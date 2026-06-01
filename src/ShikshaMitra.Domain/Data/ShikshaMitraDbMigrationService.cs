@@ -5,8 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using ShikshaMitra.Seeders;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Identity;
@@ -19,7 +21,8 @@ public class ShikshaMitraDbMigrationService(
 	IDataSeeder dataSeeder,
 	IEnumerable<IShikshaMitraDbSchemaMigrator> dbSchemaMigrators,
 	ITenantRepository tenantRepository,
-	ICurrentTenant currentTenant)
+	ICurrentTenant currentTenant,
+	IConfiguration configuration)
 	: ITransientDependency
 {
     public ILogger<ShikshaMitraDbMigrationService> Logger { get; set; } = NullLogger<ShikshaMitraDbMigrationService>.Instance;
@@ -36,11 +39,21 @@ public class ShikshaMitraDbMigrationService(
         Logger.LogInformation("Started database migrations...");
 
         await MigrateDatabaseSchemaAsync();
-        await SeedDataAsync();
+        var seederOptions = ShikshaMitraSeederOptions.FromConfiguration(configuration);
+        if (seederOptions.Enabled)
+        {
+            await SeedDataAsync();
+        }
+        else
+        {
+            Logger.LogInformation("Skipping database seed because ShikshaMitra:Seeders:Enabled=false.");
+        }
 
         Logger.LogInformation($"Successfully completed host database migrations.");
 
-        var tenants = await tenantRepository.GetListAsync(includeDetails: true);
+        var tenants = (await tenantRepository.GetListAsync(includeDetails: true))
+            .Where(tenant => tenant.Id == TenantSeederContributor.DdvsTenantId)
+            .ToList();
 
         var migratedDatabaseSchemas = new HashSet<string>();
         foreach (var tenant in tenants)
@@ -61,7 +74,22 @@ public class ShikshaMitraDbMigrationService(
                     }
                 }
 
-                await SeedDataAsync(tenant);
+                if (tenant.ConnectionStrings.Any() && seederOptions.Enabled)
+                {
+                    await SeedDataAsync(tenant);
+                }
+                else if (!tenant.ConnectionStrings.Any())
+                {
+                    Logger.LogInformation(
+                        "Skipping {TenantName} tenant database seed because shared-database tenant data was already handled during host seed.",
+                        tenant.Name);
+                }
+                else
+                {
+                    Logger.LogInformation(
+                        "Skipping {TenantName} tenant database seed because ShikshaMitra:Seeders:Enabled=false.",
+                        tenant.Name);
+                }
             }
 
             Logger.LogInformation($"Successfully completed {tenant.Name} tenant database migrations.");

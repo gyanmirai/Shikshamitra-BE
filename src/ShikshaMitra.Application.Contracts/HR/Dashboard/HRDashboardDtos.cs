@@ -22,10 +22,14 @@ public class HRDashboardSummaryRequestDto
 public class HRDashboardPreviewDto
 {
 	public string DashboardKey { get; set; } = string.Empty;
+	public string ScopeKey { get; set; } = HrDashboardScopeKeys.HrWide;
 	public string Status { get; set; } = HrDashboardPreviewStatus.Empty;
 	public string PayloadJson { get; set; } = "{}";
 	public int PayloadVersion { get; set; }
+	public bool IsStale { get; set; }
 	public DateTime? LastRefreshedAt { get; set; }
+	public DateTime? LastSuccessfulRefreshAt { get; set; }
+	public DateTime? NextScheduledRefreshAt { get; set; }
 	public DateTime? RefreshStartedAt { get; set; }
 	public Guid? RefreshRequestedByUserId { get; set; }
 	public string? LastError { get; set; }

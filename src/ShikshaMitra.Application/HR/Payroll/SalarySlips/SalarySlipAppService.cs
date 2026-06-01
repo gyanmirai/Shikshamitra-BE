@@ -11,7 +11,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Diagnostics;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -88,13 +87,17 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 
 			await EnsureEmployeeScopeAllowedAsync(employeeId);
 			_salarySlipManager.ValidateMonthYearFormat(monthYear);
+			var normalizedMonthYear = NormalizeMonthYear(monthYear);
+			var hadExistingSalarySlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(
+				employeeId,
+				normalizedMonthYear) != null;
 
 			// Generate or retrieve salary slip (Manager validates employee existence)
 			var salarySlip = await _salarySlipManager.GenerateOrGetSalarySlipAsync(
 				employeeId,
 				monthYear,
 				forceRegenerate: false);
-			salarySlip = await EnsureDraftSalarySlipFreshAsync(salarySlip);
+			salarySlip = await EnsureDraftSalarySlipFreshAsync(salarySlip, hadExistingSalarySlip);
 
 			// Get employee for DTO mapping (already validated by Manager)
 			var employee = await _employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
@@ -312,9 +315,16 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			id, salarySlip.EmployeeId, salarySlip.MonthYear);
 	}
 
-	private async Task<SalarySlip> EnsureDraftSalarySlipFreshAsync(SalarySlip salarySlip)
+	private async Task<SalarySlip> EnsureDraftSalarySlipFreshAsync(
+		SalarySlip salarySlip,
+		bool hadExistingSalarySlip)
 	{
 		if (salarySlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
+		{
+			return salarySlip;
+		}
+
+		if (hadExistingSalarySlip && IsHistoricalPayrollMonth(salarySlip.MonthYear))
 		{
 			return salarySlip;
 		}
@@ -324,22 +334,35 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		{
 			if (!snapshot.IsLocked)
 			{
+				if (!hadExistingSalarySlip)
+				{
+					return salarySlip;
+				}
+
 				var resolvedPolicies = await ResolvePoliciesForMonthAsync(salarySlip.EmployeeId, salarySlip.MonthYear);
-				if (!SnapshotMatchesResolvedPolicies(snapshot, resolvedPolicies))
+				var unlockedSnapshotEarnings = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EarningComponentsJson);
+				var unlockedSnapshotDeductions = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.DeductionComponentsJson);
+				if (PayrollSnapshotComponentParser.HasLegacyComponentSnapshotFormat(snapshot) ||
+				    !SnapshotMatchesResolvedPolicies(snapshot, resolvedPolicies) ||
+				    !SalarySlipMatchesSnapshot(salarySlip, snapshot, unlockedSnapshotEarnings, unlockedSnapshotDeductions))
 				{
 					return await _salarySlipManager.GenerateOrGetSalarySlipAsync(
 						salarySlip.EmployeeId,
 						salarySlip.MonthYear,
 						forceRegenerate: true);
 				}
+
+				return salarySlip;
 			}
 
-			if (!SalarySlipMatchesSnapshot(salarySlip, snapshot))
+			var snapshotEarnings = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EarningComponentsJson);
+			var snapshotDeductions = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.DeductionComponentsJson);
+			if (!SalarySlipMatchesSnapshot(salarySlip, snapshot, snapshotEarnings, snapshotDeductions))
 			{
 				return await _salarySlipManager.GenerateOrGetSalarySlipFromSnapshotAsync(
 					snapshot,
-					BuildSalarySlipLineItems(snapshot.EarningComponentsJson),
-					BuildSalarySlipLineItems(snapshot.DeductionComponentsJson),
+					snapshotEarnings,
+					snapshotDeductions,
 					ParseDayCalculationMode(snapshot.DayCalculationMode));
 			}
 
@@ -351,6 +374,12 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 			salarySlip.MonthYear,
 			forceRegenerate: true);
 	}
+
+	private bool IsHistoricalPayrollMonth(string monthYear) =>
+		string.Compare(
+			NormalizeMonthYear(monthYear),
+			Clock.Now.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+			StringComparison.Ordinal) < 0;
 
 	private async Task<HrResolvedPolicies> ResolvePoliciesForMonthAsync(Guid employeeId, string monthYear)
 	{
@@ -373,7 +402,11 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		snapshot.WorkCalendarPolicyId == resolvedPolicies.PayrollWorkCalendarPolicy.Id &&
 		snapshot.WorkCalendarPolicyVersion == resolvedPolicies.PayrollWorkCalendarPolicy.Version;
 
-	private static bool SalarySlipMatchesSnapshot(SalarySlip salarySlip, PayrollRunItemSnapshot snapshot) =>
+	private static bool SalarySlipMatchesSnapshot(
+		SalarySlip salarySlip,
+		PayrollRunItemSnapshot snapshot,
+		IReadOnlyList<SalarySlipLineItem> snapshotEarnings,
+		IReadOnlyList<SalarySlipLineItem> snapshotDeductions) =>
 		salarySlip.PayrollPolicyId == snapshot.PayrollPolicyId &&
 		salarySlip.PayrollPolicyVersion == snapshot.PayrollPolicyVersion &&
 		salarySlip.AttendancePolicyId == snapshot.AttendancePolicyId &&
@@ -386,18 +419,48 @@ public class SalarySlipAppService : ApplicationService, ISalarySlipAppService
 		salarySlip.PayrollDayCalculationMode == ParseDayCalculationMode(snapshot.DayCalculationMode) &&
 		Math.Round(salarySlip.TotalEarning, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.GrossSalary, 2, MidpointRounding.AwayFromZero) &&
 		Math.Round(salarySlip.TotalDeduction, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.TotalDeduction, 2, MidpointRounding.AwayFromZero) &&
-		Math.Round(salarySlip.NetSalary, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.NetPay, 2, MidpointRounding.AwayFromZero);
+		Math.Round(salarySlip.NetSalary, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.NetPay, 2, MidpointRounding.AwayFromZero) &&
+		LineItemsMatch(salarySlip.Earnings, snapshotEarnings) &&
+		LineItemsMatch(salarySlip.Deductions, snapshotDeductions);
 
-	private static List<SalarySlipLineItem> BuildSalarySlipLineItems(string componentsJson)
+	private static bool LineItemsMatch(
+		IReadOnlyList<SalarySlipLineItem> current,
+		IReadOnlyList<SalarySlipLineItem> snapshot)
 	{
-		var components = JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(componentsJson)
-			?? new List<RunPayrollComponentItem>();
-		return components
-			.Select(x => new SalarySlipLineItem(
-				x.Name,
-				Math.Round((decimal) x.Amount, 2, MidpointRounding.AwayFromZero)))
-			.ToList();
+		if (current.Count != snapshot.Count)
+		{
+			return false;
+		}
+
+		for (var i = 0; i < current.Count; i++)
+		{
+			if (ToLineComparisonKey(current[i]) != ToLineComparisonKey(snapshot[i]))
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
+
+	private static SalarySlipLineComparisonKey ToLineComparisonKey(SalarySlipLineItem item) =>
+		new(
+			item.Name ?? string.Empty,
+			Math.Round(item.Amount, 2, MidpointRounding.AwayFromZero),
+			item.Description ?? string.Empty,
+			item.IsFixed,
+			item.IsTemp,
+			item.ComponentType,
+			item.DependOn);
+
+	private readonly record struct SalarySlipLineComparisonKey(
+		string Name,
+		decimal Amount,
+		string Description,
+		bool IsFixed,
+		bool IsTemp,
+		SalaryComponentType ComponentType,
+		SalaryComponentDependency DependOn);
 
 	private static DayCalculationType ParseDayCalculationMode(string value) => value switch
 	{

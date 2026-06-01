@@ -5,12 +5,18 @@ using System.Net.Http.Json;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Security.UserScope;
 using Shouldly;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -22,6 +28,128 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 	private const string BaseUrl = "/api/hr/attendance/take-attendance";
 
 	public TakeAttendanceApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Day_Should_Return_Holiday_Metadata_For_Summer_Vacation()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var marker = $"HolidayDay{Guid.NewGuid():N}";
+		await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			marker,
+			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate=10-05-2026&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(marker)}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
+
+		payload.IsHoliday.ShouldBeTrue();
+		payload.HolidayName.ShouldContain("Summer Vacation");
+		var row = payload.Items.Single();
+		row.IsHoliday.ShouldBeTrue();
+		row.HolidayName.ShouldContain("Summer Vacation");
+		row.HolidayReason.ShouldContain("Holiday:");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task SaveDay_Should_Reject_Holiday_Attendance()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"HolidaySave{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = "10-05-2026",
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					Remarks = "Holiday save should be rejected"
+				}
+			]
+		}, JsonOptions);
+
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+		body.ShouldContain("HR:Attendance:020314");
+		body.ShouldContain("Summer Vacation");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task SaveDay_Should_Update_Legacy_Null_Stage_From_Assignment()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"LegacyStageFix{Guid.NewGuid():N}",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-5));
+		await SeedLegacyAttendanceAsync(employee.Id, attendanceDate, educationMediumStageId: null);
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					Remarks = "Assignment stage should replace legacy null stage"
+				}
+			]
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		await AssertAttendanceStageAsync(employee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task SaveDay_StageScopedUser_Should_Update_Legacy_Null_Stage_By_Assignment()
+	{
+		var scopedUserId = Guid.NewGuid();
+		await EnsureUserHasStageScopeAsync(scopedUserId, EmployeeTestHelper.DefaultMediumStageId);
+
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"ScopedLegacyStageFix{Guid.NewGuid():N}",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-5));
+		await SeedLegacyAttendanceAsync(employee.Id, attendanceDate, educationMediumStageId: null);
+
+		var scopedClient = CreateClientAs(scopedUserId);
+		var response = await scopedClient.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					Remarks = "Stage-scoped assignment should allow correction"
+				}
+			]
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		await AssertAttendanceStageAsync(employee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -276,6 +404,75 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			using var doc = JsonDocument.Parse(payload);
 			doc.RootElement.GetProperty("status").GetInt32().ShouldBe(400);
 			doc.RootElement.GetProperty("title").GetString().ShouldNotBeNullOrWhiteSpace();
+		}
+	}
+
+	private async Task SeedLegacyAttendanceAsync(Guid employeeId, DateOnly attendanceDate, Guid? educationMediumStageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await attendanceRepository.InsertAsync(new EmployeeAttendance
+			{
+				TenantId = tenantId,
+				EmployeeId = employeeId,
+				AttendanceDate = attendanceDate,
+				EducationMediumStageId = educationMediumStageId,
+				StatusType = EmployeeAttendanceStatusType.FullDayLeave,
+				Remarks = "Legacy attendance row"
+			}, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task AssertAttendanceStageAsync(Guid employeeId, DateOnly attendanceDate, Guid expectedStageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var query = await attendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x =>
+				x.EmployeeId == employeeId &&
+				x.AttendanceDate == attendanceDate);
+			attendance.EducationMediumStageId.ShouldBe(expectedStageId);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task EnsureUserHasStageScopeAsync(Guid userId, Guid stageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var scopeRepository = scope.ServiceProvider.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		var userScopeService = scope.ServiceProvider.GetRequiredService<IUserScopeService>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await scopeRepository.InsertAsync(
+				new UserScopeAssignment(
+					Guid.NewGuid(),
+					tenantId,
+					userId: userId,
+					educationMediumStageId: stageId,
+					description: "API regression test stage HR scope"),
+				autoSave: false);
+			await userScopeService.InvalidateUserScopeCacheAsync(userId);
+			await uow.CompleteAsync();
 		}
 	}
 }

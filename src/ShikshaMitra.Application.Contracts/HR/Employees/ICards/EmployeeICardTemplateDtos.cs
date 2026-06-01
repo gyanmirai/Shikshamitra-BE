@@ -26,6 +26,9 @@ public class EmployeeICardTemplateDto
 	public bool QrCodeEnabled { get; set; }
 	public bool BarcodeEnabled { get; set; }
 	public bool BackSideEnabled { get; set; }
+	public int SchemaVersion { get; set; } = 1;
+	public string LayoutJson { get; set; } = string.Empty;
+	public string PrintSettingsJson { get; set; } = string.Empty;
 	public string FieldsJson { get; set; } = "[]";
 	public bool IsActive { get; set; }
 	public DateTime CreationTime { get; set; }
@@ -87,6 +90,13 @@ public class EmployeeICardTemplateRequest : IValidatableObject
 
 	public bool BackSideEnabled { get; set; }
 
+	[Range(1, 1)]
+	public int SchemaVersion { get; set; } = 1;
+
+	public string LayoutJson { get; set; } = string.Empty;
+
+	public string PrintSettingsJson { get; set; } = string.Empty;
+
 	[Required]
 	public string FieldsJson { get; set; } = "[]";
 
@@ -135,7 +145,7 @@ public class EmployeeICardPdfRequest : IValidatableObject
 	public List<Guid> EmployeeIds { get; set; } = new();
 
 	[Range(1, 10)]
-	public int CardsPerPage { get; set; } = 8;
+	public int? CardsPerPage { get; set; }
 
 	public bool ExcludeIncompleteEmployees { get; set; }
 

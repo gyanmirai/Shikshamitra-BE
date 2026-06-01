@@ -171,6 +171,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "HR.LeaveManagement.Setting.LeaveType", new SubmoduleInfo(LeaveManagement_SettingLeaveType.All, LeaveManagement_SettingLeaveType.DisplayNames) },
 			{ "HR.LeaveManagement.Setting.LeavePolicy", new SubmoduleInfo(LeaveManagement_SettingLeavePolicy.All, LeaveManagement_SettingLeavePolicy.DisplayNames) },
 			{ "HR.ProfessionalManagement", new SubmoduleInfo(ProfessionalManagement.All, ProfessionalManagement.DisplayNames) },
+			{ "HR.PerformanceManagement", new SubmoduleInfo(PerformanceManagement.All, PerformanceManagement.DisplayNames) },
 			{ "HR.Reports", new SubmoduleInfo(Reports.All, Reports.DisplayNames) },
 			{ "HR.Notification", new SubmoduleInfo(Notification.All, Notification.DisplayNames) }
 		};

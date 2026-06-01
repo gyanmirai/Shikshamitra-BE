@@ -13,6 +13,10 @@ public class ProfessionalReviewCycleConfiguration : IEntityTypeConfiguration<Pro
 		builder.ConfigureByConvention();
 		builder.HasKey(x => x.Id);
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(120);
+		builder.Property(x => x.AllowNotApplicable).HasDefaultValue(true);
+		builder.Property(x => x.RatingScaleMax).HasDefaultValue(5);
+		builder.Property(x => x.AudienceFilterJson).HasMaxLength(4000);
+		builder.Property(x => x.ReviewerWorkflowJson).HasMaxLength(4000);
 		builder.HasIndex(x => new { x.TenantId, x.Status });
 	}
 }

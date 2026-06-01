@@ -360,27 +360,9 @@ public class EmployeeAppService(
 
 	private async Task<string> GenerateUniqueUsernameAsync(string firstName, string lastName)
 	{
-		// Generate base username: firstInitial + lastName (e.g., jdoe)
-		// Sanitize to remove special characters and non-ASCII characters
-		var firstInitial = !string.IsNullOrWhiteSpace(firstName)
-			? new string(firstName.Where(char.IsLetterOrDigit).ToArray()).ToLower().FirstOrDefault().ToString()
-			: "x";
-
-		if (string.IsNullOrWhiteSpace(firstInitial))
-		{
-			firstInitial = "x";
-		}
-
-		var lastNamePart = !string.IsNullOrWhiteSpace(lastName)
-			? new string(lastName.Where(char.IsLetterOrDigit).ToArray()).ToLower()
-			: "user";
-
-		if (string.IsNullOrWhiteSpace(lastNamePart))
-		{
-			lastNamePart = "user";
-		}
-
-		var baseUsername = $"{firstInitial}{lastNamePart}";
+		var firstNamePart = NormalizeUsernamePart(firstName, "x", maxLength: 16);
+		var lastNamePart = NormalizeUsernamePart(lastName, "user", maxLength: 24);
+		var baseUsername = $"{firstNamePart}.{lastNamePart}";
 
 		// Check if username exists
 		var normalizedUsername = lookupNormalizer.NormalizeName(baseUsername);
@@ -392,10 +374,9 @@ public class EmployeeAppService(
 		}
 
 		// Username exists, append sequence number
-		var sequence = 1;
-		while (true)
+		for (var sequence = 1; sequence <= 9999; sequence++)
 		{
-			var sequencedUsername = $"{baseUsername}{sequence:D2}";
+			var sequencedUsername = $"{baseUsername}{sequence:D4}";
 			normalizedUsername = lookupNormalizer.NormalizeName(sequencedUsername);
 			existingUser = await userRepository.FindByNormalizedUserNameAsync(normalizedUsername);
 
@@ -403,13 +384,23 @@ public class EmployeeAppService(
 			{
 				return sequencedUsername;
 			}
-
-			sequence++;
-			if (sequence > 99)
-			{
-				throw new BusinessException(HRErrorCodes.EmployeeUsernameGenerationFailed);
-			}
 		}
+
+		throw new BusinessException(HRErrorCodes.EmployeeUsernameGenerationFailed);
+	}
+
+	private static string NormalizeUsernamePart(string? value, string fallback, int maxLength)
+	{
+		var normalized = string.IsNullOrWhiteSpace(value)
+			? string.Empty
+			: new string(value.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+
+		if (string.IsNullOrWhiteSpace(normalized))
+		{
+			normalized = fallback;
+		}
+
+		return normalized.Length <= maxLength ? normalized : normalized[..maxLength];
 	}
 
 	public async Task<EmployeeDto> UpdateBasicInfoAsync(Guid employeeId, UpdateEmployeeBasicInfoDto input)

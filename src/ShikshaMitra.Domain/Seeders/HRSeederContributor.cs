@@ -11,6 +11,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.ProfessionalManagement;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -45,6 +46,8 @@ public class HRSeederContributor : BaseSeederContributor
 	private const string SeedDemoPolicyScenariosConfigKey = "ShikshaMitra:Seeders:HR:SeedDemoPolicyScenarios";
 	private const string PastAttendanceMonthsToSeedConfigKey = "ShikshaMitra:Seeders:HR:PastAttendanceMonthsToSeed";
 	private const string PastPayrollMonthsToSeedConfigKey = "ShikshaMitra:Seeders:HR:PastPayrollMonthsToSeed";
+	private const string SeedRichAssetsConfigKey = "ShikshaMitra:Seeders:HR:SeedRichAssets";
+	private const string SeedPerformanceManagementDemoDataConfigKey = "ShikshaMitra:Seeders:HR:SeedPerformanceManagementDemoData";
 	private const string TempPassword = "Temp@123";
 
 	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
@@ -85,9 +88,23 @@ public class HRSeederContributor : BaseSeederContributor
 	private readonly IEmployeePayrollDetailsRepository _employeePayrollDetailsRepository;
 	private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
 	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
+	private readonly IRepository<PerformanceTemplate, Guid> _performanceTemplateRepository;
+	private readonly IRepository<PerformanceTemplateSection, Guid> _performanceTemplateSectionRepository;
+	private readonly IRepository<PerformanceTemplateCriterion, Guid> _performanceTemplateCriterionRepository;
+	private readonly IRepository<ProfessionalReviewCycle, Guid> _performanceCycleRepository;
+	private readonly IRepository<PerformanceReviewAssignment, Guid> _performanceAssignmentRepository;
+	private readonly IRepository<PerformanceReviewStage, Guid> _performanceStageRepository;
+	private readonly IRepository<PerformanceReviewResponse, Guid> _performanceResponseRepository;
+	private readonly IRepository<ClassroomObservation, Guid> _classroomObservationRepository;
+	private readonly IRepository<PerformanceEvidence, Guid> _performanceEvidenceRepository;
+	private readonly IRepository<PerformanceFeedback, Guid> _performanceFeedbackRepository;
+	private readonly IRepository<PerformanceOutcome, Guid> _performanceOutcomeRepository;
+	private readonly IRepository<DevelopmentPlan, Guid> _developmentPlanRepository;
+	private readonly IRepository<PerformanceAuditEvent, Guid> _performanceAuditRepository;
 	private readonly IConfiguration _configuration;
 	private readonly ILogger<HRSeederContributor> _logger;
 	private readonly IDataFilter _dataFilter;
+	private Dictionary<string, SeedRoleInfo>? _roleSeedInfoByNormalizedName;
 
 	public HRSeederContributor(
 		ICurrentTenant currentTenant,
@@ -131,6 +148,19 @@ public class HRSeederContributor : BaseSeederContributor
 			IEmployeePayrollDetailsRepository employeePayrollDetailsRepository,
 			IEmployeePayrollComponentRepository employeePayrollComponentRepository,
 			IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
+			IRepository<PerformanceTemplate, Guid> performanceTemplateRepository,
+			IRepository<PerformanceTemplateSection, Guid> performanceTemplateSectionRepository,
+			IRepository<PerformanceTemplateCriterion, Guid> performanceTemplateCriterionRepository,
+			IRepository<ProfessionalReviewCycle, Guid> performanceCycleRepository,
+			IRepository<PerformanceReviewAssignment, Guid> performanceAssignmentRepository,
+			IRepository<PerformanceReviewStage, Guid> performanceStageRepository,
+			IRepository<PerformanceReviewResponse, Guid> performanceResponseRepository,
+			IRepository<ClassroomObservation, Guid> classroomObservationRepository,
+			IRepository<PerformanceEvidence, Guid> performanceEvidenceRepository,
+			IRepository<PerformanceFeedback, Guid> performanceFeedbackRepository,
+			IRepository<PerformanceOutcome, Guid> performanceOutcomeRepository,
+			IRepository<DevelopmentPlan, Guid> developmentPlanRepository,
+			IRepository<PerformanceAuditEvent, Guid> performanceAuditRepository,
 			IConfiguration configuration,
 			ILogger<HRSeederContributor> logger,
 			IDataFilter dataFilter)
@@ -174,6 +204,19 @@ public class HRSeederContributor : BaseSeederContributor
 		_employeePayrollDetailsRepository = employeePayrollDetailsRepository;
 		_employeePayrollComponentRepository = employeePayrollComponentRepository;
 		_payrollRunItemSnapshotRepository = payrollRunItemSnapshotRepository;
+		_performanceTemplateRepository = performanceTemplateRepository;
+		_performanceTemplateSectionRepository = performanceTemplateSectionRepository;
+		_performanceTemplateCriterionRepository = performanceTemplateCriterionRepository;
+		_performanceCycleRepository = performanceCycleRepository;
+		_performanceAssignmentRepository = performanceAssignmentRepository;
+		_performanceStageRepository = performanceStageRepository;
+		_performanceResponseRepository = performanceResponseRepository;
+		_classroomObservationRepository = classroomObservationRepository;
+		_performanceEvidenceRepository = performanceEvidenceRepository;
+		_performanceFeedbackRepository = performanceFeedbackRepository;
+		_performanceOutcomeRepository = performanceOutcomeRepository;
+		_developmentPlanRepository = developmentPlanRepository;
+		_performanceAuditRepository = performanceAuditRepository;
 		_configuration = configuration;
 		_logger = logger;
 		_dataFilter = dataFilter;
@@ -220,6 +263,13 @@ public class HRSeederContributor : BaseSeederContributor
 			await SeedSampleLeaveScenariosAsync(samplePayrollEmployeeIds);
 		}
 		_logger.LogInformation("[HRSeeder] Phase 8 complete (sample payroll/attendance/leaves)");
+
+		if (ShouldSeedPerformanceManagementDemoData())
+		{
+			await SeedPerformanceManagementDemoDataAsync(activeEmployeeIds);
+			_logger.LogInformation("[HRSeeder] Phase 9 complete (performance management demo data)");
+		}
+
 		_logger.LogInformation("[HRSeeder] Finished seeding for TenantId={TenantId}", CurrentTenant.Id);
 	}
 
@@ -231,6 +281,20 @@ public class HRSeederContributor : BaseSeederContributor
 	private bool ShouldSeedDemoPolicyScenarios() =>
 		_configuration.GetValue(SeedDemoPolicyScenariosConfigKey, true);
 
+	private bool ShouldSeedPerformanceManagementDemoData()
+		=> ResolveShouldSeedPerformanceManagementDemoData(_configuration);
+
+	internal static bool ResolveShouldSeedPerformanceManagementDemoData(IConfiguration configuration)
+	{
+		var profile = ShikshaMitraSeederProfile.Normalize(
+			configuration[ShikshaMitraSeederProfile.ContextPropertyName] ??
+			configuration["ShikshaMitra:Seeders:Profile"]);
+
+		return configuration.GetValue(
+			SeedPerformanceManagementDemoDataConfigKey,
+			ShikshaMitraSeederProfile.Demo.Contains(profile));
+	}
+
 	private int PastAttendanceMonthsToSeed() =>
 		ResolvePastAttendanceMonthsToSeed(_configuration);
 
@@ -238,9 +302,34 @@ public class HRSeederContributor : BaseSeederContributor
 		Math.Clamp(
 			configuration.GetValue(
 				PastAttendanceMonthsToSeedConfigKey,
-				configuration.GetValue(PastPayrollMonthsToSeedConfigKey, 3)),
+				configuration.GetValue(
+					PastPayrollMonthsToSeedConfigKey,
+					DefaultPastAttendanceMonthsForProfile(configuration))),
 			0,   // 0 = skip attendance/payroll seeding entirely (used in tests)
 			12);
+
+	private static int DefaultPastAttendanceMonthsForProfile(IConfiguration configuration)
+	{
+		var profile = ShikshaMitraSeederProfile.Normalize(
+			configuration[ShikshaMitraSeederProfile.ContextPropertyName] ??
+			configuration["ShikshaMitra:Seeders:Profile"]);
+
+		return profile switch
+		{
+			ShikshaMitraSeederProfile.FastDemo => 1,
+			ShikshaMitraSeederProfile.Minimal => 0,
+			_ => 3
+		};
+	}
+
+	private bool ShouldSeedRichAssets()
+	{
+		var profile = ShikshaMitraSeederProfile.Normalize(
+			_configuration[ShikshaMitraSeederProfile.ContextPropertyName] ??
+			_configuration["ShikshaMitra:Seeders:Profile"]);
+		var defaultValue = profile == ShikshaMitraSeederProfile.FullDemo;
+		return _configuration.GetValue(SeedRichAssetsConfigKey, defaultValue);
+	}
 
 	private async Task SeedLeaveTypesAndPoliciesAsync()
 	{
@@ -276,8 +365,10 @@ public class HRSeederContributor : BaseSeederContributor
 		foreach (var (type, color, description) in leaveTypes)
 		{
 			var leaveType = await _leaveTypeManager.CreateAsync(academicYearId, type, color, description);
-			await _leaveTypeRepository.InsertAsync(leaveType, autoSave: true);
+			await _leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
 		}
+
+		await CurrentUnitOfWork.SaveChangesAsync();
 
 		// Seed leave policies
 		await SeedLeavePoliciesAsync(academicYearId);
@@ -326,8 +417,10 @@ public class HRSeederContributor : BaseSeederContributor
 				policy.RequiresApproval,
 				policy.Description
 			);
-			await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: true);
+			await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
 		}
+
+		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 
 	private async Task SeedEarningComponentsAsync()
@@ -363,8 +456,10 @@ public class HRSeederContributor : BaseSeederContributor
 				component.VisibleInPayslip,
 				component.DisplayOrder
 			);
-			await _earningComponentRepository.InsertAsync(earningComponent, autoSave: true);
+			await _earningComponentRepository.InsertAsync(earningComponent, autoSave: false);
 		}
+
+		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 
 	private async Task SeedDeductionComponentsAsync()
@@ -398,8 +493,10 @@ public class HRSeederContributor : BaseSeederContributor
 				component.VisibleInPayslip,
 				component.DisplayOrder
 			);
-			await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: true);
+			await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: false);
 		}
+
+		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 
 	private async Task SeedPayrollSettingsAsync()
@@ -974,43 +1071,94 @@ public class HRSeederContributor : BaseSeederContributor
 			};
 			// Set the Id using reflection since there's no constructor
 			typeof(ShiftManagement).GetProperty("Id").SetValue(shiftEntity, id);
-			await _shiftRepository.InsertAsync(shiftEntity, autoSave: true);
+			await _shiftRepository.InsertAsync(shiftEntity, autoSave: false);
 		}
+
+		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 
 	private async Task<List<Guid>> SeedEmployeesAsync()
 	{
-		var seededEmployeeIds = new List<Guid>();
+		var seededEmployeeIds = await TimeHrPhaseAsync(
+			"Phase 4a employee batch create/update",
+			SeedEmployeesFromProfilesAsync);
 
-		// Check if already seeded
-		if (await _employeeRepository.AnyAsync())
-		{
-			await EnsureSeededReportingChainAsync();
-			await EnsureEmployeesHaveOrganizationAssignmentsAsync();
-			return seededEmployeeIds;
-		}
-
-		// Get required dependencies
-		var allEducationMediumStages = (await _educationMediumStageRepository.GetQueryableAsync())
-			.OrderBy(x => x.Name)
-			.ToList();
-		var educationMediumStage = allEducationMediumStages.FirstOrDefault();
-		if (educationMediumStage == null)
-			return seededEmployeeIds; // Skip if no academic setup
-
-		var fullDayShift = (await _shiftRepository.GetQueryableAsync())
-			.FirstOrDefault(s => s.ShiftName == "Full Day Shift");
-
-		// Seed teaching staff
-		await SeedTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id, seededEmployeeIds);
-
-		// Seed non-teaching staff
-		await SeedNonTeachingStaffAsync(educationMediumStage.Id, fullDayShift?.Id, seededEmployeeIds);
-
-		await EnsureSeededReportingChainAsync();
-		await EnsureEmployeesHaveOrganizationAssignmentsAsync();
+		await TimeHrPhaseAsync(
+			"Phase 4b reporting chain",
+			EnsureSeededReportingChainAsync);
 
 		return seededEmployeeIds;
+	}
+
+	private async Task<List<Guid>> SeedEmployeesFromProfilesAsync()
+	{
+		var profiles = BuildSuratSeedEmployeeProfiles().Values.ToList();
+		var profileEmails = profiles.Select(p => p.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var fullDayShiftId = (await _shiftRepository.GetQueryableAsync())
+			.Where(s => s.ShiftName == "Full Day Shift")
+			.Select(s => (Guid?)s.Id)
+			.FirstOrDefault();
+		var existingEmployees = (await _employeeRepository.GetListAsync())
+			.Where(x => x.Email != null && profileEmails.Contains(x.Email))
+			.ToList();
+		var employeesByEmail = existingEmployees
+			.Where(x => !string.IsNullOrWhiteSpace(x.Email))
+			.ToDictionary(x => x.Email!, StringComparer.OrdinalIgnoreCase);
+		var rolesByName = await GetSeedRolesByNameAsync();
+		var employeeCodesByEmail = await GenerateSeedEmployeeCodesAsync(profiles, rolesByName, existingEmployees);
+		var employeesToInsert = new List<Employee>();
+		var employeesToUpdate = new List<Employee>();
+
+		ValidateSeedProfiles(profiles, rolesByName);
+
+		foreach (var profile in profiles)
+		{
+			var userId = await CreateUserForEmployeeAsync(
+				profile.FirstName,
+				profile.LastName,
+				profile.Email,
+				profile.Mobile,
+				profile.RoleName);
+
+			var role = rolesByName[NormalizeRoleName(profile.RoleName)];
+			if (employeesByEmail.TryGetValue(profile.Email, out var existingEmployee))
+			{
+				UpdateSeedEmployee(existingEmployee, profile, role.Id, fullDayShiftId);
+				employeesToUpdate.Add(existingEmployee);
+				continue;
+			}
+
+			var employee = CreateSeedEmployee(
+				profile,
+				userId,
+				role.Id,
+				employeeCodesByEmail[profile.Email],
+				fullDayShiftId);
+			employeesToInsert.Add(employee);
+			employeesByEmail[profile.Email] = employee;
+		}
+
+		if (employeesToInsert.Count > 0)
+		{
+			await _employeeRepository.InsertManyAsync(employeesToInsert, autoSave: false);
+		}
+
+		if (employeesToUpdate.Count > 0)
+		{
+			await _employeeRepository.UpdateManyAsync(employeesToUpdate, autoSave: false);
+		}
+
+		if (employeesToInsert.Count > 0 || employeesToUpdate.Count > 0)
+		{
+			await CurrentUnitOfWork.SaveChangesAsync();
+		}
+
+		_logger.LogInformation(
+			"[HRSeeder] Seed employee batch ensured created={CreatedCount}, updated={UpdatedCount}",
+			employeesToInsert.Count,
+			employeesToUpdate.Count);
+
+		return employeesToInsert.Select(x => x.Id).Concat(employeesToUpdate.Select(x => x.Id)).Distinct().ToList();
 	}
 
 	private async Task EnsureEmployeesHaveOrganizationAssignmentsAsync()
@@ -1028,10 +1176,20 @@ public class HRSeederContributor : BaseSeederContributor
 		var assignedEmployeeIds = existingAssignments
 			.Select(x => x.EmployeeId)
 			.ToHashSet();
+		var assignmentsToInsert = new List<EmployeeOrganizationAssignment>();
 
 		foreach (var employee in employees.Where(x => !assignedEmployeeIds.Contains(x.Id)))
 		{
-			await EnsureEmployeeOrganizationAssignmentsAsync(employee.Id, stageIds);
+			assignmentsToInsert.AddRange(stageIds.Select(stageId => new EmployeeOrganizationAssignment(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				employee.Id,
+				stageId)));
+		}
+
+		if (assignmentsToInsert.Count > 0)
+		{
+			await _employeeOrganizationAssignmentRepository.InsertManyAsync(assignmentsToInsert, autoSave: true);
 		}
 	}
 
@@ -1520,14 +1678,35 @@ public class HRSeederContributor : BaseSeederContributor
 		var normalizedTargetKey = HrPolicyAssignment.NormalizeTargetKey(targetType, targetKey);
 		var effectiveFrom = academicYear.StartDate.Date;
 		var effectiveTo = academicYear.EndDate.Date;
-		var exists = await _hrPolicyAssignmentRepository.AnyAsync(x =>
+		var existing = await _hrPolicyAssignmentRepository.FirstOrDefaultAsync(x =>
 			x.AcademicYearId == academicYear.Id &&
 			x.TargetType == targetType &&
 			x.TargetKey == normalizedTargetKey &&
 			x.EffectiveFrom == effectiveFrom &&
 			x.EffectiveTo == effectiveTo);
-		if (exists)
+		if (existing != null)
 		{
+			var needsUpdate =
+				existing.AttendancePolicyId != attendancePolicy.Id ||
+				existing.PayrollPolicyId != payrollPolicy.Id ||
+				existing.Priority != priority ||
+				!existing.IsActive ||
+				!string.Equals(existing.AssignmentReason, reason, StringComparison.Ordinal) ||
+				!string.Equals(existing.TargetDisplayName, targetDisplayName, StringComparison.Ordinal);
+			if (needsUpdate)
+			{
+				existing.UpdateTarget(targetType, normalizedTargetKey, targetDisplayName);
+				existing.Update(
+					attendancePolicy.Id,
+					payrollPolicy.Id,
+					effectiveFrom,
+					effectiveTo,
+					isActive: true,
+					priority,
+					reason);
+				await _hrPolicyAssignmentRepository.UpdateAsync(existing, autoSave: false);
+			}
+
 			return 0;
 		}
 
@@ -1547,6 +1726,63 @@ public class HRSeederContributor : BaseSeederContributor
 			reason);
 		await _hrPolicyAssignmentRepository.InsertAsync(assignment, autoSave: false);
 		return 1;
+	}
+
+	internal readonly record struct SeedHolidayDateRange(DateOnly StartDate, DateOnly EndDate);
+
+	internal static HashSet<DateOnly> BuildSeedHolidayDateSet(
+		IEnumerable<SeedHolidayDateRange> holidays,
+		DateOnly windowStart,
+		DateOnly windowEnd)
+	{
+		var holidayDates = new HashSet<DateOnly>();
+		if (windowEnd < windowStart)
+		{
+			return holidayDates;
+		}
+
+		foreach (var holiday in holidays)
+		{
+			var start = holiday.StartDate < windowStart ? windowStart : holiday.StartDate;
+			var end = holiday.EndDate > windowEnd ? windowEnd : holiday.EndDate;
+			if (end < start)
+			{
+				continue;
+			}
+
+			for (var date = start; date <= end; date = date.AddDays(1))
+			{
+				holidayDates.Add(date);
+			}
+		}
+
+		return holidayDates;
+	}
+
+	internal static bool ShouldSeedAttendanceForDate(DateOnly date, IReadOnlySet<DateOnly> holidayDates) =>
+		date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) &&
+		!holidayDates.Contains(date);
+
+	private async Task<HashSet<DateOnly>> BuildSeedHolidayDateSetAsync(
+		DateOnly windowStart,
+		DateOnly windowEnd,
+		Guid? academicYearId = null)
+	{
+		if (windowEnd < windowStart)
+		{
+			return [];
+		}
+
+		var holidays = await _holidayRepository.GetListAsync(x =>
+			!academicYearId.HasValue || x.AcademicYearId == academicYearId.Value);
+		var ranges = holidays
+			.Select(x => new SeedHolidayDateRange(
+				DateOnly.FromDateTime(x.StartDate.Date),
+				DateOnly.FromDateTime(x.EndDate.Date)))
+			.Where(x => x.EndDate >= windowStart && x.StartDate <= windowEnd)
+			.ToList();
+
+		return BuildSeedHolidayDateSet(ranges, windowStart, windowEnd);
 	}
 
 	private async Task<Group> EnsureEmployeeRuleGroupAsync(
@@ -1746,152 +1982,550 @@ public class HRSeederContributor : BaseSeederContributor
 
 	private async Task EnsureSeededEmployeeCompletenessAsync()
 	{
-		var profiles = BuildSuratSeedEmployeeProfiles();
-		var documentSettings = await EnsureHrDocumentSettingsAsync();
+		var profilesByEmail = BuildSuratSeedEmployeeProfiles();
+		var seedEmails = profilesByEmail.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var rolesByName = await GetSeedRolesByNameAsync();
 		var shifts = await _shiftRepository.GetListAsync();
 		var fullDayShiftId = shifts.FirstOrDefault(s => s.ShiftName == "Full Day Shift")?.Id
 		                     ?? shifts.FirstOrDefault()?.Id;
-		var employees = (await _employeeRepository.GetQueryableAsync())
-			.AsEnumerable()
-			.Where(IsSeededDemoEmployee)
-			.ToList();
+		var documentSettings = await TimeHrPhaseAsync(
+			"Phase 5a document settings",
+			EnsureHrDocumentSettingsAsync);
+		var employees = await TimeHrPhaseAsync(
+			"Phase 5b preload seeded employees",
+			async () =>
+			{
+				var list = new List<Employee>();
+				var seededIds = (await _employeeRepository.GetListAsync())
+					.Where(x => x.Email != null && seedEmails.Contains(x.Email))
+					.Select(x => x.Id)
+					.ToList();
+				foreach (var employeeId in seededIds)
+				{
+					var employee = await _employeeRepository.GetWithDetailsAsync(employeeId);
+					if (employee != null)
+					{
+						list.Add(employee);
+					}
+				}
+
+				return list;
+			});
 		var employeesByEmail = employees
 			.Where(x => !string.IsNullOrWhiteSpace(x.Email))
 			.ToDictionary(x => x.Email!, StringComparer.OrdinalIgnoreCase);
-		var createdEmployees = 0;
-		var updatedEmployees = 0;
 
-		foreach (var profile in profiles.Values.Where(profile =>
-			         string.Equals(profile.RoleName, "Director", StringComparison.OrdinalIgnoreCase)))
+		await TimeHrPhaseAsync(
+			"Phase 5c employee profile/work/documents",
+			async () =>
+			{
+				foreach (var employee in employees)
+				{
+					if (employee.Email == null || !profilesByEmail.TryGetValue(employee.Email, out var profile))
+					{
+						continue;
+					}
+
+					var role = rolesByName[NormalizeRoleName(profile.RoleName)];
+					UpdateSeedEmployee(employee, profile, role.Id, employee.ShiftId ?? fullDayShiftId);
+
+					if (employee.WorkExperiences.Count == 0)
+					{
+						employee.UpdateWorkExperiences(BuildWorkExperiences(profile));
+					}
+
+					await AddMissingSeedEmployeeDocumentsAsync(employee, profile, documentSettings);
+				}
+
+				if (employees.Count > 0)
+				{
+					await _employeeRepository.UpdateManyAsync(employees, autoSave: false);
+					await CurrentUnitOfWork.SaveChangesAsync();
+				}
+			});
+
+		await TimeHrPhaseAsync(
+			"Phase 5d family details",
+			() => EnsureEmployeeFamilyDetailsBatchAsync(employeesByEmail, profilesByEmail));
+		await TimeHrPhaseAsync(
+			"Phase 5e organization assignments",
+			() => EnsureEmployeeOrganizationAssignmentsBatchAsync(employeesByEmail, profilesByEmail));
+
+		_logger.LogInformation(
+			"[HRSeeder] Seeded employee completeness backfilled employees={EmployeeCount}",
+			employees.Count);
+	}
+
+	private async Task TimeHrPhaseAsync(string name, Func<Task> action)
+	{
+		var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+		await action();
+		stopwatch.Stop();
+		_logger.LogInformation("[HRSeeder] {PhaseName} completed in {ElapsedMs} ms", name, stopwatch.ElapsedMilliseconds);
+	}
+
+	private async Task<T> TimeHrPhaseAsync<T>(string name, Func<Task<T>> action)
+	{
+		var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+		var result = await action();
+		stopwatch.Stop();
+		_logger.LogInformation("[HRSeeder] {PhaseName} completed in {ElapsedMs} ms", name, stopwatch.ElapsedMilliseconds);
+		return result;
+	}
+
+	private async Task<Dictionary<string, SeedRoleInfo>> GetSeedRolesByNameAsync()
+	{
+		_roleSeedInfoByNormalizedName ??= (await _identityRoleRepository.GetQueryableAsync())
+			.Select(role => new SeedRoleInfo(role.Id, role.Name))
+			.AsEnumerable()
+			.Where(role => !string.IsNullOrWhiteSpace(role.Name))
+			.ToDictionary(
+				role => _lookupNormalizer.NormalizeName(role.Name),
+				role => role,
+				StringComparer.OrdinalIgnoreCase);
+
+		return _roleSeedInfoByNormalizedName;
+	}
+
+	private static void ValidateSeedProfiles(
+		IReadOnlyCollection<SuratSeedEmployeeProfile> profiles,
+		IReadOnlyDictionary<string, SeedRoleInfo> rolesByName)
+	{
+		var duplicateEmails = profiles
+			.GroupBy(x => x.Email, StringComparer.OrdinalIgnoreCase)
+			.Where(x => x.Count() > 1)
+			.Select(x => x.Key)
+			.ToList();
+		if (duplicateEmails.Count > 0)
 		{
-			if (employeesByEmail.ContainsKey(profile.Email))
-			{
-				continue;
-			}
-
-			var role = await FindRoleSeedInfoAsync(profile.RoleName);
-			if (role == null)
-			{
-				_logger.LogWarning(
-					"[HRSeeder] Skipping seeded employee {Email}; role {RoleName} was not found.",
-					profile.Email,
-					profile.RoleName);
-				continue;
-			}
-
-			var userId = await CreateUserForEmployeeAsync(
-				profile.FirstName,
-				profile.LastName,
-				profile.Email,
-				profile.Mobile,
-				profile.RoleName);
-
-			var employee = await _employeeManager.CreateEmployeeAsync(
-				userId,
-				role.Id,
-				profile.FirstName,
-				profile.LastName,
-				profile.MiddleName,
-				$"{profile.FirstName[0]}.{profile.LastName}",
-				EmployeeStatusType.Active,
-				profile.DateOfBirth,
-				profile.FamilyCast,
-				profile.CastType,
-				profile.Gender,
-				profile.Religion,
-				profile.MaritalStatus,
-				profile.BloodGroup,
-				profile.Mobile,
-				profile.SecondaryMobile,
-				profile.Email,
-				BuildSeedPanNo(profile.Mobile, profile.Email),
-				BuildSeedAdharNo(profile.Mobile),
-				profile.Address1,
-				profile.Address2,
-				profile.Address3,
-				profile.Department,
-				profile.Designation,
-				profile.DateOfJoining,
-				profile.EmployeeGroup,
-				profile.Qualification,
-				profile.IdentificationMark,
-				profile.City,
-				profile.State,
-				profile.Country,
-				profile.PinCode,
-				fullDayShiftId);
-
-			employee = await _employeeRepository.InsertAsync(employee, autoSave: true);
-			employees.Add(employee);
-			employeesByEmail[profile.Email] = employee;
-			createdEmployees++;
+			throw new InvalidOperationException($"Duplicate seeded employee emails: {string.Join(", ", duplicateEmails)}");
 		}
 
-		foreach (var employee in employees)
+		foreach (var profile in profiles)
 		{
-			if (employee.Email == null || !profiles.TryGetValue(employee.Email, out var profile))
+			if (!rolesByName.ContainsKey(NormalizeRoleName(profile.RoleName)))
+			{
+				throw new InvalidOperationException(
+					$"Seeded employee role '{profile.RoleName}' was not found for {profile.Email}.");
+			}
+
+			if (profile.DateOfJoining <= profile.DateOfBirth)
+			{
+				throw new InvalidOperationException(
+					$"Seeded employee '{profile.Email}' has DateOfJoining before DateOfBirth.");
+			}
+
+			if (string.IsNullOrWhiteSpace(profile.Mobile) || profile.Mobile.Length < 4)
+			{
+				throw new InvalidOperationException($"Seeded employee '{profile.Email}' has invalid mobile number.");
+			}
+		}
+	}
+
+	private async Task<Dictionary<string, string>> GenerateSeedEmployeeCodesAsync(
+		IReadOnlyCollection<SuratSeedEmployeeProfile> profiles,
+		IReadOnlyDictionary<string, SeedRoleInfo> rolesByName,
+		IReadOnlyCollection<Employee> existingSeedEmployees)
+	{
+		var codeByEmail = existingSeedEmployees
+			.Where(x => !string.IsNullOrWhiteSpace(x.Email) && !string.IsNullOrWhiteSpace(x.EmployeeCode))
+			.ToDictionary(x => x.Email!, x => x.EmployeeCode!, StringComparer.OrdinalIgnoreCase);
+		var sequenceByScope = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		var employeeQuery = await _employeeRepository.GetQueryableAsync();
+		var existingCodes = employeeQuery
+			.Select(x => x.EmployeeCode)
+			.Where(x => x != null)
+			.AsEnumerable()
+			.Select(x => x!)
+			.ToList();
+
+		foreach (var profile in profiles.OrderBy(x => x.DateOfJoining).ThenBy(x => x.Email, StringComparer.OrdinalIgnoreCase))
+		{
+			if (codeByEmail.ContainsKey(profile.Email))
 			{
 				continue;
 			}
 
-			var role = await FindRoleSeedInfoAsync(profile.RoleName);
-			var updated = await _employeeManager.UpdateEmployeeAsync(
-				employee.Id,
-				profile.FirstName,
-				profile.LastName,
-				profile.MiddleName,
-				$"{profile.FirstName[0]}.{profile.LastName}",
-				employee.EmployeeStatusType ?? EmployeeStatusType.Active,
-				profile.DateOfBirth,
-				profile.FamilyCast,
-				profile.CastType,
-				profile.Gender,
-				profile.Religion,
-				profile.MaritalStatus,
-				profile.BloodGroup,
-				profile.Mobile,
-				profile.SecondaryMobile,
-				profile.Email,
-				BuildSeedPanNo(profile.Mobile, profile.Email),
-				BuildSeedAdharNo(profile.Mobile),
-				profile.Address1,
-				profile.Address2,
-				profile.Address3,
-				profile.Department,
-				profile.Designation,
-				profile.DateOfJoining,
-				profile.EmployeeGroup,
-				profile.Qualification,
-				role?.Id ?? employee.RoleId,
-				profile.IdentificationMark,
-				profile.City,
-				profile.State,
-				profile.Country,
-				profile.PinCode,
-				employee.ShiftId ?? fullDayShiftId);
-			await EnsureEmployeeFamilyDetailsAsync(updated.Id, profile);
-			await EnsureEmployeeWorkExperiencesAsync(updated.Id, profile);
-			if (string.IsNullOrWhiteSpace(employee.ProfilePictureBlobName))
+			var role = rolesByName[NormalizeRoleName(profile.RoleName)];
+			var roleCode = GetSeedRoleCode(role.Name);
+			var yearCode = (profile.DateOfJoining.Year % 100).ToString("D2");
+			var prefix = $"{roleCode}{yearCode}";
+			var scope = $"{prefix}";
+			if (!sequenceByScope.TryGetValue(scope, out var current))
 			{
-				await SeedEmployeeProfilePictureAsync(updated.Id);
+				current = existingCodes.Count(code => code.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 			}
-			await EnsureEmployeeDocumentsAsync(updated.Id, profile, documentSettings);
-			await EnsureEmployeeOrganizationAssignmentsAsync(
-				updated.Id,
-				await ResolveSeedOrganizationIdsForEmployeeAsync(profile.RoleName, profile.Email));
-			updatedEmployees++;
+
+			current++;
+			sequenceByScope[scope] = current;
+			codeByEmail[profile.Email] = $"{prefix}{ToBase36(current).PadLeft(4, '0')[^4..].ToUpperInvariant()}";
 		}
 
-		if (updatedEmployees > 0)
+		return codeByEmail;
+	}
+
+	private Employee CreateSeedEmployee(
+		SuratSeedEmployeeProfile profile,
+		Guid userId,
+		Guid roleId,
+		string employeeCode,
+		Guid? shiftId)
+	{
+		return new Employee(
+			id: userId,
+			tenantId: CurrentTenant.Id,
+			userId: userId,
+			profilePictureBlobName: null,
+			employeeCode: employeeCode,
+			lastName: profile.LastName,
+			firstName: profile.FirstName,
+			middleName: profile.MiddleName,
+			shortName: $"{profile.FirstName[0]}.{profile.LastName}",
+			employeeStatusType: EmployeeStatusType.Active,
+			dateOfBirth: profile.DateOfBirth,
+			familyCast: profile.FamilyCast,
+			castType: profile.CastType,
+			genderType: profile.Gender,
+			religion: profile.Religion,
+			maritalStatus: profile.MaritalStatus,
+			bloodGroup: profile.BloodGroup,
+			mobileNo: profile.Mobile,
+			secondaryMobileNo: profile.SecondaryMobile,
+			email: profile.Email,
+			panNo: BuildSeedPanNo(profile.Mobile, profile.Email),
+			adharNo: BuildSeedAdharNo(profile.Mobile),
+			address1: profile.Address1,
+			address2: profile.Address2,
+			address3: profile.Address3,
+			department: profile.Department,
+			designation: profile.Designation,
+			dateOfJoining: profile.DateOfJoining,
+			employeeGroup: profile.EmployeeGroup,
+			qualification: profile.Qualification,
+			roleId: roleId,
+			identificationMark1: profile.IdentificationMark,
+			city: profile.City,
+			state: profile.State,
+			country: profile.Country,
+			pinCode: profile.PinCode,
+			bankDetails: new BankDetails(null, null, null, null, null),
+			workExperiences: BuildWorkExperiences(profile),
+			shiftId: shiftId);
+	}
+
+	private static void UpdateSeedEmployee(Employee employee, SuratSeedEmployeeProfile profile, Guid roleId, Guid? shiftId)
+	{
+		employee.UpdateBasicInfo(
+			lastName: profile.LastName,
+			firstName: profile.FirstName,
+			middleName: profile.MiddleName,
+			shortName: $"{profile.FirstName[0]}.{profile.LastName}",
+			employeeStatusType: employee.EmployeeStatusType ?? EmployeeStatusType.Active,
+			dateOfBirth: profile.DateOfBirth,
+			profilePictureBlobName: employee.ProfilePictureBlobName,
+			familyCast: profile.FamilyCast,
+			castType: profile.CastType,
+			genderType: profile.Gender,
+			religion: profile.Religion,
+			maritalStatus: profile.MaritalStatus,
+			bloodGroup: profile.BloodGroup,
+			mobileNo: profile.Mobile,
+			secondaryMobileNo: profile.SecondaryMobile,
+			email: profile.Email,
+			panNo: BuildSeedPanNo(profile.Mobile, profile.Email),
+			adharNo: BuildSeedAdharNo(profile.Mobile),
+			address1: profile.Address1,
+			address2: profile.Address2,
+			address3: profile.Address3,
+			department: profile.Department,
+			designation: profile.Designation,
+			dateOfJoining: profile.DateOfJoining,
+			employeeGroup: profile.EmployeeGroup,
+			qualification: profile.Qualification,
+			roleId: roleId,
+			identificationMark1: profile.IdentificationMark,
+			city: profile.City,
+			state: profile.State,
+			country: profile.Country,
+			pinCode: profile.PinCode,
+			shiftId: shiftId);
+	}
+
+	private async Task AddMissingSeedEmployeeDocumentsAsync(
+		Employee employee,
+		SuratSeedEmployeeProfile profile,
+		IReadOnlyDictionary<string, DocumentSetting> documentSettings)
+	{
+		var existingSettingIds = employee.Documents
+			.Where(x => x.DocumentNameId.HasValue)
+			.Select(x => x.DocumentNameId!.Value)
+			.ToHashSet();
+		var documentsToAdd = new List<EmployeeDocumentData>();
+		foreach (var documentName in RequiredSeedEmployeeDocumentNames)
+		{
+			if (!documentSettings.TryGetValue(documentName, out var setting) ||
+			    existingSettingIds.Contains(setting.Id) ||
+			    employee.Documents.Any(x => x.DocumentName.Contains(documentName, StringComparison.OrdinalIgnoreCase)))
+			{
+				continue;
+			}
+
+			var fileName = $"{SanitizeFileToken(profile.Email)}-{SanitizeFileToken(documentName)}.pdf";
+			var content = BuildSeedPdfBytes(documentName, profile);
+			documentsToAdd.Add(new EmployeeDocumentData
+			{
+				DocumentNameId = setting.Id,
+				FileName = fileName,
+				ContentType = "application/pdf",
+				Content = content,
+				Size = content.LongLength
+			});
+		}
+
+		if (documentsToAdd.Count > 0)
+		{
+			await _employeeDocumentManager.AddDocumentsAsync(employee, documentsToAdd, updateEmployee: false);
+		}
+	}
+
+	private async Task EnsureEmployeeFamilyDetailsBatchAsync(
+		IReadOnlyDictionary<string, Employee> employeesByEmail,
+		IReadOnlyDictionary<string, SuratSeedEmployeeProfile> profilesByEmail)
+	{
+		var employeeIds = employeesByEmail.Values.Select(x => x.Id).ToHashSet();
+		var existing = await _familyMemberRepository.GetListAsync(x => employeeIds.Contains(x.EmployeeId));
+		var existingByKey = existing.ToDictionary(x => (x.EmployeeId, x.RelationType));
+		var toInsert = new List<EmployeeFamilyMember>();
+		var toUpdate = new List<EmployeeFamilyMember>();
+
+		foreach (var (email, employee) in employeesByEmail)
+		{
+			if (!profilesByEmail.TryGetValue(email, out var profile))
+			{
+				continue;
+			}
+
+			foreach (var (relationType, details) in BuildSeedFamilyDetails(profile))
+			{
+				if (details == null || string.IsNullOrWhiteSpace(details.Name))
+				{
+					continue;
+				}
+
+				if (existingByKey.TryGetValue((employee.Id, relationType), out var existingMember))
+				{
+					existingMember.Update(
+						details.Name,
+						details.Occupation,
+						details.ContactNo,
+						details.Address1,
+						details.Address2,
+						details.Address3,
+						details.City,
+						details.StateName,
+						details.StateIsoCode,
+						details.CountryName,
+						details.CountryIsoCode,
+						details.PinCode);
+					toUpdate.Add(existingMember);
+				}
+				else
+				{
+					toInsert.Add(new EmployeeFamilyMember(
+						GuidGenerator.Create(),
+						CurrentTenant.Id,
+						employee.Id,
+						relationType,
+						details.Name,
+						details.Occupation,
+						details.ContactNo,
+						details.Address1,
+						details.Address2,
+						details.Address3,
+						details.City,
+						details.StateName,
+						details.StateIsoCode,
+						details.CountryName,
+						details.CountryIsoCode,
+						details.PinCode));
+				}
+			}
+		}
+
+		if (toInsert.Count > 0)
+		{
+			await _familyMemberRepository.InsertManyAsync(toInsert, autoSave: false);
+		}
+
+		if (toUpdate.Count > 0)
+		{
+			await _familyMemberRepository.UpdateManyAsync(toUpdate, autoSave: false);
+		}
+
+		if (toInsert.Count > 0 || toUpdate.Count > 0)
 		{
 			await CurrentUnitOfWork.SaveChangesAsync();
 		}
 
 		_logger.LogInformation(
-			"[HRSeeder] Seeded employee completeness backfilled created={CreatedCount}, updated={UpdatedCount}",
-			createdEmployees,
-			updatedEmployees);
+			"[HRSeeder] Employee family details ensured inserted={InsertedCount}, updated={UpdatedCount}",
+			toInsert.Count,
+			toUpdate.Count);
 	}
+
+	private async Task EnsureEmployeeOrganizationAssignmentsBatchAsync(
+		IReadOnlyDictionary<string, Employee> employeesByEmail,
+		IReadOnlyDictionary<string, SuratSeedEmployeeProfile> profilesByEmail)
+	{
+		var stages = (await _educationMediumStageRepository.GetQueryableAsync())
+			.OrderBy(x => x.Name)
+			.Select(x => new SeedStageInfo(x.Id, x.Name))
+			.ToList();
+		if (stages.Count == 0 || employeesByEmail.Count == 0)
+		{
+			return;
+		}
+
+		var employeeIds = employeesByEmail.Values.Select(x => x.Id).ToHashSet();
+		var existing = await _employeeOrganizationAssignmentRepository.GetListAsync(x => employeeIds.Contains(x.EmployeeId));
+		var existingKeys = existing.Select(x => (x.EmployeeId, x.EducationMediumStageId)).ToHashSet();
+		var assignments = new List<EmployeeOrganizationAssignment>();
+
+		foreach (var (email, employee) in employeesByEmail)
+		{
+			if (!profilesByEmail.TryGetValue(email, out var profile))
+			{
+				continue;
+			}
+
+			foreach (var stageId in ResolveSeedOrganizationIdsForEmployee(profile.RoleName, profile.Email, stages))
+			{
+				if (!existingKeys.Add((employee.Id, stageId)))
+				{
+					continue;
+				}
+
+				assignments.Add(new EmployeeOrganizationAssignment(
+					GuidGenerator.Create(),
+					CurrentTenant.Id,
+					employee.Id,
+					stageId));
+			}
+		}
+
+		if (assignments.Count > 0)
+		{
+			await _employeeOrganizationAssignmentRepository.InsertManyAsync(assignments, autoSave: true);
+		}
+
+		_logger.LogInformation(
+			"[HRSeeder] Employee organization assignments inserted={InsertedCount}",
+			assignments.Count);
+	}
+
+	private static IEnumerable<(FamilyRelationType RelationType, ContactDetails? Details)> BuildSeedFamilyDetails(
+		SuratSeedEmployeeProfile profile)
+	{
+		yield return (FamilyRelationType.Father, new ContactDetails(
+			$"{profile.FirstName}bhai {profile.LastName}",
+			profile.EmployeeGroup == EmployeeGroupType.Teaching ? "Retired Teacher" : "Retired Service Professional",
+			BuildDemoMobile(profile.Mobile, 7),
+			profile.Address1,
+			profile.Address2,
+			profile.Address3,
+			profile.City,
+			profile.State.Name,
+			profile.State.IsoCode,
+			profile.Country.Name,
+			profile.Country.IsoCode,
+			profile.PinCode));
+		yield return (FamilyRelationType.Mother, new ContactDetails(
+			$"{profile.FirstName}ben {profile.LastName}",
+			"Homemaker",
+			BuildDemoMobile(profile.Mobile, 8),
+			profile.Address1,
+			profile.Address2,
+			profile.Address3,
+			profile.City,
+			profile.State.Name,
+			profile.State.IsoCode,
+			profile.Country.Name,
+			profile.Country.IsoCode,
+			profile.PinCode));
+		if (profile.MaritalStatus == MaritalStatusType.Married)
+		{
+			yield return (FamilyRelationType.Spouse, new ContactDetails(
+				profile.Gender == GenderType.Male ? $"Mitali {profile.LastName}" : $"Nirav {profile.LastName}",
+				"Private Sector Professional",
+				BuildDemoMobile(profile.Mobile, 9),
+				profile.Address1,
+				profile.Address2,
+				profile.Address3,
+				profile.City,
+				profile.State.Name,
+				profile.State.IsoCode,
+				profile.Country.Name,
+				profile.Country.IsoCode,
+				profile.PinCode));
+		}
+	}
+
+	private static IReadOnlyCollection<Guid> ResolveSeedOrganizationIdsForEmployee(
+		string roleName,
+		string email,
+		IReadOnlyList<SeedStageInfo> stages)
+	{
+		var broadAccessRoles = new[] { "Director", "Principal", "Admin", "Administrative", "Manager", "Clerk", "Finance", "HR" };
+		if (broadAccessRoles.Any(token => roleName.Contains(token, StringComparison.OrdinalIgnoreCase)))
+		{
+			return stages.Select(x => x.Id).ToList();
+		}
+
+		var primary = stages.FirstOrDefault(x => x.Name.Contains("Primary", StringComparison.OrdinalIgnoreCase));
+		var secondary = stages.FirstOrDefault(x => x.Name.Contains("Secondary", StringComparison.OrdinalIgnoreCase));
+		if (roleName.Contains("Teacher", StringComparison.OrdinalIgnoreCase))
+		{
+			var preferred = StableSeedHash(email) % 2 == 0 ? primary ?? stages[0] : secondary ?? stages[^1];
+			return new[] { preferred.Id };
+		}
+
+		return new[] { stages[0].Id };
+	}
+
+	private static string NormalizeRoleName(string roleName) => roleName.ToUpperInvariant();
+
+	private static string GetSeedRoleCode(string roleName)
+	{
+		var normalized = roleName.Trim().ToUpperInvariant().Replace(" ", "");
+		return normalized.Length >= 3 ? normalized[..3] : normalized.PadRight(3, 'X');
+	}
+
+	private static string ToBase36(int value)
+	{
+		const string chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		var result = string.Empty;
+		do
+		{
+			result = chars[value % 36] + result;
+			value /= 36;
+		} while (value > 0);
+
+		return result;
+	}
+
+	private sealed record SeedStageInfo(Guid Id, string Name);
+
+	private static readonly string[] RequiredSeedEmployeeDocumentNames =
+	[
+		"Aadhaar Card",
+		"PAN Card",
+		"Qualification Certificate",
+		"Experience Letter",
+		"Joining Letter",
+		"Bank Proof",
+		"Address Proof",
+		"Profile Verification"
+	];
 
 	private async Task EnsureEmployeeFamilyDetailsAsync(Guid employeeId, SuratSeedEmployeeProfile profile)
 	{
@@ -2073,6 +2707,7 @@ public class HRSeederContributor : BaseSeederContributor
 		var previousMonthEndDate = previousMonthStartDate.AddMonths(1).AddDays(-1);
 		var windowStart = DateOnly.FromDateTime(previousMonthStartDate);
 		var windowEnd = DateOnly.FromDateTime(previousMonthEndDate);
+		var holidayDates = await BuildSeedHolidayDateSetAsync(windowStart, windowEnd);
 
 		List<EmployeeAttendance> existingRows;
 		using (_dataFilter.Disable<ISoftDelete>())
@@ -2088,7 +2723,7 @@ public class HRSeederContributor : BaseSeederContributor
 		var rows = new List<EmployeeAttendance>();
 		for (var date = windowStart; date <= windowEnd; date = date.AddDays(1))
 		{
-			if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+			if (!ShouldSeedAttendanceForDate(date, holidayDates))
 			{
 				continue;
 			}
@@ -2138,11 +2773,12 @@ public class HRSeederContributor : BaseSeederContributor
 
 		var inserted = await _employeeAttendanceRepository.InsertManyIgnoringDuplicatesAsync(rows);
 		_logger.LogInformation(
-			"[HRSeeder] Previous completed month attendance ensured range={Start}..{End}, rows={InsertedCount}, employees={EmployeeCount}",
+			"[HRSeeder] Previous completed month attendance ensured range={Start}..{End}, rows={InsertedCount}, employees={EmployeeCount}, holidayDatesSkipped={HolidayDateCount}",
 			windowStart,
 			windowEnd,
 			inserted,
-			employeeIds.Count);
+			employeeIds.Count,
+			holidayDates.Count);
 	}
 
 	internal static byte[] BuildSeedPdfBytes(string documentName, SuratSeedEmployeeProfile profile)
@@ -2658,6 +3294,7 @@ public class HRSeederContributor : BaseSeederContributor
 		var windowStartMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1)
 			.AddMonths(-(monthWindow - 1));
 		var windowStart = DateOnly.FromDateTime(windowStartMonth);
+		var holidayDates = await BuildSeedHolidayDateSetAsync(windowStart, today);
 
 		List<EmployeeAttendance> existingRows;
 		using (_dataFilter.Disable<ISoftDelete>())
@@ -2677,7 +3314,7 @@ public class HRSeederContributor : BaseSeederContributor
 
 		for (var date = windowStart; date <= today; date = date.AddDays(1))
 		{
-			if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+			if (!ShouldSeedAttendanceForDate(date, holidayDates))
 			{
 				continue;
 			}
@@ -2729,9 +3366,10 @@ public class HRSeederContributor : BaseSeederContributor
 		var insertedCount = await _employeeAttendanceRepository.InsertManyIgnoringDuplicatesAsync(attendancesToInsert);
 
 		_logger.LogInformation(
-			"[HRSeeder] Attendance sample seeded rows={InsertedCount} for employees={EmployeeCount}",
+			"[HRSeeder] Attendance sample seeded rows={InsertedCount} for employees={EmployeeCount}, holidayDatesSkipped={HolidayDateCount}",
 			insertedCount,
-			employeeIds.Count);
+			employeeIds.Count,
+			holidayDates.Count);
 	}
 
 	private async Task SeedPastAcademicYearPayrollAttendanceAsync(List<Guid> employeeIds, Guid educationMediumStageId)
@@ -2776,6 +3414,7 @@ public class HRSeederContributor : BaseSeederContributor
 		{
 			windowEnd = DateOnly.FromDateTime(academicYear.EndDate.Date);
 		}
+		var holidayDates = await BuildSeedHolidayDateSetAsync(windowStart, windowEnd, academicYear.Id);
 
 		List<EmployeeAttendance> existingRows;
 		using (_dataFilter.Disable<ISoftDelete>())
@@ -2794,7 +3433,7 @@ public class HRSeederContributor : BaseSeederContributor
 		var workingDayIndex = 0;
 		for (var date = windowStart; date <= windowEnd; date = date.AddDays(1))
 		{
-			if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+			if (!ShouldSeedAttendanceForDate(date, holidayDates))
 			{
 				continue;
 			}
@@ -2847,12 +3486,13 @@ public class HRSeederContributor : BaseSeederContributor
 		var insertedCount = await _employeeAttendanceRepository.InsertManyIgnoringDuplicatesAsync(attendancesToInsert);
 
 		_logger.LogInformation(
-			"[HRSeeder] Past-year payroll attendance seeded academicYear={AcademicYearName}, range={Start}..{End}, rows={InsertedCount}, employees={EmployeeCount}",
+			"[HRSeeder] Past-year payroll attendance seeded academicYear={AcademicYearName}, range={Start}..{End}, rows={InsertedCount}, employees={EmployeeCount}, holidayDatesSkipped={HolidayDateCount}",
 			academicYear.Name,
 			windowStart,
 			windowEnd,
 			insertedCount,
-			employeeIds.Count);
+			employeeIds.Count,
+			holidayDates.Count);
 	}
 
 	private async Task SeedSampleLeaveScenariosAsync(List<Guid> employeeIds)
@@ -3640,6 +4280,11 @@ public class HRSeederContributor : BaseSeederContributor
 
 				private async Task SeedEmployeeProfilePictureAsync(Guid employeeId)
 				{
+					if (!ShouldSeedRichAssets())
+					{
+						return;
+					}
+
 					_logger.LogDebug("[HRSeeder] Upload profile picture start EmployeeId={EmployeeId}", employeeId);
 					var idx = (employeeId.GetHashCode() & 0x7FFFFFFF) % ProfileSeedImageCount;
 					var resourceName = $"ShikshaMitra.Seeders.Assets.profile-seed-{idx:D2}.png";
@@ -3663,8 +4308,9 @@ public class HRSeederContributor : BaseSeederContributor
 				{
 					var tenantId = CurrentTenant.Id;
 
-					// Father
-					var father = new EmployeeFamilyMember(
+					var familyMembers = new List<EmployeeFamilyMember>();
+
+					familyMembers.Add(new EmployeeFamilyMember(
 						id: GuidGenerator.Create(),
 						tenantId: tenantId,
 						employeeId: employeeId,
@@ -3681,11 +4327,9 @@ public class HRSeederContributor : BaseSeederContributor
 						countryName: "India",
 						countryIsoCode: "IN",
 						pinCode: "400001"
-					);
-					await _familyMemberRepository.InsertAsync(father, autoSave: true);
+					));
 
-					// Mother
-					var mother = new EmployeeFamilyMember(
+					familyMembers.Add(new EmployeeFamilyMember(
 						id: GuidGenerator.Create(),
 						tenantId: tenantId,
 						employeeId: employeeId,
@@ -3702,12 +4346,11 @@ public class HRSeederContributor : BaseSeederContributor
 						countryName: "India",
 						countryIsoCode: "IN",
 						pinCode: "400001"
-					);
-					await _familyMemberRepository.InsertAsync(mother, autoSave: true);
+					));
 
 					// Spouse (for married employees)
 					var spouseName = employeeGender == GenderType.Male ? "Wife" : "Husband";
-					var spouse = new EmployeeFamilyMember(
+					familyMembers.Add(new EmployeeFamilyMember(
 						id: GuidGenerator.Create(),
 						tenantId: tenantId,
 						employeeId: employeeId,
@@ -3724,8 +4367,9 @@ public class HRSeederContributor : BaseSeederContributor
 						countryName: "India",
 						countryIsoCode: "IN",
 						pinCode: "400001"
-					);
-					await _familyMemberRepository.InsertAsync(spouse, autoSave: true);
+					));
+
+					await _familyMemberRepository.InsertManyAsync(familyMembers, autoSave: true);
 				}
 
 				private async Task<Guid> CreateUserForEmployeeAsync(
@@ -3788,6 +4432,485 @@ public class HRSeederContributor : BaseSeederContributor
 
 		return user.Id;
 	}
+
+	private async Task SeedPerformanceManagementDemoDataAsync(IReadOnlyCollection<Guid> activeEmployeeIds)
+	{
+		var employees = await GetPerformanceSeedEmployeesAsync(activeEmployeeIds);
+		if (employees.Count == 0)
+		{
+			_logger.LogInformation("[HRSeeder] Skipping performance management demo data because no active employees were found.");
+			return;
+		}
+
+		var teacherTemplate = await EnsurePerformanceTemplateAsync(
+			"Teacher Annual Appraisal",
+			PerformanceStaffCategory.Teacher,
+			new[]
+			{
+				("Classroom Practice", 45m, new[] { ("Lesson planning and delivery", 40m, true), ("Student engagement", 35m, false), ("Assessment for learning", 25m, true) }),
+				("Student Progress", 25m, new[] { ("Remedial support", 45m, false), ("Learning outcomes tracking", 55m, true) }),
+				("Professional Conduct", 30m, new[] { ("Parent communication", 40m, false), ("Collaboration and punctuality", 60m, false) })
+			});
+		var adminTemplate = await EnsurePerformanceTemplateAsync(
+			"Admin and Accounts Appraisal",
+			PerformanceStaffCategory.Admin,
+			new[]
+			{
+				("Operational Accuracy", 40m, new[] { ("Documentation accuracy", 50m, true), ("Turnaround time", 50m, false) }),
+				("Service Quality", 35m, new[] { ("Stakeholder support", 55m, false), ("Issue resolution", 45m, false) }),
+				("Compliance", 25m, new[] { ("Policy adherence", 100m, true) })
+			});
+		var libraryTemplate = await EnsurePerformanceTemplateAsync(
+			"Librarian and Lab Assistant Appraisal",
+			PerformanceStaffCategory.LibrarianLabAssistant,
+			new[]
+			{
+				("Resource Readiness", 40m, new[] { ("Inventory discipline", 50m, true), ("Lab/library availability", 50m, false) }),
+				("Student Support", 35m, new[] { ("Guidance quality", 55m, false), ("Safety and supervision", 45m, true) }),
+				("Coordination", 25m, new[] { ("Teacher coordination", 100m, false) })
+			});
+
+		var academicYearId = await ResolvePerformanceSeedAcademicYearIdAsync();
+		var cycle = await EnsurePerformanceCycleAsync(academicYearId);
+		var templateByCategory = new Dictionary<PerformanceStaffCategory, Guid>
+		{
+			[PerformanceStaffCategory.Teacher] = teacherTemplate.Id,
+			[PerformanceStaffCategory.ClassTeacher] = teacherTemplate.Id,
+			[PerformanceStaffCategory.Admin] = adminTemplate.Id,
+			[PerformanceStaffCategory.Accounts] = adminTemplate.Id,
+			[PerformanceStaffCategory.LibrarianLabAssistant] = libraryTemplate.Id
+		};
+
+		var selectedEmployees = employees.Take(Math.Min(12, employees.Count)).ToList();
+		for (var index = 0; index < selectedEmployees.Count; index++)
+		{
+			var employee = selectedEmployees[index];
+			var category = InferPerformanceSeedStaffCategory(employee);
+			var templateId = templateByCategory.GetValueOrDefault(category, teacherTemplate.Id);
+			var assignment = await EnsurePerformanceAssignmentAsync(cycle, employee, templateId);
+			await EnsurePerformanceReviewSeedDetailsAsync(assignment, templateId, employee, index);
+		}
+	}
+
+	private async Task<List<Employee>> GetPerformanceSeedEmployeesAsync(IReadOnlyCollection<Guid> activeEmployeeIds)
+	{
+		var query = await _employeeRepository.GetQueryableAsync();
+		return query
+			.Where(x => activeEmployeeIds.Contains(x.Id))
+			.Where(x => x.EmployeeStatusType == null || x.EmployeeStatusType == EmployeeStatusType.Active)
+			.OrderBy(x => x.Department)
+			.ThenBy(x => x.FirstName)
+			.ThenBy(x => x.LastName)
+			.ToList();
+	}
+
+	private async Task<Guid?> ResolvePerformanceSeedAcademicYearIdAsync()
+	{
+		var query = await _academicYearRepository.GetQueryableAsync();
+		return query.OrderByDescending(x => x.CreationTime).FirstOrDefault()?.Id;
+	}
+
+	private async Task<PerformanceTemplate> EnsurePerformanceTemplateAsync(
+		string name,
+		PerformanceStaffCategory staffCategory,
+		(string Name, decimal Weight, (string Name, decimal Weight, bool EvidenceRequired)[] Criteria)[] sectionSpecs)
+	{
+		var templateQuery = await _performanceTemplateRepository.GetQueryableAsync();
+		var template = templateQuery.FirstOrDefault(x => x.Name == name);
+		if (template == null)
+		{
+			template = new PerformanceTemplate(GuidGenerator.Create(), CurrentTenant.Id, name, staffCategory, null, "Seeded demo appraisal template");
+			await _performanceTemplateRepository.InsertAsync(template, autoSave: true);
+		}
+
+		var sectionQuery = await _performanceTemplateSectionRepository.GetQueryableAsync();
+		var existingSections = sectionQuery.Where(x => x.TemplateId == template.Id).ToList();
+		if (existingSections.Count == 0)
+		{
+			var displayOrder = 1;
+			foreach (var sectionSpec in sectionSpecs)
+			{
+				var section = new PerformanceTemplateSection(
+					GuidGenerator.Create(),
+					CurrentTenant.Id,
+					template.Id,
+					sectionSpec.Name,
+					sectionSpec.Weight,
+					displayOrder++);
+				await _performanceTemplateSectionRepository.InsertAsync(section, autoSave: true);
+
+				var criterionOrder = 1;
+				foreach (var criterionSpec in sectionSpec.Criteria)
+				{
+					await _performanceTemplateCriterionRepository.InsertAsync(
+						new PerformanceTemplateCriterion(
+							GuidGenerator.Create(),
+							CurrentTenant.Id,
+							template.Id,
+							section.Id,
+							criterionSpec.Name,
+							null,
+							criterionSpec.Weight,
+							criterionSpec.EvidenceRequired,
+							criterionOrder++),
+						autoSave: true);
+				}
+			}
+		}
+
+		if (template.Status != PerformanceTemplateStatus.Published)
+		{
+			var sections = (await _performanceTemplateSectionRepository.GetQueryableAsync()).Where(x => x.TemplateId == template.Id).ToList();
+			var criteria = (await _performanceTemplateCriterionRepository.GetQueryableAsync()).Where(x => x.TemplateId == template.Id).ToList();
+			template.Publish(sections.Sum(x => x.Weight), sections.All(section => criteria.Any(criterion => criterion.SectionId == section.Id)));
+			await _performanceTemplateRepository.UpdateAsync(template, autoSave: true);
+		}
+
+		return template;
+	}
+
+	private async Task<ProfessionalReviewCycle> EnsurePerformanceCycleAsync(Guid? academicYearId)
+	{
+		const string cycleName = "Annual Staff Appraisal Demo";
+		var cycleQuery = await _performanceCycleRepository.GetQueryableAsync();
+		var cycle = cycleQuery.FirstOrDefault(x => x.Name == cycleName);
+		if (cycle != null)
+		{
+			return cycle;
+		}
+
+		var today = DateTime.Today;
+		cycle = new ProfessionalReviewCycle(
+			GuidGenerator.Create(),
+			CurrentTenant.Id,
+			academicYearId,
+			cycleName,
+			PerformanceCycleType.Annual,
+			new DateTime(today.Year, 4, 1),
+			new DateTime(today.Year + 1, 3, 31),
+			today.AddDays(-7),
+			today.AddDays(7),
+			today.AddDays(21),
+			5,
+			true,
+			"{\"demo\":true}",
+			"{\"stages\":[\"SelfAppraisal\",\"ReportingManager\",\"HodCoordinator\",\"PrincipalManagement\",\"HrVerification\"]}",
+			ProfessionalReviewCycleStatus.InProgress);
+		await _performanceCycleRepository.InsertAsync(cycle, autoSave: true);
+		return cycle;
+	}
+
+	private async Task<PerformanceReviewAssignment> EnsurePerformanceAssignmentAsync(
+		ProfessionalReviewCycle cycle,
+		Employee employee,
+		Guid templateId)
+	{
+		var assignmentQuery = await _performanceAssignmentRepository.GetQueryableAsync();
+		var assignment = assignmentQuery.FirstOrDefault(x => x.CycleId == cycle.Id && x.EmployeeId == employee.Id);
+		if (assignment != null)
+		{
+			return assignment;
+		}
+
+		assignment = new PerformanceReviewAssignment(
+			GuidGenerator.Create(),
+			CurrentTenant.Id,
+			cycle.Id,
+			templateId,
+			employee.Id,
+			employee.ReportingManagerId,
+			await FindPerformanceSeedReviewerByKeywordAsync(employee.Department, "hod", "coordinator", "head"),
+			await FindPerformanceSeedReviewerByKeywordAsync(null, "principal", "vice principal", "management"));
+		await _performanceAssignmentRepository.InsertAsync(assignment, autoSave: true);
+		return assignment;
+	}
+
+	private async Task EnsurePerformanceReviewSeedDetailsAsync(
+		PerformanceReviewAssignment assignment,
+		Guid templateId,
+		Employee employee,
+		int index)
+	{
+		var criteria = (await _performanceTemplateCriterionRepository.GetQueryableAsync())
+			.Where(x => x.TemplateId == templateId)
+			.OrderBy(x => x.DisplayOrder)
+			.ToList();
+		if (criteria.Count == 0)
+		{
+			return;
+		}
+
+		var score = 72m + (index % 5) * 5m;
+		var finalRating = score >= 88m ? "Excellent" : score >= 80m ? "Very Good" : "Good";
+		var submittedStages = (index % 4) switch
+		{
+			0 => new[] { PerformanceReviewStageType.SelfAppraisal },
+			1 => new[] { PerformanceReviewStageType.SelfAppraisal, PerformanceReviewStageType.ReportingManager },
+			2 => new[] { PerformanceReviewStageType.SelfAppraisal, PerformanceReviewStageType.ReportingManager, PerformanceReviewStageType.HodCoordinator },
+			_ => Enum.GetValues<PerformanceReviewStageType>()
+		};
+
+		foreach (var stageType in Enum.GetValues<PerformanceReviewStageType>())
+		{
+			var stage = await EnsurePerformanceStageAsync(assignment, stageType);
+			if (stage.Status == PerformanceReviewStageStatus.Pending || stage.Status == PerformanceReviewStageStatus.Draft)
+			{
+				var comment = BuildPerformanceStageComment(employee, stageType);
+				if (submittedStages.Contains(stageType))
+				{
+					stage.Submit(comment, DateTime.Now.AddDays(-Math.Max(1, 10 - index)));
+				}
+				else
+				{
+					stage.SaveDraft(comment);
+				}
+
+				await _performanceStageRepository.UpdateAsync(stage, autoSave: true);
+			}
+
+			await EnsurePerformanceResponsesAsync(assignment.Id, stage.Id, criteria, index);
+		}
+
+		assignment.MarkInProgress();
+		if (index % 4 == 3)
+		{
+			assignment.FinalizeReview(score, finalRating, DateTime.Now.AddDays(-index));
+			await EnsurePerformanceOutcomeAsync(assignment.Id, score, finalRating, index);
+		}
+		await _performanceAssignmentRepository.UpdateAsync(assignment, autoSave: true);
+
+		if (index % 3 == 0)
+		{
+			await EnsureClassroomObservationAsync(assignment.Id, employee.Id, index);
+		}
+
+		await EnsurePerformanceEvidenceAsync(assignment.Id, criteria.First().Id, index);
+		await EnsurePerformanceFeedbackAsync(assignment.Id, employee, index);
+		if (index % 2 == 0)
+		{
+			await EnsureDevelopmentPlanAsync(assignment.Id, employee.Id, index);
+		}
+		await EnsurePerformanceAuditAsync(assignment.Id, index);
+	}
+
+	private async Task<PerformanceReviewStage> EnsurePerformanceStageAsync(
+		PerformanceReviewAssignment assignment,
+		PerformanceReviewStageType stageType)
+	{
+		var stageQuery = await _performanceStageRepository.GetQueryableAsync();
+		var stage = stageQuery.FirstOrDefault(x => x.ReviewAssignmentId == assignment.Id && x.StageType == stageType);
+		if (stage != null)
+		{
+			return stage;
+		}
+
+		stage = new PerformanceReviewStage(
+			GuidGenerator.Create(),
+			CurrentTenant.Id,
+			assignment.Id,
+			stageType,
+			stageType switch
+			{
+				PerformanceReviewStageType.ReportingManager => assignment.ReportingManagerEmployeeId,
+				PerformanceReviewStageType.HodCoordinator => assignment.HodEmployeeId,
+				PerformanceReviewStageType.PrincipalManagement => assignment.PrincipalEmployeeId,
+				_ => null
+			});
+		await _performanceStageRepository.InsertAsync(stage, autoSave: true);
+		return stage;
+	}
+
+	private async Task EnsurePerformanceResponsesAsync(
+		Guid assignmentId,
+		Guid stageId,
+		IReadOnlyCollection<PerformanceTemplateCriterion> criteria,
+		int index)
+	{
+		var responseQuery = await _performanceResponseRepository.GetQueryableAsync();
+		if (responseQuery.Any(x => x.StageId == stageId))
+		{
+			return;
+		}
+
+		var rating = 3 + (index % 3);
+		foreach (var criterion in criteria)
+		{
+			await _performanceResponseRepository.InsertAsync(
+				new PerformanceReviewResponse(
+					GuidGenerator.Create(),
+					CurrentTenant.Id,
+					assignmentId,
+					stageId,
+					criterion.Id,
+					Math.Clamp(rating, 1, 5),
+					false,
+					"Seeded review response for demo appraisal flow."),
+				autoSave: true);
+		}
+	}
+
+	private async Task EnsurePerformanceOutcomeAsync(Guid assignmentId, decimal score, string finalRating, int index)
+	{
+		var outcomeQuery = await _performanceOutcomeRepository.GetQueryableAsync();
+		if (outcomeQuery.Any(x => x.ReviewAssignmentId == assignmentId))
+		{
+			return;
+		}
+
+		await _performanceOutcomeRepository.InsertAsync(
+			new PerformanceOutcome(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				assignmentId,
+				score,
+				finalRating,
+				"Strong classroom ownership, timely documentation, and steady collaboration.",
+				"Continue improving data-backed interventions and peer mentoring.",
+				index % 2 == 0 ? PerformanceRecommendationType.Training : PerformanceRecommendationType.Increment,
+				"Recommendation only; payroll is not updated automatically.",
+				index % 2 == 1,
+				index % 5 == 0),
+			autoSave: true);
+	}
+
+	private async Task EnsureClassroomObservationAsync(Guid assignmentId, Guid employeeId, int index)
+	{
+		var observationQuery = await _classroomObservationRepository.GetQueryableAsync();
+		if (observationQuery.Any(x => x.ReviewAssignmentId == assignmentId))
+		{
+			return;
+		}
+
+		await _classroomObservationRepository.InsertAsync(
+			new ClassroomObservation(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				assignmentId,
+				employeeId,
+				DateTime.Today.AddDays(-index - 3),
+				$"Class {6 + index % 5}",
+				index % 2 == 0 ? "Mathematics" : "English",
+				4,
+				3 + index % 3,
+				4,
+				4,
+				"Lesson flow was structured with visible student checks for understanding."),
+			autoSave: true);
+	}
+
+	private async Task EnsurePerformanceEvidenceAsync(Guid assignmentId, Guid criterionId, int index)
+	{
+		var evidenceQuery = await _performanceEvidenceRepository.GetQueryableAsync();
+		if (evidenceQuery.Any(x => x.ReviewAssignmentId == assignmentId))
+		{
+			return;
+		}
+
+		await _performanceEvidenceRepository.InsertAsync(
+			new PerformanceEvidence(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				assignmentId,
+				criterionId,
+				"Lesson plan and improvement tracker",
+				$"performance-evidence-{index + 1}.pdf",
+				null,
+				"Seeded evidence metadata for demo review inspection."),
+			autoSave: true);
+	}
+
+	private async Task EnsurePerformanceFeedbackAsync(Guid assignmentId, Employee employee, int index)
+	{
+		var feedbackQuery = await _performanceFeedbackRepository.GetQueryableAsync();
+		if (feedbackQuery.Any(x => x.ReviewAssignmentId == assignmentId))
+		{
+			return;
+		}
+
+		await _performanceFeedbackRepository.InsertAsync(
+			new PerformanceFeedback(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				assignmentId,
+				index % 2 == 0 ? PerformanceFeedbackSource.Parent : PerformanceFeedbackSource.InternalStakeholder,
+				index % 2 == 0 ? "Parent feedback summary" : "Department coordinator",
+				$"{employee.EmployeeName} is responsive, prepared, and consistent in follow-up."),
+			autoSave: true);
+	}
+
+	private async Task EnsureDevelopmentPlanAsync(Guid assignmentId, Guid employeeId, int index)
+	{
+		var planQuery = await _developmentPlanRepository.GetQueryableAsync();
+		if (planQuery.Any(x => x.ReviewAssignmentId == assignmentId))
+		{
+			return;
+		}
+
+		var plan = new DevelopmentPlan(
+			GuidGenerator.Create(),
+			CurrentTenant.Id,
+			assignmentId,
+			index % 3 == 0 ? "Strengthen differentiated instruction" : "Improve evidence-backed reporting",
+			"Attend a peer observation cycle and submit one implementation reflection.",
+			employeeId,
+			DateTime.Today.AddDays(45 + index));
+		plan.Update(plan.Goal, plan.ActionPlan, plan.OwnerEmployeeId, plan.TargetDate, DevelopmentPlanStatus.InProgress);
+		await _developmentPlanRepository.InsertAsync(plan, autoSave: true);
+	}
+
+	private async Task EnsurePerformanceAuditAsync(Guid assignmentId, int index)
+	{
+		var auditQuery = await _performanceAuditRepository.GetQueryableAsync();
+		if (auditQuery.Any(x => x.ReviewAssignmentId == assignmentId))
+		{
+			return;
+		}
+
+		await _performanceAuditRepository.InsertAsync(
+			new PerformanceAuditEvent(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				assignmentId,
+				"SeededDemoReview",
+				$"Demo performance review seeded with workflow state {index % 4}.",
+				"{\"source\":\"HRSeeder\"}"),
+			autoSave: true);
+	}
+
+	private async Task<Guid?> FindPerformanceSeedReviewerByKeywordAsync(string? preferredDepartment, params string[] keywords)
+	{
+		var query = await _employeeRepository.GetQueryableAsync();
+		var employees = query
+			.Where(x => x.EmployeeStatusType == null || x.EmployeeStatusType == EmployeeStatusType.Active)
+			.ToList();
+		return employees
+			.Where(x => string.IsNullOrWhiteSpace(preferredDepartment) || string.Equals(x.Department, preferredDepartment, StringComparison.OrdinalIgnoreCase))
+			.Concat(employees)
+			.FirstOrDefault(x => keywords.Any(keyword =>
+				(x.Designation?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false) ||
+				(x.Role != null && x.Role.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))))?.Id;
+	}
+
+	private static PerformanceStaffCategory InferPerformanceSeedStaffCategory(Employee employee)
+	{
+		var text = $"{employee.Designation} {employee.Department} {employee.Role?.Name}".ToLowerInvariant();
+		if (text.Contains("class teacher")) return PerformanceStaffCategory.ClassTeacher;
+		if (text.Contains("account")) return PerformanceStaffCategory.Accounts;
+		if (text.Contains("librarian") || text.Contains("lab")) return PerformanceStaffCategory.LibrarianLabAssistant;
+		if (text.Contains("teacher") || text.Contains("faculty") || text.Contains("academic")) return PerformanceStaffCategory.Teacher;
+		return PerformanceStaffCategory.Admin;
+	}
+
+	private static string BuildPerformanceStageComment(Employee employee, PerformanceReviewStageType stageType) =>
+		stageType switch
+		{
+			PerformanceReviewStageType.SelfAppraisal => $"{employee.EmployeeName} documented core achievements and improvement priorities.",
+			PerformanceReviewStageType.ReportingManager => "Reporting manager noted consistent follow-through and practical classroom ownership.",
+			PerformanceReviewStageType.HodCoordinator => "Department review confirms alignment with academic and operational expectations.",
+			PerformanceReviewStageType.PrincipalManagement => "Leadership review recommends continued development with measured recognition.",
+			PerformanceReviewStageType.HrVerification => "HR verified documentation completeness and workflow readiness.",
+			_ => "Review stage seeded for demo workflow."
+		};
 
 	private async Task<IdentityUser?> FindUserByEmailOrLegacyAliasAsync(string email)
 	{
@@ -3937,10 +5060,16 @@ public class HRSeederContributor : BaseSeederContributor
 	private async Task<SeedRoleInfo?> FindRoleSeedInfoAsync(string roleName)
 	{
 		var normalizedRoleName = _lookupNormalizer.NormalizeName(roleName);
-		return (await _identityRoleRepository.GetQueryableAsync())
-			.Where(role => role.NormalizedName == normalizedRoleName)
+		_roleSeedInfoByNormalizedName ??= (await _identityRoleRepository.GetQueryableAsync())
 			.Select(role => new SeedRoleInfo(role.Id, role.Name))
-			.FirstOrDefault();
+			.AsEnumerable()
+			.Where(role => !string.IsNullOrWhiteSpace(role.Name))
+			.ToDictionary(
+				role => _lookupNormalizer.NormalizeName(role.Name),
+				role => role,
+				StringComparer.OrdinalIgnoreCase);
+
+		return _roleSeedInfoByNormalizedName.GetValueOrDefault(normalizedRoleName);
 	}
 
 	private sealed record SeedRoleInfo(Guid Id, string Name);

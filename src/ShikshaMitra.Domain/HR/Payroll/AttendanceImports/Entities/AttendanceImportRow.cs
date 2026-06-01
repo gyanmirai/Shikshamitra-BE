@@ -56,4 +56,21 @@ public class AttendanceImportRow : FullAuditedEntity<Guid>, IMultiTenant
 		Errors = errors;
 		Warnings = warnings;
 	}
+
+	public void UpdateEditableValues(
+		string? timeIn,
+		string? timeOut,
+		string? status,
+		string? remarks,
+		string? warning = null)
+	{
+		TimeIn = timeIn;
+		TimeOut = timeOut;
+		Status = status;
+		Remarks = remarks;
+		if (!string.IsNullOrWhiteSpace(warning) && !Warnings.Contains(warning))
+		{
+			Warnings.Add(warning);
+		}
+	}
 }

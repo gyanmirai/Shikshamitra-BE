@@ -46,7 +46,14 @@ public static class EmployeeTestHelper
 		content.Add(new StringContent(jsonData), "data");
 
 		var response = await client.PostAsync("/api/employees/personal-info", content);
-		response.EnsureSuccessStatusCode();
+		if (!response.IsSuccessStatusCode)
+		{
+			var payload = await response.Content.ReadAsStringAsync();
+			throw new HttpRequestException(
+				$"Employee create failed with {(int)response.StatusCode} {response.StatusCode}: {payload}",
+				null,
+				response.StatusCode);
+		}
 
 		return await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create test employee");
@@ -72,7 +79,14 @@ public static class EmployeeTestHelper
 		content.Add(imageContent, "profilePicture", "profile.jpg");
 
 		var response = await client.PostAsync("/api/employees/personal-info", content);
-		response.EnsureSuccessStatusCode();
+		if (!response.IsSuccessStatusCode)
+		{
+			var payload = await response.Content.ReadAsStringAsync();
+			throw new HttpRequestException(
+				$"Employee create with picture failed with {(int)response.StatusCode} {response.StatusCode}: {payload}",
+				null,
+				response.StatusCode);
+		}
 
 		return await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create test employee with picture");

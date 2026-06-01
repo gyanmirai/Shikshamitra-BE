@@ -10,6 +10,8 @@ namespace ShikshaMitra.Seeders;
 
 public class RolesSeederContributor : BaseSeederContributor
 {
+	private const string AdminRoleName = "admin";
+	private const string SuperAdminRoleName = "super-admin";
 	private const string HeadOfDepartmentRoleName = "Head of Department";
 	private const string HodRoleName = "HOD";
 
@@ -33,6 +35,8 @@ public class RolesSeederContributor : BaseSeederContributor
 		var roles = new List<IdentityRole>
 		{
 			// Core System Roles
+			new IdentityRole(GuidGenerator.Create(), AdminRoleName, tenantId),
+			new IdentityRole(GuidGenerator.Create(), SuperAdminRoleName, tenantId),
 			new IdentityRole(GuidGenerator.Create(), "Director", tenantId),
 			new IdentityRole(GuidGenerator.Create(), "Principal", tenantId),
 			new IdentityRole(GuidGenerator.Create(), "Teacher", tenantId),

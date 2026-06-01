@@ -830,6 +830,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Save_Percentage_Earning_When_Amount_Is_Zero()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayPctEarnZero");
+		var baseEarning = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayPctEarnBase");
 		var earningName = $"PayPctEarn-{Guid.NewGuid():N}";
 		var createResponse = await Client.PostAsJsonAsync(
 			"/api/payroll/earning-components",
@@ -839,7 +840,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 				EarningType = "FIXED",
 				CalculationType = "PERCENTAGE",
 				Percentage = 0m,
-				SelectedEarningComponentId = Guid.NewGuid(),
+				SelectedEarningComponentId = baseEarning.Id,
 				VisibleInPayslip = true,
 			},
 			JsonOptions);
@@ -851,6 +852,13 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			EarningComponents = new List<SalaryComponentContract>
 			{
+				new()
+				{
+					ComponentId = baseEarning.Id,
+					Name = baseEarning.Name,
+					Amount = 100m,
+					IsFixed = true,
+				},
 				new()
 				{
 					ComponentId = earningComponent.Id,
@@ -875,6 +883,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Save_ReAdded_Percentage_Deduction_When_Amount_Is_Zero()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayPctReAdd");
+		var baseEarning = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayPctReAddBase");
 		var deductionName = $"PayPctDed-{Guid.NewGuid():N}";
 		var createResponse = await Client.PostAsJsonAsync(
 			"/api/payroll/deduction-components",
@@ -884,7 +893,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 				DeductionType = "FIXED",
 				CalculationType = "PERCENTAGE",
 				Percentage = 12m,
-				SelectedDeductionComponentId = Guid.NewGuid(),
+				SelectedDeductionComponentId = baseEarning.Id,
 				VisibleInPayslip = true,
 			},
 			JsonOptions);
@@ -894,6 +903,16 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var firstResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", new PayrollContract
 		{
+			EarningComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = baseEarning.Id,
+					Name = baseEarning.Name,
+					Amount = 100m,
+					IsFixed = true,
+				},
+			},
 			DeductionComponents = new List<SalaryComponentContract>
 			{
 				new() { ComponentId = deductionComponent.Id, Name = deductionName },
@@ -903,12 +922,32 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var removeResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", new PayrollContract
 		{
+			EarningComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = baseEarning.Id,
+					Name = baseEarning.Name,
+					Amount = 100m,
+					IsFixed = true,
+				},
+			},
 			DeductionComponents = new List<SalaryComponentContract>(),
 		}, JsonOptions);
 		removeResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
 		var reAddResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", new PayrollContract
 		{
+			EarningComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = baseEarning.Id,
+					Name = baseEarning.Name,
+					Amount = 100m,
+					IsFixed = true,
+				},
+			},
 			DeductionComponents = new List<SalaryComponentContract>
 			{
 				new()
@@ -935,6 +974,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Save_Percentage_Deduction_When_Amount_Is_Zero()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayPctDedZero");
+		var baseEarning = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayPctDedZeroBase");
 		var deductionName = $"PayPctDedZero-{Guid.NewGuid():N}";
 		var createResponse = await Client.PostAsJsonAsync(
 			"/api/payroll/deduction-components",
@@ -944,7 +984,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 				DeductionType = "FIXED",
 				CalculationType = "PERCENTAGE",
 				Percentage = 0m,
-				SelectedDeductionComponentId = Guid.NewGuid(),
+				SelectedDeductionComponentId = baseEarning.Id,
 				VisibleInPayslip = true,
 			},
 			JsonOptions);
@@ -954,6 +994,16 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", new PayrollContract
 		{
+			EarningComponents = new List<SalaryComponentContract>
+			{
+				new()
+				{
+					ComponentId = baseEarning.Id,
+					Name = baseEarning.Name,
+					Amount = 100m,
+					IsFixed = true,
+				},
+			},
 			DeductionComponents = new List<SalaryComponentContract>
 			{
 				new()

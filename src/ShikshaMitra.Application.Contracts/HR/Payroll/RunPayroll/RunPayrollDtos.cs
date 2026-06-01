@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FluentValidation;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
@@ -221,6 +222,11 @@ public class RunPayrollComponentItem
 {
 	public string Name { get; set; } = string.Empty;
 	public double Amount { get; set; }
+	public string? Description { get; set; }
+	public bool IsFixed { get; set; } = true;
+	public bool IsTemp { get; set; }
+	public string ComponentType { get; set; } = "Fixed";
+	public string DependOn { get; set; } = "None";
 }
 
 public class PayrollAdjustmentDto
@@ -240,6 +246,7 @@ public class PayrollAdjustmentDto
 public class PayrollAdjustmentRequest
 {
 	public string Month { get; set; } = string.Empty;
+	public Guid? AcademicYearId { get; set; }
 	public Guid EmployeeId { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public double Amount { get; set; }
@@ -259,6 +266,11 @@ public class RunPayrollRequest
 	public string Month { get; set; } = string.Empty;
 
 	/// <summary>
+	/// Optional academic year scope. When supplied, the payroll month must fall inside this academic year.
+	/// </summary>
+	public Guid? AcademicYearId { get; set; }
+
+	/// <summary>
 	/// Optional target employee IDs to finalize a subset. If omitted, payroll runs for all in-scope active employees.
 	/// </summary>
 	public List<Guid>? EmployeeIds { get; set; }
@@ -270,7 +282,30 @@ public class RunPayrollRequest
 public class PayrollRunReviewRequest
 {
 	public string Month { get; set; } = string.Empty;
+	public Guid? AcademicYearId { get; set; }
 	public List<Guid> EmployeeIds { get; set; } = new();
+}
+
+public class PayrollAdjustmentRequestValidator : AbstractValidator<PayrollAdjustmentRequest>
+{
+	public PayrollAdjustmentRequestValidator()
+	{
+		RuleFor(x => x.Month).NotEmpty().MaximumLength(30);
+		RuleFor(x => x.EmployeeId).NotEmpty();
+		RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
+		RuleFor(x => x.Reason).NotEmpty().MaximumLength(500);
+		RuleFor(x => x.Description).MaximumLength(1000);
+	}
+}
+
+public class PayrollRunReviewRequestValidator : AbstractValidator<PayrollRunReviewRequest>
+{
+	public PayrollRunReviewRequestValidator()
+	{
+		RuleFor(x => x.Month).NotEmpty().MaximumLength(30);
+		RuleFor(x => x.EmployeeIds).NotNull().Must(x => x.Count > 0);
+		RuleForEach(x => x.EmployeeIds).NotEmpty();
+	}
 }
 
 /// <summary>
@@ -323,6 +358,11 @@ public class GetRunPayrollInput
 	/// Month in MMMM-YYYY format
 	/// </summary>
 	public string Month { get; set; } = string.Empty;
+
+	/// <summary>
+	/// Optional academic year scope. When supplied, the payroll month must fall inside this academic year.
+	/// </summary>
+	public Guid? AcademicYearId { get; set; }
 
 	/// <summary>
 	/// Page index (0-based)

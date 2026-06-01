@@ -123,6 +123,11 @@ public static class HRErrorCodes
 	public const string TakeAttendanceEmptyEntries = "HR:Attendance:020307";
 	public const string TakeAttendanceInvalidStatusWire = "HR:Attendance:020308";
 	public const string TakeAttendanceEmployeeNotActiveOnDate = "HR:Attendance:020309";
+	public const string AttendancePolicyEvaluationShiftRequired = "HR:Attendance:020310";
+	public const string AttendancePolicyEvaluationInvalidShift = "HR:Attendance:020311";
+	public const string AttendancePolicyEvaluationInvalidPolicy = "HR:Attendance:020312";
+	public const string AttendancePolicyEvaluationInvalidPunches = "HR:Attendance:020313";
+	public const string TakeAttendanceHolidayNotAllowed = "HR:Attendance:020314";
 
 	// Leave — File validation
 	public const string LeaveFileTooLarge = "HR:Leave:020101";
@@ -151,6 +156,9 @@ public static class HRErrorCodes
 	public const string AttendanceImportInvalidSkipCount = "HR:Leave:020211";
 	public const string AttendanceImportInvalidMaxResultCount = "HR:Leave:020212";
 	public const string AttendanceImportDuplicateFileName = "HR:Leave:020213";
+	public const string AttendanceImportBatchLocked = "HR:Leave:020214";
+	public const string AttendanceImportPayrollLocked = "HR:Leave:020215";
+	public const string AttendanceImportRowMismatch = "HR:Leave:020216";
 
 	// ── Payroll: 03xxxx ──────────────────────────────────────────
 
@@ -182,6 +190,8 @@ public static class HRErrorCodes
 	public const string PayrollAdjustmentRequiresReviewedPreview = "HR:Payroll:030027";
 	public const string PayrollReviewContainsAdjustments = "HR:Payroll:030028";
 	public const string SalarySlipEmployeeNotActiveInMonth = "HR:Payroll:030029";
+	public const string PayrollAcademicYearNotFound = "HR:Payroll:030030";
+	public const string PayrollMonthOutsideAcademicYear = "HR:Payroll:030031";
 
 	// ── Calendar: 04xxxx ─────────────────────────────────────────
 
@@ -199,4 +209,13 @@ public static class HRErrorCodes
 
 	public const string ProfessionalReviewCycleInvalidPeriod = "HR:ProfessionalManagement:060001";
 	public const string ProfessionalReviewAlreadySubmitted = "HR:ProfessionalManagement:060002";
+	public const string PerformanceTemplateWeightsInvalid = "HR:ProfessionalManagement:060003";
+	public const string PerformanceTemplatePublished = "HR:ProfessionalManagement:060004";
+	public const string PerformanceReviewStageLocked = "HR:ProfessionalManagement:060005";
+	public const string PerformanceReviewFinalized = "HR:ProfessionalManagement:060006";
+	public const string PerformanceEvidenceRequired = "HR:ProfessionalManagement:060007";
+	public const string PerformanceObservationTeacherOnly = "HR:ProfessionalManagement:060008";
+	public const string PerformanceTemplateRubricInvalid = "HR:ProfessionalManagement:060009";
+	public const string PerformanceReviewCycleInvalidStatus = "HR:ProfessionalManagement:060010";
+	public const string PerformanceReviewCriterionInvalid = "HR:ProfessionalManagement:060011";
 }

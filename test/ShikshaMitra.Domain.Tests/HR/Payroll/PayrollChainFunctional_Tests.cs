@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using Shouldly;
@@ -12,6 +16,25 @@ namespace ShikshaMitra.HR.Payroll;
 
 public class PayrollChainFunctional_Tests
 {
+	[Fact]
+	public void Component_Month_Scope_Should_Include_Temp_Rows_Only_For_Applicable_Month()
+	{
+		var employeeId = Guid.NewGuid();
+		var components = new List<EmployeePayrollComponent>
+		{
+			BuildComponent(employeeId, "Basic", 30000m, isEarning: true),
+			BuildComponent(employeeId, "January Bonus", 100m, isEarning: true, isTemp: true, applicableMonth: new DateTime(2026, 1, 20)),
+			BuildComponent(employeeId, "February Recovery", 50m, isEarning: false, isTemp: true, applicableMonth: new DateTime(2026, 2, 1)),
+			BuildComponent(employeeId, "Undated Temp", 25m, isEarning: true, isTemp: true)
+		};
+
+		var januaryComponents = PayrollComponentMonthScope.FilterForMonth(components, 2026, 1);
+		var februaryComponents = PayrollComponentMonthScope.FilterForMonth(components, 2026, 2);
+
+		januaryComponents.Select(x => x.Name).ShouldBe(["Basic", "January Bonus"]);
+		februaryComponents.Select(x => x.Name).ShouldBe(["Basic", "February Recovery"]);
+	}
+
 	[Fact]
 	public void Full_Present_Attendance_Should_Pay_Full_Salary()
 	{
@@ -171,6 +194,169 @@ public class PayrollChainFunctional_Tests
 	}
 
 	[Fact]
+	public void Work_Calendar_SaturdaySunday_Should_Exclude_Saturday_And_Sunday()
+	{
+		var calendar = BuildWorkCalendar(AttendanceWeeklyOffPattern.SaturdaySunday);
+
+		var units = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+			2026,
+			6,
+			holidays: [],
+			SaturdayWorkPolicy.FullDay,
+			holidayOverrides: [],
+			calendar);
+
+		units[new DateOnly(2026, 6, 6)].ShouldBe(0m);
+		units[new DateOnly(2026, 6, 7)].ShouldBe(0m);
+		units.Values.Sum().ShouldBe(22m);
+	}
+
+	[Theory]
+	[InlineData(SaturdayWorkPolicy.FullDay, 1, 26)]
+	[InlineData(SaturdayWorkPolicy.HalfDay, 0.5, 24)]
+	[InlineData(SaturdayWorkPolicy.Off, 0, 22)]
+	public void Work_Calendar_Sunday_Should_Allow_Saturday_And_Apply_Saturday_Policy(
+		SaturdayWorkPolicy saturdayWorkPolicy,
+		double expectedSaturdayUnit,
+		double expectedMonthUnits)
+	{
+		var calendar = BuildWorkCalendar(AttendanceWeeklyOffPattern.Sunday);
+
+		var units = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+			2026,
+			6,
+			holidays: [],
+			saturdayWorkPolicy,
+			holidayOverrides: [],
+			calendar);
+
+		units[new DateOnly(2026, 6, 6)].ShouldBe(Convert.ToDecimal(expectedSaturdayUnit));
+		units[new DateOnly(2026, 6, 7)].ShouldBe(0m);
+		units.Values.Sum().ShouldBe(Convert.ToDecimal(expectedMonthUnits));
+	}
+
+	[Fact]
+	public void Work_Calendar_Custom_Should_Respect_Custom_Weekly_Offs_Before_Saturday_Policy()
+	{
+		var calendar = BuildWorkCalendar(AttendanceWeeklyOffPattern.Custom, new List<int> { 6 });
+
+		var units = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+			2026,
+			6,
+			holidays: [],
+			SaturdayWorkPolicy.FullDay,
+			holidayOverrides: [],
+			calendar);
+
+		units[new DateOnly(2026, 6, 6)].ShouldBe(0m);
+		units[new DateOnly(2026, 6, 7)].ShouldBe(1m);
+		units.Values.Sum().ShouldBe(26m);
+	}
+
+	[Fact]
+	public void Work_Calendar_Holiday_Should_Reduce_Working_Days_Basis()
+	{
+		var calendar = BuildWorkCalendar(AttendanceWeeklyOffPattern.SaturdaySunday);
+		var holiday = BuildHoliday(new DateTime(2026, 6, 3));
+
+		var units = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+			2026,
+			6,
+			[holiday],
+			SaturdayWorkPolicy.FullDay,
+			holidayOverrides: [],
+			calendar);
+
+		units[new DateOnly(2026, 6, 3)].ShouldBe(0m);
+		units.Values.Sum().ShouldBe(21m);
+	}
+
+	[Fact]
+	public void Unpaid_Payroll_Holiday_Override_Should_Reduce_Working_Days_Basis()
+	{
+		var calendar = BuildWorkCalendar(AttendanceWeeklyOffPattern.SaturdaySunday);
+		var holiday = BuildHoliday(new DateTime(2026, 6, 3));
+		var overrides = new List<PayrollHolidayOverride>
+		{
+			new(new DateTime(2026, 6, 3), "Unpaid Override", IncludedInPayroll: false, CalendarHolidayId: holiday.Id)
+		};
+
+		var units = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+			2026,
+			6,
+			[holiday],
+			SaturdayWorkPolicy.FullDay,
+			overrides,
+			calendar);
+
+		units[new DateOnly(2026, 6, 3)].ShouldBe(0m);
+		units.Values.Sum().ShouldBe(21m);
+	}
+
+	[Fact]
+	public void Attendance_On_Work_Calendar_Holiday_Should_Not_Contribute_Payable_Units()
+	{
+		var workingUnits = BuildWeekdayUnits(2026, 6);
+		workingUnits[new DateOnly(2026, 6, 3)] = 0m;
+		var basis = new PayrollBasisDaysResult(
+			BasisDays: 21m,
+			EffectiveMode: DayCalculationType.WorkingDays,
+			UsedTenantDefault: false,
+			SaturdayWorkPolicy.FullDay,
+			workingUnits);
+		var attendance = new List<EmployeeAttendance>
+		{
+			BuildAttendance(new DateOnly(2026, 6, 3), EmployeeAttendanceStatusType.Present)
+		};
+
+		var result = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendance,
+			basis,
+			2026,
+			6,
+			holidays: []);
+
+		result.PresentDays.ShouldBe(0);
+		result.PayableDays.ShouldBe(0m);
+	}
+
+	[Fact]
+	public void Full_Month_Holiday_Should_Return_Zero_Basis_And_Zero_Proration()
+	{
+		var calendar = BuildWorkCalendar(AttendanceWeeklyOffPattern.SaturdaySunday);
+		var holiday = BuildHoliday(new DateTime(2026, 6, 1), new DateTime(2026, 6, 30));
+		var workingUnits = PayrollMonthCalendar.BuildWorkingUnitsByDate(
+			2026,
+			6,
+			[holiday],
+			SaturdayWorkPolicy.FullDay,
+			holidayOverrides: [],
+			calendar);
+		var basis = new PayrollBasisDaysResult(
+			BasisDays: workingUnits.Values.Sum(),
+			EffectiveMode: DayCalculationType.WorkingDays,
+			UsedTenantDefault: false,
+			SaturdayWorkPolicy.FullDay,
+			workingUnits);
+		var attendance = new List<EmployeeAttendance>
+		{
+			BuildAttendance(new DateOnly(2026, 6, 3), EmployeeAttendanceStatusType.Present)
+		};
+
+		var result = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendance,
+			basis,
+			2026,
+			6,
+			holidays: []);
+
+		basis.BasisDays.ShouldBe(0m);
+		result.PresentDays.ShouldBe(0);
+		result.PayableDays.ShouldBe(0m);
+		PayrollProrationCalculator.CalculateProrationFactor(basis.BasisDays, result.PayableDays).ShouldBe(0m);
+	}
+
+	[Fact]
 	public void Attendance_Before_Joining_Date_Should_Not_Count_For_Payroll()
 	{
 		var basis = new PayrollBasisDaysResult(
@@ -246,6 +432,29 @@ public class PayrollChainFunctional_Tests
 		return units;
 	}
 
+	private static WorkCalendarPolicy BuildWorkCalendar(
+		AttendanceWeeklyOffPattern weeklyOffPattern,
+		IReadOnlyList<int>? customWeeklyOffs = null) => new(
+		Guid.NewGuid(),
+		tenantId: null,
+		Guid.NewGuid(),
+		"Payroll Calendar",
+		HrPolicyStatus.Active,
+		new DateTime(2026, 4, 1),
+		new DateTime(2027, 3, 31),
+		weeklyOffPattern,
+		customWeeklyOffs,
+		WorkCalendarHolidaySyncMode.Snapshot);
+
+	private static Holiday BuildHoliday(DateTime date, DateTime? toDate = null) =>
+		Holiday.Create(
+			tenantId: null,
+			Guid.NewGuid(),
+			"Payroll Holiday",
+			Guid.NewGuid(),
+			new DateTimeOffset(date.Date, TimeSpan.Zero),
+			new DateTimeOffset((toDate ?? date).Date, TimeSpan.Zero));
+
 	private static List<EmployeePayrollComponent> BuildSalaryComponents()
 	{
 		var employeeId = Guid.NewGuid();
@@ -266,7 +475,8 @@ public class PayrollChainFunctional_Tests
 		string name,
 		decimal amount,
 		bool isEarning,
-		bool isTemp = false) => new(
+		bool isTemp = false,
+		DateTime? applicableMonth = null) => new(
 		Guid.NewGuid(),
 		employeeId,
 		name,
@@ -275,7 +485,7 @@ public class PayrollChainFunctional_Tests
 		amount,
 		isFixed: true,
 		isTemp,
-		applicableMonth: null,
+		applicableMonth,
 		SalaryComponentType.Fixed,
 		SalaryComponentDependency.None,
 		isEarning);

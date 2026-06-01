@@ -28,18 +28,26 @@ public class PayrollCalendarResolver : DomainService
 		_holidayRepository = holidayRepository;
 	}
 
+	public Task<PayrollCalendarResolution> ResolveAsync(
+		int year,
+		int month,
+		CancellationToken cancellationToken) =>
+		ResolveAsync(year, month, academicYearId: null, cancellationToken);
+
 	public async Task<PayrollCalendarResolution> ResolveAsync(
 		int year,
 		int month,
+		Guid? academicYearId = null,
 		CancellationToken cancellationToken = default)
 	{
 		var firstDay = new DateTime(year, month, 1);
 		var lastDay = new DateTime(year, month, DateTime.DaysInMonth(year, month));
-		var academicYearId = await ResolveAcademicYearIdForMonthAsync(firstDay, lastDay, cancellationToken);
-		var holidays = await LoadHolidaysForMonthAsync(firstDay, lastDay, academicYearId, cancellationToken);
+		var resolvedAcademicYearId = academicYearId
+			?? await ResolveAcademicYearIdForMonthAsync(firstDay, lastDay, cancellationToken);
+		var holidays = await LoadHolidaysForMonthAsync(firstDay, lastDay, resolvedAcademicYearId, cancellationToken);
 		var workingDays = PayrollMonthCalendar.CountWorkingWeekdaysExcludingHolidayWeekdays(year, month, holidays);
 
-		return new PayrollCalendarResolution(academicYearId, holidays, workingDays);
+		return new PayrollCalendarResolution(resolvedAcademicYearId, holidays, workingDays);
 	}
 
 	private async Task<Guid?> ResolveAcademicYearIdForMonthAsync(

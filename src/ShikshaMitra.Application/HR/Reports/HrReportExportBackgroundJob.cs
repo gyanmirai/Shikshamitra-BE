@@ -7,6 +7,7 @@ using Volo.Abp.BlobStoring;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Reports;
 
@@ -20,6 +21,7 @@ public class HrReportExportBackgroundJob(
 	ILogger<HrReportExportBackgroundJob> logger)
 	: AsyncBackgroundJob<HrReportExportJobArgs>, ITransientDependency
 {
+	[UnitOfWork]
 	public override async Task ExecuteAsync(HrReportExportJobArgs args)
 	{
 		using (currentTenant.Change(args.TenantId))
@@ -49,7 +51,6 @@ public class HrReportExportBackgroundJob(
 				logger.LogError(ex, "Failed to export HR report job {JobId}", args.JobId);
 				job.MarkFailed(ex.Message, DateTime.UtcNow);
 				await exportJobRepository.UpdateAsync(job, autoSave: true);
-				throw;
 			}
 		}
 	}

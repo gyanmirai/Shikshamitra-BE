@@ -41,6 +41,8 @@ public class UserSeederContributor : BaseSeederContributor
 
 		var users = new List<BaselineUserSpec>
 		{
+			new("admin-ddvs", "admin-ddvs@ddvs.com", "Admin", "DDVS", "admin", ["admin1"], ["admin1@gmail.com", "ddvs@gmail.com"]),
+			new("admin-ops", "admin-ops@ddvs.com", "Admin", "Operations", "admin", ["admin2"], ["admin2@ddvs.com"]),
 			new("teacher-demo-1", "teacher-demo-1@ddvs.com", "Teacher", "Demo 1", "Teacher", ["teacher1"], ["teacher1@school.com"]),
 			new("teacher-demo-2", "teacher-demo-2@ddvs.com", "Teacher", "Demo 2", "Teacher", ["teacher2"], ["teacher2@school.com"]),
 			new("principal-demo-gseb", "principal-demo-gseb@ddvs.com", "Principal", "Demo GSEB", "Principal", ["principal"], ["principal@school.com"]),
@@ -171,7 +173,8 @@ public class UserSeederContributor : BaseSeederContributor
 		var role = await _roleRepository.FindByNormalizedNameAsync(normalizedRoleName);
 		if (role == null || string.IsNullOrWhiteSpace(role.Name))
 		{
-			return;
+			throw new System.Exception(
+				$"Required seeded role '{roleName}' was not found while assigning baseline user '{user.Email}'.");
 		}
 
 		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
@@ -180,7 +183,13 @@ public class UserSeederContributor : BaseSeederContributor
 			return;
 		}
 
-		await _userManager.AddToRoleAsync(managedUser, role.Name);
+		var addResult = await _userManager.AddToRoleAsync(managedUser, role.Name);
+		if (!addResult.Succeeded)
+		{
+			throw new System.Exception(
+				$"Failed to assign role '{role.Name}' to baseline user '{managedUser.Email}': " +
+				string.Join(", ", addResult.Errors.Select(e => e.Description)));
+		}
 	}
 
 	private sealed record BaselineUserSpec(

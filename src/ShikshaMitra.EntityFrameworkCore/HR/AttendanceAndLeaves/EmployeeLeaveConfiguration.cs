@@ -31,6 +31,15 @@ public class EmployeeLeaveConfiguration : IEntityTypeConfiguration<EmployeeLeave
 		builder.HasIndex(e => new { e.TenantId, e.EmployeeId, e.Status, e.StartDate, e.EndDate })
 			.HasDatabaseName("IX_EmployeeLeaves_Overlap");
 
+		builder.Property(e => e.StartDateOnly)
+			.HasColumnType("date");
+
+		builder.Property(e => e.EndDateOnly)
+			.HasColumnType("date");
+
+		builder.HasIndex(e => new { e.TenantId, e.Status, e.StartDateOnly, e.EndDateOnly, e.EmployeeId })
+			.HasDatabaseName("IX_EmployeeLeaves_Dashboard_DateScope");
+
 		builder.HasOne(e => e.Employee)
 			.WithMany()
 			.HasForeignKey(e => e.EmployeeId)

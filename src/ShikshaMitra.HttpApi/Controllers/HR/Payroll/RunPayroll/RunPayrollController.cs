@@ -44,9 +44,10 @@ public class RunPayrollController : AbpControllerBase
 	[ProducesResponseType(typeof(RunPayrollReadinessSummary), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task<RunPayrollReadinessSummary> GetReadinessAsync(
-		[FromQuery, Required] string month)
+		[FromQuery, Required] string month,
+		[FromQuery] Guid? academicYearId = null)
 	{
-		return await _runPayrollAppService.GetReadinessAsync(month);
+		return await _runPayrollAppService.GetReadinessAsync(month, academicYearId);
 	}
 
 	[HttpGet]
@@ -55,6 +56,7 @@ public class RunPayrollController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task<RunPayrollResponse> GetPreviewAsync(
 		[FromQuery, Required] string month,
+		[FromQuery] Guid? academicYearId = null,
 		[FromQuery, Range(0, int.MaxValue)] int page = 0,
 		[FromQuery, Range(1, 100)] int pageSize = 50,
 		[FromQuery] bool forceRefresh = false)
@@ -62,6 +64,7 @@ public class RunPayrollController : AbpControllerBase
 		return await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput
 		{
 			Month = month,
+			AcademicYearId = academicYearId,
 			Page = page,
 			PageSize = pageSize,
 			ForceRefresh = forceRefresh
@@ -117,9 +120,10 @@ public class RunPayrollController : AbpControllerBase
 	[ProducesResponseType(typeof(List<PayrollAdjustmentDto>), StatusCodes.Status200OK)]
 	public virtual async Task<List<PayrollAdjustmentDto>> GetAdjustmentsAsync(
 		[FromQuery, Required] string month,
-		[FromQuery] Guid? employeeId = null)
+		[FromQuery] Guid? employeeId = null,
+		[FromQuery] Guid? academicYearId = null)
 	{
-		return await _runPayrollAppService.GetAdjustmentsAsync(month, employeeId);
+		return await _runPayrollAppService.GetAdjustmentsAsync(month, employeeId, academicYearId);
 	}
 
 	[HttpPost("adjustments")]

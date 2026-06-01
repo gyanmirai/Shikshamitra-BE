@@ -19,7 +19,9 @@ namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 public class AttendanceIntegrationRunAppService(
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
 	IRepository<AttendanceImportRow, Guid> attendanceImportRowRepository,
-	IEmployeeAttendanceRepository employeeAttendanceRepository)
+	IEmployeeAttendanceRepository employeeAttendanceRepository,
+	IRepository<Employee, Guid> employeeRepository,
+	AttendancePolicyWorkedTimeEvaluator workedTimeEvaluator)
 	: ApplicationService, IAttendanceIntegrationRunAppService
 {
 	private const int RowRemarksMaxLength = 512;
@@ -76,6 +78,14 @@ public class AttendanceIntegrationRunAppService(
 		await attendanceImportBatchRepository.InsertAsync(batch, autoSave: true);
 
 		var employeeIds = parsedRows.Select(r => r.Row.EmployeeId).Distinct().ToList();
+		var employeeQuery = await employeeRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			employeeQuery = employeeQuery.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+
+		var employees = await AsyncExecuter.ToListAsync(employeeQuery.Where(x => employeeIds.Contains(x.Id)));
+		var employeeById = employees.ToDictionary(x => x.Id);
 		var dates = parsedRows.Select(r => r.AttendanceDate).ToList();
 		var minDate = dates.Min();
 		var maxDate = dates.Max();
@@ -108,16 +118,27 @@ public class AttendanceIntegrationRunAppService(
 			var key = $"{row.EmployeeId:N}|{dateOnly:yyyy-MM-dd}";
 			var isReplace = existingLookup.ContainsKey(key);
 			var action = isReplace ? "replace" : "create";
+			if (!employeeById.TryGetValue(row.EmployeeId, out var employee))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeeNotFound)
+					.WithData("employeeId", row.EmployeeId);
+			}
+
+			var tIn = ParseNullableOffset(row.TimeIn);
+			var tOut = ParseNullableOffset(row.TimeOut);
+			var evaluation = await workedTimeEvaluator.EvaluateAsync(
+				employee,
+				dateOnly,
+				tIn,
+				tOut,
+				row.Status);
+			var status = evaluation.Status;
 
 			if (existingLookup.TryGetValue(key, out var existing))
 			{
-				existing.TimeIn = row.TimeIn != null && DateTimeOffset.TryParse(row.TimeIn, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var tIn)
-					? tIn
-					: existing.TimeIn;
-				existing.TimeOut = row.TimeOut != null && DateTimeOffset.TryParse(row.TimeOut, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var tOut)
-					? tOut
-					: existing.TimeOut;
-				existing.StatusType = row.Status;
+				existing.TimeIn = tIn ?? existing.TimeIn;
+				existing.TimeOut = tOut ?? existing.TimeOut;
+				existing.StatusType = status;
 				existing.EducationMediumStageId = row.EducationMediumStageId;
 				existing.Remarks = normalizedRemarks;
 				await employeeAttendanceRepository.UpdateAsync(existing, autoSave: false);
@@ -125,20 +146,6 @@ public class AttendanceIntegrationRunAppService(
 			}
 			else
 			{
-				DateTimeOffset? tIn = null;
-				DateTimeOffset? tOut = null;
-				if (!string.IsNullOrWhiteSpace(row.TimeIn) &&
-				    DateTimeOffset.TryParse(row.TimeIn, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var tin))
-				{
-					tIn = tin;
-				}
-
-				if (!string.IsNullOrWhiteSpace(row.TimeOut) &&
-				    DateTimeOffset.TryParse(row.TimeOut, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var tout))
-				{
-					tOut = tout;
-				}
-
 				await employeeAttendanceRepository.InsertAsync(new EmployeeAttendance
 				{
 					TenantId = CurrentTenant.Id,
@@ -146,7 +153,7 @@ public class AttendanceIntegrationRunAppService(
 					AttendanceDate = dateOnly,
 					TimeIn = tIn,
 					TimeOut = tOut,
-					StatusType = row.Status,
+					StatusType = status,
 					EducationMediumStageId = row.EducationMediumStageId,
 					Remarks = normalizedRemarks
 				}, autoSave: false);
@@ -165,10 +172,10 @@ public class AttendanceIntegrationRunAppService(
 				null,
 				row.TimeIn,
 				row.TimeOut,
-				row.Status.ToString(),
+				status.ToString(),
 				normalizedRemarks,
 				[],
-				[]));
+				string.IsNullOrWhiteSpace(evaluation.Warning) ? [] : [evaluation.Warning]));
 		}
 
 		if (importRows.Count > 0)
@@ -200,6 +207,23 @@ public class AttendanceIntegrationRunAppService(
 		}
 
 		return value[..max];
+	}
+
+	private static DateTimeOffset? ParseNullableOffset(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			return null;
+		}
+
+		if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
+		{
+			return parsed;
+		}
+
+		throw new BusinessException(
+			HRErrorCodes.AttendancePolicyEvaluationInvalidPunches,
+			"Attendance time is invalid.");
 	}
 
 	private readonly record struct ParsedIntegrationRow(

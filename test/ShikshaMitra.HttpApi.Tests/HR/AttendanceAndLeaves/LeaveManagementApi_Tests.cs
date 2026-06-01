@@ -311,7 +311,8 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Get_Leave_Export_Excel()
 	{
-		var monthYear = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));
+		var (academicYearStart, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		var monthYear = Uri.EscapeDataString(new DateTime(academicYearStart.Year, academicYearStart.Month, 1).ToString("O"));
 		var response = await Client.GetAsync(
 			$"{BaseUrl}/export?academicYearId={AcademicYearId}&month-year={monthYear}");
 

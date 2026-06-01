@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -22,14 +23,16 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Get_Date_Wise_Attendance_With_Contract_Params()
 	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		var today = DateTime.UtcNow.ToString("dd-MM-yyyy");
-		var mediumStageId = Guid.NewGuid();
+		var mediumStageId = EmployeeTestHelper.DefaultMediumStageId;
 		var response = await Client.GetAsync(
 			$"{BaseUrl}/date-wise?attendanceDate={today}&status=PRESENT&page=1&pageSize=10&educationMediumStageId={mediumStageId}&search=abc");
+		var rawPayload = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
 
-		var json = await response.Content.ReadAsStringAsync();
+		var json = rawPayload;
 		using var document = JsonDocument.Parse(json);
 		document.RootElement.TryGetProperty("totalCount", out _).ShouldBeTrue();
 		document.RootElement.TryGetProperty("currentPage", out _).ShouldBeTrue();
@@ -52,17 +55,19 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Get_Employee_Wise_Attendance_With_Pagination_Fields()
 	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		var employeeId = Guid.NewGuid();
-		var mediumStageId = Guid.NewGuid();
+		var mediumStageId = EmployeeTestHelper.DefaultMediumStageId;
 		var start = DateTime.UtcNow.AddDays(-30).ToString("dd-MM-yyyy");
 		var end = DateTime.UtcNow.ToString("dd-MM-yyyy");
 
 		var response = await Client.GetAsync(
 			$"{BaseUrl}/employee-wise?employeeId={employeeId}&startDate={start}&endDate={end}&page=1&pageSize=10&educationMediumStageId={mediumStageId}&search=mon");
+		var rawPayload = await response.Content.ReadAsStringAsync();
 
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
 
-		var json = await response.Content.ReadAsStringAsync();
+		var json = rawPayload;
 		using var document = JsonDocument.Parse(json);
 		document.RootElement.TryGetProperty("totalCount", out _).ShouldBeTrue();
 		document.RootElement.TryGetProperty("currentPage", out _).ShouldBeTrue();

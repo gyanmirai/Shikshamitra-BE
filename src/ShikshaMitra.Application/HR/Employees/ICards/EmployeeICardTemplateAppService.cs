@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using QRCoder;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -141,6 +144,9 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 			input.QrCodeEnabled,
 			input.BarcodeEnabled,
 			input.BackSideEnabled,
+			input.SchemaVersion,
+			input.LayoutJson,
+			input.PrintSettingsJson,
 			input.FieldsJson,
 			input.IsActive);
 
@@ -172,6 +178,9 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 			input.QrCodeEnabled,
 			input.BarcodeEnabled,
 			input.BackSideEnabled,
+			input.SchemaVersion,
+			input.LayoutJson,
+			input.PrintSettingsJson,
 			input.FieldsJson,
 			input.IsActive);
 
@@ -220,6 +229,8 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 		var template = await _repository.GetAsync(templateId);
 		var employeeIds = input.EmployeeIds.Distinct().ToList();
 		var fields = ParseFieldsJson(template.FieldsJson, allowLegacyFallback: true);
+		var layout = EmployeeICardLayoutSchema.ResolveLayout(template);
+		var printSettings = EmployeeICardLayoutSchema.ResolvePrintSettings(template.PrintSettingsJson, input.CardsPerPage);
 		ValidateTemplateAssetReferences(template.LogoBlobName, template.BackgroundImageBlobName);
 		var employeeQuery = await _employeeRepository.GetQueryableAsync();
 		var employees = await AsyncExecuter.ToListAsync(
@@ -245,9 +256,15 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 
 		if (input.ExcludeIncompleteEmployees)
 		{
+			if (string.IsNullOrWhiteSpace(template.LogoBlobName))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeeICardPdfEmployeeRequired);
+			}
+
 			employees = employees
 				.Where(x => !string.IsNullOrWhiteSpace(x.ProfilePictureBlobName) &&
 							!string.IsNullOrWhiteSpace(x.MobileNo) &&
+							!string.IsNullOrWhiteSpace(x.EmployeeCode) &&
 							!string.IsNullOrWhiteSpace(x.Designation))
 				.ToList();
 		}
@@ -266,11 +283,11 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 				? await TryGetBlobBytesAsync(employee.ProfilePictureBlobName)
 				: null;
 		}
-		var cardsPerPage = Math.Clamp(input.CardsPerPage, 1, 10);
+		var cardsPerPage = Math.Clamp(input.CardsPerPage ?? printSettings.CardsPerPage, 1, 10);
 		var themeColor = NormalizeColor(template.ThemeColor ?? template.BackgroundColor ?? "#1D4ED8");
 		var accentColor = NormalizeColor(template.BackgroundColor ?? "#F8FAFC");
-		var cardSize = ResolveCardSize(template);
-		var sheetLayout = ResolveSheetLayout(cardsPerPage, cardSize.Width, cardSize.Height);
+		var cardSize = ResolveCardSize(layout);
+		var sheetLayout = ResolveSheetLayout(cardsPerPage, cardSize.Width, cardSize.Height, printSettings);
 
 		using var stream = new MemoryStream();
 		Document.Create(container =>
@@ -280,12 +297,12 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 				container.Page(page =>
 				{
 					page.Size(PageSizes.A4);
-					page.Margin(18);
+					page.Margin(printSettings.Margin);
 					page.DefaultTextStyle(x => x.FontSize(8).FontColor("#111827"));
 					page.Content().Grid(grid =>
 					{
 						grid.Columns(sheetLayout.Columns);
-						grid.Spacing(10);
+						grid.Spacing(printSettings.Gap);
 
 						foreach (var employee in pageEmployees)
 						{
@@ -295,6 +312,7 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 								employee,
 								ResolveOrganizationName(employee, organizationsByUserId),
 								fields,
+								layout,
 								logoIsRaster ? logoBytes : null,
 								photoBytesByEmployeeId.GetValueOrDefault(employee.Id),
 								themeColor,
@@ -326,6 +344,7 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 		ValidateTemplateAssetReferences(input.LogoBlobName, input.BackgroundImageBlobName);
 		ValidateColor(input.ThemeColor);
 		ValidateColor(input.BackgroundColor);
+		EmployeeICardLayoutSchema.Validate(input.LayoutJson, input.PrintSettingsJson);
 	}
 
 	private void ValidateTemplateAssetReferences(params string?[] blobNames)
@@ -500,6 +519,7 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 		Employee employee,
 		string? organization,
 		IReadOnlyDictionary<string, bool> fields,
+		EmployeeICardLayout layout,
 		byte[]? logoBytes,
 		byte[]? employeePhotoBytes,
 		string themeColor,
@@ -507,83 +527,278 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 		float cardWidth,
 		float cardHeight)
 	{
-		var address = string.Join(", ", new[] { employee.Address1, employee.Address2, employee.Address3 }.Where(x => !string.IsNullOrWhiteSpace(x)));
-		var employeeName = string.IsNullOrWhiteSpace(employee.EmployeeName) ? employee.ShortName ?? "Employee" : employee.EmployeeName;
-		var schoolName = string.IsNullOrWhiteSpace(template.SchoolName) ? template.Name : template.SchoolName;
-		var schoolAddress = string.IsNullOrWhiteSpace(template.SchoolAddress) ? organization ?? "School" : template.SchoolAddress;
+		var svg = BuildCardSvg(template, employee, organization, fields, layout, logoBytes, employeePhotoBytes, themeColor, accentColor);
 
 		container
 			.Width(cardWidth)
 			.Height(cardHeight)
-			.Border(1)
-			.BorderColor("#CBD5E1")
-			.Background(NormalizeColor(template.BackgroundColor ?? "#FFFFFF"))
-			.Padding(8)
-			.Column(column =>
-			{
-				column.Spacing(6);
-				column.Item().Row(row =>
-				{
-					if (logoBytes is { Length: > 0 })
-					{
-						row.ConstantItem(34).Height(34).Image(logoBytes).FitArea();
-						row.ConstantItem(8);
-					}
-
-					row.RelativeItem().Column(header =>
-					{
-						header.Item().Text(schoolName).Bold().FontSize(11).FontColor(themeColor);
-						header.Item().Text(schoolAddress).FontSize(7).FontColor(Colors.Grey.Darken1);
-					});
-				});
-
-				column.Item().LineHorizontal(1).LineColor(accentColor);
-				column.Item().Row(row =>
-				{
-					if (IsFieldEnabled(fields, "photo"))
-					{
-						row.ConstantItem(58).Height(68).Element(photo =>
-						{
-							var frame = photo.Border(1).BorderColor("#CBD5E1").Background("#F8FAFC");
-							if (employeePhotoBytes is { Length: > 0 })
-							{
-								frame.Image(employeePhotoBytes).FitArea();
-							}
-							else
-							{
-								frame.AlignCenter().AlignMiddle().Text("PHOTO").FontSize(8).FontColor(Colors.Grey.Darken1);
-							}
-						});
-						row.ConstantItem(10);
-					}
-					row.RelativeItem().Column(details =>
-					{
-						details.Spacing(3);
-						if (IsFieldEnabled(fields, "name"))
-						{
-							details.Item().Text(employeeName).Bold().FontSize(12).FontColor("#0F172A");
-						}
-						AddLineIfEnabled(details, fields, "employeeCode", "Code", employee.EmployeeCode);
-						AddLineIfEnabled(details, fields, "designation", "Designation", employee.Designation);
-						AddLineIfEnabled(details, fields, "department", "Department", employee.Department);
-						AddLineIfEnabled(details, fields, "organization", "Organization", organization);
-						AddLineIfEnabled(details, fields, "contactNo", "Mobile", employee.MobileNo);
-						AddLineIfEnabled(details, fields, "bloodGroup", "Blood Group", employee.BloodGroup);
-						AddLineIfEnabled(details, fields, "validityYear", "Valid", template.Name);
-					});
-				});
-
-				if (IsFieldEnabled(fields, "address") && !string.IsNullOrWhiteSpace(address))
-				{
-					column.Item().Text(address).FontSize(6).FontColor(Colors.Grey.Darken1);
-				}
-
-				if (template.QrCodeEnabled || template.BarcodeEnabled)
-				{
-					column.Item().AlignRight().Text(template.QrCodeEnabled ? $"QR: {employee.EmployeeCode}" : $"BAR: {employee.EmployeeCode}").FontSize(6).FontColor(Colors.Grey.Darken1);
-				}
-			});
+			.Svg(svg);
 	}
+
+	private static string BuildCardSvg(
+		EmployeeICardTemplate template,
+		Employee employee,
+		string? organization,
+		IReadOnlyDictionary<string, bool> fields,
+		EmployeeICardLayout layout,
+		byte[]? logoBytes,
+		byte[]? employeePhotoBytes,
+		string themeColor,
+		string accentColor)
+	{
+		var builder = new StringBuilder();
+		var background = NormalizeColor(layout.BackgroundColor ?? template.BackgroundColor ?? "#FFFFFF");
+		builder.Append($"""<svg xmlns="http://www.w3.org/2000/svg" width="{layout.Width}" height="{layout.Height}" viewBox="0 0 {layout.Width} {layout.Height}">""");
+		builder.Append($"""<rect x="0" y="0" width="{layout.Width}" height="{layout.Height}" rx="8" fill="{Escape(background)}" stroke="#CBD5E1" stroke-width="1"/>""");
+
+		foreach (var element in layout.Front.Elements.Where(x => x.Visible).OrderBy(x => x.Z))
+		{
+				if (!ShouldRenderElement(template, element, fields))
+			{
+				continue;
+			}
+
+			builder.Append(RenderElement(template, employee, organization, element, logoBytes, employeePhotoBytes, themeColor, accentColor));
+		}
+
+		builder.Append("</svg>");
+		return builder.ToString();
+	}
+
+	private static bool ShouldRenderElement(EmployeeICardTemplate template, EmployeeICardLayoutElement element, IReadOnlyDictionary<string, bool> fields)
+	{
+		if (string.Equals(element.Type, "qr", StringComparison.OrdinalIgnoreCase) && !template.QrCodeEnabled)
+		{
+			return false;
+		}
+
+		if (string.Equals(element.Type, "barcode", StringComparison.OrdinalIgnoreCase) && !template.BarcodeEnabled)
+		{
+			return false;
+		}
+
+		if (string.IsNullOrWhiteSpace(element.FieldKey) ||
+			string.Equals(element.FieldKey, "schoolName", StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(element.FieldKey, "schoolAddress", StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(element.FieldKey, "static", StringComparison.OrdinalIgnoreCase))
+		{
+			return true;
+		}
+
+		return string.Equals(element.Type, "photo", StringComparison.OrdinalIgnoreCase)
+			? IsFieldEnabled(fields, "photo")
+			: IsFieldEnabled(fields, element.FieldKey);
+	}
+
+	private static string RenderElement(
+		EmployeeICardTemplate template,
+		Employee employee,
+		string? organization,
+		EmployeeICardLayoutElement element,
+		byte[]? logoBytes,
+		byte[]? employeePhotoBytes,
+		string themeColor,
+		string accentColor)
+	{
+		var style = element.Style ?? new EmployeeICardElementStyle();
+		var fill = NormalizeColor(style.BackgroundColor ?? "FFFFFF");
+		var stroke = NormalizeColor(style.BorderColor ?? "#CBD5E1");
+		var strokeWidth = Math.Max(0, style.BorderWidth ?? 0);
+		var radius = Math.Max(0, style.BorderRadius ?? 0);
+
+		return element.Type.ToLowerInvariant() switch
+		{
+			"shape" => $"""<rect x="{element.X}" y="{element.Y}" width="{element.W}" height="{element.H}" rx="{radius}" fill="{Escape(fill)}" stroke="{Escape(stroke)}" stroke-width="{strokeWidth}"/>""",
+			"line" => $"""<line x1="{element.X}" y1="{element.Y}" x2="{element.X + element.W}" y2="{element.Y}" stroke="{Escape(NormalizeColor(style.BackgroundColor ?? style.BorderColor ?? accentColor))}" stroke-width="{Math.Max(1, element.H)}"/>""",
+			"logo" => RenderImageOrPlaceholder(element, logoBytes, themeColor, "LOGO"),
+			"photo" => RenderImageOrPlaceholder(element, employeePhotoBytes, themeColor, "PHOTO", style.PhotoShape),
+			"qr" => RenderEmbeddedSvg(element, BuildQrSvg(BuildIdentityPayload(employee))),
+			"barcode" => RenderBarcode(element, employee.EmployeeCode ?? employee.EmployeeName ?? employee.Id.ToString("N")),
+			"text" => RenderText(template, employee, organization, element),
+			_ => string.Empty
+		};
+	}
+
+	private static string RenderText(EmployeeICardTemplate template, Employee employee, string? organization, EmployeeICardLayoutElement element)
+	{
+		var style = element.Style ?? new EmployeeICardElementStyle();
+		var value = ResolveFieldValue(template, employee, organization, element.FieldKey, element.Value);
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			value = "-";
+		}
+
+		if (style.ShowLabel == true && !string.IsNullOrWhiteSpace(element.Label))
+		{
+			value = $"{element.Label}{style.Separator ?? ": "}{value}";
+		}
+
+		var fontSize = Math.Clamp(style.FontSize ?? 9, 5, 48);
+		var color = NormalizeColor(style.Color ?? "#111827");
+		var fontWeightValue = style.FontWeight?.ToString();
+		var fontWeight = fontWeightValue is "700" or "800" or "900" or "bold" ? "700" : "400";
+		var anchor = string.Equals(style.TextAlign, "center", StringComparison.OrdinalIgnoreCase)
+			? "middle"
+			: string.Equals(style.TextAlign, "right", StringComparison.OrdinalIgnoreCase) ? "end" : "start";
+		var x = anchor == "middle" ? element.X + (element.W / 2) : anchor == "end" ? element.X + element.W : element.X;
+		var y = element.Y + fontSize;
+		var text = Truncate(value, Math.Max(4, (int)(element.W / Math.Max(4, fontSize * 0.55f))));
+
+		return $"""<text x="{x}" y="{y}" font-family="Arial, sans-serif" font-size="{fontSize}" font-weight="{fontWeight}" fill="{Escape(color)}" text-anchor="{anchor}">{Escape(text)}</text>""";
+	}
+
+	private static string RenderImageOrPlaceholder(EmployeeICardLayoutElement element, byte[]? bytes, string themeColor, string label, string? shape = null)
+	{
+		var clipId = $"clip-{element.Id}";
+		var radius = string.Equals(shape, "circle", StringComparison.OrdinalIgnoreCase)
+			? Math.Min(element.W, element.H) / 2
+			: Math.Max(0, element.Style?.BorderRadius ?? 8);
+		var border = NormalizeColor(element.Style?.BorderColor ?? themeColor);
+		var strokeWidth = Math.Max(0, element.Style?.BorderWidth ?? 1);
+		var frame = $"""<rect x="{element.X}" y="{element.Y}" width="{element.W}" height="{element.H}" rx="{radius}" fill="#FFFFFF" stroke="{Escape(border)}" stroke-width="{strokeWidth}"/>""";
+		if (bytes is not { Length: > 0 })
+		{
+			return frame + $"""<text x="{element.X + (element.W / 2)}" y="{element.Y + (element.H / 2) + 4}" font-family="Arial, sans-serif" font-size="9" text-anchor="middle" fill="#64748B">{label}</text>""";
+		}
+
+		var mime = IsPng(bytes) ? "image/png" : "image/jpeg";
+		var data = Convert.ToBase64String(bytes);
+		return frame +
+			$"""<clipPath id="{clipId}"><rect x="{element.X}" y="{element.Y}" width="{element.W}" height="{element.H}" rx="{radius}"/></clipPath>""" +
+			$"""<image href="data:{mime};base64,{data}" x="{element.X}" y="{element.Y}" width="{element.W}" height="{element.H}" preserveAspectRatio="xMidYMid slice" clip-path="url(#{clipId})"/>""";
+	}
+
+	private static string RenderEmbeddedSvg(EmployeeICardLayoutElement element, string svg)
+	{
+		var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
+		return $"""<image href="data:image/svg+xml;base64,{encoded}" x="{element.X}" y="{element.Y}" width="{element.W}" height="{element.H}" preserveAspectRatio="xMidYMid meet"/>""";
+	}
+
+	private static string BuildQrSvg(string payload)
+	{
+		using var generator = new QRCodeGenerator();
+		using var data = generator.CreateQrCode(payload, QRCodeGenerator.ECCLevel.Q);
+		var qr = new SvgQRCode(data);
+		return qr.GetGraphic(4);
+	}
+
+	private static string RenderBarcode(EmployeeICardLayoutElement element, string value)
+	{
+		var encoded = $"*{new string(value.ToUpperInvariant().Where(IsCode39Character).ToArray())}*";
+		if (encoded.Length <= 2)
+		{
+			encoded = "*ID*";
+		}
+
+		var narrow = Math.Max(1f, element.W / Math.Max(40, encoded.Length * 14));
+		var x = element.X;
+		var bars = new StringBuilder();
+		foreach (var character in encoded)
+		{
+			var pattern = Code39Pattern(character);
+			for (var index = 0; index < pattern.Length; index++)
+			{
+				var wide = pattern[index] == 'w';
+				var width = wide ? narrow * 2.5f : narrow;
+				if (index % 2 == 0)
+				{
+					bars.Append($"""<rect x="{x:0.##}" y="{element.Y}" width="{width:0.##}" height="{Math.Max(8, element.H - 8):0.##}" fill="#111827"/>""");
+				}
+				x += width;
+			}
+			x += narrow;
+		}
+
+		var text = Escape(Truncate(encoded.Trim('*'), 24));
+		return bars + $"""<text x="{element.X + (element.W / 2)}" y="{element.Y + element.H}" font-family="Arial, sans-serif" font-size="6" text-anchor="middle" fill="#111827">{text}</text>""";
+	}
+
+	private static string ResolveFieldValue(EmployeeICardTemplate template, Employee employee, string? organization, string? fieldKey, string? fallback)
+	{
+		var address = string.Join(", ", new[] { employee.Address1, employee.Address2, employee.Address3 }.Where(x => !string.IsNullOrWhiteSpace(x)));
+		var employeeName = string.IsNullOrWhiteSpace(employee.EmployeeName) ? employee.ShortName ?? "Employee" : employee.EmployeeName;
+		return fieldKey?.ToLowerInvariant() switch
+		{
+			"name" => employeeName,
+			"employeecode" => employee.EmployeeCode,
+			"designation" => employee.Designation,
+			"department" => employee.Department,
+			"organization" => organization,
+			"contactno" => employee.MobileNo,
+			"bloodgroup" => employee.BloodGroup,
+			"validityyear" => template.Name,
+			"address" => address,
+			"schoolname" => string.IsNullOrWhiteSpace(template.SchoolName) ? template.Name : template.SchoolName,
+			"schooladdress" => string.IsNullOrWhiteSpace(template.SchoolAddress) ? organization ?? "School" : template.SchoolAddress,
+			"static" => fallback,
+			_ => fallback
+		};
+	}
+
+	private static string BuildIdentityPayload(Employee employee) =>
+		$"employee:{employee.Id:N}:{employee.EmployeeCode ?? employee.EmployeeName ?? "unknown"}";
+
+	private static bool IsPng(byte[] bytes) =>
+		bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47;
+
+	private static bool IsCode39Character(char value) =>
+		char.IsLetterOrDigit(value) || value is '-' or '.' or ' ' or '$' or '/' or '+' or '%';
+
+	private static string Code39Pattern(char value) =>
+		value switch
+		{
+			'0' => "nnnwwnwnn",
+			'1' => "wnnwnnnnw",
+			'2' => "nnwwnnnnw",
+			'3' => "wnwwnnnnn",
+			'4' => "nnnwwnnnw",
+			'5' => "wnnwwnnnn",
+			'6' => "nnwwwnnnn",
+			'7' => "nnnwnnwnw",
+			'8' => "wnnwnnwnn",
+			'9' => "nnwwnnwnn",
+			'A' => "wnnnnwnnw",
+			'B' => "nnwnnwnnw",
+			'C' => "wnwnnwnnn",
+			'D' => "nnnnwwnnw",
+			'E' => "wnnnwwnnn",
+			'F' => "nnwnwwnnn",
+			'G' => "nnnnnwwnw",
+			'H' => "wnnnnwwnn",
+			'I' => "nnwnnwwnn",
+			'J' => "nnnnwwwnn",
+			'K' => "wnnnnnnww",
+			'L' => "nnwnnnnww",
+			'M' => "wnwnnnnwn",
+			'N' => "nnnnwnnww",
+			'O' => "wnnnwnnwn",
+			'P' => "nnwnwnnwn",
+			'Q' => "nnnnnnwww",
+			'R' => "wnnnnnwwn",
+			'S' => "nnwnnnwwn",
+			'T' => "nnnnwnwwn",
+			'U' => "wwnnnnnnw",
+			'V' => "nwwnnnnnw",
+			'W' => "wwwnnnnnn",
+			'X' => "nwnnwnnnw",
+			'Y' => "wwnnwnnnn",
+			'Z' => "nwwnwnnnn",
+			'-' => "nwnnnnwnw",
+			'.' => "wwnnnnwnn",
+			' ' => "nwwnnnwnn",
+			'*' => "nwnnwnwnn",
+			'$' => "nwnwnwnnn",
+			'/' => "nwnwnnnwn",
+			'+' => "nwnnnwnwn",
+			'%' => "nnnwnwnwn",
+			_ => "nwwnnnwnn"
+		};
+
+	private static string Truncate(string value, int maxLength) =>
+		value.Length <= maxLength ? value : value[..Math.Max(1, maxLength - 3)] + "...";
+
+	private static string Escape(string value) =>
+		WebUtility.HtmlEncode(value);
 
 	private static string? ResolveOrganizationName(
 		Employee employee,
@@ -625,18 +840,18 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 		return SupportedFieldNames.ToDictionary(fieldName => fieldName, _ => false, StringComparer.OrdinalIgnoreCase);
 	}
 
-	private static (float Width, float Height) ResolveCardSize(EmployeeICardTemplate template)
+	private static (float Width, float Height) ResolveCardSize(EmployeeICardLayout layout)
 	{
-		var isVertical = string.Equals(template.Orientation, VerticalOrientation, StringComparison.OrdinalIgnoreCase);
+		var isVertical = string.Equals(layout.Orientation, VerticalOrientation, StringComparison.OrdinalIgnoreCase);
 		var defaultWidth = isVertical ? 160f : 252f;
 		var defaultHeight = isVertical ? 252f : 160f;
-		if (template.Width <= 0 || template.Height <= 0)
+		if (layout.Width <= 0 || layout.Height <= 0)
 		{
 			return (defaultWidth, defaultHeight);
 		}
 
-		var width = (float)(template.Width * PreviewPixelToPointScale);
-		var height = (float)(template.Height * PreviewPixelToPointScale);
+		var width = (float)(layout.Width * PreviewPixelToPointScale);
+		var height = (float)(layout.Height * PreviewPixelToPointScale);
 		if ((isVertical && width > height) || (!isVertical && height > width))
 		{
 			(width, height) = (height, width);
@@ -645,12 +860,12 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 		return (Math.Clamp(width, 120f, 280f), Math.Clamp(height, 120f, 390f));
 	}
 
-	private static (int Columns, float CardWidth, float CardHeight) ResolveSheetLayout(int cardsPerPage, float cardWidth, float cardHeight)
+	private static (int Columns, float CardWidth, float CardHeight) ResolveSheetLayout(int cardsPerPage, float cardWidth, float cardHeight, EmployeeICardPrintSettings printSettings)
 	{
 		const float a4Width = 595f;
 		const float a4Height = 842f;
-		const float margin = 18f;
-		const float spacing = 10f;
+		var margin = printSettings.Margin;
+		var spacing = printSettings.Gap;
 		var availableWidth = a4Width - (margin * 2);
 		var availableHeight = a4Height - (margin * 2);
 		var columns = Math.Clamp((int) Math.Floor((availableWidth + spacing) / (cardWidth + spacing)), 1, cardsPerPage);
@@ -703,6 +918,9 @@ public class EmployeeICardTemplateAppService : ApplicationService, IEmployeeICar
 			QrCodeEnabled = template.QrCodeEnabled,
 			BarcodeEnabled = template.BarcodeEnabled,
 			BackSideEnabled = template.BackSideEnabled,
+			SchemaVersion = template.SchemaVersion,
+			LayoutJson = template.LayoutJson,
+			PrintSettingsJson = template.PrintSettingsJson,
 			FieldsJson = template.FieldsJson,
 			IsActive = template.IsActive,
 			CreationTime = template.CreationTime,

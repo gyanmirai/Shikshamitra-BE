@@ -9,6 +9,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.Security.UserScope;
@@ -26,9 +27,12 @@ public class TakeAttendanceAppService(
 	IStaffAttendanceDayLockRepository staffAttendanceDayLockRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
 	IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
+	IRepository<Holiday, Guid> holidayRepository,
 	IUserScopeService userScopeService,
 	HrUserScopeAccessService hrScopeAccessService,
-	IRepository<ShiftManagement, Guid> shiftRepository)
+	HrEmployeeScopeQueryService hrEmployeeScopeQueryService,
+	IRepository<ShiftManagement, Guid> shiftRepository,
+	AttendancePolicyWorkedTimeEvaluator workedTimeEvaluator)
 	: ApplicationService, ITakeAttendanceAppService
 {
 	private const int AttendanceRemarksMaxLength = 512;
@@ -44,14 +48,16 @@ public class TakeAttendanceAppService(
 
 		var scope = await EnsureCanOperateAttendanceAsync();
 		var locked = await staffAttendanceDayLockRepository.FindAsync(dateOnly);
+		var holiday = await FindHolidayAsync(dateOnly);
+		var holidayReason = holiday == null ? null : $"Holiday: {holiday.HolidayName}";
 
-		var empQuery = (await employeeRepository.GetQueryableAsync())
-			.ApplyAttendanceDateEligibility(dateOnly);
-
-		if (CurrentTenant.Id.HasValue)
-		{
-			empQuery = empQuery.Where(e => e.TenantId == CurrentTenant.Id);
-		}
+		var empQuery = await hrEmployeeScopeQueryService.BuildScopedEmployeeQueryAsync(
+			scope,
+			new HrEmployeeScopeOptions
+			{
+				ActiveOnOrAfter = dateOnly,
+				JoinedOnOrBefore = dateOnly
+			});
 
 		if (!string.IsNullOrWhiteSpace(input.Department))
 		{
@@ -83,7 +89,7 @@ public class TakeAttendanceAppService(
 		empQuery = empQuery.OrderBy(e => e.FirstName).ThenBy(e => e.LastName);
 
 		var allEmployeeIds = await AsyncExecuter.ToListAsync(empQuery.Select(e => e.Id));
-		var employeeStageMap = await ResolveEmployeeStagesAsync(allEmployeeIds);
+		var employeeStageMap = await ResolveEmployeeStagesAsync(allEmployeeIds, scope);
 		var scopedEmployeeIds = await FilterEmployeeIdsByScopeAsync(allEmployeeIds, employeeStageMap, scope);
 		empQuery = empQuery.Where(e => scopedEmployeeIds.Contains(e.Id));
 
@@ -130,6 +136,9 @@ public class TakeAttendanceAppService(
 				Remarks = a?.Remarks,
 				Warnings = [],
 				Errors = [],
+				IsHoliday = holiday != null,
+				HolidayName = holiday?.HolidayName,
+				HolidayReason = holidayReason,
 				Status = status
 			});
 		}
@@ -147,6 +156,9 @@ public class TakeAttendanceAppService(
 			TotalCount = scopedEmployeeIds.Count,
 			Date = dateOnly,
 			IsDayLocked = locked != null,
+			IsHoliday = holiday != null,
+			HolidayName = holiday?.HolidayName,
+			HolidayReason = holidayReason,
 			LockedByUserId = locked?.LockedByUserId,
 			LockedAt = locked?.LockedAt,
 			Summary = summary,
@@ -164,6 +176,14 @@ public class TakeAttendanceAppService(
 		}
 
 		var scope = await EnsureCanOperateAttendanceAsync();
+		var holiday = await FindHolidayAsync(dateOnly);
+		if (holiday != null)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceHolidayNotAllowed)
+				.WithData("attendanceDate", dateOnly)
+				.WithData("holidayName", holiday.HolidayName);
+		}
+
 		if (await staffAttendanceDayLockRepository.FindAsync(dateOnly) != null)
 		{
 			throw new BusinessException(HRErrorCodes.TakeAttendanceDayLocked);
@@ -178,7 +198,7 @@ public class TakeAttendanceAppService(
 			.Select(entry => new ParsedTakeAttendanceEntry(entry, ParseWireStatus(entry.StatusWire)))
 			.ToList();
 		var requestedEmployeeIds = parsedEntries.Select(x => x.Entry.EmployeeId).Distinct().ToList();
-		var employeeStageMap = await ResolveEmployeeStagesAsync(requestedEmployeeIds);
+		var employeeStageMap = await ResolveEmployeeStagesAsync(requestedEmployeeIds, scope);
 		var upserted = 0;
 		foreach (var parsedEntry in parsedEntries)
 		{
@@ -201,6 +221,16 @@ public class TakeAttendanceAppService(
 
 			var employee = await employeeRepository.GetAsync(entry.EmployeeId);
 			EnsureEmployeeCanTakeAttendanceOnDate(employee, dateOnly);
+			if (tIn.HasValue || tOut.HasValue)
+			{
+				var evaluation = await workedTimeEvaluator.EvaluateAsync(
+					employee,
+					dateOnly,
+					tIn,
+					tOut,
+					status);
+				status = evaluation.Status;
+			}
 
 			var attQuery = await employeeAttendanceRepository.GetQueryableAsync();
 			if (CurrentTenant.Id.HasValue)
@@ -213,11 +243,8 @@ public class TakeAttendanceAppService(
 					a.EmployeeId == entry.EmployeeId &&
 					a.AttendanceDate == dateOnly));
 
-			var resolvedStageId = existing?.EducationMediumStageId;
-			if (!resolvedStageId.HasValue)
-			{
-				employeeStageMap.TryGetValue(entry.EmployeeId, out resolvedStageId);
-			}
+			employeeStageMap.TryGetValue(entry.EmployeeId, out var assignmentStageId);
+			var resolvedStageId = assignmentStageId ?? existing?.EducationMediumStageId;
 			resolvedStageId = ResolveScopedStageFallback(scope, resolvedStageId);
 
 			await EnsureEmployeeScopeAllowedAsync(scope, resolvedStageId);
@@ -227,7 +254,7 @@ public class TakeAttendanceAppService(
 				existing.StatusType = status;
 				existing.TimeIn = tIn;
 				existing.TimeOut = tOut;
-				existing.EducationMediumStageId ??= resolvedStageId;
+				existing.EducationMediumStageId = resolvedStageId;
 				existing.Remarks = normalizedRemarks;
 				await employeeAttendanceRepository.UpdateAsync(existing, autoSave: false);
 			}
@@ -267,6 +294,14 @@ public class TakeAttendanceAppService(
 		var dateOnly = DateOnly.FromDateTime(date);
 		var scope = await EnsureCanOperateAttendanceAsync();
 		EnsureTenantWideDayLockAllowed(scope);
+		var holiday = await FindHolidayAsync(dateOnly);
+		if (holiday != null)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceHolidayNotAllowed)
+				.WithData("attendanceDate", dateOnly)
+				.WithData("holidayName", holiday.HolidayName);
+		}
+
 		if (await staffAttendanceDayLockRepository.FindAsync(dateOnly) != null)
 		{
 			return;
@@ -368,12 +403,19 @@ public class TakeAttendanceAppService(
 		throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 	}
 
-	private async Task<Dictionary<Guid, Guid?>> ResolveEmployeeStagesAsync(List<Guid> employeeIds)
+	private async Task<Dictionary<Guid, Guid?>> ResolveEmployeeStagesAsync(
+		List<Guid> employeeIds,
+		UserScopeContext scope)
 	{
 		if (employeeIds.Count == 0)
 		{
 			return new Dictionary<Guid, Guid?>();
 		}
+
+		var assignmentStageLookup = await hrEmployeeScopeQueryService.BuildEmployeeStageLookupAsync(employeeIds);
+		var accessibleStageIds = HrUserScopeAccess.HasHrWideAccess(scope)
+			? new HashSet<Guid>()
+			: (await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope)).ToHashSet();
 
 		var attQuery = await employeeAttendanceRepository.GetQueryableAsync();
 		if (CurrentTenant.Id.HasValue)
@@ -387,24 +429,43 @@ public class TakeAttendanceAppService(
 				.OrderByDescending(a => a.AttendanceDate)
 				.Select(a => new { a.EmployeeId, a.EducationMediumStageId }));
 
-		var result = new Dictionary<Guid, Guid?>();
+		var legacyStageByEmployee = new Dictionary<Guid, Guid?>();
 		foreach (var row in rows)
 		{
-			if (!result.ContainsKey(row.EmployeeId))
+			if (!legacyStageByEmployee.ContainsKey(row.EmployeeId))
 			{
-				result[row.EmployeeId] = row.EducationMediumStageId;
+				legacyStageByEmployee[row.EmployeeId] = row.EducationMediumStageId;
 			}
 		}
 
+		var result = new Dictionary<Guid, Guid?>();
 		foreach (var employeeId in employeeIds)
 		{
-			if (!result.ContainsKey(employeeId))
-			{
-				result[employeeId] = null;
-			}
+			assignmentStageLookup.TryGetValue(employeeId, out var assignedStages);
+			var assignedStage = ResolveAssignedStageForScope(assignedStages ?? new List<Guid>(), scope, accessibleStageIds);
+			result[employeeId] = assignedStage ?? legacyStageByEmployee.GetValueOrDefault(employeeId);
 		}
 
 		return result;
+	}
+
+	private static Guid? ResolveAssignedStageForScope(
+		IReadOnlyCollection<Guid> assignedStages,
+		UserScopeContext scope,
+		IReadOnlySet<Guid> accessibleStageIds)
+	{
+		if (assignedStages.Count == 0)
+		{
+			return null;
+		}
+
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
+		{
+			return assignedStages.First();
+		}
+
+		var scopedStage = assignedStages.FirstOrDefault(accessibleStageIds.Contains);
+		return scopedStage == Guid.Empty ? null : scopedStage;
 	}
 
 	private async Task<Dictionary<Guid, ShiftManagement>> LoadShiftLookupAsync(List<Guid> shiftIds)
@@ -417,6 +478,27 @@ public class TakeAttendanceAppService(
 		var query = await shiftRepository.GetQueryableAsync();
 		var shifts = await AsyncExecuter.ToListAsync(query.Where(x => shiftIds.Contains(x.Id)));
 		return shifts.ToDictionary(x => x.Id, x => x);
+	}
+
+	private async Task<Holiday?> FindHolidayAsync(DateOnly date)
+	{
+		var dayStart = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+		var dayEnd = new DateTimeOffset(date.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero);
+		var query = await holidayRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			query = query.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			query = query.Where(x => x.TenantId == null);
+		}
+
+		var holidays = await AsyncExecuter.ToListAsync(query);
+		return holidays
+			.Where(x => x.StartDate <= dayEnd && x.EndDate >= dayStart)
+			.OrderBy(x => x.StartDate)
+			.FirstOrDefault();
 	}
 
 	private static EmployeeAttendanceStatusType ParseWireStatus(string wire) =>
@@ -538,15 +620,15 @@ public class TakeAttendanceAppService(
 
 	private static DateTime ParseDate(string dateString)
 	{
-		if (DateTimeOffset.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
-		{
-			return DateTime.SpecifyKind(dto.Date, DateTimeKind.Unspecified);
-		}
-
-		if (DateTime.TryParseExact(dateString, "dd-MM-yyyy", CultureInfo.InvariantCulture,
+		if (DateTime.TryParseExact(dateString, ["dd-MM-yyyy", "yyyy-MM-dd"], CultureInfo.InvariantCulture,
 				DateTimeStyles.None, out var result))
 		{
 			return DateTime.SpecifyKind(result, DateTimeKind.Unspecified);
+		}
+
+		if (DateTimeOffset.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
+		{
+			return DateTime.SpecifyKind(dto.Date, DateTimeKind.Unspecified);
 		}
 
 		if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.None, out result))

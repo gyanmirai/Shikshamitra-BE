@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Dashboard;
 
@@ -10,6 +11,7 @@ public class HrDashboardPreviewRefreshBackgroundJob(
 	ICurrentTenant currentTenant)
 	: AsyncBackgroundJob<HrDashboardPreviewRefreshJobArgs>, ITransientDependency
 {
+	[UnitOfWork]
 	public override async Task ExecuteAsync(HrDashboardPreviewRefreshJobArgs args)
 	{
 		using (currentTenant.Change(args.TenantId))

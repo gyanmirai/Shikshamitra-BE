@@ -63,9 +63,23 @@ public partial class ShikshaMitraDbContext
     public DbSet<HrPolicyVersion> HrPolicyVersions { get; set; }
     public DbSet<HrAuditEvent> HrAuditEvents { get; set; }
     public DbSet<HrDashboardPreview> HrDashboardPreviews { get; set; }
+    public DbSet<HrDashboardRefreshRun> HrDashboardRefreshRuns { get; set; }
     public DbSet<ProfessionalReviewCycle> ProfessionalReviewCycles { get; set; }
     public DbSet<ProfessionalReview> ProfessionalReviews { get; set; }
+    public DbSet<PerformanceTemplate> PerformanceTemplates { get; set; }
+    public DbSet<PerformanceTemplateSection> PerformanceTemplateSections { get; set; }
+    public DbSet<PerformanceTemplateCriterion> PerformanceTemplateCriteria { get; set; }
+    public DbSet<PerformanceReviewAssignment> PerformanceReviewAssignments { get; set; }
+    public DbSet<PerformanceReviewStage> PerformanceReviewStages { get; set; }
+    public DbSet<PerformanceReviewResponse> PerformanceReviewResponses { get; set; }
+    public DbSet<ClassroomObservation> ClassroomObservations { get; set; }
+    public DbSet<PerformanceEvidence> PerformanceEvidence { get; set; }
+    public DbSet<PerformanceFeedback> PerformanceFeedback { get; set; }
+    public DbSet<PerformanceOutcome> PerformanceOutcomes { get; set; }
+    public DbSet<DevelopmentPlan> DevelopmentPlans { get; set; }
+    public DbSet<PerformanceAuditEvent> PerformanceAuditEvents { get; set; }
     public DbSet<HrReportExportJob> HrReportExportJobs { get; set; }
+    public DbSet<HrReportTemplate> HrReportTemplates { get; set; }
 
     public DbSet<HolidayType> HolidayTypes { get; set; }
     public DbSet<EventType> EventTypes { get; set; }

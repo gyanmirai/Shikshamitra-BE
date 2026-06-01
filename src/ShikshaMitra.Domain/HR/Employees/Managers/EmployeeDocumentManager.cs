@@ -23,7 +23,11 @@ public class EmployeeDocumentManager(
 	public async Task AddDocumentsAsync(Guid employeeId, List<EmployeeDocumentData> documents)
 	{
 		var employee = await employeeRepository.GetAsync(employeeId);
+		await AddDocumentsAsync(employee, documents, updateEmployee: true);
+	}
 
+	public async Task AddDocumentsAsync(Employee employee, List<EmployeeDocumentData> documents, bool updateEmployee)
+	{
 		foreach (var docData in documents)
 		{
 			FileValidationService.ValidateDocumentUpload(docData.FileName, docData.Content, docData.Size);
@@ -32,14 +36,14 @@ public class EmployeeDocumentManager(
 
 			// Sanitize filename to prevent path traversal
 			var sanitizedFileName = Path.GetFileName(docData.FileName);
-			var blobName = $"employee-documents/{employeeId}/{documentId}_{sanitizedFileName}";
+			var blobName = $"employee-documents/{employee.Id}/{documentId}_{sanitizedFileName}";
 
 			await blobContainer.SaveAsync(blobName, docData.Content, overrideExisting: true);
 
 			var document = new EmployeeDocument(
 				id: documentId,
 				tenantId: CurrentTenant.Id,
-				employeeId: employeeId,
+				employeeId: employee.Id,
 				documentName: docData.FileName,
 				contentType: docData.ContentType,
 				size: docData.Size,
@@ -50,7 +54,10 @@ public class EmployeeDocumentManager(
 			employee.AddDocument(document);
 		}
 
-		await employeeRepository.UpdateAsync(employee);
+		if (updateEmployee)
+		{
+			await employeeRepository.UpdateAsync(employee);
+		}
 	}
 
 	public async Task<EmployeeDocument> GetDocumentAsync(Guid employeeId, Guid documentId)

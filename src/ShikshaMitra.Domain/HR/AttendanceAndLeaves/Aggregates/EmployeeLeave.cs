@@ -22,6 +22,8 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public bool HalfDay { get; private set; }
 	public DateTimeOffset StartDate { get; private set; }
 	public DateTimeOffset EndDate { get; private set; }
+	public DateOnly StartDateOnly { get; private set; }
+	public DateOnly EndDateOnly { get; private set; }
 	public EmployeeLeaveStatusType Status { get; private set; }
 	public LeavePaidType? ApprovedPaidType { get; private set; }
 	public decimal ApprovedLeaveUnits { get; private set; }
@@ -47,6 +49,8 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		HalfDay = halfDay;
 		StartDate = startDate;
 		EndDate = endDate;
+		StartDateOnly = DateOnly.FromDateTime(startDate.Date);
+		EndDateOnly = DateOnly.FromDateTime(endDate.Date);
 		Description = description;
 		RejectionReason = rejectionReason;
 		Status = EmployeeLeaveStatusType.Pending;

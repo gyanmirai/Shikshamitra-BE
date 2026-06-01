@@ -8,6 +8,7 @@ public class HrDashboardPreview : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public string DashboardKey { get; private set; } = string.Empty;
+	public string ScopeKey { get; private set; } = HrDashboardScopeKeys.HrWide;
 	public string PayloadJson { get; private set; } = "{}";
 	public int PayloadVersion { get; private set; } = 1;
 	public string Status { get; private set; } = HrDashboardPreviewStatus.Empty;
@@ -20,10 +21,11 @@ public class HrDashboardPreview : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 	}
 
-	public HrDashboardPreview(Guid id, Guid? tenantId, string dashboardKey) : base(id)
+	public HrDashboardPreview(Guid id, Guid? tenantId, string dashboardKey, string scopeKey) : base(id)
 	{
 		TenantId = tenantId;
 		DashboardKey = dashboardKey;
+		ScopeKey = string.IsNullOrWhiteSpace(scopeKey) ? HrDashboardScopeKeys.HrWide : scopeKey;
 	}
 
 	public void MarkRefreshing(Guid? requestedByUserId, DateTime startedAt)
@@ -51,6 +53,5 @@ public class HrDashboardPreview : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			: HrDashboardPreviewStatus.Ready;
 		LastError = string.IsNullOrWhiteSpace(error) ? "Dashboard refresh failed." : error;
 		RefreshStartedAt = null;
-		LastRefreshedAt ??= failedAt;
 	}
 }

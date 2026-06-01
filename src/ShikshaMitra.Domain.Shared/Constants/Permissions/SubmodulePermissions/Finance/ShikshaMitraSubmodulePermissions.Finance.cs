@@ -8,6 +8,7 @@ namespace ShikshaMitra.Constants.Permissions;
 /// - ShikshaMitraSubmodulePermissions.Finance.cs (Main module definition)
 /// - ShikshaMitraSubmodulePermissions.Finance.Fees.cs
 /// - ShikshaMitraSubmodulePermissions.Finance.Accounts.cs
+/// - ShikshaMitraSubmodulePermissions.Finance.Auditing.cs
 /// </summary>
 public static partial class ShikshaMitraSubmodulePermissions
 {

@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -11,7 +13,8 @@ namespace ShikshaMitra.TenantSettings.Divisions;
 [Authorize]
 public class DivisionAppService(
 	IDivisionRepository divisionRepository,
-	DivisionManager divisionManager) : CrudAppService<
+	DivisionManager divisionManager,
+	IUserScopeService userScopeService) : CrudAppService<
 		Division,
 		DivisionDto,
 		Guid,
@@ -36,5 +39,24 @@ public class DivisionAppService(
 		Division division = await divisionRepository.GetAsync(id);
 		await divisionManager.UpdateAsync(division, input.Name, input.Strength);
 		return ObjectMapper.Map<Division, DivisionDto>(division);
+	}
+
+	public override async Task<PagedResultDto<DivisionDto>> GetListAsync(
+		PagedAndSortedResultRequestDto input)
+	{
+		var result = await base.GetListAsync(input);
+
+		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id!.Value);
+		if (!scope.IsAdmin && !scope.HasTenantWideScope())
+		{
+			result.Items = result.Items
+				.Where(d =>
+					scope.WildcardDivisionStandardIds.Contains(d.StandardId)
+					|| scope.DivisionIds.Contains(d.Id))
+				.ToList();
+			result.TotalCount = result.Items.Count;
+		}
+
+		return result;
 	}
 }

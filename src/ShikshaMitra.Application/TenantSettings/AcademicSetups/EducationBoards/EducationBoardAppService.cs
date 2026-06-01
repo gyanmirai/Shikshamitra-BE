@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using System;
@@ -12,7 +13,8 @@ namespace ShikshaMitra.TenantSettings.EducationBoards;
 [Authorize]
 public class EducationBoardAppService(
 	IEducationBoardRepository educationBoardRepository,
-	EducationBoardManager educationBoardManager) : CrudAppService<
+	EducationBoardManager educationBoardManager,
+	IUserScopeService userScopeService) : CrudAppService<
 	EducationBoard,
 	EducationBoardDto,
 	Guid,
@@ -61,6 +63,11 @@ public class EducationBoardAppService(
 				}
 			}
 		}
+
+		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id!.Value);
+		var prunedItems = EducationBoardScopeFilter.PruneTree(result.Items, scope);
+		result.Items = prunedItems.ToList();
+		result.TotalCount = result.Items.Count;
 
 		return result;
 	}

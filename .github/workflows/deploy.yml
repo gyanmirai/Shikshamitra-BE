@@ -45,12 +45,12 @@ jobs:
     #     --filter "Tier=Critical"
 
     # ⭐ Run ABP DbMigrator
-    - name: Run DbMigrator
-      env:
-        ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
-      run: |
-        cd src/ShikshaMitra.DbMigrator
-        dotnet run --configuration Release --no-launch-profile
+    # - name: Run DbMigrator
+    #   env:
+    #     ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
+    #   run: |
+    #     cd src/ShikshaMitra.DbMigrator
+    #     dotnet run --configuration Release --no-launch-profile
 
     # ⭐ Publish Host App
     - name: Publish

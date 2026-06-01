@@ -8,6 +8,7 @@ namespace ShikshaMitra.Constants.Permissions;
 /// - ShikshaMitraSubmodulePermissions.Finance.cs (Main module definition)
 /// - ShikshaMitraSubmodulePermissions.Finance.Fees.cs
 /// - ShikshaMitraSubmodulePermissions.Finance.Accounts.cs
+/// - ShikshaMitraSubmodulePermissions.Finance.Auditing.cs
 /// </summary>
 public static partial class ShikshaMitraSubmodulePermissions
 {
@@ -62,7 +63,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 			// Accounts Settings submodules
 			{ "Finance.Accounts.Settings.IncomeCategory", new SubmoduleInfo(Accounts_Settings_IncomeCategory.All, Accounts_Settings_IncomeCategory.DisplayNames) },
 			{ "Finance.Accounts.Settings.ExpenseCategory", new SubmoduleInfo(Accounts_Settings_ExpenseCategory.All, Accounts_Settings_ExpenseCategory.DisplayNames) },
-			{ "Finance.Accounts.Settings.BankAccount", new SubmoduleInfo(Accounts_Settings_BankAccount.All, Accounts_Settings_BankAccount.DisplayNames) }
+			{ "Finance.Accounts.Settings.BankAccount", new SubmoduleInfo(Accounts_Settings_BankAccount.All, Accounts_Settings_BankAccount.DisplayNames) },
+
+			// Finance root submodules
+			{ "Finance.Auditing", new SubmoduleInfo(Auditing.All, Auditing.DisplayNames) },
+			{ "Finance.Adjustment", new SubmoduleInfo(Adjustment.All, Adjustment.DisplayNames) }
 		};
 	}
 }

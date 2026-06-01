@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FluentValidation;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HR.Payroll.AttendanceImports;
@@ -80,4 +81,48 @@ public class AttendanceImportRowDto
 	public string? Remarks { get; set; }
 	public List<string> Errors { get; set; } = [];
 	public List<string> Warnings { get; set; } = [];
+}
+
+public class AttendanceImportRowsSaveInput
+{
+	public List<AttendanceImportRowsSaveEntryDto> Entries { get; set; } = [];
+}
+
+public class AttendanceImportRowsSaveEntryDto
+{
+	public Guid RowId { get; set; }
+	public Guid EmployeeId { get; set; }
+	public string AttendanceDate { get; set; } = string.Empty;
+	public string StatusWire { get; set; } = "PRESENT";
+	public string? InTime { get; set; }
+	public string? OutTime { get; set; }
+	public string? Remarks { get; set; }
+}
+
+public class AttendanceImportRowsSaveOutput
+{
+	public int UpsertedCount { get; set; }
+}
+
+public class AttendanceImportRowsSaveInputValidator : AbstractValidator<AttendanceImportRowsSaveInput>
+{
+	public AttendanceImportRowsSaveInputValidator()
+	{
+		RuleFor(x => x.Entries).NotNull().Must(x => x.Count > 0);
+		RuleForEach(x => x.Entries).SetValidator(new AttendanceImportRowsSaveEntryDtoValidator());
+	}
+}
+
+public class AttendanceImportRowsSaveEntryDtoValidator : AbstractValidator<AttendanceImportRowsSaveEntryDto>
+{
+	public AttendanceImportRowsSaveEntryDtoValidator()
+	{
+		RuleFor(x => x.RowId).NotEmpty();
+		RuleFor(x => x.EmployeeId).NotEmpty();
+		RuleFor(x => x.AttendanceDate).NotEmpty().MaximumLength(30);
+		RuleFor(x => x.StatusWire).NotEmpty().MaximumLength(20);
+		RuleFor(x => x.InTime).MaximumLength(40);
+		RuleFor(x => x.OutTime).MaximumLength(40);
+		RuleFor(x => x.Remarks).MaximumLength(500);
+	}
 }

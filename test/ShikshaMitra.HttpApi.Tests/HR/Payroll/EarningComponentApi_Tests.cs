@@ -92,6 +92,7 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 			VisibleInPayslip = true,
 		};
 
+		await AttachUpdatePreviewHashAsync(created.Id, updateDto);
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}", updateDto, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -103,7 +104,7 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 	{
 		var created = await CreateComponentAsync();
 
-		var response = await Client.DeleteAsync($"{BaseUrl}/{created.Id}");
+		var response = await DeleteComponentAsync(created.Id);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}
@@ -237,7 +238,7 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Allow_Recreate_Same_Name_After_Delete()
+	public async Task Should_Reject_Recreate_Same_Name_After_Delete()
 	{
 		var name = TestDataHelper.UniqueName("RecreateAfterDelete");
 		var input = new EarningComponentCreateRequestDto
@@ -254,11 +255,11 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 		var firstBody = await firstCreate.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions);
 		firstBody.ShouldNotBeNull();
 
-		var deleteResponse = await Client.DeleteAsync($"{BaseUrl}/{firstBody.Id}");
+		var deleteResponse = await DeleteComponentAsync(firstBody.Id);
 		deleteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
 		var secondCreate = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
-		secondCreate.StatusCode.ShouldBe(HttpStatusCode.Created);
+		secondCreate.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}
 
 	[Fact]
@@ -361,7 +362,9 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 			VisibleInPayslip = false,
 		};
 
-		await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}", updateDto, JsonOptions);
+		await AttachUpdatePreviewHashAsync(created.Id, updateDto);
+		var updateResponse = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}", updateDto, JsonOptions);
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
 		var getResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}");
 		var body = await getResponse.Content.ReadFromJsonAsync<EarningComponentResponseDto>(JsonOptions);
@@ -389,6 +392,32 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 		response.EnsureSuccessStatusCode();
 		return await response.Content.ReadFromJsonAsync<ComponentCreateResponseDto>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create test earning component");
+	}
+
+	private async Task AttachUpdatePreviewHashAsync(Guid componentId, EarningComponentUpdateRequestDto updateDto)
+	{
+		var previewResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/{componentId}/update-impact-preview",
+			updateDto,
+			JsonOptions);
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var preview = await previewResponse.Content.ReadFromJsonAsync<PayrollComponentUpdateImpactPreviewDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview.PreviewHash.ShouldNotBeNullOrWhiteSpace();
+		updateDto.PreviewHash = preview.PreviewHash;
+	}
+
+	private async Task<HttpResponseMessage> DeleteComponentAsync(Guid componentId)
+	{
+		var previewResponse = await Client.GetAsync($"{BaseUrl}/{componentId}/delete-impact-preview");
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var preview = await previewResponse.Content.ReadFromJsonAsync<PayrollComponentUpdateImpactPreviewDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview.PreviewHash.ShouldNotBeNullOrWhiteSpace();
+
+		return await Client.DeleteAsync($"{BaseUrl}/{componentId}?previewHash={Uri.EscapeDataString(preview.PreviewHash!)}");
 	}
 
 	#endregion

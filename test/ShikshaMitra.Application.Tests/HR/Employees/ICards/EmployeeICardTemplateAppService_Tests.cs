@@ -38,6 +38,45 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 
 		template.Id.ShouldNotBe(Guid.Empty);
 		template.FieldsJson.ShouldContain("employeeCode");
+		template.SchemaVersion.ShouldBe(1);
+		template.LayoutJson.ShouldContain("front");
+		template.PrintSettingsJson.ShouldContain("cardsPerPage");
+	}
+
+	[Fact]
+	public void ResolvePrintSettings_Should_Prefer_Template_When_Request_Omits_Cards_Per_Page()
+	{
+		var settings = EmployeeICardLayoutSchema.ResolvePrintSettings(
+			"""{"pageSize":"A4","cardsPerPage":3,"margin":18,"gap":10,"showCutMarks":true}""",
+			null);
+
+		settings.CardsPerPage.ShouldBe(3);
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Unsupported_Layout_Element()
+	{
+		var input = BuildTemplateRequest();
+		input.LayoutJson = """
+			{"orientation":"Horizontal","width":360,"height":230,"backgroundColor":"#ffffff","themeColor":"#1D4ED8","front":{"elements":[{"id":"x","type":"video","x":0,"y":0,"w":10,"h":10,"z":1,"visible":true}]}}
+			""";
+
+		var exception = await Should.ThrowAsync<BusinessException>(() => _iCardAppService.CreateAsync(input));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson);
+	}
+
+	[Theory]
+	[InlineData("""{"orientation":"Horizontal","width":360,"height":230,"backgroundColor":"#ffffff","themeColor":"#1D4ED8","front":null}""")]
+	[InlineData("""{"orientation":"Horizontal","width":360,"height":230,"backgroundColor":"#ffffff","themeColor":"#1D4ED8","front":{"elements":[{"id":"x","type":"text","fieldKey":"name","x":0,"y":0,"w":10,"h":10,"z":1,"visible":true,"style":null}]}}""")]
+	public async Task CreateAsync_Should_Reject_Malformed_Layout_Without_Server_Error(string layoutJson)
+	{
+		var input = BuildTemplateRequest();
+		input.LayoutJson = layoutJson;
+
+		var exception = await Should.ThrowAsync<BusinessException>(() => _iCardAppService.CreateAsync(input));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson);
 	}
 
 	[Fact]
@@ -134,9 +173,24 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 	}
 
 	[Fact]
-	public async Task GenerateEmployeeICardsPdfAsync_Should_Error_When_Exclusion_Removes_All()
+	public async Task GenerateEmployeeICardsPdfAsync_Should_Reject_Exclude_Incomplete_When_Template_Logo_Missing()
 	{
 		var template = await _iCardAppService.CreateAsync(BuildTemplateRequest());
+		var employee = await CreateEmployeeAsync();
+
+		var exception = await Should.ThrowAsync<BusinessException>(() => _iCardAppService.GenerateEmployeeICardsPdfAsync(
+			template.Id,
+			new EmployeeICardPdfRequest { EmployeeIds = [employee.Id], ExcludeIncompleteEmployees = true }));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeICardPdfEmployeeRequired);
+	}
+
+	[Fact]
+	public async Task GenerateEmployeeICardsPdfAsync_Should_Error_When_Exclusion_Removes_All()
+	{
+		var input = BuildTemplateRequest();
+		input.LogoBlobName = (await _iCardAppService.UploadAssetAsync("logo.png", "image/png", BuildMinimalPng())).BlobName;
+		var template = await _iCardAppService.CreateAsync(input);
 		var employee = await CreateEmployeeAsync();
 
 		var exception = await Should.ThrowAsync<BusinessException>(() => _iCardAppService.GenerateEmployeeICardsPdfAsync(
@@ -182,6 +236,11 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 			QrCodeEnabled = true,
 			BarcodeEnabled = false,
 			BackSideEnabled = false,
+			SchemaVersion = 1,
+			LayoutJson = """
+				{"orientation":"Horizontal","width":360,"height":230,"backgroundColor":"#F8FAFC","themeColor":"#1D4ED8","front":{"elements":[{"id":"school","type":"text","fieldKey":"schoolName","x":16,"y":14,"w":220,"h":22,"z":2,"visible":true,"style":{"fontSize":14,"fontWeight":700,"color":"#1D4ED8"}},{"id":"photo","type":"photo","fieldKey":"photo","x":16,"y":70,"w":72,"h":86,"z":3,"visible":true,"style":{"borderColor":"#1D4ED8","borderWidth":1}},{"id":"name","type":"text","fieldKey":"name","x":104,"y":74,"w":170,"h":24,"z":4,"visible":true,"style":{"fontSize":16,"fontWeight":700,"color":"#111827"}},{"id":"code","type":"text","fieldKey":"employeeCode","label":"Code","x":104,"y":108,"w":150,"h":18,"z":4,"visible":true,"style":{"fontSize":9,"showLabel":true,"separator":": "}},{"id":"qr","type":"qr","x":286,"y":154,"w":48,"h":48,"z":5,"visible":true},{"id":"barcode","type":"barcode","x":16,"y":188,"w":150,"h":22,"z":5,"visible":true}]}}
+				""",
+			PrintSettingsJson = """{"pageSize":"A4","cardsPerPage":8,"margin":18,"gap":10,"showCutMarks":true}""",
 			FieldsJson = fieldsJson ?? """[{"name":"photo","enabled":true},{"name":"name","enabled":true},{"name":"employeeCode","enabled":true},{"name":"designation","enabled":true}]""",
 			IsActive = true
 		};
@@ -196,6 +255,8 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 			LastName = "Employee",
 			MobileNo = "9876543210",
 			Email = $"card.employee.{Guid.NewGuid():N}@test.com",
+			PanNo = "ABCDE1234F",
+			AdharNo = "123456789012",
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
 			GenderType = GenderType.Male,
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),

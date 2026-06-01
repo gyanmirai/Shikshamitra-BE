@@ -8,6 +8,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Audit;
 using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceRegister;
+using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
@@ -28,6 +29,7 @@ public class AttendanceRegisterAppService(
 	IRepository<SalarySlip, Guid> salarySlipRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
 	IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
+	IRepository<Holiday, Guid> holidayRepository,
 	IUserScopeService userScopeService,
 	HrUserScopeAccessService hrScopeAccessService,
 	HrEmployeeScopeQueryService hrEmployeeScopeQueryService,
@@ -133,6 +135,7 @@ public class AttendanceRegisterAppService(
 
 		var rows = await AsyncExecuter.ToListAsync(attendanceQuery.Where(x => uniqueIds.Contains(x.Id)));
 		var foundById = rows.ToDictionary(x => x.Id);
+		var holidayLookup = await BuildHolidayLookupAsync(rows.Select(x => x.AttendanceDate));
 		var results = new List<AttendanceRegisterAdjustmentRowResult>();
 		var changedEmployeeMonths = new HashSet<(Guid EmployeeId, string MonthYear)>();
 
@@ -152,6 +155,12 @@ public class AttendanceRegisterAppService(
 			if (!await hrScopeAccessService.CanAccessEmployeeStageAsync(scope, row.EducationMediumStageId))
 			{
 				results.Add(ToSkipped(row, "Employee is outside your organization scope."));
+				continue;
+			}
+
+			if (holidayLookup.TryGetValue(row.AttendanceDate, out var holiday))
+			{
+				results.Add(ToSkipped(row, $"Holiday: {holiday.Name}"));
 				continue;
 			}
 
@@ -287,6 +296,7 @@ public class AttendanceRegisterAppService(
 			var stages = stageLookup.TryGetValue(employee.EmployeeId, out var assignedStages)
 				? assignedStages
 				: [];
+			employee.AssignedStageIds = stages;
 			employee.EducationMediumStageId = hrEmployeeScopeQueryService.ResolveDisplayStage(stages, scope, input.EducationMediumStageId);
 		}
 
@@ -322,7 +332,12 @@ public class AttendanceRegisterAppService(
 		}
 
 		var employeeIds = employees.Select(x => x.EmployeeId).ToList();
-		var attendanceQuery = await hrEmployeeScopeQueryService.BuildScopedAttendanceQueryAsync(scope, input.EducationMediumStageId);
+		var attendanceQuery = await employeeAttendanceRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			attendanceQuery = attendanceQuery.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+
 		attendanceQuery = attendanceQuery.Where(x =>
 			employeeIds.Contains(x.EmployeeId) &&
 			x.AttendanceDate >= startDate &&
@@ -332,6 +347,8 @@ public class AttendanceRegisterAppService(
 		var attendanceByEmployeeDate = attendanceRows
 			.GroupBy(x => (x.EmployeeId, x.AttendanceDate))
 			.ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.LastModificationTime ?? y.CreationTime).First());
+		var holidayLookup = await BuildHolidayLookupAsync(Enumerable.Range(0, endDate.DayNumber - startDate.DayNumber + 1)
+			.Select(offset => startDate.AddDays(offset)));
 
 		var rows = new List<RegisterProjection>();
 		foreach (var employee in employees)
@@ -344,6 +361,7 @@ public class AttendanceRegisterAppService(
 				}
 
 				attendanceByEmployeeDate.TryGetValue((employee.EmployeeId, date), out var attendance);
+				holidayLookup.TryGetValue(date, out var holiday);
 				if (input.Status.HasValue && attendance?.StatusType != input.Status.Value)
 				{
 					continue;
@@ -358,7 +376,7 @@ public class AttendanceRegisterAppService(
 						? AttendanceRegisterStatus.NotMarked
 						: MapRegisterStatus(attendance.StatusType),
 					IsMarked = attendance != null,
-					EducationMediumStageId = attendance?.EducationMediumStageId ?? employee.EducationMediumStageId,
+					EducationMediumStageId = ResolveRegisterDisplayStage(attendance, employee),
 					EmployeeName = employee.EmployeeName,
 					EmployeeCode = employee.EmployeeCode,
 					MobileNo = employee.MobileNo,
@@ -367,7 +385,9 @@ public class AttendanceRegisterAppService(
 					RoleId = employee.RoleId,
 					TimeIn = attendance?.TimeIn,
 					TimeOut = attendance?.TimeOut,
-					Remarks = attendance?.Remarks
+					Remarks = attendance?.Remarks,
+					IsHoliday = holiday != null,
+					HolidayName = holiday?.Name
 				});
 			}
 		}
@@ -379,6 +399,17 @@ public class AttendanceRegisterAppService(
 		}
 
 		return rows;
+	}
+
+	private static Guid? ResolveRegisterDisplayStage(EmployeeAttendance? attendance, EmployeeProjection employee)
+	{
+		if (attendance?.EducationMediumStageId.HasValue == true &&
+		    employee.AssignedStageIds.Contains(attendance.EducationMediumStageId.Value))
+		{
+			return attendance.EducationMediumStageId;
+		}
+
+		return employee.EducationMediumStageId;
 	}
 
 	private async Task<Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo>> BuildLockLookupAsync(List<RegisterProjection> rows)
@@ -457,6 +488,49 @@ public class AttendanceRegisterAppService(
 		return result;
 	}
 
+	private async Task<Dictionary<DateOnly, HolidayInfo>> BuildHolidayLookupAsync(IEnumerable<DateOnly> dates)
+	{
+		var dateList = dates.Distinct().OrderBy(x => x).ToList();
+		if (dateList.Count == 0)
+		{
+			return new Dictionary<DateOnly, HolidayInfo>();
+		}
+
+		var start = dateList.First();
+		var end = dateList.Last();
+		var startInstant = new DateTimeOffset(start.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+		var endInstant = new DateTimeOffset(end.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero);
+		var query = await holidayRepository.GetQueryableAsync();
+		if (CurrentTenant.Id.HasValue)
+		{
+			query = query.Where(x => x.TenantId == CurrentTenant.Id);
+		}
+		else
+		{
+			query = query.Where(x => x.TenantId == null);
+		}
+
+		var holidays = (await AsyncExecuter.ToListAsync(query))
+			.Where(x => x.StartDate <= endInstant && x.EndDate >= startInstant)
+			.ToList();
+		var lookup = new Dictionary<DateOnly, HolidayInfo>();
+		var requestedDates = dateList.ToHashSet();
+		foreach (var holiday in holidays.OrderBy(x => x.StartDate))
+		{
+			var holidayStart = DateOnly.FromDateTime(holiday.StartDate.Date);
+			var holidayEnd = DateOnly.FromDateTime(holiday.EndDate.Date);
+			for (var date = holidayStart; date <= holidayEnd; date = date.AddDays(1))
+			{
+				if (requestedDates.Contains(date) && !lookup.ContainsKey(date))
+				{
+					lookup[date] = new HolidayInfo(holiday.HolidayName);
+				}
+			}
+		}
+
+		return lookup;
+	}
+
 	private static List<RegisterProjection> ApplyPayrollStateFilter(
 		List<RegisterProjection> rows,
 		Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup,
@@ -464,7 +538,7 @@ public class AttendanceRegisterAppService(
 	{
 		return state switch
 		{
-			AttendanceRegisterPayrollState.Editable => rows.Where(x => x.IsMarked && !IsPayrollLocked(x, lockLookup)).ToList(),
+			AttendanceRegisterPayrollState.Editable => rows.Where(x => x.IsMarked && !x.IsHoliday && !IsPayrollLocked(x, lockLookup)).ToList(),
 			AttendanceRegisterPayrollState.Locked => rows.Where(x => IsPayrollLocked(x, lockLookup)).ToList(),
 			_ => rows
 		};
@@ -485,7 +559,8 @@ public class AttendanceRegisterAppService(
 			NotMarked = rows.Count(x => x.Status == AttendanceRegisterStatus.NotMarked),
 			Locked = rows.Count(x => IsLocked(x, lockLookup, dayLocks)),
 			Editable = rows.Count(x => x.IsMarked && !IsLocked(x, lockLookup, dayLocks)),
-			MissingPunch = rows.Count(IsMissingPunch)
+			MissingPunch = rows.Count(IsMissingPunch),
+			Holiday = rows.Count(x => x.IsHoliday)
 		};
 	}
 
@@ -500,6 +575,7 @@ public class AttendanceRegisterAppService(
 		var halfDay = orderedRows.Count(x => x.Status == AttendanceRegisterStatus.HalfDay);
 		var missingPunch = orderedRows.Count(IsMissingPunch);
 		var locked = orderedRows.Count(x => IsLocked(x, lockLookup, dayLocks));
+		var holiday = orderedRows.Count(x => x.IsHoliday);
 		return new GroupedRegisterProjection
 		{
 			EmployeeId = first.EmployeeId,
@@ -516,6 +592,7 @@ public class AttendanceRegisterAppService(
 			Editable = orderedRows.Count(x => x.IsMarked && !IsLocked(x, lockLookup, dayLocks)),
 			Locked = locked,
 			MissingPunch = missingPunch,
+			Holiday = holiday,
 			HasExceptions = absent > 0 || halfDay > 0 || missingPunch > 0 || locked > 0,
 			RawDays = orderedRows
 		};
@@ -556,6 +633,7 @@ public class AttendanceRegisterAppService(
 			Editable = group.Editable,
 			Locked = group.Locked,
 			MissingPunch = group.MissingPunch,
+			Holiday = group.Holiday,
 			HasExceptions = group.HasExceptions,
 			Days = group.RawDays.Select(x => MapRow(x, lockLookup, stageNames, dayLocks)).ToList()
 		};
@@ -569,7 +647,8 @@ public class AttendanceRegisterAppService(
 		var payrollMonth = ToMonthYear(row.AttendanceDate);
 		var lockInfo = lockLookup.GetValueOrDefault((row.EmployeeId, payrollMonth), new PayrollLockInfo(false, null));
 		var isDayLocked = dayLocks.Contains(row.AttendanceDate);
-		var lockReason = isDayLocked ? "Attendance day is locked." : lockInfo.Reason;
+		var holidayReason = row.IsHoliday ? $"Holiday: {row.HolidayName}" : null;
+		var lockReason = holidayReason ?? (isDayLocked ? "Attendance day is locked." : lockInfo.Reason);
 		return new AttendanceRegisterRowDto
 		{
 			AttendanceId = row.AttendanceId,
@@ -593,7 +672,10 @@ public class AttendanceRegisterAppService(
 			IsMarked = row.IsMarked,
 			IsDayLocked = isDayLocked,
 			IsPayrollLocked = lockInfo.IsLocked,
-			CanEdit = row.IsMarked && !lockInfo.IsLocked && !isDayLocked,
+			IsHoliday = row.IsHoliday,
+			HolidayName = row.HolidayName,
+			HolidayReason = holidayReason,
+			CanEdit = row.IsMarked && !lockInfo.IsLocked && !isDayLocked && !row.IsHoliday,
 			LockReason = lockReason
 		};
 	}
@@ -790,7 +872,7 @@ public class AttendanceRegisterAppService(
 	private static bool IsPayrollLocked(RegisterProjection row, Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup) =>
 		lockLookup.GetValueOrDefault((row.EmployeeId, ToMonthYear(row.AttendanceDate)), new PayrollLockInfo(false, null)).IsLocked;
 	private static bool IsLocked(RegisterProjection row, Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup, HashSet<DateOnly> dayLocks) =>
-		dayLocks.Contains(row.AttendanceDate) || IsPayrollLocked(row, lockLookup);
+		row.IsHoliday || dayLocks.Contains(row.AttendanceDate) || IsPayrollLocked(row, lockLookup);
 	private static bool IsMissingPunch(RegisterProjection row) =>
 		row.Status == AttendanceRegisterStatus.Present && (!row.TimeIn.HasValue || !row.TimeOut.HasValue);
 	private static bool MatchesSearch(RegisterProjection row, string search) =>
@@ -812,6 +894,7 @@ public class AttendanceRegisterAppService(
 		public string? Department { get; set; }
 		public EmployeeGroupType? EmployeeGroup { get; set; }
 		public Guid? EducationMediumStageId { get; set; }
+		public List<Guid> AssignedStageIds { get; set; } = [];
 		public Guid? RoleId { get; set; }
 		public DateOnly? DateOfJoining { get; set; }
 		public DateTime CreationTime { get; set; }
@@ -837,6 +920,8 @@ public class AttendanceRegisterAppService(
 		public DateTimeOffset? TimeIn { get; set; }
 		public DateTimeOffset? TimeOut { get; set; }
 		public string? Remarks { get; set; }
+		public bool IsHoliday { get; set; }
+		public string? HolidayName { get; set; }
 	}
 
 	private sealed class GroupedRegisterProjection
@@ -855,9 +940,11 @@ public class AttendanceRegisterAppService(
 		public int Editable { get; set; }
 		public int Locked { get; set; }
 		public int MissingPunch { get; set; }
+		public int Holiday { get; set; }
 		public bool HasExceptions { get; set; }
 		public List<RegisterProjection> RawDays { get; set; } = [];
 	}
 
+	private sealed record HolidayInfo(string Name);
 	private sealed record PayrollLockInfo(bool IsLocked, string? Reason);
 }

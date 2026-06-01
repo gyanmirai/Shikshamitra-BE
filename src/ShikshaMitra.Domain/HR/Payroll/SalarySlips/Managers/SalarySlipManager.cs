@@ -134,6 +134,7 @@ public class SalarySlipManager : DomainService
 			cancellationToken);
 		var components = await _payrollComponentRepository.GetByEmployeeIdAsync(employeeId, cancellationToken);
 		components = await _componentVersionResolver.ResolveAsync(components, normalizedMonthYear);
+		components = PayrollComponentMonthScope.FilterForMonth(components, year, month);
 		var adjustments = await GetAdjustmentsForEmployeeMonthAsync(employeeId, normalizedMonthYear, cancellationToken);
 		var allComponents = components
 			.Concat(adjustments.Select(ToPayrollComponent))
@@ -176,6 +177,7 @@ public class SalarySlipManager : DomainService
 				computation.PayableDays,
 				computation.ProrationFactor,
 				basis.EffectiveMode);
+			ApplyPolicySnapshot(salarySlip, resolvedPolicies);
 
 			await _salarySlipRepository.InsertAsync(salarySlip, cancellationToken: cancellationToken);
 
@@ -192,6 +194,7 @@ public class SalarySlipManager : DomainService
 			computation.PayableDays,
 			computation.ProrationFactor,
 			basis.EffectiveMode);
+		ApplyPolicySnapshot(existingSlip, resolvedPolicies);
 		await _salarySlipRepository.UpdateAsync(existingSlip, cancellationToken: cancellationToken);
 
 		_logger.LogInformation("Salary slip regenerated for Employee: {EmployeeId}, Month: {MonthYear}, " +
@@ -256,6 +259,17 @@ public class SalarySlipManager : DomainService
 			snapshot.AttendancePolicyVersion,
 			snapshot.WorkCalendarPolicyId,
 			snapshot.WorkCalendarPolicyVersion);
+	}
+
+	private static void ApplyPolicySnapshot(SalarySlip salarySlip, HrResolvedPolicies resolvedPolicies)
+	{
+		salarySlip.SetPolicySnapshot(
+			resolvedPolicies.PayrollPolicy.Id,
+			resolvedPolicies.PayrollPolicy.Version,
+			resolvedPolicies.AttendancePolicy.Id,
+			resolvedPolicies.AttendancePolicy.Version,
+			resolvedPolicies.PayrollWorkCalendarPolicy.Id,
+			resolvedPolicies.PayrollWorkCalendarPolicy.Version);
 	}
 
 	private async Task<List<EmployeeAttendance>> GetAttendanceForEmployeeMonthAsync(
@@ -345,9 +359,9 @@ public class SalarySlipManager : DomainService
 
 	private static void EnsureEmployeeEligibleForPayrollMonth(Employee employee, int year, int month)
 	{
-		var effectiveStartDate = GetEffectiveEmploymentStartDate(employee);
+		var monthStartDate = new DateOnly(year, month, 1);
 		var monthEndDate = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
-		if (effectiveStartDate <= monthEndDate)
+		if (EmployeeLifecycleEligibility.IsEligibleForPayrollMonth(employee, monthStartDate, monthEndDate))
 		{
 			return;
 		}
@@ -355,11 +369,13 @@ public class SalarySlipManager : DomainService
 		throw new BusinessException(HRErrorCodes.SalarySlipEmployeeNotActiveInMonth)
 			.WithData("employeeId", employee.Id)
 			.WithData("month", $"{year}-{month:00}")
-			.WithData("effectiveStartDate", effectiveStartDate);
+			.WithData("effectiveStartDate", GetEffectiveEmploymentStartDate(employee))
+			.WithData("statusEffectiveDate", employee.StatusEffectiveDate)
+			.WithData("statusLastChangedAt", employee.StatusLastChangedAt);
 	}
 
 	private static DateOnly GetEffectiveEmploymentStartDate(Employee employee) =>
-		employee.DateOfJoining ?? DateOnly.FromDateTime(employee.CreationTime.Date);
+		EmployeeLifecycleEligibility.GetEffectiveEmploymentStartDate(employee);
 
 	private static string NormalizeMonthYear(string monthYear)
 	{

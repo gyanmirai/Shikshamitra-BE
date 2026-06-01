@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FluentValidation;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
@@ -26,6 +27,9 @@ public class TakeAttendanceDayResponse
 	public int TotalCount { get; set; }
 	public DateOnly Date { get; set; }
 	public bool IsDayLocked { get; set; }
+	public bool IsHoliday { get; set; }
+	public string? HolidayName { get; set; }
+	public string? HolidayReason { get; set; }
 	public Guid? LockedByUserId { get; set; }
 	public DateTime? LockedAt { get; set; }
 	public TakeAttendanceSummaryDto Summary { get; set; } = new();
@@ -55,6 +59,9 @@ public class TakeAttendanceEmployeeRowDto
 	public string? Remarks { get; set; }
 	public List<string> Warnings { get; set; } = [];
 	public List<string> Errors { get; set; } = [];
+	public bool IsHoliday { get; set; }
+	public string? HolidayName { get; set; }
+	public string? HolidayReason { get; set; }
 	public TakeAttendanceStatus Status { get; set; } = TakeAttendanceStatus.NotMarked;
 }
 
@@ -76,4 +83,26 @@ public class TakeAttendanceSaveEntryDto
 public class TakeAttendanceSaveOutput
 {
 	public int UpsertedCount { get; set; }
+}
+
+public class TakeAttendanceSaveInputValidator : AbstractValidator<TakeAttendanceSaveInput>
+{
+	public TakeAttendanceSaveInputValidator()
+	{
+		RuleFor(x => x.AttendanceDate).NotEmpty().MaximumLength(30);
+		RuleFor(x => x.Entries).NotNull().Must(x => x.Count > 0);
+		RuleForEach(x => x.Entries).SetValidator(new TakeAttendanceSaveEntryDtoValidator());
+	}
+}
+
+public class TakeAttendanceSaveEntryDtoValidator : AbstractValidator<TakeAttendanceSaveEntryDto>
+{
+	public TakeAttendanceSaveEntryDtoValidator()
+	{
+		RuleFor(x => x.EmployeeId).NotEmpty();
+		RuleFor(x => x.StatusWire).NotEmpty().MaximumLength(20);
+		RuleFor(x => x.InTime).MaximumLength(40);
+		RuleFor(x => x.OutTime).MaximumLength(40);
+		RuleFor(x => x.Remarks).MaximumLength(500);
+	}
 }

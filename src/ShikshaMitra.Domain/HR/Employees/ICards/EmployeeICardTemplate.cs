@@ -23,6 +23,9 @@ public class EmployeeICardTemplate : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	public bool QrCodeEnabled { get; private set; }
 	public bool BarcodeEnabled { get; private set; }
 	public bool BackSideEnabled { get; private set; }
+	public int SchemaVersion { get; private set; } = 1;
+	public string LayoutJson { get; private set; } = string.Empty;
+	public string PrintSettingsJson { get; private set; } = string.Empty;
 	public string FieldsJson { get; private set; } = "[]";
 	public bool IsActive { get; private set; }
 
@@ -49,11 +52,14 @@ public class EmployeeICardTemplate : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		bool qrCodeEnabled,
 		bool barcodeEnabled,
 		bool backSideEnabled,
+		int schemaVersion,
+		string? layoutJson,
+		string? printSettingsJson,
 		string fieldsJson,
 		bool isActive) : base(id)
 	{
 		TenantId = tenantId;
-		Update(academicYearId, mediumStageId, name, width, height, backgroundColor, backgroundImageBlobName, logoBlobName, schoolName, schoolAddress, themeColor, orientation, presetKey, qrCodeEnabled, barcodeEnabled, backSideEnabled, fieldsJson, isActive);
+		Update(academicYearId, mediumStageId, name, width, height, backgroundColor, backgroundImageBlobName, logoBlobName, schoolName, schoolAddress, themeColor, orientation, presetKey, qrCodeEnabled, barcodeEnabled, backSideEnabled, schemaVersion, layoutJson, printSettingsJson, fieldsJson, isActive);
 	}
 
 	public void Update(
@@ -73,6 +79,9 @@ public class EmployeeICardTemplate : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		bool qrCodeEnabled,
 		bool barcodeEnabled,
 		bool backSideEnabled,
+		int schemaVersion,
+		string? layoutJson,
+		string? printSettingsJson,
 		string fieldsJson,
 		bool isActive)
 	{
@@ -92,6 +101,9 @@ public class EmployeeICardTemplate : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		QrCodeEnabled = qrCodeEnabled;
 		BarcodeEnabled = barcodeEnabled;
 		BackSideEnabled = backSideEnabled;
+		SchemaVersion = schemaVersion <= 0 ? 1 : schemaVersion;
+		LayoutJson = string.IsNullOrWhiteSpace(layoutJson) ? string.Empty : layoutJson;
+		PrintSettingsJson = string.IsNullOrWhiteSpace(printSettingsJson) ? string.Empty : printSettingsJson;
 		FieldsJson = string.IsNullOrWhiteSpace(fieldsJson) ? "[]" : fieldsJson;
 		IsActive = isActive;
 	}

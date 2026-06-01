@@ -13,7 +13,11 @@ using Volo.Abp.MultiTenancy;
 using ShikshaMitra.HR.AttendanceAndLeaves.Import;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Xunit;
 
@@ -23,9 +27,14 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 {
 	private readonly IAttendanceImportAppService _attendanceImportAppService;
 	private readonly IEmployeePersonalInfoAppService _employeePersonalInfoAppService;
+	private readonly IRepository<Employee, Guid> _employeeRepository;
 	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
+	private readonly IRepository<WorkCalendarPolicy, Guid> _workCalendarPolicyRepository;
+	private readonly IRepository<PayrollPolicy, Guid> _payrollPolicyRepository;
+	private readonly IRepository<AttendancePolicy, Guid> _attendancePolicyRepository;
 	private readonly IGuidGenerator _guidGenerator;
 	private readonly ICurrentTenant _currentTenant;
 
@@ -33,9 +42,14 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	{
 		_attendanceImportAppService = GetRequiredService<IAttendanceImportAppService>();
 		_employeePersonalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
+		_employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
 		_employeeAttendanceRepository = GetRequiredService<IEmployeeAttendanceRepository>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+		_academicYearRepository = GetRequiredService<IRepository<AcademicYear, Guid>>();
+		_workCalendarPolicyRepository = GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
+		_payrollPolicyRepository = GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		_attendancePolicyRepository = GetRequiredService<IRepository<AttendancePolicy, Guid>>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 	}
@@ -44,9 +58,11 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	public async Task Should_Preview_And_Confirm_Csv_Import()
 	{
 		var employee = await CreateEmployeeAsync("csv");
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		var attendanceDateText = attendanceDate.ToString("dd-MM-yyyy");
 		var csv = BuildCsv(
 			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
-			$"11-04-2026,{employee.EmployeeCode},09:00 AM,05:30 PM,,Regular shift,{employee.FullName},{employee.MobileNo}");
+			$"{attendanceDateText},{employee.EmployeeCode},09:00 AM,05:30 PM,,Regular shift,{employee.FullName},{employee.MobileNo}");
 
 		var preview = await _attendanceImportAppService.PreviewAsync("attendance.csv", "text/csv", csv);
 
@@ -70,7 +86,7 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var query = await _employeeAttendanceRepository.GetQueryableAsync();
-			var attendance = query.Single(x => x.EmployeeId == employee.Id && x.AttendanceDate == new DateOnly(2026, 4, 11));
+			var attendance = query.Single(x => x.EmployeeId == employee.Id && x.AttendanceDate == attendanceDate);
 			attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.Present);
 			attendance.TimeIn.ShouldNotBeNull();
 			attendance.TimeOut.ShouldNotBeNull();
@@ -81,8 +97,9 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	public async Task Should_Preview_Xlsx_Import()
 	{
 		var employee = await CreateEmployeeAsync("xlsx");
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
 		var xlsx = BuildXlsxFile((
-			"11-04-2026",
+			attendanceDate.ToString("dd-MM-yyyy"),
 			employee.EmployeeCode,
 			string.Empty,
 			string.Empty,
@@ -103,22 +120,24 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	public async Task Should_Replace_Existing_Attendance_On_Confirm()
 	{
 		var employee = await CreateEmployeeAsync("replace");
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		var attendanceDateText = attendanceDate.ToString("dd-MM-yyyy");
 		await WithUnitOfWorkAsync(async () =>
 		{
 			await _employeeAttendanceRepository.InsertAsync(new EmployeeAttendance
 			{
 				TenantId = _currentTenant.Id,
 				EmployeeId = employee.Id,
-				AttendanceDate = new DateOnly(2026, 4, 11),
+				AttendanceDate = attendanceDate,
 				StatusType = EmployeeAttendanceStatusType.Present,
-				TimeIn = new DateTimeOffset(2026, 4, 11, 9, 0, 0, TimeSpan.Zero),
-				TimeOut = new DateTimeOffset(2026, 4, 11, 17, 0, 0, TimeSpan.Zero)
+				TimeIn = new DateTimeOffset(attendanceDate.Year, attendanceDate.Month, attendanceDate.Day, 9, 0, 0, TimeSpan.Zero),
+				TimeOut = new DateTimeOffset(attendanceDate.Year, attendanceDate.Month, attendanceDate.Day, 17, 0, 0, TimeSpan.Zero)
 			}, autoSave: true);
 		});
 
 		var csv = BuildCsv(
 			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
-			$"11-04-2026,{employee.EmployeeCode},,,HalfDayLeave,Updated by import,{employee.FullName},{employee.MobileNo}");
+			$"{attendanceDateText},{employee.EmployeeCode},,,HalfDayLeave,Updated by import,{employee.FullName},{employee.MobileNo}");
 
 		var preview = await _attendanceImportAppService.PreviewAsync("replace.csv", "text/csv", csv);
 		preview.Rows.Single().Action.ShouldBe("replace");
@@ -134,7 +153,7 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var query = await _employeeAttendanceRepository.GetQueryableAsync();
-			var attendance = query.Single(x => x.EmployeeId == employee.Id && x.AttendanceDate == new DateOnly(2026, 4, 11));
+			var attendance = query.Single(x => x.EmployeeId == employee.Id && x.AttendanceDate == attendanceDate);
 			attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.HalfDayLeave);
 			attendance.TimeIn.ShouldBeNull();
 			attendance.TimeOut.ShouldBeNull();
@@ -145,10 +164,11 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	public async Task Should_Reject_Duplicate_Rows_In_Same_File()
 	{
 		var employee = await CreateEmployeeAsync("duplicate");
+		var attendanceDateText = (await GetCoveredAttendanceDateAsync()).ToString("dd-MM-yyyy");
 		var csv = BuildCsv(
 			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
-			$"11-04-2026,{employee.EmployeeCode},09:00 AM,05:00 PM,,Morning,{employee.FullName},{employee.MobileNo}",
-			$"11-04-2026,{employee.EmployeeCode},09:15 AM,05:15 PM,,Duplicate,{employee.FullName},{employee.MobileNo}");
+			$"{attendanceDateText},{employee.EmployeeCode},09:00 AM,05:00 PM,,Morning,{employee.FullName},{employee.MobileNo}",
+			$"{attendanceDateText},{employee.EmployeeCode},09:15 AM,05:15 PM,,Duplicate,{employee.FullName},{employee.MobileNo}");
 
 		var preview = await _attendanceImportAppService.PreviewAsync("duplicate.csv", "text/csv", csv);
 
@@ -162,10 +182,11 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	public async Task Should_Reject_Duplicate_FileName_In_Same_Payroll_Month()
 	{
 		var employee = await CreateEmployeeAsync("duplicatefile");
+		var attendanceDateText = (await GetCoveredAttendanceDateAsync()).ToString("dd-MM-yyyy");
 		var fileName = $"duplicate-file-{Guid.NewGuid():N}.csv";
 		var csv = BuildCsv(
 			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
-			$"11-04-2026,{employee.EmployeeCode},09:00 AM,05:00 PM,,First upload,{employee.FullName},{employee.MobileNo}");
+			$"{attendanceDateText},{employee.EmployeeCode},09:00 AM,05:00 PM,,First upload,{employee.FullName},{employee.MobileNo}");
 
 		await _attendanceImportAppService.PreviewAsync(fileName, "text/csv", csv);
 
@@ -182,13 +203,15 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	public async Task Should_Allow_Same_FileName_In_Different_Payroll_Month()
 	{
 		var employee = await CreateEmployeeAsync("samefilemonth");
+		var firstAttendanceDate = await GetCoveredAttendanceDateAsync();
+		var secondAttendanceDate = await GetCoveredAttendanceDateAsync(monthOffset: 1);
 		var fileName = $"same-file-different-month-{Guid.NewGuid():N}.csv";
 		var aprilCsv = BuildCsv(
 			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
-			$"11-04-2026,{employee.EmployeeCode},09:00 AM,05:00 PM,,April upload,{employee.FullName},{employee.MobileNo}");
+			$"{firstAttendanceDate:dd-MM-yyyy},{employee.EmployeeCode},09:00 AM,05:00 PM,,May upload,{employee.FullName},{employee.MobileNo}");
 		var mayCsv = BuildCsv(
 			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
-			$"11-05-2026,{employee.EmployeeCode},09:00 AM,05:00 PM,,May upload,{employee.FullName},{employee.MobileNo}");
+			$"{secondAttendanceDate:dd-MM-yyyy},{employee.EmployeeCode},09:00 AM,05:00 PM,,June upload,{employee.FullName},{employee.MobileNo}");
 
 		await _attendanceImportAppService.PreviewAsync(fileName, "text/csv", aprilCsv);
 		var mayPreview = await _attendanceImportAppService.PreviewAsync(fileName, "text/csv", mayCsv);
@@ -197,10 +220,62 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		mayPreview.Summary.ValidRows.ShouldBe(1);
 	}
 
-	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(string suffix)
+	[Fact]
+	public async Task Should_Auto_Mark_Half_Day_When_Worked_Time_Is_Below_Full_Day_Threshold()
+	{
+		var shiftId = await EnsureFullDayShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("lowwork", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},03:00 PM,05:30 PM,,Low worked time,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("low-worked-time.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.HalfDayLeave.ToString());
+		row.Warnings.ShouldContain(x => x.Contains("Auto-marked Half Day", StringComparison.OrdinalIgnoreCase));
+
+		await _attendanceImportAppService.ConfirmAsync(new AttendanceImportConfirmRequestDto
+		{
+			PreviewToken = preview.PreviewToken!
+		});
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var query = await _employeeAttendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x => x.EmployeeId == employee.Id && x.AttendanceDate == attendanceDate);
+			attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.HalfDayLeave);
+		});
+	}
+
+	[Fact]
+	public async Task Should_Return_Row_Error_When_Employee_Has_No_Shift_For_Worked_Time_Evaluation()
+	{
+		var employee = await CreateEmployeeAsync("noshift");
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var entity = await _employeeRepository.GetAsync(employee.Id);
+			entity.ShiftId = null;
+			await _employeeRepository.UpdateAsync(entity, autoSave: true);
+		});
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},09:00 AM,05:00 PM,,Missing shift,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("missing-shift.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeFalse();
+		preview.Summary.InvalidRows.ShouldBe(1);
+		preview.Rows.Single().Errors.ShouldContain(x => x.Contains("Employee shift is required", StringComparison.OrdinalIgnoreCase));
+	}
+
+	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(string suffix, Guid? shiftIdOverride = null)
 	{
 		var roleId = await EnsureRoleExistsAsync();
-		var shiftId = await EnsureShiftExistsAsync();
+		var shiftId = shiftIdOverride ?? await EnsureShiftExistsAsync();
 		var organizationId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		var unique = Guid.NewGuid().ToString("N")[..6];
 
@@ -252,6 +327,114 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 
 		await _shiftRepository.InsertAsync(shift, autoSave: true);
 		return shift.Id;
+	}
+
+	private async Task<Guid> EnsureFullDayShiftExistsAsync()
+	{
+		var existing = (await _shiftRepository.GetListAsync())
+			.FirstOrDefault(x => x.ShiftName == "Attendance Import Full Day Test Shift");
+		if (existing != null)
+		{
+			return existing.Id;
+		}
+
+		var shift = new ShiftManagement
+		{
+			ShiftName = "Attendance Import Full Day Test Shift",
+			StartTime = new TimeOnly(7, 0),
+			EndTime = new TimeOnly(17, 30)
+		};
+
+		await _shiftRepository.InsertAsync(shift, autoSave: true);
+		return shift.Id;
+	}
+
+	private async Task<DateOnly> GetCoveredAttendanceDateAsync(int monthOffset = 0)
+	{
+		var academicYear = await EnsurePolicyBaselineAsync();
+		return DateOnly.FromDateTime(academicYear.StartDate.AddMonths(monthOffset).AddDays(14));
+	}
+
+	private async Task<AcademicYear> EnsurePolicyBaselineAsync()
+	{
+		const string academicYearName = "Attendance Import Policy Test 2026";
+		var existing = (await _academicYearRepository.GetListAsync())
+			.FirstOrDefault(x => x.Name == academicYearName);
+		if (existing != null)
+		{
+			return existing;
+		}
+
+		var academicYear = (AcademicYear)Activator.CreateInstance(
+			typeof(AcademicYear),
+			System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+			binder: null,
+			args:
+			[
+				_guidGenerator.Create(),
+				_currentTenant.Id,
+				academicYearName,
+				new DateTime(2026, 1, 1),
+				new DateTime(2026, 12, 31)
+			],
+			culture: null)!;
+		await _academicYearRepository.InsertAsync(academicYear, autoSave: true);
+
+		var calendar = new WorkCalendarPolicy(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			academicYear.Id,
+			"Attendance Import Test Calendar",
+			HrPolicyStatus.Active,
+			academicYear.StartDate,
+			academicYear.EndDate,
+			AttendanceWeeklyOffPattern.Sunday,
+			[],
+			WorkCalendarHolidaySyncMode.Snapshot);
+		await _workCalendarPolicyRepository.InsertAsync(calendar, autoSave: true);
+
+		await _payrollPolicyRepository.InsertAsync(new PayrollPolicy(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			academicYear.Id,
+			calendar.Id,
+			"Attendance Import Test Payroll",
+			HrPolicyStatus.Active,
+			isDefault: true,
+			DayCalculationType.WorkingDays,
+			manualDays: null,
+			manualMonthDays: [],
+			SaturdayWorkPolicy.FullDay,
+			holidayOverrides: [],
+			lockedMonthSettings: []), autoSave: true);
+
+		await _attendancePolicyRepository.InsertAsync(new AttendancePolicy(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			academicYear.Id,
+			calendar.Id,
+			"Attendance Import Test Attendance",
+			HrPolicyStatus.Active,
+			isDefault: true,
+			fullDayThresholdPercentage: 75,
+			halfDayThresholdPercentage: 50,
+			absentThresholdPercentage: 0,
+			AttendanceMissingPunchBehavior.RequiresReview,
+			manualCorrectionAllowed: true,
+			graceTime: 0,
+			maxLateAllowedPerMonth: 0,
+			AttendancePenaltyType.None,
+			penaltyCountThreshold: 0,
+			earlyExitEnabled: false,
+			earlyExitGraceTime: 0,
+			overtimeEnabled: false,
+			overtimeRate: null,
+			minOvertimeMinutes: null,
+			AttendanceHolidayWorkBehavior.CompOff,
+			sandwichRuleEnabled: false,
+			payrollPreviewEnabled: true), autoSave: true);
+
+		return academicYear;
 	}
 
 	private static string BuildPhoneNumber() => $"90{Random.Shared.Next(10000000, 99999999)}";

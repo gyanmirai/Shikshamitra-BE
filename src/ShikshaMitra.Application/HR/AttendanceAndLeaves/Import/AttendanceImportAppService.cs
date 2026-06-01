@@ -32,7 +32,8 @@ public class AttendanceImportAppService(
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
 	IRepository<AttendanceImportRow, Guid> attendanceImportRowRepository,
 	IDistributedCache<AttendanceImportPreviewCacheItem> previewCache,
-	IExcelService excelService)
+	IExcelService excelService,
+	AttendancePolicyWorkedTimeEvaluator workedTimeEvaluator)
 	: ApplicationService, IAttendanceImportAppService
 {
 	private static readonly string[] AllowedHeaders =
@@ -271,7 +272,7 @@ public class AttendanceImportAppService(
 		if (fileContent.Length > MaxFileSizeBytes)
 			throw new BusinessException(HRErrorCodes.AttendanceImportFileTooLarge);
 
-		var extension = Path.GetExtension(fileName).ToLowerInvariant();
+		var extension = Path.GetExtension(fileName.Trim()).ToLowerInvariant();
 		if (extension is not ".xlsx" and not ".xls" and not ".csv")
 			throw new BusinessException(HRErrorCodes.AttendanceImportInvalidExtension);
 	}
@@ -280,7 +281,7 @@ public class AttendanceImportAppService(
 	{
 		try
 		{
-			return Path.GetExtension(fileName).ToLowerInvariant() switch
+			return Path.GetExtension(fileName.Trim()).ToLowerInvariant() switch
 			{
 				".xlsx" => ParseExcel(fileContent),
 				".xls" => ParseExcel(fileContent),
@@ -590,6 +591,29 @@ public class AttendanceImportAppService(
 				if (!string.Equals(normalizedIncoming, normalizedStored, StringComparison.OrdinalIgnoreCase))
 				{
 					row.Warnings.Add("Employee Name does not match the current employee record.");
+				}
+			}
+
+			if (row.AttendanceDateValue.HasValue)
+			{
+				try
+				{
+					var evaluation = await workedTimeEvaluator.EvaluateAsync(
+						employee,
+						row.AttendanceDateValue.Value,
+						row.TimeInValue,
+						row.TimeOutValue,
+						row.StatusValue);
+					row.StatusValue = evaluation.Status;
+					row.Status = evaluation.Status.ToString();
+					if (!string.IsNullOrWhiteSpace(evaluation.Warning))
+					{
+						row.Warnings.Add(evaluation.Warning);
+					}
+				}
+				catch (BusinessException ex)
+				{
+					row.Errors.Add(GetFriendlyBusinessExceptionMessage(ex));
 				}
 			}
 		}
@@ -978,6 +1002,13 @@ public class AttendanceImportAppService(
 		var offset = DefaultImportTimeZone.GetUtcOffset(localDateTime);
 		return new DateTimeOffset(localDateTime, offset);
 	}
+
+	private static string GetFriendlyBusinessExceptionMessage(BusinessException ex) =>
+		string.IsNullOrWhiteSpace(ex.Message) ||
+		ex.Message == ex.Code ||
+		ex.Message.StartsWith("Exception of type", StringComparison.OrdinalIgnoreCase)
+			? ex.Code ?? "Attendance policy evaluation failed."
+			: ex.Message;
 
 	private static AttendanceImportRowResultDto MapToResultDto(AttendanceImportPreviewRow row)
 	{

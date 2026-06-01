@@ -1553,6 +1553,28 @@ namespace ShikshaMitra.Migrations
                     table.PrimaryKey("PK_AppRoomTypes", x => x.Id);
                 });
 
+            migrationBuilder.Sql("""
+                CREATE TABLE IF NOT EXISTS "AppSeedExecutionMarkers" (
+                    "Id" uuid NOT NULL,
+                    "TenantId" uuid NULL,
+                    "SeederName" character varying(128) NOT NULL,
+                    "Version" character varying(64) NOT NULL,
+                    "Profile" character varying(32) NOT NULL,
+                    "Status" integer NOT NULL,
+                    "StartedAt" timestamp with time zone NOT NULL,
+                    "CompletedAt" timestamp with time zone NULL,
+                    "ElapsedMilliseconds" bigint NULL,
+                    "Error" character varying(4000) NULL,
+                    "ExtraProperties" text NOT NULL,
+                    "ConcurrencyStamp" character varying(40) NOT NULL,
+                    "CreationTime" timestamp with time zone NOT NULL,
+                    "CreatorId" uuid NULL,
+                    "LastModificationTime" timestamp with time zone NULL,
+                    "LastModifierId" uuid NULL,
+                    CONSTRAINT "PK_AppSeedExecutionMarkers" PRIMARY KEY ("Id")
+                );
+                """);
+
             migrationBuilder.CreateTable(
                 name: "AppShiftManagements",
                 columns: table => new
@@ -6909,6 +6931,11 @@ namespace ShikshaMitra.Migrations
                 table: "AppRooms",
                 column: "RoomTypeId");
 
+            migrationBuilder.Sql("""
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_SeedExecutionMarkers_Tenant_Seeder_Version_Profile"
+                ON "AppSeedExecutionMarkers" ("TenantId", "SeederName", "Version", "Profile");
+                """);
+
             migrationBuilder.CreateIndex(
                 name: "IX_StaffAttendanceDayLocks_Tenant_Date",
                 table: "AppStaffAttendanceDayLocks",
@@ -7930,6 +7957,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppRooms");
+
+            migrationBuilder.DropTable(
+                name: "AppSeedExecutionMarkers");
 
             migrationBuilder.DropTable(
                 name: "AppStaffAttendanceDayLocks");

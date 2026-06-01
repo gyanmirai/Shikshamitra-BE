@@ -79,7 +79,7 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 
 		var response = await anonymousClient.PostAsync($"{BaseUrl}/preview", content);
 
-		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 	}
 
 	[Fact]
@@ -104,7 +104,7 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 			row);
 		var file = new ByteArrayContent(Encoding.UTF8.GetBytes(csv));
 		file.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
-		content.Add(file, "File", "attendance.csv");
+		content.Add(file, "File", $"attendance-{Guid.NewGuid():N}.csv");
 		return content;
 	}
 }

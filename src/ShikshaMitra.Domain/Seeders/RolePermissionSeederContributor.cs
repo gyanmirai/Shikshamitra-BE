@@ -34,13 +34,18 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 	public override async Task SeedAsync(DataSeedContext context)
 	{
 		var rolePermissions = BuildRolePermissions();
+		var rolesByNormalizedName = (await _roleRepository.GetListAsync())
+			.Where(role => !string.IsNullOrWhiteSpace(role.Name))
+			.ToDictionary(
+				role => role.NormalizedName,
+				role => role,
+				StringComparer.OrdinalIgnoreCase);
 
 		foreach (var (roleName, permissions) in rolePermissions)
 		{
-			var role = await _roleRepository.FindByNormalizedNameAsync(roleName.ToUpperInvariant());
-			if (role == null)
+			if (!rolesByNormalizedName.TryGetValue(roleName.ToUpperInvariant(), out var role))
 			{
-				continue;
+				throw new Exception($"Required seeded role '{roleName}' was not found while assigning baseline permissions.");
 			}
 
 			var effectivePermissions = GetEffectivePermissions(roleName, permissions);

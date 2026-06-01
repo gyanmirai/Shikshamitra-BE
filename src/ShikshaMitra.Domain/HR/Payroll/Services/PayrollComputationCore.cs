@@ -138,8 +138,7 @@ public static class PayrollMonthCalendar
 	{
 		var firstDay = new DateTime(year, month, 1);
 		var lastDay = new DateTime(year, month, DateTime.DaysInMonth(year, month));
-		var includedHolidayDates = GetResolvedHolidayDaysInMonth(year, month, holidays, holidayOverrides)
-			.Where(x => x.IncludedInPayroll)
+		var holidayDates = GetResolvedHolidayDaysInMonth(year, month, holidays, holidayOverrides)
 			.Select(x => x.Date)
 			.ToHashSet();
 		var units = new Dictionary<DateOnly, decimal>();
@@ -148,7 +147,7 @@ public static class PayrollMonthCalendar
 		{
 			var dateOnly = DateOnly.FromDateTime(date);
 			var unit = GetBaseWorkingUnit(date.DayOfWeek, saturdayWorkPolicy, weeklyOffPattern, customWeeklyOffs);
-			if (unit > 0m && includedHolidayDates.Contains(dateOnly))
+			if (unit > 0m && holidayDates.Contains(dateOnly))
 			{
 				unit = 0m;
 			}
@@ -262,6 +261,7 @@ public static class PayrollMonthCalendar
 		return weeklyOffPattern switch
 		{
 			AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.Sunday => dayOfWeek == DayOfWeek.Sunday,
+			AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.SaturdaySunday => dayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday,
 			AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.Custom => customWeeklyOffs.Contains((int)dayOfWeek),
 			_ => dayOfWeek == DayOfWeek.Sunday
 		};
@@ -315,7 +315,7 @@ public static class PayrollProrationCalculator
 	{
 		if (basisDays <= 0)
 		{
-			return 1m;
+			return 0m;
 		}
 
 		return Math.Min(1m, payableDays / basisDays);
@@ -411,10 +411,10 @@ public static class PayrollAttendanceCalculator
 				if (paidUnitsForDate > attendanceUnits)
 				{
 					payableDays += paidUnitsForDate - attendanceUnits;
+					payableByDate[date] = paidUnitsForDate;
 				}
 			}
 		}
-
 		return new PayrollAttendancePayableDays(present, half, Math.Max(0m, payableDays));
 	}
 
@@ -488,10 +488,10 @@ public static class PayrollAttendanceCalculator
 				if (paidUnitsForDate > attendanceUnits)
 				{
 					payableDays += paidUnitsForDate - attendanceUnits;
+					attendancePayableByDate[date] = paidUnitsForDate;
 				}
 			}
 		}
-
 		return new PayrollAttendancePayableDays(
 			present,
 			half,
@@ -601,6 +601,31 @@ public static class PayrollComputation
 
 		return string.Equals(name, "Basic", StringComparison.OrdinalIgnoreCase)
 			|| name.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase);
+	}
+}
+
+public static class PayrollComponentMonthScope
+{
+	public static List<EmployeePayrollComponent> FilterForMonth(
+		IEnumerable<EmployeePayrollComponent> components,
+		int year,
+		int month)
+	{
+		return components
+			.Where(component => AppliesToMonth(component, year, month))
+			.ToList();
+	}
+
+	public static bool AppliesToMonth(EmployeePayrollComponent component, int year, int month)
+	{
+		if (!component.IsTemp)
+		{
+			return true;
+		}
+
+		return component.ApplicableMonth.HasValue &&
+			component.ApplicableMonth.Value.Year == year &&
+			component.ApplicableMonth.Value.Month == month;
 	}
 }
 

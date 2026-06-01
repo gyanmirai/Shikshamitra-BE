@@ -30,6 +30,7 @@ public class TestLoginSeederContributor : BaseSeederContributor
 	private readonly IStudentRepository _studentRepository;
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly ILogger<TestLoginSeederContributor> _logger;
+	private List<Employee>? _employeeAliasCache;
 
 	public TestLoginSeederContributor(
 		ICurrentTenant currentTenant,
@@ -259,8 +260,8 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			return;
 		}
 
-		var employees = await _employeeRepository.GetListAsync();
-		var employee = employees.FirstOrDefault(x =>
+		_employeeAliasCache ??= await _employeeRepository.GetListAsync();
+		var employee = _employeeAliasCache.FirstOrDefault(x =>
 			!string.IsNullOrWhiteSpace(x.Email) &&
 			aliasEmails.Contains(x.Email, StringComparer.OrdinalIgnoreCase));
 
@@ -287,7 +288,7 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			employee.UserId);
 
 		employee.UpdateUserId(user.Id);
-		await _employeeRepository.UpdateAsync(employee, autoSave: true);
+		await _employeeRepository.UpdateAsync(employee, autoSave: false);
 	}
 
 	private async Task<IdentityUser?> FindUserAsync(TestLoginSpec spec)
@@ -375,7 +376,8 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		var role = await _roleRepository.FindByNormalizedNameAsync(normalizedRoleName);
 		if (role == null || string.IsNullOrWhiteSpace(role.Name))
 		{
-			return;
+			throw new Exception(
+				$"Required seeded role '{roleName}' was not found while assigning seeded test user '{user.Email}'.");
 		}
 
 		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;

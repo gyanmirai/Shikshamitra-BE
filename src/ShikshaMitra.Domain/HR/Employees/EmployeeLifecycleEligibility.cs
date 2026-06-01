@@ -39,11 +39,59 @@ public static class EmployeeLifecycleEligibility
 			  employee.StatusEffectiveDate.Value >= attendanceDate)));
 	}
 
+	public static bool IsEligibleForPayrollMonth(
+		Employee employee,
+		DateOnly monthStart,
+		DateOnly monthEnd,
+		bool treatNullStatusAsActive = true)
+	{
+		if (GetEffectiveEmploymentStartDate(employee) > monthEnd)
+		{
+			return false;
+		}
+
+		return IsActiveOnOrAfter(
+			employee.EmployeeStatusType,
+			employee.StatusEffectiveDate,
+			employee.StatusLastChangedAt,
+			monthStart,
+			treatNullStatusAsActive);
+	}
+
 	public static bool IsAttendanceEligibleOnDate(
 		EmployeeStatusType? status,
 		DateOnly? statusEffectiveDate,
 		DateOnly attendanceDate,
-		bool treatNullStatusAsActive = true)
+		bool treatNullStatusAsActive = true) =>
+		IsAttendanceEligibleOnDate(
+			status,
+			statusEffectiveDate,
+			statusLastChangedAt: null,
+			attendanceDate,
+			treatNullStatusAsActive);
+
+	public static bool IsAttendanceEligibleOnDate(
+		EmployeeStatusType? status,
+		DateOnly? statusEffectiveDate,
+		DateTimeOffset? statusLastChangedAt,
+		DateOnly attendanceDate,
+		bool treatNullStatusAsActive = true) =>
+		IsActiveOnOrAfter(
+			status,
+			statusEffectiveDate,
+			statusLastChangedAt,
+			attendanceDate,
+			treatNullStatusAsActive);
+
+	public static DateOnly GetEffectiveEmploymentStartDate(Employee employee) =>
+		employee.DateOfJoining ?? DateOnly.FromDateTime(employee.CreationTime.Date);
+
+	private static bool IsActiveOnOrAfter(
+		EmployeeStatusType? status,
+		DateOnly? statusEffectiveDate,
+		DateTimeOffset? statusLastChangedAt,
+		DateOnly date,
+		bool treatNullStatusAsActive)
 	{
 		if (!status.HasValue)
 		{
@@ -55,6 +103,12 @@ public static class EmployeeLifecycleEligibility
 			return true;
 		}
 
-		return statusEffectiveDate.HasValue && statusEffectiveDate.Value >= attendanceDate;
+		if (statusEffectiveDate.HasValue)
+		{
+			return statusEffectiveDate.Value >= date;
+		}
+
+		return statusLastChangedAt.HasValue &&
+		       DateOnly.FromDateTime(statusLastChangedAt.Value.Date) >= date;
 	}
 }

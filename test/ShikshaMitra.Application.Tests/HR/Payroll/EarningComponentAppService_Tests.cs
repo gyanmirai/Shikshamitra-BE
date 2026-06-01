@@ -1304,7 +1304,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         // Arrange
         var input = new CreateEarningComponentDto
         {
-            Name = "No Description Component",
+            Name = $"No Description Component {Guid.NewGuid():N}",
             Description = null,
             ComponentType = EarningComponentType.Fixed,
             CalculationType = CalculationType.Amount,

@@ -21,6 +21,9 @@ public class EmployeeICardTemplateConfiguration : IEntityTypeConfiguration<Emplo
 		builder.Property(x => x.ThemeColor).HasMaxLength(32);
 		builder.Property(x => x.Orientation).IsRequired().HasMaxLength(24);
 		builder.Property(x => x.PresetKey).HasMaxLength(64);
+		builder.Property(x => x.SchemaVersion).IsRequired();
+		builder.Property(x => x.LayoutJson).IsRequired();
+		builder.Property(x => x.PrintSettingsJson).IsRequired();
 		builder.Property(x => x.FieldsJson).IsRequired();
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.MediumStageId, x.Name });
 	}

@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -42,9 +45,18 @@ public class HRDashboardAppService(
 	private const int MaxRangeDays = 31;
 	private const int PayloadVersion = 1;
 	private static readonly TimeSpan RefreshStaleAfter = TimeSpan.FromMinutes(15);
+	private static readonly TimeSpan PreviewStaleAfter = TimeSpan.FromHours(24);
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
 	public async Task<HRDashboardSummaryDto> GetSummaryAsync(HRDashboardSummaryRequestDto input)
+	{
+		var scope = await EnsureCanReadScopedEmployeesAsync();
+		return await GetSummaryAsync(input, scope);
+	}
+
+	private async Task<HRDashboardSummaryDto> GetSummaryAsync(
+		HRDashboardSummaryRequestDto input,
+		UserScopeContext scope)
 	{
 		input ??= new HRDashboardSummaryRequestDto();
 		var dashboardDate = ParseDateOrDefault(input.Date, DateTime.Today);
@@ -52,8 +64,10 @@ public class HRDashboardAppService(
 		var month = NormalizeMonth(input.Month, dashboardDate);
 		var selectedMonthStart = DateTime.ParseExact(month, "yyyy-MM", CultureInfo.InvariantCulture);
 		var selectedNextMonthStart = selectedMonthStart.AddMonths(1);
+		var selectedMonthStartDate = DateOnly.FromDateTime(selectedMonthStart);
+		var selectedMonthEndDate = DateOnly.FromDateTime(selectedNextMonthStart.AddDays(-1));
 
-		var employeeQuery = await GetScopedEmployeeQueryAsync();
+		var employeeQuery = await GetScopedEmployeeQueryAsync(scope);
 		var attendanceQuery = await attendanceRepository.GetQueryableAsync();
 		var leaveQuery = await leaveRepository.GetQueryableAsync();
 		var leavePolicyQuery = await leavePolicyRepository.GetQueryableAsync();
@@ -93,10 +107,6 @@ public class HRDashboardAppService(
 		var todayDateOnly = DateOnly.FromDateTime(dashboardDate);
 		var trendStart = todayDateOnly.AddDays(-(rangeDays - 1));
 		var trendEnd = todayDateOnly;
-		var todayStartOffset = new DateTimeOffset(dashboardDate.Date, TimeSpan.Zero);
-		var todayEndOffset = todayStartOffset.AddDays(1).AddTicks(-1);
-		var selectedMonthStartOffset = new DateTimeOffset(selectedMonthStart, TimeSpan.Zero);
-		var selectedMonthEndOffset = new DateTimeOffset(selectedNextMonthStart, TimeSpan.Zero).AddTicks(-1);
 
 		var workforce = await BuildWorkforceAsync(
 			activeEmployees,
@@ -115,26 +125,26 @@ public class HRDashboardAppService(
 		var attendanceCounts = attendanceCountRows
 			.Select(x => new AttendanceStatusCount(x.AttendanceDate, x.StatusType, x.Count))
 			.ToList();
-		var leavesForTrend = await AsyncExecuter.ToListAsync(
+		var leaveTrendRows = await AsyncExecuter.ToListAsync(
 			leaveQuery.Where(l =>
 				l.Status == EmployeeLeaveStatusType.Approved &&
-				l.StartDate <= todayEndOffset &&
-				l.EndDate >= new DateTimeOffset(trendStart.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero) &&
+				l.StartDateOnly <= trendEnd &&
+				l.EndDateOnly >= trendStart &&
 				activeEmployeeIds.Contains(l.EmployeeId))
-				.Select(l => new LeaveTrendRow(l.EmployeeId, l.StartDate, l.EndDate)));
+				.Select(l => new LeaveTrendRow(l.EmployeeId, l.StartDateOnly, l.EndDateOnly)));
 
 		var attendanceToday = BuildAttendanceToday(attendanceCounts, todayDateOnly, activeEmployeeIds.Count);
-		var attendanceTrend = BuildAttendanceTrend(attendanceCounts, leavesForTrend, trendStart, trendEnd);
+		var attendanceTrend = BuildAttendanceTrend(attendanceCounts, leaveTrendRows, trendStart, trendEnd);
 		var leave = await BuildLeaveAsync(
 			leaveQuery,
 			leavePolicyQuery,
 			employeeQuery,
 			activeEmployeeIds,
-			selectedMonthStartOffset,
-			selectedMonthEndOffset);
+			selectedMonthStartDate,
+			selectedMonthEndDate);
+		var inactiveReportingManagerIssue = await BuildInactiveReportingManagerIssueAsync(employeeQuery);
 		var payroll = await BuildPayrollAsync(month);
 		var celebrations = BuildCelebrations(celebrationCandidates, dashboardDate);
-		var inactiveReportingManagerIssue = await BuildInactiveReportingManagerIssueAsync(employeeQuery);
 		var insights = BuildInsights(attendanceToday, leave, payroll, celebrations, inactiveReportingManagerIssue);
 
 		return new HRDashboardSummaryDto
@@ -156,21 +166,25 @@ public class HRDashboardAppService(
 	{
 		dashboardKey = NormalizeDashboardKey(dashboardKey);
 		await CheckDashboardPermissionAsync(dashboardKey);
+		var scope = await EnsureCanReadScopedEmployeesAsync();
+		var scopeKey = BuildScopeKey(scope);
 
-		var preview = await FindPreviewAsync(dashboardKey);
-		return preview == null ? EmptyPreview(dashboardKey) : ToPreviewDto(preview);
+		var preview = await FindPreviewAsync(dashboardKey, scopeKey);
+		return preview == null ? EmptyPreview(dashboardKey, scopeKey) : ToPreviewDto(preview);
 	}
 
 	public async Task<HRDashboardPreviewDto> RefreshPreviewAsync(string dashboardKey)
 	{
 		dashboardKey = NormalizeDashboardKey(dashboardKey);
 		await CheckDashboardPermissionAsync(dashboardKey);
+		var scope = await EnsureCanReadScopedEmployeesAsync();
+		var scopeKey = BuildScopeKey(scope);
 
 		var now = Clock.Now;
-		var preview = await FindPreviewAsync(dashboardKey);
+		var preview = await FindPreviewAsync(dashboardKey, scopeKey);
 		if (preview == null)
 		{
-			preview = new HrDashboardPreview(GuidGenerator.Create(), CurrentTenant.Id, dashboardKey);
+			preview = new HrDashboardPreview(GuidGenerator.Create(), CurrentTenant.Id, dashboardKey, scopeKey);
 			await previewRepository.InsertAsync(preview, autoSave: true);
 		}
 
@@ -186,6 +200,7 @@ public class HRDashboardAppService(
 				TenantId = CurrentTenant.Id,
 				PreviewId = preview.Id,
 				DashboardKey = dashboardKey,
+				ScopeKey = scopeKey,
 				RequestedByUserId = CurrentUser.Id
 			});
 		}
@@ -196,23 +211,51 @@ public class HRDashboardAppService(
 	[AllowAnonymous]
 	public async Task RefreshExistingPreviewsAsync()
 	{
+		await EnsureScheduledPreviewsAsync();
+
 		List<HrDashboardPreview> previews;
+		var refreshStaleBefore = Clock.Now - RefreshStaleAfter;
 		using (dataFilter.Disable<IMultiTenant>())
 		{
 			previews = await AsyncExecuter.ToListAsync((await previewRepository.GetQueryableAsync())
-				.Where(x => x.Status != HrDashboardPreviewStatus.Refreshing ||
+				.Where(x => x.TenantId == CurrentTenant.Id &&
+					x.ScopeKey == HrDashboardScopeKeys.HrWide &&
+					(x.Status != HrDashboardPreviewStatus.Refreshing ||
 					!x.RefreshStartedAt.HasValue ||
-					Clock.Now - x.RefreshStartedAt.Value >= RefreshStaleAfter));
+					x.RefreshStartedAt.Value <= refreshStaleBefore)));
 		}
 
 		foreach (var preview in previews)
 		{
+			preview.MarkRefreshing(null, Clock.Now);
+			await previewRepository.UpdateAsync(preview, autoSave: true);
 			await backgroundJobManager.EnqueueAsync(new HrDashboardPreviewRefreshJobArgs
 			{
 				TenantId = preview.TenantId,
 				PreviewId = preview.Id,
-				DashboardKey = preview.DashboardKey
+				DashboardKey = preview.DashboardKey,
+				ScopeKey = preview.ScopeKey
 			});
+		}
+	}
+
+	private async Task EnsureScheduledPreviewsAsync()
+	{
+		foreach (var dashboardKey in HrDashboardKeys.All)
+		{
+			var preview = await FindPreviewAsync(dashboardKey, HrDashboardScopeKeys.HrWide);
+			if (preview != null)
+			{
+				continue;
+			}
+
+			await previewRepository.InsertAsync(
+				new HrDashboardPreview(
+					GuidGenerator.Create(),
+					CurrentTenant.Id,
+					dashboardKey,
+					HrDashboardScopeKeys.HrWide),
+				autoSave: true);
 		}
 	}
 
@@ -227,18 +270,30 @@ public class HRDashboardAppService(
 
 		try
 		{
-			var payloadJson = await BuildPreviewPayloadJsonAsync(preview.DashboardKey);
+			var refreshScope = await ResolveRefreshScopeAsync(args);
+			if (!string.Equals(preview.ScopeKey, BuildScopeKey(refreshScope), StringComparison.Ordinal))
+			{
+				throw new BusinessException("HR:Dashboard:ScopeChanged");
+			}
+
+			var payloadJson = await BuildPreviewPayloadJsonAsync(preview.DashboardKey, refreshScope);
 			preview.MarkReady(payloadJson, PayloadVersion, Clock.Now);
 		}
 		catch (Exception ex)
 		{
-			preview.MarkFailed(ex.Message, Clock.Now);
+			Logger.LogWarning(
+				ex,
+				"HR dashboard preview refresh failed. PreviewId={PreviewId}, DashboardKey={DashboardKey}, ScopeKey={ScopeKey}",
+				preview.Id,
+				preview.DashboardKey,
+				preview.ScopeKey);
+			preview.MarkFailed(FormatRefreshError(ex), Clock.Now);
 		}
 
 		await previewRepository.UpdateAsync(preview, autoSave: true);
 	}
 
-	private async Task<string> BuildPreviewPayloadJsonAsync(string dashboardKey)
+	private async Task<string> BuildPreviewPayloadJsonAsync(string dashboardKey, UserScopeContext scope)
 	{
 		var defaults = new HRDashboardSummaryRequestDto
 		{
@@ -246,7 +301,7 @@ public class HRDashboardAppService(
 			Month = Clock.Now.ToString("yyyy-MM", CultureInfo.InvariantCulture),
 			Range = 7
 		};
-		var summary = await GetSummaryAsync(defaults);
+		var summary = await GetSummaryAsync(defaults, scope);
 
 		return dashboardKey switch
 		{
@@ -385,10 +440,8 @@ public class HRDashboardAppService(
 		for (var date = trendStart; date <= trendEnd; date = date.AddDays(1))
 		{
 			var records = attendanceCounts.Where(a => a.AttendanceDate == date).ToList();
-			var dateStart = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-			var dateEnd = dateStart.AddDays(1).AddTicks(-1);
 			var leaveCount = approvedLeaves
-				.Where(l => l.StartDate <= dateEnd && l.EndDate >= dateStart)
+				.Where(l => l.StartDate <= date && l.EndDate >= date)
 				.Select(l => l.EmployeeId)
 				.Distinct()
 				.Count();
@@ -410,35 +463,37 @@ public class HRDashboardAppService(
 		IQueryable<LeavePolicy> leavePolicyQuery,
 		IQueryable<Employee> scopedEmployeeQuery,
 		IReadOnlyCollection<Guid> activeEmployeeIds,
-		DateTimeOffset monthStart,
-		DateTimeOffset monthEnd)
+		DateOnly monthStart,
+		DateOnly monthEnd)
 	{
-		var scopedLeaveQuery = leaveQuery.Where(l => activeEmployeeIds.Contains(l.EmployeeId));
-		var pendingCount = await AsyncExecuter.CountAsync(
-			scopedLeaveQuery.Where(l => l.Status == EmployeeLeaveStatusType.Pending));
-		var monthStatusRows = await AsyncExecuter.ToListAsync(
-			scopedLeaveQuery
+		var pendingQuery = leaveQuery.Where(l =>
+			l.Status == EmployeeLeaveStatusType.Pending &&
+			activeEmployeeIds.Contains(l.EmployeeId));
+		var pendingCount = await AsyncExecuter.CountAsync(pendingQuery);
+		var pendingSummaryRows = await AsyncExecuter.ToListAsync(pendingQuery
+			.GroupBy(l => l.LeaveTypeId)
+			.Select(g => new LeaveTypeCountRow(g.Key, g.Count())));
+		var recentPendingRows = await AsyncExecuter.ToListAsync(pendingQuery
+			.OrderByDescending(l => l.CreationTime)
+			.Take(6)
+			.Select(l => new LeaveDashboardRow(
+				l.Id,
+				l.PublicId,
+				l.EmployeeId,
+				l.LeaveTypeId,
+				l.StartDate,
+				l.EndDate,
+				l.HalfDay,
+				l.Status,
+				l.CreationTime)));
+		var monthRows = await AsyncExecuter.ToListAsync(
+			leaveQuery
 				.Where(l =>
-					l.StartDate <= monthEnd &&
-					l.EndDate >= monthStart &&
-					(l.Status == EmployeeLeaveStatusType.Approved || l.Status == EmployeeLeaveStatusType.Rejected))
-				.GroupBy(l => l.Status)
-				.Select(g => new { Status = g.Key, Count = g.Count() }));
-		var monthStatusCounts = monthStatusRows.ToDictionary(x => x.Status, x => x.Count);
-		var summaryRows = await AsyncExecuter.ToListAsync(
-			scopedLeaveQuery
-				.Where(l =>
-					l.Status == EmployeeLeaveStatusType.Pending ||
-					(l.StartDate <= monthEnd && l.EndDate >= monthStart))
-				.GroupBy(l => l.LeaveTypeId)
-				.Select(g => new { LeaveTypeId = g.Key, Count = g.Count() }));
-		var recentPendingRows = await AsyncExecuter.ToListAsync(
-			scopedLeaveQuery
-				.Where(l => l.Status == EmployeeLeaveStatusType.Pending)
-				.OrderByDescending(l => l.CreationTime)
-				.Take(6)
-				.Select(l => new
-				{
+					(l.Status == EmployeeLeaveStatusType.Approved || l.Status == EmployeeLeaveStatusType.Rejected) &&
+					l.StartDateOnly <= monthEnd &&
+					l.EndDateOnly >= monthStart &&
+					activeEmployeeIds.Contains(l.EmployeeId))
+				.Select(l => new LeaveDashboardRow(
 					l.Id,
 					l.PublicId,
 					l.EmployeeId,
@@ -447,8 +502,17 @@ public class HRDashboardAppService(
 					l.EndDate,
 					l.HalfDay,
 					l.Status,
-					l.CreationTime
-				}));
+					l.CreationTime)));
+		var monthStatusCounts = monthRows
+			.GroupBy(l => l.Status)
+			.ToDictionary(g => g.Key, g => g.Count());
+		var summaryRows = pendingSummaryRows
+			.Concat(monthRows
+				.GroupBy(l => l.LeaveTypeId)
+				.Select(g => new LeaveTypeCountRow(g.Key, g.Count())))
+			.GroupBy(l => l.LeaveTypeId)
+			.Select(g => new LeaveTypeCountRow(g.Key, g.Sum(x => x.Count)))
+			.ToList();
 		var policyIds = summaryRows
 			.Select(x => x.LeaveTypeId)
 			.Concat(recentPendingRows.Select(x => x.LeaveTypeId))
@@ -782,9 +846,8 @@ public class HRDashboardAppService(
 			[new ValidationResult("Month must be yyyy-MM.", [nameof(HRDashboardSummaryRequestDto.Month)])]);
 	}
 
-	private async Task<IQueryable<Employee>> GetScopedEmployeeQueryAsync()
+	private async Task<IQueryable<Employee>> GetScopedEmployeeQueryAsync(UserScopeContext scope)
 	{
-		var scope = await EnsureCanReadScopedEmployeesAsync();
 		var employeeQuery = await employeeRepository.GetQueryableAsync();
 
 		if (CurrentTenant.Id.HasValue)
@@ -846,36 +909,165 @@ public class HRDashboardAppService(
 		return scope;
 	}
 
-	private async Task<HrDashboardPreview?> FindPreviewAsync(string dashboardKey)
+	private Task<UserScopeContext> ResolveRefreshScopeAsync(HrDashboardPreviewRefreshJobArgs args)
 	{
-		return await AsyncExecuter.FirstOrDefaultAsync((await previewRepository.GetQueryableAsync())
-			.Where(x => x.TenantId == CurrentTenant.Id && x.DashboardKey == dashboardKey));
+		if (args.RequestedByUserId.HasValue)
+		{
+			return userScopeService.GetUserScopeAsync(args.RequestedByUserId.Value);
+		}
+
+		return Task.FromResult(CreateHrWideScope());
 	}
 
-	private static HRDashboardPreviewDto EmptyPreview(string dashboardKey)
+	private UserScopeContext CreateHrWideScope()
+	{
+		return new UserScopeContext
+		{
+			UserId = Guid.Empty,
+			TenantId = CurrentTenant.Id,
+			IsAdmin = true,
+			CalculatedAt = Clock.Now
+		};
+	}
+
+	private async Task<HrDashboardPreview?> FindPreviewAsync(string dashboardKey, string scopeKey)
+	{
+		return await AsyncExecuter.FirstOrDefaultAsync((await previewRepository.GetQueryableAsync())
+			.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.DashboardKey == dashboardKey &&
+				x.ScopeKey == scopeKey));
+	}
+
+	private HRDashboardPreviewDto EmptyPreview(string dashboardKey, string scopeKey)
 	{
 		return new HRDashboardPreviewDto
 		{
 			DashboardKey = dashboardKey,
+			ScopeKey = scopeKey,
 			Status = HrDashboardPreviewStatus.Empty,
 			PayloadJson = "{}",
-			PayloadVersion = PayloadVersion
+			PayloadVersion = PayloadVersion,
+			IsStale = true,
+			NextScheduledRefreshAt = GetNextScheduledRefreshAt(Clock.Now)
 		};
 	}
 
-	private static HRDashboardPreviewDto ToPreviewDto(HrDashboardPreview preview)
+	private HRDashboardPreviewDto ToPreviewDto(HrDashboardPreview preview)
 	{
 		return new HRDashboardPreviewDto
 		{
 			DashboardKey = preview.DashboardKey,
+			ScopeKey = preview.ScopeKey,
 			Status = preview.Status,
 			PayloadJson = preview.PayloadJson,
 			PayloadVersion = preview.PayloadVersion,
+			IsStale = !preview.LastRefreshedAt.HasValue || Clock.Now - preview.LastRefreshedAt.Value > PreviewStaleAfter,
 			LastRefreshedAt = preview.LastRefreshedAt,
+			LastSuccessfulRefreshAt = preview.LastRefreshedAt,
+			NextScheduledRefreshAt = GetNextScheduledRefreshAt(Clock.Now),
 			RefreshStartedAt = preview.RefreshStartedAt,
 			RefreshRequestedByUserId = preview.RefreshRequestedByUserId,
 			LastError = preview.LastError
 		};
+	}
+
+	private static string BuildScopeKey(UserScopeContext scope)
+	{
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
+		{
+			return HrDashboardScopeKeys.HrWide;
+		}
+
+		var raw = string.Join("|",
+			$"ay:{JoinIds(scope.AcademicYearIds)}",
+			$"b:{JoinIds(scope.BoardIds)}",
+			$"m:{JoinIds(scope.MediumIds)}",
+			$"ms:{JoinIds(scope.MediumStageIds)}",
+			$"s:{JoinIds(scope.StandardIds)}",
+			$"d:{JoinIds(scope.DivisionIds)}",
+			$"way:{JoinIds(scope.WildcardBoardAcademicYearIds)}",
+			$"wb:{JoinIds(scope.WildcardMediumBoardIds)}",
+			$"wm:{JoinIds(scope.WildcardMediumStageMediumIds)}",
+			$"wms:{JoinIds(scope.WildcardStandardMediumStageIds)}",
+			$"ws:{JoinIds(scope.WildcardDivisionStandardIds)}");
+		var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
+		return $"scoped-{Convert.ToHexString(hash)[..32].ToLowerInvariant()}";
+	}
+
+	private static string JoinIds(IEnumerable<Guid> ids) =>
+		string.Join(",", ids.OrderBy(x => x).Select(x => x.ToString("N")));
+
+	private static DateTime GetNextScheduledRefreshAt(DateTime now)
+	{
+		var nowUtc = now.Kind switch
+		{
+			DateTimeKind.Utc => now,
+			DateTimeKind.Local => now.ToUniversalTime(),
+			_ => DateTime.SpecifyKind(now, DateTimeKind.Utc)
+		};
+		var nowIst = ConvertUtcToIndiaTime(nowUtc);
+		var nextIst = nowIst.Date.AddHours(6);
+		if (nowIst >= nextIst)
+		{
+			nextIst = nextIst.AddDays(1);
+		}
+
+		var nextUtc = DateTime.SpecifyKind(nextIst.AddHours(-5.5), DateTimeKind.Utc);
+		return now.Kind == DateTimeKind.Local ? nextUtc.ToLocalTime() : DateTime.SpecifyKind(nextUtc, now.Kind);
+	}
+
+	private static DateTime ConvertUtcToIndiaTime(DateTime utcNow)
+	{
+		try
+		{
+			return TimeZoneInfo.ConvertTimeFromUtc(
+				DateTime.SpecifyKind(utcNow, DateTimeKind.Utc),
+				TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"));
+		}
+		catch (Exception) when (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+		{
+			return TimeZoneInfo.ConvertTimeFromUtc(
+				DateTime.SpecifyKind(utcNow, DateTimeKind.Utc),
+				TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
+		}
+		catch
+		{
+			return DateTime.SpecifyKind(utcNow, DateTimeKind.Utc).AddHours(5.5);
+		}
+	}
+
+	private static string FormatRefreshError(Exception exception)
+	{
+		if (exception is BusinessException businessException)
+		{
+			var code = string.IsNullOrWhiteSpace(businessException.Code)
+				? null
+				: businessException.Code;
+			var message = string.IsNullOrWhiteSpace(businessException.Message) ||
+				businessException.Message.StartsWith("Exception of type", StringComparison.Ordinal)
+					? null
+					: businessException.Message;
+
+			if (code != null && message != null)
+			{
+				return $"{code}: {message}";
+			}
+
+			if (code != null)
+			{
+				return code;
+			}
+
+			if (businessException.InnerException?.Message is { Length: > 0 } innerMessage)
+			{
+				return innerMessage;
+			}
+		}
+
+		return string.IsNullOrWhiteSpace(exception.Message)
+			? "Dashboard refresh failed."
+			: exception.Message;
 	}
 
 	private static string NormalizeDashboardKey(string dashboardKey)
@@ -920,8 +1112,23 @@ public class HRDashboardAppService(
 
 	private sealed record LeaveTrendRow(
 		Guid EmployeeId,
+		DateOnly StartDate,
+		DateOnly EndDate);
+
+	private sealed record LeaveDashboardRow(
+		Guid Id,
+		int PublicId,
+		Guid EmployeeId,
+		Guid LeaveTypeId,
 		DateTimeOffset StartDate,
-		DateTimeOffset EndDate);
+		DateTimeOffset EndDate,
+		bool HalfDay,
+		EmployeeLeaveStatusType Status,
+		DateTime CreationTime);
+
+	private sealed record LeaveTypeCountRow(
+		Guid LeaveTypeId,
+		int Count);
 
 	private sealed record InactiveReportingManagerIssue(
 		int ActiveDirectReportCount,

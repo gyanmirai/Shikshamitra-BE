@@ -16,10 +16,11 @@ public class TenantSeederContributor(
 	ICurrentTenant currentTenant,
 	IGuidGenerator guidGenerator,
 	IUnitOfWork unitOfWork,
-	IDataSeeder dataSeeder,
 	ITenantManager tenantManager,
 	ITenantRepository tenantRepository) : BaseSeederContributor(currentTenant, guidGenerator, unitOfWork), ITransientDependency
 {
+	public static readonly Guid DdvsTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
 	public override async Task SeedAsync(DataSeedContext context)
 	{
 		if (context.TenantId.HasValue)
@@ -30,8 +31,7 @@ public class TenantSeederContributor(
 		// List tenant creation details with hardcoded GUIDs for consistency
 		var tenants = new List<(Guid Id, string Name, string AdminEmail, string InstituteName, string Address, string City, string State, string Country, string PostalCode, string ContactNo)>
 			{
-				(Guid.Parse("11111111-1111-1111-1111-111111111111"), "DDVS", "admin-ddvs@ddvs.com", "DDVS", "Parvat Patiya", "Surat", "Gujarat", "India", "395010", "+91-9876543210"),
-				(Guid.Parse("22222222-2222-2222-2222-222222222222"), "SSVM", "admin-ssvm@ddvs.com", "SSVM", "Some Address", "CityName", "StateName", "CountryName", "123456", "+91-1234567890")
+				(DdvsTenantId, "DDVS", "admin-ddvs@ddvs.com", "DDVS", "Parvat Patiya", "Surat", "Gujarat", "India", "395010", "+91-9876543210")
 			};
 
 		var tenantIds = new List<Guid>();
@@ -73,13 +73,6 @@ public class TenantSeederContributor(
 
 			await tenantRepository.InsertAsync(tenant);
 			await unitOfWork.SaveChangesAsync();
-
-			// Seed tenant-specific data (such as roles, HR, student data, etc.)
-			await dataSeeder.SeedAsync(
-				new DataSeedContext(tenant.Id)
-					.WithProperty("AdminEmail", input.AdminEmailAddress)
-					.WithProperty("AdminPassword", input.AdminPassword)
-			);
 
 			tenantIds.Add(tenant.Id);
 		}

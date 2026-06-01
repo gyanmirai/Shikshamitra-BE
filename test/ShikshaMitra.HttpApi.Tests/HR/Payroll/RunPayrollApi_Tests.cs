@@ -7,12 +7,18 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.HR.Payroll.RunPayroll;
+using ShikshaMitra.HR.Payroll.SalaryStructure;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
@@ -47,8 +53,86 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Ignore_Holiday_Attendance_For_Selected_Academic_Year()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"AkshayPayrollFlow{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		await AssignSalaryStructureAsync(employee.Id, "AkshayPayrollFlow");
+		await SeedLegacyAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 5, 10));
+
+		var preview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-05&academicYearId={Factory.SeededAcademicYearId}&page=0&pageSize=100&forceRefresh=true");
+		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
+
+		item.BasisDays.ShouldBe(0);
+		item.PayableDays.ShouldBe(0);
+		item.IssueCodes.ShouldContain("NO_WORKING_DAYS");
+		item.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
+		item.IssueCodes.ShouldNotContain("PAYROLL_POLICY_CONFIGURATION");
+		item.IssueCodes.ShouldNotContain("MISSING_SALARY_STRUCTURE");
+		item.FullGrossSalary.ShouldBeGreaterThan(0);
+		item.GrossSalary.ShouldBe(0);
+		item.NetPay.ShouldBe(0);
+
+		preview.Readiness.CanLock.ShouldBeFalse();
+		preview.Readiness.BlockingIssues.ShouldContain("NO_WORKING_DAYS");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Reject_Academic_Year_When_Month_Is_Outside_Range()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?month=2040-05&academicYearId={Factory.SeededAcademicYearId}&page=0&pageSize=100");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var body = await response.Content.ReadAsStringAsync();
+		body.ShouldContain("HR:Payroll:030031");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Recompute_Unlocked_Zero_Basis_Snapshot()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollZeroBasis{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		await AssignSalaryStructureAsync(employee.Id, "PayrollZeroBasis");
+		await SeedLegacyAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 5, 10));
+
+		var firstPreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-05&academicYearId={Factory.SeededAcademicYearId}&page=0&pageSize=100&forceRefresh=true");
+		firstPreview.Items.Single(x => x.EmployeeId == employee.Id).BasisDays.ShouldBe(0);
+
+		await CorruptPayrollSnapshotBasisAsync(employee.Id, "2026-05");
+
+		var refreshedPreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-05&academicYearId={Factory.SeededAcademicYearId}&page=0&pageSize=100&forceRefresh=false");
+		var refreshedItem = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
+
+		refreshedItem.BasisDays.ShouldBe(0);
+		refreshedItem.PayableDays.ShouldBe(0);
+		refreshedItem.IssueCodes.ShouldContain("NO_WORKING_DAYS");
+		refreshedItem.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Exclude_Employee_Before_Joining_Month()
 	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
 			"PayrollMayJoin",
@@ -67,6 +151,8 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Readiness_Should_Not_Count_Employee_Before_Joining_Month()
 	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
 		var before = await GetAndReadAsync<RunPayrollReadinessSummary>(
 			$"{BaseUrl}/readiness?month=2026-04");
 
@@ -84,6 +170,8 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Include_Inactive_Employee_For_Effective_Month_Only()
 	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
 			$"PayrollInactiveFinal{Guid.NewGuid():N}",
@@ -92,18 +180,20 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		await SetEmployeeStatusAsync(employee.Id, 1, new DateOnly(2026, 5, 31));
 
 		var mayPreview = await GetAndReadAsync<RunPayrollResponse>(
-			$"{BaseUrl}?month=2026-05&page=0&pageSize=500&forceRefresh=true");
+			$"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=true");
 		mayPreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeTrue();
 
 		var junePreview = await GetAndReadAsync<RunPayrollResponse>(
-			$"{BaseUrl}?month=2026-06&page=0&pageSize=500&forceRefresh=true");
+			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
 		junePreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeFalse();
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Payroll_Register_Should_Show_Final_Month_Inactive_Employee_With_No_Attendance_Issue()
+	public async Task Payroll_Register_Should_Report_No_Working_Days_For_Final_Month_Inactive_Employee_During_Holiday()
 	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
 			$"PayrollInactiveNoAttendance{Guid.NewGuid():N}",
@@ -112,9 +202,92 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		await SetEmployeeStatusAsync(employee.Id, 1, new DateOnly(2026, 5, 31));
 
 		var mayPreview = await GetAndReadAsync<RunPayrollResponse>(
-			$"{BaseUrl}?month=2026-05&page=0&pageSize=500&forceRefresh=true");
+			$"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=true");
 		var item = mayPreview.Items.Single(x => x.EmployeeId == employee.Id);
-		item.IssueCodes.ShouldContain("NO_ATTENDANCE");
+		item.BasisDays.ShouldBe(0);
+		item.PayableDays.ShouldBe(0);
+		item.IssueCodes.ShouldContain("NO_WORKING_DAYS");
+		item.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
+		item.IssueCodes.ShouldContain("MISSING_SALARY_STRUCTURE");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Include_Left_Employee_For_Final_Month_And_Lock()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var before = await GetAndReadAsync<RunPayrollReadinessSummary>(
+			$"{BaseUrl}/readiness?month=2026-03");
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollLeftFinal{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		await AssignSalaryStructureAsync(employee.Id, "PayrollLeftFinal");
+		await MarkAttendanceAsync(employee.Id, "11-03-2026");
+		await SetEmployeeStatusAsync(employee.Id, 2, new DateOnly(2026, 3, 20));
+
+		var marchPreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-03&page=0&pageSize=100&forceRefresh=true");
+		var previewItem = marchPreview.Items.Single(x => x.EmployeeId == employee.Id);
+		previewItem.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
+		previewItem.IssueCodes.ShouldNotContain("MISSING_SALARY_STRUCTURE");
+		previewItem.IssueCodes.ShouldNotContain("NEGATIVE_NET_PAY");
+		previewItem.IssueCodes.ShouldNotContain("PAYROLL_POLICY_CONFIGURATION");
+
+		var marchReadiness = await GetAndReadAsync<RunPayrollReadinessSummary>(
+			$"{BaseUrl}/readiness?month=2026-03");
+		marchReadiness.EmployeeCount.ShouldBeGreaterThanOrEqualTo(before.EmployeeCount + 1);
+
+		var reviewResponse = await Client.PostAsJsonAsync(
+			ReviewUrl,
+			new PayrollRunReviewRequest
+			{
+				Month = "2026-03",
+				EmployeeIds = new List<Guid> { employee.Id }
+			},
+			JsonOptions);
+		var reviewBody = await reviewResponse.Content.ReadAsStringAsync();
+		reviewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, reviewBody);
+
+		var lockResponse = await Client.PostAsJsonAsync(
+			BaseUrl,
+			new RunPayrollRequest
+			{
+				Month = "2026-03",
+				EmployeeIds = new List<Guid> { employee.Id }
+			},
+			JsonOptions);
+		var lockBody = await lockResponse.Content.ReadAsStringAsync();
+		lockResponse.StatusCode.ShouldBe(HttpStatusCode.OK, lockBody);
+
+		var junePreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
+		junePreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeFalse();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Use_Status_Change_Date_When_Effective_Date_Is_Missing()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollLeftLegacy{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		await SetEmployeeStatusAsync(employee.Id, 2, new DateOnly(2026, 5, 20));
+		await ClearStatusEffectiveDateAsync(employee.Id, new DateTimeOffset(2026, 5, 20, 12, 0, 0, TimeSpan.Zero));
+
+		var mayPreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=true");
+		mayPreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeTrue();
+
+		var junePreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
+		junePreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeFalse();
 	}
 
 	[Fact]
@@ -126,16 +299,16 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
 			$"PayrollAttendanceRefresh{Guid.NewGuid():N}",
-			dateOfJoining: new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc));
+			dateOfJoining: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		var before = await GetAndReadAsync<RunPayrollReadinessSummary>(
-			$"{BaseUrl}/readiness?month=2026-04");
+			$"{BaseUrl}/readiness?month=2026-03");
 
 		var attendanceResponse = await Client.PostAsJsonAsync(
 			"/api/hr/attendance/take-attendance/day/save",
 			new TakeAttendanceSaveInput
 			{
-				AttendanceDate = "11-04-2026",
+				AttendanceDate = "11-03-2026",
 				Entries =
 				[
 					new TakeAttendanceSaveEntryDto
@@ -148,9 +321,10 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 			JsonOptions);
 		attendanceResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		await AssertAttendanceStagePersistedAsync(employee.Id, new DateOnly(2026, 3, 11));
 
 		var after = await GetAndReadAsync<RunPayrollReadinessSummary>(
-			$"{BaseUrl}/readiness?month=2026-04");
+			$"{BaseUrl}/readiness?month=2026-03");
 
 		after.EmployeeCount.ShouldBe(before.EmployeeCount);
 		after.AttendanceFoundCount.ShouldBeGreaterThanOrEqualTo(before.AttendanceFoundCount + 1);
@@ -159,8 +333,91 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Use_Manual_Attendance_For_Payable_Days()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollManualAttendance{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		var attendanceResponse = await Client.PostAsJsonAsync(
+			"/api/hr/attendance/take-attendance/day/save",
+			new TakeAttendanceSaveInput
+			{
+				AttendanceDate = "14-04-2026",
+				Entries =
+				[
+					new TakeAttendanceSaveEntryDto
+					{
+						EmployeeId = employee.Id,
+						StatusWire = "PRESENT",
+						Remarks = "Payroll payable days regression"
+					}
+				]
+			},
+			JsonOptions);
+		attendanceResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		await AssertAttendanceStagePersistedAsync(employee.Id, new DateOnly(2026, 4, 14));
+
+		var preview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-04&page=0&pageSize=100&forceRefresh=true");
+		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
+
+		item.PresentDays.ShouldBeGreaterThanOrEqualTo(1);
+		item.PayableDays.ShouldBeGreaterThan(0);
+		item.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Readiness_Should_Count_Absent_Attendance_As_Found()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollAbsentAttendance{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		var attendanceResponse = await Client.PostAsJsonAsync(
+			"/api/hr/attendance/take-attendance/day/save",
+			new TakeAttendanceSaveInput
+			{
+				AttendanceDate = "15-04-2026",
+				Entries =
+				[
+					new TakeAttendanceSaveEntryDto
+					{
+						EmployeeId = employee.Id,
+						StatusWire = "ABSENT",
+						Remarks = "Payroll absent attendance is still marked"
+					}
+				]
+			},
+			JsonOptions);
+		attendanceResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		await AssertAttendanceStagePersistedAsync(employee.Id, new DateOnly(2026, 4, 15));
+
+		var preview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-04&page=0&pageSize=100&forceRefresh=true");
+		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
+
+		item.PayableDays.ShouldBe(0);
+		item.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
+
+		var readiness = await GetAndReadAsync<RunPayrollReadinessSummary>(
+			$"{BaseUrl}/readiness?month=2026-04");
+		readiness.AttendanceFoundCount.ShouldBeGreaterThanOrEqualTo(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Lock_Should_Reject_Employee_Before_Joining_Month()
 	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
 			"PayrollLockMayJoin",
@@ -182,6 +439,8 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Remove_Unlocked_Stale_Rows_For_Ineligible_Employees()
 	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
 			"PayrollStaleMayJoin",
@@ -205,6 +464,74 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.OK,
 			HttpStatusCode.BadRequest,
 			HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Preview_Should_Report_Policy_Setup_Issue_When_Month_Has_No_Academic_Year()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollNoAcademicYear{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		var previewResponse = await Client.GetAsync($"{BaseUrl}?month=2040-05&page=0&pageSize=100&forceRefresh=true");
+		var previewBody = await previewResponse.Content.ReadAsStringAsync();
+		previewBody.ShouldNotContain("HR:Payroll:030011");
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, previewBody);
+
+		var preview = JsonSerializer.Deserialize<RunPayrollResponse>(previewBody, JsonOptions)!;
+		preview.Readiness.CanLock.ShouldBeFalse();
+		preview.Readiness.PolicyConfigurationIssueCount.ShouldBeGreaterThan(0);
+		preview.Readiness.BlockingIssues.ShouldContain("PAYROLL_POLICY_CONFIGURATION");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Readiness_Should_Report_Policy_Setup_Issue_When_Default_Payroll_Policy_Is_Missing()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollMissingDefaultPolicy{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		var initialReadiness = await GetAndReadAsync<RunPayrollReadinessSummary>(
+			$"{BaseUrl}/readiness?month=2026-05");
+		initialReadiness.SnapshotCount.ShouldBeGreaterThan(0);
+
+		var effectiveDate = new DateTime(2026, 5, 1);
+		var disabledAssignmentIds = await DisablePolicyAssignmentsForMonthAsync(effectiveDate);
+		var defaultPayrollPolicyId = await ClearDefaultPayrollPolicyForMonthAsync(effectiveDate);
+		try
+		{
+			var response = await Client.GetAsync($"{BaseUrl}/readiness?month=2026-05");
+			var body = await response.Content.ReadAsStringAsync();
+			response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+
+			var readiness = JsonSerializer.Deserialize<RunPayrollReadinessSummary>(body, JsonOptions)!;
+			readiness.CanLock.ShouldBeFalse();
+			readiness.PolicyConfigurationIssueCount.ShouldBeGreaterThan(0);
+			readiness.BlockingIssues.ShouldContain("PAYROLL_POLICY_CONFIGURATION");
+			readiness.RecommendedActions.ShouldContain("fix-payroll-policy");
+
+			var previewResponse = await Client.GetAsync($"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=false");
+			var previewBody = await previewResponse.Content.ReadAsStringAsync();
+			previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, previewBody);
+
+			var preview = JsonSerializer.Deserialize<RunPayrollResponse>(previewBody, JsonOptions)!;
+			preview.Readiness.CanLock.ShouldBeFalse();
+			preview.Readiness.PolicyConfigurationIssueCount.ShouldBeGreaterThan(0);
+			preview.Readiness.BlockingIssues.ShouldContain("PAYROLL_POLICY_CONFIGURATION");
+		}
+		finally
+		{
+			await RestoreDefaultPayrollPolicyAsync(defaultPayrollPolicyId);
+			await RestorePolicyAssignmentsAsync(disabledAssignmentIds);
+		}
 	}
 
 	[Fact]
@@ -318,6 +645,28 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
+	private async Task CorruptPayrollSnapshotBasisAsync(Guid employeeId, string monthYear)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var snapshotRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var query = await snapshotRepository.GetQueryableAsync();
+			var snapshot = query.Single(x => x.MonthYear == monthYear && x.EmployeeId == employeeId);
+			snapshot.BasisDays = 0m;
+			snapshot.TotalWorkingDays = 0m;
+			snapshot.PayableDays = 0m;
+			snapshot.PayableUnits = 0m;
+			await snapshotRepository.UpdateAsync(snapshot, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
 	private async Task SetEmployeeStatusAsync(Guid employeeId, int status, DateOnly effectiveDate)
 	{
 		var response = await Client.PutAsJsonAsync(
@@ -330,6 +679,154 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			},
 			JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	private async Task AssignSalaryStructureAsync(Guid employeeId, string suffix)
+	{
+		var detailsResponse = await Client.PutAsJsonAsync(
+			$"/api/employees/{employeeId}/payroll",
+			new PayrollContract
+			{
+				BankDetails = new BankDetailsContract
+				{
+					BankName = "State Bank of India",
+					BranchName = "Main Branch",
+					AccountHolderName = "Payroll Test Employee",
+					AccountNumber = $"9{Math.Abs(employeeId.GetHashCode()):D9}",
+					IfscCode = "SBIN0001234"
+				},
+				SalaryDetails = new SalaryDetailsContract
+				{
+					TotalWorkingHourPerMonth = 160m,
+					PunchId = suffix
+				}
+			},
+			JsonOptions);
+		var detailsBody = await detailsResponse.Content.ReadAsStringAsync();
+		detailsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, detailsBody);
+
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, $"{suffix}Earn");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, $"{suffix}Ded");
+		var response = await Client.PutAsJsonAsync(
+			$"/api/payroll/employees/{employeeId}/salary-structure",
+			new UpdateSalaryStructureDto
+			{
+				EarningComponents =
+				[
+					new SalaryComponentDto
+					{
+						ComponentId = earningComponent.Id,
+						Name = earningComponent.Name,
+						Amount = 25000m,
+						IsFixed = true,
+						IsTemp = false,
+						ApplicableMonth = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)
+					}
+				],
+				DeductionComponents =
+				[
+					new SalaryComponentDto
+					{
+						ComponentId = deductionComponent.Id,
+						Name = deductionComponent.Name,
+						Amount = 1000m,
+						IsFixed = true,
+						IsTemp = false,
+						ApplicableMonth = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)
+					}
+				]
+			},
+			JsonOptions);
+
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+	}
+
+	private async Task MarkAttendanceAsync(Guid employeeId, string attendanceDate)
+	{
+		var response = await Client.PostAsJsonAsync(
+			"/api/hr/attendance/take-attendance/day/save",
+			new TakeAttendanceSaveInput
+			{
+				AttendanceDate = attendanceDate,
+				Entries =
+				[
+					new TakeAttendanceSaveEntryDto
+					{
+						EmployeeId = employeeId,
+						StatusWire = "PRESENT",
+						Remarks = "Payroll lock setup"
+					}
+				]
+			},
+			JsonOptions);
+
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+	}
+
+	private async Task SeedLegacyAttendanceOnDateAsync(Guid employeeId, DateOnly attendanceDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await attendanceRepository.InsertAsync(new EmployeeAttendance
+			{
+				TenantId = tenantId,
+				EmployeeId = employeeId,
+				AttendanceDate = attendanceDate,
+				EducationMediumStageId = EmployeeTestHelper.DefaultMediumStageId,
+				StatusType = EmployeeAttendanceStatusType.Present,
+				Remarks = "Legacy holiday attendance row"
+			}, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task ClearStatusEffectiveDateAsync(Guid employeeId, DateTimeOffset statusLastChangedAt)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var employeeRepository = scope.ServiceProvider.GetRequiredService<IRepository<Employee, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var employee = await employeeRepository.GetAsync(employeeId);
+			typeof(Employee).GetProperty(nameof(Employee.StatusEffectiveDate))!.SetValue(employee, null);
+			typeof(Employee).GetProperty(nameof(Employee.StatusLastChangedAt))!.SetValue(employee, statusLastChangedAt);
+			await employeeRepository.UpdateAsync(employee, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task AssertAttendanceStagePersistedAsync(Guid employeeId, DateOnly attendanceDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var query = await attendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x =>
+				x.EmployeeId == employeeId &&
+				x.AttendanceDate == attendanceDate);
+
+			attendance.EducationMediumStageId.ShouldBe(EmployeeTestHelper.DefaultMediumStageId);
+			await uow.CompleteAsync();
+		}
 	}
 
 	private async Task AssertNoStalePayrollRowsAsync(Guid employeeId, string monthYear)
@@ -352,6 +849,130 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			snapshots.Any(x => x.MonthYear == monthYear && x.EmployeeId == employeeId).ShouldBeFalse();
 			reviews.Any(x => x.MonthYear == monthYear && x.EmployeeId == employeeId).ShouldBeFalse();
 			adjustments.Any(x => x.MonthYear == monthYear && x.EmployeeId == employeeId).ShouldBeFalse();
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<Guid> ClearDefaultPayrollPolicyForMonthAsync(DateTime monthDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x =>
+				x.StartDate <= monthDate &&
+				x.EndDate >= monthDate);
+			var payrollPolicyQuery = await payrollPolicyRepository.GetQueryableAsync();
+			var defaultPolicy = payrollPolicyQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+
+			defaultPolicy.SetDefault(false);
+			await payrollPolicyRepository.UpdateAsync(defaultPolicy, autoSave: false);
+			await uow.CompleteAsync();
+			return defaultPolicy.Id;
+		}
+	}
+
+	private async Task<List<Guid>> DisablePolicyAssignmentsForMonthAsync(DateTime monthDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x =>
+				x.StartDate <= monthDate &&
+				x.EndDate >= monthDate);
+			var assignmentQuery = await assignmentRepository.GetQueryableAsync();
+			var assignments = assignmentQuery
+				.Where(x =>
+					x.AcademicYearId == academicYear.Id &&
+					x.IsActive &&
+					x.EffectiveFrom <= monthDate &&
+					(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= monthDate))
+				.ToList();
+
+			foreach (var assignment in assignments)
+			{
+				assignment.Update(
+					assignment.AttendancePolicyId,
+					assignment.PayrollPolicyId,
+					assignment.EffectiveFrom,
+					assignment.EffectiveTo,
+					isActive: false,
+					assignment.Priority,
+					assignment.AssignmentReason);
+				await assignmentRepository.UpdateAsync(assignment, autoSave: false);
+			}
+
+			await uow.CompleteAsync();
+			return assignments.Select(x => x.Id).ToList();
+		}
+	}
+
+	private async Task RestoreDefaultPayrollPolicyAsync(Guid payrollPolicyId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var policy = await payrollPolicyRepository.GetAsync(payrollPolicyId);
+			policy.SetDefault(true);
+			await payrollPolicyRepository.UpdateAsync(policy, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task RestorePolicyAssignmentsAsync(List<Guid> assignmentIds)
+	{
+		if (assignmentIds.Count == 0)
+		{
+			return;
+		}
+
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			foreach (var assignmentId in assignmentIds)
+			{
+				var assignment = await assignmentRepository.GetAsync(assignmentId);
+				assignment.Update(
+					assignment.AttendancePolicyId,
+					assignment.PayrollPolicyId,
+					assignment.EffectiveFrom,
+					assignment.EffectiveTo,
+					isActive: true,
+					assignment.Priority,
+					assignment.AssignmentReason);
+				await assignmentRepository.UpdateAsync(assignment, autoSave: false);
+			}
+
 			await uow.CompleteAsync();
 		}
 	}

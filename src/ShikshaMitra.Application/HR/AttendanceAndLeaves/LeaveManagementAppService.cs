@@ -507,9 +507,7 @@ public class LeaveManagementAppService(
 		var targetId = forEmployeeId ?? actorContext.ActorEmployeeId;
 		if (!targetId.HasValue)
 		{
-			// Some privileged users may not have a linked employee record.
-			// In that case, no target can be resolved unless an explicit employee id is supplied.
-			return new LeaveBalanceListDto { Items = [] };
+			throw new BusinessException(HRErrorCodes.LeaveTargetEmployeeRequired);
 		}
 
 		await EnsureActorCanAccessEmployeeAsync(targetId.Value);

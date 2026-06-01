@@ -67,10 +67,10 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		}
 
 		attendanceQuery = attendanceQuery.Where(a => a.EducationMediumStageId == input.EducationMediumStageId);
-		var attendanceEmployeeIdsForDate = attendanceQuery
+		var attendanceEmployeeIdsForDate = await AsyncExecuter.ToListAsync(attendanceQuery
 			.Where(a => a.AttendanceDate == targetDateOnly)
 			.Select(a => a.EmployeeId)
-			.Distinct();
+			.Distinct());
 
 		// Get all employees with attendance for this date
 		var attendanceData = from a in attendanceQuery
@@ -99,14 +99,16 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		var targetDateStart = new DateTimeOffset(targetDate.Date, TimeSpan.Zero);
 		var targetDateEnd = targetDateStart.AddDays(1).AddTicks(-1);
 
-		var rejectedLeaveEmployeeIds = await AsyncExecuter.ToListAsync(
+		var rejectedLeaveCandidates = await AsyncExecuter.ToListAsync(
 			leaveQuery.Where(l =>
 				l.Status == EmployeeLeaveStatusType.Rejected &&
-				l.StartDate <= targetDateEnd &&
-				l.EndDate >= targetDateStart &&
 				attendanceEmployeeIdsForDate.Contains(l.EmployeeId))
+			.Select(l => new { l.EmployeeId, l.StartDate, l.EndDate }));
+		var rejectedLeaveEmployeeIds = rejectedLeaveCandidates
+			.Where(l => l.StartDate <= targetDateEnd && l.EndDate >= targetDateStart)
 			.Select(l => l.EmployeeId)
-			.Distinct());
+			.Distinct()
+			.ToList();
 
 		// Apply status filter if specified
 		if (input.Status.HasValue)
@@ -227,13 +229,13 @@ public class AttendanceTrackingAppService : ApplicationService, IAttendanceTrack
 		var startDateTime = new DateTimeOffset(startDate.Date, TimeSpan.Zero);
 		var endDateTime = new DateTimeOffset(endDate.Date.AddDays(1).AddTicks(-1), TimeSpan.Zero);
 
-		var rejectedLeaves = await AsyncExecuter.ToListAsync(
+		var rejectedLeaves = (await AsyncExecuter.ToListAsync(
 			leaveQuery
 				.Where(l =>
 					l.EmployeeId == input.EmployeeId &&
-					l.Status == EmployeeLeaveStatusType.Rejected &&
-					l.StartDate <= endDateTime &&
-					l.EndDate >= startDateTime));
+					l.Status == EmployeeLeaveStatusType.Rejected)))
+			.Where(l => l.StartDate <= endDateTime && l.EndDate >= startDateTime)
+			.ToList();
 
 		// Build items for each day in the range
 		var items = new List<AttendanceEmployeeWiseItem>();

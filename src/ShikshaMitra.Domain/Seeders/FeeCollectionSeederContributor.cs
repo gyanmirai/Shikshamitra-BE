@@ -200,6 +200,17 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
         var monthlyAmount = AnnualTuitionFee / monthRange.Count;
 
         var studentsWithNewDueFees = new List<Student>();
+        var enrolledStudentIds = enrolledStudents.Select(x => x.Id).ToList();
+        var assignedStudentIds = (await _studentFeeStructureRepository.GetListAsync(
+                sfs => enrolledStudentIds.Contains(sfs.StudentId)))
+            .Select(x => x.StudentId)
+            .ToHashSet();
+        var studentsWithExistingDueFees = (await _dueFeeRepository.GetListAsync(
+                dueFee => enrolledStudentIds.Contains(dueFee.StudentId)))
+            .Select(x => x.StudentId)
+            .ToHashSet();
+        var studentFeeStructuresToInsert = new List<StudentFeeStructure>();
+        var dueFeesToInsert = new List<DueFee>();
 
         foreach (var student in enrolledStudents)
         {
@@ -208,22 +219,19 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 continue;   // student's standard has no seed fee structure
 
             // Create StudentFeeStructure assignment (idempotent check inside)
-            var existingAssignment = await _studentFeeStructureRepository
-                .FirstOrDefaultAsync(sfs => sfs.StudentId == student.Id);
-
-            if (existingAssignment is null)
+            if (!assignedStudentIds.Contains(student.Id))
             {
-                await _studentFeeStructureRepository.InsertAsync(
+                studentFeeStructuresToInsert.Add(
                     new StudentFeeStructure(
                         id:                     GuidGenerator.Create(),
                         tenantId:               CurrentTenant.Id,
                         studentId:              student.Id,
-                        feeStructureStandardId: feeStructure.Id),
-                    autoSave: false);
+                        feeStructureStandardId: feeStructure.Id));
+                assignedStudentIds.Add(student.Id);
             }
 
             // Skip DueFee generation if any already exist (e.g. from FeeRefundSeeder)
-            if (await _dueFeeRepository.ExistsForStudentAsync(student.Id))
+            if (studentsWithExistingDueFees.Contains(student.Id))
                 continue;
 
             // Monthly tuition DueFees
@@ -248,8 +256,19 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 isOneTime: true,
                 amount:    DevFeeAmount));
 
-            await _dueFeeRepository.InsertManyAsync(dueFees, autoSave: true);
+            dueFeesToInsert.AddRange(dueFees);
+            studentsWithExistingDueFees.Add(student.Id);
             studentsWithNewDueFees.Add(student);
+        }
+
+        if (studentFeeStructuresToInsert.Count > 0)
+        {
+            await _studentFeeStructureRepository.InsertManyAsync(studentFeeStructuresToInsert, autoSave: false);
+        }
+
+        if (dueFeesToInsert.Count > 0)
+        {
+            await _dueFeeRepository.InsertManyAsync(dueFeesToInsert, autoSave: false);
         }
 
         await CurrentUnitOfWork.SaveChangesAsync();

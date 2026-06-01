@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20260530055959_v1")]
+    [Migration("20260530184941_v1")]
     partial class v1
     {
         /// <inheritdoc />
@@ -9395,6 +9395,83 @@ namespace ShikshaMitra.Migrations
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("UserScopeAssignments", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Seeders.SeedExecutionMarker", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<long?>("ElapsedMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Profile")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SeederName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "SeederName", "Version", "Profile")
+                        .IsUnique()
+                        .HasDatabaseName("IX_SeedExecutionMarkers_Tenant_Seeder_Version_Profile");
+
+                    b.ToTable("AppSeedExecutionMarkers", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>

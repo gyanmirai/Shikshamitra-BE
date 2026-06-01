@@ -16,11 +16,56 @@ namespace ShikshaMitra.Controllers.HR.Reports;
 [Authorize]
 public class HrReportController(IHrReportAppService reportAppService) : AbpControllerBase
 {
+	[HttpGet("sources")]
+	[ProducesResponseType(typeof(HrReportSourcesDto), StatusCodes.Status200OK)]
+	public Task<HrReportSourcesDto> GetSourcesAsync()
+	{
+		return reportAppService.GetSourcesAsync();
+	}
+
 	[HttpGet("options")]
 	[ProducesResponseType(typeof(HrReportOptionsDto), StatusCodes.Status200OK)]
 	public Task<HrReportOptionsDto> GetOptionsAsync()
 	{
 		return reportAppService.GetOptionsAsync();
+	}
+
+	[HttpGet("templates")]
+	[ProducesResponseType(typeof(HrReportTemplateListDto), StatusCodes.Status200OK)]
+	public Task<HrReportTemplateListDto> GetTemplatesAsync()
+	{
+		return reportAppService.GetTemplatesAsync();
+	}
+
+	[HttpPost("templates")]
+	[ProducesResponseType(typeof(HrReportTemplateDto), StatusCodes.Status201Created)]
+	public async Task<IActionResult> CreateTemplateAsync([FromBody] HrReportTemplateRequestDto input)
+	{
+		var template = await reportAppService.CreateTemplateAsync(input);
+		return Created($"api/hr/reports/templates/{template.Id}", template);
+	}
+
+	[HttpPut("templates/{id:guid}")]
+	[ProducesResponseType(typeof(HrReportTemplateDto), StatusCodes.Status200OK)]
+	public Task<HrReportTemplateDto> UpdateTemplateAsync(Guid id, [FromBody] HrReportTemplateRequestDto input)
+	{
+		return reportAppService.UpdateTemplateAsync(id, input);
+	}
+
+	[HttpPost("templates/{id:guid}/duplicate")]
+	[ProducesResponseType(typeof(HrReportTemplateDto), StatusCodes.Status201Created)]
+	public async Task<IActionResult> DuplicateTemplateAsync(Guid id)
+	{
+		var template = await reportAppService.DuplicateTemplateAsync(id);
+		return Created($"api/hr/reports/templates/{template.Id}", template);
+	}
+
+	[HttpDelete("templates/{id:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public async Task<IActionResult> DeleteTemplateAsync(Guid id)
+	{
+		await reportAppService.DeleteTemplateAsync(id);
+		return NoContent();
 	}
 
 	[HttpPost("preview")]

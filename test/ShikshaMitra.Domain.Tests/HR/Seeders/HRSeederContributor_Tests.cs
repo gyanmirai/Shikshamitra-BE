@@ -99,4 +99,84 @@ public class HRSeederContributor_Tests
 
 		HRSeederContributor.ResolvePastAttendanceMonthsToSeed(config).ShouldBe(4);
 	}
+
+	[Fact]
+	public void Performance_Management_Demo_Seed_Should_Default_On_For_Demo_Profiles()
+	{
+		var config = new ConfigurationBuilder()
+			.AddInMemoryCollection(new Dictionary<string, string?>
+			{
+				[ShikshaMitraSeederProfile.ContextPropertyName] = ShikshaMitraSeederProfile.FastDemo
+			})
+			.Build();
+
+		HRSeederContributor.ResolveShouldSeedPerformanceManagementDemoData(config).ShouldBeTrue();
+	}
+
+	[Fact]
+	public void Performance_Management_Demo_Seed_Should_Default_Off_For_Minimal_Profile()
+	{
+		var config = new ConfigurationBuilder()
+			.AddInMemoryCollection(new Dictionary<string, string?>
+			{
+				[ShikshaMitraSeederProfile.ContextPropertyName] = ShikshaMitraSeederProfile.Minimal
+			})
+			.Build();
+
+		HRSeederContributor.ResolveShouldSeedPerformanceManagementDemoData(config).ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Performance_Management_Demo_Seed_Should_Respect_Explicit_Config()
+	{
+		var config = new ConfigurationBuilder()
+			.AddInMemoryCollection(new Dictionary<string, string?>
+			{
+				[ShikshaMitraSeederProfile.ContextPropertyName] = ShikshaMitraSeederProfile.Minimal,
+				["ShikshaMitra:Seeders:HR:SeedPerformanceManagementDemoData"] = "true"
+			})
+			.Build();
+
+		HRSeederContributor.ResolveShouldSeedPerformanceManagementDemoData(config).ShouldBeTrue();
+	}
+
+	[Fact]
+	public void Attendance_Seed_Should_Skip_Weekends_And_Holidays()
+	{
+		var holidays = HRSeederContributor.BuildSeedHolidayDateSet(
+			[
+				new HRSeederContributor.SeedHolidayDateRange(
+					new DateOnly(2026, 5, 1),
+					new DateOnly(2026, 5, 31))
+			],
+			new DateOnly(2026, 5, 1),
+			new DateOnly(2026, 5, 31));
+
+		HRSeederContributor.ShouldSeedAttendanceForDate(new DateOnly(2026, 5, 4), holidays).ShouldBeFalse();
+		HRSeederContributor.ShouldSeedAttendanceForDate(new DateOnly(2026, 5, 9), holidays).ShouldBeFalse();
+		HRSeederContributor.ShouldSeedAttendanceForDate(new DateOnly(2026, 4, 30), holidays).ShouldBeTrue();
+	}
+
+	[Fact]
+	public void Holiday_Date_Set_Should_Clamp_Seed_Ranges_To_Attendance_Window()
+	{
+		var holidays = HRSeederContributor.BuildSeedHolidayDateSet(
+			[
+				new HRSeederContributor.SeedHolidayDateRange(
+					new DateOnly(2026, 4, 28),
+					new DateOnly(2026, 5, 3)),
+				new HRSeederContributor.SeedHolidayDateRange(
+					new DateOnly(2026, 6, 1),
+					new DateOnly(2026, 6, 5))
+			],
+			new DateOnly(2026, 5, 1),
+			new DateOnly(2026, 5, 31));
+
+		holidays.Count.ShouldBe(3);
+		holidays.ShouldContain(new DateOnly(2026, 5, 1));
+		holidays.ShouldContain(new DateOnly(2026, 5, 2));
+		holidays.ShouldContain(new DateOnly(2026, 5, 3));
+		holidays.ShouldNotContain(new DateOnly(2026, 4, 30));
+		holidays.ShouldNotContain(new DateOnly(2026, 6, 1));
+	}
 }

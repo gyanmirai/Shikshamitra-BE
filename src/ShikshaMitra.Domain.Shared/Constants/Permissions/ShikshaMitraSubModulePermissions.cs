@@ -78,6 +78,8 @@ public static class ShikshaMitraSubModulePermissions
 	public const string FinanceSettingsExpenseCategory = $"{ShikshaMitraModulePermissions.Finance}.Settings.ExpenseCategory";
 	public const string FinanceSettingsIncomeCategory = $"{ShikshaMitraModulePermissions.Finance}.Settings.IncomeCategory";
 	public const string FinanceSettingsBankAccount = $"{ShikshaMitraModulePermissions.Finance}.Settings.BankAccount";
+	public const string FinanceAuditing = $"{ShikshaMitraModulePermissions.Finance}.Auditing";
+	public const string FinanceAdjustment = $"{ShikshaMitraModulePermissions.Finance}.Adjustment";
 
 	// Communication module submodules
 	public const string CommunicationDashboard = $"{ShikshaMitraModulePermissions.Communication}.Dashboard";
@@ -233,6 +235,8 @@ public static class ShikshaMitraSubModulePermissions
 		FinanceSettingsExpenseCategory,
 		FinanceSettingsIncomeCategory,
 		FinanceSettingsBankAccount,
+		FinanceAuditing,
+		FinanceAdjustment,
 		CommunicationDashboard,
 		Announcements,
 		CommunicationNotification,
@@ -382,6 +386,8 @@ public static class ShikshaMitraSubModulePermissions
 		{ FinanceSettingsExpenseCategory, $"{DisplayNamePrefix}.FinanceSettingsExpenseCategory" },
 		{ FinanceSettingsIncomeCategory, $"{DisplayNamePrefix}.FinanceSettingsIncomeCategory" },
 		{ FinanceSettingsBankAccount, $"{DisplayNamePrefix}.FinanceSettingsBankAccount" },
+		{ FinanceAuditing, $"{DisplayNamePrefix}.FinanceAuditing" },
+		{ FinanceAdjustment, $"{DisplayNamePrefix}.FinanceAdjustment" },
 
 		// Communication module submodules
 		{ CommunicationDashboard, $"{DisplayNamePrefix}.CommunicationDashboard" },

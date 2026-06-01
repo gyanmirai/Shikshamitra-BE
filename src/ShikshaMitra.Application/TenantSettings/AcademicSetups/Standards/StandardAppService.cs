@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
@@ -17,7 +18,8 @@ namespace ShikshaMitra.TenantSettings.Standards;
 public class StandardAppService(
 	IStandardRepository standardRepository,
 	IEducationMediumStageRepository educationMediumRepository,
-	StandardManager standardManager) : CrudAppService<
+	StandardManager standardManager,
+	IUserScopeService userScopeService) : CrudAppService<
 	Standard,
 	StandardDto,
 	Guid,
@@ -78,6 +80,21 @@ public class StandardAppService(
 		}
 
 		standards = standards.OrderBy(x => x.CreationTime).ToList();
+
+		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id!.Value);
+		if (!scope.IsAdmin && !scope.HasTenantWideScope())
+		{
+			standards = standards.Where(s =>
+			{
+				bool stdFullAccess = scope.WildcardDivisionStandardIds.Contains(s.Id);
+				bool stdVisible = stdFullAccess || scope.StandardIds.Contains(s.Id);
+				if (!stdVisible)
+					return false;
+				if (!stdFullAccess)
+					s.Divisions = s.Divisions?.Where(d => scope.DivisionIds.Contains(d.Id)).ToList() ?? [];
+				return true;
+			}).ToList();
+		}
 
 		return ObjectMapper.Map<List<Standard>, List<StandardDto>>(standards);
 	}

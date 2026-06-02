@@ -35,17 +35,16 @@ internal static class EducationBoardScopeFilter
                 scope.WildcardBoardAcademicYearIds.Contains(board.AcademicYearId)
                 || scope.WildcardMediumBoardIds.Contains(board.Id);
 
-            // Board is visible at all if full access OR user has an explicit assignment for it
-            bool boardVisible = boardFullAccess || scope.BoardIds.Contains(board.Id);
-
-            if (!boardVisible)
-                continue;
-
             if (boardFullAccess)
             {
                 result.Add(board);
                 continue;
             }
+
+            // No early-exit visibility check here — a user with a standard-level assignment
+            // (boardId=null in their UserScopeAssignment) won't have BoardIds populated, but
+            // the board must still be traversed so we can find their accessible standards.
+            // Boards are kept only if at least one medium survives the pruning below.
 
             // Prune mediums
             var filteredMediums = new List<EducationMediumDto>(board.EducationMediums?.Count ?? 0);
@@ -54,11 +53,6 @@ internal static class EducationBoardScopeFilter
             {
                 // Full medium access = user can see ALL stages (and lower) under this medium
                 bool mediumFullAccess = scope.WildcardMediumStageMediumIds.Contains(medium.Id);
-
-                bool mediumVisible = mediumFullAccess || scope.MediumIds.Contains(medium.Id);
-
-                if (!mediumVisible)
-                    continue;
 
                 if (mediumFullAccess)
                 {
@@ -73,11 +67,6 @@ internal static class EducationBoardScopeFilter
                 {
                     // Full stage access = user can see ALL standards (and lower) under this stage
                     bool stageFullAccess = scope.WildcardStandardMediumStageIds.Contains(stage.Id);
-
-                    bool stageVisible = stageFullAccess || scope.MediumStageIds.Contains(stage.Id);
-
-                    if (!stageVisible)
-                        continue;
 
                     if (stageFullAccess)
                     {

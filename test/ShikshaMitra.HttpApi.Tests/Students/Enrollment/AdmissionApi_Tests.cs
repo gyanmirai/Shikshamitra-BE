@@ -49,6 +49,11 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
             .ReadFromJsonAsync<PagedResultDto<StudentDto>>(JsonOptions);
         body.ShouldNotBeNull();
         body.Items.ShouldNotBeNull();
+        foreach (var item in body.Items)
+        {
+            // Contract includes fee-structure assignment flag (defaults to false when unset)
+            _ = item.IsFeeStructureAssigned;
+        }
     }
 
     [Fact]

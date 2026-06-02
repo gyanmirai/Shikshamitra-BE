@@ -52,6 +52,12 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
         body.ShouldNotBeNull();
         body.Items.ShouldNotBeNull();
         body.TotalCount.ShouldBeGreaterThanOrEqualTo(0);
+        foreach (var item in body.Items)
+        {
+            item.TotalCharges.ShouldBeGreaterThanOrEqualTo(0);
+            item.PendingCharges.ShouldBeGreaterThanOrEqualTo(0);
+            item.PendingCharges.ShouldBeLessThanOrEqualTo(item.TotalCharges);
+        }
     }
 
     [Fact]

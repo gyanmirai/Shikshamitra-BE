@@ -45,6 +45,16 @@ public class FeeCollectionSummaryItemDtoV2
 	public double OverdueFees { get; set; }
 
 	/// <summary>
+	/// Sum of approved charge amounts for the student in the requested academic year.
+	/// </summary>
+	public double TotalCharges { get; set; }
+
+	/// <summary>
+	/// Sum of unpaid approved charge balances (amount minus collected, excluding reversed payments).
+	/// </summary>
+	public double PendingCharges { get; set; }
+
+	/// <summary>
 	/// Computed fee status.
 	/// <list type="bullet">
 	///   <item><c>Paid</c> — PendingFees = 0 and OverdueFees = 0</item>

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
+using ShikshaMitra.Finance.Accounts;
 using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
 using Volo.Abp;
@@ -16,7 +16,7 @@ public class ExpenseCategoryController(ITransactionCategoryAppService expenseCat
 	[HttpPost]
 	public Task<TransactionCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateTransactionCategoryRequest input)
 	{
-		return expenseCategoryAppService.CreateAsync(academicYearId, input);
+		return expenseCategoryAppService.CreateAsync(academicYearId, input, TransactionType.Expense);
 	}
 
 	[HttpGet]
@@ -26,24 +26,24 @@ public class ExpenseCategoryController(ITransactionCategoryAppService expenseCat
 		[FromQuery] int pageSize = 10,
 		[FromQuery] string? search = null)
 	{
-		return expenseCategoryAppService.GetListAsync(academicYearId, page, pageSize, search);
+		return expenseCategoryAppService.GetListAsync(academicYearId, TransactionType.Expense, page, pageSize, search);
 	}
 
 	[HttpGet("{expenseCategoryId}")]
 	public Task<TransactionCategoryResponse> GetAsync(Guid expenseCategoryId)
 	{
-		return expenseCategoryAppService.GetAsync(expenseCategoryId);
+		return expenseCategoryAppService.GetAsync(expenseCategoryId, TransactionType.Expense);
 	}
 
 	[HttpPut("{expenseCategoryId}")]
 	public Task<TransactionCategoryResponse> UpdateAsync(Guid expenseCategoryId, [FromBody] UpdateTransactionCategoryRequest input)
 	{
-		return expenseCategoryAppService.UpdateAsync(expenseCategoryId, input);
+		return expenseCategoryAppService.UpdateAsync(expenseCategoryId, input, TransactionType.Expense);
 	}
 
 	[HttpDelete("{expenseCategoryId}")]
 	public Task DeleteAsync(Guid expenseCategoryId)
 	{
-		return expenseCategoryAppService.DeleteAsync(expenseCategoryId);
+		return expenseCategoryAppService.DeleteAsync(expenseCategoryId, TransactionType.Expense);
 	}
 }

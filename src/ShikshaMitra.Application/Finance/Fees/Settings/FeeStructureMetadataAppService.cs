@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -18,6 +19,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 [RemoteService(false)]
 public class FeeStructureMetadataAppService(
 	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
+	IRepository<FeeStructure, Guid> feeStructureRepository,
 	IAcademicYearRepository academicYearRepository,
 	IEducationBoardRepository educationBoardRepository,
 	IGuidGenerator guidGenerator
@@ -50,7 +52,22 @@ public class FeeStructureMetadataAppService(
 				Items = new List<FeeStructureDetailsResponse>()
 			};
 
-		var responseItems = items.ToDetailsResponseList();
+		var metadataIds = items.Select(x => x.Id).ToList();
+
+		var feeStructures = await AsyncExecuter.ToListAsync(
+			(await feeStructureRepository.WithDetailsAsync(x => x.FeeStructureDetails))
+				.Where(x => metadataIds.Contains(x.FeeStructureMetadataId)));
+
+		var counts = feeStructures
+			.GroupBy(x => x.FeeStructureMetadataId)
+			.ToDictionary(
+				g => g.Key,
+				g => (
+					TotalClasses: g.Count(),
+					TotalFeeHeads: g.SelectMany(x => x.FeeStructureDetails).Select(d => d.FeeHeadId).Distinct().Count()
+				));
+
+		var responseItems = items.ToDetailsResponseList(counts);
 
 		return new FeeStructureMetadataListResponse
 		{

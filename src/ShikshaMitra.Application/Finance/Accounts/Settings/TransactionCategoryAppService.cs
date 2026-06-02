@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
-using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts;
 using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
 
 namespace ShikshaMitra.Finance.Accounts.Settings;
@@ -21,29 +21,28 @@ public class TransactionCategoryAppService : ApplicationService, ITransactionCat
 		_transactionCategoryRepository = transactionCategoryRepository;
 	}
 
-	public async Task<TransactionCategoryResponse> CreateAsync(Guid academicYearId, CreateTransactionCategoryRequest input)
+	public async Task<TransactionCategoryResponse> CreateAsync(Guid academicYearId, CreateTransactionCategoryRequest input, TransactionType categoryType)
 	{
-		var tags = input.Tags != null && input.Tags.Any() ? string.Join(",", input.Tags) : null;
-
-		var incomeCategory = new TransactionCategory(
+		var category = new TransactionCategory(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			academicYearId,
+			categoryType,
 			input.Name,
 			input.Description,
 			input.Tags
 		);
 
-		await _transactionCategoryRepository.InsertAsync(incomeCategory);
+		await _transactionCategoryRepository.InsertAsync(category);
 
-		return MapToResponse(incomeCategory);
+		return MapToResponse(category);
 	}
 
-	public async Task<PaginatedTransactionCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
+	public async Task<PaginatedTransactionCategoryResponse> GetListAsync(Guid academicYearId, TransactionType categoryType, int page = 1, int pageSize = 10, string? search = null)
 	{
 		var query = await _transactionCategoryRepository.GetQueryableAsync();
 
-		query = query.Where(x => x.AcademicYearId == academicYearId);
+		query = query.Where(x => x.AcademicYearId == academicYearId && (x.CategoryType == null || x.CategoryType == categoryType));
 
 		if (!search.IsNullOrWhiteSpace())
 		{
@@ -71,32 +70,45 @@ public class TransactionCategoryAppService : ApplicationService, ITransactionCat
 		};
 	}
 
-	public async Task<TransactionCategoryResponse> GetAsync(Guid id)
+	public async Task<TransactionCategoryResponse> GetAsync(Guid id, TransactionType categoryType)
 	{
-		var incomeCategory = await _transactionCategoryRepository.GetAsync(id);
-		return MapToResponse(incomeCategory);
+		var category = await _transactionCategoryRepository.GetAsync(id);
+		EnsureCategoryType(category, categoryType);
+		return MapToResponse(category);
 	}
 
-	public async Task<TransactionCategoryResponse> UpdateAsync(Guid id, UpdateTransactionCategoryRequest input)
+	public async Task<TransactionCategoryResponse> UpdateAsync(Guid id, UpdateTransactionCategoryRequest input, TransactionType categoryType)
 	{
-		var incomeCategory = await _transactionCategoryRepository.GetAsync(id);
+		var category = await _transactionCategoryRepository.GetAsync(id);
+		EnsureCategoryType(category, categoryType);
 
-		incomeCategory.Name = input.Name;
-		incomeCategory.Description = input.Description;
-		incomeCategory.ClearTags();
+		category.Name = input.Name;
+		category.Description = input.Description;
+		category.ClearTags();
 		foreach (var tag in input.Tags)
 		{
-			incomeCategory.AddTag(tag);
+			category.AddTag(tag);
 		}
 
-		await _transactionCategoryRepository.UpdateAsync(incomeCategory);
+		await _transactionCategoryRepository.UpdateAsync(category);
 
-		return MapToResponse(incomeCategory);
+		return MapToResponse(category);
 	}
 
-	public async Task DeleteAsync(Guid id)
+	public async Task DeleteAsync(Guid id, TransactionType categoryType)
 	{
-		await _transactionCategoryRepository.DeleteAsync(id);
+		var category = await _transactionCategoryRepository.GetAsync(id);
+		EnsureCategoryType(category, categoryType);
+		await _transactionCategoryRepository.DeleteAsync(category);
+	}
+
+	private static void EnsureCategoryType(TransactionCategory category, TransactionType expected)
+	{
+		if (category.CategoryType.HasValue && category.CategoryType.Value != expected)
+			throw new BusinessException("ShikshaMitra:TransactionCategoryTypeMismatch")
+				.WithData("CategoryId", category.Id)
+				.WithData("Expected", expected)
+				.WithData("Actual", category.CategoryType);
 	}
 
 	private TransactionCategoryResponse MapToResponse(TransactionCategory entity)

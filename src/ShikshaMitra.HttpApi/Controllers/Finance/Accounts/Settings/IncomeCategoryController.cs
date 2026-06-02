@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Finance.Accounts;
 using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
 using Volo.Abp;
@@ -14,7 +15,7 @@ public class IncomeCategoryController(ITransactionCategoryAppService incomeCateg
 	[HttpPost]
 	public Task<TransactionCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateTransactionCategoryRequest input)
 	{
-		return incomeCategoryAppService.CreateAsync(academicYearId, input);
+		return incomeCategoryAppService.CreateAsync(academicYearId, input, TransactionType.Income);
 	}
 
 	[HttpGet]
@@ -24,24 +25,24 @@ public class IncomeCategoryController(ITransactionCategoryAppService incomeCateg
 		[FromQuery] int pageSize = 10,
 		[FromQuery] string? search = null)
 	{
-		return incomeCategoryAppService.GetListAsync(academicYearId, page, pageSize, search);
+		return incomeCategoryAppService.GetListAsync(academicYearId, TransactionType.Income, page, pageSize, search);
 	}
 
 	[HttpGet("{incomeCategoryId}")]
 	public Task<TransactionCategoryResponse> GetAsync(Guid incomeCategoryId)
 	{
-		return incomeCategoryAppService.GetAsync(incomeCategoryId);
+		return incomeCategoryAppService.GetAsync(incomeCategoryId, TransactionType.Income);
 	}
 
 	[HttpPut("{incomeCategoryId}")]
 	public Task<TransactionCategoryResponse> UpdateAsync(Guid incomeCategoryId, [FromBody] UpdateTransactionCategoryRequest input)
 	{
-		return incomeCategoryAppService.UpdateAsync(incomeCategoryId, input);
+		return incomeCategoryAppService.UpdateAsync(incomeCategoryId, input, TransactionType.Income);
 	}
 
 	[HttpDelete("{incomeCategoryId}")]
 	public Task DeleteAsync(Guid incomeCategoryId)
 	{
-		return incomeCategoryAppService.DeleteAsync(incomeCategoryId);
+		return incomeCategoryAppService.DeleteAsync(incomeCategoryId, TransactionType.Income);
 	}
 }

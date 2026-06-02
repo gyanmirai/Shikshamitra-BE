@@ -292,7 +292,20 @@ public class ExamSeatAllocationAppService(
 
         // Allocations per exam
         var allocCounts = await seatAllocationRepository.GetListAsync(a => examIds.Contains(a.ExamId));
-        var allocByExam = allocCounts.GroupBy(a => a.ExamId).ToDictionary(g => g.Key, g => g.Count());
+
+        // When IsRoomAssigned=true, restrict the exam list to only those with at least one
+        // room-assigned allocation, and count only room-assigned allocations.
+        var roomAssignedFilter = input.IsRoomAssigned == true;
+        var relevantAllocs = roomAssignedFilter
+            ? allocCounts.Where(a => a.IsRoomAssign).ToList()
+            : allocCounts;
+        var examsWithRoomAssign = roomAssignedFilter
+            ? relevantAllocs.Select(a => a.ExamId).ToHashSet()
+            : null;
+        if (examsWithRoomAssign != null)
+            allExamsWithDetails = allExamsWithDetails.Where(e => examsWithRoomAssign.Contains(e.Id)).ToList();
+
+        var allocByExam = relevantAllocs.GroupBy(a => a.ExamId).ToDictionary(g => g.Key, g => g.Count());
 
         var items = allExamsWithDetails.Select(exam =>
         {

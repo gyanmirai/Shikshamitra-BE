@@ -60,6 +60,12 @@ public class TransactionAppService(
 			?? throw new BusinessException("ShikshaMitra:TransactionCategoryNotFound")
 				.WithData("CategoryId", input.CategoryId);
 
+		if (category.CategoryType.HasValue && category.CategoryType.Value != transactionType)
+			throw new BusinessException("ShikshaMitra:TransactionCategoryTypeMismatch")
+				.WithData("CategoryId", category.Id)
+				.WithData("Expected", transactionType)
+				.WithData("Actual", category.CategoryType);
+
 		var transaction = new Transaction(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
@@ -119,6 +125,12 @@ public class TransactionAppService(
 		var category = await transactionCategoryRepository.FindAsync(input.CategoryId)
 			?? throw new BusinessException("ShikshaMitra:TransactionCategoryNotFound")
 				.WithData("CategoryId", input.CategoryId);
+
+		if (category.CategoryType.HasValue && category.CategoryType.Value != transactionType)
+			throw new BusinessException("ShikshaMitra:TransactionCategoryTypeMismatch")
+				.WithData("CategoryId", category.Id)
+				.WithData("Expected", transactionType)
+				.WithData("Actual", category.CategoryType);
 
 		transaction.Update(
 			input.CategoryId,

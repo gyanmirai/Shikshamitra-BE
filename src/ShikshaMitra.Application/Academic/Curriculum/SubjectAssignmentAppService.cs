@@ -8,6 +8,7 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -28,7 +29,8 @@ public class SubjectAssignmentAppService(
 	IIdentityUserRepository userRepository,
 	ILogger<SubjectAssignmentAppService> logger,
 	IWeeklyLectureSlotRepository weeklyLectureSlotRepository,
-	ITimetableRepository timetableRepository
+	ITimetableRepository timetableRepository,
+	IUserScopeService userScopeService
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -152,9 +154,15 @@ public class SubjectAssignmentAppService(
 	{
 		var query = await assignmentRepository.GetQueryableAsync();
 
-		query = query.Where(a =>
-			a.StandardId == classId
-		);
+		query = query.Where(a => a.StandardId == classId);
+
+		// Non-admin users only see subjects they are personally assigned to teach.
+		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id!.Value);
+		if (!scope.IsAdmin && !scope.HasTenantWideScope())
+		{
+			var userId = CurrentUser.Id!.Value;
+			query = query.Where(a => a.Teachers.Any(t => t.TeacherId == userId));
+		}
 
 		var assignments = await AsyncExecuter.ToListAsync(query);
 

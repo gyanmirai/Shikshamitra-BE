@@ -245,7 +245,13 @@ public class FeeCollectionAppServiceV2(
 			cancellationToken))
 			.ToDictionary(d => d.Id, d => d.Name);
 
-		// ── 4. Join in memory ──────────────────────────────────────────────
+		// ── 4. Charge aggregates per student ───────────────────────────────
+		var chargeAggDict = await BuildChargeAggregatesByStudentAsync(
+			studentIds,
+			input.AcademicYearId,
+			cancellationToken);
+
+		// ── 5. Join in memory ──────────────────────────────────────────────
 		var feeDict    = feeAggs.ToDictionary(fa => fa.StudentId);
 		var overdueDict = overdueAggs.ToDictionary(ov => ov.StudentId);
 
@@ -253,6 +259,7 @@ public class FeeCollectionAppServiceV2(
 		{
 			feeDict.TryGetValue(s.Id, out var fa);
 			overdueDict.TryGetValue(s.Id, out var ov);
+			chargeAggDict.TryGetValue(s.Id, out var ca);
 			standardDict.TryGetValue(s.StandardId ?? Guid.Empty, out var standardName);
 			divisionDict.TryGetValue(s.DivisionId ?? Guid.Empty, out var divisionName);
 			return new FeeCollectionRawRow
@@ -269,8 +276,80 @@ public class FeeCollectionAppServiceV2(
 				PaidFees        = fa?.Paid ?? 0d,
 				OutstandingFees = fa?.Outstanding ?? 0d,
 				OverdueFees     = ov?.Overdue ?? 0d,
+				TotalCharges    = ca.TotalCharges,
+				PendingCharges  = ca.PendingCharges,
 			};
 		}).ToList();
+	}
+
+	/// <summary>
+	/// Approved charge totals and outstanding balances per student for an academic year.
+	/// Excludes reversed fee transactions from collected charge amounts (same as collect-form).
+	/// </summary>
+	private async Task<Dictionary<Guid, StudentChargeAggregate>> BuildChargeAggregatesByStudentAsync(
+		List<Guid> studentIds,
+		Guid academicYearId,
+		CancellationToken cancellationToken = default)
+	{
+		var result = studentIds.ToDictionary(id => id, _ => StudentChargeAggregate.Empty);
+
+		if (studentIds.Count == 0)
+			return result;
+
+		var chargeQ = await chargeRepository.GetQueryableAsync();
+		var approvedCharges = await asyncExecuter.ToListAsync(
+			chargeQ
+				.Where(c =>
+					studentIds.Contains(c.StudentId) &&
+					c.AcademicYearId == academicYearId &&
+					c.Status == ChargeStatus.Approved)
+				.Select(c => new { c.Id, c.StudentId, Amount = (double)c.Amount }),
+			cancellationToken);
+
+		if (approvedCharges.Count == 0)
+			return result;
+
+		var chargeIds = approvedCharges.Select(c => c.Id).Distinct().ToList();
+
+		var metaQ = await feeRecordMetadataRepository.GetQueryableAsync();
+		var reversedTxIds = await asyncExecuter.ToListAsync(
+			metaQ
+				.Where(m => m.Status == FeeCollectionStatus.Reversed)
+				.Select(m => m.Id),
+			cancellationToken);
+
+		var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
+		var paidPerCharge = await asyncExecuter.ToListAsync(
+			chargeCollQ
+				.Where(r =>
+					studentIds.Contains(r.StudentId) &&
+					chargeIds.Contains(r.ChargeId) &&
+					!reversedTxIds.Contains(r.FeeRecordMetadataId))
+				.GroupBy(r => r.ChargeId)
+				.Select(g => new { ChargeId = g.Key, Paid = g.Sum(r => r.Amount) }),
+			cancellationToken);
+
+		var paidDict = paidPerCharge.ToDictionary(x => x.ChargeId, x => x.Paid);
+
+		foreach (var group in approvedCharges.GroupBy(c => c.StudentId))
+		{
+			var total = 0d;
+			var pending = 0d;
+			foreach (var charge in group)
+			{
+				total += charge.Amount;
+				pending += Math.Max(0d, charge.Amount - paidDict.GetValueOrDefault(charge.Id, 0d));
+			}
+
+			result[group.Key] = new StudentChargeAggregate(total, pending);
+		}
+
+		return result;
+	}
+
+	private readonly record struct StudentChargeAggregate(double TotalCharges, double PendingCharges)
+	{
+		public static StudentChargeAggregate Empty => new(0d, 0d);
 	}
 
 	// ── In-memory mapping (string concatenation, status derivation) ───────
@@ -294,6 +373,8 @@ public class FeeCollectionAppServiceV2(
 				PaidFees    = r.PaidFees ?? 0d,
 				PendingFees = outstanding ?? 0d,
 				OverdueFees = overdue ?? 0d,
+				TotalCharges = r.TotalCharges ?? 0d,
+				PendingCharges = r.PendingCharges ?? 0d,
 				// Status:
 				//   Paid    → nothing outstanding
 				//   Overdue → has overdue balance
@@ -354,6 +435,10 @@ public class FeeCollectionAppServiceV2(
 			"pendingfees desc"                            => rows.OrderByDescending(x => x.OutstandingFees),
 			"overduefees asc"      or "overduefees"       => rows.OrderBy(x => x.OverdueFees),
 			"overduefees desc"                            => rows.OrderByDescending(x => x.OverdueFees),
+			"totalcharges asc"     or "totalcharges"      => rows.OrderBy(x => x.TotalCharges),
+			"totalcharges desc"                           => rows.OrderByDescending(x => x.TotalCharges),
+			"pendingcharges asc"   or "pendingcharges"    => rows.OrderBy(x => x.PendingCharges),
+			"pendingcharges desc"                         => rows.OrderByDescending(x => x.PendingCharges),
 			"standarddivision asc" or "standarddivision"  => rows.OrderBy(x => x.StandardName).ThenBy(x => x.DivisionName),
 			"standarddivision desc"                       => rows.OrderByDescending(x => x.StandardName).ThenByDescending(x => x.DivisionName),
 			_                                             => rows.OrderBy(x => x.LastName).ThenBy(x => x.FirstName),
@@ -381,6 +466,8 @@ public class FeeCollectionAppServiceV2(
 		csv.WriteField("Paid Fees");
 		csv.WriteField("Pending Fees");
 		csv.WriteField("Overdue Fees");
+		csv.WriteField("Total Charges");
+		csv.WriteField("Pending Charges");
 		csv.WriteField("Status");
 		csv.NextRecord();
 
@@ -394,6 +481,8 @@ public class FeeCollectionAppServiceV2(
 			csv.WriteField(r.PaidFees);
 			csv.WriteField(r.PendingFees);
 			csv.WriteField(r.OverdueFees);
+			csv.WriteField(r.TotalCharges);
+			csv.WriteField(r.PendingCharges);
 			csv.WriteField(r.Status.ToString());
 			csv.NextRecord();
 		}
@@ -410,7 +499,8 @@ public class FeeCollectionAppServiceV2(
 		var headers = new[]
 		{
 			"Student Name", "GR Number", "Roll Number", "Class / Division",
-			"Total Fees", "Paid Fees", "Pending Fees", "Overdue Fees", "Status",
+			"Total Fees", "Paid Fees", "Pending Fees", "Overdue Fees",
+			"Total Charges", "Pending Charges", "Status",
 		};
 
 		for (var col = 0; col < headers.Length; col++)
@@ -433,7 +523,9 @@ public class FeeCollectionAppServiceV2(
 			sheet.Cell(row, 6).Value = r.PaidFees;
 			sheet.Cell(row, 7).Value = r.PendingFees;
 			sheet.Cell(row, 8).Value = r.OverdueFees;
-			sheet.Cell(row, 9).Value = r.Status.ToString();
+			sheet.Cell(row, 9).Value = r.TotalCharges;
+			sheet.Cell(row, 10).Value = r.PendingCharges;
+			sheet.Cell(row, 11).Value = r.Status.ToString();
 
 			if (r.Status == FeeCollectionStatus.Overdue)
 				sheet.Row(row).Style.Fill.BackgroundColor = XLColor.LightSalmon;
@@ -1142,5 +1234,7 @@ public class FeeCollectionAppServiceV2(
 		public double?  PaidFees        { get; init; }
 		public double?  OutstandingFees { get; init; }
 		public double?  OverdueFees     { get; init; }
+		public double?  TotalCharges    { get; init; }
+		public double?  PendingCharges  { get; init; }
 	}
 }

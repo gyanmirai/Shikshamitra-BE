@@ -54,4 +54,9 @@ public class StudentDto : EntityDto
 	public DateTimeOffset? NextReminderDate { get; set; }
 	public double Progress { get; set; } = 0;
 	public string? Remarks { get; set; }
+
+	/// <summary>
+	/// True when a fee structure has been assigned to the student.
+	/// </summary>
+	public bool IsFeeStructureAssigned { get; set; } = false;
 }

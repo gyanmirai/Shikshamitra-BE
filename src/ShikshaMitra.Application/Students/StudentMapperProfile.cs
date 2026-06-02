@@ -103,6 +103,7 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.Progress, opt => opt.MapFrom(src => src.AdditionalDetail != null
 				? ((double)src.AdditionalDetail.StudentRegistrationState / (Enum.GetValues<StudentRegistrationStateEnum>().Length - 1))*100
 				: 0))
+			.ForMember(dest => dest.IsFeeStructureAssigned, opt => opt.MapFrom(src => src.FeeStructureId.HasValue))
 			.IncludeAllDerived();
 
 		// Add converter for Age calculation

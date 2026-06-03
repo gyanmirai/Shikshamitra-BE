@@ -227,8 +227,8 @@ public class ChapterProgressAppService(
 					ChapterId = chapter.Id,
 					ChapterNumber = chapter.ChapterNumber,
 					ChapterName = chapter.ChapterName,
-					StartDate = progress?.StartDate,
-					EndDate = progress?.CompletionDate,
+					StartDate = chapter.ChapterStartTime == default ? null : chapter.ChapterStartTime.UtcDateTime,
+					EndDate = chapter.ChapterEndTime == default ? null : chapter.ChapterEndTime.UtcDateTime,
 					Progress = progress?.Progress ?? 0
 				};
 			}).ToList()

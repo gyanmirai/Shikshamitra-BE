@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.FeeCollection;
 using System;
 using System.Collections.Generic;
@@ -54,6 +55,14 @@ public class CollectFeeOutput
     public List<PaidDueFeeInfoDto> PaidDueFees { get; set; } = [];
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>Groups all audit events written for this collection action.</summary>
+    public string? CorrelationId { get; set; }
+
+    public List<Guid> AuditEventIds { get; set; } = [];
+
+    /// <summary>Immediate audit summary for post-payment UI (Layer C).</summary>
+    public FinanceAuditSummaryDto? AuditSummary { get; set; }
 }
 
 /// <summary>Information about a paid due fee.</summary>

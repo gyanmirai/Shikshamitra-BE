@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.FeeCollection;
+using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Collections;
@@ -32,6 +33,7 @@ namespace ShikshaMitra.Finance.Fees;
 public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private readonly IFeeCollectionAppServiceV2 _service;
+    private readonly IFinanceAuditTrailAppService _auditTrail;
     private readonly IRepository<AcademicYear, Guid> _academicYearRepo;
     private readonly IRepository<FeeCategory, Guid> _feeCategoryRepo;
     private readonly IRepository<FeeHead, Guid> _feeHeadRepo;
@@ -44,6 +46,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     public FeeCollectionAppServiceV2_Tests()
     {
         _service            = GetRequiredService<IFeeCollectionAppServiceV2>();
+        _auditTrail         = GetRequiredService<IFinanceAuditTrailAppService>();
         _academicYearRepo   = GetRequiredService<IRepository<AcademicYear, Guid>>();
         _feeCategoryRepo    = GetRequiredService<IRepository<FeeCategory, Guid>>();
         _feeHeadRepo        = GetRequiredService<IRepository<FeeHead, Guid>>();
@@ -72,6 +75,17 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             output.FeeReceiptNumber.ShouldNotBeNull();
             output.FeeReceiptNumber!.StartsWith("FIN-").ShouldBeTrue(
                 $"Cash payment must generate a FinalFee receipt; got: {output.FeeReceiptNumber}");
+
+            output.CorrelationId.ShouldNotBeNullOrWhiteSpace();
+            output.AuditEventIds.ShouldNotBeEmpty();
+            output.AuditSummary.ShouldNotBeNull();
+            output.AuditSummary!.AllocationLines.ShouldNotBeEmpty();
+
+            var thread = await _auditTrail.GetByCorrelationAsync(
+                output.CorrelationId!,
+                new Volo.Abp.Application.Dtos.PagedAndSortedResultRequestDto { MaxResultCount = 10 });
+            thread.EventCount.ShouldBeGreaterThan(0);
+            thread.Events.ShouldContain(e => e.EntityType == FinanceAuditEntityTypes.FeePayment);
         }
     }
 

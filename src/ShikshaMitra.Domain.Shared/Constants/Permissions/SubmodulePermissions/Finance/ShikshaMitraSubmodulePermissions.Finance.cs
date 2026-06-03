@@ -67,7 +67,9 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			// Finance root-level submodules
 			{ "Finance.AuditTrail", new SubmoduleInfo(AuditTrail.All, AuditTrail.DisplayNames) },
-			{ "Finance.Adjustments", new SubmoduleInfo(Adjustments.All, Adjustments.DisplayNames) }
+			{ "Finance.Auditing", new SubmoduleInfo(Auditing.All, Auditing.DisplayNames) },
+			{ "Finance.Adjustments", new SubmoduleInfo(Adjustments.All, Adjustments.DisplayNames) },
+			{ "Finance.Adjustment", new SubmoduleInfo(Adjustment.All, Adjustment.DisplayNames) }
 		};
 	}
 }

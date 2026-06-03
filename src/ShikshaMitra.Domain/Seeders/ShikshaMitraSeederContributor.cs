@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
@@ -139,6 +140,7 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 		TenantStep<Seeders.FeeAssignmentRepairSeederContributor>(serviceProvider, "FeeAssignmentRepairSeeder", "FeeAssignmentRepairSeeder:v2", 185, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.FeeCollectionSeederContributor>(serviceProvider, "FeeCollectionSeeder", "FeeCollectionSeeder:v2", 190, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<FeeRecordMetadata>(serviceProvider)),
 		TenantStep<Seeders.FeeReceiptSeederContributor>(serviceProvider, "FeeReceiptSeeder", "FeeReceiptSeeder:v1", 200, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<FeePaymentReceipt>(serviceProvider)),
+		TenantStep<Seeders.FinanceAuditSeederContributor>(serviceProvider, "FinanceAuditSeeder", "FinanceAuditSeeder:v1", 205, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.ReconciliationSeederContributor>(serviceProvider, "ReconciliationSeeder", "ReconciliationSeeder:v1", 210, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.ConcessionTypeSeederContributor>(serviceProvider, "ConcessionTypeSeeder", "ConcessionTypeSeeder:v1", 220, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<ConcessionType>(serviceProvider)),
 		TenantStep<Seeders.TestLoginSeederContributor>(serviceProvider, "TestLoginSeeder", "TestLoginSeeder:v2", 230, Seeders.ShikshaMitraSeederProfile.Demo),

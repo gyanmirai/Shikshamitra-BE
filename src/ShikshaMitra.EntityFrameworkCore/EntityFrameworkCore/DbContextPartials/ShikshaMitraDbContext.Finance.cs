@@ -6,6 +6,7 @@ using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
@@ -24,6 +25,14 @@ public partial class ShikshaMitraDbContext
 	public DbSet<FeeStructureMetadata> FeeStructureMetadatas { get; set; }
 	public DbSet<FeeStructure> FeeStructures { get; set; }
 	public DbSet<FeeStructureDetail> FeeStructureDetails { get; set; }
+
+	// ───────────────────────────────────────────────
+	// Finance — Concession Requests
+	// ───────────────────────────────────────────────
+	public DbSet<ConcessionRequest> ConcessionRequests { get; set; }
+	public DbSet<ConcessionFeeHeadMapping> ConcessionFeeHeadMappings { get; set; }
+	public DbSet<ConcessionRequestDocument> ConcessionRequestDocuments { get; set; }
+	public DbSet<ConcessionDueFeeAllocation> ConcessionDueFeeAllocations { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Concession Types

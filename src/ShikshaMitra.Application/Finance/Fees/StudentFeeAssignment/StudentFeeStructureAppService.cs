@@ -21,30 +21,31 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 public class StudentFeeStructureAppService(
 	IRepository<Student, Guid> studentRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,
+	IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
+	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
-	IRepository<DueFee, Guid> dueFeeRepository,
+	IDueFeeRepository dueFeeRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	DueFeeManager dueFeeManager
 ) : ApplicationService, IStudentFeeStructureAppService
 {
 	public async Task AssignAsync(AssignStudentFeeStructureDto input)
 	{
-		// get the student
-		var student = await studentRepository.GetAsync(input.StudentId) ?? throw new BusinessException("Student with given id does not exist.");
+		var student = await studentRepository.GetAsync(input.StudentId)
+			?? throw new BusinessException("Student with given id does not exist.");
 
 		if (student.FeeStructureId != null)
 		{
-			throw new BusinessException("Fee structure is already assigned to the student. Please unassign the existing fee structure before assigning a new one.");
+			throw new BusinessException(
+				"Fee structure is already assigned to the student. Please unassign the existing fee structure before assigning a new one.");
 		}
 
-		// validate the standard fee structure id
-		var feeStructure = await feeStructureRepository.GetAsync(input.StandardFeeStructureId) ?? throw new BusinessException("Fee structure with given id does not exist.");
+		var feeStructure = await feeStructureRepository.GetAsync(input.StandardFeeStructureId)
+			?? throw new BusinessException("Fee structure with given id does not exist.");
 
-		// assign the fee structure to the student
 		student.AssignFeeStructure(input.StandardFeeStructureId);
 
-		// ── Create StudentFeeStructure record for fee collection module lookups ──
 		await studentFeeStructureRepository.InsertAsync(
 			new StudentFeeStructure(
 				id: GuidGenerator.Create(),
@@ -53,24 +54,22 @@ public class StudentFeeStructureAppService(
 				feeStructureStandardId: feeStructure.Id),
 			autoSave: false);
 
-		// ── Load FeeStructureMetadata to reach the AcademicYear ──────────────
 		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
-
-		// ── Load AcademicYear for month-range computation ─────────────────────
 		var academicYear = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
 
-		// ── Generate DueFee records via domain manager ────────────────────────
+		var details = await feeStructureDetailRepository.GetListAsync(d => d.FeeStructureId == feeStructure.Id);
+		foreach (var detail in details.Where(d => feeStructure.FeeStructureDetails.All(x => x.Id != d.Id)))
+			feeStructure.AddDetail(detail);
+
 		var dueFees = await dueFeeManager.GenerateForStudentAsync(
 			student.Id,
 			feeStructure,
 			academicYear,
 			input.SelectedOptionalFeeHeadIds);
 
-		// ── Bulk insert — autoSave: false to commit everything atomically ─────
 		foreach (var dueFee in dueFees)
 			await dueFeeRepository.InsertAsync(dueFee, autoSave: false);
 
-		// ── Single atomic commit: student assignment + StudentFeeStructure + all due fees ─
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 
@@ -79,38 +78,147 @@ public class StudentFeeStructureAppService(
 		var student = await studentRepository.GetAsync(studentId)
 			?? throw new BusinessException("Student with given id does not exist.");
 
-		if (student.FeeStructureId == null)
+		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == studentId);
+
+		// Prefer the fee-collection assignment row; fall back to Student.FeeStructureId.
+		var feeStructureId = assignment?.FeeStructureStandardId ?? student.FeeStructureId;
+
+		if (feeStructureId == null)
 			throw new BusinessException("No fee structure has been assigned to this student.");
 
-		var feeStructure = await feeStructureRepository.GetAsync(student.FeeStructureId.Value)
+		var feeStructure = await feeStructureRepository.GetAsync(feeStructureId.Value)
 			?? throw new BusinessException("Assigned fee structure could not be found.");
 
-		// Determine which fee heads have due-fee records (i.e., were selected during assignment)
-		var selectedFeeHeadIds = (await dueFeeRepository.GetListAsync(d => d.StudentId == studentId))
-			.Select(d => d.FeeHeadId)
-			.ToHashSet();
+		var dueFees = await GetDueFeesForStudentAsync(studentId);
+		var selectedFeeHeadIds = dueFees.Select(d => d.FeeHeadId).ToHashSet();
 
-		var feeHeads = feeStructure.FeeStructureDetails
-			.Select(detail => new StudentFeeHeadDto
-			{
-				FeeHeadId = detail.FeeHeadId,
-				FeeHeadName = detail.FeeHead?.Name,
-				CategoryName = detail.FeeHead?.FeeCategory?.Name,
-				Amount = (decimal)detail.Amount,
-				IsOptional = detail.IsOptional,
-				IsOneTime = detail.IsOneTime,
-				IsSelected = !detail.IsOptional || selectedFeeHeadIds.Contains(detail.FeeHeadId)
-			})
-			.ToList();
+		var details = await feeStructureDetailRepository.GetListAsync(d => d.FeeStructureId == feeStructureId.Value);
+
+		List<StudentFeeHeadDto> feeHeads;
+		if (dueFees.Count > 0)
+		{
+			feeHeads = await BuildFeeHeadsFromDueFeesAsync(dueFees);
+			EnrichFeeHeadsFromDetails(feeHeads, details, selectedFeeHeadIds);
+		}
+		else if (details.Count > 0)
+		{
+			feeHeads = BuildFeeHeadsFromDetails(details, selectedFeeHeadIds);
+		}
+		else
+		{
+			feeHeads = [];
+		}
 
 		return new StudentFeeStructureResponseDto
 		{
-			StudentFeeStructureId = feeStructure.Id,
+			StudentFeeStructureId = assignment?.Id ?? feeStructure.Id,
 			StandardFeeStructureId = feeStructure.Id,
 			StudentId = studentId,
 			StandardId = feeStructure.StandardId,
 			StructureName = feeStructure.Name,
-			FeeHeads = feeHeads
+			FeeHeads = feeHeads,
 		};
+	}
+
+	private async Task<List<DueFee>> GetDueFeesForStudentAsync(Guid studentId)
+	{
+		var queryable = await dueFeeRepository.GetQueryableAsync();
+		return queryable
+			.Where(d => d.StudentId == studentId)
+			.OrderBy(d => d.Year)
+			.ThenBy(d => d.Month)
+			.ToList();
+	}
+
+	private static List<StudentFeeHeadDto> BuildFeeHeadsFromDetails(
+		List<FeeStructureDetail> details,
+		HashSet<Guid> selectedFeeHeadIds)
+	{
+		return details
+			.GroupBy(d => d.FeeHeadId)
+			.Select(group =>
+			{
+				var detail = group.First();
+				return new StudentFeeHeadDto
+				{
+					FeeHeadId = detail.FeeHeadId,
+					FeeHeadName = detail.FeeHead?.Name ?? string.Empty,
+					CategoryName = detail.FeeHead?.FeeCategory?.Name ?? string.Empty,
+					Amount = (decimal)group.Sum(d => d.Amount),
+					IsOptional = detail.IsOptional,
+					IsOneTime = detail.IsOneTime,
+					IsSelected = !detail.IsOptional || selectedFeeHeadIds.Contains(detail.FeeHeadId),
+				};
+			})
+			.ToList();
+	}
+
+	private async Task<List<StudentFeeHeadDto>> BuildFeeHeadsFromDueFeesAsync(List<DueFee> dueFees)
+	{
+		var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
+		var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
+		var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id);
+
+		return feeHeadIds.Select(feeHeadId =>
+		{
+			var lines = dueFees.Where(d => d.FeeHeadId == feeHeadId).ToList();
+			feeHeadMap.TryGetValue(feeHeadId, out var feeHead);
+
+			return new StudentFeeHeadDto
+			{
+				FeeHeadId = feeHeadId,
+				FeeHeadName = feeHead?.Name ?? string.Empty,
+				CategoryName = feeHead?.FeeCategory?.Name ?? string.Empty,
+				Amount = (decimal)lines.Sum(l => l.OriginalAmount),
+				IsOptional = false,
+				IsOneTime = lines.All(l => l.IsOneTime),
+				IsSelected = true,
+			};
+		}).ToList();
+	}
+
+	private static void EnrichFeeHeadsFromDetails(
+		List<StudentFeeHeadDto> feeHeads,
+		List<FeeStructureDetail> details,
+		HashSet<Guid> selectedFeeHeadIds)
+	{
+		if (details.Count == 0)
+			return;
+
+		var detailByFeeHead = details
+			.GroupBy(d => d.FeeHeadId)
+			.ToDictionary(g => g.Key, g => g.First());
+
+		foreach (var head in feeHeads)
+		{
+			if (!detailByFeeHead.TryGetValue(head.FeeHeadId, out var detail))
+				continue;
+
+			head.FeeHeadName = string.IsNullOrEmpty(head.FeeHeadName) ? detail.FeeHead?.Name ?? string.Empty : head.FeeHeadName;
+			head.CategoryName = string.IsNullOrEmpty(head.CategoryName)
+				? detail.FeeHead?.FeeCategory?.Name ?? string.Empty
+				: head.CategoryName;
+			head.IsOptional = detail.IsOptional;
+			head.IsOneTime = detail.IsOneTime;
+			head.IsSelected = !detail.IsOptional || selectedFeeHeadIds.Contains(detail.FeeHeadId);
+		}
+
+		foreach (var detailGroup in details.GroupBy(d => d.FeeHeadId))
+		{
+			if (feeHeads.Any(h => h.FeeHeadId == detailGroup.Key))
+				continue;
+
+			var detail = detailGroup.First();
+			feeHeads.Add(new StudentFeeHeadDto
+			{
+				FeeHeadId = detail.FeeHeadId,
+				FeeHeadName = detail.FeeHead?.Name ?? string.Empty,
+				CategoryName = detail.FeeHead?.FeeCategory?.Name ?? string.Empty,
+				Amount = (decimal)detailGroup.Sum(d => d.Amount),
+				IsOptional = detail.IsOptional,
+				IsOneTime = detail.IsOneTime,
+				IsSelected = !detail.IsOptional || selectedFeeHeadIds.Contains(detail.FeeHeadId),
+			});
+		}
 	}
 }

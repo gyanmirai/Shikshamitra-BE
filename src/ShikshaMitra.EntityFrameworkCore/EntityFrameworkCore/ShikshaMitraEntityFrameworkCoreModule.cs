@@ -34,6 +34,8 @@ using Volo.Abp.Data;
 using ShikshaMitra.EntityFrameworkCore.Configurations.Standards;
 using ShikshaMitra.EntityFrameworkCore.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Charges;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.EntityFrameworkCore.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.EntityFrameworkCore.Finance.FeeRefund;
 using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.EntityFrameworkCore.Finance.Fees.Receipts;
@@ -100,6 +102,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<PayrollRunReview, EfCorePayrollRunReviewRepository>();
             options.AddRepository<Student, EfCoreStudentRepository>();
             options.AddRepository<Charge, EfCoreChargeRepository>();
+            options.AddRepository<ConcessionRequest, EfCoreConcessionRequestRepository>();
             options.AddRepository<StaffAttendanceDayLock, EfCoreStaffAttendanceDayLockRepository>();
             options.AddRepository<DueFee, EfCoreDueFeeRepository>();
             options.AddRepository<FeeRefundRequest, EfCoreFeeRefundRepository>();

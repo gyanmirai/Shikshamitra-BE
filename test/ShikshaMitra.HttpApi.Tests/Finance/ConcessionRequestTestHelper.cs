@@ -13,6 +13,7 @@ using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Students.Enrollment;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using Volo.Abp.Application.Dtos;
+using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
@@ -21,8 +22,6 @@ namespace ShikshaMitra.Finance.ConcessionRequests;
 
 /// <summary>
 /// Shared test helper for Concession Request API tests.
-/// Provides methods to create prerequisite domain objects via the API
-/// and convenience factories for request DTOs.
 /// </summary>
 public static class ConcessionRequestTestHelper
 {
@@ -33,19 +32,11 @@ public static class ConcessionRequestTestHelper
 	private const string FeeCategoryUrl = "/api/fee-categories";
 	private const string FeeHeadUrl = "/api/fee-heads";
 
-	// ── Static defaults set by the test class ctor from the factory ──────────
-
 	public static Guid DefaultAcademicYearId { get; set; }
 	public static Guid DefaultMediumId { get; set; }
 	public static Guid DefaultStandardId { get; set; }
 	public static Guid DefaultDivisionId { get; set; }
 
-	// ── Prerequisite data builders ────────────────────────────────────────────
-
-	/// <summary>
-	/// Creates a student via direct registration with all four enrollment context
-	/// fields populated. Returns the student ID and its derived BoardId.
-	/// </summary>
 	public static async Task<(Guid StudentId, Guid BoardId)> CreateStudentAsync(HttpClient client)
 	{
 		var dto = new CreateDirectRegistrationDto
@@ -78,10 +69,6 @@ public static class ConcessionRequestTestHelper
 		return (details.StudentId, details.AcademicBoardId);
 	}
 
-	/// <summary>
-	/// Creates a ConcessionType for the seeded academic year and returns its ID.
-	/// The type is created with no required documents for simplicity.
-	/// </summary>
 	public static async Task<Guid> CreateConcessionTypeAsync(HttpClient client, string? nameSuffix = null)
 	{
 		var name = TestDataHelper.UniqueName(nameSuffix ?? "ConcType");
@@ -97,7 +84,6 @@ public static class ConcessionRequestTestHelper
 			$"/api/{DefaultAcademicYearId}/concession-types", request, JsonOptions);
 		createResponse.EnsureSuccessStatusCode();
 
-		// Retrieve the created type by searching its unique name
 		var listResponse = await client.GetAsync(
 			$"/api/{DefaultAcademicYearId}/concession-types?searchTerm={name}&maxResultCount=50");
 		listResponse.EnsureSuccessStatusCode();
@@ -110,9 +96,6 @@ public static class ConcessionRequestTestHelper
 			?? throw new InvalidOperationException($"Could not locate created concession type '{name}'");
 	}
 
-	/// <summary>
-	/// Creates a FeeCategory for the seeded academic year and returns its ID.
-	/// </summary>
 	public static async Task<Guid> CreateFeeCategoryAsync(HttpClient client)
 	{
 		var name = TestDataHelper.UniqueName("FeeCat");
@@ -122,7 +105,6 @@ public static class ConcessionRequestTestHelper
 			$"{FeeCategoryUrl}?academicYearId={DefaultAcademicYearId}", request, JsonOptions);
 		createResponse.EnsureSuccessStatusCode();
 
-		// Retrieve by name
 		var listResponse = await client.GetAsync(
 			$"{FeeCategoryUrl}?academicYearId={DefaultAcademicYearId}&search={name}&pageSize=50");
 		listResponse.EnsureSuccessStatusCode();
@@ -135,9 +117,6 @@ public static class ConcessionRequestTestHelper
 			?? throw new InvalidOperationException($"Could not locate created fee category '{name}'");
 	}
 
-	/// <summary>
-	/// Creates a FeeHead under the given category for the seeded academic year and returns its ID.
-	/// </summary>
 	public static async Task<Guid> CreateFeeHeadAsync(HttpClient client, Guid feeCategoryId)
 	{
 		var name = TestDataHelper.UniqueName("FeeHead");
@@ -152,7 +131,6 @@ public static class ConcessionRequestTestHelper
 			$"{FeeHeadUrl}?academicYearId={DefaultAcademicYearId}", request, JsonOptions);
 		createResponse.EnsureSuccessStatusCode();
 
-		// Retrieve by name
 		var listResponse = await client.GetAsync(
 			$"{FeeHeadUrl}?academicYearId={DefaultAcademicYearId}&search={name}&pageSize=50");
 		listResponse.EnsureSuccessStatusCode();
@@ -166,29 +144,39 @@ public static class ConcessionRequestTestHelper
 	}
 
 	/// <summary>
-	/// Creates a ConcessionRequest (Draft) and returns the ID of the anchor request
-	/// directly from the Create response body.
+	/// Creates a pending concession request (atomic create) and returns its id.
 	/// </summary>
 	public static async Task<Guid> CreateConcessionRequestAsync(
 		HttpClient client,
 		Guid studentId,
-		Guid boardId,
-		Guid educationMediumId,
-		Guid standardId,
-		Guid divisionId,
-		IEnumerable<Guid> concessionTypeIds)
+		Guid concessionTypeId,
+		IReadOnlyList<Guid>? feeHeadIds = null)
 	{
+		var feeHeadConcessions = new List<FeeHeadConcessionDto>();
+		if (feeHeadIds is { Count: > 0 })
+		{
+			foreach (var feeHeadId in feeHeadIds)
+			{
+				feeHeadConcessions.Add(new FeeHeadConcessionDto
+				{
+					FeeHeadId = feeHeadId,
+					BasedOn = 0,
+					Amount = 1000m,
+					NetAmount = 900m,
+				});
+			}
+		}
+
 		var input = new CreateConcessionRequestDto
 		{
 			StudentId = studentId,
-			BoardId = boardId,
-			EducationMediumId = educationMediumId,
-			StandardId = standardId,
-			DivisionId = divisionId,
-			ConcessionTypeIds = concessionTypeIds.ToList(),
+			ConcessionTypeId = concessionTypeId,
+			Remarks = "Test concession request",
+			FeeHeadConcessions = feeHeadConcessions,
 		};
 
-		var createResponse = await client.PostAsJsonAsync(ConcessionRequestUrl, input, JsonOptions);
+		var createResponse = await client.PostAsJsonAsync(
+			$"{ConcessionRequestUrl}?academicYearId={DefaultAcademicYearId}", input, JsonOptions);
 		createResponse.EnsureSuccessStatusCode();
 
 		var body = await createResponse.Content
@@ -199,27 +187,23 @@ public static class ConcessionRequestTestHelper
 			?? throw new InvalidOperationException("Could not find concessionRequestId in create response");
 	}
 
-	// ── DTO builders ──────────────────────────────────────────────────────────
-
-	/// <summary>
-	/// Builds a <see cref="CreateConcessionRequestDto"/> with all required fields.
-	/// </summary>
-	public static CreateConcessionRequestDto BuildCreateDto(
-		Guid studentId,
-		Guid boardId,
-		Guid educationMediumId,
-		Guid standardId,
-		Guid divisionId,
-		Guid concessionTypeId)
+	public static CreateConcessionRequestDto BuildCreateDto(Guid studentId, Guid concessionTypeId, Guid feeHeadId)
 	{
 		return new CreateConcessionRequestDto
 		{
 			StudentId = studentId,
-			BoardId = boardId,
-			EducationMediumId = educationMediumId,
-			StandardId = standardId,
-			DivisionId = divisionId,
-			ConcessionTypeIds = new List<Guid> { concessionTypeId },
+			ConcessionTypeId = concessionTypeId,
+			Remarks = "Test",
+			FeeHeadConcessions =
+			[
+				new FeeHeadConcessionDto
+				{
+					FeeHeadId = feeHeadId,
+					BasedOn = 0,
+					Amount = 1000m,
+					NetAmount = 900m,
+				},
+			],
 		};
 	}
 }

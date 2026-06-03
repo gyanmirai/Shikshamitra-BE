@@ -19,6 +19,8 @@ using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Receipts;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
@@ -62,6 +64,7 @@ public class FeeCollectionAppServiceV2(
 	IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
 	IRepository<FeeCategory, Guid> feeCategoryRepository,
 	IRepository<ConcessionType, Guid> concessionTypeRepository,
+	IConcessionRequestRepository concessionRequestRepository,
 	FeeCollectionManager feeCollectionManager,
 	FeeReceiptManager feeReceiptManager,
 	IFeePaymentReceiptRepository feePaymentReceiptRepository,
@@ -1067,36 +1070,33 @@ public class FeeCollectionAppServiceV2(
 		}
 
 		// ── Concessions ───────────────────────────────────────────────────
-		//var concessionRequests = await concessionRequestRepository.GetListAsync(
-		//	skipCount: 0,
-		//	maxResultCount: int.MaxValue,
-		//	studentId: studentId,
-		//	status: ConcessionRequestStatus.Approved);
+		var approvedConcessions = await concessionRequestRepository.GetListAsync(
+			r => r.StudentId == studentId && r.Status == ConcessionRequestStatus.Approved);
 
-		//List<ConcessionDetailDto>? concessions = null;
-		//if (concessionRequests.Count > 0)
-		//{
-		//	var typeIds = concessionRequests.Select(r => r.ConcessionTypeId).Distinct().ToList();
-		//	var concessionTypes = await concessionTypeRepository.GetListAsync(ct => typeIds.Contains(ct.Id));
-		//	var typeMap = concessionTypes.ToDictionary(ct => ct.Id, ct => ct.Name);
+		List<ConcessionDetailDto>? concessions = null;
+		if (approvedConcessions.Count > 0)
+		{
+			var typeIds = approvedConcessions.Select(r => r.ConcessionTypeId).Distinct().ToList();
+			var concessionTypes = await concessionTypeRepository.GetListAsync(ct => typeIds.Contains(ct.Id));
+			var typeMap = concessionTypes.ToDictionary(ct => ct.Id, ct => ct.Name);
 
-		//	concessions = concessionRequests.Select(r =>
-		//	{
-		//		var total = r.ConcessionFeeHeadMappings.Sum(m => (double)m.FeeHeadConcessionAmount);
-		//		return new ConcessionDetailDto
-		//		{
-		//			ConcessionRequestConcessionTypeId = r.Id,
-		//			ConcessionTypeName = typeMap.GetValueOrDefault(r.ConcessionTypeId, string.Empty),
-		//			Amount = total > 0d ? total : null,
-		//		};
-		//	}).ToList();
-		//}
+			concessions = approvedConcessions.Select(r =>
+			{
+				var total = r.ConcessionFeeHeadMappings.Sum(m => (double)m.FeeHeadConcessionAmount);
+				return new ConcessionDetailDto
+				{
+					ConcessionRequestConcessionTypeId = r.Id,
+					ConcessionTypeName = typeMap.GetValueOrDefault(r.ConcessionTypeId, string.Empty),
+					Amount = total > 0d ? total : null,
+				};
+			}).ToList();
+		}
 
 		// ── Fee overview ──────────────────────────────────────────────────
 		var totalFee = feeHeadSummaries.Sum(fh => fh.Amount);
 		var totalPaid = feeHeadSummaries.Sum(fh => fh.PaidAmount);
 		var totalPending = feeHeadSummaries.Sum(fh => fh.PendingAmount ?? 0d);
-		var totalConcession = 0d; // concessions?.Sum(c => c.Amount ?? 0d);
+		var totalConcession = concessions?.Sum(c => c.Amount ?? 0d) ?? 0d;
 
 		return new StudentFeeDetailsDto
 		{
@@ -1111,7 +1111,7 @@ public class FeeCollectionAppServiceV2(
 			FeeHeads = feeHeadSummaries,
 			Charges = chargeDtos,
 			Payments = payments,
-			Concessions = null,
+			Concessions = concessions,
 		};
 	}
 

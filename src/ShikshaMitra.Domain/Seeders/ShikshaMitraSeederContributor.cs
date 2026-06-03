@@ -136,6 +136,7 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 		TenantStep<Seeders.HRSeederContributor>(serviceProvider, "HRSeeder", "HRSeeder:v4", 160, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.StudentSeederContributor>(serviceProvider, "StudentSeeder", "StudentSeeder:v1", 170, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<Student>(serviceProvider)),
 		TenantStep<Seeders.FeeRefundSeederContributor>(serviceProvider, "FeeRefundSeeder", "FeeRefundSeeder:v1", 180, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<FeeRefundRequest>(serviceProvider)),
+		TenantStep<Seeders.FeeAssignmentRepairSeederContributor>(serviceProvider, "FeeAssignmentRepairSeeder", "FeeAssignmentRepairSeeder:v2", 185, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.FeeCollectionSeederContributor>(serviceProvider, "FeeCollectionSeeder", "FeeCollectionSeeder:v2", 190, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<FeeRecordMetadata>(serviceProvider)),
 		TenantStep<Seeders.FeeReceiptSeederContributor>(serviceProvider, "FeeReceiptSeeder", "FeeReceiptSeeder:v1", 200, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<FeePaymentReceipt>(serviceProvider)),
 		TenantStep<Seeders.ReconciliationSeederContributor>(serviceProvider, "ReconciliationSeeder", "ReconciliationSeeder:v1", 210, Seeders.ShikshaMitraSeederProfile.Demo),

@@ -1,5 +1,6 @@
 using ShikshaMitra.Finance.Collections;
 using ShikshaMitra.Finance.FeeCollection;
+using ShikshaMitra.Finance.Fees.Concessions;
 using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -69,7 +70,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("Amount", amount);
 
 		PaidAmount += amount;
-		OutstandingAmount = Math.Max(0d, OriginalAmount - PaidAmount);
+		RecalculateOutstanding();
 		Status = OutstandingAmount <= 0d ? FeeStatus.Paid : FeeStatus.Partial;
 	}
 
@@ -115,7 +116,33 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("PaidAmount", PaidAmount);
 
 		PaidAmount -= amount;
-		OutstandingAmount = Math.Max(0d, OriginalAmount - PaidAmount);
+		RecalculateOutstanding();
 		Status = PaidAmount <= 0d ? FeeStatus.Pending : FeeStatus.Partial;
 	}
+
+	/// <summary>
+	/// Applies an approved concession discount to this monthly obligation line.
+	/// </summary>
+	public void ApplyConcession(double concessionAmount)
+	{
+		if (concessionAmount <= 0)
+		{
+			throw new BusinessException(DueFeeErrorCodes.PaymentAmountMustBePositive)
+				.WithData("Amount", concessionAmount);
+		}
+
+		if (concessionAmount > OutstandingAmount)
+		{
+			throw new BusinessException(FinanceConcessionErrorCodes.ConcessionExceedsDueOutstanding)
+				.WithData("DueFeeId", Id)
+				.WithData("Outstanding", OutstandingAmount)
+				.WithData("Requested", concessionAmount);
+		}
+
+		NetAmount += concessionAmount;
+		RecalculateOutstanding();
+	}
+
+	private void RecalculateOutstanding() =>
+		OutstandingAmount = Math.Max(0d, OriginalAmount - PaidAmount - NetAmount);
 }

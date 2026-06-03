@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Finance.FeeCollectionTests;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
@@ -18,6 +19,7 @@ namespace ShikshaMitra.Finance.FeeStructureAssignment;
 public class StudentFeeAssignmentApi_Tests : ShikshaMitraApiTestBase
 {
     private const string AssignUrl        = "/api/student-fee-structure/assign";
+    private const string GetByStudentUrl  = "/api/student-fee-structure/student";
     private const string FeeStructuresUrl = "/api/fee-structures";
     private const string MetadataUrl      = "/api/fee-structures-metadata";
     private const string CollectFormUrl   = "/api/v2/fee-collections";
@@ -193,5 +195,32 @@ public class StudentFeeAssignmentApi_Tests : ShikshaMitraApiTestBase
             "Total fee should equal the annual amount on the fee structure.");
         feeDetails.FeeOverview.PendingFee.ShouldBe(12_000d,
             "Full amount should be pending before any payment.");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Get_Student_Fee_Structure_Returns_Fee_Heads_After_Assignment()
+    {
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var metadataId = await GetOrCreateFeeStructureMetadataIdAsync();
+        var feeStructureId = await CreateFeeStructureAsync(metadataId, feeHeadId);
+
+        await Client.PostAsJsonAsync(AssignUrl, new
+        {
+            studentId,
+            standardFeeStructureId = feeStructureId,
+            selectedOptionalFeeHeadIds = Array.Empty<Guid>(),
+        }, JsonOptions);
+
+        var response = await Client.GetAsync($"{GetByStudentUrl}/{studentId}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadFromJsonAsync<StudentFeeStructureResponseDto>(JsonOptions);
+        body.ShouldNotBeNull();
+        body!.FeeHeads.ShouldNotBeNull();
+        body.FeeHeads.ShouldNotBeEmpty();
+        body.FeeHeads.ShouldContain(h => h.FeeHeadId == feeHeadId);
+        body.StandardFeeStructureId.ShouldBe(feeStructureId);
     }
 }

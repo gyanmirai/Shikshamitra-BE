@@ -230,6 +230,12 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 assignedStudentIds.Add(student.Id);
             }
 
+            if (student.FeeStructureId != feeStructure.Id)
+            {
+                student.AssignFeeStructure(feeStructure.Id);
+                await _studentRepository.UpdateAsync(student, autoSave: false);
+            }
+
             // Skip DueFee generation if any already exist (e.g. from FeeRefundSeeder)
             if (studentsWithExistingDueFees.Contains(student.Id))
                 continue;
@@ -458,8 +464,12 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
 
         foreach (var standard in standards)
         {
-            if (result.ContainsKey(standard.Id))
-                continue;   // already exists
+            if (result.TryGetValue(standard.Id, out var existingStructure))
+            {
+                await EnsureFeeStructureDetailsAsync(
+                    existingStructure, tuitionFeeHeadId, devFeeHeadId, academicYear);
+                continue;
+            }
 
             var structure = new FeeStructure(
                 id:                    GuidGenerator.Create(),
@@ -468,21 +478,17 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 standardId:            standard.Id,
                 name:                  $"Seed – {standard.Name} Fee Structure");
 
-            // Monthly tuition details (one per academic-year month)
-            foreach (var (month, year) in monthRange)
-            {
-                structure.AddDetail(new FeeStructureDetail(
-                    id:              GuidGenerator.Create(),
-                    tenantId:        CurrentTenant.Id,
-                    feeStructureId:  structure.Id,
-                    feeHeadId:       tuitionFeeHeadId,
-                    amount:          monthlyAmount,
-                    isOneTime:       false,
-                    isOptional:      false,
-                    isRefundable:    true,
-                    payableMonth:    null,
-                    payableYear:     null));
-            }
+            structure.AddDetail(new FeeStructureDetail(
+                id: GuidGenerator.Create(),
+                tenantId: CurrentTenant.Id,
+                feeStructureId: structure.Id,
+                feeHeadId: tuitionFeeHeadId,
+                amount: monthlyAmount,
+                isOneTime: false,
+                isOptional: false,
+                isRefundable: true,
+                payableMonth: null,
+                payableYear: null));
 
             // One-time development fee (due in first month)
             structure.AddDetail(new FeeStructureDetail(
@@ -498,12 +504,56 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 payableYear:     monthRange[0].Year));
 
             await _feeStructureRepository.InsertAsync(structure, autoSave: false);
+            foreach (var detail in structure.FeeStructureDetails)
+                await _feeStructureDetailRepository.InsertAsync(detail, autoSave: false);
+
             result[standard.Id] = structure;
 
             _logger.LogDebug("[FeeCollectionSeeder] Created FeeStructure: {Name}", structure.Name);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Ensures fee-structure detail rows exist (repair path for structures created without persisted children).
+    /// </summary>
+    private async Task EnsureFeeStructureDetailsAsync(
+        FeeStructure structure,
+        Guid tuitionFeeHeadId,
+        Guid devFeeHeadId,
+        AcademicYear academicYear)
+    {
+        var existingCount = await _feeStructureDetailRepository.CountAsync(d => d.FeeStructureId == structure.Id);
+        if (existingCount > 0)
+            return;
+
+        var monthRange = ComputeMonthRange(academicYear);
+        var monthlyAmount = AnnualTuitionFee / monthRange.Count;
+
+        await _feeStructureDetailRepository.InsertAsync(new FeeStructureDetail(
+            id: GuidGenerator.Create(),
+            tenantId: CurrentTenant.Id,
+            feeStructureId: structure.Id,
+            feeHeadId: tuitionFeeHeadId,
+            amount: monthlyAmount,
+            isOneTime: false,
+            isOptional: false,
+            isRefundable: true,
+            payableMonth: null,
+            payableYear: null), autoSave: false);
+
+        await _feeStructureDetailRepository.InsertAsync(new FeeStructureDetail(
+            id: GuidGenerator.Create(),
+            tenantId: CurrentTenant.Id,
+            feeStructureId: structure.Id,
+            feeHeadId: devFeeHeadId,
+            amount: DevFeeAmount,
+            isOneTime: true,
+            isOptional: false,
+            isRefundable: false,
+            payableMonth: monthRange[0].Month,
+            payableYear: monthRange[0].Year), autoSave: false);
     }
 
     // ─── Sample payment receipts ──────────────────────────────────────────────

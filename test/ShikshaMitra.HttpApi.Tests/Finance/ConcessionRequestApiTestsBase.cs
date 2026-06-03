@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 
@@ -19,32 +18,14 @@ public abstract class ConcessionRequestApiTestsBase : ShikshaMitraApiTestBase
 		ConcessionRequestTestHelper.DefaultDivisionId = factory.SeededDivisionId;
 	}
 
-	protected async Task<Guid> CreateDraftWithFeeHeadsAndSubmitAsync()
+	protected async Task<Guid> CreatePendingRequestWithFeeHeadAsync()
 	{
-		var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
 		var typeId = await ConcessionRequestTestHelper.CreateConcessionTypeAsync(Client);
-		var requestId = await ConcessionRequestTestHelper.CreateConcessionRequestAsync(
-			Client, studentId, boardId,
-			ConcessionRequestTestHelper.DefaultMediumId,
-			ConcessionRequestTestHelper.DefaultStandardId,
-			ConcessionRequestTestHelper.DefaultDivisionId,
-			new[] { typeId });
-
 		var feeCategoryId = await ConcessionRequestTestHelper.CreateFeeCategoryAsync(Client);
 		var feeHeadId = await ConcessionRequestTestHelper.CreateFeeHeadAsync(Client, feeCategoryId);
 
-		(await Client.PutAsJsonAsync($"{BaseUrl}/{requestId}/feeHeadsData",
-			new SaveFeeHeadsDataDto
-			{
-				FeeHeadsData = new List<ConcessionTypeFeeHeadsDto>
-				{
-					new() { ConcessionTypeId = typeId, SelectedFeeHeadIds = new List<Guid> { feeHeadId } },
-				},
-			}, JsonOptions)).EnsureSuccessStatusCode();
-
-		(await Client.PostAsJsonAsync($"{BaseUrl}/{requestId}/submit", (object?)null, JsonOptions))
-			.EnsureSuccessStatusCode();
-
-		return requestId;
+		return await ConcessionRequestTestHelper.CreateConcessionRequestAsync(
+			Client, studentId, typeId, new[] { feeHeadId });
 	}
 }

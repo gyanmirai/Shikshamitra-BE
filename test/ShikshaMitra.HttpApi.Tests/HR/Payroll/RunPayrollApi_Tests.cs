@@ -63,7 +63,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await AssignSalaryStructureAsync(employee.Id, "AkshayPayrollFlow");
-		await SeedLegacyAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 5, 10));
+		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 5, 10));
 
 		var preview = await GetAndReadAsync<RunPayrollResponse>(
 			$"{BaseUrl}?month=2026-05&academicYearId={Factory.SeededAcademicYearId}&page=0&pageSize=100&forceRefresh=true");
@@ -109,7 +109,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await AssignSalaryStructureAsync(employee.Id, "PayrollZeroBasis");
-		await SeedLegacyAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 5, 10));
+		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 5, 10));
 
 		var firstPreview = await GetAndReadAsync<RunPayrollResponse>(
 			$"{BaseUrl}?month=2026-05&academicYearId={Factory.SeededAcademicYearId}&page=0&pageSize=100&forceRefresh=true");
@@ -275,7 +275,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollLeftLegacy{Guid.NewGuid():N}",
+			$"PayrollLeftNoEffectiveDate{Guid.NewGuid():N}",
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await SetEmployeeStatusAsync(employee.Id, 2, new DateOnly(2026, 5, 20));
@@ -765,7 +765,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
 	}
 
-	private async Task SeedLegacyAttendanceOnDateAsync(Guid employeeId, DateOnly attendanceDate)
+	private async Task SeedAttendanceOnDateAsync(Guid employeeId, DateOnly attendanceDate)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -783,7 +783,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				AttendanceDate = attendanceDate,
 				EducationMediumStageId = EmployeeTestHelper.DefaultMediumStageId,
 				StatusType = EmployeeAttendanceStatusType.Present,
-				Remarks = "Legacy holiday attendance row"
+				Remarks = "Holiday attendance row"
 			}, autoSave: false);
 			await uow.CompleteAsync();
 		}

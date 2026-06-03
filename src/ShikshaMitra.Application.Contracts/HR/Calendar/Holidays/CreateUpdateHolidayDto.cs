@@ -17,7 +17,7 @@ public class CreateUpdateHolidayDto
     /// <summary>
     /// Name of the holiday (1-256 characters, required)
     /// </summary>
-    public string HolidayName { get; set; }
+    public string HolidayName { get; set; } = string.Empty;
 
     /// <summary>
     /// Reference to the EventType, required

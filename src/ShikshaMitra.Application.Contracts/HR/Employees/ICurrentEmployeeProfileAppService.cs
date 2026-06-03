@@ -3,7 +3,7 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Employees;
 
-public interface ICurrentEmployeeAppService : IApplicationService
+public interface ICurrentEmployeeProfileAppService : IApplicationService
 {
 	Task<EmployeeDto> GetCurrentAsync();
 }

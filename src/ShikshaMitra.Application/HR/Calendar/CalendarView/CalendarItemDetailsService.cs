@@ -113,7 +113,7 @@ public class CalendarItemDetailsService(
 			}
 			catch
 			{
-				// Missing groups are ignored to preserve the legacy calendar-detail response.
+				// Missing groups should not block the calendar-detail response.
 			}
 		}
 

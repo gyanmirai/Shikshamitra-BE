@@ -81,7 +81,7 @@ public class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 				var manager = await employeeManager.UpdateEmployeeStatusAsync(
 					managerId,
 					EmployeeStatusType.Inactive,
-					"Legacy inconsistent state");
+					"Inconsistent dashboard state");
 				await employeeRepository.UpdateAsync(manager);
 				await uow.CompleteAsync();
 			}

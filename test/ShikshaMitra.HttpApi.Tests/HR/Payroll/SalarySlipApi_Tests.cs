@@ -202,74 +202,7 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Direct_Payslip_Should_Regenerate_From_Current_Structure_When_Unlocked_Snapshot_Is_Legacy()
-	{
-		await EnsureDefaultTestUserHasTenantWideScopeAsync();
-
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"PayslipLegacySnapshot{Guid.NewGuid():N}",
-			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-
-		await UpdateSalaryStructureAsync(
-			employee.Id,
-			new UpdateSalaryStructureDto
-			{
-				EarningComponents = new List<SalaryComponentDto>
-				{
-					new()
-					{
-						Name = "January Temp Earning",
-						Amount = 100m,
-						IsFixed = false,
-						IsTemp = true,
-						ApplicableMonth = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-					}
-				},
-				DeductionComponents = new List<SalaryComponentDto>
-				{
-					new()
-					{
-						Name = "January Temp Deduction",
-						Amount = 50m,
-						IsFixed = false,
-						IsTemp = true,
-						ApplicableMonth = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-					}
-				}
-			});
-
-		var februaryPreview = await GetPayrollItemAsync(employee.Id, "2026-02");
-		februaryPreview.GrossSalary.ShouldBe(0d);
-		februaryPreview.TotalDeduction.ShouldBe(0d);
-
-		await MutatePayrollSnapshotAsync(employee.Id, "2026-02", snapshot =>
-		{
-			snapshot.EarningComponentsJson = JsonSerializer.Serialize(new[]
-			{
-				new { Name = "January Temp Earning", Amount = 100d }
-			});
-			snapshot.DeductionComponentsJson = JsonSerializer.Serialize(new[]
-			{
-				new { Name = "January Temp Deduction", Amount = 50d }
-			});
-			snapshot.GrossSalary = 100m;
-			snapshot.FullGrossSalary = 100m;
-			snapshot.TotalDeduction = 50m;
-			snapshot.NetPay = 50m;
-		});
-
-		var februarySlip = await GetSalarySlipResponseAsync(employee.Id, "FEBRUARY-2026");
-		februarySlip.Earnings.ShouldNotContain(x => x.Name == "January Temp Earning");
-		februarySlip.Deductions.ShouldNotContain(x => x.Name == "January Temp Deduction");
-		februarySlip.TotalEarning.ShouldBe(0d);
-		februarySlip.TotalDeduction.ShouldBe(0d);
-		februarySlip.NetSalary.ShouldBe(0d);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Direct_Payslip_Should_Not_Use_Unlocked_NonLegacy_Stale_Snapshot()
+	public async Task Direct_Payslip_Should_Not_Use_Unlocked_Stale_Snapshot()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 

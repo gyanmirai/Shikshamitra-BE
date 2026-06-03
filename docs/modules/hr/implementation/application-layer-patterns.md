@@ -8,9 +8,9 @@
 ## 1. AppService Decomposition
 
 The HR Employee module follows a **one-service-per-concern** pattern. The original
-monolithic `EmployeeAppService` (~1 145 lines, 25+ methods) was split into focused
-services. `EmployeeAppService` and `IEmployeeAppService` are marked `[Obsolete]`
-but retained for test compatibility (`EmployeeAppService_Tests.cs`, 679 lines).
+monolithic `EmployeePersonalInfoAppService` (~1 145 lines, 25+ methods) was split into focused
+services. `EmployeePersonalInfoAppService` and `focused employee service interfaces` are marked `current`
+but retained for test compatibility (`EmployeePersonalInfoAppService_Tests.cs`, 679 lines).
 
 | Service | Concern | Key Methods |
 |---------|---------|-------------|
@@ -24,7 +24,7 @@ but retained for test compatibility (`EmployeeAppService_Tests.cs`, 679 lines).
 | `EmployeeAdditionalDetailsAppService` | Additional details (BPL, disability, etc.) | `GetAsync`, `UpsertAsync`, `PatchAsync` |
 | `ReportingManagerAppService` | Reporting hierarchy | `AssignAsync`, `GetAsync`, `GetByManagerAsync` |
 | `EmployeeAuthorizationService` | IDOR / ownership checks | `CheckEmployeeAccessAsync`, `CheckEmployeeModifyAccessAsync` |
-| `EmployeeAppService` *(obsolete)* | Legacy facade — retained for test compatibility | All methods delegated to focused services above |
+| `EmployeePersonalInfoAppService` *(current)* | Focused service — retained for test compatibility | All methods delegated to focused services above |
 
 ### Why split?
 

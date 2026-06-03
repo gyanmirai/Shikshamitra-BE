@@ -41,14 +41,6 @@ public class SalarySlipDraftFreshnessService(
 				var resolvedPolicies = await ResolvePoliciesForMonthAsync(salarySlip.EmployeeId, salarySlip.MonthYear);
 				var unlockedSnapshotEarnings = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EarningComponentsJson);
 				var unlockedSnapshotDeductions = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.DeductionComponentsJson);
-				if (PayrollSnapshotComponentParser.HasLegacyComponentSnapshotFormat(snapshot))
-				{
-					return await salarySlipManager.GenerateOrGetSalarySlipAsync(
-						salarySlip.EmployeeId,
-						salarySlip.MonthYear,
-						forceRegenerate: true);
-				}
-
 				if (IsHistoricalPayrollMonth(salarySlip.MonthYear) &&
 					SalarySlipFinancialLinesMatchSnapshot(salarySlip, snapshot, unlockedSnapshotEarnings, unlockedSnapshotDeductions))
 				{

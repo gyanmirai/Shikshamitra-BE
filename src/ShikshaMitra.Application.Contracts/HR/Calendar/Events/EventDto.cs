@@ -24,10 +24,10 @@ public class EventDto : AuditedEntityDto<Guid>
     /// <summary>
     /// Title of the event
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = string.Empty;
 
     /// <summary>
-    /// Event type ID (deprecated - use EventType object instead)
+    /// Event type ID
     /// </summary>
     public Guid EventTypeId { get; set; }
 
@@ -64,12 +64,12 @@ public class EventDto : AuditedEntityDto<Guid>
     /// <summary>
     /// Start time (HH:mm)
     /// </summary>
-    public string StartTime { get; set; }
+    public string StartTime { get; set; } = string.Empty;
 
     /// <summary>
     /// End time (HH:mm)
     /// </summary>
-    public string EndTime { get; set; }
+    public string EndTime { get; set; } = string.Empty;
 
     /// <summary>
     /// Is recurring

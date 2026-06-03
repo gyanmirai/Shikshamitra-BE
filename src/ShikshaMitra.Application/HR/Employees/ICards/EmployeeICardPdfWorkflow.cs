@@ -30,7 +30,7 @@ public class EmployeeICardPdfWorkflow(
 
 		var template = await templateRepository.GetAsync(templateId);
 		var employeeIds = input.EmployeeIds.Distinct().ToList();
-		var fields = EmployeeICardTemplateRules.ParseFieldsJson(template.FieldsJson, allowLegacyFallback: true);
+		var fields = EmployeeICardTemplateRules.ParseFieldsJson(template.FieldsJson);
 		var layout = EmployeeICardLayoutSchema.ResolveLayout(template);
 		var printSettings = EmployeeICardLayoutSchema.ResolvePrintSettings(template.PrintSettingsJson, input.CardsPerPage);
 		EmployeeICardTemplateRules.ValidateTemplateAssetReferences(

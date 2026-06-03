@@ -19,7 +19,7 @@ The HR module manages the full employee lifecycle within a multi-tenant educatio
 | **AttendanceAndLeaves** | `ShikshaMitra.HR.AttendanceAndLeaves` | Daily attendance records, leave requests, leave approval workflow, leave policies, leave types, custom attendance rules, automated notifications |
 | **Payroll** | `ShikshaMitra.HR.Payroll` | Payroll structures, salary slips, day calculation settings, earning/deduction components, provident fund rules, attendance import |
 | **Calendar** | `ShikshaMitra.HR.Calendar` | Events, holidays, event types, holiday types, calendar view aggregation |
-| ~~**EventAndHolidays**~~ | ~~`ShikshaMitra.HR.EventAndHolidays`~~ | **Deprecated — removed.** The flat `EventAndHoliday` aggregate duplicated `HR/Calendar/`. Consolidated into `Calendar`. Code and DB table to be deleted after data migration completes. |
+| ~~**EventAndHolidays**~~ | ~~`ShikshaMitra.HR.EventAndHolidays`~~ | **Current — removed.** The flat `EventAndHoliday` aggregate duplicated `HR/Calendar/`. Consolidated into `Calendar`. Code and DB table to be deleted after data migration completes. |
 | **Reports** | (Application only) | PDF/Excel report generation for employee data |
 
 ---
@@ -105,11 +105,11 @@ The HR module manages the full employee lifecycle within a multi-tenant educatio
 
 ### 2.7 Application Services
 
-> **Refactored**: The original `EmployeeAppService` (1 145 lines) was decomposed into focused services.
-> All 5 employee controllers now use focused service interfaces instead of `IEmployeeAppService`.
+> **Refactored**: The original `EmployeePersonalInfoAppService` (1 145 lines) was decomposed into focused services.
+> All 5 employee controllers now use focused service interfaces instead of `focused employee service interfaces`.
 > 28 FluentValidation validators were added across HR Application.Contracts.
 > Domain error handling is standardized — all business errors use `BusinessException` with `HRErrorCodes`.
-> See [application-layer-refactoring.md](./implementation/application-layer-refactoring.md) and [httpapi-migration.md](./implementation/httpapi-migration.md) for full details.
+> See [application-layer-patterns.md](./implementation/application-layer-patterns.md) and [httpapi-migration.md](./implementation/httpapi-migration.md) for full details.
 
 | App Service | Key Methods |
 |---|---|
@@ -123,7 +123,7 @@ The HR module manages the full employee lifecycle within a multi-tenant educatio
 | `EmployeeStatusAppService` | Status transitions with domain events |
 | `ReportingManagerAppService` | Reporting hierarchy management |
 | `DocumentSettingAppService` | Document type configuration per tenant |
-| ~~`EmployeeAppService`~~ | **Deprecated** — `IEmployeeAppService` marked `[Obsolete]`, retained for test compatibility |
+| ~~`EmployeePersonalInfoAppService`~~ | **Current** — `focused employee service interfaces` marked `current`, retained for test compatibility |
 
 ### 2.8 HTTP Controllers
 

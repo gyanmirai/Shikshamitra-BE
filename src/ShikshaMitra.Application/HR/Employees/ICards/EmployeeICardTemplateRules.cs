@@ -28,7 +28,7 @@ internal static class EmployeeICardTemplateRules
 
 	public static void ValidateFieldsJson(string fieldsJson)
 	{
-		ParseFieldsJson(fieldsJson, allowLegacyFallback: false);
+		ParseFieldsJson(fieldsJson);
 	}
 
 	public static void ValidateTemplateInput(EmployeeICardTemplateRequest input, Guid? tenantId)
@@ -50,18 +50,13 @@ internal static class EmployeeICardTemplateRules
 		}
 	}
 
-	public static Dictionary<string, bool> ParseFieldsJson(string fieldsJson, bool allowLegacyFallback)
+	public static Dictionary<string, bool> ParseFieldsJson(string fieldsJson)
 	{
 		try
 		{
 			using var document = JsonDocument.Parse(fieldsJson);
 			if (document.RootElement.ValueKind is not JsonValueKind.Array)
 			{
-				if (allowLegacyFallback)
-				{
-					return BuildDefaultFields();
-				}
-
 				throw new BusinessException(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson);
 			}
 
@@ -93,11 +88,6 @@ internal static class EmployeeICardTemplateRules
 		}
 		catch (JsonException)
 		{
-			if (allowLegacyFallback)
-			{
-				return BuildDefaultFields();
-			}
-
 			throw new BusinessException(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson);
 		}
 	}

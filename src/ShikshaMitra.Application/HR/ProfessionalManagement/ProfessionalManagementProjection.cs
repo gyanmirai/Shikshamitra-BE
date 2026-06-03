@@ -152,25 +152,4 @@ internal static class ProfessionalManagementProjection
 			CreationTime = auditEvent.CreationTime
 		};
 
-	public static ProfessionalReviewDto ToLegacyReviewDto(
-		ProfessionalReview review,
-		ProfessionalReviewCycle cycle,
-		Employee? employee) =>
-		new()
-		{
-			Id = review.Id,
-			CycleId = review.CycleId,
-			CycleName = cycle.Name,
-			EmployeeId = review.EmployeeId,
-			EmployeeName = employee?.EmployeeName ?? "Unknown employee",
-			EmployeeIdentifier = employee?.EmployeeCode,
-			EmployeeRole = employee?.Role?.Name,
-			ReviewerUserId = review.ReviewerUserId,
-			CommunicationScore = review.CommunicationScore,
-			ProblemSolvingScore = review.ProblemSolvingScore,
-			Comments = review.Comments,
-			Feedback = review.Feedback,
-			Status = review.Status,
-			SubmittedAt = review.SubmittedAt
-		};
 }

@@ -15,8 +15,6 @@ public partial class HRSeederContributor
 {
 	private async Task SeedDemoHrPolicyAssignmentsAsync(List<Guid> activeEmployeeIds)
 	{
-		await ConvertLegacyPolicyAssignmentsToGroupsAsync();
-
 		if (!ShouldSeedDemoPolicyScenarios())
 		{
 			return;

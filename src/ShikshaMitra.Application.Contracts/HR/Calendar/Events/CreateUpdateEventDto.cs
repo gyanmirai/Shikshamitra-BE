@@ -18,7 +18,7 @@ public class CreateUpdateEventDto
     /// <summary>
     /// Title of the event (1-256 characters, required)
     /// </summary>
-    public string Title { get; set; }
+    public string Title { get; set; } = string.Empty;
 
     /// <summary>
     /// Reference to the EventType, required
@@ -54,12 +54,12 @@ public class CreateUpdateEventDto
     /// <summary>
     /// Start time in HH:mm format, required
     /// </summary>
-    public string StartTime { get; set; }
+    public string StartTime { get; set; } = string.Empty;
 
     /// <summary>
     /// End time in HH:mm format, required
     /// </summary>
-    public string EndTime { get; set; }
+    public string EndTime { get; set; } = string.Empty;
 
     /// <summary>
     /// Whether event is recurring

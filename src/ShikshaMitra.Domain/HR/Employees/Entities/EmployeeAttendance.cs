@@ -57,7 +57,7 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant, IUserSc
 		}
 	}
 
-	public virtual Employee Employee { get; set; }
+	public virtual Employee? Employee { get; set; }
 
 	#region IUserScopedEntity Explicit Implementation
 	// Use concrete FK properties instead of navigating through nullable Employee

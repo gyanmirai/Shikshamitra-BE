@@ -15,7 +15,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public Guid? UserId { get; private set; }
 	public string? ProfilePictureBlobName { get; private set; }
-	public string EmployeeCode { get; private set; }
+	public string EmployeeCode { get; private set; } = string.Empty;
 	public string? LastName { get; private set; }
 	public string? FirstName { get; private set; }
 	public string? MiddleName { get; private set; }
@@ -34,8 +34,8 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? MobileNo { get; private set; }
 	public string? SecondaryMobileNo { get; private set; }
 	public string? Email { get; private set; }
-	public string PanNo { get; private set; }
-	public string AdharNo { get; private set; }
+	public string PanNo { get; private set; } = string.Empty;
+	public string AdharNo { get; private set; } = string.Empty;
 	public string? Address1 { get; private set; }
 	public string? Address2 { get; private set; }
 	public string? Address3 { get; private set; }
@@ -50,7 +50,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public State? State { get; private set; }
 	public Country? Country { get; private set; }
 	public string? PinCode { get; private set; }
-	public BankDetails BankDetails { get; private set; }
+	public BankDetails BankDetails { get; private set; } = new(null, null, null, null, null);
 	public Guid? ShiftId { get; set; }
 	public List<WorkExperience> WorkExperiences { get; private set; } = [];
 	public List<EmployeeDocument> Documents { get; private set; } = [];
@@ -80,9 +80,9 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		UserId = userId;
-		EmployeeCode = employeeCode;
+		EmployeeCode = employeeCode ?? string.Empty;
 		UpdateBasicInfo(basicInfo);
-		BankDetails = bankDetails;
+		BankDetails = bankDetails ?? new BankDetails(null, null, null, null, null);
 		WorkExperiences = workExperiences ?? [];
 	}
 

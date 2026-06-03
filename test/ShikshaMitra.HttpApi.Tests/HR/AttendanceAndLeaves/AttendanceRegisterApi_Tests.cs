@@ -40,7 +40,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 			Client,
 			marker,
 			dateOfJoining: holidayDate.ToDateTime(TimeOnly.MinValue).AddDays(-1));
-		await SeedLegacyAttendanceAsync(employee.Id, holidayDate, EmployeeTestHelper.DefaultMediumStageId);
+		await SeedAttendanceAsync(employee.Id, holidayDate, EmployeeTestHelper.DefaultMediumStageId);
 
 		var response = await Client.GetAsync(
 			$"{RegisterUrl}?startDate=2026-05-10&endDate=2026-05-10&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
@@ -73,7 +73,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 			Client,
 			marker,
 			dateOfJoining: holidayDate.ToDateTime(TimeOnly.MinValue).AddDays(-1));
-		await SeedLegacyAttendanceAsync(employee.Id, holidayDate, EmployeeTestHelper.DefaultMediumStageId);
+		await SeedAttendanceAsync(employee.Id, holidayDate, EmployeeTestHelper.DefaultMediumStageId);
 
 		var registerResponse = await Client.GetAsync(
 			$"{RegisterUrl}?startDate=2026-05-10&endDate=2026-05-10&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
@@ -98,64 +98,6 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var skippedRow = result.Rows.Single();
 		skippedRow.Reason.ShouldNotBeNull();
 		skippedRow.Reason.ShouldContain("Holiday:");
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Grouped_Register_Should_Show_Legacy_Null_Stage_Attendance_By_Assignment()
-	{
-		await EnsureDefaultTestUserHasTenantWideScopeAsync();
-
-		var marker = $"RegLegacyNull{Guid.NewGuid():N}";
-		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
-			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-5));
-		await SeedLegacyAttendanceAsync(employee.Id, attendanceDate, educationMediumStageId: null);
-
-		var response = await Client.GetAsync(
-			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
-		var day = payload.Items.Single(x => x.EmployeeId == employee.Id).Days.Single();
-
-		day.Status.ShouldBe(AttendanceRegisterStatus.Present);
-		day.IsMarked.ShouldBeTrue();
-		day.AttendanceId.ShouldNotBeNull();
-		day.EducationMediumStageId.ShouldBe(EmployeeTestHelper.DefaultMediumStageId);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Grouped_Register_StageScopedUser_Should_Show_Legacy_Null_Stage_Attendance_By_Assignment()
-	{
-		var scopedUserId = Guid.NewGuid();
-		await EnsureUserHasStageScopeAsync(scopedUserId, EmployeeTestHelper.DefaultMediumStageId);
-
-		var marker = $"RegScopedLegacyNull{Guid.NewGuid():N}";
-		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
-			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-5));
-		await SeedLegacyAttendanceAsync(employee.Id, attendanceDate, educationMediumStageId: null);
-
-		var scopedClient = CreateClientAs(scopedUserId);
-		var response = await scopedClient.GetAsync(
-			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
-		var day = payload.Items.Single(x => x.EmployeeId == employee.Id).Days.Single();
-
-		day.Status.ShouldBe(AttendanceRegisterStatus.Present);
-		day.IsMarked.ShouldBeTrue();
-		day.AttendanceId.ShouldNotBeNull();
-		day.EducationMediumStageId.ShouldBe(EmployeeTestHelper.DefaultMediumStageId);
 	}
 
 	[Fact]
@@ -301,7 +243,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		payload.Summary.NotMarked.ShouldBe(0);
 	}
 
-	private async Task SeedLegacyAttendanceAsync(Guid employeeId, DateOnly attendanceDate, Guid? educationMediumStageId)
+	private async Task SeedAttendanceAsync(Guid employeeId, DateOnly attendanceDate, Guid? educationMediumStageId)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -319,7 +261,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 				AttendanceDate = attendanceDate,
 				EducationMediumStageId = educationMediumStageId,
 				StatusType = EmployeeAttendanceStatusType.Present,
-				Remarks = "Legacy register row"
+				Remarks = "Register row"
 			}, autoSave: false);
 			await uow.CompleteAsync();
 		}

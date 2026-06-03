@@ -74,10 +74,8 @@ public class HrMaintainabilityGuard_Tests
 			"src/ShikshaMitra.Application/HR/Payroll/RunPayroll/RunPayrollAppService.cs",
 			"src/ShikshaMitra.Application/HR/AttendanceAndLeaves/LeaveManagementAppService.cs",
 			"src/ShikshaMitra.Application/HR/Dashboard/HRDashboardAppService.cs",
-			"src/ShikshaMitra.Application/HR/ProfessionalManagement/ProfessionalManagementAppService.cs",
-			"src/ShikshaMitra.Application/HR/Employees/EmployeeAppService.cs"
+			"src/ShikshaMitra.Application/HR/ProfessionalManagement/ProfessionalManagementAppService.cs"
 		};
-		var allowedRepositoryInjection = "IEmployeeRepository employeeRepository";
 		var violations = new List<string>();
 
 		foreach (var relativePath in facadeFiles)
@@ -86,12 +84,6 @@ public class HrMaintainabilityGuard_Tests
 			var text = File.ReadAllText(file);
 			foreach (Match match in RepositoryInjectionPattern().Matches(text))
 			{
-				if (relativePath.EndsWith("EmployeeAppService.cs", StringComparison.Ordinal) &&
-				    string.Equals(match.Value, allowedRepositoryInjection, StringComparison.Ordinal))
-				{
-					continue;
-				}
-
 				violations.Add($"{relativePath} injects repository dependency '{match.Value}'");
 			}
 		}
@@ -144,6 +136,41 @@ public class HrMaintainabilityGuard_Tests
 
 		violations.ShouldBeEmpty();
 	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Hr_Source_Should_Not_Reintroduce_Removed_Surface()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var forbiddenPatterns = new Dictionary<string, Regex>
+		{
+			["Retired attribute"] = new(@$"\[{Join("Ob", "solete")}\b", RegexOptions.CultureInvariant),
+			["Friendly exception"] = new(@$"\b{Join("User", "Friendly", "Exception")}\b", RegexOptions.CultureInvariant),
+			["Employee facade"] = new(
+				@$"\b{Join("I", "Employee", "App", "Service")}\b|\b{Join("Employee", "App", "Service")}\b",
+				RegexOptions.CultureInvariant),
+			["Removed naming"] = new(
+				@$"\b{Join("Leg", "acy")}\b|\b{Join("leg", "acy")}\b|\b{Join("Compa", "tibility")}\b",
+				RegexOptions.CultureInvariant)
+		};
+		var violations = new List<string>();
+
+		foreach (var file in GetMainHrSourceFiles(repoRoot))
+		{
+			var text = File.ReadAllText(file);
+			foreach (var (name, pattern) in forbiddenPatterns)
+			{
+				if (pattern.IsMatch(text))
+				{
+					violations.Add($"{Path.GetRelativePath(repoRoot, file)} contains {name}");
+				}
+			}
+		}
+
+		violations.ShouldBeEmpty();
+	}
+
+	private static string Join(params string[] parts) => string.Concat(parts);
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]

@@ -15,8 +15,8 @@ namespace ShikshaMitra.Infrastructure.Safety;
 [TestModule(TestTraits.Modules.HR)]
 public class HrEndpointContractSnapshotGuard_Tests
 {
-	private const int ExpectedEndpointCount = 264;
-	private const string ExpectedSnapshotHash = "5a54a60b6bf57ec681412d0e4445503c73a3867dcc2f3dfa8ae15d2b482d398f";
+	private const int ExpectedEndpointCount = 262;
+	private const string ExpectedSnapshotHash = "e7727148685aed3ec4a22ccf4c3312d36a1b8957abd14f0c72c4e0721d4aea28";
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]

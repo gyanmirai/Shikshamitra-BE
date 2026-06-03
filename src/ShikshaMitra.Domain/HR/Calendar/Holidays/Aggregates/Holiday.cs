@@ -21,7 +21,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>
     /// Name of the holiday (e.g., "Diwali", "New Year")
     /// </summary>
-    public string HolidayName { get; set; }
+    public string HolidayName { get; set; } = string.Empty;
 
     /// <summary>
     /// Reference to the EventType that defines color and category

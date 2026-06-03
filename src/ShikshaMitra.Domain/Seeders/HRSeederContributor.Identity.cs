@@ -9,30 +9,10 @@ namespace ShikshaMitra.Seeders;
 
 public partial class HRSeederContributor
 {
-	private async Task<IdentityUser?> FindUserByEmailOrLegacyAliasAsync(string email)
+	private async Task<IdentityUser?> FindUserByEmailAsync(string email)
 	{
-		var emails = new List<string> { email };
-		if (email.EndsWith("@ddvs.com", StringComparison.OrdinalIgnoreCase))
-		{
-			emails.Add(email[..^"@ddvs.com".Length] + "@school.edu");
-		}
-
-		if (string.Equals(email, "nilesh.joshi@ddvs.com", StringComparison.OrdinalIgnoreCase))
-		{
-			emails.Add("clerk@school.edu");
-		}
-
-		foreach (var candidateEmail in emails.Distinct(StringComparer.OrdinalIgnoreCase))
-		{
-			var normalizedEmail = _lookupNormalizer.NormalizeEmail(candidateEmail);
-			var user = await _userRepository.FindByNormalizedEmailAsync(normalizedEmail);
-			if (user != null)
-			{
-				return user;
-			}
-		}
-
-		return null;
+		var normalizedEmail = _lookupNormalizer.NormalizeEmail(email);
+		return await _userRepository.FindByNormalizedEmailAsync(normalizedEmail);
 	}
 
 	private async Task UpdateSeededEmployeeUserAsync(

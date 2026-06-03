@@ -13,7 +13,6 @@ namespace ShikshaMitra.HR.ProfessionalManagement;
 
 [RemoteService(false)]
 public class ProfessionalManagementReviewWorkflow(
-	IRepository<ProfessionalReview, Guid> legacyReviewRepository,
 	IRepository<PerformanceTemplate, Guid> templateRepository,
 	IRepository<PerformanceReviewAssignment, Guid> assignmentRepository,
 	IRepository<PerformanceReviewStage, Guid> stageRepository,
@@ -28,27 +27,11 @@ public class ProfessionalManagementReviewWorkflow(
 {
 	public async Task<ProfessionalReviewDto> SaveDraftAsync(Guid id, ProfessionalReviewSaveRequest input)
 	{
-		var legacy = await legacyReviewRepository.FindAsync(id);
-		if (legacy != null)
-		{
-			legacy.SaveDraft(input.CommunicationScore, input.ProblemSolvingScore, input.Comments, input.Feedback, CurrentUser.Id);
-			await legacyReviewRepository.UpdateAsync(legacy, autoSave: true);
-			return await reviewReader.MapLegacyReviewAsync(legacy);
-		}
-
 		return await SaveStageAsync(id, new PerformanceReviewStageRequest { StageType = PerformanceReviewStageType.SelfAppraisal, SummaryComment = input.Comments }, false);
 	}
 
 	public async Task<ProfessionalReviewDto> SubmitAsync(Guid id, ProfessionalReviewSaveRequest input)
 	{
-		var legacy = await legacyReviewRepository.FindAsync(id);
-		if (legacy != null)
-		{
-			legacy.Submit(input.CommunicationScore, input.ProblemSolvingScore, input.Comments, input.Feedback, CurrentUser.Id, Clock.Now);
-			await legacyReviewRepository.UpdateAsync(legacy, autoSave: true);
-			return await reviewReader.MapLegacyReviewAsync(legacy);
-		}
-
 		return await SaveStageAsync(id, new PerformanceReviewStageRequest { StageType = PerformanceReviewStageType.SelfAppraisal, SummaryComment = input.Comments }, true);
 	}
 

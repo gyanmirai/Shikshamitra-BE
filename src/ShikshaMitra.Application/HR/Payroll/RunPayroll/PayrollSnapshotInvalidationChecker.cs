@@ -45,14 +45,6 @@ public class PayrollSnapshotInvalidationChecker(
 			return true;
 		}
 
-		if (snapshots.Any(PayrollSnapshotComponentParser.HasLegacyComponentSnapshotFormat))
-		{
-			logger.LogDebug(
-				"Payroll snapshot for {MonthYear} is stale because component metadata is missing.",
-				monthYear);
-			return true;
-		}
-
 		return await attendanceInvalidationReader.HasAttendanceInvalidationsAsync(
 			monthYear,
 			year,

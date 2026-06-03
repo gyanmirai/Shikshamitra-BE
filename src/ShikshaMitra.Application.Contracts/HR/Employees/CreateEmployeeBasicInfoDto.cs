@@ -7,7 +7,7 @@ public class CreateEmployeeBasicInfoDto
 {
 	public string? LastName { get; set; }
 
-	public string FirstName { get; set; }
+	public string FirstName { get; set; } = string.Empty;
 
 	public string? MiddleName { get; set; }
 

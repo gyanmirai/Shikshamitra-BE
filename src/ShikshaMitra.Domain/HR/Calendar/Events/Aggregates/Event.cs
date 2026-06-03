@@ -11,7 +11,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public Guid AcademicYearId { get; private set; }
 
-    public string Title { get; set; }
+    public string Title { get; set; } = string.Empty;
 
     public Guid EventTypeId { get; set; }
 
@@ -25,9 +25,9 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public DateTimeOffset? MeetingDate { get; set; }
 
-    public string StartTime { get; set; }
+    public string StartTime { get; set; } = string.Empty;
 
-    public string EndTime { get; set; }
+    public string EndTime { get; set; } = string.Empty;
 
     public bool IsRecurring { get; set; }
 
@@ -110,32 +110,6 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
             academicYearId,
             eventTypeId,
             new EventDetails(title, null, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
-    }
-
-    [Obsolete("Use CreateMeetingEvent or CreateEvent instead")]
-    public static Event Create(
-        Guid? tenantId,
-        Guid academicYearId,
-        string title,
-        Guid eventTypeId,
-        DateTimeOffset meetingDate,
-        string startTime,
-        string endTime,
-        string? description = null,
-        string? poster = null,
-        EventMode mode = EventMode.Offline,
-        string? venue = null,
-        bool isRecurring = false,
-        string? recurrenceJson = null,
-        List<Guid>? audienceIds = null)
-    {
-        EventScheduleRules.ValidateTime(startTime, endTime);
-
-        return EventFactory.Create(
-            tenantId,
-            academicYearId,
-            eventTypeId,
-            new EventDetails(title, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
     public void Update(

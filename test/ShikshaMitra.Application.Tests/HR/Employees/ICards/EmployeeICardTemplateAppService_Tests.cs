@@ -4,8 +4,11 @@ using System.Threading.Tasks;
 using QuestPDF.Infrastructure;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.ICards;
+using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.TenantSettings;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
@@ -16,16 +19,18 @@ namespace ShikshaMitra.HR.Employees.ICards;
 public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private readonly IEmployeeICardTemplateAppService _iCardAppService;
-	private readonly IEmployeeAppService _employeeAppService;
+	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IIdentityRoleRepository _roleRepository;
+	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly IGuidGenerator _guidGenerator;
 	private readonly ICurrentTenant _currentTenant;
 
 	public EmployeeICardTemplateAppService_Tests()
 	{
 		_iCardAppService = GetRequiredService<IEmployeeICardTemplateAppService>();
-		_employeeAppService = GetRequiredService<IEmployeeAppService>();
+		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
+		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		QuestPDF.Settings.License = LicenseType.Community;
@@ -246,10 +251,11 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 		};
 	}
 
-	private async Task<EmployeeDto> CreateEmployeeAsync()
+	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync()
 	{
 		var roleId = await EnsureRoleExistsAsync();
-		return await _employeeAppService.CreateBasicInfoAsync(new CreateEmployeeBasicInfoDto
+		var shiftId = await EnsureShiftExistsAsync();
+		return await _personalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Card",
 			LastName = "Employee",
@@ -261,7 +267,8 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 			GenderType = GenderType.Male,
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
-			RoleId = roleId
+			RoleId = roleId,
+			ShiftId = shiftId
 		});
 	}
 
@@ -277,6 +284,25 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 		var id = _guidGenerator.Create();
 		await _roleRepository.InsertAsync(new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id), autoSave: true);
 		return id;
+	}
+
+	private async Task<Guid> EnsureShiftExistsAsync()
+	{
+		var shifts = await _shiftRepository.GetListAsync();
+		var existing = shifts.FirstOrDefault();
+		if (existing != null)
+		{
+			return existing.Id;
+		}
+
+		var shift = new ShiftManagement
+		{
+			ShiftName = "Test Shift",
+			StartTime = new TimeOnly(8, 0),
+			EndTime = new TimeOnly(16, 0)
+		};
+		await _shiftRepository.InsertAsync(shift, autoSave: true);
+		return shift.Id;
 	}
 
 	private static byte[] BuildMinimalPng()

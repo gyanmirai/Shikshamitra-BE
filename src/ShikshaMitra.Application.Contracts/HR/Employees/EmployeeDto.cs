@@ -58,7 +58,7 @@ public class EmployeeDto : EntityDto<Guid>
 	public string? PinCode { get; set; }
 
 	// Value Objects
-	public BankDetailsDto BankDetails { get; set; }
+	public BankDetailsDto BankDetails { get; set; } = new();
 
 	public List<WorkExperienceDto> WorkExperiences { get; set; } = [];
 
@@ -70,7 +70,7 @@ public class EmployeeDto : EntityDto<Guid>
 	// Profile Picture stored in blob storage
 	public string? ProfilePictureBlobName { get; set; }
 
-	public ShiftManagementDto Shift { get; set; }
+	public ShiftManagementDto Shift { get; set; } = new();
 
 	public List<Guid> OrganizationIds { get; set; } = [];
 	public List<EmployeeOrganizationDto> Organizations { get; set; } = [];

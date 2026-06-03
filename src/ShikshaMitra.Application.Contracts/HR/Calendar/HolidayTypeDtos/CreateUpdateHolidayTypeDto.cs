@@ -8,12 +8,12 @@ public class CreateUpdateHolidayTypeDto
     /// <summary>
     /// Name of the holiday type (e.g., "National Holiday", "Festival")
     /// </summary>
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
     /// <summary>
     /// Hexadecimal color code for UI representation (#RRGGBB format)
     /// </summary>
-    public string Color { get; set; }
+    public string Color { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional description of the holiday type

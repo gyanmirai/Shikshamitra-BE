@@ -20,7 +20,6 @@ public static partial class HRErrorCodes
 	public const string PayrollBatchSaveFailed = "HR:Payroll:030017";
 	public const string PayrollGenerationCompleteFailure = "HR:Payroll:030018";
 	public const string PayrollSnapshotMigrationRequired = "HR:Payroll:030019";
-	public const string PayrollStructureLegacyEndpointDeprecated = "HR:Payroll:030020";
 	public const string SalarySlipPdfRequiresFinalized = "HR:Payroll:030021";
 	public const string PayrollAdjustmentNameRequired = "HR:Payroll:030022";
 	public const string PayrollAdjustmentAmountInvalid = "HR:Payroll:030023";

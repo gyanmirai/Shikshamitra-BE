@@ -2,14 +2,13 @@ namespace ShikshaMitra.HR.Employees;
 
 /// <summary>
 /// DTO for employee additional details (response).
-/// Used by the legacy API at /api/app/employee/{employeeId}/additional-details
 /// </summary>
 public class EmployeeAdditionalDetailsDto
 {
 	/// <summary>
 	/// Employee code for reference.
 	/// </summary>
-	public string EmployeeCode { get; set; }
+	public string EmployeeCode { get; set; } = string.Empty;
 
 	/// <summary>
 	/// Below Poverty Line card number.
@@ -39,7 +38,6 @@ public class EmployeeAdditionalDetailsDto
 
 /// <summary>
 /// DTO for updating employee additional details.
-/// Used by the legacy API at /api/app/employee/{employeeId}/additional-details
 /// </summary>
 public class UpdateEmployeeAdditionalDetailsDto
 {

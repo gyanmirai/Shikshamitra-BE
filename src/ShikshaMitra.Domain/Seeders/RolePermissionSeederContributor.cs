@@ -164,9 +164,9 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			permission.StartsWith($"{modulePermission}.", StringComparison.OrdinalIgnoreCase));
 
 	private static string[] AllApplicationPermissions() =>
-		AllModulePermissions()
+			AllModulePermissions()
 			.Concat(AllDetailedModulePermissions())
-			.Concat(AllLegacySubModulePermissions())
+			.Concat(AllClassicSubModulePermissions())
 			.Concat(AllDetailedSubmodulePermissions())
 			.Concat(AllPlatformPermissions())
 			.Distinct(StringComparer.OrdinalIgnoreCase)
@@ -185,7 +185,7 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 	private static IEnumerable<string> AllDetailedModulePermissions() =>
 		ShikshaMitraSubmodulePermissions.AllModules.Keys;
 
-	private static IEnumerable<string> AllLegacySubModulePermissions() =>
+	private static IEnumerable<string> AllClassicSubModulePermissions() =>
 		ShikshaMitraSubModulePermissions.All;
 
 	private static IEnumerable<string> AllDetailedSubmodulePermissions() =>

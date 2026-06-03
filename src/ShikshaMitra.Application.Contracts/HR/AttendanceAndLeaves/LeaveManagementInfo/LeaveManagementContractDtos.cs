@@ -83,7 +83,7 @@ public class LeaveRequestDetailsResponse
 	public string? SubmittedByEmployeeCode { get; set; }
 	[Required]
 	public Guid LeavePolicyId { get; set; }
-	/// <summary>Same value as <see cref="LeavePolicyId"/> (legacy JSON name).</summary>
+	/// <summary>Policy identifier included for clients that label the policy as a leave type.</summary>
 	[Required]
 	public Guid LeaveTypeId { get; set; }
 	[Required]

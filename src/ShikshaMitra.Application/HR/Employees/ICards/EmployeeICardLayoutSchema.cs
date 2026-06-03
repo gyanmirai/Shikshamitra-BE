@@ -18,7 +18,7 @@ internal static class EmployeeICardLayoutSchema
 			}
 		}
 
-		return EmployeeICardLegacyLayoutBuilder.Build(template);
+		throw new BusinessException(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson);
 	}
 
 	public static EmployeeICardPrintSettings ResolvePrintSettings(string? json, int? cardsPerPageFallback)

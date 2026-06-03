@@ -15,12 +15,12 @@ public class EventType : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>
     /// Name of the event type (e.g., "Meeting", "Holiday", "Conference")
     /// </summary>
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
     /// <summary>
     /// Hex color code for UI representation (#RRGGBB format)
     /// </summary>
-    public string Color { get; set; }
+    public string Color { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional description of the event type

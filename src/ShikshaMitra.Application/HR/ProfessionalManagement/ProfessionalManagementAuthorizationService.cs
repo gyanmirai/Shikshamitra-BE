@@ -150,9 +150,9 @@ public class ProfessionalManagementAuthorizationService(
 		await assignmentRepository.GetAsync(reviewAssignmentId);
 	}
 
-	public async Task EnsureAnyPermissionAsync(string primaryPermission, string legacyPermission)
+	public async Task EnsureAnyPermissionAsync(string primaryPermission, string fallbackPermission)
 	{
-		if (await IsGrantedAsync(primaryPermission) || await IsGrantedAsync(legacyPermission))
+		if (await IsGrantedAsync(primaryPermission) || await IsGrantedAsync(fallbackPermission))
 		{
 			return;
 		}

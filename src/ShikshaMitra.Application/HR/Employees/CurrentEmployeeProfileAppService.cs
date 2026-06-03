@@ -9,8 +9,8 @@ namespace ShikshaMitra.HR.Employees;
 
 [RemoteService(false)]
 [Authorize]
-public class CurrentEmployeeAppService(IEmployeeRepository employeeRepository)
-	: ApplicationService, ICurrentEmployeeAppService
+public class CurrentEmployeeProfileAppService(IEmployeeRepository employeeRepository)
+	: ApplicationService, ICurrentEmployeeProfileAppService
 {
 	public async Task<EmployeeDto> GetCurrentAsync()
 	{

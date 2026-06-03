@@ -60,7 +60,9 @@ public partial class HRSeederContributor
 				EndTime = shift.EndTime
 			};
 			// Set the Id using reflection since there's no constructor
-			typeof(ShiftManagement).GetProperty("Id").SetValue(shiftEntity, id);
+			var idProperty = typeof(ShiftManagement).GetProperty(nameof(ShiftManagement.Id))
+				?? throw new InvalidOperationException("ShiftManagement.Id property was not found.");
+			idProperty.SetValue(shiftEntity, id);
 			await _shiftRepository.InsertAsync(shiftEntity, autoSave: false);
 		}
 

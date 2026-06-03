@@ -37,8 +37,8 @@ public static class SalarySlipGenerationRules
 			.WithData("employeeId", employee.Id)
 			.WithData("month", $"{year}-{month:00}")
 			.WithData("effectiveStartDate", GetEffectiveEmploymentStartDate(employee))
-			.WithData("statusEffectiveDate", employee.StatusEffectiveDate)
-			.WithData("statusLastChangedAt", employee.StatusLastChangedAt);
+			.WithData("statusEffectiveDate", employee.StatusEffectiveDate?.ToString("O") ?? string.Empty)
+			.WithData("statusLastChangedAt", employee.StatusLastChangedAt?.ToString("O") ?? string.Empty);
 	}
 
 	public static DateOnly GetEffectiveEmploymentStartDate(Employee employee) =>

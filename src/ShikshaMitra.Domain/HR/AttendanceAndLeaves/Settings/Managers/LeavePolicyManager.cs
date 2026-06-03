@@ -99,7 +99,7 @@ public class LeavePolicyManager : DomainService
 
 		if (existingLeaveType == null)
 		{
-			throw new BusinessException(HRErrorCodes.LeaveTypeNotFoundLegacy)
+			throw new BusinessException(HRErrorCodes.LeaveTypeNotFound)
 				.WithData("leaveTypeId", leaveTypeId);
 		}
 

@@ -44,5 +44,5 @@ __tenant: <tenant-id>
 ## Change log
 - 2026-03-27: Created canonical curated wrapper from raw contract export.
 
-### Legacy clarification
+### Contract clarification
 Earlier Widdershins/Slate exports for employee personal and status endpoints were found to diverge from current backend behavior. Treat `contracts/raw` + current PRD as authoritative during contract downloads.

@@ -1044,7 +1044,7 @@ Returns paginated work experience details of an employee
 
 ## GET Get employee payroll information
 
-GET /api/employees/{employeeId}/get-payroll
+
 
 ### Params
 

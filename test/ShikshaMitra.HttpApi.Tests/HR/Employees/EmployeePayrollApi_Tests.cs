@@ -39,22 +39,6 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Get_Employee_Payroll_Legacy_Route_Returns_Same_Shape()
-	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayLegacy");
-
-		var response = await Client.GetAsync($"{BaseUrl}/{empId}/get-payroll");
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-		var body = await response.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
-		body.ShouldNotBeNull();
-		body.Id.ShouldBe(empId);
-		body.BankDetails.ShouldNotBeNull();
-		body.SalaryDetails.ShouldNotBeNull();
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Employee_Payroll()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayPut");

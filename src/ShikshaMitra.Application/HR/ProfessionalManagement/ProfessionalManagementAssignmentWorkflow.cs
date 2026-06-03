@@ -16,7 +16,6 @@ namespace ShikshaMitra.HR.ProfessionalManagement;
 
 [RemoteService(false)]
 public class ProfessionalManagementAssignmentWorkflow(
-	IRepository<ProfessionalReview, Guid> legacyReviewRepository,
 	IRepository<Employee, Guid> employeeRepository,
 	IRepository<PerformanceTemplate, Guid> templateRepository,
 	IRepository<PerformanceReviewAssignment, Guid> assignmentRepository,
@@ -25,7 +24,6 @@ public class ProfessionalManagementAssignmentWorkflow(
 	PerformanceTemplateManager templateManager,
 	PerformanceReviewStageManager stageManager,
 	PerformanceReviewAssignmentManager assignmentManager,
-	IGuidGenerator guidGenerator,
 	IAsyncQueryableExecuter asyncExecuter) : ApplicationService, ITransientDependency
 {
 	public async Task<List<PerformanceReviewAssignment>> GetAssignmentsForCycleAsync(Guid cycleId)
@@ -62,25 +60,11 @@ public class ProfessionalManagementAssignmentWorkflow(
 				await FindReviewerByKeywordAsync(null, "principal", "vice principal", "management"));
 			await assignmentRepository.InsertAsync(assignment, autoSave: true);
 			await EnsureStagesAsync(assignment);
-			await EnsureLegacyReviewAsync(cycle.Id, employee.Id);
 			existing.Add(assignment);
 			createdCount++;
 		}
 
 		return createdCount;
-	}
-
-	private async Task EnsureLegacyReviewAsync(Guid cycleId, Guid employeeId)
-	{
-		var query = await legacyReviewRepository.GetQueryableAsync();
-		if (await asyncExecuter.AnyAsync(query.Where(x => x.CycleId == cycleId && x.EmployeeId == employeeId)))
-		{
-			return;
-		}
-
-		await legacyReviewRepository.InsertAsync(
-			new ProfessionalReview(guidGenerator.Create(), CurrentTenant.Id, cycleId, employeeId, CurrentUser.Id),
-			autoSave: true);
 	}
 
 	private async Task EnsureStagesAsync(PerformanceReviewAssignment assignment)

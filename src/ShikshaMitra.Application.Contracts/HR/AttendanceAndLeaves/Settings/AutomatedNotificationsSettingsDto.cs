@@ -7,5 +7,5 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 public class AutomatedNotificationsSettingsDto : EntityDto<Guid>
 {
 	public EmployeeAttendanceStatusType EmployeeAttendanceStatusType { get; set; }
-	public ICollection<NotificationMethodType> NotificationMethods { get; set; }
+	public ICollection<NotificationMethodType> NotificationMethods { get; set; } = [];
 }

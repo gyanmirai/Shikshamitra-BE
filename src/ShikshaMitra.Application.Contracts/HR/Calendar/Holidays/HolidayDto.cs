@@ -17,10 +17,10 @@ public class HolidayDto : AuditedEntityDto<Guid>
     /// </summary>
     public Guid AcademicYearId { get; set; }
 
-    public string HolidayName { get; set; }
+    public string HolidayName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Holiday type ID (deprecated - use HolidayType object instead)
+    /// Holiday type ID
     /// </summary>
     public Guid HolidayTypeId { get; set; }
 

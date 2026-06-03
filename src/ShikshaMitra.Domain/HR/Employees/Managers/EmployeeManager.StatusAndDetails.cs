@@ -17,7 +17,7 @@ public partial class EmployeeManager
 
 		employee = employee.UpdateEmployeeStatus(
 			employeeStatusType,
-			changeReason,
+			changeReason ?? string.Empty,
 			statusEffectiveDate,
 			new DateTimeOffset(Clock.Now.ToUniversalTime(), TimeSpan.Zero));
 		return employee;

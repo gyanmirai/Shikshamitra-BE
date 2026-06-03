@@ -10,7 +10,6 @@ namespace ShikshaMitra.HR.ProfessionalManagement;
 
 public class ProfessionalManagementReviewReader(
 	IRepository<ProfessionalReviewCycle, Guid> cycleRepository,
-	IRepository<ProfessionalReview, Guid> legacyReviewRepository,
 	IRepository<PerformanceReviewAssignment, Guid> assignmentRepository,
 	IRepository<ClassroomObservation, Guid> observationRepository,
 	IRepository<PerformanceEvidence, Guid> evidenceRepository,
@@ -72,20 +71,8 @@ public class ProfessionalManagementReviewReader(
 
 	public async Task<ProfessionalReviewListResponse> GetEmployeeReviewHistoryAsync(Guid employeeId)
 	{
-		var modern = await GetReviewsAsync(null, employeeId, null, null);
-		var reviewQuery = await legacyReviewRepository.GetQueryableAsync();
-		var reviews = await asyncExecuter.ToListAsync(reviewQuery
-			.Where(x => x.EmployeeId == employeeId)
-			.OrderByDescending(x => x.SubmittedAt ?? x.LastModificationTime ?? x.CreationTime));
-		var cycles = await lookupReader.GetCyclesByIdsAsync(reviews.Select(x => x.CycleId).Distinct().ToList());
-		var employees = await lookupReader.GetEmployeesByIdsAsync([employeeId]);
-		var employee = employees.GetValueOrDefault(employeeId);
-		var modernCycleIds = modern.Items.Select(x => x.CycleId).ToHashSet();
-		var legacyItems = reviews
-			.Where(x => cycles.ContainsKey(x.CycleId) && !modernCycleIds.Contains(x.CycleId))
-			.Select(x => ProfessionalManagementProjection.ToLegacyReviewDto(x, cycles[x.CycleId], employee));
-		var items = modern.Items
-			.Concat(legacyItems)
+		var reviews = await GetReviewsAsync(null, employeeId, null, null);
+		var items = reviews.Items
 			.OrderByDescending(x => x.FinalizedAt ?? x.SubmittedAt ?? DateTime.MinValue)
 			.ToList();
 		return new ProfessionalReviewListResponse { TotalCount = items.Count, Items = items };
@@ -138,11 +125,4 @@ public class ProfessionalManagementReviewReader(
 		return rows.Select(ProfessionalManagementProjection.ToAuditEventDto).ToList();
 	}
 
-	public async Task<ProfessionalReviewDto> MapLegacyReviewAsync(ProfessionalReview review)
-	{
-		var cycle = await cycleRepository.GetAsync(review.CycleId);
-		var employees = await lookupReader.GetEmployeesByIdsAsync([review.EmployeeId]);
-		var employee = employees.GetValueOrDefault(review.EmployeeId);
-		return ProfessionalManagementProjection.ToLegacyReviewDto(review, cycle, employee);
-	}
 }

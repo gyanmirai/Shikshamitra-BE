@@ -10,14 +10,14 @@ public class EmployeeDocument : IMultiTenant, IHasCreationTime
 	public Guid? TenantId { get; private set; }
 	public Guid EmployeeId { get; private set; }
 	public Guid? DocumentNameId { get; private set; }
-	public string DocumentName { get; private set; }
-	public string ContentType { get; private set; }
+	public string DocumentName { get; private set; } = string.Empty;
+	public string ContentType { get; private set; } = string.Empty;
 	public long Size { get; private set; }
 	public DateTime CreationTime { get; private set; }
 	public DateTime? LastModificationTime { get; private set; }
 
 	// Stores the Blob name if using Blob Storage
-	public string BlobName { get; private set; }
+	public string BlobName { get; private set; } = string.Empty;
 
 	private EmployeeDocument() { } // For ORM
 

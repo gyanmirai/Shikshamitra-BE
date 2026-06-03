@@ -20,8 +20,7 @@ public partial class HRSeederContributor
 			throw new Exception($"Invalid mobile number for employee {firstName} {lastName}");
 		}
 
-		// Legacy @school.edu aliases are repaired in place so rerunning old seed data remains idempotent.
-		var existingUserByEmail = await FindUserByEmailOrLegacyAliasAsync(email);
+		var existingUserByEmail = await FindUserByEmailAsync(email);
 		if (existingUserByEmail != null)
 		{
 			await UpdateSeededEmployeeUserAsync(existingUserByEmail, firstName, lastName, email, mobileNo);

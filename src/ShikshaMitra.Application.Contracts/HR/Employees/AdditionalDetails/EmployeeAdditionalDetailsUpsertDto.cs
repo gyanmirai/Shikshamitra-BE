@@ -1,5 +1,3 @@
-﻿using System.ComponentModel.DataAnnotations;
-
 namespace ShikshaMitra.HR.Employees.AdditionalDetails;
 
 /// <summary>
@@ -11,7 +9,6 @@ public class EmployeeAdditionalDetailsUpsertDto
 	/// <summary>
 	/// Below Poverty Line card number, if applicable.
 	/// </summary>
-	[MaxLength(50)]
 	public string? BplCardNo { get; set; }
 
 	/// <summary>
@@ -22,7 +19,6 @@ public class EmployeeAdditionalDetailsUpsertDto
 	/// <summary>
 	/// Optional second language known by the employee.
 	/// </summary>
-	[MaxLength(50)]
 	public string? SecondLanguage { get; set; }
 
 	/// <summary>

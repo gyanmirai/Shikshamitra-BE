@@ -10,6 +10,7 @@ using ShikshaMitra.HR;
 using ShikshaMitra.HttpApi.Models;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Timing;
 
 namespace ShikshaMitra.Controllers.HR.Employees;
 
@@ -21,10 +22,12 @@ public class EmployeeICardTemplateController : AbpControllerBase
 {
 	private const long MaxAssetSize = 2 * 1024 * 1024;
 	private readonly IEmployeeICardTemplateAppService _appService;
+	private readonly IClock _clock;
 
-	public EmployeeICardTemplateController(IEmployeeICardTemplateAppService appService)
+	public EmployeeICardTemplateController(IEmployeeICardTemplateAppService appService, IClock clock)
 	{
 		_appService = appService;
+		_clock = clock;
 	}
 
 	[HttpGet]
@@ -88,7 +91,7 @@ public class EmployeeICardTemplateController : AbpControllerBase
 	public async Task<IActionResult> GeneratePdfAsync(Guid id, [FromBody] EmployeeICardPdfRequest input)
 	{
 		var bytes = await _appService.GenerateEmployeeICardsPdfAsync(id, input);
-		return File(bytes, "application/pdf", $"employee-i-cards-{DateTime.UtcNow:yyyyMMddHHmmss}.pdf");
+		return File(bytes, "application/pdf", $"employee-i-cards-{_clock.Now:yyyyMMddHHmmss}.pdf");
 	}
 
 	[HttpDelete("{id}")]

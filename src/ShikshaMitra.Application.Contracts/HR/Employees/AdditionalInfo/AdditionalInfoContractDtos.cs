@@ -1,22 +1,25 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
+using FluentValidation;
 
 namespace ShikshaMitra.HR.Employees.AdditionalInfo;
 
-/// <summary>
-/// Request/Response DTO for employee additional information
-/// </summary>
 public class AdditionalInfoContract
 {
-	[MaxLength(50)]
 	public string? BplCardNo { get; set; }
 
 	public bool PersonWithDisability { get; set; }
 
-	[MaxLength(50)]
 	public string? SecondLanguage { get; set; }
 
 	public bool IsLibraryMember { get; set; }
 
 	public bool IsTransportMember { get; set; }
+}
+
+public class AdditionalInfoContractValidator : AbstractValidator<AdditionalInfoContract>
+{
+	public AdditionalInfoContractValidator()
+	{
+		RuleFor(x => x.BplCardNo).MaximumLength(50);
+		RuleFor(x => x.SecondLanguage).MaximumLength(50);
+	}
 }

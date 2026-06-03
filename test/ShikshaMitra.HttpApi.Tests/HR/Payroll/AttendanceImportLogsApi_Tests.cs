@@ -514,7 +514,7 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
 			var salarySlip = CreateSalarySlip(tenantId, employeeId, monthYear);
-			salarySlip.Finalize();
+			salarySlip.FinalizeSlip();
 			await salarySlipRepository.InsertAsync(salarySlip, autoSave: false);
 			await uow.CompleteAsync();
 		}
@@ -532,6 +532,7 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 				typeof(string),
 				typeof(List<SalarySlipLineItem>),
 				typeof(List<SalarySlipLineItem>),
+				typeof(DateTime),
 				typeof(string)
 			],
 			modifiers: null);
@@ -555,6 +556,7 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 				}
 			},
 			new List<SalarySlipLineItem>(),
+			DateTime.UtcNow,
 			"Finalized payroll lock test"
 		]);
 	}

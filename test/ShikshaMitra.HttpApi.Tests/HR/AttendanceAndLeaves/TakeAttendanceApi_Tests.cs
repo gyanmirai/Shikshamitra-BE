@@ -49,10 +49,13 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
 
 		payload.IsHoliday.ShouldBeTrue();
+		payload.HolidayName.ShouldNotBeNull();
 		payload.HolidayName.ShouldContain("Summer Vacation");
 		var row = payload.Items.Single();
 		row.IsHoliday.ShouldBeTrue();
+		row.HolidayName.ShouldNotBeNull();
 		row.HolidayName.ShouldContain("Summer Vacation");
+		row.HolidayReason.ShouldNotBeNull();
 		row.HolidayReason.ShouldContain("Holiday:");
 	}
 

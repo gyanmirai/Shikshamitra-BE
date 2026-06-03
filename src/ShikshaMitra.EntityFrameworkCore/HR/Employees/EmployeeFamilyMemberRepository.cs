@@ -23,9 +23,7 @@ public class EmployeeFamilyMemberRepository : EfCoreRepository<ShikshaMitraDbCon
 	{
 		var dbSet = await GetDbSetAsync();
 
-		// SECURITY: EF Core auto-applies tenant filter via IMultiTenant interface
-		// Using parameterized LINQ query - SQL injection safe
-		// Adding explicit tenant filter for defense-in-depth
+		// ABP applies the IMultiTenant filter; this query only scopes the employee aggregate child records.
 		return await dbSet
 			.Where(fm => fm.EmployeeId == employeeId)
 			.OrderBy(fm => fm.RelationType)

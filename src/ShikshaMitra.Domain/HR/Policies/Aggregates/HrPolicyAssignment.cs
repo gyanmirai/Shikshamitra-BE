@@ -69,7 +69,7 @@ public class HrPolicyAssignment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (effectiveTo.HasValue && effectiveTo.Value.Date < effectiveFrom.Date)
 		{
-			throw new BusinessException("ShikshaMitra:PolicyAssignmentRangeInvalid");
+			throw new BusinessException(HRErrorCodes.PolicyAssignmentRangeInvalid);
 		}
 
 		AttendancePolicyId = attendancePolicyId;
@@ -91,7 +91,7 @@ public class HrPolicyAssignment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (string.IsNullOrWhiteSpace(targetKey))
 		{
-			throw new BusinessException("ShikshaMitra:PolicyAssignmentTargetRequired");
+			throw new BusinessException(HRErrorCodes.PolicyAssignmentTargetRequired);
 		}
 
 		var value = targetKey.Trim();

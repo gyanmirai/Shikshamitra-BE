@@ -48,6 +48,7 @@ public class EmployeeDocumentManager(
 				contentType: docData.ContentType,
 				size: docData.Size,
 				blobName: blobName,
+				creationTime: Clock.Now,
 				documentNameId: docData.DocumentNameId
 			);
 
@@ -92,7 +93,7 @@ public class EmployeeDocumentManager(
 
 		await blobContainer.SaveAsync(document.BlobName, content, overrideExisting: true);
 
-		document.UpdateDocumentMetadata(fileName, contentType, size, documentNameId);
+		document.UpdateDocumentMetadata(fileName, contentType, size, Clock.Now, documentNameId);
 
 		await employeeRepository.UpdateAsync(employee);
 		return document;

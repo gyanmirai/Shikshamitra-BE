@@ -5,110 +5,64 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.Calendar.Events;
 
-/// <summary>
-/// Represents a calendar event with temporal properties and recurrence support.
-/// Tenant-specific, supporting different events per tenant.
-/// </summary>
 public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
 
-    /// <summary>
-    /// Academic Year ID for filtering events by academic year (required)
-    /// </summary>
     public Guid AcademicYearId { get; private set; }
 
-    /// <summary>
-    /// Title/name of the event
-    /// </summary>
     public string Title { get; set; }
 
-    /// <summary>
-    /// Reference to EventType for categorization
-    /// </summary>
     public Guid EventTypeId { get; set; }
 
-    /// <summary>
-    /// Optional description of the event
-    /// </summary>
     public string? Description { get; set; }
 
-    /// <summary>
-    /// Poster/image URL for the event
-    /// </summary>
     public string? Poster { get; set; }
 
-    /// <summary>
-    /// Event mode: ONLINE or OFFLINE
-    /// </summary>
     public EventMode Mode { get; set; } = EventMode.Offline;
 
-    /// <summary>
-    /// Venue location (required for offline events)
-    /// </summary>
     public string? Venue { get; set; }
 
-    /// <summary>
-    /// Meeting/event date - only for "Meeting Event" type events, null for other event types
-    /// </summary>
     public DateTimeOffset? MeetingDate { get; set; }
 
-    /// <summary>
-    /// Start time (HH:mm format)
-    /// </summary>
     public string StartTime { get; set; }
 
-    /// <summary>
-    /// End time (HH:mm format)
-    /// </summary>
     public string EndTime { get; set; }
 
-    /// <summary>
-    /// Whether this is a recurring event
-    /// </summary>
     public bool IsRecurring { get; set; }
 
-    /// <summary>
-    /// Recurrence configuration (if IsRecurring is true)
-    /// </summary>
-    public string? RecurrenceJson { get; set; } // Stores recurrence configuration as JSON
+    public string? RecurrenceJson { get; set; }
 
-    /// <summary>
-    /// List of user/group IDs this event applies to
-    /// </summary>
     public List<Guid> AudienceIds { get; set; } = new();
 
-    /// <summary>
-    /// Computed status based on meeting date (for meeting events) or current time (for non-meeting events)
-    /// </summary>
-    public EventStatus Status
-    {
-        get
-        {
-            var now = DateTimeOffset.UtcNow;
-
-            // For meeting events, use MeetingDate for status
-            if (MeetingDate.HasValue)
-            {
-                if (MeetingDate.Value.Date < now.Date)
-                    return EventStatus.Completed;
-
-                if (MeetingDate.Value.Date == now.Date)
-                    return EventStatus.Active;
-
-                return EventStatus.Upcoming;
-            }
-
-            // For non-meeting events (no MeetingDate), status is always Active
-            return EventStatus.Active;
-        }
-    }
+    public EventStatus GetStatus(DateTimeOffset now) =>
+        EventScheduleRules.ResolveStatus(MeetingDate, now);
 
     protected Event() { }
 
-    /// <summary>
-    /// Factory method to create a meeting event (uses MeetingDate)
-    /// </summary>
+    internal Event(
+        Guid id,
+        Guid? tenantId,
+        Guid academicYearId,
+        Guid eventTypeId,
+        EventDetails details) : base(id)
+    {
+        TenantId = tenantId;
+        AcademicYearId = academicYearId;
+        EventTypeId = eventTypeId;
+        Title = details.Title;
+        MeetingDate = details.MeetingDate;
+        StartTime = details.StartTime;
+        EndTime = details.EndTime;
+        Description = details.Description;
+        Poster = details.Poster;
+        Mode = details.Mode ?? EventMode.Offline;
+        Venue = details.Venue;
+        IsRecurring = details.IsRecurring ?? false;
+        RecurrenceJson = details.RecurrenceJson;
+        AudienceIds = details.AudienceIds ?? new();
+    }
+
     public static Event CreateMeetingEvent(
         Guid? tenantId,
         Guid academicYearId,
@@ -125,31 +79,15 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         string? recurrenceJson = null,
         List<Guid>? audienceIds = null)
     {
-        ValidateTime(startTime, endTime);
+        EventScheduleRules.ValidateTime(startTime, endTime);
 
-        return new Event
-        {
-            Id = Guid.NewGuid(),
-            TenantId = tenantId,
-            AcademicYearId = academicYearId,
-            Title = title,
-            EventTypeId = eventTypeId,
-            MeetingDate = meetingDate,
-            StartTime = startTime,
-            EndTime = endTime,
-            Description = description,
-            Poster = poster,
-            Mode = mode,
-            Venue = venue,
-            IsRecurring = isRecurring,
-            RecurrenceJson = recurrenceJson,
-            AudienceIds = audienceIds ?? new()
-        };
+        return EventFactory.Create(
+            tenantId,
+            academicYearId,
+            eventTypeId,
+            new EventDetails(title, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
-    /// <summary>
-    /// Factory method to create a non-meeting event (no MeetingDate, only StartTime and EndTime)
-    /// </summary>
     public static Event CreateEvent(
         Guid? tenantId,
         Guid academicYearId,
@@ -165,31 +103,15 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         string? recurrenceJson = null,
         List<Guid>? audienceIds = null)
     {
-        ValidateTime(startTime, endTime);
+        EventScheduleRules.ValidateTime(startTime, endTime);
 
-        return new Event
-        {
-            Id = Guid.NewGuid(),
-            TenantId = tenantId,
-            AcademicYearId = academicYearId,
-            Title = title,
-            EventTypeId = eventTypeId,
-            MeetingDate = null,
-            StartTime = startTime,
-            EndTime = endTime,
-            Description = description,
-            Poster = poster,
-            Mode = mode,
-            Venue = venue,
-            IsRecurring = isRecurring,
-            RecurrenceJson = recurrenceJson,
-            AudienceIds = audienceIds ?? new()
-        };
+        return EventFactory.Create(
+            tenantId,
+            academicYearId,
+            eventTypeId,
+            new EventDetails(title, null, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
-    /// <summary>
-    /// Factory method to create an event (legacy - kept for backward compatibility)
-    /// </summary>
     [Obsolete("Use CreateMeetingEvent or CreateEvent instead")]
     public static Event Create(
         Guid? tenantId,
@@ -207,31 +129,15 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         string? recurrenceJson = null,
         List<Guid>? audienceIds = null)
     {
-        ValidateDateAndTime(meetingDate, startTime, endTime);
+        EventScheduleRules.ValidateTime(startTime, endTime);
 
-        return new Event
-        {
-            Id = Guid.NewGuid(),
-            TenantId = tenantId,
-            AcademicYearId = academicYearId,
-            Title = title,
-            EventTypeId = eventTypeId,
-            MeetingDate = meetingDate,
-            StartTime = startTime,
-            EndTime = endTime,
-            Description = description,
-            Poster = poster,
-            Mode = mode,
-            Venue = venue,
-            IsRecurring = isRecurring,
-            RecurrenceJson = recurrenceJson,
-            AudienceIds = audienceIds ?? new()
-        };
+        return EventFactory.Create(
+            tenantId,
+            academicYearId,
+            eventTypeId,
+            new EventDetails(title, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
-    /// <summary>
-    /// Update event details
-    /// </summary>
     public void Update(
         string title,
         DateTimeOffset meetingDate,
@@ -245,38 +151,13 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         string? recurrenceJson = null,
         List<Guid>? audienceIds = null)
     {
-        ValidateDateAndTime(meetingDate, startTime, endTime);
+        EventScheduleRules.ValidateTime(startTime, endTime);
 
-        Title = title;
-        MeetingDate = meetingDate;
-        StartTime = startTime;
-        EndTime = endTime;
-
-        if (description != null)
-            Description = description;
-
-        if (poster != null)
-            Poster = poster;
-
-        if (mode.HasValue)
-            Mode = mode.Value;
-
-        if (venue != null)
-            Venue = venue;
-
-        if (isRecurring.HasValue)
-            IsRecurring = isRecurring.Value;
-
-        if (recurrenceJson != null)
-            RecurrenceJson = recurrenceJson;
-
-        if (audienceIds != null)
-            AudienceIds = audienceIds;
+        EventDetailsMutator.Apply(
+            this,
+            new EventDetails(title, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
-    /// <summary>
-    /// Update meeting event details (uses MeetingDate)
-    /// </summary>
     public void UpdateMeetingEvent(
         string title,
         DateTimeOffset meetingDate,
@@ -290,38 +171,13 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         string? recurrenceJson = null,
         List<Guid>? audienceIds = null)
     {
-        ValidateTime(startTime, endTime);
+        EventScheduleRules.ValidateTime(startTime, endTime);
 
-        Title = title;
-        MeetingDate = meetingDate;
-        StartTime = startTime;
-        EndTime = endTime;
-
-        if (description != null)
-            Description = description;
-
-        if (poster != null)
-            Poster = poster;
-
-        if (mode.HasValue)
-            Mode = mode.Value;
-
-        if (venue != null)
-            Venue = venue;
-
-        if (isRecurring.HasValue)
-            IsRecurring = isRecurring.Value;
-
-        if (recurrenceJson != null)
-            RecurrenceJson = recurrenceJson;
-
-        if (audienceIds != null)
-            AudienceIds = audienceIds;
+        EventDetailsMutator.Apply(
+            this,
+            new EventDetails(title, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
-    /// <summary>
-    /// Update non-meeting event details (no MeetingDate, only StartTime and EndTime)
-    /// </summary>
     public void UpdateEvent(
         string title,
         string startTime,
@@ -334,57 +190,11 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         string? recurrenceJson = null,
         List<Guid>? audienceIds = null)
     {
-        ValidateTime(startTime, endTime);
+        EventScheduleRules.ValidateTime(startTime, endTime);
 
-        Title = title;
-        MeetingDate = null;
-        StartTime = startTime;
-        EndTime = endTime;
-
-        if (description != null)
-            Description = description;
-
-        if (poster != null)
-            Poster = poster;
-
-        if (mode.HasValue)
-            Mode = mode.Value;
-
-        if (venue != null)
-            Venue = venue;
-
-        if (isRecurring.HasValue)
-            IsRecurring = isRecurring.Value;
-
-        if (recurrenceJson != null)
-            RecurrenceJson = recurrenceJson;
-
-        if (audienceIds != null)
-            AudienceIds = audienceIds;
+        EventDetailsMutator.Apply(
+            this,
+            new EventDetails(title, null, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
-    private static void ValidateTime(string startTime, string endTime)
-    {
-        // Validate time format HH:mm
-        if (!IsValidTimeFormat(startTime))
-            throw new ArgumentException($"Invalid start time format: {startTime}. Expected HH:mm");
-
-        if (!IsValidTimeFormat(endTime))
-            throw new ArgumentException($"Invalid end time format: {endTime}. Expected HH:mm");
-    }
-
-    private static void ValidateDateAndTime(DateTimeOffset meetingDate, string startTime, string endTime)
-    {
-        // Validate time format HH:mm
-        if (!IsValidTimeFormat(startTime))
-            throw new ArgumentException($"Invalid start time format: {startTime}. Expected HH:mm");
-
-        if (!IsValidTimeFormat(endTime))
-            throw new ArgumentException($"Invalid end time format: {endTime}. Expected HH:mm");
-    }
-
-    private static bool IsValidTimeFormat(string time)
-    {
-        return System.Text.RegularExpressions.Regex.IsMatch(time, @"^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$");
-    }
 }

@@ -98,7 +98,9 @@ public class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 
 		reportingManagerInsight.ValueKind.ShouldNotBe(JsonValueKind.Undefined);
 		reportingManagerInsight.GetProperty("severity").GetString().ShouldBe("critical");
-		reportingManagerInsight.GetProperty("summary").GetString().ShouldContain("1 active employee");
+		var summary = reportingManagerInsight.GetProperty("summary").GetString();
+		summary.ShouldNotBeNull();
+		summary.ShouldContain("1 active employee");
 		reportingManagerInsight.GetProperty("actionHref").GetString().ShouldBe("/hr/employee?reportingManagerStatus=nonActive");
 	}
 

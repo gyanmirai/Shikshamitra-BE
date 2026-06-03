@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
@@ -24,6 +25,8 @@ namespace ShikshaMitra.HR.Employees;
 /// </summary>
 public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
+    private static int _uniqueEmployeeIdentifierSeed;
+
     private readonly IEmployeeAppService _employeeAppService;
     private readonly IIdentityRoleRepository _roleRepository;
     private readonly ICurrentTenant _currentTenant;
@@ -1699,14 +1702,14 @@ public class EmployeeAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
     private static string UniqueEmployeePan()
     {
-        var digits = Math.Abs(Guid.NewGuid().GetHashCode()).ToString("D10");
-        return $"ABCDE{digits[..4]}F";
+        var value = Interlocked.Increment(ref _uniqueEmployeeIdentifierSeed) % 10000;
+        return $"ABCDE{value:D4}F";
     }
 
     private static string UniqueEmployeeAdhar()
     {
-        var digits = Math.Abs(Guid.NewGuid().GetHashCode()).ToString("D10");
-        return $"98{digits[..10]}";
+        var value = Interlocked.Increment(ref _uniqueEmployeeIdentifierSeed);
+        return $"98{value:D10}";
     }
 
     private async Task<Guid> EnsureRoleExistsAsync(Guid? roleId = null)

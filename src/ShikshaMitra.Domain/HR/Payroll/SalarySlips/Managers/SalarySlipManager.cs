@@ -1,12 +1,8 @@
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR;
-using ShikshaMitra.HR.AttendanceAndLeaves;
-using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
-using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Policies;
-using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
@@ -15,7 +11,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp;
-using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
@@ -23,43 +18,40 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 /// <summary>
 /// Domain service for managing salary slip generation and business logic
 /// </summary>
-public class SalarySlipManager : DomainService
+public partial class SalarySlipManager : DomainService
 {
 	private readonly ISalarySlipRepository _salarySlipRepository;
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IEmployeePayrollComponentRepository _payrollComponentRepository;
-	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
-	private readonly IRepository<PayrollAdjustment, Guid> _payrollAdjustmentRepository;
-	private readonly IRepository<WorkCalendarHoliday, Guid> _workCalendarHolidayRepository;
+	private readonly SalarySlipGenerationDataReader _generationDataReader;
 	private readonly HrPolicyResolver _hrPolicyResolver;
 	private readonly PayrollCalendarResolver _payrollCalendarResolver;
 	private readonly PayrollApprovedLeaveResolver _payrollApprovedLeaveResolver;
 	private readonly PayrollComponentVersionResolver _componentVersionResolver;
+	private readonly SalarySlipSnapshotWriter _snapshotWriter;
 	private readonly ILogger<SalarySlipManager> _logger;
 
 	public SalarySlipManager(
 		ISalarySlipRepository salarySlipRepository,
 		IEmployeeRepository employeeRepository,
 		IEmployeePayrollComponentRepository payrollComponentRepository,
-		IRepository<EmployeeAttendance, Guid> attendanceRepository,
-		IRepository<PayrollAdjustment, Guid> payrollAdjustmentRepository,
-		IRepository<WorkCalendarHoliday, Guid> workCalendarHolidayRepository,
+		SalarySlipGenerationDataReader generationDataReader,
 		HrPolicyResolver hrPolicyResolver,
 		PayrollCalendarResolver payrollCalendarResolver,
 		PayrollApprovedLeaveResolver payrollApprovedLeaveResolver,
 		PayrollComponentVersionResolver componentVersionResolver,
+		SalarySlipSnapshotWriter snapshotWriter,
 		ILogger<SalarySlipManager> logger)
 	{
 		_salarySlipRepository = salarySlipRepository;
 		_employeeRepository = employeeRepository;
 		_payrollComponentRepository = payrollComponentRepository;
-		_attendanceRepository = attendanceRepository;
-		_payrollAdjustmentRepository = payrollAdjustmentRepository;
-		_workCalendarHolidayRepository = workCalendarHolidayRepository;
+		_generationDataReader = generationDataReader;
 		_hrPolicyResolver = hrPolicyResolver;
 		_payrollCalendarResolver = payrollCalendarResolver;
 		_payrollApprovedLeaveResolver = payrollApprovedLeaveResolver;
 		_componentVersionResolver = componentVersionResolver;
+		_snapshotWriter = snapshotWriter;
 		_logger = logger;
 	}
 
@@ -72,7 +64,7 @@ public class SalarySlipManager : DomainService
 		bool forceRegenerate = false,
 		CancellationToken cancellationToken = default)
 	{
-		var normalizedMonthYear = NormalizeMonthYear(monthYear);
+		var normalizedMonthYear = SalarySlipGenerationRules.NormalizeMonthYear(monthYear);
 
 		_logger.LogInformation("Generating salary slip for Employee: {EmployeeId}, Month: {MonthYear}",
 			employeeId, normalizedMonthYear);
@@ -101,7 +93,7 @@ public class SalarySlipManager : DomainService
 
 		var year = int.Parse(normalizedMonthYear[..4]);
 		var month = int.Parse(normalizedMonthYear[5..7]);
-		EnsureEmployeeEligibleForPayrollMonth(employee, year, month);
+		SalarySlipGenerationRules.EnsureEmployeeEligibleForPayrollMonth(employee, year, month);
 		var calendar = await _payrollCalendarResolver.ResolveAsync(year, month, cancellationToken);
 		var resolvedPolicies = await _hrPolicyResolver.ResolveAsync(
 			employeeId,
@@ -109,7 +101,7 @@ public class SalarySlipManager : DomainService
 			calendar.AcademicYearId,
 			cancellationToken);
 		var holidayOverrides = resolvedPolicies.PayrollPolicy.GetHolidayOverrides();
-		var workCalendarHolidays = await GetIncludedWorkCalendarHolidaysAsync(resolvedPolicies.PayrollWorkCalendarPolicy.Id, year, month, cancellationToken);
+		var workCalendarHolidays = await _generationDataReader.GetIncludedWorkCalendarHolidaysAsync(resolvedPolicies.PayrollWorkCalendarPolicy.Id, year, month, cancellationToken);
 		var workingUnitsByDate = PayrollMonthCalendar.BuildWorkingUnitsByDate(
 			year,
 			month,
@@ -126,7 +118,7 @@ public class SalarySlipManager : DomainService
 
 		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
 		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
-		var attendance = await GetAttendanceForEmployeeMonthAsync(employeeId, startDate, endDate);
+		var attendance = await _generationDataReader.GetAttendanceForEmployeeMonthAsync(employeeId, startDate, endDate);
 		var leaveUnitsByEmployee = await _payrollApprovedLeaveResolver.ResolveLeaveUnitsByEmployeeAsync(
 			new[] { employeeId },
 			year,
@@ -135,9 +127,9 @@ public class SalarySlipManager : DomainService
 		var components = await _payrollComponentRepository.GetByEmployeeIdAsync(employeeId, cancellationToken);
 		components = await _componentVersionResolver.ResolveAsync(components, normalizedMonthYear);
 		components = PayrollComponentMonthScope.FilterForMonth(components, year, month);
-		var adjustments = await GetAdjustmentsForEmployeeMonthAsync(employeeId, normalizedMonthYear, cancellationToken);
+		var adjustments = await _generationDataReader.GetAdjustmentsForEmployeeMonthAsync(employeeId, normalizedMonthYear, cancellationToken);
 		var allComponents = components
-			.Concat(adjustments.Select(ToPayrollComponent))
+			.Concat(adjustments.Select(SalarySlipAdjustmentComponentMapper.ToPayrollComponent))
 			.ToList();
 		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
 			attendance,
@@ -146,7 +138,7 @@ public class SalarySlipManager : DomainService
 			month,
 			workCalendarHolidays,
 			leaveUnitsByEmployee.GetValueOrDefault(employeeId),
-			GetEffectiveEmploymentStartDate(employee));
+			SalarySlipGenerationRules.GetEffectiveEmploymentStartDate(employee));
 		var computation = PayrollComputation.Calculate(
 			attendanceSummary.PresentDays,
 			attendanceSummary.HalfWorkingDays,
@@ -170,14 +162,15 @@ public class SalarySlipManager : DomainService
 				employeeId,
 				normalizedMonthYear,
 				earningLineItems,
-				deductionLineItems);
+				deductionLineItems,
+				Clock.Now);
 
 			salarySlip.SetPayrollComputationSnapshot(
 				basis.BasisDays,
 				computation.PayableDays,
 				computation.ProrationFactor,
 				basis.EffectiveMode);
-			ApplyPolicySnapshot(salarySlip, resolvedPolicies);
+			SalarySlipGenerationRules.ApplyPolicySnapshot(salarySlip, resolvedPolicies);
 
 			await _salarySlipRepository.InsertAsync(salarySlip, cancellationToken: cancellationToken);
 
@@ -188,13 +181,13 @@ public class SalarySlipManager : DomainService
 			return salarySlip;
 		}
 
-		existingSlip.UpdateLineItems(earningLineItems, deductionLineItems);
+		existingSlip.UpdateLineItems(earningLineItems, deductionLineItems, Clock.Now);
 		existingSlip.SetPayrollComputationSnapshot(
 			basis.BasisDays,
 			computation.PayableDays,
 			computation.ProrationFactor,
 			basis.EffectiveMode);
-		ApplyPolicySnapshot(existingSlip, resolvedPolicies);
+		SalarySlipGenerationRules.ApplyPolicySnapshot(existingSlip, resolvedPolicies);
 		await _salarySlipRepository.UpdateAsync(existingSlip, cancellationToken: cancellationToken);
 
 		_logger.LogInformation("Salary slip regenerated for Employee: {EmployeeId}, Month: {MonthYear}, " +
@@ -204,191 +197,4 @@ public class SalarySlipManager : DomainService
 		return existingSlip;
 	}
 
-	public async Task<SalarySlip> GenerateOrGetSalarySlipFromSnapshotAsync(
-		PayrollRunItemSnapshot snapshot,
-		List<SalarySlipLineItem> earningLineItems,
-		List<SalarySlipLineItem> deductionLineItems,
-		DayCalculationType dayCalculationMode,
-		CancellationToken cancellationToken = default)
-	{
-		var existingSlip = await _salarySlipRepository.GetByEmployeeAndMonthAsync(
-			snapshot.EmployeeId,
-			snapshot.MonthYear,
-			cancellationToken);
-
-		if (existingSlip != null && existingSlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
-		{
-			throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
-		}
-
-		if (existingSlip == null)
-		{
-			var salarySlip = new SalarySlip(
-				GuidGenerator.Create(),
-				CurrentTenant.Id,
-				snapshot.EmployeeId,
-				snapshot.MonthYear,
-				earningLineItems,
-				deductionLineItems);
-
-			ApplySnapshotMetadata(salarySlip, snapshot, dayCalculationMode);
-			await _salarySlipRepository.InsertAsync(salarySlip, cancellationToken: cancellationToken);
-			return salarySlip;
-		}
-
-		existingSlip.UpdateLineItems(earningLineItems, deductionLineItems);
-		ApplySnapshotMetadata(existingSlip, snapshot, dayCalculationMode);
-		await _salarySlipRepository.UpdateAsync(existingSlip, cancellationToken: cancellationToken);
-		return existingSlip;
-	}
-
-	private static void ApplySnapshotMetadata(
-		SalarySlip salarySlip,
-		PayrollRunItemSnapshot snapshot,
-		DayCalculationType dayCalculationMode)
-	{
-		salarySlip.SetPayrollComputationSnapshot(
-			snapshot.BasisDays,
-			snapshot.PayableDays,
-			snapshot.ProrationFactor,
-			dayCalculationMode);
-		salarySlip.SetPolicySnapshot(
-			snapshot.PayrollPolicyId,
-			snapshot.PayrollPolicyVersion,
-			snapshot.AttendancePolicyId,
-			snapshot.AttendancePolicyVersion,
-			snapshot.WorkCalendarPolicyId,
-			snapshot.WorkCalendarPolicyVersion);
-	}
-
-	private static void ApplyPolicySnapshot(SalarySlip salarySlip, HrResolvedPolicies resolvedPolicies)
-	{
-		salarySlip.SetPolicySnapshot(
-			resolvedPolicies.PayrollPolicy.Id,
-			resolvedPolicies.PayrollPolicy.Version,
-			resolvedPolicies.AttendancePolicy.Id,
-			resolvedPolicies.AttendancePolicy.Version,
-			resolvedPolicies.PayrollWorkCalendarPolicy.Id,
-			resolvedPolicies.PayrollWorkCalendarPolicy.Version);
-	}
-
-	private async Task<List<EmployeeAttendance>> GetAttendanceForEmployeeMonthAsync(
-		Guid employeeId,
-		DateOnly startDate,
-		DateOnly endDate)
-	{
-		var attendanceQuery = await _attendanceRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			attendanceQuery = attendanceQuery.Where(a => a.TenantId == CurrentTenant.Id);
-		}
-
-		return await AsyncExecuter.ToListAsync(
-			attendanceQuery.Where(a =>
-				a.EmployeeId == employeeId &&
-				a.AttendanceDate >= startDate &&
-				a.AttendanceDate <= endDate));
-	}
-
-	private async Task<List<PayrollAdjustment>> GetAdjustmentsForEmployeeMonthAsync(
-		Guid employeeId,
-		string monthYear,
-		CancellationToken cancellationToken)
-	{
-		var query = await _payrollAdjustmentRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			query = query.Where(x => x.TenantId == CurrentTenant.Id);
-		}
-		else
-		{
-			query = query.Where(x => x.TenantId == null);
-		}
-
-		return await AsyncExecuter.ToListAsync(
-			query
-				.Where(x => x.EmployeeId == employeeId && x.MonthYear == monthYear)
-				.OrderBy(x => x.CreationTime),
-			cancellationToken);
-	}
-
-	private static EmployeePayrollComponent ToPayrollComponent(PayrollAdjustment adjustment) =>
-		new(
-			adjustment.Id,
-			adjustment.EmployeeId,
-			adjustment.Name,
-			componentId: null,
-			adjustment.Description ?? adjustment.Reason,
-			adjustment.Amount,
-			isFixed: true,
-			isTemp: true,
-			applicableMonth: DateTime.Parse($"{adjustment.MonthYear}-01"),
-			SalaryComponentType.Fixed,
-			SalaryComponentDependency.None,
-			adjustment.IsEarning,
-			usesMasterValue: false);
-
-	private async Task<List<Holiday>> GetIncludedWorkCalendarHolidaysAsync(
-		Guid workCalendarPolicyId,
-		int year,
-		int month,
-		CancellationToken cancellationToken)
-	{
-		var start = new DateTime(year, month, 1);
-		var end = new DateTime(year, month, DateTime.DaysInMonth(year, month));
-		var query = await _workCalendarHolidayRepository.GetQueryableAsync();
-		var rows = await AsyncExecuter.ToListAsync(query.Where(x =>
-			x.WorkCalendarPolicyId == workCalendarPolicyId &&
-			x.IsIncluded &&
-			x.ToDate >= start &&
-			x.FromDate <= end), cancellationToken);
-		return rows
-			.OrderBy(x => x.FromDate)
-			.ThenBy(x => x.HolidayName)
-			.Select(x => x.ToCalendarHoliday(CurrentTenant.Id))
-			.ToList();
-	}
-
-	/// <summary>
-	/// Validates month-year format
-	/// </summary>
-	public void ValidateMonthYearFormat(string monthYear)
-	{
-		NormalizeMonthYear(monthYear);
-	}
-
-	private static void EnsureEmployeeEligibleForPayrollMonth(Employee employee, int year, int month)
-	{
-		var monthStartDate = new DateOnly(year, month, 1);
-		var monthEndDate = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
-		if (EmployeeLifecycleEligibility.IsEligibleForPayrollMonth(employee, monthStartDate, monthEndDate))
-		{
-			return;
-		}
-
-		throw new BusinessException(HRErrorCodes.SalarySlipEmployeeNotActiveInMonth)
-			.WithData("employeeId", employee.Id)
-			.WithData("month", $"{year}-{month:00}")
-			.WithData("effectiveStartDate", GetEffectiveEmploymentStartDate(employee))
-			.WithData("statusEffectiveDate", employee.StatusEffectiveDate)
-			.WithData("statusLastChangedAt", employee.StatusLastChangedAt);
-	}
-
-	private static DateOnly GetEffectiveEmploymentStartDate(Employee employee) =>
-		EmployeeLifecycleEligibility.GetEffectiveEmploymentStartDate(employee);
-
-	private static string NormalizeMonthYear(string monthYear)
-	{
-		if (string.IsNullOrWhiteSpace(monthYear))
-		{
-			throw new BusinessException(HRErrorCodes.MonthYearRequired);
-		}
-
-		if (!PayrollMonthNormalizer.TryNormalizeToInternal(monthYear, out var normalizedMonthYear))
-		{
-			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
-		}
-
-		return normalizedMonthYear;
-	}
 }

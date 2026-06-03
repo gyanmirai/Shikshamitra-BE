@@ -1,14 +1,13 @@
 using ShikshaMitra.Common;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
 /// <summary>
 /// DTO for updating an existing employee's personal information.
 /// </summary>
-public class UpdateEmployeePersonalInfoDto : IValidatableObject
+public class UpdateEmployeePersonalInfoDto
 {
 	#region Required Fields for Update
 
@@ -84,43 +83,4 @@ public class UpdateEmployeePersonalInfoDto : IValidatableObject
 
 	#endregion
 
-	#region Validation
-
-	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-	{
-		if (DateOfJoining.HasValue && DateOfBirth.HasValue)
-		{
-			var age = DateOfJoining.Value.Year - DateOfBirth.Value.Year;
-			if (DateOfJoining.Value < DateOfBirth.Value.AddYears(age))
-			{
-				age--;
-			}
-
-			if (age < 18)
-			{
-				yield return new ValidationResult(
-					"Employee must be at least 18 years old at the time of joining.",
-					new[] { nameof(DateOfJoining), nameof(DateOfBirth) }
-				);
-			}
-		}
-
-		if (DateOfBirth.HasValue && DateOfBirth.Value >= DateOnly.FromDateTime(DateTime.UtcNow))
-		{
-			yield return new ValidationResult(
-				"Date of birth cannot be in the future.",
-				new[] { nameof(DateOfBirth) }
-			);
-		}
-
-		if (DateOfJoining.HasValue && DateOfBirth.HasValue && DateOfJoining.Value < DateOfBirth.Value)
-		{
-			yield return new ValidationResult(
-				"Date of joining cannot be before date of birth.",
-				new[] { nameof(DateOfJoining) }
-			);
-		}
-	}
-
-	#endregion
 }

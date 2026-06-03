@@ -54,7 +54,7 @@ public class WorkCalendarHoliday : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (string.IsNullOrWhiteSpace(holidayName))
 		{
-			throw new BusinessException("ShikshaMitra:WorkCalendarHolidayNameRequired");
+			throw new BusinessException(HRErrorCodes.WorkCalendarHolidayNameRequired);
 		}
 
 		AcademicYearId = academicYearId;
@@ -64,7 +64,7 @@ public class WorkCalendarHoliday : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ToDate = (toDate ?? date).Date;
 		if (ToDate < FromDate)
 		{
-			throw new BusinessException("ShikshaMitra:WorkCalendarHolidayInvalidRange");
+			throw new BusinessException(HRErrorCodes.WorkCalendarHolidayInvalidRange);
 		}
 		HolidayName = holidayName.Trim();
 		Source = source;

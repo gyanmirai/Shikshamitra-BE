@@ -70,7 +70,6 @@ public class DocumentSettingAppService
 		var queryable = await Repository.GetQueryableAsync();
 		var skipCount = (page - 1) * pageSize;
 
-		// Get total count for pagination
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 
 		var items = await AsyncExecuter.ToListAsync(
@@ -79,20 +78,7 @@ public class DocumentSettingAppService
 				.Take(pageSize)
 		);
 
-		return new DocumentListResponse
-		{
-			TotalCount = totalCount,
-			CurrentPage = page,
-			PageSize = pageSize,
-			TotalPages = (int)Math.Ceiling((double)totalCount / pageSize),
-			Items = items.Select(doc => new DocumentItem
-			{
-				Id = doc.Id,
-				Title = doc.DocumentName,
-				DocumentSize = (int)doc.DocumentSize,
-				DocumentTypes = doc.DocumentTypes.Select(dt => (int)dt).ToList()
-			}).ToList()
-		};
+		return DocumentSettingProjection.ToListResponse(items, totalCount, page, pageSize);
 	}
 
 	/// <summary>
@@ -100,16 +86,9 @@ public class DocumentSettingAppService
 	/// </summary>
 	public async Task<DocumentItem> GetDocumentByIdAsync(Guid documentId)
 	{
-		// Repository.GetAsync throws EntityNotFoundException if not found
 		var doc = await Repository.GetAsync(documentId);
 
-		return new DocumentItem
-		{
-			Id = doc.Id,
-			Title = doc.DocumentName,
-			DocumentSize = (int)doc.DocumentSize,
-			DocumentTypes = doc.DocumentTypes.Select(dt => (int)dt).ToList()
-		};
+		return DocumentSettingProjection.ToItem(doc);
 	}
 
 	/// <summary>
@@ -118,7 +97,6 @@ public class DocumentSettingAppService
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task<DocumentCreateResponse> CreateDocumentAsync(DocumentRequest input)
 	{
-		// Check for duplicate
 		var exists = await _repository.FindAsync(x => x.DocumentName == input.Title);
 		if (exists != null)
 		{
@@ -126,25 +104,18 @@ public class DocumentSettingAppService
 				.WithData("documentName", input.Title);
 		}
 
-		var documentTypes = input.DocumentTypes
-			.Select(dt => (DocumentType)dt)
-			.ToList();
-
 		var doc = new DocumentSetting(
 			_guidGenerator.Create(),
 			CurrentTenant.Id,
 			input.Title,
 			input.DocumentSize,
 			isRequired: false,
-			documentTypes
+			DocumentSettingProjection.ToDocumentTypes(input.DocumentTypes)
 		);
 
 		await Repository.InsertAsync(doc, autoSave: true);
 
-		return new DocumentCreateResponse
-		{
-			Id = doc.Id
-		};
+		return DocumentSettingProjection.ToCreateResponse(doc);
 	}
 
 	/// <summary>
@@ -153,10 +124,8 @@ public class DocumentSettingAppService
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	public async Task UpdateDocumentAsync(Guid documentId, DocumentRequest input)
 	{
-		// Repository.GetAsync throws EntityNotFoundException if not found
 		var doc = await Repository.GetAsync(documentId);
 
-		// Check for duplicate name (excluding current document)
 		var duplicate = await _repository.FindAsync(x => x.DocumentName == input.Title && x.Id != documentId);
 		if (duplicate != null)
 		{
@@ -164,11 +133,12 @@ public class DocumentSettingAppService
 				.WithData("documentName", input.Title);
 		}
 
-		var documentTypes = input.DocumentTypes
-			.Select(dt => (DocumentType)dt)
-			.ToList();
+		doc.Update(
+			input.Title,
+			input.DocumentSize,
+			doc.IsRequired,
+			DocumentSettingProjection.ToDocumentTypes(input.DocumentTypes));
 
-		doc.Update(input.Title, input.DocumentSize, doc.IsRequired, documentTypes);
 		await Repository.UpdateAsync(doc, autoSave: true);
 	}
 
@@ -178,7 +148,6 @@ public class DocumentSettingAppService
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Delete)]
 	public async Task DeleteDocumentAsync(Guid documentId)
 	{
-		// Repository.GetAsync throws EntityNotFoundException if not found
 		var doc = await Repository.GetAsync(documentId);
 		await Repository.DeleteAsync(doc, autoSave: true);
 	}

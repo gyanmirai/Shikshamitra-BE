@@ -33,11 +33,6 @@ public class HrEmployeeScopeQueryService(
 
 		var employeeQuery = await employeeRepository.GetQueryableAsync();
 		var assignmentQuery = await employeeOrganizationAssignmentRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			employeeQuery = employeeQuery.Where(x => x.TenantId == CurrentTenant.Id);
-			assignmentQuery = assignmentQuery.Where(x => x.TenantId == CurrentTenant.Id);
-		}
 
 		employeeQuery = ApplyEmployeeLifecycleFilter(employeeQuery, options);
 		employeeQuery = await ApplyEmployeeScopeFilterAsync(employeeQuery, assignmentQuery, scope, options.EducationMediumStageId);
@@ -53,10 +48,6 @@ public class HrEmployeeScopeQueryService(
 		}
 
 		var assignmentQuery = await employeeOrganizationAssignmentRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			assignmentQuery = assignmentQuery.Where(x => x.TenantId == CurrentTenant.Id);
-		}
 
 		var rows = await AsyncExecuter.ToListAsync(
 			assignmentQuery
@@ -83,11 +74,6 @@ public class HrEmployeeScopeQueryService(
 		UserScopeContext scope,
 		Guid? educationMediumStageId = null)
 	{
-		if (CurrentTenant.Id.HasValue)
-		{
-			attendanceQuery = attendanceQuery.Where(x => x.TenantId == CurrentTenant.Id);
-		}
-
 		if (educationMediumStageId.HasValue)
 		{
 			await EnsureStageInScopeAsync(scope, educationMediumStageId.Value);

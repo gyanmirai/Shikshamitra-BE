@@ -1,5 +1,3 @@
-﻿using System.ComponentModel.DataAnnotations;
-
 namespace ShikshaMitra.HR.Employees;
 
 /// <summary>
@@ -16,7 +14,6 @@ public class EmployeeAdditionalDetailsDto
 	/// <summary>
 	/// Below Poverty Line card number.
 	/// </summary>
-	[MaxLength(50)]
 	public string? BplCardNo { get; set; }
 
 	/// <summary>
@@ -27,7 +24,6 @@ public class EmployeeAdditionalDetailsDto
 	/// <summary>
 	/// Second language known.
 	/// </summary>
-	[MaxLength(50)]
 	public string? SecondLanguage { get; set; }
 
 	/// <summary>
@@ -50,7 +46,6 @@ public class UpdateEmployeeAdditionalDetailsDto
 	/// <summary>
 	/// Below Poverty Line card number.
 	/// </summary>
-	[MaxLength(50, ErrorMessage = "BPL Card No cannot exceed 50 characters")]
 	public string? BplCardNo { get; set; }
 
 	/// <summary>
@@ -61,7 +56,6 @@ public class UpdateEmployeeAdditionalDetailsDto
 	/// <summary>
 	/// Second language known.
 	/// </summary>
-	[MaxLength(50, ErrorMessage = "Second Language cannot exceed 50 characters")]
 	public string? SecondLanguage { get; set; }
 
 	/// <summary>

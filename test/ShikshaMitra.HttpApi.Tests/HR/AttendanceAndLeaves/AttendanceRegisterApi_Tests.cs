@@ -51,9 +51,12 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var row = payload.Items.Single(x => x.EmployeeId == employee.Id);
 
 		row.IsHoliday.ShouldBeTrue();
+		row.HolidayName.ShouldNotBeNull();
 		row.HolidayName.ShouldContain("Summer Vacation");
+		row.HolidayReason.ShouldNotBeNull();
 		row.HolidayReason.ShouldContain("Holiday:");
 		row.CanEdit.ShouldBeFalse();
+		row.LockReason.ShouldNotBeNull();
 		row.LockReason.ShouldContain("Holiday:");
 		payload.Summary.Holiday.ShouldBeGreaterThanOrEqualTo(1);
 	}
@@ -92,7 +95,9 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 			?? throw new InvalidOperationException("Failed to deserialize adjustment result.");
 		result.UpdatedCount.ShouldBe(0);
 		result.SkippedCount.ShouldBe(1);
-		result.Rows.Single().Reason.ShouldContain("Holiday:");
+		var skippedRow = result.Rows.Single();
+		skippedRow.Reason.ShouldNotBeNull();
+		skippedRow.Reason.ShouldContain("Holiday:");
 	}
 
 	[Fact]

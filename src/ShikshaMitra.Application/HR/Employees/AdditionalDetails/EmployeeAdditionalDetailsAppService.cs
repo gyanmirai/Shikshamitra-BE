@@ -21,26 +21,19 @@ public class EmployeeAdditionalDetailsAppService(
 	{
 		await employeeAuthorizationService.CheckEmployeeAccessAsync(employeeId);
 
-		// Verify employee exists
 		var employee = await employeeRepository.FindAsync(employeeId);
 		if (employee == null)
 		{
 			throw new EntityNotFoundException(typeof(Employee), employeeId);
 		}
 
-		// Get additional details
 		var additionalDetails = await additionalDetailsRepository.GetByEmployeeIdAsync(employeeId);
 		if (additionalDetails == null)
 		{
-			return new EmployeeAdditionalDetailsDto
-			{
-				EmployeeId = employeeId,
-				CreatedAt = employee.CreationTime,
-				LastModifiedAt = employee.LastModificationTime ?? employee.CreationTime
-			};
+			return EmployeeAdditionalDetailsProjection.ToEmptyResponse(employee);
 		}
 
-		return MapToDto(additionalDetails);
+		return ObjectMapper.Map<EmployeeAdditionalDetails, EmployeeAdditionalDetailsDto>(additionalDetails);
 	}
 
 	/// <inheritdoc />
@@ -51,14 +44,12 @@ public class EmployeeAdditionalDetailsAppService(
 	{
 		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 
-		// Verify employee exists
 		var employee = await employeeRepository.FindAsync(employeeId);
 		if (employee == null)
 		{
 			throw new EntityNotFoundException(typeof(Employee), employeeId);
 		}
 
-		// Check if additional details already exist
 		var existingDetails = await additionalDetailsRepository.GetByEmployeeIdAsync(employeeId);
 
 		EmployeeAdditionalDetails additionalDetails;
@@ -66,7 +57,6 @@ public class EmployeeAdditionalDetailsAppService(
 
 		if (existingDetails == null)
 		{
-			// Create new additional details
 			additionalDetails = new EmployeeAdditionalDetails(
 				id: GuidGenerator.Create(),
 				tenantId: CurrentTenant.Id,
@@ -82,7 +72,6 @@ public class EmployeeAdditionalDetailsAppService(
 		}
 		else
 		{
-			// Update existing additional details
 			existingDetails.Update(
 				bplCardNo: input.BplCardNo,
 				personWithDisability: input.PersonWithDisability,
@@ -95,7 +84,7 @@ public class EmployeeAdditionalDetailsAppService(
 			isCreated = false;
 		}
 
-		return (MapToDto(additionalDetails), isCreated);
+		return (ObjectMapper.Map<EmployeeAdditionalDetails, EmployeeAdditionalDetailsDto>(additionalDetails), isCreated);
 	}
 
 	/// <inheritdoc />
@@ -106,21 +95,18 @@ public class EmployeeAdditionalDetailsAppService(
 	{
 		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 
-		// Verify employee exists
 		var employee = await employeeRepository.FindAsync(employeeId);
 		if (employee == null)
 		{
 			throw new EntityNotFoundException(typeof(Employee), employeeId);
 		}
 
-		// Get existing additional details
 		var additionalDetails = await additionalDetailsRepository.GetByEmployeeIdAsync(employeeId);
 		if (additionalDetails == null)
 		{
 			throw new EntityNotFoundException(typeof(EmployeeAdditionalDetails), employeeId);
 		}
 
-		// Apply partial updates
 		additionalDetails.Patch(
 			bplCardNo: input.BplCardNo,
 			personWithDisability: input.PersonWithDisability,
@@ -131,22 +117,6 @@ public class EmployeeAdditionalDetailsAppService(
 
 		await additionalDetailsRepository.UpdateAsync(additionalDetails);
 
-		return MapToDto(additionalDetails);
-	}
-
-	private static EmployeeAdditionalDetailsDto MapToDto(EmployeeAdditionalDetails entity)
-	{
-		return new EmployeeAdditionalDetailsDto
-		{
-			Id = entity.Id,
-			EmployeeId = entity.EmployeeId,
-			BplCardNo = entity.BplCardNo,
-			PersonWithDisability = entity.PersonWithDisability,
-			SecondLanguage = entity.SecondLanguage,
-			LibraryMember = entity.LibraryMember,
-			TransportMember = entity.TransportMember,
-			CreatedAt = entity.CreationTime,
-			LastModifiedAt = entity.LastModificationTime ?? entity.CreationTime
-		};
+		return ObjectMapper.Map<EmployeeAdditionalDetails, EmployeeAdditionalDetailsDto>(additionalDetails);
 	}
 }

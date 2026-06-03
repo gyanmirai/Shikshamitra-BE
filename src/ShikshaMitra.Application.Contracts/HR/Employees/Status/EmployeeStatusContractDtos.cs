@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.HR.Employees.Status;
 
@@ -9,11 +8,8 @@ namespace ShikshaMitra.HR.Employees.Status;
 public class EmployeeStatusUpdateRequest
 {
 	/// <summary>0=Active, 1=Inactive, 2=Left, 3=Retired</summary>
-	[Required]
-	[Range(0, 3)]
 	public int EmployeeStatusType { get; set; }
 
-	[MaxLength(2000)]
 	public string? Remarks { get; set; }
 
 	/// <summary>Effective lifecycle/payroll date. Required for 1=Inactive, 2=Left, 3=Retired.</summary>

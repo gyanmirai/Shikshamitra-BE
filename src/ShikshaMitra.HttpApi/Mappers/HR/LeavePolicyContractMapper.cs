@@ -126,13 +126,13 @@ public static class LeavePolicyContractMapper
 	/// <summary>
 	/// Creates delete response
 	/// </summary>
-	public static LeavePolicyDeleteResponse ToDeleteResponse(Guid id)
+	public static LeavePolicyDeleteResponse ToDeleteResponse(Guid id, DateTime deletedAt)
 	{
 		return new LeavePolicyDeleteResponse
 		{
 			Id = id.ToString(),
 			Message = "Leave policy deleted successfully",
-			DeletedAt = DateTime.UtcNow
+			DeletedAt = deletedAt
 		};
 	}
 

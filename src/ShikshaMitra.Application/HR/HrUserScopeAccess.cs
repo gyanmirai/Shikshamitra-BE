@@ -1,6 +1,4 @@
 using ShikshaMitra.Security.UserScope;
-using ShikshaMitra.TenantSettings.EducationBoards;
-using ShikshaMitra.TenantSettings.EducationMediums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +6,6 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
-using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR;
 
@@ -56,22 +53,9 @@ public static class HrUserScopeAccess
 }
 
 [RemoteService(false)]
-public class HrUserScopeAccessService : ApplicationService, ITransientDependency
+public class HrUserScopeAccessService(HrMediumStageScopeReader stageScopeReader)
+	: ApplicationService, ITransientDependency
 {
-	private readonly IRepository<EducationMediumStage, Guid> _stageRepository;
-	private readonly IRepository<EducationMedium, Guid> _mediumRepository;
-	private readonly IRepository<EducationBoard, Guid> _boardRepository;
-
-	public HrUserScopeAccessService(
-		IRepository<EducationMediumStage, Guid> stageRepository,
-		IRepository<EducationMedium, Guid> mediumRepository,
-		IRepository<EducationBoard, Guid> boardRepository)
-	{
-		_stageRepository = stageRepository;
-		_mediumRepository = mediumRepository;
-		_boardRepository = boardRepository;
-	}
-
 	public async Task<bool> CanAccessEmployeeStageAsync(UserScopeContext scope, Guid? employeeStageId)
 	{
 		if (HrUserScopeAccess.HasHrWideAccess(scope))
@@ -84,7 +68,8 @@ public class HrUserScopeAccessService : ApplicationService, ITransientDependency
 			return false;
 		}
 
-		var stageScope = await ResolveStageScopeAsync(employeeStageId.Value);
+		var stageScopes = await stageScopeReader.GetByStageIdsAsync([employeeStageId.Value]);
+		stageScopes.TryGetValue(employeeStageId.Value, out var stageScope);
 		return scope.CanAccessMediumStage(
 			employeeStageId.Value,
 			stageScope?.MediumId,
@@ -108,7 +93,7 @@ public class HrUserScopeAccessService : ApplicationService, ITransientDependency
 			.Select(x => x!.Value)
 			.Distinct()
 			.ToList();
-		var stageScopes = await ResolveStageScopesAsync(stageIds);
+		var stageScopes = await stageScopeReader.GetByStageIdsAsync(stageIds);
 
 		return employeeIds
 			.Where(id =>
@@ -143,7 +128,7 @@ public class HrUserScopeAccessService : ApplicationService, ITransientDependency
 			.SelectMany(x => x)
 			.Distinct()
 			.ToList();
-		var stageScopes = await ResolveStageScopesAsync(stageIds);
+		var stageScopes = await stageScopeReader.GetByStageIdsAsync(stageIds);
 
 		return employeeIds
 			.Where(id =>
@@ -173,21 +158,7 @@ public class HrUserScopeAccessService : ApplicationService, ITransientDependency
 			return new List<Guid>();
 		}
 
-		var stageQuery = await _stageRepository.GetQueryableAsync();
-		var mediumQuery = await _mediumRepository.GetQueryableAsync();
-		var boardQuery = await _boardRepository.GetQueryableAsync();
-
-		var rows = await AsyncExecuter.ToListAsync(
-			from stage in stageQuery
-			join medium in mediumQuery on stage.EducationMediumId equals medium.Id
-			join board in boardQuery on medium.EducationBoardId equals board.Id
-			select new
-			{
-				StageId = stage.Id,
-				MediumId = medium.Id,
-				BoardId = board.Id,
-				board.AcademicYearId
-			});
+		var rows = await stageScopeReader.GetAllAsync();
 
 		return rows
 			.Where(x => scope.CanAccessMediumStage(x.StageId, x.MediumId, x.BoardId, x.AcademicYearId))
@@ -195,45 +166,4 @@ public class HrUserScopeAccessService : ApplicationService, ITransientDependency
 			.Distinct()
 			.ToList();
 	}
-
-	private async Task<Dictionary<Guid, MediumStageScope>> ResolveStageScopesAsync(IReadOnlyCollection<Guid> stageIds)
-	{
-		if (stageIds.Count == 0)
-		{
-			return new Dictionary<Guid, MediumStageScope>();
-		}
-
-		var stages = await AsyncExecuter.ToListAsync(
-			(await _stageRepository.GetQueryableAsync()).Where(x => stageIds.Contains(x.Id)));
-		var mediumIds = stages.Select(x => x.EducationMediumId).Distinct().ToList();
-		var mediums = await AsyncExecuter.ToListAsync(
-			(await _mediumRepository.GetQueryableAsync()).Where(x => mediumIds.Contains(x.Id)));
-		var mediumById = mediums.ToDictionary(x => x.Id);
-		var boardIds = mediums.Select(x => x.EducationBoardId).Distinct().ToList();
-		var boards = await AsyncExecuter.ToListAsync(
-			(await _boardRepository.GetQueryableAsync()).Where(x => boardIds.Contains(x.Id)));
-		var boardById = boards.ToDictionary(x => x.Id);
-
-		var result = new Dictionary<Guid, MediumStageScope>();
-		foreach (var stage in stages)
-		{
-			if (!mediumById.TryGetValue(stage.EducationMediumId, out var medium) ||
-			    !boardById.TryGetValue(medium.EducationBoardId, out var board))
-			{
-				continue;
-			}
-
-			result[stage.Id] = new MediumStageScope(stage.Id, medium.Id, board.Id, board.AcademicYearId);
-		}
-
-		return result;
-	}
-
-	private async Task<MediumStageScope?> ResolveStageScopeAsync(Guid stageId)
-	{
-		var scopes = await ResolveStageScopesAsync(new[] { stageId });
-		return scopes.TryGetValue(stageId, out var scope) ? scope : null;
-	}
-
-	private sealed record MediumStageScope(Guid StageId, Guid MediumId, Guid BoardId, Guid AcademicYearId);
 }

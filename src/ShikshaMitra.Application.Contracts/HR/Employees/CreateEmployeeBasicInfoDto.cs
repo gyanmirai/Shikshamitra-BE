@@ -1,11 +1,9 @@
 using ShikshaMitra.Common;
 using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.HR.Employees;
 
-public class CreateEmployeeBasicInfoDto : IValidatableObject
+public class CreateEmployeeBasicInfoDto
 {
 	public string? LastName { get; set; }
 
@@ -68,32 +66,4 @@ public class CreateEmployeeBasicInfoDto : IValidatableObject
 	public string? Address3 { get; set; }
 
 	public Guid? ShiftId { get; set; }
-
-	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-	{
-		if (DateOfJoining.HasValue && DateOfBirth.HasValue)
-		{
-			var age = DateOfJoining.Value.Year - DateOfBirth.Value.Year;
-			if (DateOfJoining.Value < DateOfBirth.Value.AddYears(age))
-			{
-				age--;
-			}
-
-			if (age < 18)
-			{
-				yield return new ValidationResult(
-					"Employee must be at least 18 years old at the time of joining.",
-					new[] { nameof(DateOfJoining), nameof(DateOfBirth) }
-				);
-			}
-		}
-
-		if (DateOfBirth.HasValue && DateOfBirth.Value >= DateOnly.FromDateTime(DateTime.UtcNow))
-		{
-			yield return new ValidationResult(
-				"Date of birth cannot be in the future.",
-				new[] { nameof(DateOfBirth) }
-			);
-		}
-	}
 }

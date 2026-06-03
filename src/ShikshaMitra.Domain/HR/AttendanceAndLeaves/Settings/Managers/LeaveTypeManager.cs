@@ -50,7 +50,7 @@ public class LeaveTypeManager : DomainService
 	{
 		if (await _leaveTypeRepository.IsTypeExistsAsync(academicYearId, type, excludeId))
 		{
-			throw new BusinessException("ShikshaMitra:LeaveTypeAlreadyExists")
+			throw new BusinessException(HRErrorCodes.LeaveTypeAlreadyExists)
 				.WithData("type", type);
 		}
 	}

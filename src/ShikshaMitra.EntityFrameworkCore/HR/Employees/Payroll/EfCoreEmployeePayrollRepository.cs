@@ -28,9 +28,6 @@ public class EfCoreEmployeePayrollDetailsRepository
 			.FirstOrDefaultAsync(x => x.EmployeeId == employeeId, cancellationToken);
 	}
 
-	/// <summary>
-	/// Batch fetch payroll details for multiple employees (single query)
-	/// </summary>
 	public async Task<Dictionary<Guid, EmployeePayrollDetails>> GetByEmployeeIdsAsync(
 		IEnumerable<Guid> employeeIds,
 		CancellationToken cancellationToken = default)
@@ -39,30 +36,27 @@ public class EfCoreEmployeePayrollDetailsRepository
 		if (idList.Count == 0)
 			return new Dictionary<Guid, EmployeePayrollDetails>();
 
-		// Get DbContext to access Employee table
 		var dbContext = await GetDbContextAsync();
 
-		// Query payroll details with employee info for tenant filtering
+		// Payroll detail rows are not tenant-scoped; preserve schema by isolating through the parent employee.
 		var query = from payrollDetail in dbContext.EmployeePayrollDetails
 					join employee in dbContext.Set<Employee>() on payrollDetail.EmployeeId equals employee.Id
 					where idList.Contains(payrollDetail.EmployeeId)
 					select new { PayrollDetail = payrollDetail, EmployeeTenantId = employee.TenantId };
 
+		var currentTenantId = CurrentTenant.Id;
+		if (currentTenantId.HasValue)
+		{
+			query = query.Where(x => x.EmployeeTenantId == currentTenantId);
+		}
+
 		var results = await query.AsNoTracking().ToListAsync(cancellationToken);
 
-			// Filter by current tenant
-			var currentTenantId = CurrentTenant.Id;
-			if (currentTenantId.HasValue)
-			{
-				results = results.Where(x => x.EmployeeTenantId == currentTenantId).ToList();
-			}
-
-			// Use GroupBy to handle potential duplicates and take the first payroll detail for each employee
-			return results
-				.Select(x => x.PayrollDetail)
-				.GroupBy(x => x.EmployeeId)
-				.ToDictionary(g => g.Key, g => g.First());
-		}
+		return results
+			.Select(x => x.PayrollDetail)
+			.GroupBy(x => x.EmployeeId)
+			.ToDictionary(g => g.Key, g => g.First());
+	}
 }
 
 public class EfCoreEmployeePayrollComponentRepository
@@ -110,17 +104,19 @@ public class EfCoreEmployeePayrollComponentRepository
 		CancellationToken cancellationToken = default)
 	{
 		var dbContext = await GetDbContextAsync();
+		// Payroll component rows are not tenant-scoped; preserve schema by isolating through the parent employee.
 		var query = from component in dbContext.EmployeePayrollComponents
 					join employee in dbContext.Set<Employee>() on component.EmployeeId equals employee.Id
 					where component.ComponentId == componentId && component.IsEarning == isEarning
 					select new { Component = component, EmployeeTenantId = employee.TenantId };
 
-		var rows = await query.ToListAsync(cancellationToken);
 		var currentTenantId = CurrentTenant.Id;
 		if (currentTenantId.HasValue)
 		{
-			rows = rows.Where(x => x.EmployeeTenantId == currentTenantId).ToList();
+			query = query.Where(x => x.EmployeeTenantId == currentTenantId);
 		}
+
+		var rows = await query.ToListAsync(cancellationToken);
 
 		return rows.Select(x => x.Component).ToList();
 	}
@@ -131,6 +127,7 @@ public class EfCoreEmployeePayrollComponentRepository
 		CancellationToken cancellationToken = default)
 	{
 		var dbContext = await GetDbContextAsync();
+		// Payroll component rows are not tenant-scoped; preserve schema by isolating through the parent employee.
 		var query = from component in dbContext.EmployeePayrollComponents
 					join employee in dbContext.Set<Employee>() on component.EmployeeId equals employee.Id
 					where component.ComponentId == componentId && component.IsEarning == isEarning
@@ -162,9 +159,6 @@ public class EfCoreEmployeePayrollComponentRepository
 		}
 	}
 
-	/// <summary>
-	/// Batch fetch payroll components for multiple employees (single query)
-	/// </summary>
 	public async Task<ILookup<Guid, EmployeePayrollComponent>> GetByEmployeeIdsAsync(
 		IEnumerable<Guid> employeeIds,
 		CancellationToken cancellationToken = default)
@@ -173,23 +167,21 @@ public class EfCoreEmployeePayrollComponentRepository
 		if (idList.Count == 0)
 			return Enumerable.Empty<EmployeePayrollComponent>().ToLookup(x => x.EmployeeId);
 
-		// Get DbContext to access Employee table
 		var dbContext = await GetDbContextAsync();
 
-		// Query components with employee info for tenant filtering
+		// Payroll component rows are not tenant-scoped; preserve schema by isolating through the parent employee.
 		var query = from component in dbContext.EmployeePayrollComponents
 					join employee in dbContext.Set<Employee>() on component.EmployeeId equals employee.Id
 					where idList.Contains(component.EmployeeId)
 					select new { Component = component, EmployeeTenantId = employee.TenantId };
 
-		var results = await query.AsNoTracking().ToListAsync(cancellationToken);
-
-		// Filter by current tenant
 		var currentTenantId = CurrentTenant.Id;
 		if (currentTenantId.HasValue)
 		{
-			results = results.Where(x => x.EmployeeTenantId == currentTenantId).ToList();
+			query = query.Where(x => x.EmployeeTenantId == currentTenantId);
 		}
+
+		var results = await query.AsNoTracking().ToListAsync(cancellationToken);
 
 		return results.Select(x => x.Component).ToLookup(x => x.EmployeeId);
 	}

@@ -12,24 +12,24 @@ using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.Guids;
+using Volo.Abp.Timing;
 
 namespace ShikshaMitra.Employees;
 
 public class EfCoreEmployeeAttendanceRepository(
 	IDbContextProvider<ShikshaMitraDbContext> dbContextProvider,
-	IGuidGenerator guidGenerator)
+	IGuidGenerator guidGenerator,
+	IClock clock)
 	: EfCoreRepository<ShikshaMitraDbContext, EmployeeAttendance, Guid>(dbContextProvider),
 		IEmployeeAttendanceRepository
 {
 	private const int PostgreSqlInsertBatchSize = 500;
 
-	// override the GetListAsync method to include the Employee navigation property
 	public override async Task<List<EmployeeAttendance>> GetListAsync(
 		Expression<Func<EmployeeAttendance, bool>> predicate,
 		bool includeDetails = false,
 		CancellationToken cancellationToken = default)
 	{
-		// if includeDetails is true, include the Employee navigation property
 		if (includeDetails)
 		{
 			return await (await GetQueryableAsync())
@@ -57,6 +57,7 @@ public class EfCoreEmployeeAttendanceRepository(
 			var insertedCount = 0;
 			foreach (var attendance in attendances)
 			{
+				// Duplicate detection mirrors the database uniqueness boundary for attendance imports.
 				var exists = await dbContext.Set<EmployeeAttendance>().AnyAsync(x =>
 					x.TenantId == attendance.TenantId &&
 					x.EmployeeId == attendance.EmployeeId &&
@@ -81,7 +82,7 @@ public class EfCoreEmployeeAttendanceRepository(
 		}
 
 		var affectedRows = 0;
-		var now = DateTime.UtcNow;
+		var now = clock.Now;
 		foreach (var batch in attendances.Chunk(PostgreSqlInsertBatchSize))
 		{
 			affectedRows += await ExecutePostgreSqlInsertBatchAsync(dbContext, batch, now, token);

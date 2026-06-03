@@ -1,5 +1,3 @@
-using ShikshaMitra.Common.Validation;
-
 namespace ShikshaMitra.HR.Calendar.EventTypes;
 
 /// <summary>
@@ -15,7 +13,6 @@ public class CreateUpdateEventTypeDto
     /// <summary>
     /// Hex color code for UI representation (required, must be valid hex format)
     /// </summary>
-    [HexColor(ErrorMessage = "Color must be a valid hex code in format #RRGGBB or #RGB")]
     public string Color { get; set; }
 
     /// <summary>

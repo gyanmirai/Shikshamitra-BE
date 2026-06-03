@@ -35,7 +35,7 @@ public class EmployeeCodeGenerator(
 		var year = dateOfJoining.Year;
 		var tenantId = CurrentTenant.Id ?? Guid.Empty;
 		string roleCode = GetRoleCode(role);
-		var existingCount = await GetCountForTenantRoleAndYearAsync(tenantId, year, roleCode);
+		var existingCount = await GetCountForRoleAndYearAsync(year, roleCode);
 		var scopeKey = $"{tenantId:N}:{year}:{roleCode}";
 		var nextSequence = SequenceByScope.AddOrUpdate(
 			scopeKey,
@@ -48,16 +48,14 @@ public class EmployeeCodeGenerator(
 		return $"{roleCode}{yearCode}{uniqueHash}";
 	}
 
-	private async Task<int> GetCountForTenantRoleAndYearAsync(Guid tenantId, int year, string roleCode)
+	private async Task<int> GetCountForRoleAndYearAsync(int year, string roleCode)
 	{
 		var queryable = await employeeRepository.GetQueryableAsync();
 		var yearCode = (year % 100).ToString("D2");
 		var codePrefix = $"{roleCode}{yearCode}";
 
 		return await AsyncExecuter.CountAsync(
-			queryable
-				.Where(e => e.TenantId == (tenantId == Guid.Empty ? null : tenantId))
-				.Where(e => e.EmployeeCode.StartsWith(codePrefix))
+			queryable.Where(e => e.EmployeeCode.StartsWith(codePrefix))
 		);
 	}
 

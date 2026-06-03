@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
+using FluentValidation;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
@@ -34,11 +34,20 @@ public class GetEventTypeListRequestDto : PagedAndSortedResultRequestDto
     /// <summary>
     /// Optional search term to filter by event type name
     /// </summary>
-    [StringLength(256)]
     public string? Search { get; set; }
 
     public GetEventTypeListRequestDto()
     {
         MaxResultCount = 20; // Default page size
     }
+}
+
+public class GetEventTypeListRequestDtoValidator : AbstractValidator<GetEventTypeListRequestDto>
+{
+	public GetEventTypeListRequestDtoValidator()
+	{
+		RuleFor(x => x.Search)
+			.MaximumLength(256)
+			.When(x => x.Search != null);
+	}
 }

@@ -103,7 +103,7 @@ public class HrReportTemplate : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (string.IsNullOrWhiteSpace(value))
 		{
-			throw new BusinessException("HR:Reports:050006").WithData("field", name);
+			throw new BusinessException(HRErrorCodes.ReportTemplateFieldRequired).WithData("field", name);
 		}
 
 		return value.Trim()[..Math.Min(value.Trim().Length, max)];

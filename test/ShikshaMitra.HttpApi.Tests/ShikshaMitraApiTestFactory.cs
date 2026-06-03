@@ -197,6 +197,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		builder.ConfigureTestServices(services =>
 		{
 			AddTestAuthentication(services);
+			RemoveAbpIdentityDataSeedContributor(services);
 			services.AddTransient<StudentSeederContributor, NoOpStudentSeeder>();
 			// Replace the PostgreSQL-specific receipt number repo with an in-memory fake
 			// so SQLite doesn't receive the INSERT … ON CONFLICT … RETURNING syntax.
@@ -287,6 +288,20 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 
 		services.AddTransient<Volo.Abp.Authorization.Permissions.IPermissionChecker,
 			AlwaysGrantPermissionChecker>();
+	}
+
+	private static void RemoveAbpIdentityDataSeedContributor(IServiceCollection services)
+	{
+		var descriptors = services
+			.Where(descriptor =>
+				descriptor.ServiceType == typeof(IDataSeedContributor) &&
+				descriptor.ImplementationType?.FullName == "Volo.Abp.Identity.IdentityDataSeedContributor")
+			.ToList();
+
+		foreach (var descriptor in descriptors)
+		{
+			services.Remove(descriptor);
+		}
 	}
 
 	protected override void Dispose(bool disposing)

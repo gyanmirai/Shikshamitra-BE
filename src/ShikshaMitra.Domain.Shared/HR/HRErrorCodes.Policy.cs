@@ -1,0 +1,53 @@
+namespace ShikshaMitra.HR;
+
+public static partial class HRErrorCodes
+{
+	public const string HrPolicyImpactBlocking = "ShikshaMitra:HrPolicyImpactBlocking";
+	public const string HrPolicyImpactConfirmationRequired = "ShikshaMitra:HrPolicyImpactConfirmationRequired";
+	public const string HrPolicyImpactConfirmationInvalid = "ShikshaMitra:HrPolicyImpactConfirmationInvalid";
+	public const string HrPolicyNoAffectedEmployees = "ShikshaMitra:NoAffectedEmployees";
+	public const string HrPolicyAssignmentAcademicYearMismatch = "ShikshaMitra:PolicyAssignmentAcademicYearMismatch";
+	public const string HrPolicyAssignmentTargetInvalid = "ShikshaMitra:PolicyAssignmentTargetInvalid";
+	public const string HrPolicyAssignmentTargetTypeUnsupported = "ShikshaMitra:PolicyAssignmentTargetTypeUnsupported";
+	public const string HrPolicyAssignmentOverlap = "ShikshaMitra:HrPolicyAssignmentOverlap";
+	public const string HrPolicyInvalidType = "ShikshaMitra:InvalidPolicyType";
+	public const string HrPolicyAcademicYearRequiredForImpact = "ShikshaMitra:AcademicYearRequiredForPolicyImpact";
+	public const string HrPolicyMustBeActive = "ShikshaMitra:PolicyMustBeActive";
+	public const string HrPolicyVersionNotFound = "ShikshaMitra:PolicyVersionNotFound";
+	public const string HrPolicyInvalidVersionSnapshot = "ShikshaMitra:InvalidPolicyVersionSnapshot";
+	public const string HrPolicyInvalidWorkCalendar = "ShikshaMitra:InvalidWorkCalendarPolicy";
+	public const string DefaultAttendancePolicyRequired = "ShikshaMitra:DefaultAttendancePolicyRequired";
+	public const string DefaultPayrollPolicyRequired = "ShikshaMitra:DefaultPayrollPolicyRequired";
+	public const string AcademicYearRequired = "ShikshaMitra:AcademicYearRequired";
+	public const string AcademicYearRequiredForPolicyResolution = "ShikshaMitra:AcademicYearRequiredForPolicyResolution";
+	public const string WorkCalendarPolicyMustBeActive = "ShikshaMitra:WorkCalendarPolicyMustBeActive";
+	public const string AttendancePolicyNameRequired = "ShikshaMitra:AttendancePolicyNameRequired";
+	public const string PayrollPolicyNameRequired = "ShikshaMitra:PayrollPolicyNameRequired";
+	public const string WorkCalendarPolicyNameRequired = "ShikshaMitra:WorkCalendarPolicyNameRequired";
+	public const string DefaultPolicyMustBeActive = "ShikshaMitra:DefaultPolicyMustBeActive";
+	public const string DefaultPolicyCannotBeArchived = "ShikshaMitra:DefaultPolicyCannotBeArchived";
+	public const string InvalidAttendanceThreshold = "ShikshaMitra:InvalidAttendanceThreshold";
+	public const string InvalidAttendanceThresholdOrder = "ShikshaMitra:InvalidAttendanceThresholdOrder";
+	public const string InvalidAttendancePolicyRule = "ShikshaMitra:InvalidAttendancePolicyRule";
+	public const string OvertimeRateAndMinMinutesRequired = "ShikshaMitra:OvertimeRateAndMinMinutesRequired";
+	public const string InvalidManualDays = "ShikshaMitra:InvalidManualDays";
+	public const string InvalidCustomWeeklyOff = "ShikshaMitra:InvalidCustomWeeklyOff";
+	public const string PolicyEffectiveFromRequired = "ShikshaMitra:PolicyEffectiveFromRequired";
+	public const string PolicyEffectiveRangeInvalid = "ShikshaMitra:PolicyEffectiveRangeInvalid";
+	public const string PolicyAssignmentRangeInvalid = "ShikshaMitra:PolicyAssignmentRangeInvalid";
+	public const string PolicyAssignmentTargetRequired = "ShikshaMitra:PolicyAssignmentTargetRequired";
+	public const string WorkCalendarPolicyInUse = "ShikshaMitra:WorkCalendarPolicyInUse";
+	public const string WorkCalendarPolicyReferenced = "ShikshaMitra:WorkCalendarPolicyReferenced";
+	public const string LockedPayrollImpact = "ShikshaMitra:LockedPayrollImpact";
+	public const string AffectedEmployees = "ShikshaMitra:AffectedEmployees";
+	public const string UnsupportedMissingPunchBehavior = "ShikshaMitra:UnsupportedMissingPunchBehavior";
+	public const string UnsupportedAttendancePenaltyType = "ShikshaMitra:UnsupportedAttendancePenaltyType";
+	public const string UnsupportedAttendanceOvertimeRate = "ShikshaMitra:UnsupportedAttendanceOvertimeRate";
+	public const string UnsupportedAttendanceHolidayWorkBehavior = "ShikshaMitra:UnsupportedAttendanceHolidayWorkBehavior";
+	public const string WorkCalendarHolidayOverlap = "ShikshaMitra:WorkCalendarHolidayOverlap";
+	public const string WorkCalendarHolidayDateRequired = "ShikshaMitra:WorkCalendarHolidayDateRequired";
+	public const string WorkCalendarHolidayInvalidRange = "ShikshaMitra:WorkCalendarHolidayInvalidRange";
+	public const string WorkCalendarHolidayNameRequired = "ShikshaMitra:WorkCalendarHolidayNameRequired";
+	public const string WorkCalendarHolidayAcademicYearMismatch = "ShikshaMitra:WorkCalendarHolidayAcademicYearMismatch";
+	public const string WorkCalendarHolidayOutsideAcademicYear = "ShikshaMitra:WorkCalendarHolidayOutsideAcademicYear";
+}

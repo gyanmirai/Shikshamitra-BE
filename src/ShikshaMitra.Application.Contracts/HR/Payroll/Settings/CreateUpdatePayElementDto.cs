@@ -2,9 +2,9 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 
 public class CreateUpdatePayElementDto
 {
-	public string Code { get; set; }
+	public string Code { get; set; } = string.Empty;
 
-	public string Name { get; set; }
+	public string Name { get; set; } = string.Empty;
 
 	public PayElementType Type { get; set; }
 
@@ -16,7 +16,7 @@ public class CreateUpdatePayElementDto
 
 public class DependentPropertiesDto
 {
-	public string ElementId { get; set; }
+	public string ElementId { get; set; } = string.Empty;
 	public float? Percentage { get; set; }
 	public float? Amount { get; set; }
 }

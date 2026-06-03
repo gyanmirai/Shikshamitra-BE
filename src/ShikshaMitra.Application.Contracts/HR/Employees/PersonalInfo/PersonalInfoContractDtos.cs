@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
 using ShikshaMitra.HR.Employees;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
@@ -9,20 +8,14 @@ namespace ShikshaMitra.HR.Employees.PersonalInfo;
 /// <summary>
 /// Request DTO for creating or updating employee personal information
 /// </summary>
-public class PersonalInfoRequest : IValidatableObject
+public class PersonalInfoRequest
 {
-	[Required]
-	[MaxLength(256)]
 	public string FirstName { get; set; } = string.Empty;
 
-	[MaxLength(256)]
 	public string? MiddleName { get; set; }
 
-	[Required]
-	[MaxLength(256)]
 	public string LastName { get; set; } = string.Empty;
 
-	[MaxLength(128)]
 	public string? ShortName { get; set; }
 
 	public DateTime? Dob { get; set; }
@@ -32,7 +25,6 @@ public class PersonalInfoRequest : IValidatableObject
 	/// </summary>
 	public int? Gender { get; set; }
 
-	[MaxLength(128)]
 	public string? Religion { get; set; }
 
 	/// <summary>
@@ -40,7 +32,6 @@ public class PersonalInfoRequest : IValidatableObject
 	/// </summary>
 	public int? CasteType { get; set; }
 
-	[MaxLength(128)]
 	public string? FamilyCaste { get; set; }
 
 	/// <summary>
@@ -53,81 +44,43 @@ public class PersonalInfoRequest : IValidatableObject
 	/// </summary>
 	public int? BloodGroup { get; set; }
 
-	[EmailAddress]
-	[MaxLength(256)]
 	public string? Email { get; set; }
 
-	[Required]
-	[RegularExpression(@"^[6-9]\d{9}$", ErrorMessage = "Invalid mobile number. Must be 10 digits starting with 6-9.")]
-	[MaxLength(15)]
 	public string MobileNo { get; set; } = string.Empty;
 
-	[MaxLength(15)]
 	public string? SecondaryMobileNo { get; set; }
 
-	[Required]
-	[MaxLength(10)]
-	[RegularExpression(@"^[A-Z]{5}[0-9]{4}[A-Z]$", ErrorMessage = "PAN must be in format AAAAA9999A.")]
 	public string PanNo { get; set; } = string.Empty;
 
-	[Required]
-	[MaxLength(12)]
-	[RegularExpression(@"^\d{12}$", ErrorMessage = "Aadhaar number must be 12 digits.")]
 	public string AdharNo { get; set; } = string.Empty;
 
-	[Required]
 	public DateTime Doj { get; set; }
 
-	[Required]
 	public bool IsTeaching { get; set; }
 
 	public string? Department { get; set; }
 
-	[Required]
 	public Guid RoleId { get; set; }
 
-	[Required]
 	public Guid ShiftId { get; set; }
 
-	[Required]
 	public List<Guid> OrganizationIds { get; set; } = [];
 
-	[MaxLength(512)]
 	public string? Address1 { get; set; }
 
-	[MaxLength(512)]
 	public string? Address2 { get; set; }
 
-	[MaxLength(512)]
 	public string? Address3 { get; set; }
 
 	public CountryInfo? Country { get; set; }
 
 	public StateInfo? State { get; set; }
 
-	[MaxLength(128)]
 	public string? City { get; set; }
 
-	[MaxLength(10)]
-	[RegularExpression(@"^$|^\d{6}$", ErrorMessage = "Pincode must be 6 digits.")]
 	public string? PinCode { get; set; }
 
 	public PersonalInfoPolicyOverrideRequest? PolicyOverride { get; set; }
-
-	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-	{
-		if (!string.IsNullOrWhiteSpace(SecondaryMobileNo) && !string.IsNullOrWhiteSpace(MobileNo))
-		{
-			var primaryDigits = new string(MobileNo.Where(char.IsDigit).ToArray());
-			var secondaryDigits = new string(SecondaryMobileNo.Where(char.IsDigit).ToArray());
-			if (primaryDigits.Length > 0 && secondaryDigits.Length > 0 && primaryDigits == secondaryDigits)
-			{
-				yield return new ValidationResult(
-					"Secondary mobile number must be different from the primary mobile number.",
-					[nameof(SecondaryMobileNo)]);
-			}
-		}
-	}
 }
 
 public class PersonalInfoPolicyOverrideRequest

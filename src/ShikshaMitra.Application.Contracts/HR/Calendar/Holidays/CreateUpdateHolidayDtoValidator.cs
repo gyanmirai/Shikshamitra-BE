@@ -19,6 +19,9 @@ public class CreateUpdateHolidayDtoValidator : AbstractValidator<CreateUpdateHol
 		RuleFor(x => x.StartDate).NotEmpty();
 
 		RuleFor(x => x.EndDate).NotEmpty();
+		RuleFor(x => x.EndDate)
+			.GreaterThanOrEqualTo(x => x.StartDate)
+			.WithMessage("End date must be greater than or equal to start date");
 
 		RuleFor(x => x.Description)
 			.MaximumLength(500)

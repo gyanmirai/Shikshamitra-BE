@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+using FluentValidation;
 
 namespace ShikshaMitra.HR.Employees.Settings;
 
@@ -13,24 +13,36 @@ public class DocumentRequest
 	/// Document name (maps to DocumentName in entity)
 	/// Pattern: ^[A-Za-z ]+$ (alphabets and spaces only)
 	/// </summary>
-	[Required]
-	[RegularExpression(@"^[A-Za-z ]+$", ErrorMessage = "Title must contain only alphabets and spaces")]
 	public string Title { get; set; } = string.Empty;
 
 	/// <summary>
 	/// Maximum file size in MB (1-20)
 	/// </summary>
-	[Required]
-	[Range(1, 20, ErrorMessage = "Document size must be between 1 and 20 MB")]
 	public int DocumentSize { get; set; }
 
 	/// <summary>
 	/// Accepted document formats as integer enum values (0-5)
 	/// 0=Jpg, 1=Jpeg, 2=Png, 3=Docx, 4=Pdf, 5=Xlsx
 	/// </summary>
-	[Required]
-	[MinLength(1, ErrorMessage = "At least one document type must be selected")]
 	public List<int> DocumentTypes { get; set; } = new();
+}
+
+public class DocumentRequestValidator : AbstractValidator<DocumentRequest>
+{
+	public DocumentRequestValidator()
+	{
+		RuleFor(x => x.Title)
+			.NotEmpty()
+			.Matches(@"^[A-Za-z ]+$")
+			.WithMessage("Title must contain only alphabets and spaces");
+		RuleFor(x => x.DocumentSize)
+			.InclusiveBetween(1, 20)
+			.WithMessage("Document size must be between 1 and 20 MB");
+		RuleFor(x => x.DocumentTypes)
+			.NotNull()
+			.NotEmpty()
+			.WithMessage("At least one document type must be selected");
+	}
 }
 
 /// <summary>

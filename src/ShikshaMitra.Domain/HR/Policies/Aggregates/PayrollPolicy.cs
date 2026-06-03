@@ -65,12 +65,12 @@ public class PayrollPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (string.IsNullOrWhiteSpace(name))
 		{
-			throw new BusinessException("ShikshaMitra:PayrollPolicyNameRequired");
+			throw new BusinessException(HRErrorCodes.PayrollPolicyNameRequired);
 		}
 
 		if (isDefault && status != HrPolicyStatus.Active)
 		{
-			throw new BusinessException("ShikshaMitra:DefaultPolicyMustBeActive");
+			throw new BusinessException(HRErrorCodes.DefaultPolicyMustBeActive);
 		}
 
 		WorkCalendarPolicyId = workCalendarPolicyId;
@@ -89,7 +89,7 @@ public class PayrollPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (isDefault && Status != HrPolicyStatus.Active)
 		{
-			throw new BusinessException("ShikshaMitra:DefaultPolicyMustBeActive");
+			throw new BusinessException(HRErrorCodes.DefaultPolicyMustBeActive);
 		}
 
 		IsDefault = isDefault;
@@ -100,7 +100,7 @@ public class PayrollPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (IsDefault)
 		{
-			throw new BusinessException("ShikshaMitra:DefaultPolicyCannotBeArchived");
+			throw new BusinessException(HRErrorCodes.DefaultPolicyCannotBeArchived);
 		}
 
 		Status = HrPolicyStatus.Archived;
@@ -153,7 +153,7 @@ public class PayrollPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			return;
 		}
 
-		throw new BusinessException("ShikshaMitra:InvalidManualDays");
+		throw new BusinessException(HRErrorCodes.InvalidManualDays);
 	}
 
 	private static List<PayrollHolidayOverride> NormalizeHolidayOverrides(IReadOnlyList<PayrollHolidayOverride>? holidayOverrides) =>

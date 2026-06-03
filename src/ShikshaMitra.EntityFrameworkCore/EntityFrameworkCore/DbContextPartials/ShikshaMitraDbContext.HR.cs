@@ -65,7 +65,6 @@ public partial class ShikshaMitraDbContext
     public DbSet<HrDashboardPreview> HrDashboardPreviews { get; set; }
     public DbSet<HrDashboardRefreshRun> HrDashboardRefreshRuns { get; set; }
     public DbSet<ProfessionalReviewCycle> ProfessionalReviewCycles { get; set; }
-    public DbSet<ProfessionalReview> ProfessionalReviews { get; set; }
     public DbSet<PerformanceTemplate> PerformanceTemplates { get; set; }
     public DbSet<PerformanceTemplateSection> PerformanceTemplateSections { get; set; }
     public DbSet<PerformanceTemplateCriterion> PerformanceTemplateCriteria { get; set; }

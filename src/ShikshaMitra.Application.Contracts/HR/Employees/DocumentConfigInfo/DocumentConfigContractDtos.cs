@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using FluentValidation;
 
 namespace ShikshaMitra.HR.Employees.DocumentConfigInfo;
 
@@ -9,17 +10,21 @@ namespace ShikshaMitra.HR.Employees.DocumentConfigInfo;
 /// </summary>
 public class DocumentRequest
 {
-	[Required]
-	[RegularExpression("^[A-Za-z ]+$")]
 	public string Title { get; set; } = string.Empty;
 
-	[Required]
-	[Range(1, 20)]
 	public int DocumentSize { get; set; }
 
-	[Required]
-	[MinLength(1)]
 	public List<int> DocumentTypes { get; set; } = new();
+}
+
+public class DocumentRequestValidator : AbstractValidator<DocumentRequest>
+{
+	public DocumentRequestValidator()
+	{
+		RuleFor(x => x.Title).NotEmpty().Matches("^[A-Za-z ]+$");
+		RuleFor(x => x.DocumentSize).InclusiveBetween(1, 20);
+		RuleFor(x => x.DocumentTypes).NotNull().NotEmpty();
+	}
 }
 
 /// <summary>

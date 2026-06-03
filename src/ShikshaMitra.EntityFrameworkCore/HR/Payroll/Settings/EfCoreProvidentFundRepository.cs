@@ -13,8 +13,9 @@ public class EfCoreProvidentFundRepository(IDbContextProvider<ShikshaMitraDbCont
 {
 	public async Task<bool> IsCodeExistsAsync(string code, Guid? excludeId = null)
 	{
+		var normalized = code.ToLowerInvariant();
 		var dbSet = await GetDbSetAsync();
-		var query = dbSet.Where(x => x.Code.ToLower() == code.ToLower());
+		var query = dbSet.Where(x => x.Code.ToLower() == normalized);
 
 		if (excludeId.HasValue)
 		{
@@ -26,8 +27,9 @@ public class EfCoreProvidentFundRepository(IDbContextProvider<ShikshaMitraDbCont
 
 	public async Task<bool> IsNameExistsAsync(string name, Guid? excludeId = null)
 	{
+		var normalized = name.ToLowerInvariant();
 		var dbSet = await GetDbSetAsync();
-		var query = dbSet.Where(x => x.Name.ToLower() == name.ToLower());
+		var query = dbSet.Where(x => x.Name.ToLower() == normalized);
 
 		if (excludeId.HasValue)
 		{

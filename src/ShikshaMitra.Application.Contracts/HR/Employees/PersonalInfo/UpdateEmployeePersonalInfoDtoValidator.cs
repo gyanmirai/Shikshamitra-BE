@@ -1,12 +1,13 @@
 using System;
 using System.Linq;
 using FluentValidation;
+using Volo.Abp.Timing;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
 public class UpdateEmployeePersonalInfoDtoValidator : AbstractValidator<UpdateEmployeePersonalInfoDto>
 {
-	public UpdateEmployeePersonalInfoDtoValidator()
+	public UpdateEmployeePersonalInfoDtoValidator(IClock clock)
 	{
 		RuleFor(x => x.FirstName).MaximumLength(256);
 		RuleFor(x => x.LastName).MaximumLength(256);
@@ -60,8 +61,36 @@ public class UpdateEmployeePersonalInfoDtoValidator : AbstractValidator<UpdateEm
 			.MaximumLength(10)
 			.Matches(@"^\d{6}$")
 			.When(x => !string.IsNullOrEmpty(x.Pincode));
+
+		RuleFor(x => x.DateOfBirth)
+			.Must(x => !x.HasValue || x.Value < DateOnly.FromDateTime(clock.Now))
+			.WithMessage("Date of birth cannot be in the future.");
+
+		RuleFor(x => x)
+			.Must(x => !x.DateOfJoining.HasValue ||
+			           !x.DateOfBirth.HasValue ||
+			           CalculateAge(x.DateOfBirth.Value, x.DateOfJoining.Value) >= 18)
+			.WithMessage("Employee must be at least 18 years old at the time of joining.");
+
+		RuleFor(x => x.DateOfJoining)
+			.Must((dto, dateOfJoining) =>
+				!dateOfJoining.HasValue ||
+				!dto.DateOfBirth.HasValue ||
+				dateOfJoining.Value >= dto.DateOfBirth.Value)
+			.WithMessage("Date of joining cannot be before date of birth.");
 	}
 
 	private static string NormalizeDigits(string? value) =>
 		value == null ? string.Empty : new string(value.Where(char.IsDigit).ToArray());
+
+	private static int CalculateAge(DateOnly dob, DateOnly referenceDate)
+	{
+		var age = referenceDate.Year - dob.Year;
+		if (referenceDate < dob.AddYears(age))
+		{
+			age--;
+		}
+
+		return age;
+	}
 }

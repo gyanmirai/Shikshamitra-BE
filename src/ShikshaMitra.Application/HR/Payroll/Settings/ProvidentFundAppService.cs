@@ -28,12 +28,12 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 		}
 		catch (Exception ex) when (IsProvidentFundCodeUniqueViolation(ex))
 		{
-			throw new BusinessException("ShikshaMitra:ProvidentFundCodeAlreadyExists")
+			throw new BusinessException(HRErrorCodes.ProvidentFundCodeAlreadyExists)
 				.WithData("code", input.Code);
 		}
 		catch (Exception ex) when (IsProvidentFundNameUniqueViolation(ex))
 		{
-			throw new BusinessException("ShikshaMitra:ProvidentFundNameAlreadyExists")
+			throw new BusinessException(HRErrorCodes.ProvidentFundNameAlreadyExists)
 				.WithData("name", input.Name);
 		}
 	}
@@ -59,12 +59,12 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 		}
 		catch (Exception ex) when (IsProvidentFundCodeUniqueViolation(ex))
 		{
-			throw new BusinessException("ShikshaMitra:ProvidentFundCodeAlreadyExists")
+			throw new BusinessException(HRErrorCodes.ProvidentFundCodeAlreadyExists)
 				.WithData("code", input.Code);
 		}
 		catch (Exception ex) when (IsProvidentFundNameUniqueViolation(ex))
 		{
-			throw new BusinessException("ShikshaMitra:ProvidentFundNameAlreadyExists")
+			throw new BusinessException(HRErrorCodes.ProvidentFundNameAlreadyExists)
 				.WithData("name", input.Name);
 		}
 	}
@@ -100,7 +100,7 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 	{
 		if (await _providentFundRepository.IsCodeExistsAsync(code, excludeId))
 		{
-			throw new BusinessException("ShikshaMitra:ProvidentFundCodeAlreadyExists")
+			throw new BusinessException(HRErrorCodes.ProvidentFundCodeAlreadyExists)
 				.WithData("code", code);
 		}
 	}
@@ -109,7 +109,7 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 	{
 		if (await _providentFundRepository.IsNameExistsAsync(name, excludeId))
 		{
-			throw new BusinessException("ShikshaMitra:ProvidentFundNameAlreadyExists")
+			throw new BusinessException(HRErrorCodes.ProvidentFundNameAlreadyExists)
 				.WithData("name", name);
 		}
 	}

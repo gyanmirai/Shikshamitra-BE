@@ -109,7 +109,7 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (leaveCount < LeavePolicyConsts.MinLeaveCount || leaveCount > LeavePolicyConsts.MaxLeaveCount)
 		{
-			throw new BusinessException("ShikshaMitra:InvalidLeaveCount")
+			throw new BusinessException(HRErrorCodes.LeaveInvalidCount)
 				.WithData("message", $"Leave count must be between {LeavePolicyConsts.MinLeaveCount} and {LeavePolicyConsts.MaxLeaveCount}");
 		}
 

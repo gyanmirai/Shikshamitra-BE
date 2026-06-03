@@ -63,7 +63,7 @@ public class EarningComponentController : AbpControllerBase
 		return StatusCode(201, new ComponentCreateResponseDto
 		{
 			Id = createdComponent.Id,
-			CreatedAt = DateTime.UtcNow
+			CreatedAt = createdComponent.CreationTime
 		});
 	}
 

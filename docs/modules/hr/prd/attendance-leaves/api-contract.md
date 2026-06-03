@@ -67,8 +67,8 @@ All controllers are `[Authorize]`.
 | GET | `/api/leave-management/balances` | Per active policy: entitled, used (approved business days YTD), remaining (`employeeId` optional; defaults to caller’s employee; respects employee access rules) |
 | GET | `/api/leave-management/calendar` | Requests overlapping `rangeStart`–`rangeEnd` for calendar UI (optional filters). Use ISO-8601 date-time with offset (example: `2026-04-01T00:00:00-07:00`). |
 | GET | `/api/leave-management/export` | Excel export using the same date scope and filters as the list (`month-year` optional; full academic year when omitted) |
-| POST | `/api/leave-management?academicYearId=` | Multipart create: `leavePolicyId` (preferred) or legacy `leaveTypeId` (leave **policy** id), `startDate`, `endDate`, `reason`, optional `employeeId` (manager/HR on-behalf), optional attachment |
-| GET | `/api/leave-management/{id}` | Detail (includes `publicId`, `leavePolicyId`; `leaveTypeId` duplicates `leavePolicyId` for backward compatibility) |
+| POST | `/api/leave-management?academicYearId=` | Multipart create: `leavePolicyId` (preferred), `startDate`, `endDate`, `reason`, optional `employeeId` (manager/HR on-behalf), optional attachment |
+| GET | `/api/leave-management/{id}` | Detail (includes `publicId`, `leavePolicyId`) |
 | PATCH | `/api/leave-management/{id}/approve` | Approve |
 | PATCH | `/api/leave-management/{id}/reject` | Reject |
 | DELETE | `/api/leave-management/{id}` | Cancel (pending, own request) |

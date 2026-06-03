@@ -10,14 +10,14 @@ public class EmployeeDocument : IMultiTenant, IHasCreationTime
 	public Guid? TenantId { get; private set; }
 	public Guid EmployeeId { get; private set; }
 	public Guid? DocumentNameId { get; private set; }
-	public string DocumentName { get; private set; }
-	public string ContentType { get; private set; }
+	public string DocumentName { get; private set; } = string.Empty;
+	public string ContentType { get; private set; } = string.Empty;
 	public long Size { get; private set; }
 	public DateTime CreationTime { get; private set; }
 	public DateTime? LastModificationTime { get; private set; }
 
 	// Stores the Blob name if using Blob Storage
-	public string BlobName { get; private set; }
+	public string BlobName { get; private set; } = string.Empty;
 
 	private EmployeeDocument() { } // For ORM
 
@@ -29,6 +29,7 @@ public class EmployeeDocument : IMultiTenant, IHasCreationTime
 		string contentType,
 		long size,
 		string blobName,
+		DateTime creationTime,
 		Guid? documentNameId = null)
 	{
 		Id = id;
@@ -39,16 +40,21 @@ public class EmployeeDocument : IMultiTenant, IHasCreationTime
 		Size = size;
 		BlobName = blobName;
 		DocumentNameId = documentNameId;
-		CreationTime = DateTime.Now;
+		CreationTime = creationTime;
 	}
 
-	public EmployeeDocument UpdateDocumentMetadata(string documentName, string contentType, long size, Guid? documentNameId = null)
+	public EmployeeDocument UpdateDocumentMetadata(
+		string documentName,
+		string contentType,
+		long size,
+		DateTime modificationTime,
+		Guid? documentNameId = null)
 	{
 		DocumentName = documentName;
 		ContentType = contentType;
 		Size = size;
 		DocumentNameId = documentNameId ?? DocumentNameId;
-		LastModificationTime = DateTime.Now;
+		LastModificationTime = modificationTime;
 		return this;
 	}
 }

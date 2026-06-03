@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
 
 /// <summary>
 /// DTO for creating and updating holidays
 /// </summary>
-public class CreateUpdateHolidayDto : IValidatableObject
+public class CreateUpdateHolidayDto
 {
     /// <summary>
     /// Academic Year ID for filtering holidays by academic year (required)
@@ -18,7 +17,7 @@ public class CreateUpdateHolidayDto : IValidatableObject
     /// <summary>
     /// Name of the holiday (1-256 characters, required)
     /// </summary>
-    public string HolidayName { get; set; }
+    public string HolidayName { get; set; } = string.Empty;
 
     /// <summary>
     /// Reference to the EventType, required
@@ -50,16 +49,4 @@ public class CreateUpdateHolidayDto : IValidatableObject
     /// </summary>
     public string? Attachments { get; set; }
 
-    /// <summary>
-    /// Validate that end date is not before start date
-    /// </summary>
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-    {
-        if (StartDate > EndDate)
-        {
-            yield return new ValidationResult(
-                "End date must be greater than or equal to start date",
-                new[] { nameof(EndDate) });
-        }
-    }
 }

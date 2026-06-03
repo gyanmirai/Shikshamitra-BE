@@ -1,6 +1,6 @@
-﻿# HR Module Tests - Quick Start Guide
+# HR Module Tests - Quick Start Guide
 
-## 🚀 Getting Started (5 Minutes)
+## ?? Getting Started (5 Minutes)
 
 ### Prerequisites
 - Visual Studio 2022 or VS Code
@@ -24,13 +24,13 @@ dotnet test --filter "FullyQualifiedName~HR"
 
 **Expected Result:**
 ```
-✅ 175+ tests passed
-⏱️ Completed in ~30 seconds
+? 175+ tests passed
+?? Completed in ~30 seconds
 ```
 
 ---
 
-## 📋 Test Files Quick Reference
+## ?? Test Files Quick Reference
 
 | Module | File | Tests | Run Command |
 |--------|------|-------|-------------|
@@ -38,15 +38,15 @@ dotnet test --filter "FullyQualifiedName~HR"
 | Deduction Components | `DeductionComponentAppService_Tests.cs` | 35+ | `--filter "FullyQualifiedName~DeductionComponent"` |
 | Leave Types | `LeaveTypeAppService_Tests.cs` | 30+ | `--filter "FullyQualifiedName~LeaveType"` |
 | Leave Policies | `LeavePolicyAppService_Tests.cs` | 35+ | `--filter "FullyQualifiedName~LeavePolicy"` |
-| Employees | `EmployeeAppService_Tests.cs` | 40+ | `--filter "FullyQualifiedName~EmployeeAppService"` |
+| Employees | `EmployeePersonalInfoAppService_Tests.cs` | 40+ | `--filter "FullyQualifiedName~Employee"` |
 
 ---
 
-## 🎯 Common Tasks
+## ?? Common Tasks
 
 ### Run Single Test
 ```bash
-# Visual Studio: Right-click test → Run
+# Visual Studio: Right-click test ? Run
 # Command Line:
 dotnet test --filter "Should_Create_Earning_Component"
 ```
@@ -68,7 +68,7 @@ dotnet test --collect:"XPlat Code Coverage"
 
 ---
 
-## 🔍 Test Categories
+## ?? Test Categories
 
 ### By Operation Type
 
@@ -99,31 +99,31 @@ dotnet test --filter "Activate"
 
 ---
 
-## ✅ Verification Checklist
+## ? Verification Checklist
 
 ### After Code Changes
 
 ```
-□ Run affected test file
-□ Verify all tests pass
-□ Add new tests for new features
-□ Update tests for changed behavior
-□ Run full suite before commit
+? Run affected test file
+? Verify all tests pass
+? Add new tests for new features
+? Update tests for changed behavior
+? Run full suite before commit
 ```
 
 ### Before Pull Request
 
 ```
-□ All HR tests passing (175+)
-□ No test warnings
-□ Code coverage maintained (90%+)
-□ New features have tests
-□ Documentation updated
+? All HR tests passing (175+)
+? No test warnings
+? Code coverage maintained (90%+)
+? New features have tests
+? Documentation updated
 ```
 
 ---
 
-## 🐛 Quick Troubleshooting
+## ?? Quick Troubleshooting
 
 ### Test Fails: "Entity not found"
 **Fix:** Check test data creation, ensure IDs are valid
@@ -145,7 +145,7 @@ dotnet test
 
 ---
 
-## 📊 Expected Test Results
+## ?? Expected Test Results
 
 ### Successful Run Output
 ```
@@ -159,46 +159,46 @@ Total time: 28.5 Seconds
 
 ### Test Coverage by Module
 ```
-✅ Earning Components    - 35 tests - 100% pass
-✅ Deduction Components  - 35 tests - 100% pass
-✅ Leave Types          - 30 tests - 100% pass
-✅ Leave Policies       - 35 tests - 100% pass
-✅ Employees            - 40 tests - 100% pass
+? Earning Components    - 35 tests - 100% pass
+? Deduction Components  - 35 tests - 100% pass
+? Leave Types          - 30 tests - 100% pass
+? Leave Policies       - 35 tests - 100% pass
+? Employees            - 40 tests - 100% pass
 ```
 
 ---
 
-## 🔗 Key Files
+## ?? Key Files
 
 **Test Files:**
 ```
 test\ShikshaMitra.Application.Tests\HR\
-├── Payroll\
-│   ├── EarningComponentAppService_Tests.cs
-│   └── DeductionComponentAppService_Tests.cs
-├── AttendanceAndLeaves\
-│   ├── LeaveTypeAppService_Tests.cs
-│   └── LeavePolicyAppService_Tests.cs
-└── Employees\
-    └── EmployeeAppService_Tests.cs
++-- Payroll\
+�   +-- EarningComponentAppService_Tests.cs
+�   +-- DeductionComponentAppService_Tests.cs
++-- AttendanceAndLeaves\
+�   +-- LeaveTypeAppService_Tests.cs
+�   +-- LeavePolicyAppService_Tests.cs
++-- Employees\
+    +-- EmployeePersonalInfoAppService_Tests.cs
 ```
 
 **Base Classes:**
 ```
 test\ShikshaMitra.Application.Tests\
-├── ShikshaMitraApplicationTestBase.cs
-└── ShikshaMitraApplicationTestModule.cs
++-- ShikshaMitraApplicationTestBase.cs
++-- ShikshaMitraApplicationTestModule.cs
 ```
 
 **Documentation:**
 ```
 docs\testing\
-└── HR-Module-E2E-Tests.md (Detailed guide)
++-- HR-Module-E2E-Tests.md (Detailed guide)
 ```
 
 ---
 
-## 💡 Pro Tips
+## ?? Pro Tips
 
 1. **Run tests frequently** while developing
 2. **Use Test Explorer** in Visual Studio for visual feedback
@@ -209,7 +209,7 @@ docs\testing\
 
 ---
 
-## 📞 Need Help?
+## ?? Need Help?
 
 **For detailed information:**
 - See `docs\testing\HR-Module-E2E-Tests.md`
@@ -238,7 +238,7 @@ public async Task Should_Do_Something()
 
 ---
 
-## ⚡ Quick Commands Cheat Sheet
+## ? Quick Commands Cheat Sheet
 
 ```bash
 # Run all tests
@@ -269,4 +269,4 @@ dotnet clean && dotnet test
 **Total Tests:** 175+  
 **Success Rate:** 100%  
 **Execution Time:** ~30 seconds  
-**Status:** ✅ Production Ready
+**Status:** ? Production Ready

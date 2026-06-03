@@ -7,6 +7,7 @@ using Volo.Abp.BlobStoring;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Timing;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Reports;
@@ -18,6 +19,7 @@ public class HrReportExportBackgroundJob(
 	IRepository<HrReportExportJob, Guid> exportJobRepository,
 	IBlobContainer blobContainer,
 	ICurrentTenant currentTenant,
+	IClock clock,
 	ILogger<HrReportExportBackgroundJob> logger)
 	: AsyncBackgroundJob<HrReportExportJobArgs>, ITransientDependency
 {
@@ -27,7 +29,7 @@ public class HrReportExportBackgroundJob(
 		using (currentTenant.Change(args.TenantId))
 		{
 			var job = await exportJobRepository.GetAsync(args.JobId);
-			job.MarkRunning(DateTime.UtcNow);
+			job.MarkRunning(clock.Now);
 			await exportJobRepository.UpdateAsync(job, autoSave: true);
 
 			try
@@ -43,13 +45,13 @@ public class HrReportExportBackgroundJob(
 
 				await using var stream = new MemoryStream(bytes);
 				await blobContainer.SaveAsync(blobName, stream, overrideExisting: true);
-				job.MarkCompleted(blobName, DateTime.UtcNow);
+				job.MarkCompleted(blobName, clock.Now);
 				await exportJobRepository.UpdateAsync(job, autoSave: true);
 			}
 			catch (Exception ex)
 			{
 				logger.LogError(ex, "Failed to export HR report job {JobId}", args.JobId);
-				job.MarkFailed(ex.Message, DateTime.UtcNow);
+				job.MarkFailed(ex.Message, clock.Now);
 				await exportJobRepository.UpdateAsync(job, autoSave: true);
 			}
 		}

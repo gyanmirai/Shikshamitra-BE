@@ -1,43 +1,40 @@
-﻿using System;
+using FluentValidation;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.LeavePolicyInfo;
 
-/// <summary>
-/// Request DTO for creating a leave policy
-/// </summary>
 public class LeavePolicyCreateRequest
 {
-	[Required]
-	[MinLength(1)]
 	public string PolicyTitle { get; set; } = string.Empty;
 
-	[Required]
 	public Guid LeaveType { get; set; }
 
-	[Required]
-	[Range(0, int.MaxValue)]
 	public int MaxLeavePerYear { get; set; }
 
-	[Required]
 	public string PaidType { get; set; } = string.Empty;
 
-	[Required]
 	public bool CarryForward { get; set; }
 
-	[Required]
 	public bool EncashmentAllowed { get; set; }
 
-	[Required]
 	public bool RequiresApproval { get; set; }
 
 	public string? Description { get; set; }
 }
 
-/// <summary>
-/// Response DTO for leave policy
-/// </summary>
+public class LeavePolicyCreateRequestValidator : AbstractValidator<LeavePolicyCreateRequest>
+{
+	public LeavePolicyCreateRequestValidator()
+	{
+		RuleFor(x => x.PolicyTitle).NotEmpty();
+		RuleFor(x => x.LeaveType).NotEmpty();
+		RuleFor(x => x.MaxLeavePerYear).GreaterThanOrEqualTo(0);
+		RuleFor(x => x.PaidType).NotEmpty();
+	}
+}
+
 public class LeavePolicyResponse
 {
 	[Required]
@@ -70,9 +67,6 @@ public class LeavePolicyResponse
 	public DateTime CreatedAt { get; set; }
 }
 
-/// <summary>
-/// Response DTO for updated leave policy
-/// </summary>
 public class LeavePolicyUpdatedResponse
 {
 	[Required]
@@ -105,9 +99,6 @@ public class LeavePolicyUpdatedResponse
 	public DateTime UpdatedAt { get; set; }
 }
 
-/// <summary>
-/// Response DTO for leave policy list item
-/// </summary>
 public class LeavePolicyItemResponse
 {
 	[Required]
@@ -136,9 +127,6 @@ public class LeavePolicyItemResponse
 	public string RequiresApproval { get; set; } = string.Empty;
 }
 
-/// <summary>
-/// Response DTO for paginated leave policy list
-/// </summary>
 public class LeavePolicyListResponse
 {
 	[Required]
@@ -160,9 +148,6 @@ public class LeavePolicyListResponse
 	public List<LeavePolicyItemResponse> Items { get; set; } = new();
 }
 
-/// <summary>
-/// Response DTO for delete operation
-/// </summary>
 public class LeavePolicyDeleteResponse
 {
 	[Required]

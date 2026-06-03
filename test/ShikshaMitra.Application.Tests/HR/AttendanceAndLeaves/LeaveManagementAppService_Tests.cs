@@ -251,7 +251,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 		var now = DateTime.UtcNow;
 		var shortAyId = Guid.Parse("00000000-0000-0000-0000-000000000021");
 
-		WithUnitOfWorkAsync(async () =>
+		await WithUnitOfWorkAsync(async () =>
 		{
 			var dbContext = ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
 			var stamp = Guid.NewGuid().ToString();
@@ -264,7 +264,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 				stamp,
 				"{}",
 				now);
-		}).GetAwaiter().GetResult();
+		});
 
 		var ex = await Should.ThrowAsync<BusinessException>(async () =>
 			await _leaveManagement.GetListAsync(
@@ -279,7 +279,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 		var now = DateTime.UtcNow;
 		var shortAyId = Guid.Parse("00000000-0000-0000-0000-000000000022");
 
-		WithUnitOfWorkAsync(async () =>
+		await WithUnitOfWorkAsync(async () =>
 		{
 			var dbContext = ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
 			var stamp = Guid.NewGuid().ToString();
@@ -292,7 +292,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 				stamp,
 				"{}",
 				now);
-		}).GetAwaiter().GetResult();
+		});
 
 		var result = await _leaveManagement.GetCalendarAsync(BuildCalendarInput(
 			shortAyId,
@@ -311,7 +311,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 		var now = DateTime.UtcNow;
 		var shortAyId = Guid.Parse("00000000-0000-0000-0000-000000000023");
 
-		WithUnitOfWorkAsync(async () =>
+		await WithUnitOfWorkAsync(async () =>
 		{
 			var dbContext = ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
 			var stamp = Guid.NewGuid().ToString();
@@ -324,7 +324,7 @@ public class LeaveManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 				stamp,
 				"{}",
 				now);
-		}).GetAwaiter().GetResult();
+		});
 
 		var ex = await Should.ThrowAsync<BusinessException>(async () =>
 			await _leaveManagement.GetCalendarAsync(BuildCalendarInput(

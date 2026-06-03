@@ -88,7 +88,7 @@ public class LeavePolicyManager : DomainService
 	{
 		if (await _leavePolicyRepository.IsPolicyNameExistsAsync(academicYearId, policyName, excludeId))
 		{
-			throw new BusinessException("ShikshaMitra:LeavePolicyNameAlreadyExists")
+			throw new BusinessException(HRErrorCodes.LeavePolicyNameAlreadyExists)
 				.WithData("policyName", policyName);
 		}
 	}
@@ -99,19 +99,19 @@ public class LeavePolicyManager : DomainService
 
 		if (existingLeaveType == null)
 		{
-			throw new BusinessException("ShikshaMitra:LeaveTypeNotFound")
+			throw new BusinessException(HRErrorCodes.LeaveTypeNotFound)
 				.WithData("leaveTypeId", leaveTypeId);
 		}
 
 		if (!existingLeaveType.IsActive)
 		{
-			throw new BusinessException("ShikshaMitra:LeaveTypeInactive")
+			throw new BusinessException(HRErrorCodes.LeaveTypeInactive)
 				.WithData("leaveTypeId", leaveTypeId);
 		}
 
 		if (existingLeaveType.AcademicYearId != academicYearId)
 		{
-			throw new BusinessException("ShikshaMitra:LeaveTypeAcademicYearMismatch")
+			throw new BusinessException(HRErrorCodes.LeaveTypeAcademicYearMismatch)
 				.WithData("leaveTypeId", leaveTypeId)
 				.WithData("academicYearId", academicYearId);
 		}

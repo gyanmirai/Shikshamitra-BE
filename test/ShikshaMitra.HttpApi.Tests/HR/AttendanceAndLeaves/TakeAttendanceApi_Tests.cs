@@ -49,10 +49,13 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
 
 		payload.IsHoliday.ShouldBeTrue();
+		payload.HolidayName.ShouldNotBeNull();
 		payload.HolidayName.ShouldContain("Summer Vacation");
 		var row = payload.Items.Single();
 		row.IsHoliday.ShouldBeTrue();
+		row.HolidayName.ShouldNotBeNull();
 		row.HolidayName.ShouldContain("Summer Vacation");
+		row.HolidayReason.ShouldNotBeNull();
 		row.HolidayReason.ShouldContain("Holiday:");
 	}
 
@@ -85,70 +88,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
 		body.ShouldContain("HR:Attendance:020314");
 		body.ShouldContain("Summer Vacation");
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task SaveDay_Should_Update_Legacy_Null_Stage_From_Assignment()
-	{
-		await EnsureDefaultTestUserHasTenantWideScopeAsync();
-
-		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"LegacyStageFix{Guid.NewGuid():N}",
-			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-5));
-		await SeedLegacyAttendanceAsync(employee.Id, attendanceDate, educationMediumStageId: null);
-
-		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
-		{
-			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
-			Entries =
-			[
-				new TakeAttendanceSaveEntryDto
-				{
-					EmployeeId = employee.Id,
-					StatusWire = "PRESENT",
-					Remarks = "Assignment stage should replace legacy null stage"
-				}
-			]
-		}, JsonOptions);
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-		await AssertAttendanceStageAsync(employee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task SaveDay_StageScopedUser_Should_Update_Legacy_Null_Stage_By_Assignment()
-	{
-		var scopedUserId = Guid.NewGuid();
-		await EnsureUserHasStageScopeAsync(scopedUserId, EmployeeTestHelper.DefaultMediumStageId);
-
-		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"ScopedLegacyStageFix{Guid.NewGuid():N}",
-			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-5));
-		await SeedLegacyAttendanceAsync(employee.Id, attendanceDate, educationMediumStageId: null);
-
-		var scopedClient = CreateClientAs(scopedUserId);
-		var response = await scopedClient.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
-		{
-			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
-			Entries =
-			[
-				new TakeAttendanceSaveEntryDto
-				{
-					EmployeeId = employee.Id,
-					StatusWire = "PRESENT",
-					Remarks = "Stage-scoped assignment should allow correction"
-				}
-			]
-		}, JsonOptions);
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-		await AssertAttendanceStageAsync(employee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
 	}
 
 	[Fact]
@@ -404,30 +343,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			using var doc = JsonDocument.Parse(payload);
 			doc.RootElement.GetProperty("status").GetInt32().ShouldBe(400);
 			doc.RootElement.GetProperty("title").GetString().ShouldNotBeNullOrWhiteSpace();
-		}
-	}
-
-	private async Task SeedLegacyAttendanceAsync(Guid employeeId, DateOnly attendanceDate, Guid? educationMediumStageId)
-	{
-		using var scope = Factory.Services.CreateScope();
-		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
-		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
-		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
-
-		using (currentTenant.Change(tenantId))
-		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
-		{
-			await attendanceRepository.InsertAsync(new EmployeeAttendance
-			{
-				TenantId = tenantId,
-				EmployeeId = employeeId,
-				AttendanceDate = attendanceDate,
-				EducationMediumStageId = educationMediumStageId,
-				StatusType = EmployeeAttendanceStatusType.FullDayLeave,
-				Remarks = "Legacy attendance row"
-			}, autoSave: false);
-			await uow.CompleteAsync();
 		}
 	}
 

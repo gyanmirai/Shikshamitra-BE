@@ -1,6 +1,5 @@
-﻿using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using System;
-using System.Collections.Generic;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -9,10 +8,6 @@ namespace ShikshaMitra.HR.Policies;
 
 public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
-	private const int MaxGraceMinutes = 240;
-	private const int MaxLateAllowed = 31;
-	private const int MaxOvertimeMinutes = 1440;
-
 	public Guid? TenantId { get; protected set; }
 	public Guid AcademicYearId { get; protected set; }
 	public Guid WorkCalendarPolicyId { get; protected set; }
@@ -119,7 +114,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		bool sandwichRuleEnabled,
 		bool payrollPreviewEnabled)
 	{
-		Validate(name, status, isDefault, fullDayThresholdPercentage, halfDayThresholdPercentage, absentThresholdPercentage, graceTime, maxLateAllowedPerMonth, penaltyCountThreshold, earlyExitGraceTime, overtimeEnabled, overtimeRate, minOvertimeMinutes);
+		AttendancePolicyRuleValidator.Validate(name, status, isDefault, fullDayThresholdPercentage, halfDayThresholdPercentage, absentThresholdPercentage, graceTime, maxLateAllowedPerMonth, penaltyCountThreshold, earlyExitGraceTime, overtimeEnabled, overtimeRate, minOvertimeMinutes);
 
 		WorkCalendarPolicyId = workCalendarPolicyId;
 		Name = name.Trim();
@@ -149,7 +144,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (isDefault && Status != HrPolicyStatus.Active)
 		{
-			throw new BusinessException("ShikshaMitra:DefaultPolicyMustBeActive");
+			throw new BusinessException(HRErrorCodes.DefaultPolicyMustBeActive);
 		}
 
 		IsDefault = isDefault;
@@ -160,7 +155,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (IsDefault)
 		{
-			throw new BusinessException("ShikshaMitra:DefaultPolicyCannotBeArchived");
+			throw new BusinessException(HRErrorCodes.DefaultPolicyCannotBeArchived);
 		}
 
 		Status = HrPolicyStatus.Archived;
@@ -172,54 +167,5 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Status = HrPolicyStatus.Draft;
 		IsDefault = false;
 		Version++;
-	}
-
-	private static void Validate(
-		string name,
-		HrPolicyStatus status,
-		bool isDefault,
-		double fullDayThresholdPercentage,
-		double halfDayThresholdPercentage,
-		double absentThresholdPercentage,
-		int graceTime,
-		int maxLateAllowedPerMonth,
-		int penaltyCountThreshold,
-		int earlyExitGraceTime,
-		bool overtimeEnabled,
-		AttendanceOvertimeRate? overtimeRate,
-		int? minOvertimeMinutes)
-	{
-		if (string.IsNullOrWhiteSpace(name))
-		{
-			throw new BusinessException("ShikshaMitra:AttendancePolicyNameRequired");
-		}
-
-		if (isDefault && status != HrPolicyStatus.Active)
-		{
-			throw new BusinessException("ShikshaMitra:DefaultPolicyMustBeActive");
-		}
-
-		if (fullDayThresholdPercentage is < 0 or > 100 || halfDayThresholdPercentage is < 0 or > 100 || absentThresholdPercentage is < 0 or > 100)
-		{
-			throw new BusinessException("ShikshaMitra:InvalidAttendanceThreshold");
-		}
-
-		if (halfDayThresholdPercentage >= fullDayThresholdPercentage || absentThresholdPercentage > halfDayThresholdPercentage)
-		{
-			throw new BusinessException("ShikshaMitra:InvalidAttendanceThresholdOrder");
-		}
-
-		if (graceTime is < 0 or > MaxGraceMinutes ||
-			maxLateAllowedPerMonth is < 0 or > MaxLateAllowed ||
-			penaltyCountThreshold is < 0 or > MaxLateAllowed ||
-			earlyExitGraceTime is < 0 or > MaxGraceMinutes)
-		{
-			throw new BusinessException("ShikshaMitra:InvalidAttendancePolicyRule");
-		}
-
-		if (overtimeEnabled && (!overtimeRate.HasValue || !minOvertimeMinutes.HasValue || minOvertimeMinutes is < 0 or > MaxOvertimeMinutes))
-		{
-			throw new BusinessException("ShikshaMitra:OvertimeRateAndMinMinutesRequired");
-		}
 	}
 }

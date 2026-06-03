@@ -1,42 +1,52 @@
-﻿using System;
+using FluentValidation;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.LeaveTypeInfo;
 
-/// <summary>
-/// Request DTO for creating a leave type
-/// </summary>
 public class LeaveTypeCreateRequest
 {
-	[Required]
-	[MinLength(1)]
 	public string Name { get; set; } = string.Empty;
 
 	public string? Description { get; set; }
 
-	[Required]
-	[RegularExpression(@"^#([A-Fa-f0-9]{6})$", ErrorMessage = "Color must be in HEX format (#RRGGBB)")]
 	public string Color { get; set; } = string.Empty;
 }
 
-/// <summary>
-/// Request DTO for updating a leave type
-/// </summary>
 public class LeaveTypeUpdateRequest
 {
-	[MinLength(1)]
 	public string? Name { get; set; }
 
 	public string? Description { get; set; }
 
-	[RegularExpression(@"^#([A-Fa-f0-9]{6})$", ErrorMessage = "Color must be in HEX format (#RRGGBB)")]
 	public string? Color { get; set; }
 }
 
-/// <summary>
-/// Response DTO for leave type
-/// </summary>
+public class LeaveTypeCreateRequestValidator : AbstractValidator<LeaveTypeCreateRequest>
+{
+	public LeaveTypeCreateRequestValidator()
+	{
+		RuleFor(x => x.Name).NotEmpty();
+		RuleFor(x => x.Color)
+			.NotEmpty()
+			.Matches(@"^#([A-Fa-f0-9]{6})$")
+			.WithMessage("Color must be in HEX format (#RRGGBB)");
+	}
+}
+
+public class LeaveTypeUpdateRequestValidator : AbstractValidator<LeaveTypeUpdateRequest>
+{
+	public LeaveTypeUpdateRequestValidator()
+	{
+		RuleFor(x => x.Name).NotEmpty().When(x => x.Name != null);
+		RuleFor(x => x.Color)
+			.Matches(@"^#([A-Fa-f0-9]{6})$")
+			.WithMessage("Color must be in HEX format (#RRGGBB)")
+			.When(x => x.Color != null);
+	}
+}
+
 public class LeaveTypeResponse
 {
 	[Required]
@@ -51,9 +61,6 @@ public class LeaveTypeResponse
 	public string Color { get; set; } = string.Empty;
 }
 
-/// <summary>
-/// Response DTO for leave type list item
-/// </summary>
 public class LeaveTypeItemResponse
 {
 	[Required]
@@ -70,9 +77,6 @@ public class LeaveTypeItemResponse
 	public string Color { get; set; } = string.Empty;
 }
 
-/// <summary>
-/// Response DTO for paginated leave type list
-/// </summary>
 public class LeaveTypeListResponse
 {
 	[Required]
@@ -91,9 +95,6 @@ public class LeaveTypeListResponse
 	public List<LeaveTypeItemResponse> Items { get; set; } = new();
 }
 
-/// <summary>
-/// Response DTO for delete operation
-/// </summary>
 public class LeaveTypeDeleteResponse
 {
 	[Required]

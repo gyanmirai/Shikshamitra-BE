@@ -36,14 +36,11 @@ public class EmployeeStatusAppService(
 		if (employee.EmployeeStatusType == input.EmployeeStatusType &&
 		    employee.StatusEffectiveDate == effectiveDate)
 		{
-			return new EmployeeStatusResponseDto
-			{
-				EmployeeId = employee.Id.ToString(),
-				PreviousStatus = employee.EmployeeStatusType,
-				CurrentStatus = input.EmployeeStatusType,
-				UpdatedAt = employee.StatusLastChangedAt ?? DateTimeOffset.UtcNow,
-				EffectiveDate = employee.StatusEffectiveDate
-			};
+			return EmployeeStatusProjection.ToResponse(
+				employee,
+				employee.EmployeeStatusType,
+				input.EmployeeStatusType,
+				new DateTimeOffset(Clock.Now));
 		}
 
 		if (input.EmployeeStatusType == EmployeeStatusType.Active)
@@ -80,17 +77,14 @@ public class EmployeeStatusAppService(
 			ChangeReason = input.Remarks,
 			EffectiveDate = employee.StatusEffectiveDate,
 			TenantId = CurrentTenant.Id,
-			ChangedAt = DateTime.UtcNow
+			ChangedAt = Clock.Now
 		});
 
-		return new EmployeeStatusResponseDto
-		{
-			EmployeeId = employee.Id.ToString(),
-			PreviousStatus = previousStatus,
-			CurrentStatus = input.EmployeeStatusType,
-			UpdatedAt = employee.StatusLastChangedAt ?? DateTimeOffset.UtcNow,
-			EffectiveDate = employee.StatusEffectiveDate
-		};
+		return EmployeeStatusProjection.ToResponse(
+			employee,
+			previousStatus,
+			input.EmployeeStatusType,
+			new DateTimeOffset(Clock.Now));
 	}
 
 	private static DateOnly? NormalizeStatusEffectiveDate(EmployeeStatusType status, DateOnly? effectiveDate)

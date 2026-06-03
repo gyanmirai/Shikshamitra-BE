@@ -87,7 +87,7 @@ public class LeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		if (!IsValidHexColor(color))
 		{
-			throw new BusinessException("ShikshaMitra:InvalidColorCode")
+			throw new BusinessException(HRErrorCodes.LeaveInvalidColorCode)
 				.WithData("message", "Color code must be a valid HEX value (e.g., #FF5733)");
 		}
 

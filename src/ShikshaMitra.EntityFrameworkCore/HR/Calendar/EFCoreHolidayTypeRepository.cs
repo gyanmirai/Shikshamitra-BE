@@ -1,35 +1,24 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
-/// <summary>
-/// EF Core implementation of IHolidayTypeRepository
-/// </summary>
-public class EFCoreHolidayTypeRepository : EfCoreRepository<ShikshaMitraDbContext, HolidayType, Guid>, IHolidayTypeRepository
+public class EFCoreHolidayTypeRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
+	: EfCoreRepository<ShikshaMitraDbContext, HolidayType, Guid>(dbContextProvider), IHolidayTypeRepository
 {
-    public EFCoreHolidayTypeRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
-        : base(dbContextProvider)
-    {
-    }
+	public async Task<HolidayType?> GetByNameAsync(string name)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet.FirstOrDefaultAsync(x => x.Name == name);
+	}
 
-    /// <summary>
-    /// Get HolidayType by name
-    /// </summary>
-    public async Task<HolidayType?> GetByNameAsync(string name)
-    {
-        return await DbSet.FirstOrDefaultAsync(x => x.Name == name);
-    }
-
-    /// <summary>
-    /// Check if HolidayType with given name exists
-    /// </summary>
-    public async Task<bool> ExistsByNameAsync(string name)
-    {
-        return await DbSet.AnyAsync(x => x.Name == name);
-    }
+	public async Task<bool> ExistsByNameAsync(string name)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet.AnyAsync(x => x.Name == name);
+	}
 }

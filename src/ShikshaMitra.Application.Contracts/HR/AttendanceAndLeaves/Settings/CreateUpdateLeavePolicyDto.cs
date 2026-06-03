@@ -3,9 +3,9 @@
 // DTO for the create and Uodate LeavePolicy table records
 public class CreateUpdateLeavePolicyDto
 {
-	public string LeaveType { get; set; }
+	public string LeaveType { get; set; } = string.Empty;
 	public int LeaveDays { get; set; }
 	public bool CarryForward { get; set; }
 	public AccrualRate AccrualRate { get; set; }
-	public string Color { get; set; }
+	public string Color { get; set; } = string.Empty;
 }

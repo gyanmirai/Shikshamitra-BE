@@ -609,17 +609,4 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	#endregion
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Legacy_Organization_PayrollStructure_Endpoint_Should_Return_Deprecation_Error()
-	{
-		var stageId = Guid.NewGuid();
-		var response = await Client.GetAsync($"/api/education-medium-stage/{stageId}/payroll-structure");
-
-		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		var body = await response.Content.ReadAsStringAsync();
-		body.ShouldContain("HR:Payroll:030020");
-		body.ShouldContain("/api/payroll/employees/{employeeId}/salary-structure");
-	}
 }

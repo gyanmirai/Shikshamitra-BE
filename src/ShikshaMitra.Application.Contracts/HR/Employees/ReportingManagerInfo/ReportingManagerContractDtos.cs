@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
+using FluentValidation;
+
 namespace ShikshaMitra.HR.Employees.ReportingManagerInfo;
 
 /// <summary>
@@ -10,6 +12,17 @@ namespace ShikshaMitra.HR.Employees.ReportingManagerInfo;
 public class ReportingManagerRequest
 {
 	public string? ReportingManagerId { get; set; }
+}
+
+public class ReportingManagerRequestValidator : FluentValidation.AbstractValidator<ReportingManagerRequest>
+{
+	public ReportingManagerRequestValidator()
+	{
+		RuleFor(x => x.ReportingManagerId)
+			.NotEmpty()
+			.Must(value => Guid.TryParse(value, out var id) && id != Guid.Empty)
+			.WithMessage("Reporting manager is required.");
+	}
 }
 
 /// <summary>

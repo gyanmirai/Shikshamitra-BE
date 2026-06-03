@@ -21,7 +21,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>
     /// Name of the holiday (e.g., "Diwali", "New Year")
     /// </summary>
-    public string HolidayName { get; set; }
+    public string HolidayName { get; set; } = string.Empty;
 
     /// <summary>
     /// Reference to the EventType that defines color and category
@@ -53,20 +53,13 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public string? Attachments { get; set; }
 
-    /// <summary>
-    /// Calculated status based on current date vs StartDate/EndDate
-    /// </summary>
-    public HolidayStatus Status
+    public HolidayStatus GetStatus(DateTimeOffset now)
     {
-        get
-        {
-            var now = DateTimeOffset.UtcNow;
-            if (now < StartDate)
-                return HolidayStatus.Upcoming;
-            if (now > EndDate)
-                return HolidayStatus.Completed;
-            return HolidayStatus.Ongoing;
-        }
+        if (now < StartDate)
+            return HolidayStatus.Upcoming;
+        if (now > EndDate)
+            return HolidayStatus.Completed;
+        return HolidayStatus.Ongoing;
     }
 
     protected Holiday() { }

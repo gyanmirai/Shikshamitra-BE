@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Common;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
@@ -14,6 +12,7 @@ namespace ShikshaMitra.HR.Employees.ReportingManager;
 [RemoteService(false)]
 public class ReportingManagerAppService(
 	IEmployeeRepository employeeRepository,
+	EmployeeReportingManager reportingManager,
 	ICurrentUser currentUser,
 	IEmployeeAuthorizationService employeeAuthorizationService)
 	: ApplicationService, IReportingManagerAppService
@@ -25,41 +24,10 @@ public class ReportingManagerAppService(
 		AssignReportingManagerDto input)
 	{
 		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
-
-		// Validate employee exists
-		var employee = await employeeRepository.GetAsync(employeeId)
-			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
-
-		// Validate reporting manager exists
-		var reportingManager = await employeeRepository.GetAsync(input.ReportingManagerId)
-			?? throw new EntityNotFoundException(typeof(Employee), input.ReportingManagerId);
-
-		if ((reportingManager.EmployeeStatusType ?? EmployeeStatusType.Active) != EmployeeStatusType.Active)
-		{
-			throw new BusinessException("ShikshaMitra:ReportingManagerMustBeActive")
-				.WithData("EmployeeId", employeeId)
-				.WithData("ReportingManagerId", input.ReportingManagerId)
-				.WithData("ReportingManagerStatus", reportingManager.EmployeeStatusType);
-		}
-
-		// Business rule: Employee cannot report to themselves
-		if (employeeId == input.ReportingManagerId)
-		{
-			throw new BusinessException(ShikshaMitraDomainErrorCodes.EmployeeCannotReportToSelf)
-				.WithData("EmployeeId", employeeId);
-		}
-
-		// Business rule: Prevent circular reporting relationships
-		await ValidateNoCircularReportingAsync(employeeId, input.ReportingManagerId);
-
-		// Assign reporting manager
-		employee.AssignReportingManager(input.ReportingManagerId);
-		await employeeRepository.UpdateAsync(employee);
-
-		// Get updated employee with reporting manager details
+		await reportingManager.AssignReportingManagerAsync(employeeId, input.ReportingManagerId);
 		var updatedEmployee = await employeeRepository.GetWithReportingManagerAsync(employeeId);
 
-		return MapToEmployeeReportingResponse(updatedEmployee!);
+		return ReportingManagerProjection.ToReportingResponse(updatedEmployee!);
 	}
 
 	public async Task<EmployeeReportingResponseDto> GetReportingManagerAsync(Guid employeeId)
@@ -69,7 +37,7 @@ public class ReportingManagerAppService(
 		var employee = await employeeRepository.GetWithReportingManagerAsync(employeeId)
 			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 
-		return MapToEmployeeReportingResponse(employee);
+		return ReportingManagerProjection.ToReportingResponse(employee);
 	}
 
 	public async Task<EmployeesByManagerResponseDto> GetEmployeesByManagerAsync(Guid managerId)
@@ -83,17 +51,12 @@ public class ReportingManagerAppService(
 			}
 		}
 
-		// Validate manager exists
 		var manager = await employeeRepository.GetAsync(managerId)
 			?? throw new EntityNotFoundException(typeof(Employee), managerId);
 
 		var employees = await GetEmployeesByManagerHierarchyAsync(managerId);
 
-		return new EmployeesByManagerResponseDto
-		{
-			Manager = MapToEmployeeBasic(manager),
-			Employees = employees.Select(MapToEmployeeBasic).ToList()
-		};
+		return ReportingManagerProjection.ToEmployeesByManagerResponse(manager, employees);
 	}
 
 	public async Task<EmployeesByManagerResponseDto> GetMyEmployeesByManagerAsync()
@@ -102,50 +65,6 @@ public class ReportingManagerAppService(
 			?? throw new AbpAuthorizationException("Access denied: Employee profile not found.");
 
 		return await GetEmployeesByManagerAsync(actorEmployee.Id);
-	}
-
-	private async Task ValidateNoCircularReportingAsync(Guid employeeId, Guid newManagerId)
-	{
-		// Check if the new manager reports to this employee (directly or indirectly)
-		var currentManagerId = newManagerId;
-		var visited = new System.Collections.Generic.HashSet<Guid> { employeeId };
-
-		while (currentManagerId != Guid.Empty)
-		{
-			if (visited.Contains(currentManagerId))
-			{
-				throw new BusinessException(ShikshaMitraDomainErrorCodes.CircularReportingNotAllowed)
-					.WithData("EmployeeId", employeeId)
-					.WithData("ManagerId", newManagerId);
-			}
-
-			visited.Add(currentManagerId);
-
-			var manager = await employeeRepository.GetWithReportingManagerAsync(currentManagerId);
-			currentManagerId = manager?.ReportingManagerId ?? Guid.Empty;
-		}
-	}
-
-	private EmployeeReportingResponseDto MapToEmployeeReportingResponse(Employee employee)
-	{
-		return new EmployeeReportingResponseDto
-		{
-			EmployeeId = employee.Id,
-			ReportingManager = employee.ReportingManager != null
-				? MapToEmployeeBasic(employee.ReportingManager)
-				: null
-		};
-	}
-
-	private EmployeeBasicDto MapToEmployeeBasic(Employee employee)
-	{
-		return new EmployeeBasicDto
-		{
-			Id = employee.Id,
-			EmployeeCode = employee.EmployeeCode,
-			FullName = employee.EmployeeName,
-			Designation = employee.Designation
-		};
 	}
 
 	private async Task<List<Employee>> GetEmployeesByManagerHierarchyAsync(Guid managerId)

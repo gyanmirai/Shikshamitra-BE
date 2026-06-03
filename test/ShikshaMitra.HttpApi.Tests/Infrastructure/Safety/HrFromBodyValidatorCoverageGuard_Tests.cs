@@ -33,8 +33,7 @@ public class HrFromBodyValidatorCoverageGuard_Tests
 		var missing = fromBodyTypes
 			.Where(t =>
 				!validatorTargets.Contains(t) &&
-				!allowlist.Contains(t) &&
-				!HasDataAnnotationCoverage(t, contractsRoot))
+				!allowlist.Contains(t))
 			.OrderBy(x => x, StringComparer.Ordinal)
 			.ToList();
 
@@ -111,43 +110,6 @@ public class HrFromBodyValidatorCoverageGuard_Tests
 		}
 
 		return simple;
-	}
-
-	private static bool HasDataAnnotationCoverage(string typeName, string contractsRoot)
-	{
-		var attributeTokens = new[]
-		{
-			"[Required",
-			"[StringLength",
-			"[MaxLength",
-			"[MinLength",
-			"[Range",
-			"[RegularExpression",
-			"[EmailAddress",
-			"[Phone",
-			"[Url"
-		};
-
-		foreach (var file in Directory.EnumerateFiles(contractsRoot, "*.cs", SearchOption.AllDirectories))
-		{
-			var text = File.ReadAllText(file);
-			if (!Regex.IsMatch(text, $@"class\s+{Regex.Escape(typeName)}\b"))
-			{
-				continue;
-			}
-
-			if (text.Contains("IValidatableObject", StringComparison.Ordinal))
-			{
-				return true;
-			}
-
-			if (attributeTokens.Any(token => text.Contains(token, StringComparison.Ordinal)))
-			{
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	private static string FindRepositoryRoot()

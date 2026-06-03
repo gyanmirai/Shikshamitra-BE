@@ -1,5 +1,4 @@
 ﻿using System;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore.HR.AttendanceAndLeaves;
 using ShikshaMitra.EntityFrameworkCore.Security.UserScope;
@@ -18,7 +17,6 @@ using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
-using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -36,12 +34,12 @@ using Volo.Abp.Data;
 using ShikshaMitra.EntityFrameworkCore.Configurations.Standards;
 using ShikshaMitra.EntityFrameworkCore.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Charges;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.EntityFrameworkCore.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.EntityFrameworkCore.Finance.FeeRefund;
 using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.EntityFrameworkCore.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.Receipts;
-using ShikshaMitra.Finance.Fees.ConcessionRequests;
-using ShikshaMitra.Finance.Fees.Concessions;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -103,8 +101,8 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<Event, EFCoreEventRepository>();
             options.AddRepository<PayrollRunReview, EfCorePayrollRunReviewRepository>();
             options.AddRepository<Student, EfCoreStudentRepository>();
-            options.AddRepository<ConcessionRequest, EfCoreConcessionRequestRepository>();
             options.AddRepository<Charge, EfCoreChargeRepository>();
+            options.AddRepository<ConcessionRequest, EfCoreConcessionRequestRepository>();
             options.AddRepository<StaffAttendanceDayLock, EfCoreStaffAttendanceDayLockRepository>();
             options.AddRepository<DueFee, EfCoreDueFeeRepository>();
             options.AddRepository<FeeRefundRequest, EfCoreFeeRefundRepository>();

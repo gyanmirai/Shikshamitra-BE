@@ -10,23 +10,17 @@ using ShikshaMitra.HR.Calendar;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.HR.Calendar.Holidays;
-using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
 using ShikshaMitra.Application.Contracts.HR.Calendar.Events;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.ReportingManager;
 using ShikshaMitra.HR.Payroll.Settings;
-using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
-using ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.Academic.Curriculum.Settings;
-using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
-using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
-using System.Linq;
 
 namespace ShikshaMitra;
 
@@ -37,12 +31,6 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		/* You can configure your AutoMapper mapping configuration here.
 		 * Alternatively, you can split your mapping configurations
 		 * into multiple profile classes for a better organization. */
-
-		// ConcessionRequest mappings
-		CreateMap<ConcessionRequest, ConcessionRequestDto>();
-		CreateMap<CreateUpdateConcessionRequestDto, ConcessionRequest>();
-
-		// BookCategory and LibraryTiming mappings are defined at the bottom of this profile
 
 		// Event Types mapping
 		CreateMap<EventType, EventTypeDto>();

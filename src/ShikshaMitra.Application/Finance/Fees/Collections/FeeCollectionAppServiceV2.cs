@@ -14,14 +14,13 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Charges;
 using ShikshaMitra.Finance.Fees.Charges;
-using ShikshaMitra.Finance.Collections;
-using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
-using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Receipts;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
@@ -1071,20 +1070,17 @@ public class FeeCollectionAppServiceV2(
 		}
 
 		// ── Concessions ───────────────────────────────────────────────────
-		var concessionRequests = await concessionRequestRepository.GetListAsync(
-			skipCount: 0,
-			maxResultCount: int.MaxValue,
-			studentId: studentId,
-			status: ConcessionRequestStatus.Approved);
+		var approvedConcessions = await concessionRequestRepository.GetListAsync(
+			r => r.StudentId == studentId && r.Status == ConcessionRequestStatus.Approved);
 
 		List<ConcessionDetailDto>? concessions = null;
-		if (concessionRequests.Count > 0)
+		if (approvedConcessions.Count > 0)
 		{
-			var typeIds = concessionRequests.Select(r => r.ConcessionTypeId).Distinct().ToList();
+			var typeIds = approvedConcessions.Select(r => r.ConcessionTypeId).Distinct().ToList();
 			var concessionTypes = await concessionTypeRepository.GetListAsync(ct => typeIds.Contains(ct.Id));
 			var typeMap = concessionTypes.ToDictionary(ct => ct.Id, ct => ct.Name);
 
-			concessions = concessionRequests.Select(r =>
+			concessions = approvedConcessions.Select(r =>
 			{
 				var total = r.ConcessionFeeHeadMappings.Sum(m => (double)m.FeeHeadConcessionAmount);
 				return new ConcessionDetailDto
@@ -1100,7 +1096,7 @@ public class FeeCollectionAppServiceV2(
 		var totalFee = feeHeadSummaries.Sum(fh => fh.Amount);
 		var totalPaid = feeHeadSummaries.Sum(fh => fh.PaidAmount);
 		var totalPending = feeHeadSummaries.Sum(fh => fh.PendingAmount ?? 0d);
-		var totalConcession = concessions?.Sum(c => c.Amount ?? 0d);
+		var totalConcession = concessions?.Sum(c => c.Amount ?? 0d) ?? 0d;
 
 		return new StudentFeeDetailsDto
 		{

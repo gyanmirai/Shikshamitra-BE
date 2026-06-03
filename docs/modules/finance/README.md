@@ -1,3 +1,11 @@
+# Finance Module
+
+## Sub-modules
+
+- [Concession requests](./concession-requests.md) — fee concessions (single-form create, due-fee approval)
+
+---
+
 # Finance Module — Charges
 
 ## Overview

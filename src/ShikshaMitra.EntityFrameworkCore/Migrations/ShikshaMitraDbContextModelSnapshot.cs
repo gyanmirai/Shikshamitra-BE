@@ -3186,6 +3186,72 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("Charges", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionDueFeeAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ConcessionAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("ConcessionRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("DueFeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FeeHeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConcessionRequestId")
+                        .HasDatabaseName("IX_ConcessionDueFeeAllocations_ConcessionRequestId");
+
+                    b.HasIndex("DueFeeId")
+                        .HasDatabaseName("IX_ConcessionDueFeeAllocations_DueFeeId");
+
+                    b.HasIndex("ConcessionRequestId", "DueFeeId")
+                        .IsUnique()
+                        .HasDatabaseName("UIX_ConcessionDueFeeAllocations_Request_DueFee");
+
+                    b.ToTable("AppConcessionDueFeeAllocations", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionFeeHeadMapping", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3211,7 +3277,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("DeletionTime");
 
                     b.Property<decimal>("FeeHeadConcessionAmount")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("numeric");
 
                     b.Property<Guid>("FeeHeadId")
                         .HasColumnType("uuid");
@@ -3231,10 +3297,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("LastModifierId");
 
                     b.Property<decimal>("PostConcessionFeeHeadAmount")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("numeric");
 
                     b.Property<decimal>("PreConcessionFeeHeadAmount")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("numeric");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
@@ -3244,7 +3310,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("UserSpecifiedConcessionAmountValue")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("numeric");
 
                     b.HasKey("Id");
 
@@ -3331,15 +3397,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ConcessionTypeId")
-                        .HasDatabaseName("IX_ConcessionRequests_ConcessionTypeId");
-
-                    b.HasIndex("StudentId")
-                        .HasDatabaseName("IX_ConcessionRequests_StudentId");
-
-                    b.HasIndex("StudentId", "Status")
-                        .HasDatabaseName("IX_ConcessionRequests_StudentId_Status");
 
                     b.ToTable("AppConcessionRequests", (string)null);
                 });
@@ -15635,6 +15692,15 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Lines");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionDueFeeAllocation", b =>
+                {
+                    b.HasOne("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionRequest", null)
+                        .WithMany("ConcessionDueFeeAllocations")
+                        .HasForeignKey("ConcessionRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionFeeHeadMapping", b =>
                 {
                     b.HasOne("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionRequest", null)
@@ -17745,6 +17811,8 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionRequest", b =>
                 {
+                    b.Navigation("ConcessionDueFeeAllocations");
+
                     b.Navigation("ConcessionFeeHeadMappings");
 
                     b.Navigation("ConcessionRequestDocuments");

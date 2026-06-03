@@ -23,6 +23,7 @@ using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -66,6 +67,7 @@ public class FeeCollectionAppServiceV2(
 	IRepository<ConcessionType, Guid> concessionTypeRepository,
 	IConcessionRequestRepository concessionRequestRepository,
 	FeeCollectionManager feeCollectionManager,
+	FinanceAuditWriter financeAuditWriter,
 	FeeReceiptManager feeReceiptManager,
 	IFeePaymentReceiptRepository feePaymentReceiptRepository,
 	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
@@ -723,6 +725,14 @@ public class FeeCollectionAppServiceV2(
 			.Select(dfp => (dfp.DueFeeId, dfp.Amount))
 			.ToList();
 
+		var dueFeeBeforeSnapshots = input.DueFeePayments
+			.Select(dfp =>
+			{
+				var df = dueFeeMap[dfp.DueFeeId];
+				return (dfp.DueFeeId, df.OutstandingAmount, df.PaidAmount, df.Status);
+			})
+			.ToDictionary(x => x.DueFeeId, x => (x.Item2, x.Item3, x.Status));
+
 		if (allAllocations.Count > 0)
 		{
 			var dueFees = await feeCollectionManager.ApplyDueFeeAllocationsAsync(allAllocations);
@@ -758,13 +768,108 @@ public class FeeCollectionAppServiceV2(
 		if (receipts.Count > 0)
 			await feePaymentReceiptRepository.InsertManyAsync(receipts, autoSave: false);
 
+		var correlationId = $"fc-{metadata.Id:N}";
+		var studentContext = new FinanceAuditStudentContext
+		{
+			StudentId = input.StudentId,
+			StudentName = BuildFullName(student.FirstName, student.MiddleName, student.LastName),
+			GrNo = student.GrNo?.ToString(),
+			RollNo = student.RollNo?.ToString()
+		};
+
+		var allocationLines = new List<FinanceAuditAllocationLineDto>();
+		var paymentChangedFields = new List<FinanceAuditChangedFieldDto>
+		{
+			new() { Field = "totalAmount", OldValue = null, NewValue = received.ToString("F2") },
+			new() { Field = "status", OldValue = null, NewValue = status.ToString() }
+		};
+
+		foreach (var dfp in input.DueFeePayments)
+		{
+			var df = dueFeeMap[dfp.DueFeeId];
+			var before = dueFeeBeforeSnapshots[dfp.DueFeeId];
+			var pendingAfter = Math.Max(0, before.Item1 - dfp.Amount);
+			var feeHeadName = feeHeadMap[dfp.FeeHeadId].Name;
+			var installmentLabel = $"{df.Month} {df.Year}";
+			allocationLines.Add(new FinanceAuditAllocationLineDto
+			{
+				DueFeeId = dfp.DueFeeId,
+				FeeHeadId = dfp.FeeHeadId,
+				FeeHeadName = feeHeadName,
+				InstallmentLabel = installmentLabel,
+				AmountPaid = dfp.Amount,
+				PendingBefore = before.Item1,
+				PendingAfter = pendingAfter
+			});
+			paymentChangedFields.Add(new FinanceAuditChangedFieldDto
+			{
+				Field = $"dueFee_{dfp.DueFeeId}_pending",
+				OldValue = before.Item1.ToString("F2"),
+				NewValue = pendingAfter.ToString("F2")
+			});
+		}
+
+		var paymentSummary =
+			$"Fee payment of ₹{received:N0} received ({receiptNumber})";
+		var paymentWrite = await financeAuditWriter.WriteAsync(
+			input.AcademicYearId,
+			FinanceAuditEntityTypes.FeePayment,
+			metadata.Id,
+			receiptNumber,
+			FinanceAuditActions.Payment,
+			paymentSummary,
+			studentContext,
+			input.Notes,
+			paymentChangedFields,
+			new
+			{
+				paymentMethods = paymentMethods.Select(m => m.ToString()).ToList(),
+				receiptNumber,
+				received,
+				status = status.ToString()
+			},
+			correlationId);
+
+		var auditEventIds = new List<Guid> { paymentWrite.EventId };
+
+		var feeReceipt = receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Fee);
+		if (feeReceipt != null)
+		{
+			var receiptWrite = await financeAuditWriter.WriteAsync(
+				input.AcademicYearId,
+				FinanceAuditEntityTypes.FeeReceipt,
+				feeReceipt.Id,
+				feeReceipt.ReceiptNumber,
+				FinanceAuditActions.GenerateReceipt,
+				$"Receipt {feeReceipt.ReceiptNumber} generated",
+				studentContext,
+				null,
+				[
+					new FinanceAuditChangedFieldDto
+					{
+						Field = "receiptNumber",
+						OldValue = null,
+						NewValue = feeReceipt.ReceiptNumber
+					},
+					new FinanceAuditChangedFieldDto
+					{
+						Field = "amount",
+						OldValue = null,
+						NewValue = feeLinesTotal.ToString("F2")
+					}
+				],
+				new { feeReceiptId = feeReceipt.Id, feeReceiptNumber = feeReceipt.ReceiptNumber },
+				correlationId,
+				paymentWrite.EventId);
+			auditEventIds.Add(receiptWrite.EventId);
+		}
+
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
 		Logger.LogInformation(
 			"Fee collected for student {StudentId}: receipt {ReceiptNumber}, amount {Amount}, receipts created {ReceiptCount}",
 			input.StudentId, receiptNumber, received, receipts.Count);
 
-		var feeReceipt = receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Fee);
 		return new CollectFeeOutput
 		{
 			Id = metadata.Id,
@@ -806,6 +911,17 @@ public class FeeCollectionAppServiceV2(
 					})
 					.ToList()
 				: null,
+			CorrelationId = correlationId,
+			AuditEventIds = auditEventIds,
+			AuditSummary = new FinanceAuditSummaryDto
+			{
+				Headline = status == FeeCollectionStatus.InReconciliation
+					? "Payment saved as pending verification"
+					: "Fee collected successfully",
+				TotalAmount = received,
+				ChangedFields = paymentChangedFields,
+				AllocationLines = allocationLines
+			}
 		};
 	}
 

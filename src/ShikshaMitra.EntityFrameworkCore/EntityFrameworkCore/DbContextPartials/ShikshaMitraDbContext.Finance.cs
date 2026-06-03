@@ -10,6 +10,7 @@ using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
+using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Students.Fees;
 
 namespace ShikshaMitra.EntityFrameworkCore;
@@ -76,4 +77,9 @@ public partial class ShikshaMitraDbContext
 	// Finance — Fee Refunds
 	// ───────────────────────────────────────────────
 	public DbSet<FeeRefundRequest> FeeRefundRequests { get; set; }
+
+	// ───────────────────────────────────────────────
+	// Finance — Audit Trail
+	// ───────────────────────────────────────────────
+	public DbSet<FinanceAuditEvent> FinanceAuditEvents { get; set; }
 }

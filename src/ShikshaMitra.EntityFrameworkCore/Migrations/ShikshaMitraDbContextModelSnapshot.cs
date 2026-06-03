@@ -2962,6 +2962,124 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("Transactions", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.Audit.FinanceAuditEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ActorNameSnapshot")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ContextJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntityName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PerformedByRoleSnapshot")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid?>("SourceAuditLogId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StudentGrNoSnapshot")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StudentNameSnapshot")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("StudentRollNoSnapshot")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SubModuleCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CorrelationId")
+                        .HasDatabaseName("IX_Finance_AuditEvents_Tenant_Correlation");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "OccurredAt")
+                        .HasDatabaseName("IX_Finance_AuditEvents_Tenant_AcademicYear_Time");
+
+                    b.HasIndex("TenantId", "Action", "OccurredAt")
+                        .HasDatabaseName("IX_Finance_AuditEvents_Tenant_Action_Time");
+
+                    b.HasIndex("TenantId", "StudentId", "OccurredAt")
+                        .HasDatabaseName("IX_Finance_AuditEvents_Tenant_Student_Time");
+
+                    b.HasIndex("TenantId", "EntityType", "EntityId", "OccurredAt")
+                        .HasDatabaseName("IX_Finance_AuditEvents_Tenant_Entity_Time");
+
+                    b.ToTable("Finance_AuditEvents", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.FeeRefund.FeeRefundRequest", b =>
                 {
                     b.Property<Guid>("Id")

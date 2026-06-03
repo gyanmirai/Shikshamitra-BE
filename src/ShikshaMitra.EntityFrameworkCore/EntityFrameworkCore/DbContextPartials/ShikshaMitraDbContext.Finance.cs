@@ -1,15 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
-using ShikshaMitra.Finance.Accounts.Expenses;
 using ShikshaMitra.Finance.Accounts.Incomes;
-using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.Charges;
-using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
-using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
@@ -47,12 +43,6 @@ public partial class ShikshaMitraDbContext
 	// Finance — Student Fee Assignment
 	// ───────────────────────────────────────────────
 	public DbSet<StudentFeeStructure> StudentFeeStructures { get; set; }
-
-	// ───────────────────────────────────────────────
-	// Finance — Concession Requests
-	// ───────────────────────────────────────────────
-	public DbSet<ConcessionRequest> ConcessionRequests { get; set; }
-	public DbSet<ConcessionRequestDocument> ConcessionRequestDocuments { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Transactions

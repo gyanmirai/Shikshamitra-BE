@@ -96,6 +96,7 @@ public class AttendanceIntegrationRunAttendanceWriter(
 			existing!.TimeIn = tIn ?? existing.TimeIn;
 			existing.TimeOut = tOut ?? existing.TimeOut;
 			existing.StatusType = status;
+			existing.Source = AttendanceRecordSource.Integration;
 			existing.EducationMediumStageId = row.EducationMediumStageId;
 			existing.Remarks = normalizedRemarks;
 			await employeeAttendanceRepository.UpdateAsync(existing, autoSave: false);
@@ -110,6 +111,7 @@ public class AttendanceIntegrationRunAttendanceWriter(
 				TimeIn = tIn,
 				TimeOut = tOut,
 				StatusType = status,
+				Source = AttendanceRecordSource.Integration,
 				EducationMediumStageId = row.EducationMediumStageId,
 				Remarks = normalizedRemarks
 			}, autoSave: false);

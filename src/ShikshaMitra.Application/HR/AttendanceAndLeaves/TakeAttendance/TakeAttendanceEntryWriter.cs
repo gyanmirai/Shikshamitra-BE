@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -17,6 +18,7 @@ public class TakeAttendanceEntryWriter(
 	IRepository<Employee, Guid> employeeRepository,
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	TakeAttendanceAccessService accessService,
+	HrPolicyResolver policyResolver,
 	AttendancePolicyWorkedTimeEvaluator workedTimeEvaluator)
 	: ApplicationService, ITransientDependency
 {
@@ -36,6 +38,17 @@ public class TakeAttendanceEntryWriter(
 
 		var employee = await employeeRepository.GetAsync(entry.EmployeeId);
 		EnsureEmployeeCanTakeAttendanceOnDate(employee, dateOnly);
+		var policies = await policyResolver.ResolveAsync(
+			employee.Id,
+			dateOnly.ToDateTime(TimeOnly.MinValue));
+		var captureMode = policies.AttendancePolicy.CaptureMode;
+		if (captureMode == AttendanceCaptureMode.ManualStatus)
+		{
+			tIn = null;
+			tOut = null;
+		}
+
+		var source = ResolveManualSaveSource(captureMode, tIn.HasValue || tOut.HasValue);
 		if (tIn.HasValue || tOut.HasValue)
 		{
 			var evaluation = await workedTimeEvaluator.EvaluateAsync(
@@ -62,6 +75,7 @@ public class TakeAttendanceEntryWriter(
 		if (existing != null)
 		{
 			existing.StatusType = status;
+			existing.Source = source;
 			existing.TimeIn = tIn;
 			existing.TimeOut = tOut;
 			existing.EducationMediumStageId = resolvedStageId;
@@ -77,6 +91,7 @@ public class TakeAttendanceEntryWriter(
 			AttendanceDate = dateOnly,
 			EducationMediumStageId = resolvedStageId,
 			StatusType = status,
+			Source = source,
 			TimeIn = tIn,
 			TimeOut = tOut,
 			Remarks = normalizedRemarks
@@ -107,5 +122,22 @@ public class TakeAttendanceEntryWriter(
 			employee.EmployeeStatusType,
 			employee.StatusEffectiveDate,
 			attendanceDate);
+	}
+
+	private static AttendanceRecordSource ResolveManualSaveSource(
+		AttendanceCaptureMode captureMode,
+		bool hasAnyTime)
+	{
+		if (captureMode == AttendanceCaptureMode.ManualStatus)
+		{
+			return AttendanceRecordSource.Manual;
+		}
+
+		if (captureMode == AttendanceCaptureMode.Integrated)
+		{
+			return AttendanceRecordSource.Correction;
+		}
+
+		return hasAnyTime ? AttendanceRecordSource.ManualTime : AttendanceRecordSource.Manual;
 	}
 }

@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
@@ -306,6 +308,28 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.InternalServerError);
 	}
 
+	[Theory]
+	[InlineData("APRIL-2026")]
+	[InlineData("April-2026")]
+	[InlineData("Apr-2026")]
+	[InlineData("2026-04")]
+	[InlineData("2026-04-15")]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Salary_Slip_Should_Accept_Run_Payroll_Month_Formats_And_Normalize_Response(
+		string monthYear)
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"SlipMonth{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		await SeedFinalizedSalarySlipAsync(employee.Id, "2026-04");
+
+		var slip = await GetSalarySlipResponseAsync(employee.Id, Uri.EscapeDataString(monthYear));
+
+		slip.MonthYear.ShouldBe("APRIL-2026");
+	}
+
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Get_Salary_Slip_Pdf()
@@ -391,6 +415,65 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 			await snapshotRepository.UpdateAsync(snapshot, autoSave: false);
 			await uow.CompleteAsync();
 		}
+	}
+
+	private async Task SeedFinalizedSalarySlipAsync(Guid employeeId, string monthYear)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var salarySlipRepository = scope.ServiceProvider.GetRequiredService<IRepository<SalarySlip, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var salarySlip = CreateSalarySlip(tenantId, employeeId, monthYear);
+			salarySlip.FinalizeSlip();
+			await salarySlipRepository.InsertAsync(salarySlip, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private static SalarySlip CreateSalarySlip(Guid tenantId, Guid employeeId, string monthYear)
+	{
+		var constructor = typeof(SalarySlip).GetConstructor(
+			BindingFlags.Instance | BindingFlags.NonPublic,
+			binder: null,
+			[
+				typeof(Guid),
+				typeof(Guid?),
+				typeof(Guid),
+				typeof(string),
+				typeof(List<SalarySlipLineItem>),
+				typeof(List<SalarySlipLineItem>),
+				typeof(DateTime),
+				typeof(string)
+			],
+			modifiers: null);
+
+		constructor.ShouldNotBeNull();
+		return (SalarySlip)constructor.Invoke(
+		[
+			Guid.NewGuid(),
+			tenantId,
+			employeeId,
+			monthYear,
+			new List<SalarySlipLineItem>
+			{
+				new()
+				{
+					Name = "Basic",
+					Amount = 1000m,
+					IsFixed = true,
+					ComponentType = SalaryComponentType.Fixed,
+					DependOn = SalaryComponentDependency.None
+				}
+			},
+			new List<SalarySlipLineItem>(),
+			DateTime.UtcNow,
+			"Salary slip month normalizer test"
+		]);
 	}
 
 	private async Task<RunPayrollItem> GetPayrollItemAsync(Guid employeeId, string month)

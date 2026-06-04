@@ -87,7 +87,7 @@ public class HrReportRowSourceReader(
 				employee.EmployeeName,
 				employee.FirstName,
 				employee.LastName,
-				LeaveType = leave.LeavePolicy != null ? leave.LeavePolicy.PolicyName : leave.LeaveTypeId.ToString(),
+				LeaveType = leave.LeavePolicy != null ? leave.LeavePolicy.PolicyName : leave.LeavePolicyId.ToString(),
 				leave.StartDateOnly,
 				leave.EndDateOnly,
 				leave.Status,

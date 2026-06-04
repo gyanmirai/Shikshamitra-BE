@@ -16,6 +16,7 @@ public class AttendanceRegisterRowReader(
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	HrEmployeeScopeQueryService hrEmployeeScopeQueryService,
 	AttendanceRegisterLookupReader lookupReader,
+	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
@@ -130,6 +131,10 @@ public class AttendanceRegisterRowReader(
 			.ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.LastModificationTime ?? y.CreationTime).First());
 		var holidayLookup = await lookupReader.BuildHolidayLookupAsync(Enumerable.Range(0, endDate.DayNumber - startDate.DayNumber + 1)
 			.Select(offset => startDate.AddDays(offset)));
+		var dates = Enumerable.Range(0, endDate.DayNumber - startDate.DayNumber + 1)
+			.Select(offset => startDate.AddDays(offset))
+			.ToList();
+		var captureModeLookup = await captureModeLookupResolver.ResolveForDatesAsync(employeeIds, dates);
 
 		var rows = new List<RegisterProjection>();
 		foreach (var employee in employees)
@@ -143,6 +148,7 @@ public class AttendanceRegisterRowReader(
 
 				attendanceByEmployeeDate.TryGetValue((employee.EmployeeId, date), out var attendance);
 				holidayLookup.TryGetValue(date, out var holiday);
+				var captureMode = captureModeLookup.GetValueOrDefault((employee.EmployeeId, date), AttendanceCaptureMode.Integrated);
 				if (input.Status.HasValue && attendance?.StatusType != input.Status.Value)
 				{
 					continue;
@@ -167,6 +173,8 @@ public class AttendanceRegisterRowReader(
 					TimeIn = attendance?.TimeIn,
 					TimeOut = attendance?.TimeOut,
 					Remarks = attendance?.Remarks,
+					CaptureMode = captureMode,
+					Source = attendance?.Source ?? AttendanceRecordSource.Manual,
 					IsHoliday = holiday != null,
 					HolidayName = holiday?.Name
 				});
@@ -192,4 +200,5 @@ public class AttendanceRegisterRowReader(
 
 		return employee.EducationMediumStageId;
 	}
+
 }

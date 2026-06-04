@@ -1,3 +1,4 @@
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Volo.Abp;
 
@@ -5,6 +6,30 @@ namespace ShikshaMitra.HR.Policies;
 
 internal static partial class HrPolicyMapping
 {
+	public static AttendanceCaptureMode ParseCaptureMode(string? value) => Normalize(value) switch
+	{
+		"manual_status" => AttendanceCaptureMode.ManualStatus,
+		"manual_with_time" => AttendanceCaptureMode.ManualWithTime,
+		"integrated" or "" => AttendanceCaptureMode.Integrated,
+		_ => AttendanceCaptureMode.Integrated
+	};
+
+	public static string MapCaptureMode(AttendanceCaptureMode value) => value switch
+	{
+		AttendanceCaptureMode.ManualStatus => "manual_status",
+		AttendanceCaptureMode.ManualWithTime => "manual_with_time",
+		_ => "integrated"
+	};
+
+	public static string MapAttendanceSource(AttendanceRecordSource value) => value switch
+	{
+		AttendanceRecordSource.ManualTime => "manual_time",
+		AttendanceRecordSource.CsvImport => "csv_import",
+		AttendanceRecordSource.Integration => "integration",
+		AttendanceRecordSource.Correction => "correction",
+		_ => "manual"
+	};
+
 	public static AttendanceMissingPunchBehavior ParseMissingPunchBehavior(string value) => Normalize(value) switch
 	{
 		"mark_absent" => AttendanceMissingPunchBehavior.MarkAbsent,
@@ -75,6 +100,7 @@ internal static partial class HrPolicyMapping
 		Name = entity.Name,
 		Status = MapPolicyStatus(entity.Status),
 		IsDefault = entity.IsDefault,
+		CaptureMode = MapCaptureMode(entity.CaptureMode),
 		FullDayThresholdPercentage = entity.FullDayThresholdPercentage,
 		HalfDayThresholdPercentage = entity.HalfDayThresholdPercentage,
 		AbsentThresholdPercentage = entity.AbsentThresholdPercentage,

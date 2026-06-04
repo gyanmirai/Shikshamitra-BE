@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
 using Volo.Abp;
@@ -24,6 +25,7 @@ public class TakeAttendanceDayReader(
 	HrUserScopeAccessService hrScopeAccessService,
 	HrEmployeeScopeQueryService hrEmployeeScopeQueryService,
 	IRepository<ShiftManagement, Guid> shiftRepository,
+	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
 	IClock clock,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
@@ -99,9 +101,16 @@ public class TakeAttendanceDayReader(
 		var attByEmp = attRows.GroupBy(a => a.EmployeeId).ToDictionary(g => g.Key, g => g.First());
 		var shiftIds = employees.Where(e => e.ShiftId.HasValue).Select(e => e.ShiftId!.Value).Distinct().ToList();
 		var shifts = await LoadShiftLookupAsync(shiftIds);
+		var captureModeByEmployee = await captureModeLookupResolver.ResolveForDateAsync(ids, dateOnly);
 
-		var items = TakeAttendanceDayProjection.BuildRows(employees, attByEmp, shifts, date, holiday, holidayReason);
+		var items = TakeAttendanceDayProjection.BuildRows(employees, attByEmp, shifts, captureModeByEmployee, date, holiday, holidayReason);
 		var summary = TakeAttendanceDayProjection.BuildSummary(attForSummary, scopedEmployeeIds.Count);
+		var distinctCaptureModes = items
+			.Select(x => x.CaptureMode)
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Take(2)
+			.ToList();
+		var dayCaptureMode = distinctCaptureModes.Count == 1 ? distinctCaptureModes[0] : "integrated";
 
 		return new TakeAttendanceDayResponse
 		{
@@ -109,6 +118,7 @@ public class TakeAttendanceDayReader(
 			Date = dateOnly,
 			IsDayLocked = locked != null,
 			IsHoliday = holiday != null,
+			CaptureMode = dayCaptureMode,
 			HolidayName = holiday?.HolidayName,
 			HolidayReason = holidayReason,
 			LockedByUserId = locked?.LockedByUserId,
@@ -141,4 +151,5 @@ public class TakeAttendanceDayReader(
 		var shifts = await asyncExecuter.ToListAsync(query.Where(x => shiftIds.Contains(x.Id)));
 		return shifts.ToDictionary(x => x.Id, x => x);
 	}
+
 }

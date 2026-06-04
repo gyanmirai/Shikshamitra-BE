@@ -34,6 +34,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	private readonly IHrPolicySafetyAppService _policySafety;
 	private readonly IHrPolicyVersionAppService _policyVersions;
 	private readonly IHrAuditTrailAppService _auditTrail;
+	private readonly HrPolicyImpactConfirmationService _impactConfirmation;
 	private readonly IEmployeePersonalInfoAppService _employeePersonalInfo;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IRepository<WorkCalendarPolicy, Guid> _workCalendarPolicyRepository;
@@ -57,6 +58,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		_policySafety = GetRequiredService<IHrPolicySafetyAppService>();
 		_policyVersions = GetRequiredService<IHrPolicyVersionAppService>();
 		_auditTrail = GetRequiredService<IHrAuditTrailAppService>();
+		_impactConfirmation = GetRequiredService<HrPolicyImpactConfirmationService>();
 		_employeePersonalInfo = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_workCalendarPolicyRepository = GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
@@ -69,6 +71,27 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_unitOfWorkManager = GetRequiredService<IUnitOfWorkManager>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
+	}
+
+	[Fact]
+	public async Task Impact_Confirmation_Should_Treat_Severity_Case_Insensitively()
+	{
+		var warningPreview = BuildImpactPreviewWithSeverity("Warning");
+		await _impactConfirmation.AttachTokenAsync(warningPreview);
+		warningPreview.RequiresConfirmation.ShouldBeTrue();
+		warningPreview.ConfirmationToken.ShouldNotBeNullOrWhiteSpace();
+		await Should.ThrowAsync<BusinessException>(() => _impactConfirmation.EnsureConfirmedAsync(warningPreview));
+		await _impactConfirmation.EnsureConfirmedAsync(warningPreview, warningPreview.ConfirmationToken);
+
+		var infoPreview = BuildImpactPreviewWithSeverity("INFO");
+		await _impactConfirmation.AttachTokenAsync(infoPreview);
+		infoPreview.RequiresConfirmation.ShouldBeTrue();
+		await Should.ThrowAsync<BusinessException>(() => _impactConfirmation.EnsureConfirmedAsync(infoPreview));
+
+		var blockingPreview = BuildImpactPreviewWithSeverity("BLOCKING");
+		await _impactConfirmation.AttachTokenAsync(blockingPreview);
+		blockingPreview.BlockingWarnings.Count.ShouldBe(1);
+		await Should.ThrowAsync<BusinessException>(() => _impactConfirmation.EnsureConfirmedAsync(blockingPreview));
 	}
 
 	[Fact]
@@ -1399,6 +1422,23 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			EffectiveFrom = new DateTime(2026, 4, 1),
 			AssignmentReason = "Repeatable policy override regression"
 		});
+
+	private static HrPolicyImpactPreviewDto BuildImpactPreviewWithSeverity(string severity) =>
+		new()
+		{
+			PolicyType = "payroll",
+			AcademicYearId = Guid.NewGuid(),
+			Action = "update",
+			Warnings =
+			[
+				new HrPolicyImpactWarningDto
+				{
+					Code = $"Test:{severity}",
+					Severity = severity,
+					Message = $"{severity} impact"
+				}
+			]
+		};
 
 	private async Task<Guid> EnsureRoleExistsAsync()
 	{

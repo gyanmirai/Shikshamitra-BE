@@ -18,5 +18,7 @@ internal static class AttendanceRegisterLockState
 		row.IsHoliday || dayLocks.Contains(row.AttendanceDate) || IsPayrollLocked(row, lockLookup);
 
 	public static bool IsMissingPunch(RegisterProjection row) =>
-		row.Status == AttendanceRegisterStatus.Present && (!row.TimeIn.HasValue || !row.TimeOut.HasValue);
+		row.Status == AttendanceRegisterStatus.Present &&
+		row.CaptureMode != AttendanceCaptureMode.ManualStatus &&
+		(!row.TimeIn.HasValue || !row.TimeOut.HasValue);
 }

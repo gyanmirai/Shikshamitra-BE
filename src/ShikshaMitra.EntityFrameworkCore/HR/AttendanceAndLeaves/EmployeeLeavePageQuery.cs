@@ -99,7 +99,7 @@ internal static class EmployeeLeavePageQuery
 
 		if (filters.LeavePolicyId.HasValue)
 		{
-			query = query.Where(x => x.LeaveTypeId == filters.LeavePolicyId.Value);
+			query = query.Where(x => x.LeavePolicyId == filters.LeavePolicyId.Value);
 		}
 
 		if (filters.LeaveTypeMasterId.HasValue)

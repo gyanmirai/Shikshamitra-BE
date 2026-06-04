@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceRegister;
+using ShikshaMitra.HR.Policies;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
@@ -67,6 +68,8 @@ internal static class AttendanceRegisterDtoMapper
 			OutTime = row.TimeOut?.ToString("o"),
 			HoursWorked = CalculateHoursWorked(row.TimeIn, row.TimeOut),
 			Remarks = row.Remarks,
+			CaptureMode = HrPolicyMapping.MapCaptureMode(row.CaptureMode),
+			Source = HrPolicyMapping.MapAttendanceSource(row.Source),
 			Status = row.Status,
 			IsMarked = row.IsMarked,
 			IsDayLocked = isDayLocked,
@@ -74,7 +77,7 @@ internal static class AttendanceRegisterDtoMapper
 			IsHoliday = row.IsHoliday,
 			HolidayName = row.HolidayName,
 			HolidayReason = holidayReason,
-			CanEdit = row.IsMarked && !lockInfo.IsLocked && !isDayLocked && !row.IsHoliday,
+			CanEdit = !lockInfo.IsLocked && !isDayLocked && !row.IsHoliday,
 			LockReason = lockReason
 		};
 	}

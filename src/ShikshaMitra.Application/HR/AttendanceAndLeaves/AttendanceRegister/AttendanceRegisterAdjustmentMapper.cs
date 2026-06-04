@@ -42,6 +42,21 @@ internal static class AttendanceRegisterAdjustmentMapper
 				? parsed
 				: null;
 
+	public static DateOnly ParseAdjustmentDate(string? value)
+	{
+		if (DateOnly.TryParse(value, CultureInfo.InvariantCulture, out var parsed))
+		{
+			return parsed;
+		}
+
+		if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
+		{
+			return DateOnly.FromDateTime(dto.Date);
+		}
+
+		throw new BusinessException(HRErrorCodes.AttendanceInvalidDateFormat);
+	}
+
 	public static DateTimeOffset? ApplyTimeToDate(DateOnly attendanceDate, DateTimeOffset? time)
 	{
 		if (!time.HasValue)

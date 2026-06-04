@@ -3,12 +3,22 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.AttendanceAndLeaves.Import;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Payroll.AttendanceImports;
+using ShikshaMitra.HR.Policies;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -18,6 +28,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string BaseUrl = "/api/attendance-import";
+	private const string IntegrationRunsUrl = "/api/hr/attendance/integration-runs";
 
 	public AttendanceImportApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
@@ -36,6 +47,72 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 		body.CanConfirm.ShouldBeTrue();
 		body.PreviewToken.ShouldNotBeNullOrWhiteSpace();
 		body.Rows.Count.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Csv_Import_Should_Preserve_Raw_Punches_For_Manual_Status_Policy()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"ManualCsv{Guid.NewGuid():N}");
+		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualStatus);
+		using var previewContent = BuildCsvUpload($"11-04-2026,{employee.EmployeeCode},09:00 AM,09:30 AM,,Short raw punch,{employee.FullName},{employee.MobileNo}");
+
+		var previewResponse = await Client.PostAsync($"{BaseUrl}/preview", previewContent);
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var preview = await previewResponse.Content.ReadFromJsonAsync<AttendanceImportPreviewResponseDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview.Rows.Single().Status.ShouldBe(nameof(EmployeeAttendanceStatusType.Present));
+
+		var confirmResponse = await Client.PostAsJsonAsync($"{BaseUrl}/confirm", new AttendanceImportConfirmRequestDto
+		{
+			PreviewToken = preview.PreviewToken!
+		}, JsonOptions);
+		confirmResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var attendance = await GetAttendanceAsync(employee.Id, attendanceDate);
+		attendance.TimeIn.ShouldNotBeNull();
+		attendance.TimeOut.ShouldNotBeNull();
+		attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.Present);
+		attendance.Source.ShouldBe(AttendanceRecordSource.CsvImport);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Integration_Run_Should_Preserve_Raw_Punches_For_Manual_Status_Policy()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 12);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"ManualIntegration{Guid.NewGuid():N}");
+		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualStatus);
+
+		var response = await Client.PostAsJsonAsync(IntegrationRunsUrl, new AttendanceIntegrationRunRequestDto
+		{
+			FileName = $"integration-{Guid.NewGuid():N}.json",
+			RunSource = AttendanceImportRunSource.Integration,
+			IntegrationProvider = "regression-test",
+			Rows =
+			[
+				new AttendanceIntegrationRunRowDto
+				{
+					EmployeeId = employee.Id,
+					AttendanceDate = "2026-04-12",
+					TimeIn = "2026-04-12T09:00:00Z",
+					TimeOut = "2026-04-12T17:30:00Z",
+					Status = EmployeeAttendanceStatusType.Present,
+					Remarks = "Integration raw punch"
+				}
+			]
+		}, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var attendance = await GetAttendanceAsync(employee.Id, attendanceDate);
+		attendance.TimeIn.ShouldNotBeNull();
+		attendance.TimeOut.ShouldNotBeNull();
+		attendance.Source.ShouldBe(AttendanceRecordSource.Integration);
 	}
 
 	[Fact]
@@ -106,6 +183,99 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 		file.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
 		content.Add(file, "File", $"attendance-{Guid.NewGuid():N}.csv");
 		return content;
+	}
+
+	private async Task AssignCaptureModePolicyAsync(
+		Guid employeeId,
+		DateOnly effectiveDate,
+		AttendanceCaptureMode captureMode)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var targetDate = effectiveDate.ToDateTime(TimeOnly.MinValue);
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x => x.StartDate <= targetDate && x.EndDate >= targetDate);
+			var attendanceQuery = await attendancePolicyRepository.GetQueryableAsync();
+			var defaultAttendance = attendanceQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			var payrollQuery = await payrollPolicyRepository.GetQueryableAsync();
+			var defaultPayroll = payrollQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			var policy = new AttendancePolicy(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				defaultAttendance.WorkCalendarPolicyId,
+				$"Test {captureMode} {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				false,
+				captureMode,
+				75,
+				50,
+				0,
+				AttendanceMissingPunchBehavior.RequiresReview,
+				true,
+				0,
+				0,
+				AttendancePenaltyType.None,
+				0,
+				false,
+				0,
+				false,
+				null,
+				null,
+				AttendanceHolidayWorkBehavior.CompOff,
+				false,
+				true);
+			await attendancePolicyRepository.InsertAsync(policy, autoSave: false);
+			await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				HrPolicyAssignmentTargetType.Employee,
+				employeeId.ToString("D"),
+				null,
+				policy.Id,
+				defaultPayroll.Id,
+				targetDate.Date,
+				null,
+				true,
+				priority: 100,
+				assignmentReason: "Capture mode regression test"), autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<EmployeeAttendance> GetAttendanceAsync(Guid employeeId, DateOnly attendanceDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var query = await attendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x => x.EmployeeId == employeeId && x.AttendanceDate == attendanceDate);
+			await uow.CompleteAsync();
+			return attendance;
+		}
 	}
 }
 

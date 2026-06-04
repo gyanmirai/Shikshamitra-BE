@@ -6148,6 +6148,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
                     b.Property<string>("StatusType")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -6375,6 +6378,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)")
                         .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<int>("CaptureMode")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")

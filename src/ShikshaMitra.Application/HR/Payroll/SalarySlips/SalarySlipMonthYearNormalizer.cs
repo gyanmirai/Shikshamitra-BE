@@ -1,4 +1,3 @@
-using ShikshaMitra.HR.Payroll.Services;
 using Volo.Abp;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;

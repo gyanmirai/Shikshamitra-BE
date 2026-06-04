@@ -39,6 +39,7 @@ public class AttendancePolicyMutationService(
 		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, input.AcademicYearId);
 		var entity = await repository.GetAsync(id);
 		var status = HrPolicyMapping.ParsePolicyStatus(input.Status);
+		var captureMode = HrPolicyMapping.ParseCaptureMode(input.CaptureMode);
 		var missingPunchBehavior = HrPolicyMapping.ParseMissingPunchBehavior(input.MissingPunchBehavior);
 		var penaltyType = HrPolicyMapping.ParsePenaltyType(input.PenaltyType);
 		var overtimeRate = HrPolicyMapping.ParseOvertimeRate(input.OvertimeRate);
@@ -49,6 +50,7 @@ public class AttendancePolicyMutationService(
 			entity,
 			input,
 			status,
+			captureMode,
 			missingPunchBehavior,
 			penaltyType,
 			overtimeRate,
@@ -68,6 +70,7 @@ public class AttendancePolicyMutationService(
 			input.Name,
 			status,
 			input.IsDefault,
+			captureMode,
 			input.FullDayThresholdPercentage,
 			input.HalfDayThresholdPercentage,
 			input.AbsentThresholdPercentage,
@@ -116,6 +119,7 @@ public class AttendancePolicyMutationService(
 			string.IsNullOrWhiteSpace(input.Name) ? $"{source.Name} Copy" : input.Name!,
 			HrPolicyStatus.Draft,
 			false,
+			source.CaptureMode,
 			source.FullDayThresholdPercentage,
 			source.HalfDayThresholdPercentage,
 			source.AbsentThresholdPercentage,

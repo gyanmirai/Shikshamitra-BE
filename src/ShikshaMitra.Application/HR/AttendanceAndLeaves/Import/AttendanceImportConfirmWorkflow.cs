@@ -69,6 +69,7 @@ public class AttendanceImportConfirmWorkflow(
 				existing.TimeIn = row.TimeIn;
 				existing.TimeOut = row.TimeOut;
 				existing.StatusType = row.StatusType;
+				existing.Source = AttendanceRecordSource.CsvImport;
 				existing.EducationMediumStageId = row.EducationMediumStageId;
 				existing.Remarks = row.Remarks;
 				await employeeAttendanceRepository.UpdateAsync(existing, autoSave: false);
@@ -84,6 +85,7 @@ public class AttendanceImportConfirmWorkflow(
 				TimeIn = row.TimeIn,
 				TimeOut = row.TimeOut,
 				StatusType = row.StatusType,
+				Source = AttendanceRecordSource.CsvImport,
 				EducationMediumStageId = row.EducationMediumStageId,
 				Remarks = row.Remarks
 			}, autoSave: false);

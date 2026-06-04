@@ -41,7 +41,7 @@ public class LeaveValidationService : DomainService
 	/// </summary>
 	public async Task<Guid> ValidateLeaveRequestAsync(
 		Guid employeeId,
-		Guid leaveTypeId,
+		Guid leavePolicyId,
 		DateTime startDate,
 		DateTime endDate,
 		bool halfDay = false,
@@ -73,7 +73,7 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeaveOverlap);
 		}
 
-		var leavePolicy = await _leavePolicyRepository.FindAsync(x => x.Id == leaveTypeId);
+		var leavePolicy = await _leavePolicyRepository.FindAsync(x => x.Id == leavePolicyId);
 		if (leavePolicy == null)
 		{
 			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
@@ -147,9 +147,9 @@ public class LeaveValidationService : DomainService
 
 	public async Task<decimal> GetRemainingLeaveBalanceAsync(
 		Guid employeeId,
-		Guid leaveTypeId)
+		Guid leavePolicyId)
 	{
-		var leavePolicy = await _leavePolicyRepository.FindAsync(x => x.Id == leaveTypeId);
+		var leavePolicy = await _leavePolicyRepository.FindAsync(x => x.Id == leavePolicyId);
 		if (leavePolicy == null)
 		{
 			return 0;

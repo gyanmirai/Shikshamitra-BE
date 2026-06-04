@@ -1,3 +1,4 @@
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using System;
 using Volo.Abp;
@@ -14,6 +15,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Name { get; protected set; } = string.Empty;
 	public HrPolicyStatus Status { get; protected set; }
 	public bool IsDefault { get; protected set; }
+	public AttendanceCaptureMode CaptureMode { get; protected set; } = AttendanceCaptureMode.Integrated;
 	public double FullDayThresholdPercentage { get; protected set; }
 	public double HalfDayThresholdPercentage { get; protected set; }
 	public double AbsentThresholdPercentage { get; protected set; }
@@ -45,6 +47,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string name,
 		HrPolicyStatus status,
 		bool isDefault,
+		AttendanceCaptureMode captureMode,
 		double fullDayThresholdPercentage,
 		double halfDayThresholdPercentage,
 		double absentThresholdPercentage,
@@ -72,6 +75,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			name,
 			status,
 			isDefault,
+			captureMode,
 			fullDayThresholdPercentage,
 			halfDayThresholdPercentage,
 			absentThresholdPercentage,
@@ -96,6 +100,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string name,
 		HrPolicyStatus status,
 		bool isDefault,
+		AttendanceCaptureMode captureMode,
 		double fullDayThresholdPercentage,
 		double halfDayThresholdPercentage,
 		double absentThresholdPercentage,
@@ -120,6 +125,7 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Name = name.Trim();
 		Status = status;
 		IsDefault = isDefault;
+		CaptureMode = captureMode;
 		FullDayThresholdPercentage = fullDayThresholdPercentage;
 		HalfDayThresholdPercentage = halfDayThresholdPercentage;
 		AbsentThresholdPercentage = absentThresholdPercentage;

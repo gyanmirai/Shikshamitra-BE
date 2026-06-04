@@ -10,6 +10,7 @@ namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 
 public class AttendanceImportSaveEntryNormalizer(
 	AttendanceImportEmployeeResolver employeeResolver,
+	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
 	AttendancePolicyWorkedTimeEvaluator workedTimeEvaluator)
 	: ITransientDependency
 {
@@ -74,6 +75,8 @@ public class AttendanceImportSaveEntryNormalizer(
 
 		var employeeIds = entries.Select(x => x.EmployeeId).Distinct().ToList();
 		var employeeById = await employeeResolver.BuildLookupByIdAsync(employeeIds);
+		var captureModeLookup = await captureModeLookupResolver.ResolveForPairsAsync(
+			entries.Select(x => (x.EmployeeId, x.AttendanceDate)));
 		var result = new List<NormalizedAttendanceImportSaveEntry>(entries.Count);
 		foreach (var entry in entries)
 		{
@@ -82,6 +85,12 @@ public class AttendanceImportSaveEntryNormalizer(
 				throw new BusinessException(HRErrorCodes.AttendanceImportRowMismatch)
 					.WithData("rowId", entry.RowId)
 					.WithData("reason", "Employee does not match the import row.");
+			}
+
+			if (captureModeLookup.GetValueOrDefault((entry.EmployeeId, entry.AttendanceDate)) == AttendanceCaptureMode.ManualStatus)
+			{
+				result.Add(entry);
+				continue;
 			}
 
 			var evaluation = await workedTimeEvaluator.EvaluateAsync(

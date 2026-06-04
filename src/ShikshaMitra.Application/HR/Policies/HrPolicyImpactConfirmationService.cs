@@ -105,7 +105,8 @@ public class HrPolicyImpactConfirmationService(
 
 	private static bool RequiresConfirmation(HrPolicyImpactWarningDto warning) =>
 		warning.Code != HRErrorCodes.HrPolicyNoAffectedEmployees &&
-		warning.Severity is "warning" or "info";
+		(string.Equals(warning.Severity, "warning", StringComparison.OrdinalIgnoreCase) ||
+		 string.Equals(warning.Severity, "info", StringComparison.OrdinalIgnoreCase));
 
 	private sealed record ConfirmationPayload(
 		string PolicyType,

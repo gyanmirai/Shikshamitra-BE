@@ -23,7 +23,7 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 
 	public Task<EmployeeLeave> CreateAsync(
 		Guid employeeId,
-		Guid leaveTypeId,
+		Guid leavePolicyId,
 		DateTimeOffset startDate,
 		DateTimeOffset endDate,
 		string description,
@@ -36,7 +36,7 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 			leaveId,
 			tenantId,
 			employeeId,
-			leaveTypeId,
+			leavePolicyId,
 			startDate,
 			endDate,
 			description,

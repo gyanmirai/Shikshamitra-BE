@@ -150,6 +150,7 @@ public class HrPolicyVersionRestoreService(
 			BuildRestoredName(input.Name, snapshot.Name, snapshot.Version),
 			HrPolicyStatus.Draft,
 			false,
+			HrPolicyMapping.ParseCaptureMode(snapshot.CaptureMode),
 			snapshot.FullDayThresholdPercentage,
 			snapshot.HalfDayThresholdPercentage,
 			snapshot.AbsentThresholdPercentage,

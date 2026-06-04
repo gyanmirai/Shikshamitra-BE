@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.TenantSettings;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
@@ -98,12 +99,56 @@ public class AttendancePolicyWorkedTimeEvaluator(
 				? EmployeeAttendanceStatusType.HalfDayLeave
 				: EmployeeAttendanceStatusType.FullDayLeave;
 
-		var warning = evaluatedStatus == requestedStatus
+		var workedTimeWarning = evaluatedStatus == requestedStatus
 			? null
 			: BuildWarning(evaluatedStatus, workedMinutes, shiftMinutes, workedPercentage, policy.FullDayThresholdPercentage);
 
+		var latePenalty = EvaluateLateArrivalPenalty(policy, shift, timeIn.Value, evaluatedStatus);
+		if (latePenalty != null)
+		{
+			return latePenalty;
+		}
+
+		var warning = workedTimeWarning;
 		return new AttendanceWorkedTimeEvaluation(evaluatedStatus, warning);
 	}
+
+	private static AttendanceWorkedTimeEvaluation? EvaluateLateArrivalPenalty(
+		AttendancePolicy policy,
+		ShiftManagement shift,
+		DateTimeOffset timeIn,
+		EmployeeAttendanceStatusType evaluatedStatus)
+	{
+		var penaltyStatus = policy.PenaltyType switch
+		{
+			AttendancePenaltyType.DeductHalfDay => EmployeeAttendanceStatusType.HalfDayLeave,
+			AttendancePenaltyType.DeductFullDay => EmployeeAttendanceStatusType.FullDayLeave,
+			_ => (EmployeeAttendanceStatusType?)null
+		};
+
+		if (!penaltyStatus.HasValue || GetStatusSeverity(penaltyStatus.Value) <= GetStatusSeverity(evaluatedStatus))
+		{
+			return null;
+		}
+
+		var lateMinutes = (timeIn.TimeOfDay - shift.StartTime.ToTimeSpan()).TotalMinutes;
+		if (lateMinutes <= policy.GraceTime)
+		{
+			return null;
+		}
+
+		return new AttendanceWorkedTimeEvaluation(
+			penaltyStatus.Value,
+			BuildLateArrivalWarning(penaltyStatus.Value, lateMinutes, policy.GraceTime));
+	}
+
+	private static int GetStatusSeverity(EmployeeAttendanceStatusType status) => status switch
+	{
+		EmployeeAttendanceStatusType.FullDayLeave => 3,
+		EmployeeAttendanceStatusType.HalfDayLeave => 2,
+		EmployeeAttendanceStatusType.Present => 1,
+		_ => 0
+	};
 
 	private static string BuildWarning(
 		EmployeeAttendanceStatusType evaluatedStatus,
@@ -127,5 +172,25 @@ public class AttendancePolicyWorkedTimeEvaluator(
 			shiftMinutes / 60d,
 			workedPercentage,
 			fullDayThresholdPercentage);
+	}
+
+	private static string BuildLateArrivalWarning(
+		EmployeeAttendanceStatusType evaluatedStatus,
+		double lateMinutes,
+		int graceTime)
+	{
+		var label = evaluatedStatus switch
+		{
+			EmployeeAttendanceStatusType.HalfDayLeave => "Half Day",
+			EmployeeAttendanceStatusType.FullDayLeave => "Absent",
+			_ => "Present"
+		};
+
+		return string.Format(
+			CultureInfo.InvariantCulture,
+			"Auto-marked {0}: late arrival {1:0.##} minutes exceeded grace time {2} minutes.",
+			label,
+			lateMinutes,
+			graceTime);
 	}
 }

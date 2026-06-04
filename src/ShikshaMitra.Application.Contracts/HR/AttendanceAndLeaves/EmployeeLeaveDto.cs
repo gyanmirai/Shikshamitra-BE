@@ -9,7 +9,7 @@ public class EmployeeLeaveDto : FullAuditedEntityDto<Guid>
 {
 	public Guid EmployeeId { get; set; }
 	public EmployeeDto Employee { get; set; } = new();
-	public Guid LeaveTypeId { get; set; } // Reference to LeavePolicy
+	public Guid LeavePolicyId { get; set; }
 	public LeavePolicyDto LeavePolicy { get; set; } = new();
 	public bool HalfDay { get; set; }
 	public DateTimeOffset StartDate { get; set; }

@@ -35,13 +35,22 @@ public static class PayrollMonthNormalizer
 		}
 
 		var trimmed = input.Trim();
-		if (DateTime.TryParseExact(trimmed, MonthFormats, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var parsedExact))
+		if (DateTime.TryParseExact(
+			    trimmed,
+			    MonthFormats,
+			    CultureInfo.InvariantCulture,
+			    DateTimeStyles.AllowWhiteSpaces,
+			    out var parsedExact))
 		{
 			normalizedMonth = $"{parsedExact.Year:D4}-{parsedExact.Month:D2}";
 			return true;
 		}
 
-		if (DateTime.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var parsedFlexible))
+		if (DateTime.TryParse(
+			    trimmed,
+			    CultureInfo.InvariantCulture,
+			    DateTimeStyles.AllowWhiteSpaces,
+			    out var parsedFlexible))
 		{
 			normalizedMonth = $"{parsedFlexible.Year:D4}-{parsedFlexible.Month:D2}";
 			return true;
@@ -58,11 +67,11 @@ public static class PayrollMonthNormalizer
 		}
 
 		if (!DateTime.TryParseExact(
-			$"{internalMonthYear}-01",
-			"yyyy-MM-dd",
-			CultureInfo.InvariantCulture,
-			DateTimeStyles.None,
-			out var monthDate))
+			    $"{internalMonthYear}-01",
+			    "yyyy-MM-dd",
+			    CultureInfo.InvariantCulture,
+			    DateTimeStyles.None,
+			    out var monthDate))
 		{
 			return null;
 		}

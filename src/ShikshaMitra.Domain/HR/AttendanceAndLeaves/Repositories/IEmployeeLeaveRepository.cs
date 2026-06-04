@@ -37,7 +37,7 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
     /// </summary>
     Task<decimal> GetApprovedLeaveDaysAsync(
         Guid employeeId,
-        Guid leaveTypeId,
+        Guid leavePolicyId,
         int year);
 
 	/// <summary>
@@ -45,7 +45,7 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 	/// </summary>
 	Task<decimal> GetApprovedLeaveDaysAsync(
 		Guid employeeId,
-		Guid leaveTypeId);
+		Guid leavePolicyId);
 
 	Task<List<PayrollApprovedLeaveRow>> GetApprovedPayrollLeaveRowsAsync(
 		IReadOnlyCollection<Guid> employeeIds,

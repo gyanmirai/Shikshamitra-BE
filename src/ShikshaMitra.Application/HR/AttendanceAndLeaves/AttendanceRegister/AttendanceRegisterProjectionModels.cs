@@ -41,6 +41,8 @@ internal sealed class RegisterProjection
 	public DateTimeOffset? TimeIn { get; set; }
 	public DateTimeOffset? TimeOut { get; set; }
 	public string? Remarks { get; set; }
+	public AttendanceCaptureMode CaptureMode { get; set; } = AttendanceCaptureMode.Integrated;
+	public AttendanceRecordSource Source { get; set; } = AttendanceRecordSource.Manual;
 	public bool IsHoliday { get; set; }
 	public string? HolidayName { get; set; }
 }

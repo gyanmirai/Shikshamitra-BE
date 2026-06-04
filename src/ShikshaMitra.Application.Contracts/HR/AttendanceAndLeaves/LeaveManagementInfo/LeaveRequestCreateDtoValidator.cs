@@ -7,10 +7,8 @@ public class LeaveRequestCreateDtoValidator : AbstractValidator<LeaveRequestCrea
 {
 	public LeaveRequestCreateDtoValidator()
 	{
-		RuleFor(x => x)
-			.Must(x =>
-				(x.LeavePolicyId.HasValue && x.LeavePolicyId.Value != Guid.Empty) ||
-				x.LeaveTypeId != Guid.Empty)
+		RuleFor(x => x.LeavePolicyId)
+			.NotEmpty()
 			.WithMessage("Leave policy is required.");
 		RuleFor(x => x.StartDate).NotEmpty().WithMessage("Start date is required.");
 		RuleFor(x => x.EndDate).NotEmpty().WithMessage("End date is required.");

@@ -6,8 +6,11 @@ public class AttendanceRegisterAdjustRequestValidator : AbstractValidator<Attend
 {
 	public AttendanceRegisterAdjustRequestValidator()
 	{
-		RuleFor(x => x.AttendanceId).NotEmpty();
+		RuleFor(x => x)
+			.Must(x => x.AttendanceId.HasValue || (x.EmployeeId.HasValue && !string.IsNullOrWhiteSpace(x.AttendanceDate)))
+			.WithMessage("AttendanceId or EmployeeId with AttendanceDate is required.");
 		RuleFor(x => x.StatusWire).NotEmpty().MaximumLength(20);
+		RuleFor(x => x.AttendanceDate).MaximumLength(40);
 		RuleFor(x => x.InTime).MaximumLength(40);
 		RuleFor(x => x.OutTime).MaximumLength(40);
 		RuleFor(x => x.Remarks).MaximumLength(500);

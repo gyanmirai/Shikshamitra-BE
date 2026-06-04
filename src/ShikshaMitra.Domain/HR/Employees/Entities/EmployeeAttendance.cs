@@ -22,6 +22,7 @@ public class EmployeeAttendance : FullAuditedEntity<Guid>, IMultiTenant, IUserSc
 	public DateTimeOffset? TimeOut { get; set; }
 
 	public EmployeeAttendanceStatusType StatusType { get; set; }
+	public AttendanceRecordSource Source { get; set; } = AttendanceRecordSource.Manual;
 
 	// Concrete FK for scope filtering - denormalized from Employee
 	// This ensures EF Core can apply scope filters without relying on navigation properties

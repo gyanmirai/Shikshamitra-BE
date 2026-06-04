@@ -38,7 +38,7 @@ internal static class AttendanceRegisterProjection
 			Absent = rows.Count(x => x.Status == AttendanceRegisterStatus.Absent),
 			NotMarked = rows.Count(x => x.Status == AttendanceRegisterStatus.NotMarked),
 			Locked = rows.Count(x => IsLocked(x, lockLookup, dayLocks)),
-			Editable = rows.Count(x => x.IsMarked && !IsLocked(x, lockLookup, dayLocks)),
+			Editable = rows.Count(x => !IsLocked(x, lockLookup, dayLocks)),
 			MissingPunch = rows.Count(IsMissingPunch),
 			Holiday = rows.Count(x => x.IsHoliday)
 		};
@@ -69,7 +69,7 @@ internal static class AttendanceRegisterProjection
 			Present = orderedRows.Count(x => x.Status == AttendanceRegisterStatus.Present),
 			HalfDay = halfDay,
 			Absent = absent,
-			Editable = orderedRows.Count(x => x.IsMarked && !IsLocked(x, lockLookup, dayLocks)),
+			Editable = orderedRows.Count(x => !IsLocked(x, lockLookup, dayLocks)),
 			Locked = locked,
 			MissingPunch = missingPunch,
 			Holiday = holiday,

@@ -26,7 +26,7 @@ internal sealed record LeaveDashboardRow(
 	Guid Id,
 	int PublicId,
 	Guid EmployeeId,
-	Guid LeaveTypeId,
+	Guid LeavePolicyId,
 	DateTimeOffset StartDate,
 	DateTimeOffset EndDate,
 	bool HalfDay,
@@ -34,7 +34,7 @@ internal sealed record LeaveDashboardRow(
 	DateTime CreationTime);
 
 internal sealed record LeaveTypeCountRow(
-	Guid LeaveTypeId,
+	Guid LeavePolicyId,
 	int Count);
 
 internal sealed record InactiveReportingManagerIssue(

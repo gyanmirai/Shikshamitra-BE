@@ -52,7 +52,7 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		var leaves = await dbSet
 			.Where(x =>
 				x.EmployeeId == employeeId &&
-				x.LeaveTypeId == leavePolicyId &&
+				x.LeavePolicyId == leavePolicyId &&
 				x.Status == EmployeeLeaveStatusType.Approved &&
 				!x.IsDeleted &&
 				x.StartDate >= startOfYear &&
@@ -70,7 +70,7 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		var leaves = await dbSet
 			.Where(x =>
 				x.EmployeeId == employeeId &&
-				x.LeaveTypeId == leavePolicyId &&
+				x.LeavePolicyId == leavePolicyId &&
 				x.Status == EmployeeLeaveStatusType.Approved &&
 				!x.IsDeleted)
 			.ToListAsync();

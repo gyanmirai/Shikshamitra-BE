@@ -20,6 +20,10 @@ public class EmployeeAttendanceConfiguration : IEntityTypeConfiguration<Employee
 			.HasConversion<string>()
 			.HasMaxLength(20);
 
+		builder.Property(e => e.Source)
+			.IsRequired()
+			.HasConversion<int>();
+
 		// Configure EducationMediumStageId for scope filtering
 		// Nullable to support existing records created before this column was added
 		builder.Property(e => e.EducationMediumStageId)

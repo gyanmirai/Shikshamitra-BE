@@ -83,9 +83,8 @@ public class LeaveRequestDetailsResponse
 	public string? SubmittedByEmployeeCode { get; set; }
 	[Required]
 	public Guid LeavePolicyId { get; set; }
-	/// <summary>Policy identifier included for clients that label the policy as a leave type.</summary>
 	[Required]
-	public Guid LeaveTypeId { get; set; }
+	public Guid LeaveTypeMasterId { get; set; }
 	[Required]
 	public string LeaveType { get; set; } = string.Empty;
 	[Required]

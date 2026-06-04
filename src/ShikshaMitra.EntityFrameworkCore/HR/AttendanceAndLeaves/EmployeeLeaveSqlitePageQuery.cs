@@ -66,7 +66,7 @@ internal static class EmployeeLeaveSqlitePageQuery
 				x.CreationTime,
 				x.Description,
 				x.Status,
-				x.LeaveTypeId,
+				x.LeavePolicyId,
 				x.LeavePolicy != null ? x.LeavePolicy.AcademicYearId : null,
 				x.LeavePolicy != null ? x.LeavePolicy.LeaveTypeId : null,
 				x.Employee != null ? x.Employee.EmployeeCode : string.Empty,
@@ -90,7 +90,7 @@ internal static class EmployeeLeaveSqlitePageQuery
 
 		if (filters.LeavePolicyId.HasValue)
 		{
-			rows = rows.Where(r => r.LeaveTypeId == filters.LeavePolicyId.Value);
+			rows = rows.Where(r => r.LeavePolicyId == filters.LeavePolicyId.Value);
 		}
 
 		if (filters.LeaveTypeMasterId.HasValue)
@@ -146,7 +146,7 @@ internal sealed record EmployeeLeavePageRow(
 	DateTime CreationTime,
 	string? Description,
 	EmployeeLeaveStatusType Status,
-	Guid LeaveTypeId,
+	Guid LeavePolicyId,
 	Guid? AcademicYearId,
 	Guid? MasterLeaveTypeId,
 	string EmployeeCode,

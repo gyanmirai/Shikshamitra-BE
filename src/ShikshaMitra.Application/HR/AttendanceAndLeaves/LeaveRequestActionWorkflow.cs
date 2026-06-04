@@ -39,7 +39,7 @@ public class LeaveRequestActionWorkflow(
 
 		await leaveValidationService.EnsureSufficientLeaveBalanceAsync(
 			leave.EmployeeId,
-			leave.LeaveTypeId,
+			leave.LeavePolicyId,
 			leave.StartDate.DateTime,
 			leave.EndDate.DateTime,
 			leave.HalfDay);

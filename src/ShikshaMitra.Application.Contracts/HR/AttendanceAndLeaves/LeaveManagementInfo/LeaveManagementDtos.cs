@@ -111,6 +111,7 @@ public class LeaveRequestDetailsDto
 	public string SubmittedByName { get; set; } = string.Empty;
 	public string? SubmittedByEmployeeCode { get; set; }
 	public Guid LeavePolicyId { get; set; }
+	public Guid LeaveTypeMasterId { get; set; }
 	public string LeaveType { get; set; } = string.Empty;
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
@@ -126,27 +127,11 @@ public class LeaveRequestDetailsDto
 public class LeaveRequestCreateDto
 {
 	public Guid? ForEmployeeId { get; set; }
-	public Guid? LeavePolicyId { get; set; }
-	public Guid LeaveTypeId { get; set; }
+	public Guid LeavePolicyId { get; set; }
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
 	public bool HalfDay { get; set; }
 	public string Reason { get; set; } = string.Empty;
-
-	public Guid ResolveLeavePolicyId()
-	{
-		if (LeavePolicyId.HasValue && LeavePolicyId.Value != Guid.Empty)
-		{
-			return LeavePolicyId.Value;
-		}
-
-		if (LeaveTypeId != Guid.Empty)
-		{
-			return LeaveTypeId;
-		}
-
-		return Guid.Empty;
-	}
 }
 
 public class LeaveRequestCreatedDto

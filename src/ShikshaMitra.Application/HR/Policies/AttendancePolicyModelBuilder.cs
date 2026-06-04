@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
 namespace ShikshaMitra.HR.Policies;
@@ -14,6 +15,7 @@ internal static class AttendancePolicyModelBuilder
 			input.Name,
 			HrPolicyMapping.ParsePolicyStatus(input.Status),
 			input.IsDefault,
+			HrPolicyMapping.ParseCaptureMode(input.CaptureMode),
 			input.FullDayThresholdPercentage,
 			input.HalfDayThresholdPercentage,
 			input.AbsentThresholdPercentage,
@@ -36,6 +38,7 @@ internal static class AttendancePolicyModelBuilder
 		AttendancePolicy entity,
 		CreateUpdateAttendancePolicyDto input,
 		HrPolicyStatus status,
+		AttendanceCaptureMode captureMode,
 		AttendanceMissingPunchBehavior missingPunchBehavior,
 		AttendancePenaltyType penaltyType,
 		AttendanceOvertimeRate? overtimeRate,
@@ -46,6 +49,7 @@ internal static class AttendancePolicyModelBuilder
 			string.Equals(entity.Name, input.Name.Trim(), StringComparison.Ordinal) &&
 			entity.Status == status &&
 			entity.IsDefault == input.IsDefault &&
+			entity.CaptureMode == captureMode &&
 			entity.FullDayThresholdPercentage == input.FullDayThresholdPercentage &&
 			entity.HalfDayThresholdPercentage == input.HalfDayThresholdPercentage &&
 			entity.AbsentThresholdPercentage == input.AbsentThresholdPercentage &&

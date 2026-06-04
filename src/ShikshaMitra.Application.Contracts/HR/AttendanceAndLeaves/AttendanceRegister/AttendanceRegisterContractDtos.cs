@@ -123,6 +123,8 @@ public class AttendanceRegisterRowDto
 	public string? OutTime { get; set; }
 	public string? HoursWorked { get; set; }
 	public string? Remarks { get; set; }
+	public string CaptureMode { get; set; } = "integrated";
+	public string Source { get; set; } = "manual";
 	public AttendanceRegisterStatus Status { get; set; }
 	public bool IsMarked { get; set; }
 	public bool IsDayLocked { get; set; }
@@ -136,7 +138,9 @@ public class AttendanceRegisterRowDto
 
 public class AttendanceRegisterAdjustRequest
 {
-	public Guid AttendanceId { get; set; }
+	public Guid? AttendanceId { get; set; }
+	public Guid? EmployeeId { get; set; }
+	public string? AttendanceDate { get; set; }
 	public string StatusWire { get; set; } = "PRESENT";
 	public string? InTime { get; set; }
 	public string? OutTime { get; set; }

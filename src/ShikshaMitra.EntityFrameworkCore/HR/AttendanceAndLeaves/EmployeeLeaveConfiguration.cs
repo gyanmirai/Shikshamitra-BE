@@ -51,7 +51,7 @@ public class EmployeeLeaveConfiguration : IEntityTypeConfiguration<EmployeeLeave
 		// reference to the leavePolicy
 		builder.HasOne(e => e.LeavePolicy)
 			.WithMany()
-			.HasForeignKey(e => e.LeaveTypeId)
+			.HasForeignKey(e => e.LeavePolicyId)
 			.OnDelete(DeleteBehavior.Restrict);
 
 		// Auto Include

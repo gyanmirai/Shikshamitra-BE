@@ -17,6 +17,7 @@ public class AttendancePolicyConfiguration : IEntityTypeConfiguration<Attendance
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(128);
 		builder.Property(x => x.Status).IsRequired().HasConversion<int>();
 		builder.Property(x => x.IsDefault).IsRequired();
+		builder.Property(x => x.CaptureMode).IsRequired().HasConversion<int>();
 		builder.Property(x => x.MissingPunchBehavior).IsRequired().HasConversion<int>();
 		builder.Property(x => x.PenaltyType).IsRequired().HasConversion<int>();
 		builder.Property(x => x.OvertimeRate).HasConversion<int?>();

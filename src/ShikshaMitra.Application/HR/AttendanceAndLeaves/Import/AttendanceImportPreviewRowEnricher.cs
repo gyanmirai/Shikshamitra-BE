@@ -11,6 +11,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.Import;
 
 public class AttendanceImportPreviewRowEnricher(
 	IEmployeeRepository employeeRepository,
+	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
 	AttendancePolicyWorkedTimeEvaluator workedTimeEvaluator)
 	: ITransientDependency
 {
@@ -23,6 +24,7 @@ public class AttendanceImportPreviewRowEnricher(
 			.ToList();
 
 		var employeesByCode = await employeeRepository.GetEmployeesByCodesAsync(employeeCodes);
+		var matchedRows = new List<(AttendanceImportPreviewRow Row, Employee Employee)>();
 		foreach (var row in rows.Where(x => x.Errors.Count == 0))
 		{
 			if (!employeesByCode.TryGetValue(row.EmployeeCode.ToUpperInvariant(), out var employee))
@@ -44,7 +46,20 @@ public class AttendanceImportPreviewRowEnricher(
 			row.EmployeeId = employee.Id;
 			row.EducationMediumStageId = null;
 			AddNameMismatchWarning(row, employee);
-			await EvaluatePolicyAsync(row, employee);
+			matchedRows.Add((row, employee));
+		}
+
+		var datedRows = matchedRows
+			.Where(x => x.Row.AttendanceDateValue.HasValue)
+			.ToList();
+		var captureModeLookup = datedRows.Count == 0
+			? new Dictionary<(Guid EmployeeId, DateOnly Date), AttendanceCaptureMode>()
+			: await captureModeLookupResolver.ResolveForPairsAsync(
+				datedRows.Select(x => (x.Employee.Id, x.Row.AttendanceDateValue!.Value)));
+
+		foreach (var (row, employee) in matchedRows)
+		{
+			await EvaluatePolicyAsync(row, employee, captureModeLookup);
 		}
 	}
 
@@ -63,7 +78,10 @@ public class AttendanceImportPreviewRowEnricher(
 		}
 	}
 
-	private async Task EvaluatePolicyAsync(AttendanceImportPreviewRow row, Employee employee)
+	private async Task EvaluatePolicyAsync(
+		AttendanceImportPreviewRow row,
+		Employee employee,
+		Dictionary<(Guid EmployeeId, DateOnly Date), AttendanceCaptureMode> captureModeLookup)
 	{
 		if (!row.AttendanceDateValue.HasValue)
 		{
@@ -72,6 +90,11 @@ public class AttendanceImportPreviewRowEnricher(
 
 		try
 		{
+			if (captureModeLookup.GetValueOrDefault((employee.Id, row.AttendanceDateValue.Value)) == AttendanceCaptureMode.ManualStatus)
+			{
+				return;
+			}
+
 			var evaluation = await workedTimeEvaluator.EvaluateAsync(
 				employee,
 				row.AttendanceDateValue.Value,

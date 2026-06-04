@@ -38,7 +38,7 @@ public class LeaveRequestCreationWorkflow(
 
 		var actorContext = await leaveActorAccessService.ResolveContextAsync();
 
-		var policyId = input.ResolveLeavePolicyId();
+		var policyId = input.LeavePolicyId;
 		if (policyId == Guid.Empty)
 		{
 			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);

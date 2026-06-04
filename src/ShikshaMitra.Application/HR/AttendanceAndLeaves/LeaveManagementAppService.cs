@@ -53,7 +53,6 @@ public class LeaveManagementAppService(
 		{
 			ForEmployeeId = actorEmployeeId,
 			LeavePolicyId = input.LeavePolicyId,
-			LeaveTypeId = input.LeaveTypeId,
 			StartDate = input.StartDate,
 			EndDate = input.EndDate,
 			HalfDay = input.HalfDay,

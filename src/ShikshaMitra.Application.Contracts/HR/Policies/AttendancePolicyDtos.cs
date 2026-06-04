@@ -11,6 +11,7 @@ public class AttendancePolicyDto : EntityDto<Guid>
 	public string Name { get; set; } = string.Empty;
 	public string Status { get; set; } = "draft";
 	public bool IsDefault { get; set; }
+	public string CaptureMode { get; set; } = "integrated";
 	public double FullDayThresholdPercentage { get; set; }
 	public double HalfDayThresholdPercentage { get; set; }
 	public double AbsentThresholdPercentage { get; set; }
@@ -42,6 +43,7 @@ public class CreateUpdateAttendancePolicyDto
 	public string Name { get; set; } = string.Empty;
 	public string Status { get; set; } = "draft";
 	public bool IsDefault { get; set; }
+	public string CaptureMode { get; set; } = "integrated";
 	public double FullDayThresholdPercentage { get; set; } = 75;
 	public double HalfDayThresholdPercentage { get; set; } = 50;
 	public double AbsentThresholdPercentage { get; set; }

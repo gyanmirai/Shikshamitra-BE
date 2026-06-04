@@ -25,7 +25,7 @@ public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITr
 			activeEmployeeIds.Contains(l.EmployeeId));
 		var pendingCount = await asyncExecuter.CountAsync(pendingQuery);
 		var pendingSummaryRows = await asyncExecuter.ToListAsync(pendingQuery
-			.GroupBy(l => l.LeaveTypeId)
+			.GroupBy(l => l.LeavePolicyId)
 			.Select(g => new LeaveTypeCountRow(g.Key, g.Count())));
 		var recentPendingRows = await asyncExecuter.ToListAsync(pendingQuery
 			.OrderByDescending(l => l.CreationTime)
@@ -34,7 +34,7 @@ public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITr
 				l.Id,
 				l.PublicId,
 				l.EmployeeId,
-				l.LeaveTypeId,
+				l.LeavePolicyId,
 				l.StartDate,
 				l.EndDate,
 				l.HalfDay,
@@ -51,7 +51,7 @@ public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITr
 					l.Id,
 					l.PublicId,
 					l.EmployeeId,
-					l.LeaveTypeId,
+					l.LeavePolicyId,
 					l.StartDate,
 					l.EndDate,
 					l.HalfDay,
@@ -62,14 +62,14 @@ public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITr
 			.ToDictionary(g => g.Key, g => g.Count());
 		var summaryRows = pendingSummaryRows
 			.Concat(monthRows
-				.GroupBy(l => l.LeaveTypeId)
+				.GroupBy(l => l.LeavePolicyId)
 				.Select(g => new LeaveTypeCountRow(g.Key, g.Count())))
-			.GroupBy(l => l.LeaveTypeId)
+			.GroupBy(l => l.LeavePolicyId)
 			.Select(g => new LeaveTypeCountRow(g.Key, g.Sum(x => x.Count)))
 			.ToList();
 		var policyIds = summaryRows
-			.Select(x => x.LeaveTypeId)
-			.Concat(recentPendingRows.Select(x => x.LeaveTypeId))
+			.Select(x => x.LeavePolicyId)
+			.Concat(recentPendingRows.Select(x => x.LeavePolicyId))
 			.Distinct()
 			.ToList();
 		var policyNames = await asyncExecuter.ToListAsync(
@@ -92,7 +92,7 @@ public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITr
 			LeaveTypeSummary = summaryRows
 				.Select(row => new HRDashboardLeaveTypeSummaryDto
 				{
-					LeaveType = policyNameById.GetValueOrDefault(row.LeaveTypeId, "Leave"),
+					LeaveType = policyNameById.GetValueOrDefault(row.LeavePolicyId, "Leave"),
 					Count = row.Count
 				})
 				.OrderByDescending(x => x.Count)
@@ -108,7 +108,7 @@ public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITr
 					EmployeeId = l.EmployeeId,
 					EmployeeName = employee?.EmployeeName ?? "Employee",
 					EmployeeIdentifier = employee?.EmployeeCode ?? string.Empty,
-					LeaveType = policyNameById.GetValueOrDefault(l.LeaveTypeId, "Leave"),
+					LeaveType = policyNameById.GetValueOrDefault(l.LeavePolicyId, "Leave"),
 					StartDate = l.StartDate.DateTime,
 					EndDate = l.EndDate.DateTime,
 					TotalDays = LeaveDurationCalculator.CountLeaveUnits(l.StartDate.Date, l.EndDate.Date, l.HalfDay),

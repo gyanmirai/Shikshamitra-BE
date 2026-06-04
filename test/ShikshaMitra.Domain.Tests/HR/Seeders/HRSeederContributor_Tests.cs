@@ -88,7 +88,7 @@ public class HRSeederContributor_Tests
 	}
 
 	[Fact]
-	public void Past_Attendance_Months_Should_Fallback_To_Legacy_Payroll_Config()
+	public void Past_Attendance_Months_Should_Use_Current_Payroll_Config()
 	{
 		var config = new ConfigurationBuilder()
 			.AddInMemoryCollection(new Dictionary<string, string?>

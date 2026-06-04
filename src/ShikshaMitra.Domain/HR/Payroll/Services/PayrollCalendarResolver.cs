@@ -56,7 +56,6 @@ public class PayrollCalendarResolver : DomainService
 		CancellationToken cancellationToken)
 	{
 		var academicYearQuery = await _academicYearRepository.GetQueryableAsync();
-		academicYearQuery = academicYearQuery.Where(x => x.TenantId == CurrentTenant.Id);
 
 		return (await AsyncExecuter.FirstOrDefaultAsync(
 			academicYearQuery
@@ -75,7 +74,6 @@ public class PayrollCalendarResolver : DomainService
 		var startDate = new DateTimeOffset(firstDay);
 		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
 		var holidayQuery = await _holidayRepository.GetQueryableAsync();
-		holidayQuery = holidayQuery.Where(h => h.TenantId == CurrentTenant.Id);
 
 		if (academicYearId.HasValue)
 		{

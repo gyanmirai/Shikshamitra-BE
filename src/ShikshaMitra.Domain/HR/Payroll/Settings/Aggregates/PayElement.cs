@@ -17,12 +17,12 @@ public class PayElement : AuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Unique code for the pay element.
 	/// </summary>
-	public string Code { get; set; }
+	public string Code { get; set; } = string.Empty;
 
 	/// <summary>
 	/// Name of the pay element.
 	/// </summary>
-	public string Name { get; set; }
+	public string Name { get; set; } = string.Empty;
 
 	/// <summary>
 	/// Type of the pay element (e.g., Allowance, Deduction).

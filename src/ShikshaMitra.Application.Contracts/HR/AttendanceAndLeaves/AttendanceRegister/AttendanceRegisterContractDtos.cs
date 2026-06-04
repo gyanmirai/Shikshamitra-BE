@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using FluentValidation;
 using ShikshaMitra.Common;
 using Volo.Abp.Application.Dtos;
 
@@ -124,6 +123,8 @@ public class AttendanceRegisterRowDto
 	public string? OutTime { get; set; }
 	public string? HoursWorked { get; set; }
 	public string? Remarks { get; set; }
+	public string CaptureMode { get; set; } = "integrated";
+	public string Source { get; set; } = "manual";
 	public AttendanceRegisterStatus Status { get; set; }
 	public bool IsMarked { get; set; }
 	public bool IsDayLocked { get; set; }
@@ -137,7 +138,9 @@ public class AttendanceRegisterRowDto
 
 public class AttendanceRegisterAdjustRequest
 {
-	public Guid AttendanceId { get; set; }
+	public Guid? AttendanceId { get; set; }
+	public Guid? EmployeeId { get; set; }
+	public string? AttendanceDate { get; set; }
 	public string StatusWire { get; set; } = "PRESENT";
 	public string? InTime { get; set; }
 	public string? OutTime { get; set; }
@@ -177,31 +180,4 @@ public interface IAttendanceRegisterAppService
 	Task<GroupedAttendanceRegisterResponse> GetGroupedAsync(GetGroupedAttendanceRegisterInput input);
 	Task<AttendanceRegisterAdjustmentResult> AdjustAsync(AttendanceRegisterAdjustRequest input);
 	Task<AttendanceRegisterAdjustmentResult> BulkAdjustAsync(AttendanceRegisterBulkAdjustRequest input);
-}
-
-public class AttendanceRegisterAdjustRequestValidator : AbstractValidator<AttendanceRegisterAdjustRequest>
-{
-	public AttendanceRegisterAdjustRequestValidator()
-	{
-		RuleFor(x => x.AttendanceId).NotEmpty();
-		RuleFor(x => x.StatusWire).NotEmpty().MaximumLength(20);
-		RuleFor(x => x.InTime).MaximumLength(40);
-		RuleFor(x => x.OutTime).MaximumLength(40);
-		RuleFor(x => x.Remarks).MaximumLength(500);
-		RuleFor(x => x.Reason).MaximumLength(500);
-	}
-}
-
-public class AttendanceRegisterBulkAdjustRequestValidator : AbstractValidator<AttendanceRegisterBulkAdjustRequest>
-{
-	public AttendanceRegisterBulkAdjustRequestValidator()
-	{
-		RuleFor(x => x.AttendanceIds).NotNull().Must(x => x.Count > 0);
-		RuleForEach(x => x.AttendanceIds).NotEmpty();
-		RuleFor(x => x.StatusWire).NotEmpty().MaximumLength(20);
-		RuleFor(x => x.InTime).MaximumLength(40);
-		RuleFor(x => x.OutTime).MaximumLength(40);
-		RuleFor(x => x.Remarks).MaximumLength(500);
-		RuleFor(x => x.Reason).MaximumLength(500);
-	}
 }

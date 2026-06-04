@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Collections;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
@@ -26,7 +26,15 @@ public class FeeStructureAppService(
 {
     public async Task<FeeStructureCreateResponse> CreateAsync(Guid feeStructureMetadataId, StandardFeeStructureSaveRequest input)
     {
-        var feeStructure = new FeeStructure(
+		// validation to ensure no duplicate fee structure name exists for the same standard
+		var existingStructure = await feeStructureRepository.AnyAsync(x => x.StandardId == input.StandardId && x.Name == input.StandardFeeStructures.Name);
+
+		if (existingStructure)
+		{
+			throw new BusinessException("A fee structure with the same name already exists for this standard. Please choose a different name.");
+		}
+
+		var feeStructure = new FeeStructure(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             feeStructureMetadataId,
@@ -37,22 +45,21 @@ public class FeeStructureAppService(
         if (input.StandardFeeStructures != null)
         {
             var structureRequest = input.StandardFeeStructures;
+            
+            foreach (var feeHead in structureRequest.FeeHeads)
             {
-                foreach (var feeHead in structureRequest.FeeHeads)
-                {
-                    feeStructure.AddDetail(new FeeStructureDetail(
-                        GuidGenerator.Create(),
-                        CurrentTenant.Id,
-                        feeStructure.Id,
-                        feeHead.FeeHeadId,
-                        feeHead.Amount,
-                        feeHead.IsOneTime,
-                        feeHead.IsOptional,
-						feeHead.IsRefundable,
-						feeHead.PayableMonth,
-						feeHead.PayableYear
-					));
-                }
+                feeStructure.AddDetail(new FeeStructureDetail(
+                    GuidGenerator.Create(),
+                    CurrentTenant.Id,
+                    feeStructure.Id,
+                    feeHead.FeeHeadId,
+                    feeHead.Amount,
+                    feeHead.IsOneTime,
+                    feeHead.IsOptional,
+					feeHead.IsRefundable,
+					feeHead.PayableMonth,
+					feeHead.PayableYear
+				));
             }
         }
 
@@ -92,6 +99,14 @@ public class FeeStructureAppService(
         }
 
 		feeStructure.ChangeName(input.Name);
+
+		// validation to ensure no duplicate fee structure name exists for the same standard
+		var existingStructure = await feeStructureRepository.AnyAsync(x => x.StandardId == feeStructure.StandardId && x.Name == feeStructure.Name && x.Id != feeStructure.Id);
+
+		if (existingStructure)
+		{
+			throw new BusinessException("A fee structure with the same name already exists for this standard. Please choose a different name.");
+		}
 
 		await feeStructureRepository.UpdateAsync(feeStructure);
     }

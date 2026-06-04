@@ -7,12 +7,15 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
@@ -49,10 +52,13 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
 
 		payload.IsHoliday.ShouldBeTrue();
+		payload.HolidayName.ShouldNotBeNull();
 		payload.HolidayName.ShouldContain("Summer Vacation");
 		var row = payload.Items.Single();
 		row.IsHoliday.ShouldBeTrue();
+		row.HolidayName.ShouldNotBeNull();
 		row.HolidayName.ShouldContain("Summer Vacation");
+		row.HolidayReason.ShouldNotBeNull();
 		row.HolidayReason.ShouldContain("Holiday:");
 	}
 
@@ -85,70 +91,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
 		body.ShouldContain("HR:Attendance:020314");
 		body.ShouldContain("Summer Vacation");
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task SaveDay_Should_Update_Legacy_Null_Stage_From_Assignment()
-	{
-		await EnsureDefaultTestUserHasTenantWideScopeAsync();
-
-		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"LegacyStageFix{Guid.NewGuid():N}",
-			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-5));
-		await SeedLegacyAttendanceAsync(employee.Id, attendanceDate, educationMediumStageId: null);
-
-		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
-		{
-			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
-			Entries =
-			[
-				new TakeAttendanceSaveEntryDto
-				{
-					EmployeeId = employee.Id,
-					StatusWire = "PRESENT",
-					Remarks = "Assignment stage should replace legacy null stage"
-				}
-			]
-		}, JsonOptions);
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-		await AssertAttendanceStageAsync(employee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task SaveDay_StageScopedUser_Should_Update_Legacy_Null_Stage_By_Assignment()
-	{
-		var scopedUserId = Guid.NewGuid();
-		await EnsureUserHasStageScopeAsync(scopedUserId, EmployeeTestHelper.DefaultMediumStageId);
-
-		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"ScopedLegacyStageFix{Guid.NewGuid():N}",
-			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-5));
-		await SeedLegacyAttendanceAsync(employee.Id, attendanceDate, educationMediumStageId: null);
-
-		var scopedClient = CreateClientAs(scopedUserId);
-		var response = await scopedClient.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
-		{
-			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
-			Entries =
-			[
-				new TakeAttendanceSaveEntryDto
-				{
-					EmployeeId = employee.Id,
-					StatusWire = "PRESENT",
-					Remarks = "Stage-scoped assignment should allow correction"
-				}
-			]
-		}, JsonOptions);
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-		await AssertAttendanceStageAsync(employee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
 	}
 
 	[Fact]
@@ -337,6 +279,107 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Day_Should_Handle_Mixed_Capture_Modes_Without_Throwing()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var marker = $"MixedCapture{Guid.NewGuid():N}";
+		var attendanceDate = DateTime.UtcNow.AddDays(-1);
+		var manualStatusEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"{marker}Status",
+			dateOfJoining: attendanceDate.AddDays(-10));
+		var manualTimeEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"{marker}Time",
+			dateOfJoining: attendanceDate.AddDays(-10));
+		await AssignCaptureModePolicyAsync(manualStatusEmployee.Id, DateOnly.FromDateTime(attendanceDate), AttendanceCaptureMode.ManualStatus);
+		await AssignCaptureModePolicyAsync(manualTimeEmployee.Id, DateOnly.FromDateTime(attendanceDate), AttendanceCaptureMode.ManualWithTime);
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate={attendanceDate:dd-MM-yyyy}&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(marker)}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
+
+		payload.CaptureMode.ShouldBe("integrated");
+		payload.Items.Single(x => x.EmployeeId == manualStatusEmployee.Id).CaptureMode.ShouldBe("manual_status");
+		payload.Items.Single(x => x.EmployeeId == manualTimeEmployee.Id).CaptureMode.ShouldBe("manual_with_time");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task SaveDay_Should_Strip_Times_For_Manual_Status_Policy()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = DateTime.UtcNow.AddDays(-1);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"ManualStatusSave{Guid.NewGuid():N}",
+			dateOfJoining: attendanceDate.AddDays(-10));
+		await AssignCaptureModePolicyAsync(employee.Id, DateOnly.FromDateTime(attendanceDate), AttendanceCaptureMode.ManualStatus);
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					InTime = "09:00:00",
+					OutTime = "17:00:00"
+				}
+			]
+		}, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var attendance = await GetAttendanceAsync(employee.Id, DateOnly.FromDateTime(attendanceDate));
+		attendance.TimeIn.ShouldBeNull();
+		attendance.TimeOut.ShouldBeNull();
+		attendance.Source.ShouldBe(AttendanceRecordSource.Manual);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task SaveDay_Should_Stamp_Manual_Time_Source_For_Manual_With_Time_Policy()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = DateTime.UtcNow.AddDays(-1);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"ManualTimeSave{Guid.NewGuid():N}",
+			dateOfJoining: attendanceDate.AddDays(-10));
+		await AssignCaptureModePolicyAsync(employee.Id, DateOnly.FromDateTime(attendanceDate), AttendanceCaptureMode.ManualWithTime);
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					InTime = "09:00:00",
+					OutTime = "17:00:00"
+				}
+			]
+		}, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var attendance = await GetAttendanceAsync(employee.Id, DateOnly.FromDateTime(attendanceDate));
+		attendance.TimeIn.ShouldNotBeNull();
+		attendance.TimeOut.ShouldNotBeNull();
+		attendance.Source.ShouldBe(AttendanceRecordSource.ManualTime);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Lock_And_Unlock_Day_Without_EducationMediumStageId()
 	{
 		var lockResponse = await Client.PostAsync($"{BaseUrl}/day/lock?attendanceDate=11-04-2026", null);
@@ -407,30 +450,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	private async Task SeedLegacyAttendanceAsync(Guid employeeId, DateOnly attendanceDate, Guid? educationMediumStageId)
-	{
-		using var scope = Factory.Services.CreateScope();
-		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
-		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
-		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
-
-		using (currentTenant.Change(tenantId))
-		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
-		{
-			await attendanceRepository.InsertAsync(new EmployeeAttendance
-			{
-				TenantId = tenantId,
-				EmployeeId = employeeId,
-				AttendanceDate = attendanceDate,
-				EducationMediumStageId = educationMediumStageId,
-				StatusType = EmployeeAttendanceStatusType.FullDayLeave,
-				Remarks = "Legacy attendance row"
-			}, autoSave: false);
-			await uow.CompleteAsync();
-		}
-	}
-
 	private async Task AssertAttendanceStageAsync(Guid employeeId, DateOnly attendanceDate, Guid expectedStageId)
 	{
 		using var scope = Factory.Services.CreateScope();
@@ -473,6 +492,99 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				autoSave: false);
 			await userScopeService.InvalidateUserScopeCacheAsync(userId);
 			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task AssignCaptureModePolicyAsync(
+		Guid employeeId,
+		DateOnly effectiveDate,
+		AttendanceCaptureMode captureMode)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var targetDate = effectiveDate.ToDateTime(TimeOnly.MinValue);
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x => x.StartDate <= targetDate && x.EndDate >= targetDate);
+			var attendanceQuery = await attendancePolicyRepository.GetQueryableAsync();
+			var defaultAttendance = attendanceQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			var payrollQuery = await payrollPolicyRepository.GetQueryableAsync();
+			var defaultPayroll = payrollQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			var policy = new AttendancePolicy(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				defaultAttendance.WorkCalendarPolicyId,
+				$"Test {captureMode} {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				false,
+				captureMode,
+				75,
+				50,
+				0,
+				AttendanceMissingPunchBehavior.RequiresReview,
+				true,
+				0,
+				0,
+				AttendancePenaltyType.None,
+				0,
+				false,
+				0,
+				false,
+				null,
+				null,
+				AttendanceHolidayWorkBehavior.CompOff,
+				false,
+				true);
+			await attendancePolicyRepository.InsertAsync(policy, autoSave: false);
+			await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				HrPolicyAssignmentTargetType.Employee,
+				employeeId.ToString("D"),
+				null,
+				policy.Id,
+				defaultPayroll.Id,
+				targetDate.Date,
+				null,
+				true,
+				priority: 100,
+				assignmentReason: "Capture mode regression test"), autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<EmployeeAttendance> GetAttendanceAsync(Guid employeeId, DateOnly attendanceDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var query = await attendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x => x.EmployeeId == employeeId && x.AttendanceDate == attendanceDate);
+			await uow.CompleteAsync();
+			return attendance;
 		}
 	}
 }

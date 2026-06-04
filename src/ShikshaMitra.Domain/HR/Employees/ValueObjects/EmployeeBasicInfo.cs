@@ -1,0 +1,39 @@
+using ShikshaMitra.Common;
+using System;
+
+namespace ShikshaMitra.HR.Employees;
+
+internal sealed record EmployeeBasicInfo(
+	string? ProfilePictureBlobName,
+	string? LastName,
+	string? FirstName,
+	string? MiddleName,
+	string? ShortName,
+	EmployeeStatusType? EmployeeStatusType,
+	DateOnly? DateOfBirth,
+	string? FamilyCast,
+	CastType? CastType,
+	GenderType? GenderType,
+	string? Religion,
+	MaritalStatusType? MaritalStatus,
+	string? BloodGroup,
+	string? MobileNo,
+	string? SecondaryMobileNo,
+	string? Email,
+	string? PanNo,
+	string? AdharNo,
+	string? Address1,
+	string? Address2,
+	string? Address3,
+	string? Department,
+	string? Designation,
+	DateOnly? DateOfJoining,
+	EmployeeGroupType? EmployeeGroup,
+	string? Qualification,
+	Guid? RoleId,
+	string? IdentificationMark1,
+	string? City,
+	State? State,
+	Country? Country,
+	string? PinCode,
+	Guid? ShiftId);

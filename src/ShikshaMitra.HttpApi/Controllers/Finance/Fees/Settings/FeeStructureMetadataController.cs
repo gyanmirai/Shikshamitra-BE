@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using Volo.Abp;
@@ -15,10 +16,8 @@ public class FeeStructureMetadataController(
 	IFeeStructureMetadataAppService feeStructureMetadataAppService
 ) : AbpControllerBase
 {
-	/// <summary>
-	/// Get Fee Structures list
-	/// </summary>
 	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.View)]
 	public async Task<FeeStructureMetadataListResponse> GetListAsync(
 		[FromQuery] Guid academicYearId,
 		[FromQuery] int page = 1,
@@ -28,11 +27,8 @@ public class FeeStructureMetadataController(
 		return await feeStructureMetadataAppService.GetListAsync(academicYearId, page, pageSize, search);
 	}
 
-	// create API to generate fee structures for all the mediums in given academic year based on the default fee structure of the school
-	/// <summary>
-	/// Generate Fee Structures for all Mediums in a Given Academic Year
-	/// </summary>
 	[HttpPost("generate")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add)]
 	public async Task GenerateFeeStructuresAsync([FromQuery] Guid academicYearId)
 	{
 		await feeStructureMetadataAppService.GenerateFeeStructuresAsync(academicYearId);

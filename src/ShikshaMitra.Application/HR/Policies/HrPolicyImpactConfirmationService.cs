@@ -62,7 +62,7 @@ public class HrPolicyImpactConfirmationService(
 			.ToList();
 		if (preview.BlockingWarnings.Count > 0)
 		{
-			throw new BusinessException("ShikshaMitra:HrPolicyImpactBlocking")
+			throw new BusinessException(HRErrorCodes.HrPolicyImpactBlocking)
 				.WithData("warnings", string.Join("; ", preview.BlockingWarnings.Select(x => x.Message)));
 		}
 
@@ -77,17 +77,17 @@ public class HrPolicyImpactConfirmationService(
 			: httpContextAccessor.HttpContext?.Request.Headers[HeaderName].FirstOrDefault();
 		if (string.IsNullOrWhiteSpace(token))
 		{
-			throw new BusinessException("ShikshaMitra:HrPolicyImpactConfirmationRequired");
+			throw new BusinessException(HRErrorCodes.HrPolicyImpactConfirmationRequired);
 		}
 
 		var cached = await cache.GetAsync(CachePrefix + token);
 		if (string.IsNullOrWhiteSpace(cached))
 		{
-			throw new BusinessException("ShikshaMitra:HrPolicyImpactConfirmationInvalid");
+			throw new BusinessException(HRErrorCodes.HrPolicyImpactConfirmationInvalid);
 		}
 
 		var payload = JsonSerializer.Deserialize<ConfirmationPayload>(cached)
-			?? throw new BusinessException("ShikshaMitra:HrPolicyImpactConfirmationInvalid");
+			?? throw new BusinessException(HRErrorCodes.HrPolicyImpactConfirmationInvalid);
 
 		if (payload.ExpiresAt < clock.Now ||
 			payload.HasBlockingWarnings ||
@@ -96,7 +96,7 @@ public class HrPolicyImpactConfirmationService(
 			payload.AcademicYearId != preview.AcademicYearId ||
 			!string.Equals(payload.Action, NormalizeAction(preview.Action), StringComparison.OrdinalIgnoreCase))
 		{
-			throw new BusinessException("ShikshaMitra:HrPolicyImpactConfirmationInvalid");
+			throw new BusinessException(HRErrorCodes.HrPolicyImpactConfirmationInvalid);
 		}
 	}
 
@@ -104,8 +104,9 @@ public class HrPolicyImpactConfirmationService(
 		string.IsNullOrWhiteSpace(action) ? "update" : action.Trim().ToLowerInvariant();
 
 	private static bool RequiresConfirmation(HrPolicyImpactWarningDto warning) =>
-		warning.Code != "ShikshaMitra:NoAffectedEmployees" &&
-		warning.Severity is "warning" or "info";
+		warning.Code != HRErrorCodes.HrPolicyNoAffectedEmployees &&
+		(string.Equals(warning.Severity, "warning", StringComparison.OrdinalIgnoreCase) ||
+		 string.Equals(warning.Severity, "info", StringComparison.OrdinalIgnoreCase));
 
 	private sealed record ConfirmationPayload(
 		string PolicyType,

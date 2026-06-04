@@ -8,6 +8,7 @@ using ShikshaMitra.Mappers.HR.Payroll;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Timing;
 
 namespace ShikshaMitra.Controllers.HR.Payroll;
 
@@ -18,10 +19,12 @@ namespace ShikshaMitra.Controllers.HR.Payroll;
 public class PfRuleController : AbpControllerBase
 {
 	private readonly IProvidentFundAppService _providentFundAppService;
+	private readonly IClock _clock;
 
-	public PfRuleController(IProvidentFundAppService providentFundAppService)
+	public PfRuleController(IProvidentFundAppService providentFundAppService, IClock clock)
 	{
 		_providentFundAppService = providentFundAppService;
+		_clock = clock;
 	}
 
 	[HttpPost]
@@ -87,7 +90,7 @@ public class PfRuleController : AbpControllerBase
 		[FromBody] CreateUpdateProvidentFundDto input)
 	{
 		var updatedPfRule = await _providentFundAppService.UpdateAsync(id, input);
-		return PfRuleContractMapper.ToUpdateResponse(updatedPfRule);
+		return PfRuleContractMapper.ToUpdateResponse(updatedPfRule, _clock.Now);
 	}
 
 	[HttpDelete("{id}")]

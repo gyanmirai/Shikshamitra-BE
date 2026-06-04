@@ -28,6 +28,7 @@ public class TakeAttendanceDayResponse
 	public DateOnly Date { get; set; }
 	public bool IsDayLocked { get; set; }
 	public bool IsHoliday { get; set; }
+	public string CaptureMode { get; set; } = "integrated";
 	public string? HolidayName { get; set; }
 	public string? HolidayReason { get; set; }
 	public Guid? LockedByUserId { get; set; }
@@ -57,6 +58,8 @@ public class TakeAttendanceEmployeeRowDto
 	public string? ShiftStartTime { get; set; }
 	public string? ShiftEndTime { get; set; }
 	public string? Remarks { get; set; }
+	public string CaptureMode { get; set; } = "integrated";
+	public string Source { get; set; } = "manual";
 	public List<string> Warnings { get; set; } = [];
 	public List<string> Errors { get; set; } = [];
 	public bool IsHoliday { get; set; }

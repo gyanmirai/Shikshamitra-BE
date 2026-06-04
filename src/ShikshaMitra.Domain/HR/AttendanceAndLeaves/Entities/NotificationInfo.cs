@@ -8,11 +8,11 @@ public class NotificationInfo : AggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; }
 
-	public string ReceiverName { get; set; }
+	public string ReceiverName { get; set; } = string.Empty;
 
 	public DateTimeOffset NotificationTime { get; set; }
 
-	public string ReceiverRole { get; set; }
+	public string ReceiverRole { get; set; } = string.Empty;
 
 	public EmployeeAttendanceStatusType NotificationType { get; set; }
 

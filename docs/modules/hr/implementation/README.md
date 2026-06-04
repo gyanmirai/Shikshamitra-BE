@@ -5,7 +5,6 @@ Canonical implementation notes for HR backend internals.
 ## Guides
 
 - [Application layer patterns](./application-layer-patterns.md)
-- [Application layer refactoring](./application-layer-refactoring.md)
 - [HttpApi migration](./httpapi-migration.md)
 
 ## Related

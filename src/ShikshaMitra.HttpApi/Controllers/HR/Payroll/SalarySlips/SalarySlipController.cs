@@ -1,6 +1,5 @@
 using System;
 using System.ComponentModel.DataAnnotations;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -8,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
+using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -42,14 +42,15 @@ public class SalarySlipController : AbpControllerBase
 		[FromQuery, Required] Guid employeeId,
 		[FromQuery, Required] string monthYear)
 	{
-		if (!System.Text.RegularExpressions.Regex.IsMatch(monthYear, @"^[A-Z]+-\d{4}$"))
+		if (!PayrollMonthNormalizer.TryNormalizeToInternal(monthYear, out var internalMonthYear))
 		{
 			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
 		}
 
-		var internalMonthYear = ConvertToInternalFormat(monthYear);
 		var salarySlipDto = await _salarySlipAppService.GetSalarySlipAsync(employeeId, internalMonthYear);
-		return MapToSalarySlipResponse(salarySlipDto, monthYear);
+		return MapToSalarySlipResponse(
+			salarySlipDto,
+			PayrollMonthNormalizer.ToApiMonthYear(internalMonthYear) ?? internalMonthYear.ToUpperInvariant());
 	}
 
 	[HttpGet("pdf")]
@@ -61,33 +62,16 @@ public class SalarySlipController : AbpControllerBase
 		[FromQuery, Required] Guid employeeId,
 		[FromQuery, Required] string monthYear)
 	{
-		if (!System.Text.RegularExpressions.Regex.IsMatch(monthYear, @"^[A-Z]+-\d{4}$"))
+		if (!PayrollMonthNormalizer.TryNormalizeToInternal(monthYear, out var internalMonthYear))
 		{
 			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
 		}
 
-		var internalMonthYear = ConvertToInternalFormat(monthYear);
 		var bytes = await _salarySlipAppService.GenerateSalarySlipPdfAsync(employeeId, internalMonthYear);
-		var fileName = $"Payslip_{employeeId:N}_{monthYear}.pdf";
+		var displayMonthYear = PayrollMonthNormalizer.ToApiMonthYear(internalMonthYear) ?? internalMonthYear.ToUpperInvariant();
+		var fileName = $"Payslip_{employeeId:N}_{displayMonthYear}.pdf";
 
 		return File(bytes, "application/pdf", fileName);
-	}
-
-	private static string ConvertToInternalFormat(string monthYear)
-	{
-		var parts = monthYear.Split('-');
-		if (parts.Length != 2)
-		{
-			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
-		}
-
-		if (DateTime.TryParseExact(parts[0], "MMMM", CultureInfo.InvariantCulture,
-			DateTimeStyles.None, out var date))
-		{
-			return $"{parts[1]}-{date.Month:D2}";
-		}
-
-		throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
 	}
 
 	private static SalarySlipResponse MapToSalarySlipResponse(SalarySlipDto dto, string contractMonthYear)

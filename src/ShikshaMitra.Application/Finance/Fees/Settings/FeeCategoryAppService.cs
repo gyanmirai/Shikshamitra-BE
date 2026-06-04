@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
-using ShikshaMitra.Finance.Setting;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -14,18 +12,21 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
+public class FeeCategoryAppService(
+	IRepository<FeeCategory, Guid> feeCategoryRepository
+) : ApplicationService, IFeeCategoryAppService
 {
-    private readonly IRepository<FeeCategory, Guid> _feeCategoryRepository;
-
-    public FeeCategoryAppService(IRepository<FeeCategory, Guid> feeCategoryRepository)
-    {
-        _feeCategoryRepository = feeCategoryRepository;
-    }
-
     public async Task<MessageResponse> CreateAsync(Guid academicYearId, FeeCategoryCreateRequest input)
     {
-        var feeCategory = new FeeCategory(
+		// validation to ensure no duplicate fee category name exists for the same academic year
+		var existingCategory = await feeCategoryRepository.FirstOrDefaultAsync(x => x.AcademicYearId == academicYearId && x.Name == input.Name);
+
+		if (existingCategory != null)
+		{
+			throw new BusinessException("A fee category with the same name already exists for this academic year.");
+		}
+
+		var feeCategory = new FeeCategory(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             academicYearId,
@@ -33,7 +34,7 @@ public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
             input.Description
         );
 
-        await _feeCategoryRepository.InsertAsync(feeCategory);
+        await feeCategoryRepository.InsertAsync(feeCategory);
 
         return new MessageResponse
         {
@@ -43,7 +44,7 @@ public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
 
     public async Task<FeeCategoryListResponse> GetListAsync(Guid academicYearId, string search = null, int page = 1, int pageSize = 10)
     {
-        var query = await _feeCategoryRepository.GetQueryableAsync();
+        var query = await feeCategoryRepository.GetQueryableAsync();
 
         query = query.Where(x => x.AcademicYearId == academicYearId);
 
@@ -52,13 +53,13 @@ public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
             query = query.Where(x => x.Name.Contains(search));
         }
 
-        var totalCount = await _feeCategoryRepository.AsyncExecuter.CountAsync(query);
+        var totalCount = await feeCategoryRepository.AsyncExecuter.CountAsync(query);
 
         query = query.OrderByDescending(x => x.CreationTime)
                      .Skip((page - 1) * pageSize)
                      .Take(pageSize);
 
-        var items = await _feeCategoryRepository.AsyncExecuter.ToListAsync(query);
+        var items = await feeCategoryRepository.AsyncExecuter.ToListAsync(query);
 
         var dtos = items.Select(x => new FeeCategoryResponse
         {
@@ -82,11 +83,19 @@ public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
 
     public async Task<MessageResponse> UpdateAsync(Guid feeCategoryId, FeeCategoryUpdateRequest input)
     {
-        var feeCategory = await _feeCategoryRepository.GetAsync(feeCategoryId);
+		var feeCategory = await feeCategoryRepository.GetAsync(feeCategoryId);
 
         feeCategory.Update(input.Name, input.Description);
 
-        await _feeCategoryRepository.UpdateAsync(feeCategory);
+		// validation to ensure no duplicate fee category name exists for the same academic year
+		var existingCategory = await feeCategoryRepository.FirstOrDefaultAsync(x => x.AcademicYearId == feeCategory.AcademicYearId && x.Name == input.Name && x.Id != feeCategoryId);
+
+		if (existingCategory != null)
+		{
+			throw new BusinessException("A fee category with the same name already exists for this academic year.");
+		}
+
+		await feeCategoryRepository.UpdateAsync(feeCategory);
 
         return new MessageResponse
         {
@@ -96,7 +105,7 @@ public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
 
     public async Task<MessageResponse> DeleteAsync(Guid feeCategoryId)
     {
-        await _feeCategoryRepository.DeleteAsync(feeCategoryId);
+        await feeCategoryRepository.DeleteAsync(feeCategoryId);
 
         return new MessageResponse
         {

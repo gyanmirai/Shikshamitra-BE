@@ -108,7 +108,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		unmappedUserClient.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Teacher");
 
 		using var form = new MultipartFormDataContent();
-		form.Add(new StringContent(Guid.NewGuid().ToString()), "leaveTypeId");
+		form.Add(new StringContent(Guid.NewGuid().ToString()), "leavePolicyId");
 		form.Add(new StringContent(startDate.ToString("yyyy-MM-dd")), "startDate");
 		form.Add(new StringContent(endDate.ToString("yyyy-MM-dd")), "endDate");
 		form.Add(new StringContent("Planned leave request"), "reason");
@@ -136,7 +136,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 		using var form = new MultipartFormDataContent();
 		form.Add(new StringContent(Guid.NewGuid().ToString()), "forEmployeeId");
-		form.Add(new StringContent(Guid.NewGuid().ToString()), "leaveTypeId");
+		form.Add(new StringContent(Guid.NewGuid().ToString()), "leavePolicyId");
 		form.Add(new StringContent(startDate.ToString("yyyy-MM-dd")), "startDate");
 		form.Add(new StringContent(endDate.ToString("yyyy-MM-dd")), "endDate");
 		form.Add(new StringContent("Planned leave request"), "reason");
@@ -149,6 +149,28 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 			var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
 			payload.GetProperty("errorCode").GetString().ShouldNotBe(HRErrorCodes.LeaveEmployeeNotFound);
 		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Legacy_LeaveTypeId_Create_Payload()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "LegacyLeaveTypePayload");
+		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+
+		using var form = new MultipartFormDataContent();
+		form.Add(new StringContent(employee.Id.ToString()), "forEmployeeId");
+		form.Add(new StringContent(Guid.NewGuid().ToString()), "leaveTypeId");
+		form.Add(new StringContent(startDate.ToString("yyyy-MM-dd")), "startDate");
+		form.Add(new StringContent(startDate.AddDays(1).ToString("yyyy-MM-dd")), "endDate");
+		form.Add(new StringContent("Legacy leave type payload"), "reason");
+
+		var response = await Client.PostAsync($"{BaseUrl}?academicYearId={AcademicYearId}", form);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
+		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeavePolicyNotFound);
 	}
 
 	[Fact]
@@ -168,7 +190,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		using var form = new MultipartFormDataContent();
 		form.Add(new StringContent(inactiveEmployee.Id.ToString()), "forEmployeeId");
-		form.Add(new StringContent(Guid.NewGuid().ToString()), "leaveTypeId");
+		form.Add(new StringContent(Guid.NewGuid().ToString()), "leavePolicyId");
 		form.Add(new StringContent(startDate.ToString("yyyy-MM-dd")), "startDate");
 		form.Add(new StringContent(startDate.AddDays(1).ToString("yyyy-MM-dd")), "endDate");
 		form.Add(new StringContent("Planned leave request"), "reason");

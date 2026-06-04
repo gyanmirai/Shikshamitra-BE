@@ -100,6 +100,11 @@ public class EmployeeICardTemplateApi_Tests : ShikshaMitraApiTestBase
 			QrCodeEnabled = true,
 			BarcodeEnabled = false,
 			BackSideEnabled = false,
+			SchemaVersion = 1,
+			LayoutJson = """
+				{"orientation":"Horizontal","width":360,"height":230,"backgroundColor":"#F8FAFC","themeColor":"#1D4ED8","front":{"elements":[{"id":"school","type":"text","fieldKey":"schoolName","x":16,"y":14,"w":220,"h":22,"z":2,"visible":true,"style":{"fontSize":14,"fontWeight":700,"color":"#1D4ED8"}},{"id":"photo","type":"photo","fieldKey":"photo","x":16,"y":70,"w":72,"h":86,"z":3,"visible":true,"style":{"borderColor":"#1D4ED8","borderWidth":1}},{"id":"name","type":"text","fieldKey":"name","x":104,"y":74,"w":170,"h":24,"z":4,"visible":true,"style":{"fontSize":16,"fontWeight":700,"color":"#111827"}},{"id":"code","type":"text","fieldKey":"employeeCode","label":"Code","x":104,"y":108,"w":150,"h":18,"z":4,"visible":true,"style":{"fontSize":9,"showLabel":true,"separator":": "}},{"id":"qr","type":"qr","x":286,"y":154,"w":48,"h":48,"z":5,"visible":true},{"id":"barcode","type":"barcode","x":16,"y":188,"w":150,"h":22,"z":5,"visible":true}]}}
+				""",
+			PrintSettingsJson = """{"pageSize":"A4","cardsPerPage":8,"margin":18,"gap":10,"showCutMarks":true}""",
 			FieldsJson = """[{"name":"photo","enabled":true},{"name":"name","enabled":true},{"name":"employeeCode","enabled":true}]""",
 			IsActive = true
 		}, JsonOptions);

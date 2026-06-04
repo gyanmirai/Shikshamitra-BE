@@ -66,9 +66,8 @@ public class StudentFeeStructureAppService(
 			feeStructure,
 			academicYear,
 			input.SelectedOptionalFeeHeadIds);
-
-		foreach (var dueFee in dueFees)
-			await dueFeeRepository.InsertAsync(dueFee, autoSave: false);
+	
+		await dueFeeRepository.InsertManyAsync(dueFees, autoSave: false);
 
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}

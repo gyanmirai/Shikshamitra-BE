@@ -26,31 +26,6 @@ internal static class PayrollSnapshotComponentParser
 			.ToList();
 	}
 
-	public static bool HasLegacyComponentSnapshotFormat(PayrollRunItemSnapshot snapshot) =>
-		!snapshot.IsLocked &&
-		(HasLegacyComponentSnapshotFormat(snapshot.EarningComponentsJson) ||
-		 HasLegacyComponentSnapshotFormat(snapshot.DeductionComponentsJson));
-
-	private static bool HasLegacyComponentSnapshotFormat(string componentsJson)
-	{
-		try
-		{
-			using var document = JsonDocument.Parse(componentsJson);
-			if (document.RootElement.ValueKind != JsonValueKind.Array)
-			{
-				return true;
-			}
-
-			return document.RootElement.EnumerateArray().Any(component =>
-				!component.TryGetProperty("isTemp", out _) &&
-				!component.TryGetProperty("IsTemp", out _));
-		}
-		catch (JsonException)
-		{
-			return true;
-		}
-	}
-
 	private static SalaryComponentType ParseSalaryComponentType(string? value) =>
 		Enum.TryParse<SalaryComponentType>(value, ignoreCase: true, out var componentType)
 			? componentType

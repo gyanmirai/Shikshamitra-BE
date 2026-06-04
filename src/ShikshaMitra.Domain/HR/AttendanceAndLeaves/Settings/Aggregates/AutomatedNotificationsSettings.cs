@@ -10,7 +10,7 @@ public class AutomatedNotificationsSettings : AggregateRoot<Guid>, IMultiTenant
 	// Private setter: required so ABP can set the current tenant after mapping on create (get-only skips that step).
 	public Guid? TenantId { get; private set; }
 	public EmployeeAttendanceStatusType EmployeeAttendanceStatusType { get; set; }
-	public List<NotificationMethodType> NotificationMethods { get; set; }
+	public List<NotificationMethodType> NotificationMethods { get; set; } = [];
 
 	private AutomatedNotificationsSettings()
 	{
@@ -24,6 +24,6 @@ public class AutomatedNotificationsSettings : AggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		EmployeeAttendanceStatusType = employeeAttendanceStatusType;
-		NotificationMethods = notificationMethods;
+		NotificationMethods = notificationMethods ?? [];
 	}
 }

@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
@@ -202,74 +204,7 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Direct_Payslip_Should_Regenerate_From_Current_Structure_When_Unlocked_Snapshot_Is_Legacy()
-	{
-		await EnsureDefaultTestUserHasTenantWideScopeAsync();
-
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"PayslipLegacySnapshot{Guid.NewGuid():N}",
-			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-
-		await UpdateSalaryStructureAsync(
-			employee.Id,
-			new UpdateSalaryStructureDto
-			{
-				EarningComponents = new List<SalaryComponentDto>
-				{
-					new()
-					{
-						Name = "January Temp Earning",
-						Amount = 100m,
-						IsFixed = false,
-						IsTemp = true,
-						ApplicableMonth = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-					}
-				},
-				DeductionComponents = new List<SalaryComponentDto>
-				{
-					new()
-					{
-						Name = "January Temp Deduction",
-						Amount = 50m,
-						IsFixed = false,
-						IsTemp = true,
-						ApplicableMonth = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-					}
-				}
-			});
-
-		var februaryPreview = await GetPayrollItemAsync(employee.Id, "2026-02");
-		februaryPreview.GrossSalary.ShouldBe(0d);
-		februaryPreview.TotalDeduction.ShouldBe(0d);
-
-		await MutatePayrollSnapshotAsync(employee.Id, "2026-02", snapshot =>
-		{
-			snapshot.EarningComponentsJson = JsonSerializer.Serialize(new[]
-			{
-				new { Name = "January Temp Earning", Amount = 100d }
-			});
-			snapshot.DeductionComponentsJson = JsonSerializer.Serialize(new[]
-			{
-				new { Name = "January Temp Deduction", Amount = 50d }
-			});
-			snapshot.GrossSalary = 100m;
-			snapshot.FullGrossSalary = 100m;
-			snapshot.TotalDeduction = 50m;
-			snapshot.NetPay = 50m;
-		});
-
-		var februarySlip = await GetSalarySlipResponseAsync(employee.Id, "FEBRUARY-2026");
-		februarySlip.Earnings.ShouldNotContain(x => x.Name == "January Temp Earning");
-		februarySlip.Deductions.ShouldNotContain(x => x.Name == "January Temp Deduction");
-		februarySlip.TotalEarning.ShouldBe(0d);
-		februarySlip.TotalDeduction.ShouldBe(0d);
-		februarySlip.NetSalary.ShouldBe(0d);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Direct_Payslip_Should_Not_Use_Unlocked_NonLegacy_Stale_Snapshot()
+	public async Task Direct_Payslip_Should_Not_Use_Unlocked_Stale_Snapshot()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
@@ -373,6 +308,28 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.InternalServerError);
 	}
 
+	[Theory]
+	[InlineData("APRIL-2026")]
+	[InlineData("April-2026")]
+	[InlineData("Apr-2026")]
+	[InlineData("2026-04")]
+	[InlineData("2026-04-15")]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Salary_Slip_Should_Accept_Run_Payroll_Month_Formats_And_Normalize_Response(
+		string monthYear)
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"SlipMonth{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		await SeedFinalizedSalarySlipAsync(employee.Id, "2026-04");
+
+		var slip = await GetSalarySlipResponseAsync(employee.Id, Uri.EscapeDataString(monthYear));
+
+		slip.MonthYear.ShouldBe("APRIL-2026");
+	}
+
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Get_Salary_Slip_Pdf()
@@ -458,6 +415,65 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 			await snapshotRepository.UpdateAsync(snapshot, autoSave: false);
 			await uow.CompleteAsync();
 		}
+	}
+
+	private async Task SeedFinalizedSalarySlipAsync(Guid employeeId, string monthYear)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var salarySlipRepository = scope.ServiceProvider.GetRequiredService<IRepository<SalarySlip, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var salarySlip = CreateSalarySlip(tenantId, employeeId, monthYear);
+			salarySlip.FinalizeSlip();
+			await salarySlipRepository.InsertAsync(salarySlip, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private static SalarySlip CreateSalarySlip(Guid tenantId, Guid employeeId, string monthYear)
+	{
+		var constructor = typeof(SalarySlip).GetConstructor(
+			BindingFlags.Instance | BindingFlags.NonPublic,
+			binder: null,
+			[
+				typeof(Guid),
+				typeof(Guid?),
+				typeof(Guid),
+				typeof(string),
+				typeof(List<SalarySlipLineItem>),
+				typeof(List<SalarySlipLineItem>),
+				typeof(DateTime),
+				typeof(string)
+			],
+			modifiers: null);
+
+		constructor.ShouldNotBeNull();
+		return (SalarySlip)constructor.Invoke(
+		[
+			Guid.NewGuid(),
+			tenantId,
+			employeeId,
+			monthYear,
+			new List<SalarySlipLineItem>
+			{
+				new()
+				{
+					Name = "Basic",
+					Amount = 1000m,
+					IsFixed = true,
+					ComponentType = SalaryComponentType.Fixed,
+					DependOn = SalaryComponentDependency.None
+				}
+			},
+			new List<SalarySlipLineItem>(),
+			DateTime.UtcNow,
+			"Salary slip month normalizer test"
+		]);
 	}
 
 	private async Task<RunPayrollItem> GetPayrollItemAsync(Guid employeeId, string month)

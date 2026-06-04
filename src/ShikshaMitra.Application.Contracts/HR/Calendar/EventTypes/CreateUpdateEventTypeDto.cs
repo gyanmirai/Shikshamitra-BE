@@ -1,5 +1,3 @@
-using ShikshaMitra.Common.Validation;
-
 namespace ShikshaMitra.HR.Calendar.EventTypes;
 
 /// <summary>
@@ -10,13 +8,12 @@ public class CreateUpdateEventTypeDto
     /// <summary>
     /// Name of the event type (required, max 256 characters)
     /// </summary>
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
     /// <summary>
     /// Hex color code for UI representation (required, must be valid hex format)
     /// </summary>
-    [HexColor(ErrorMessage = "Color must be a valid hex code in format #RRGGBB or #RGB")]
-    public string Color { get; set; }
+    public string Color { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional description of the event type (max 500 characters)

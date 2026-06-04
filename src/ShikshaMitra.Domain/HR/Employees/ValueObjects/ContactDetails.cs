@@ -34,17 +34,17 @@ public class ContactDetails(
 
 	protected override IEnumerable<object> GetAtomicValues()
 	{
-		yield return Name;
-		yield return Occupation;
-		yield return ContactNo;
-		yield return Address1;
-		yield return Address2;
-		yield return Address3;
-		yield return City;
-		yield return StateName;
-		yield return StateIsoCode;
-		yield return CountryName;
-		yield return CountryIsoCode;
-		yield return PinCode;
+		yield return Name ?? string.Empty;
+		yield return Occupation ?? string.Empty;
+		yield return ContactNo ?? string.Empty;
+		yield return Address1 ?? string.Empty;
+		yield return Address2 ?? string.Empty;
+		yield return Address3 ?? string.Empty;
+		yield return City ?? string.Empty;
+		yield return StateName ?? string.Empty;
+		yield return StateIsoCode ?? string.Empty;
+		yield return CountryName ?? string.Empty;
+		yield return CountryIsoCode ?? string.Empty;
+		yield return PinCode ?? string.Empty;
 	}
 }

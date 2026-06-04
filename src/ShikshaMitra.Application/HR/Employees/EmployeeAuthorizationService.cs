@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -7,59 +7,39 @@ using Volo.Abp.Users;
 
 namespace ShikshaMitra.HR.Employees;
 
-/// <summary>
-/// Service to handle employee-specific authorization checks
-/// Prevents IDOR (Insecure Direct Object Reference) vulnerabilities
-/// </summary>
-public class EmployeeAuthorizationService : ApplicationService, IEmployeeAuthorizationService
+[RemoteService(false)]
+public class EmployeeAuthorizationService(
+	IEmployeeRepository employeeRepository,
+	ICurrentUser currentUser)
+	: ApplicationService, IEmployeeAuthorizationService
 {
-	private readonly IEmployeeRepository _employeeRepository;
-	private readonly ICurrentUser _currentUser;
+	private const string AdminRole = "admin";
+	private const string AdministratorRole = "Administrator";
+	private const string HrManagerRole = "HR Manager";
+	private const string HrAdminRole = "HR Admin";
 
-	public EmployeeAuthorizationService(
-		IEmployeeRepository employeeRepository,
-		ICurrentUser currentUser)
-	{
-		_employeeRepository = employeeRepository;
-		_currentUser = currentUser;
-	}
-
-	/// <summary>
-	/// Checks if the current user can access a specific employee's data.
-	/// Throws AbpAuthorizationException if access is denied.
-	/// </summary>
-	/// <param name="employeeId">The employee ID to check access for</param>
-	/// <param name="requireOwnership">If true, only the employee themselves can access (stricter check)</param>
-	/// <exception cref="AbpAuthorizationException">Thrown when access is denied</exception>
 	public async Task CheckEmployeeAccessAsync(Guid employeeId, bool requireOwnership = false)
 	{
-		// System administrators always have access
 		if (await IsAdminAsync())
 		{
 			return;
 		}
 
-		var employee = await _employeeRepository.GetAsync(employeeId);
+		var employee = await employeeRepository.GetAsync(employeeId);
+		EnsureSameTenant(employee, "Access denied: Cross-tenant access not allowed.");
 
-		// Check tenant isolation
-		if (employee.TenantId != _currentUser.TenantId)
-		{
-			throw new AbpAuthorizationException("Access denied: Cross-tenant access not allowed.");
-		}
-
-		// For ownership-based access (e.g., viewing own payroll)
 		if (requireOwnership)
 		{
-			if (employee.UserId != _currentUser.Id)
+			if (employee.UserId != currentUser.Id)
 			{
 				throw new AbpAuthorizationException("Access denied: You can only access your own data.");
 			}
+
 			return;
 		}
 
-		// For general access: Allow if user is HR Manager or accessing their own data
-		var hasHRAccess = await IsInRoleAsync("HR Manager") || await IsInRoleAsync("HR Admin");
-		var isOwnData = employee.UserId == _currentUser.Id;
+		var hasHRAccess = await HasHrAccessAsync();
+		var isOwnData = employee.UserId == currentUser.Id;
 
 		if (!hasHRAccess && !isOwnData)
 		{
@@ -67,74 +47,62 @@ public class EmployeeAuthorizationService : ApplicationService, IEmployeeAuthori
 		}
 	}
 
-	/// <summary>
-	/// Checks if current user can modify employee data
-	/// </summary>
 	public async Task CheckEmployeeModifyAccessAsync(Guid employeeId)
 	{
-		// System administrators always have access
 		if (await IsAdminAsync())
 		{
 			return;
 		}
 
-		var employee = await _employeeRepository.GetAsync(employeeId);
+		var employee = await employeeRepository.GetAsync(employeeId);
+		EnsureSameTenant(employee, "Access denied: Cross-tenant modification not allowed.");
 
-		// Check tenant isolation
-		if (employee.TenantId != _currentUser.TenantId)
-		{
-			throw new AbpAuthorizationException("Access denied: Cross-tenant modification not allowed.");
-		}
-
-		// Only HR Manager/Admin can modify employee data
-		var hasHRAccess = await IsInRoleAsync("HR Manager") || await IsInRoleAsync("HR Admin");
-
-		if (!hasHRAccess)
+		if (!await HasHrAccessAsync())
 		{
 			throw new AbpAuthorizationException("Access denied: Only HR personnel can modify employee data.");
 		}
 	}
 
-	/// <summary>
-	/// Checks if current user can modify sensitive fields (salary, role, etc.)
-	/// </summary>
 	public async Task CheckSensitiveFieldAccessAsync(Guid employeeId)
 	{
-		// Only administrators and HR Admin can modify sensitive fields
-		if (!await IsAdminAsync() && !await IsInRoleAsync("HR Admin"))
+		if (!await IsAdminAsync() && !await IsInRoleAsync(HrAdminRole))
 		{
 			throw new AbpAuthorizationException("Access denied: Only administrators can modify sensitive employee fields.");
 		}
 
-		var employee = await _employeeRepository.GetAsync(employeeId);
-
-		// Verify tenant isolation
-		if (employee.TenantId != _currentUser.TenantId)
-		{
-			throw new AbpAuthorizationException("Access denied: Cross-tenant access not allowed.");
-		}
+		var employee = await employeeRepository.GetAsync(employeeId);
+		EnsureSameTenant(employee, "Access denied: Cross-tenant access not allowed.");
 	}
 
-	/// <summary>
-	/// Checks if user has bulk operation permissions
-	/// </summary>
 	public async Task CheckBulkOperationAccessAsync()
 	{
-		// Only administrators can perform bulk operations
-		if (!await IsAdminAsync() && !await IsInRoleAsync("HR Admin"))
+		if (!await IsAdminAsync() && !await IsInRoleAsync(HrAdminRole))
 		{
 			throw new AbpAuthorizationException("Access denied: Bulk operations require administrator privileges.");
 		}
 	}
 
-	private async Task<bool> IsAdminAsync()
+	private void EnsureSameTenant(Employee employee, string message)
 	{
-		return await IsInRoleAsync("admin") || await IsInRoleAsync("Administrator");
+		// Employee lookups are ABP-filtered, but this explicit check protects reused IDOR paths.
+		if (employee.TenantId != currentUser.TenantId)
+		{
+			throw new AbpAuthorizationException(message);
+		}
 	}
 
-	private async Task<bool> IsInRoleAsync(string roleName)
+	private async Task<bool> HasHrAccessAsync()
 	{
-		// ABP framework automatically handles role checks with tenant context
-		return _currentUser.IsInRole(roleName);
+		return await IsInRoleAsync(HrManagerRole) || await IsInRoleAsync(HrAdminRole);
+	}
+
+	private async Task<bool> IsAdminAsync()
+	{
+		return await IsInRoleAsync(AdminRole) || await IsInRoleAsync(AdministratorRole);
+	}
+
+	private Task<bool> IsInRoleAsync(string roleName)
+	{
+		return Task.FromResult(currentUser.IsInRole(roleName));
 	}
 }

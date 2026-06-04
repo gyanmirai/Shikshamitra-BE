@@ -56,7 +56,7 @@ public static class LeaveManagementContractMapper
 			SubmittedByName = dto.SubmittedByName,
 			SubmittedByEmployeeCode = dto.SubmittedByEmployeeCode,
 			LeavePolicyId = dto.LeavePolicyId,
-			LeaveTypeId = dto.LeavePolicyId,
+			LeaveTypeMasterId = dto.LeaveTypeMasterId,
 			LeaveType = dto.LeaveType,
 			StartDate = dto.StartDate,
 			EndDate = dto.EndDate,

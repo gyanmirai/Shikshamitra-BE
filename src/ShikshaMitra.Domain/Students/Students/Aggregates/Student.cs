@@ -14,6 +14,7 @@ using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 
 namespace ShikshaMitra.Students;
 
@@ -51,6 +52,8 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 	public EducationBoard? AcademicBoard { get; private set; }
 	public Standard? Standard { get; private set; }
 	public Division? Division { get; private set; }
+
+	public FeeStructure? FeeStructure { get; private set; }
 
 	public ICollection<StudentNote> Notes { get; private set; } = new List<StudentNote>();
 

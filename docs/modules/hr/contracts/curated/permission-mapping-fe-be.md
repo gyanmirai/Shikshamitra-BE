@@ -16,7 +16,7 @@ BE canonical keys are the single source of truth.
 
 ## Mapping Matrix
 
-| FE key (requested/legacy) | Canonical BE key | Status | Notes |
+| FE key | Canonical BE key | Status | Notes |
 |---|---|---|---|
 | `HR.Dashboard` | `HR.Dashboard` | Canonical | No change. |
 | `HR.Employee` | `HR.Employee` | Canonical | Used as module/root guard. |

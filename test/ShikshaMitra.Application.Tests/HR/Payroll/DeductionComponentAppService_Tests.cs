@@ -424,7 +424,8 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             employee.Id,
             effectiveMonth,
             new(),
-            new());
+            new(),
+            DateTime.UtcNow);
         await _salarySlipRepository.InsertAsync(draftSlip, autoSave: true);
 
         var updateInput = new UpdateDeductionComponentDto
@@ -442,7 +443,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         };
         updateInput.PreviewHash = (await _deductionComponentAppService.PreviewUpdateImpactAsync(master.Id, updateInput)).PreviewHash;
 
-        draftSlip.Finalize();
+        draftSlip.FinalizeSlip();
         await _salarySlipRepository.UpdateAsync(draftSlip, autoSave: true);
 
         var staleHash = await Should.ThrowAsync<BusinessException>(async () =>
@@ -662,6 +663,8 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         var syncedEmployee = await CreateEmployeeAsync("deduction-preview-synced");
         var overriddenEmployee = await CreateEmployeeAsync("deduction-preview-override");
         var master = await CreateTestDeductionComponentAsync($"Preview TDS {Guid.NewGuid():N}");
+        var effectiveMonth = DateTime.Now.AddMonths(1).ToString("yyyy-MM");
+        var forceEffectiveMonth = DateTime.Now.AddMonths(2).ToString("yyyy-MM");
 
         await _employeePayrollComponentRepository.InsertAsync(new EmployeePayrollComponent(
             Guid.NewGuid(), syncedEmployee.Id, master.Name, master.Id, master.Description, master.Amount ?? 0m,
@@ -681,13 +684,13 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
             Amount = 125m,
-            EffectiveMonth = "2026-06"
+            EffectiveMonth = effectiveMonth
         };
 
         var preview = await _deductionComponentAppService.PreviewUpdateImpactAsync(master.Id, update);
         preview.SyncedEmployeeCount.ShouldBe(1);
         preview.ManualOverrideEmployeeCount.ShouldBe(1);
-        preview.EffectiveMonth.ShouldBe("2026-06");
+        preview.EffectiveMonth.ShouldBe(effectiveMonth);
         preview.PreviewHash.ShouldNotBeNullOrWhiteSpace();
 
         update.PreviewHash = preview.PreviewHash;
@@ -705,7 +708,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             CalculationType = CalculationType.Amount,
             DependOn = ComponentDependency.None,
             Amount = 140m,
-            EffectiveMonth = "2026-07",
+            EffectiveMonth = forceEffectiveMonth,
             ApplyMode = PayrollComponentApplyMode.ForceApply
         };
         forceUpdate.PreviewHash = (await _deductionComponentAppService.PreviewUpdateImpactAsync(master.Id, forceUpdate)).PreviewHash;
@@ -889,8 +892,9 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             employee.Id,
             "2024-01",
             new(),
-            new());
-        finalizedSlip.Finalize();
+            new(),
+            DateTime.UtcNow);
+        finalizedSlip.FinalizeSlip();
         await _salarySlipRepository.InsertAsync(finalizedSlip, autoSave: true);
         await _salarySlipRepository.InsertAsync(new SalarySlip(
             _guidGenerator.Create(),
@@ -898,7 +902,8 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             employee.Id,
             "2024-02",
             new(),
-            new()), autoSave: true);
+            new(),
+            DateTime.UtcNow), autoSave: true);
 
         var preview = await _deductionComponentAppService.PreviewDeleteImpactAsync(master.Id);
 
@@ -932,12 +937,13 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             employee.Id,
             "2024-03",
             new(),
-            new());
+            new(),
+            DateTime.UtcNow);
         await _salarySlipRepository.InsertAsync(draftSlip, autoSave: true);
 
         var preview = await _deductionComponentAppService.PreviewDeleteImpactAsync(master.Id);
 
-        draftSlip.Finalize();
+        draftSlip.FinalizeSlip();
         await _salarySlipRepository.UpdateAsync(draftSlip, autoSave: true);
 
         var refreshedPreview = await _deductionComponentAppService.PreviewDeleteImpactAsync(master.Id);

@@ -84,7 +84,7 @@ public class EmployeeFamilyMember : FullAuditedEntity<Guid>, IMultiTenant
 	/// <summary>
 	/// Navigation property to Employee
 	/// </summary>
-	public virtual Employee Employee { get; private set; }
+	public virtual Employee? Employee { get; private set; }
 
 	private EmployeeFamilyMember() { } // For ORM
 

@@ -29,18 +29,18 @@ public class EmployeesController : AbpControllerBase
 	private readonly IEmployeeSearchAppService _searchAppService;
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IEmployeeAuthorizationService _authorizationService;
-	private readonly ICurrentEmployeeAppService _currentEmployeeAppService;
+	private readonly ICurrentEmployeeProfileAppService _currentEmployeeProfileAppService;
 
 	public EmployeesController(
 		IEmployeeSearchAppService searchAppService,
 		IEmployeePersonalInfoAppService personalInfoAppService,
 		IEmployeeAuthorizationService authorizationService,
-		ICurrentEmployeeAppService currentEmployeeAppService)
+		ICurrentEmployeeProfileAppService currentEmployeeProfileAppService)
 	{
 		_searchAppService = searchAppService;
 		_personalInfoAppService = personalInfoAppService;
 		_authorizationService = authorizationService;
-		_currentEmployeeAppService = currentEmployeeAppService;
+		_currentEmployeeProfileAppService = currentEmployeeProfileAppService;
 	}
 
 	/// <summary>
@@ -88,7 +88,7 @@ public class EmployeesController : AbpControllerBase
 			throw new EntityNotFoundException(typeof(EmployeeDetails), Guid.Empty);
 		}
 
-		var employee = await _currentEmployeeAppService.GetCurrentAsync();
+		var employee = await _currentEmployeeProfileAppService.GetCurrentAsync();
 		return MapToEmployeeDetails(employee);
 	}
 

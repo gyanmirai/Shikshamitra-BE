@@ -20,10 +20,11 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 
 	public async Task<bool> IsPolicyNameExistsAsync(Guid academicYearId, string policyName, Guid? excludeId = null)
 	{
+		var normalizedPolicyName = policyName.ToLowerInvariant();
 		var dbSet = await GetDbSetAsync();
 		var query = dbSet.Where(x =>
 			x.AcademicYearId == academicYearId &&
-			x.PolicyName.ToLower() == policyName.ToLower());
+			x.PolicyName.ToLower() == normalizedPolicyName);
 
 		if (excludeId.HasValue)
 		{
@@ -35,9 +36,10 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 
 	public async Task<LeavePolicy?> FindByPolicyNameAsync(Guid academicYearId, string policyName)
 	{
+		var normalizedPolicyName = policyName.ToLowerInvariant();
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
-			.Where(x => x.AcademicYearId == academicYearId && x.PolicyName.ToLower() == policyName.ToLower())
+			.Where(x => x.AcademicYearId == academicYearId && x.PolicyName.ToLower() == normalizedPolicyName)
 			.Include(x => x.LeaveType)
 			.FirstOrDefaultAsync();
 	}

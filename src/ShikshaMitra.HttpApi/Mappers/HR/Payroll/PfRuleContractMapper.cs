@@ -31,12 +31,12 @@ public static class PfRuleContractMapper
         };
     }
 
-    public static PfRuleUpdateResponseDto ToUpdateResponse(ProvidentFundDto dto)
+    public static PfRuleUpdateResponseDto ToUpdateResponse(ProvidentFundDto dto, DateTime fallbackUpdatedAt)
     {
         return new PfRuleUpdateResponseDto
         {
             Id = dto.Id,
-            UpdatedAt = dto.LastModificationTime ?? DateTime.UtcNow
+            UpdatedAt = dto.LastModificationTime ?? fallbackUpdatedAt
         };
     }
 

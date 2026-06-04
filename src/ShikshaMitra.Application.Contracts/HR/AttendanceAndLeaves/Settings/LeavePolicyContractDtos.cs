@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+using FluentValidation;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
@@ -36,44 +36,71 @@ public class LeavePolicyItem
 
 public class LeavePolicyCreateRequest
 {
-	[Required]
-	[MinLength(1)]
-	[StringLength(LeavePolicyConsts.MaxPolicyNameLength)]
 	public string PolicyTitle { get; set; } = string.Empty;
 
-	[Required]
 	public Guid LeaveType { get; set; }
 
-	[Required]
-	[RegularExpression("^(Monthly|Yearly)$", ErrorMessage = "AccrualPolicyType must be Monthly or Yearly")]
 	public string AccrualPolicyType { get; set; } = "Monthly";
 
-	[Required]
-	[Range(LeavePolicyConsts.MinLeaveCount, LeavePolicyConsts.MaxLeaveCount)]
 	public int LeaveCount { get; set; }
 
-	[Required]
-	[RegularExpression("^(Paid|Unpaid)$", ErrorMessage = "PaidType must be 'Paid' or 'Unpaid'")]
 	public string PaidType { get; set; } = "Paid";
 
-	[Required]
 	public bool CarryForward { get; set; }
 
-	[Required]
 	public bool EncashmentAllowed { get; set; }
 
-	[RegularExpression("^(next_payroll|end_of_year)$", ErrorMessage = "EncashmentTiming must be next_payroll or end_of_year")]
 	public string? EncashmentTiming { get; set; }
 
-	[Required]
 	public bool RequiresApproval { get; set; }
 
-	[StringLength(LeavePolicyConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
 }
 
 public class LeavePolicyUpdateRequest : LeavePolicyCreateRequest
 {
+}
+
+public class LeavePolicyCreateRequestValidator : AbstractValidator<LeavePolicyCreateRequest>
+{
+	public LeavePolicyCreateRequestValidator()
+	{
+		RuleFor(x => x.PolicyTitle)
+			.NotEmpty()
+			.MaximumLength(LeavePolicyConsts.MaxPolicyNameLength);
+
+		RuleFor(x => x.LeaveType)
+			.NotEmpty();
+
+		RuleFor(x => x.AccrualPolicyType)
+			.NotEmpty()
+			.Matches("^(Monthly|Yearly)$")
+			.WithMessage("AccrualPolicyType must be Monthly or Yearly");
+
+		RuleFor(x => x.LeaveCount)
+			.InclusiveBetween(LeavePolicyConsts.MinLeaveCount, LeavePolicyConsts.MaxLeaveCount);
+
+		RuleFor(x => x.PaidType)
+			.NotEmpty()
+			.Matches("^(Paid|Unpaid)$")
+			.WithMessage("PaidType must be 'Paid' or 'Unpaid'");
+
+		RuleFor(x => x.EncashmentTiming)
+			.Matches("^(next_payroll|end_of_year)$")
+			.WithMessage("EncashmentTiming must be next_payroll or end_of_year")
+			.When(x => x.EncashmentTiming is not null);
+
+		RuleFor(x => x.Description)
+			.MaximumLength(LeavePolicyConsts.MaxDescriptionLength);
+	}
+}
+
+public class LeavePolicyUpdateRequestValidator : AbstractValidator<LeavePolicyUpdateRequest>
+{
+	public LeavePolicyUpdateRequestValidator()
+	{
+		Include(new LeavePolicyCreateRequestValidator());
+	}
 }
 
 public class LeavePolicyResponse

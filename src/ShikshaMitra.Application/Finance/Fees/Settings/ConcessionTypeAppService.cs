@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
@@ -18,12 +19,22 @@ using Volo.Abp.Guids;
 public class ConcessionTypeAppService(
 	IRepository<ConcessionType, Guid> concessionTypeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
+	IRepository<ConcessionRequest, Guid> concessionRequestRepository,
 	IGuidGenerator guidGenerator
 ) : ApplicationService, IConcessionTypeAppService
 {
 	public async Task CreateAsync(Guid academicYearId, ConcessionTypeRequest concessionTypeRequest)
 	{
-		var academicYear = await academicYearRepository.GetAsync(academicYearId) ?? throw new UserFriendlyException("Academic Year not found.");
+		var academicYear = await academicYearRepository.GetAsync(academicYearId) ?? throw new BusinessException("Academic Year not found.");
+
+		// Check for duplicate name within the same academic year
+		var existingConcessionType = await concessionTypeRepository.AnyAsync(x => x.AcademicYearId == academicYearId && x.Name == concessionTypeRequest.Name);
+
+		if (existingConcessionType)
+		{
+			throw new BusinessException("A Concession Type with the same name already exists for this Academic Year.");
+		}
+
 		var concessionType = new ConcessionType(
 			 guidGenerator.Create(),
 			 CurrentTenant.Id,
@@ -70,11 +81,7 @@ public class ConcessionTypeAppService(
 
 	public async Task<ConcessionTypeResponse> GetAsync(Guid id)
 	{
-		var concessionType = await concessionTypeRepository.GetAsync(id);
-		if (concessionType == null)
-		{
-			throw new UserFriendlyException("Concession Type not found.");
-		}
+		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new BusinessException("Concession Type not found.");
 		return new ConcessionTypeResponse
 		{
 			Id = concessionType.Id,
@@ -92,15 +99,35 @@ public class ConcessionTypeAppService(
 
 	public async Task UpdateAsync(Guid id, ConcessionTypeRequest input)
 	{
-		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new UserFriendlyException("Concession Type not found.");
+		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new BusinessException("Concession Type not found.");
+
 		concessionType.Update(input.Name, input.Description);
+
+		// Check for duplicate name within the same academic year, excluding the current record
+		var existingConcessionType = await concessionTypeRepository.AnyAsync(x => x.AcademicYearId == concessionType.AcademicYearId && x.Name == input.Name && x.Id != id);
+
+		if (existingConcessionType)
+		{
+			throw new BusinessException("A Concession Type with the same name already exists for this Academic Year.");
+		}
+
 		concessionType.ReplaceDocuments(input.Documents.Select(d => (d.DocumentName, d.DocumentSize, d.AcceptedFormat)).ToList());
+
 		await concessionTypeRepository.UpdateAsync(concessionType);
 	}
 
 	public async Task DeleteAsync(Guid id)
 	{
-		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new UserFriendlyException("Concession Type not found.");
+		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new BusinessException("Concession Type not found.");
+
+		// Check if the concession type is associated with any concessions before deleting
+		var hasAssociatedConcessions = await concessionRequestRepository.AnyAsync(x => x.ConcessionTypeId == id);
+
+		if (hasAssociatedConcessions)
+		{
+			throw new BusinessException("Cannot delete this Concession Type as it is associated with existing Concession Requests.");
+		}
+
 		await concessionTypeRepository.DeleteAsync(concessionType);
 	}
 }

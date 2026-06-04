@@ -106,13 +106,13 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			if (componentType == DeductionComponentType.Fixed && !amount.HasValue)
 			{
-				throw new BusinessException("ShikshaMitra:InvalidAmount")
+				throw new BusinessException(HRErrorCodes.PayrollComponentInvalidAmount)
 					.WithData("message", "Amount is required when deductionType is FIXED and calculationType is AMOUNT.");
 			}
 
 			if (amount is < 0)
 			{
-				throw new BusinessException("ShikshaMitra:InvalidAmount")
+				throw new BusinessException(HRErrorCodes.PayrollComponentInvalidAmount)
 					.WithData("message", "Amount must be a non-negative number.");
 			}
 
@@ -124,13 +124,13 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			if (!percentage.HasValue || percentage.Value < 0 || percentage.Value > 100)
 			{
-				throw new BusinessException("ShikshaMitra:InvalidPercentage")
+				throw new BusinessException(HRErrorCodes.PayrollComponentInvalidPercentage)
 					.WithData("message", "Percentage must be between 0 and 100.");
 			}
 
 			if (!selectedDeductionComponentId.HasValue)
 			{
-				throw new BusinessException("ShikshaMitra:MissingSelectedComponent")
+				throw new BusinessException(HRErrorCodes.PayrollComponentMissingSelectedComponent)
 					.WithData("message", "selectedDeductionComponentId is required when calculationType is PERCENTAGE.");
 			}
 

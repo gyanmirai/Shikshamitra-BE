@@ -7,8 +7,8 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 public class ProvidentFund : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get;  private set; }
-	public string Code { get; private set; }
-	public string Name { get; private set; }
+	public string Code { get; private set; } = string.Empty;
+	public string Name { get; private set; } = string.Empty;
 	public float EmployeePercentage { get; private set; }
 	public float EmployerPercentage { get; private set; }
 

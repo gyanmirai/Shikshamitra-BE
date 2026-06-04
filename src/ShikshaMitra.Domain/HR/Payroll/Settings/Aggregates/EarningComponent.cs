@@ -105,7 +105,7 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			if (!amount.HasValue || amount.Value < 0)
 			{
-				throw new BusinessException("ShikshaMitra:InvalidAmount")
+				throw new BusinessException(HRErrorCodes.PayrollComponentInvalidAmount)
 					.WithData("message", "Amount must be a non-negative number when calculationType is AMOUNT.");
 			}
 
@@ -117,13 +117,13 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			if (!percentage.HasValue || percentage.Value < 0 || percentage.Value > 100)
 			{
-				throw new BusinessException("ShikshaMitra:InvalidPercentage")
+				throw new BusinessException(HRErrorCodes.PayrollComponentInvalidPercentage)
 					.WithData("message", "Percentage must be between 0 and 100.");
 			}
 
 			if (!selectedEarningComponentId.HasValue)
 			{
-				throw new BusinessException("ShikshaMitra:MissingSelectedComponent")
+				throw new BusinessException(HRErrorCodes.PayrollComponentMissingSelectedComponent)
 					.WithData("message", "selectedEarningComponentId is required when calculationType is PERCENTAGE.");
 			}
 

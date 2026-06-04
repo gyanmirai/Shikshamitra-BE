@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+using FluentValidation;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
@@ -31,30 +31,57 @@ public class LeaveTypeResponse
 
 public class LeaveTypeCreateRequest
 {
-	[Required]
-	[MinLength(1)]
-	[StringLength(LeaveTypeConsts.MaxTypeLength)]
 	public string Name { get; set; } = string.Empty;
 
-	[StringLength(LeaveTypeConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
 
-	[Required]
-	[RegularExpression(@"^#([A-Fa-f0-9]{6})$", ErrorMessage = "Color must be in HEX format (#RRGGBB)")]
 	public string Color { get; set; } = string.Empty;
 }
 
 public class LeaveTypeUpdateRequest
 {
-	[MinLength(1)]
-	[StringLength(LeaveTypeConsts.MaxTypeLength)]
 	public string? Name { get; set; }
 
-	[StringLength(LeaveTypeConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
 
-	[RegularExpression(@"^#([A-Fa-f0-9]{6})$", ErrorMessage = "Color must be in HEX format (#RRGGBB)")]
 	public string? Color { get; set; }
+}
+
+public class LeaveTypeCreateRequestValidator : AbstractValidator<LeaveTypeCreateRequest>
+{
+	public LeaveTypeCreateRequestValidator()
+	{
+		RuleFor(x => x.Name)
+			.NotEmpty()
+			.MaximumLength(LeaveTypeConsts.MaxTypeLength);
+
+		RuleFor(x => x.Description)
+			.MaximumLength(LeaveTypeConsts.MaxDescriptionLength);
+
+		RuleFor(x => x.Color)
+			.NotEmpty()
+			.Matches(@"^#([A-Fa-f0-9]{6})$")
+			.WithMessage("Color must be in HEX format (#RRGGBB)");
+	}
+}
+
+public class LeaveTypeUpdateRequestValidator : AbstractValidator<LeaveTypeUpdateRequest>
+{
+	public LeaveTypeUpdateRequestValidator()
+	{
+		RuleFor(x => x.Name)
+			.NotEmpty()
+			.MaximumLength(LeaveTypeConsts.MaxTypeLength)
+			.When(x => x.Name is not null);
+
+		RuleFor(x => x.Description)
+			.MaximumLength(LeaveTypeConsts.MaxDescriptionLength);
+
+		RuleFor(x => x.Color)
+			.Matches(@"^#([A-Fa-f0-9]{6})$")
+			.WithMessage("Color must be in HEX format (#RRGGBB)")
+			.When(x => x.Color is not null);
+	}
 }
 
 public class LeaveTypeDeleteResponse

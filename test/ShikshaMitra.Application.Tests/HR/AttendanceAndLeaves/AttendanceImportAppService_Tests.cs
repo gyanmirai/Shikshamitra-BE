@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,11 +12,13 @@ using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using ShikshaMitra.HR.AttendanceAndLeaves.Import;
+using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
@@ -251,6 +254,117 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	}
 
 	[Fact]
+	public async Task Should_Auto_Mark_Half_Day_When_Late_Arrival_Exceeds_Grace_Time()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("latehalfday", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.DeductHalfDay);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:35 AM,05:30 PM,,Late beyond grace,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("late-half-day.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.HalfDayLeave.ToString());
+		row.Warnings.ShouldContain(x => x.Contains("Auto-marked Half Day", StringComparison.OrdinalIgnoreCase));
+
+		await _attendanceImportAppService.ConfirmAsync(new AttendanceImportConfirmRequestDto
+		{
+			PreviewToken = preview.PreviewToken!
+		});
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var query = await _employeeAttendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x => x.EmployeeId == employee.Id && x.AttendanceDate == attendanceDate);
+			attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.HalfDayLeave);
+		});
+	}
+
+	[Fact]
+	public async Task Take_Attendance_Entry_Writer_Should_Auto_Mark_Half_Day_When_Late_Arrival_Exceeds_Grace_Time()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("manualsave", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.DeductHalfDay);
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var writer = GetRequiredService<TakeAttendanceEntryWriter>();
+			await writer.SaveEntryAsync(
+				new ParsedTakeAttendanceEntry(
+					new TakeAttendanceSaveEntryDto
+					{
+						EmployeeId = employee.Id,
+						StatusWire = "PRESENT",
+						InTime = "08:35:00",
+						OutTime = "17:30:00",
+						Remarks = "Late beyond grace from mark attendance"
+					},
+					EmployeeAttendanceStatusType.Present),
+				attendanceDate,
+				new UserScopeContext { IsAdmin = true, UserId = _guidGenerator.Create(), TenantId = _currentTenant.Id },
+				new Dictionary<Guid, Guid?>());
+		});
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var query = await _employeeAttendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x => x.EmployeeId == employee.Id && x.AttendanceDate == attendanceDate);
+			attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.HalfDayLeave);
+		});
+	}
+
+	[Fact]
+	public async Task Should_Keep_Present_When_Late_Arrival_Equals_Grace_Time()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("lateboundary", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.DeductHalfDay);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:30 AM,05:30 PM,,Late at grace,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("late-boundary.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.Present.ToString());
+		row.Warnings.ShouldNotContain(x => x.Contains("late arrival", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Should_Keep_Present_When_Late_Penalty_Is_None()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("latenopenalty", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.None);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:35 AM,05:30 PM,,Late no penalty,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("late-no-penalty.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.Present.ToString());
+	}
+
+	[Fact]
 	public async Task Should_Return_Row_Error_When_Employee_Has_No_Shift_For_Worked_Time_Evaluation()
 	{
 		var employee = await CreateEmployeeAsync("noshift");
@@ -349,10 +463,65 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		return shift.Id;
 	}
 
+	private async Task<Guid> EnsureEightToFiveShiftExistsAsync()
+	{
+		var existing = (await _shiftRepository.GetListAsync())
+			.FirstOrDefault(x => x.ShiftName == "Attendance Import Eight To Five Test Shift");
+		if (existing != null)
+		{
+			return existing.Id;
+		}
+
+		var shift = new ShiftManagement
+		{
+			ShiftName = "Attendance Import Eight To Five Test Shift",
+			StartTime = new TimeOnly(8, 0),
+			EndTime = new TimeOnly(17, 30)
+		};
+
+		await _shiftRepository.InsertAsync(shift, autoSave: true);
+		return shift.Id;
+	}
+
 	private async Task<DateOnly> GetCoveredAttendanceDateAsync(int monthOffset = 0)
 	{
 		var academicYear = await EnsurePolicyBaselineAsync();
 		return DateOnly.FromDateTime(academicYear.StartDate.AddMonths(monthOffset).AddDays(14));
+	}
+
+	private async Task SetDefaultAttendancePolicyRulesAsync(
+		int graceTime,
+		AttendancePenaltyType penaltyType)
+	{
+		await EnsurePolicyBaselineAsync();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var policy = (await _attendancePolicyRepository.GetListAsync()).Single(x => x.IsDefault);
+			policy.Update(
+				policy.WorkCalendarPolicyId,
+				policy.Name,
+				policy.Status,
+				policy.IsDefault,
+				policy.CaptureMode,
+				policy.FullDayThresholdPercentage,
+				policy.HalfDayThresholdPercentage,
+				policy.AbsentThresholdPercentage,
+				policy.MissingPunchBehavior,
+				policy.ManualCorrectionAllowed,
+				graceTime,
+				policy.MaxLateAllowedPerMonth,
+				penaltyType,
+				policy.PenaltyCountThreshold,
+				policy.EarlyExitEnabled,
+				policy.EarlyExitGraceTime,
+				policy.OvertimeEnabled,
+				policy.OvertimeRate,
+				policy.MinOvertimeMinutes,
+				policy.HolidayWorkBehavior,
+				policy.SandwichRuleEnabled,
+				policy.PayrollPreviewEnabled);
+			await _attendancePolicyRepository.UpdateAsync(policy, autoSave: true);
+		});
 	}
 
 	private async Task<AcademicYear> EnsurePolicyBaselineAsync()
@@ -415,24 +584,25 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 			calendar.Id,
 			"Attendance Import Test Attendance",
 			HrPolicyStatus.Active,
-			isDefault: true,
-			fullDayThresholdPercentage: 75,
-			halfDayThresholdPercentage: 50,
-			absentThresholdPercentage: 0,
+			true,
+			AttendanceCaptureMode.Integrated,
+			75,
+			50,
+			0,
 			AttendanceMissingPunchBehavior.RequiresReview,
-			manualCorrectionAllowed: true,
-			graceTime: 0,
-			maxLateAllowedPerMonth: 0,
+			true,
+			0,
+			0,
 			AttendancePenaltyType.None,
-			penaltyCountThreshold: 0,
-			earlyExitEnabled: false,
-			earlyExitGraceTime: 0,
-			overtimeEnabled: false,
-			overtimeRate: null,
-			minOvertimeMinutes: null,
+			0,
+			false,
+			0,
+			false,
+			null,
+			null,
 			AttendanceHolidayWorkBehavior.CompOff,
-			sandwichRuleEnabled: false,
-			payrollPreviewEnabled: true), autoSave: true);
+			false,
+			true), autoSave: true);
 
 		return academicYear;
 	}

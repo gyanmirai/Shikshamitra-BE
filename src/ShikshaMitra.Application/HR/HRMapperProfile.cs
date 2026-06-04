@@ -59,7 +59,11 @@ public class HRMapperProfile : Profile
 		CreateMap<Holiday, Application.Contracts.HR.Calendar.Holidays.HolidayDto>();
 		CreateMap<HolidayType, ShikshaMitra.HR.Calendar.HolidayTypeDto>();
 
-		CreateMap<EmployeeAdditionalDetails, Employees.AdditionalDetails.EmployeeAdditionalDetailsDto>();
+		CreateMap<EmployeeAdditionalDetails, Employees.AdditionalDetails.EmployeeAdditionalDetailsDto>()
+			.ForMember(dest => dest.CreatedAt,
+				opt => opt.MapFrom(src => src.CreationTime))
+			.ForMember(dest => dest.LastModifiedAt,
+				opt => opt.MapFrom(src => src.LastModificationTime ?? src.CreationTime));
 
 		CreateMap<SalarySlip, SalarySlipDto>();
 		CreateMap<SalarySlipLineItem, SalarySlipLineItemDto>();

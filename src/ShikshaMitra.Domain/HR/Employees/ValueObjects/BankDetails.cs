@@ -19,10 +19,10 @@ public class BankDetails(
 
 	protected override IEnumerable<object> GetAtomicValues()
 	{
-		yield return BankName;
-		yield return BranchName;
-		yield return AccountHolderName;
-		yield return AccountNumber;
-		yield return IfscCode;
+		yield return BankName ?? string.Empty;
+		yield return BranchName ?? string.Empty;
+		yield return AccountHolderName ?? string.Empty;
+		yield return AccountNumber ?? string.Empty;
+		yield return IfscCode ?? string.Empty;
 	}
 }

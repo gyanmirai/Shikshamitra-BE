@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.HR.Employees.Payroll;
 
@@ -50,16 +49,12 @@ public class SalaryDetailsContract
 
 public class EmployeePayrollPolicyOverrideContract
 {
-	[Required]
 	public Guid AcademicYearId { get; set; }
 
-	[Required]
 	public Guid PayrollPolicyId { get; set; }
 
-	[Required]
 	public Guid AttendancePolicyId { get; set; }
 
-	[Required]
 	public DateTime EffectiveFrom { get; set; }
 
 	public DateTime? EffectiveTo { get; set; }
@@ -77,7 +72,6 @@ public class SalaryComponentContract
 
 	public Guid? ComponentId { get; set; }
 
-	[Required]
 	public string Name { get; set; } = string.Empty;
 
 	public decimal? Amount { get; set; }

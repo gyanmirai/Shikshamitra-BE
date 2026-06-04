@@ -2,17 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
-using Volo.Abp.BackgroundJobs;
-using Volo.Abp.Domain.Repositories;
-using Volo.Abp.Guids;
-using Volo.Abp.MultiTenancy;
-using Volo.Abp.BlobStoring;
 
 namespace ShikshaMitra.HR.Reports;
 
@@ -20,283 +12,54 @@ namespace ShikshaMitra.HR.Reports;
 [Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.View)]
 public class HrReportAppService(
 	HrReportGenerator reportGenerator,
-	IRepository<HrReportExportJob, Guid> exportJobRepository,
-	IRepository<HrReportTemplate, Guid> templateRepository,
-	IBackgroundJobManager backgroundJobManager,
-	IBlobContainer blobContainer,
-	IGuidGenerator guidGenerator) : ApplicationService, IHrReportAppService
+	HrReportTemplateService templateService,
+	HrReportExportService exportService) : ApplicationService, IHrReportAppService
 {
-	public Task<HrReportSourcesDto> GetSourcesAsync()
-	{
-		return reportGenerator.GetSourcesAsync();
-	}
+	public Task<HrReportSourcesDto> GetSourcesAsync() =>
+		reportGenerator.GetSourcesAsync();
 
 	public async Task<HrReportOptionsDto> GetOptionsAsync()
 	{
-		var userId = CurrentUser.Id ?? throw new BusinessException("HR:Reports:050003");
+		var userId = CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.ReportUserRequired);
 		return await reportGenerator.GetOptionsAsync(userId, CurrentTenant.Id);
 	}
 
-	public async Task<HrReportTemplateListDto> GetTemplatesAsync()
-	{
-		var userId = CurrentUser.Id ?? throw new BusinessException("HR:Reports:050003");
-		var query = await templateRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			query = query.Where(x => x.TenantId == CurrentTenant.Id);
-		}
-
-		var templates = await AsyncExecuter.ToListAsync(
-			query
-				.Where(x =>
-					x.OwnerUserId == userId ||
-					(x.Visibility == HrReportTemplateVisibility.Organization && x.Status == HrReportTemplateStatus.Published))
-				.OrderBy(x => x.Visibility)
-				.ThenBy(x => x.Name));
-
-		return new HrReportTemplateListDto
-		{
-			Items = templates.Select(MapTemplate).ToList()
-		};
-	}
+	public Task<HrReportTemplateListDto> GetTemplatesAsync() =>
+		templateService.GetTemplatesAsync();
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Add)]
-	public async Task<HrReportTemplateDto> CreateTemplateAsync(HrReportTemplateRequestDto input)
-	{
-		var userId = CurrentUser.Id ?? throw new BusinessException("HR:Reports:050003");
-		ValidateTemplateDefinition(input);
-		var template = new HrReportTemplate(
-			guidGenerator.Create(),
-			CurrentTenant.Id,
-			userId,
-			input.Name,
-			input.Description,
-			input.Category,
-			input.DataSource,
-			input.Visibility,
-			input.Status,
-			JsonSerializer.Serialize(input.Definition));
-
-		await templateRepository.InsertAsync(template, autoSave: true);
-		return MapTemplate(template);
-	}
+	public Task<HrReportTemplateDto> CreateTemplateAsync(HrReportTemplateRequestDto input) =>
+		templateService.CreateTemplateAsync(input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Add)]
-	public async Task<HrReportTemplateDto> UpdateTemplateAsync(Guid id, HrReportTemplateRequestDto input)
-	{
-		ValidateTemplateDefinition(input);
-		var template = await GetEditableTemplateAsync(id);
-		template.Update(
-			input.Name,
-			input.Description,
-			input.Category,
-			input.DataSource,
-			input.Visibility,
-			input.Status,
-			JsonSerializer.Serialize(input.Definition));
-
-		await templateRepository.UpdateAsync(template, autoSave: true);
-		return MapTemplate(template);
-	}
+	public Task<HrReportTemplateDto> UpdateTemplateAsync(Guid id, HrReportTemplateRequestDto input) =>
+		templateService.UpdateTemplateAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Add)]
-	public async Task<HrReportTemplateDto> DuplicateTemplateAsync(Guid id)
-	{
-		var userId = CurrentUser.Id ?? throw new BusinessException("HR:Reports:050003");
-		var source = await GetReadableTemplateAsync(id);
-		var clone = source.Clone(guidGenerator.Create(), userId);
-		await templateRepository.InsertAsync(clone, autoSave: true);
-		return MapTemplate(clone);
-	}
+	public Task<HrReportTemplateDto> DuplicateTemplateAsync(Guid id) =>
+		templateService.DuplicateTemplateAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Delete)]
-	public async Task DeleteTemplateAsync(Guid id)
-	{
-		var template = await GetEditableTemplateAsync(id);
-		await templateRepository.DeleteAsync(template, autoSave: true);
-	}
+	public Task DeleteTemplateAsync(Guid id) =>
+		templateService.DeleteTemplateAsync(id);
 
 	public async Task<HrReportPreviewDto> PreviewAsync(HrReportRequestDto input)
 	{
-		var userId = CurrentUser.Id ?? throw new BusinessException("HR:Reports:050003");
+		var userId = CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.ReportUserRequired);
 		return await reportGenerator.GenerateAsync(input, userId, CurrentTenant.Id, exportAllRows: false);
 	}
 
-	public async Task<HrReportExportCreateResponseDto> CreateExportAsync(HrReportRequestDto input)
-	{
-		var userId = CurrentUser.Id ?? throw new BusinessException("HR:Reports:050003");
-		var job = new HrReportExportJob(
-			guidGenerator.Create(),
-			CurrentTenant.Id,
-			userId,
-			input.ReportType,
-			NormalizeFormat(input.Format),
-			JsonSerializer.Serialize(input.Filters ?? new HrReportFilterDto()),
-			Clock.Now.AddDays(7));
+	public Task<HrReportExportCreateResponseDto> CreateExportAsync(HrReportRequestDto input) =>
+		exportService.CreateExportAsync(input);
 
-		await exportJobRepository.InsertAsync(job, autoSave: true);
-		await backgroundJobManager.EnqueueAsync(new HrReportExportJobArgs
-		{
-			JobId = job.Id,
-			TenantId = CurrentTenant.Id,
-			UserId = userId,
-			Request = input
-		});
+	public Task<List<HrReportExportJobDto>> GetExportsAsync() =>
+		exportService.GetExportsAsync();
 
-		return new HrReportExportCreateResponseDto
-		{
-			JobId = job.Id,
-			Status = job.Status
-		};
-	}
+	public Task<HrReportExportJobDto> GetExportAsync(Guid jobId) =>
+		exportService.GetExportAsync(jobId);
 
-	public async Task<List<HrReportExportJobDto>> GetExportsAsync()
-	{
-		var userId = CurrentUser.Id ?? throw new BusinessException("HR:Reports:050003");
-		var query = await exportJobRepository.GetQueryableAsync();
-		if (CurrentTenant.Id.HasValue)
-		{
-			query = query.Where(x => x.TenantId == CurrentTenant.Id);
-		}
-
-		return (await AsyncExecuter.ToListAsync(
-				query
-					.Where(x => x.RequestedByUserId == userId)
-					.OrderByDescending(x => x.CreationTime)
-					.Take(50)))
-			.Select(MapJob)
-			.ToList();
-	}
-
-	public async Task<HrReportExportJobDto> GetExportAsync(Guid jobId)
-	{
-		return MapJob(await GetAuthorizedJobAsync(jobId));
-	}
-
-	public async Task<HrReportDownloadDto> DownloadExportAsync(Guid jobId)
-	{
-		var job = await GetAuthorizedJobAsync(jobId);
-		if (job.Status != HrReportExportStatus.Completed || string.IsNullOrWhiteSpace(job.BlobName))
-		{
-			throw new BusinessException("HR:Reports:050004")
-				.WithData("status", job.Status);
-		}
-
-		await using var stream = await blobContainer.GetAsync(job.BlobName);
-		await using var memory = new MemoryStream();
-		await stream.CopyToAsync(memory);
-		var format = NormalizeFormat(job.Format);
-		return new HrReportDownloadDto
-		{
-			Bytes = memory.ToArray(),
-			ContentType = format == HrReportFormat.Pdf
-				? "application/pdf"
-				: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-			FileName = BuildFileName(job.ReportType, format)
-		};
-	}
-
-	private async Task<HrReportExportJob> GetAuthorizedJobAsync(Guid jobId)
-	{
-		var userId = CurrentUser.Id ?? throw new BusinessException("HR:Reports:050003");
-		var job = await exportJobRepository.GetAsync(jobId);
-		if (job.RequestedByUserId != userId || job.TenantId != CurrentTenant.Id)
-		{
-			throw new BusinessException("HR:Reports:050005");
-		}
-
-		return job;
-	}
-
-	private async Task<HrReportTemplate> GetReadableTemplateAsync(Guid id)
-	{
-		var userId = CurrentUser.Id ?? throw new BusinessException("HR:Reports:050003");
-		var template = await templateRepository.GetAsync(id);
-		if (template.TenantId != CurrentTenant.Id ||
-			(template.OwnerUserId != userId &&
-				!(template.Visibility == HrReportTemplateVisibility.Organization && template.Status == HrReportTemplateStatus.Published)))
-		{
-			throw new BusinessException("HR:Reports:050005");
-		}
-
-		return template;
-	}
-
-	private async Task<HrReportTemplate> GetEditableTemplateAsync(Guid id)
-	{
-		var userId = CurrentUser.Id ?? throw new BusinessException("HR:Reports:050003");
-		var template = await templateRepository.GetAsync(id);
-		if (template.TenantId != CurrentTenant.Id || template.OwnerUserId != userId)
-		{
-			throw new BusinessException("HR:Reports:050005");
-		}
-
-		return template;
-	}
-
-	private static void ValidateTemplateDefinition(HrReportTemplateRequestDto input)
-	{
-		input.Definition.DataSource = string.IsNullOrWhiteSpace(input.Definition.DataSource)
-			? input.DataSource
-			: input.Definition.DataSource;
-		input.Definition.ReportType = string.IsNullOrWhiteSpace(input.Definition.ReportType)
-			? input.Name
-			: input.Definition.ReportType;
-	}
-
-	private static HrReportTemplateDto MapTemplate(HrReportTemplate template)
-	{
-		var definition = JsonSerializer.Deserialize<HrReportRequestDto>(template.DefinitionJson, new JsonSerializerOptions
-		{
-			PropertyNameCaseInsensitive = true
-		}) ?? new HrReportRequestDto { DataSource = template.DataSource, ReportType = template.Name };
-
-		return new HrReportTemplateDto
-		{
-			Id = template.Id,
-			Name = template.Name,
-			Description = template.Description,
-			Category = template.Category,
-			DataSource = template.DataSource,
-			Visibility = template.Visibility,
-			Status = template.Status,
-			OwnerUserId = template.OwnerUserId,
-			Definition = definition,
-			CreationTime = template.CreationTime,
-			LastModificationTime = template.LastModificationTime
-		};
-	}
-
-	private static HrReportExportJobDto MapJob(HrReportExportJob job)
-	{
-		var format = NormalizeFormat(job.Format);
-		return new HrReportExportJobDto
-		{
-			Id = job.Id,
-			ReportType = job.ReportType,
-			Format = format,
-			Status = job.Status,
-			FileName = job.Status == HrReportExportStatus.Completed ? BuildFileName(job.ReportType, format) : null,
-			ErrorMessage = job.ErrorMessage,
-			CreationTime = job.CreationTime,
-			StartedAt = job.StartedAt,
-			CompletedAt = job.CompletedAt,
-			ExpiresAt = job.ExpiresAt
-		};
-	}
-
-	private static string NormalizeFormat(string? format) =>
-		string.Equals(format, HrReportFormat.Pdf, StringComparison.OrdinalIgnoreCase)
-			? HrReportFormat.Pdf
-			: HrReportFormat.Excel;
-
-	private static string BuildFileName(string reportType, string format)
-	{
-		var safeName = string.Join("-", reportType.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries))
-			.Replace(' ', '-')
-			.ToLowerInvariant();
-		return $"{safeName}.{(format == HrReportFormat.Pdf ? "pdf" : "xlsx")}";
-	}
+	public Task<HrReportDownloadDto> DownloadExportAsync(Guid jobId) =>
+		exportService.DownloadExportAsync(jobId);
 }
 
 public class HrReportExportJobArgs

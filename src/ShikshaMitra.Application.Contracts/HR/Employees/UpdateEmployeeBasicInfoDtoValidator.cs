@@ -1,10 +1,12 @@
 using FluentValidation;
+using System;
+using Volo.Abp.Timing;
 
 namespace ShikshaMitra.HR.Employees;
 
 public class UpdateEmployeeBasicInfoDtoValidator : AbstractValidator<UpdateEmployeeBasicInfoDto>
 {
-	public UpdateEmployeeBasicInfoDtoValidator()
+	public UpdateEmployeeBasicInfoDtoValidator(IClock clock)
 	{
 		RuleFor(x => x.FirstName).MaximumLength(256);
 		RuleFor(x => x.LastName).MaximumLength(256);
@@ -13,6 +15,16 @@ public class UpdateEmployeeBasicInfoDtoValidator : AbstractValidator<UpdateEmplo
 		RuleFor(x => x.FamilyCast).MaximumLength(128);
 		RuleFor(x => x.Religion).MaximumLength(128);
 		RuleFor(x => x.BloodGroup).MaximumLength(20);
+
+		RuleFor(x => x.DateOfBirth)
+			.Must(x => !x.HasValue || x.Value < DateOnly.FromDateTime(clock.Now))
+			.WithMessage("Date of birth cannot be in the future.");
+
+		RuleFor(x => x)
+			.Must(x => !x.DateOfJoining.HasValue ||
+			           !x.DateOfBirth.HasValue ||
+			           CalculateAge(x.DateOfBirth.Value, x.DateOfJoining.Value) >= 18)
+			.WithMessage("Employee must be at least 18 years old at the time of joining.");
 
 		RuleFor(x => x.MobileNo)
 			.MaximumLength(20)
@@ -58,4 +70,15 @@ public class UpdateEmployeeBasicInfoDtoValidator : AbstractValidator<UpdateEmplo
 	private static bool BeValidPan(string? panNo) =>
 		!string.IsNullOrWhiteSpace(panNo) &&
 		System.Text.RegularExpressions.Regex.IsMatch(panNo.Trim().ToUpperInvariant(), @"^[A-Z]{5}[0-9]{4}[A-Z]$");
+
+	private static int CalculateAge(DateOnly dateOfBirth, DateOnly dateOfJoining)
+	{
+		var age = dateOfJoining.Year - dateOfBirth.Year;
+		if (dateOfJoining < dateOfBirth.AddYears(age))
+		{
+			age--;
+		}
+
+		return age;
+	}
 }

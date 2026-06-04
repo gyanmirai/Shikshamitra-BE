@@ -84,7 +84,7 @@ public class EarningComponentManager : DomainService
 	{
 		if (await _earningComponentRepository.IsNameExistsAsync(name, excludeId))
 		{
-			throw new BusinessException("ShikshaMitra:EarningComponentNameAlreadyExists")
+			throw new BusinessException(HRErrorCodes.EarningComponentNameAlreadyExists)
 				.WithData("name", name);
 		}
 	}

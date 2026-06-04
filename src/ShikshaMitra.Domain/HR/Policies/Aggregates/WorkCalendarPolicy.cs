@@ -54,17 +54,17 @@ public class WorkCalendarPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (string.IsNullOrWhiteSpace(name))
 		{
-			throw new BusinessException("ShikshaMitra:WorkCalendarPolicyNameRequired");
+			throw new BusinessException(HRErrorCodes.WorkCalendarPolicyNameRequired);
 		}
 
 		if (status == HrPolicyStatus.Active && !effectiveFrom.HasValue)
 		{
-			throw new BusinessException("ShikshaMitra:PolicyEffectiveFromRequired");
+			throw new BusinessException(HRErrorCodes.PolicyEffectiveFromRequired);
 		}
 
 		if (effectiveFrom.HasValue && effectiveTo.HasValue && effectiveTo.Value.Date < effectiveFrom.Value.Date)
 		{
-			throw new BusinessException("ShikshaMitra:PolicyEffectiveRangeInvalid");
+			throw new BusinessException(HRErrorCodes.PolicyEffectiveRangeInvalid);
 		}
 
 		Name = name.Trim();
@@ -113,7 +113,7 @@ public class WorkCalendarPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		if (normalized.Any(x => x is < 0 or > 6))
 		{
-			throw new BusinessException("ShikshaMitra:InvalidCustomWeeklyOff");
+			throw new BusinessException(HRErrorCodes.InvalidCustomWeeklyOff);
 		}
 
 		return JsonSerializer.Serialize(normalized);

@@ -18,7 +18,7 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public int PublicId { get; private set; }
 
 	public Guid EmployeeId { get; private set; }
-	public Guid LeaveTypeId { get; private set; }  // Foreign key to LeavePolicy
+	public Guid LeavePolicyId { get; private set; }
 	public bool HalfDay { get; private set; }
 	public DateTimeOffset StartDate { get; private set; }
 	public DateTimeOffset EndDate { get; private set; }
@@ -95,7 +95,7 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid tenantId,
 		Guid employeeId,
-		Guid leaveTypeId,
+		Guid leavePolicyId,
 		DateTimeOffset startDate,
 		DateTimeOffset endDate,
 		string description,
@@ -105,10 +105,10 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		// Use reflection only in controlled factory method to set private properties
 		var employeeIdProperty = typeof(EmployeeLeave).GetProperty(nameof(EmployeeId));
-		var leaveTypeIdProperty = typeof(EmployeeLeave).GetProperty(nameof(LeaveTypeId));
+		var leavePolicyIdProperty = typeof(EmployeeLeave).GetProperty(nameof(LeavePolicyId));
 
 		employeeIdProperty?.SetValue(leave, employeeId);
-		leaveTypeIdProperty?.SetValue(leave, leaveTypeId);
+		leavePolicyIdProperty?.SetValue(leave, leavePolicyId);
 
 		return leave;
 	}

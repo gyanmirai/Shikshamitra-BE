@@ -84,7 +84,7 @@ public class DeductionComponentManager : DomainService
 	{
 		if (await _deductionComponentRepository.IsNameExistsAsync(name, excludeId))
 		{
-			throw new BusinessException("ShikshaMitra:DeductionComponentNameAlreadyExists")
+			throw new BusinessException(HRErrorCodes.DeductionComponentNameAlreadyExists)
 				.WithData("name", name);
 		}
 	}

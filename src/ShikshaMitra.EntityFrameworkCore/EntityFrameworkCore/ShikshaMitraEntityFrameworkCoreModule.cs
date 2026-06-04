@@ -106,6 +106,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<StaffAttendanceDayLock, EfCoreStaffAttendanceDayLockRepository>();
             options.AddRepository<DueFee, EfCoreDueFeeRepository>();
             options.AddRepository<FeeRefundRequest, EfCoreFeeRefundRepository>();
+            options.AddRepository<ShikshaMitra.Finance.FeeAdjustment.Aggregates.FeeAdjustmentRequest, ShikshaMitra.EntityFrameworkCore.Finance.FeeAdjustment.EfCoreFeeAdjustmentRepository>();
             options.AddRepository<FeePaymentReceipt, EfCoreFeePaymentReceiptRepository>();
         });
 

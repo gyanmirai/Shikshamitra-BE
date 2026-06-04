@@ -45,6 +45,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Finance.Fees.Refund", new SubmoduleInfo(Fees_Refund.All, Fees_Refund.DisplayNames) },
 			{ "Finance.Fees.InvoiceReceipt", new SubmoduleInfo(Fees_InvoiceReceipt.All, Fees_InvoiceReceipt.DisplayNames) },
 			{ "Finance.Fees.Concession", new SubmoduleInfo(Fees_Concession.All, Fees_Concession.DisplayNames) },
+			{ "Finance.Fees.Adjustment", new SubmoduleInfo(Fees_Adjustment.All, Fees_Adjustment.DisplayNames) },
 
 			// Fees Settings submodules
 			{ "Finance.Settings.FeeCategory", new SubmoduleInfo(Fees_Settings_FeeCategory.All, Fees_Settings_FeeCategory.DisplayNames) },
@@ -69,7 +70,6 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Finance.AuditTrail", new SubmoduleInfo(AuditTrail.All, AuditTrail.DisplayNames) },
 			{ "Finance.Auditing", new SubmoduleInfo(Auditing.All, Auditing.DisplayNames) },
 			{ "Finance.Adjustments", new SubmoduleInfo(Adjustments.All, Adjustments.DisplayNames) },
-			{ "Finance.Adjustment", new SubmoduleInfo(Adjustment.All, Adjustment.DisplayNames) }
 		};
 	}
 }

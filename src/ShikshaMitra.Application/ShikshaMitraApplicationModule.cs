@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using ShikshaMitra.Finance.FeeAdjustment;
 using ShikshaMitra.Security.Permissions;
 using Volo.Abp.Account;
 using Volo.Abp.AutoMapper;
@@ -27,6 +29,7 @@ public class ShikshaMitraApplicationModule : AbpModule
 	public override void ConfigureServices(ServiceConfigurationContext context)
 	{
 		context.Services.AddHttpContextAccessor();
+		context.Services.AddSingleton<IAuthorizationHandler, FeeAdjustmentLegacyPermissionAuthorizationHandler>();
 		context.Services.Replace(ServiceDescriptor.Transient<IPermissionAppService, ShikshaMitraPermissionAppService>());
 		context.Services.Replace(ServiceDescriptor.Transient<PermissionAppService, SecureAbpPermissionAppService>());
 

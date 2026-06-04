@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.FeeRefund;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.FeeRefund.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;
@@ -25,6 +26,7 @@ public class FeeRefundAppService(
     IDueFeeRepository dueFeeRepository,
     IRepository<FeeHead, Guid> feeHeadRepository,
     IRepository<Student, Guid> studentRepository,
+    IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
     FeeRefundManager feeRefundManager,
     ICurrentUser currentUser,
     IUnitOfWorkManager unitOfWorkManager
@@ -81,7 +83,22 @@ public class FeeRefundAppService(
                 AcademicYearId = academicYearId,
             };
 
-        var feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
+		var student = await studentRepository.GetAsync(studentId);
+
+		var feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
+
+		if (student.FeeStructureId.HasValue)
+		{
+			var refundableFeeHeadIds = (await feeStructureDetailRepository.GetListAsync(
+					fsd => fsd.FeeStructureId == student.FeeStructureId.Value
+						   && feeHeadIds.Contains(fsd.FeeHeadId)
+						   && fsd.IsRefundable))
+				.Select(fsd => fsd.FeeHeadId)
+				.ToHashSet();
+
+			dueFees = dueFees.Where(df => refundableFeeHeadIds.Contains(df.FeeHeadId)).ToList();
+			feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
+		}
         var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
         var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
 

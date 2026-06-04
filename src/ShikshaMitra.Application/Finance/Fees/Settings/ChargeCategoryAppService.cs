@@ -1,30 +1,34 @@
 ﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Settings.ChargeCategories;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
-using ShikshaMitra.Finance.Setting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
-using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
+
 [RemoteService(false)]
-public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppService
+public class ChargeCategoryAppService(
+	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
+	IRepository<Charge, Guid> chargeRepository
+) : ApplicationService, IChargeCategoryAppService
 {
-    private readonly IRepository<ChargeCategory, Guid> _chargeCategoryRepository;
-
-    public ChargeCategoryAppService(IRepository<ChargeCategory, Guid> chargeCategoryRepository)
-    {
-        _chargeCategoryRepository = chargeCategoryRepository;
-    }
-
     public async Task<ChargeCategoryResponse> CreateAsync(Guid academicYearId, CreateChargeCategoryRequest input)
     {
-        var chargeCategory = new ChargeCategory(
+		// Check for duplicate name within the same academic year
+		var existingCategory = await chargeCategoryRepository.AnyAsync(x => x.AcademicYearId == academicYearId && x.Name == input.Name);
+
+		if (existingCategory)
+		{
+			throw new BusinessException("A charge category with the same name already exists for this academic year.");
+		}
+
+		var chargeCategory = new ChargeCategory(
             GuidGenerator.Create(),
 			CurrentTenant.Id,
 			academicYearId,
@@ -33,14 +37,14 @@ public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppSe
             input.Description
         );
 
-        await _chargeCategoryRepository.InsertAsync(chargeCategory);
+        await chargeCategoryRepository.InsertAsync(chargeCategory);
 
         return ObjectMapper.Map<ChargeCategory, ChargeCategoryResponse>(chargeCategory);
     }
 
     public async Task<PaginatedChargeCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
     {
-        var query = await _chargeCategoryRepository.GetQueryableAsync();
+        var query = await chargeCategoryRepository.GetQueryableAsync();
 
         query = query.Where(x => x.AcademicYearId == academicYearId);
 
@@ -72,13 +76,13 @@ public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppSe
 
     public async Task<ChargeCategoryResponse> GetAsync(Guid id)
     {
-        var chargeCategory = await _chargeCategoryRepository.GetAsync(id);
+        var chargeCategory = await chargeCategoryRepository.GetAsync(id);
         return ObjectMapper.Map<ChargeCategory, ChargeCategoryResponse>(chargeCategory);
     }
 
     public async Task<ChargeCategoryResponse> UpdateAsync(Guid id, UpdateChargeCategoryRequest input)
     {
-        var chargeCategory = await _chargeCategoryRepository.GetAsync(id);
+        var chargeCategory = await chargeCategoryRepository.GetAsync(id);
 
         chargeCategory.Name = input.Name;
         if (input.IsApprovalRequired.HasValue)
@@ -87,13 +91,28 @@ public class ChargeCategoryAppService : ApplicationService, IChargeCategoryAppSe
         }
         chargeCategory.Description = input.Description;
 
-        await _chargeCategoryRepository.UpdateAsync(chargeCategory);
+		// validate for duplicate name within the same academic year
+		var existingCategory = await chargeCategoryRepository.AnyAsync(x => x.AcademicYearId == chargeCategory.AcademicYearId && x.Name == input.Name && x.Id != id);
+
+		if (existingCategory)
+		{
+			throw new BusinessException("A charge category with the same name already exists for this academic year.");
+		}
+
+		await chargeCategoryRepository.UpdateAsync(chargeCategory);
 
         return ObjectMapper.Map<ChargeCategory, ChargeCategoryResponse>(chargeCategory);
     }
 
     public async Task DeleteAsync(Guid id)
     {
-        await _chargeCategoryRepository.DeleteAsync(id);
+		var existingCharge = await chargeRepository.AnyAsync(x => x.ChargeCategoryId == id);
+
+		if (existingCharge)
+		{
+			throw new BusinessException("Cannot delete charge category as it is being used in existing charges.");
+		}
+
+		await chargeCategoryRepository.DeleteAsync(id);
     }
 }

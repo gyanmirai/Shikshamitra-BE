@@ -16,7 +16,7 @@ public enum FeeCollectionExportFormat
 
 /// <summary>
 /// Query parameters for the fee-collection export endpoint.
-/// Mirrors the filters of <see cref="GetFeeCollectionSummaryInputV2"/> without
+/// Mirrors the filters of <see cref="GetFeeCollectionSummaryInput"/> without
 /// pagination — the export always returns all matching rows.
 /// </summary>
 public class FeeCollectionExportRequestDto

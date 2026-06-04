@@ -7,7 +7,7 @@ namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 /// Single student row in the V2 fee-collection summary list.
 /// All monetary values use <c>double</c> consistent with the V1 convention.
 /// </summary>
-public class FeeCollectionSummaryItemDtoV2
+public class FeeCollectionSummaryItemDto
 {
 	/// <summary>Unique identifier of the student.</summary>
 	public Guid StudentId { get; set; }

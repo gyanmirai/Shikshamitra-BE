@@ -10,7 +10,7 @@ namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 /// Uses ABP standard <see cref="PagedAndSortedResultRequestDto"/> for
 /// skip-count pagination and server-side sorting.
 /// </summary>
-public class GetFeeCollectionSummaryInputV2 : PagedAndSortedResultRequestDto
+public class GetFeeCollectionSummaryInput : PagedAndSortedResultRequestDto
 {
 	/// <summary>Maximum page size cap.</summary>
 	public const int MaxPageSize = 100;

@@ -12,24 +12,8 @@ using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
-/// <summary>
-/// Domain manager responsible for generating <see cref="DueFee"/> records when a fee
-/// structure is assigned to a student. This is a one-time, idempotent operation per student.
-/// </summary>
 public class DueFeeManager(IDueFeeRepository dueFeeRepository) : DomainService
 {
-	/// <summary>
-	/// Generates the full set of <see cref="DueFee"/> records for a student based on
-	/// the fee heads defined in the assigned <paramref name="feeStructure"/>.
-	/// </summary>
-	/// <remarks>
-	/// <list type="bullet">
-	///   <item>Optional fee heads are included only when their id is present in <paramref name="selectedOptionalFeeHeadIds"/>.</item>
-	///   <item>One-time fees produce a single record — for the <c>PayableMonth/Year</c> on the detail if set, otherwise the first month of the academic year.</item>
-	///   <item>Recurring fees produce one record per month in the academic year range, ignoring <c>PayableMonth/Year</c>.</item>
-	/// </list>
-	/// The returned list is NOT persisted here — the application layer owns the Unit of Work.
-	/// </remarks>
 	public async Task<IReadOnlyList<DueFee>> GenerateForStudentAsync(
 		Guid studentId,
 		FeeStructure feeStructure,
@@ -68,8 +52,16 @@ public class DueFeeManager(IDueFeeRepository dueFeeRepository) : DomainService
 			{
 				// Recurring fee: one DueFee per month in the academic year — PayableMonth/Year
 				// on the detail is intentionally ignored for recurring fees.
-				foreach (var (month, year) in monthRange)
-					dueFees.Add(CreateDueFee(studentId, detail, month, year, detail.Amount/monthRange.Count()));
+				var months = monthRange.ToList();
+				var count = months.Count;
+				var floorAmount = Math.Floor(detail.Amount / count);
+				var remainder = (int)(detail.Amount - floorAmount * count);
+
+				for (int i = 0; i < count; i++)
+				{
+					var feeAmount = i < remainder ? floorAmount + 1 : floorAmount;
+					dueFees.Add(CreateDueFee(studentId, detail, months[i].Month, months[i].Year, feeAmount));
+				}
 			}
 		}
 

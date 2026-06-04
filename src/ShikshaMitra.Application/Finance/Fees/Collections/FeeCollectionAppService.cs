@@ -45,7 +45,7 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 
 [Authorize(ShikshaMitraSubModulePermissions.FeeCollection)]
 [RemoteService(false)]
-public class FeeCollectionAppServiceV2(
+public class FeeCollectionAppService(
 	IReadOnlyRepository<Student, Guid> studentRepository,
 	IReadOnlyRepository<EducationBoard, Guid> educationBoardRepository,
 	IReadOnlyRepository<EducationMedium, Guid> educationMediumRepository,
@@ -73,7 +73,7 @@ public class FeeCollectionAppServiceV2(
 	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
 	IAsyncQueryableExecuter asyncExecuter,
 	IClock clock
-) : ApplicationService, IFeeCollectionAppServiceV2
+) : ApplicationService, IFeeCollectionAppService
 {
 	private static void EnsureNotEmpty(Guid value, string fieldName)
 	{
@@ -86,15 +86,15 @@ public class FeeCollectionAppServiceV2(
 			]);
 	}
 
-	private static void EnsureSummaryContextIsValid(GetFeeCollectionSummaryInputV2 input)
+	private static void EnsureSummaryContextIsValid(GetFeeCollectionSummaryInput input)
 	{
 		EnsureNotEmpty(input.AcademicYearId, nameof(input.AcademicYearId));
 		EnsureNotEmpty(input.BoardId, nameof(input.BoardId));
 		EnsureNotEmpty(input.EducationMediumId, nameof(input.EducationMediumId));
 	}
 
-	public async Task<PagedResultDto<FeeCollectionSummaryItemDtoV2>> GetSummaryAsync(
-		GetFeeCollectionSummaryInputV2 input,
+	public async Task<PagedResultDto<FeeCollectionSummaryItemDto>> GetSummaryAsync(
+		GetFeeCollectionSummaryInput input,
 		CancellationToken cancellationToken = default)
 	{
 		var allRows = await BuildRawRowsAsync(input, cancellationToken);
@@ -102,21 +102,21 @@ public class FeeCollectionAppServiceV2(
 
 		var totalCount = filtered.Count;
 		if (totalCount == 0)
-			return new PagedResultDto<FeeCollectionSummaryItemDtoV2>(0, []);
+			return new PagedResultDto<FeeCollectionSummaryItemDto>(0, []);
 
 		var page = ApplySorting(filtered, input.Sorting)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount)
 			.ToList();
 
-		return new PagedResultDto<FeeCollectionSummaryItemDtoV2>(totalCount, MapToDto(page));
+		return new PagedResultDto<FeeCollectionSummaryItemDto>(totalCount, MapToDto(page));
 	}
 
 	public async Task<byte[]> ExportAsync(
 		FeeCollectionExportRequestDto input,
 		CancellationToken cancellationToken = default)
 	{
-		var filterInput = new GetFeeCollectionSummaryInputV2
+		var filterInput = new GetFeeCollectionSummaryInput
 		{
 			AcademicYearId    = input.AcademicYearId,
 			BoardId           = input.BoardId,
@@ -145,7 +145,7 @@ public class FeeCollectionAppServiceV2(
 	// perfectly acceptable for school-scale datasets.
 
 	private async Task<List<FeeCollectionRawRow>> BuildRawRowsAsync(
-		GetFeeCollectionSummaryInputV2 input,
+		GetFeeCollectionSummaryInput input,
 		CancellationToken cancellationToken = default)
 	{
 		EnsureSummaryContextIsValid(input);
@@ -355,13 +355,13 @@ public class FeeCollectionAppServiceV2(
 
 	// ── In-memory mapping (string concatenation, status derivation) ───────
 
-	private static List<FeeCollectionSummaryItemDtoV2> MapToDto(List<FeeCollectionRawRow> rows)
+	private static List<FeeCollectionSummaryItemDto> MapToDto(List<FeeCollectionRawRow> rows)
 		=> rows.ConvertAll(r =>
 		{
 			var outstanding = r.OutstandingFees;
 			var overdue     = r.OverdueFees;
 
-			return new FeeCollectionSummaryItemDtoV2
+			return new FeeCollectionSummaryItemDto
 			{
 				StudentId        = r.StudentId,
 				StudentName      = BuildFullName(r.FirstName, r.MiddleName, r.LastName),
@@ -448,7 +448,7 @@ public class FeeCollectionAppServiceV2(
 
 	// ── Export helpers ────────────────────────────────────────────────────
 
-	private static byte[] BuildCsv(List<FeeCollectionSummaryItemDtoV2> rows)
+	private static byte[] BuildCsv(List<FeeCollectionSummaryItemDto> rows)
 	{
 		var config = new CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)
 		{
@@ -492,7 +492,7 @@ public class FeeCollectionAppServiceV2(
 		return ms.ToArray();
 	}
 
-	private static byte[] BuildExcel(List<FeeCollectionSummaryItemDtoV2> rows)
+	private static byte[] BuildExcel(List<FeeCollectionSummaryItemDto> rows)
 	{
 		using var workbook = new XLWorkbook();
 		var sheet = workbook.Worksheets.Add("Fee Collection");

@@ -1,7 +1,7 @@
-﻿using System;
-using System.Threading.Tasks;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common.Responses;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
 using Volo.Abp;
@@ -12,11 +12,14 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Settings;
 
 [RemoteService]
 [Area("app")]
-
 [Route("api")]
-public class ConcessionTypeController(IConcessionTypeAppService concessionTypeAppService) : AbpController
+[Authorize]
+public class ConcessionTypeController(
+	IConcessionTypeAppService concessionTypeAppService
+) : AbpController
 {
 	[HttpPost("{academicYearId}/concession-types")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.Add)]
 	public async Task<Result> CreateAsync(Guid academicYearId, ConcessionTypeRequest concessionTypeRequest)
 	{
 		await concessionTypeAppService.CreateAsync(academicYearId, concessionTypeRequest);
@@ -24,6 +27,7 @@ public class ConcessionTypeController(IConcessionTypeAppService concessionTypeAp
 	}
 
 	[HttpGet("{academicYearId}/concession-types")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.View)]
 	public async Task<Result<PagedResultDto<ConcessionTypeResponse>>> GetListAsync(Guid academicYearId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null)
 	{
 		var concessionTypes = await concessionTypeAppService.GetListAsync(academicYearId, skipCount, maxResultCount, searchTerm);
@@ -31,6 +35,7 @@ public class ConcessionTypeController(IConcessionTypeAppService concessionTypeAp
 	}
 
 	[HttpGet("concession-types/{concessionTypeId}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.View)]
 	public async Task<Result<ConcessionTypeResponse>> GetAsync(Guid concessionTypeId)
 	{
 		var concessionType = await concessionTypeAppService.GetAsync(concessionTypeId);
@@ -38,6 +43,7 @@ public class ConcessionTypeController(IConcessionTypeAppService concessionTypeAp
 	}
 
 	[HttpPut("concession-types/{concessionTypeId}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.Add)]
 	public async Task<Result> UpdateAsync(Guid concessionTypeId, ConcessionTypeRequest concessionTypeUpdateRequest)
 	{
 		await concessionTypeAppService.UpdateAsync(concessionTypeId, concessionTypeUpdateRequest);
@@ -45,6 +51,7 @@ public class ConcessionTypeController(IConcessionTypeAppService concessionTypeAp
 	}
 
 	[HttpDelete("concession-types/{concessionTypeId}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.Delete)]
 	public async Task<Result> DeleteAsync(Guid concessionTypeId)
 	{
 		await concessionTypeAppService.DeleteAsync(concessionTypeId);

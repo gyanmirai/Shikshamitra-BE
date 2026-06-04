@@ -63,7 +63,7 @@ public class FeeStructureMetadataAppService(
 			.ToDictionary(
 				g => g.Key,
 				g => (
-					TotalClasses: g.Count(),
+					TotalClasses: g.Select(x => x.StandardId).Distinct().Count(),
 					TotalFeeHeads: g.SelectMany(x => x.FeeStructureDetails).Select(d => d.FeeHeadId).Distinct().Count()
 				));
 

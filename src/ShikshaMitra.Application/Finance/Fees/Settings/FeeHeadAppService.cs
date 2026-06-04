@@ -1,12 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp;
-using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 
@@ -14,22 +12,27 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
+public class FeeHeadAppService(
+	IRepository<FeeHead, Guid> feeHeadRepository,
+	IRepository<FeeCategory, Guid> feeCategoryRepository,
+	IRepository<FeeStructure, Guid> feeStructureRepository
+) : ApplicationService, IFeeHeadAppService
 {
-    private readonly IRepository<FeeHead, Guid> _feeHeadRepository;
-    private readonly IRepository<FeeCategory, Guid> _feeCategoryRepository;
-
-    public FeeHeadAppService(
-        IRepository<FeeHead, Guid> feeHeadRepository,
-        IRepository<FeeCategory, Guid> feeCategoryRepository)
-    {
-        _feeHeadRepository = feeHeadRepository;
-        _feeCategoryRepository = feeCategoryRepository;
-    }
-
 	public async Task<MessageResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input)
     {
-        var feeHead = new FeeHead(
+		// validation to ensure no duplicate fee head name exists under the same fee category for the same academic year
+		var existingFeeHead = await feeHeadRepository.FirstOrDefaultAsync(x =>
+			x.AcademicYearId == academicYearId &&
+			x.FeeCategoryId == input.FeeCategoryId &&
+			x.Name == input.Name
+		);
+
+		if (existingFeeHead != null)
+		{
+			throw new BusinessException("A fee head with the same name already exists under this fee category for the selected academic year.");
+		}
+
+		var feeHead = new FeeHead(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             academicYearId,
@@ -38,7 +41,7 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
             input.Description
         );
 
-        await _feeHeadRepository.InsertAsync(feeHead);
+        await feeHeadRepository.InsertAsync(feeHead);
 
         return new MessageResponse
         {
@@ -48,7 +51,7 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 
     public async Task<FeeHeadListResponse> GetListAsync(Guid academicYearId, Guid? feeCategoryId = null, string search = null, int page = 1, int pageSize = 10)
     {
-        var query = await _feeHeadRepository.GetQueryableAsync();
+        var query = await feeHeadRepository.GetQueryableAsync();
 
         query = query.Where(x => x.AcademicYearId == academicYearId);
 
@@ -62,17 +65,17 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
             query = query.Where(x => x.Name.Contains(search));
         }
 
-        var totalCount = await _feeHeadRepository.AsyncExecuter.CountAsync(query);
+        var totalCount = await feeHeadRepository.AsyncExecuter.CountAsync(query);
 
         query = query.OrderByDescending(x => x.CreationTime)
                      .Skip((page - 1) * pageSize)
                      .Take(pageSize);
 
-        var items = await _feeHeadRepository.AsyncExecuter.ToListAsync(query);
+        var items = await feeHeadRepository.AsyncExecuter.ToListAsync(query);
 
         // Fetch fee category names
         var categoryIds = items.Select(x => x.FeeCategoryId).Distinct().ToList();
-        var categories = await _feeCategoryRepository.GetListAsync(x => categoryIds.Contains(x.Id));
+        var categories = await feeCategoryRepository.GetListAsync(x => categoryIds.Contains(x.Id));
         var categoryDict = categories.ToDictionary(x => x.Id, x => x.Name);
 
         var dtos = items.Select(x => new FeeHeadResponse
@@ -100,11 +103,24 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 
     public async Task<MessageResponse> UpdateAsync(Guid feeHeadId, FeeHeadUpdateRequest input)
     {
-        var feeHead = await _feeHeadRepository.GetAsync(feeHeadId);
+        var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
 
         feeHead.Update(input.FeeCategoryId, input.Name, input.Description);
 
-        await _feeHeadRepository.UpdateAsync(feeHead);
+		// validation to ensure no duplicate fee head name exists under the same fee category for the same academic year
+		var existingFeeHead = await feeHeadRepository.FirstOrDefaultAsync(x =>
+			x.Id != feeHeadId &&
+			x.AcademicYearId == feeHead.AcademicYearId &&
+			x.FeeCategoryId == input.FeeCategoryId &&
+			x.Name == input.Name
+		);
+
+		if (existingFeeHead != null)
+		{
+			throw new BusinessException("A fee head with the same name already exists under this fee category for the selected academic year.");
+		}
+
+		await feeHeadRepository.UpdateAsync(feeHead);
 
         return new MessageResponse
         {
@@ -114,7 +130,15 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 
     public async Task<MessageResponse> DeleteAsync(Guid feeHeadId)
     {
-        await _feeHeadRepository.DeleteAsync(feeHeadId);
+		// check if fee head is associated with any fee structure details before deleting
+		var isAssociatedWithFeeStructure = await feeStructureRepository.AnyAsync(fs => fs.FeeStructureDetails.Any(fsd => fsd.FeeHeadId == feeHeadId) && fs.IsLocked);
+
+		if (isAssociatedWithFeeStructure)
+		{
+			throw new BusinessException("Cannot delete fee head as it is associated with existing fee structures.");
+		}
+
+		await feeHeadRepository.DeleteAsync(feeHeadId);
 
         return new MessageResponse
         {
@@ -124,11 +148,21 @@ public class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 
     public async Task<MessageResponse> UpdateStatusAsync(Guid feeHeadId, FeeHeadStatusUpdateRequest input)
     {
-        var feeHead = await _feeHeadRepository.GetAsync(feeHeadId);
+        var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
 
         feeHead.SetActiveStatus(input.IsActive);
 
-        await _feeHeadRepository.UpdateAsync(feeHead);
+		// if deactivating the fee head, check if it is associated with any fee structure details before updating status
+		if (!input.IsActive)
+		{
+			var isAssociatedWithFeeStructure = await feeStructureRepository.AnyAsync(fs => fs.FeeStructureDetails.Any(fsd => fsd.FeeHeadId == feeHeadId) && fs.IsLocked);
+			if (isAssociatedWithFeeStructure)
+			{
+				throw new BusinessException("Cannot deactivate fee head as it is associated with existing fee structures.");
+			}
+		}
+
+		await feeHeadRepository.UpdateAsync(feeHead);
 
         return new MessageResponse
         {

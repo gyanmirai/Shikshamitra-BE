@@ -4,6 +4,7 @@ using ShikshaMitra.Extensions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
@@ -16,40 +17,61 @@ public class AssignmentTypeManager : DomainService
 {
 	private readonly IAssignmentTypeRepository _repository;
 	private readonly IEducationMediumRepository _mediumRepository;
+	private readonly IDataFilter _dataFilter;
 
 	private string EntityName => this.GetType().ToEntityNameFromManager();
 
 	public AssignmentTypeManager(
 		IAssignmentTypeRepository repository,
-		IEducationMediumRepository mediumRepository
+		IEducationMediumRepository mediumRepository,
+		IDataFilter dataFilter
 	)
 	{
 		_repository = repository;
 		_mediumRepository = mediumRepository;
+		_dataFilter = dataFilter;
 	}
 
 	/// <summary>
-	/// Creates a new assignment type with validation
+	/// Creates a new assignment type with validation.
+	/// If a soft-deleted record with the same name exists it is restored in-place
+	/// (reusing its ID) to avoid violating the unique index on {Name, AcademicMediumId}.
 	/// </summary>
 	/// <param name="academicMediumId">Academic medium ID</param>
 	/// <param name="name">Assignment type name</param>
-	/// <returns>Created AssignmentType entity</returns>
+	/// <returns>Persisted AssignmentType entity (inserted or restored)</returns>
 	/// <exception cref="BusinessException">Thrown when validation fails</exception>
 	public async Task<AssignmentType> CreateAsync(Guid academicMediumId, string name)
 	{
 		// Validate academic medium exists
 		await ValidateAcademicMediumExistsAsync(academicMediumId);
 
-		// Check for duplicate name within the same academic medium
-		await ValidateAssignmentTypeAsync(name, academicMediumId);
+		// Check including soft-deleted rows — the unique DB index does not filter on IsDeleted,
+		// so re-creating a previously deleted name would hit a constraint violation.
+		AssignmentType? existing;
+		using (_dataFilter.Disable<ISoftDelete>())
+		{
+			existing = await _repository.FindByNameAndAcademicMediumIdAsync(name, academicMediumId);
+		}
 
-		// Create new entity
-		return new AssignmentType(
-			GuidGenerator.Create(),
-			name,
-			academicMediumId,
-			CurrentTenant.Id
-		);
+		if (existing != null && !existing.IsDeleted)
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.DuplicateAssignmentType)
+				.WithData("Name", name);
+		}
+
+		if (existing != null && existing.IsDeleted)
+		{
+			// Restore the soft-deleted record rather than inserting a duplicate row.
+			existing.IsDeleted = false;
+			existing.DeletionTime = null;
+			existing.DeleterId = null;
+			existing.SetName(name);
+			return await _repository.UpdateAsync(existing, autoSave: true);
+		}
+
+		var entity = new AssignmentType(GuidGenerator.Create(), name, academicMediumId, CurrentTenant.Id);
+		return await _repository.InsertAsync(entity, autoSave: true);
 	}
 
 	/// <summary>

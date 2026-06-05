@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -40,7 +40,7 @@ public class EfCorePermissionGrantSeedRepository(
 		}
 
 		var dbContext = await dbContextProvider.GetDbContextAsync();
-		var legacyNames = legacyToTargets.Keys.ToArray();
+		var legacyNames = legacyToTargets.Keys.ToList();
 
 		var roleKeys = await dbContext.Set<PermissionGrant>()
 			.Where(g =>

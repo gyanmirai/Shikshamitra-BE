@@ -146,6 +146,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			{ "HR.Dashboard", new SubmoduleInfo(Dashboard.All, Dashboard.DisplayNames) },
 			{ "HR.Policies", new SubmoduleInfo(Policies.All, Policies.DisplayNames) },
+			{ "HR.Policies.Calendars", new SubmoduleInfo(Policies_Calendars.All, Policies_Calendars.DisplayNames) },
+			{ "HR.Policies.Payroll", new SubmoduleInfo(Policies_Payroll.All, Policies_Payroll.DisplayNames) },
+			{ "HR.Policies.Attendance", new SubmoduleInfo(Policies_Attendance.All, Policies_Attendance.DisplayNames) },
+			{ "HR.Policies.PolicyAssignment", new SubmoduleInfo(Policies_PolicyAssignment.All, Policies_PolicyAssignment.DisplayNames) },
+			{ "HR.Policies.PolicyImpact", new SubmoduleInfo(Policies_PolicyImpact.All, Policies_PolicyImpact.DisplayNames) },
 			{ "HR.Calendar", new SubmoduleInfo(Calendar.All, Calendar.DisplayNames) },
 			{ "HR.Employee.EmployeeList", new SubmoduleInfo(Employee_EmployeeList.All, Employee_EmployeeList.DisplayNames) },
 			{ "HR.Employee.ICard", new SubmoduleInfo(Employee_ICard.All, Employee_ICard.DisplayNames) },

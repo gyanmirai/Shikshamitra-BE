@@ -43,6 +43,12 @@ public static class ShikshaMitraSubModulePermissions
 	public const string EmployeeRecordsSettings = $"{ShikshaMitraModulePermissions.HR}.Employee.Settings";
 	public const string Payroll = $"{ShikshaMitraModulePermissions.HR}.Payroll";
 	public const string PayrollSettings = $"{ShikshaMitraModulePermissions.HR}.Payroll.Settings";
+	public const string HRPolicies = $"{ShikshaMitraModulePermissions.HR}.Policies";
+	public const string HRPoliciesCalendars = $"{ShikshaMitraModulePermissions.HR}.Policies.Calendars";
+	public const string HRPoliciesPayroll = $"{ShikshaMitraModulePermissions.HR}.Policies.Payroll";
+	public const string HRPoliciesAttendance = $"{ShikshaMitraModulePermissions.HR}.Policies.Attendance";
+	public const string HRPoliciesPolicyAssignment = $"{ShikshaMitraModulePermissions.HR}.Policies.PolicyAssignment";
+	public const string HRPoliciesPolicyImpact = $"{ShikshaMitraModulePermissions.HR}.Policies.PolicyImpact";
 	public const string AttendanceManagement = $"{ShikshaMitraModulePermissions.HR}.AttendanceManagement";
 	public const string AttendanceManagementSettings = $"{ShikshaMitraModulePermissions.HR}.AttendanceManagement.Settings";
 	public const string ProfessionalManagement = $"{ShikshaMitraModulePermissions.HR}.ProfessionalManagement";
@@ -202,6 +208,12 @@ public static class ShikshaMitraSubModulePermissions
 		EmployeeRecordsSettings,
 		Payroll,
 		PayrollSettings,
+		HRPolicies,
+		HRPoliciesCalendars,
+		HRPoliciesPayroll,
+		HRPoliciesAttendance,
+		HRPoliciesPolicyAssignment,
+		HRPoliciesPolicyImpact,
 		AttendanceManagement,
 		AttendanceManagementSettings,
 		ProfessionalManagement,
@@ -351,6 +363,12 @@ public static class ShikshaMitraSubModulePermissions
 		{ EmployeeRecordsSettings, $"{DisplayNamePrefix}.EmployeeRecordsSettings" },
 		{ Payroll, $"{DisplayNamePrefix}.Payroll" },
 		{ PayrollSettings, $"{DisplayNamePrefix}.PayrollSettings" },
+		{ HRPolicies, $"{DisplayNamePrefix}.HRPolicies" },
+		{ HRPoliciesCalendars, $"{DisplayNamePrefix}.HRPoliciesCalendars" },
+		{ HRPoliciesPayroll, $"{DisplayNamePrefix}.HRPoliciesPayroll" },
+		{ HRPoliciesAttendance, $"{DisplayNamePrefix}.HRPoliciesAttendance" },
+		{ HRPoliciesPolicyAssignment, $"{DisplayNamePrefix}.HRPoliciesPolicyAssignment" },
+		{ HRPoliciesPolicyImpact, $"{DisplayNamePrefix}.HRPoliciesPolicyImpact" },
 		{ AttendanceManagement, $"{DisplayNamePrefix}.AttendanceManagement" },
 		{ AttendanceManagementSettings, $"{DisplayNamePrefix}.AttendanceManagementSettings" },
 		{ ProfessionalManagement, $"{DisplayNamePrefix}.ProfessionalManagement" },

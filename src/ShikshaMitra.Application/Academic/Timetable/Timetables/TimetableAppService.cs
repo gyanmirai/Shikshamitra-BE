@@ -78,16 +78,22 @@ public class TimetableAppService(
             .ToDictionary(s => s.ElectiveGroupId!.Value, s => s.WeeklyLectures)
             ?? new Dictionary<Guid, int>();
 
-        // Build a (startTime, endTime) → (SlotType, BreakType) lookup from the slot config.
-        // The slot config is the source of truth for period vs break type; saved timetable slots
-        // may carry stale/incorrect SlotType values if data was originally saved with a wrong enum.
-        var slotTypeByTime = new Dictionary<(TimeOnly, TimeOnly), (SlotType, BreakType?)>();
+        // Build a (day, startTime, endTime) → (SlotType, BreakType) lookup from the slot config.
+        // Must be keyed per-day: different day groups can share the same time slot with different
+        // types (e.g. Mon-Fri has 09:00-09:30 as BREAK, Saturday has 08:00-08:30 as BREAK).
+        // A flat (startTime, endTime) key causes Saturday's break to override Mon-Fri's lecture
+        // at the same time slot whenever the groups happen to be iterated in the wrong order.
+        var slotTypeByDayAndTime = new Dictionary<(TimetableDayOfWeek, TimeOnly, TimeOnly), (SlotType, BreakType?)>();
         if (slotConfig != null)
         {
             foreach (var group in slotConfig.SlotGroups)
             {
-                foreach (var ts in group.TimeSlots)
-                    slotTypeByTime.TryAdd((ts.StartTime, ts.EndTime), (ts.SlotType, ts.BreakType));
+                for (var dayIdx = group.WeekRangeStart; dayIdx <= group.WeekRangeEnd; dayIdx++)
+                {
+                    var groupDay = (TimetableDayOfWeek) dayIdx;
+                    foreach (var ts in group.TimeSlots)
+                        slotTypeByDayAndTime.TryAdd((groupDay, ts.StartTime, ts.EndTime), (ts.SlotType, ts.BreakType));
+                }
             }
         }
 
@@ -103,8 +109,8 @@ public class TimetableAppService(
             {
                 response.Days[dayName] = savedSlots.OrderBy(s => s.Sequence).Select(slot =>
                 {
-                    var (resolvedType, resolvedBreakType) = slotTypeByTime.TryGetValue(
-                        (slot.StartTime, slot.EndTime), out var configType)
+                    var (resolvedType, resolvedBreakType) = slotTypeByDayAndTime.TryGetValue(
+                        (slot.Day, slot.StartTime, slot.EndTime), out var configType)
                         ? configType
                         : (slot.SlotType, slot.BreakType);
                     return new TimetableSlotResponseDto

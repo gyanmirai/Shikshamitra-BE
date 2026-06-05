@@ -32,7 +32,7 @@ namespace ShikshaMitra.Finance.Fees;
 /// </summary>
 public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
-    private readonly IFeeCollectionAppServiceV2 _service;
+    private readonly IFeeCollectionAppService _service;
     private readonly IFinanceAuditTrailAppService _auditTrail;
     private readonly IRepository<AcademicYear, Guid> _academicYearRepo;
     private readonly IRepository<FeeCategory, Guid> _feeCategoryRepo;
@@ -45,7 +45,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
 
     public FeeCollectionAppServiceV2_Tests()
     {
-        _service            = GetRequiredService<IFeeCollectionAppServiceV2>();
+        _service            = GetRequiredService<IFeeCollectionAppService>();
         _auditTrail         = GetRequiredService<IFinanceAuditTrailAppService>();
         _academicYearRepo   = GetRequiredService<IRepository<AcademicYear, Guid>>();
         _feeCategoryRepo    = GetRequiredService<IRepository<FeeCategory, Guid>>();

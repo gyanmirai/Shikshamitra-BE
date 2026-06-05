@@ -15,6 +15,7 @@ namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 public class AttendanceIntegrationRunAttendanceWriter(
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	IRepository<Employee, Guid> employeeRepository,
+	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
 	AttendancePolicyWorkedTimeEvaluator workedTimeEvaluator)
 	: ApplicationService, ITransientDependency
 {
@@ -27,13 +28,25 @@ public class AttendanceIntegrationRunAttendanceWriter(
 		var employeeIds = parsedRows.Select(r => r.Row.EmployeeId).Distinct().ToList();
 		var employeeById = await LoadEmployeesAsync(employeeIds);
 		var existingLookup = await LoadExistingAttendanceAsync(employeeIds, parsedRows);
+		var punchContextLookup = BuildPunchContextLookup(parsedRows);
+		var captureModeLookup = await captureModeLookupResolver.ResolveForPairsAsync(
+			parsedRows.Select(x => (x.Row.EmployeeId, x.AttendanceDate)));
 		var outcome = new AttendanceIntegrationRunOutcome();
 		var rowNumber = 0;
 
 		foreach (var parsedRow in parsedRows)
 		{
 			rowNumber++;
-			var importRow = await UpsertAttendanceAndBuildImportRowAsync(parsedRow, batchId, rowNumber, employeeById, existingLookup);
+			punchContextLookup.TryGetValue(parsedRow.Row.EmployeeId, out var punchContext);
+			captureModeLookup.TryGetValue((parsedRow.Row.EmployeeId, parsedRow.AttendanceDate), out var captureMode);
+			var importRow = await UpsertAttendanceAndBuildImportRowAsync(
+				parsedRow,
+				batchId,
+				rowNumber,
+				employeeById,
+				existingLookup,
+				punchContext,
+				captureMode);
 			outcome.ImportRows.Add(importRow.Row);
 			outcome.Created += importRow.Created ? 1 : 0;
 			outcome.Replaced += importRow.Replaced ? 1 : 0;
@@ -72,7 +85,9 @@ public class AttendanceIntegrationRunAttendanceWriter(
 		Guid batchId,
 		int rowNumber,
 		Dictionary<Guid, Employee> employeeById,
-		Dictionary<string, EmployeeAttendance> existingLookup)
+		Dictionary<string, EmployeeAttendance> existingLookup,
+		IReadOnlyCollection<AttendancePolicyEvaluationPunchContext>? punchContext,
+		AttendanceCaptureMode captureMode)
 	{
 		var row = parsedRow.Row;
 		var dateOnly = parsedRow.AttendanceDate;
@@ -87,14 +102,25 @@ public class AttendanceIntegrationRunAttendanceWriter(
 
 		var tIn = AttendanceIntegrationRunParsing.ParseNullableOffset(row.TimeIn);
 		var tOut = AttendanceIntegrationRunParsing.ParseNullableOffset(row.TimeOut);
-		var evaluation = await workedTimeEvaluator.EvaluateAsync(employee, dateOnly, tIn, tOut, row.Status);
-		var status = evaluation.Status;
+		var status = row.Status;
+		IReadOnlyList<string> warnings = [];
+		if (captureMode == AttendanceCaptureMode.ManualStatus)
+		{
+			tIn = null;
+			tOut = null;
+		}
+		else
+		{
+			var evaluation = await workedTimeEvaluator.EvaluateAsync(employee, dateOnly, tIn, tOut, status, punchContext);
+			status = evaluation.Status;
+			warnings = evaluation.Warnings;
+		}
 
 		var replaced = existingLookup.TryGetValue(key, out var existing);
 		if (replaced)
 		{
-			existing!.TimeIn = tIn ?? existing.TimeIn;
-			existing.TimeOut = tOut ?? existing.TimeOut;
+			existing!.TimeIn = tIn;
+			existing.TimeOut = tOut;
 			existing.StatusType = status;
 			existing.Source = AttendanceRecordSource.Integration;
 			existing.EducationMediumStageId = row.EducationMediumStageId;
@@ -133,11 +159,28 @@ public class AttendanceIntegrationRunAttendanceWriter(
 				status.ToString(),
 				normalizedRemarks,
 				[],
-				string.IsNullOrWhiteSpace(evaluation.Warning) ? [] : [evaluation.Warning]),
+				[.. warnings]),
 			Created: !replaced,
 			Replaced: replaced);
 	}
 
 	private static string BuildAttendanceKey(Guid employeeId, DateOnly attendanceDate) =>
 		$"{employeeId:N}|{attendanceDate:yyyy-MM-dd}";
+
+	private static Dictionary<Guid, IReadOnlyCollection<AttendancePolicyEvaluationPunchContext>> BuildPunchContextLookup(
+		List<ParsedIntegrationRow> parsedRows) =>
+		parsedRows
+			.Select(row => new
+			{
+				row.Row.EmployeeId,
+				row.AttendanceDate,
+				TimeIn = AttendanceIntegrationRunParsing.ParseNullableOffset(row.Row.TimeIn)
+			})
+			.Where(x => x.TimeIn.HasValue)
+			.GroupBy(x => x.EmployeeId)
+			.ToDictionary(
+				x => x.Key,
+				x => (IReadOnlyCollection<AttendancePolicyEvaluationPunchContext>)x
+					.Select(row => new AttendancePolicyEvaluationPunchContext(row.AttendanceDate, row.TimeIn!.Value))
+					.ToList());
 }

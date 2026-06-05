@@ -49,7 +49,7 @@ public class TakeAttendanceEntryWriter(
 		}
 
 		var source = ResolveManualSaveSource(captureMode, tIn.HasValue || tOut.HasValue);
-		if (tIn.HasValue || tOut.HasValue)
+		if (captureMode != AttendanceCaptureMode.ManualStatus)
 		{
 			var evaluation = await workedTimeEvaluator.EvaluateAsync(
 				employee,

@@ -17,13 +17,14 @@ public class HRDashboardPayrollReader(IRunPayrollAppService runPayrollAppService
 		}
 		catch (BusinessException ex)
 		{
+			var diagnostic = HRDashboardRefreshErrorFormatter.Format(ex);
 			return new HRDashboardPayrollDto
 			{
 				Month = month,
 				CanPreview = false,
 				CanLock = false,
-				BlockingIssues = [ex.Message],
-				RecommendedActions = ["Review payroll configuration."]
+				BlockingIssues = ["Payroll readiness could not be calculated. Review payroll setup before locking this month."],
+				RecommendedActions = [diagnostic, "Review payroll configuration."]
 			};
 		}
 

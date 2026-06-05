@@ -112,6 +112,35 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			.ToListAsync(cancellationToken);
 	}
 
+	public async Task<List<ApprovedAttendanceLeaveRow>> GetApprovedAttendanceLeaveRowsForDateAsync(
+		IReadOnlyCollection<Guid> employeeIds,
+		DateOnly attendanceDate,
+		CancellationToken cancellationToken = default)
+	{
+		if (employeeIds.Count == 0)
+		{
+			return new List<ApprovedAttendanceLeaveRow>();
+		}
+
+		var dbSet = await GetDbSetAsync();
+		var employeeIdList = employeeIds.ToList();
+		return await dbSet
+			.IgnoreAutoIncludes()
+			.AsNoTracking()
+			.Where(x =>
+				employeeIdList.Contains(x.EmployeeId) &&
+				x.Status == EmployeeLeaveStatusType.Approved &&
+				x.StartDateOnly <= attendanceDate &&
+				x.EndDateOnly >= attendanceDate)
+			.Select(x => new ApprovedAttendanceLeaveRow(
+				x.Id,
+				x.EmployeeId,
+				x.HalfDay,
+				x.StartDate,
+				x.EndDate))
+			.ToListAsync(cancellationToken);
+	}
+
 	public async Task<(int TotalCount, List<Guid> PageIds)> GetPagedIdsForManagementListAsync(
 		DateTime rangeStart,
 		DateTime rangeEnd,

@@ -87,13 +87,14 @@ public class PayrollSnapshotRefresher(
 		var adjustmentsByEmployee = await adjustmentReader.GetByEmployeeAsync(internalMonthYear, employeeIds);
 
 		var computedItems = new List<RunPayrollItem>();
+		var policyResolutionDate = PayrollRunRules.GetPayrollPolicyResolutionDate(year, month);
 		foreach (var employee in scopedEmployees)
 		{
 			try
 			{
 				var resolvedPolicies = await hrPolicyResolver.ResolveAsync(
 					employee.Id,
-					new DateTime(year, month, 1),
+					policyResolutionDate,
 					calendar.AcademicYearId);
 				var holidayOverrides = resolvedPolicies.PayrollPolicy.GetHolidayOverrides();
 				var workCalendarHolidays = await basisPreviewResolver.GetIncludedWorkCalendarHolidaysAsync(

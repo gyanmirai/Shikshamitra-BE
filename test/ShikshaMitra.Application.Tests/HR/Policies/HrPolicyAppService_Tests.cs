@@ -272,6 +272,34 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		row.HasDifference.ShouldBeTrue();
 	}
 
+	[Theory]
+	[InlineData("no_benefit", "non_working_no_benefit", false, false)]
+	[InlineData("both", "working_required_punch_with_comp_off", true, true)]
+	public async Task Holiday_Impact_Should_Surface_New_Holiday_Compensation_Values(
+		string holidayWorkBehavior,
+		string expectedAttendanceImpact,
+		bool expectedPunchRequired,
+		bool expectedWorkingDay)
+	{
+		var context = await CreatePolicyContextAsync(attendanceHolidayWorkBehavior: holidayWorkBehavior);
+		var holiday = await CreateHolidayAsync(context.AcademicYearId, "NewHolidayBehavior", new DateTime(2026, 5, 21));
+
+		var result = await _holidayImpact.GetPreviewAsync(
+			context.AcademicYearId,
+			context.WorkCalendar.Id,
+			context.PayrollPolicy.Id,
+			context.AttendancePolicy.Id,
+			fromDate: new DateTime(2026, 5, 1),
+			toDate: new DateTime(2026, 5, 31),
+			month: null);
+
+		var row = result.Items.Single(x => x.CalendarHolidayId == holiday.Id);
+		row.HolidayWorkBehavior.ShouldBe(holidayWorkBehavior);
+		row.AttendanceImpact.ShouldBe(expectedAttendanceImpact);
+		row.IsPunchRequired.ShouldBe(expectedPunchRequired);
+		row.IsAttendanceWorkingDay.ShouldBe(expectedWorkingDay);
+	}
+
 	[Fact]
 	public async Task Clone_Should_Create_Draft_Non_Default_Copies()
 	{
@@ -624,6 +652,45 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		updated.HolidayWorkBehavior.ShouldBe("ot_payout");
 		updated.MinOvertimeMinutes.ShouldBe(30);
 		updated.SandwichRuleEnabled.ShouldBeTrue();
+	}
+
+	[Theory]
+	[InlineData("warning", "no_benefit")]
+	[InlineData("salary_deduction", "both")]
+	public async Task AttendancePolicy_Should_Persist_New_Advanced_Rule_Values(
+		string penaltyType,
+		string holidayWorkBehavior)
+	{
+		var context = await CreatePolicyContextAsync();
+
+		var updated = await _attendancePolicies.UpdateAsync(context.AttendancePolicy.Id, new CreateUpdateAttendancePolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = context.AttendancePolicy.Name,
+			Status = context.AttendancePolicy.Status,
+			IsDefault = context.AttendancePolicy.IsDefault,
+			FullDayThresholdPercentage = context.AttendancePolicy.FullDayThresholdPercentage,
+			HalfDayThresholdPercentage = context.AttendancePolicy.HalfDayThresholdPercentage,
+			AbsentThresholdPercentage = context.AttendancePolicy.AbsentThresholdPercentage,
+			MissingPunchBehavior = context.AttendancePolicy.MissingPunchBehavior,
+			ManualCorrectionAllowed = context.AttendancePolicy.ManualCorrectionAllowed,
+			GraceTime = context.AttendancePolicy.GraceTime,
+			MaxLateAllowedPerMonth = context.AttendancePolicy.MaxLateAllowedPerMonth,
+			PenaltyType = penaltyType,
+			PenaltyCountThreshold = context.AttendancePolicy.PenaltyCountThreshold,
+			EarlyExitEnabled = context.AttendancePolicy.EarlyExitEnabled,
+			EarlyExitGraceTime = context.AttendancePolicy.EarlyExitGraceTime,
+			OvertimeEnabled = context.AttendancePolicy.OvertimeEnabled,
+			OvertimeRate = context.AttendancePolicy.OvertimeRate,
+			MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
+			HolidayWorkBehavior = holidayWorkBehavior,
+			SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
+			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
+		});
+
+		updated.PenaltyType.ShouldBe(penaltyType);
+		updated.HolidayWorkBehavior.ShouldBe(holidayWorkBehavior);
 	}
 
 	[Fact]
@@ -1230,6 +1297,180 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			.ToList();
 		employeeAssignments.Count.ShouldBe(1);
 		employeeAssignments.Single().PayrollPolicyId.ShouldBe(totalMonthPayroll.Id);
+	}
+
+	[Fact]
+	public async Task EmployeeOverride_Disable_Should_Fall_Back_To_Default_Policies()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var totalMonthPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Disable Override Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "total-month-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, totalMonthPayroll.Id);
+		var overridden = await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 5, 1));
+		overridden.PolicySource.ShouldBe("employee");
+		overridden.MatchedTargetType.ShouldBe("employee");
+		overridden.PayrollPolicy.Id.ShouldBe(totalMonthPayroll.Id);
+
+		await _assignments.DisableEmployeeOverrideAsync(new DisableEmployeePolicyOverrideDto
+		{
+			EmployeeId = employee.Id,
+			AcademicYearId = context.AcademicYearId,
+			EffectiveDate = new DateTime(2026, 5, 1),
+			AssignmentReason = "Toggle disabled from employee payroll step"
+		});
+
+		var fallback = await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 5, 1));
+		fallback.PolicySource.ShouldBe("default");
+		fallback.MatchedAssignmentId.ShouldBeNull();
+		fallback.PayrollPolicy.Id.ShouldBe(context.PayrollPolicy.Id);
+		var assignments = await _assignments.GetListAsync(new PolicyListRequestDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			TargetType = "employee",
+			MaxResultCount = 100
+		});
+		assignments.Items
+			.Where(x => x.TargetKey == employee.Id.ToString("D").ToLowerInvariant())
+			.ShouldAllBe(x => !x.IsActive || x.EffectiveTo < new DateTime(2026, 5, 1));
+	}
+
+	[Fact]
+	public async Task EmployeeOverride_Disable_Should_Not_Deactivate_Future_Override()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var currentPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Current Override Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "total-month-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+		var futurePayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Future Override Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "manual-days",
+			ManualDays = 24,
+			SaturdayWorkPolicy = "full-day"
+		});
+
+		await _assignments.UpsertEmployeeOverrideAsync(new UpsertEmployeePolicyOverrideDto
+		{
+			EmployeeId = employee.Id,
+			AcademicYearId = context.AcademicYearId,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			PayrollPolicyId = currentPayroll.Id,
+			EffectiveFrom = new DateTime(2026, 4, 1),
+			EffectiveTo = new DateTime(2026, 6, 30),
+			AssignmentReason = "Current payroll step override"
+		});
+		await _assignments.CreateAsync(new CreateUpdateHrPolicyAssignmentDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			TargetType = "employee",
+			TargetKey = employee.Id.ToString("D"),
+			TargetDisplayName = employee.FullName,
+			PayrollPolicyId = futurePayroll.Id,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			EffectiveFrom = new DateTime(2026, 7, 1),
+			IsActive = true,
+			Priority = 100,
+			AssignmentReason = "Future scheduled override"
+		});
+
+		await _assignments.DisableEmployeeOverrideAsync(new DisableEmployeePolicyOverrideDto
+		{
+			EmployeeId = employee.Id,
+			AcademicYearId = context.AcademicYearId,
+			EffectiveDate = new DateTime(2026, 5, 1),
+			AssignmentReason = "Disable current override only"
+		});
+
+		var fallback = await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 5, 1));
+		fallback.PolicySource.ShouldBe("default");
+		fallback.PayrollPolicy.Id.ShouldBe(context.PayrollPolicy.Id);
+
+		var future = await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 7, 1));
+		future.PolicySource.ShouldBe("employee");
+		future.PayrollPolicy.Id.ShouldBe(futurePayroll.Id);
+	}
+
+	[Fact]
+	public async Task EmployeeOverride_Upsert_Should_Deactivate_Competing_Active_Overrides()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var targetPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Overwrite Target Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "total-month-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+		var stalePayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Stale Duplicate Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "manual-days",
+			ManualDays = 24,
+			SaturdayWorkPolicy = "full-day"
+		});
+
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.PayrollPolicy.Id);
+		var assignmentRepository = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			context.AcademicYearId,
+			HrPolicyAssignmentTargetType.Employee,
+			employee.Id.ToString("D"),
+			employee.FullName,
+			context.AttendancePolicy.Id,
+			stalePayroll.Id,
+			new DateTime(2026, 5, 1),
+			null,
+			true,
+			100,
+			"Historical duplicate active override"), autoSave: true);
+
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, targetPayroll.Id);
+
+		var effective = await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 5, 1));
+		effective.PayrollPolicy.Id.ShouldBe(targetPayroll.Id);
+		var assignments = await _assignments.GetListAsync(new PolicyListRequestDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			TargetType = "employee",
+			MaxResultCount = 100
+		});
+		var activeEmployeeAssignments = assignments.Items
+			.Where(x => x.IsActive && x.TargetKey == employee.Id.ToString("D").ToLowerInvariant())
+			.ToList();
+		activeEmployeeAssignments.Count.ShouldBe(1);
+		activeEmployeeAssignments.Single().PayrollPolicyId.ShouldBe(targetPayroll.Id);
 	}
 
 	[Fact]

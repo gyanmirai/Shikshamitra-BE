@@ -77,6 +77,20 @@ public class AttendanceImportSaveEntryNormalizer(
 		var employeeById = await employeeResolver.BuildLookupByIdAsync(employeeIds);
 		var captureModeLookup = await captureModeLookupResolver.ResolveForPairsAsync(
 			entries.Select(x => (x.EmployeeId, x.AttendanceDate)));
+		var punchContextLookup = entries
+			.Select(x => new
+			{
+				x.EmployeeId,
+				x.AttendanceDate,
+				TimeIn = ParseNullableOffset(x.InTimeForSave)
+			})
+			.Where(x => x.TimeIn.HasValue)
+			.GroupBy(x => x.EmployeeId)
+			.ToDictionary(
+				x => x.Key,
+				x => (IReadOnlyCollection<AttendancePolicyEvaluationPunchContext>)x
+					.Select(entry => new AttendancePolicyEvaluationPunchContext(entry.AttendanceDate, entry.TimeIn!.Value))
+					.ToList());
 		var result = new List<NormalizedAttendanceImportSaveEntry>(entries.Count);
 		foreach (var entry in entries)
 		{
@@ -93,18 +107,20 @@ public class AttendanceImportSaveEntryNormalizer(
 				continue;
 			}
 
+			punchContextLookup.TryGetValue(entry.EmployeeId, out var punchContext);
 			var evaluation = await workedTimeEvaluator.EvaluateAsync(
 				employee,
 				entry.AttendanceDate,
 				ParseNullableOffset(entry.InTimeForSave),
 				ParseNullableOffset(entry.OutTimeForSave),
-				AttendanceImportSaveEntryParsing.ParseDomainStatus(entry.SaveStatusWire));
+				AttendanceImportSaveEntryParsing.ParseDomainStatus(entry.SaveStatusWire),
+				punchContext);
 
 			result.Add(entry with
 			{
 				SaveStatusWire = AttendanceImportSaveEntryParsing.ToSaveWire(evaluation.Status),
 				ImportRowStatus = evaluation.Status.ToString(),
-				Warning = evaluation.Warning
+				Warnings = evaluation.Warnings
 			});
 		}
 

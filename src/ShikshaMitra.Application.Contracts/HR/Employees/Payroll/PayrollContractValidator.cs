@@ -49,9 +49,38 @@ public class PayrollContractValidator : AbstractValidator<PayrollContract>
 			.Must(x => !HasOverlappingMasterIds(x.EarningComponents, x.DeductionComponents))
 			.WithMessage("A component id cannot appear in both earning and deduction lists.");
 
+		RuleFor(x => x.PolicyOverrideAction)
+			.Must(action => string.IsNullOrWhiteSpace(action) ||
+			                string.Equals(action, "upsert", StringComparison.OrdinalIgnoreCase) ||
+			                string.Equals(action, "disable", StringComparison.OrdinalIgnoreCase))
+			.WithMessage("Policy override action must be either 'upsert' or 'disable'.");
+
+		RuleFor(x => x.PolicyOverride)
+			.NotNull()
+			.When(x => string.Equals(x.PolicyOverrideAction, "upsert", StringComparison.OrdinalIgnoreCase))
+			.WithMessage("Policy override details are required when action is upsert.");
+
+		RuleFor(x => x.PolicyOverride)
+			.NotNull()
+			.When(x => string.Equals(x.PolicyOverrideAction, "disable", StringComparison.OrdinalIgnoreCase))
+			.WithMessage("Policy override academic year is required when action is disable.");
+
+		RuleFor(x => x.PolicyOverride!.AcademicYearId)
+			.NotEmpty()
+			.When(x => string.Equals(x.PolicyOverrideAction, "disable", StringComparison.OrdinalIgnoreCase) &&
+			           x.PolicyOverride != null)
+			.WithMessage("Academic year is required when disabling policy override.");
+
+		RuleFor(x => x.PolicyOverride!.EffectiveFrom)
+			.NotEmpty()
+			.When(x => string.Equals(x.PolicyOverrideAction, "disable", StringComparison.OrdinalIgnoreCase) &&
+			           x.PolicyOverride != null)
+			.WithMessage("Effective date is required when disabling policy override.");
+
 		RuleFor(x => x.PolicyOverride)
 			.SetValidator(new EmployeePayrollPolicyOverrideContractValidator()!)
-			.When(x => x.PolicyOverride != null);
+			.When(x => x.PolicyOverride != null &&
+			           !string.Equals(x.PolicyOverrideAction, "disable", StringComparison.OrdinalIgnoreCase));
 	}
 
 	private static bool HasNoDuplicateResolutionKeys(

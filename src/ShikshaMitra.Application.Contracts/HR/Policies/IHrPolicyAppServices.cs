@@ -50,6 +50,7 @@ public interface IHrPolicyAssignmentAppService : IApplicationService
 	Task<HrPolicyAssignmentDto> CreateAsync(CreateUpdateHrPolicyAssignmentDto input);
 	Task<HrPolicyAssignmentDto> UpdateAsync(Guid id, CreateUpdateHrPolicyAssignmentDto input);
 	Task<HrPolicyAssignmentDto> UpsertEmployeeOverrideAsync(UpsertEmployeePolicyOverrideDto input);
+	Task DisableEmployeeOverrideAsync(DisableEmployeePolicyOverrideDto input);
 	Task<HrPolicyImpactPreviewDto> PreviewImpactAsync(HrPolicyAssignmentImpactPreviewRequestDto input);
 	Task DeleteAsync(Guid id);
 	Task<EffectiveEmployeePoliciesDto> GetEffectivePoliciesAsync(Guid employeeId, DateTime date);

@@ -52,6 +52,14 @@ public class UpsertEmployeePolicyOverrideDto
 	public string? ConfirmationToken { get; set; }
 }
 
+public class DisableEmployeePolicyOverrideDto
+{
+	public Guid EmployeeId { get; set; }
+	public Guid AcademicYearId { get; set; }
+	public DateTime EffectiveDate { get; set; }
+	public string? AssignmentReason { get; set; }
+}
+
 public class EffectiveEmployeePoliciesDto
 {
 	public Guid EmployeeId { get; set; }

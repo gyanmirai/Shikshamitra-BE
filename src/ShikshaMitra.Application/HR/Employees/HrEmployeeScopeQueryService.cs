@@ -17,7 +17,8 @@ public class HrEmployeeScopeQueryService(
 	IRepository<Employee, Guid> employeeRepository,
 	IRepository<EmployeeOrganizationAssignment, Guid> employeeOrganizationAssignmentRepository,
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
-	HrUserScopeAccessService hrScopeAccessService)
+	HrUserScopeAccessService hrScopeAccessService,
+	HrMediumStageScopeReader stageScopeReader)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<List<Guid>> GetAccessibleStageIdsAsync(UserScopeContext scope)
@@ -35,11 +36,18 @@ public class HrEmployeeScopeQueryService(
 		var assignmentQuery = await employeeOrganizationAssignmentRepository.GetQueryableAsync();
 
 		employeeQuery = ApplyEmployeeLifecycleFilter(employeeQuery, options);
-		employeeQuery = await ApplyEmployeeScopeFilterAsync(employeeQuery, assignmentQuery, scope, options.EducationMediumStageId);
+		employeeQuery = await ApplyEmployeeScopeFilterAsync(
+			employeeQuery,
+			assignmentQuery,
+			scope,
+			options.EducationMediumStageId,
+			options.AcademicYearId);
 		return employeeQuery;
 	}
 
-	public async Task<Dictionary<Guid, List<Guid>>> BuildEmployeeStageLookupAsync(IEnumerable<Guid> employeeIds)
+	public async Task<Dictionary<Guid, List<Guid>>> BuildEmployeeStageLookupAsync(
+		IEnumerable<Guid> employeeIds,
+		Guid? academicYearId = null)
 	{
 		var ids = employeeIds.Distinct().ToList();
 		if (ids.Count == 0)
@@ -53,6 +61,17 @@ public class HrEmployeeScopeQueryService(
 			assignmentQuery
 				.Where(x => ids.Contains(x.EmployeeId))
 				.Select(x => new { x.EmployeeId, x.EducationMediumStageId }));
+
+		if (academicYearId.HasValue)
+		{
+			var stageIds = rows.Select(x => x.EducationMediumStageId).Distinct().ToList();
+			var stageScopes = await stageScopeReader.GetByStageIdsAsync(stageIds);
+			rows = rows
+				.Where(x =>
+					stageScopes.TryGetValue(x.EducationMediumStageId, out var stageScope) &&
+					stageScope.AcademicYearId == academicYearId.Value)
+				.ToList();
+		}
 
 		return rows
 			.GroupBy(x => x.EmployeeId)
@@ -119,11 +138,25 @@ public class HrEmployeeScopeQueryService(
 		IQueryable<Employee> employeeQuery,
 		IQueryable<EmployeeOrganizationAssignment> assignmentQuery,
 		UserScopeContext scope,
-		Guid? educationMediumStageId)
+		Guid? educationMediumStageId,
+		Guid? academicYearId)
 	{
+		List<Guid>? academicYearStageIds = null;
+		if (academicYearId.HasValue)
+		{
+			academicYearStageIds = (await stageScopeReader.GetAllAsync())
+				.Where(x => x.AcademicYearId == academicYearId.Value)
+				.Select(x => x.StageId)
+				.ToList();
+		}
+
 		if (educationMediumStageId.HasValue)
 		{
 			await EnsureStageInScopeAsync(scope, educationMediumStageId.Value);
+			if (academicYearStageIds is not null && !academicYearStageIds.Contains(educationMediumStageId.Value))
+			{
+				throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+			}
 			var stageEmployeeIds = assignmentQuery
 				.Where(x => x.EducationMediumStageId == educationMediumStageId.Value)
 				.Select(x => x.EmployeeId);
@@ -132,6 +165,14 @@ public class HrEmployeeScopeQueryService(
 
 		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
+			if (academicYearStageIds is not null)
+			{
+				var academicYearEmployeeIds = assignmentQuery
+					.Where(x => academicYearStageIds.Contains(x.EducationMediumStageId))
+					.Select(x => x.EmployeeId);
+				return employeeQuery.Where(x => academicYearEmployeeIds.Contains(x.Id));
+			}
+
 			return employeeQuery;
 		}
 
@@ -141,6 +182,13 @@ public class HrEmployeeScopeQueryService(
 		}
 
 		var accessibleStageIds = await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope);
+		if (academicYearStageIds is not null)
+		{
+			accessibleStageIds = accessibleStageIds
+				.Where(academicYearStageIds.Contains)
+				.ToList();
+		}
+
 		var accessibleEmployeeIds = assignmentQuery
 			.Where(x => accessibleStageIds.Contains(x.EducationMediumStageId))
 			.Select(x => x.EmployeeId);
@@ -185,6 +233,7 @@ public class HrEmployeeScopeQueryService(
 
 public class HrEmployeeScopeOptions
 {
+	public Guid? AcademicYearId { get; set; }
 	public Guid? EducationMediumStageId { get; set; }
 	public DateOnly? ActiveOnOrAfter { get; set; }
 	public DateOnly? JoinedOnOrBefore { get; set; }

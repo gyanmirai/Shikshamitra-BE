@@ -18,6 +18,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 public class TakeAttendanceDayReader(
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
+	IEmployeeLeaveRepository employeeLeaveRepository,
 	IStaffAttendanceDayLockRepository staffAttendanceDayLockRepository,
 	TakeAttendanceAccessService accessService,
 	TakeAttendanceHolidayReader holidayReader,
@@ -92,6 +93,12 @@ public class TakeAttendanceDayReader(
 			attBaseQuery.Where(a =>
 				scopedEmployeeIds.Contains(a.EmployeeId) &&
 				a.AttendanceDate == dateOnly));
+		var approvedLeaves = await employeeLeaveRepository.GetApprovedAttendanceLeaveRowsForDateAsync(
+			scopedEmployeeIds,
+			dateOnly);
+		var approvedLeaveByEmployee = approvedLeaves
+			.GroupBy(x => x.EmployeeId)
+			.ToDictionary(g => g.Key, g => g.OrderBy(x => x.StartDate).First());
 
 		var employees = await asyncExecuter.ToListAsync(
 			empQuery.Skip(input.SkipCount).Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
@@ -103,8 +110,8 @@ public class TakeAttendanceDayReader(
 		var shifts = await LoadShiftLookupAsync(shiftIds);
 		var captureModeByEmployee = await captureModeLookupResolver.ResolveForDateAsync(ids, dateOnly);
 
-		var items = TakeAttendanceDayProjection.BuildRows(employees, attByEmp, shifts, captureModeByEmployee, date, holiday, holidayReason);
-		var summary = TakeAttendanceDayProjection.BuildSummary(attForSummary, scopedEmployeeIds.Count);
+		var items = TakeAttendanceDayProjection.BuildRows(employees, attByEmp, approvedLeaveByEmployee, shifts, captureModeByEmployee, date, holiday, holidayReason);
+		var summary = TakeAttendanceDayProjection.BuildSummary(attForSummary, approvedLeaveByEmployee, scopedEmployeeIds.Count);
 		var distinctCaptureModes = items
 			.Select(x => x.CaptureMode)
 			.Distinct(StringComparer.OrdinalIgnoreCase)

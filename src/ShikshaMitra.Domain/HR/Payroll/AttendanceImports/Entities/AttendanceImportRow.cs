@@ -62,15 +62,18 @@ public class AttendanceImportRow : FullAuditedEntity<Guid>, IMultiTenant
 		string? timeOut,
 		string? status,
 		string? remarks,
-		string? warning = null)
+		IReadOnlyList<string>? warnings = null)
 	{
 		TimeIn = timeIn;
 		TimeOut = timeOut;
 		Status = status;
 		Remarks = remarks;
-		if (!string.IsNullOrWhiteSpace(warning) && !Warnings.Contains(warning))
+		foreach (var warning in warnings ?? [])
 		{
-			Warnings.Add(warning);
+			if (!string.IsNullOrWhiteSpace(warning) && !Warnings.Contains(warning))
+			{
+				Warnings.Add(warning);
+			}
 		}
 	}
 }

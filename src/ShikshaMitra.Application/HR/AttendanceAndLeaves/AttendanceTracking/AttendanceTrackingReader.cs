@@ -23,7 +23,11 @@ public class AttendanceTrackingReader(
 	public async Task<AttendanceEmployeeWiseResponse> GetEmployeeWiseAsync(GetAttendanceEmployeeWiseInput input)
 	{
 		var scope = await accessService.EnsureCanReadAttendanceTrackingAsync();
-		await accessService.EnsureMediumStageInScopeAsync(scope, input.EducationMediumStageId);
-		return await employeeWiseReader.GetEmployeeWiseAsync(input);
+		var stageIds = await accessService.ResolveEmployeeWiseStageIdsAsync(
+			scope,
+			input.EmployeeId,
+			input.EducationMediumStageId,
+			input.AcademicYearId);
+		return await employeeWiseReader.GetEmployeeWiseAsync(input, stageIds);
 	}
 }

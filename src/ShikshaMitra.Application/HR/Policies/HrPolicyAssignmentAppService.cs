@@ -35,6 +35,10 @@ public class HrPolicyAssignmentAppService(
 	public Task<HrPolicyAssignmentDto> UpsertEmployeeOverrideAsync(UpsertEmployeePolicyOverrideDto input) =>
 		workflow.UpsertEmployeeOverrideAsync(input);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.Assign)]
+	public Task DisableEmployeeOverrideAsync(DisableEmployeePolicyOverrideDto input) =>
+		workflow.DisableEmployeeOverrideAsync(input);
+
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.PreviewImpact)]
 	public Task<HrPolicyImpactPreviewDto> PreviewImpactAsync(HrPolicyAssignmentImpactPreviewRequestDto input) =>
 		workflow.PreviewImpactAsync(input);

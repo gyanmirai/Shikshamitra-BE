@@ -12,6 +12,7 @@ public class PayrollContract
 	public SalaryDetailsContract? SalaryDetails { get; set; }
 	public List<SalaryComponentContract>? EarningComponents { get; set; }
 	public List<SalaryComponentContract>? DeductionComponents { get; set; }
+	public string? PolicyOverrideAction { get; set; }
 	public EmployeePayrollPolicyOverrideContract? PolicyOverride { get; set; }
 }
 

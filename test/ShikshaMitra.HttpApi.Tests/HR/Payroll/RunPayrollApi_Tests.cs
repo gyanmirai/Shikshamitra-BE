@@ -15,6 +15,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
+using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
@@ -368,6 +369,76 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		item.PresentDays.ShouldBeGreaterThanOrEqualTo(1);
 		item.PayableDays.ShouldBeGreaterThan(0);
 		item.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Refresh_Unlocked_Snapshot_After_Policy_Day_Calculation_Changes()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollPolicyRefresh{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		await AssignSalaryStructureAsync(employee.Id, "PayrollPolicyRefresh");
+		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 6, 4));
+
+		var firstPreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
+		var firstItem = firstPreview.Items.Single(x => x.EmployeeId == employee.Id);
+		firstItem.BasisDays.ShouldNotBe(30);
+		firstItem.PayrollPolicyId.ShouldNotBeNull();
+
+		var reviewResponse = await Client.PostAsJsonAsync(
+			ReviewUrl,
+			new PayrollRunReviewRequest
+			{
+				Month = "2026-06",
+				EmployeeIds = new List<Guid> { employee.Id }
+			},
+			JsonOptions);
+		var reviewBody = await reviewResponse.Content.ReadAsStringAsync();
+		reviewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, reviewBody);
+
+		await SetPayrollPolicyDayCalculationAsync(firstItem.PayrollPolicyId!.Value, DayCalculationType.TotalMonthDays);
+
+		var refreshedPreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=false");
+		var refreshedItem = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
+
+		refreshedItem.BasisDays.ShouldBe(30);
+		refreshedItem.TotalWorkingDays.ShouldBe(30);
+		refreshedItem.DayCalculationMode.ShouldBe("total-month-days");
+		refreshedItem.ReviewStatus.ShouldBe(ReviewStatuses.Pending);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Use_Employee_Override_Effective_During_Month()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollMidMonthOverride{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		await AssignSalaryStructureAsync(employee.Id, "MidOverride");
+		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 6, 4));
+		var overridePayrollPolicyId = await AssignTotalMonthEmployeeOverrideAsync(
+			employee.Id,
+			new DateTime(2026, 6, 4));
+
+		var preview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
+		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
+
+		item.PayrollPolicyId.ShouldBe(overridePayrollPolicyId);
+		item.BasisDays.ShouldBe(30);
+		item.TotalWorkingDays.ShouldBe(30);
+		item.DayCalculationMode.ShouldBe("total-month-days");
 	}
 
 	[Fact]
@@ -805,6 +876,95 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			typeof(Employee).GetProperty(nameof(Employee.StatusLastChangedAt))!.SetValue(employee, statusLastChangedAt);
 			await employeeRepository.UpdateAsync(employee, autoSave: false);
 			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task SetPayrollPolicyDayCalculationAsync(Guid payrollPolicyId, DayCalculationType dayCalculationType)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var policy = await payrollPolicyRepository.GetAsync(payrollPolicyId);
+			policy.Update(
+				policy.WorkCalendarPolicyId,
+				policy.Name,
+				policy.Status,
+				policy.IsDefault,
+				dayCalculationType,
+				policy.ManualDays,
+				policy.GetManualMonthDays(),
+				policy.SaturdayWorkPolicy,
+				policy.GetHolidayOverrides(),
+				policy.GetLockedMonthSettings());
+			await payrollPolicyRepository.UpdateAsync(policy, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<Guid> AssignTotalMonthEmployeeOverrideAsync(Guid employeeId, DateTime effectiveFrom)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var targetDate = effectiveFrom.Date;
+			var academicYears = await academicYearRepository.GetListAsync();
+			var academicYear = academicYears.Single(x => x.StartDate <= targetDate && x.EndDate >= targetDate);
+			var payrollQuery = await payrollPolicyRepository.GetQueryableAsync();
+			var defaultPayroll = payrollQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			var attendanceQuery = await attendancePolicyRepository.GetQueryableAsync();
+			var defaultAttendance = attendanceQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			var overridePayroll = new PayrollPolicy(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				defaultPayroll.WorkCalendarPolicyId,
+				$"Mid-month override total month {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				false,
+				DayCalculationType.TotalMonthDays,
+				null,
+				null,
+				defaultPayroll.SaturdayWorkPolicy,
+				defaultPayroll.GetHolidayOverrides(),
+				defaultPayroll.GetLockedMonthSettings());
+			await payrollPolicyRepository.InsertAsync(overridePayroll, autoSave: false);
+			await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				HrPolicyAssignmentTargetType.Employee,
+				employeeId.ToString("D"),
+				"Mid-month override employee",
+				defaultAttendance.Id,
+				overridePayroll.Id,
+				effectiveFrom,
+				null,
+				true,
+				100,
+				"Mid-month payroll override regression"), autoSave: false);
+			await uow.CompleteAsync();
+			return overridePayroll.Id;
 		}
 	}
 

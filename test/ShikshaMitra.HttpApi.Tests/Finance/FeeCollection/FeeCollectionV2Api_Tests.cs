@@ -48,7 +48,7 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
         var response = await Client.GetAsync(url);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<PagedResultDto<FeeCollectionSummaryItemDtoV2>>(JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<PagedResultDto<FeeCollectionSummaryItemDto>>(JsonOptions);
         body.ShouldNotBeNull();
         body.Items.ShouldNotBeNull();
         body.TotalCount.ShouldBeGreaterThanOrEqualTo(0);
@@ -73,7 +73,7 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
         var response = await Client.GetAsync(url);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<PagedResultDto<FeeCollectionSummaryItemDtoV2>>(JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<PagedResultDto<FeeCollectionSummaryItemDto>>(JsonOptions);
         body.ShouldNotBeNull();
         // Students created via direct registration are in Registration status, not Enrolled
         body.TotalCount.ShouldBe(0);

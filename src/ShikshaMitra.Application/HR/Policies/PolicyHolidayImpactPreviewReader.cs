@@ -54,7 +54,9 @@ public class PolicyHolidayImpactPreviewReader(
 
 		var attendanceImpact = MapAttendanceImpact(attendancePolicy.HolidayWorkBehavior);
 		var holidayWorkBehavior = MapHolidayWorkBehavior(attendancePolicy.HolidayWorkBehavior);
-		var isPunchRequired = attendancePolicy.HolidayWorkBehavior == AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.OvertimePayout;
+		var isPunchRequired = attendancePolicy.HolidayWorkBehavior is
+			AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.OvertimePayout or
+			AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.Both;
 		var isAttendanceWorkingDay = isPunchRequired;
 		var items = holidays.Select(holiday =>
 		{
@@ -151,12 +153,16 @@ public class PolicyHolidayImpactPreviewReader(
 	{
 		AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.Paid => "non_working_paid",
 		AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.OvertimePayout => "working_required_punch",
+		AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.NoBenefit => "non_working_no_benefit",
+		AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.Both => "working_required_punch_with_comp_off",
 		_ => "non_working_comp_off"
 	};
 
 	private static string MapHolidayWorkBehavior(AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior value) => value switch
 	{
+		AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.NoBenefit => "no_benefit",
 		AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.Paid => "paid",
+		AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.Both => "both",
 		AttendanceAndLeaves.Settings.AttendanceHolidayWorkBehavior.OvertimePayout => "overtime_payout",
 		_ => "comp_off"
 	};

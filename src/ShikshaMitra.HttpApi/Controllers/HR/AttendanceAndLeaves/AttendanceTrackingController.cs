@@ -81,6 +81,7 @@ public class AttendanceTrackingController : AbpControllerBase
 	/// <param name="status">Optional attendance status filter</param>
 	/// <param name="page">Page number (1-based)</param>
 	/// <param name="pageSize">Page size (1-500)</param>
+	/// <param name="academicYearId">Optional academic year id used to infer employee stages</param>
 	/// <param name="educationMediumStageId">Education medium stage id</param>
 	/// <param name="search">Search text</param>
 	/// <returns>Employee attendance records with summary</returns>
@@ -96,7 +97,8 @@ public class AttendanceTrackingController : AbpControllerBase
 		[FromQuery] string? status = null,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
 		[FromQuery, Range(1, 500)] int pageSize = 10,
-		[FromQuery, Required] Guid educationMediumStageId = default,
+		[FromQuery] Guid? academicYearId = null,
+		[FromQuery] Guid? educationMediumStageId = null,
 		[FromQuery] string? search = null)
 	{
 		AttendanceTrackingStatus? parsedStatus = null;
@@ -116,6 +118,7 @@ public class AttendanceTrackingController : AbpControllerBase
 			StartDate = startDate,
 			EndDate = endDate,
 			Status = parsedStatus,
+			AcademicYearId = academicYearId,
 			EducationMediumStageId = educationMediumStageId,
 			Search = search,
 			Page = page,

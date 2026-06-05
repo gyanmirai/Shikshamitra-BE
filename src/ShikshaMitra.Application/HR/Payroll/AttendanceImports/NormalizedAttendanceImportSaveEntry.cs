@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 
@@ -13,6 +14,6 @@ public sealed record NormalizedAttendanceImportSaveEntry(
 	string? InTimeForImportRow,
 	string? OutTimeForImportRow,
 	string? Remarks,
-	string? Warning = null);
+	IReadOnlyList<string>? Warnings = null);
 
 internal sealed record NormalizedAttendanceImportTime(string? SaveValue, string? ImportRowValue);

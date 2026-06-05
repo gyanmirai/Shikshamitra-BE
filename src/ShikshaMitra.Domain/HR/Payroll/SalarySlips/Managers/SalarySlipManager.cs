@@ -3,6 +3,7 @@ using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
@@ -97,7 +98,7 @@ public partial class SalarySlipManager : DomainService
 		var calendar = await _payrollCalendarResolver.ResolveAsync(year, month, cancellationToken);
 		var resolvedPolicies = await _hrPolicyResolver.ResolveAsync(
 			employeeId,
-			new DateTime(year, month, 1),
+			PayrollRunRules.GetPayrollPolicyResolutionDate(year, month),
 			calendar.AcademicYearId,
 			cancellationToken);
 		var holidayOverrides = resolvedPolicies.PayrollPolicy.GetHolidayOverrides();

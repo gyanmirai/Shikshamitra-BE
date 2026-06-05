@@ -176,7 +176,8 @@ public class GetAttendanceEmployeeWiseInput
 	/// Optional status filter
 	/// </summary>
 	public AttendanceTrackingStatus? Status { get; set; }
-	public Guid EducationMediumStageId { get; set; }
+	public Guid? AcademicYearId { get; set; }
+	public Guid? EducationMediumStageId { get; set; }
 	public string? Search { get; set; }
 	public int Page { get; set; } = 1;
 	public int PageSize { get; set; } = 10;

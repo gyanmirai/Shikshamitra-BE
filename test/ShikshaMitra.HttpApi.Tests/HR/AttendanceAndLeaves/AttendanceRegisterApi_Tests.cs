@@ -13,7 +13,12 @@ using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
@@ -466,6 +471,39 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		payload.Summary.NotMarked.ShouldBe(0);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Grouped_Register_Should_Filter_Inferred_Attendance_By_AcademicYear()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var seeded = await SeedRegisterAcademicOrganizationsAsync();
+		var marker = $"RegYearScope{Guid.NewGuid():N}";
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			marker,
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		await AssignEmployeeToStageAsync(employee.Id, seeded.CurrentYearStageId);
+		await AssignEmployeeToStageAsync(employee.Id, seeded.OtherYearStageId);
+		await SeedAttendanceAsync(employee.Id, attendanceDate, seeded.OtherYearStageId);
+
+		var response = await Client.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&academicYearId={seeded.AcademicYearId:D}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
+		var day = payload.Items.Single(x => x.EmployeeId == employee.Id).Days.Single();
+
+		day.Status.ShouldBe(AttendanceRegisterStatus.NotMarked);
+		day.IsMarked.ShouldBeFalse();
+		day.AttendanceId.ShouldBeNull();
+		payload.Summary.Present.ShouldBe(0);
+		payload.Summary.NotMarked.ShouldBe(1);
+	}
+
 	private async Task SeedAttendanceAsync(
 		Guid employeeId,
 		DateOnly attendanceDate,
@@ -574,6 +612,83 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
+	private async Task AssignEmployeeToStageAsync(Guid employeeId, Guid stageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var assignmentRepository =
+			scope.ServiceProvider.GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var exists = await assignmentRepository.AnyAsync(x =>
+				x.EmployeeId == employeeId &&
+				x.EducationMediumStageId == stageId);
+			if (!exists)
+			{
+				await assignmentRepository.InsertAsync(
+					new EmployeeOrganizationAssignment(Guid.NewGuid(), tenantId, employeeId, stageId),
+					autoSave: false);
+			}
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<RegisterAcademicOrganizations> SeedRegisterAcademicOrganizationsAsync()
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+			var boardRepository = scope.ServiceProvider.GetRequiredService<IEducationBoardRepository>();
+			var mediumRepository = scope.ServiceProvider.GetRequiredService<IEducationMediumRepository>();
+			var stageRepository = scope.ServiceProvider.GetRequiredService<IEducationMediumStageRepository>();
+			var academicYearManager = scope.ServiceProvider.GetRequiredService<AcademicYearManager>();
+			var boardManager = scope.ServiceProvider.GetRequiredService<EducationBoardManager>();
+			var mediumManager = scope.ServiceProvider.GetRequiredService<EducationMediumManager>();
+			var stageManager = scope.ServiceProvider.GetRequiredService<EducationMediumStageManager>();
+
+			var suffix = Guid.NewGuid().ToString("N")[..8];
+			var academicYear = await academicYearManager.CreateAsync(
+				$"RegYear-{suffix}",
+				new DateTime(2035, 4, 1),
+				new DateTime(2036, 3, 31));
+			await academicYearRepository.InsertAsync(academicYear, autoSave: false);
+
+			var otherYear = await academicYearManager.CreateAsync(
+				$"RegOther-{suffix}",
+				new DateTime(2036, 4, 1),
+				new DateTime(2037, 3, 31));
+			await academicYearRepository.InsertAsync(otherYear, autoSave: false);
+
+			var board = await boardManager.CreateAsync(academicYear.Id, EducationBoardType.GSEB);
+			await boardRepository.InsertAsync(board, autoSave: false);
+			var otherBoard = await boardManager.CreateAsync(otherYear.Id, EducationBoardType.CBSE);
+			await boardRepository.InsertAsync(otherBoard, autoSave: false);
+
+			var medium = await mediumManager.CreateAsync(board.Id, $"Gujarati-{suffix}");
+			await mediumRepository.InsertAsync(medium, autoSave: false);
+			var otherMedium = await mediumManager.CreateAsync(otherBoard.Id, $"English-{suffix}");
+			await mediumRepository.InsertAsync(otherMedium, autoSave: false);
+
+			var stage = await stageManager.CreateAsync(medium.Id, $"Primary-{suffix}");
+			await stageRepository.InsertAsync(stage, autoSave: false);
+			var otherStage = await stageManager.CreateAsync(otherMedium.Id, $"Secondary-{suffix}");
+			await stageRepository.InsertAsync(otherStage, autoSave: false);
+
+			await uow.CompleteAsync();
+			return new RegisterAcademicOrganizations(academicYear.Id, stage.Id, otherStage.Id);
+		}
+	}
+
 	private async Task<EmployeeAttendance> GetAttendanceAsync(Guid employeeId, DateOnly attendanceDate)
 	{
 		using var scope = Factory.Services.CreateScope();
@@ -616,4 +731,9 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 			await uow.CompleteAsync();
 		}
 	}
+
+	private sealed record RegisterAcademicOrganizations(
+		Guid AcademicYearId,
+		Guid CurrentYearStageId,
+		Guid OtherYearStageId);
 }

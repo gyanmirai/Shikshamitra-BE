@@ -97,7 +97,7 @@ public class SalarySlipDraftFreshnessService(
 		var calendar = await payrollCalendarResolver.ResolveAsync(year, month);
 		return await hrPolicyResolver.ResolveAsync(
 			employeeId,
-			new DateTime(year, month, 1),
+			PayrollRunRules.GetPayrollPolicyResolutionDate(year, month),
 			calendar.AcademicYearId);
 	}
 

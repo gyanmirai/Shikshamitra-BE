@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Policies;
+using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.HR.Employees.Payroll;
@@ -24,7 +25,11 @@ public class EmployeePayrollContractWorkflow(
 
 		await contractWriter.SaveAsync(employeeId, input, earningLines, deductionLines);
 
-		if (input.PolicyOverride != null)
+		if (string.Equals(input.PolicyOverrideAction, "disable", StringComparison.OrdinalIgnoreCase))
+		{
+			await DisableDirectPolicyOverrideAsync(employee, input.PolicyOverride);
+		}
+		else if (input.PolicyOverride != null)
 		{
 			await UpsertDirectPolicyOverrideAsync(employee, input.PolicyOverride);
 		}
@@ -42,6 +47,22 @@ public class EmployeePayrollContractWorkflow(
 			EffectiveTo = input.EffectiveTo,
 			AssignmentReason = input.AssignmentReason,
 			ConfirmationToken = input.ConfirmationToken
+		});
+	}
+
+	private async Task DisableDirectPolicyOverrideAsync(Employee employee, EmployeePayrollPolicyOverrideContract? input)
+	{
+		if (input?.AcademicYearId is not { } academicYearId || academicYearId == Guid.Empty)
+		{
+			throw new BusinessException(HRErrorCodes.AcademicYearRequiredForPolicyResolution);
+		}
+
+		await policyAssignmentAppService.DisableEmployeeOverrideAsync(new DisableEmployeePolicyOverrideDto
+		{
+			EmployeeId = employee.Id,
+			AcademicYearId = academicYearId,
+			EffectiveDate = input.EffectiveFrom.Date,
+			AssignmentReason = input.AssignmentReason
 		});
 	}
 }

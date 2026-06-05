@@ -57,8 +57,8 @@ internal static class HRDashboardInsightProjection
 			insights.Add(new HRDashboardInsightDto
 			{
 				Severity = "critical",
-				Title = "Payroll cannot be locked",
-				Summary = payroll.BlockingIssues[0],
+				Title = "Payroll needs review",
+				Summary = "Payroll readiness needs attention before this month can be locked.",
 				Source = "payroll.readiness",
 				ActionLabel = "Open payroll",
 				ActionHref = "/hr/payroll/run-payroll"

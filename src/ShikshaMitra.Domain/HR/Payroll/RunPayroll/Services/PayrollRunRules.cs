@@ -86,4 +86,7 @@ public static class PayrollRunRules
 
 	public static DateOnly GetPayrollMonthEndDate(int year, int month) =>
 		new(year, month, DateTime.DaysInMonth(year, month));
+
+	public static DateTime GetPayrollPolicyResolutionDate(int year, int month) =>
+		new(year, month, DateTime.DaysInMonth(year, month));
 }

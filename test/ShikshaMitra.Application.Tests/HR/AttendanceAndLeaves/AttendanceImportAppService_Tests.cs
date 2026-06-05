@@ -17,6 +17,7 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.AttendanceImports;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
@@ -324,6 +325,171 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	}
 
 	[Fact]
+	public async Task Take_Attendance_Entry_Writer_Should_Reject_Present_When_No_Punches_In_Time_Based_Mode()
+	{
+		var employee = await CreateEmployeeAsync("presentnopunch");
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.None);
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var writer = GetRequiredService<TakeAttendanceEntryWriter>();
+			var exception = await Should.ThrowAsync<BusinessException>(() =>
+				writer.SaveEntryAsync(
+					new ParsedTakeAttendanceEntry(
+						new TakeAttendanceSaveEntryDto
+						{
+							EmployeeId = employee.Id,
+							StatusWire = "PRESENT",
+							InTime = null,
+							OutTime = null,
+							Remarks = "Invalid present without punches"
+						},
+						EmployeeAttendanceStatusType.Present),
+					attendanceDate,
+					new UserScopeContext { IsAdmin = true, UserId = _guidGenerator.Create(), TenantId = _currentTenant.Id },
+					new Dictionary<Guid, Guid?>()));
+
+			exception.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationInvalidPunches);
+		});
+	}
+
+	[Fact]
+	public async Task Take_Attendance_Entry_Writer_Should_Save_Explicit_Absent_When_No_Punches_In_Time_Based_Mode()
+	{
+		var employee = await CreateEmployeeAsync("absentnopunch");
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.None);
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var writer = GetRequiredService<TakeAttendanceEntryWriter>();
+			await writer.SaveEntryAsync(
+				new ParsedTakeAttendanceEntry(
+					new TakeAttendanceSaveEntryDto
+					{
+						EmployeeId = employee.Id,
+						StatusWire = "ABSENT",
+						InTime = null,
+						OutTime = null,
+						Remarks = "Absent without punches"
+					},
+					EmployeeAttendanceStatusType.FullDayLeave),
+				attendanceDate,
+				new UserScopeContext { IsAdmin = true, UserId = _guidGenerator.Create(), TenantId = _currentTenant.Id },
+				new Dictionary<Guid, Guid?>());
+		});
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var query = await _employeeAttendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x => x.EmployeeId == employee.Id && x.AttendanceDate == attendanceDate);
+			attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.FullDayLeave);
+			attendance.TimeIn.ShouldBeNull();
+			attendance.TimeOut.ShouldBeNull();
+		});
+	}
+
+	[Fact]
+	public async Task Integration_Writer_Should_Skip_Time_Based_Evaluation_In_Manual_Status_Mode()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("integrationmanual", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.DeductHalfDay,
+			captureMode: AttendanceCaptureMode.ManualStatus);
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var writer = GetRequiredService<AttendanceIntegrationRunAttendanceWriter>();
+			var outcome = await writer.UpsertAttendanceAndBuildImportRowsAsync(
+				[
+					new ParsedIntegrationRow(
+						new AttendanceIntegrationRunRowDto
+						{
+							EmployeeId = employee.Id,
+							AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+							TimeIn = new DateTimeOffset(attendanceDate.Year, attendanceDate.Month, attendanceDate.Day, 8, 35, 0, TimeSpan.Zero).ToString("o"),
+							TimeOut = new DateTimeOffset(attendanceDate.Year, attendanceDate.Month, attendanceDate.Day, 17, 30, 0, TimeSpan.Zero).ToString("o"),
+							Status = EmployeeAttendanceStatusType.Present,
+							Remarks = "Manual mode integration row"
+						},
+						attendanceDate)
+				],
+				_guidGenerator.Create());
+
+			outcome.Created.ShouldBe(1);
+			outcome.ImportRows.Single().Status.ShouldBe(EmployeeAttendanceStatusType.Present.ToString());
+			outcome.ImportRows.Single().Warnings.ShouldBeEmpty();
+		});
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var query = await _employeeAttendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x => x.EmployeeId == employee.Id && x.AttendanceDate == attendanceDate);
+			attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.Present);
+			attendance.TimeIn.ShouldBeNull();
+			attendance.TimeOut.ShouldBeNull();
+		});
+	}
+
+	[Fact]
+	public async Task Integration_Writer_Should_Clear_Previous_Punches_When_Replacement_Row_Has_No_Times()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("integrationclearpunch", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.None,
+			captureMode: AttendanceCaptureMode.ManualStatus);
+		await InsertAttendanceAsync(
+			employee.Id,
+			attendanceDate,
+			EmployeeAttendanceStatusType.Present,
+			new TimeOnly(8, 0),
+			new TimeOnly(17, 30));
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var writer = GetRequiredService<AttendanceIntegrationRunAttendanceWriter>();
+			var outcome = await writer.UpsertAttendanceAndBuildImportRowsAsync(
+				[
+					new ParsedIntegrationRow(
+						new AttendanceIntegrationRunRowDto
+						{
+							EmployeeId = employee.Id,
+							AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+							TimeIn = null,
+							TimeOut = null,
+							Status = EmployeeAttendanceStatusType.FullDayLeave,
+							Remarks = "Replacement row intentionally has no punches"
+						},
+						attendanceDate)
+				],
+				_guidGenerator.Create());
+
+			outcome.Created.ShouldBe(0);
+			outcome.Replaced.ShouldBe(1);
+		});
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var query = await _employeeAttendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x => x.EmployeeId == employee.Id && x.AttendanceDate == attendanceDate);
+			attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.FullDayLeave);
+			attendance.TimeIn.ShouldBeNull();
+			attendance.TimeOut.ShouldBeNull();
+		});
+	}
+
+	[Fact]
 	public async Task Should_Keep_Present_When_Late_Arrival_Equals_Grace_Time()
 	{
 		var shiftId = await EnsureEightToFiveShiftExistsAsync();
@@ -362,6 +528,282 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		preview.CanConfirm.ShouldBeTrue();
 		var row = preview.Rows.Single();
 		row.Status.ShouldBe(EmployeeAttendanceStatusType.Present.ToString());
+	}
+
+	[Theory]
+	[InlineData(AttendancePenaltyType.Warning, "warning action")]
+	[InlineData(AttendancePenaltyType.SalaryDeduction, "salary deduction marker")]
+	public async Task Should_Keep_Present_And_Warn_When_Late_Penalty_Does_Not_Change_Status(
+		AttendancePenaltyType penaltyType,
+		string warningText)
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync($"late{penaltyType}", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: penaltyType);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:35 AM,05:30 PM,,Late non-status penalty,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("late-non-status-penalty.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.Present.ToString());
+		row.Warnings.ShouldContain(x => x.Contains(warningText, StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Should_Warn_But_Keep_Present_When_Late_Count_Is_Below_Trigger()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("latebelowtrigger", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.DeductHalfDay,
+			maxLateAllowedPerMonth: 1);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:35 AM,05:30 PM,,First late below trigger,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("late-below-trigger.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.Present.ToString());
+		row.Warnings.ShouldContain(x => x.Contains("late arrival", StringComparison.OrdinalIgnoreCase));
+		row.Warnings.ShouldNotContain(x => x.Contains("Auto-marked Half Day", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Should_Apply_Late_Penalty_When_Monthly_Late_Count_Reaches_Trigger()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("latetrigger", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.DeductHalfDay,
+			maxLateAllowedPerMonth: 1);
+		await InsertAttendanceAsync(
+			employee.Id,
+			attendanceDate.AddDays(-1),
+			EmployeeAttendanceStatusType.Present,
+			new TimeOnly(8, 35),
+			new TimeOnly(17, 30));
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:35 AM,05:30 PM,,Second late triggers,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("late-trigger.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.HalfDayLeave.ToString());
+		row.Warnings.ShouldContain(x => x.Contains("Auto-marked Half Day", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Should_Apply_Late_Penalty_To_Second_Late_In_Same_Import_Batch()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("latebatch", shiftId);
+		var firstAttendanceDate = await GetCoveredAttendanceDateAsync();
+		var secondAttendanceDate = firstAttendanceDate.AddDays(1);
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.DeductHalfDay,
+			maxLateAllowedPerMonth: 1);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{firstAttendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:35 AM,05:30 PM,,First batch late,{employee.FullName},{employee.MobileNo}",
+			$"{secondAttendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:35 AM,05:30 PM,,Second batch late,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("late-batch-trigger.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var firstRow = preview.Rows.Single(x => x.AttendanceDate == firstAttendanceDate.ToString("dd-MM-yyyy"));
+		var secondRow = preview.Rows.Single(x => x.AttendanceDate == secondAttendanceDate.ToString("dd-MM-yyyy"));
+		firstRow.Status.ShouldBe(EmployeeAttendanceStatusType.Present.ToString());
+		firstRow.Warnings.ShouldContain(x => x.Contains("late arrival", StringComparison.OrdinalIgnoreCase));
+		firstRow.Warnings.ShouldNotContain(x => x.Contains("Auto-marked Half Day", StringComparison.OrdinalIgnoreCase));
+		secondRow.Status.ShouldBe(EmployeeAttendanceStatusType.HalfDayLeave.ToString());
+		secondRow.Warnings.ShouldContain(x => x.Contains("Auto-marked Half Day", StringComparison.OrdinalIgnoreCase));
+
+		await _attendanceImportAppService.ConfirmAsync(new AttendanceImportConfirmRequestDto
+		{
+			PreviewToken = preview.PreviewToken!
+		});
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var query = await _employeeAttendanceRepository.GetQueryableAsync();
+			var attendance = query
+				.Where(x => x.EmployeeId == employee.Id && (x.AttendanceDate == firstAttendanceDate || x.AttendanceDate == secondAttendanceDate))
+				.ToDictionary(x => x.AttendanceDate);
+			attendance[firstAttendanceDate].StatusType.ShouldBe(EmployeeAttendanceStatusType.Present);
+			attendance[secondAttendanceDate].StatusType.ShouldBe(EmployeeAttendanceStatusType.HalfDayLeave);
+		});
+	}
+
+	[Fact]
+	public async Task Should_Not_Upgrade_Lower_Worked_Time_Status_When_Late_Penalty_Is_Less_Severe()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("latenoupgrade", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.DeductHalfDay,
+			absentThresholdPercentage: 50);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:35 AM,08:45 AM,,Late but absent by worked time,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("late-no-upgrade.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.FullDayLeave.ToString());
+		row.Warnings.ShouldContain(x => x.Contains("Auto-marked Absent", StringComparison.OrdinalIgnoreCase));
+		row.Warnings.ShouldContain(x => x.Contains("late arrival", StringComparison.OrdinalIgnoreCase));
+		row.Warnings.ShouldNotContain(x => x.Contains("Auto-marked Half Day", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Should_Mark_Half_Day_When_One_Punch_And_Missing_Punch_Policy_Is_Half_Day()
+	{
+		var employee = await CreateEmployeeAsync("missinghalf");
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.None,
+			missingPunchBehavior: AttendanceMissingPunchBehavior.MarkHalfDay);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:00 AM,,,One punch half day,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("missing-half-day.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.HalfDayLeave.ToString());
+		row.Warnings.ShouldContain(x => x.Contains("missing punch", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Should_Mark_Absent_When_One_Punch_And_Missing_Punch_Policy_Is_Absent()
+	{
+		var employee = await CreateEmployeeAsync("missingabsent");
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.None,
+			missingPunchBehavior: AttendanceMissingPunchBehavior.MarkAbsent);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:00 AM,,,One punch absent,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("missing-absent.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.FullDayLeave.ToString());
+		row.Warnings.ShouldContain(x => x.Contains("missing punch", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Should_Return_Row_Error_When_One_Punch_And_Missing_Punch_Policy_Requires_Review()
+	{
+		var employee = await CreateEmployeeAsync("missingreview");
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.None,
+			missingPunchBehavior: AttendanceMissingPunchBehavior.RequiresReview);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:00 AM,,,One punch review,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("missing-review.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeFalse();
+		preview.Rows.Single().Errors.ShouldContain(x => x.Contains("Time In and Time Out", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Should_Not_Warn_When_Early_Exit_Is_Within_Grace()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("earlywithin", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.None,
+			earlyExitEnabled: true,
+			earlyExitGraceTime: 15);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:00 AM,05:20 PM,,Within early grace,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("early-within-grace.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.Present.ToString());
+		row.Warnings.ShouldNotContain(x => x.Contains("early exit", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Should_Warn_When_Early_Exit_Exceeds_Grace_Without_Downgrading_Status()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("earlybeyond", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			penaltyType: AttendancePenaltyType.None,
+			earlyExitEnabled: true,
+			earlyExitGraceTime: 15);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:00 AM,05:00 PM,,Beyond early grace,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("early-beyond-grace.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.Present.ToString());
+		row.Warnings.ShouldContain(x => x.Contains("early exit", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Should_Not_Apply_Late_Arrival_Penalty_To_Early_Exit_Warnings()
+	{
+		var shiftId = await EnsureEightToFiveShiftExistsAsync();
+		var employee = await CreateEmployeeAsync("earlypenalty", shiftId);
+		var attendanceDate = await GetCoveredAttendanceDateAsync();
+		await SetDefaultAttendancePolicyRulesAsync(
+			graceTime: 30,
+			maxLateAllowedPerMonth: 0,
+			penaltyType: AttendancePenaltyType.DeductFullDay,
+			penaltyCountThreshold: 1,
+			earlyExitEnabled: true,
+			earlyExitGraceTime: 15);
+		var csv = BuildCsv(
+			"Attendance Date,Employee Code,Time In,Time Out,Status,Remarks,Employee Name,Contact No",
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},08:00 AM,05:00 PM,,Early exit only,{employee.FullName},{employee.MobileNo}");
+
+		var preview = await _attendanceImportAppService.PreviewAsync("early-exit-penalty.csv", "text/csv", csv);
+
+		preview.CanConfirm.ShouldBeTrue();
+		var row = preview.Rows.Single();
+		row.Status.ShouldBe(EmployeeAttendanceStatusType.Present.ToString());
+		row.Warnings.ShouldContain(x => x.Contains("early exit", StringComparison.OrdinalIgnoreCase));
+		row.Warnings.ShouldNotContain(x => x.Contains("Auto-marked", StringComparison.OrdinalIgnoreCase));
 	}
 
 	[Fact]
@@ -491,7 +933,14 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 
 	private async Task SetDefaultAttendancePolicyRulesAsync(
 		int graceTime,
-		AttendancePenaltyType penaltyType)
+		AttendancePenaltyType penaltyType,
+		int? maxLateAllowedPerMonth = null,
+		int? penaltyCountThreshold = null,
+		AttendanceMissingPunchBehavior? missingPunchBehavior = null,
+		bool? earlyExitEnabled = null,
+		int? earlyExitGraceTime = null,
+		double? absentThresholdPercentage = null,
+		AttendanceCaptureMode? captureMode = null)
 	{
 		await EnsurePolicyBaselineAsync();
 		await WithUnitOfWorkAsync(async () =>
@@ -502,18 +951,18 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 				policy.Name,
 				policy.Status,
 				policy.IsDefault,
-				policy.CaptureMode,
+				captureMode ?? AttendanceCaptureMode.Integrated,
 				policy.FullDayThresholdPercentage,
 				policy.HalfDayThresholdPercentage,
-				policy.AbsentThresholdPercentage,
-				policy.MissingPunchBehavior,
+				absentThresholdPercentage ?? 0,
+				missingPunchBehavior ?? AttendanceMissingPunchBehavior.RequiresReview,
 				policy.ManualCorrectionAllowed,
 				graceTime,
-				policy.MaxLateAllowedPerMonth,
+				maxLateAllowedPerMonth ?? 0,
 				penaltyType,
-				policy.PenaltyCountThreshold,
-				policy.EarlyExitEnabled,
-				policy.EarlyExitGraceTime,
+				penaltyCountThreshold ?? 0,
+				earlyExitEnabled ?? false,
+				earlyExitGraceTime ?? 0,
 				policy.OvertimeEnabled,
 				policy.OvertimeRate,
 				policy.MinOvertimeMinutes,
@@ -521,6 +970,31 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 				policy.SandwichRuleEnabled,
 				policy.PayrollPreviewEnabled);
 			await _attendancePolicyRepository.UpdateAsync(policy, autoSave: true);
+		});
+	}
+
+	private async Task InsertAttendanceAsync(
+		Guid employeeId,
+		DateOnly attendanceDate,
+		EmployeeAttendanceStatusType status,
+		TimeOnly? timeIn,
+		TimeOnly? timeOut)
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			await _employeeAttendanceRepository.InsertAsync(new EmployeeAttendance
+			{
+				TenantId = _currentTenant.Id,
+				EmployeeId = employeeId,
+				AttendanceDate = attendanceDate,
+				StatusType = status,
+				TimeIn = timeIn.HasValue
+					? new DateTimeOffset(attendanceDate.Year, attendanceDate.Month, attendanceDate.Day, timeIn.Value.Hour, timeIn.Value.Minute, 0, TimeSpan.Zero)
+					: null,
+				TimeOut = timeOut.HasValue
+					? new DateTimeOffset(attendanceDate.Year, attendanceDate.Month, attendanceDate.Day, timeOut.Value.Hour, timeOut.Value.Minute, 0, TimeSpan.Zero)
+					: null
+			}, autoSave: true);
 		});
 	}
 

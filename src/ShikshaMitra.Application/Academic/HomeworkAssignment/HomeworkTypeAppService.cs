@@ -51,14 +51,11 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 				academicMediumId
 			);
 
-			// Create through domain manager (handles all business logic)
+			// Create through domain manager (handles all business logic + persistence)
 			var homeworkType = await _manager.CreateAsync(
 				academicMediumId,
 				input.HomeworkTypeName
 			);
-
-			// Persist to database
-			await _repository.InsertAsync(homeworkType, autoSave: true);
 
 			// Map to DTO
 			var dto = ObjectMapper.Map<HomeworkType, HomeworkTypeDto>(homeworkType);

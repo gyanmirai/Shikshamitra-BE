@@ -50,14 +50,11 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 				academicMediumId
 			);
 
-			// Create through domain manager (handles all business logic)
+			// Create through domain manager (handles all business logic + persistence)
 			var assignmentType = await _manager.CreateAsync(
 				academicMediumId,
 				input.AssignmentTypeName
 			);
-
-			// Persist to database
-			await _repository.InsertAsync(assignmentType, autoSave: true);
 
 			// Map to DTO
 			var dto = ObjectMapper.Map<AssignmentType, AssignmentTypeDto>(assignmentType);

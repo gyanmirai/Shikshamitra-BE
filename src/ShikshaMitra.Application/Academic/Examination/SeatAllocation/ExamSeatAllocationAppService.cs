@@ -168,18 +168,31 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SaveSeatAllocationResponseDto> SaveSeatAllocationAsync(Guid examId, SaveSeatAllocationRequestDto input)
     {
-        var existingAllocations = await seatAllocationRepository.GetListAsync(a =>
+        var incomingStudentIds = input.Students.Select(s => s.StudentId).ToHashSet();
+
+        // Load by studentId (not roomId) to respect the unique index on {ExamId, StudentId}.
+        // A student being moved from room A → room B would not be found if we filter by roomId,
+        // causing a duplicate-key 500 on insert.
+        var existingForStudents = await seatAllocationRepository.GetListAsync(a =>
+            a.ExamId == examId && incomingStudentIds.Contains(a.StudentId));
+        var existingByStudent = existingForStudents.ToDictionary(a => a.StudentId);
+
+        // Separately load the room-scoped list to find seats that should be cleared
+        // (students removed from this room by the current submission).
+        var existingInRoom = await seatAllocationRepository.GetListAsync(a =>
             a.ExamId == examId && a.RoomId == input.RoomId);
-        var existingByStudent = existingAllocations.ToDictionary(a => a.StudentId);
 
         var toInsert = new List<ExamSeatAllocation>();
         var toUpdate = new List<ExamSeatAllocation>();
 
         foreach (var student in input.Students)
         {
+            // Normalise Guid.Empty → null so bench FK constraints are not violated
+            var benchId = student.BenchId == Guid.Empty ? null : student.BenchId;
+
             if (existingByStudent.TryGetValue(student.StudentId, out var existing))
             {
-                existing.Update(input.RoomId, student.SeatNumber, student.BenchId, student.IsRoomAssign);
+                existing.Update(input.RoomId, student.SeatNumber, benchId, student.IsRoomAssign);
                 toUpdate.Add(existing);
             }
             else
@@ -191,14 +204,13 @@ public class ExamSeatAllocationAppService(
                     student.StudentId,
                     input.RoomId,
                     student.SeatNumber,
-                    student.BenchId,
+                    benchId,
                     student.IsRoomAssign));
             }
         }
 
-        // Delete allocations for students that are no longer in the submitted list (removed from seat)
-        var incomingStudentIds = input.Students.Select(s => s.StudentId).ToHashSet();
-        var toDelete = existingAllocations
+        // Delete seats in this room whose students are no longer in the submission
+        var toDelete = existingInRoom
             .Where(a => !incomingStudentIds.Contains(a.StudentId))
             .ToList();
 

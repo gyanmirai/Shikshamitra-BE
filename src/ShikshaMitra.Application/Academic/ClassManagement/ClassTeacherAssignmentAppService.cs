@@ -145,6 +145,12 @@ public class ClassTeacherAssignmentAppService(
 
 		try
 		{
+			// Resolve all standards for this organization so we can do a full replace
+			var orgStandards = await standardRepository.GetListAsync(
+				s => s.EducationMediumStageId == input.OrganizationId
+			);
+			var orgStandardIds = orgStandards.Select(s => s.Id).ToList();
+
 			// Batch load all required data before processing
 			var teacherIds = input.Assignments.Select(a => a.TeacherId).Distinct().ToList();
 			var classIds = input.Assignments.Select(a => a.ClassId).Distinct().ToList();
@@ -191,41 +197,32 @@ public class ClassTeacherAssignmentAppService(
 			var educationMediumStageLookup = educationMediumStages.ToDictionary(ems => ems.Id);
 			var standardLookup = standards.ToDictionary(s => s.Id);
 
-			// Get existing class teacher assignments
-			var existingAssignments = await classTeacherRepository.GetListAsync(ct =>
-				classIds.Contains(ct.StandardId) &&
-				divisionIds.Contains(ct.DivisionId)
+			// Full replace: delete ALL existing assignments for the organization, then re-insert.
+			// This ensures removed teachers are cleared and not left as stale records.
+			var toDelete = await classTeacherRepository.GetListAsync(
+				ct => orgStandardIds.Contains(ct.StandardId)
 			);
-			var existingLookup = existingAssignments.ToDictionary(
-				ct => (ct.StandardId, ct.DivisionId)
-			);
+			if (toDelete.Any())
+			{
+				await classTeacherRepository.DeleteManyAsync(toDelete, autoSave: true);
+			}
 
-			// Process assignments
+			// Insert all incoming assignments fresh
 			foreach (var assignment in input.Assignments)
 			{
-				if (existingLookup.TryGetValue((assignment.ClassId, assignment.DivisionId), out var existingAssignment))
-				{
-					// Update existing assignment
-					existingAssignment.TeacherId = assignment.TeacherId;
-					await classTeacherRepository.UpdateAsync(existingAssignment);
-				}
-				else
-				{
-					// Create new assignment
-					var standard = standardLookup[assignment.ClassId];
-					var educationMediumStage = educationMediumStageLookup[standard.EducationMediumStageId];
+				var standard = standardLookup[assignment.ClassId];
+				var educationMediumStage = educationMediumStageLookup[standard.EducationMediumStageId];
 
-					var newAssignment = new ClassTeacher.ClassTeacher(
-						guidGenerator.Create(),
-						CurrentTenant.Id,
-						assignment.ClassId,
-						assignment.DivisionId,
-						assignment.TeacherId,
-						educationMediumStage.EducationMediumId
-					);
+				var newAssignment = new ClassTeacher.ClassTeacher(
+					guidGenerator.Create(),
+					CurrentTenant.Id,
+					assignment.ClassId,
+					assignment.DivisionId,
+					assignment.TeacherId,
+					educationMediumStage.EducationMediumId
+				);
 
-					await classTeacherRepository.InsertAsync(newAssignment);
-				}
+				await classTeacherRepository.InsertAsync(newAssignment);
 			}
 
 			return new ApiSuccessResponseDto

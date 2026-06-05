@@ -77,6 +77,7 @@ public class HrPolicyAssignmentWorkflow(
 			return await CreateAsync(payload);
 		}
 
+		await DeactivateCompetingEmployeeOverridesAsync(input, targetType, targetKey, effectiveFrom, effectiveTo, existing.Id);
 		await assignmentImpactService.EnsureNoOverlapAsync(targetType, targetKey, payload.AcademicYearId, payload.EffectiveFrom, payload.EffectiveTo, existing.Id, true);
 		await assignmentImpactService.EnsureAssignmentImpactConfirmedAsync("update", existing.Id, payload);
 
@@ -87,6 +88,51 @@ public class HrPolicyAssignmentWorkflow(
 		var dto = HrPolicyMapping.ToDto(existing);
 		await auditWriter.WriteEmployeeOverrideAsync(existing, before, dto, employee.EmployeeName);
 		return dto;
+	}
+
+	public async Task DisableEmployeeOverrideAsync(DisableEmployeePolicyOverrideDto input)
+	{
+		if (input.EffectiveDate == default)
+		{
+			throw new BusinessException(HRErrorCodes.PolicyAssignmentRangeInvalid);
+		}
+
+		await employeeRepository.GetAsync(input.EmployeeId);
+		var targetType = HrPolicyAssignmentTargetType.Employee;
+		var targetKey = HrPolicyAssignment.NormalizeTargetKey(targetType, input.EmployeeId.ToString("D"));
+		var effectiveDate = input.EffectiveDate.Date;
+		var query = await repository.GetQueryableAsync();
+		var activeOverrides = await AsyncExecuter.ToListAsync(query.Where(x =>
+			x.AcademicYearId == input.AcademicYearId &&
+			x.TargetType == targetType &&
+			x.TargetKey == targetKey &&
+			x.IsActive &&
+			x.EffectiveFrom <= effectiveDate &&
+			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= effectiveDate)));
+
+		foreach (var assignment in activeOverrides)
+		{
+			var before = HrPolicyMapping.ToDto(assignment);
+			var disableReason = string.IsNullOrWhiteSpace(input.AssignmentReason)
+				? assignment.AssignmentReason
+				: input.AssignmentReason;
+			var shouldEndBeforeEffectiveDate = assignment.EffectiveFrom.Date < effectiveDate;
+			assignment.Update(
+				assignment.AttendancePolicyId,
+				assignment.PayrollPolicyId,
+				assignment.EffectiveFrom,
+				shouldEndBeforeEffectiveDate ? effectiveDate.AddDays(-1) : assignment.EffectiveTo,
+				shouldEndBeforeEffectiveDate,
+				assignment.Priority,
+				disableReason);
+			await repository.UpdateAsync(assignment, autoSave: false);
+			await auditWriter.WriteDeletedAsync(assignment, before);
+		}
+
+		if (activeOverrides.Count > 0)
+		{
+			await CurrentUnitOfWork!.SaveChangesAsync();
+		}
 	}
 
 	public Task<HrPolicyImpactPreviewDto> PreviewImpactAsync(HrPolicyAssignmentImpactPreviewRequestDto input) =>
@@ -141,16 +187,57 @@ public class HrPolicyAssignmentWorkflow(
 		DateTime? effectiveTo)
 	{
 		var query = await repository.GetQueryableAsync();
+		var effectiveEnd = effectiveTo ?? DateTime.MaxValue;
 		return await AsyncExecuter.FirstOrDefaultAsync(query
 			.Where(x =>
 				x.AcademicYearId == input.AcademicYearId &&
 				x.TargetType == targetType &&
 				x.TargetKey == targetKey &&
 				x.IsActive &&
-				x.EffectiveFrom <= (effectiveTo ?? DateTime.MaxValue) &&
+				x.EffectiveFrom <= effectiveEnd &&
 				(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= effectiveFrom))
 			.OrderByDescending(x => x.Priority)
 			.ThenByDescending(x => x.EffectiveFrom));
+	}
+
+	private async Task DeactivateCompetingEmployeeOverridesAsync(
+		UpsertEmployeePolicyOverrideDto input,
+		HrPolicyAssignmentTargetType targetType,
+		string targetKey,
+		DateTime effectiveFrom,
+		DateTime? effectiveTo,
+		Guid keepAssignmentId)
+	{
+		var query = await repository.GetQueryableAsync();
+		var effectiveEnd = effectiveTo ?? DateTime.MaxValue.Date;
+		var competing = await AsyncExecuter.ToListAsync(query.Where(x =>
+			x.AcademicYearId == input.AcademicYearId &&
+			x.TargetType == targetType &&
+			x.TargetKey == targetKey &&
+			x.IsActive &&
+			x.Id != keepAssignmentId &&
+			x.EffectiveFrom <= effectiveEnd &&
+			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= effectiveFrom)));
+
+		foreach (var assignment in competing)
+		{
+			var before = HrPolicyMapping.ToDto(assignment);
+			assignment.Update(
+				assignment.AttendancePolicyId,
+				assignment.PayrollPolicyId,
+				assignment.EffectiveFrom,
+				assignment.EffectiveTo,
+				false,
+				assignment.Priority,
+				assignment.AssignmentReason);
+			await repository.UpdateAsync(assignment, autoSave: false);
+			await auditWriter.WriteDeletedAsync(assignment, before);
+		}
+
+		if (competing.Count > 0)
+		{
+			await CurrentUnitOfWork!.SaveChangesAsync();
+		}
 	}
 
 	private static CreateUpdateHrPolicyAssignmentDto BuildEmployeeOverridePayload(

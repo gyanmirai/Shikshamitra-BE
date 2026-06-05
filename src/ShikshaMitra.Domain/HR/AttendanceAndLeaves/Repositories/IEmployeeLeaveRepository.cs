@@ -21,6 +21,13 @@ public record PayrollApprovedLeaveRow(
 	LeavePaidType? ApprovedPaidType,
 	LeavePaidType PolicyPaidType);
 
+public record ApprovedAttendanceLeaveRow(
+	Guid LeaveId,
+	Guid EmployeeId,
+	bool HalfDay,
+	DateTimeOffset StartDate,
+	DateTimeOffset EndDate);
+
 public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 {
     /// <summary>
@@ -51,6 +58,11 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 		IReadOnlyCollection<Guid> employeeIds,
 		DateTimeOffset rangeStart,
 		DateTimeOffset rangeEnd,
+		CancellationToken cancellationToken = default);
+
+	Task<List<ApprovedAttendanceLeaveRow>> GetApprovedAttendanceLeaveRowsForDateAsync(
+		IReadOnlyCollection<Guid> employeeIds,
+		DateOnly attendanceDate,
 		CancellationToken cancellationToken = default);
 
 	/// <summary>

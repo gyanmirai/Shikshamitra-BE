@@ -1,10 +1,25 @@
 using System;
+using System.Linq;
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using Shouldly;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -84,6 +99,96 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Employee_Wise_Attendance_Without_EducationMediumStageId()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			"TrackNoStage",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+		await SeedAttendanceAsync(employee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate={attendanceDate:dd-MM-yyyy}&endDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
+
+		var payload = await response.Content.ReadFromJsonAsync<AttendanceEmployeeWiseResponse>()
+			?? throw new InvalidOperationException("Failed to deserialize employee-wise attendance response.");
+		payload.TotalCount.ShouldBe(1);
+		payload.AttendanceSummary.Present.ShouldBe(1);
+		payload.Items.Count.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Employee_Wise_Attendance_With_AcademicYearId_Filtering_Inferred_Stages()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var seeded = await SeedAttendanceAcademicOrganizationsAsync();
+		var startDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-2));
+		var endDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			"TrackYearScope",
+			dateOfJoining: startDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		await AssignEmployeeToStageAsync(employee.Id, seeded.CurrentYearStageId);
+		await AssignEmployeeToStageAsync(employee.Id, seeded.OtherYearStageId);
+		await SeedAttendanceAsync(employee.Id, startDate, seeded.OtherYearStageId);
+		await SeedAttendanceAsync(employee.Id, endDate, seeded.CurrentYearStageId);
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate={startDate:dd-MM-yyyy}&endDate={endDate:dd-MM-yyyy}&page=1&pageSize=10&academicYearId={seeded.AcademicYearId:D}");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
+
+		var payload = await response.Content.ReadFromJsonAsync<AttendanceEmployeeWiseResponse>()
+			?? throw new InvalidOperationException("Failed to deserialize employee-wise attendance response.");
+		payload.TotalCount.ShouldBe(2);
+		payload.AttendanceSummary.Present.ShouldBe(1);
+		payload.AttendanceSummary.Absent.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Employee_Wise_When_Provided_EducationMediumStageId_Is_Outside_AcademicYear()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var seeded = await SeedAttendanceAcademicOrganizationsAsync();
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employeeId = Guid.NewGuid();
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/employee-wise?employeeId={employeeId:D}&startDate={attendanceDate:dd-MM-yyyy}&endDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10&educationMediumStageId={seeded.OtherYearStageId:D}&academicYearId={seeded.AcademicYearId:D}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Employee_Wise_When_Provided_EducationMediumStageId_Is_Out_Of_Scope()
+	{
+		var scopedUserId = Guid.NewGuid();
+		await EnsureUserHasStageScopeAsync(scopedUserId, EmployeeTestHelper.DefaultMediumStageId);
+		var scopedClient = CreateClientAs(scopedUserId);
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employeeId = Guid.NewGuid();
+
+		var response = await scopedClient.GetAsync(
+			$"{BaseUrl}/employee-wise?employeeId={employeeId:D}&startDate={attendanceDate:dd-MM-yyyy}&endDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10&educationMediumStageId={Guid.NewGuid():D}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Reject_Invalid_Status_With_400_And_Raw_Abp_ValidationErrors()
 	{
 		var today = DateTime.UtcNow.ToString("dd-MM-yyyy");
@@ -140,4 +245,142 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	#endregion
+
+	private async Task SeedAttendanceAsync(Guid employeeId, DateOnly attendanceDate, Guid? educationMediumStageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await attendanceRepository.InsertAsync(new EmployeeAttendance
+			{
+				TenantId = tenantId,
+				EmployeeId = employeeId,
+				AttendanceDate = attendanceDate,
+				EducationMediumStageId = educationMediumStageId,
+				StatusType = EmployeeAttendanceStatusType.Present,
+				Source = AttendanceRecordSource.Manual,
+				TimeIn = new DateTimeOffset(attendanceDate.ToDateTime(new TimeOnly(9, 0)), TimeSpan.Zero),
+				TimeOut = new DateTimeOffset(attendanceDate.ToDateTime(new TimeOnly(17, 0)), TimeSpan.Zero),
+				Remarks = "Attendance tracking test"
+			}, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task AssignEmployeeToStageAsync(Guid employeeId, Guid stageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var assignmentRepository =
+			scope.ServiceProvider.GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var exists = await assignmentRepository.AnyAsync(x =>
+				x.EmployeeId == employeeId &&
+				x.EducationMediumStageId == stageId);
+			if (!exists)
+			{
+				await assignmentRepository.InsertAsync(
+					new EmployeeOrganizationAssignment(Guid.NewGuid(), tenantId, employeeId, stageId),
+					autoSave: false);
+			}
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<AttendanceAcademicOrganizations> SeedAttendanceAcademicOrganizationsAsync()
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+			var boardRepository = scope.ServiceProvider.GetRequiredService<IEducationBoardRepository>();
+			var mediumRepository = scope.ServiceProvider.GetRequiredService<IEducationMediumRepository>();
+			var stageRepository = scope.ServiceProvider.GetRequiredService<IEducationMediumStageRepository>();
+			var academicYearManager = scope.ServiceProvider.GetRequiredService<AcademicYearManager>();
+			var boardManager = scope.ServiceProvider.GetRequiredService<EducationBoardManager>();
+			var mediumManager = scope.ServiceProvider.GetRequiredService<EducationMediumManager>();
+			var stageManager = scope.ServiceProvider.GetRequiredService<EducationMediumStageManager>();
+
+			var suffix = Guid.NewGuid().ToString("N")[..8];
+			var academicYear = await academicYearManager.CreateAsync(
+				$"AttTrack-{suffix}",
+				new DateTime(2033, 4, 1),
+				new DateTime(2034, 3, 31));
+			await academicYearRepository.InsertAsync(academicYear, autoSave: false);
+
+			var otherYear = await academicYearManager.CreateAsync(
+				$"AttTrackOther-{suffix}",
+				new DateTime(2034, 4, 1),
+				new DateTime(2035, 3, 31));
+			await academicYearRepository.InsertAsync(otherYear, autoSave: false);
+
+			var board = await boardManager.CreateAsync(academicYear.Id, EducationBoardType.GSEB);
+			await boardRepository.InsertAsync(board, autoSave: false);
+			var otherBoard = await boardManager.CreateAsync(otherYear.Id, EducationBoardType.CBSE);
+			await boardRepository.InsertAsync(otherBoard, autoSave: false);
+
+			var medium = await mediumManager.CreateAsync(board.Id, $"Gujarati-{suffix}");
+			await mediumRepository.InsertAsync(medium, autoSave: false);
+			var otherMedium = await mediumManager.CreateAsync(otherBoard.Id, $"English-{suffix}");
+			await mediumRepository.InsertAsync(otherMedium, autoSave: false);
+
+			var stage = await stageManager.CreateAsync(medium.Id, $"Primary-{suffix}");
+			await stageRepository.InsertAsync(stage, autoSave: false);
+			var otherStage = await stageManager.CreateAsync(otherMedium.Id, $"Secondary-{suffix}");
+			await stageRepository.InsertAsync(otherStage, autoSave: false);
+
+			await uow.CompleteAsync();
+
+			return new AttendanceAcademicOrganizations(
+				academicYear.Id,
+				stage.Id,
+				otherStage.Id);
+		}
+	}
+
+	private async Task EnsureUserHasStageScopeAsync(Guid userId, Guid stageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var scopeRepository = scope.ServiceProvider.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		var userScopeService = scope.ServiceProvider.GetRequiredService<IUserScopeService>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await scopeRepository.InsertAsync(
+				new UserScopeAssignment(
+					Guid.NewGuid(),
+					tenantId,
+					userId: userId,
+					educationMediumStageId: stageId,
+					description: "API regression test attendance tracking stage scope"),
+				autoSave: false);
+			await userScopeService.InvalidateUserScopeCacheAsync(userId);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private sealed record AttendanceAcademicOrganizations(
+		Guid AcademicYearId,
+		Guid CurrentYearStageId,
+		Guid OtherYearStageId);
 }

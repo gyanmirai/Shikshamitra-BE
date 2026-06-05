@@ -40,6 +40,7 @@ public class AttendanceRegisterRowReader(
 			scope,
 			new HrEmployeeScopeOptions
 			{
+				AcademicYearId = input.AcademicYearId,
 				EducationMediumStageId = input.EducationMediumStageId,
 				ActiveOnOrAfter = startDate,
 				JoinedOnOrBefore = endDate,
@@ -92,7 +93,9 @@ public class AttendanceRegisterRowReader(
 		}
 
 		var employeeIds = employees.Select(x => x.EmployeeId).ToList();
-		var stageLookup = await hrEmployeeScopeQueryService.BuildEmployeeStageLookupAsync(employeeIds);
+		var stageLookup = await hrEmployeeScopeQueryService.BuildEmployeeStageLookupAsync(
+			employeeIds,
+			input.AcademicYearId);
 
 		foreach (var employee in employees)
 		{
@@ -124,6 +127,22 @@ public class AttendanceRegisterRowReader(
 			employeeIds.Contains(x.EmployeeId) &&
 			x.AttendanceDate >= startDate &&
 			x.AttendanceDate <= endDate);
+
+		if (input.EducationMediumStageId.HasValue)
+		{
+			attendanceQuery = attendanceQuery.Where(x =>
+				x.EducationMediumStageId == input.EducationMediumStageId.Value);
+		}
+		else if (input.AcademicYearId.HasValue)
+		{
+			var allowedStageIds = employees
+				.SelectMany(x => x.AssignedStageIds)
+				.Distinct()
+				.ToList();
+			attendanceQuery = attendanceQuery.Where(x =>
+				x.EducationMediumStageId.HasValue &&
+				allowedStageIds.Contains(x.EducationMediumStageId.Value));
+		}
 
 		var attendanceRows = await asyncExecuter.ToListAsync(attendanceQuery);
 		var attendanceByEmployeeDate = attendanceRows

@@ -56,10 +56,21 @@ public class AttendanceImportPreviewRowEnricher(
 			? new Dictionary<(Guid EmployeeId, DateOnly Date), AttendanceCaptureMode>()
 			: await captureModeLookupResolver.ResolveForPairsAsync(
 				datedRows.Select(x => (x.Employee.Id, x.Row.AttendanceDateValue!.Value)));
+		var punchContextLookup = datedRows
+			.Where(x => x.Row.TimeInValue.HasValue)
+			.GroupBy(x => x.Employee.Id)
+			.ToDictionary(
+				x => x.Key,
+				x => (IReadOnlyCollection<AttendancePolicyEvaluationPunchContext>)x
+					.Select(row => new AttendancePolicyEvaluationPunchContext(
+						row.Row.AttendanceDateValue!.Value,
+						row.Row.TimeInValue!.Value))
+					.ToList());
 
 		foreach (var (row, employee) in matchedRows)
 		{
-			await EvaluatePolicyAsync(row, employee, captureModeLookup);
+			punchContextLookup.TryGetValue(employee.Id, out var punchContext);
+			await EvaluatePolicyAsync(row, employee, captureModeLookup, punchContext);
 		}
 	}
 
@@ -81,7 +92,8 @@ public class AttendanceImportPreviewRowEnricher(
 	private async Task EvaluatePolicyAsync(
 		AttendanceImportPreviewRow row,
 		Employee employee,
-		Dictionary<(Guid EmployeeId, DateOnly Date), AttendanceCaptureMode> captureModeLookup)
+		Dictionary<(Guid EmployeeId, DateOnly Date), AttendanceCaptureMode> captureModeLookup,
+		IReadOnlyCollection<AttendancePolicyEvaluationPunchContext>? punchContext)
 	{
 		if (!row.AttendanceDateValue.HasValue)
 		{
@@ -100,13 +112,11 @@ public class AttendanceImportPreviewRowEnricher(
 				row.AttendanceDateValue.Value,
 				row.TimeInValue,
 				row.TimeOutValue,
-				row.StatusValue);
+				row.StatusValue,
+				punchContext);
 			row.StatusValue = evaluation.Status;
 			row.Status = evaluation.Status.ToString();
-			if (!string.IsNullOrWhiteSpace(evaluation.Warning))
-			{
-				row.Warnings.Add(evaluation.Warning);
-			}
+			row.Warnings.AddRange(evaluation.Warnings);
 		}
 		catch (BusinessException ex)
 		{

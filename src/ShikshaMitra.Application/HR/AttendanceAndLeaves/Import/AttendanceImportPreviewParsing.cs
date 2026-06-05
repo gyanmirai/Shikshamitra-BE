@@ -51,11 +51,6 @@ internal static class AttendanceImportPreviewParsing
 		var hasAnyTime = hasTimeIn || hasTimeOut;
 		var hasBothTimes = hasTimeIn && hasTimeOut;
 
-		if (hasAnyTime && !hasBothTimes)
-		{
-			previewRow.Errors.Add("Time In and Time Out must both be provided for present rows.");
-		}
-
 		if (hasBothTimes)
 		{
 			if (previewRow.AttendanceDateValue.HasValue)
@@ -75,6 +70,38 @@ internal static class AttendanceImportPreviewParsing
 					previewRow.StatusValue = EmployeeAttendanceStatusType.Present;
 					previewRow.Status = nameof(EmployeeAttendanceStatusType.Present);
 				}
+			}
+		}
+		else if (hasAnyTime)
+		{
+			if (previewRow.AttendanceDateValue.HasValue)
+			{
+				if (hasTimeIn)
+				{
+					previewRow.TimeInValue = AttendanceImportCellParser.CombineDateAndTime(previewRow.AttendanceDateValue.Value, timeIn);
+					previewRow.TimeIn = timeIn.ToString(@"hh\:mm");
+				}
+
+				if (hasTimeOut)
+				{
+					previewRow.TimeOutValue = AttendanceImportCellParser.CombineDateAndTime(previewRow.AttendanceDateValue.Value, timeOut);
+					previewRow.TimeOut = timeOut.ToString(@"hh\:mm");
+				}
+			}
+
+			if (string.IsNullOrWhiteSpace(previewRow.Status))
+			{
+				previewRow.StatusValue = EmployeeAttendanceStatusType.Present;
+				previewRow.Status = nameof(EmployeeAttendanceStatusType.Present);
+			}
+			else if (AttendanceImportCellParser.TryParseStatus(previewRow.Status, out var statusValue))
+			{
+				previewRow.StatusValue = statusValue;
+				previewRow.Status = statusValue.ToString();
+			}
+			else
+			{
+				previewRow.Errors.Add("Status is invalid. Allowed values: Present, HalfDayLeave, FullDayLeave.");
 			}
 		}
 		else

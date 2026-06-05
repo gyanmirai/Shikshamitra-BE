@@ -14,6 +14,7 @@ internal static class TakeAttendanceDayProjection
 	public static List<TakeAttendanceEmployeeRowDto> BuildRows(
 		IReadOnlyList<Employee> employees,
 		IReadOnlyDictionary<Guid, EmployeeAttendance> attendanceByEmployee,
+		IReadOnlyDictionary<Guid, ApprovedAttendanceLeaveRow> approvedLeaveByEmployee,
 		IReadOnlyDictionary<Guid, ShiftManagement> shifts,
 		IReadOnlyDictionary<Guid, AttendanceCaptureMode> captureModeByEmployee,
 		DateTime date,
@@ -24,8 +25,15 @@ internal static class TakeAttendanceDayProjection
 		foreach (var employee in employees)
 		{
 			attendanceByEmployee.TryGetValue(employee.Id, out var attendance);
+			approvedLeaveByEmployee.TryGetValue(employee.Id, out var approvedLeave);
 			shifts.TryGetValue(employee.ShiftId ?? Guid.Empty, out var shift);
 			var captureMode = captureModeByEmployee.GetValueOrDefault(employee.Id, AttendanceCaptureMode.Integrated);
+			var warnings = new List<string>();
+			if (attendance != null && approvedLeave != null)
+			{
+				warnings.Add("Approved leave exists for this date but attendance was manually overridden.");
+			}
+
 			items.Add(new TakeAttendanceEmployeeRowDto
 			{
 				EmployeeId = employee.Id,
@@ -40,14 +48,20 @@ internal static class TakeAttendanceDayProjection
 				ShiftEndTime = shift?.EndTime.ToString("HH:mm:ss"),
 				Remarks = attendance?.Remarks,
 				CaptureMode = HrPolicyMapping.MapCaptureMode(captureMode),
-				Source = HrPolicyMapping.MapAttendanceSource(attendance?.Source ?? AttendanceRecordSource.Manual),
-				Warnings = [],
+				Source = attendance == null && approvedLeave != null
+					? "approved_leave"
+					: HrPolicyMapping.MapAttendanceSource(attendance?.Source ?? AttendanceRecordSource.Manual),
+				Warnings = warnings,
 				Errors = [],
 				IsHoliday = holiday != null,
 				HolidayName = holiday?.HolidayName,
 				HolidayReason = holidayReason,
+				IsApprovedLeave = approvedLeave != null,
+				ApprovedLeaveId = approvedLeave?.LeaveId,
+				ApprovedLeaveKind = approvedLeave == null ? null : approvedLeave.HalfDay ? "HalfDay" : "FullDay",
+				ApprovedLeaveLabel = approvedLeave == null ? null : approvedLeave.HalfDay ? "On Leave (Half Day)" : "On Leave",
 				Status = attendance == null
-					? TakeAttendanceStatus.NotMarked
+					? approvedLeave == null ? TakeAttendanceStatus.NotMarked : TakeAttendanceStatus.OnLeave
 					: MapDomainStatus(attendance.StatusType)
 			});
 		}
@@ -57,14 +71,20 @@ internal static class TakeAttendanceDayProjection
 
 	public static TakeAttendanceSummaryDto BuildSummary(
 		IReadOnlyList<EmployeeAttendance> attendanceRows,
-		int scopedEmployeeCount) =>
-		new()
+		IReadOnlyDictionary<Guid, ApprovedAttendanceLeaveRow> approvedLeaveByEmployee,
+		int scopedEmployeeCount)
+	{
+		var onLeaveCount = CountApprovedLeaveWithoutAttendance(attendanceRows, approvedLeaveByEmployee);
+
+		return new TakeAttendanceSummaryDto
 		{
 			Present = attendanceRows.Count(x => x.StatusType == EmployeeAttendanceStatusType.Present),
 			HalfDay = attendanceRows.Count(x => x.StatusType == EmployeeAttendanceStatusType.HalfDayLeave),
 			Absent = attendanceRows.Count(x => x.StatusType == EmployeeAttendanceStatusType.FullDayLeave),
-			NotMarked = scopedEmployeeCount - attendanceRows.Count
+			OnLeave = onLeaveCount,
+			NotMarked = scopedEmployeeCount - attendanceRows.Count - onLeaveCount
 		};
+	}
 
 	private static TakeAttendanceStatus MapDomainStatus(EmployeeAttendanceStatusType status) =>
 		status switch
@@ -74,6 +94,14 @@ internal static class TakeAttendanceDayProjection
 			EmployeeAttendanceStatusType.FullDayLeave => TakeAttendanceStatus.Absent,
 			_ => TakeAttendanceStatus.NotMarked
 		};
+
+	private static int CountApprovedLeaveWithoutAttendance(
+		IReadOnlyList<EmployeeAttendance> attendanceRows,
+		IReadOnlyDictionary<Guid, ApprovedAttendanceLeaveRow> approvedLeaveByEmployee)
+	{
+		var attendanceEmployeeIds = attendanceRows.Select(x => x.EmployeeId).ToHashSet();
+		return approvedLeaveByEmployee.Keys.Count(employeeId => !attendanceEmployeeIds.Contains(employeeId));
+	}
 
 	private static string FormatName(string? first, string? middle, string? last)
 	{

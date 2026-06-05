@@ -47,6 +47,8 @@ internal static partial class HrPolicyMapping
 
 	public static AttendancePenaltyType ParsePenaltyType(string value) => Normalize(value) switch
 	{
+		"warning" => AttendancePenaltyType.Warning,
+		"salary_deduction" => AttendancePenaltyType.SalaryDeduction,
 		"deduct_half_day" => AttendancePenaltyType.DeductHalfDay,
 		"deduct_full_day" => AttendancePenaltyType.DeductFullDay,
 		"none" or "" => AttendancePenaltyType.None,
@@ -55,6 +57,8 @@ internal static partial class HrPolicyMapping
 
 	public static string MapPenaltyType(AttendancePenaltyType value) => value switch
 	{
+		AttendancePenaltyType.Warning => "warning",
+		AttendancePenaltyType.SalaryDeduction => "salary_deduction",
 		AttendancePenaltyType.DeductHalfDay => "deduct_half_day",
 		AttendancePenaltyType.DeductFullDay => "deduct_full_day",
 		_ => "none"
@@ -79,7 +83,9 @@ internal static partial class HrPolicyMapping
 
 	public static AttendanceHolidayWorkBehavior ParseHolidayWorkBehavior(string value) => Normalize(value) switch
 	{
+		"no_benefit" => AttendanceHolidayWorkBehavior.NoBenefit,
 		"paid" => AttendanceHolidayWorkBehavior.Paid,
+		"both" => AttendanceHolidayWorkBehavior.Both,
 		"ot_payout" => AttendanceHolidayWorkBehavior.OvertimePayout,
 		"comp_off" or "" => AttendanceHolidayWorkBehavior.CompOff,
 		_ => throw new BusinessException(HRErrorCodes.UnsupportedAttendanceHolidayWorkBehavior)
@@ -87,7 +93,9 @@ internal static partial class HrPolicyMapping
 
 	public static string MapHolidayWorkBehavior(AttendanceHolidayWorkBehavior value) => value switch
 	{
+		AttendanceHolidayWorkBehavior.NoBenefit => "no_benefit",
 		AttendanceHolidayWorkBehavior.Paid => "paid",
+		AttendanceHolidayWorkBehavior.Both => "both",
 		AttendanceHolidayWorkBehavior.OvertimePayout => "ot_payout",
 		_ => "comp_off"
 	};

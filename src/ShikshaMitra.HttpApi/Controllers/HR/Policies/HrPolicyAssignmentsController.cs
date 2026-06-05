@@ -31,6 +31,10 @@ public class HrPolicyAssignmentsController(IHrPolicyAssignmentAppService appServ
 	public Task<HrPolicyAssignmentDto> UpsertEmployeeOverrideAsync([FromBody] UpsertEmployeePolicyOverrideDto input) =>
 		appService.UpsertEmployeeOverrideAsync(input);
 
+	[HttpPost("direct-employee-override/disable")]
+	public Task DisableEmployeeOverrideAsync([FromBody] DisableEmployeePolicyOverrideDto input) =>
+		appService.DisableEmployeeOverrideAsync(input);
+
 	[HttpPost("impact-preview")]
 	public Task<HrPolicyImpactPreviewDto> PreviewImpactAsync([FromBody] HrPolicyAssignmentImpactPreviewRequestDto input) =>
 		appService.PreviewImpactAsync(input);

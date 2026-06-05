@@ -23,6 +23,7 @@ public class AttendanceRegisterController(IAttendanceRegisterAppService attendan
 	public virtual Task<AttendanceRegisterResponse> GetAsync(
 		[FromQuery, Required] string startDate,
 		[FromQuery, Required] string endDate,
+		[FromQuery] Guid? academicYearId = null,
 		[FromQuery] Guid? educationMediumStageId = null,
 		[FromQuery] Guid? employeeId = null,
 		[FromQuery] EmployeeGroupType? employeeGroup = null,
@@ -39,6 +40,7 @@ public class AttendanceRegisterController(IAttendanceRegisterAppService attendan
 		{
 			StartDate = startDate,
 			EndDate = endDate,
+			AcademicYearId = academicYearId,
 			EducationMediumStageId = educationMediumStageId,
 			EmployeeId = employeeId,
 			EmployeeGroup = employeeGroup,
@@ -58,6 +60,7 @@ public class AttendanceRegisterController(IAttendanceRegisterAppService attendan
 	public virtual Task<GroupedAttendanceRegisterResponse> GetGroupedAsync(
 		[FromQuery, Required] string startDate,
 		[FromQuery, Required] string endDate,
+		[FromQuery] Guid? academicYearId = null,
 		[FromQuery] Guid? educationMediumStageId = null,
 		[FromQuery] Guid? employeeId = null,
 		[FromQuery] EmployeeGroupType? employeeGroup = null,
@@ -75,6 +78,7 @@ public class AttendanceRegisterController(IAttendanceRegisterAppService attendan
 		{
 			StartDate = startDate,
 			EndDate = endDate,
+			AcademicYearId = academicYearId,
 			EducationMediumStageId = educationMediumStageId,
 			EmployeeId = employeeId,
 			EmployeeGroup = employeeGroup,

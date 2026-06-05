@@ -18,6 +18,7 @@ using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -60,6 +61,174 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		row.HolidayName.ShouldContain("Summer Vacation");
 		row.HolidayReason.ShouldNotBeNull();
 		row.HolidayReason.ShouldContain("Holiday:");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Day_Should_Auto_Fill_Approved_Full_Day_Leave_As_OnLeave()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"OnLeaveFull{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		var leaveId = await InsertLeaveForAttendanceAsync(
+			employee.Id,
+			attendanceDate,
+			attendanceDate,
+			EmployeeLeaveStatusType.Approved);
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate={attendanceDate:dd-MM-yyyy}&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(employee.FirstName)}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
+		var row = payload.Items.Single(x => x.EmployeeId == employee.Id);
+
+		row.Status.ShouldBe(TakeAttendanceStatus.OnLeave);
+		row.IsApprovedLeave.ShouldBeTrue();
+		row.ApprovedLeaveId.ShouldBe(leaveId);
+		row.ApprovedLeaveKind.ShouldBe("FullDay");
+		row.ApprovedLeaveLabel.ShouldBe("On Leave");
+		row.Source.ShouldBe("approved_leave");
+		payload.Summary.OnLeave.ShouldBe(1);
+		payload.Summary.NotMarked.ShouldBe(0);
+		payload.Summary.Absent.ShouldBe(0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Day_Should_Auto_Fill_Approved_Half_Day_Leave_Metadata()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"OnLeaveHalf{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		await InsertLeaveForAttendanceAsync(
+			employee.Id,
+			attendanceDate,
+			attendanceDate,
+			EmployeeLeaveStatusType.Approved,
+			halfDay: true);
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate={attendanceDate:dd-MM-yyyy}&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(employee.FirstName)}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
+		var row = payload.Items.Single(x => x.EmployeeId == employee.Id);
+
+		row.Status.ShouldBe(TakeAttendanceStatus.OnLeave);
+		row.IsApprovedLeave.ShouldBeTrue();
+		row.ApprovedLeaveKind.ShouldBe("HalfDay");
+		row.ApprovedLeaveLabel.ShouldBe("On Leave (Half Day)");
+		payload.Summary.OnLeave.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Day_Should_Keep_Manual_Attendance_When_Approved_Leave_Exists()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"OnLeaveOverride{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		await InsertLeaveForAttendanceAsync(
+			employee.Id,
+			attendanceDate,
+			attendanceDate,
+			EmployeeLeaveStatusType.Approved);
+
+		await InsertAttendanceForTestAsync(
+			employee.Id,
+			attendanceDate,
+			EmployeeAttendanceStatusType.Present,
+			"Manual override");
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate={attendanceDate:dd-MM-yyyy}&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(employee.FirstName)}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
+		var row = payload.Items.Single(x => x.EmployeeId == employee.Id);
+
+		row.Status.ShouldBe(TakeAttendanceStatus.Present);
+		row.IsApprovedLeave.ShouldBeTrue();
+		row.Source.ShouldBe("manual");
+		row.Warnings.ShouldContain(x => x.Contains("Approved leave exists", StringComparison.OrdinalIgnoreCase));
+		payload.Summary.OnLeave.ShouldBe(0);
+		payload.Summary.Present.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Day_Should_Not_Auto_Fill_Approved_Leave_Outside_Selected_Date()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"OnLeaveOutside{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		await InsertLeaveForAttendanceAsync(
+			employee.Id,
+			attendanceDate.AddDays(1),
+			attendanceDate.AddDays(1),
+			EmployeeLeaveStatusType.Approved);
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate={attendanceDate:dd-MM-yyyy}&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(employee.FirstName)}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
+		var row = payload.Items.Single(x => x.EmployeeId == employee.Id);
+
+		row.Status.ShouldBe(TakeAttendanceStatus.NotMarked);
+		row.IsApprovedLeave.ShouldBeFalse();
+		payload.Summary.OnLeave.ShouldBe(0);
+	}
+
+	[Theory]
+	[InlineData(EmployeeLeaveStatusType.Pending)]
+	[InlineData(EmployeeLeaveStatusType.Reviewed)]
+	[InlineData(EmployeeLeaveStatusType.Rejected)]
+	[InlineData(EmployeeLeaveStatusType.Cancelled)]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Day_Should_Not_Auto_Fill_Non_Approved_Leave(EmployeeLeaveStatusType status)
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"OnLeaveNonApproved{status}{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		await InsertLeaveForAttendanceAsync(employee.Id, attendanceDate, attendanceDate, status);
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate={attendanceDate:dd-MM-yyyy}&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(employee.FirstName)}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
+		var row = payload.Items.Single(x => x.EmployeeId == employee.Id);
+
+		row.Status.ShouldBe(TakeAttendanceStatus.NotMarked);
+		row.IsApprovedLeave.ShouldBeFalse();
+		payload.Summary.OnLeave.ShouldBe(0);
 	}
 
 	[Fact]
@@ -566,6 +735,121 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				true,
 				priority: 100,
 				assignmentReason: "Capture mode regression test"), autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<Guid> InsertLeaveForAttendanceAsync(
+		Guid employeeId,
+		DateOnly startDate,
+		DateOnly endDate,
+		EmployeeLeaveStatusType status,
+		bool halfDay = false)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var guidGenerator = scope.ServiceProvider.GetRequiredService<IGuidGenerator>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var leaveTypeRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
+		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
+		var leaveRepository = scope.ServiceProvider.GetRequiredService<IEmployeeLeaveRepository>();
+		var leaveManager = scope.ServiceProvider.GetRequiredService<EmployeeLeaveManager>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var startDateTime = startDate.ToDateTime(TimeOnly.MinValue);
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x => x.StartDate <= startDateTime && x.EndDate >= startDateTime);
+			var suffix = Guid.NewGuid().ToString("N")[..12];
+			var leaveType = new LeaveType(
+				guidGenerator.Create(),
+				tenantId,
+				academicYear.Id,
+				$"AL {suffix}",
+				"#2196F3");
+			await leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
+
+			var leavePolicy = new LeavePolicy(
+				guidGenerator.Create(),
+				tenantId,
+				academicYear.Id,
+				$"AL Policy {suffix}",
+				leaveType.Id,
+				LeaveAccrualPolicyType.Yearly,
+				12,
+				LeavePaidType.Paid,
+				carryForward: false,
+				encashable: false,
+				encashmentTiming: null,
+				requiresApproval: true);
+			await leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
+
+			var start = new DateTimeOffset(startDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+			var end = new DateTimeOffset(endDate.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero);
+			var leave = EmployeeLeave.Create(
+				guidGenerator.Create(),
+				tenantId,
+				employeeId,
+				leavePolicy.Id,
+				start,
+				end,
+				"Attendance approved leave overlay test",
+				halfDay);
+			var leaveQuery = await leaveRepository.GetQueryableAsync();
+			var nextPublicId = (leaveQuery.Select(x => (int?)x.PublicId).Max() ?? 0) + 1;
+			typeof(EmployeeLeave)
+				.GetProperty(nameof(EmployeeLeave.PublicId))!
+				.SetValue(leave, nextPublicId);
+
+			await leaveRepository.InsertAsync(leave, autoSave: false);
+			if (status == EmployeeLeaveStatusType.Approved)
+			{
+				await leaveManager.ApproveAsync(leave, LeavePaidType.Paid, halfDay ? 0.5m : 1m);
+			}
+			else if (status == EmployeeLeaveStatusType.Cancelled)
+			{
+				await leaveManager.CancelAsync(leave);
+			}
+			else if (status != EmployeeLeaveStatusType.Pending)
+			{
+				await leaveManager.UpdateLeaveRequestStatusAsync(
+					leave,
+					status,
+					status == EmployeeLeaveStatusType.Rejected ? "Rejected" : null);
+			}
+
+			await uow.CompleteAsync();
+			return leave.Id;
+		}
+	}
+
+	private async Task InsertAttendanceForTestAsync(
+		Guid employeeId,
+		DateOnly attendanceDate,
+		EmployeeAttendanceStatusType status,
+		string? remarks = null)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await attendanceRepository.InsertAsync(new EmployeeAttendance
+			{
+				TenantId = tenantId,
+				EmployeeId = employeeId,
+				AttendanceDate = attendanceDate,
+				StatusType = status,
+				Source = AttendanceRecordSource.Manual,
+				Remarks = remarks
+			}, autoSave: false);
 			await uow.CompleteAsync();
 		}
 	}

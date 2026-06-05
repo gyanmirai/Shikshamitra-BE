@@ -35,6 +35,7 @@ public class GetAttendanceRegisterInput : PagedAndSortedResultRequestDto
 {
 	public string StartDate { get; set; } = string.Empty;
 	public string EndDate { get; set; } = string.Empty;
+	public Guid? AcademicYearId { get; set; }
 	public Guid? EducationMediumStageId { get; set; }
 	public Guid? EmployeeId { get; set; }
 	public EmployeeGroupType? EmployeeGroup { get; set; }

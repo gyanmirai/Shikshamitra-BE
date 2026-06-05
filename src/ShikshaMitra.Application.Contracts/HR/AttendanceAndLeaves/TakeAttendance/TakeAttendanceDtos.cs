@@ -10,7 +10,8 @@ public enum TakeAttendanceStatus
 	NotMarked = 0,
 	Present = 1,
 	Absent = 2,
-	HalfDay = 3
+	HalfDay = 3,
+	OnLeave = 4
 }
 
 public class GetTakeAttendanceDayInput : PagedAndSortedResultRequestDto
@@ -42,6 +43,7 @@ public class TakeAttendanceSummaryDto
 	public int Present { get; set; }
 	public int HalfDay { get; set; }
 	public int Absent { get; set; }
+	public int OnLeave { get; set; }
 	public int NotMarked { get; set; }
 }
 
@@ -65,6 +67,10 @@ public class TakeAttendanceEmployeeRowDto
 	public bool IsHoliday { get; set; }
 	public string? HolidayName { get; set; }
 	public string? HolidayReason { get; set; }
+	public bool IsApprovedLeave { get; set; }
+	public Guid? ApprovedLeaveId { get; set; }
+	public string? ApprovedLeaveKind { get; set; }
+	public string? ApprovedLeaveLabel { get; set; }
 	public TakeAttendanceStatus Status { get; set; } = TakeAttendanceStatus.NotMarked;
 }
 

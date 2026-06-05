@@ -78,7 +78,7 @@ public class AttendanceImportRowsSaveWorkflow(
 				entry.OutTimeForImportRow,
 				entry.ImportRowStatus,
 				entry.Remarks,
-				entry.Warning);
+				entry.Warnings);
 		}
 
 		await attendanceImportRowRepository.UpdateManyAsync(importRows, autoSave: true);

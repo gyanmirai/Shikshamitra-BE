@@ -68,7 +68,7 @@ public class PayrollSnapshotInvalidationChecker(
 		}
 
 		var calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId);
-		var effectiveDate = new DateTime(year, month, 1);
+		var effectiveDate = PayrollRunRules.GetPayrollPolicyResolutionDate(year, month);
 		foreach (var snapshot in unlockedSnapshots)
 		{
 			HrResolvedPolicies resolvedPolicies;
@@ -139,6 +139,8 @@ public class PayrollSnapshotInvalidationChecker(
 			issueCodes);
 
 		return snapshot.BasisDays != basis.BasisDays ||
+		       snapshot.DayCalculationMode != HrPolicyMapping.MapDayCalculationType(basis.EffectiveMode) ||
+		       snapshot.UsedDefaultDayCalculation != basis.UsedTenantDefault ||
 		       snapshot.TotalWorkingDays != basis.BasisDays ||
 		       snapshot.HolidayImpactJson.Contains("\"paid\"", StringComparison.OrdinalIgnoreCase);
 	}

@@ -9,7 +9,6 @@ public class GetAttendanceEmployeeWiseInputValidator : AbstractValidator<GetAtte
 	public GetAttendanceEmployeeWiseInputValidator()
 	{
 		RuleFor(x => x.EmployeeId).NotEmpty();
-		RuleFor(x => x.EducationMediumStageId).NotEmpty();
 
 		RuleFor(x => x.StartDate)
 			.NotEmpty()

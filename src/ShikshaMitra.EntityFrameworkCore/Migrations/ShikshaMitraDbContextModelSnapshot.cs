@@ -3080,6 +3080,211 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("Finance_AuditEvents", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.FeeAdjustment.Aggregates.FeeAdjustmentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AdjustmentType")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("AppliedAmount")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("ApplyVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ApproverNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("BoardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("DivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EducationMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<string>("LastIdempotencyKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ProcessedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<double>("RemainingAmount")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<double>("RequestedAmount")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("VoucherNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "VoucherNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FeeAdjustmentRequests_Tenant_Voucher");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "BoardId", "EducationMediumId", "Status")
+                        .HasDatabaseName("IX_FeeAdjustmentRequests_Inbox");
+
+                    b.ToTable("Finance_FeeAdjustmentRequests", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.FeeAdjustment.Entities.FeeAdjustmentSourceLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("Amount")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("DueFeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FeeAdjustmentRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FeeHeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DueFeeId")
+                        .HasDatabaseName("IX_FeeAdjustmentSourceLines_DueFeeId");
+
+                    b.HasIndex("FeeAdjustmentRequestId")
+                        .HasDatabaseName("IX_FeeAdjustmentSourceLines_RequestId");
+
+                    b.ToTable("Finance_FeeAdjustmentSourceLines", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.FeeAdjustment.Entities.FeeAdjustmentTargetAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("Amount")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("AppliedOn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ApplyBatchNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("DueFeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FeeAdjustmentRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FeeHeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DueFeeId")
+                        .HasDatabaseName("IX_FeeAdjustmentTargetAllocations_DueFeeId");
+
+                    b.HasIndex("FeeAdjustmentRequestId")
+                        .HasDatabaseName("IX_FeeAdjustmentTargetAllocations_RequestId");
+
+                    b.ToTable("Finance_FeeAdjustmentTargetAllocations", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.FeeRefund.FeeRefundRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3665,6 +3870,9 @@ namespace ShikshaMitra.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<double>("AdjustmentCreditAmount")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -4784,7 +4992,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("LeaveTypeId")
+                    b.Property<Guid>("LeavePolicyId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("PublicId")
@@ -4813,7 +5021,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.HasIndex("LeaveTypeId");
+                    b.HasIndex("LeavePolicyId");
 
                     b.HasIndex("TenantId", "PublicId")
                         .IsUnique()
@@ -6378,9 +6586,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)")
                         .HasColumnName("ConcurrencyStamp");
-
-                    b.Property<int>("CaptureMode")
-                        .HasColumnType("integer");
 
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
@@ -7990,6 +8195,9 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("CaptureMode")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -11388,6 +11596,8 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("CommunicationDetailId");
 
                     b.HasIndex("DivisionId");
+
+                    b.HasIndex("FeeStructureId");
 
                     b.HasIndex("MedicalRecordId");
 
@@ -15695,6 +15905,24 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("CategoryTags");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.FeeAdjustment.Entities.FeeAdjustmentSourceLine", b =>
+                {
+                    b.HasOne("ShikshaMitra.Finance.FeeAdjustment.Aggregates.FeeAdjustmentRequest", null)
+                        .WithMany("SourceLines")
+                        .HasForeignKey("FeeAdjustmentRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.FeeAdjustment.Entities.FeeAdjustmentTargetAllocation", b =>
+                {
+                    b.HasOne("ShikshaMitra.Finance.FeeAdjustment.Aggregates.FeeAdjustmentRequest", null)
+                        .WithMany("TargetAllocations")
+                        .HasForeignKey("FeeAdjustmentRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.FeeRefund.FeeRefundRequest", b =>
                 {
                     b.OwnsMany("ShikshaMitra.Finance.FeeRefund.FeeRefundLine", "Lines", b1 =>
@@ -15867,7 +16095,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasOne("ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicy", "LeavePolicy")
                         .WithMany()
-                        .HasForeignKey("LeaveTypeId")
+                        .HasForeignKey("LeavePolicyId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -16309,6 +16537,10 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("DivisionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ShikshaMitra.Domain.Finance.Fees.Settings.FeeStructure", "FeeStructure")
+                        .WithMany()
+                        .HasForeignKey("FeeStructureId");
+
                     b.HasOne("ShikshaMitra.Students.StudentMedicalRecord", "MedicalRecord")
                         .WithMany()
                         .HasForeignKey("MedicalRecordId");
@@ -16333,6 +16565,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("CommunicationDetail");
 
                     b.Navigation("Division");
+
+                    b.Navigation("FeeStructure");
 
                     b.Navigation("MedicalRecord");
 
@@ -17843,6 +18077,13 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Domain.Finance.Fees.Settings.FeeStructure", b =>
                 {
                     b.Navigation("FeeStructureDetails");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.FeeAdjustment.Aggregates.FeeAdjustmentRequest", b =>
+                {
+                    b.Navigation("SourceLines");
+
+                    b.Navigation("TargetAllocations");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionRequest", b =>

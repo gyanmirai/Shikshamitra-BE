@@ -130,7 +130,13 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 	[
 		TenantStep<Seeders.EventTypeSeederContributor>(serviceProvider, "EventTypeSeeder", "EventTypeSeeder:v1", 100, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.RolesSeederContributor>(serviceProvider, "RolesSeeder", "RolesSeeder:v2", 110, Seeders.ShikshaMitraSeederProfile.All),
-		TenantStep<Seeders.RolePermissionSeederContributor>(serviceProvider, "RolePermissionSeeder", "RolePermissionSeeder:v3", 120, Seeders.ShikshaMitraSeederProfile.All),
+		TenantStep<Seeders.RolePermissionSeederContributor>(serviceProvider, "RolePermissionSeeder", "RolePermissionSeeder:v4", 120, Seeders.ShikshaMitraSeederProfile.All),
+		TenantStep<Seeders.FinanceFeeAdjustmentPermissionMigrationSeederContributor>(
+			serviceProvider,
+			"FinanceFeeAdjustmentPermissionMigration",
+			"FinanceFeeAdjustmentPermissionMigration:v1",
+			121,
+			Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.UserSeederContributor>(serviceProvider, "UserSeeder", "UserSeeder:v2", 130, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.AcademicSetupSeederContributor>(serviceProvider, "AcademicSetupSeeder", "AcademicSetupSeeder:v2", 140, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.DemoAcademicAndInstituteSeederContributor>(serviceProvider, "DemoAcademicAndInstituteSeeder", "DemoAcademicAndInstituteSeeder:v2", 150, Seeders.ShikshaMitraSeederProfile.Demo),

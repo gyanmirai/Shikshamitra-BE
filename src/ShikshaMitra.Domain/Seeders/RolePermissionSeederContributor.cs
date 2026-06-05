@@ -197,6 +197,11 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 	{
 		yield return ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View;
 		yield return ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.Add;
+
+		foreach (var permission in ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.All)
+		{
+			yield return permission;
+		}
 	}
 
 	private static IEnumerable<string> AllPlatformPermissions()

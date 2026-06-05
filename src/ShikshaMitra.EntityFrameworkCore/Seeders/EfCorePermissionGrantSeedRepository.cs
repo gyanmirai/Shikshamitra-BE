@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -28,6 +28,86 @@ public class EfCorePermissionGrantSeedRepository(
 		Guid? tenantId,
 		CancellationToken cancellationToken = default) =>
 		InsertGrantsIgnoringDuplicatesAsync(RoleProviderName, providerKey, permissionNames, tenantId, cancellationToken);
+
+	public async Task<int> MirrorRoleGrantsIgnoringDuplicatesAsync(
+		IReadOnlyDictionary<string, IReadOnlyCollection<string>> legacyToTargets,
+		Guid? tenantId,
+		CancellationToken cancellationToken = default)
+	{
+		if (legacyToTargets.Count == 0)
+		{
+			return 0;
+		}
+
+		var dbContext = await dbContextProvider.GetDbContextAsync();
+		var legacyNames = legacyToTargets.Keys.ToList();
+
+		var roleKeys = await dbContext.Set<PermissionGrant>()
+			.Where(g =>
+				g.TenantId == tenantId &&
+				g.ProviderName == RoleProviderName &&
+				legacyNames.Contains(g.Name))
+			.Select(g => g.ProviderKey)
+			.Distinct()
+			.ToListAsync(cancellationToken);
+
+		if (roleKeys.Count == 0)
+		{
+			return 0;
+		}
+
+		var grantsByRole = await dbContext.Set<PermissionGrant>()
+			.Where(g =>
+				g.TenantId == tenantId &&
+				g.ProviderName == RoleProviderName &&
+				roleKeys.Contains(g.ProviderKey))
+			.Select(g => new { g.ProviderKey, g.Name })
+			.ToListAsync(cancellationToken);
+
+		var grantedByRole = grantsByRole
+			.GroupBy(g => g.ProviderKey, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(
+				g => g.Key,
+				g => g.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase),
+				StringComparer.OrdinalIgnoreCase);
+
+		var insertsByRole = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+		foreach (var roleKey in roleKeys)
+		{
+			if (!grantedByRole.TryGetValue(roleKey, out var granted))
+			{
+				continue;
+			}
+
+			var roleTargets = new List<string>();
+			foreach (var (legacyName, targets) in legacyToTargets)
+			{
+				if (!granted.Contains(legacyName))
+				{
+					continue;
+				}
+
+				roleTargets.AddRange(targets);
+			}
+
+			if (roleTargets.Count > 0)
+			{
+				insertsByRole[roleKey] = roleTargets;
+			}
+		}
+
+		var affectedRows = 0;
+		foreach (var (roleKey, permissionNames) in insertsByRole)
+		{
+			affectedRows += await InsertRoleGrantsIgnoringDuplicatesAsync(
+				roleKey,
+				permissionNames,
+				tenantId,
+				cancellationToken);
+		}
+
+		return affectedRows;
+	}
 
 	public async Task<int> InsertGrantsIgnoringDuplicatesAsync(
 		string providerName,

@@ -12,7 +12,7 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Collections;
 [Authorize]
 [ApiController]
 [Area("finance")]
-[Route("api/v2/fee-collections")]
+[Route("api/fee-collections")]
 public class FeeCollectionController(
     IFeeCollectionAppService feeCollectionAppService
 ) : AbpControllerBase

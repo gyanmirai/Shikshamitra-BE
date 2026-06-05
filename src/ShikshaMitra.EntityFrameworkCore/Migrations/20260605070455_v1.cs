@@ -680,6 +680,37 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppClassroomObservations",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReviewAssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ObserverEmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ObservationDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ClassName = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: true),
+                    SubjectName = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: true),
+                    LessonObjectiveScore = table.Column<int>(type: "integer", nullable: false),
+                    StudentEngagementScore = table.Column<int>(type: "integer", nullable: false),
+                    ClassroomManagementScore = table.Column<int>(type: "integer", nullable: false),
+                    AssessmentScore = table.Column<int>(type: "integer", nullable: false),
+                    Notes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppClassroomObservations", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppClassTeachers",
                 columns: table => new
                 {
@@ -717,8 +748,8 @@ namespace ShikshaMitra.Migrations
                     StudentId = table.Column<Guid>(type: "uuid", nullable: false),
                     ConcessionTypeId = table.Column<Guid>(type: "uuid", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
-                    RejectionReason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
                     Remarks = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    RejectionReason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
                     ApproverMessage = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
@@ -765,6 +796,33 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AppDeductionComponents", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppDevelopmentPlans",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReviewAssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Goal = table.Column<string>(type: "character varying(240)", maxLength: 240, nullable: false),
+                    ActionPlan = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    OwnerEmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    TargetDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppDevelopmentPlans", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -915,6 +973,9 @@ namespace ShikshaMitra.Migrations
                     QrCodeEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     BarcodeEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     BackSideEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    SchemaVersion = table.Column<int>(type: "integer", nullable: false),
+                    LayoutJson = table.Column<string>(type: "text", nullable: false),
+                    PrintSettingsJson = table.Column<string>(type: "text", nullable: false),
                     FieldsJson = table.Column<string>(type: "text", nullable: false),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
@@ -1429,14 +1490,291 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppPerformanceAuditEvents",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReviewAssignmentId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EventType = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
+                    Summary = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    MetadataJson = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPerformanceAuditEvents", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppPerformanceEvidence",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReviewAssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CriterionId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Title = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
+                    FileName = table.Column<string>(type: "character varying(260)", maxLength: 260, nullable: true),
+                    Url = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    Notes = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPerformanceEvidence", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppPerformanceFeedback",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReviewAssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Source = table.Column<int>(type: "integer", nullable: false),
+                    ProviderName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
+                    FeedbackText = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPerformanceFeedback", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppPerformanceOutcomes",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReviewAssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FinalScore = table.Column<decimal>(type: "numeric(7,2)", precision: 7, scale: 2, nullable: false),
+                    FinalRating = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: false),
+                    Strengths = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ImprovementAreas = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    Recommendation = table.Column<int>(type: "integer", nullable: false),
+                    RecommendationNotes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    IncrementRecommended = table.Column<bool>(type: "boolean", nullable: false),
+                    PromotionRecommended = table.Column<bool>(type: "boolean", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPerformanceOutcomes", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppPerformanceReviewAssignments",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CycleId = table.Column<Guid>(type: "uuid", nullable: false),
+                    TemplateId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ReportingManagerEmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    HodEmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PrincipalEmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    FinalScore = table.Column<decimal>(type: "numeric(7,2)", precision: 7, scale: 2, nullable: true),
+                    FinalRating = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: true),
+                    FinalizedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPerformanceReviewAssignments", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppPerformanceReviewResponses",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReviewAssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    StageId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CriterionId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Rating = table.Column<int>(type: "integer", nullable: true),
+                    IsNotApplicable = table.Column<bool>(type: "boolean", nullable: false),
+                    Comment = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPerformanceReviewResponses", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppPerformanceReviewStages",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReviewAssignmentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    StageType = table.Column<int>(type: "integer", nullable: false),
+                    ReviewerEmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    SummaryComment = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    SubmittedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPerformanceReviewStages", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppPerformanceTemplateCriteria",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    TemplateId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SectionId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    Weight = table.Column<decimal>(type: "numeric(7,2)", precision: 7, scale: 2, nullable: false),
+                    EvidenceRequired = table.Column<bool>(type: "boolean", nullable: false),
+                    DisplayOrder = table.Column<int>(type: "integer", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPerformanceTemplateCriteria", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppPerformanceTemplates",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Name = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
+                    StaffCategory = table.Column<int>(type: "integer", nullable: false),
+                    RoleName = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: true),
+                    RatingScaleMax = table.Column<int>(type: "integer", nullable: false),
+                    AllowNotApplicable = table.Column<bool>(type: "boolean", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    Description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPerformanceTemplates", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppPerformanceTemplateSections",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    TemplateId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
+                    Weight = table.Column<decimal>(type: "numeric(7,2)", precision: 7, scale: 2, nullable: false),
+                    DisplayOrder = table.Column<int>(type: "integer", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppPerformanceTemplateSections", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppProfessionalReviewCycles",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: true),
                     Name = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
+                    CycleType = table.Column<int>(type: "integer", nullable: false),
                     PeriodStart = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     PeriodEnd = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    SelfReviewDueDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ReviewerDueDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    FinalizationDueDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RatingScaleMax = table.Column<int>(type: "integer", nullable: false, defaultValue: 5),
+                    AllowNotApplicable = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    AudienceFilterJson = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
+                    ReviewerWorkflowJson = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
@@ -1451,36 +1789,6 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AppProfessionalReviewCycles", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AppProfessionalReviews",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CycleId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ReviewerUserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CommunicationScore = table.Column<int>(type: "integer", nullable: false),
-                    ProblemSolvingScore = table.Column<int>(type: "integer", nullable: false),
-                    Comments = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
-                    Feedback = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    SubmittedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
-                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppProfessionalReviews", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -1553,27 +1861,31 @@ namespace ShikshaMitra.Migrations
                     table.PrimaryKey("PK_AppRoomTypes", x => x.Id);
                 });
 
-            migrationBuilder.Sql("""
-                CREATE TABLE IF NOT EXISTS "AppSeedExecutionMarkers" (
-                    "Id" uuid NOT NULL,
-                    "TenantId" uuid NULL,
-                    "SeederName" character varying(128) NOT NULL,
-                    "Version" character varying(64) NOT NULL,
-                    "Profile" character varying(32) NOT NULL,
-                    "Status" integer NOT NULL,
-                    "StartedAt" timestamp with time zone NOT NULL,
-                    "CompletedAt" timestamp with time zone NULL,
-                    "ElapsedMilliseconds" bigint NULL,
-                    "Error" character varying(4000) NULL,
-                    "ExtraProperties" text NOT NULL,
-                    "ConcurrencyStamp" character varying(40) NOT NULL,
-                    "CreationTime" timestamp with time zone NOT NULL,
-                    "CreatorId" uuid NULL,
-                    "LastModificationTime" timestamp with time zone NULL,
-                    "LastModifierId" uuid NULL,
-                    CONSTRAINT "PK_AppSeedExecutionMarkers" PRIMARY KEY ("Id")
-                );
-                """);
+            migrationBuilder.CreateTable(
+                name: "AppSeedExecutionMarkers",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    SeederName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    Version = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    Profile = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    StartedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CompletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ElapsedMilliseconds = table.Column<long>(type: "bigint", nullable: true),
+                    Error = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppSeedExecutionMarkers", x => x.Id);
+                });
 
             migrationBuilder.CreateTable(
                 name: "AppShiftManagements",
@@ -1930,6 +2242,7 @@ namespace ShikshaMitra.Migrations
                     PaidAmount = table.Column<double>(type: "double precision", nullable: false),
                     OutstandingAmount = table.Column<double>(type: "double precision", nullable: false),
                     RefundedAmount = table.Column<double>(type: "double precision", nullable: false),
+                    AdjustmentCreditAmount = table.Column<double>(type: "double precision", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
@@ -2134,6 +2447,81 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Finance_AuditEvents",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: true),
+                    SubModuleCode = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    EntityType = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    EntityId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EntityName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    Action = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentNameSnapshot = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    StudentGrNoSnapshot = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
+                    StudentRollNoSnapshot = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
+                    ActorUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ActorNameSnapshot = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    PerformedByRoleSnapshot = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    OccurredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Reason = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    Summary = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
+                    ChangedFieldsJson = table.Column<string>(type: "text", nullable: true),
+                    ContextJson = table.Column<string>(type: "text", nullable: true),
+                    CorrelationId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    SourceAuditLogId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Finance_AuditEvents", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Finance_FeeAdjustmentRequests",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    BoardId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EducationMediumId = table.Column<Guid>(type: "uuid", nullable: false),
+                    StandardId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DivisionId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AdjustmentType = table.Column<int>(type: "integer", nullable: false),
+                    Reason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
+                    Remarks = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    VoucherNumber = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    RequestedAmount = table.Column<double>(type: "double precision", nullable: false),
+                    AppliedAmount = table.Column<double>(type: "double precision", nullable: false),
+                    RemainingAmount = table.Column<double>(type: "double precision", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    RejectionReason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ApproverNotes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ProcessedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ProcessedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ApplyVersion = table.Column<int>(type: "integer", nullable: false),
+                    LastIdempotencyKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Finance_FeeAdjustmentRequests", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "FinanceReceiptNumberSequences",
                 columns: table => new
                 {
@@ -2208,6 +2596,7 @@ namespace ShikshaMitra.Migrations
                     Name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     IsDefault = table.Column<bool>(type: "boolean", nullable: false),
+                    CaptureMode = table.Column<int>(type: "integer", nullable: false),
                     FullDayThresholdPercentage = table.Column<double>(type: "double precision", nullable: false),
                     HalfDayThresholdPercentage = table.Column<double>(type: "double precision", nullable: false),
                     AbsentThresholdPercentage = table.Column<double>(type: "double precision", nullable: false),
@@ -2276,6 +2665,7 @@ namespace ShikshaMitra.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     DashboardKey = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    ScopeKey = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     PayloadJson = table.Column<string>(type: "jsonb", nullable: false),
                     PayloadVersion = table.Column<int>(type: "integer", nullable: false),
                     Status = table.Column<string>(type: "character varying(24)", maxLength: 24, nullable: false),
@@ -2296,6 +2686,32 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_HR_DashboardPreviews", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "HR_DashboardRefreshRuns",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    RunKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    Status = table.Column<string>(type: "character varying(24)", maxLength: 24, nullable: false),
+                    StartedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CompletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    TenantCount = table.Column<int>(type: "integer", nullable: false),
+                    LastError = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HR_DashboardRefreshRuns", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -2532,6 +2948,35 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_HR_ReportExportJobs", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "HR_ReportTemplates",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    OwnerUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    Description = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
+                    Category = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    DataSource = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    Visibility = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    DefinitionJson = table.Column<string>(type: "jsonb", nullable: false),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HR_ReportTemplates", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -2948,6 +3393,7 @@ namespace ShikshaMitra.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CategoryType = table.Column<int>(type: "integer", nullable: true),
                     Name = table.Column<string>(type: "text", nullable: false),
                     Description = table.Column<string>(type: "text", nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
@@ -3521,6 +3967,35 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppConcessionDueFeeAllocations",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ConcessionRequestId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DueFeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FeeHeadId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ConcessionAmount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppConcessionDueFeeAllocations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppConcessionDueFeeAllocations_AppConcessionRequests_Conces~",
+                        column: x => x.ConcessionRequestId,
+                        principalTable: "AppConcessionRequests",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppConcessionFeeHeadMappings",
                 columns: table => new
                 {
@@ -3528,11 +4003,11 @@ namespace ShikshaMitra.Migrations
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     ConcessionRequestId = table.Column<Guid>(type: "uuid", nullable: false),
                     FeeHeadId = table.Column<Guid>(type: "uuid", nullable: false),
-                    FeeHeadConcessionAmount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    PreConcessionFeeHeadAmount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    PostConcessionFeeHeadAmount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    UserSpecifiedConcessionAmountValue = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    PreConcessionFeeHeadAmount = table.Column<decimal>(type: "numeric", nullable: false),
+                    FeeHeadConcessionAmount = table.Column<decimal>(type: "numeric", nullable: false),
+                    PostConcessionFeeHeadAmount = table.Column<decimal>(type: "numeric", nullable: false),
                     UserSpecifiedConcessionAmountType = table.Column<int>(type: "integer", nullable: false),
+                    UserSpecifiedConcessionAmountValue = table.Column<decimal>(type: "numeric", nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
                     LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -3935,6 +4410,54 @@ namespace ShikshaMitra.Migrations
                         name: "FK_FeeRefundLines_FeeRefundRequests_FeeRefundRequestId",
                         column: x => x.FeeRefundRequestId,
                         principalTable: "FeeRefundRequests",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Finance_FeeAdjustmentSourceLines",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    FeeAdjustmentRequestId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DueFeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FeeHeadId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Month = table.Column<int>(type: "integer", nullable: false),
+                    Year = table.Column<int>(type: "integer", nullable: false),
+                    Amount = table.Column<double>(type: "double precision", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Finance_FeeAdjustmentSourceLines", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Finance_FeeAdjustmentSourceLines_Finance_FeeAdjustmentReque~",
+                        column: x => x.FeeAdjustmentRequestId,
+                        principalTable: "Finance_FeeAdjustmentRequests",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Finance_FeeAdjustmentTargetAllocations",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    FeeAdjustmentRequestId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DueFeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FeeHeadId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Month = table.Column<int>(type: "integer", nullable: false),
+                    Year = table.Column<int>(type: "integer", nullable: false),
+                    Amount = table.Column<double>(type: "double precision", nullable: false),
+                    ApplyBatchNumber = table.Column<int>(type: "integer", nullable: false),
+                    AppliedOn = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Finance_FeeAdjustmentTargetAllocations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Finance_FeeAdjustmentTargetAllocations_Finance_FeeAdjustmen~",
+                        column: x => x.FeeAdjustmentRequestId,
+                        principalTable: "Finance_FeeAdjustmentRequests",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -4367,6 +4890,7 @@ namespace ShikshaMitra.Migrations
                     TimeIn = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
                     TimeOut = table.Column<DateTimeOffset>(type: "timestamptz", nullable: true),
                     StatusType = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    Source = table.Column<int>(type: "integer", nullable: false),
                     EducationMediumStageId = table.Column<Guid>(type: "uuid", nullable: true),
                     Remarks = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -4780,10 +5304,12 @@ namespace ShikshaMitra.Migrations
                     PublicId = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityAlwaysColumn),
                     EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    LeaveTypeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LeavePolicyId = table.Column<Guid>(type: "uuid", nullable: false),
                     HalfDay = table.Column<bool>(type: "boolean", nullable: false),
                     StartDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    StartDateOnly = table.Column<DateOnly>(type: "date", nullable: false),
+                    EndDateOnly = table.Column<DateOnly>(type: "date", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     ApprovedPaidType = table.Column<int>(type: "integer", nullable: true),
                     ApprovedLeaveUnits = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false, defaultValue: 0m),
@@ -4804,8 +5330,8 @@ namespace ShikshaMitra.Migrations
                 {
                     table.PrimaryKey("PK_AppEmployeeLeaves", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_AppEmployeeLeaves_AppEmployeeLeavePolicies_LeaveTypeId",
-                        column: x => x.LeaveTypeId,
+                        name: "FK_AppEmployeeLeaves_AppEmployeeLeavePolicies_LeavePolicyId",
+                        column: x => x.LeavePolicyId,
                         principalTable: "AppEmployeeLeavePolicies",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -5353,6 +5879,11 @@ namespace ShikshaMitra.Migrations
                         principalTable: "AppStandards",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AppStudents_FeeStructures_FeeStructureId",
+                        column: x => x.FeeStructureId,
+                        principalTable: "FeeStructures",
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_AppStudents_StudentBankDetails_BankDetailId",
                         column: x => x.BankDetailId,
@@ -6296,6 +6827,27 @@ namespace ShikshaMitra.Migrations
                 columns: new[] { "ChapterId", "DivisionId" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppClassroomObservations_TenantId_ReviewAssignmentId_Observ~",
+                table: "AppClassroomObservations",
+                columns: new[] { "TenantId", "ReviewAssignmentId", "ObservationDate" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ConcessionDueFeeAllocations_ConcessionRequestId",
+                table: "AppConcessionDueFeeAllocations",
+                column: "ConcessionRequestId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ConcessionDueFeeAllocations_DueFeeId",
+                table: "AppConcessionDueFeeAllocations",
+                column: "DueFeeId");
+
+            migrationBuilder.CreateIndex(
+                name: "UIX_ConcessionDueFeeAllocations_Request_DueFee",
+                table: "AppConcessionDueFeeAllocations",
+                columns: new[] { "ConcessionRequestId", "DueFeeId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ConcessionFeeHeadMappings_ConcessionRequestId",
                 table: "AppConcessionFeeHeadMappings",
                 column: "ConcessionRequestId");
@@ -6318,21 +6870,6 @@ namespace ShikshaMitra.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_ConcessionRequests_ConcessionTypeId",
-                table: "AppConcessionRequests",
-                column: "ConcessionTypeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ConcessionRequests_StudentId",
-                table: "AppConcessionRequests",
-                column: "StudentId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ConcessionRequests_StudentId_Status",
-                table: "AppConcessionRequests",
-                columns: new[] { "StudentId", "Status" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_AppConcessionTypeDocumentFormats_ConcessionTypeDocumentId",
                 table: "AppConcessionTypeDocumentFormats",
                 column: "ConcessionTypeDocumentId");
@@ -6353,6 +6890,11 @@ namespace ShikshaMitra.Migrations
                 columns: new[] { "TenantId", "Name" },
                 unique: true,
                 filter: "\"IsDeleted\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppDevelopmentPlans_TenantId_ReviewAssignmentId_Status",
+                table: "AppDevelopmentPlans",
+                columns: new[] { "TenantId", "ReviewAssignmentId", "Status" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppDivisions_StandardId",
@@ -6502,9 +7044,14 @@ namespace ShikshaMitra.Migrations
                 column: "EmployeeId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppEmployeeLeaves_LeaveTypeId",
+                name: "IX_AppEmployeeLeaves_LeavePolicyId",
                 table: "AppEmployeeLeaves",
-                column: "LeaveTypeId");
+                column: "LeavePolicyId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmployeeLeaves_Dashboard_DateScope",
+                table: "AppEmployeeLeaves",
+                columns: new[] { "TenantId", "Status", "StartDateOnly", "EndDateOnly", "EmployeeId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_EmployeeLeaves_Overlap",
@@ -6892,15 +7439,68 @@ namespace ShikshaMitra.Migrations
                 columns: new[] { "TenantId", "IsEarning", "ComponentId", "EffectiveMonth" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppProfessionalReviewCycles_TenantId_Status",
-                table: "AppProfessionalReviewCycles",
+                name: "IX_AppPerformanceAuditEvents_TenantId_ReviewAssignmentId_Creat~",
+                table: "AppPerformanceAuditEvents",
+                columns: new[] { "TenantId", "ReviewAssignmentId", "CreationTime" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppPerformanceEvidence_TenantId_ReviewAssignmentId",
+                table: "AppPerformanceEvidence",
+                columns: new[] { "TenantId", "ReviewAssignmentId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppPerformanceFeedback_TenantId_ReviewAssignmentId_Source",
+                table: "AppPerformanceFeedback",
+                columns: new[] { "TenantId", "ReviewAssignmentId", "Source" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppPerformanceOutcomes_TenantId_ReviewAssignmentId",
+                table: "AppPerformanceOutcomes",
+                columns: new[] { "TenantId", "ReviewAssignmentId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppPerformanceReviewAssignments_TenantId_CycleId_EmployeeId",
+                table: "AppPerformanceReviewAssignments",
+                columns: new[] { "TenantId", "CycleId", "EmployeeId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppPerformanceReviewAssignments_TenantId_Status",
+                table: "AppPerformanceReviewAssignments",
                 columns: new[] { "TenantId", "Status" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppProfessionalReviews_TenantId_CycleId_EmployeeId",
-                table: "AppProfessionalReviews",
-                columns: new[] { "TenantId", "CycleId", "EmployeeId" },
+                name: "IX_AppPerformanceReviewResponses_TenantId_StageId_CriterionId",
+                table: "AppPerformanceReviewResponses",
+                columns: new[] { "TenantId", "StageId", "CriterionId" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppPerformanceReviewStages_TenantId_ReviewAssignmentId_Stag~",
+                table: "AppPerformanceReviewStages",
+                columns: new[] { "TenantId", "ReviewAssignmentId", "StageType" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppPerformanceTemplateCriteria_TenantId_TemplateId_SectionI~",
+                table: "AppPerformanceTemplateCriteria",
+                columns: new[] { "TenantId", "TemplateId", "SectionId", "DisplayOrder" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppPerformanceTemplates_TenantId_StaffCategory_Status",
+                table: "AppPerformanceTemplates",
+                columns: new[] { "TenantId", "StaffCategory", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppPerformanceTemplateSections_TenantId_TemplateId_DisplayO~",
+                table: "AppPerformanceTemplateSections",
+                columns: new[] { "TenantId", "TemplateId", "DisplayOrder" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppProfessionalReviewCycles_TenantId_Status",
+                table: "AppProfessionalReviewCycles",
+                columns: new[] { "TenantId", "Status" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_ProvidentFunds_TenantId_Code",
@@ -6931,10 +7531,11 @@ namespace ShikshaMitra.Migrations
                 table: "AppRooms",
                 column: "RoomTypeId");
 
-            migrationBuilder.Sql("""
-                CREATE UNIQUE INDEX IF NOT EXISTS "IX_SeedExecutionMarkers_Tenant_Seeder_Version_Profile"
-                ON "AppSeedExecutionMarkers" ("TenantId", "SeederName", "Version", "Profile");
-                """);
+            migrationBuilder.CreateIndex(
+                name: "IX_SeedExecutionMarkers_Tenant_Seeder_Version_Profile",
+                table: "AppSeedExecutionMarkers",
+                columns: new[] { "TenantId", "SeederName", "Version", "Profile" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_StaffAttendanceDayLocks_Tenant_Date",
@@ -7121,6 +7722,11 @@ namespace ShikshaMitra.Migrations
                 name: "IX_AppStudents_DivisionId",
                 table: "AppStudents",
                 column: "DivisionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudents_FeeStructureId",
+                table: "AppStudents",
+                column: "FeeStructureId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppStudents_MedicalRecordId",
@@ -7350,6 +7956,62 @@ namespace ShikshaMitra.Migrations
                 column: "ReceiptBookId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Finance_AuditEvents_Tenant_AcademicYear_Time",
+                table: "Finance_AuditEvents",
+                columns: new[] { "TenantId", "AcademicYearId", "OccurredAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Finance_AuditEvents_Tenant_Action_Time",
+                table: "Finance_AuditEvents",
+                columns: new[] { "TenantId", "Action", "OccurredAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Finance_AuditEvents_Tenant_Correlation",
+                table: "Finance_AuditEvents",
+                columns: new[] { "TenantId", "CorrelationId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Finance_AuditEvents_Tenant_Entity_Time",
+                table: "Finance_AuditEvents",
+                columns: new[] { "TenantId", "EntityType", "EntityId", "OccurredAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Finance_AuditEvents_Tenant_Student_Time",
+                table: "Finance_AuditEvents",
+                columns: new[] { "TenantId", "StudentId", "OccurredAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeeAdjustmentRequests_Inbox",
+                table: "Finance_FeeAdjustmentRequests",
+                columns: new[] { "TenantId", "AcademicYearId", "BoardId", "EducationMediumId", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "UX_FeeAdjustmentRequests_Tenant_Voucher",
+                table: "Finance_FeeAdjustmentRequests",
+                columns: new[] { "TenantId", "VoucherNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeeAdjustmentSourceLines_DueFeeId",
+                table: "Finance_FeeAdjustmentSourceLines",
+                column: "DueFeeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeeAdjustmentSourceLines_RequestId",
+                table: "Finance_FeeAdjustmentSourceLines",
+                column: "FeeAdjustmentRequestId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeeAdjustmentTargetAllocations_DueFeeId",
+                table: "Finance_FeeAdjustmentTargetAllocations",
+                column: "DueFeeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_FeeAdjustmentTargetAllocations_RequestId",
+                table: "Finance_FeeAdjustmentTargetAllocations",
+                column: "FeeAdjustmentRequestId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_FinanceReceiptNumberSequences_Tenant_Year_Kind",
                 table: "FinanceReceiptNumberSequences",
                 columns: new[] { "TenantId", "Year", "Kind" },
@@ -7433,9 +8095,15 @@ namespace ShikshaMitra.Migrations
                 columns: new[] { "Status", "RefreshStartedAt" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_HR_DashboardPreviews_Tenant_Key",
+                name: "IX_HR_DashboardPreviews_Tenant_Key_Scope",
                 table: "HR_DashboardPreviews",
-                columns: new[] { "TenantId", "DashboardKey" },
+                columns: new[] { "TenantId", "DashboardKey", "ScopeKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_DashboardRefreshRuns_RunKey",
+                table: "HR_DashboardRefreshRuns",
+                column: "RunKey",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -7524,6 +8192,16 @@ namespace ShikshaMitra.Migrations
                 name: "IX_HR_ReportExportJobs_Tenant_User_Created",
                 table: "HR_ReportExportJobs",
                 columns: new[] { "TenantId", "RequestedByUserId", "CreationTime" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_ReportTemplates_Tenant_Owner_Name",
+                table: "HR_ReportTemplates",
+                columns: new[] { "TenantId", "OwnerUserId", "Name" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HR_ReportTemplates_Tenant_Visibility_Status_Source",
+                table: "HR_ReportTemplates",
+                columns: new[] { "TenantId", "Visibility", "Status", "DataSource" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_HR_SalarySlips_EmployeeId",
@@ -7803,7 +8481,13 @@ namespace ShikshaMitra.Migrations
                 name: "AppChapterProgressLogs");
 
             migrationBuilder.DropTable(
+                name: "AppClassroomObservations");
+
+            migrationBuilder.DropTable(
                 name: "AppClassTeachers");
+
+            migrationBuilder.DropTable(
+                name: "AppConcessionDueFeeAllocations");
 
             migrationBuilder.DropTable(
                 name: "AppConcessionFeeHeadMappings");
@@ -7816,6 +8500,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppDeductionComponents");
+
+            migrationBuilder.DropTable(
+                name: "AppDevelopmentPlans");
 
             migrationBuilder.DropTable(
                 name: "AppDivisionPermissions");
@@ -7944,10 +8631,37 @@ namespace ShikshaMitra.Migrations
                 name: "AppPayrollComponentVersions");
 
             migrationBuilder.DropTable(
-                name: "AppProfessionalReviewCycles");
+                name: "AppPerformanceAuditEvents");
 
             migrationBuilder.DropTable(
-                name: "AppProfessionalReviews");
+                name: "AppPerformanceEvidence");
+
+            migrationBuilder.DropTable(
+                name: "AppPerformanceFeedback");
+
+            migrationBuilder.DropTable(
+                name: "AppPerformanceOutcomes");
+
+            migrationBuilder.DropTable(
+                name: "AppPerformanceReviewAssignments");
+
+            migrationBuilder.DropTable(
+                name: "AppPerformanceReviewResponses");
+
+            migrationBuilder.DropTable(
+                name: "AppPerformanceReviewStages");
+
+            migrationBuilder.DropTable(
+                name: "AppPerformanceTemplateCriteria");
+
+            migrationBuilder.DropTable(
+                name: "AppPerformanceTemplates");
+
+            migrationBuilder.DropTable(
+                name: "AppPerformanceTemplateSections");
+
+            migrationBuilder.DropTable(
+                name: "AppProfessionalReviewCycles");
 
             migrationBuilder.DropTable(
                 name: "AppProfessionalTaxes");
@@ -8040,6 +8754,15 @@ namespace ShikshaMitra.Migrations
                 name: "FeeStructureMetadatas");
 
             migrationBuilder.DropTable(
+                name: "Finance_AuditEvents");
+
+            migrationBuilder.DropTable(
+                name: "Finance_FeeAdjustmentSourceLines");
+
+            migrationBuilder.DropTable(
+                name: "Finance_FeeAdjustmentTargetAllocations");
+
+            migrationBuilder.DropTable(
                 name: "FinanceReceiptNumberSequences");
 
             migrationBuilder.DropTable(
@@ -8053,6 +8776,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "HR_DashboardPreviews");
+
+            migrationBuilder.DropTable(
+                name: "HR_DashboardRefreshRuns");
 
             migrationBuilder.DropTable(
                 name: "HR_PayrollAdjustments");
@@ -8074,6 +8800,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "HR_ReportExportJobs");
+
+            migrationBuilder.DropTable(
+                name: "HR_ReportTemplates");
 
             migrationBuilder.DropTable(
                 name: "HR_SalarySlips");
@@ -8202,10 +8931,10 @@ namespace ShikshaMitra.Migrations
                 name: "FeeHeads");
 
             migrationBuilder.DropTable(
-                name: "FeeStructures");
+                name: "ReceiptBooks");
 
             migrationBuilder.DropTable(
-                name: "ReceiptBooks");
+                name: "Finance_FeeAdjustmentRequests");
 
             migrationBuilder.DropTable(
                 name: "HR_AttendanceImportBatches");
@@ -8266,6 +8995,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppDivisions");
+
+            migrationBuilder.DropTable(
+                name: "FeeStructures");
 
             migrationBuilder.DropTable(
                 name: "StudentBankDetails");

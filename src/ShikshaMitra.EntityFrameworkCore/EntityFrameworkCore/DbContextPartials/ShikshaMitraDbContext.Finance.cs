@@ -2,6 +2,8 @@
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Accounts.Incomes;
+using ShikshaMitra.Finance.FeeAdjustment.Aggregates;
+using ShikshaMitra.Finance.FeeAdjustment.Entities;
 using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.FeeCollection;
@@ -77,6 +79,13 @@ public partial class ShikshaMitraDbContext
 	// Finance — Fee Refunds
 	// ───────────────────────────────────────────────
 	public DbSet<FeeRefundRequest> FeeRefundRequests { get; set; }
+
+	// ───────────────────────────────────────────────
+	// Finance — Fee Adjustments
+	// ───────────────────────────────────────────────
+	public DbSet<FeeAdjustmentRequest> FeeAdjustmentRequests { get; set; }
+	public DbSet<FeeAdjustmentSourceLine> FeeAdjustmentSourceLines { get; set; }
+	public DbSet<FeeAdjustmentTargetAllocation> FeeAdjustmentTargetAllocations { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Audit Trail

@@ -1,4 +1,5 @@
 using ShikshaMitra.Finance.Collections;
+using ShikshaMitra.Finance.FeeAdjustment;
 using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Concessions;
 using System;
@@ -29,6 +30,9 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>Total amount already refunded against this obligation line.</summary>
 	public double RefundedAmount { get; private set; }
 
+	/// <summary>Total adjustment credit applied to this obligation line (reduces outstanding).</summary>
+	public double AdjustmentCreditAmount { get; private set; }
+
 	public FeeStatus Status { get; private set; }
 
 	private DueFee() { /* For ORM */ }
@@ -55,6 +59,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PaidAmount = 0;
 		OutstandingAmount = amount;
 		RefundedAmount = 0;
+		AdjustmentCreditAmount = 0;
 		Status = FeeStatus.Pending;
 	}
 
@@ -99,6 +104,11 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public double RefundableBalance => Math.Max(0d, PaidAmount - RefundedAmount);
 
 	/// <summary>
+	/// Credit available to fund adjustments from this line (overpayment / paid credit not yet allocated).
+	/// </summary>
+	public double AdjustableBalance => Math.Max(0d, PaidAmount - RefundedAmount - AdjustmentCreditAmount);
+
+	/// <summary>
 	/// Reverses a payment allocation against this obligation line (called when
 	/// the payment instrument — e.g. cheque — is rejected/bounced).
 	/// Invariant: cannot reverse more than <see cref="PaidAmount"/>.
@@ -140,6 +150,30 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 
 		NetAmount += concessionAmount;
+		RecalculateOutstanding();
+	}
+
+	/// <summary>
+	/// Applies an approved fee adjustment credit to this obligation line (reduces outstanding).
+	/// </summary>
+	public void ApplyAdjustmentCredit(double amount)
+	{
+		if (amount <= 0)
+		{
+			throw new BusinessException(DueFeeErrorCodes.PaymentAmountMustBePositive)
+				.WithData("Amount", amount);
+		}
+
+		if (amount > OutstandingAmount)
+		{
+			throw new BusinessException(FeeAdjustmentErrorCodes.TargetExceedsOutstanding)
+				.WithData("DueFeeId", Id)
+				.WithData("Outstanding", OutstandingAmount)
+				.WithData("Requested", amount);
+		}
+
+		AdjustmentCreditAmount += amount;
+		NetAmount += amount;
 		RecalculateOutstanding();
 	}
 

@@ -109,6 +109,34 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		public static class Fees_Adjustment
+		{
+			private const string SubmoduleName = $"{ModuleName}.Fees.Adjustment";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Fees.Adjustment";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			public const string Approve = $"{SubmoduleName}.Approve";
+			public const string Reject = $"{SubmoduleName}.Reject";
+
+			/// <summary>Pre-fix permission names still stored on some tenant roles.</summary>
+			public const string LegacyView = $"{ModuleName}.Adjustment.View";
+			public const string LegacyAdd = $"{ModuleName}.Adjustment.Add";
+			public const string LegacyDelete = $"{ModuleName}.Adjustment.Delete";
+
+			public static readonly string[] All = { View, Add, Delete, Approve, Reject };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
+				{ Approve, $"{SubmoduleDisplayName}.Approve" },
+				{ Reject, $"{SubmoduleDisplayName}.Reject" }
+			};
+		}
+
 		public static class Fees_Settings_FeeCategory
 		{
 			private const string SubmoduleName = $"{ModuleName}.Settings.FeeCategory";

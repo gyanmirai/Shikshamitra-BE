@@ -82,7 +82,11 @@ internal static class EducationBoardScopeFilter
                         // Full standard access = user can see ALL divisions under this standard
                         bool standardFullAccess = scope.WildcardDivisionStandardIds.Contains(standard.Id);
 
-                        bool standardVisible = standardFullAccess || scope.StandardIds.Contains(standard.Id);
+                        // A standard is visible if the user has explicit access to it, OR if the user
+                        // has a division-level assignment inside it (DivisionId set, StandardId left NULL).
+                        bool standardVisible = standardFullAccess
+                            || scope.StandardIds.Contains(standard.Id)
+                            || (scope.DivisionIds.Count > 0 && (standard.Divisions?.Any(d => scope.DivisionIds.Contains(d.Id)) ?? false));
 
                         if (!standardVisible)
                             continue;

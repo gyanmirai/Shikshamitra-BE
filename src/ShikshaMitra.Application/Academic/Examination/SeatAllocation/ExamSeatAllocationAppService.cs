@@ -11,6 +11,7 @@ using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 
@@ -25,7 +26,8 @@ public class ExamSeatAllocationAppService(
     IRepository<Division, Guid> divisionRepository,
     IRepository<Standard, Guid> standardRepository,
     IRepository<ExamType, Guid> examTypeRepository,
-    IGuidGenerator guidGenerator
+    IGuidGenerator guidGenerator,
+    IDataFilter dataFilter
 ) : ApplicationService, IExamSeatAllocationAppService
 {
     public async Task<SeatLayoutResponseDto> GetSeatLayoutAsync(Guid examId, GetSeatLayoutInput input)
@@ -171,10 +173,15 @@ public class ExamSeatAllocationAppService(
         var incomingStudentIds = input.Students.Select(s => s.StudentId).ToHashSet();
 
         // Load by studentId (not roomId) to respect the unique index on {ExamId, StudentId}.
-        // A student being moved from room A → room B would not be found if we filter by roomId,
-        // causing a duplicate-key 500 on insert.
-        var existingForStudents = await seatAllocationRepository.GetListAsync(a =>
-            a.ExamId == examId && incomingStudentIds.Contains(a.StudentId));
+        // Disable the soft-delete filter so previously-deleted allocations are visible —
+        // otherwise a soft-deleted row is hidden, the code tries to INSERT, and the
+        // unique constraint IX_AppExamSeatAllocations_ExamId_StudentId fires.
+        List<ExamSeatAllocation> existingForStudents;
+        using (dataFilter.Disable<ISoftDelete>())
+        {
+            existingForStudents = await seatAllocationRepository.GetListAsync(a =>
+                a.ExamId == examId && incomingStudentIds.Contains(a.StudentId));
+        }
         var existingByStudent = existingForStudents.ToDictionary(a => a.StudentId);
 
         // Separately load the room-scoped list to find seats that should be cleared
@@ -192,6 +199,9 @@ public class ExamSeatAllocationAppService(
 
             if (existingByStudent.TryGetValue(student.StudentId, out var existing))
             {
+                // Restore soft-deleted record if needed before updating
+                if (existing.IsDeleted)
+                    existing.IsDeleted = false;
                 existing.Update(input.RoomId, student.SeatNumber, benchId, student.IsRoomAssign);
                 toUpdate.Add(existing);
             }

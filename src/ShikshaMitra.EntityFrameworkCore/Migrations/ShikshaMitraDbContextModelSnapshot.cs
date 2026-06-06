@@ -9527,6 +9527,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<bool>("AllowNotApplicable")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("BoardType")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -9578,6 +9581,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
+                    b.Property<string>("GujaratiName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
                     b.Property<int>("RatingScaleMax")
                         .HasColumnType("integer");
 
@@ -9597,7 +9604,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "StaffCategory", "Status");
+                    b.HasIndex("TenantId", "BoardType", "StaffCategory", "Status");
 
                     b.ToTable("AppPerformanceTemplates", (string)null);
                 });
@@ -9664,8 +9671,15 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("GujaratiName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<Guid>("SectionId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("SqaaDomain")
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("TemplateId")
                         .HasColumnType("uuid");
@@ -9739,6 +9753,13 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
+
+                    b.Property<string>("GujaratiName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<int>("SqaaDomain")
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("TemplateId")
                         .HasColumnType("uuid");

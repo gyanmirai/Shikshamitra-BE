@@ -22,6 +22,9 @@ public partial class ProfessionalManagementAppService
 	public Task<List<PerformanceOutcomeDto>> GetIncrementRecommendationsAsync(Guid? cycleId = null) =>
 		AuthorizedAsync(EnsureConfidentialOutcomeAccessAsync, () => _dashboardReader.GetIncrementRecommendationsAsync(cycleId));
 
+	public Task<List<PerformanceSqaaEvidenceDto>> GetSqaaEvidenceAsync(Guid? cycleId = null, PerformanceBoardType? boardType = null, PerformanceStaffCategory? staffCategory = null, PerformanceSqaaDomain? sqaaDomain = null) =>
+		AuthorizedAsync(EnsureReportExportAccessAsync, () => _dashboardReader.GetSqaaEvidenceAsync(cycleId, boardType, staffCategory, sqaaDomain));
+
 	public async Task<List<PerformanceAuditEventDto>> GetAuditTrailAsync(Guid? reviewId = null)
 	{
 		await EnsureAuditAccessAsync();
@@ -50,5 +53,10 @@ public partial class ProfessionalManagementAppService
 	private Task EnsureAuditAccessAsync() =>
 		_authorization.EnsureAnyPermissionAsync(
 			ShikshaMitraSubmodulePermissions.HR.PerformanceManagement.ViewAudit,
+			ShikshaMitraSubmodulePermissions.HR.ProfessionalManagement.View);
+
+	private Task EnsureReportExportAccessAsync() =>
+		_authorization.EnsureAnyPermissionAsync(
+			ShikshaMitraSubmodulePermissions.HR.PerformanceManagement.ExportReports,
 			ShikshaMitraSubmodulePermissions.HR.ProfessionalManagement.View);
 }

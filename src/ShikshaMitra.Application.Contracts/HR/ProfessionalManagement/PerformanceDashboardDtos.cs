@@ -27,6 +27,17 @@ public class PendingActionDto
 	public DateTime? DueDate { get; set; }
 }
 
+public class PerformanceSqaaEvidenceDto
+{
+	public PerformanceSqaaDomain Domain { get; set; }
+	public int TemplateCount { get; set; }
+	public int AssignedReviewCount { get; set; }
+	public int MappedCriteria { get; set; }
+	public int EvidenceRequiredCriteria { get; set; }
+	public int EvidenceSubmitted { get; set; }
+	public int MissingEvidence { get; set; }
+}
+
 public class PerformanceAuditEventDto
 {
 	public Guid Id { get; set; }

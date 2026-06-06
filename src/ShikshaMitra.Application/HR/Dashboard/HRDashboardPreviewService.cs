@@ -32,9 +32,8 @@ public class HRDashboardPreviewService(
 		var scopeKey = HRDashboardScopeService.BuildScopeKey(scope);
 
 		var preview = await FindPreviewAsync(dashboardKey, scopeKey);
-		return preview == null
-			? projectionService.Empty(dashboardKey, scopeKey, Clock.Now)
-			: projectionService.ToDto(preview, Clock.Now);
+		preview = await EnsureRefreshQueuedAsync(preview, dashboardKey, scopeKey);
+		return projectionService.ToDto(preview, Clock.Now);
 	}
 
 	public async Task<HRDashboardPreviewDto> RefreshPreviewAsync(string dashboardKey)
@@ -43,7 +42,6 @@ public class HRDashboardPreviewService(
 		var scope = await scopeService.EnsureCanReadScopedEmployeesAsync();
 		var scopeKey = HRDashboardScopeService.BuildScopeKey(scope);
 
-		var now = Clock.Now;
 		var preview = await FindPreviewAsync(dashboardKey, scopeKey);
 		if (preview == null)
 		{
@@ -51,22 +49,7 @@ public class HRDashboardPreviewService(
 			await previewRepository.InsertAsync(preview, autoSave: true);
 		}
 
-		var isAlreadyRefreshing = preview.Status == HrDashboardPreviewStatus.Refreshing &&
-			preview.RefreshStartedAt.HasValue &&
-			now - preview.RefreshStartedAt.Value < RefreshStaleAfter;
-		if (!isAlreadyRefreshing)
-		{
-			preview.MarkRefreshing(CurrentUser.Id, now);
-			await previewRepository.UpdateAsync(preview, autoSave: true);
-			await backgroundJobManager.EnqueueAsync(new HrDashboardPreviewRefreshJobArgs
-			{
-				TenantId = CurrentTenant.Id,
-				PreviewId = preview.Id,
-				DashboardKey = dashboardKey,
-				ScopeKey = scopeKey,
-				RequestedByUserId = CurrentUser.Id
-			});
-		}
+		await QueueRefreshAsync(preview, dashboardKey, scopeKey, CurrentUser.Id);
 
 		return projectionService.ToDto(preview, Clock.Now);
 	}
@@ -162,4 +145,50 @@ public class HRDashboardPreviewService(
 				x.ScopeKey == scopeKey));
 	}
 
+	private async Task<HrDashboardPreview> EnsureRefreshQueuedAsync(
+		HrDashboardPreview? preview,
+		string dashboardKey,
+		string scopeKey)
+	{
+		if (preview == null)
+		{
+			preview = new HrDashboardPreview(GuidGenerator.Create(), CurrentTenant.Id, dashboardKey, scopeKey);
+			await previewRepository.InsertAsync(preview, autoSave: true);
+		}
+
+		var dto = projectionService.ToDto(preview, Clock.Now);
+		if (dto.Status is HrDashboardPreviewStatus.Empty or HrDashboardPreviewStatus.Failed || dto.IsStale)
+		{
+			await QueueRefreshAsync(preview, dashboardKey, scopeKey, CurrentUser.Id);
+		}
+
+		return preview;
+	}
+
+	private async Task QueueRefreshAsync(
+		HrDashboardPreview preview,
+		string dashboardKey,
+		string scopeKey,
+		Guid? requestedByUserId)
+	{
+		var now = Clock.Now;
+		var isAlreadyRefreshing = preview.Status == HrDashboardPreviewStatus.Refreshing &&
+			preview.RefreshStartedAt.HasValue &&
+			now - preview.RefreshStartedAt.Value < RefreshStaleAfter;
+		if (isAlreadyRefreshing)
+		{
+			return;
+		}
+
+		preview.MarkRefreshing(requestedByUserId, now);
+		await previewRepository.UpdateAsync(preview, autoSave: true);
+		await backgroundJobManager.EnqueueAsync(new HrDashboardPreviewRefreshJobArgs
+		{
+			TenantId = CurrentTenant.Id,
+			PreviewId = preview.Id,
+			DashboardKey = dashboardKey,
+			ScopeKey = scopeKey,
+			RequestedByUserId = requestedByUserId
+		});
+	}
 }

@@ -128,7 +128,7 @@ public class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Return_Empty_Preview_Without_Live_Calculation()
+	public async Task Should_Automatically_Queue_Missing_Preview_Refresh()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		await ClearDashboardPreviewsAsync();
@@ -140,7 +140,7 @@ public class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 		using var document = JsonDocument.Parse(json);
 		document.RootElement.GetProperty("dashboardKey").GetString().ShouldBe(HrDashboardKeys.Main);
 		document.RootElement.GetProperty("scopeKey").GetString().ShouldBe(HrDashboardScopeKeys.HrWide);
-		document.RootElement.GetProperty("status").GetString().ShouldBe(HrDashboardPreviewStatus.Empty);
+		document.RootElement.GetProperty("status").GetString().ShouldBe(HrDashboardPreviewStatus.Refreshing);
 		document.RootElement.GetProperty("payloadJson").GetString().ShouldBe("{}");
 		document.RootElement.GetProperty("isStale").GetBoolean().ShouldBeTrue();
 	}

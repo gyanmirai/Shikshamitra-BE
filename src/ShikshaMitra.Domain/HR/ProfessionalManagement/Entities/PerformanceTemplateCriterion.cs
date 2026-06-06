@@ -12,7 +12,9 @@ public class PerformanceTemplateCriterion : FullAuditedAggregateRoot<Guid>, IMul
 	public Guid TemplateId { get; private set; }
 	public Guid SectionId { get; private set; }
 	public string Name { get; private set; } = string.Empty;
+	public string? GujaratiName { get; private set; }
 	public string? Description { get; private set; }
+	public PerformanceSqaaDomain SqaaDomain { get; private set; } = PerformanceSqaaDomain.HumanResources;
 	public decimal Weight { get; private set; }
 	public bool EvidenceRequired { get; private set; }
 	public int DisplayOrder { get; private set; }
@@ -21,18 +23,20 @@ public class PerformanceTemplateCriterion : FullAuditedAggregateRoot<Guid>, IMul
 	{
 	}
 
-	public PerformanceTemplateCriterion(Guid id, Guid? tenantId, Guid templateId, Guid sectionId, string name, string? description, decimal weight, bool evidenceRequired, int displayOrder) : base(id)
+	public PerformanceTemplateCriterion(Guid id, Guid? tenantId, Guid templateId, Guid sectionId, string name, string? description, decimal weight, bool evidenceRequired, int displayOrder, string? gujaratiName = null, PerformanceSqaaDomain sqaaDomain = PerformanceSqaaDomain.HumanResources) : base(id)
 	{
 		TenantId = tenantId;
 		TemplateId = templateId;
 		SectionId = sectionId;
-		Update(name, description, weight, evidenceRequired, displayOrder);
+		Update(name, description, weight, evidenceRequired, displayOrder, gujaratiName, sqaaDomain);
 	}
 
-	public void Update(string name, string? description, decimal weight, bool evidenceRequired, int displayOrder)
+	public void Update(string name, string? description, decimal weight, bool evidenceRequired, int displayOrder, string? gujaratiName = null, PerformanceSqaaDomain sqaaDomain = PerformanceSqaaDomain.HumanResources)
 	{
 		Name = name.Trim();
+		GujaratiName = string.IsNullOrWhiteSpace(gujaratiName) ? null : gujaratiName.Trim();
 		Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+		SqaaDomain = sqaaDomain;
 		Weight = Math.Clamp(weight, 0m, 100m);
 		EvidenceRequired = evidenceRequired;
 		DisplayOrder = displayOrder;

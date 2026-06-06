@@ -46,6 +46,24 @@ public enum PerformanceStaffCategory
 	ItSupport = 9
 }
 
+public enum PerformanceBoardType
+{
+	GenericIndian = 0,
+	CBSE = 1,
+	GSEB = 2
+}
+
+public enum PerformanceSqaaDomain
+{
+	CurriculumPedagogyAssessment = 0,
+	Infrastructure = 1,
+	HumanResources = 2,
+	LeadershipGovernance = 3,
+	InclusivenessWellBeing = 4,
+	BeneficiarySatisfaction = 5,
+	ManagementSchoolProcesses = 6
+}
+
 public enum PerformanceTemplateStatus
 {
 	Draft = 0,

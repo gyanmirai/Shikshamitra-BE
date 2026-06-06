@@ -60,7 +60,7 @@ public class ProfessionalManagementTemplateWorkflow(
 	public async Task<PerformanceTemplateDto> UpdateTemplateAsync(Guid id, PerformanceTemplateRequest input)
 	{
 		var template = await templateRepository.GetAsync(id);
-		template.Update(input.Name, input.StaffCategory, input.RoleName, input.RatingScaleMax, input.AllowNotApplicable, input.Description);
+		template.Update(input.Name, input.StaffCategory, input.RoleName, input.RatingScaleMax, input.AllowNotApplicable, input.Description, input.BoardType, input.GujaratiName);
 		await templateRepository.UpdateAsync(template, autoSave: true);
 		await ReplaceTemplateChildrenAsync(template.Id, input);
 		await AuditAsync(null, "TemplateUpdated", $"Updated performance template {template.Name}");
@@ -89,15 +89,21 @@ public class ProfessionalManagementTemplateWorkflow(
 			RatingScaleMax = source.RatingScaleMax,
 			AllowNotApplicable = source.AllowNotApplicable,
 			Description = source.Description,
+			BoardType = source.BoardType,
+			GujaratiName = source.GujaratiName,
 			Sections = source.Sections.Select(s => new PerformanceTemplateSectionRequest
 			{
 				Name = s.Name,
+				GujaratiName = s.GujaratiName,
+				SqaaDomain = s.SqaaDomain,
 				Weight = s.Weight,
 				DisplayOrder = s.DisplayOrder,
 				Criteria = s.Criteria.Select(c => new PerformanceTemplateCriterionRequest
 				{
 					Name = c.Name,
+					GujaratiName = c.GujaratiName,
 					Description = c.Description,
+					SqaaDomain = c.SqaaDomain,
 					Weight = c.Weight,
 					EvidenceRequired = c.EvidenceRequired,
 					DisplayOrder = c.DisplayOrder
@@ -130,8 +136,10 @@ public class ProfessionalManagementTemplateWorkflow(
 			input.Name,
 			input.StaffCategory,
 			input.RoleName,
-			input.Description);
-		template.Update(input.Name, input.StaffCategory, input.RoleName, input.RatingScaleMax, input.AllowNotApplicable, input.Description);
+			input.Description,
+			input.BoardType,
+			input.GujaratiName);
+		template.Update(input.Name, input.StaffCategory, input.RoleName, input.RatingScaleMax, input.AllowNotApplicable, input.Description, input.BoardType, input.GujaratiName);
 		await templateRepository.InsertAsync(template, autoSave: true);
 		await ReplaceTemplateChildrenAsync(template.Id, input);
 		return template;
@@ -169,7 +177,9 @@ public class ProfessionalManagementTemplateWorkflow(
 				templateId,
 				sectionInput.Name,
 				sectionInput.Weight,
-				sectionInput.DisplayOrder);
+				sectionInput.DisplayOrder,
+				sectionInput.GujaratiName,
+				sectionInput.SqaaDomain);
 			await sectionRepository.InsertAsync(section, autoSave: true);
 
 			foreach (var criterionInput in sectionInput.Criteria)
@@ -183,7 +193,9 @@ public class ProfessionalManagementTemplateWorkflow(
 					criterionInput.Description,
 					criterionInput.Weight,
 					criterionInput.EvidenceRequired,
-					criterionInput.DisplayOrder);
+					criterionInput.DisplayOrder,
+					criterionInput.GujaratiName,
+					criterionInput.SqaaDomain);
 				await criterionRepository.InsertAsync(criterion, autoSave: true);
 			}
 		}

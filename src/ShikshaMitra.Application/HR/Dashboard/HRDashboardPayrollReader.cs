@@ -6,14 +6,14 @@ using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.HR.Dashboard;
 
-public class HRDashboardPayrollReader(IRunPayrollAppService runPayrollAppService) : ITransientDependency
+public class HRDashboardPayrollReader(PayrollPreviewWorkflow payrollPreviewWorkflow) : ITransientDependency
 {
 	public async Task<HRDashboardPayrollDto> BuildPayrollAsync(string month)
 	{
 		RunPayrollReadinessSummary readiness;
 		try
 		{
-			readiness = await runPayrollAppService.GetReadinessAsync(month);
+			readiness = await payrollPreviewWorkflow.GetReadinessAsync(month);
 		}
 		catch (BusinessException ex)
 		{

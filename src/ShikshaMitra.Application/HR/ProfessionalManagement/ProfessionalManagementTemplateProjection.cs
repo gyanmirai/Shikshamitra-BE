@@ -19,11 +19,15 @@ internal static class ProfessionalManagementTemplateProjection
 			AllowNotApplicable = template.AllowNotApplicable,
 			Status = template.Status,
 			Description = template.Description,
+			BoardType = template.BoardType,
+			GujaratiName = template.GujaratiName,
 			Sections = sections.Select(s => new PerformanceTemplateSectionDto
 			{
 				Id = s.Id,
 				TemplateId = s.TemplateId,
 				Name = s.Name,
+				GujaratiName = s.GujaratiName,
+				SqaaDomain = s.SqaaDomain,
 				Weight = s.Weight,
 				DisplayOrder = s.DisplayOrder,
 				Criteria = criteria.Where(c => c.SectionId == s.Id).Select(ToCriterionDto).ToList()
@@ -37,7 +41,9 @@ internal static class ProfessionalManagementTemplateProjection
 			TemplateId = criterion.TemplateId,
 			SectionId = criterion.SectionId,
 			Name = criterion.Name,
+			GujaratiName = criterion.GujaratiName,
 			Description = criterion.Description,
+			SqaaDomain = criterion.SqaaDomain,
 			Weight = criterion.Weight,
 			EvidenceRequired = criterion.EvidenceRequired,
 			DisplayOrder = criterion.DisplayOrder

@@ -10,8 +10,11 @@ namespace ShikshaMitra.HR.ProfessionalManagement;
 
 public class ProfessionalManagementDashboardReader(
 	IRepository<ProfessionalReviewCycle, Guid> cycleRepository,
+	IRepository<PerformanceTemplate, Guid> templateRepository,
+	IRepository<PerformanceTemplateCriterion, Guid> criterionRepository,
 	IRepository<PerformanceReviewAssignment, Guid> assignmentRepository,
 	IRepository<PerformanceReviewStage, Guid> stageRepository,
+	IRepository<PerformanceEvidence, Guid> evidenceRepository,
 	IRepository<PerformanceOutcome, Guid> outcomeRepository,
 	IRepository<DevelopmentPlan, Guid> developmentPlanRepository,
 	ProfessionalManagementDashboardLookupReader lookupReader,
@@ -132,5 +135,66 @@ public class ProfessionalManagementDashboardReader(
 		}
 
 		return outcomes.Select(ProfessionalManagementProjection.ToOutcomeDto).ToList();
+	}
+
+	public async Task<List<PerformanceSqaaEvidenceDto>> GetSqaaEvidenceAsync(
+		Guid? cycleId,
+		PerformanceBoardType? boardType,
+		PerformanceStaffCategory? staffCategory,
+		PerformanceSqaaDomain? sqaaDomain)
+	{
+		var templateQuery = await templateRepository.GetQueryableAsync();
+		templateQuery = templateQuery
+			.WhereIf(boardType.HasValue, x => x.BoardType == boardType || x.BoardType == PerformanceBoardType.GenericIndian)
+			.WhereIf(staffCategory.HasValue, x => x.StaffCategory == staffCategory);
+		var templates = await asyncExecuter.ToListAsync(templateQuery);
+		var templateIds = templates.Select(x => x.Id).ToHashSet();
+
+		var criterionQuery = await criterionRepository.GetQueryableAsync();
+		var criteria = await asyncExecuter.ToListAsync(criterionQuery
+			.Where(x => templateIds.Contains(x.TemplateId))
+			.WhereIf(sqaaDomain.HasValue, x => x.SqaaDomain == sqaaDomain));
+		var criterionIds = criteria.Select(x => x.Id).ToHashSet();
+
+		var assignmentQuery = await assignmentRepository.GetQueryableAsync();
+		var assignments = await asyncExecuter.ToListAsync(assignmentQuery
+			.Where(x => templateIds.Contains(x.TemplateId))
+			.WhereIf(cycleId.HasValue, x => x.CycleId == cycleId));
+		var assignmentIds = assignments.Select(x => x.Id).ToHashSet();
+
+		var evidenceQuery = await evidenceRepository.GetQueryableAsync();
+		var evidence = await asyncExecuter.ToListAsync(evidenceQuery.Where(x =>
+			assignmentIds.Contains(x.ReviewAssignmentId) &&
+			x.CriterionId.HasValue &&
+			criterionIds.Contains(x.CriterionId.Value)));
+
+		return criteria
+			.GroupBy(x => x.SqaaDomain)
+			.Select(group =>
+			{
+				var groupCriterionIds = group.Select(x => x.Id).ToHashSet();
+				var groupTemplateIds = group.Select(x => x.TemplateId).Distinct().ToHashSet();
+				var requiredCriteria = group.Where(x => x.EvidenceRequired).Select(x => x.Id).ToHashSet();
+				var domainAssignments = assignments.Where(x => groupTemplateIds.Contains(x.TemplateId)).ToList();
+				var submittedEvidencePairs = evidence
+					.Where(x => x.CriterionId.HasValue && requiredCriteria.Contains(x.CriterionId.Value))
+					.Select(x => (x.ReviewAssignmentId, CriterionId: x.CriterionId!.Value))
+					.ToHashSet();
+				var missingEvidence = domainAssignments.Sum(assignment =>
+					requiredCriteria.Count(criterionId => !submittedEvidencePairs.Contains((assignment.Id, criterionId))));
+
+				return new PerformanceSqaaEvidenceDto
+				{
+					Domain = group.Key,
+					TemplateCount = groupTemplateIds.Count,
+					AssignedReviewCount = domainAssignments.Count,
+					MappedCriteria = group.Count(),
+					EvidenceRequiredCriteria = requiredCriteria.Count,
+					EvidenceSubmitted = evidence.Count(x => x.CriterionId.HasValue && groupCriterionIds.Contains(x.CriterionId.Value)),
+					MissingEvidence = missingEvidence
+				};
+			})
+			.OrderBy(x => x.Domain)
+			.ToList();
 	}
 }

@@ -145,6 +145,10 @@ public class ProfessionalManagementController : AbpControllerBase
 	[HttpGet("reports/increment-recommendations")]
 	public Task<List<PerformanceOutcomeDto>> GetIncrementRecommendationsAsync([FromQuery] Guid? cycleId = null) => _appService.GetIncrementRecommendationsAsync(cycleId);
 
+	[HttpGet("reports/sqaaf-evidence")]
+	public Task<List<PerformanceSqaaEvidenceDto>> GetSqaaEvidenceAsync([FromQuery] Guid? cycleId = null, [FromQuery] PerformanceBoardType? boardType = null, [FromQuery] PerformanceStaffCategory? staffCategory = null, [FromQuery] PerformanceSqaaDomain? sqaaDomain = null) =>
+		_appService.GetSqaaEvidenceAsync(cycleId, boardType, staffCategory, sqaaDomain);
+
 	[HttpGet("audit")]
 	public Task<List<PerformanceAuditEventDto>> GetAuditTrailAsync([FromQuery] Guid? reviewId = null) => _appService.GetAuditTrailAsync(reviewId);
 

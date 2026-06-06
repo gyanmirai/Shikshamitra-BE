@@ -14,6 +14,8 @@ public class PerformanceTemplateDto
 	public bool AllowNotApplicable { get; set; } = true;
 	public PerformanceTemplateStatus Status { get; set; }
 	public string? Description { get; set; }
+	public PerformanceBoardType BoardType { get; set; } = PerformanceBoardType.GenericIndian;
+	public string? GujaratiName { get; set; }
 	public List<PerformanceTemplateSectionDto> Sections { get; set; } = new();
 }
 
@@ -22,6 +24,8 @@ public class PerformanceTemplateSectionDto
 	public Guid Id { get; set; }
 	public Guid TemplateId { get; set; }
 	public string Name { get; set; } = string.Empty;
+	public string? GujaratiName { get; set; }
+	public PerformanceSqaaDomain SqaaDomain { get; set; } = PerformanceSqaaDomain.HumanResources;
 	public decimal Weight { get; set; }
 	public int DisplayOrder { get; set; }
 	public List<PerformanceTemplateCriterionDto> Criteria { get; set; } = new();
@@ -33,7 +37,9 @@ public class PerformanceTemplateCriterionDto
 	public Guid TemplateId { get; set; }
 	public Guid SectionId { get; set; }
 	public string Name { get; set; } = string.Empty;
+	public string? GujaratiName { get; set; }
 	public string? Description { get; set; }
+	public PerformanceSqaaDomain SqaaDomain { get; set; } = PerformanceSqaaDomain.HumanResources;
 	public decimal Weight { get; set; }
 	public bool EvidenceRequired { get; set; }
 	public int DisplayOrder { get; set; }
@@ -47,6 +53,8 @@ public class PerformanceTemplateRequest
 	public int RatingScaleMax { get; set; } = 5;
 	public bool AllowNotApplicable { get; set; } = true;
 	public string? Description { get; set; }
+	public PerformanceBoardType BoardType { get; set; } = PerformanceBoardType.GenericIndian;
+	public string? GujaratiName { get; set; }
 	public List<PerformanceTemplateSectionRequest> Sections { get; set; } = new();
 }
 
@@ -63,6 +71,8 @@ public class PerformanceTemplateRequestValidator : AbstractValidator<Performance
 			.InclusiveBetween(1, 10);
 		RuleFor(x => x.Description)
 			.MaximumLength(1000);
+		RuleFor(x => x.GujaratiName)
+			.MaximumLength(160);
 		RuleForEach(x => x.Sections)
 			.SetValidator(new PerformanceTemplateSectionRequestValidator());
 	}
@@ -72,6 +82,8 @@ public class PerformanceTemplateSectionRequest
 {
 	public Guid? Id { get; set; }
 	public string Name { get; set; } = string.Empty;
+	public string? GujaratiName { get; set; }
+	public PerformanceSqaaDomain SqaaDomain { get; set; } = PerformanceSqaaDomain.HumanResources;
 	public decimal Weight { get; set; }
 	public int DisplayOrder { get; set; }
 	public List<PerformanceTemplateCriterionRequest> Criteria { get; set; } = new();
@@ -84,6 +96,8 @@ public class PerformanceTemplateSectionRequestValidator : AbstractValidator<Perf
 		RuleFor(x => x.Name)
 			.NotEmpty()
 			.Length(2, 160);
+		RuleFor(x => x.GujaratiName)
+			.MaximumLength(160);
 		RuleFor(x => x.Weight)
 			.InclusiveBetween(0, 100);
 		RuleForEach(x => x.Criteria)
@@ -95,7 +109,9 @@ public class PerformanceTemplateCriterionRequest
 {
 	public Guid? Id { get; set; }
 	public string Name { get; set; } = string.Empty;
+	public string? GujaratiName { get; set; }
 	public string? Description { get; set; }
+	public PerformanceSqaaDomain SqaaDomain { get; set; } = PerformanceSqaaDomain.HumanResources;
 	public decimal Weight { get; set; }
 	public bool EvidenceRequired { get; set; }
 	public int DisplayOrder { get; set; }
@@ -108,6 +124,8 @@ public class PerformanceTemplateCriterionRequestValidator : AbstractValidator<Pe
 		RuleFor(x => x.Name)
 			.NotEmpty()
 			.Length(2, 200);
+		RuleFor(x => x.GujaratiName)
+			.MaximumLength(200);
 		RuleFor(x => x.Description)
 			.MaximumLength(1000);
 		RuleFor(x => x.Weight)

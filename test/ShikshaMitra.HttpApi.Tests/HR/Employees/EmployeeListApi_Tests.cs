@@ -24,7 +24,7 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Get_Employee_List_Returns_200()
 	{
-		await EmployeeTestHelper.CreateEmployeeAsync(Client, "ListTest");
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ListTest");
 
 		var response = await Client.GetAsync($"{BaseUrl}?page=1&pageSize=10");
 
@@ -33,6 +33,9 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 		body.ShouldNotBeNull();
 		body.Items.ShouldNotBeNull();
 		body.TotalCount.ShouldBeGreaterThanOrEqualTo(1);
+		var row = body.Items.First(x => x.Id == created.Id);
+		row.FirstName.ShouldBe(created.FirstName);
+		row.LastName.ShouldBe(created.LastName);
 	}
 
 	[Fact]
@@ -47,6 +50,8 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 		var body = await response.Content.ReadFromJsonAsync<EmployeeDetails>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.Id.ShouldBe(created.Id);
+		body.FirstName.ShouldBe(created.FirstName);
+		body.LastName.ShouldBe(created.LastName);
 	}
 
 	#endregion

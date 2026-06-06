@@ -12,6 +12,7 @@ public class PerformanceTemplateCriterionConfiguration : IEntityTypeConfiguratio
 		builder.ConfigureByConvention();
 		builder.HasKey(x => x.Id);
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
+		builder.Property(x => x.GujaratiName).HasMaxLength(200);
 		builder.Property(x => x.Description).HasMaxLength(1000);
 		builder.Property(x => x.Weight).HasPrecision(7, 2);
 		builder.HasIndex(x => new { x.TenantId, x.TemplateId, x.SectionId, x.DisplayOrder });

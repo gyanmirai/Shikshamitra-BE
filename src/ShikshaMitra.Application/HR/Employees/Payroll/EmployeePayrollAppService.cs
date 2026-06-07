@@ -2,6 +2,7 @@
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
 using System.Collections.Generic;
@@ -25,7 +26,8 @@ public class EmployeePayrollAppService(
 	IDeductionComponentRepository deductionComponentRepository,
 	IEmployeeCacheManager employeeCacheManager,
 	IGuidGenerator guidGenerator,
-	EmployeePayrollContractWorkflow payrollContractWorkflow)
+	EmployeePayrollContractWorkflow payrollContractWorkflow,
+	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator)
 	: ApplicationService, IEmployeePayrollAppService
 {
 	public async Task<EmployeePayrollDetailsDto> GetPayrollDetailsAsync(Guid employeeId)
@@ -95,6 +97,7 @@ public class EmployeePayrollAppService(
 		}
 
 		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
+		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { employeeId });
 	}
 
 	public async Task<EmployeePayrollResponse> GetPayrollContractAsync(Guid employeeId)
@@ -117,11 +120,12 @@ public class EmployeePayrollAppService(
 	}
 
 	[UnitOfWork]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
 	public async Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input)
 	{
 		await payrollContractWorkflow.UpdateAsync(employeeId, input);
 		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
+		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { employeeId });
 	}
 
 	private async Task<Dictionary<string, Guid>> GetEarningComponentIdsByNameAsync(

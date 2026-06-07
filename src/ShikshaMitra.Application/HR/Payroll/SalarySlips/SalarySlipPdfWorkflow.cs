@@ -13,10 +13,34 @@ public class SalarySlipPdfWorkflow(
 	IEmployeeRepository employeeRepository,
 	SalarySlipDtoMapper salarySlipDtoMapper,
 	PayslipPdfService payslipPdfService,
-	SalarySlipAccessService accessService)
+	SalarySlipAccessService accessService,
+	SalarySlipSnapshotGenerationService snapshotGenerationService)
 	: ApplicationService
 {
 	public async Task<byte[]> GenerateSalarySlipPdfAsync(Guid employeeId, string monthYear)
+	{
+		var salarySlip = await GetSalarySlipForPdfAsync(employeeId, monthYear, allowSnapshotPreview: false);
+
+		if (salarySlip.Status is not (SalarySlipStatus.Finalized or SalarySlipStatus.Paid))
+		{
+			throw new BusinessException(HRErrorCodes.SalarySlipPdfRequiresFinalized);
+		}
+
+		return await GenerateAsync(salarySlip, isPreview: false);
+	}
+
+	public async Task<byte[]> GenerateSalarySlipPreviewPdfAsync(Guid employeeId, string monthYear)
+	{
+		var salarySlip = await GetSalarySlipForPdfAsync(employeeId, monthYear, allowSnapshotPreview: true);
+		var isPreview = salarySlip.Status is not (SalarySlipStatus.Finalized or SalarySlipStatus.Paid);
+
+		return await GenerateAsync(salarySlip, isPreview);
+	}
+
+	private async Task<SalarySlip> GetSalarySlipForPdfAsync(
+		Guid employeeId,
+		string monthYear,
+		bool allowSnapshotPreview)
 	{
 		if (employeeId == Guid.Empty)
 		{
@@ -26,19 +50,24 @@ public class SalarySlipPdfWorkflow(
 		await accessService.EnsureEmployeeScopeAllowedAsync(employeeId);
 		var normalizedMonthYear = SalarySlipMonthYearNormalizer.Normalize(monthYear);
 		var salarySlip = await salarySlipRepository.GetByEmployeeAndMonthAsync(employeeId, normalizedMonthYear);
+		if (allowSnapshotPreview && salarySlip?.Status is not (SalarySlipStatus.Finalized or SalarySlipStatus.Paid))
+		{
+			return await snapshotGenerationService.GenerateOrGetFromSnapshotAsync(employeeId, normalizedMonthYear);
+		}
+
 		if (salarySlip == null)
 		{
 			throw new BusinessException(HRErrorCodes.SalarySlipNotFound);
 		}
 
-		if (salarySlip.Status is not (SalarySlipStatus.Finalized or SalarySlipStatus.Paid))
-		{
-			throw new BusinessException(HRErrorCodes.SalarySlipPdfRequiresFinalized);
-		}
+		return salarySlip;
+	}
 
+	private async Task<byte[]> GenerateAsync(SalarySlip salarySlip, bool isPreview)
+	{
 		var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 		var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);
-		var pdfModel = SalarySlipProjection.ToPdfModel(dto, CurrentTenant.Name ?? "ShikshaMitra");
+		var pdfModel = SalarySlipProjection.ToPdfModel(dto, CurrentTenant.Name ?? "ShikshaMitra", isPreview);
 
 		return payslipPdfService.Generate(pdfModel);
 	}

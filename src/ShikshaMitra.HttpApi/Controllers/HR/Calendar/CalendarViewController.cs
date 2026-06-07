@@ -73,14 +73,7 @@ public class CalendarViewController : ShikshaMitraController
     [ProducesResponseType(404)]
     public async Task<ActionResult<CalendarItemDetailsDto>> GetItemDetailsAsync(Guid itemId)
     {
-        try
-        {
-            var result = await _calendarViewAppService.GetItemDetailsAsync(itemId);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var result = await _calendarViewAppService.GetItemDetailsAsync(itemId);
+        return Ok(result);
     }
 }

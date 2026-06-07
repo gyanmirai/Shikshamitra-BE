@@ -204,7 +204,7 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Direct_Payslip_Should_Not_Use_Unlocked_Stale_Snapshot()
+	public async Task Draft_Payslip_Should_Mirror_Unlocked_Payroll_Snapshot()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
@@ -284,11 +284,11 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 		});
 
 		var februarySlip = await GetSalarySlipResponseAsync(employee.Id, "FEBRUARY-2026");
-		februarySlip.Earnings.ShouldNotContain(x => x.Name == "January Temp Earning");
-		februarySlip.Deductions.ShouldNotContain(x => x.Name == "January Temp Deduction");
-		februarySlip.TotalEarning.ShouldBe(0d);
-		februarySlip.TotalDeduction.ShouldBe(0d);
-		februarySlip.NetSalary.ShouldBe(0d);
+		februarySlip.Earnings.ShouldContain(x => x.Name == "January Temp Earning" && x.Amount == 100d && x.IsTemp);
+		februarySlip.Deductions.ShouldContain(x => x.Name == "January Temp Deduction" && x.Amount == 50d && x.IsTemp);
+		februarySlip.TotalEarning.ShouldBe(100d);
+		februarySlip.TotalDeduction.ShouldBe(50d);
+		februarySlip.NetSalary.ShouldBe(50d);
 	}
 
 	[Fact]
@@ -323,7 +323,32 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 			Client,
 			$"SlipMonth{Guid.NewGuid():N}",
 			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-		await SeedFinalizedSalarySlipAsync(employee.Id, "2026-04");
+		await UpdateSalaryStructureAsync(
+			employee.Id,
+			new UpdateSalaryStructureDto
+			{
+				EarningComponents = new List<SalaryComponentDto>
+				{
+					new()
+					{
+						Name = "April Normalizer Earning",
+						Amount = 100m,
+						IsFixed = true,
+						IsTemp = false
+					}
+				},
+				DeductionComponents = new List<SalaryComponentDto>
+				{
+					new()
+					{
+						Name = "April Normalizer Deduction",
+						Amount = 10m,
+						IsFixed = true,
+						IsTemp = false
+					}
+				}
+			});
+		await GetPayrollItemAsync(employee.Id, "2026-04");
 
 		var slip = await GetSalarySlipResponseAsync(employee.Id, Uri.EscapeDataString(monthYear));
 
@@ -381,6 +406,24 @@ public class SalarySlipApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.BadRequest,
 			HttpStatusCode.Forbidden,
 			HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Salary_Slip_Should_Require_Payroll_Snapshot()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"SlipSnapshotRequired{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?employeeId={employee.Id}&monthYear=JUNE-2026");
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+		body.ShouldContain(HRErrorCodes.PayrollSnapshotRequiredForSalarySlip);
 	}
 
 	#endregion

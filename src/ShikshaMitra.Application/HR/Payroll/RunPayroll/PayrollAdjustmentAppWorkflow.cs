@@ -48,7 +48,7 @@ public class PayrollAdjustmentAppWorkflow(
 			month,
 			academicYearId,
 			new[] { request.EmployeeId },
-			preserveReviewedSnapshots: true);
+			preserveReviewedSnapshots: false);
 		return adjustment;
 	}
 
@@ -65,7 +65,7 @@ public class PayrollAdjustmentAppWorkflow(
 			month,
 			academicYearId,
 			new[] { request.EmployeeId },
-			preserveReviewedSnapshots: true);
+			preserveReviewedSnapshots: false);
 		return adjustment;
 	}
 
@@ -82,6 +82,6 @@ public class PayrollAdjustmentAppWorkflow(
 			month,
 			null,
 			new[] { adjustment.EmployeeId },
-			preserveReviewedSnapshots: true);
+			preserveReviewedSnapshots: false);
 	}
 }

@@ -30,7 +30,8 @@ public class CalendarViewReadService(
 {
 	public async Task<PagedResultDto<CalendarViewItemDto>> GetViewAsync(GetCalendarViewRequestDto input)
 	{
-		var visibility = await ResolveVisibilityAsync();
+		var now = CurrentInstant();
+		var visibility = await ResolveVisibilityAsync(input.AcademicYearId);
 		var eventTypeDict = (await AsyncExecuter.ToListAsync(await eventTypeRepository.GetQueryableAsync()))
 			.ToDictionary(et => et.Id);
 		var holidayTypeDict = (await AsyncExecuter.ToListAsync(await holidayTypeRepository.GetQueryableAsync()))
@@ -44,14 +45,30 @@ public class CalendarViewReadService(
 				Id = e.Id,
 				Title = e.Title,
 				CalendarItemType = CalendarItemType.Event,
-				Color = eventTypeDict.TryGetValue(e.EventTypeId, out var eventType) ? eventType.Color : string.Empty
+				Color = eventTypeDict.TryGetValue(e.EventTypeId, out var eventType) ? eventType.Color : string.Empty,
+				TypeName = eventType?.Name ?? string.Empty,
+				Description = e.Description,
+				Mode = e.Mode.ToString(),
+				Venue = e.Venue,
+				StartTime = e.StartTime,
+				EndTime = e.EndTime,
+				AudienceCount = e.AudienceIds.Count,
+				Status = (int)e.GetStatus(now),
+				StartDate = e.MeetingDate ?? e.StartDate ?? now,
+				EndDate = e.MeetingDate ?? e.EndDate ?? e.StartDate ?? now
 			})
 			.Concat(holidays.Select(h => new CalendarViewItemDto
 			{
 				Id = h.Id,
 				Title = h.HolidayName,
 				CalendarItemType = CalendarItemType.Holiday,
-				Color = holidayTypeDict.TryGetValue(h.HolidayTypeId, out var holidayType) ? holidayType.Color : string.Empty
+				Color = holidayTypeDict.TryGetValue(h.HolidayTypeId, out var holidayType) ? holidayType.Color : string.Empty,
+				TypeName = holidayType?.Name ?? string.Empty,
+				Description = h.Description,
+				AudienceCount = h.AudienceIds.Count,
+				Status = (int)h.GetStatus(now),
+				StartDate = h.StartDate,
+				EndDate = h.EndDate
 			}))
 			.ToList();
 
@@ -65,7 +82,7 @@ public class CalendarViewReadService(
 		return new PagedResultDto<CalendarViewItemDto>(totalCount, pagedItems);
 	}
 
-	private async Task<CalendarVisibilityContext> ResolveVisibilityAsync()
+	private async Task<CalendarVisibilityContext> ResolveVisibilityAsync(Guid academicYearId)
 	{
 		var isAdmin = false;
 		var userGroupIds = new List<Guid>();
@@ -75,7 +92,7 @@ public class CalendarViewReadService(
 			isAdmin = await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value);
 			if (!isAdmin)
 			{
-				userGroupIds = await groupAppService.GetUserGroupIdsAsync(CurrentUser.Id.Value);
+				userGroupIds = await groupAppService.GetUserGroupIdsAsync(CurrentUser.Id.Value, academicYearId);
 			}
 		}
 
@@ -100,10 +117,11 @@ public class CalendarViewReadService(
 			eventQuery = eventQuery.Where(e => e.Title.Contains(input.Search));
 		}
 
+		var statuses = GetRequestedStatuses(input);
 		var events = await AsyncExecuter.ToListAsync(eventQuery);
-		if (input.Status.HasValue)
+		if (statuses.Count > 0)
 		{
-			events = events.Where(e => (int)e.GetStatus(now) == input.Status.Value).ToList();
+			events = events.Where(e => statuses.Contains((int)e.GetStatus(now))).ToList();
 		}
 
 		return ApplyVisibility(events, visibility, e => e.AudienceIds);
@@ -127,13 +145,24 @@ public class CalendarViewReadService(
 			holidayQuery = holidayQuery.Where(h => h.HolidayName.Contains(input.Search));
 		}
 
+		var statuses = GetRequestedStatuses(input);
 		var holidays = await AsyncExecuter.ToListAsync(holidayQuery);
-		if (input.Status.HasValue)
+		if (statuses.Count > 0)
 		{
-			holidays = holidays.Where(h => (int)h.GetStatus(now) == input.Status.Value).ToList();
+			holidays = holidays.Where(h => statuses.Contains((int)h.GetStatus(now))).ToList();
 		}
 
 		return ApplyVisibility(holidays, visibility, h => h.AudienceIds);
+	}
+
+	private static IReadOnlyCollection<int> GetRequestedStatuses(GetCalendarViewRequestDto input)
+	{
+		if (input.Statuses is { Count: > 0 })
+		{
+			return input.Statuses.Distinct().ToArray();
+		}
+
+		return input.Status.HasValue ? new[] { input.Status.Value } : Array.Empty<int>();
 	}
 
 	private static List<T> ApplyVisibility<T>(

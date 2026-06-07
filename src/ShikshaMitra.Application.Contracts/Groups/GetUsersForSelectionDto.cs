@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
 using Volo.Abp.Application.Dtos;
 
@@ -133,6 +134,11 @@ public class UserSelectionDto
     public string? Identifier { get; set; }
 
     /// <summary>
+    /// Employee code for HR-backed employee selection results.
+    /// </summary>
+    public string? EmployeeCode { get; set; }
+
+    /// <summary>
     /// Standard/Class name (for students)
     /// </summary>
     public string? StandardName { get; set; }
@@ -148,7 +154,27 @@ public class UserSelectionDto
     public string? Department { get; set; }
 
     /// <summary>
+    /// Designation (for employees)
+    /// </summary>
+    public string? Designation { get; set; }
+
+    /// <summary>
     /// Role name (for employees)
     /// </summary>
     public string? RoleName { get; set; }
+
+    /// <summary>
+    /// Employee mobile number (for employees)
+    /// </summary>
+    public string? MobileNo { get; set; }
+
+    /// <summary>
+    /// Employee email address (for employees)
+    /// </summary>
+    public string? Email { get; set; }
+
+    /// <summary>
+    /// Employee status (for employees)
+    /// </summary>
+    public EmployeeStatusType? EmployeeStatusType { get; set; }
 }

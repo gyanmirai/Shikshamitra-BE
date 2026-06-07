@@ -28,6 +28,11 @@ public class SalarySlipResponse
     public string? SlipNumber { get; set; }
 
     /// <summary>
+    /// Official salary slip status: Draft, Finalized, or Paid.
+    /// </summary>
+    public string? Status { get; set; }
+
+    /// <summary>
     /// Salary period in MMMM-YYYY format (e.g., JANUARY-2025)
     /// </summary>
     [Required]

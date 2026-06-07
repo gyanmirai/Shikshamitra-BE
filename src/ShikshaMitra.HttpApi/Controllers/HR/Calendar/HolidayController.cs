@@ -117,9 +117,11 @@ public class HolidayController : ShikshaMitraController
     [HttpGet("by-type/{typeId}")]
     [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
     [ProducesResponseType(typeof(PagedResultDto<HolidayDto>), StatusCodes.Status200OK)]
-    public virtual async Task<PagedResultDto<HolidayDto>> GetByTypeAsync(Guid typeId)
+    public virtual async Task<PagedResultDto<HolidayDto>> GetByTypeAsync(
+        Guid typeId,
+        [FromQuery] GetHolidayListRequestDto input)
     {
-        var input = new GetHolidayListRequestDto { TypeId = typeId };
+        input.TypeId = typeId;
         return await _holidayAppService.GetListAsync(input);
     }
 
@@ -131,9 +133,11 @@ public class HolidayController : ShikshaMitraController
     [HttpGet("by-status/{status}")]
     [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
     [ProducesResponseType(typeof(PagedResultDto<HolidayDto>), StatusCodes.Status200OK)]
-    public virtual async Task<PagedResultDto<HolidayDto>> GetByStatusAsync(int status)
+    public virtual async Task<PagedResultDto<HolidayDto>> GetByStatusAsync(
+        int status,
+        [FromQuery] GetHolidayListRequestDto input)
     {
-        var input = new GetHolidayListRequestDto { Status = status };
+        input.Status = status;
         return await _holidayAppService.GetByStatusAsync(input);
     }
 }

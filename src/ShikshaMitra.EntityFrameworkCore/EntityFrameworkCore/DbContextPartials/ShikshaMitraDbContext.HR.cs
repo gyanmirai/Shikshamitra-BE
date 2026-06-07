@@ -54,6 +54,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<PayrollRunReview> PayrollRunReviews { get; set; }
     public DbSet<PayrollRunItemSnapshot> PayrollRunItemSnapshots { get; set; }
     public DbSet<PayrollAdjustment> PayrollAdjustments { get; set; }
+    public DbSet<PayrollMonthLock> PayrollMonthLocks { get; set; }
 
     public DbSet<WorkCalendarPolicy> WorkCalendarPolicies { get; set; }
     public DbSet<WorkCalendarHoliday> WorkCalendarHolidays { get; set; }

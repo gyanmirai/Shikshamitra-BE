@@ -56,15 +56,8 @@ public class EventController : ShikshaMitraController
     [ProducesResponseType(404)]
     public async Task<ActionResult<EventDto>> GetAsync(Guid id)
     {
-        try
-        {
-            var result = await _eventAppService.GetAsync(id);
-            return Ok(result);
-        }
-        catch (Exception)
-        {
-            return NotFound();
-        }
+        var result = await _eventAppService.GetAsync(id);
+        return Ok(result);
     }
 
     /// <summary>
@@ -149,10 +142,13 @@ public class EventController : ShikshaMitraController
     /// <returns>List of events of specified type</returns>
     [HttpGet("by-type/{typeId}")]
     [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
-    [ProducesResponseType(typeof(List<EventDto>), 200)]
-    public async Task<ActionResult<List<EventDto>>> GetByTypeAsync(Guid typeId)
+    [ProducesResponseType(typeof(PagedResultDto<EventDto>), 200)]
+    public async Task<ActionResult<PagedResultDto<EventDto>>> GetByTypeAsync(
+        Guid typeId,
+        [FromQuery] GetEventListRequestDto input)
     {
-        var result = await _eventAppService.GetByTypeAsync(typeId);
+        input.TypeId = typeId;
+        var result = await _eventAppService.GetListAsync(input);
         return Ok(result);
     }
 

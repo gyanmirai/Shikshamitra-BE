@@ -130,7 +130,7 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 	[
 		TenantStep<Seeders.EventTypeSeederContributor>(serviceProvider, "EventTypeSeeder", "EventTypeSeeder:v1", 100, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.RolesSeederContributor>(serviceProvider, "RolesSeeder", "RolesSeeder:v2", 110, Seeders.ShikshaMitraSeederProfile.All),
-		TenantStep<Seeders.RolePermissionSeederContributor>(serviceProvider, "RolePermissionSeeder", "RolePermissionSeeder:v4", 120, Seeders.ShikshaMitraSeederProfile.All),
+		TenantStep<Seeders.RolePermissionSeederContributor>(serviceProvider, "RolePermissionSeeder", "RolePermissionSeeder:v5", 120, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.FinanceFeeAdjustmentPermissionMigrationSeederContributor>(
 			serviceProvider,
 			"FinanceFeeAdjustmentPermissionMigration",

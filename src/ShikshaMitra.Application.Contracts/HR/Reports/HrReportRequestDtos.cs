@@ -35,6 +35,7 @@ public class HrReportFilterDto
 	public int? GenderType { get; set; }
 	public string? Month { get; set; }
 	public List<string>? ComponentNames { get; set; }
+	public string? DateField { get; set; }
 	public DateOnly? FromDate { get; set; }
 	public DateOnly? ToDate { get; set; }
 	public List<HrReportFilterConditionDto>? Conditions { get; set; }

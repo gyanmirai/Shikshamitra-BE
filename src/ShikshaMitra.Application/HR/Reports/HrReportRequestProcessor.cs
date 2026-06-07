@@ -20,6 +20,7 @@ public static class HrReportRequestProcessor
 		input.Filters ??= new HrReportFilterDto();
 		input.Filters.Departments = input.Filters.Departments?.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct().ToList();
 		input.Filters.ComponentNames = input.Filters.ComponentNames?.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct().ToList();
+		input.Filters.DateField = string.IsNullOrWhiteSpace(input.Filters.DateField) ? null : input.Filters.DateField.Trim();
 		input.Columns = input.Columns?.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct().ToList();
 		input.Groups = input.Groups?.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct().ToList();
 	}

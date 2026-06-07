@@ -30,6 +30,11 @@ public class GetCalendarViewRequestDto : PagedAndSortedResultRequestDto
     public int? Status { get; set; }
 
     /// <summary>
+    /// Filter by one or more statuses: 0=Upcoming, 1=Active/Ongoing, 2=Completed (optional)
+    /// </summary>
+    public List<int>? Statuses { get; set; }
+
+    /// <summary>
     /// Search by title (optional)
     /// </summary>
     public string? Search { get; set; }

@@ -107,6 +107,85 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Preview_Should_Filter_Employee_Report_By_Selected_Date_Field()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/preview", new HrReportRequestDto
+		{
+			ReportType = HrReportTypes.EmployeeList,
+			DataSource = HrReportDataSources.Employee,
+			Page = 1,
+			PageSize = 10,
+			Filters = new HrReportFilterDto
+			{
+				DateField = "dateOfJoining",
+				FromDate = new DateOnly(2099, 1, 1),
+				ToDate = new DateOnly(2099, 12, 31)
+			}
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var preview = await response.Content.ReadFromJsonAsync<HrReportPreviewDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview.TotalCount.ShouldBe(0);
+		preview.NormalizedFilters.DateField.ShouldBe("dateOfJoining");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Preview_Should_Filter_Payroll_Report_By_Month()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/preview", new HrReportRequestDto
+		{
+			ReportType = HrReportTypes.MonthlyPayrollSummary,
+			DataSource = HrReportDataSources.Payroll,
+			Page = 1,
+			PageSize = 10,
+			Filters = new HrReportFilterDto
+			{
+				Month = "2099-01"
+			}
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var preview = await response.Content.ReadFromJsonAsync<HrReportPreviewDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview.TotalCount.ShouldBe(0);
+		preview.NormalizedFilters.Month.ShouldBe("2099-01");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Preview_Should_Filter_Performance_Report_By_Finalized_Date()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/preview", new HrReportRequestDto
+		{
+			ReportType = "Performance Future Window",
+			DataSource = HrReportDataSources.Performance,
+			Page = 1,
+			PageSize = 10,
+			Filters = new HrReportFilterDto
+			{
+				DateField = "finalizedAt",
+				FromDate = new DateOnly(2099, 1, 1),
+				ToDate = new DateOnly(2099, 12, 31)
+			}
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var preview = await response.Content.ReadFromJsonAsync<HrReportPreviewDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview.TotalCount.ShouldBe(0);
+		preview.NormalizedFilters.DateField.ShouldBe("finalizedAt");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Sources_Should_Return_Report_Builder_Metadata()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();

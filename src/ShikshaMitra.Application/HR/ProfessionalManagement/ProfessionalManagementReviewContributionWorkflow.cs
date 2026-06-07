@@ -23,7 +23,13 @@ public class ProfessionalManagementReviewContributionWorkflow(
 	IClock clock)
 	: ApplicationService, ITransientDependency
 {
-	public async Task<ClassroomObservationDto> AddObservationAsync(Guid id, ClassroomObservationRequest input)
+	public Task<ClassroomObservationDto> AddObservationAsync(Guid id, ClassroomObservationRequest input) =>
+		AddObservationAsync(id, input, input.ObserverEmployeeId ?? Guid.Empty);
+
+	public async Task<ClassroomObservationDto> AddObservationAsync(
+		Guid id,
+		ClassroomObservationRequest input,
+		Guid observerEmployeeId)
 	{
 		(await assignmentRepository.GetAsync(id)).EnsureEditable();
 		var review = await reviewReader.GetReviewAsync(id);
@@ -35,7 +41,7 @@ public class ProfessionalManagementReviewContributionWorkflow(
 		var observationDate = input.ObservationDate == default
 			? clock.Now
 			: input.ObservationDate;
-		var observation = new ClassroomObservation(guidGenerator.Create(), CurrentTenant.Id, id, input.ObserverEmployeeId, observationDate, input.ClassName, input.SubjectName, input.LessonObjectiveScore, input.StudentEngagementScore, input.ClassroomManagementScore, input.AssessmentScore, input.Notes);
+		var observation = new ClassroomObservation(guidGenerator.Create(), CurrentTenant.Id, id, observerEmployeeId, observationDate, input.ClassName, input.SubjectName, input.LessonObjectiveScore, input.StudentEngagementScore, input.ClassroomManagementScore, input.AssessmentScore, input.Notes);
 		await observationRepository.InsertAsync(observation, autoSave: true);
 		await AuditAsync(id, "ObservationAdded", "Added classroom observation");
 		return ProfessionalManagementProjection.ToObservationDto(observation);

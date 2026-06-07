@@ -17,6 +17,9 @@ public class SalarySlipAppService(
 	public Task<byte[]> GenerateSalarySlipPdfAsync(Guid employeeId, string monthYear) =>
 		pdfWorkflow.GenerateSalarySlipPdfAsync(employeeId, monthYear);
 
+	public Task<byte[]> GenerateSalarySlipPreviewPdfAsync(Guid employeeId, string monthYear) =>
+		pdfWorkflow.GenerateSalarySlipPreviewPdfAsync(employeeId, monthYear);
+
 	public Task<SalarySlipDto> GenerateSalarySlipAsync(GenerateSalarySlipInput input) =>
 		workflow.GenerateSalarySlipAsync(input);
 

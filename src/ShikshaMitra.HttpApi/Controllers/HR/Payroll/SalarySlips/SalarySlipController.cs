@@ -74,6 +74,28 @@ public class SalarySlipController : AbpControllerBase
 		return File(bytes, "application/pdf", fileName);
 	}
 
+	[HttpGet("pdf-preview")]
+	[HttpGet("preview-pdf")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View)]
+	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<IActionResult> GetSalarySlipPreviewPdfAsync(
+		[FromQuery, Required] Guid employeeId,
+		[FromQuery, Required] string monthYear)
+	{
+		if (!PayrollMonthNormalizer.TryNormalizeToInternal(monthYear, out var internalMonthYear))
+		{
+			throw new BusinessException(HRErrorCodes.InvalidMonthYearFormat);
+		}
+
+		var bytes = await _salarySlipAppService.GenerateSalarySlipPreviewPdfAsync(employeeId, internalMonthYear);
+		var displayMonthYear = PayrollMonthNormalizer.ToApiMonthYear(internalMonthYear) ?? internalMonthYear.ToUpperInvariant();
+		var fileName = $"Payslip_Preview_{employeeId:N}_{displayMonthYear}.pdf";
+
+		return File(bytes, "application/pdf", fileName);
+	}
+
 	private static SalarySlipResponse MapToSalarySlipResponse(SalarySlipDto dto, string contractMonthYear)
 	{
 		return new SalarySlipResponse
@@ -85,6 +107,7 @@ public class SalarySlipController : AbpControllerBase
 			Designation = dto.Designation,
 			DateOfJoining = dto.DateOfJoining,
 			SlipNumber = dto.SlipNumber,
+			Status = dto.Status.ToString(),
 			MonthYear = contractMonthYear,
 			TotalEarning = Convert.ToDouble(dto.TotalEarning),
 			TotalDeduction = Convert.ToDouble(dto.TotalDeduction),

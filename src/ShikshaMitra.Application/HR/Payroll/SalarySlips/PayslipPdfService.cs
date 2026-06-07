@@ -23,9 +23,10 @@ public class PayslipPdfService : ITransientDependency
 
 				page.Content().Column(column =>
 				{
-					column.Spacing(12);
+					column.Spacing(10);
 					column.Item().Element(c => ComposeHeader(c, model));
 					column.Item().Element(c => ComposeInfoBlocks(c, model));
+					column.Item().Element(c => ComposeSummary(c, model));
 					column.Item().Element(c => ComposePayBasis(c, model));
 					column.Item().Element(c => ComposeSalaryTables(c, model));
 					column.Item().Element(c => ComposeNetPay(c, model));

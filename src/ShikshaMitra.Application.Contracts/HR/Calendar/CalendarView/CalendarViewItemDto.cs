@@ -27,4 +27,30 @@ public class CalendarViewItemDto
     /// Color code for calendar item (from EventType or HolidayType)
     /// </summary>
     public string Color { get; set; } = string.Empty;
+
+    public string TypeName { get; set; } = string.Empty;
+
+    public string? Description { get; set; }
+
+    public string? Mode { get; set; }
+
+    public string? Venue { get; set; }
+
+    public string? StartTime { get; set; }
+
+    public string? EndTime { get; set; }
+
+    public int AudienceCount { get; set; }
+
+    public int Status { get; set; }
+
+    /// <summary>
+    /// Start date/time used by calendar UI placement.
+    /// </summary>
+    public DateTimeOffset StartDate { get; set; }
+
+    /// <summary>
+    /// End date/time used by calendar UI placement.
+    /// </summary>
+    public DateTimeOffset EndDate { get; set; }
 }

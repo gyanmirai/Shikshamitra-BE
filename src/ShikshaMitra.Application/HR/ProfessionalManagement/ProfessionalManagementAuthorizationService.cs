@@ -83,17 +83,30 @@ public class ProfessionalManagementAuthorizationService(
 
 	public async Task EnsureCanAddObservationAsync(Guid reviewAssignmentId, Guid observerEmployeeId)
 	{
+		await ResolveObservationObserverEmployeeIdAsync(reviewAssignmentId, observerEmployeeId);
+	}
+
+	public async Task<Guid> ResolveObservationObserverEmployeeIdAsync(Guid reviewAssignmentId, Guid? requestedObserverEmployeeId)
+	{
 		if (await IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.ProfessionalManagement.Add))
 		{
 			await assignmentRepository.GetAsync(reviewAssignmentId);
-			return;
+			if (requestedObserverEmployeeId is { } adminObserverEmployeeId && adminObserverEmployeeId != Guid.Empty)
+			{
+				return adminObserverEmployeeId;
+			}
+
+			return await GetCurrentEmployeeIdAsync()
+			       ?? throw new AbpAuthorizationException("Access denied: Observer employee could not be resolved.");
 		}
 
 		await EnsureGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PerformanceManagement.ClassroomObservation);
 		var assignment = await assignmentRepository.GetAsync(reviewAssignmentId);
-		if (ProfessionalManagementAccessRules.CanAddObservation(await GetCurrentEmployeeIdAsync(), assignment, observerEmployeeId))
+		var currentEmployeeId = await GetCurrentEmployeeIdAsync();
+		if (currentEmployeeId.HasValue &&
+		    ProfessionalManagementAccessRules.CanAddObservation(currentEmployeeId, assignment, currentEmployeeId.Value))
 		{
-			return;
+			return currentEmployeeId.Value;
 		}
 
 		throw new AbpAuthorizationException(AccessDenied);

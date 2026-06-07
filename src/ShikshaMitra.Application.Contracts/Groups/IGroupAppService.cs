@@ -65,6 +65,7 @@ public interface IGroupAppService : IApplicationService
     /// Gets all group IDs that a user belongs to
     /// </summary>
     /// <param name="userId">The user ID to check</param>
+    /// <param name="academicYearId">Optional academic year scope for calendar visibility checks</param>
     /// <returns>List of group IDs the user is a member of</returns>
-    Task<List<Guid>> GetUserGroupIdsAsync(Guid userId);
+    Task<List<Guid>> GetUserGroupIdsAsync(Guid userId, Guid? academicYearId = null);
 }

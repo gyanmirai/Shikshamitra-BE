@@ -83,6 +83,37 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 		}
 	}
 
+	[Fact]
+	public async Task Resolver_Should_Use_Working_Units_By_Employee_When_Provided()
+	{
+		var scenario = await SeedPayrollLeaveScenarioAsync();
+
+		using (_currentTenant.Change(scenario.TenantId))
+		{
+			var workingUnitsByEmployee = new Dictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>>
+			{
+				[scenario.TargetEmployeeId] = new Dictionary<DateOnly, decimal>
+				{
+					[new(2026, 1, 5)] = 1m,
+					[new(2026, 1, 6)] = 0m,
+					[new(2026, 1, 7)] = 0.5m
+				}
+			};
+
+			var result = await _resolver.ResolveLeaveUnitsByEmployeeAsync(
+				new[] { scenario.TargetEmployeeId },
+				2026,
+				1,
+				workingUnitsByEmployee);
+
+			var map = result[scenario.TargetEmployeeId];
+
+			map[new DateOnly(2026, 1, 5)].PaidUnits.ShouldBe(1m);
+			map.ContainsKey(new DateOnly(2026, 1, 6)).ShouldBeFalse();
+			map[new DateOnly(2026, 1, 7)].UnpaidUnits.ShouldBe(0.5m);
+		}
+	}
+
 	private async Task<PayrollLeaveScenario> SeedPayrollLeaveScenarioAsync()
 	{
 		var tenantId = _guidGenerator.Create();

@@ -49,6 +49,24 @@ public class LeaveTypeApi_Tests : ShikshaMitraApiTestBase
 		list.Items.ShouldContain(x => x.Name == marker);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Archived_Leave_Type_Should_Not_Appear_In_Active_List()
+	{
+		var marker = $"Archive-{Guid.NewGuid():N}";
+		var created = await CreateLeaveTypeAsync(marker);
+
+		var deleteResponse = await Client.DeleteAsync($"{BaseUrl}/{created.Id}");
+		deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var response = await Client.GetAsync($"{BaseUrl}?academicYearId={AcademicYearId}&page=1&pageSize=100&search={marker}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var list = await response.Content.ReadFromJsonAsync<LeaveTypeListResponse>(JsonOptions);
+		list.ShouldNotBeNull();
+		list.Items.ShouldNotContain(x => x.Id == created.Id);
+	}
+
 	private async Task<LeaveTypeResponse> CreateLeaveTypeAsync(string? name = null)
 	{
 		var request = new LeaveTypeCreateRequest

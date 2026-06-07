@@ -6,6 +6,8 @@ namespace ShikshaMitra.HR.Calendar.Events;
 internal sealed record EventDetails(
 	string Title,
 	DateTimeOffset? MeetingDate,
+	DateTimeOffset? StartDate,
+	DateTimeOffset? EndDate,
 	string StartTime,
 	string EndTime,
 	string? Description,

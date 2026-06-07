@@ -61,7 +61,7 @@ public class EmployeeSalaryStructureController : AbpControllerBase
 	/// <param name="input">The salary structure to set</param>
 	/// <returns>Success response</returns>
 	[HttpPut]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
 	public async Task<IActionResult> UpdateAsync(
 		Guid employeeId,
 		[FromBody] UpdateSalaryStructureDto input)

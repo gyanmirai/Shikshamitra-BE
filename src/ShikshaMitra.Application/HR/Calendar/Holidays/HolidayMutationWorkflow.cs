@@ -44,9 +44,11 @@ public class HolidayMutationWorkflow(
 	public async Task<HolidayDto> UpdateAsync(Guid id, CreateUpdateHolidayDto input)
 	{
 		var holiday = await holidayRepository.GetAsync(id);
+		await EnsureHolidayTypeExistsAsync(input.HolidayTypeId);
 
 		holiday.Update(
 			input.HolidayName,
+			input.HolidayTypeId,
 			input.StartDate,
 			input.EndDate,
 			input.Description,

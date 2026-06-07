@@ -111,6 +111,7 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public void Update(
         string? holidayName = null,
+        Guid? holidayTypeId = null,
         DateTimeOffset? startDate = null,
         DateTimeOffset? endDate = null,
         string? description = null,
@@ -120,20 +121,21 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
         if (!string.IsNullOrWhiteSpace(holidayName))
             HolidayName = holidayName;
 
+        if (holidayTypeId.HasValue)
+            HolidayTypeId = holidayTypeId.Value;
+
         if (startDate.HasValue)
             StartDate = startDate.Value;
 
         if (endDate.HasValue)
             EndDate = endDate.Value;
 
-        if (description != null)
-            Description = description;
+        Description = description;
 
         if (audienceIds != null)
             AudienceIds = audienceIds;
 
-        if (attachments != null)
-            Attachments = attachments;
+        Attachments = attachments;
 
         ValidateDateRange();
     }

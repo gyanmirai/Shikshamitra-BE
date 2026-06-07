@@ -42,6 +42,12 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.Property(x => x.MeetingDate)
             .IsRequired(false);
 
+        builder.Property(x => x.StartDate)
+            .IsRequired(false);
+
+        builder.Property(x => x.EndDate)
+            .IsRequired(false);
+
         builder.Property(x => x.StartTime)
             .IsRequired();
 
@@ -77,6 +83,9 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
 
         builder.HasIndex(x => x.MeetingDate)
             .HasDatabaseName("IX_AppEvents_MeetingDate");
+
+        builder.HasIndex(x => new { x.StartDate, x.EndDate })
+            .HasDatabaseName("IX_AppEvents_StartDate_EndDate");
 
         builder.HasIndex(x => x.TenantId)
             .HasDatabaseName("IX_AppEvents_TenantId");

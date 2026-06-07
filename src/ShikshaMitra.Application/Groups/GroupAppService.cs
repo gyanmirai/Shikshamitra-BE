@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using ShikshaMitra.Application.Contracts.Groups;
+using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students;
@@ -131,7 +133,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
     public async Task<GroupDto> CreateAsync(Guid academicYearId, CreateUpdateGroupDto input)
     {
         // Check for duplicate name
-        if (await _groupRepository.ExistsByNameAsync(input.Name))
+        if (await _groupRepository.ExistsByNameAsync(academicYearId, input.Name))
             throw new UserFriendlyException($"A group with name '{input.Name}' already exists.");
 
         // Extract division and role IDs for each selection type
@@ -214,8 +216,9 @@ public class GroupAppService : ApplicationService, IGroupAppService
         // Add manually selected members (from name-based selection)
         if (input.NameBased?.SelectedMembers != null)
         {
-            foreach (var member in input.NameBased.SelectedMembers)
+            foreach (var member in GetDistinctMembers(input.NameBased.SelectedMembers))
             {
+                await EnsureSelectableMemberAsync(member);
                 var userId = member.UserId ?? await ResolveUserIdAsync(member.MemberType, member.MemberId);
                 group.AddMember(new GroupMember(
                     GuidGenerator.Create(),
@@ -238,7 +241,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
             throw new UserFriendlyException($"Group with ID {id} not found.");
 
         // Check for duplicate name (excluding current group)
-        if (await _groupRepository.ExistsByNameAsync(input.Name, id))
+        if (await _groupRepository.ExistsByNameAsync(academicYearId, input.Name, id))
             throw new UserFriendlyException($"A group with name '{input.Name}' already exists.");
 
         // Update basic info
@@ -321,8 +324,9 @@ public class GroupAppService : ApplicationService, IGroupAppService
         group.ClearMembers();
         if (input.NameBased?.SelectedMembers != null)
         {
-            foreach (var member in input.NameBased.SelectedMembers)
+            foreach (var member in GetDistinctMembers(input.NameBased.SelectedMembers))
             {
+                await EnsureSelectableMemberAsync(member);
                 var userId = member.UserId ?? await ResolveUserIdAsync(member.MemberType, member.MemberId);
                 group.AddMember(new GroupMember(
                     GuidGenerator.Create(),
@@ -349,11 +353,9 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
     public async Task<PagedResultDto<UserSelectionDto>> GetUsersForSelectionAsync(GetUsersForSelectionDto input)
     {
-        // Fetch both students and employees, then combine results
         var studentResults = await GetStudentsForSelectionAsync(input);
         var employeeResults = await GetEmployeesForSelectionAsync(input);
 
-        // Combine and sort results
         var combinedItems = studentResults.Items
             .Concat(employeeResults.Items)
             .OrderBy(u => u.DisplayName)
@@ -361,7 +363,6 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
         var totalCount = studentResults.TotalCount + employeeResults.TotalCount;
 
-        // Apply pagination to combined results
         var pagedItems = combinedItems
             .Skip(input.SkipCount)
             .Take(input.MaxResultCount)
@@ -411,8 +412,12 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
         var totalCount = await AsyncExecuter.CountAsync(query);
 
+        var candidateLimit = GetSelectionCandidateLimit(input);
         var students = await AsyncExecuter.ToListAsync(
-            query.OrderBy(s => s.FirstName).ThenBy(s => s.LastName));
+            query
+                .OrderBy(s => s.FirstName)
+                .ThenBy(s => s.LastName)
+                .Take(candidateLimit));
 
         // Get standard and division names
         var standardIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
@@ -441,6 +446,8 @@ public class GroupAppService : ApplicationService, IGroupAppService
     {
         var query = await _employeeRepository.GetQueryableAsync();
 
+        query = query.Where(IsActiveEmployeeExpression());
+
         // Apply role filters
         if (input.RoleFilters.Count > 0)
         {
@@ -455,7 +462,11 @@ public class GroupAppService : ApplicationService, IGroupAppService
                 (e.FirstName != null && e.FirstName.ToLower().Contains(searchLower)) ||
                 (e.LastName != null && e.LastName.ToLower().Contains(searchLower)) ||
                 (e.MiddleName != null && e.MiddleName.ToLower().Contains(searchLower)) ||
-                e.EmployeeCode.ToLower().Contains(searchLower));
+                e.EmployeeCode.ToLower().Contains(searchLower) ||
+                (e.Department != null && e.Department.ToLower().Contains(searchLower)) ||
+                (e.Designation != null && e.Designation.ToLower().Contains(searchLower)) ||
+                (e.MobileNo != null && e.MobileNo.ToLower().Contains(searchLower)) ||
+                (e.Email != null && e.Email.ToLower().Contains(searchLower)));
         }
 
         // Apply additional filters using RuleQueryBuilder
@@ -473,8 +484,12 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
         var totalCount = await AsyncExecuter.CountAsync(query);
 
+        var candidateLimit = GetSelectionCandidateLimit(input);
         var employees = await AsyncExecuter.ToListAsync(
-            query.OrderBy(e => e.FirstName).ThenBy(e => e.LastName));
+            query
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName)
+                .Take(candidateLimit));
 
         // Get role names separately
         var roleIds = employees.Select(e => e.RoleId).Distinct().ToList();
@@ -488,8 +503,13 @@ public class GroupAppService : ApplicationService, IGroupAppService
             UserId = e.UserId,
             DisplayName = e.EmployeeName,
             Identifier = e.EmployeeCode,
+            EmployeeCode = e.EmployeeCode,
             Department = e.Department,
-            RoleName = roles.FirstOrDefault(r => r.Id == e.RoleId)?.Name
+            Designation = e.Designation,
+            RoleName = roles.FirstOrDefault(r => r.Id == e.RoleId)?.Name,
+            MobileNo = e.MobileNo,
+            Email = e.Email,
+            EmployeeStatusType = e.EmployeeStatusType
         }).ToList();
 
         return new PagedResultDto<UserSelectionDto>(totalCount, items);
@@ -529,9 +549,15 @@ public class GroupAppService : ApplicationService, IGroupAppService
         return await GetGroupMemberCountInternalAsync(group);
     }
 
-    public async Task<List<Guid>> GetUserGroupIdsAsync(Guid userId)
+    public async Task<List<Guid>> GetUserGroupIdsAsync(Guid userId, Guid? academicYearId = null)
     {
-        var groups = await AsyncExecuter.ToListAsync(await _repository.GetQueryableAsync());
+        var query = await _repository.GetQueryableAsync();
+        if (academicYearId.HasValue)
+        {
+            query = query.Where(group => group.AcademicYearId == academicYearId.Value);
+        }
+
+        var groups = await AsyncExecuter.ToListAsync(query);
         var userGroupIds = new List<Guid>();
 
         foreach (var group in groups)
@@ -552,8 +578,9 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
     private async Task<int> GetGroupMemberCountInternalAsync(Group group)
     {
-        var members = await ResolveGroupMembersAsync(group);
-        return members.Count;
+        var employeeIds = await ResolveEmployeeMemberIdsAsync(group);
+        var studentIds = await ResolveStudentMemberIdsAsync(group);
+        return employeeIds.Count + studentIds.Count;
     }
 
     private async Task<List<Guid>> ResolveGroupMembersAsync(Group group)
@@ -579,11 +606,29 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
     private async Task<List<Guid>> ResolveStudentMembersAsync(Group group)
     {
+        var studentIds = await ResolveStudentMemberIdsAsync(group);
+        if (studentIds.Count == 0)
+            return new List<Guid>();
+
+        var memberUserIds = group.Members
+            .Where(member => member.MemberType == GroupMemberType.Student && member.UserId.HasValue)
+            .Select(member => member.UserId!.Value);
+
+        // Student records in this domain do not currently expose a UserId. Preserve direct
+        // selected-member UserIds when available so linked student users remain visible.
+        return memberUserIds.Distinct().ToList();
+    }
+
+    private async Task<List<Guid>> ResolveStudentMemberIdsAsync(Group group)
+    {
         var ruleBasedStudentRules = group.GetRuleBasedStudentRules().ToList();
+        var studentIds = new HashSet<Guid>(group.Members
+            .Where(member => member.MemberType == GroupMemberType.Student)
+            .Select(member => member.MemberId));
 
         // If no rule-based division selections and no student rules, skip students
         if (group.RuleBasedDivisionIds.Count == 0 && ruleBasedStudentRules.Count == 0)
-            return new List<Guid>();
+            return studentIds.ToList();
 
         var query = await _studentRepository.GetQueryableAsync();
 
@@ -610,13 +655,13 @@ public class GroupAppService : ApplicationService, IGroupAppService
             query = RuleQueryBuilder.ApplyStudentRules(query, rules, MapStudentRuleField);
         }
 
-        // Note: Students may not have UserId linked, so we return an empty list for now
-        // In a real scenario, you would have a UserId property on Student
         var students = await AsyncExecuter.ToListAsync(query);
+        foreach (var student in students)
+        {
+            studentIds.Add(student.Id);
+        }
 
-        // Return empty list since Student doesn't have UserId
-        // The frontend will use MemberId (Student.Id) for reference
-        return new List<Guid>();
+        return studentIds.ToList();
     }
 
     private async Task<List<Guid>> ResolveEmployeeMembersAsync(Group group)
@@ -638,19 +683,37 @@ public class GroupAppService : ApplicationService, IGroupAppService
     private async Task<List<Guid>> ResolveEmployeeMemberIdsAsync(Group group)
     {
         var ruleBasedEmployeeRules = group.GetRuleBasedEmployeeRules().ToList();
-        var employeeIds = new HashSet<Guid>(group.Members
+        var manualEmployeeIds = group.Members
             .Where(member => member.MemberType == GroupMemberType.Employee)
-            .Select(member => member.MemberId));
+            .Select(member => member.MemberId)
+            .Distinct()
+            .ToList();
+
+        var employeeIds = new HashSet<Guid>();
+
+        var query = await _employeeRepository.GetQueryableAsync();
+        query = query.Where(IsActiveEmployeeExpression());
+
+        if (manualEmployeeIds.Count > 0)
+        {
+            var activeManualEmployees = await AsyncExecuter.ToListAsync(
+                query.Where(e => manualEmployeeIds.Contains(e.Id)));
+            foreach (var employee in activeManualEmployees)
+            {
+                employeeIds.Add(employee.Id);
+            }
+        }
 
         if (group.RuleBasedRoleIds.Count == 0 && ruleBasedEmployeeRules.Count == 0)
             return employeeIds.ToList();
 
-        var query = await _employeeRepository.GetQueryableAsync();
+        var ruleQuery = await _employeeRepository.GetQueryableAsync();
+        ruleQuery = ruleQuery.Where(IsActiveEmployeeExpression());
 
         // Apply role selections from rule-based configuration
         if (group.RuleBasedRoleIds.Count > 0)
         {
-            query = query.Where(e => group.RuleBasedRoleIds.Contains(e.RoleId));
+            ruleQuery = ruleQuery.Where(e => group.RuleBasedRoleIds.Contains(e.RoleId));
         }
 
         // Apply employee rules from rule-based configuration
@@ -663,10 +726,10 @@ public class GroupAppService : ApplicationService, IGroupAppService
                 Value = r.Value
             }).ToList();
 
-            query = RuleQueryBuilder.ApplyEmployeeRules(query, rules, MapEmployeeRuleField);
+            ruleQuery = RuleQueryBuilder.ApplyEmployeeRules(ruleQuery, rules, MapEmployeeRuleField);
         }
 
-        var employees = await AsyncExecuter.ToListAsync(query);
+        var employees = await AsyncExecuter.ToListAsync(ruleQuery);
         foreach (var employee in employees)
         {
             employeeIds.Add(employee.Id);
@@ -757,8 +820,8 @@ public class GroupAppService : ApplicationService, IGroupAppService
         }
 
         var resolvedEmployeeCount = (await ResolveEmployeeMemberIdsAsync(group)).Count;
-        var manualStudentCount = group.Members.Count(member => member.MemberType == GroupMemberType.Student);
-        var memberCount = resolvedEmployeeCount + manualStudentCount;
+        var resolvedStudentCount = (await ResolveStudentMemberIdsAsync(group)).Count;
+        var memberCount = resolvedEmployeeCount + resolvedStudentCount;
 
         return new GroupDto
         {
@@ -792,7 +855,7 @@ public class GroupAppService : ApplicationService, IGroupAppService
             } : null,
             NameBased = nameBasedDto,
             MemberCount = memberCount,
-            StudentCount = nameBasedDto?.StudentCount ?? manualStudentCount,
+            StudentCount = resolvedStudentCount,
             EmployeeCount = resolvedEmployeeCount,
             CreationTime = group.CreationTime,
             CreatorId = group.CreatorId,
@@ -1005,6 +1068,51 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
         // Students typically don't have UserId, return null
         return null;
+    }
+
+    private static IEnumerable<CreateGroupMemberDto> GetDistinctMembers(IEnumerable<CreateGroupMemberDto> members)
+    {
+        return members
+            .Where(member => member.MemberId != Guid.Empty)
+            .GroupBy(member => new { member.MemberType, member.MemberId })
+            .Select(group => group.First());
+    }
+
+    private async Task EnsureSelectableMemberAsync(CreateGroupMemberDto member)
+    {
+        if (member.MemberType != GroupMemberType.Employee)
+            return;
+
+        var employee = await _employeeRepository.FindAsync(member.MemberId);
+        if (employee == null)
+        {
+            throw new UserFriendlyException($"Employee with ID {member.MemberId} not found.");
+        }
+
+        if (!IsActiveEmployee(employee))
+        {
+            throw new UserFriendlyException("Only active employees can be added to calendar groups.");
+        }
+    }
+
+    private static Expression<Func<Employee, bool>> IsActiveEmployeeExpression()
+    {
+        return employee =>
+            !employee.EmployeeStatusType.HasValue ||
+            employee.EmployeeStatusType == EmployeeStatusType.Active;
+    }
+
+    private static bool IsActiveEmployee(Employee employee)
+    {
+        return !employee.EmployeeStatusType.HasValue ||
+               employee.EmployeeStatusType == EmployeeStatusType.Active;
+    }
+
+    private static int GetSelectionCandidateLimit(PagedAndSortedResultRequestDto input)
+    {
+        var skipCount = Math.Max(input.SkipCount, 0);
+        var maxResultCount = Math.Max(input.MaxResultCount, 0);
+        return skipCount + maxResultCount;
     }
 
     private static string MapStudentRuleField(StudentRuleField field)

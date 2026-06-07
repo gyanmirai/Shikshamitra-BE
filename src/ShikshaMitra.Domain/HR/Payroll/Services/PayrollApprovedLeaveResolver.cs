@@ -18,10 +18,23 @@ public class PayrollApprovedLeaveResolver : DomainService
 		_employeeLeaveRepository = employeeLeaveRepository;
 	}
 
+	public Task<Dictionary<Guid, IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>>> ResolveLeaveUnitsByEmployeeAsync(
+		IReadOnlyCollection<Guid> employeeIds,
+		int year,
+		int month,
+		CancellationToken cancellationToken = default) =>
+		ResolveLeaveUnitsByEmployeeAsync(
+			employeeIds,
+			year,
+			month,
+			workingUnitsByEmployee: null,
+			cancellationToken);
+
 	public async Task<Dictionary<Guid, IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>>> ResolveLeaveUnitsByEmployeeAsync(
 		IReadOnlyCollection<Guid> employeeIds,
 		int year,
 		int month,
+		IReadOnlyDictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>> workingUnitsByEmployee,
 		CancellationToken cancellationToken = default)
 	{
 		if (employeeIds.Count == 0)
@@ -55,12 +68,18 @@ public class PayrollApprovedLeaveResolver : DomainService
 			var overlapEnd = leave.EndDate.Date < lastDay ? leave.EndDate.Date : lastDay;
 			for (var date = overlapStart; date <= overlapEnd; date = date.AddDays(1))
 			{
-				if (date.DayOfWeek == DayOfWeek.Sunday)
+				var workingUnit = ResolveWorkingUnit(
+					workingUnitsByEmployee,
+					leave.EmployeeId,
+					DateOnly.FromDateTime(date));
+				if (workingUnit <= 0m)
 				{
 					continue;
 				}
 
-				var unitsForDate = leave.HalfDay ? 0.5m : 1m;
+				var unitsForDate = leave.HalfDay
+					? Math.Min(0.5m, workingUnit)
+					: workingUnit;
 				var dateOnly = DateOnly.FromDateTime(date);
 				var current = map.GetValueOrDefault(dateOnly, new PayrollLeaveUnits(0m, 0m));
 				map[dateOnly] = paidType == LeavePaidType.Paid
@@ -74,4 +93,17 @@ public class PayrollApprovedLeaveResolver : DomainService
 			x => (IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>)x.Value);
 	}
 
+	private static decimal ResolveWorkingUnit(
+		IReadOnlyDictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>>? workingUnitsByEmployee,
+		Guid employeeId,
+		DateOnly date)
+	{
+		if (workingUnitsByEmployee?.TryGetValue(employeeId, out var workingUnitsByDate) == true &&
+		    workingUnitsByDate.TryGetValue(date, out var workingUnit))
+		{
+			return Math.Clamp(workingUnit, 0m, 1m);
+		}
+
+		return date.DayOfWeek == DayOfWeek.Sunday ? 0m : 1m;
+	}
 }

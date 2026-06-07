@@ -75,10 +75,6 @@ public class PayrollSnapshotRefresher(
 		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
 		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
 		var attendanceByEmployee = await lookupReader.GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
-		var leaveUnitsByEmployee = await payrollApprovedLeaveResolver.ResolveLeaveUnitsByEmployeeAsync(
-			employeeIds,
-			year,
-			month);
 		var payrollDetailsByEmployee = await payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
 		var componentsByEmployee = await payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
 		var resolvedComponentsByEmployee = await componentVersionResolver.ResolveByEmployeeAsync(
@@ -87,6 +83,7 @@ public class PayrollSnapshotRefresher(
 		var adjustmentsByEmployee = await adjustmentReader.GetByEmployeeAsync(internalMonthYear, employeeIds);
 
 		var computedItems = new List<RunPayrollItem>();
+		var payrollContextByEmployee = new Dictionary<Guid, PayrollEmployeeComputationContext>();
 		var policyResolutionDate = PayrollRunRules.GetPayrollPolicyResolutionDate(year, month);
 		foreach (var employee in scopedEmployees)
 		{
@@ -115,25 +112,13 @@ public class PayrollSnapshotRefresher(
 					month,
 					workingUnitsByDate,
 					payrollPolicyIssueCodes);
-				computedItems.Add(PayrollRunItemBuilder.BuildPayrollItem(
-					employee,
-					attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
-					payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-					GetResolvedComponents(resolvedComponentsByEmployee, employee.Id, year, month),
-					adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
-					basis,
-					year,
-					month,
-					workCalendarHolidays,
-					leaveUnitsByEmployee.GetValueOrDefault(employee.Id),
+				payrollContextByEmployee[employee.Id] = new PayrollEmployeeComputationContext(
 					resolvedPolicies,
+					workCalendarHolidays,
+					workingUnitsByDate,
+					basis,
 					PayrollRunItemBuilder.BuildHolidayImpactJson(year, month, workCalendarHolidays, holidayOverrides),
-					finalizedEmployeeIds.Contains(employee.Id),
-					reviewByEmployee.GetValueOrDefault(employee.Id),
-					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
-					payrollPolicyIssueCodes,
-					PayrollRunRules.GetEffectiveEmploymentStartDate(employee)
-				));
+					payrollPolicyIssueCodes);
 			}
 			catch (BusinessException ex) when (PayrollRunRules.IsPayrollPolicySetupException(ex))
 			{
@@ -154,10 +139,46 @@ public class PayrollSnapshotRefresher(
 					finalizedEmployeeIds.Contains(employee.Id),
 					reviewByEmployee.GetValueOrDefault(employee.Id),
 					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
-					leaveUnitsByEmployee.GetValueOrDefault(employee.Id),
+					leaveUnitsByDate: null,
 					new[] { IssueCodes.PayrollPolicyConfiguration },
 					PayrollRunRules.GetEffectiveEmploymentStartDate(employee)));
 			}
+		}
+
+		var leaveUnitsByEmployee = await payrollApprovedLeaveResolver.ResolveLeaveUnitsByEmployeeAsync(
+			employeeIds,
+			year,
+			month,
+			payrollContextByEmployee.ToDictionary(
+				x => x.Key,
+				x => (IReadOnlyDictionary<DateOnly, decimal>)x.Value.WorkingUnitsByDate));
+
+		foreach (var employee in scopedEmployees)
+		{
+			if (!payrollContextByEmployee.TryGetValue(employee.Id, out var payrollContext))
+			{
+				continue;
+			}
+
+			computedItems.Add(PayrollRunItemBuilder.BuildPayrollItem(
+				employee,
+				attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
+				payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
+				GetResolvedComponents(resolvedComponentsByEmployee, employee.Id, year, month),
+				adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
+				payrollContext.Basis,
+				year,
+				month,
+				payrollContext.WorkCalendarHolidays,
+				leaveUnitsByEmployee.GetValueOrDefault(employee.Id),
+				payrollContext.ResolvedPolicies,
+				payrollContext.HolidayImpactJson,
+				finalizedEmployeeIds.Contains(employee.Id),
+				reviewByEmployee.GetValueOrDefault(employee.Id),
+				previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
+				payrollContext.PayrollPolicyIssueCodes,
+				PayrollRunRules.GetEffectiveEmploymentStartDate(employee)
+			));
 		}
 
 		await snapshotStore.UpsertAsync(internalMonthYear, computedItems, preserveReviewedSnapshots);
@@ -169,4 +190,12 @@ public class PayrollSnapshotRefresher(
 		int year,
 		int month) =>
 		PayrollComponentMonthScope.FilterForMonth(resolvedComponentsByEmployee[employeeId], year, month);
+
+	private sealed record PayrollEmployeeComputationContext(
+		HrResolvedPolicies ResolvedPolicies,
+		IReadOnlyList<ShikshaMitra.HR.Calendar.Holidays.Holiday> WorkCalendarHolidays,
+		Dictionary<DateOnly, decimal> WorkingUnitsByDate,
+		PayrollBasisDaysResult Basis,
+		string HolidayImpactJson,
+		IReadOnlyList<string> PayrollPolicyIssueCodes);
 }

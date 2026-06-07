@@ -23,6 +23,7 @@ public class HolidayReadService(
 	public async Task<PagedResultDto<HolidayDto>> GetListAsync(GetHolidayListRequestDto input)
 	{
 		var search = input.Search;
+		var now = CurrentInstant();
 		var query = (await holidayRepository.GetQueryableAsync())
 			.WhereIf(!search.IsNullOrWhiteSpace(), x => x.HolidayName.Contains(search!))
 			.WhereIf(input.AcademicYearId.HasValue, x => x.AcademicYearId == input.AcademicYearId)
@@ -30,15 +31,33 @@ public class HolidayReadService(
 			.WhereIf(input.FromDate.HasValue, x => x.StartDate >= input.FromDate)
 			.WhereIf(input.ToDate.HasValue, x => x.EndDate <= input.ToDate);
 
-		var totalCount = await AsyncExecuter.CountAsync(query);
-		var queryWithSort = ApplySorting(query, input.Sorting);
-		var items = await AsyncExecuter.ToListAsync(
-			queryWithSort
+		List<Holiday> items;
+		int totalCount;
+		if (input.Status.HasValue || string.Equals(input.Sorting, "status", StringComparison.OrdinalIgnoreCase))
+		{
+			var filtered = await AsyncExecuter.ToListAsync(query);
+			if (input.Status.HasValue)
+			{
+				filtered = filtered.Where(x => (int)x.GetStatus(now) == input.Status.Value).ToList();
+			}
+
+			totalCount = filtered.Count;
+			items = ApplySorting(filtered, input.Sorting, now)
 				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount));
+				.Take(input.MaxResultCount)
+				.ToList();
+		}
+		else
+		{
+			totalCount = await AsyncExecuter.CountAsync(query);
+			items = await AsyncExecuter.ToListAsync(
+				ApplySorting(query, input.Sorting)
+					.Skip(input.SkipCount)
+					.Take(input.MaxResultCount));
+		}
 
 		var holidayDtos = ObjectMapper.Map<List<Holiday>, List<HolidayDto>>(items);
-		ApplyStatuses(items, holidayDtos);
+		ApplyStatuses(items, holidayDtos, now);
 		await PopulateHolidayTypesAsync(holidayDtos);
 
 		return new PagedResultDto<HolidayDto>(totalCount, holidayDtos);
@@ -72,32 +91,8 @@ public class HolidayReadService(
 		return holidayDtos;
 	}
 
-	public async Task<PagedResultDto<HolidayDto>> GetByStatusAsync(GetHolidayListRequestDto input)
-	{
-		if (!input.Status.HasValue)
-		{
-			return new PagedResultDto<HolidayDto>(0, new List<HolidayDto>());
-		}
-
-		var search = input.Search;
-		var query = (await holidayRepository.GetQueryableAsync())
-			.WhereIf(!search.IsNullOrWhiteSpace(), x => x.HolidayName.Contains(search!));
-
-		var allHolidays = await AsyncExecuter.ToListAsync(query);
-		var statusValue = (HolidayStatus)input.Status.Value;
-		var now = CurrentInstant();
-		var filtered = allHolidays.Where(x => x.GetStatus(now) == statusValue).ToList();
-		var items = filtered
-			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount)
-			.ToList();
-
-		var holidayDtos = ObjectMapper.Map<List<Holiday>, List<HolidayDto>>(items);
-		ApplyStatuses(items, holidayDtos, now);
-		return new PagedResultDto<HolidayDto>(
-			filtered.Count,
-			holidayDtos);
-	}
+	public Task<PagedResultDto<HolidayDto>> GetByStatusAsync(GetHolidayListRequestDto input) =>
+		GetListAsync(input);
 
 	public async Task PopulateHolidayTypeAsync(HolidayDto holidayDto)
 	{
@@ -121,16 +116,31 @@ public class HolidayReadService(
 		}
 	}
 
-	private IQueryable<Holiday> ApplySorting(IQueryable<Holiday> query, string? sorting)
+	private static IOrderedQueryable<Holiday> ApplySorting(
+		IQueryable<Holiday> holidays,
+		string? sorting)
 	{
 		var sortingProperty = sorting ?? nameof(Holiday.HolidayName);
-		var now = CurrentInstant();
 		return sortingProperty switch
 		{
-			"startDate" => query.OrderBy(x => x.StartDate),
-			"endDate" => query.OrderBy(x => x.EndDate),
-			"status" => query.AsEnumerable().OrderBy(x => x.GetStatus(now)).AsQueryable(),
-			_ => query.OrderBy(x => x.HolidayName)
+			"startDate" => holidays.OrderBy(x => x.StartDate),
+			"endDate" => holidays.OrderBy(x => x.EndDate),
+			_ => holidays.OrderBy(x => x.HolidayName)
+		};
+	}
+
+	private static IOrderedEnumerable<Holiday> ApplySorting(
+		IEnumerable<Holiday> holidays,
+		string? sorting,
+		DateTimeOffset now)
+	{
+		var sortingProperty = sorting ?? nameof(Holiday.HolidayName);
+		return sortingProperty switch
+		{
+			"startDate" => holidays.OrderBy(x => x.StartDate),
+			"endDate" => holidays.OrderBy(x => x.EndDate),
+			"status" => holidays.OrderBy(x => x.GetStatus(now)),
+			_ => holidays.OrderBy(x => x.HolidayName)
 		};
 	}
 

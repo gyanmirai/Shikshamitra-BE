@@ -294,7 +294,7 @@ public class HrMaintainabilityGuard_Tests
 			new ProfessionalManagementAuthorizationExpectation(
 				"ProfessionalManagementAppService.Contributions.cs",
 				"AddObservationAsync",
-				"EnsureCanAddObservationAsync"),
+				"ResolveObservationObserverEmployeeIdAsync"),
 			new ProfessionalManagementAuthorizationExpectation(
 				"ProfessionalManagementAppService.Contributions.cs",
 				"GetObservationsAsync",

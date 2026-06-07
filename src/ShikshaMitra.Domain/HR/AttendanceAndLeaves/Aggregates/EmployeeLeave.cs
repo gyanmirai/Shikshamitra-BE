@@ -40,12 +40,16 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal EmployeeLeave(
 		Guid id,
 		Guid tenantId,
+		Guid employeeId,
+		Guid leavePolicyId,
 		bool halfDay,
 		DateTimeOffset startDate,
 		DateTimeOffset endDate,
 		string description, string rejectionReason) : base(id)
 	{
 		TenantId = Check.NotNull(tenantId, nameof(tenantId));
+		EmployeeId = Check.NotNull(employeeId, nameof(employeeId));
+		LeavePolicyId = Check.NotNull(leavePolicyId, nameof(leavePolicyId));
 		HalfDay = halfDay;
 		StartDate = startDate;
 		EndDate = endDate;
@@ -101,15 +105,6 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string description,
 		bool halfDay = false)
 	{
-		var leave = new EmployeeLeave(id, tenantId, halfDay, startDate, endDate, description, null!);
-
-		// Use reflection only in controlled factory method to set private properties
-		var employeeIdProperty = typeof(EmployeeLeave).GetProperty(nameof(EmployeeId));
-		var leavePolicyIdProperty = typeof(EmployeeLeave).GetProperty(nameof(LeavePolicyId));
-
-		employeeIdProperty?.SetValue(leave, employeeId);
-		leavePolicyIdProperty?.SetValue(leave, leavePolicyId);
-
-		return leave;
+		return new EmployeeLeave(id, tenantId, employeeId, leavePolicyId, halfDay, startDate, endDate, description, null!);
 	}
 }

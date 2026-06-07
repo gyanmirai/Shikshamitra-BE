@@ -7,6 +7,8 @@ public static partial class HRErrorCodes
 	public const string EventMeetingDateNotAllowed = "HR:Calendar:040003";
 	public const string HolidayTypeNotFound = "HR:Calendar:040004";
 	public const string CalendarItemNotFound = "HR:Calendar:040005";
+	public const string EventDateRangeRequired = "HR:Calendar:040006";
+	public const string EventDateRangeInvalid = "HR:Calendar:040007";
 	public const string ReportExportFailed = "HR:Reports:050001";
 	public const string ReportUserRequired = "HR:Reports:050003";
 	public const string ReportExportNotReady = "HR:Reports:050004";

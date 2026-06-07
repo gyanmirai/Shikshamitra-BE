@@ -49,7 +49,7 @@ public class PayrollController : AbpControllerBase
 	/// Update employee payroll information (matches OpenAPI Payroll contract)
 	/// </summary>
 	[HttpPut("{employeeId}/payroll")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
 	[ProducesResponseType(StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]

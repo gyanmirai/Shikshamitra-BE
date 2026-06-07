@@ -62,6 +62,16 @@ public class EventDto : AuditedEntityDto<Guid>
     public DateTimeOffset? MeetingDate { get; set; }
 
     /// <summary>
+    /// Start date for calendar placement.
+    /// </summary>
+    public DateTimeOffset? StartDate { get; set; }
+
+    /// <summary>
+    /// End date for calendar placement.
+    /// </summary>
+    public DateTimeOffset? EndDate { get; set; }
+
+    /// <summary>
     /// Start time (HH:mm)
     /// </summary>
     public string StartTime { get; set; } = string.Empty;

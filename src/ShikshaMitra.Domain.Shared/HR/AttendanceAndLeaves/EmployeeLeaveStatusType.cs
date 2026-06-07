@@ -1,5 +1,7 @@
 ﻿using System;
 
+using System.Collections.Generic;
+
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 public enum EmployeeLeaveStatusType
@@ -23,6 +25,39 @@ public static class LeaveDurationCalculator
 		}
 
 		return CountInclusiveBusinessDays(startDate, endDate);
+	}
+
+	public static decimal CountLeaveUnits(
+		DateTime startDate,
+		DateTime endDate,
+		bool halfDay,
+		IReadOnlyDictionary<DateOnly, decimal> workingUnitsByDate)
+	{
+		var start = startDate.Date;
+		var end = endDate.Date;
+		if (start > end)
+		{
+			return 0m;
+		}
+
+		if (halfDay)
+		{
+			if (start != end)
+			{
+				return 0m;
+			}
+
+			var workingUnit = GetWorkingUnit(workingUnitsByDate, DateOnly.FromDateTime(start));
+			return workingUnit <= 0m ? 0m : Math.Min(0.5m, workingUnit);
+		}
+
+		var units = 0m;
+		for (var d = start; d <= end; d = d.AddDays(1))
+		{
+			units += Math.Min(1m, GetWorkingUnit(workingUnitsByDate, DateOnly.FromDateTime(d)));
+		}
+
+		return units;
 	}
 
 	public static int CountInclusiveBusinessDays(DateTime startDate, DateTime endDate)
@@ -50,4 +85,9 @@ public static class LeaveDurationCalculator
 	{
 		return (int)Math.Ceiling(CountLeaveUnits(startDate, endDate, halfDay));
 	}
+
+	private static decimal GetWorkingUnit(IReadOnlyDictionary<DateOnly, decimal> workingUnitsByDate, DateOnly date) =>
+		workingUnitsByDate.TryGetValue(date, out var unit)
+			? Math.Clamp(unit, 0m, 1m)
+			: 0m;
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Uow;
 
@@ -12,7 +13,8 @@ namespace ShikshaMitra.HR.Payroll.Settings;
 public class PayrollComponentEmployeeSyncService(
 	IEmployeePayrollComponentRepository employeePayrollComponentRepository,
 	IEmployeeCacheManager employeeCacheManager,
-	IUnitOfWorkManager unitOfWorkManager) : ITransientDependency
+	IUnitOfWorkManager unitOfWorkManager,
+	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator) : ITransientDependency
 {
 	public Task SyncEarningAsync(
 		EarningComponent earningComponent,
@@ -148,10 +150,13 @@ public class PayrollComponentEmployeeSyncService(
 
 	private async Task InvalidateEmployeesAsync(IEnumerable<Guid> employeeIds)
 	{
-		foreach (var employeeId in employeeIds)
+		var ids = employeeIds.Distinct().ToList();
+		foreach (var employeeId in ids)
 		{
 			await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
 		}
+
+		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(ids);
 	}
 
 	private static decimal ResolveComponentAmount(

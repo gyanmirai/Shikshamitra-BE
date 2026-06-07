@@ -31,5 +31,8 @@ public class CreateUpdateEventDtoValidator : AbstractValidator<CreateUpdateEvent
 			.WithMessage("End time is required")
 			.Matches(@"^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")
 			.WithMessage("End time must be in HH:mm format");
+		RuleFor(x => x.EndDate)
+			.Must((dto, endDate) => dto.MeetingDate.HasValue || !dto.StartDate.HasValue || !endDate.HasValue || endDate.Value.Date >= dto.StartDate.Value.Date)
+			.WithMessage("End date cannot be before start date");
 	}
 }

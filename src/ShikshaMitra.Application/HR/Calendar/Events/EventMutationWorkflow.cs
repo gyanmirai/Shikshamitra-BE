@@ -76,12 +76,15 @@ public class EventMutationWorkflow(
 		}
 
 		EnsureMeetingDateAbsent(input.MeetingDate);
+		EnsureDateRangeExists(input.StartDate, input.EndDate);
 
 		return Event.CreateEvent(
 			CurrentTenant.Id,
 			input.AcademicYearId,
 			input.Title,
 			input.EventTypeId,
+			input.StartDate!.Value,
+			input.EndDate!.Value,
 			input.StartTime,
 			input.EndTime,
 			input.Description,
@@ -117,9 +120,12 @@ public class EventMutationWorkflow(
 		}
 
 		EnsureMeetingDateAbsent(input.MeetingDate);
+		EnsureDateRangeExists(input.StartDate, input.EndDate);
 
 		entity.UpdateEvent(
 			input.Title,
+			input.StartDate!.Value,
+			input.EndDate!.Value,
 			input.StartTime,
 			input.EndTime,
 			input.Description,
@@ -144,6 +150,19 @@ public class EventMutationWorkflow(
 		if (meetingDate.HasValue)
 		{
 			throw new BusinessException(HRErrorCodes.EventMeetingDateNotAllowed);
+		}
+	}
+
+	private static void EnsureDateRangeExists(DateTimeOffset? startDate, DateTimeOffset? endDate)
+	{
+		if (!startDate.HasValue || !endDate.HasValue)
+		{
+			throw new BusinessException(HRErrorCodes.EventDateRangeRequired);
+		}
+
+		if (endDate.Value.Date < startDate.Value.Date)
+		{
+			throw new BusinessException(HRErrorCodes.EventDateRangeInvalid);
 		}
 	}
 

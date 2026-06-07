@@ -81,11 +81,15 @@ public class EFCoreGroupRepository : EfCoreRepository<ShikshaMitraDbContext, Gro
         return await query.LongCountAsync(cancellationToken);
     }
 
-    public async Task<bool> ExistsByNameAsync(string name, Guid? excludeId = null, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsByNameAsync(
+        Guid academicYearId,
+        string name,
+        Guid? excludeId = null,
+        CancellationToken cancellationToken = default)
     {
         var dbContext = await GetDbContextAsync();
 
-        var query = dbContext.Groups.Where(x => x.Name == name);
+        var query = dbContext.Groups.Where(x => x.AcademicYearId == academicYearId && x.Name == name);
 
         if (excludeId.HasValue)
         {

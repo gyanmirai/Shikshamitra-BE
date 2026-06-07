@@ -52,6 +52,16 @@ public class CreateUpdateEventDto
     public DateTimeOffset? MeetingDate { get; set; }
 
     /// <summary>
+    /// Start date for non-meeting events. Meeting events use MeetingDate.
+    /// </summary>
+    public DateTimeOffset? StartDate { get; set; }
+
+    /// <summary>
+    /// End date for non-meeting events. Meeting events use MeetingDate.
+    /// </summary>
+    public DateTimeOffset? EndDate { get; set; }
+
+    /// <summary>
     /// Start time in HH:mm format, required
     /// </summary>
     public string StartTime { get; set; } = string.Empty;

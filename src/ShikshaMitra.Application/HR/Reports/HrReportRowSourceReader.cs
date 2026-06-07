@@ -113,6 +113,18 @@ public class HrReportRowSourceReader(
 		var assignmentQuery = await performanceAssignmentRepository.GetQueryableAsync();
 		var cycleQuery = await reviewCycleRepository.GetQueryableAsync();
 
+		if (input.Filters.FromDate.HasValue)
+		{
+			var from = input.Filters.FromDate.Value.ToDateTime(TimeOnly.MinValue);
+			assignmentQuery = assignmentQuery.Where(x => x.FinalizedAt.HasValue && x.FinalizedAt.Value >= from);
+		}
+
+		if (input.Filters.ToDate.HasValue)
+		{
+			var to = input.Filters.ToDate.Value.ToDateTime(TimeOnly.MaxValue);
+			assignmentQuery = assignmentQuery.Where(x => x.FinalizedAt.HasValue && x.FinalizedAt.Value <= to);
+		}
+
 		var rows = await asyncExecuter.ToListAsync((
 			from assignment in assignmentQuery
 			join employee in employeeQuery on assignment.EmployeeId equals employee.Id

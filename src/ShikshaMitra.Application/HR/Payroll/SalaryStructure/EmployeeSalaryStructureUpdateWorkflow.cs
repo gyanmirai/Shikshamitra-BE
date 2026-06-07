@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp.DependencyInjection;
 
@@ -11,7 +12,8 @@ namespace ShikshaMitra.HR.Payroll.SalaryStructure;
 public class EmployeeSalaryStructureUpdateWorkflow(
 	IEmployeePayrollComponentRepository payrollComponentRepository,
 	SalaryStructureMasterResolver masterResolver,
-	SalaryStructureComponentFactory componentFactory) : ITransientDependency
+	SalaryStructureComponentFactory componentFactory,
+	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator) : ITransientDependency
 {
 	public async Task UpdateAsync(Guid employeeId, UpdateSalaryStructureDto input)
 	{
@@ -97,5 +99,7 @@ public class EmployeeSalaryStructureUpdateWorkflow(
 		{
 			await payrollComponentRepository.InsertManyAsync(componentsToInsert);
 		}
+
+		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { employeeId });
 	}
 }

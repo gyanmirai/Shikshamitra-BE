@@ -20,7 +20,7 @@ public class EventTypeApi_Tests : ShikshaMitraApiTestBase
 
 	public EventTypeApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
-	#region Tier 0 — Critical
+	#region Tier 0 - Critical
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
@@ -90,7 +90,7 @@ public class EventTypeApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
-	#region Tier 1 — Important
+	#region Tier 1 - Important
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -109,7 +109,7 @@ public class EventTypeApi_Tests : ShikshaMitraApiTestBase
 	{
 		var response = await Client.GetAsync($"{BaseUrl}/{Guid.NewGuid()}");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.NotFound, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	#endregion

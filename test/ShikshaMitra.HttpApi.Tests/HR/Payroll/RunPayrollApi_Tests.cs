@@ -316,6 +316,8 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 					{
 						EmployeeId = employee.Id,
 						StatusWire = "PRESENT",
+						InTime = "09:00",
+						OutTime = "17:00",
 						Remarks = "Payroll readiness refresh regression"
 					}
 				]
@@ -354,6 +356,8 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 					{
 						EmployeeId = employee.Id,
 						StatusWire = "PRESENT",
+						InTime = "09:00",
+						OutTime = "17:00",
 						Remarks = "Payroll payable days regression"
 					}
 				]
@@ -412,6 +416,124 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		refreshedItem.TotalWorkingDays.ShouldBe(30);
 		refreshedItem.DayCalculationMode.ShouldBe("total-month-days");
 		refreshedItem.ReviewStatus.ShouldBe(ReviewStatuses.Pending);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Lock_Should_Reject_Reviewed_Snapshot_When_Adjustment_Changed()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollSalaryFreshness{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		await AssignSalaryStructureAsync(employee.Id, "SalaryFreshness", earningAmount: 25000m, useMasterComponents: false);
+		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 6, 4));
+
+		var firstPreview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
+		var firstItem = firstPreview.Items.Single(x => x.EmployeeId == employee.Id);
+		firstItem.ReviewStatus.ShouldBe(ReviewStatuses.Pending);
+
+		var reviewResponse = await Client.PostAsJsonAsync(
+			ReviewUrl,
+			new PayrollRunReviewRequest
+			{
+				Month = "2026-06",
+				EmployeeIds = new List<Guid> { employee.Id }
+			},
+			JsonOptions);
+		var reviewBody = await reviewResponse.Content.ReadAsStringAsync();
+		reviewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, reviewBody);
+		await MarkPayrollSnapshotReviewedAsync(employee.Id, "2026-06");
+
+		await CreatePayrollAdjustmentAsync(employee.Id, "2026-06", 500m);
+
+		var lockResponse = await Client.PostAsJsonAsync(
+			BaseUrl,
+			new RunPayrollRequest
+			{
+				Month = "2026-06",
+				EmployeeIds = new List<Guid> { employee.Id }
+			},
+			JsonOptions);
+		var lockBody = await lockResponse.Content.ReadAsStringAsync();
+
+		lockResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest, lockBody);
+		lockBody.ShouldContain(HRErrorCodes.PayrollReviewRequiredBeforeLock);
+
+		var refreshedPreview = await GetPayrollPreviewAsync("2026-06", forceRefresh: false);
+		var refreshedItem = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
+		refreshedItem.ReviewStatus.ShouldBe(
+			ReviewStatuses.Pending,
+			$"Lock body: {lockBody}; firstNetPay={firstItem.NetPay}; refreshedNetPay={refreshedItem.NetPay}");
+		refreshedItem.NetPay.ShouldBe(firstItem.NetPay + 500d);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Adjustment_Create_Should_Reset_Reviewed_Snapshot_To_Pending()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollAdjustmentReviewReset{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+
+		await AssignSalaryStructureAsync(employee.Id, "AdjustmentReviewReset", earningAmount: 25000m, useMasterComponents: false);
+		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 6, 4));
+
+		var firstPreview = await GetPayrollPreviewAsync("2026-06", forceRefresh: true);
+		var firstItem = firstPreview.Items.Single(x => x.EmployeeId == employee.Id);
+
+		var reviewResponse = await Client.PostAsJsonAsync(
+			ReviewUrl,
+			new PayrollRunReviewRequest
+			{
+				Month = "2026-06",
+				EmployeeIds = new List<Guid> { employee.Id }
+			},
+			JsonOptions);
+		var reviewBody = await reviewResponse.Content.ReadAsStringAsync();
+		reviewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, reviewBody);
+		await MarkPayrollSnapshotReviewedAsync(employee.Id, "2026-06");
+
+		var adjustmentResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/adjustments",
+			new PayrollAdjustmentRequest
+			{
+				Month = "2026-06",
+				EmployeeId = employee.Id,
+				Name = "Review reset allowance",
+				Amount = 750d,
+				IsEarning = true,
+				Reason = "Regression coverage"
+			},
+			JsonOptions);
+		var adjustmentBody = await adjustmentResponse.Content.ReadAsStringAsync();
+		adjustmentResponse.StatusCode.ShouldBe(HttpStatusCode.OK, adjustmentBody);
+
+		await AssertPayrollReviewInvalidatedAsync(employee.Id, "2026-06");
+
+		var lockResponse = await Client.PostAsJsonAsync(
+			BaseUrl,
+			new RunPayrollRequest
+			{
+				Month = "2026-06",
+				EmployeeIds = new List<Guid> { employee.Id }
+			},
+			JsonOptions);
+		var lockBody = await lockResponse.Content.ReadAsStringAsync();
+		lockResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest, lockBody);
+		lockBody.ShouldContain(HRErrorCodes.PayrollReviewRequiredBeforeLock);
+
+		var refreshedPreview = await GetPayrollPreviewAsync("2026-06", forceRefresh: false);
+		var refreshedItem = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
+		refreshedItem.ReviewStatus.ShouldBe(ReviewStatuses.Pending);
+		refreshedItem.NetPay.ShouldBe(firstItem.NetPay + 750d);
 	}
 
 	[Fact]
@@ -738,6 +860,79 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
+	private async Task CreatePayrollAdjustmentAsync(Guid employeeId, string monthYear, decimal amount)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var adjustmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollAdjustment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await adjustmentRepository.InsertAsync(
+				new PayrollAdjustment(Guid.NewGuid(), tenantId, monthYear, employeeId, "Freshness adjustment", amount, true, "Regression setup"),
+				autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<RunPayrollResponse> GetPayrollPreviewAsync(string month, bool forceRefresh)
+	{
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?month={month}&page=0&pageSize=100&forceRefresh={forceRefresh.ToString().ToLowerInvariant()}");
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+		var preview = await response.Content.ReadFromJsonAsync<RunPayrollResponse>(JsonOptions);
+		preview.ShouldNotBeNull();
+		return preview;
+	}
+
+	private async Task MarkPayrollSnapshotReviewedAsync(Guid employeeId, string monthYear)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var snapshotRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var reviewerId = Guid.Parse(TestAuthHandler.TestUserId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var query = await snapshotRepository.GetQueryableAsync();
+			var snapshot = query.Single(x => x.MonthYear == monthYear && x.EmployeeId == employeeId);
+			snapshot.MarkReviewed(reviewerId, DateTime.UtcNow);
+			await snapshotRepository.UpdateAsync(snapshot, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task AssertPayrollReviewInvalidatedAsync(Guid employeeId, string monthYear)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var snapshotRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
+		var reviewRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollRunReview, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var snapshotQuery = await snapshotRepository.GetQueryableAsync();
+			var snapshot = snapshotQuery.Single(x => x.MonthYear == monthYear && x.EmployeeId == employeeId);
+			snapshot.ReviewStatus.ShouldBe(ReviewStatuses.Pending);
+			snapshot.ReviewedByUserId.ShouldBeNull();
+			snapshot.ReviewedAt.ShouldBeNull();
+
+			var reviewQuery = await reviewRepository.GetQueryableAsync();
+			reviewQuery.Any(x => x.MonthYear == monthYear && x.EmployeeId == employeeId).ShouldBeFalse();
+			await uow.CompleteAsync();
+		}
+	}
+
 	private async Task SetEmployeeStatusAsync(Guid employeeId, int status, DateOnly effectiveDate)
 	{
 		var response = await Client.PutAsJsonAsync(
@@ -752,7 +947,12 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
-	private async Task AssignSalaryStructureAsync(Guid employeeId, string suffix)
+	private async Task AssignSalaryStructureAsync(
+		Guid employeeId,
+		string suffix,
+		decimal earningAmount = 25000m,
+		decimal deductionAmount = 1000m,
+		bool useMasterComponents = true)
 	{
 		var detailsResponse = await Client.PutAsJsonAsync(
 			$"/api/employees/{employeeId}/payroll",
@@ -769,15 +969,19 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				SalaryDetails = new SalaryDetailsContract
 				{
 					TotalWorkingHourPerMonth = 160m,
-					PunchId = suffix
+					PunchId = suffix.Length > 20 ? suffix[..20] : suffix
 				}
 			},
 			JsonOptions);
 		var detailsBody = await detailsResponse.Content.ReadAsStringAsync();
 		detailsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, detailsBody);
 
-		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, $"{suffix}Earn");
-		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, $"{suffix}Ded");
+		var earningComponent = useMasterComponents
+			? await PayrollTestHelper.CreateEarningComponentAsync(Client, $"{suffix}Earn")
+			: null;
+		var deductionComponent = useMasterComponents
+			? await PayrollTestHelper.CreateDeductionComponentAsync(Client, $"{suffix}Ded")
+			: null;
 		var response = await Client.PutAsJsonAsync(
 			$"/api/payroll/employees/{employeeId}/salary-structure",
 			new UpdateSalaryStructureDto
@@ -786,9 +990,9 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				[
 					new SalaryComponentDto
 					{
-						ComponentId = earningComponent.Id,
-						Name = earningComponent.Name,
-						Amount = 25000m,
+						ComponentId = earningComponent?.Id,
+						Name = earningComponent?.Name ?? $"{suffix}CustomEarn",
+						Amount = earningAmount,
 						IsFixed = true,
 						IsTemp = false,
 						ApplicableMonth = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)
@@ -798,9 +1002,9 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				[
 					new SalaryComponentDto
 					{
-						ComponentId = deductionComponent.Id,
-						Name = deductionComponent.Name,
-						Amount = 1000m,
+						ComponentId = deductionComponent?.Id,
+						Name = deductionComponent?.Name ?? $"{suffix}CustomDed",
+						Amount = deductionAmount,
 						IsFixed = true,
 						IsTemp = false,
 						ApplicableMonth = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)
@@ -826,6 +1030,8 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 					{
 						EmployeeId = employeeId,
 						StatusWire = "PRESENT",
+						InTime = "09:00",
+						OutTime = "17:00",
 						Remarks = "Payroll lock setup"
 					}
 				]

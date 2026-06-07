@@ -59,8 +59,10 @@ internal static class SalarySlipProjection
 		};
 	}
 
-	public static PayslipPdfModel ToPdfModel(SalarySlipDto dto, string instituteName)
+	public static PayslipPdfModel ToPdfModel(SalarySlipDto dto, string instituteName, bool isPreview = false)
 	{
+		var statusLabel = dto.Status.ToString();
+
 		return new PayslipPdfModel(
 			InstituteName: instituteName,
 			InstituteAddress: null,
@@ -71,6 +73,9 @@ internal static class SalarySlipProjection
 			DateOfJoining: SalarySlipProjectionFormatting.FormatDate(dto.DateOfJoining),
 			PayPeriodDisplay: SalarySlipProjectionFormatting.FormatPayPeriod(dto.MonthYear),
 			SlipNumber: dto.SlipNumber ?? BuildSlipNumber(dto.EmployeeCode, dto.MonthYear),
+			Status: statusLabel,
+			IsPreview: isPreview,
+			DocumentLabel: isPreview ? $"Preview - {statusLabel}" : statusLabel,
 			GeneratedAt: dto.ProcessedDate,
 			PayrollBasisDays: dto.PayrollBasisDays,
 			PayableDays: dto.PayableDays,

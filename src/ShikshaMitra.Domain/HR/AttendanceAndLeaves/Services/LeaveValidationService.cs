@@ -13,15 +13,18 @@ public class LeaveValidationService : DomainService
 	private readonly IEmployeeLeaveRepository _employeeLeaveRepository;
 	private readonly ILeavePolicyRepository _leavePolicyRepository;
 	private readonly LeaveReportingChainService _reportingChainService;
+	private readonly LeaveWorkCalendarUnitService _leaveWorkCalendarUnitService;
 
 	public LeaveValidationService(
 		IEmployeeLeaveRepository employeeLeaveRepository,
 		ILeavePolicyRepository leavePolicyRepository,
-		LeaveReportingChainService reportingChainService)
+		LeaveReportingChainService reportingChainService,
+		LeaveWorkCalendarUnitService leaveWorkCalendarUnitService)
 	{
 		_employeeLeaveRepository = employeeLeaveRepository;
 		_leavePolicyRepository = leavePolicyRepository;
 		_reportingChainService = reportingChainService;
+		_leaveWorkCalendarUnitService = leaveWorkCalendarUnitService;
 	}
 
 	public async Task EnsureActorMayChangeLeaveStatusAsync(
@@ -89,7 +92,12 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
 		}
 
-		var requestedUnits = LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, halfDay);
+		var requestedUnits = await _leaveWorkCalendarUnitService.CalculateUnitsAsync(
+			employeeId,
+			startDate,
+			endDate,
+			halfDay,
+			academicYearId);
 		if (requestedUnits <= 0)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveNoBusinessDaysInRange);
@@ -131,7 +139,12 @@ public class LeaveValidationService : DomainService
 
 		EnsureValidHalfDayRange(startDate, endDate, halfDay);
 
-		var requestedUnits = LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, halfDay);
+		var requestedUnits = await _leaveWorkCalendarUnitService.CalculateUnitsAsync(
+			employeeId,
+			startDate,
+			endDate,
+			halfDay,
+			leavePolicy.AcademicYearId);
 		if (requestedUnits <= 0)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveNoBusinessDaysInRange);

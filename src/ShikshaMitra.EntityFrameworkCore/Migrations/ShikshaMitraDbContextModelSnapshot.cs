@@ -5574,6 +5574,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<DateTimeOffset?>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("EndTime")
                         .IsRequired()
                         .HasColumnType("text");
@@ -5617,6 +5620,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("RecurrenceJson")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("StartTime")
                         .IsRequired()
                         .HasColumnType("text");
@@ -5646,6 +5652,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("AcademicYearId", "TenantId")
                         .HasDatabaseName("IX_AppEvents_AcademicYearId_TenantId");
+
+                    b.HasIndex("StartDate", "EndDate")
+                        .HasDatabaseName("IX_AppEvents_StartDate_EndDate");
 
                     b.HasIndex("Title", "TenantId")
                         .HasDatabaseName("IX_AppEvents_Title_TenantId");
@@ -7229,6 +7238,58 @@ namespace ShikshaMitra.Migrations
                         .HasDatabaseName("IX_HR_PayrollAdjustments_Tenant_Month_Employee");
 
                     b.ToTable("HR_PayrollAdjustments", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollMonthLock", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("MonthYear")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_HR_PayrollMonthLocks_ExpiresAt");
+
+                    b.HasIndex("TenantId", "MonthYear")
+                        .IsUnique()
+                        .HasDatabaseName("IX_HR_PayrollMonthLocks_Tenant_Month");
+
+                    b.ToTable("HR_PayrollMonthLocks", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollRunItemSnapshot", b =>
@@ -9562,6 +9623,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<string>("GujaratiName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -9578,10 +9643,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<string>("GujaratiName")
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
@@ -9652,6 +9713,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<string>("GujaratiName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -9668,10 +9733,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("GujaratiName")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
@@ -9735,6 +9796,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<string>("GujaratiName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -9751,10 +9816,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<string>("GujaratiName")
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 

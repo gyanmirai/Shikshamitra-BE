@@ -3,12 +3,15 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Status;
+using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.HR;
@@ -25,7 +28,10 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string BaseUrl = "/api/leave-management";
+	private const string LeaveTypesUrl = "/api/hr-leave-types";
+	private const string LeavePoliciesUrl = "/api/leave-policies";
 	private static readonly Guid TestAcademicYearId = Guid.Parse("00000000-0000-0000-0000-000000000030");
+	private static int _publicIdSeed = 900000;
 	private Guid AcademicYearId => Factory.SeededAcademicYearId != Guid.Empty ? Factory.SeededAcademicYearId : TestAcademicYearId;
 
 	public LeaveManagementApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
@@ -205,6 +211,62 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Admin_Should_Create_Employee_Leave_And_Approve_It()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"AdminApproveLeave{Guid.NewGuid():N}");
+		var (policy, leaveType) = await CreateLeavePolicyFixtureAsync("AdminApprove");
+		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		var leaveDate = FirstNonSunday(startDate);
+		var created = await SeedPendingLeaveRequestAsync(employee.Id, policy.Id, leaveDate, "Admin created leave for approval");
+
+		var response = await Client.PatchAsJsonAsync(
+			$"{BaseUrl}/{created}/approve",
+			new LeaveApprovalRequestDto { Remarks = "Approved by admin" },
+			JsonOptions);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
+		var approved = await response.Content.ReadFromJsonAsync<LeaveActionResponse>(JsonOptions);
+		approved.ShouldNotBeNull();
+		approved.Status.ShouldBe("APPROVED");
+
+		var detailResponse = await Client.GetAsync($"{BaseUrl}/{created}");
+		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var detail = await detailResponse.Content.ReadFromJsonAsync<LeaveRequestDetailsResponse>(JsonOptions);
+		detail.ShouldNotBeNull();
+		detail.Status.ShouldBe("APPROVED");
+		detail.LeaveTypeMasterId.ShouldBe(leaveType.Id);
+		detail.LeaveType.ShouldBe(leaveType.Name);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Admin_Should_Create_Employee_Leave_And_Reject_It()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"AdminRejectLeave{Guid.NewGuid():N}");
+		var (policy, _) = await CreateLeavePolicyFixtureAsync("AdminReject");
+		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		var leaveDate = FirstNonSunday(startDate).AddDays(1);
+		if (leaveDate.DayOfWeek == DayOfWeek.Sunday)
+		{
+			leaveDate = leaveDate.AddDays(1);
+		}
+		var created = await SeedPendingLeaveRequestAsync(employee.Id, policy.Id, leaveDate, "Admin created leave for rejection");
+
+		var response = await Client.PatchAsJsonAsync(
+			$"{BaseUrl}/{created}/reject",
+			new LeaveRejectionRequestDto { Remarks = "Coverage unavailable" },
+			JsonOptions);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
+		var rejected = await response.Content.ReadFromJsonAsync<LeaveActionResponse>(JsonOptions);
+		rejected.ShouldNotBeNull();
+		rejected.Status.ShouldBe("REJECTED");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Admin_Without_Employee_Profile_Should_Get_400_When_Balances_Target_Is_Missing()
 	{
 		using var unmappedAdminClient = Factory.CreateClient();
@@ -359,6 +421,87 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 			response.Content.Headers.ContentType!.MediaType.ShouldBe(
 				"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 		}
+	}
+
+	private async Task<(LeavePolicyResponse Policy, LeaveTypeResponse LeaveType)> CreateLeavePolicyFixtureAsync(string marker)
+	{
+		var leaveTypeRequest = new LeaveTypeCreateRequest
+		{
+			Name = $"{marker}-Type-{Guid.NewGuid():N}",
+			Color = "#1A73E8",
+			Description = "Leave type for leave management workflow tests"
+		};
+		var leaveTypeResponse = await Client.PostAsJsonAsync(
+			$"{LeaveTypesUrl}?academicYearId={AcademicYearId}",
+			leaveTypeRequest,
+			JsonOptions);
+		leaveTypeResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+		var leaveType = await leaveTypeResponse.Content.ReadFromJsonAsync<LeaveTypeResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to create leave type.");
+
+		var policyRequest = new LeavePolicyCreateRequest
+		{
+			PolicyTitle = $"{marker}-Policy-{Guid.NewGuid():N}",
+			LeaveType = leaveType.Id,
+			AccrualPolicyType = "Yearly",
+			LeaveCount = 12,
+			PaidType = "Paid",
+			CarryForward = false,
+			EncashmentAllowed = false,
+			RequiresApproval = true,
+			Description = "Leave policy for leave management workflow tests"
+		};
+		var policyResponse = await Client.PostAsJsonAsync(
+			$"{LeavePoliciesUrl}?academicYearId={AcademicYearId}",
+			policyRequest,
+			JsonOptions);
+		policyResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+		var policy = await policyResponse.Content.ReadFromJsonAsync<LeavePolicyResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to create leave policy.");
+
+		return (policy, leaveType);
+	}
+
+	private async Task<Guid> SeedPendingLeaveRequestAsync(
+		Guid employeeId,
+		Guid leavePolicyId,
+		DateTime leaveDate,
+		string reason)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var leaveRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeLeave, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		{
+			var leave = EmployeeLeave.Create(
+				Guid.NewGuid(),
+				tenantId,
+				employeeId,
+				leavePolicyId,
+				new DateTimeOffset(leaveDate.Date),
+				new DateTimeOffset(leaveDate.Date),
+				reason);
+
+			typeof(EmployeeLeave)
+				.GetProperty(nameof(EmployeeLeave.PublicId))!
+				.SetValue(leave, Interlocked.Increment(ref _publicIdSeed));
+
+			await leaveRepository.InsertAsync(leave, autoSave: true);
+			return leave.Id;
+		}
+	}
+
+	private static DateTime FirstNonSunday(DateTime date)
+	{
+		var cursor = date.Date;
+		while (cursor.DayOfWeek == DayOfWeek.Sunday)
+		{
+			cursor = cursor.AddDays(1);
+		}
+
+		return cursor;
 	}
 
 	private async Task<(DateTime StartDate, DateTime EndDate)> GetAcademicYearDateRangeAsync(Guid academicYearId)

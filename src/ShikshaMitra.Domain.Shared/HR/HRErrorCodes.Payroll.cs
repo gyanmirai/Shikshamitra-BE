@@ -31,6 +31,8 @@ public static partial class HRErrorCodes
 	public const string SalarySlipEmployeeNotActiveInMonth = "HR:Payroll:030029";
 	public const string PayrollAcademicYearNotFound = "HR:Payroll:030030";
 	public const string PayrollMonthOutsideAcademicYear = "HR:Payroll:030031";
+	public const string PayrollSnapshotRequiredForSalarySlip = "HR:Payroll:030032";
+	public const string PayrollMonthLockBusy = "HR:Payroll:030033";
 	public const string ProvidentFundCodeAlreadyExists = "ShikshaMitra:ProvidentFundCodeAlreadyExists";
 	public const string ProvidentFundNameAlreadyExists = "ShikshaMitra:ProvidentFundNameAlreadyExists";
 	public const string EarningComponentNameAlreadyExists = "ShikshaMitra:EarningComponentNameAlreadyExists";

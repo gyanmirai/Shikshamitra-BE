@@ -4,6 +4,7 @@ using ShikshaMitra.HR.Policies;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
@@ -15,6 +16,7 @@ public class PayrollSnapshotInvalidationChecker(
 	PayrollCalendarResolver payrollCalendarResolver,
 	PayrollBasisPreviewResolver basisPreviewResolver,
 	PayrollSnapshotAttendanceInvalidationReader attendanceInvalidationReader,
+	PayrollAdjustmentReader adjustmentReader,
 	ILogger<PayrollSnapshotInvalidationChecker> logger) : ITransientDependency
 {
 	public async Task<bool> HasInvalidationsAsync(
@@ -41,6 +43,11 @@ public class PayrollSnapshotInvalidationChecker(
 		}
 
 		if (await HavePolicyChangesAfterSnapshotsAsync(year, month, academicYearId, snapshotByEmployee))
+		{
+			return true;
+		}
+
+		if (await HaveAdjustmentChangesAfterSnapshotsAsync(monthYear, employeeIds, snapshotByEmployee))
 		{
 			return true;
 		}
@@ -111,6 +118,65 @@ public class PayrollSnapshotInvalidationChecker(
 
 		return false;
 	}
+
+	private async Task<bool> HaveAdjustmentChangesAfterSnapshotsAsync(
+		string monthYear,
+		IReadOnlyCollection<Guid> employeeIds,
+		IReadOnlyDictionary<Guid, PayrollRunItemSnapshot> snapshotByEmployee)
+	{
+		var adjustmentsByEmployee = await adjustmentReader.GetByEmployeeAsync(monthYear, employeeIds);
+		foreach (var snapshot in snapshotByEmployee.Values.Where(x => !x.IsLocked))
+		{
+			var currentAdjustmentsJson = JsonSerializer.Serialize(
+				adjustmentsByEmployee.GetValueOrDefault(snapshot.EmployeeId)?.Select(ToAdjustmentFingerprint).ToList()
+				?? new List<PayrollAdjustmentFingerprint>());
+			var snapshotAdjustmentsJson = JsonSerializer.Serialize(
+				(JsonSerializer.Deserialize<List<PayrollAdjustmentDto>>(snapshot.PayrollAdjustmentsJson)
+				 ?? new List<PayrollAdjustmentDto>()).Select(ToAdjustmentFingerprint).ToList());
+			if (snapshotAdjustmentsJson != currentAdjustmentsJson)
+			{
+				logger.LogDebug(
+					"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale after adjustment change.",
+					snapshot.EmployeeId,
+					snapshot.MonthYear);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static PayrollAdjustmentFingerprint ToAdjustmentFingerprint(PayrollAdjustment adjustment) =>
+		new(
+			adjustment.Id,
+			adjustment.MonthYear,
+			adjustment.EmployeeId,
+			adjustment.Name,
+			adjustment.Amount,
+			adjustment.IsEarning,
+			adjustment.Reason,
+			adjustment.Description);
+
+	private static PayrollAdjustmentFingerprint ToAdjustmentFingerprint(PayrollAdjustmentDto adjustment) =>
+		new(
+			adjustment.Id,
+			adjustment.MonthYear,
+			adjustment.EmployeeId,
+			adjustment.Name,
+			(decimal)adjustment.Amount,
+			adjustment.IsEarning,
+			adjustment.Reason,
+			adjustment.Description);
+
+	private readonly record struct PayrollAdjustmentFingerprint(
+		Guid Id,
+		string MonthYear,
+		Guid EmployeeId,
+		string Name,
+		decimal Amount,
+		bool IsEarning,
+		string Reason,
+		string? Description);
 
 	private async Task<bool> SnapshotHasInvalidPayrollBasisAsync(
 		PayrollRunItemSnapshot snapshot,

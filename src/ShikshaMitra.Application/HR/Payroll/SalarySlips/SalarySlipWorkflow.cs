@@ -15,6 +15,7 @@ public class SalarySlipWorkflow(
 	IEmployeeRepository employeeRepository,
 	SalarySlipManager salarySlipManager,
 	SalarySlipDraftFreshnessService draftFreshnessService,
+	SalarySlipSnapshotGenerationService snapshotGenerationService,
 	SalarySlipDtoMapper salarySlipDtoMapper,
 	SalarySlipAccessService accessService,
 	ILogger<SalarySlipAppService> logger)
@@ -41,10 +42,9 @@ public class SalarySlipWorkflow(
 				employeeId,
 				normalizedMonthYear) != null;
 
-			var salarySlip = await salarySlipManager.GenerateOrGetSalarySlipAsync(
+			var salarySlip = await snapshotGenerationService.GenerateOrGetFromSnapshotAsync(
 				employeeId,
-				monthYear,
-				forceRegenerate: false);
+				monthYear);
 			salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip, hadExistingSalarySlip);
 
 			var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
@@ -92,10 +92,9 @@ public class SalarySlipWorkflow(
 		await accessService.EnsureEmployeeScopeAllowedAsync(input.EmployeeId);
 		salarySlipManager.ValidateMonthYearFormat(input.MonthYear);
 
-		var salarySlip = await salarySlipManager.GenerateOrGetSalarySlipAsync(
+		var salarySlip = await snapshotGenerationService.GenerateOrGetFromSnapshotAsync(
 			input.EmployeeId,
-			input.MonthYear,
-			input.ForceRegenerate);
+			input.MonthYear);
 
 		var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 		var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);

@@ -1,10 +1,13 @@
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.Infrastructure.Data;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HR.Calendar;
 
@@ -29,6 +32,31 @@ public static class CalendarTestHelper
 		response.EnsureSuccessStatusCode();
 		return await response.Content.ReadFromJsonAsync<EventTypeDto>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create event type");
+	}
+
+	public static async Task<EventTypeDto> GetOrCreateMeetingEventTypeAsync(HttpClient client)
+	{
+		var response = await client.GetAsync("/api/calendar/event-types?SkipCount=0&MaxResultCount=100");
+		response.EnsureSuccessStatusCode();
+
+		var page = await response.Content.ReadFromJsonAsync<PagedResultDto<EventTypeDto>>(JsonOptions);
+		var existing = page?.Items.FirstOrDefault(x => x.Name == EventTypeNames.MeetingEvent);
+		if (existing is not null)
+		{
+			return existing;
+		}
+
+		var input = new CreateUpdateEventTypeDto
+		{
+			Name = EventTypeNames.MeetingEvent,
+			Color = "#3366FF",
+			Description = "Meeting event type",
+		};
+
+		var createResponse = await client.PostAsJsonAsync("/api/calendar/event-types", input, JsonOptions);
+		createResponse.EnsureSuccessStatusCode();
+		return await createResponse.Content.ReadFromJsonAsync<EventTypeDto>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to create meeting event type");
 	}
 
 	public static async Task<HolidayTypeDto> CreateHolidayTypeAsync(

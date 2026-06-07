@@ -1,5 +1,6 @@
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,7 +15,9 @@ public class LeaveRequestActionWorkflow(
 	IEmployeeLeaveRepository employeeLeaveRepository,
 	EmployeeLeaveManager employeeLeaveManager,
 	LeaveValidationService leaveValidationService,
-	LeaveActorAccessService leaveActorAccessService)
+	LeaveActorAccessService leaveActorAccessService,
+	LeaveWorkCalendarUnitService leaveWorkCalendarUnitService,
+	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator)
 	: ApplicationService
 {
 	public async Task<LeaveActionResultDto> ApproveAsync(Guid leaveRequestId)
@@ -47,7 +50,13 @@ public class LeaveRequestActionWorkflow(
 		await employeeLeaveManager.ApproveAsync(
 			leave,
 			leave.LeavePolicy!.PaidType,
-			LeaveManagementProjection.CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay));
+			await leaveWorkCalendarUnitService.CalculateUnitsAsync(
+				leave.EmployeeId,
+				leave.StartDate.DateTime,
+				leave.EndDate.DateTime,
+				leave.HalfDay,
+				leave.LeavePolicy.AcademicYearId));
+		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { leave.EmployeeId });
 
 		return new LeaveActionResultDto
 		{
@@ -81,6 +90,7 @@ public class LeaveRequestActionWorkflow(
 			leave,
 			EmployeeLeaveStatusType.Rejected,
 			rejectionReason: input.Remarks);
+		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { leave.EmployeeId });
 
 		return new LeaveActionResultDto
 		{
@@ -108,6 +118,7 @@ public class LeaveRequestActionWorkflow(
 		}
 
 		await employeeLeaveManager.CancelAsync(leave);
+		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { leave.EmployeeId });
 
 		return new LeaveRequestDeleteDto { Id = leave.Id };
 	}
@@ -128,6 +139,7 @@ public class LeaveRequestActionWorkflow(
 		}
 
 		await employeeLeaveManager.CancelAsync(leave);
+		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { leave.EmployeeId });
 		return new LeaveRequestDeleteDto { Id = leave.Id };
 	}
 

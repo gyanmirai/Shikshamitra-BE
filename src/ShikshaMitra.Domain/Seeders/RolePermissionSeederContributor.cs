@@ -76,7 +76,7 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		roleName.Equals("admin", StringComparison.OrdinalIgnoreCase) ||
 		roleName.Equals("super-admin", StringComparison.OrdinalIgnoreCase);
 
-	private static Dictionary<string, string[]> BuildRolePermissions()
+	internal static Dictionary<string, string[]> BuildRolePermissions()
 	{
 		var tenantAdminPermissions = TenantAdminPermissions();
 		var applicationPermissions = AllApplicationPermissions();
@@ -123,7 +123,7 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			["Clerk"] = officeStaffPermissions,
 			["Office Assistant"] = officeStaffPermissions,
 			["Finance Officer"] = financeStaffPermissions,
-			["HR Manager"] = hrStaffPermissions,
+			["HR Manager"] = hrStaffPermissions.Concat(HrStaffPlatformPermissions()).ToArray(),
 			["Student"] = studentFamilyPermissions,
 			["Parent"] = studentFamilyPermissions
 		};
@@ -230,6 +230,11 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		yield return IdentityPermissions.Users.ManagePermissions;
 		yield return IdentityPermissions.Roles.Default;
 		yield return IdentityPermissions.Roles.ManagePermissions;
+	}
+
+	private static IEnumerable<string> HrStaffPlatformPermissions()
+	{
+		yield return IdentityPermissions.Roles.Default;
 	}
 
 	private static IEnumerable<string> HostPlatformPermissions()

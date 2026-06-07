@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -83,20 +84,28 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Update_Holiday()
 	{
 		var created = await CreateHolidayAsync("UpdHol");
+		var newHolidayType = await CalendarTestHelper.CreateHolidayTypeAsync(Client, "UpdHolType");
 
 		var updateDto = new CreateUpdateHolidayDto
 		{
 			AcademicYearId = created.AcademicYearId,
 			HolidayName = TestDataHelper.UniqueName("UpdatedHol"),
-			HolidayTypeId = created.HolidayTypeId,
+			HolidayTypeId = newHolidayType.Id,
 			StartDate = DateTimeOffset.UtcNow.AddDays(40),
 			EndDate = DateTimeOffset.UtcNow.AddDays(42),
+			Description = string.Empty,
+			Attachments = string.Empty,
 			AudienceIds = new List<Guid>(),
 		};
 
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}", updateDto, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<HolidayDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.HolidayTypeId.ShouldBe(newHolidayType.Id);
+		body.Description.ShouldBe(string.Empty);
+		body.Attachments.ShouldBe(string.Empty);
 	}
 
 	#endregion
@@ -120,20 +129,61 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 	{
 		var created = await CreateHolidayAsync("ByTypeHol");
 
-		var response = await Client.GetAsync($"{BaseUrl}/by-type/{created.HolidayTypeId}");
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/by-type/{created.HolidayTypeId}?SkipCount=0&MaxResultCount=10");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<PagedResultDto<HolidayDto>>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Items.Any(x => x.Id == created.Id).ShouldBeTrue();
+		body.Items.All(x => x.HolidayTypeId == created.HolidayTypeId).ShouldBeTrue();
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Get_Holidays_By_Status()
 	{
-		await CreateHolidayAsync("ByStatusHol");
+		var future = await CreateHolidayAsync(
+			"ByStatusHol",
+			DateTimeOffset.UtcNow.AddDays(10),
+			DateTimeOffset.UtcNow.AddDays(11));
+		var past = await CreateHolidayAsync(
+			"ByStatusPastHol",
+			DateTimeOffset.UtcNow.AddDays(-10),
+			DateTimeOffset.UtcNow.AddDays(-9));
 
-		var response = await Client.GetAsync($"{BaseUrl}/by-status/0");
+		var response = await Client.GetAsync($"{BaseUrl}/by-status/0?SkipCount=0&MaxResultCount=50");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<PagedResultDto<HolidayDto>>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Items.Any(x => x.Id == future.Id).ShouldBeTrue();
+		body.Items.Any(x => x.Id == past.Id).ShouldBeFalse();
+		body.Items.All(x => x.Status == 0).ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Filter_Holiday_List_By_Status()
+	{
+		var future = await CreateHolidayAsync(
+			"FutureStatusHol",
+			DateTimeOffset.UtcNow.AddDays(10),
+			DateTimeOffset.UtcNow.AddDays(11));
+		var past = await CreateHolidayAsync(
+			"PastStatusHol",
+			DateTimeOffset.UtcNow.AddDays(-10),
+			DateTimeOffset.UtcNow.AddDays(-9));
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?AcademicYearId={Factory.SeededAcademicYearId}&Status=0&SkipCount=0&MaxResultCount=50");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<PagedResultDto<HolidayDto>>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Items.Any(x => x.Id == future.Id).ShouldBeTrue();
+		body.Items.Any(x => x.Id == past.Id).ShouldBeFalse();
+		body.Items.All(x => x.Status == 0).ShouldBeTrue();
 	}
 
 	[Fact]
@@ -142,14 +192,17 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 	{
 		var response = await Client.GetAsync($"{BaseUrl}/{Guid.NewGuid()}");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.NotFound, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	#endregion
 
 	#region Helpers
 
-	private async Task<HolidayDto> CreateHolidayAsync(string suffix)
+	private async Task<HolidayDto> CreateHolidayAsync(
+		string suffix,
+		DateTimeOffset? startDate = null,
+		DateTimeOffset? endDate = null)
 	{
 		var holidayType = await CalendarTestHelper.CreateHolidayTypeAsync(Client, suffix);
 		var academicYearId = Factory.SeededAcademicYearId;
@@ -159,8 +212,10 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 			AcademicYearId = academicYearId,
 			HolidayName = TestDataHelper.UniqueName(suffix),
 			HolidayTypeId = holidayType.Id,
-			StartDate = DateTimeOffset.UtcNow.AddDays(30),
-			EndDate = DateTimeOffset.UtcNow.AddDays(31),
+			StartDate = startDate ?? DateTimeOffset.UtcNow.AddDays(30),
+			EndDate = endDate ?? DateTimeOffset.UtcNow.AddDays(31),
+			Description = "Original holiday description",
+			Attachments = "holiday-a.pdf",
 			AudienceIds = new List<Guid>(),
 		};
 

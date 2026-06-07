@@ -25,6 +25,10 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public DateTimeOffset? MeetingDate { get; set; }
 
+    public DateTimeOffset? StartDate { get; set; }
+
+    public DateTimeOffset? EndDate { get; set; }
+
     public string StartTime { get; set; } = string.Empty;
 
     public string EndTime { get; set; } = string.Empty;
@@ -36,7 +40,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public List<Guid> AudienceIds { get; set; } = new();
 
     public EventStatus GetStatus(DateTimeOffset now) =>
-        EventScheduleRules.ResolveStatus(MeetingDate, now);
+        EventScheduleRules.ResolveStatus(MeetingDate, StartDate, EndDate, now);
 
     protected Event() { }
 
@@ -52,6 +56,8 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         EventTypeId = eventTypeId;
         Title = details.Title;
         MeetingDate = details.MeetingDate;
+        StartDate = details.StartDate;
+        EndDate = details.EndDate;
         StartTime = details.StartTime;
         EndTime = details.EndTime;
         Description = details.Description;
@@ -85,7 +91,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
             tenantId,
             academicYearId,
             eventTypeId,
-            new EventDetails(title, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
+            new EventDetails(title, meetingDate, meetingDate, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
     public static Event CreateEvent(
@@ -93,6 +99,8 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Guid academicYearId,
         string title,
         Guid eventTypeId,
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
         string startTime,
         string endTime,
         string? description = null,
@@ -109,7 +117,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
             tenantId,
             academicYearId,
             eventTypeId,
-            new EventDetails(title, null, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
+            new EventDetails(title, null, startDate, endDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
     public void Update(
@@ -129,7 +137,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
         EventDetailsMutator.Apply(
             this,
-            new EventDetails(title, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
+            new EventDetails(title, meetingDate, meetingDate, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
     public void UpdateMeetingEvent(
@@ -149,11 +157,13 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
         EventDetailsMutator.Apply(
             this,
-            new EventDetails(title, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
+            new EventDetails(title, meetingDate, meetingDate, meetingDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
     public void UpdateEvent(
         string title,
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
         string startTime,
         string endTime,
         string? description = null,
@@ -168,7 +178,7 @@ public class Event : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
         EventDetailsMutator.Apply(
             this,
-            new EventDetails(title, null, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
+            new EventDetails(title, null, startDate, endDate, startTime, endTime, description, poster, mode, venue, isRecurring, recurrenceJson, audienceIds));
     }
 
 }

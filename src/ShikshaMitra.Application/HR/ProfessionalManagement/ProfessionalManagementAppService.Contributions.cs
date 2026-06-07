@@ -6,8 +6,13 @@ namespace ShikshaMitra.HR.ProfessionalManagement;
 
 public partial class ProfessionalManagementAppService
 {
-	public Task<ClassroomObservationDto> AddObservationAsync(Guid id, ClassroomObservationRequest input) =>
-		AuthorizedAsync(() => _authorization.EnsureCanAddObservationAsync(id, input.ObserverEmployeeId), () => _contributionWorkflow.AddObservationAsync(id, input));
+	public async Task<ClassroomObservationDto> AddObservationAsync(Guid id, ClassroomObservationRequest input)
+	{
+		var observerEmployeeId = Guid.Empty;
+		return await AuthorizedAsync(
+			async () => observerEmployeeId = await _authorization.ResolveObservationObserverEmployeeIdAsync(id, input.ObserverEmployeeId),
+			() => _contributionWorkflow.AddObservationAsync(id, input, observerEmployeeId));
+	}
 
 	public Task<List<ClassroomObservationDto>> GetObservationsAsync(Guid id) =>
 		AuthorizedAsync(() => _authorization.EnsureCanViewReviewAsync(id), () => _contributionWorkflow.GetObservationsAsync(id));

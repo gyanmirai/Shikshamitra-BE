@@ -37,5 +37,9 @@ public interface IGroupRepository : IRepository<Group, Guid>
     /// <summary>
     /// Checks if a group with the given name exists
     /// </summary>
-    Task<bool> ExistsByNameAsync(string name, Guid? excludeId = null, CancellationToken cancellationToken = default);
+    Task<bool> ExistsByNameAsync(
+        Guid academicYearId,
+        string name,
+        Guid? excludeId = null,
+        CancellationToken cancellationToken = default);
 }

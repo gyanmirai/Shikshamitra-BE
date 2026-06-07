@@ -24,7 +24,7 @@ public class PayrollAdjustmentWorkflow(
 		PayrollAdjustmentRequest request,
 		string internalMonthYear)
 	{
-		await EnsureCanChangeAsync(internalMonthYear, request.Month, request.EmployeeId);
+		await EnsureCanCreateAsync(internalMonthYear, request.Month, request.EmployeeId);
 
 		var adjustment = new PayrollAdjustment(
 			guidGenerator.Create(),
@@ -52,7 +52,7 @@ public class PayrollAdjustmentWorkflow(
 			throw new BusinessException(HRErrorCodes.PayrollAdjustmentNotFound);
 		}
 
-		await EnsureCanChangeAsync(internalMonthYear, request.Month, request.EmployeeId);
+		await EnsureCanModifyExistingAsync(internalMonthYear, request.Month, request.EmployeeId);
 
 		adjustment.Update(
 			request.Name,
@@ -68,24 +68,46 @@ public class PayrollAdjustmentWorkflow(
 	public async Task<PayrollAdjustment> DeleteAsync(Guid id)
 	{
 		var adjustment = await adjustmentReader.GetOrThrowAsync(id);
-		await EnsureCanChangeAsync(adjustment.MonthYear, adjustment.MonthYear, adjustment.EmployeeId);
+		await EnsureCanModifyExistingAsync(adjustment.MonthYear, adjustment.MonthYear, adjustment.EmployeeId);
 		await payrollAdjustmentRepository.DeleteAsync(adjustment, autoSave: true);
 		return adjustment;
 	}
 
-	private async Task EnsureCanChangeAsync(string internalMonthYear, string requestMonth, Guid employeeId)
+	private async Task EnsureCanCreateAsync(string internalMonthYear, string requestMonth, Guid employeeId)
 	{
-		var query = await payrollRunItemSnapshotRepository.GetQueryableAsync();
-
-		var snapshot = await asyncExecuter.FirstOrDefaultAsync(query.Where(x =>
-			x.MonthYear == internalMonthYear &&
-			x.EmployeeId == employeeId));
-
+		var snapshot = await GetSnapshotAsync(internalMonthYear, employeeId);
 		if (snapshot != null && !snapshot.IsLocked && snapshot.ReviewStatus == ReviewStatuses.Reviewed)
 		{
 			return;
 		}
 
+		ThrowCannotChange(requestMonth, employeeId, snapshot);
+	}
+
+	private async Task EnsureCanModifyExistingAsync(string internalMonthYear, string requestMonth, Guid employeeId)
+	{
+		var snapshot = await GetSnapshotAsync(internalMonthYear, employeeId);
+		if (snapshot != null &&
+		    !snapshot.IsLocked &&
+		    snapshot.ReviewStatus is ReviewStatuses.Reviewed or ReviewStatuses.Pending)
+		{
+			return;
+		}
+
+		ThrowCannotChange(requestMonth, employeeId, snapshot);
+	}
+
+	private async Task<PayrollRunItemSnapshot?> GetSnapshotAsync(string internalMonthYear, Guid employeeId)
+	{
+		var query = await payrollRunItemSnapshotRepository.GetQueryableAsync();
+
+		return await asyncExecuter.FirstOrDefaultAsync(query.Where(x =>
+			x.MonthYear == internalMonthYear &&
+			x.EmployeeId == employeeId));
+	}
+
+	private static void ThrowCannotChange(string requestMonth, Guid employeeId, PayrollRunItemSnapshot? snapshot)
+	{
 		throw new BusinessException(HRErrorCodes.PayrollAdjustmentRequiresReviewedPreview)
 			.WithData("month", requestMonth)
 			.WithData("employeeId", employeeId)

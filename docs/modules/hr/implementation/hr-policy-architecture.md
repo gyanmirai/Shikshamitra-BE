@@ -11,7 +11,7 @@ HR uses a shared calendar for dates, but payroll and attendance interpret those 
 | `WorkCalendarPolicy` | HR shared policy | Academic-year work calendar, weekly-off pattern, custom weekly-offs, holiday sync mode |
 | `AttendancePolicy` | Attendance module | Punch thresholds, missing punch behavior, late/early rules, overtime, holiday work behavior, payroll integration |
 | `PayrollPolicy` | Payroll module | Day calculation mode, Saturday/workday units, manual month days, payroll holiday overrides, locked month settings |
-| `HrPolicyAssignment` | HR policy assignment | Effective-dated scoped assignment to attendance and payroll policies for employee, shift, role, department, or employee type |
+| `HrPolicyAssignment` | HR policy assignment | Effective-dated scoped assignment to attendance and payroll policies for an employee or dynamic group |
 | `HrPolicyVersion` | HR policy lifecycle | Immutable policy snapshots used for history, compare, restore-as-draft, and activation review |
 
 ## API Ownership
@@ -52,13 +52,10 @@ Policy lifecycle APIs expose immutable versions for each policy type:
 Resolution order is specificity-first:
 
 1. Active employee assignment effective on the requested date.
-2. Active shift assignment.
-3. Active role assignment.
-4. Active department assignment.
-5. Active employee-type assignment.
-6. Active tenant/academic-year default attendance policy and payroll policy.
+2. Active group assignment effective on the requested date.
+3. Active tenant/academic-year default attendance policy and payroll policy.
 
-Only active policies can be assigned. Active assignments for the same target type/key and academic year cannot overlap by date range. Within the same target type, higher priority wins; ties use the latest effective-from date. The preview APIs return the winning source and resolution steps for skipped candidates.
+Groups are the v1 abstraction for dynamic role, department, employment-type, and mixed targeting. Only active policies can be assigned. Active assignments for the same target type/key and academic year cannot overlap by date range. Employee assignments always beat group assignments. Within the same specificity, higher priority wins; ties use the latest effective-from date. The preview APIs return the winning source and resolution steps for skipped candidates.
 
 ## Policy Lifecycle
 
@@ -81,7 +78,7 @@ Payroll owns paid/unpaid and basis-day behavior. Attendance owns work/non-work, 
 - non-working in attendance and paid in payroll;
 - required attendance with overtime treatment;
 - unpaid or excluded for a part-time employee;
-- overridden for one employee through policy assignment.
+- overridden for one employee or dynamic employee group through policy assignment.
 
 ## Migration Note
 

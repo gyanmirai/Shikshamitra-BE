@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using ShikshaMitra.Application.Contracts.Groups;
 using ShikshaMitra.Application.Contracts.HR.Calendar.CalendarView;
-using ShikshaMitra.HR;
 using ShikshaMitra.HR.Calendar;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.HR.Calendar.Events;
@@ -11,6 +10,7 @@ using ShikshaMitra.HR.Calendar.HolidayTypes;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Event = ShikshaMitra.HR.Calendar.Events.Event;
 
@@ -38,8 +38,7 @@ public class CalendarItemDetailsService(
 			return await MapHolidayToDetailsAsync(holiday);
 		}
 
-		throw new BusinessException(HRErrorCodes.CalendarItemNotFound)
-			.WithData("itemId", itemId);
+		throw new EntityNotFoundException(typeof(CalendarItemDetailsDto), itemId);
 	}
 
 	private async Task<CalendarItemDetailsDto> MapEventToDetailsAsync(Event eventEntity)
@@ -51,7 +50,7 @@ public class CalendarItemDetailsService(
 			CalendarItemType = CalendarItemType.Event,
 			Status = (int)eventEntity.GetStatus(CurrentInstant()),
 			Title = eventEntity.Title,
-			Date = eventEntity.MeetingDate,
+			Date = eventEntity.MeetingDate ?? eventEntity.StartDate,
 			Time = new CalendarItemTimeDto
 			{
 				StartTime = eventEntity.StartTime,

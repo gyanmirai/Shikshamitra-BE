@@ -21,7 +21,7 @@ public class ClassroomObservationDto
 
 public class ClassroomObservationRequest
 {
-	public Guid ObserverEmployeeId { get; set; }
+	public Guid? ObserverEmployeeId { get; set; }
 	public DateTime ObservationDate { get; set; }
 	public string? ClassName { get; set; }
 	public string? SubjectName { get; set; }

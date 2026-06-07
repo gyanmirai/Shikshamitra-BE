@@ -24,19 +24,49 @@ public class EventReadService(
 	public async Task<PagedResultDto<EventDto>> GetListAsync(GetEventListRequestDto input)
 	{
 		var search = input.Search;
+		var now = CurrentInstant();
 		var query = (await eventRepository.GetQueryableAsync())
 			.WhereIf(!search.IsNullOrWhiteSpace(), x => x.Title.Contains(search!))
 			.WhereIf(input.AcademicYearId.HasValue, x => x.AcademicYearId == input.AcademicYearId)
 			.WhereIf(input.TypeId.HasValue, x => x.EventTypeId == input.TypeId)
-			.WhereIf(input.Mode.HasValue, x => (int)x.Mode == input.Mode)
-			.WhereIf(input.FromDate.HasValue, x => x.MeetingDate >= input.FromDate)
-			.WhereIf(input.ToDate.HasValue, x => x.MeetingDate <= input.ToDate);
+			.WhereIf(input.Mode.HasValue, x => (int)x.Mode == input.Mode);
 
-		var totalCount = await asyncExecuter.CountAsync(query);
-		var sortedQuery = ApplySorting(query, input.Sorting);
-		var items = await asyncExecuter.ToListAsync(sortedQuery.Skip(input.SkipCount).Take(input.MaxResultCount));
+		if (input.FromDate.HasValue)
+		{
+			query = query.Where(x => (x.MeetingDate ?? x.EndDate ?? x.StartDate) >= input.FromDate);
+		}
+
+		if (input.ToDate.HasValue)
+		{
+			query = query.Where(x => (x.MeetingDate ?? x.StartDate) <= input.ToDate);
+		}
+
+		List<Event> items;
+		int totalCount;
+		if (input.Status.HasValue || string.Equals(input.Sorting, "status", StringComparison.OrdinalIgnoreCase))
+		{
+			var filtered = await asyncExecuter.ToListAsync(query);
+			if (input.Status.HasValue)
+			{
+				filtered = filtered.Where(x => (int)x.GetStatus(now) == input.Status.Value).ToList();
+			}
+
+			totalCount = filtered.Count;
+			items = ApplySorting(filtered, input.Sorting, now)
+				.Skip(input.SkipCount)
+				.Take(input.MaxResultCount)
+				.ToList();
+		}
+		else
+		{
+			totalCount = await asyncExecuter.CountAsync(query);
+			items = await asyncExecuter.ToListAsync(
+				ApplySorting(query, input.Sorting)
+					.Skip(input.SkipCount)
+					.Take(input.MaxResultCount));
+		}
 		var eventDtos = ObjectMapper.Map<List<Event>, List<EventDto>>(items);
-		ApplyStatuses(items, eventDtos);
+		ApplyStatuses(items, eventDtos, now);
 
 		await PopulateEventTypesAsync(eventDtos);
 
@@ -53,37 +83,15 @@ public class EventReadService(
 
 	public async Task<List<EventDto>> GetByTypeAsync(Guid typeId)
 	{
-		var events = await eventRepository.GetByTypeAsync(typeId);
+		var query = (await eventRepository.GetQueryableAsync()).Where(x => x.EventTypeId == typeId);
+		var events = await asyncExecuter.ToListAsync(query);
 		var eventDtos = ObjectMapper.Map<List<Event>, List<EventDto>>(events);
 		ApplyStatuses(events, eventDtos);
 		return eventDtos;
 	}
 
-	public async Task<PagedResultDto<EventDto>> GetByStatusAsync(GetEventListRequestDto input)
-	{
-		var allEvents = await eventRepository.GetAllAsync();
-		var search = input.Search;
-		var now = CurrentInstant();
-		var filteredEvents = allEvents
-			.WhereIf(input.Status.HasValue, x => (int)x.GetStatus(now) == input.Status)
-			.ToList();
-
-		var totalCount = filteredEvents.Count;
-		var sortedAndPaged = filteredEvents
-			.WhereIf(!search.IsNullOrWhiteSpace(), x => x.Title.Contains(search!))
-			.WhereIf(input.TypeId.HasValue, x => x.EventTypeId == input.TypeId)
-			.WhereIf(input.Mode.HasValue, x => (int)x.Mode == input.Mode)
-			.WhereIf(input.FromDate.HasValue, x => x.MeetingDate >= input.FromDate)
-			.WhereIf(input.ToDate.HasValue, x => x.MeetingDate <= input.ToDate)
-			.OrderBy(x => x.Title)
-			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount)
-			.ToList();
-
-		var eventDtos = ObjectMapper.Map<List<Event>, List<EventDto>>(sortedAndPaged);
-		ApplyStatuses(sortedAndPaged, eventDtos, now);
-		return new PagedResultDto<EventDto>(totalCount, eventDtos);
-	}
+	public Task<PagedResultDto<EventDto>> GetByStatusAsync(GetEventListRequestDto input) =>
+		GetListAsync(input);
 
 	public async Task<EventDto> GetAsync(Guid id)
 	{
@@ -116,13 +124,28 @@ public class EventReadService(
 		}
 	}
 
-	private static IOrderedQueryable<Event> ApplySorting(IQueryable<Event> query, string? sorting) =>
+	private static IOrderedQueryable<Event> ApplySorting(
+		IQueryable<Event> events,
+		string? sorting) =>
 		sorting switch
 		{
-			"meetingDate" => query.OrderBy(x => x.MeetingDate),
-			"title" => query.OrderBy(x => x.Title),
-			"creationTime" => query.OrderByDescending(x => x.CreationTime),
-			_ => query.OrderBy(x => x.Title)
+			"meetingDate" or "startDate" => events.OrderBy(x => x.MeetingDate ?? x.StartDate),
+			"title" => events.OrderBy(x => x.Title),
+			"creationTime" => events.OrderByDescending(x => x.CreationTime),
+			_ => events.OrderBy(x => x.Title)
+		};
+
+	private static IOrderedEnumerable<Event> ApplySorting(
+		IEnumerable<Event> events,
+		string? sorting,
+		DateTimeOffset now) =>
+		sorting switch
+		{
+			"meetingDate" or "startDate" => events.OrderBy(x => x.MeetingDate ?? x.StartDate),
+			"title" => events.OrderBy(x => x.Title),
+			"creationTime" => events.OrderByDescending(x => x.CreationTime),
+			"status" => events.OrderBy(x => x.GetStatus(now)),
+			_ => events.OrderBy(x => x.Title)
 		};
 
 	private void ApplyStatuses(IReadOnlyList<Event> events, IReadOnlyList<EventDto> eventDtos, DateTimeOffset? now = null)

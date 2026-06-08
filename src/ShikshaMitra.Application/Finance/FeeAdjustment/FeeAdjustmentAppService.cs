@@ -258,7 +258,7 @@ public class FeeAdjustmentAppService(
         };
     }
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
     public async Task<FeeAdjustmentApplyContextDto> GetApplyContextAsync(Guid id)
     {
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
@@ -303,7 +303,7 @@ public class FeeAdjustmentAppService(
         };
     }
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
     public async Task<ApplyFeeAdjustmentResultDto> ApplyAsync(
         Guid id,
         ApplyFeeAdjustmentDto input,
@@ -360,7 +360,7 @@ public class FeeAdjustmentAppService(
         return await MapApplyResultAsync(request, approverId, request.AppliedAmount - batchBefore);
     }
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
     public async Task<RejectFeeAdjustmentResultDto> RejectAsync(Guid id, RejectFeeAdjustmentDto input)
     {
         var reviewerId = currentUser.Id

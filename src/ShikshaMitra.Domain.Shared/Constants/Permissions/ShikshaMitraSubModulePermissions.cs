@@ -85,7 +85,7 @@ public static class ShikshaMitraSubModulePermissions
 	public const string FinanceSettingsIncomeCategory = $"{ShikshaMitraModulePermissions.Finance}.Settings.IncomeCategory";
 	public const string FinanceSettingsBankAccount = $"{ShikshaMitraModulePermissions.Finance}.Settings.BankAccount";
 	public const string FinanceAuditing = $"{ShikshaMitraModulePermissions.Finance}.Auditing";
-	public const string FinanceAdjustment = $"{ShikshaMitraModulePermissions.Finance}.Adjustment";
+	public const string FinanceAdjustment = $"{ShikshaMitraModulePermissions.Finance}.Fees.Adjustment";
 
 	// Communication module submodules
 	public const string CommunicationDashboard = $"{ShikshaMitraModulePermissions.Communication}.Dashboard";

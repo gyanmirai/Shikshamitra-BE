@@ -38,7 +38,7 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 		body.Data.ShouldNotBeNull();
 		body.Data.ChargeId.ShouldNotBe(Guid.Empty);
 		body.Data.Status.ShouldBe(0); // Pending
-		body.Data.StudentId.ShouldBe(studentId);
+		body.Data.ResolvedStudentCount.ShouldBe(1);
 	}
 
 	[Fact]
@@ -77,9 +77,8 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 		data.ShouldNotBeNull();
 		data.BoardId.ShouldBe(boardId);
 		data.EducationMediumId.ShouldNotBe(Guid.Empty);
-		data.StandardId.ShouldNotBe(Guid.Empty);
-		data.DivisionId.ShouldNotBe(Guid.Empty);
-		data.StudentName.ShouldNotBeNullOrWhiteSpace();
+		data.ChargeName.ShouldNotBeNullOrWhiteSpace();
+		data.ResolvedStudentCount.ShouldBe(1);
 		data.CategoryName.ShouldNotBeNullOrWhiteSpace();
 		data.RequestorId.ShouldNotBe(Guid.Empty);
 		data.AcademicYearId.ShouldBe(ChargeTestHelper.DefaultAcademicYearId);
@@ -100,9 +99,11 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 		var data = body.Data;
 		data.ShouldNotBeNull();
 		data.ChargeId.ShouldBe(chargeId);
-		data.Student.ShouldNotBeNull();
-		data.Student.StudentId.ShouldNotBe(Guid.Empty);
-		data.Student.BoardId.ShouldNotBe(Guid.Empty);
+		data.Students.ShouldNotBeNull();
+		data.Students.Count.ShouldBeGreaterThanOrEqualTo(1);
+		data.Students[0].StudentId.ShouldNotBe(Guid.Empty);
+		data.Audience.ShouldNotBeNull();
+		data.Audience.Scope.BoardId.ShouldNotBe(Guid.Empty);
 		data.Requestor.ShouldNotBeNull();
 		data.Requestor.RequestorId.ShouldNotBe(Guid.Empty);
 		data.ApprovalDetails.ShouldNotBeNull();

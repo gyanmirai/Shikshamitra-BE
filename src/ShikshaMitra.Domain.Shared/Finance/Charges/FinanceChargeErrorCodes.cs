@@ -16,6 +16,15 @@ public static class FinanceChargeErrorCodes
 	public const string ChargeCannotBeDeleted = "Finance:Charge:010004";
 	public const string InvalidRejectionReason = "Finance:Charge:010005";
 	public const string ChargeCategoryInactive = "Finance:Charge:010006";
+	public const string InvalidChargeName = "Finance:Charge:010007";
+	public const string EmptyChargeAudience = "Finance:Charge:010008";
+	public const string InvalidChargeAudienceScope = "Finance:Charge:010009";
+	public const string ChargeBatchTooLarge = "Finance:Charge:010010";
+	public const string StudentNotInChargeScope = "Finance:Charge:010011";
+	public const string ChargeRequestNotFound = "Finance:Charge:010012";
+	public const string CannotRemoveAppliedChargeLine = "Finance:Charge:010013";
+	public const string InvalidChargeLineSubset = "Finance:Charge:010014";
+	public const string ChargeRequestNotFullyPending = "Finance:Charge:010015";
 
 	// ── Reference data: 02xxxx ────────────────────────────────────
 

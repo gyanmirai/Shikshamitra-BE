@@ -34,6 +34,17 @@ public interface IStudentRepository : IRepository<Student, Guid>
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets enrolled students matching board, medium, class, and optional division filters.
+    /// </summary>
+    Task<List<Student>> GetActiveStudentsInScopeAsync(
+        Guid academicYearId,
+        Guid boardId,
+        Guid educationMediumId,
+        IReadOnlyList<Guid> classIds,
+        IReadOnlyList<Guid>? divisionIds = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Bulk lookup of students by GR numbers (case-sensitive integer match).
     /// Useful for import operations.
     /// </summary>

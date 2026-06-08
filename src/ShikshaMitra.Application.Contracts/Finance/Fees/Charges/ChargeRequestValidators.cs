@@ -7,9 +7,12 @@ public class CreateChargeRequestValidator : AbstractValidator<CreateChargeReques
 {
 	public CreateChargeRequestValidator()
 	{
-		RuleFor(x => x.ChargeCategoryId).NotEmpty();
+		RuleFor(x => x.ChargeName)
+			.NotEmpty()
+			.MinimumLength(3)
+			.MaximumLength(100);
 
-		RuleFor(x => x.StudentId).NotEmpty();
+		RuleFor(x => x.ChargeCategoryId).NotEmpty();
 
 		RuleFor(x => x.PurposeDescription)
 			.NotEmpty()
@@ -17,20 +20,26 @@ public class CreateChargeRequestValidator : AbstractValidator<CreateChargeReques
 			.MaximumLength(1000);
 
 		RuleFor(x => x.Amount)
-			.GreaterThan(0)
-			.WithMessage("Amount must be greater than 0.");
+			.GreaterThan(0);
 
 		RuleFor(x => x.DueDate)
 			.Must(d => d.Date >= System.DateTime.UtcNow.Date)
 			.WithMessage("Due date must not be in the past.");
 
 		RuleFor(x => x.Priority)
-			.InclusiveBetween(0, 2)
-			.WithMessage("Priority must be 0 (Low), 1 (Medium), or 2 (High).");
+			.InclusiveBetween(0, 2);
 
 		RuleFor(x => x.AdditionalNotes)
 			.MaximumLength(2000)
 			.When(x => x.AdditionalNotes != null);
+
+		RuleFor(x => x)
+			.Must(x => x.Audience is not null || x.StudentId.HasValue)
+			.WithMessage("Either Audience or StudentId must be provided.");
+
+		RuleFor(x => x.Audience!)
+			.SetValidator(new ChargeAudienceValidator())
+			.When(x => x.Audience is not null);
 	}
 }
 
@@ -38,6 +47,11 @@ public class UpdateChargeRequestValidator : AbstractValidator<UpdateChargeReques
 {
 	public UpdateChargeRequestValidator()
 	{
+		RuleFor(x => x.ChargeName)
+			.MinimumLength(3)
+			.MaximumLength(100)
+			.When(x => x.ChargeName != null);
+
 		RuleFor(x => x.PurposeDescription)
 			.MinimumLength(10)
 			.MaximumLength(1000)
@@ -45,22 +59,23 @@ public class UpdateChargeRequestValidator : AbstractValidator<UpdateChargeReques
 
 		RuleFor(x => x.Amount)
 			.GreaterThan(0)
-			.WithMessage("Amount must be greater than 0.")
 			.When(x => x.Amount.HasValue);
 
 		RuleFor(x => x.DueDate)
 			.Must(d => d!.Value.Date >= System.DateTime.UtcNow.Date)
-			.WithMessage("Due date must not be in the past.")
 			.When(x => x.DueDate.HasValue);
 
 		RuleFor(x => x.Priority)
 			.InclusiveBetween(0, 2)
-			.WithMessage("Priority must be 0 (Low), 1 (Medium), or 2 (High).")
 			.When(x => x.Priority.HasValue);
 
 		RuleFor(x => x.AdditionalNotes)
 			.MaximumLength(2000)
 			.When(x => x.AdditionalNotes != null);
+
+		RuleFor(x => x.Audience!)
+			.SetValidator(new ChargeAudienceValidator())
+			.When(x => x.Audience is not null);
 	}
 }
 

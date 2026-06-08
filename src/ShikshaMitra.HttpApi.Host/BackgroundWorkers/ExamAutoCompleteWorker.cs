@@ -31,7 +31,7 @@ public class ExamAutoCompleteWorker : AsyncPeriodicBackgroundWorkerBase
         var dataFilter = workerContext.ServiceProvider.GetRequiredService<IDataFilter>();
         var unitOfWorkManager = workerContext.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 
-        var today = DateTime.UtcNow.Date;
+        var now = DateTime.UtcNow;
         var completedCount = 0;
 
         using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
@@ -44,20 +44,33 @@ public class ExamAutoCompleteWorker : AsyncPeriodicBackgroundWorkerBase
 
             foreach (var exam in exams)
             {
-                var scheduledDates = exam.ExamSubjects
-                    .Where(s => s.ExamDate.HasValue)
-                    .Select(s => s.ExamDate!.Value.Date)
+                // Use EndTime when available (most accurate); fall back to ExamDate when EndTime
+                // was not set so exams without a time window are still auto-completed.
+                var subjectsWithEndTime = exam.ExamSubjects
+                    .Where(s => s.EndTime.HasValue)
                     .ToList();
 
-                if (scheduledDates.Count == 0)
-                    continue;
-
-                if (scheduledDates.Max() < today)
+                if (subjectsWithEndTime.Count > 0)
                 {
-                    exam.ChangeStatus(ExamStatus.Completed);
-                    await examRepository.UpdateAsync(exam);
-                    completedCount++;
+                    // All scheduled subjects must have finished before we mark Completed
+                    if (subjectsWithEndTime.Max(s => s.EndTime!.Value) > now)
+                        continue;
                 }
+                else
+                {
+                    // Fallback: use ExamDate (date-only) when no EndTime is stored
+                    var scheduledDates = exam.ExamSubjects
+                        .Where(s => s.ExamDate.HasValue)
+                        .Select(s => s.ExamDate!.Value.Date)
+                        .ToList();
+
+                    if (scheduledDates.Count == 0 || scheduledDates.Max() >= now.Date)
+                        continue;
+                }
+
+                exam.ChangeStatus(ExamStatus.Completed);
+                await examRepository.UpdateAsync(exam);
+                completedCount++;
             }
         }
 

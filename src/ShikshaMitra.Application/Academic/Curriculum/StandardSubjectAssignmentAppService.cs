@@ -36,7 +36,7 @@ public class StandardSubjectAssignmentAppService(
 			// Use SubjectType from DTO, default to Core if not provided
 			var subjectType = createAssignmentDto.SubjectType ?? SubjectType.Core;
 
-			var assignment = subjectAssignmentManager.AssignSubject(
+			var assignment = await subjectAssignmentManager.AssignSubjectAsync(
 				standardId: createAssignmentDto.StandardId,
 				subjectId: createAssignmentDto.SubjectId,
 				subjectCode: createAssignmentDto.SubjectCode,
@@ -66,6 +66,10 @@ public class StandardSubjectAssignmentAppService(
 				AssignedSubject,
 				StandardSubjectAssignmentResponseDto
 			>(assignment);
+		}
+		catch (BusinessException)
+		{
+			throw;
 		}
 		catch (Exception ex)
 		{

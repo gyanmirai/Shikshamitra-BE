@@ -198,6 +198,10 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("SubjectId");
 
+                    b.HasIndex("TenantId", "StandardId", "SubjectId")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
                     b.ToTable("AppStandardSubjectAssignments", (string)null);
                 });
 

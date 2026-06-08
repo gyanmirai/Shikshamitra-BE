@@ -19,9 +19,10 @@ public class ChapterAppService(
 {
 	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, CreateChapterDto createChapterDto)
 	{
-		var assignedSubject = await assignedSubjectRepository.FindAsync(
+		var assignedSubject = (await assignedSubjectRepository.GetListAsync(
 				a => a.StandardId == standardId && a.SubjectId == subjectId
-			) ?? throw new BusinessException("Academic:Chapter:001", "Subject not assigned to this class");
+			)).FirstOrDefault()
+			?? throw new BusinessException("Academic:Chapter:001", "Subject not assigned to this class");
 
 		assignedSubject.AddChapter(
 			guidGenerator.Create(),
@@ -40,10 +41,11 @@ public class ChapterAppService(
 
 	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId)
 	{
-		var assignedSubject = await assignedSubjectRepository.FindAsync(
+		var assignedSubject = (await assignedSubjectRepository.GetListAsync(
 				a => a.StandardId == standardId && a.SubjectId == subjectId,
 				includeDetails: true
-			) ?? throw new BusinessException("Academic:Chapter:002", "Subject not assigned to this class");
+			)).FirstOrDefault()
+			?? throw new BusinessException("Academic:Chapter:002", "Subject not assigned to this class");
 
 		var chapters = assignedSubject.Chapters.OrderBy(c => c.ChapterNumber).ToList();
 		var dtos = ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);

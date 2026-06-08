@@ -29,6 +29,7 @@ public class AcademicReportFilterDto
     public string? Grade { get; set; }
     public double? MinMarks { get; set; }
     public double? MaxMarks { get; set; }
+    public List<Guid>? StudentIds { get; set; }
 
     /// <summary>
     /// Upcoming = 1, In Progress = 2, Completed = 3
@@ -36,6 +37,9 @@ public class AcademicReportFilterDto
     public List<int>? Statuses { get; set; }
 
     public bool? RevisionRequired { get; set; }
+
+    public DateTime? FromDate { get; set; }
+    public DateTime? ToDate { get; set; }
 }
 
 public class AcademicReportPreviewDto
@@ -129,4 +133,43 @@ public static class AcademicReportTypes
     public const string SubjectwiseMarksReport = "Subject-wise Marks Report";
     public const string DetailedResultSheet = "Detailed Result Sheet";
     public const string ExamSummaryReport = "Exam Summary Report";
+
+    // Student Ranking / Bright-Weak reports
+    public const string BrightStudentAnalysis = "Bright Student Analysis";
+    public const string BrightStudentListSubjectWise = "Bright Student List Subject Wise";
+    public const string WeakStudentAnalysis = "Weak Student Analysis";
+    public const string WeakStudentAnalysisSubjectWise = "Weak Student Analysis Subject Wise";
+    public const string StudentGradeAnalysis = "Student Grade Analysis";
+    public const string ResultListPassFailOverallAnalysis = "Result List Pass/Fail Overall Analysis";
+    public const string ResultListOverallGradeAnalysis = "Result List Overall Grade Analysis";
+
+    // Student-Wise Full Result reports
+    public const string StudentAllBatchResult = "Student All Batch Result";
+    public const string StudentAllExamResult = "Student All Exam Result";
+
+    // Homework reports
+    public const string DailyHomeworkReport = "Daily Homework Report";
+    public const string ClasswiseHomeworkReport = "Class-wise Homework Report";
+    public const string SubjectwiseHomeworkReport = "Subject-wise Homework Report";
+    public const string TeacherwiseHomeworkReport = "Teacher-wise Homework Report";
+    public const string StudentwiseHomeworkSummaryReport = "Student-wise Homework Summary Report";
+    public const string HomeworkCompletionStatusReport = "Homework Completion Status Report";
+    public const string PendingHomeworkReport = "Pending Homework Report";
+    public const string OverdueHomeworkReport = "Overdue Homework Report";
+    public const string HomeworkSubmissionHistoryReport = "Homework Submission History Report";
+    public const string HomeworkWithAttachmentsReport = "Homework with Attachments Report";
+    public const string HomeworkAcknowledgementReport = "Homework Acknowledgement Report";
+
+    // Subject Performance & Analysis reports
+    public const string AverageSubjectMarkAnalysis = "Average Subject Mark Analysis";
+    public const string SubjectAverageClassMarkAnalysis = "Subject Average Class Mark Analysis";
+    public const string StudentGradeAnalysisSubjectWise = "Student Grade Analysis Subject Wise";
+    public const string SubjectWiseGradeList = "Subject Wise Grade List";
+    public const string ResultListPassFailAnalysisSubjectWise = "Result List Pass/Fail Analysis Subject Wise";
+    public const string ResultListSubjectGradeAnalysis = "Result List Subject Grade Analysis";
+    public const string ResultListWithSubject = "Result List With Subject";
+    public const string ResultListWithSubjectFailedDetails = "Result List With Subject Failed Details";
+    public const string ResultListWithSubjectGrade = "Result List With Subject Grade";
+    public const string ResultListWithSubjectSmall = "Result List With Subject Small";
+    public const string ResultListWithSubjectWithGrace = "Result List With Subject With Grace";
 }

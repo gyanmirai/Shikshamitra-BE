@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.Receipts.Dtos;
 using ShikshaMitra.Finance.Receipts;
 using ShikshaMitra.Students;
@@ -26,6 +27,7 @@ public class FeeReceiptAppService(
     IFeePaymentReceiptRepository receiptRepository,
     FeeReceiptBlobManager blobManager,
     IFeeReceiptPdfGenerator pdfGenerator,
+    FinanceScopeAccessService financeScopeAccessService,
     IReadOnlyRepository<Student, Guid> studentRepository,
     IReadOnlyRepository<AcademicYear, Guid> academicYearRepository,
     IReadOnlyRepository<EducationBoard, Guid> boardRepository,
@@ -39,6 +41,15 @@ public class FeeReceiptAppService(
         CancellationToken cancellationToken = default)
     {
         ValidateListInput(input);
+        FinanceClassDivisionFilterValidator.Validate(input);
+
+        await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+            input.AcademicYearId,
+            input.BoardId,
+            input.EducationMediumId,
+            input.StandardId,
+            input.DivisionId,
+            cancellationToken);
 
         var filter = new FeeReceiptListFilter
         {
@@ -48,6 +59,8 @@ public class FeeReceiptAppService(
             Month             = input.Month,
             ReceiptKind       = input.ReceiptKind,
             Search            = input.Search,
+            StandardId        = input.StandardId,
+            DivisionId        = input.DivisionId,
             SkipCount         = input.SkipCount,
             MaxResultCount    = input.MaxResultCount,
         };
@@ -109,6 +122,8 @@ public class FeeReceiptAppService(
     {
         var receipt = await receiptRepository.GetAsync(id, cancellationToken: cancellationToken)
                       ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
+
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(receipt.StudentId, cancellationToken);
 
         var student      = await studentRepository.FindAsync(receipt.StudentId, cancellationToken: cancellationToken);
         var academicYear = await academicYearRepository.FindAsync(receipt.AcademicYearId, cancellationToken: cancellationToken);
@@ -188,6 +203,8 @@ public class FeeReceiptAppService(
     {
         var receipt = await receiptRepository.GetAsync(id, cancellationToken: cancellationToken)
                       ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
+
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(receipt.StudentId, cancellationToken);
 
         // Serve from blob if already generated
         if (receipt.PdfBlobName != null)

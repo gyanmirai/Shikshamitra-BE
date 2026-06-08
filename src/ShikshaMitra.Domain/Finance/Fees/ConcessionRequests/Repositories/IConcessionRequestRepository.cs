@@ -21,6 +21,8 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
+		Guid? standardId,
+		Guid? divisionId,
 		int skip,
 		int take,
 		CancellationToken cancellationToken = default);
@@ -29,10 +31,14 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
+		Guid? standardId,
+		Guid? divisionId,
 		CancellationToken cancellationToken = default);
 
 	Task<Dictionary<ConcessionRequestStatus, int>> GetStatusCountsAsync(
 		Guid boardId,
 		Guid educationMediumId,
+		Guid? standardId,
+		Guid? divisionId,
 		CancellationToken cancellationToken = default);
 }

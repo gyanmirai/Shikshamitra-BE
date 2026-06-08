@@ -81,6 +81,10 @@ public sealed class FeeReceiptListFilter
     /// <summary>Free-text: matches receipt number, student name, or GR number.</summary>
     public string? Search { get; init; }
 
+    public Guid? StandardId { get; init; }
+
+    public Guid? DivisionId { get; init; }
+
     public int SkipCount { get; init; }
     public int MaxResultCount { get; init; } = 20;
 }

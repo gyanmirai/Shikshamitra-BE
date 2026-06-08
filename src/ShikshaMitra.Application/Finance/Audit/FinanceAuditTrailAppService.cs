@@ -24,7 +24,8 @@ public class FinanceAuditTrailAppService(
 	IRepository<FinanceAuditEvent, Guid> repository,
 	IRepository<Student, Guid> studentRepository,
 	IRepository<Standard, Guid> standardRepository,
-	IRepository<Division, Guid> divisionRepository)
+	IRepository<Division, Guid> divisionRepository,
+	FinanceScopeAccessService financeScopeAccessService)
 	: ApplicationService, IFinanceAuditTrailAppService
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -32,6 +33,22 @@ public class FinanceAuditTrailAppService(
 	public async Task<PagedResultDto<FinanceAuditEventDto>> GetListAsync(FinanceAuditEventListRequestDto input)
 	{
 		await EnsureCanViewFinanceAuditAsync();
+
+		if (input.StudentId.HasValue)
+		{
+			await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId.Value);
+		}
+
+		if (input.AcademicYearId.HasValue)
+		{
+			await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+				input.AcademicYearId.Value,
+				null,
+				null,
+				null,
+				null);
+		}
+
 		var query = await repository.GetQueryableAsync();
 		query = ApplyFilters(query, input);
 		var total = await AsyncExecuter.CountAsync(query);
@@ -79,6 +96,22 @@ public class FinanceAuditTrailAppService(
 				.Take(NormalizeMaxResultCount(input.MaxResultCount)));
 
 		var dtos = rows.Select(ToDto).ToList();
+
+		var sampleEvent = rows.FirstOrDefault();
+		if (sampleEvent?.StudentId.HasValue == true)
+		{
+			await financeScopeAccessService.EnsureStudentAccessibleAsync(sampleEvent.StudentId.Value);
+		}
+		else if (sampleEvent != null)
+		{
+			await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+				sampleEvent.AcademicYearId,
+				null,
+				null,
+				null,
+				null);
+		}
+
 		return new FinanceAuditCorrelationDto
 		{
 			CorrelationId = normalized,
@@ -95,6 +128,21 @@ public class FinanceAuditTrailAppService(
 	{
 		await EnsureCanViewFinanceAuditAsync();
 		var entity = await repository.GetAsync(id);
+
+		if (entity.StudentId.HasValue)
+		{
+			await financeScopeAccessService.EnsureStudentAccessibleAsync(entity.StudentId.Value);
+		}
+		else
+		{
+			await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+				entity.AcademicYearId,
+				null,
+				null,
+				null,
+				null);
+		}
+
 		return ToDto(entity);
 	}
 
@@ -102,6 +150,12 @@ public class FinanceAuditTrailAppService(
 		FinanceAuditStudentLookupRequestDto input)
 	{
 		await EnsureCanViewFinanceAuditAsync();
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			input.AcademicYearId,
+			null,
+			null,
+			null,
+			null);
 
 		var search = input.Search?.Trim() ?? string.Empty;
 		if (string.IsNullOrWhiteSpace(search))

@@ -24,6 +24,7 @@ using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Audit;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -71,6 +72,7 @@ public class FeeCollectionAppService(
 	FeeReceiptManager feeReceiptManager,
 	IFeePaymentReceiptRepository feePaymentReceiptRepository,
 	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
+	FinanceScopeAccessService financeScopeAccessService,
 	IAsyncQueryableExecuter asyncExecuter,
 	IClock clock
 ) : ApplicationService, IFeeCollectionAppService
@@ -91,12 +93,21 @@ public class FeeCollectionAppService(
 		EnsureNotEmpty(input.AcademicYearId, nameof(input.AcademicYearId));
 		EnsureNotEmpty(input.BoardId, nameof(input.BoardId));
 		EnsureNotEmpty(input.EducationMediumId, nameof(input.EducationMediumId));
+		FinanceClassDivisionFilterValidator.Validate(input);
 	}
 
 	public async Task<PagedResultDto<FeeCollectionSummaryItemDto>> GetSummaryAsync(
 		GetFeeCollectionSummaryInput input,
 		CancellationToken cancellationToken = default)
 	{
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			input.AcademicYearId,
+			input.BoardId,
+			input.EducationMediumId,
+			input.StandardId,
+			input.DivisionId,
+			cancellationToken);
+
 		var allRows = await BuildRawRowsAsync(input, cancellationToken);
 		var filtered = ApplyStatusFilter(allRows, input.Status);
 
@@ -116,6 +127,14 @@ public class FeeCollectionAppService(
 		FeeCollectionExportRequestDto input,
 		CancellationToken cancellationToken = default)
 	{
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			input.AcademicYearId,
+			input.BoardId,
+			input.EducationMediumId,
+			input.StandardId,
+			input.DivisionId,
+			cancellationToken);
+
 		var filterInput = new GetFeeCollectionSummaryInput
 		{
 			AcademicYearId    = input.AcademicYearId,

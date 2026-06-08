@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -22,9 +23,11 @@ public interface IConcessionRequestAppService : IApplicationService
 	Task<ConcessionCancellationResponseDto> CancelAsync(Guid id);
 }
 
-public class GetConcessionApplicationsInput : PagedResultRequestDto
+public class GetConcessionApplicationsInput : PagedResultRequestDto, IFinanceClassDivisionFilter
 {
 	public Guid BoardId { get; set; }
 	public Guid EducationMediumId { get; set; }
 	public int? Status { get; set; }
+	public Guid? StandardId { get; set; }
+	public Guid? DivisionId { get; set; }
 }

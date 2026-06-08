@@ -30,6 +30,7 @@ namespace ShikshaMitra.Finance.Accounts.Reconciliation;
 public class ReconciliationAppService(
     IFeePaymentReceiptRepository receiptRepository,
     ReconciliationManager reconciliationManager,
+    FinanceScopeAccessService financeScopeAccessService,
     ICurrentUser currentUser,
     ILogger<ReconciliationAppService> logger
 ) : ApplicationService, IReconciliationAppService
@@ -45,6 +46,14 @@ public class ReconciliationAppService(
     {
         if (input.AcademicYearId == Guid.Empty)
             throw new UserFriendlyException("AcademicYearId is required.");
+
+        await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+            input.AcademicYearId,
+            null,
+            null,
+            null,
+            null,
+            cancellationToken);
 
         var filter = new ReconciliationListFilter
         {
@@ -89,6 +98,14 @@ public class ReconciliationAppService(
         int? year,
         CancellationToken cancellationToken = default)
     {
+        await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+            academicYearId,
+            null,
+            null,
+            null,
+            null,
+            cancellationToken);
+
         return await GetTabCountsCoreAsync(academicYearId, month, year, cancellationToken);
     }
 
@@ -104,6 +121,9 @@ public class ReconciliationAppService(
         var validation = validator.Validate(input);
         if (!validation.IsValid)
             throw new UserFriendlyException(validation.Errors[0].ErrorMessage);
+
+        var provisionalForScope = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(provisionalForScope.StudentId, cancellationToken);
 
         var provisional = await reconciliationManager.ApproveAsync(
             provisionalReceiptId, input.Remarks, cancellationToken);
@@ -132,6 +152,9 @@ public class ReconciliationAppService(
         var validation = validator.Validate(input);
         if (!validation.IsValid)
             throw new UserFriendlyException(validation.Errors[0].ErrorMessage);
+
+        var provisionalForScope = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(provisionalForScope.StudentId, cancellationToken);
 
         var provisional = await reconciliationManager.RejectAsync(
             provisionalReceiptId, input.Remarks, cancellationToken);

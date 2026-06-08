@@ -60,6 +60,8 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 	public Task<ConcessionApplicationsDto> GetApplicationsAsync(
 		[FromQuery] Guid boardId,
 		[FromQuery] Guid educationMediumId,
+		[FromQuery] Guid? standardId = null,
+		[FromQuery] Guid? divisionId = null,
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 20,
 		[FromQuery] int? status = null) =>
@@ -67,6 +69,8 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 		{
 			BoardId = boardId,
 			EducationMediumId = educationMediumId,
+			StandardId = standardId,
+			DivisionId = divisionId,
 			SkipCount = (page - 1) * pageSize,
 			MaxResultCount = pageSize,
 			Status = status,

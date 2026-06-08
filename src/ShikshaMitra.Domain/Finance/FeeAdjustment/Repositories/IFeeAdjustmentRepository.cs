@@ -28,6 +28,8 @@ public interface IFeeAdjustmentRepository : IRepository<FeeAdjustmentRequest, Gu
         FeeAdjustmentStatus? status,
         bool? completedOnly,
         string? filter,
+        Guid? standardId,
+        Guid? divisionId,
         int skip,
         int take,
         CancellationToken cancellationToken = default);
@@ -39,12 +41,16 @@ public interface IFeeAdjustmentRepository : IRepository<FeeAdjustmentRequest, Gu
         FeeAdjustmentStatus? status,
         bool? completedOnly,
         string? filter,
+        Guid? standardId,
+        Guid? divisionId,
         CancellationToken cancellationToken = default);
 
     Task<Dictionary<FeeAdjustmentStatus, int>> GetStatusCountsAsync(
         Guid boardId,
         Guid educationMediumId,
         Guid academicYearId,
+        Guid? standardId,
+        Guid? divisionId,
         CancellationToken cancellationToken = default);
 
     Task<int> GetCountForVoucherAsync(CancellationToken cancellationToken = default);

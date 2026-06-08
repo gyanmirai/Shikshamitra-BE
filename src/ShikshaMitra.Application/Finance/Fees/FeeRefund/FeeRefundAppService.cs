@@ -7,6 +7,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.FeeRefund.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;
@@ -28,6 +29,7 @@ public class FeeRefundAppService(
     IRepository<Student, Guid> studentRepository,
     IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
     FeeRefundManager feeRefundManager,
+    FinanceScopeAccessService financeScopeAccessService,
     ICurrentUser currentUser,
     IUnitOfWorkManager unitOfWorkManager
 ) : ApplicationService, IFeeRefundAppService
@@ -37,9 +39,28 @@ public class FeeRefundAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     public async Task<PagedResultDto<FeeRefundRequestDto>> GetListAsync(GetFeeRefundsInput input)
     {
+        FinanceClassDivisionFilterValidator.Validate(input);
+
+        if (input.StudentId.HasValue)
+        {
+            await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId.Value);
+        }
+
+        if (input.AcademicMediumId.HasValue)
+        {
+            await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+                null,
+                null,
+                input.AcademicMediumId.Value,
+                input.StandardId,
+                input.DivisionId);
+        }
+
         var (items, totalCount) = await feeRefundRepository.GetListWithDetailsAsync(
             studentId: input.StudentId,
             academicMediumId: input.AcademicMediumId,
+            standardId: input.StandardId,
+            divisionId: input.DivisionId,
             status: input.Status,
             search: input.Search,
             skipCount: input.SkipCount,
@@ -60,6 +81,8 @@ public class FeeRefundAppService(
             ?? throw new BusinessException(FeeRefundErrorCodes.RefundNotFound)
                 .WithData("Id", id);
 
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+
         var studentMap = await BuildStudentMapAsync([request.StudentId]);
         var dto = MapToDto(request, studentMap);
 
@@ -73,6 +96,8 @@ public class FeeRefundAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     public async Task<RefundEligibilityDto> GetEligibilityAsync(Guid studentId, Guid academicYearId)
     {
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
+
         var dueFees = await dueFeeRepository.GetListAsync(
             df => df.StudentId == studentId && df.PaidAmount > 0);
 
@@ -149,6 +174,8 @@ public class FeeRefundAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add)]
     public async Task<FeeRefundRequestDto> CreateAsync(CreateFeeRefundRequestDto input)
     {
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
+
         using var uow = unitOfWorkManager.Begin(isTransactional: true);
 
         var lines = input.Lines
@@ -176,6 +203,8 @@ public class FeeRefundAppService(
         var request = await feeRefundRepository.FindWithLinesAsync(id)
             ?? throw new BusinessException(FeeRefundErrorCodes.RefundNotFound)
                 .WithData("Id", id);
+
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 
         using var uow = unitOfWorkManager.Begin(isTransactional: true);
 

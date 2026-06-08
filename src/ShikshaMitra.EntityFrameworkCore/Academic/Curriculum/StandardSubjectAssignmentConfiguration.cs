@@ -39,5 +39,11 @@ public class StandardSubjectAssignmentConfiguration : IEntityTypeConfiguration<A
 			.WithOne()
 			.HasForeignKey(t => t.AssignedSubjectId)
 			.IsRequired();
+
+		// Prevent duplicate active assignments for the same (tenant, standard, subject).
+		// Filtered to IsDeleted = false so soft-deleted rows don't block re-assignment.
+		builder.HasIndex(x => new { x.TenantId, x.StandardId, x.SubjectId })
+			.IsUnique()
+			.HasFilter("\"IsDeleted\" = false");
 	}
 }

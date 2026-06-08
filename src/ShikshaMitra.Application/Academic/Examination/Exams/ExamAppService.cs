@@ -87,6 +87,8 @@ public class ExamAppService(
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 
+		await ValidateScheduleConflictsAsync(examId, exam, input);
+
 		var schedules = input.Subjects.Select(s => (
 			s.SubjectId,
 			s.ElectiveGroupId,
@@ -614,5 +616,80 @@ public class ExamAppService(
 			PublishedAt = DateTime.UtcNow,
 			StudentsCount = studentCount
 		};
+	}
+
+	/// <summary>
+	/// Validates that no subject in the incoming schedule overlaps in time with any
+	/// subject already scheduled in another exam for the same class and a shared division.
+	/// Also detects exact-duplicate subject schedules (same subject, same time slot).
+	/// </summary>
+	private async Task ValidateScheduleConflictsAsync(Guid examId, Exam currentExam, ExamScheduleRequestDto input)
+	{
+		// Only validate entries that have a fully-specified time window
+		var incomingScheduled = input.Subjects
+			.Where(s => s.StartTime.HasValue && s.EndTime.HasValue)
+			.ToList();
+
+		if (incomingScheduled.Count == 0)
+			return;
+
+		var currentDivisionIds = currentExam.ExamDivisions
+			.Select(d => d.DivisionId)
+			.ToHashSet();
+
+		if (currentDivisionIds.Count == 0)
+			return;
+
+		// Load all other exams for the same standard (with divisions + subjects)
+		var otherExamsQuery = (await examRepository.WithDetailsAsync())
+			.Where(e => e.Id != examId && e.StandardId == currentExam.StandardId);
+
+		var otherExams = await AsyncExecuter.ToListAsync(otherExamsQuery);
+
+		// Keep only exams that share at least one division with the current exam
+		var conflictCandidateSubjects = otherExams
+			.Where(e => e.ExamDivisions.Any(d => currentDivisionIds.Contains(d.DivisionId)))
+			.SelectMany(e => e.ExamSubjects)
+			.Where(es => es.StartTime.HasValue && es.EndTime.HasValue)
+			.ToList();
+
+		if (conflictCandidateSubjects.Count == 0)
+			return;
+
+		foreach (var incoming in incomingScheduled)
+		{
+			var incomingStart = incoming.StartTime!.Value;
+			var incomingEnd = incoming.EndTime!.Value;
+
+			// Find all existing subjects on the same day whose window overlaps
+			var dayOverlaps = conflictCandidateSubjects
+				.Where(es =>
+					es.StartTime!.Value.Date == incomingStart.Date &&
+					es.StartTime < incomingEnd &&
+					es.EndTime > incomingStart)
+				.ToList();
+
+			if (dayOverlaps.Count == 0)
+				continue;
+
+			// More specific check first: same subject already scheduled in the overlapping slot
+			var subjectId = incoming.ElectiveGroupId ?? incoming.SubjectId;
+			var duplicateSubject = dayOverlaps
+				.FirstOrDefault(es => es.SubjectId == subjectId);
+
+			if (duplicateSubject != null)
+			{
+				throw new BusinessException(ExamErrorCodes.DuplicateSubjectSchedule)
+					.WithData("SubjectId", subjectId)
+					.WithData("ExamDate", incomingStart.Date.ToString("yyyy-MM-dd"));
+			}
+
+			// General overlap: a different subject in the same class+division occupies this time slot
+			var conflictingSubject = dayOverlaps.First();
+			throw new BusinessException(ExamErrorCodes.ScheduleOverlap)
+				.WithData("ExamDate", incomingStart.Date.ToString("yyyy-MM-dd"))
+				.WithData("StartTime", conflictingSubject.StartTime!.Value.ToString("HH:mm"))
+				.WithData("EndTime", conflictingSubject.EndTime!.Value.ToString("HH:mm"));
+		}
 	}
 }

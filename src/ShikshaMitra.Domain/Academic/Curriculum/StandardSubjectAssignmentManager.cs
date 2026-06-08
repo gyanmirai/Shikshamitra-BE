@@ -16,7 +16,7 @@ public class StandardSubjectAssignmentManager(
 	IGuidGenerator guidGenerator
 ) : DomainService
 {
-	public AssignedSubject AssignSubject(
+	public async Task<AssignedSubject> AssignSubjectAsync(
 		Guid standardId,
 		Guid subjectId,
 		string subjectCode,
@@ -26,8 +26,18 @@ public class StandardSubjectAssignmentManager(
 		string? prerequisites = null,
 		string? description = null,
 		string? subjectColor = null
-	) =>
-		new AssignedSubject(
+	)
+	{
+		var alreadyExists = await assignmentRepo.AnyAsync(a =>
+			a.StandardId == standardId && a.SubjectId == subjectId
+		);
+
+		if (alreadyExists)
+			throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectAssignment)
+				.WithData("StandardId", standardId)
+				.WithData("SubjectId", subjectId);
+
+		return new AssignedSubject(
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			standardId: standardId,
@@ -39,6 +49,7 @@ public class StandardSubjectAssignmentManager(
 			prerequisites: prerequisites,
 			description: description
 		);
+	}
 
 	public async Task UpdateTeachersAsync(
 		Guid assignmentId,

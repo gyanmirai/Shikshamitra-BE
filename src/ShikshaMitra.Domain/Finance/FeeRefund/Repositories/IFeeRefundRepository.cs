@@ -19,6 +19,8 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
     Task<(List<FeeRefundRequest> Items, int TotalCount)> GetListWithDetailsAsync(
         Guid? studentId = null,
         Guid? academicMediumId = null,
+        Guid? standardId = null,
+        Guid? divisionId = null,
         FeeRefundStatus? status = null,
         string? search = null,
         int skipCount = 0,

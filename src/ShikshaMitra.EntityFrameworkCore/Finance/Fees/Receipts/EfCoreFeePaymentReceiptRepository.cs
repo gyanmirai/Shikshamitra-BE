@@ -271,6 +271,21 @@ public class EfCoreFeePaymentReceiptRepository(
         if (filter.ReceiptKind.HasValue)
             query = query.Where(r => r.ReceiptKind == filter.ReceiptKind.Value);
 
+        // ── Class / division filter (via student) ─────────────────────────────
+        if (filter.StandardId.HasValue || filter.DivisionId.HasValue)
+        {
+            var studentQ = dbContext.Set<Student>().AsQueryable();
+
+            if (filter.StandardId.HasValue)
+                studentQ = studentQ.Where(s => s.StandardId == filter.StandardId.Value);
+
+            if (filter.DivisionId.HasValue)
+                studentQ = studentQ.Where(s => s.DivisionId == filter.DivisionId.Value);
+
+            var studentIds = studentQ.Select(s => s.Id);
+            query = query.Where(r => studentIds.Contains(r.StudentId));
+        }
+
         // ── Free-text search ──────────────────────────────────────────────────
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {

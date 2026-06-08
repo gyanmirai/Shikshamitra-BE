@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.Receipts.Dtos;
 using ShikshaMitra.Finance.Receipts;
 using ShikshaMitra.Students;
@@ -40,13 +41,14 @@ public class FeeReceiptAppService(
         CancellationToken cancellationToken = default)
     {
         ValidateListInput(input);
+        FinanceClassDivisionFilterValidator.Validate(input);
 
         await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
             input.AcademicYearId,
             input.BoardId,
             input.EducationMediumId,
-            null,
-            null,
+            input.StandardId,
+            input.DivisionId,
             cancellationToken);
 
         var filter = new FeeReceiptListFilter
@@ -57,6 +59,8 @@ public class FeeReceiptAppService(
             Month             = input.Month,
             ReceiptKind       = input.ReceiptKind,
             Search            = input.Search,
+            StandardId        = input.StandardId,
+            DivisionId        = input.DivisionId,
             SkipCount         = input.SkipCount,
             MaxResultCount    = input.MaxResultCount,
         };

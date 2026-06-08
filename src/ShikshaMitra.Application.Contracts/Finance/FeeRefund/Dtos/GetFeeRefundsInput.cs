@@ -1,10 +1,11 @@
 using System;
+using ShikshaMitra.Finance.Common;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Finance.FeeRefund.Dtos;
 
 /// <summary>Paged + filtered input for the refund list endpoint.</summary>
-public class GetFeeRefundsInput : PagedAndSortedResultRequestDto
+public class GetFeeRefundsInput : PagedAndSortedResultRequestDto, IFinanceClassDivisionFilter
 {
     public Guid? StudentId { get; set; }
 
@@ -18,4 +19,8 @@ public class GetFeeRefundsInput : PagedAndSortedResultRequestDto
 
     /// <summary>Free-text search on student name, GR number, or voucher number.</summary>
     public string? Search { get; set; }
+
+    public Guid? StandardId { get; set; }
+
+    public Guid? DivisionId { get; set; }
 }

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Collections;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.FeeAdjustment.Dtos;
@@ -178,18 +179,20 @@ public class FeeAdjustmentAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View)]
     public async Task<FeeAdjustmentApplicationsDto> GetApplicationsAsync(GetFeeAdjustmentApplicationsInput input)
     {
+        FinanceClassDivisionFilterValidator.Validate(input);
+
         await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
             input.AcademicYearId,
             input.BoardId,
             input.EducationMediumId,
-            null,
-            null);
+            input.StandardId,
+            input.DivisionId);
 
         var pageSize = Math.Min(Math.Max(input.PageSize, 1), 100);
         var skip = (Math.Max(input.Page, 1) - 1) * pageSize;
 
         var counts = await feeAdjustmentRepository.GetStatusCountsAsync(
-            input.BoardId, input.EducationMediumId, input.AcademicYearId);
+            input.BoardId, input.EducationMediumId, input.AcademicYearId, input.StandardId, input.DivisionId);
 
         var items = await feeAdjustmentRepository.GetListForApplicationsAsync(
             input.BoardId,
@@ -198,6 +201,8 @@ public class FeeAdjustmentAppService(
             input.Status,
             input.CompletedOnly,
             input.Filter,
+            input.StandardId,
+            input.DivisionId,
             skip,
             pageSize);
 
@@ -207,7 +212,9 @@ public class FeeAdjustmentAppService(
             input.AcademicYearId,
             input.Status,
             input.CompletedOnly,
-            input.Filter);
+            input.Filter,
+            input.StandardId,
+            input.DivisionId);
 
         var studentIds = items.Select(i => i.StudentId).Distinct().ToList();
         var students = studentIds.Count > 0

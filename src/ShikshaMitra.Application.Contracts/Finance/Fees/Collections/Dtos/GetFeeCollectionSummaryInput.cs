@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.FeeCollection;
 using Volo.Abp.Application.Dtos;
 
@@ -10,7 +11,7 @@ namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 /// Uses ABP standard <see cref="PagedAndSortedResultRequestDto"/> for
 /// skip-count pagination and server-side sorting.
 /// </summary>
-public class GetFeeCollectionSummaryInput : PagedAndSortedResultRequestDto
+public class GetFeeCollectionSummaryInput : PagedAndSortedResultRequestDto, IFinanceClassDivisionFilter
 {
 	/// <summary>Maximum page size cap.</summary>
 	public const int MaxPageSize = 100;

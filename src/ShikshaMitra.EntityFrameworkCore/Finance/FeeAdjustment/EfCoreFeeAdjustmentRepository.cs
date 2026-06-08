@@ -65,11 +65,14 @@ public class EfCoreFeeAdjustmentRepository(IDbContextProvider<ShikshaMitraDbCont
         FeeAdjustmentStatus? status,
         bool? completedOnly,
         string? filter,
+        Guid? standardId,
+        Guid? divisionId,
         int skip,
         int take,
         CancellationToken cancellationToken = default)
     {
-        var query = await BuildApplicationsQueryAsync(boardId, educationMediumId, academicYearId, status, completedOnly, filter, cancellationToken);
+        var query = await BuildApplicationsQueryAsync(
+            boardId, educationMediumId, academicYearId, status, completedOnly, filter, standardId, divisionId, cancellationToken);
         return await query
             .OrderByDescending(x => x.CreationTime)
             .Skip(skip)
@@ -84,9 +87,12 @@ public class EfCoreFeeAdjustmentRepository(IDbContextProvider<ShikshaMitraDbCont
         FeeAdjustmentStatus? status,
         bool? completedOnly,
         string? filter,
+        Guid? standardId,
+        Guid? divisionId,
         CancellationToken cancellationToken = default)
     {
-        var query = await BuildApplicationsQueryAsync(boardId, educationMediumId, academicYearId, status, completedOnly, filter, cancellationToken);
+        var query = await BuildApplicationsQueryAsync(
+            boardId, educationMediumId, academicYearId, status, completedOnly, filter, standardId, divisionId, cancellationToken);
         return await query.CountAsync(cancellationToken);
     }
 
@@ -94,18 +100,17 @@ public class EfCoreFeeAdjustmentRepository(IDbContextProvider<ShikshaMitraDbCont
         Guid boardId,
         Guid educationMediumId,
         Guid academicYearId,
+        Guid? standardId,
+        Guid? divisionId,
         CancellationToken cancellationToken = default)
     {
-        var queryable = await GetQueryableAsync();
-        var list = await queryable
-            .Where(x => x.BoardId == boardId
-                && x.EducationMediumId == educationMediumId
-                && x.AcademicYearId == academicYearId)
+        var query = await BuildApplicationsQueryAsync(
+            boardId, educationMediumId, academicYearId, status: null, completedOnly: null, filter: null, standardId, divisionId, cancellationToken);
+
+        return await query
             .GroupBy(x => x.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
-            .ToListAsync(cancellationToken);
-
-        return list.ToDictionary(x => x.Status, x => x.Count);
+            .ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
     }
 
     public async Task<int> GetCountForVoucherAsync(CancellationToken cancellationToken = default)
@@ -121,6 +126,8 @@ public class EfCoreFeeAdjustmentRepository(IDbContextProvider<ShikshaMitraDbCont
         FeeAdjustmentStatus? status,
         bool? completedOnly,
         string? filter,
+        Guid? standardId,
+        Guid? divisionId,
         CancellationToken cancellationToken)
     {
         var queryable = await GetQueryableAsync();
@@ -128,6 +135,16 @@ public class EfCoreFeeAdjustmentRepository(IDbContextProvider<ShikshaMitraDbCont
             x.BoardId == boardId
             && x.EducationMediumId == educationMediumId
             && x.AcademicYearId == academicYearId);
+
+        if (standardId.HasValue)
+        {
+            query = query.Where(x => x.StandardId == standardId.Value);
+        }
+
+        if (divisionId.HasValue)
+        {
+            query = query.Where(x => x.DivisionId == divisionId.Value);
+        }
 
         if (completedOnly == true)
         {

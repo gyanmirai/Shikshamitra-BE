@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions;
+using ShikshaMitra.Students;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 
@@ -47,51 +48,83 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
+		Guid? standardId,
+		Guid? divisionId,
 		int skip,
 		int take,
 		CancellationToken cancellationToken = default)
 	{
-		var filtered = await FilterApplicationsAsync(boardId, educationMediumId, status, cancellationToken);
-		return filtered
+		var query = await BuildApplicationsQueryAsync(
+			boardId, educationMediumId, status, standardId, divisionId, cancellationToken);
+
+		return await query
 			.OrderByDescending(x => x.CreationTime)
 			.Skip(skip)
 			.Take(take)
-			.ToList();
+			.ToListAsync(cancellationToken);
 	}
 
 	public async Task<int> CountForApplicationsAsync(
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
+		Guid? standardId,
+		Guid? divisionId,
 		CancellationToken cancellationToken = default)
 	{
-		var filtered = await FilterApplicationsAsync(boardId, educationMediumId, status, cancellationToken);
-		return filtered.Count;
+		var query = await BuildApplicationsQueryAsync(
+			boardId, educationMediumId, status, standardId, divisionId, cancellationToken);
+		return await query.CountAsync(cancellationToken);
 	}
 
 	public async Task<Dictionary<ConcessionRequestStatus, int>> GetStatusCountsAsync(
 		Guid boardId,
 		Guid educationMediumId,
+		Guid? standardId,
+		Guid? divisionId,
 		CancellationToken cancellationToken = default)
 	{
-		var filtered = await FilterApplicationsAsync(boardId, educationMediumId, null, cancellationToken);
-		return filtered
+		var query = await BuildApplicationsQueryAsync(
+			boardId, educationMediumId, status: null, standardId, divisionId, cancellationToken);
+
+		return await query
 			.GroupBy(x => x.Status)
-			.ToDictionary(g => g.Key, g => g.Count());
+			.Select(g => new { Status = g.Key, Count = g.Count() })
+			.ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
 	}
 
-	private async Task<List<ConcessionRequest>> FilterApplicationsAsync(
+	private async Task<IQueryable<ConcessionRequest>> BuildApplicationsQueryAsync(
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
+		Guid? standardId,
+		Guid? divisionId,
 		CancellationToken cancellationToken)
 	{
+		var db = await GetDbContextAsync();
 		var queryable = await GetQueryableAsync();
-		var list = await queryable.ToListAsync(cancellationToken);
 
-		return list
-			.Where(x => x.GetBoardId() == boardId && x.GetEducationMediumId() == educationMediumId)
-			.Where(x => status == null || x.Status == status)
-			.ToList();
+		var studentIds = db.Set<Student>()
+			.Where(s => s.AcademicBoardId == boardId && s.AcademicMediumId == educationMediumId);
+
+		if (standardId.HasValue)
+		{
+			studentIds = studentIds.Where(s => s.StandardId == standardId.Value);
+		}
+
+		if (divisionId.HasValue)
+		{
+			studentIds = studentIds.Where(s => s.DivisionId == divisionId.Value);
+		}
+
+		var allowedStudentIds = studentIds.Select(s => s.Id);
+		var query = queryable.Where(c => allowedStudentIds.Contains(c.StudentId));
+
+		if (status.HasValue)
+		{
+			query = query.Where(c => c.Status == status.Value);
+		}
+
+		return query;
 	}
 }

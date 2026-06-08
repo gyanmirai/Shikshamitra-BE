@@ -7,6 +7,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.FeeRefund.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;
@@ -38,6 +39,8 @@ public class FeeRefundAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     public async Task<PagedResultDto<FeeRefundRequestDto>> GetListAsync(GetFeeRefundsInput input)
     {
+        FinanceClassDivisionFilterValidator.Validate(input);
+
         if (input.StudentId.HasValue)
         {
             await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId.Value);
@@ -49,13 +52,15 @@ public class FeeRefundAppService(
                 null,
                 null,
                 input.AcademicMediumId.Value,
-                null,
-                null);
+                input.StandardId,
+                input.DivisionId);
         }
 
         var (items, totalCount) = await feeRefundRepository.GetListWithDetailsAsync(
             studentId: input.StudentId,
             academicMediumId: input.AcademicMediumId,
+            standardId: input.StandardId,
+            divisionId: input.DivisionId,
             status: input.Status,
             search: input.Search,
             skipCount: input.SkipCount,

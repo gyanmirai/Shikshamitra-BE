@@ -30,6 +30,7 @@ public class AcademicReportFilterDto
     public double? MinMarks { get; set; }
     public double? MaxMarks { get; set; }
     public List<Guid>? StudentIds { get; set; }
+    public List<Guid>? AssignmentIds { get; set; }
 
     /// <summary>
     /// Upcoming = 1, In Progress = 2, Completed = 3
@@ -146,6 +147,24 @@ public static class AcademicReportTypes
     // Student-Wise Full Result reports
     public const string StudentAllBatchResult = "Student All Batch Result";
     public const string StudentAllExamResult = "Student All Exam Result";
+
+    // Analytics & Monitoring reports
+    public const string HomeworkLoadAnalysisReport = "Homework Load Analysis Report";
+    public const string AssignmentLoadAnalysisReport = "Assignment Load Analysis Report";
+    public const string TeacherPerformanceInHomeworkEvaluationReport = "Teacher Performance in Homework Evaluation Report";
+    public const string StudentPerformanceTrendReport = "Student Performance Trend Report";
+    public const string ClasswiseOverallHomeworkAssignmentReport = "Class-wise Overall Homework & Assignment Report";
+
+    // Assignment reports
+    public const string AssignmentIssuanceReport = "Assignment Issuance Report";
+    public const string AssignmentSubmissionReport = "Assignment Submission Report";
+    public const string AssignmentEvaluationReport = "Assignment Evaluation Report";
+    public const string AssignmentMarksReport = "Assignment Marks Report";
+    public const string LateSubmissionReport = "Late Submission Report";
+    public const string MissingAssignmentReport = "Missing Assignment Report";
+    public const string AssignmentFeedbackReport = "Assignment Feedback Report";
+    public const string AssignmentGradeDistributionReport = "Assignment Grade Distribution Report";
+    public const string AssignmentPerformanceReport = "Assignment Performance Report";
 
     // Homework reports
     public const string DailyHomeworkReport = "Daily Homework Report";

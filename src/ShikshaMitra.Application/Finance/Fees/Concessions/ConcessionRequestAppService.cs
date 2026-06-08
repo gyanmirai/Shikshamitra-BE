@@ -33,6 +33,7 @@ public class ConcessionRequestAppService(
 	IRepository<DueFee, Guid> dueFeeRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
+	FinanceScopeAccessService financeScopeAccessService,
 	ICurrentUser currentUser,
 	IGuidGenerator guidGenerator)
 	: ApplicationService, IConcessionRequestAppService
@@ -107,6 +108,13 @@ public class ConcessionRequestAppService(
 
 	public async Task<ConcessionApplicationsDto> GetApplicationsAsync(GetConcessionApplicationsInput input)
 	{
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			null,
+			input.BoardId,
+			input.EducationMediumId,
+			null,
+			null);
+
 		var pageSize = Math.Min(input.MaxResultCount, 100);
 		var skip = input.SkipCount;
 		var status = input.Status.HasValue ? (ConcessionRequestStatus)input.Status.Value : (ConcessionRequestStatus?)null;

@@ -26,6 +26,7 @@ public class FeeReceiptAppService(
     IFeePaymentReceiptRepository receiptRepository,
     FeeReceiptBlobManager blobManager,
     IFeeReceiptPdfGenerator pdfGenerator,
+    FinanceScopeAccessService financeScopeAccessService,
     IReadOnlyRepository<Student, Guid> studentRepository,
     IReadOnlyRepository<AcademicYear, Guid> academicYearRepository,
     IReadOnlyRepository<EducationBoard, Guid> boardRepository,
@@ -39,6 +40,14 @@ public class FeeReceiptAppService(
         CancellationToken cancellationToken = default)
     {
         ValidateListInput(input);
+
+        await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+            input.AcademicYearId,
+            input.BoardId,
+            input.EducationMediumId,
+            null,
+            null,
+            cancellationToken);
 
         var filter = new FeeReceiptListFilter
         {
@@ -109,6 +118,8 @@ public class FeeReceiptAppService(
     {
         var receipt = await receiptRepository.GetAsync(id, cancellationToken: cancellationToken)
                       ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
+
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(receipt.StudentId, cancellationToken);
 
         var student      = await studentRepository.FindAsync(receipt.StudentId, cancellationToken: cancellationToken);
         var academicYear = await academicYearRepository.FindAsync(receipt.AcademicYearId, cancellationToken: cancellationToken);
@@ -188,6 +199,8 @@ public class FeeReceiptAppService(
     {
         var receipt = await receiptRepository.GetAsync(id, cancellationToken: cancellationToken)
                       ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
+
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(receipt.StudentId, cancellationToken);
 
         // Serve from blob if already generated
         if (receipt.PdfBlobName != null)

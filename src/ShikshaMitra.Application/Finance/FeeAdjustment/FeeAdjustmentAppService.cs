@@ -35,6 +35,7 @@ public class FeeAdjustmentAppService(
     IRepository<Division, Guid> divisionRepository,
     IRepository<IdentityUser, Guid> identityUserRepository,
     FinanceAuditWriter financeAuditWriter,
+    FinanceScopeAccessService financeScopeAccessService,
     ICurrentUser currentUser,
     IUnitOfWorkManager unitOfWorkManager) : ApplicationService, IFeeAdjustmentAppService
 {
@@ -47,6 +48,8 @@ public class FeeAdjustmentAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View)]
     public async Task<AdjustmentEligibilityDto> GetEligibilityAsync(Guid studentId, Guid academicYearId)
     {
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
+
         var dueFees = await dueFeeRepository.GetListAsync(
             df => df.StudentId == studentId && df.PaidAmount > 0);
 
@@ -113,6 +116,8 @@ public class FeeAdjustmentAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
     public async Task<FeeAdjustmentDetailDto> CreateAsync(Guid academicYearId, CreateFeeAdjustmentDto input)
     {
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
+
         using var uow = unitOfWorkManager.Begin(isTransactional: true);
 
         var lines = input.SourceLines.Select(l => (l.DueFeeId, l.Amount)).ToList();
@@ -146,6 +151,7 @@ public class FeeAdjustmentAppService(
     public async Task<FeeAdjustmentDetailDto> UpdateAsync(Guid id, Guid academicYearId, UpdateFeeAdjustmentDto input)
     {
         var existing = await feeAdjustmentRepository.GetWithDetailsAsync(id);
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(existing.StudentId);
         existing.EnsurePending();
         await feeAdjustmentRepository.DeleteAsync(existing, autoSave: true);
 
@@ -156,6 +162,7 @@ public class FeeAdjustmentAppService(
     public async Task DeleteAsync(Guid id)
     {
         var request = await feeAdjustmentRepository.GetAsync(id);
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         request.EnsurePending();
         await feeAdjustmentRepository.DeleteAsync(request);
     }
@@ -164,12 +171,20 @@ public class FeeAdjustmentAppService(
     public async Task<FeeAdjustmentDetailDto> GetAsync(Guid id)
     {
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         return await MapDetailAsync(request);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View)]
     public async Task<FeeAdjustmentApplicationsDto> GetApplicationsAsync(GetFeeAdjustmentApplicationsInput input)
     {
+        await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+            input.AcademicYearId,
+            input.BoardId,
+            input.EducationMediumId,
+            null,
+            null);
+
         var pageSize = Math.Min(Math.Max(input.PageSize, 1), 100);
         var skip = (Math.Max(input.Page, 1) - 1) * pageSize;
 
@@ -262,6 +277,7 @@ public class FeeAdjustmentAppService(
     public async Task<FeeAdjustmentApplyContextDto> GetApplyContextAsync(Guid id)
     {
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         request.EnsureCanApply();
 
         var dueFees = await dueFeeRepository.GetListAsync(
@@ -313,6 +329,7 @@ public class FeeAdjustmentAppService(
             ?? throw new BusinessException(FeeAdjustmentErrorCodes.CannotApply);
 
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 
         if (!string.IsNullOrWhiteSpace(idempotencyKey) && request.HasIdempotencyKey(idempotencyKey))
         {
@@ -369,6 +386,7 @@ public class FeeAdjustmentAppService(
         using var uow = unitOfWorkManager.Begin(isTransactional: true);
 
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         feeAdjustmentManager.Reject(request, reviewerId, input.Message);
         await feeAdjustmentRepository.UpdateAsync(request, autoSave: true);
 

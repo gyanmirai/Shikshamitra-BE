@@ -28,6 +28,7 @@ public class ChargeAppService(
 	IRepository<IdentityUser, Guid> userRepository,
 	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
 	IRepository<Student, Guid> studentRepository,
+	FinanceScopeAccessService financeScopeAccessService,
 	ICurrentUser currentUser,
 	ChargeRequestManager chargeRequestManager,
 	FinanceAuditWriter financeAuditWriter,
@@ -80,6 +81,13 @@ public class ChargeAppService(
 
 	public async Task<ChargeListResponse> GetAllAsync(Guid academicYearId, GetChargesRequest input)
 	{
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			academicYearId,
+			input.BoardId,
+			input.EducationMediumId,
+			null,
+			null);
+
 		var pageSize = Math.Min(input.PageSize, MaxPageSize);
 		var (items, totalCount) = await chargeRequestRepository.GetChargeRequestsPagedAsync(
 			academicYearId, input.Status, input.Page, pageSize,
@@ -103,6 +111,13 @@ public class ChargeAppService(
 
 	public async Task<ChargeLineListResponse> GetLinesAsync(Guid academicYearId, GetChargeLinesRequest input)
 	{
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			academicYearId,
+			input.BoardId,
+			input.EducationMediumId,
+			null,
+			null);
+
 		var pageSize = Math.Min(input.PageSize, MaxPageSize);
 		var query = await chargeRequestRepository.GetChargeLinesQueryAsync(
 			academicYearId, input.Status, input.BoardId, input.EducationMediumId);

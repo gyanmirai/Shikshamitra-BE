@@ -906,7 +906,9 @@ public class FeeCollectionAppService(
 					.Select(r => new PaidChargeInfoDto
 					{
 						ChargeId = r.ChargeId,
-						ChargeName = chargeMap[r.ChargeId].PurposeDescription,
+						ChargeName = string.IsNullOrWhiteSpace(chargeMap[r.ChargeId].ChargeName)
+							? chargeMap[r.ChargeId].PurposeDescription
+							: chargeMap[r.ChargeId].ChargeName,
 						AmountPaid = r.Amount,
 					})
 					.ToList()
@@ -1029,7 +1031,7 @@ public class FeeCollectionAppService(
 				return new ChargeDetailDto
 				{
 					ChargeId = c.Id,
-					Name = c.PurposeDescription,
+					Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
 					Amount = net,
 					PaidAmount = paid,
 					PendingAmount = pending,
@@ -1146,7 +1148,7 @@ public class FeeCollectionAppService(
 				return new FeeChargeDetailDto
 				{
 					ChargeId = c.Id,
-					Name = c.PurposeDescription,
+					Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
 					Amount = net,
 					PaidAmount = paid,
 					PendingAmount = pending,

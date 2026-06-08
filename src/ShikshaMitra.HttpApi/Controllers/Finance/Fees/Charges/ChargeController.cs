@@ -72,6 +72,31 @@ public class ChargeController : AbpController
 	}
 
 	/// <summary>
+	/// Retrieve flat charge lines for student-grouped history views.
+	/// </summary>
+	[HttpGet("lines")]
+	[ProducesResponseType(typeof(ChargeLineListResponse), StatusCodes.Status200OK)]
+	public Task<ChargeLineListResponse> GetLinesAsync(
+		[FromQuery] Guid academicYearId,
+		[FromQuery] int page = 1,
+		[FromQuery] int pageSize = 100,
+		[FromQuery] int? status = null,
+		[FromQuery] Guid? educationMediumId = null,
+		[FromQuery] Guid? boardId = null)
+	{
+		var request = new GetChargeLinesRequest
+		{
+			Page = page,
+			PageSize = Math.Min(pageSize, MaxChargePageSize),
+			Status = status,
+			EducationMediumId = educationMediumId,
+			BoardId = boardId
+		};
+
+		return _chargeAppService.GetLinesAsync(academicYearId, request);
+	}
+
+	/// <summary>
 	/// Get detailed information about a specific charge.
 	/// </summary>
 	[HttpGet("{chargeId}")]

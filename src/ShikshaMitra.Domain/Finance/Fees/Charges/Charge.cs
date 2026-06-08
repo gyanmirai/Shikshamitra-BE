@@ -13,6 +13,8 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
+	public Guid ChargeRequestId { get; private set; }
+	public string ChargeName { get; private set; } = string.Empty;
 	public Guid ChargeCategoryId { get; private set; }
 	public Guid StudentId { get; private set; }
 	public Guid BoardId { get; private set; }
@@ -40,6 +42,8 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		Guid academicYearId,
+		Guid chargeRequestId,
+		string chargeName,
 		Guid chargeCategoryId,
 		Guid studentId,
 		Guid boardId,
@@ -57,6 +61,8 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		AcademicYearId = Check.NotNull(academicYearId, nameof(academicYearId));
+		ChargeRequestId = Check.NotNull(chargeRequestId, nameof(chargeRequestId));
+		ChargeName = Check.NotNullOrWhiteSpace(chargeName, nameof(chargeName));
 		ChargeCategoryId = Check.NotNull(chargeCategoryId, nameof(chargeCategoryId));
 		StudentId = Check.NotNull(studentId, nameof(studentId));
 		BoardId = Check.NotNull(boardId, nameof(boardId));

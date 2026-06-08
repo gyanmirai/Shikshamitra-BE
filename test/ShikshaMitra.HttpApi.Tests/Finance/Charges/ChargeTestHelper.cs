@@ -135,6 +135,7 @@ public static class ChargeTestHelper
 	{
 		return new CreateChargeRequest
 		{
+			ChargeName = TestDataHelper.UniqueName("Chrg"),
 			StudentId = studentId,
 			ChargeCategoryId = categoryId,
 			PurposeDescription = TestDataHelper.UniqueName("ChrgPurpose"),

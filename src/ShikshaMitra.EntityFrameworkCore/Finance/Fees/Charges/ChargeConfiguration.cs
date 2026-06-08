@@ -12,6 +12,10 @@ public class ChargeConfiguration : IEntityTypeConfiguration<Charge>
 		builder.ConfigureByConvention();
 
 		// Configure properties
+		builder.Property(x => x.ChargeName)
+			.IsRequired()
+			.HasMaxLength(ChargeRequest.MaxChargeNameLength);
+
 		builder.Property(x => x.PurposeDescription)
 			.IsRequired()
 			.HasMaxLength(1000);
@@ -39,6 +43,9 @@ public class ChargeConfiguration : IEntityTypeConfiguration<Charge>
 			.IsRequired();
 
 		// Configure indexes for better query performance
+		builder.HasIndex(x => x.ChargeRequestId)
+			.HasDatabaseName("IX_Charges_ChargeRequestId");
+
 		builder.HasIndex(x => new { x.AcademicYearId, x.Status })
 			.HasDatabaseName("IX_Charges_AcademicYearId_Status");
 

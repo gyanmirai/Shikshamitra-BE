@@ -11,6 +11,8 @@ public interface IChargeAppService : IApplicationService
 
 	Task<ChargeListResponse> GetAllAsync(Guid academicYearId, GetChargesRequest input);
 
+	Task<ChargeLineListResponse> GetLinesAsync(Guid academicYearId, GetChargeLinesRequest input);
+
 	Task<ChargeDetailResponse> GetByIdAsync(Guid chargeId);
 
 	Task<ChargeResponse> UpdateAsync(Guid chargeId, UpdateChargeRequest input);

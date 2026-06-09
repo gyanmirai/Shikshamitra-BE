@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -34,23 +34,16 @@ public class FinanceAuditTrailAppService(
 	{
 		await EnsureCanViewFinanceAuditAsync();
 
-		if (input.StudentId.HasValue)
-		{
-			await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId.Value);
-		}
-
-		if (input.AcademicYearId.HasValue)
-		{
-			await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-				input.AcademicYearId.Value,
-				null,
-				null,
-				null,
-				null);
-		}
-
 		var query = await repository.GetQueryableAsync();
 		query = ApplyFilters(query, input);
+
+		// Apply user scope: pass non-student events (institutional) through,
+		// but restrict student events to only those within the caller's scope.
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		query = query.Where(x =>
+			x.StudentId == null ||
+			scopedStudentIds.Contains(x.StudentId.Value));
+
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(ApplySorting(query, input.Sorting)
 			.Skip(input.SkipCount)
@@ -176,6 +169,10 @@ public class FinanceAuditTrailAppService(
 		studentQ = studentQ.Where(s =>
 			s.AcademicYearId == input.AcademicYearId &&
 			s.Status == StudentLifeCycleStatusEnum.Enrolled);
+
+		// User scope — restrict lookup to students the caller can access
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		studentQ = studentQ.Where(s => scopedStudentIds.Contains(s.Id));
 
 		if (Guid.TryParse(search, out var studentId))
 		{

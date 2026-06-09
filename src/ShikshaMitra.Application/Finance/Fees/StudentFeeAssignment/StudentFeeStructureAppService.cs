@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Finance;
 using ShikshaMitra.Students;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -27,13 +28,16 @@ public class StudentFeeStructureAppService(
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IDueFeeRepository dueFeeRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
-	DueFeeManager dueFeeManager
+	DueFeeManager dueFeeManager,
+	FinanceScopeAccessService financeScopeAccessService
 ) : ApplicationService, IStudentFeeStructureAppService
 {
 	public async Task AssignAsync(AssignStudentFeeStructureDto input)
 	{
 		var student = await studentRepository.GetAsync(input.StudentId)
 			?? throw new BusinessException("Student with given id does not exist.");
+
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
 
 		if (student.FeeStructureId != null)
 		{
@@ -76,6 +80,8 @@ public class StudentFeeStructureAppService(
 	{
 		var student = await studentRepository.GetAsync(studentId)
 			?? throw new BusinessException("Student with given id does not exist.");
+
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
 
 		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == studentId);
 

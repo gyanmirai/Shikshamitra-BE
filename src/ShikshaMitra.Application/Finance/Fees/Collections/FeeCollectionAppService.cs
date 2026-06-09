@@ -195,6 +195,10 @@ public class FeeCollectionAppService(
 				(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)));
 		}
 
+		// User scope — restrict to students accessible by the current user
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		studentQ = studentQ.Where(s => scopedStudentIds.Contains(s.Id));
+
 		var students = await asyncExecuter.ToListAsync(
 			studentQ.Select(s => new
 			{
@@ -572,6 +576,9 @@ public class FeeCollectionAppService(
 		{
 			throw new BusinessException(FeeCollectionErrorCodes.StudentAcademicYearMismatch);
 		}
+
+		// 1c. Verify the student is within the current user's scope
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
 
 		// 2. Validate and load referenced DueFees
 		var dueFeeMap = new Dictionary<Guid, DueFee>();
@@ -954,6 +961,8 @@ public class FeeCollectionAppService(
 	{
 		EnsureNotEmpty(academicYearId, "academicYearId");
 
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
+
 		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
 
 		// ── Student info ─────────────────────────────────────────────────
@@ -1075,6 +1084,8 @@ public class FeeCollectionAppService(
 		Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		EnsureNotEmpty(academicYearId, "academicYearId");
+
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
 
 		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
 		var studentSummary = BuildStudentSummary(student);

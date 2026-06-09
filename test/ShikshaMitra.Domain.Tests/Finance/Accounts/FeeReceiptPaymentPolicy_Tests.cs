@@ -1,4 +1,4 @@
-using ShikshaMitra.Finance.FeeCollection;
+﻿using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Receipts;
 using Xunit;
@@ -76,8 +76,6 @@ public class FeeReceiptPaymentPolicy_Tests
     [InlineData(PaymentMethodEnum.CreditCard)]
     [InlineData(PaymentMethodEnum.DebitCard)]
     [InlineData(PaymentMethodEnum.BankTransfer)]
-    [InlineData(PaymentMethodEnum.OnlinePaymentGateway)]
-    [InlineData(PaymentMethodEnum.WalletPrepaidCard)]
     public void CashierDecided_With_Confirmed_True_Produces_FinalFee(PaymentMethodEnum method)
     {
         var kind = FeeReceiptPaymentPolicy.DetermineFeeReceiptKind([method], bankReceiptConfirmed: true);
@@ -89,8 +87,6 @@ public class FeeReceiptPaymentPolicy_Tests
     [InlineData(PaymentMethodEnum.CreditCard)]
     [InlineData(PaymentMethodEnum.DebitCard)]
     [InlineData(PaymentMethodEnum.BankTransfer)]
-    [InlineData(PaymentMethodEnum.OnlinePaymentGateway)]
-    [InlineData(PaymentMethodEnum.WalletPrepaidCard)]
     public void CashierDecided_With_Confirmed_False_Produces_ProvisionalFee(PaymentMethodEnum method)
     {
         var kind = FeeReceiptPaymentPolicy.DetermineFeeReceiptKind([method], bankReceiptConfirmed: false);

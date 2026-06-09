@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -52,10 +52,11 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		Guid? divisionId,
 		int skip,
 		int take,
+		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		CancellationToken cancellationToken = default)
 	{
 		var query = await BuildApplicationsQueryAsync(
-			boardId, educationMediumId, status, standardId, divisionId, cancellationToken);
+			boardId, educationMediumId, status, standardId, divisionId, scopedStudentIdsQuery, cancellationToken);
 
 		return await query
 			.OrderByDescending(x => x.CreationTime)
@@ -70,10 +71,11 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		ConcessionRequestStatus? status,
 		Guid? standardId,
 		Guid? divisionId,
+		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		CancellationToken cancellationToken = default)
 	{
 		var query = await BuildApplicationsQueryAsync(
-			boardId, educationMediumId, status, standardId, divisionId, cancellationToken);
+			boardId, educationMediumId, status, standardId, divisionId, scopedStudentIdsQuery, cancellationToken);
 		return await query.CountAsync(cancellationToken);
 	}
 
@@ -82,10 +84,11 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		Guid educationMediumId,
 		Guid? standardId,
 		Guid? divisionId,
+		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		CancellationToken cancellationToken = default)
 	{
 		var query = await BuildApplicationsQueryAsync(
-			boardId, educationMediumId, status: null, standardId, divisionId, cancellationToken);
+			boardId, educationMediumId, status: null, standardId, divisionId, scopedStudentIdsQuery, cancellationToken);
 
 		return await query
 			.GroupBy(x => x.Status)
@@ -99,6 +102,7 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		ConcessionRequestStatus? status,
 		Guid? standardId,
 		Guid? divisionId,
+		IQueryable<Guid>? scopedStudentIdsQuery,
 		CancellationToken cancellationToken)
 	{
 		var db = await GetDbContextAsync();
@@ -119,6 +123,10 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 
 		var allowedStudentIds = studentIds.Select(s => s.Id);
 		var query = queryable.Where(c => allowedStudentIds.Contains(c.StudentId));
+
+		// User scope — restrict to students within the caller's access scope
+		if (scopedStudentIdsQuery != null)
+			query = query.Where(c => scopedStudentIdsQuery.Contains(c.StudentId));
 
 		if (status.HasValue)
 		{

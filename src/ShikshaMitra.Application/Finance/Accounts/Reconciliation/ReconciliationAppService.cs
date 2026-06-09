@@ -41,7 +41,7 @@ public class ReconciliationAppService(
             AcademicYearId       = input.AcademicYearId,
             Month                = input.Month,
             Year                 = input.Year,
-            PaymentMethod        = MapPaymentMethodString(input.PaymentMethod),
+            PaymentMethod        = input.PaymentMethod,
             VerificationStatus   = input.VerificationStatus,
             Search               = input.Search,
             Page                 = Math.Max(1, input.Page),
@@ -141,7 +141,6 @@ public class ReconciliationAppService(
         return BuildActionResponse(provisional, null, input.Remarks);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private async Task<ReconciliationTabCountsDto> GetTabCountsCoreAsync(
         Guid academicYearId, int? month, int? year,
@@ -288,50 +287,20 @@ public class ReconciliationAppService(
                     if (approved) dto.CreditCardApproved += c.Count;
                     if (rejected) dto.CreditCardRejected += c.Count;
                     break;
-                case PaymentMethodEnum.UPI:
+				case PaymentMethodEnum.DebitCard:
+					if (pending) dto.DebitCardPending += c.Count;
+					if (approved) dto.DebitCardApproved += c.Count;
+					if (rejected) dto.DebitCardRejected += c.Count;
+					break;
+				case PaymentMethodEnum.UPI:
                     if (pending)  dto.UpiPending  += c.Count;
                     if (approved) dto.UpiApproved += c.Count;
                     if (rejected) dto.UpiRejected += c.Count;
-                    break;
-                case PaymentMethodEnum.OnlinePaymentGateway:
-                    if (pending)  dto.OnlineGatewayPending  += c.Count;
-                    if (approved) dto.OnlineGatewayApproved += c.Count;
-                    if (rejected) dto.OnlineGatewayRejected += c.Count;
-                    break;
-                case PaymentMethodEnum.WalletPrepaidCard:
-                    if (pending)  dto.WalletPending  += c.Count;
-                    if (approved) dto.WalletApproved += c.Count;
-                    if (rejected) dto.WalletRejected += c.Count;
                     break;
             }
 
             if (pending) dto.TotalPending += c.Count;
         }
         return dto;
-    }
-
-    /// <summary>
-    /// Maps the FE payment method string to the domain enum.
-    /// Supports both the exact enum name and common aliases from the UI.
-    /// </summary>
-    internal static PaymentMethodEnum? MapPaymentMethodString(string? method)
-    {
-        if (string.IsNullOrWhiteSpace(method))
-            return null;
-
-        return method.Trim().ToLowerInvariant() switch
-        {
-            "cheque"         => PaymentMethodEnum.Cheque,
-            "demanddraft"    => PaymentMethodEnum.DemandDraft,
-            "dd"             => PaymentMethodEnum.DemandDraft,
-            "banktransfer"   => PaymentMethodEnum.BankTransfer,
-            "creditcard"     => PaymentMethodEnum.CreditCard,
-            "upi"            => PaymentMethodEnum.UPI,
-            "onlinegateway"  => PaymentMethodEnum.OnlinePaymentGateway,
-            "onlinepaymentgateway" => PaymentMethodEnum.OnlinePaymentGateway,
-            "wallet"         => PaymentMethodEnum.WalletPrepaidCard,
-            "walletprepaidcard" => PaymentMethodEnum.WalletPrepaidCard,
-            _                => null,
-        };
     }
 }

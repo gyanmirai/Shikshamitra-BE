@@ -100,14 +100,6 @@ public class FeeCollectionAppService(
 		GetFeeCollectionSummaryInput input,
 		CancellationToken cancellationToken = default)
 	{
-		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-			input.AcademicYearId,
-			input.BoardId,
-			input.EducationMediumId,
-			input.StandardId,
-			input.DivisionId,
-			cancellationToken);
-
 		var allRows = await BuildRawRowsAsync(input, cancellationToken);
 		var filtered = ApplyStatusFilter(allRows, input.Status);
 
@@ -127,14 +119,6 @@ public class FeeCollectionAppService(
 		FeeCollectionExportRequestDto input,
 		CancellationToken cancellationToken = default)
 	{
-		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-			input.AcademicYearId,
-			input.BoardId,
-			input.EducationMediumId,
-			input.StandardId,
-			input.DivisionId,
-			cancellationToken);
-
 		var filterInput = new GetFeeCollectionSummaryInput
 		{
 			AcademicYearId    = input.AcademicYearId,
@@ -178,8 +162,16 @@ public class FeeCollectionAppService(
 		studentQ = studentQ.Where(s =>
 			s.AcademicYearId   == input.AcademicYearId  &&
 			s.AcademicBoardId  == input.BoardId          &&
-			s.AcademicMediumId == input.EducationMediumId &&
-			s.Status           == StudentLifeCycleStatusEnum.Enrolled);
+			s.AcademicMediumId == input.EducationMediumId);
+
+		if (IsPrivilegedUser())
+		{
+			studentQ = studentQ.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled || s.Status == StudentLifeCycleStatusEnum.Left || s.Status == StudentLifeCycleStatusEnum.InActive);
+		}
+		else
+		{
+			studentQ = studentQ.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled);
+		}
 
 		if (input.StandardId.HasValue)
 			studentQ = studentQ.Where(s => s.StandardId == input.StandardId.Value);
@@ -965,10 +957,8 @@ public class FeeCollectionAppService(
 
 		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
 
-		// ── Student info ─────────────────────────────────────────────────
 		var studentInfo = BuildStudentInfo(student);
 
-		// ── Fee-head structure ────────────────────────────────────────────
 		var feeStructureAssignment = await studentFeeStructureRepository
 			.FirstOrDefaultAsync(x => x.StudentId == studentId);
 
@@ -1283,53 +1273,34 @@ public class FeeCollectionAppService(
 		public int? RollNo { get; init; }
 		public string ContactNo { get; init; } = string.Empty;
 		public string Email { get; init; } = string.Empty;
+		public Guid? FeeStructureId { get; set; }
 	}
 
 	private async Task<StudentSnapshot> GetStudentSnapshotAsync(Guid studentId, CancellationToken cancellationToken)
 	{
-		var studentQ = await studentRepository.GetQueryableAsync();
-		var boardQ = await educationBoardRepository.GetQueryableAsync();
-		var mediumQ = await educationMediumRepository.GetQueryableAsync();
-		var standardQ = await standardRepository.GetQueryableAsync();
-		var divisionQ = await divisionRepository.GetQueryableAsync();
-		var contactQ = await studentContactDetailRepository.GetQueryableAsync();
+		var student = await studentRepository.FindAsync(studentId) ?? throw new BusinessException("Student not found");
 
-		var query =
-			from s in studentQ
-			join b in boardQ on s.AcademicBoardId equals (Guid?)b.Id into bj
-			from b in bj.DefaultIfEmpty()
-			join m in mediumQ on s.AcademicMediumId equals m.Id into mj
-			from m in mj.DefaultIfEmpty()
-			join st in standardQ on s.StandardId equals (Guid?)st.Id into stj
-			from st in stj.DefaultIfEmpty()
-			join d in divisionQ on s.DivisionId equals (Guid?)d.Id into dj
-			from d in dj.DefaultIfEmpty()
-			join c in contactQ on s.Id equals c.Id into cj
-			from c in cj.DefaultIfEmpty()
-			where s.Id == studentId
-			select new StudentSnapshot
-			{
-				Id = s.Id,
-				FirstName = s.FirstName,
-				MiddleName = s.MiddleName,
-				LastName = s.LastName,
-				AcademicBoardId = s.AcademicBoardId,
-				BoardType = b != null ? (EducationBoardType?)b.Type : null,
-				AcademicMediumId = s.AcademicMediumId,
-				EducationMediumName = m != null ? m.Name : string.Empty,
-				StandardId = s.StandardId,
-				StandardName = st != null ? st.Name : string.Empty,
-				DivisionId = s.DivisionId,
-				DivisionName = d != null ? d.Name : string.Empty,
-				GrNo = s.GrNo,
-				RollNo = s.RollNo,
-				ContactNo = c != null ? c.PrimaryContactNo : string.Empty,
-				Email = c != null ? (c.Email ?? string.Empty) : string.Empty,
-			};
+		return new StudentSnapshot
+		{
+			Id = student.Id,
+			FirstName = student.FirstName,
+			MiddleName = student.MiddleName,
+			LastName = student.LastName,
+			AcademicBoardId = student.AcademicBoardId,
+			BoardType = student.AcademicBoard?.Type,
+			AcademicMediumId = student.AcademicMediumId,
+			EducationMediumName = student.AcademicMedium?.Name ?? string.Empty,
+			StandardId = student.StandardId,
+			StandardName = student.Standard?.Name ?? string.Empty,
+			DivisionId = student.DivisionId,
+			DivisionName = student.Division?.Name ?? string.Empty,
+			GrNo = student.GrNo,
+			RollNo = student.RollNo,
+			ContactNo = student.ContactDetail?.PrimaryContactNo ?? string.Empty,
+			Email = student.ContactDetail?.Email ?? string.Empty,
+			FeeStructureId = student.FeeStructureId,
+		};
 
-		var snapshot = await asyncExecuter.FirstOrDefaultAsync(query, cancellationToken);
-
-		return snapshot ?? throw new EntityNotFoundException(typeof(Student), studentId);
 	}
 
 	private static StudentInfoDto BuildStudentInfo(StudentSnapshot student) => new()
@@ -1349,7 +1320,7 @@ public class FeeCollectionAppService(
 		ContactNo = student.ContactNo,
 		Email = student.Email,
 		FeeStructureName = string.Empty,
-		IsFeeStructureAssigned = false,
+		IsFeeStructureAssigned = student.FeeStructureId.HasValue,
 	};
 
 	private static StudentSummaryDto BuildStudentSummary(StudentSnapshot student) => new()
@@ -1381,4 +1352,7 @@ public class FeeCollectionAppService(
 		public double?  TotalCharges    { get; init; }
 		public double?  PendingCharges  { get; init; }
 	}
+
+	private bool IsPrivilegedUser() => CurrentUser.IsInRole("admin")
+			|| CurrentUser.IsInRole("Finance Officer");
 }

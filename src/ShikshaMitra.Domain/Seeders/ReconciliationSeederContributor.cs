@@ -206,25 +206,11 @@ public class ReconciliationSeederContributor : BaseSeederContributor
             new UpiDetails("UPI-RECON-001", "school.fees@okicici", "GPay"),
             receiptDate, paymentDate);
 
-        await SeedPendingAsync(NextStudent(), tuitionHead.Id, academicYear.Id, board.Id, medium.Id,
-            "REC-RECON-OG", "KFE-RECON-OG", PaymentMethodEnum.OnlinePaymentGateway,
-            new OnlineGatewayDetails("OG-RECON-001", "Razorpay", "ORD-RECON-001"),
-            receiptDate, paymentDate);
-
-        await SeedPendingAsync(NextStudent(), tuitionHead.Id, academicYear.Id, board.Id, medium.Id,
-            "REC-RECON-WAL", "KFE-RECON-WAL", PaymentMethodEnum.WalletPrepaidCard,
-            new WalletDetails("WAL-RECON-001", "Paytm", "9876543210"),
-            receiptDate, paymentDate);
-
-        // ── Approved example (Bank Transfer) ──────────────────────────────────
-
         await SeedApprovedAsync(
             NextStudent(), tuitionHead.Id, academicYear.Id, board.Id, medium.Id,
             "REC-RECON-BT-OK", "KFE-RECON-BT-APPROVED", "FIN-RECON-BT-APPROVED",
             new BankTransferDetails("NEFT-RECON-APPROVED", "Axis Bank", "UTIB0001234"),
             receiptDate.AddDays(-5), paymentDate.AddDays(-5));
-
-        // ── Rejected example (UPI bounce) ─────────────────────────────────────
 
         await SeedRejectedAsync(
             NextStudent(), tuitionHead.Id, academicYear.Id, board.Id, medium.Id,
@@ -240,8 +226,6 @@ public class ReconciliationSeederContributor : BaseSeederContributor
             "Created 7 pending + 1 approved + 1 rejected reconciliation entries.",
             CurrentTenant.Id);
     }
-
-    // ── Scenario builders ──────────────────────────────────────────────────────
 
     private async Task SeedPendingAsync(
         Student student,

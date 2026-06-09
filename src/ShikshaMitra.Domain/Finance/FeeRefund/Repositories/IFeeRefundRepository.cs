@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
@@ -26,6 +27,7 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
         int skipCount = 0,
         int maxResultCount = 20,
         string? sorting = null,
+        IQueryable<Guid>? scopedStudentIdsQuery = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Loads a single request with its <see cref="FeeRefundRequest.Lines"/> collection.</summary>

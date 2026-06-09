@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ShikshaMitra.Finance.Fees.Concessions;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -33,6 +33,20 @@ public class ConcessionFeeHeadMapping : FullAuditedEntity<Guid>, IMultiTenant
 		TenantId = tenantId;
 		ConcessionRequestId = concessionRequestId;
 		FeeHeadId = feeHeadId;
+		PreConcessionFeeHeadAmount = preAmount;
+		FeeHeadConcessionAmount = discountAmount;
+		PostConcessionFeeHeadAmount = postAmount;
+		UserSpecifiedConcessionAmountType = basis;
+		UserSpecifiedConcessionAmountValue = userValue;
+	}
+
+	public void UpdateAmounts(
+		decimal preAmount,
+		decimal discountAmount,
+		decimal postAmount,
+		DiscountBasis basis,
+		decimal userValue)
+	{
 		PreConcessionFeeHeadAmount = preAmount;
 		FeeHeadConcessionAmount = discountAmount;
 		PostConcessionFeeHeadAmount = postAmount;

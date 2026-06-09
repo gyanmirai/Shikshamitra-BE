@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -219,16 +219,6 @@ public class FeeCollectionManager(
 				transactionId: Get("transactionId"),
 				cardLast4: Get("cardLast4"),
 				bankName: Get("bankName")),
-
-			PaymentMethodEnum.OnlinePaymentGateway => new OnlineGatewayDetails(
-				transactionId: Get("transactionId"),
-				gatewayName: Get("gatewayName"),
-				orderId: details.TryGetValue("orderId", out var oid) ? oid?.ToString() : null),
-
-			PaymentMethodEnum.WalletPrepaidCard => new WalletDetails(
-				transactionId: Get("transactionId"),
-				walletProvider: Get("walletProvider"),
-				mobileNumber: details.TryGetValue("mobileNumber", out var mob) ? mob?.ToString() : null),
 
 			_ => null,
 		};

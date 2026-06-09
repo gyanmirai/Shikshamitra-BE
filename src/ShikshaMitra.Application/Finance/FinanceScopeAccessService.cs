@@ -59,6 +59,39 @@ public class FinanceScopeAccessService(
 		}
 	}
 
+	/// <summary>
+	/// Non-throwing variant of <see cref="EnsureAcademicContextAccessibleAsync"/>.
+	/// Use for list endpoints that should return an empty result (not 403) when the
+	/// requested context is outside the current user's scope.
+	/// </summary>
+	public async Task<bool> IsAcademicContextAccessibleAsync(
+		Guid? academicYearId,
+		Guid? boardId,
+		Guid? educationMediumId,
+		Guid? standardId,
+		Guid? divisionId,
+		CancellationToken cancellationToken = default)
+	{
+		var scopedStudents = await GetScopedStudentsQueryAsync();
+
+		if (academicYearId.HasValue && academicYearId.Value != Guid.Empty)
+			scopedStudents = scopedStudents.Where(s => s.AcademicYearId == academicYearId.Value);
+
+		if (boardId.HasValue && boardId.Value != Guid.Empty)
+			scopedStudents = scopedStudents.Where(s => s.AcademicBoardId == boardId.Value);
+
+		if (educationMediumId.HasValue && educationMediumId.Value != Guid.Empty)
+			scopedStudents = scopedStudents.Where(s => s.AcademicMediumId == educationMediumId.Value);
+
+		if (standardId.HasValue && standardId.Value != Guid.Empty)
+			scopedStudents = scopedStudents.Where(s => s.StandardId == standardId.Value);
+
+		if (divisionId.HasValue && divisionId.Value != Guid.Empty)
+			scopedStudents = scopedStudents.Where(s => s.DivisionId == divisionId.Value);
+
+		return await AsyncExecuter.AnyAsync(scopedStudents, cancellationToken);
+	}
+
 	public async Task<IQueryable<Guid>> GetScopedStudentIdsQueryAsync()
 	{
 		var query = await GetScopedStudentsQueryAsync();

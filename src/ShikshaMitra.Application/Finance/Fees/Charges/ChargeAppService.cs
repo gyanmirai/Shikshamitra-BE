@@ -81,12 +81,24 @@ public class ChargeAppService(
 
 	public async Task<ChargeListResponse> GetAllAsync(Guid academicYearId, GetChargesRequest input)
 	{
-		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-			academicYearId,
-			input.BoardId,
-			input.EducationMediumId,
-			null,
-			null);
+		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(
+				academicYearId,
+				input.BoardId,
+				input.EducationMediumId,
+				null,
+				null))
+		{
+			return new ChargeListResponse
+			{
+				Success = true,
+				Items = [],
+				TotalCount = 0,
+				CurrentPage = input.Page,
+				PageSize = input.PageSize,
+				TotalPages = 0,
+				Message = "Charges retrieved successfully"
+			};
+		}
 
 		var pageSize = Math.Min(input.PageSize, MaxPageSize);
 		var (items, totalCount) = await chargeRequestRepository.GetChargeRequestsPagedAsync(
@@ -111,16 +123,12 @@ public class ChargeAppService(
 
 	public async Task<ChargeLineListResponse> GetLinesAsync(Guid academicYearId, GetChargeLinesRequest input)
 	{
-		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-			academicYearId,
-			input.BoardId,
-			input.EducationMediumId,
-			null,
-			null);
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
 
 		var pageSize = Math.Min(input.PageSize, MaxPageSize);
-		var query = await chargeRequestRepository.GetChargeLinesQueryAsync(
-			academicYearId, input.Status, input.BoardId, input.EducationMediumId);
+		var query = (await chargeRequestRepository.GetChargeLinesQueryAsync(
+			academicYearId, input.Status, input.BoardId, input.EducationMediumId))
+			.Where(x => scopedStudentIds.Contains(x.Student.Id));
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var lines = await AsyncExecuter.ToListAsync(

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -27,6 +27,7 @@ public class EfCoreFeeRefundRepository(
         int skipCount = 0,
         int maxResultCount = 20,
         string? sorting = null,
+        IQueryable<Guid>? scopedStudentIdsQuery = null,
         CancellationToken cancellationToken = default)
     {
         var dbContext = await GetDbContextAsync();
@@ -58,6 +59,10 @@ public class EfCoreFeeRefundRepository(
             var filteredStudentIds = studentQuery.Select(s => s.Id);
             query = query.Where(r => filteredStudentIds.Contains(r.StudentId));
         }
+
+        // User scope — restrict to students within the caller's access scope
+        if (scopedStudentIdsQuery != null)
+            query = query.Where(r => scopedStudentIdsQuery.Contains(r.StudentId));
 
         if (status.HasValue)
             query = query.Where(r => r.Status == status.Value);

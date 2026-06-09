@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.Finance.Fees.Concessions;
@@ -77,10 +77,34 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void ReplaceFeeHeadMappings(IEnumerable<ConcessionFeeHeadMapping> mappings)
 	{
 		EnsurePending();
-		ConcessionFeeHeadMappings.Clear();
-		foreach (var mapping in mappings)
+
+		var incoming = mappings.ToList();
+		var incomingFeeHeadIds = incoming.Select(m => m.FeeHeadId).ToHashSet();
+
+		// Remove stale mappings — EF Core emits DELETE only for these
+		foreach (var stale in ConcessionFeeHeadMappings
+			.Where(m => !incomingFeeHeadIds.Contains(m.FeeHeadId))
+			.ToList())
 		{
-			ConcessionFeeHeadMappings.Add(mapping);
+			ConcessionFeeHeadMappings.Remove(stale);
+		}
+
+		// Update existing (EF Core emits UPDATE, same key — no constraint conflict)
+		// or add truly new ones (EF Core emits INSERT for a brand-new FeeHeadId only)
+		foreach (var newMapping in incoming)
+		{
+			var existing = ConcessionFeeHeadMappings
+				.FirstOrDefault(m => m.FeeHeadId == newMapping.FeeHeadId);
+
+			if (existing is not null)
+				existing.UpdateAmounts(
+					newMapping.PreConcessionFeeHeadAmount,
+					newMapping.FeeHeadConcessionAmount,
+					newMapping.PostConcessionFeeHeadAmount,
+					newMapping.UserSpecifiedConcessionAmountType,
+					newMapping.UserSpecifiedConcessionAmountValue);
+			else
+				ConcessionFeeHeadMappings.Add(newMapping);
 		}
 	}
 

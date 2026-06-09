@@ -21,12 +21,18 @@ public class TransactionAppService(
 {
 	public async Task<TransactionListResponse> GetListAsync(Guid academicYearId, GetTransactionsRequest input, TransactionType transactionType)
 	{
-		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-			academicYearId,
-			null,
-			null,
-			null,
-			null);
+		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(
+				academicYearId, null, null, null, null))
+		{
+			return new TransactionListResponse
+			{
+				TotalCount = 0,
+				CurrentPage = input.Page,
+				PageSize = input.PageSize,
+				TotalPages = 0,
+				Items = []
+			};
+		}
 
 		var transactionQuery = await transactionRepository.GetQueryableAsync();
 		var categoryQuery = await transactionCategoryRepository.GetQueryableAsync();

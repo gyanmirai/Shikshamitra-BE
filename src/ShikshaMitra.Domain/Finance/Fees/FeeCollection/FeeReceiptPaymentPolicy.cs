@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Receipts;
@@ -54,9 +54,7 @@ public static class FeeReceiptPaymentPolicy
 		PaymentMethodEnum.UPI,
 		PaymentMethodEnum.CreditCard,
 		PaymentMethodEnum.DebitCard,
-		PaymentMethodEnum.BankTransfer,
-		PaymentMethodEnum.OnlinePaymentGateway,
-		PaymentMethodEnum.WalletPrepaidCard,
+		PaymentMethodEnum.BankTransfer
 	];
 
 	/// <summary>

@@ -95,8 +95,6 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			PaymentMethodEnum.UPI                 => paymentDetails is not UpiDetails,
 			PaymentMethodEnum.BankTransfer        => paymentDetails is not BankTransferDetails,
 			PaymentMethodEnum.CreditCard          => paymentDetails is not CreditCardDetails,
-			PaymentMethodEnum.OnlinePaymentGateway => paymentDetails is not OnlineGatewayDetails,
-			PaymentMethodEnum.WalletPrepaidCard   => paymentDetails is not WalletDetails,
 			_ => false,
 		};
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -43,26 +43,21 @@ public class FeeReceiptAppService(
         ValidateListInput(input);
         FinanceClassDivisionFilterValidator.Validate(input);
 
-        await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-            input.AcademicYearId,
-            input.BoardId,
-            input.EducationMediumId,
-            input.StandardId,
-            input.DivisionId,
-            cancellationToken);
+        var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
 
         var filter = new FeeReceiptListFilter
         {
-            AcademicYearId    = input.AcademicYearId,
-            BoardId           = input.BoardId,
-            EducationMediumId = input.EducationMediumId,
-            Month             = input.Month,
-            ReceiptKind       = input.ReceiptKind,
-            Search            = input.Search,
-            StandardId        = input.StandardId,
-            DivisionId        = input.DivisionId,
-            SkipCount         = input.SkipCount,
-            MaxResultCount    = input.MaxResultCount,
+            AcademicYearId        = input.AcademicYearId,
+            BoardId               = input.BoardId,
+            EducationMediumId     = input.EducationMediumId,
+            Month                 = input.Month,
+            ReceiptKind           = input.ReceiptKind,
+            Search                = input.Search,
+            StandardId            = input.StandardId,
+            DivisionId            = input.DivisionId,
+            SkipCount             = input.SkipCount,
+            MaxResultCount        = input.MaxResultCount,
+            ScopedStudentIdsQuery = scopedStudentIds,
         };
 
         var (totalCount, receipts) = await receiptRepository.GetPagedListAsync(filter, cancellationToken);

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using FluentValidation;
 using ShikshaMitra.Finance.FeeCollection;
@@ -9,14 +10,12 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
 {
     // Payment methods that require the cashier to confirm bank receipt
-    private static readonly System.Collections.Generic.HashSet<PaymentMethodEnum> CashierDecidedMethods =
+    private static readonly HashSet<PaymentMethodEnum> CashierDecidedMethods =
     [
         PaymentMethodEnum.UPI,
         PaymentMethodEnum.CreditCard,
         PaymentMethodEnum.DebitCard,
         PaymentMethodEnum.BankTransfer,
-        PaymentMethodEnum.OnlinePaymentGateway,
-        PaymentMethodEnum.WalletPrepaidCard,
     ];
 
     public CollectFeeInputValidator()

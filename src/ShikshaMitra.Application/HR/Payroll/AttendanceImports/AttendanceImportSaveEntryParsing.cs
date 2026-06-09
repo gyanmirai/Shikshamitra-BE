@@ -8,6 +8,14 @@ namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 internal static class AttendanceImportSaveEntryParsing
 {
 	private static readonly TimeZoneInfo DefaultImportTimeZone = TimeZoneInfo.Local;
+	private static readonly string[] SupportedDateFormats =
+	[
+		"dd-MM-yyyy",
+		"d-M-yyyy",
+		"yyyy-MM-dd",
+		"dd/MM/yyyy",
+		"d/M/yyyy"
+	];
 
 	public static EmployeeAttendanceStatusType ParseDomainStatus(string statusWire) =>
 		NormalizeStatusKey(statusWire) switch
@@ -43,21 +51,12 @@ internal static class AttendanceImportSaveEntryParsing
 	{
 		if (DateTime.TryParseExact(
 			    (value ?? string.Empty).Trim(),
-			    ["dd-MM-yyyy", "d-M-yyyy", "yyyy-MM-dd", "dd/MM/yyyy", "d/M/yyyy"],
+			    SupportedDateFormats,
 			    CultureInfo.InvariantCulture,
 			    DateTimeStyles.None,
 			    out var exact))
 		{
 			return DateOnly.FromDateTime(exact);
-		}
-
-		if (DateTime.TryParse(
-			    (value ?? string.Empty).Trim(),
-			    CultureInfo.InvariantCulture,
-			    DateTimeStyles.AllowWhiteSpaces,
-			    out var parsed))
-		{
-			return DateOnly.FromDateTime(parsed);
 		}
 
 		throw new BusinessException(HRErrorCodes.AttendanceImportRowMismatch)
@@ -74,9 +73,11 @@ internal static class AttendanceImportSaveEntryParsing
 		var trimmed = value.Trim();
 		if (DateTimeOffset.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedOffset))
 		{
+			var dateTime = attendanceDate.ToDateTime(TimeOnly.FromDateTime(parsedOffset.DateTime), DateTimeKind.Unspecified);
+			var normalizedOffset = new DateTimeOffset(dateTime, parsedOffset.Offset);
 			return new NormalizedAttendanceImportTime(
-				parsedOffset.ToString("o", CultureInfo.InvariantCulture),
-				parsedOffset.ToString("HH:mm", CultureInfo.InvariantCulture));
+				normalizedOffset.ToString("o", CultureInfo.InvariantCulture),
+				normalizedOffset.ToString("HH:mm", CultureInfo.InvariantCulture));
 		}
 
 		if (TryParseTime(trimmed, out var parsedTime))

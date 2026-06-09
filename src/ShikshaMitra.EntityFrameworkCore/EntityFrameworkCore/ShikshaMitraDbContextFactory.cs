@@ -27,9 +27,16 @@ public class ShikshaMitraDbContextFactory : IDesignTimeDbContextFactory<ShikshaM
 
     private static IConfigurationRoot BuildConfiguration()
     {
+        var environment =
+            Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ??
+            Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ??
+            "Development";
+
         var builder = new ConfigurationBuilder()
             .SetBasePath(Path.Combine(Directory.GetCurrentDirectory(), "../ShikshaMitra.DbMigrator/"))
-            .AddJsonFile("appsettings.json", optional: false);
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile($"appsettings.{environment}.json", optional: true)
+            .AddEnvironmentVariables();
 
         return builder.Build();
     }

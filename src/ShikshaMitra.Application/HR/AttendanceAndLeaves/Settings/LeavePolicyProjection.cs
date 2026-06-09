@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using ShikshaMitra.HR.Policies;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
@@ -8,54 +10,90 @@ public static class LeavePolicyProjection
 	{
 		Id = policy.Id,
 		PolicyTitle = policy.PolicyName,
-		LeaveType = new LeaveTypeReference
-		{
-			Id = policy.LeaveTypeId,
-			Name = policy.LeaveType?.Type ?? string.Empty
-		},
-		AccrualPolicyType = ToAccrualPolicyType(policy.AccrualPolicyType),
-		LeaveCount = policy.LeaveCount,
-		CarryForward = policy.CarryForward,
-		EncashmentAllowed = policy.Encashable,
-		EncashmentTiming = ToEncashmentTiming(policy.EncashmentTiming),
-		PaidType = ToPaidType(policy.PaidType),
-		RequiresApproval = policy.RequiresApproval,
-		Description = policy.Description
+		Status = policy.Status.ToString(),
+		EffectiveFrom = policy.EffectiveFrom,
+		EffectiveTo = policy.EffectiveTo,
+		RuleCount = policy.Rules.Count(rule => rule.IsActive),
+		Description = policy.Description,
+		Rules = policy.Rules.Select(ToRuleItem).ToList()
 	};
 
 	public static LeavePolicyDetailResponse ToDetail(LeavePolicy policy) => new()
 	{
 		Id = policy.Id,
 		PolicyTitle = policy.PolicyName,
-		LeaveType = new LeaveTypeReference
-		{
-			Id = policy.LeaveTypeId,
-			Name = policy.LeaveType?.Type ?? string.Empty
-		},
-		AccrualPolicyType = ToAccrualPolicyType(policy.AccrualPolicyType),
-		LeaveCount = policy.LeaveCount,
-		PaidType = ToPaidType(policy.PaidType),
-		CarryForward = policy.CarryForward,
-		EncashmentAllowed = policy.Encashable,
-		EncashmentTiming = ToEncashmentTiming(policy.EncashmentTiming),
-		RequiresApproval = policy.RequiresApproval,
-		Description = policy.Description
+		Status = policy.Status.ToString(),
+		EffectiveFrom = policy.EffectiveFrom,
+		EffectiveTo = policy.EffectiveTo,
+		RuleCount = policy.Rules.Count(rule => rule.IsActive),
+		Description = policy.Description,
+		Rules = policy.Rules.Select(ToRuleItem).ToList()
 	};
 
-	public static LeavePolicyResponse ToCreateResponse(LeavePolicy policy) => new()
+	public static LeavePolicyResponse ToCreateResponse(LeavePolicy policy)
 	{
-		Id = policy.Id,
-		PolicyTitle = policy.PolicyName,
-		LeaveType = policy.LeaveTypeId,
-		AccrualPolicyType = ToAccrualPolicyType(policy.AccrualPolicyType),
-		LeaveCount = policy.LeaveCount,
-		PaidType = ToPaidType(policy.PaidType),
-		CarryForward = policy.CarryForward,
-		EncashmentAllowed = policy.Encashable,
-		EncashmentTiming = ToEncashmentTiming(policy.EncashmentTiming),
-		RequiresApproval = policy.RequiresApproval,
-		Description = policy.Description,
-		CreatedAt = policy.CreationTime
+		var item = ToPolicyItem(policy);
+		return new LeavePolicyResponse
+		{
+			Id = item.Id,
+			PolicyTitle = item.PolicyTitle,
+			Status = item.Status,
+			EffectiveFrom = item.EffectiveFrom,
+			EffectiveTo = item.EffectiveTo,
+			RuleCount = item.RuleCount,
+			Description = item.Description,
+			Rules = item.Rules,
+			CreatedAt = policy.CreationTime
+		};
+	}
+
+	public static LeavePolicyRuleItem ToRuleItem(LeavePolicyRule rule) => new()
+	{
+		Id = rule.Id,
+		LeaveType = new LeaveTypeReference
+		{
+			Id = rule.LeaveTypeId,
+			Name = rule.LeaveType?.Type ?? string.Empty,
+			Color = rule.LeaveType?.Color
+		},
+		AccrualPolicyType = ToAccrualPolicyType(rule.AccrualPolicyType),
+		LeaveCount = rule.LeaveCount,
+		CarryForward = rule.CarryForward,
+		CarryForwardLimit = rule.CarryForwardLimit,
+		EncashmentAllowed = rule.Encashable,
+		EncashmentTiming = ToEncashmentTiming(rule.EncashmentTiming),
+		PaidType = ToPaidType(rule.PaidType),
+		RequiresApproval = rule.RequiresApproval,
+		MinNoticeDays = rule.MinNoticeDays,
+		MaxDaysPerRequest = rule.MaxDaysPerRequest,
+		AllowHalfDay = rule.AllowHalfDay,
+		AttachmentRequiredAfterDays = rule.AttachmentRequiredAfterDays,
+		AllowNegativeBalance = rule.AllowNegativeBalance,
+		IsActive = rule.IsActive
+	};
+
+	public static LeavePolicyRuleInput ToRuleInput(LeavePolicyRuleRequest request) => new(
+		request.LeaveTypeId,
+		ParseAccrualPolicyType(request.AccrualPolicyType),
+		request.LeaveCount,
+		ParsePaidType(request.PaidType),
+		request.CarryForward,
+		request.CarryForwardLimit,
+		request.EncashmentAllowed,
+		ParseEncashmentTiming(request.EncashmentTiming),
+		request.RequiresApproval,
+		request.MinNoticeDays,
+		request.MaxDaysPerRequest,
+		request.AllowHalfDay,
+		request.AttachmentRequiredAfterDays,
+		request.AllowNegativeBalance,
+		request.IsActive);
+
+	public static HrPolicyStatus ParseStatus(string status) => status switch
+	{
+		"Draft" => HrPolicyStatus.Draft,
+		"Archived" => HrPolicyStatus.Archived,
+		_ => HrPolicyStatus.Active
 	};
 
 	public static LeavePaidType ParsePaidType(string paidType) =>

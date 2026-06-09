@@ -9,6 +9,7 @@ internal static class HrPolicyAssignmentProjection
 {
 	public static HrPolicyEffectiveAssignmentCandidateDto MapCandidate(
 		Guid? assignmentId,
+		HrPolicyAssignmentTargetType targetType,
 		string targetKey,
 		string? targetDisplayName,
 		Guid payrollPolicyId,
@@ -20,7 +21,7 @@ internal static class HrPolicyAssignmentProjection
 		IReadOnlyDictionary<Guid, string> attendanceNames) => new()
 	{
 		AssignmentId = assignmentId,
-		TargetType = "group",
+		TargetType = HrPolicyMapping.MapAssignmentTargetType(targetType),
 		TargetKey = targetKey,
 		TargetDisplayName = targetDisplayName,
 		PayrollPolicyId = payrollPolicyId,
@@ -45,7 +46,7 @@ internal static class HrPolicyAssignmentProjection
 
 	public static EffectiveEmployeePoliciesDto ToEffectivePoliciesDto(HrResolvedPolicies resolved)
 	{
-		return new EffectiveEmployeePoliciesDto
+		var dto = new EffectiveEmployeePoliciesDto
 		{
 			EmployeeId = resolved.EmployeeId,
 			AcademicYearId = resolved.AcademicYearId,
@@ -59,6 +60,11 @@ internal static class HrPolicyAssignmentProjection
 			MatchedPriority = resolved.Assignment?.Priority,
 			AttendancePolicy = HrPolicyMapping.ToDto(resolved.AttendancePolicy),
 			PayrollPolicy = HrPolicyMapping.ToDto(resolved.PayrollPolicy),
+			LeavePolicy = resolved.LeavePolicy == null ? null : new EffectiveLeavePolicyDto
+			{
+				Id = resolved.LeavePolicy.Id,
+				Name = resolved.LeavePolicy.PolicyName
+			},
 			AttendanceWorkCalendarPolicy = HrPolicyMapping.ToDto(resolved.AttendanceWorkCalendarPolicy),
 			PayrollWorkCalendarPolicy = HrPolicyMapping.ToDto(resolved.PayrollWorkCalendarPolicy),
 			ResolutionSteps = resolved.ResolutionSteps.Select(x => new EffectivePolicyResolutionStepDto
@@ -72,9 +78,30 @@ internal static class HrPolicyAssignmentProjection
 				Status = x.Status,
 				SkipReason = x.SkipReason,
 				PayrollPolicyId = x.PayrollPolicyId,
-				AttendancePolicyId = x.AttendancePolicyId
+				AttendancePolicyId = x.AttendancePolicyId,
+				LeavePolicyId = x.LeavePolicyId
 			}).ToList()
 		};
+
+		dto.ResolutionSummary = BuildResolutionSummary(dto);
+		dto.RiskSummary = "No policy risks detected for this effective-policy lookup.";
+		dto.RecommendedAction = "Review the matched policy and resolution chain before changing assignments.";
+		return dto;
+	}
+
+	private static string BuildResolutionSummary(EffectiveEmployeePoliciesDto dto)
+	{
+		var matched = dto.ResolutionSteps.FirstOrDefault(x => string.Equals(x.Status, "matched", StringComparison.OrdinalIgnoreCase));
+		if (matched == null || string.Equals(matched.TargetType, "default", StringComparison.OrdinalIgnoreCase))
+		{
+			return $"No active assignment matched on {dto.Date:dd MMM yyyy}; using the academic year default payroll and attendance policies.";
+		}
+
+		var target = matched.TargetDisplayName ?? matched.TargetKey ?? matched.TargetType;
+		var precedence = string.Equals(matched.TargetType, "employee", StringComparison.OrdinalIgnoreCase)
+			? "Employee-specific assignments take precedence over group assignments."
+			: "This group assignment was selected by priority and effective date.";
+		return $"{target} matched on {dto.Date:dd MMM yyyy}. {precedence}";
 	}
 
 	public static string BuildAssignmentAuditName(HrPolicyAssignment assignment) =>
@@ -149,6 +176,7 @@ internal static class HrPolicyAssignmentProjection
 		assignment.TargetDisplayName,
 		assignment.PayrollPolicyId,
 		assignment.AttendancePolicyId,
+		assignment.LeavePolicyId,
 		assignment.EffectiveFrom,
 		assignment.EffectiveTo,
 		assignment.Priority,

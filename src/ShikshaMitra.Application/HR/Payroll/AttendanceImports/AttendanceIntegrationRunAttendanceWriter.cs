@@ -100,8 +100,8 @@ public class AttendanceIntegrationRunAttendanceWriter(
 				.WithData("employeeId", row.EmployeeId);
 		}
 
-		var tIn = AttendanceIntegrationRunParsing.ParseNullableOffset(row.TimeIn);
-		var tOut = AttendanceIntegrationRunParsing.ParseNullableOffset(row.TimeOut);
+		var tIn = AttendanceIntegrationRunParsing.NormalizeNullableOffset(row.TimeIn, dateOnly);
+		var tOut = AttendanceIntegrationRunParsing.NormalizeNullableOffset(row.TimeOut, dateOnly);
 		var status = row.Status;
 		IReadOnlyList<string> warnings = [];
 		if (captureMode == AttendanceCaptureMode.ManualStatus)
@@ -174,7 +174,7 @@ public class AttendanceIntegrationRunAttendanceWriter(
 			{
 				row.Row.EmployeeId,
 				row.AttendanceDate,
-				TimeIn = AttendanceIntegrationRunParsing.ParseNullableOffset(row.Row.TimeIn)
+				TimeIn = AttendanceIntegrationRunParsing.NormalizeNullableOffset(row.Row.TimeIn, row.AttendanceDate)
 			})
 			.Where(x => x.TimeIn.HasValue)
 			.GroupBy(x => x.EmployeeId)

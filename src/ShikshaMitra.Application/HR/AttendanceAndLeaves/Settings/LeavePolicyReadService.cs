@@ -109,7 +109,7 @@ public class LeavePolicyReadService(
 
 	public async Task<LeavePolicyDetailResponse> GetLeavePolicyByIdAsync(Guid policyId)
 	{
-		var policy = await leavePolicyRepository.GetWithLeaveTypeAsync(policyId);
+		var policy = await leavePolicyRepository.GetWithRulesAsync(policyId);
 		if (policy == null)
 		{
 			throw new EntityNotFoundException(typeof(LeavePolicy), policyId);
@@ -140,7 +140,6 @@ public class LeavePolicyReadService(
 				orderedQueryable = property.ToLowerInvariant() switch
 				{
 					"policyname" => direction == "DESC" ? queryable.OrderByDescending(x => x.PolicyName) : queryable.OrderBy(x => x.PolicyName),
-					"leavecount" => direction == "DESC" ? queryable.OrderByDescending(x => x.LeaveCount) : queryable.OrderBy(x => x.LeaveCount),
 					"isactive" => direction == "DESC" ? queryable.OrderByDescending(x => x.IsActive) : queryable.OrderBy(x => x.IsActive),
 					_ => queryable.OrderBy(x => x.PolicyName)
 				};
@@ -151,7 +150,6 @@ public class LeavePolicyReadService(
 				orderedQueryable = property.ToLowerInvariant() switch
 				{
 					"policyname" => direction == "DESC" ? orderedQueryable!.ThenByDescending(x => x.PolicyName) : orderedQueryable!.ThenBy(x => x.PolicyName),
-					"leavecount" => direction == "DESC" ? orderedQueryable!.ThenByDescending(x => x.LeaveCount) : orderedQueryable!.ThenBy(x => x.LeaveCount),
 					"isactive" => direction == "DESC" ? orderedQueryable!.ThenByDescending(x => x.IsActive) : orderedQueryable!.ThenBy(x => x.IsActive),
 					_ => orderedQueryable!.ThenBy(x => x.PolicyName)
 				};

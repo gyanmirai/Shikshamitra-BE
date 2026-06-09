@@ -30,7 +30,7 @@ public class SubjectAssignmentAppService(
 	ILogger<SubjectAssignmentAppService> logger,
 	IWeeklyLectureSlotRepository weeklyLectureSlotRepository,
 	ITimetableRepository timetableRepository,
-	IUserScopeService userScopeService
+	IUserScopeAccessService userScopeAccessService
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -157,8 +157,7 @@ public class SubjectAssignmentAppService(
 		query = query.Where(a => a.StandardId == classId);
 
 		// Non-admin users only see subjects they are personally assigned to teach.
-		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id!.Value);
-		if (!scope.IsAdmin && !scope.HasTenantWideScope())
+		if (!await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
 		{
 			var userId = CurrentUser.Id!.Value;
 			query = query.Where(a => a.Teachers.Any(t => t.TeacherId == userId));

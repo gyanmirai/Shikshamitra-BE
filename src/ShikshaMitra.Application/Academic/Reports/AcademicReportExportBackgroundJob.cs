@@ -49,7 +49,7 @@ public class AcademicReportExportBackgroundJob(
 
                 await blobContainer.SaveAsync(blobName, bytes, overrideExisting: true);
 
-                job.MarkCompleted(blobName, DateTime.UtcNow);
+                job.MarkCompleted(blobName, DateTime.UtcNow, report.TotalCount, bytes.LongLength);
                 await exportJobRepository.UpdateAsync(job, autoSave: true);
 
                 logger.LogInformation("Successfully completed Academic report export {JobId}", args.JobId);

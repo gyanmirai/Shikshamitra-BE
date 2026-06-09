@@ -25,7 +25,7 @@ public class StudentManagementAppService(
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<StudentManagementSettings, Guid> studentManagementSettingsRepository,
-	IUserScopeService userScopeService
+	IUserScopeAccessService userScopeAccessService
 ) : ApplicationService, IStudentManagementAppService
 {
 	public async Task<(List<StudentRecordDto> StudentRecords, ArrangementTypeEnum? ArrangementType, ArrangementByEnum? ArrangementBy)> GetStudentRecords(Guid divisionId)
@@ -36,7 +36,7 @@ public class StudentManagementAppService(
 			var query = (await studentRepository.WithDetailsAsync())
 				.Where(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled);
 
-			query = await ApplyCurrentUserScopeAsync(query);
+			query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
 			var students = await AsyncExecuter.ToListAsync(query);
 
 			// Get arrangement settings for the division
@@ -96,6 +96,7 @@ public class StudentManagementAppService(
 	public async Task AssignHouseToStudent(Guid studentId, Guid houseId)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		await EnsureCanAccessStudentAsync(student, nameof(AssignHouseToStudent));
 		// assign house to student only if he is not assigned with other house
 		if (student.AdditionalDetail?.HouseId != null)
 		{
@@ -108,6 +109,7 @@ public class StudentManagementAppService(
 	public async Task AssignHouseGlobalLeaderAsync(Guid studentId)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		await EnsureCanAccessStudentAsync(student, nameof(AssignHouseGlobalLeaderAsync));
 		// Global leader can be assigned to only one student in whole medium
 		var globalLeader = await studentRepository.FirstOrDefaultAsync(s => s.AcademicMediumId == student.AcademicMediumId && s.AdditionalDetail != null && s.AdditionalDetail!.IsGlobalHouseLeader == true);
 		if (globalLeader != null)
@@ -121,6 +123,7 @@ public class StudentManagementAppService(
 	public async Task AssignHouseDivisionLeaderAsync(Guid studentId)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		await EnsureCanAccessStudentAsync(student, nameof(AssignHouseDivisionLeaderAsync));
 		// Division leader can be assigned to only one student in student's division
 		var divisionLeader = await studentRepository.FirstOrDefaultAsync(s => s.DivisionId == student.DivisionId && s.AdditionalDetail != null && s.AdditionalDetail!.IsDivisionHouseLeader == true);
 		if (divisionLeader != null)
@@ -134,6 +137,7 @@ public class StudentManagementAppService(
 	public async Task DeassignHouseFromStudent(Guid studentId)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		await EnsureCanAccessStudentAsync(student, nameof(DeassignHouseFromStudent));
 		// If student is assigned with a house
 		if (student.AdditionalDetail?.HouseId == null)
 		{
@@ -146,6 +150,7 @@ public class StudentManagementAppService(
 	public async Task DeassignHouseGlobalLeaderAsync(Guid studentId)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		await EnsureCanAccessStudentAsync(student, nameof(DeassignHouseGlobalLeaderAsync));
 		// If student is not assigned with a house or he is not global leader
 		if (student.AdditionalDetail?.HouseId == null || student.AdditionalDetail!.IsGlobalHouseLeader == false)
 		{
@@ -158,6 +163,7 @@ public class StudentManagementAppService(
 	public async Task DeassignHouseDivisionLeaderAsync(Guid studentId)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		await EnsureCanAccessStudentAsync(student, nameof(DeassignHouseDivisionLeaderAsync));
 		// If student is not assigned with a house or he is not division leader
 		if (student.AdditionalDetail?.HouseId == null || student.AdditionalDetail!.IsDivisionHouseLeader == false)
 		{
@@ -172,6 +178,7 @@ public class StudentManagementAppService(
 		foreach (var studentGrNumberDto in updateStudentGrNumberDto)
 		{
 			var student = await studentRepository.GetAsync(studentGrNumberDto.StudentId, includeDetails: true);
+			await EnsureCanAccessStudentAsync(student, nameof(StoreGrNumbers));
 
 			student.AssignGrNo(studentGrNumberDto.GrNo);
 			await studentRepository.UpdateAsync(student);
@@ -186,7 +193,7 @@ public class StudentManagementAppService(
 			var query = (await studentRepository.WithDetailsAsync())
 				.Where(s => s.DivisionId == divisionId);
 
-			query = await ApplyCurrentUserScopeAsync(query);
+			query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
 			var students = await AsyncExecuter.ToListAsync(query);
 
 			// Find board from divisionId
@@ -264,7 +271,7 @@ public class StudentManagementAppService(
 			var query = (await studentRepository.WithDetailsAsync())
 				.Where(s => s.DivisionId == divisionId && s.RollNo == null);
 
-			query = await ApplyCurrentUserScopeAsync(query);
+			query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
 			var students = await AsyncExecuter.ToListAsync(query);
 
 			// arrange by first name or last name within the above arrangement
@@ -335,6 +342,7 @@ public class StudentManagementAppService(
 		foreach (var studentRollNumberDto in updateStudentRollNumberDto)
 		{
 			var student = await studentRepository.GetAsync(studentRollNumberDto.StudentId, includeDetails: true);
+			await EnsureCanAccessStudentAsync(student, nameof(StoreRollNumbers));
 
 			// check that roll no is not assigned to any other student in same division
 			var existingStudentWithRollNo = await studentRepository.FirstOrDefaultAsync(s => s.DivisionId == student.DivisionId && s.RollNo == studentRollNumberDto.RollNo && s.Id != student.Id);
@@ -367,6 +375,8 @@ public class StudentManagementAppService(
 			foreach (var changeStudentDivision in changeStudentDivisionDto)
 			{
 				var student = await studentRepository.GetAsync(changeStudentDivision.StudentId, includeDetails: true);
+				await EnsureCanAccessStudentAsync(student, nameof(ChangeDivision));
+				await EnsureCanAccessDivisionAsync(changeStudentDivision.DivisionId, nameof(ChangeDivision));
 				student.AssignDivision(changeStudentDivision.DivisionId);
 				student.AssignRollNo(null);
 				await studentRepository.UpdateAsync(student);
@@ -378,53 +388,40 @@ public class StudentManagementAppService(
 		}
 	}
 
-	private async Task<IQueryable<Student>> ApplyCurrentUserScopeAsync(IQueryable<Student> query)
+	private async Task EnsureCanAccessStudentAsync(Student student, string operation)
 	{
-		var currentUserId = CurrentUser.Id;
-		if (!currentUserId.HasValue)
-		{
-			return query.Where(_ => false);
-		}
-
-		var scope = await userScopeService.GetUserScopeAsync(currentUserId.Value);
-		if (scope.IsAdmin)
-		{
-			return query;
-		}
-
-		if (!scope.HasAnyAccess)
-		{
-			return query.Where(_ => false);
-		}
-
-		var scopedQuery = query.Where(s =>
-			scope.HasWildcardAcademicYear ||
-			(s.AcademicYearId.HasValue && scope.WildcardBoardAcademicYearIds.Contains(s.AcademicYearId.Value)) ||
-			(s.DivisionId.HasValue && (
-				scope.DivisionIds.Contains(s.DivisionId.Value) ||
-				(scope.HasWildcardDivision && s.StandardId.HasValue && scope.WildcardDivisionStandardIds.Contains(s.StandardId.Value)))) ||
-			(s.StandardId.HasValue && (
-				scope.StandardIds.Contains(s.StandardId.Value) ||
-				(scope.HasWildcardStandard && s.AcademicMediumStageId.HasValue && scope.WildcardStandardMediumStageIds.Contains(s.AcademicMediumStageId.Value)))) ||
-			(s.AcademicMediumStageId.HasValue && (
-				scope.MediumStageIds.Contains(s.AcademicMediumStageId.Value) ||
-				(scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(s.AcademicMediumId)))) ||
-			scope.MediumIds.Contains(s.AcademicMediumId) ||
-			(scope.HasWildcardMedium && s.AcademicBoardId.HasValue && scope.WildcardMediumBoardIds.Contains(s.AcademicBoardId.Value)) ||
-			(s.AcademicBoardId.HasValue && scope.BoardIds.Contains(s.AcademicBoardId.Value)));
-
-		if (scope.HasWildcardAcademicYear)
-		{
-			return scopedQuery;
-		}
-
-		if (scope.AcademicYearIds.Any())
-		{
-			return scopedQuery.Where(s =>
-				!s.AcademicYearId.HasValue ||
-				scope.AcademicYearIds.Contains(s.AcademicYearId.Value));
-		}
-
-		return scopedQuery.Where(s => !s.AcademicYearId.HasValue);
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, operation: operation);
 	}
+
+	private async Task EnsureCanAccessDivisionAsync(Guid divisionId, string operation)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		var divisionScope = await BuildDivisionScopeAsync(divisionId);
+		userScopeAccessService.EnsureCanAccess(divisionScope, scope, operation: operation);
+	}
+
+	private async Task<AcademicOrganizationScopeRow> BuildDivisionScopeAsync(Guid divisionId)
+	{
+		var division = await divisionRepository.GetAsync(divisionId);
+		var standard = await standardRepository.GetAsync(division.StandardId);
+		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
+		var medium = await educationMediumRepository.GetAsync(stage.EducationMediumId);
+		var board = await educationBoardRepository.GetAsync(medium.EducationBoardId);
+
+		return new AcademicOrganizationScopeRow(
+			board.AcademicYearId,
+			board.Id,
+			medium.Id,
+			stage.Id,
+			standard.Id,
+			division.Id);
+	}
+
+	private sealed record AcademicOrganizationScopeRow(
+		Guid? AcademicYearId,
+		Guid? EducationBoardId,
+		Guid? EducationMediumId,
+		Guid? EducationMediumStageId,
+		Guid? StandardId,
+		Guid? DivisionId) : IUserScopedEntity;
 }

@@ -19,6 +19,8 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public Guid EmployeeId { get; private set; }
 	public Guid LeavePolicyId { get; private set; }
+	public Guid LeavePolicyRuleId { get; private set; }
+	public Guid LeaveTypeId { get; private set; }
 	public bool HalfDay { get; private set; }
 	public DateTimeOffset StartDate { get; private set; }
 	public DateTimeOffset EndDate { get; private set; }
@@ -31,6 +33,8 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? RejectionReason { get; private set; }
 	public Employee? Employee { get; private set; }
 	public LeavePolicy? LeavePolicy { get; private set; } // Navigation property
+	public LeavePolicyRule? LeavePolicyRule { get; private set; }
+	public LeaveType? LeaveType { get; private set; }
 
 	// Attachment
 	public byte[]? Attachment { get; set; }
@@ -39,17 +43,21 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	internal EmployeeLeave(
 		Guid id,
-		Guid tenantId,
+		Guid? tenantId,
 		Guid employeeId,
 		Guid leavePolicyId,
+		Guid leavePolicyRuleId,
+		Guid leaveTypeId,
 		bool halfDay,
 		DateTimeOffset startDate,
 		DateTimeOffset endDate,
 		string description, string rejectionReason) : base(id)
 	{
-		TenantId = Check.NotNull(tenantId, nameof(tenantId));
+		TenantId = tenantId;
 		EmployeeId = Check.NotNull(employeeId, nameof(employeeId));
 		LeavePolicyId = Check.NotNull(leavePolicyId, nameof(leavePolicyId));
+		LeavePolicyRuleId = Check.NotNull(leavePolicyRuleId, nameof(leavePolicyRuleId));
+		LeaveTypeId = Check.NotNull(leaveTypeId, nameof(leaveTypeId));
 		HalfDay = halfDay;
 		StartDate = startDate;
 		EndDate = endDate;
@@ -97,14 +105,16 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>Factory method to create EmployeeLeave with proper initialization.</summary>
 	public static EmployeeLeave Create(
 		Guid id,
-		Guid tenantId,
+		Guid? tenantId,
 		Guid employeeId,
 		Guid leavePolicyId,
+		Guid leavePolicyRuleId,
+		Guid leaveTypeId,
 		DateTimeOffset startDate,
 		DateTimeOffset endDate,
 		string description,
 		bool halfDay = false)
 	{
-		return new EmployeeLeave(id, tenantId, employeeId, leavePolicyId, halfDay, startDate, endDate, description, null!);
+		return new EmployeeLeave(id, tenantId, employeeId, leavePolicyId, leavePolicyRuleId, leaveTypeId, halfDay, startDate, endDate, description, null!);
 	}
 }

@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.TenantSettings;
 using Volo.Abp;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
@@ -26,6 +27,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 	EmployeePersonalInfoUserAccountCreator userAccountCreator,
 	EmployeePersonalInfoProjection personalInfoProjection,
 	EmployeeCreationContactGuard contactGuard,
+	ShiftReferenceValidator shiftReferenceValidator,
 	ICurrentTenant currentTenant,
 	IUnitOfWorkManager unitOfWorkManager,
 	IClock clock,
@@ -43,6 +45,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 		input.MobileNo = contact.MobileNo;
 		input.PanNo = EmployeeIdentityUniquenessChecker.NormalizePan(input.PanNo)!;
 		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo);
+		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
 
 		var userAccount = await userAccountCreator.CreateAsync(input);
 

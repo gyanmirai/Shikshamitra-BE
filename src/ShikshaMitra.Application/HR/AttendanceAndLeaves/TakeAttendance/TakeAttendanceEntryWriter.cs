@@ -33,8 +33,8 @@ public class TakeAttendanceEntryWriter(
 		var entry = parsedEntry.Entry;
 		var status = parsedEntry.Status;
 		var normalizedRemarks = TakeAttendanceSaveEntryParser.TruncateForStorage(entry.Remarks, AttendanceRemarksMaxLength);
-		var tIn = TakeAttendanceSaveEntryParser.TryParseTime(entry.InTime);
-		var tOut = TakeAttendanceSaveEntryParser.TryParseTime(entry.OutTime);
+		var tIn = TakeAttendanceSaveEntryParser.TryParseTime(entry.InTime, dateOnly);
+		var tOut = TakeAttendanceSaveEntryParser.TryParseTime(entry.OutTime, dateOnly);
 
 		var employee = await employeeRepository.GetAsync(entry.EmployeeId);
 		EnsureEmployeeCanTakeAttendanceOnDate(employee, dateOnly);

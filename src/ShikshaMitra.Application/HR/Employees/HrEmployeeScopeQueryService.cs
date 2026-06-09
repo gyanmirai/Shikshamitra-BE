@@ -1,5 +1,4 @@
 using ShikshaMitra.Security.UserScope;
-using ShikshaMitra.Common;
 using ShikshaMitra.HR;
 using System;
 using System.Collections.Generic;
@@ -14,11 +13,11 @@ namespace ShikshaMitra.HR.Employees;
 
 [RemoteService(false)]
 public class HrEmployeeScopeQueryService(
-	IRepository<Employee, Guid> employeeRepository,
 	IRepository<EmployeeOrganizationAssignment, Guid> employeeOrganizationAssignmentRepository,
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	HrUserScopeAccessService hrScopeAccessService,
-	HrMediumStageScopeReader stageScopeReader)
+	HrMediumStageScopeReader stageScopeReader,
+	HrEmployeeScopedQueryBuilder scopedQueryBuilder)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<List<Guid>> GetAccessibleStageIdsAsync(UserScopeContext scope)
@@ -26,24 +25,15 @@ public class HrEmployeeScopeQueryService(
 		return await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope);
 	}
 
+	public void EnsureHasConcreteHrAccess(UserScopeContext scope, string operation)
+	{
+		hrScopeAccessService.EnsureHasConcreteHrAccess(scope, operation);
+	}
+
 	public async Task<IQueryable<Employee>> BuildScopedEmployeeQueryAsync(
 		UserScopeContext scope,
 		HrEmployeeScopeOptions? options = null)
-	{
-		options ??= new HrEmployeeScopeOptions();
-
-		var employeeQuery = await employeeRepository.GetQueryableAsync();
-		var assignmentQuery = await employeeOrganizationAssignmentRepository.GetQueryableAsync();
-
-		employeeQuery = ApplyEmployeeLifecycleFilter(employeeQuery, options);
-		employeeQuery = await ApplyEmployeeScopeFilterAsync(
-			employeeQuery,
-			assignmentQuery,
-			scope,
-			options.EducationMediumStageId,
-			options.AcademicYearId);
-		return employeeQuery;
-	}
+		=> await scopedQueryBuilder.BuildAsync(scope, options);
 
 	public async Task<Dictionary<Guid, List<Guid>>> BuildEmployeeStageLookupAsync(
 		IEnumerable<Guid> employeeIds,
@@ -134,90 +124,41 @@ public class HrEmployeeScopeQueryService(
 		return scopedStage == Guid.Empty ? null : scopedStage;
 	}
 
-	private async Task<IQueryable<Employee>> ApplyEmployeeScopeFilterAsync(
-		IQueryable<Employee> employeeQuery,
-		IQueryable<EmployeeOrganizationAssignment> assignmentQuery,
+	public async Task<Guid?> ResolveDisplayStageAsync(
+		IReadOnlyCollection<Guid> employeeStageIds,
 		UserScopeContext scope,
-		Guid? educationMediumStageId,
-		Guid? academicYearId)
+		Guid? educationMediumStageId = null)
 	{
-		List<Guid>? academicYearStageIds = null;
-		if (academicYearId.HasValue)
-		{
-			academicYearStageIds = (await stageScopeReader.GetAllAsync())
-				.Where(x => x.AcademicYearId == academicYearId.Value)
-				.Select(x => x.StageId)
-				.ToList();
-		}
-
 		if (educationMediumStageId.HasValue)
 		{
-			await EnsureStageInScopeAsync(scope, educationMediumStageId.Value);
-			if (academicYearStageIds is not null && !academicYearStageIds.Contains(educationMediumStageId.Value))
-			{
-				throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-			}
-			var stageEmployeeIds = assignmentQuery
-				.Where(x => x.EducationMediumStageId == educationMediumStageId.Value)
-				.Select(x => x.EmployeeId);
-			return employeeQuery.Where(x => stageEmployeeIds.Contains(x.Id));
+			return educationMediumStageId.Value;
+		}
+
+		if (employeeStageIds.Count == 0)
+		{
+			return null;
 		}
 
 		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
-			if (academicYearStageIds is not null)
+			return employeeStageIds.First();
+		}
+
+		var stageScopes = await stageScopeReader.GetByStageIdsAsync(employeeStageIds);
+		foreach (var stageId in employeeStageIds)
+		{
+			stageScopes.TryGetValue(stageId, out var parentScope);
+			if (scope.CanAccessMediumStage(
+				stageId,
+				parentScope?.MediumId,
+				parentScope?.BoardId,
+				parentScope?.AcademicYearId))
 			{
-				var academicYearEmployeeIds = assignmentQuery
-					.Where(x => academicYearStageIds.Contains(x.EducationMediumStageId))
-					.Select(x => x.EmployeeId);
-				return employeeQuery.Where(x => academicYearEmployeeIds.Contains(x.Id));
+				return stageId;
 			}
-
-			return employeeQuery;
 		}
 
-		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
-
-		var accessibleStageIds = await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope);
-		if (academicYearStageIds is not null)
-		{
-			accessibleStageIds = accessibleStageIds
-				.Where(academicYearStageIds.Contains)
-				.ToList();
-		}
-
-		var accessibleEmployeeIds = assignmentQuery
-			.Where(x => accessibleStageIds.Contains(x.EducationMediumStageId))
-			.Select(x => x.EmployeeId);
-		return employeeQuery.Where(x => accessibleEmployeeIds.Contains(x.Id));
-	}
-
-	private static IQueryable<Employee> ApplyEmployeeLifecycleFilter(
-		IQueryable<Employee> query,
-		HrEmployeeScopeOptions options)
-	{
-		if (options.ActiveOnOrAfter.HasValue)
-		{
-			query = query.Where(x =>
-				(!x.EmployeeStatusType.HasValue && options.TreatNullStatusAsActive) ||
-				x.EmployeeStatusType == EmployeeStatusType.Active ||
-				(x.EmployeeStatusType != EmployeeStatusType.Active &&
-				 x.StatusEffectiveDate.HasValue &&
-				 x.StatusEffectiveDate.Value >= options.ActiveOnOrAfter.Value));
-		}
-
-		if (options.JoinedOnOrBefore.HasValue)
-		{
-			var joinedEndExclusive = options.JoinedOnOrBefore.Value.ToDateTime(TimeOnly.MinValue).AddDays(1);
-			query = query.Where(x =>
-				(x.DateOfJoining.HasValue && x.DateOfJoining.Value <= options.JoinedOnOrBefore.Value) ||
-				(!x.DateOfJoining.HasValue && x.CreationTime < joinedEndExclusive));
-		}
-
-		return query;
+		return null;
 	}
 
 	private async Task EnsureStageInScopeAsync(UserScopeContext scope, Guid educationMediumStageId)

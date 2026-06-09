@@ -21,12 +21,16 @@ public class WorkCalendarPolicyWorkflow(
 {
 	public async Task<WorkCalendarPolicyDto> CreateAsync(CreateUpdateWorkCalendarPolicyDto input)
 	{
+		var status = HrPolicyMapping.ParsePolicyStatus(input.Status);
+		HrPolicyStatusGuard.EnsureArchiveUsesArchiveWorkflow(status);
+		await holidaySnapshotService.ValidateHolidaysAsync(input.AcademicYearId, input.Holidays);
+
 		var entity = new WorkCalendarPolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			input.AcademicYearId,
 			input.Name,
-			HrPolicyMapping.ParsePolicyStatus(input.Status),
+			status,
 			input.EffectiveFrom,
 			input.EffectiveTo,
 			HrPolicyMapping.ParseWeeklyOffPattern(input.WeeklyOffPattern),
@@ -44,8 +48,11 @@ public class WorkCalendarPolicyWorkflow(
 	public async Task<WorkCalendarPolicyDto> UpdateAsync(Guid id, CreateUpdateWorkCalendarPolicyDto input)
 	{
 		var entity = await repository.GetAsync(id);
+		HrPolicyStatusGuard.EnsureEditable(entity.Status);
+		EnsureAcademicYearUnchanged(entity.AcademicYearId, input.AcademicYearId);
 		var before = HrPolicyMapping.ToDto(entity);
 		var status = HrPolicyMapping.ParsePolicyStatus(input.Status);
+		HrPolicyStatusGuard.EnsureArchiveUsesArchiveWorkflow(status);
 		var weeklyOffPattern = HrPolicyMapping.ParseWeeklyOffPattern(input.WeeklyOffPattern);
 		var holidaySyncMode = HrPolicyMapping.ParseHolidaySyncMode(input.HolidaySyncMode);
 		var existingHolidays = await reader.GetHolidaysAsync(entity.Id);
@@ -56,6 +63,7 @@ public class WorkCalendarPolicyWorkflow(
 			return before;
 		}
 
+		await holidaySnapshotService.ValidateHolidaysAsync(input.AcademicYearId, input.Holidays);
 		if (entity.Status != HrPolicyStatus.Draft || status != HrPolicyStatus.Draft)
 		{
 			var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
@@ -112,6 +120,11 @@ public class WorkCalendarPolicyWorkflow(
 	public async Task DeleteAsync(Guid id)
 	{
 		var entity = await repository.GetAsync(id);
+		if (entity.Status == HrPolicyStatus.Archived)
+		{
+			return;
+		}
+
 		var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
 		{
 			PolicyType = "work_calendar",
@@ -149,4 +162,13 @@ public class WorkCalendarPolicyWorkflow(
 		dto.HolidaySummary = HrPolicyMapping.BuildHolidaySummary(dto.Holidays);
 		return dto;
 	}
+
+	private static void EnsureAcademicYearUnchanged(Guid entityAcademicYearId, Guid inputAcademicYearId)
+	{
+		if (entityAcademicYearId != inputAcademicYearId)
+		{
+			throw new BusinessException(HRErrorCodes.HrPolicyAssignmentAcademicYearMismatch);
+		}
+	}
+
 }

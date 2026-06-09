@@ -18,19 +18,15 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Edit = $"{SubmoduleName}.Edit";
-			public const string SensitiveFields = $"{SubmoduleName}.SensitiveFields";
-			public const string BulkOperations = $"{SubmoduleName}.BulkOperations";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { View, Add, Edit, SensitiveFields, BulkOperations, Delete };
+			public static readonly string[] All = { View, Add, Edit, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Edit, $"{SubmoduleDisplayName}.Edit" },
-				{ SensitiveFields, $"{SubmoduleDisplayName}.SensitiveFields" },
-				{ BulkOperations, $"{SubmoduleDisplayName}.BulkOperations" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}

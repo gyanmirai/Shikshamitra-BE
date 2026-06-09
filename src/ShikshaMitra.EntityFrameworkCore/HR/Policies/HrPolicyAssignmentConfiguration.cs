@@ -18,6 +18,7 @@ public class HrPolicyAssignmentConfiguration : IEntityTypeConfiguration<HrPolicy
 		builder.Property(x => x.TargetDisplayName).HasMaxLength(256);
 		builder.Property(x => x.AttendancePolicyId).IsRequired();
 		builder.Property(x => x.PayrollPolicyId).IsRequired();
+		builder.Property(x => x.LeavePolicyId);
 		builder.Property(x => x.EffectiveFrom).IsRequired();
 		builder.Property(x => x.IsActive).IsRequired();
 		builder.Property(x => x.Priority).IsRequired();
@@ -31,5 +32,7 @@ public class HrPolicyAssignmentConfiguration : IEntityTypeConfiguration<HrPolicy
 			.HasDatabaseName("IX_HR_PolicyAssignments_PayrollPolicy_Impact");
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsActive, x.AttendancePolicyId })
 			.HasDatabaseName("IX_HR_PolicyAssignments_AttendancePolicy_Impact");
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsActive, x.LeavePolicyId })
+			.HasDatabaseName("IX_HR_PolicyAssignments_LeavePolicy_Impact");
 	}
 }

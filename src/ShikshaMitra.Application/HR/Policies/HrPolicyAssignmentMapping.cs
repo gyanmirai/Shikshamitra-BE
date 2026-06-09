@@ -26,6 +26,7 @@ internal static partial class HrPolicyMapping
 		TargetDisplayName = entity.TargetDisplayName,
 		AttendancePolicyId = entity.AttendancePolicyId,
 		PayrollPolicyId = entity.PayrollPolicyId,
+		LeavePolicyId = entity.LeavePolicyId,
 		EffectiveFrom = entity.EffectiveFrom,
 		EffectiveTo = entity.EffectiveTo,
 		IsActive = entity.IsActive,

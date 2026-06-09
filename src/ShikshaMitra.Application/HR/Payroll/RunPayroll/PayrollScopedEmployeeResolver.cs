@@ -63,6 +63,30 @@ public class PayrollScopedEmployeeResolver(
 		return await AsyncExecuter.ToListAsync(employeeQuery);
 	}
 
+	public async Task<List<Employee>> ResolveScopedEmployeesByIdsAsync(
+		int year,
+		int month,
+		IReadOnlyCollection<Guid> requestedEmployeeIds,
+		bool includeUnknownStageEmployees)
+	{
+		var requestedSet = requestedEmployeeIds.Distinct().ToHashSet();
+		if (requestedSet.Count == 0)
+		{
+			return [];
+		}
+
+		var scopedEmployees = await GetScopedPayrollEmployeesAsync(year, month, includeUnknownStageEmployees);
+		var scopedById = scopedEmployees.ToDictionary(e => e.Id, e => e);
+		var outOfScopeIds = requestedSet.Where(id => !scopedById.ContainsKey(id)).ToList();
+		if (outOfScopeIds.Count > 0)
+		{
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope)
+				.WithData("employeeIds", outOfScopeIds);
+		}
+
+		return requestedSet.Select(id => scopedById[id]).ToList();
+	}
+
 	private async Task<IQueryable<Employee>> GetScopedEmployeeQueryAsync(bool includeUnknownStageEmployees)
 	{
 		var scope = await EnsureCanOperatePayrollAsync();
@@ -95,10 +119,7 @@ public class PayrollScopedEmployeeResolver(
 			return scope;
 		}
 
-		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
+		hrEmployeeScopeQueryService.EnsureHasConcreteHrAccess(scope, nameof(EnsureCanOperatePayrollAsync));
 
 		return scope;
 	}

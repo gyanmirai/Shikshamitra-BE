@@ -14,8 +14,8 @@ internal static class HrPolicyVersionDiffBuilder
 		string toJson,
 		HrPolicyVersionDisplayContext displayContext)
 	{
-		using var fromDoc = JsonDocument.Parse(fromJson);
-		using var toDoc = JsonDocument.Parse(toJson);
+		using var fromDoc = ParseSnapshot(fromJson);
+		using var toDoc = ParseSnapshot(toJson);
 		var fromProps = fromDoc.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone());
 		var toProps = toDoc.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone());
 		return fromProps.Keys.Union(toProps.Keys)
@@ -65,6 +65,18 @@ internal static class HrPolicyVersionDiffBuilder
 
 	public static string ToDisplayText(string value)
 		=> HrPolicyVersionDisplayFormatter.ToDisplayText(value);
+
+	public static JsonDocument ParseSnapshot(string snapshotJson)
+	{
+		try
+		{
+			return JsonDocument.Parse(snapshotJson);
+		}
+		catch (JsonException ex)
+		{
+			throw new Volo.Abp.BusinessException(HRErrorCodes.HrPolicyInvalidVersionSnapshot, innerException: ex);
+		}
+	}
 
 	private static bool JsonValuesEqual(JsonElement left, JsonElement right) =>
 		string.Equals(GetRawValue(left), GetRawValue(right), StringComparison.Ordinal);

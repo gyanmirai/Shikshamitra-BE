@@ -2,14 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Application.Contracts.Groups;
 using ShikshaMitra.Application.Contracts.HR.Calendar.CalendarView;
 using ShikshaMitra.HR.Calendar;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
-using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -25,13 +23,12 @@ public class CalendarViewReadService(
 	IHolidayRepository holidayRepository,
 	IRepository<EventType, Guid> eventTypeRepository,
 	IHolidayTypeRepository holidayTypeRepository,
-	IGroupAppService groupAppService,
-	IUserScopeService userScopeService) : ApplicationService, ITransientDependency
+	CalendarViewVisibilityService visibilityService) : ApplicationService, ITransientDependency
 {
 	public async Task<PagedResultDto<CalendarViewItemDto>> GetViewAsync(GetCalendarViewRequestDto input)
 	{
 		var now = CurrentInstant();
-		var visibility = await ResolveVisibilityAsync(input.AcademicYearId);
+		var visibility = await visibilityService.ResolveAsync(input.AcademicYearId);
 		var eventTypeDict = (await AsyncExecuter.ToListAsync(await eventTypeRepository.GetQueryableAsync()))
 			.ToDictionary(et => et.Id);
 		var holidayTypeDict = (await AsyncExecuter.ToListAsync(await holidayTypeRepository.GetQueryableAsync()))
@@ -82,23 +79,6 @@ public class CalendarViewReadService(
 		return new PagedResultDto<CalendarViewItemDto>(totalCount, pagedItems);
 	}
 
-	private async Task<CalendarVisibilityContext> ResolveVisibilityAsync(Guid academicYearId)
-	{
-		var isAdmin = false;
-		var userGroupIds = new List<Guid>();
-
-		if (CurrentUser.Id.HasValue)
-		{
-			isAdmin = await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value);
-			if (!isAdmin)
-			{
-				userGroupIds = await groupAppService.GetUserGroupIdsAsync(CurrentUser.Id.Value, academicYearId);
-			}
-		}
-
-		return new CalendarVisibilityContext(isAdmin, userGroupIds);
-	}
-
 	private async Task<List<Event>> GetVisibleEventsAsync(
 		GetCalendarViewRequestDto input,
 		CalendarVisibilityContext visibility)
@@ -124,7 +104,7 @@ public class CalendarViewReadService(
 			events = events.Where(e => statuses.Contains((int)e.GetStatus(now))).ToList();
 		}
 
-		return ApplyVisibility(events, visibility, e => e.AudienceIds);
+		return CalendarViewVisibilityService.Apply(events, visibility, e => e.AudienceIds);
 	}
 
 	private async Task<List<Holiday>> GetVisibleHolidaysAsync(
@@ -152,7 +132,7 @@ public class CalendarViewReadService(
 			holidays = holidays.Where(h => statuses.Contains((int)h.GetStatus(now))).ToList();
 		}
 
-		return ApplyVisibility(holidays, visibility, h => h.AudienceIds);
+		return CalendarViewVisibilityService.Apply(holidays, visibility, h => h.AudienceIds);
 	}
 
 	private static IReadOnlyCollection<int> GetRequestedStatuses(GetCalendarViewRequestDto input)
@@ -163,27 +143,6 @@ public class CalendarViewReadService(
 		}
 
 		return input.Status.HasValue ? new[] { input.Status.Value } : Array.Empty<int>();
-	}
-
-	private static List<T> ApplyVisibility<T>(
-		List<T> items,
-		CalendarVisibilityContext visibility,
-		Func<T, IReadOnlyCollection<Guid>> audienceSelector)
-	{
-		if (visibility.IsAdmin)
-		{
-			return items;
-		}
-
-		if (visibility.UserGroupIds.Count == 0)
-		{
-			return items.Where(x => audienceSelector(x).Count == 0).ToList();
-		}
-
-		return items
-			.Where(x => audienceSelector(x).Count == 0 ||
-						audienceSelector(x).Any(visibility.UserGroupIds.Contains))
-			.ToList();
 	}
 
 	private static List<CalendarViewItemDto> ApplySorting(
@@ -205,6 +164,4 @@ public class CalendarViewReadService(
 
 	private DateTimeOffset CurrentInstant() =>
 		new(Clock.Now.ToUniversalTime(), TimeSpan.Zero);
-
-	private sealed record CalendarVisibilityContext(bool IsAdmin, List<Guid> UserGroupIds);
 }

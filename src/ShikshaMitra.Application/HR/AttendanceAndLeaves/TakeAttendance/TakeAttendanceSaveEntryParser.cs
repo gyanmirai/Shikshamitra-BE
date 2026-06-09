@@ -10,12 +10,26 @@ public static class TakeAttendanceSaveEntryParser
 	public static ParsedTakeAttendanceEntry Parse(TakeAttendanceSaveEntryDto entry) =>
 		new(entry, ParseWireStatus(entry.StatusWire));
 
-	public static DateTimeOffset? TryParseTime(string? value)
+	public static DateTimeOffset? TryParseTime(string? value, DateOnly attendanceDate)
 	{
-		if (!string.IsNullOrWhiteSpace(value) &&
-		    DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
+		if (string.IsNullOrWhiteSpace(value))
 		{
-			return parsed;
+			return null;
+		}
+
+		if (TimeOnly.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedTime))
+		{
+			return new DateTimeOffset(attendanceDate.ToDateTime(parsedTime), TimeSpan.Zero);
+		}
+
+		if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedOffset))
+		{
+			return new DateTimeOffset(attendanceDate.ToDateTime(TimeOnly.FromTimeSpan(parsedOffset.TimeOfDay)), parsedOffset.Offset);
+		}
+
+		if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDateTime))
+		{
+			return new DateTimeOffset(attendanceDate.ToDateTime(TimeOnly.FromDateTime(parsedDateTime)), TimeSpan.Zero);
 		}
 
 		return null;

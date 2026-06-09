@@ -190,6 +190,45 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	}
 
 	[Fact]
+	public async Task CreateAsync_Should_Reject_Nonexistent_ShiftId()
+	{
+		var input = await BuildCreateDtoAsync($"missing.shift.create.{Guid.NewGuid():N}@test.com");
+		input.ShiftId = Guid.NewGuid();
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(async () =>
+			await _personalInfoAppService.CreateAsync(input));
+
+		exception.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationShiftRequired);
+	}
+
+	[Fact]
+	public async Task UpdateAsync_Should_Reject_Nonexistent_ShiftId()
+	{
+		var created = await _personalInfoAppService.CreateAsync(
+			await BuildCreateDtoAsync($"missing.shift.update.{Guid.NewGuid():N}@test.com"));
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(async () =>
+			await _personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
+			{
+				FirstName = created.FirstName,
+				LastName = created.LastName,
+				MobileNo = created.MobileNo,
+				Email = $"missing.shift.updated.{Guid.NewGuid():N}@test.com",
+				PanNo = created.PanNo,
+				AdharNo = created.AdharNo,
+				DateOfBirth = created.DateOfBirth,
+				GenderType = created.GenderType,
+				DateOfJoining = created.DateOfJoining,
+				EmployeeStatusType = EmployeeStatusType.Active,
+				RoleId = created.RoleId,
+				ShiftId = Guid.NewGuid(),
+				OrganizationIds = created.OrganizationIds
+			}));
+
+		exception.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationShiftRequired);
+	}
+
+	[Fact]
 	public async Task UpdateAsync_Should_Preserve_Existing_Inactive_Status()
 	{
 		var created = await _personalInfoAppService.CreateAsync(

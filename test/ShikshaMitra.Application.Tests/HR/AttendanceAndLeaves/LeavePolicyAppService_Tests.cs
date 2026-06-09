@@ -37,25 +37,23 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		var created = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
 		{
 			PolicyTitle = $"Policy-{Guid.NewGuid():N}",
-			LeaveType = leaveType.Id,
-			AccrualPolicyType = "Monthly",
-			LeaveCount = 12,
-			PaidType = "Paid",
-			CarryForward = true,
-			EncashmentAllowed = true,
-			EncashmentTiming = "end_of_year",
-			RequiresApproval = true,
-			Description = "Standard policy"
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Description = "Standard policy",
+			Rules =
+			[
+				Rule(leaveType.Id, leaveCount: 12, accrualPolicyType: "Monthly", carryForward: true, encashmentAllowed: true, encashmentTiming: "end_of_year")
+			]
 		});
 
 		created.Id.ShouldNotBe(Guid.Empty);
-		created.LeaveCount.ShouldBe(12);
-		created.AccrualPolicyType.ShouldBe("Monthly");
+		created.RuleCount.ShouldBe(1);
+		created.Rules[0].LeaveCount.ShouldBe(12);
+		created.Rules[0].AccrualPolicyType.ShouldBe("Monthly");
 
 		var detail = await _leavePolicyAppService.GetLeavePolicyByIdAsync(created.Id);
 		detail.Id.ShouldBe(created.Id);
-		detail.LeaveType.Id.ShouldBe(leaveType.Id);
-		detail.LeaveType.Name.ShouldBe(leaveType.Name);
+		detail.Rules[0].LeaveType.Id.ShouldBe(leaveType.Id);
+		detail.Rules[0].LeaveType.Name.ShouldBe(leaveType.Name);
 	}
 
 	[Fact]
@@ -68,13 +66,8 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
 		{
 			PolicyTitle = marker,
-			LeaveType = leaveType.Id,
-			AccrualPolicyType = "Yearly",
-			LeaveCount = 10,
-			PaidType = "Paid",
-			CarryForward = false,
-			EncashmentAllowed = false,
-			RequiresApproval = true
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = [Rule(leaveType.Id, leaveCount: 10)]
 		});
 
 		var list = await _leavePolicyAppService.GetListByAcademicYearIdAsync(
@@ -87,6 +80,32 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 	}
 
 	[Fact]
+	public async Task Should_Hide_Policy_When_Linked_Leave_Type_Is_Deleted()
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		var leaveType = await CreateLeaveTypeAsync($"LT-{Guid.NewGuid():N}");
+		var policyTitle = $"DeletedTypePolicy-{Guid.NewGuid():N}";
+
+		var created = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = policyTitle,
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = [Rule(leaveType.Id, leaveCount: 10)]
+		});
+
+		await _leaveTypeAppService.DeleteLeaveTypeAsync(leaveType.Id);
+
+		var list = await _leavePolicyAppService.GetListByAcademicYearIdAsync(
+			academicYearId,
+			page: 1,
+			pageSize: 10,
+			search: policyTitle);
+
+		list.TotalCount.ShouldBe(0);
+		list.Items.ShouldNotContain(x => x.Id == created.Id);
+	}
+
+	[Fact]
 	public async Task Should_Update_Accrual_Policy_Type()
 	{
 		var academicYearId = await GetAcademicYearIdAsync();
@@ -95,30 +114,20 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		var created = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
 		{
 			PolicyTitle = $"Policy-{Guid.NewGuid():N}",
-			LeaveType = leaveType.Id,
-			AccrualPolicyType = "Monthly",
-			LeaveCount = 12,
-			PaidType = "Paid",
-			CarryForward = false,
-			EncashmentAllowed = false,
-			RequiresApproval = true
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = [Rule(leaveType.Id, accrualPolicyType: "Monthly", leaveCount: 12)]
 		});
 
 		var updated = await _leavePolicyAppService.UpdateLeavePolicyAsync(created.Id, new LeavePolicyUpdateRequest
 		{
 			PolicyTitle = created.PolicyTitle,
-			LeaveType = leaveType.Id,
-			AccrualPolicyType = "Yearly",
-			LeaveCount = created.LeaveCount,
-			PaidType = created.PaidType,
-			CarryForward = created.CarryForward,
-			EncashmentAllowed = false,
-			RequiresApproval = created.RequiresApproval
+			EffectiveFrom = created.EffectiveFrom,
+			Rules = [Rule(leaveType.Id, accrualPolicyType: "Yearly", leaveCount: created.Rules[0].LeaveCount)]
 		});
 
-		updated.AccrualPolicyType.ShouldBe("Yearly");
+		updated.Rules[0].AccrualPolicyType.ShouldBe("Yearly");
 		var detail = await _leavePolicyAppService.GetLeavePolicyByIdAsync(created.Id);
-		detail.AccrualPolicyType.ShouldBe("Yearly");
+		detail.Rules[0].AccrualPolicyType.ShouldBe("Yearly");
 	}
 
 	[Fact]
@@ -131,18 +140,57 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 			_leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
 			{
 				PolicyTitle = $"Policy-{Guid.NewGuid():N}",
-				LeaveType = leaveType.Id,
-				AccrualPolicyType = "Monthly",
-				LeaveCount = 8,
-				PaidType = "Paid",
-				CarryForward = false,
-				EncashmentAllowed = true,
-				EncashmentTiming = null,
-				RequiresApproval = true
+				EffectiveFrom = DateTime.UtcNow.Date,
+				Rules = [Rule(leaveType.Id, accrualPolicyType: "Monthly", leaveCount: 8, encashmentAllowed: true, encashmentTiming: null)]
 			}));
 
 		ex.Code.ShouldBe("ShikshaMitra:EncashmentTimingRequired");
 	}
+
+	[Fact]
+	public async Task Should_Reject_Duplicate_Active_Rules_In_Same_Policy()
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		var leaveType = await CreateLeaveTypeAsync($"LT-{Guid.NewGuid():N}");
+
+		var ex = await Should.ThrowAsync<BusinessException>(() =>
+			_leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+			{
+				PolicyTitle = $"Policy-{Guid.NewGuid():N}",
+				EffectiveFrom = DateTime.UtcNow.Date,
+				Rules =
+				[
+					Rule(leaveType.Id),
+					Rule(leaveType.Id)
+				]
+			}));
+
+		ex.Code.ShouldBe(HRErrorCodes.LeavePolicyDuplicateLeaveTypeRule);
+	}
+
+	private static LeavePolicyRuleRequest Rule(
+		Guid leaveTypeId,
+		string accrualPolicyType = "Yearly",
+		int leaveCount = 10,
+		string paidType = "Paid",
+		bool carryForward = false,
+		bool encashmentAllowed = false,
+		string? encashmentTiming = null) =>
+		new()
+		{
+			LeaveTypeId = leaveTypeId,
+			AccrualPolicyType = accrualPolicyType,
+			LeaveCount = leaveCount,
+			PaidType = paidType,
+			CarryForward = carryForward,
+			EncashmentAllowed = encashmentAllowed,
+			EncashmentTiming = encashmentTiming,
+			RequiresApproval = true,
+			MinNoticeDays = 2,
+			MaxDaysPerRequest = 30,
+			AllowHalfDay = true,
+			IsActive = true
+		};
 
 	private async Task<LeaveTypeResponse> CreateLeaveTypeAsync(string name)
 	{

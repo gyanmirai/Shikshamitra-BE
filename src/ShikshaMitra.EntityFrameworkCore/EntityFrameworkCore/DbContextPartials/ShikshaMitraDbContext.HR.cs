@@ -41,6 +41,7 @@ public partial class ShikshaMitraDbContext
     DbSet<NotificationInfo> NotificationInfos { get; set; }
     public DbSet<LeaveType> EmployeeLeaveTypes { get; set; }
     public DbSet<LeavePolicy> EmployeeLeavePolicies { get; set; }
+    public DbSet<LeavePolicyRule> EmployeeLeavePolicyRules { get; set; }
 
     DbSet<PayElement> PayElements { get; set; }
     DbSet<ProvidentFund> ProvidentFunds { get; set; }
@@ -79,6 +80,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<DevelopmentPlan> DevelopmentPlans { get; set; }
     public DbSet<PerformanceAuditEvent> PerformanceAuditEvents { get; set; }
     public DbSet<HrReportExportJob> HrReportExportJobs { get; set; }
+    public DbSet<HrReportSchedule> HrReportSchedules { get; set; }
     public DbSet<HrReportTemplate> HrReportTemplates { get; set; }
 
     public DbSet<HolidayType> HolidayTypes { get; set; }

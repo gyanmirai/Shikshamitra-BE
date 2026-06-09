@@ -8,6 +8,7 @@ using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.Services;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
@@ -24,6 +25,7 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 	private readonly IEmployeeLeaveRepository _leaveRepository;
 	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
 	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
+	private readonly IRepository<LeavePolicyRule, Guid> _leavePolicyRuleRepository;
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IGuidGenerator _guidGenerator;
@@ -35,6 +37,7 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 		_leaveRepository = GetRequiredService<IEmployeeLeaveRepository>();
 		_leaveTypeRepository = GetRequiredService<IRepository<LeaveType, Guid>>();
 		_leavePolicyRepository = GetRequiredService<IRepository<LeavePolicy, Guid>>();
+		_leavePolicyRuleRepository = GetRequiredService<IRepository<LeavePolicyRule, Guid>>();
 		_employeeRepository = GetRequiredService<IEmployeeRepository>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
@@ -132,14 +135,14 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 				await InsertLeaveAsync(
 					tenantId,
 					targetEmployee.Id,
-					paidPolicy.Id,
+					paidPolicy,
 					new DateTimeOffset(new DateTime(2026, 1, 5)),
 					new DateTimeOffset(new DateTime(2026, 1, 6, 23, 59, 59)),
 					EmployeeLeaveStatusType.Approved);
 				await InsertLeaveAsync(
 					tenantId,
 					targetEmployee.Id,
-					unpaidPolicy.Id,
+					unpaidPolicy,
 					new DateTimeOffset(new DateTime(2026, 1, 7)),
 					new DateTimeOffset(new DateTime(2026, 1, 7, 23, 59, 59)),
 					EmployeeLeaveStatusType.Approved,
@@ -148,35 +151,35 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 				await InsertLeaveAsync(
 					tenantId,
 					otherEmployee.Id,
-					paidPolicy.Id,
+					paidPolicy,
 					new DateTimeOffset(new DateTime(2026, 1, 8)),
 					new DateTimeOffset(new DateTime(2026, 1, 8, 23, 59, 59)),
 					EmployeeLeaveStatusType.Approved);
 				await InsertLeaveAsync(
 					tenantId,
 					targetEmployee.Id,
-					paidPolicy.Id,
+					paidPolicy,
 					new DateTimeOffset(new DateTime(2026, 2, 2)),
 					new DateTimeOffset(new DateTime(2026, 2, 2, 23, 59, 59)),
 					EmployeeLeaveStatusType.Approved);
 				await InsertLeaveAsync(
 					tenantId,
 					targetEmployee.Id,
-					paidPolicy.Id,
+					paidPolicy,
 					new DateTimeOffset(new DateTime(2026, 1, 9)),
 					new DateTimeOffset(new DateTime(2026, 1, 9, 23, 59, 59)),
 					EmployeeLeaveStatusType.Pending);
 				await InsertLeaveAsync(
 					tenantId,
 					targetEmployee.Id,
-					paidPolicy.Id,
+					paidPolicy,
 					new DateTimeOffset(new DateTime(2026, 1, 12)),
 					new DateTimeOffset(new DateTime(2026, 1, 12, 23, 59, 59)),
 					EmployeeLeaveStatusType.Reviewed);
 				await InsertLeaveAsync(
 					tenantId,
 					targetEmployee.Id,
-					paidPolicy.Id,
+					paidPolicy,
 					new DateTimeOffset(new DateTime(2026, 1, 13)),
 					new DateTimeOffset(new DateTime(2026, 1, 13, 23, 59, 59)),
 					EmployeeLeaveStatusType.Cancelled);
@@ -252,7 +255,7 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 		return await _employeeRepository.InsertAsync(employee, autoSave: true);
 	}
 
-	private async Task<LeavePolicy> CreateLeavePolicyAsync(Guid tenantId, Guid academicYearId, LeavePaidType paidType)
+	private async Task<PayrollLeavePolicySetup> CreateLeavePolicyAsync(Guid tenantId, Guid academicYearId, LeavePaidType paidType)
 	{
 		var suffix = _guidGenerator.Create().ToString("N")[..8];
 		var leaveType = new LeaveType(
@@ -268,22 +271,39 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 			tenantId,
 			academicYearId,
 			$"{paidType} Payroll Policy {suffix}",
+			DateTime.UtcNow.Date,
+			null,
+			HrPolicyStatus.Active);
+		await _leavePolicyRepository.InsertAsync(policy, autoSave: true);
+
+		var rule = new LeavePolicyRule(
+			_guidGenerator.Create(),
+			tenantId,
+			policy.Id,
 			leaveType.Id,
 			LeaveAccrualPolicyType.Yearly,
 			12,
 			paidType,
 			carryForward: false,
+			carryForwardLimit: null,
 			encashable: false,
 			encashmentTiming: null,
-			requiresApproval: true);
+			requiresApproval: true,
+			minNoticeDays: 0,
+			maxDaysPerRequest: 30,
+			allowHalfDay: true,
+			attachmentRequiredAfterDays: null,
+			allowNegativeBalance: false,
+			isActive: true);
+		await _leavePolicyRuleRepository.InsertAsync(rule, autoSave: true);
 
-		return await _leavePolicyRepository.InsertAsync(policy, autoSave: true);
+		return new PayrollLeavePolicySetup(policy.Id, rule.Id, leaveType.Id);
 	}
 
 	private async Task InsertLeaveAsync(
 		Guid tenantId,
 		Guid employeeId,
-		Guid policyId,
+		PayrollLeavePolicySetup policy,
 		DateTimeOffset startDate,
 		DateTimeOffset endDate,
 		EmployeeLeaveStatusType status,
@@ -294,7 +314,9 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 			_guidGenerator.Create(),
 			tenantId,
 			employeeId,
-			policyId,
+			policy.PolicyId,
+			policy.RuleId,
+			policy.LeaveTypeId,
 			startDate,
 			endDate,
 			"Payroll approved leave resolver test",
@@ -310,4 +332,5 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 	}
 
 	private sealed record PayrollLeaveScenario(Guid TenantId, Guid TargetEmployeeId, Guid OtherEmployeeId);
+	private sealed record PayrollLeavePolicySetup(Guid PolicyId, Guid RuleId, Guid LeaveTypeId);
 }

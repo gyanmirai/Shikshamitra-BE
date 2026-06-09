@@ -41,6 +41,7 @@ public class EmployeePayrollContractWorkflow(
 		{
 			EmployeeId = employee.Id,
 			AcademicYearId = input.AcademicYearId,
+			AssignmentId = input.AssignmentId,
 			AttendancePolicyId = input.AttendancePolicyId,
 			PayrollPolicyId = input.PayrollPolicyId,
 			EffectiveFrom = input.EffectiveFrom,
@@ -61,8 +62,10 @@ public class EmployeePayrollContractWorkflow(
 		{
 			EmployeeId = employee.Id,
 			AcademicYearId = academicYearId,
+			AssignmentId = input.AssignmentId,
 			EffectiveDate = input.EffectiveFrom.Date,
-			AssignmentReason = input.AssignmentReason
+			AssignmentReason = input.AssignmentReason,
+			ConfirmationToken = input.ConfirmationToken
 		});
 	}
 }

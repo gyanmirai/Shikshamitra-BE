@@ -1,10 +1,9 @@
 using ShikshaMitra.Common;
+using ShikshaMitra.HR;
 using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -12,7 +11,9 @@ using Volo.Abp.Application.Services;
 namespace ShikshaMitra.HR.Dashboard;
 
 [RemoteService(false)]
-public class HRDashboardScopeService(IUserScopeService userScopeService)
+public class HRDashboardScopeService(
+	IUserScopeService userScopeService,
+	HrUserScopeAccessService hrScopeAccessService)
 	: ApplicationService
 {
 	public async Task<UserScopeContext> EnsureCanReadScopedEmployeesAsync()
@@ -29,10 +30,7 @@ public class HRDashboardScopeService(IUserScopeService userScopeService)
 			return scope;
 		}
 
-		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
+		hrScopeAccessService.EnsureHasConcreteHrAccess(scope, nameof(EnsureCanReadScopedEmployeesAsync));
 
 		return scope;
 	}
@@ -53,27 +51,9 @@ public class HRDashboardScopeService(IUserScopeService userScopeService)
 
 	public static string BuildScopeKey(UserScopeContext scope)
 	{
-		if (HrUserScopeAccess.HasHrWideAccess(scope))
-		{
-			return HrDashboardScopeKeys.HrWide;
-		}
-
-		var raw = string.Join("|",
-			$"ay:{JoinIds(scope.AcademicYearIds)}",
-			$"b:{JoinIds(scope.BoardIds)}",
-			$"m:{JoinIds(scope.MediumIds)}",
-			$"ms:{JoinIds(scope.MediumStageIds)}",
-			$"s:{JoinIds(scope.StandardIds)}",
-			$"d:{JoinIds(scope.DivisionIds)}",
-			$"way:{JoinIds(scope.WildcardBoardAcademicYearIds)}",
-			$"wb:{JoinIds(scope.WildcardMediumBoardIds)}",
-			$"wm:{JoinIds(scope.WildcardMediumStageMediumIds)}",
-			$"wms:{JoinIds(scope.WildcardStandardMediumStageIds)}",
-			$"ws:{JoinIds(scope.WildcardDivisionStandardIds)}");
-		var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
-		return $"scoped-{Convert.ToHexString(hash)[..32].ToLowerInvariant()}";
+		var scopeKey = HrUserScopeAccess.BuildScopeSummaryKey(scope);
+		return scopeKey == "hr-wide"
+			? HrDashboardScopeKeys.HrWide
+			: scopeKey.Replace("hr-scoped-", "scoped-", StringComparison.Ordinal);
 	}
-
-	private static string JoinIds(IEnumerable<Guid> ids) =>
-		string.Join(",", ids.OrderBy(x => x).Select(x => x.ToString("N")));
 }

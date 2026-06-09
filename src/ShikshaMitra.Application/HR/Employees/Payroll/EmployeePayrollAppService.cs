@@ -17,7 +17,7 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.HR.Employees.Payroll;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
+[Authorize]
 public class EmployeePayrollAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
@@ -30,6 +30,7 @@ public class EmployeePayrollAppService(
 	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator)
 	: ApplicationService, IEmployeePayrollAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<EmployeePayrollDetailsDto> GetPayrollDetailsAsync(Guid employeeId)
 	{
 		var employee = await employeeRepository.GetAsync(employeeId);
@@ -40,6 +41,7 @@ public class EmployeePayrollAppService(
 		return EmployeePayrollProjection.ToDetailsDto(employee, payrollDetails, earnings, deductions);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
 	public async Task UpdatePayrollDetailsAsync(Guid employeeId, UpdateEmployeePayrollDetailsDto input)
 	{
 		if (input.PayrollDetails == null)
@@ -100,6 +102,7 @@ public class EmployeePayrollAppService(
 		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { employeeId });
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<EmployeePayrollResponse> GetPayrollContractAsync(Guid employeeId)
 	{
 		await employeeRepository.GetAsync(employeeId);
@@ -121,6 +124,7 @@ public class EmployeePayrollAppService(
 
 	[UnitOfWork]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
 	public async Task UpdatePayrollContractAsync(Guid employeeId, PayrollContract input)
 	{
 		await payrollContractWorkflow.UpdateAsync(employeeId, input);

@@ -26,7 +26,7 @@ namespace ShikshaMitra.Students.Records;
 [RemoteService(false)]
 public class StudentListAppService(
 	IRepository<Student, Guid> studentRepository,
-	IUserScopeService userScopeService
+	IUserScopeAccessService userScopeAccessService
 ) : ApplicationService, IStudentListAppService
 {
 	public async Task<PagedResultDto<StudentDto>> GetStudentsByDivisionAsync(Guid divisionId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null)
@@ -36,7 +36,7 @@ public class StudentListAppService(
 		var studentsQuery = queryable
 			.Where(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled);
 
-		studentsQuery = await ApplyCurrentUserScopeAsync(studentsQuery);
+		studentsQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(studentsQuery);
 
 		if (!string.IsNullOrWhiteSpace(searchTerm))
 		{
@@ -61,6 +61,9 @@ public class StudentListAppService(
 	public async Task ChangeStudentStatusAsync(Guid studentId, ChangeStudentStatusDto input)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+			student,
+			operation: nameof(ChangeStudentStatusAsync));
 
 		try
 		{
@@ -79,6 +82,9 @@ public class StudentListAppService(
 	public async Task<List<StudentStatusHistoryDto>> GetStatusHistoryAsync(Guid studentId)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+			student,
+			operation: nameof(GetStatusHistoryAsync));
 
 		return student.StatusHistories
 			.OrderByDescending(h => h.CreationTime)
@@ -103,53 +109,4 @@ public class StudentListAppService(
 		CreatorId        = h.CreatorId,
 	};
 
-	private async Task<IQueryable<Student>> ApplyCurrentUserScopeAsync(IQueryable<Student> query)
-	{
-		var currentUserId = CurrentUser.Id;
-		if (!currentUserId.HasValue)
-		{
-			return query.Where(_ => false);
-		}
-
-		var scope = await userScopeService.GetUserScopeAsync(currentUserId.Value);
-		if (scope.IsAdmin)
-		{
-			return query;
-		}
-
-		if (!scope.HasAnyAccess)
-		{
-			return query.Where(_ => false);
-		}
-
-		var scopedQuery = query.Where(s =>
-			scope.HasWildcardAcademicYear ||
-			(s.AcademicYearId.HasValue && scope.WildcardBoardAcademicYearIds.Contains(s.AcademicYearId.Value)) ||
-			(s.DivisionId.HasValue && (
-				scope.DivisionIds.Contains(s.DivisionId.Value) ||
-				(scope.HasWildcardDivision && s.StandardId.HasValue && scope.WildcardDivisionStandardIds.Contains(s.StandardId.Value)))) ||
-			(s.StandardId.HasValue && (
-				scope.StandardIds.Contains(s.StandardId.Value) ||
-				(scope.HasWildcardStandard && s.AcademicMediumStageId.HasValue && scope.WildcardStandardMediumStageIds.Contains(s.AcademicMediumStageId.Value)))) ||
-			(s.AcademicMediumStageId.HasValue && (
-				scope.MediumStageIds.Contains(s.AcademicMediumStageId.Value) ||
-				(scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(s.AcademicMediumId)))) ||
-			scope.MediumIds.Contains(s.AcademicMediumId) ||
-			(scope.HasWildcardMedium && s.AcademicBoardId.HasValue && scope.WildcardMediumBoardIds.Contains(s.AcademicBoardId.Value)) ||
-			(s.AcademicBoardId.HasValue && scope.BoardIds.Contains(s.AcademicBoardId.Value)));
-
-		if (scope.HasWildcardAcademicYear)
-		{
-			return scopedQuery;
-		}
-
-		if (scope.AcademicYearIds.Any())
-		{
-			return scopedQuery.Where(s =>
-				!s.AcademicYearId.HasValue ||
-				scope.AcademicYearIds.Contains(s.AcademicYearId.Value));
-		}
-
-		return scopedQuery.Where(s => !s.AcademicYearId.HasValue);
-	}
 }

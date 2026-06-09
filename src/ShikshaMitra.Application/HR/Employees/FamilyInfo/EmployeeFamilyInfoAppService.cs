@@ -8,7 +8,7 @@ using Volo.Abp.Application.Services;
 namespace ShikshaMitra.HR.Employees.FamilyInfo;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
+[Authorize]
 public class EmployeeFamilyInfoAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeFamilyMemberRepository familyMemberRepository,
@@ -16,6 +16,7 @@ public class EmployeeFamilyInfoAppService(
 	: ApplicationService, IEmployeeFamilyInfoAppService
 {
 	/// <inheritdoc />
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<FamilyInfoResponse> GetAsync(Guid employeeId)
 	{
 		var employee = await employeeRepository.GetAsync(employeeId);
@@ -25,7 +26,7 @@ public class EmployeeFamilyInfoAppService(
 	}
 
 	/// <inheritdoc />
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
 	public async Task UpsertAsync(Guid employeeId, FamilyInfoRequest input)
 	{
 		await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(

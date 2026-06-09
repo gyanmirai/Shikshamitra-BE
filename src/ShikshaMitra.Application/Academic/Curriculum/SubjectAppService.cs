@@ -8,7 +8,7 @@ using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
-using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -26,9 +26,9 @@ public class SubjectAppService(
 		IRepository<ExamSubject, Guid> examSubjectRepository,
 		IRepository<ExamMark, Guid> examMarkRepository,
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkAssignmentRepository,
-		IRepository<AssignmentEntity, Guid> assignmentRepository,
+	IRepository<AssignmentEntity, Guid> assignmentRepository,
 	ILogger<SubjectAppService> logger,
-	IUserScopeService userScopeService
+	AcademicOrganizationScopeAccessService scopeAccessService
 ) : ApplicationService, ISubjectAppService
 {
 	public async Task<SubjectDto> GetAsync(Guid id)
@@ -52,10 +52,7 @@ public class SubjectAppService(
 	{
 		try
 		{
-			var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id!.Value);
-			if (!scope.IsAdmin && !scope.HasTenantWideScope()
-				&& !scope.MediumIds.Contains(educationMediumId)
-				&& !scope.WildcardMediumStageMediumIds.Contains(educationMediumId))
+			if (!await scopeAccessService.CanAccessMediumAsync(educationMediumId))
 			{
 				return [];
 			}

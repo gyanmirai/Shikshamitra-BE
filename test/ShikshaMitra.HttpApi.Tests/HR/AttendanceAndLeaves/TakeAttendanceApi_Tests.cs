@@ -15,6 +15,7 @@ using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
@@ -375,6 +376,8 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				{
 					EmployeeId = created.Id,
 					StatusWire = "PRESENT",
+					InTime = "09:00:00",
+					OutTime = "17:00:00",
 					Remarks = "Saved before employee left"
 				}
 			]
@@ -519,15 +522,16 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var attendanceDate = DateTime.UtcNow.AddDays(-1);
+		var attendanceDateOnly = DateOnly.FromDateTime(attendanceDate);
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
 			$"ManualTimeSave{Guid.NewGuid():N}",
 			dateOfJoining: attendanceDate.AddDays(-10));
-		await AssignCaptureModePolicyAsync(employee.Id, DateOnly.FromDateTime(attendanceDate), AttendanceCaptureMode.ManualWithTime);
+		await AssignCaptureModePolicyAsync(employee.Id, attendanceDateOnly, AttendanceCaptureMode.ManualWithTime);
 
 		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
 		{
-			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+			AttendanceDate = attendanceDateOnly.ToString("yyyy-MM-dd"),
 			Entries =
 			[
 				new TakeAttendanceSaveEntryDto
@@ -541,10 +545,166 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		}, JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-		var attendance = await GetAttendanceAsync(employee.Id, DateOnly.FromDateTime(attendanceDate));
+		var attendance = await GetAttendanceAsync(employee.Id, attendanceDateOnly);
 		attendance.TimeIn.ShouldNotBeNull();
 		attendance.TimeOut.ShouldNotBeNull();
+		DateOnly.FromDateTime(attendance.TimeIn.Value.Date).ShouldBe(attendanceDateOnly);
+		DateOnly.FromDateTime(attendance.TimeOut.Value.Date).ShouldBe(attendanceDateOnly);
 		attendance.Source.ShouldBe(AttendanceRecordSource.ManualTime);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task SaveDay_Should_Normalize_DateTime_Punches_To_Selected_Attendance_Date()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
+		var mismatchedPunchDate = attendanceDate.AddMonths(-1);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"ManualDateTimePunch{Guid.NewGuid():N}",
+			dateOfJoining: attendanceDate.AddDays(-10).ToDateTime(TimeOnly.MinValue));
+		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualWithTime);
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDate.ToString("yyyy-MM-dd"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					InTime = $"{mismatchedPunchDate:yyyy-MM-dd}T09:15:00+05:30",
+					OutTime = $"{mismatchedPunchDate:yyyy-MM-dd}T17:45:00+05:30"
+				}
+			]
+		}, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var attendance = await GetAttendanceAsync(employee.Id, attendanceDate);
+		attendance.TimeIn.ShouldNotBeNull();
+		attendance.TimeOut.ShouldNotBeNull();
+		DateOnly.FromDateTime(attendance.TimeIn.Value.Date).ShouldBe(attendanceDate);
+		DateOnly.FromDateTime(attendance.TimeOut.Value.Date).ShouldBe(attendanceDate);
+		attendance.TimeIn.Value.TimeOfDay.ShouldBe(new TimeSpan(9, 15, 0));
+		attendance.TimeOut.Value.TimeOfDay.ShouldBe(new TimeSpan(17, 45, 0));
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Day_Should_Load_After_Archived_Assigned_Attendance_Policy_Falls_Back_To_Default()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"ArchivedAttendancePolicy{Guid.NewGuid():N}",
+			dateOfJoining: attendanceDate.AddDays(-10).ToDateTime(TimeOnly.MinValue));
+		var policyContext = await AssignArchivableAttendancePolicyAsync(employee.Id, attendanceDate);
+
+		var previewResponse = await Client.PostAsJsonAsync("/api/hr/policies/impact-preview", new HrPolicyImpactPreviewRequestDto
+		{
+			PolicyType = "attendance",
+			PolicyId = policyContext.PolicyId,
+			AcademicYearId = policyContext.AcademicYearId,
+			Action = "archive"
+		}, JsonOptions);
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var preview = await previewResponse.Content.ReadFromJsonAsync<HrPolicyImpactPreviewDto>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize policy impact preview response");
+		preview.AffectedEmployeeCount.ShouldBeGreaterThan(0);
+		preview.Warnings.ShouldContain(x => x.Code == HRErrorCodes.AffectedEmployees);
+		preview.RequiresConfirmation.ShouldBeTrue();
+		preview.ConfirmationToken.ShouldNotBeNullOrWhiteSpace();
+
+		Client.DefaultRequestHeaders.Remove(HrPolicyImpactConfirmationService.HeaderName);
+		Client.DefaultRequestHeaders.Add(HrPolicyImpactConfirmationService.HeaderName, preview.ConfirmationToken);
+		try
+		{
+			var archiveResponse = await Client.DeleteAsync($"/api/hr/attendance/policies/{policyContext.PolicyId:D}");
+			archiveResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+		}
+		finally
+		{
+			Client.DefaultRequestHeaders.Remove(HrPolicyImpactConfirmationService.HeaderName);
+		}
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate={attendanceDate:dd-MM-yyyy}&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(employee.FirstName)}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize day attendance response");
+		var row = payload.Items.Single(x => x.EmployeeId == employee.Id);
+		row.Status.ShouldBe(TakeAttendanceStatus.NotMarked);
+		row.Errors.ShouldBeEmpty();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task SaveDay_Should_Reject_Timestamp_AttendanceDate()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = "2026-06-01T22:15:34-07:00",
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = Guid.NewGuid(),
+					StatusWire = "PRESENT",
+					InTime = "09:00:00",
+					OutTime = "17:00:00"
+				}
+			]
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var payload = await response.Content.ReadAsStringAsync();
+		payload.ShouldContain(HRErrorCodes.AttendanceInvalidDateFormat);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task SaveDay_Should_Reject_Overnight_Shift_For_Worked_Time_Evaluation()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"ManualOvernightShift{Guid.NewGuid():N}",
+			dateOfJoining: attendanceDate.AddDays(-10).ToDateTime(TimeOnly.MinValue));
+		var overnightShiftId = await InsertShiftAsync(
+			$"Overnight Manual Test {Guid.NewGuid():N}",
+			new TimeOnly(22, 0),
+			new TimeOnly(6, 0));
+		await AssignEmployeeShiftAsync(employee.Id, overnightShiftId);
+		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualWithTime);
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDate.ToString("yyyy-MM-dd"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					InTime = "22:00:00",
+					OutTime = "23:00:00"
+				}
+			]
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var payload = await response.Content.ReadAsStringAsync();
+		payload.ShouldContain(HRErrorCodes.AttendancePolicyEvaluationInvalidShift);
 	}
 
 	[Fact]
@@ -735,6 +895,124 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				true,
 				priority: 100,
 				assignmentReason: "Capture mode regression test"), autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<(Guid PolicyId, Guid AcademicYearId)> AssignArchivableAttendancePolicyAsync(
+		Guid employeeId,
+		DateOnly effectiveDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var targetDate = effectiveDate.ToDateTime(TimeOnly.MinValue);
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x => x.StartDate <= targetDate && x.EndDate >= targetDate);
+			var attendanceQuery = await attendancePolicyRepository.GetQueryableAsync();
+			var defaultAttendance = attendanceQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			var payrollQuery = await payrollPolicyRepository.GetQueryableAsync();
+			var defaultPayroll = payrollQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			var policy = new AttendancePolicy(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				defaultAttendance.WorkCalendarPolicyId,
+				$"Archive fallback {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				false,
+				AttendanceCaptureMode.ManualStatus,
+				75,
+				50,
+				0,
+				AttendanceMissingPunchBehavior.RequiresReview,
+				true,
+				0,
+				0,
+				AttendancePenaltyType.None,
+				0,
+				false,
+				0,
+				false,
+				null,
+				null,
+				AttendanceHolidayWorkBehavior.CompOff,
+				false,
+				true);
+			await attendancePolicyRepository.InsertAsync(policy, autoSave: false);
+			await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				HrPolicyAssignmentTargetType.Employee,
+				employeeId.ToString("D"),
+				null,
+				policy.Id,
+				defaultPayroll.Id,
+				targetDate.Date,
+				null,
+				true,
+				priority: 100,
+				assignmentReason: "Archived attendance policy API regression test"), autoSave: false);
+			await uow.CompleteAsync();
+			return (policy.Id, academicYear.Id);
+		}
+	}
+
+	private async Task<Guid> InsertShiftAsync(
+		string shiftName,
+		TimeOnly startTime,
+		TimeOnly endTime)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var shiftRepository = scope.ServiceProvider.GetRequiredService<IRepository<ShiftManagement, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var shift = await shiftRepository.InsertAsync(new ShiftManagement
+			{
+				ShiftName = shiftName,
+				StartTime = startTime,
+				EndTime = endTime
+			}, autoSave: false);
+			await uow.CompleteAsync();
+			return shift.Id;
+		}
+	}
+
+	private async Task AssignEmployeeShiftAsync(Guid employeeId, Guid shiftId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var employeeRepository = scope.ServiceProvider.GetRequiredService<IRepository<Employee, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var employee = await employeeRepository.GetAsync(employeeId);
+			employee.ShiftId = shiftId;
+			await employeeRepository.UpdateAsync(employee, autoSave: false);
 			await uow.CompleteAsync();
 		}
 	}

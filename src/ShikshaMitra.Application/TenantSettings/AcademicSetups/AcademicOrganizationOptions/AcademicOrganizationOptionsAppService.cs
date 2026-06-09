@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicOrganizationOptions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -19,7 +18,7 @@ public class AcademicOrganizationOptionsAppService(
 	IRepository<EducationBoard, Guid> boardRepository,
 	IRepository<EducationMedium, Guid> mediumRepository,
 	IRepository<EducationMediumStage, Guid> stageRepository,
-	IUserScopeService userScopeService)
+	AcademicOrganizationScopeAccessService scopeAccessService)
 	: ApplicationService, IAcademicOrganizationOptionsAppService
 {
 	public async Task<ListResultDto<AcademicOrganizationOptionDto>> GetListAsync(
@@ -54,22 +53,20 @@ public class AcademicOrganizationOptionsAppService(
 				board.Type.ToString(),
 				board.AcademicYearId));
 
-		if (CurrentUser.Id.HasValue)
+		var scopedRows = new List<AcademicOrganizationOptionRow>();
+		foreach (var row in rows)
 		{
-			var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
-			if (!scope.HasTenantWideScope())
+			if (await scopeAccessService.CanAccessMediumStageAsync(
+				row.StageId,
+				row.MediumId,
+				row.BoardId,
+				row.AcademicYearId))
 			{
-				rows = rows
-					.Where(x => scope.CanAccessMediumStage(
-						x.StageId,
-						x.MediumId,
-						x.BoardId,
-						x.AcademicYearId))
-					.ToList();
+				scopedRows.Add(row);
 			}
 		}
 
-		var items = rows
+		var items = scopedRows
 			.OrderBy(x => x.BoardName)
 			.ThenBy(x => x.MediumName)
 			.ThenBy(x => x.StageName)

@@ -38,9 +38,8 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 	{
 		var normalizedPolicyName = policyName.ToLowerInvariant();
 		var dbSet = await GetDbSetAsync();
-		return await dbSet
+		return await IncludeRules(dbSet)
 			.Where(x => x.AcademicYearId == academicYearId && x.PolicyName.ToLower() == normalizedPolicyName)
-			.Include(x => x.LeaveType)
 			.FirstOrDefaultAsync();
 	}
 
@@ -54,22 +53,11 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		IQueryable<LeavePolicy> query = dbSet
-			.Include(x => x.LeaveType)
+		IQueryable<LeavePolicy> query = IncludeRules(dbSet)
 			.Where(x => x.AcademicYearId == academicYearId);
 
-		if (!includeInactive)
-		{
-			query = query.Where(x => x.IsActive);
-		}
-
-		if (!string.IsNullOrWhiteSpace(search))
-		{
-			var normalizedSearch = search.Trim().ToLower();
-			query = query.Where(x =>
-				x.PolicyName.ToLower().Contains(normalizedSearch) ||
-				(x.LeaveType != null && x.LeaveType.Type.ToLower().Contains(normalizedSearch)));
-		}
+		query = ApplyActiveFilter(query, includeInactive);
+		query = ApplySearch(query, search);
 
 		query = !string.IsNullOrWhiteSpace(sorting)
 			? query.OrderBy(sorting)
@@ -86,28 +74,54 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 	{
 		var dbSet = await GetDbSetAsync();
 		IQueryable<LeavePolicy> query = dbSet.Where(x => x.AcademicYearId == academicYearId);
-
-		if (!includeInactive)
-		{
-			query = query.Where(x => x.IsActive);
-		}
-
-		if (!string.IsNullOrWhiteSpace(search))
-		{
-			var normalizedSearch = search.Trim().ToLower();
-			query = query
-				.Include(x => x.LeaveType)
-				.Where(x =>
-					x.PolicyName.ToLower().Contains(normalizedSearch) ||
-					(x.LeaveType != null && x.LeaveType.Type.ToLower().Contains(normalizedSearch)));
-		}
+		query = ApplyActiveFilter(query, includeInactive);
+		query = ApplySearch(query, search);
 
 		return await query.LongCountAsync(cancellationToken);
 	}
 
-	public async Task<LeavePolicy?> GetWithLeaveTypeAsync(Guid id, CancellationToken cancellationToken = default)
+	public async Task<LeavePolicy?> GetWithRulesAsync(Guid id, CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		return await dbSet.Include(x => x.LeaveType).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+		return await IncludeRules(dbSet).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+	}
+
+	public async Task<LeavePolicyRule?> GetRuleAsync(Guid leavePolicyId, Guid leaveTypeId, CancellationToken cancellationToken = default)
+	{
+		var dbContext = await GetDbContextAsync();
+		return await dbContext.EmployeeLeavePolicyRules
+			.Include(x => x.LeaveType)
+			.FirstOrDefaultAsync(x =>
+				x.LeavePolicyId == leavePolicyId &&
+				x.LeaveTypeId == leaveTypeId &&
+				x.IsActive,
+				cancellationToken);
+	}
+
+	public async Task<LeavePolicy?> FindWithoutDetailsAsync(Guid id, CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet
+			.IgnoreAutoIncludes()
+			.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+	}
+
+	private static IQueryable<LeavePolicy> IncludeRules(IQueryable<LeavePolicy> query) =>
+		query.Include(x => x.Rules).ThenInclude(x => x.LeaveType);
+
+	private static IQueryable<LeavePolicy> ApplyActiveFilter(IQueryable<LeavePolicy> query, bool includeInactive) =>
+		includeInactive ? query : query.Where(x => x.IsActive);
+
+	private static IQueryable<LeavePolicy> ApplySearch(IQueryable<LeavePolicy> query, string? search)
+	{
+		if (string.IsNullOrWhiteSpace(search))
+		{
+			return query;
+		}
+
+		var normalizedSearch = search.Trim().ToLower();
+		return query.Where(x =>
+			x.PolicyName.ToLower().Contains(normalizedSearch) ||
+			x.Rules.Any(rule => rule.LeaveType != null && rule.LeaveType.Type.ToLower().Contains(normalizedSearch)));
 	}
 }

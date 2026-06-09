@@ -64,6 +64,7 @@ public class LeaveBalanceListDto
 public class LeaveBalanceItemDto
 {
 	public Guid LeavePolicyId { get; set; }
+	public Guid LeavePolicyRuleId { get; set; }
 	public string PolicyName { get; set; } = string.Empty;
 	public Guid LeaveTypeMasterId { get; set; }
 	public string LeaveTypeName { get; set; } = string.Empty;
@@ -127,7 +128,7 @@ public class LeaveRequestDetailsDto
 public class LeaveRequestCreateDto
 {
 	public Guid? ForEmployeeId { get; set; }
-	public Guid LeavePolicyId { get; set; }
+	public Guid LeaveTypeId { get; set; }
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
 	public bool HalfDay { get; set; }

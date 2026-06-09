@@ -24,9 +24,11 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Get_Employee_List_Returns_200()
 	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ListTest");
 
-		var response = await Client.GetAsync($"{BaseUrl}?page=1&pageSize=10");
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?search={Uri.EscapeDataString(created.FirstName)}&page=1&pageSize=10");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var body = await response.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);

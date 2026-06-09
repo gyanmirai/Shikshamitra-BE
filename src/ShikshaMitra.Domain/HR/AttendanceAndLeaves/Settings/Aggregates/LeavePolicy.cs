@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -23,19 +26,14 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	public string PolicyName { get; protected set; } = string.Empty;
 
-	public Guid LeaveTypeId { get; protected set; }
-	public LeaveAccrualPolicyType AccrualPolicyType { get; protected set; }
-	public int LeaveCount { get; protected set; }
-	public LeavePaidType PaidType { get; protected set; }
-	public bool CarryForward { get; protected set; }
-	public bool Encashable { get; protected set; }
-	public LeaveEncashmentTiming? EncashmentTiming { get; protected set; }
-	public bool RequiresApproval { get; protected set; }
 	public string? Description { get; protected set; }
+	public HrPolicyStatus Status { get; protected set; }
+	public DateTime EffectiveFrom { get; protected set; }
+	public DateTime? EffectiveTo { get; protected set; }
 	public bool IsActive { get; protected set; }
 
-	public virtual LeaveType? LeaveType { get; protected set; }
 	public virtual AcademicYear? AcademicYear { get; protected set; }
+	public virtual ICollection<LeavePolicyRule> Rules { get; protected set; } = new List<LeavePolicyRule>();
 
 	protected LeavePolicy()
 	{
@@ -46,56 +44,65 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		Guid academicYearId,
 		string policyName,
-		Guid leaveTypeId,
-		LeaveAccrualPolicyType accrualPolicyType,
-		int leaveCount,
-		LeavePaidType paidType,
-		bool carryForward,
-		bool encashable,
-		LeaveEncashmentTiming? encashmentTiming,
-		bool requiresApproval,
+		DateTime effectiveFrom,
+		DateTime? effectiveTo,
+		HrPolicyStatus status,
 		string? description = null) : base(id)
 	{
 		TenantId = tenantId;
 		AcademicYearId = academicYearId;
 		SetPolicyName(policyName);
-		LeaveTypeId = leaveTypeId;
-		AccrualPolicyType = accrualPolicyType;
-		SetLeaveCount(leaveCount);
-		PaidType = paidType;
-		CarryForward = carryForward;
-		SetEncashment(encashable, encashmentTiming);
-		RequiresApproval = requiresApproval;
+		SetEffectiveRange(effectiveFrom, effectiveTo);
+		Status = status;
 		Description = description;
-		IsActive = true;
+		IsActive = status == HrPolicyStatus.Active;
 	}
 
 	public void Update(
 		string policyName,
-		Guid leaveTypeId,
-		LeaveAccrualPolicyType accrualPolicyType,
-		int leaveCount,
-		LeavePaidType paidType,
-		bool carryForward,
-		bool encashable,
-		LeaveEncashmentTiming? encashmentTiming,
-		bool requiresApproval,
+		DateTime effectiveFrom,
+		DateTime? effectiveTo,
+		HrPolicyStatus status,
 		string? description)
 	{
 		SetPolicyName(policyName);
-		LeaveTypeId = leaveTypeId;
-		AccrualPolicyType = accrualPolicyType;
-		SetLeaveCount(leaveCount);
-		PaidType = paidType;
-		CarryForward = carryForward;
-		SetEncashment(encashable, encashmentTiming);
-		RequiresApproval = requiresApproval;
+		SetEffectiveRange(effectiveFrom, effectiveTo);
+		Status = status;
+		IsActive = status == HrPolicyStatus.Active;
 		Description = description;
 	}
 
-	public void Activate() => IsActive = true;
+	public void Activate()
+	{
+		Status = HrPolicyStatus.Active;
+		IsActive = true;
+	}
 
-	public void Deactivate() => IsActive = false;
+	public void Deactivate()
+	{
+		Status = HrPolicyStatus.Archived;
+		IsActive = false;
+	}
+
+	public void ReplaceRules(IEnumerable<LeavePolicyRule> rules)
+	{
+		Check.NotNull(rules, nameof(rules));
+		var nextRules = rules.ToList();
+		var duplicate = nextRules
+			.Where(rule => rule.IsActive)
+			.GroupBy(rule => rule.LeaveTypeId)
+			.FirstOrDefault(group => group.Count() > 1);
+		if (duplicate != null)
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyDuplicateLeaveTypeRule)
+				.WithData("leaveTypeId", duplicate.Key);
+		}
+
+		Rules = nextRules;
+	}
+
+	public LeavePolicyRule? FindActiveRule(Guid leaveTypeId) =>
+		Rules.FirstOrDefault(rule => rule.LeaveTypeId == leaveTypeId && rule.IsActive);
 
 	private void SetPolicyName(string policyName)
 	{
@@ -105,20 +112,19 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PolicyName = policyName;
 	}
 
-	private void SetLeaveCount(int leaveCount)
+	private void SetEffectiveRange(DateTime effectiveFrom, DateTime? effectiveTo)
 	{
-		if (leaveCount < LeavePolicyConsts.MinLeaveCount || leaveCount > LeavePolicyConsts.MaxLeaveCount)
+		if (effectiveFrom == default)
 		{
-			throw new BusinessException(HRErrorCodes.LeaveInvalidCount)
-				.WithData("message", $"Leave count must be between {LeavePolicyConsts.MinLeaveCount} and {LeavePolicyConsts.MaxLeaveCount}");
+			throw new BusinessException(HRErrorCodes.PolicyEffectiveFromRequired);
 		}
 
-		LeaveCount = leaveCount;
-	}
+		if (effectiveTo.HasValue && effectiveTo.Value.Date < effectiveFrom.Date)
+		{
+			throw new BusinessException(HRErrorCodes.PolicyAssignmentRangeInvalid);
+		}
 
-	private void SetEncashment(bool encashable, LeaveEncashmentTiming? encashmentTiming)
-	{
-		Encashable = encashable;
-		EncashmentTiming = encashable ? encashmentTiming : null;
+		EffectiveFrom = effectiveFrom.Date;
+		EffectiveTo = effectiveTo?.Date;
 	}
 }

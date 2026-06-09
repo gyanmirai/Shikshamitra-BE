@@ -111,7 +111,7 @@ public class HrPolicyVersionReadService(
 		var ids = new HashSet<Guid>();
 		foreach (var snapshot in snapshots.Where(x => !string.IsNullOrWhiteSpace(x)))
 		{
-			using var doc = JsonDocument.Parse(snapshot);
+			using var doc = HrPolicyVersionDiffBuilder.ParseSnapshot(snapshot);
 			HrPolicyVersionDiffBuilder.CollectGuids(doc.RootElement, ids);
 		}
 

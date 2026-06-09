@@ -25,7 +25,7 @@ public class HrPolicyAuditSummaryBuilder(
 {
 	public async Task<HrPolicyAuditSummaryDto> BuildAsync(string policyType, Guid id)
 	{
-		var normalized = HrPolicyImpactPreviewBuilder.NormalizePolicyType(policyType);
+		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		if (normalized == "work_calendar")
 		{
 			var entity = await workCalendarPolicyRepository.GetAsync(id);

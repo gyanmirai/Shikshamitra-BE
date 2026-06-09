@@ -238,6 +238,43 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Adjust_Should_Reject_Timestamp_AttendanceDate()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"RegTimestampAdjust{Guid.NewGuid():N}");
+
+		var adjustResponse = await Client.PostAsJsonAsync($"{RegisterUrl}/adjust", new AttendanceRegisterAdjustRequest
+		{
+			EmployeeId = employee.Id,
+			AttendanceDate = "2026-04-17T22:15:34-07:00",
+			StatusWire = "PRESENT",
+			InTime = "09:00:00",
+			OutTime = "17:00:00",
+			Reason = "Timestamp date should be rejected"
+		}, JsonOptions);
+
+		adjustResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var payload = await adjustResponse.Content.ReadAsStringAsync();
+		payload.ShouldContain(HRErrorCodes.AttendanceInvalidDateFormat);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Grouped_Register_Should_Reject_Timestamp_Date_Range()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var response = await Client.GetAsync(
+			$"{RegisterUrl}/grouped?startDate=2026-04-17T22:15:34-07:00&endDate=2026-04-17&skipCount=0&maxResultCount=50");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var payload = await response.Content.ReadAsStringAsync();
+		payload.ShouldContain(HRErrorCodes.AttendanceInvalidDateFormat);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Grouped_Register_Should_Count_Missing_Punch_For_Time_Based_Policies()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
@@ -502,6 +539,57 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		day.AttendanceId.ShouldBeNull();
 		payload.Summary.Present.ShouldBe(0);
 		payload.Summary.NotMarked.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Grouped_Register_Should_Only_Return_Employees_In_UserScope_Stage()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var seeded = await SeedRegisterAcademicOrganizationsAsync();
+		var marker = $"RegScope{Guid.NewGuid():N}";
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var inScopeEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"{marker}In",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+		var outOfScopeEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"{marker}Out",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		await AssignEmployeeToStageAsync(inScopeEmployee.Id, seeded.CurrentYearStageId);
+		await AssignEmployeeToStageAsync(outOfScopeEmployee.Id, seeded.OtherYearStageId);
+		await SeedAttendanceAsync(inScopeEmployee.Id, attendanceDate, seeded.CurrentYearStageId);
+		await SeedAttendanceAsync(outOfScopeEmployee.Id, attendanceDate, seeded.OtherYearStageId);
+
+		var scopedUserId = Guid.NewGuid();
+		await EnsureUserHasStageScopeAsync(scopedUserId, seeded.CurrentYearStageId);
+		var scopedClient = CreateClientAs(scopedUserId);
+
+		var response = await scopedClient.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
+
+		payload.TotalCount.ShouldBe(1);
+		payload.Items.Single().EmployeeId.ShouldBe(inScopeEmployee.Id);
+		payload.Items.Single().Days.Single().EducationMediumStageId.ShouldBe(seeded.CurrentYearStageId);
+		payload.Items.ShouldNotContain(x => x.EmployeeId == outOfScopeEmployee.Id);
+		payload.Summary.StaffCount.ShouldBe(1);
+		payload.Summary.Present.ShouldBe(1);
+
+		var deniedResponse = await scopedClient.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&educationMediumStageId={seeded.OtherYearStageId:D}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+		deniedResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+		if (deniedResponse.StatusCode == HttpStatusCode.BadRequest)
+		{
+			var deniedPayload = await deniedResponse.Content.ReadAsStringAsync();
+			deniedPayload.ShouldContain(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
 	}
 
 	private async Task SeedAttendanceAsync(

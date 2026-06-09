@@ -4,11 +4,11 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
-
 namespace ShikshaMitra.HR.Policies;
 
 public sealed record HrResolvedPolicies(
@@ -21,6 +21,7 @@ public sealed record HrResolvedPolicies(
 	WorkCalendarPolicy AttendanceWorkCalendarPolicy,
 	PayrollPolicy PayrollPolicy,
 	AttendancePolicy AttendancePolicy,
+	LeavePolicy? LeavePolicy,
 	IReadOnlyList<HrPolicyResolutionStep> ResolutionSteps);
 
 public sealed record HrPolicyResolutionStep(
@@ -33,13 +34,15 @@ public sealed record HrPolicyResolutionStep(
 	string Status,
 	string SkipReason,
 	Guid? PayrollPolicyId,
-	Guid? AttendancePolicyId);
+	Guid? AttendancePolicyId,
+	Guid? LeavePolicyId);
 
 public class HrPolicyResolver(
 	IRepository<Employee, Guid> employeeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<PayrollPolicy, Guid> payrollPolicyRepository,
 	IRepository<AttendancePolicy, Guid> attendancePolicyRepository,
+	ILeavePolicyRepository leavePolicyRepository,
 	IRepository<WorkCalendarPolicy, Guid> workCalendarPolicyRepository,
 	HrPolicyAssignmentResolver assignmentResolver)
 	: DomainService
@@ -65,13 +68,17 @@ public class HrPolicyResolver(
 		var attendancePolicy = assignment is null
 			? await ResolveDefaultAttendancePolicyAsync(resolvedAcademicYearId, cancellationToken)
 			: await attendancePolicyRepository.GetAsync(assignment.AttendancePolicyId, cancellationToken: cancellationToken);
+		var leavePolicy = assignment?.LeavePolicyId is Guid leavePolicyId
+			? await leavePolicyRepository.GetWithRulesAsync(leavePolicyId, cancellationToken)
+			: await ResolveDefaultLeavePolicyAsync(resolvedAcademicYearId, cancellationToken);
 
-		EnsureActive(payrollPolicy.Status, HRErrorCodes.DefaultPayrollPolicyRequired);
-		EnsureActive(attendancePolicy.Status, HRErrorCodes.DefaultAttendancePolicyRequired);
+		EnsurePolicyUsable(payrollPolicy.AcademicYearId, payrollPolicy.Status, resolvedAcademicYearId, HRErrorCodes.DefaultPayrollPolicyRequired);
+		EnsurePolicyUsable(attendancePolicy.AcademicYearId, attendancePolicy.Status, resolvedAcademicYearId, HRErrorCodes.DefaultAttendancePolicyRequired);
+		EnsureLeavePolicyUsable(leavePolicy, resolvedAcademicYearId);
 		var payrollWorkCalendar = await workCalendarPolicyRepository.GetAsync(payrollPolicy.WorkCalendarPolicyId, cancellationToken: cancellationToken);
 		var attendanceWorkCalendar = await workCalendarPolicyRepository.GetAsync(attendancePolicy.WorkCalendarPolicyId, cancellationToken: cancellationToken);
-		EnsureActive(payrollWorkCalendar.Status, HRErrorCodes.WorkCalendarPolicyMustBeActive);
-		EnsureActive(attendanceWorkCalendar.Status, HRErrorCodes.WorkCalendarPolicyMustBeActive);
+		EnsureWorkCalendarUsable(payrollWorkCalendar.AcademicYearId, payrollWorkCalendar.Status, resolvedAcademicYearId);
+		EnsureWorkCalendarUsable(attendanceWorkCalendar.AcademicYearId, attendanceWorkCalendar.Status, resolvedAcademicYearId);
 
 		return new HrResolvedPolicies(
 			employeeId,
@@ -83,6 +90,7 @@ public class HrPolicyResolver(
 			attendanceWorkCalendar,
 			payrollPolicy,
 			attendancePolicy,
+			leavePolicy,
 			resolution.Steps);
 	}
 
@@ -107,13 +115,17 @@ public class HrPolicyResolver(
 		var attendancePolicy = assignment is null
 			? await ResolveDefaultAttendancePolicyAsync(academicYearId, cancellationToken)
 			: await attendancePolicyRepository.GetAsync(assignment.AttendancePolicyId, cancellationToken: cancellationToken);
+		var leavePolicy = assignment?.LeavePolicyId is Guid leavePolicyId
+			? await leavePolicyRepository.GetWithRulesAsync(leavePolicyId, cancellationToken)
+			: await ResolveDefaultLeavePolicyAsync(academicYearId, cancellationToken);
 
-		EnsureActive(payrollPolicy.Status, HRErrorCodes.DefaultPayrollPolicyRequired);
-		EnsureActive(attendancePolicy.Status, HRErrorCodes.DefaultAttendancePolicyRequired);
+		EnsurePolicyUsable(payrollPolicy.AcademicYearId, payrollPolicy.Status, academicYearId, HRErrorCodes.DefaultPayrollPolicyRequired);
+		EnsurePolicyUsable(attendancePolicy.AcademicYearId, attendancePolicy.Status, academicYearId, HRErrorCodes.DefaultAttendancePolicyRequired);
+		EnsureLeavePolicyUsable(leavePolicy, academicYearId);
 		var payrollWorkCalendar = await workCalendarPolicyRepository.GetAsync(payrollPolicy.WorkCalendarPolicyId, cancellationToken: cancellationToken);
 		var attendanceWorkCalendar = await workCalendarPolicyRepository.GetAsync(attendancePolicy.WorkCalendarPolicyId, cancellationToken: cancellationToken);
-		EnsureActive(payrollWorkCalendar.Status, HRErrorCodes.WorkCalendarPolicyMustBeActive);
-		EnsureActive(attendanceWorkCalendar.Status, HRErrorCodes.WorkCalendarPolicyMustBeActive);
+		EnsureWorkCalendarUsable(payrollWorkCalendar.AcademicYearId, payrollWorkCalendar.Status, academicYearId);
+		EnsureWorkCalendarUsable(attendanceWorkCalendar.AcademicYearId, attendanceWorkCalendar.Status, academicYearId);
 
 		return new HrResolvedPolicies(
 			employeeId ?? Guid.Empty,
@@ -125,6 +137,7 @@ public class HrPolicyResolver(
 			attendanceWorkCalendar,
 			payrollPolicy,
 			attendancePolicy,
+			leavePolicy,
 			resolution.Steps);
 	}
 
@@ -142,28 +155,91 @@ public class HrPolicyResolver(
 	private async Task<PayrollPolicy> ResolveDefaultPayrollPolicyAsync(Guid academicYearId, CancellationToken cancellationToken)
 	{
 		var query = await payrollPolicyRepository.GetQueryableAsync();
-		return await AsyncExecuter.FirstOrDefaultAsync(query.Where(x =>
+		var defaults = await AsyncExecuter.ToListAsync(query.Where(x =>
 			x.AcademicYearId == academicYearId &&
 			x.IsDefault &&
-			x.Status == HrPolicyStatus.Active), cancellationToken)
-			?? throw new BusinessException(HRErrorCodes.DefaultPayrollPolicyRequired);
+			x.Status == HrPolicyStatus.Active), cancellationToken);
+
+		if (defaults.Count != 1)
+		{
+			throw new BusinessException(HRErrorCodes.DefaultPayrollPolicyRequired)
+				.WithData("defaultCount", defaults.Count);
+		}
+
+		return defaults[0];
 	}
 
 	private async Task<AttendancePolicy> ResolveDefaultAttendancePolicyAsync(Guid academicYearId, CancellationToken cancellationToken)
 	{
 		var query = await attendancePolicyRepository.GetQueryableAsync();
-		return await AsyncExecuter.FirstOrDefaultAsync(query.Where(x =>
+		var defaults = await AsyncExecuter.ToListAsync(query.Where(x =>
 			x.AcademicYearId == academicYearId &&
 			x.IsDefault &&
-			x.Status == HrPolicyStatus.Active), cancellationToken)
-			?? throw new BusinessException(HRErrorCodes.DefaultAttendancePolicyRequired);
+			x.Status == HrPolicyStatus.Active), cancellationToken);
+
+		if (defaults.Count != 1)
+		{
+			throw new BusinessException(HRErrorCodes.DefaultAttendancePolicyRequired)
+				.WithData("defaultCount", defaults.Count);
+		}
+
+		return defaults[0];
 	}
 
-	private static void EnsureActive(HrPolicyStatus status, string errorCode)
+	private async Task<LeavePolicy?> ResolveDefaultLeavePolicyAsync(Guid academicYearId, CancellationToken cancellationToken)
 	{
+		var policies = await leavePolicyRepository.GetListByAcademicYearIdAsync(
+			academicYearId,
+			includeInactive: false,
+			cancellationToken: cancellationToken);
+		return policies
+			.Where(x => x.Status == HrPolicyStatus.Active && x.IsActive)
+			.OrderBy(x => x.PolicyName)
+			.ThenBy(x => x.Id)
+			.FirstOrDefault();
+	}
+
+	private static void EnsurePolicyUsable(Guid policyAcademicYearId, HrPolicyStatus status, Guid academicYearId, string inactiveErrorCode)
+	{
+		if (policyAcademicYearId != academicYearId)
+		{
+			throw new BusinessException(HRErrorCodes.HrPolicyAssignmentAcademicYearMismatch);
+		}
+
 		if (status != HrPolicyStatus.Active)
 		{
-			throw new BusinessException(errorCode);
+			throw new BusinessException(inactiveErrorCode);
+		}
+	}
+
+	private static void EnsureWorkCalendarUsable(Guid workCalendarAcademicYearId, HrPolicyStatus status, Guid academicYearId)
+	{
+		if (workCalendarAcademicYearId != academicYearId)
+		{
+			throw new BusinessException(HRErrorCodes.HrPolicyInvalidWorkCalendar);
+		}
+
+		if (status != HrPolicyStatus.Active)
+		{
+			throw new BusinessException(HRErrorCodes.WorkCalendarPolicyMustBeActive);
+		}
+	}
+
+	private static void EnsureLeavePolicyUsable(LeavePolicy? policy, Guid academicYearId)
+	{
+		if (policy == null)
+		{
+			return;
+		}
+
+		if (policy.AcademicYearId != academicYearId)
+		{
+			throw new BusinessException(HRErrorCodes.HrPolicyAssignmentAcademicYearMismatch);
+		}
+
+		if (policy.Status != HrPolicyStatus.Active || !policy.IsActive)
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
 		}
 	}
 }

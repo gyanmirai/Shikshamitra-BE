@@ -13,14 +13,14 @@ namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 public partial class LeaveManagementController
 {
 	/// <summary>
-	/// Create leave request (multipart: leavePolicyId, dates, reason, optional employeeId for on-behalf, optional attachment).
+	/// Create leave request (multipart: leaveTypeId, dates, reason, optional employeeId for on-behalf, optional attachment).
 	/// </summary>
 	[HttpPost]
 	[Consumes("multipart/form-data")]
 	[ProducesResponseType(typeof(LeaveRequestCreatedResponse), StatusCodes.Status201Created)]
 	public virtual async Task<ActionResult<LeaveRequestCreatedResponse>> CreateAsync(
 		[FromQuery, Required] Guid academicYearId,
-		[FromForm] Guid? leavePolicyId,
+		[FromForm] Guid? leaveTypeId,
 		[FromForm] Guid? forEmployeeId,
 		[FromForm] Guid? employeeId,
 		[FromForm, Required] DateTime startDate,
@@ -29,14 +29,14 @@ public partial class LeaveManagementController
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
 		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
-		if (!leavePolicyId.HasValue || leavePolicyId.Value == Guid.Empty)
+		if (!leaveTypeId.HasValue || leaveTypeId.Value == Guid.Empty)
 		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
+			throw new BusinessException(HRErrorCodes.LeaveTypeNotFound);
 		}
 
 		var createDto = new LeaveRequestCreateDto
 		{
-			LeavePolicyId = leavePolicyId.Value,
+			LeaveTypeId = leaveTypeId.Value,
 			ForEmployeeId = forEmployeeId ?? employeeId,
 			StartDate = startDate,
 			EndDate = endDate,
@@ -58,21 +58,21 @@ public partial class LeaveManagementController
 	[ProducesResponseType(typeof(LeaveRequestCreatedResponse), StatusCodes.Status201Created)]
 	public virtual async Task<ActionResult<LeaveRequestCreatedResponse>> CreateMyAsync(
 		[FromQuery, Required] Guid academicYearId,
-		[FromForm] Guid? leavePolicyId,
+		[FromForm] Guid? leaveTypeId,
 		[FromForm, Required] DateTime startDate,
 		[FromForm, Required] DateTime endDate,
 		[FromForm] bool halfDay,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
 		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
-		if (!leavePolicyId.HasValue || leavePolicyId.Value == Guid.Empty)
+		if (!leaveTypeId.HasValue || leaveTypeId.Value == Guid.Empty)
 		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
+			throw new BusinessException(HRErrorCodes.LeaveTypeNotFound);
 		}
 
 		var createDto = new LeaveRequestCreateDto
 		{
-			LeavePolicyId = leavePolicyId.Value,
+			LeaveTypeId = leaveTypeId.Value,
 			StartDate = startDate,
 			EndDate = endDate,
 			HalfDay = halfDay,

@@ -44,7 +44,8 @@ public class LeaveManagementReader(
 		var query = await employeeLeaveRepository.WithDetailsAsync(
 			x => x.Employee!,
 			x => x.LeavePolicy!,
-			x => x.LeavePolicy!.LeaveType!,
+			x => x.LeavePolicyRule!,
+			x => x.LeaveType!,
 			x => x.LeavePolicy!.AcademicYear!);
 
 		var leave = await asyncExecuter.FirstOrDefaultAsync(
@@ -108,7 +109,8 @@ public class LeaveManagementReader(
 			x => x.Employee!,
 			x => x.LeavePolicy!,
 			x => x.LeavePolicy!.AcademicYear!,
-			x => x.LeavePolicy!.LeaveType!);
+			x => x.LeavePolicyRule!,
+			x => x.LeaveType!);
 
 		var leaves = await asyncExecuter.ToListAsync(
 			detailQuery.Where(x => pageIds.Contains(x.Id)));
@@ -162,7 +164,8 @@ public class LeaveManagementReader(
 			x => x.Employee!,
 			x => x.LeavePolicy!,
 			x => x.LeavePolicy!.AcademicYear!,
-			x => x.LeavePolicy!.LeaveType!);
+			x => x.LeavePolicyRule!,
+			x => x.LeaveType!);
 
 		var leaveRequests = await asyncExecuter.ToListAsync(
 			detailQuery.Where(x => pageIds.Contains(x.Id)));

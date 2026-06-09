@@ -46,10 +46,7 @@ public class StandardManager(IStandardRepository standardRepository, IGuidGenera
 		}
 		standard.SetName(newName);
 		standard.AgeLowerLimit = newAgeLowerLimit;
-		if (shiftId.HasValue)
-		{
-			standard.ShiftId = shiftId;
-		}
+		standard.ShiftId = shiftId;
 		return standard;
 	}
 

@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -27,8 +25,6 @@ public class FinanceAuditTrailAppService(
 	IRepository<Division, Guid> divisionRepository)
 	: ApplicationService, IFinanceAuditTrailAppService
 {
-	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
 	public async Task<PagedResultDto<FinanceAuditEventDto>> GetListAsync(FinanceAuditEventListRequestDto input)
 	{
 		await EnsureCanViewFinanceAuditAsync();
@@ -38,7 +34,7 @@ public class FinanceAuditTrailAppService(
 		var rows = await AsyncExecuter.ToListAsync(ApplySorting(query, input.Sorting)
 			.Skip(input.SkipCount)
 			.Take(NormalizeMaxResultCount(input.MaxResultCount)));
-		return new PagedResultDto<FinanceAuditEventDto>(total, rows.Select(ToDto).ToList());
+		return new PagedResultDto<FinanceAuditEventDto>(total, rows.Select(FinanceAuditTrailProjection.ToDto).ToList());
 	}
 
 	public async Task<PagedResultDto<FinanceAuditEventDto>> GetStudentEventsAsync(
@@ -78,7 +74,7 @@ public class FinanceAuditTrailAppService(
 				.Skip(input.SkipCount)
 				.Take(NormalizeMaxResultCount(input.MaxResultCount)));
 
-		var dtos = rows.Select(ToDto).ToList();
+		var dtos = rows.Select(FinanceAuditTrailProjection.ToDto).ToList();
 		return new FinanceAuditCorrelationDto
 		{
 			CorrelationId = normalized,
@@ -95,7 +91,7 @@ public class FinanceAuditTrailAppService(
 	{
 		await EnsureCanViewFinanceAuditAsync();
 		var entity = await repository.GetAsync(id);
-		return ToDto(entity);
+		return FinanceAuditTrailProjection.ToDto(entity);
 	}
 
 	public async Task<ListResultDto<FinanceAuditStudentLookupDto>> LookupStudentsForAuditAsync(
@@ -341,68 +337,6 @@ public class FinanceAuditTrailAppService(
 	}
 
 	private static int NormalizeMaxResultCount(int maxResultCount) => maxResultCount <= 0 ? 25 : Math.Min(maxResultCount, 100);
-
-	private static FinanceAuditEventDto ToDto(FinanceAuditEvent entity)
-	{
-		var changedFields = DeserializeChangedFields(entity.ChangedFieldsJson);
-		return new FinanceAuditEventDto
-		{
-			Id = entity.Id,
-			AcademicYearId = entity.AcademicYearId,
-			SubModuleCode = entity.SubModuleCode,
-			SubModuleDisplayName = FinanceAuditSubModuleCodes.ToDisplayName(entity.SubModuleCode),
-			EntityType = entity.EntityType,
-			EntityId = entity.EntityId,
-			EntityName = entity.EntityName,
-			Action = entity.Action,
-			ActionLabel = ToLabel(entity.Action),
-			Reason = entity.Reason,
-			Summary = entity.Summary,
-			StudentId = entity.StudentId,
-			StudentNameSnapshot = entity.StudentNameSnapshot,
-			StudentGrNoSnapshot = entity.StudentGrNoSnapshot,
-			StudentRollNoSnapshot = entity.StudentRollNoSnapshot,
-			ActorUserId = entity.ActorUserId,
-			ActorNameSnapshot = entity.ActorNameSnapshot,
-			ActorDisplayName = entity.ActorNameSnapshot ?? entity.ActorUserId?.ToString() ?? "System",
-			PerformedByRoleSnapshot = entity.PerformedByRoleSnapshot,
-			OccurredAt = entity.OccurredAt,
-			OccurredAtUtc = NormalizeUtc(entity.OccurredAt),
-			OccurredAtDisplay = string.Empty,
-			ChangedFields = changedFields,
-			ChangedFieldCount = changedFields.Count,
-			ContextJson = entity.ContextJson,
-			CorrelationId = entity.CorrelationId,
-			SourceAuditLogId = entity.SourceAuditLogId
-		};
-	}
-
-	private static List<FinanceAuditChangedFieldDto> DeserializeChangedFields(string? json)
-	{
-		if (string.IsNullOrWhiteSpace(json))
-		{
-			return [];
-		}
-
-		try
-		{
-			return JsonSerializer.Deserialize<List<FinanceAuditChangedFieldDto>>(json, JsonOptions) ?? [];
-		}
-		catch (JsonException)
-		{
-			return [];
-		}
-	}
-
-	private static DateTime NormalizeUtc(DateTime value) => value.Kind switch
-	{
-		DateTimeKind.Utc => value,
-		DateTimeKind.Local => value.ToUniversalTime(),
-		_ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
-	};
-
-	private static string ToLabel(string value) =>
-		CultureInfo.InvariantCulture.TextInfo.ToTitleCase(Normalize(value).Replace("_", " "));
 
 	private static string Normalize(string value) => value.Trim().ToLowerInvariant().Replace("-", "_");
 

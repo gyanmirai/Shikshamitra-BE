@@ -55,16 +55,25 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleDisplayName = $"{DisplayName}.Reports";
 
 			public const string View = $"{SubmoduleName}.View";
-			public const string Add = $"{SubmoduleName}.Add";
+			public const string Build = $"{SubmoduleName}.Build";
+			public const string Export = $"{SubmoduleName}.Export";
+			public const string Schedule = $"{SubmoduleName}.Schedule";
+			public const string ManageTemplates = $"{SubmoduleName}.ManageTemplates";
 			public const string Delete = $"{SubmoduleName}.Delete";
+			public const string Share = $"{SubmoduleName}.Share";
+			public const string Add = Build;
 
-			public static readonly string[] All = { View, Add, Delete };
+			public static readonly string[] All = { View, Build, Export, Schedule, ManageTemplates, Delete, Share };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+				{ Build, $"{SubmoduleDisplayName}.Build" },
+				{ Export, $"{SubmoduleDisplayName}.Export" },
+				{ Schedule, $"{SubmoduleDisplayName}.Schedule" },
+				{ ManageTemplates, $"{SubmoduleDisplayName}.ManageTemplates" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
+				{ Share, $"{SubmoduleDisplayName}.Share" }
 			};
 		}
 

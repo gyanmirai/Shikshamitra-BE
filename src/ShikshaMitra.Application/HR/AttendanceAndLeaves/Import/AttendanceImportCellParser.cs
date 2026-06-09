@@ -7,6 +7,14 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 internal static class AttendanceImportCellParser
 {
 	private static readonly TimeZoneInfo DefaultImportTimeZone = TimeZoneInfo.Local;
+	private static readonly string[] SupportedDateFormats =
+	[
+		"dd-MM-yyyy",
+		"d-M-yyyy",
+		"yyyy-MM-dd",
+		"dd/MM/yyyy",
+		"d/M/yyyy"
+	];
 
 	public static bool TryParseDate(object value, out DateOnly date)
 	{
@@ -17,18 +25,11 @@ internal static class AttendanceImportCellParser
 				return true;
 			case string stringValue when DateTime.TryParseExact(
 				stringValue.Trim(),
-				["dd-MM-yyyy", "d-M-yyyy", "yyyy-MM-dd", "dd/MM/yyyy", "d/M/yyyy"],
+				SupportedDateFormats,
 				CultureInfo.InvariantCulture,
 				DateTimeStyles.None,
 				out var parsedExact):
 				date = DateOnly.FromDateTime(parsedExact);
-				return true;
-			case string stringValue when DateTime.TryParse(
-				stringValue.Trim(),
-				CultureInfo.InvariantCulture,
-				DateTimeStyles.AllowWhiteSpaces,
-				out var parsedFlexible):
-				date = DateOnly.FromDateTime(parsedFlexible);
 				return true;
 			default:
 				date = default;

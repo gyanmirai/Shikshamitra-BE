@@ -8,10 +8,17 @@ using ShikshaMitra.Application.Contracts.HR.Calendar.CalendarView;
 using ShikshaMitra.Application.Contracts.HR.Calendar.Events;
 using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Infrastructure.Data;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
+using Microsoft.Extensions.DependencyInjection;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.HR.Calendar;
@@ -90,6 +97,31 @@ public class CalendarViewApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Scoped_User_Without_Group_Should_Only_See_Public_Calendar_Items()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var academicYearId = Factory.SeededAcademicYearId;
+		var marker = $"CalScope{Guid.NewGuid():N}";
+		var publicEvent = await CreateEventAsync($"{marker}Public");
+		var targetedEvent = await CreateEventAsync($"{marker}Targeted", audienceIds: [Guid.NewGuid()]);
+		var scopedUserId = Guid.NewGuid();
+		await EnsureUserHasStageScopeAsync(scopedUserId, EmployeeTestHelper.DefaultMediumStageId);
+		var scopedClient = CreateClientAs(scopedUserId);
+
+		var response = await scopedClient.GetAsync(
+			$"{BaseUrl}/view?academicYearId={academicYearId}&search={Uri.EscapeDataString(marker)}&SkipCount=0&MaxResultCount=100");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var body = await response.Content.ReadFromJsonAsync<PagedResultDto<CalendarViewItemDto>>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Items.Any(x => x.Id == publicEvent.Id).ShouldBeTrue();
+		body.Items.Any(x => x.Id == targetedEvent.Id).ShouldBeFalse();
+		body.Items.ShouldAllBe(x => x.AudienceCount == 0);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Get_Item_Details_Returns_404_For_Nonexistent()
 	{
@@ -105,7 +137,8 @@ public class CalendarViewApi_Tests : ShikshaMitraApiTestBase
 	private async Task<EventDto> CreateEventAsync(
 		string suffix,
 		DateTimeOffset? startDate = null,
-		DateTimeOffset? endDate = null)
+		DateTimeOffset? endDate = null,
+		List<Guid>? audienceIds = null)
 	{
 		var eventType = await CalendarTestHelper.CreateEventTypeAsync(Client, suffix);
 		var academicYearId = Factory.SeededAcademicYearId;
@@ -122,7 +155,7 @@ public class CalendarViewApi_Tests : ShikshaMitraApiTestBase
 			StartTime = "09:00",
 			EndTime = "10:00",
 			IsRecurring = false,
-			AudienceIds = new List<Guid>(),
+			AudienceIds = audienceIds ?? [],
 		};
 
 		var response = await Client.PostAsJsonAsync(
@@ -155,6 +188,31 @@ public class CalendarViewApi_Tests : ShikshaMitraApiTestBase
 		response.EnsureSuccessStatusCode();
 		return await response.Content.ReadFromJsonAsync<HolidayDto>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create holiday");
+	}
+
+	private async Task EnsureUserHasStageScopeAsync(Guid userId, Guid stageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var scopeRepository = scope.ServiceProvider.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		var userScopeService = scope.ServiceProvider.GetRequiredService<IUserScopeService>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await scopeRepository.InsertAsync(
+				new UserScopeAssignment(
+					Guid.NewGuid(),
+					tenantId,
+					userId: userId,
+					educationMediumStageId: stageId,
+					description: "Calendar view scoped API regression"),
+				autoSave: false);
+			await userScopeService.InvalidateUserScopeCacheAsync(userId);
+			await uow.CompleteAsync();
+		}
 	}
 
 	#endregion

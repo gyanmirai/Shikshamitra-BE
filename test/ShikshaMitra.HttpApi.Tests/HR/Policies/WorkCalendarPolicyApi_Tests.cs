@@ -2,6 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Payroll.Settings;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
@@ -32,6 +36,61 @@ public class WorkCalendarPolicyApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var body = await response.Content.ReadFromJsonAsync<List<WorkCalendarHolidayDto>>(JsonOptions);
 		body.ShouldNotBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Impact_Preview_Should_Accept_WorkCalendar_Alias()
+	{
+		var response = await Client.PostAsJsonAsync("/api/hr/policies/impact-preview", new HrPolicyImpactPreviewRequestDto
+		{
+			PolicyType = "workcalendar",
+			AcademicYearId = Factory.SeededAcademicYearId,
+			Action = "update"
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<HrPolicyImpactPreviewDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		body!.PolicyType.ShouldBe("work_calendar");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Restore_Preview_Should_Not_Report_Current_Policy_Assignment_Impact()
+	{
+		var (payrollPolicyId, versionId) = await SeedPayrollVersionWithReferencingAssignmentAsync();
+
+		var response = await Client.GetAsync($"/api/hr/payroll/policies/{payrollPolicyId}/versions/{versionId}/restore-preview");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<HrPolicyImpactPreviewDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		body!.Action.ShouldBe("restore-draft");
+		body.AffectedEmployeeCount.ShouldBe(0);
+		body.AffectedAssignmentCount.ShouldBe(0);
+		body.RequiresConfirmation.ShouldBeFalse();
+		body.ConfirmationToken.ShouldBeNull();
+		body.RiskSummary.ShouldBe("No policy risks detected for this action.");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Restore_Preview_Should_Return_Review_Only_Warnings_Without_Confirmation_Token()
+	{
+		var (payrollPolicyId, versionId) = await SeedDraftPayrollVersionWithDraftCalendarAsync();
+
+		var response = await Client.GetAsync($"/api/hr/payroll/policies/{payrollPolicyId}/versions/{versionId}/restore-preview");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<HrPolicyImpactPreviewDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		body!.Action.ShouldBe("restore-draft");
+		body.Warnings.ShouldContain(x => x.Code == HRErrorCodes.WorkCalendarPolicyMustBeActive);
+		body.BlockingWarnings.ShouldBeEmpty();
+		body.RequiresConfirmation.ShouldBeFalse();
+		body.ConfirmationToken.ShouldBeNull();
+		body.RiskSummary.ShouldBe("1 non-blocking notice(s) found; no confirmation is required.");
 	}
 
 	[Fact]
@@ -79,6 +138,184 @@ public class WorkCalendarPolicyApi_Tests : ShikshaMitraApiTestBase
 		range.FromDate?.Date.ShouldBe(fromDate);
 		range.ToDate?.Date.ShouldBe(toDate);
 		range.DayCount.ShouldBe(5);
+	}
+
+	private async Task<(Guid PayrollPolicyId, Guid VersionId)> SeedPayrollVersionWithReferencingAssignmentAsync()
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var workCalendarRepository = scope.ServiceProvider.GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
+		var payrollRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var versionRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyVersion, Guid>>();
+
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		{
+			var academicYear = await GetAcademicYearDateRangeAsync(Factory.SeededAcademicYearId);
+			var calendar = await workCalendarRepository.InsertAsync(new WorkCalendarPolicy(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				Factory.SeededAcademicYearId,
+				$"Restore Preview Calendar {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				academicYear.StartDate,
+				academicYear.EndDate,
+				AttendanceWeeklyOffPattern.SaturdaySunday,
+				[],
+				WorkCalendarHolidaySyncMode.LinkedWithOverrides), autoSave: true);
+
+			var payroll = await payrollRepository.InsertAsync(new PayrollPolicy(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				Factory.SeededAcademicYearId,
+				calendar.Id,
+				$"Restore Preview Payroll {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				false,
+				DayCalculationType.WorkingDays,
+				null,
+				[],
+				SaturdayWorkPolicy.FullDay,
+				[]), autoSave: true);
+
+			var attendance = await attendanceRepository.InsertAsync(new AttendancePolicy(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				Factory.SeededAcademicYearId,
+				calendar.Id,
+				$"Restore Preview Attendance {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				false,
+				AttendanceCaptureMode.ManualStatus,
+				80,
+				50,
+				0,
+				AttendanceMissingPunchBehavior.RequiresReview,
+				true,
+				0,
+				0,
+				AttendancePenaltyType.None,
+				0,
+				false,
+				0,
+				false,
+				null,
+				null,
+				AttendanceHolidayWorkBehavior.CompOff,
+				false,
+				true), autoSave: true);
+
+			await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				Factory.SeededAcademicYearId,
+				HrPolicyAssignmentTargetType.Employee,
+				Guid.NewGuid().ToString("D").ToLowerInvariant(),
+				"Restore Preview Employee",
+				attendance.Id,
+				payroll.Id,
+				academicYear.StartDate,
+				null,
+				true,
+				100,
+				"Restore preview API regression"), autoSave: true);
+
+			var snapshot = new PayrollPolicyDto
+			{
+				Id = payroll.Id,
+				AcademicYearId = payroll.AcademicYearId,
+				WorkCalendarPolicyId = payroll.WorkCalendarPolicyId,
+				Name = payroll.Name,
+				Status = "active",
+				IsDefault = false,
+				DayCalculationType = "working-days",
+				SaturdayWorkPolicy = "full-day",
+				Version = payroll.Version
+			};
+			var version = await versionRepository.InsertAsync(new HrPolicyVersion(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				"payroll",
+				payroll.Id,
+				payroll.AcademicYearId,
+				payroll.Version,
+				payroll.Name,
+				"active",
+				null,
+				null,
+				JsonSerializer.Serialize(snapshot, JsonOptions),
+				"created"), autoSave: true);
+
+			return (payroll.Id, version.Id);
+		}
+	}
+
+	private async Task<(Guid PayrollPolicyId, Guid VersionId)> SeedDraftPayrollVersionWithDraftCalendarAsync()
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var workCalendarRepository = scope.ServiceProvider.GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
+		var payrollRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var versionRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyVersion, Guid>>();
+
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		{
+			var academicYear = await GetAcademicYearDateRangeAsync(Factory.SeededAcademicYearId);
+			var calendar = await workCalendarRepository.InsertAsync(new WorkCalendarPolicy(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				Factory.SeededAcademicYearId,
+				$"Restore Draft Calendar {Guid.NewGuid():N}",
+				HrPolicyStatus.Draft,
+				academicYear.StartDate,
+				academicYear.EndDate,
+				AttendanceWeeklyOffPattern.SaturdaySunday,
+				[],
+				WorkCalendarHolidaySyncMode.LinkedWithOverrides), autoSave: true);
+
+			var payroll = await payrollRepository.InsertAsync(new PayrollPolicy(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				Factory.SeededAcademicYearId,
+				calendar.Id,
+				$"Restore Draft Payroll {Guid.NewGuid():N}",
+				HrPolicyStatus.Draft,
+				false,
+				DayCalculationType.WorkingDays,
+				null,
+				[],
+				SaturdayWorkPolicy.FullDay,
+				[]), autoSave: true);
+
+			var snapshot = new PayrollPolicyDto
+			{
+				Id = payroll.Id,
+				AcademicYearId = payroll.AcademicYearId,
+				WorkCalendarPolicyId = payroll.WorkCalendarPolicyId,
+				Name = payroll.Name,
+				Status = "draft",
+				IsDefault = false,
+				DayCalculationType = "working-days",
+				SaturdayWorkPolicy = "full-day",
+				Version = payroll.Version
+			};
+			var version = await versionRepository.InsertAsync(new HrPolicyVersion(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				"payroll",
+				payroll.Id,
+				payroll.AcademicYearId,
+				payroll.Version,
+				payroll.Name,
+				"draft",
+				null,
+				null,
+				JsonSerializer.Serialize(snapshot, JsonOptions),
+				"created"), autoSave: true);
+
+			return (payroll.Id, version.Id);
+		}
 	}
 
 	private async Task<(DateTime StartDate, DateTime EndDate)> GetAcademicYearDateRangeAsync(Guid academicYearId)

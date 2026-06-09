@@ -1,3 +1,4 @@
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using System;
@@ -25,15 +26,11 @@ public class SalarySlipAccessService(
 		}
 
 		var employeeStageId = await ResolveEmployeeStageAsync(employeeId);
-		if (!employeeStageId.HasValue)
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
-
-		if (!await hrScopeAccessService.CanAccessEmployeeStageAsync(scope, employeeStageId.Value))
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
+		await hrScopeAccessService.EnsureCanAccessEmployeeStageAsync(
+			scope,
+			employeeStageId,
+			nameof(EnsureEmployeeScopeAllowedAsync),
+			employeeId);
 	}
 
 	private async Task<UserScopeContext> EnsureCanOperatePayrollAsync()
@@ -50,10 +47,7 @@ public class SalarySlipAccessService(
 			return scope;
 		}
 
-		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
+		hrScopeAccessService.EnsureHasConcreteHrAccess(scope, nameof(EnsureCanOperatePayrollAsync));
 
 		return scope;
 	}

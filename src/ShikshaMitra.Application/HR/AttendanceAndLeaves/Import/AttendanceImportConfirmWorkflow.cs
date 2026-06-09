@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Caching.Distributed;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.AttendanceImports;
 using System;
@@ -16,7 +17,8 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.Import;
 public class AttendanceImportConfirmWorkflow(
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
-	IDistributedCache<AttendanceImportPreviewCacheItem> previewCache)
+	IDistributedCache<AttendanceImportPreviewCacheItem> previewCache,
+	AttendanceCaptureModeLookupResolver captureModeLookupResolver)
 	: ApplicationService
 {
 	public async Task<AttendanceImportConfirmResponseDto> ConfirmAsync(AttendanceImportConfirmRequestDto input)
@@ -60,14 +62,20 @@ public class AttendanceImportConfirmWorkflow(
 
 		var createdCount = 0;
 		var replacedCount = 0;
+		var captureModeLookup = await captureModeLookupResolver.ResolveForPairsAsync(
+			cached.Rows.Select(x => (x.EmployeeId, x.AttendanceDate)));
 
 		foreach (var row in cached.Rows)
 		{
+			captureModeLookup.TryGetValue((row.EmployeeId, row.AttendanceDate), out var captureMode);
+			var isManualStatus = captureMode == AttendanceCaptureMode.ManualStatus;
+			var timeIn = isManualStatus ? null : row.TimeIn;
+			var timeOut = isManualStatus ? null : row.TimeOut;
 			var key = AttendanceImportPreviewMapper.BuildRowKey(row.EmployeeId, row.AttendanceDate);
 			if (existingLookup.TryGetValue(key, out var existing))
 			{
-				existing.TimeIn = row.TimeIn;
-				existing.TimeOut = row.TimeOut;
+				existing.TimeIn = timeIn;
+				existing.TimeOut = timeOut;
 				existing.StatusType = row.StatusType;
 				existing.Source = AttendanceRecordSource.CsvImport;
 				existing.EducationMediumStageId = row.EducationMediumStageId;
@@ -82,8 +90,8 @@ public class AttendanceImportConfirmWorkflow(
 				TenantId = CurrentTenant.Id,
 				EmployeeId = row.EmployeeId,
 				AttendanceDate = row.AttendanceDate,
-				TimeIn = row.TimeIn,
-				TimeOut = row.TimeOut,
+				TimeIn = timeIn,
+				TimeOut = timeOut,
 				StatusType = row.StatusType,
 				Source = AttendanceRecordSource.CsvImport,
 				EducationMediumStageId = row.EducationMediumStageId,

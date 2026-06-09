@@ -25,6 +25,15 @@ public partial class ProfessionalManagementAppService
 	public Task<List<PerformanceSqaaEvidenceDto>> GetSqaaEvidenceAsync(Guid? cycleId = null, PerformanceBoardType? boardType = null, PerformanceStaffCategory? staffCategory = null, PerformanceSqaaDomain? sqaaDomain = null) =>
 		AuthorizedAsync(EnsureReportExportAccessAsync, () => _dashboardReader.GetSqaaEvidenceAsync(cycleId, boardType, staffCategory, sqaaDomain));
 
+	public Task<List<PerformanceSqaaReadinessDomainDto>> GetSqaafReadinessAsync(Guid? cycleId = null, PerformanceBoardType? boardType = null, PerformanceStaffCategory? staffCategory = null, PerformanceSqaaDomain? sqaaDomain = null) =>
+		AuthorizedAsync(EnsureReportExportAccessAsync, () => _dashboardReader.GetSqaafReadinessAsync(cycleId, boardType, staffCategory, sqaaDomain));
+
+	public Task<PerformanceSqaaAuditPackDto> GetSqaafAuditPackAsync(Guid? cycleId = null, PerformanceBoardType? boardType = null, PerformanceStaffCategory? staffCategory = null, PerformanceSqaaDomain? sqaaDomain = null) =>
+		AuthorizedAsync(EnsureReportExportAccessAsync, () => _dashboardReader.GetSqaafAuditPackAsync(cycleId, boardType, staffCategory, sqaaDomain));
+
+	public Task<PerformanceSqaaAuditPackExportDto> GetSqaafAuditPackExportAsync(Guid? cycleId = null, PerformanceBoardType? boardType = null, PerformanceStaffCategory? staffCategory = null, PerformanceSqaaDomain? sqaaDomain = null) =>
+		AuthorizedAsync(EnsureReportExportAccessAsync, () => _dashboardReader.GetSqaafAuditPackExportAsync(cycleId, boardType, staffCategory, sqaaDomain));
+
 	public async Task<List<PerformanceAuditEventDto>> GetAuditTrailAsync(Guid? reviewId = null)
 	{
 		await EnsureAuditAccessAsync();

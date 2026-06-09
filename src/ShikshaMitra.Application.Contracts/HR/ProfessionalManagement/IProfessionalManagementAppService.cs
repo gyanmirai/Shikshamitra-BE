@@ -47,6 +47,9 @@ public interface IProfessionalManagementAppService : IApplicationService
 	Task<List<DevelopmentPlanDto>> GetTrainingNeedsAsync(Guid? cycleId = null);
 	Task<List<PerformanceOutcomeDto>> GetIncrementRecommendationsAsync(Guid? cycleId = null);
 	Task<List<PerformanceSqaaEvidenceDto>> GetSqaaEvidenceAsync(Guid? cycleId = null, PerformanceBoardType? boardType = null, PerformanceStaffCategory? staffCategory = null, PerformanceSqaaDomain? sqaaDomain = null);
+	Task<List<PerformanceSqaaReadinessDomainDto>> GetSqaafReadinessAsync(Guid? cycleId = null, PerformanceBoardType? boardType = null, PerformanceStaffCategory? staffCategory = null, PerformanceSqaaDomain? sqaaDomain = null);
+	Task<PerformanceSqaaAuditPackDto> GetSqaafAuditPackAsync(Guid? cycleId = null, PerformanceBoardType? boardType = null, PerformanceStaffCategory? staffCategory = null, PerformanceSqaaDomain? sqaaDomain = null);
+	Task<PerformanceSqaaAuditPackExportDto> GetSqaafAuditPackExportAsync(Guid? cycleId = null, PerformanceBoardType? boardType = null, PerformanceStaffCategory? staffCategory = null, PerformanceSqaaDomain? sqaaDomain = null);
 	Task<List<PerformanceAuditEventDto>> GetAuditTrailAsync(Guid? reviewId = null);
 	Task<byte[]> GetReviewPdfAsync(Guid id);
 }

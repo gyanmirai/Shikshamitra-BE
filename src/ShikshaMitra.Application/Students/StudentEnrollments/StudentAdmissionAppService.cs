@@ -19,6 +19,7 @@ using Volo.Abp.Domain.Entities;
 using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.Students.StudentEnrollments.Managers;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Students.StudentRecords;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -42,8 +43,20 @@ public class StudentAdmissionAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.View)]
 	public async Task<PagedResultDto<StudentDto>> GetListAsync(GetStudentAdmissionsInput input)
 	{
-		var query = (await studentRepository.GetQueryableAsync())
-			.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission);
+		var query = await studentRepository.GetQueryableAsync();
+
+		if (input.ApprovalStatus == StudentEnrollmentApprovalState.Approved)
+		{
+			query = query.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled && s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved);
+		}
+		else if (input.ApprovalStatus == StudentEnrollmentApprovalState.Rejected)
+		{
+			query = query.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission && s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Rejected);
+		}
+		else
+		{
+			query = query.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission && s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Pending);
+		}
 
 		query = await ApplyCurrentUserScopeAsync(query);
 

@@ -22,11 +22,16 @@ public class HrPolicyImpactConfirmationService(
 
 	public async Task AttachTokenAsync(HrPolicyImpactPreviewDto preview)
 	{
-		preview.BlockingWarnings = preview.Warnings
-			.Where(x => string.Equals(x.Severity, "blocking", StringComparison.OrdinalIgnoreCase))
-			.ToList();
-		preview.RequiresConfirmation = preview.BlockingWarnings.Count > 0 ||
-			preview.Warnings.Any(RequiresConfirmation);
+		preview.ConfirmationToken = null;
+		preview.ExpiresAt = null;
+		preview.BlockingWarnings = HrPolicyImpactWarningBuilder.GetBlockingWarnings(preview);
+		if (preview.BlockingWarnings.Count > 0)
+		{
+			preview.RequiresConfirmation = false;
+			return;
+		}
+
+		preview.RequiresConfirmation = preview.Warnings.Any(HrPolicyImpactWarningBuilder.RequiresConfirmation);
 
 		if (!preview.RequiresConfirmation)
 		{
@@ -40,7 +45,8 @@ public class HrPolicyImpactConfirmationService(
 			preview.PolicyId,
 			preview.AcademicYearId,
 			NormalizeAction(preview.Action),
-			preview.BlockingWarnings.Count > 0,
+			HasBlockingWarnings: false,
+			HrPolicyImpactFingerprintBuilder.Build(preview),
 			expiresAt);
 
 		await cache.SetAsync(
@@ -57,16 +63,14 @@ public class HrPolicyImpactConfirmationService(
 
 	public async Task EnsureConfirmedAsync(HrPolicyImpactPreviewDto preview, string? confirmationToken = null)
 	{
-		preview.BlockingWarnings = preview.Warnings
-			.Where(x => string.Equals(x.Severity, "blocking", StringComparison.OrdinalIgnoreCase))
-			.ToList();
+		preview.BlockingWarnings = HrPolicyImpactWarningBuilder.GetBlockingWarnings(preview);
 		if (preview.BlockingWarnings.Count > 0)
 		{
 			throw new BusinessException(HRErrorCodes.HrPolicyImpactBlocking)
 				.WithData("warnings", string.Join("; ", preview.BlockingWarnings.Select(x => x.Message)));
 		}
 
-		var requiresConfirmation = preview.Warnings.Any(RequiresConfirmation);
+		var requiresConfirmation = preview.Warnings.Any(HrPolicyImpactWarningBuilder.RequiresConfirmation);
 		if (!requiresConfirmation)
 		{
 			return;
@@ -91,6 +95,7 @@ public class HrPolicyImpactConfirmationService(
 
 		if (payload.ExpiresAt < clock.Now ||
 			payload.HasBlockingWarnings ||
+			!string.Equals(payload.RiskFingerprint, HrPolicyImpactFingerprintBuilder.Build(preview), StringComparison.Ordinal) ||
 			!string.Equals(payload.PolicyType, preview.PolicyType, StringComparison.OrdinalIgnoreCase) ||
 			payload.PolicyId != preview.PolicyId ||
 			payload.AcademicYearId != preview.AcademicYearId ||
@@ -103,16 +108,12 @@ public class HrPolicyImpactConfirmationService(
 	private static string NormalizeAction(string? action) =>
 		string.IsNullOrWhiteSpace(action) ? "update" : action.Trim().ToLowerInvariant();
 
-	private static bool RequiresConfirmation(HrPolicyImpactWarningDto warning) =>
-		warning.Code != HRErrorCodes.HrPolicyNoAffectedEmployees &&
-		(string.Equals(warning.Severity, "warning", StringComparison.OrdinalIgnoreCase) ||
-		 string.Equals(warning.Severity, "info", StringComparison.OrdinalIgnoreCase));
-
 	private sealed record ConfirmationPayload(
 		string PolicyType,
 		Guid? PolicyId,
 		Guid AcademicYearId,
 		string Action,
 		bool HasBlockingWarnings,
+		string RiskFingerprint,
 		DateTime ExpiresAt);
 }

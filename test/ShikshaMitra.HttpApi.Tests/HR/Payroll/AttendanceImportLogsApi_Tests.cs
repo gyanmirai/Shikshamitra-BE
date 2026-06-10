@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -336,6 +337,46 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Normalize_Import_Row_Save_DateTime_Punches_To_Row_Attendance_Date()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ImportRowNormalize");
+		var fileName = $"row-normalize-{Guid.NewGuid():N}.csv";
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		using var upload = BuildCsvUploadWithFileName(
+			fileName,
+			$"{attendanceDate:dd-MM-yyyy},{employee.EmployeeCode},09:00 AM,05:30 PM,,Regular shift,{employee.FullName},{employee.MobileNo}");
+
+		var importId = await UploadConfirmAndFindImportAsync(fileName, upload);
+		var row = (await GetRowsAsync(importId)).Items[0];
+
+		var saveResponse = await Client.PostAsJsonAsync($"{HrAutomatedRunsUrl}/{importId}/rows/save", new AttendanceImportRowsSaveInput
+		{
+			Entries =
+			[
+				new AttendanceImportRowsSaveEntryDto
+				{
+					RowId = row.Id,
+					EmployeeId = row.EmployeeId!.Value,
+					AttendanceDate = row.AttendanceDate,
+					StatusWire = "Present",
+					InTime = "2026-05-20T09:15:00-07:00",
+					OutTime = "2026-05-20T17:45:00-07:00",
+					Remarks = "Mismatched punch date should normalize"
+				}
+			]
+		}, JsonOptions);
+
+		saveResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await saveResponse.Content.ReadAsStringAsync());
+		var attendance = await GetAttendanceAsync(employee.Id, attendanceDate);
+		DateOnly.FromDateTime(attendance.TimeIn!.Value.DateTime).ShouldBe(attendanceDate);
+		DateOnly.FromDateTime(attendance.TimeOut!.Value.DateTime).ShouldBe(attendanceDate);
+		attendance.TimeIn.Value.TimeOfDay.ShouldBe(new TimeSpan(9, 15, 0));
+		attendance.TimeOut.Value.TimeOfDay.ShouldBe(new TimeSpan(17, 45, 0));
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Reject_Import_Row_Save_When_Request_Does_Not_Match_Row()
 	{
@@ -517,6 +558,24 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 			salarySlip.FinalizeSlip();
 			await salarySlipRepository.InsertAsync(salarySlip, autoSave: false);
 			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<EmployeeAttendance> GetAttendanceAsync(Guid employeeId, DateOnly attendanceDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var query = await attendanceRepository.GetQueryableAsync();
+			var attendance = query.Single(x => x.EmployeeId == employeeId && x.AttendanceDate == attendanceDate);
+			await uow.CompleteAsync();
+			return attendance;
 		}
 	}
 

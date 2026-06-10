@@ -34,7 +34,8 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 		var detail = await response.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
 		detail.ShouldNotBeNull();
 		detail.Id.ShouldBe(created.Id);
-		detail.LeaveType.Id.ShouldBe(leaveType.Id);
+		detail.Rules.ShouldHaveSingleItem();
+		detail.Rules[0].LeaveType.Id.ShouldBe(leaveType.Id);
 	}
 
 	[Fact]
@@ -47,27 +48,38 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PutAsJsonAsync($"{LeavePoliciesUrl}/{created.Id}", new LeavePolicyUpdateRequest
 		{
 			PolicyTitle = created.PolicyTitle,
-			LeaveType = leaveType.Id,
-			AccrualPolicyType = "Yearly",
-			LeaveCount = created.LeaveCount,
-			PaidType = created.PaidType,
-			CarryForward = created.CarryForward,
-			EncashmentAllowed = created.EncashmentAllowed,
-			EncashmentTiming = created.EncashmentTiming,
-			RequiresApproval = created.RequiresApproval,
-			Description = created.Description
+			Status = created.Status,
+			EffectiveFrom = created.EffectiveFrom,
+			EffectiveTo = created.EffectiveTo,
+			Description = created.Description,
+			Rules =
+			[
+				new LeavePolicyRuleRequest
+				{
+					LeaveTypeId = leaveType.Id,
+					AccrualPolicyType = "Yearly",
+					LeaveCount = created.Rules[0].LeaveCount,
+					PaidType = created.Rules[0].PaidType,
+					CarryForward = created.Rules[0].CarryForward,
+					EncashmentAllowed = created.Rules[0].EncashmentAllowed,
+					EncashmentTiming = created.Rules[0].EncashmentTiming,
+					RequiresApproval = created.Rules[0].RequiresApproval
+				}
+			]
 		}, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var updated = await response.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
 		updated.ShouldNotBeNull();
-		updated.AccrualPolicyType.ShouldBe("Yearly");
+		updated.Rules.ShouldHaveSingleItem();
+		updated.Rules[0].AccrualPolicyType.ShouldBe("Yearly");
 
 		var detailResponse = await Client.GetAsync($"{LeavePoliciesUrl}/{created.Id}");
 		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var detail = await detailResponse.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
 		detail.ShouldNotBeNull();
-		detail.AccrualPolicyType.ShouldBe("Yearly");
+		detail.Rules.ShouldHaveSingleItem();
+		detail.Rules[0].AccrualPolicyType.ShouldBe("Yearly");
 	}
 
 	[Fact]
@@ -107,15 +119,23 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 		var request = new LeavePolicyCreateRequest
 		{
 			PolicyTitle = policyTitle ?? $"Policy-{Guid.NewGuid():N}",
-			LeaveType = leaveTypeId,
-			AccrualPolicyType = "Monthly",
-			LeaveCount = 12,
-			PaidType = "Paid",
-			CarryForward = true,
-			EncashmentAllowed = true,
-			EncashmentTiming = "next_payroll",
-			RequiresApproval = true,
-			Description = "Policy for API testing"
+			Status = "Active",
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Description = "Policy for API testing",
+			Rules =
+			[
+				new LeavePolicyRuleRequest
+				{
+					LeaveTypeId = leaveTypeId,
+					AccrualPolicyType = "Monthly",
+					LeaveCount = 12,
+					PaidType = "Paid",
+					CarryForward = true,
+					EncashmentAllowed = true,
+					EncashmentTiming = "next_payroll",
+					RequiresApproval = true
+				}
+			]
 		};
 
 		var response = await Client.PostAsJsonAsync($"{LeavePoliciesUrl}?academicYearId={AcademicYearId}", request, JsonOptions);

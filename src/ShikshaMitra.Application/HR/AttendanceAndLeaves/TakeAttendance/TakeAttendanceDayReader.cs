@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Policies;
@@ -144,7 +145,7 @@ public class TakeAttendanceDayReader(
 			employeeIds,
 			employeeStageMap,
 			scope,
-			includeUnknownStageEmployees: scope.MediumStageIds.Count == 1);
+			includeUnknownStageEmployees: HrUserScopeAccess.HasSingleConcreteMediumStage(scope));
 	}
 
 	private async Task<Dictionary<Guid, ShiftManagement>> LoadShiftLookupAsync(List<Guid> shiftIds)

@@ -102,12 +102,13 @@ public class AttendanceRegisterReader(
 		}
 
 		var scope = await userScopeService.GetUserScopeAsync(uid.Value);
-		if (HrUserScopeAccess.HasHrWideAccess(scope) || HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
+		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return scope;
 		}
 
-		throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		hrScopeAccessService.EnsureHasConcreteHrAccess(scope, nameof(EnsureCanUseRegisterAsync));
+		return scope;
 	}
 
 	private async Task<(List<RegisterProjection> Rows, Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> LockLookup)> ResolveRegisterRowsAsync(GetAttendanceRegisterInput input)
@@ -127,12 +128,10 @@ public class AttendanceRegisterReader(
 
 	private async Task EnsureStageInScopeAsync(UserScopeContext scope, Guid? stageId)
 	{
-		if (await hrScopeAccessService.CanAccessEmployeeStageAsync(scope, stageId))
-		{
-			return;
-		}
-
-		throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		await hrScopeAccessService.EnsureCanAccessEmployeeStageAsync(
+			scope,
+			stageId,
+			nameof(EnsureStageInScopeAsync));
 	}
 
 	private static (DateOnly Start, DateOnly End) ParseDateRange(string start, string end)
@@ -152,17 +151,14 @@ public class AttendanceRegisterReader(
 
 	private static DateTime ParseDate(string dateString)
 	{
-		if (DateTimeOffset.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
-		{
-			return dto.Date;
-		}
-		if (DateTime.TryParseExact(dateString, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var exact))
+		if (DateTime.TryParseExact(
+			    dateString,
+			    ["dd-MM-yyyy", "d-M-yyyy", "yyyy-MM-dd", "dd/MM/yyyy", "d/M/yyyy"],
+			    CultureInfo.InvariantCulture,
+			    DateTimeStyles.None,
+			    out var exact))
 		{
 			return exact;
-		}
-		if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
-		{
-			return parsed;
 		}
 		throw new BusinessException(HRErrorCodes.AttendanceInvalidDateFormat);
 	}

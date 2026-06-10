@@ -1,6 +1,5 @@
-using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.RunPayroll;
-using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
@@ -19,117 +18,137 @@ public class HrReportEmployeePayrollRowReader(
 	HrReportEmployeeQueryService employeeQueryService,
 	IAsyncQueryableExecuter asyncExecuter) : ITransientDependency
 {
-	public async Task<List<Dictionary<string, string?>>> BuildEmployeeRowsAsync(HrReportRequestDto input, UserScopeContext scope)
-	{
-		var query = HrReportEmployeeQueryService.ApplyEmployeeFilters(await employeeQueryService.BuildScopedEmployeeQueryAsync(scope), input.Filters);
-		query = ApplyEmployeeDateRange(query, input.Filters);
-		var employees = await asyncExecuter.ToListAsync(query.OrderBy(e => e.EmployeeCode).Select(e => new
-		{
-			e.EmployeeCode,
-			e.EmployeeName,
-			e.FirstName,
-			e.LastName,
-			e.Department,
-			e.Designation,
-			e.EmployeeStatusType,
-			e.GenderType,
-			e.MobileNo,
-			e.Email,
-			e.DateOfJoining,
-			e.DateOfBirth
-		}).Take(HrReportRequestProcessor.MaxExportRows));
-
-		return employees.Select(e => Row(
-			("employeeCode", e.EmployeeCode),
-			("employeeName", DisplayName(e.EmployeeName, e.FirstName, e.LastName)),
-			("department", e.Department),
-			("designation", e.Designation),
-			("status", e.EmployeeStatusType?.ToString()),
-			("gender", e.GenderType?.ToString()),
-			("mobileNo", e.MobileNo),
-			("email", e.Email),
-			("dateOfJoining", FormatDate(e.DateOfJoining)),
-			("dateOfBirth", FormatDate(e.DateOfBirth)))).ToList();
-	}
-
-	private static IQueryable<Employee> ApplyEmployeeDateRange(IQueryable<Employee> query, HrReportFilterDto filters)
-	{
-		if (!filters.FromDate.HasValue && !filters.ToDate.HasValue)
-		{
-			return query;
-		}
-
-		var dateField = string.IsNullOrWhiteSpace(filters.DateField) ? "dateOfJoining" : filters.DateField;
-		return dateField switch
-		{
-			"dateOfBirth" => ApplyNullableDateRange(query, filters, e => e.DateOfBirth),
-			_ => ApplyNullableDateRange(query, filters, e => e.DateOfJoining)
-		};
-	}
-
-	private static IQueryable<Employee> ApplyNullableDateRange(
-		IQueryable<Employee> query,
-		HrReportFilterDto filters,
-		System.Linq.Expressions.Expression<Func<Employee, DateOnly?>> selector)
-	{
-		if (filters.FromDate.HasValue)
-		{
-			query = query.Where(BuildNullableDateComparison(selector, filters.FromDate.Value, true));
-		}
-
-		if (filters.ToDate.HasValue)
-		{
-			query = query.Where(BuildNullableDateComparison(selector, filters.ToDate.Value, false));
-		}
-
-		return query;
-	}
-
-	private static System.Linq.Expressions.Expression<Func<Employee, bool>> BuildNullableDateComparison(
-		System.Linq.Expressions.Expression<Func<Employee, DateOnly?>> selector,
-		DateOnly value,
-		bool gte)
-	{
-		var hasValue = System.Linq.Expressions.Expression.Property(selector.Body, nameof(Nullable<DateOnly>.HasValue));
-		var actual = System.Linq.Expressions.Expression.Property(selector.Body, nameof(Nullable<DateOnly>.Value));
-		var comparison = gte
-			? System.Linq.Expressions.Expression.GreaterThanOrEqual(actual, System.Linq.Expressions.Expression.Constant(value))
-			: System.Linq.Expressions.Expression.LessThanOrEqual(actual, System.Linq.Expressions.Expression.Constant(value));
-		return System.Linq.Expressions.Expression.Lambda<Func<Employee, bool>>(
-			System.Linq.Expressions.Expression.AndAlso(hasValue, comparison),
-			selector.Parameters);
-	}
-
 	public async Task<List<Dictionary<string, string?>>> BuildPayrollRowsAsync(HrReportRequestDto input, UserScopeContext scope)
 	{
+		var query = await BuildPayrollQueryAsync(input, scope);
+		var rows = await asyncExecuter.ToListAsync(
+			query
+				.OrderBy(x => x.EmployeeCode)
+				.Take(HrReportRequestProcessor.MaxExportRows));
+		return rows.Select(ToRow).ToList();
+	}
+
+	public async Task<HrReportRowsResult> BuildPayrollRowsResultAsync(
+		HrReportRequestDto input,
+		UserScopeContext scope,
+		bool exportAllRows)
+	{
+		var query = await BuildPayrollQueryAsync(input, scope);
+		var totalCount = await asyncExecuter.CountAsync(query);
+		var sortedQuery = HrReportPayrollRowSorting.Apply(query, input.Sorts);
+		var skip = exportAllRows ? 0 : (input.Page - 1) * input.PageSize;
+		var take = exportAllRows ? HrReportRequestProcessor.MaxExportRows : input.PageSize;
+		var rows = await asyncExecuter.ToListAsync(sortedQuery.Skip(skip).Take(take));
+
+		return new HrReportRowsResult(rows.Select(ToRow).ToList(), totalCount, true);
+	}
+
+	public async Task<HrReportRowsResult> BuildPayrollGroupedRowsResultAsync(
+		HrReportRequestDto input,
+		UserScopeContext scope,
+		bool exportAllRows)
+	{
+		var groupField = input.Groups?.SingleOrDefault() ?? "department";
 		var employeeQuery = HrReportEmployeeQueryService.ApplyEmployeeFilters(await employeeQueryService.BuildScopedEmployeeQueryAsync(scope), input.Filters);
-		var snapshotQuery = await payrollSnapshotRepository.GetQueryableAsync();
-
-		if (PayrollMonthNormalizer.TryNormalizeToInternal(input.Filters.Month, out var month))
-		{
-			snapshotQuery = snapshotQuery.Where(x => x.MonthYear == month);
-		}
-
-		var rows = await asyncExecuter.ToListAsync((
+		var snapshotQuery = await BuildMonthFilteredSnapshotQueryAsync(input);
+		var query =
 			from snapshot in snapshotQuery
 			join employee in employeeQuery on snapshot.EmployeeId equals employee.Id
 			select new
 			{
 				Month = snapshot.MonthYear,
-				EmployeeCode = snapshot.EmployeeIdentifier,
-				snapshot.EmployeeName,
 				employee.Department,
 				employee.Designation,
+				snapshot.ReviewStatus,
 				snapshot.BasicSalary,
 				snapshot.GrossSalary,
 				snapshot.TotalDeduction,
 				snapshot.NetPay,
-				snapshot.PayableDays,
-				snapshot.ReviewStatus,
-				snapshot.IsLocked
-			}).OrderBy(x => x.EmployeeCode).Take(HrReportRequestProcessor.MaxExportRows));
+				snapshot.PayableDays
+			};
 
-		return rows.Select(r => Row(
+		var keyedQuery = groupField switch
+		{
+			"month" => query.Select(x => new { Label = x.Month, x.BasicSalary, x.GrossSalary, x.TotalDeduction, x.NetPay, x.PayableDays }),
+			"designation" => query.Select(x => new { Label = x.Designation ?? string.Empty, x.BasicSalary, x.GrossSalary, x.TotalDeduction, x.NetPay, x.PayableDays }),
+			"reviewStatus" => query.Select(x => new { Label = x.ReviewStatus ?? string.Empty, x.BasicSalary, x.GrossSalary, x.TotalDeduction, x.NetPay, x.PayableDays }),
+			_ => query.Select(x => new { Label = x.Department ?? string.Empty, x.BasicSalary, x.GrossSalary, x.TotalDeduction, x.NetPay, x.PayableDays })
+		};
+
+		var groupedQuery = keyedQuery.GroupBy(x => x.Label).Select(group => new
+		{
+			Label = group.Key,
+			RowCount = group.Count(),
+			SumBasicSalary = group.Sum(x => x.BasicSalary),
+			AvgBasicSalary = group.Average(x => x.BasicSalary),
+			SumGrossSalary = group.Sum(x => x.GrossSalary),
+			AvgGrossSalary = group.Average(x => x.GrossSalary),
+			SumTotalDeduction = group.Sum(x => x.TotalDeduction),
+			AvgTotalDeduction = group.Average(x => x.TotalDeduction),
+			SumNetPay = group.Sum(x => x.NetPay),
+			AvgNetPay = group.Average(x => x.NetPay),
+			SumPayableDays = group.Sum(x => x.PayableDays),
+			AvgPayableDays = group.Average(x => x.PayableDays)
+		});
+
+		var totalCount = await asyncExecuter.CountAsync(groupedQuery);
+		var groups = await asyncExecuter.ToListAsync(groupedQuery);
+		var aggregateRows = groups.Select(group => HrReportPayrollAggregateRows.Build(
+			groupField,
+			group.Label,
+			group.RowCount,
+			group.SumBasicSalary,
+			group.AvgBasicSalary,
+			group.SumGrossSalary,
+			group.AvgGrossSalary,
+			group.SumTotalDeduction,
+			group.AvgTotalDeduction,
+			group.SumNetPay,
+			group.AvgNetPay,
+			group.SumPayableDays,
+			group.AvgPayableDays,
+			input.Summaries)).ToList();
+
+		return HrReportAggregateRows.BuildResult(aggregateRows, input, exportAllRows, totalCount, groupField);
+	}
+
+	private async Task<IQueryable<PayrollReportRow>> BuildPayrollQueryAsync(HrReportRequestDto input, UserScopeContext scope)
+	{
+		var employeeQuery = HrReportEmployeeQueryService.ApplyEmployeeFilters(await employeeQueryService.BuildScopedEmployeeQueryAsync(scope), input.Filters);
+		var snapshotQuery = await BuildMonthFilteredSnapshotQueryAsync(input);
+		return
+			from snapshot in snapshotQuery
+			join employee in employeeQuery on snapshot.EmployeeId equals employee.Id
+			select new PayrollReportRow
+			{
+				Month = snapshot.MonthYear,
+				EmployeeCode = snapshot.EmployeeIdentifier,
+				EmployeeName = snapshot.EmployeeName,
+				Department = employee.Department,
+				Designation = employee.Designation,
+				BasicSalary = snapshot.BasicSalary,
+				GrossSalary = snapshot.GrossSalary,
+				TotalDeduction = snapshot.TotalDeduction,
+				NetPay = snapshot.NetPay,
+				PayableDays = snapshot.PayableDays,
+				ReviewStatus = snapshot.ReviewStatus,
+				IsLocked = snapshot.IsLocked
+			};
+	}
+
+	private async Task<IQueryable<PayrollRunItemSnapshot>> BuildMonthFilteredSnapshotQueryAsync(HrReportRequestDto input)
+	{
+		var snapshotQuery = await payrollSnapshotRepository.GetQueryableAsync();
+		if (PayrollMonthNormalizer.TryNormalizeToInternal(input.Filters.Month, out var month))
+		{
+			snapshotQuery = snapshotQuery.Where(x => x.MonthYear == month);
+		}
+
+		return snapshotQuery;
+	}
+
+	private static Dictionary<string, string?> ToRow(PayrollReportRow r) =>
+		Row(
 			("month", r.Month),
 			("employeeCode", r.EmployeeCode),
 			("employeeName", r.EmployeeName),
@@ -141,6 +160,21 @@ public class HrReportEmployeePayrollRowReader(
 			("netPay", FormatMoney(r.NetPay)),
 			("payableDays", FormatDecimal(r.PayableDays)),
 			("reviewStatus", r.ReviewStatus),
-			("isLocked", r.IsLocked ? "Yes" : "No"))).ToList();
+			("isLocked", r.IsLocked ? "Yes" : "No"));
+
+	private sealed class PayrollReportRow
+	{
+		public string Month { get; init; } = string.Empty;
+		public string EmployeeCode { get; init; } = string.Empty;
+		public string EmployeeName { get; init; } = string.Empty;
+		public string? Department { get; init; }
+		public string? Designation { get; init; }
+		public decimal BasicSalary { get; init; }
+		public decimal GrossSalary { get; init; }
+		public decimal TotalDeduction { get; init; }
+		public decimal NetPay { get; init; }
+		public decimal PayableDays { get; init; }
+		public string? ReviewStatus { get; init; }
+		public bool IsLocked { get; init; }
 	}
 }

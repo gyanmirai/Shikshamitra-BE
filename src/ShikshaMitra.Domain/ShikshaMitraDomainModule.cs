@@ -74,6 +74,7 @@ public class ShikshaMitraDomainModule : AbpModule
 
 		// Register UserScopeService
 		context.Services.AddTransient<IUserScopeService, UserScopeService>();
+		context.Services.AddTransient<UserScopeAssignmentManager>();
 
 		//TODO : Configure TenantResolveContributors
 

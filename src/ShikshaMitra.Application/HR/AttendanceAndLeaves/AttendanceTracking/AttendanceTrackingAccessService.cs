@@ -1,3 +1,4 @@
+using ShikshaMitra.HR;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.HR.Employees;
 using System;
@@ -32,22 +33,17 @@ public class AttendanceTrackingAccessService(
 			return scope;
 		}
 
-		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
+		hrScopeAccessService.EnsureHasConcreteHrAccess(scope, nameof(EnsureCanReadAttendanceTrackingAsync));
 
 		return scope;
 	}
 
 	internal async Task EnsureMediumStageInScopeAsync(UserScopeContext scope, Guid educationMediumStageId)
 	{
-		if (await hrScopeAccessService.CanAccessEmployeeStageAsync(scope, educationMediumStageId))
-		{
-			return;
-		}
-
-		throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		await hrScopeAccessService.EnsureCanAccessEmployeeStageAsync(
+			scope,
+			educationMediumStageId,
+			nameof(EnsureMediumStageInScopeAsync));
 	}
 
 	internal async Task<List<Guid>> ResolveEmployeeWiseStageIdsAsync(
@@ -69,6 +65,7 @@ public class AttendanceTrackingAccessService(
 		var employeeStageLookup = await employeeScopeQueryService.BuildEmployeeStageLookupAsync([employeeId]);
 		if (!employeeStageLookup.TryGetValue(employeeId, out var employeeStageIds) || employeeStageIds.Count == 0)
 		{
+			hrScopeAccessService.LogDeniedAccess(scope, nameof(ResolveEmployeeWiseStageIdsAsync), "Employee", employeeId);
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}
 
@@ -78,6 +75,7 @@ public class AttendanceTrackingAccessService(
 			distinctStageIds = await FilterStageIdsByAcademicYearAsync(distinctStageIds, academicYearId.Value);
 			if (distinctStageIds.Count == 0)
 			{
+				hrScopeAccessService.LogDeniedAccess(scope, nameof(ResolveEmployeeWiseStageIdsAsync), "Employee", employeeId);
 				throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 			}
 		}
@@ -98,6 +96,7 @@ public class AttendanceTrackingAccessService(
 
 		if (accessibleStageIds.Count == 0)
 		{
+			hrScopeAccessService.LogDeniedAccess(scope, nameof(ResolveEmployeeWiseStageIdsAsync), "Employee", employeeId);
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}
 

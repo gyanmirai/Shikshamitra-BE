@@ -6,6 +6,34 @@ public static class HrReportFormat
 	public const string Excel = "excel";
 }
 
+public static class HrReportChartType
+{
+	public const string None = "none";
+	public const string Kpi = "kpi";
+	public const string Bar = "bar";
+	public const string Line = "line";
+	public const string Donut = "donut";
+}
+
+public static class HrReportDeliveryMode
+{
+	public const string InApp = "inApp";
+	public const string InAppAndEmail = "inAppAndEmail";
+}
+
+public static class HrReportScheduleFrequency
+{
+	public const string Daily = "daily";
+	public const string Weekly = "weekly";
+	public const string Monthly = "monthly";
+}
+
+public static class HrReportScheduleStatus
+{
+	public const string Active = "Active";
+	public const string Paused = "Paused";
+}
+
 public static class HrReportFilterOperator
 {
 	public new const string Equals = "equals";

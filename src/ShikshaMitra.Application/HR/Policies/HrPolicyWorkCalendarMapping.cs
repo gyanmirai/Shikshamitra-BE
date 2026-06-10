@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using Volo.Abp;
 
 namespace ShikshaMitra.HR.Policies;
 
@@ -10,7 +11,8 @@ internal static partial class HrPolicyMapping
 	{
 		"snapshot" => WorkCalendarHolidaySyncMode.Snapshot,
 		"independent" => WorkCalendarHolidaySyncMode.Independent,
-		_ => WorkCalendarHolidaySyncMode.LinkedWithOverrides
+		"linked_with_overrides" or "" => WorkCalendarHolidaySyncMode.LinkedWithOverrides,
+		_ => throw new BusinessException(HRErrorCodes.UnsupportedWorkCalendarHolidaySyncMode)
 	};
 
 	public static string MapHolidaySyncMode(WorkCalendarHolidaySyncMode value) => value switch
@@ -36,7 +38,8 @@ internal static partial class HrPolicyMapping
 	{
 		"sunday" => AttendanceWeeklyOffPattern.Sunday,
 		"custom" => AttendanceWeeklyOffPattern.Custom,
-		_ => AttendanceWeeklyOffPattern.SaturdaySunday
+		"saturday_sunday" or "" => AttendanceWeeklyOffPattern.SaturdaySunday,
+		_ => throw new BusinessException(HRErrorCodes.UnsupportedWorkCalendarWeeklyOffPattern)
 	};
 
 	public static string MapWeeklyOffPattern(AttendanceWeeklyOffPattern value) => value switch

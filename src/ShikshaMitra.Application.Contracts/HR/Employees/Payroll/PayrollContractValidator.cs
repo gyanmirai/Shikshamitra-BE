@@ -77,6 +77,12 @@ public class PayrollContractValidator : AbstractValidator<PayrollContract>
 			           x.PolicyOverride != null)
 			.WithMessage("Effective date is required when disabling policy override.");
 
+		RuleFor(x => x.PolicyOverride!.AssignmentId)
+			.Must(id => !id.HasValue || id.Value != Guid.Empty)
+			.When(x => string.Equals(x.PolicyOverrideAction, "disable", StringComparison.OrdinalIgnoreCase) &&
+			           x.PolicyOverride != null)
+			.WithMessage("Policy override assignment id must not be empty when provided.");
+
 		RuleFor(x => x.PolicyOverride)
 			.SetValidator(new EmployeePayrollPolicyOverrideContractValidator()!)
 			.When(x => x.PolicyOverride != null &&
@@ -116,6 +122,9 @@ public class EmployeePayrollPolicyOverrideContractValidator : AbstractValidator<
 	public EmployeePayrollPolicyOverrideContractValidator()
 	{
 		RuleFor(x => x.AcademicYearId).NotEmpty();
+		RuleFor(x => x.AssignmentId)
+			.Must(id => !id.HasValue || id.Value != Guid.Empty)
+			.WithMessage("Policy override assignment id must not be empty when provided.");
 		RuleFor(x => x.PayrollPolicyId).NotEmpty();
 		RuleFor(x => x.AttendancePolicyId).NotEmpty();
 		RuleFor(x => x.EffectiveFrom).NotEmpty();

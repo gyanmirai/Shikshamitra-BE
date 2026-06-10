@@ -11,7 +11,7 @@ internal static partial class HrPolicyMapping
 		"manual_status" => AttendanceCaptureMode.ManualStatus,
 		"manual_with_time" => AttendanceCaptureMode.ManualWithTime,
 		"integrated" or "" => AttendanceCaptureMode.Integrated,
-		_ => AttendanceCaptureMode.Integrated
+		_ => throw new BusinessException(HRErrorCodes.UnsupportedAttendanceCaptureMode)
 	};
 
 	public static string MapCaptureMode(AttendanceCaptureMode value) => value switch

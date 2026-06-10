@@ -1,8 +1,10 @@
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace ShikshaMitra.Seeders;
@@ -65,38 +67,85 @@ public partial class HRSeederContributor
 			return leaveType?.Id;
 		}
 
-		var leavePolicies = new[]
+		async Task<LeavePolicyRuleInput?> RuleAsync(
+			string leaveTypeName,
+			int count,
+			LeavePaidType paidType,
+			bool carryForward = false,
+			bool encashable = false,
+			bool allowNegative = false)
 		{
-			new { PolicyName = "Standard Casual Leave Policy", LeaveTypeName = "Casual Leave", MaximumDaysPerYear = 12, PaidType = LeavePaidType.Paid, CarryForward = true, Encashable = false, RequiresApproval = true, Description = "Standard casual leave - 12 days per year, carry forward allowed" },
-			new { PolicyName = "Standard Sick Leave Policy", LeaveTypeName = "Sick Leave", MaximumDaysPerYear = 7, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Sick leave - 7 days per year, no carry forward" },
-			new { PolicyName = "Standard Earned Leave Policy", LeaveTypeName = "Earned Leave", MaximumDaysPerYear = 15, PaidType = LeavePaidType.Paid, CarryForward = true, Encashable = true, RequiresApproval = true, Description = "Earned/Privilege leave - 15 days per year, carry forward and encashable" },
-			new { PolicyName = "Maternity Leave Policy", LeaveTypeName = "Maternity Leave", MaximumDaysPerYear = 180, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Maternity leave as per statutory requirements" },
-			new { PolicyName = "Paternity Leave Policy", LeaveTypeName = "Paternity Leave", MaximumDaysPerYear = 15, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Paternity leave - 15 days" },
-			new { PolicyName = "Compensatory Off Policy", LeaveTypeName = "Compensatory Off", MaximumDaysPerYear = 24, PaidType = LeavePaidType.Paid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Comp-off for working on holidays - maximum 24 days per year" },
-			new { PolicyName = "Loss of Pay Policy", LeaveTypeName = "Loss of Pay", MaximumDaysPerYear = 365, PaidType = LeavePaidType.Unpaid, CarryForward = false, Encashable = false, RequiresApproval = true, Description = "Unpaid leave when all leave quota is exhausted" }
-		};
+			var leaveTypeId = await GetLeaveTypeIdAsync(leaveTypeName);
+			return leaveTypeId.HasValue
+				? new LeavePolicyRuleInput(
+					leaveTypeId.Value,
+					LeaveAccrualPolicyType.Yearly,
+					count,
+					paidType,
+					carryForward,
+					carryForward ? count * 3 : null,
+					encashable,
+					encashable ? LeaveEncashmentTiming.EndOfYear : null,
+					true,
+					2,
+					30,
+					true,
+					null,
+					allowNegative,
+					true)
+				: null;
+		}
 
-		foreach (var policy in leavePolicies)
+		async Task SeedPolicyAsync(string policyName, string description, params Func<Task<LeavePolicyRuleInput?>>[] ruleFactories)
 		{
-			var leaveTypeId = await GetLeaveTypeIdAsync(policy.LeaveTypeName);
-			if (leaveTypeId == null)
-				continue;
+			var rules = new List<LeavePolicyRuleInput>();
+			foreach (var ruleFactory in ruleFactories)
+			{
+				var rule = await ruleFactory();
+				if (rule != null)
+				{
+					rules.Add(rule);
+				}
+			}
+
+			if (rules.Count == 0)
+			{
+				return;
+			}
 
 			var leavePolicy = await _leavePolicyManager.CreateAsync(
 				academicYearId,
-				policy.PolicyName,
-				leaveTypeId.Value,
-				LeaveAccrualPolicyType.Monthly,
-				policy.MaximumDaysPerYear,
-				policy.PaidType,
-				policy.CarryForward,
-				policy.Encashable,
-				policy.Encashable ? LeaveEncashmentTiming.EndOfYear : null,
-				policy.RequiresApproval,
-				policy.Description
-			);
+				policyName,
+				DateTime.Today,
+				null,
+				HrPolicyStatus.Active,
+				rules,
+				description);
 			await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
 		}
+
+		await SeedPolicyAsync(
+			"Teaching Staff Leave Policy",
+			"Teaching staff yearly leave entitlements.",
+			() => RuleAsync("Casual Leave", 12, LeavePaidType.Paid),
+			() => RuleAsync("Sick Leave", 10, LeavePaidType.Paid),
+			() => RuleAsync("Earned Leave", 15, LeavePaidType.Paid, carryForward: true, encashable: true),
+			() => RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
+
+		await SeedPolicyAsync(
+			"Admin Staff Leave Policy",
+			"Admin staff yearly leave entitlements.",
+			() => RuleAsync("Casual Leave", 10, LeavePaidType.Paid),
+			() => RuleAsync("Sick Leave", 8, LeavePaidType.Paid),
+			() => RuleAsync("Earned Leave", 12, LeavePaidType.Paid, carryForward: true),
+			() => RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
+
+		await SeedPolicyAsync(
+			"Contract Staff Leave Policy",
+			"Contract staff yearly leave entitlements.",
+			() => RuleAsync("Casual Leave", 6, LeavePaidType.Paid),
+			() => RuleAsync("Sick Leave", 6, LeavePaidType.Paid),
+			() => RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
 
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}

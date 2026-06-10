@@ -31,7 +31,7 @@ internal static class AttendanceImportPreviewParsing
 		}
 		else
 		{
-			previewRow.Errors.Add("Attendance Date is invalid. Use dd-MM-yyyy or ISO date format.");
+			previewRow.Errors.Add("Attendance Date is invalid. Use a date-only format such as dd-MM-yyyy or yyyy-MM-dd.");
 		}
 
 		if (string.IsNullOrWhiteSpace(previewRow.EmployeeCode))

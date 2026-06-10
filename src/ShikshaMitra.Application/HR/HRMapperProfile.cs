@@ -51,7 +51,9 @@ public class HRMapperProfile : Profile
 		CreateMap<AutomatedNotificationsSettings, AutomatedNotificationsSettingsDto>().ReverseMap();
 		CreateMap<NotificationInfo, NotificationInfoDto>();
 
-		CreateMap<LeavePolicy, LeavePolicyDto>();
+		CreateMap<LeavePolicy, LeavePolicyDto>()
+			.ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()))
+			.ForMember(dest => dest.RuleCount, opt => opt.MapFrom(src => src.Rules.Count));
 		CreateMap<CreateUpdateLeavePolicyDto, LeavePolicy>();
 
 		CreateMap<Event, Application.Contracts.HR.Calendar.Events.EventDto>();

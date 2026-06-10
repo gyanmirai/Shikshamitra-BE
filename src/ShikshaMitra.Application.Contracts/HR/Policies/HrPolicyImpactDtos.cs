@@ -83,6 +83,9 @@ public class HrPolicyImpactPreviewDto
 	public string? ConfirmationToken { get; set; }
 	public DateTime? ExpiresAt { get; set; }
 	public List<HrPolicyImpactWarningDto> BlockingWarnings { get; set; } = [];
+	public string? ResolutionSummary { get; set; }
+	public string? RiskSummary { get; set; }
+	public string? RecommendedAction { get; set; }
 }
 
 public class HrPolicyImpactWarningDto

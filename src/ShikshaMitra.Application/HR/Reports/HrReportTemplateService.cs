@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Audit;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -13,7 +14,8 @@ namespace ShikshaMitra.HR.Reports;
 [RemoteService(false)]
 public class HrReportTemplateService(
 	IRepository<HrReportTemplate, Guid> templateRepository,
-	IGuidGenerator guidGenerator) : ApplicationService, ITransientDependency
+	IGuidGenerator guidGenerator,
+	HrAuditWriter auditWriter) : ApplicationService, ITransientDependency
 {
 	public async Task<HrReportTemplateListDto> GetTemplatesAsync()
 	{
@@ -51,6 +53,7 @@ public class HrReportTemplateService(
 			JsonSerializer.Serialize(input.Definition));
 
 		await templateRepository.InsertAsync(template, autoSave: true);
+		await WriteAuditAsync(template.Id, "template_created", $"Created HR report template {template.Name}", new { template.Name, template.DataSource, template.Visibility, template.Status });
 		return HrReportProjection.ToTemplateDto(template);
 	}
 
@@ -68,6 +71,7 @@ public class HrReportTemplateService(
 			JsonSerializer.Serialize(input.Definition));
 
 		await templateRepository.UpdateAsync(template, autoSave: true);
+		await WriteAuditAsync(template.Id, "template_updated", $"Updated HR report template {template.Name}", new { template.Name, template.DataSource, template.Visibility, template.Status });
 		return HrReportProjection.ToTemplateDto(template);
 	}
 
@@ -77,6 +81,7 @@ public class HrReportTemplateService(
 		var source = await GetReadableTemplateAsync(id);
 		var clone = source.Clone(guidGenerator.Create(), userId);
 		await templateRepository.InsertAsync(clone, autoSave: true);
+		await WriteAuditAsync(clone.Id, "template_duplicated", $"Duplicated HR report template {source.Name}", new { SourceTemplateId = source.Id, clone.Name });
 		return HrReportProjection.ToTemplateDto(clone);
 	}
 
@@ -84,6 +89,7 @@ public class HrReportTemplateService(
 	{
 		var template = await GetEditableTemplateAsync(id);
 		await templateRepository.DeleteAsync(template, autoSave: true);
+		await WriteAuditAsync(template.Id, "template_deleted", $"Deleted HR report template {template.Name}", new { template.Name, template.DataSource });
 	}
 
 	private async Task<HrReportTemplate> GetReadableTemplateAsync(Guid id)
@@ -113,6 +119,16 @@ public class HrReportTemplateService(
 
 	private Guid GetRequiredUserId() =>
 		CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.ReportUserRequired);
+
+	private Task WriteAuditAsync(Guid entityId, string action, string summary, object? context) =>
+		auditWriter.WriteAsync(
+			null,
+			"hr_report_template",
+			entityId,
+			"HR Report Template",
+			action,
+			summary,
+			context: context);
 
 	private static void ValidateTemplateDefinition(HrReportTemplateRequestDto input)
 	{

@@ -17,6 +17,7 @@ public class AttendanceRegisterRowReader(
 	HrEmployeeScopeQueryService hrEmployeeScopeQueryService,
 	AttendanceRegisterLookupReader lookupReader,
 	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
+	AttendanceRegisterRowProjectionBuilder rowProjectionBuilder,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
@@ -103,7 +104,7 @@ public class AttendanceRegisterRowReader(
 				? assignedStages
 				: [];
 			employee.AssignedStageIds = stages;
-			employee.EducationMediumStageId = hrEmployeeScopeQueryService.ResolveDisplayStage(stages, scope, input.EducationMediumStageId);
+			employee.EducationMediumStageId = await hrEmployeeScopeQueryService.ResolveDisplayStageAsync(stages, scope, input.EducationMediumStageId);
 		}
 
 		return employees;
@@ -155,69 +156,13 @@ public class AttendanceRegisterRowReader(
 			.ToList();
 		var captureModeLookup = await captureModeLookupResolver.ResolveForDatesAsync(employeeIds, dates);
 
-		var rows = new List<RegisterProjection>();
-		foreach (var employee in employees)
-		{
-			for (var date = startDate; date <= endDate; date = date.AddDays(1))
-			{
-				if (!IsEmployeeEligibleOnDate(employee, date))
-				{
-					continue;
-				}
-
-				attendanceByEmployeeDate.TryGetValue((employee.EmployeeId, date), out var attendance);
-				holidayLookup.TryGetValue(date, out var holiday);
-				var captureMode = captureModeLookup.GetValueOrDefault((employee.EmployeeId, date), AttendanceCaptureMode.Integrated);
-				if (input.Status.HasValue && attendance?.StatusType != input.Status.Value)
-				{
-					continue;
-				}
-
-				rows.Add(new RegisterProjection
-				{
-					AttendanceId = attendance?.Id,
-					EmployeeId = employee.EmployeeId,
-					AttendanceDate = date,
-					Status = attendance == null
-						? AttendanceRegisterStatus.NotMarked
-						: MapRegisterStatus(attendance.StatusType),
-					IsMarked = attendance != null,
-					EducationMediumStageId = ResolveRegisterDisplayStage(attendance, employee),
-					EmployeeName = employee.EmployeeName,
-					EmployeeCode = employee.EmployeeCode,
-					MobileNo = employee.MobileNo,
-					Department = employee.Department,
-					EmployeeGroup = employee.EmployeeGroup,
-					RoleId = employee.RoleId,
-					TimeIn = attendance?.TimeIn,
-					TimeOut = attendance?.TimeOut,
-					Remarks = attendance?.Remarks,
-					CaptureMode = captureMode,
-					Source = attendance?.Source ?? AttendanceRecordSource.Manual,
-					IsHoliday = holiday != null,
-					HolidayName = holiday?.Name
-				});
-			}
-		}
-
-		if (!string.IsNullOrWhiteSpace(input.Search))
-		{
-			var search = input.Search.Trim();
-			rows = rows.Where(x => MatchesSearch(x, search)).ToList();
-		}
-
-		return rows;
+		return rowProjectionBuilder.Build(
+			input,
+			startDate,
+			endDate,
+			employees,
+			attendanceByEmployeeDate,
+			holidayLookup,
+			captureModeLookup);
 	}
-
-	private static Guid? ResolveRegisterDisplayStage(EmployeeAttendance? attendance, EmployeeProjection employee)
-	{
-		if (attendance?.EducationMediumStageId.HasValue == true &&
-		    employee.AssignedStageIds.Contains(attendance.EducationMediumStageId.Value))
-		{
-			return attendance.EducationMediumStageId;
-		}
-
-		return employee.EducationMediumStageId;
-	}
-
 }

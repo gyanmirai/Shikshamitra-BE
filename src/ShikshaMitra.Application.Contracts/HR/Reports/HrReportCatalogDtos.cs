@@ -36,6 +36,7 @@ public class HrReportFieldDto
 	public bool Sortable { get; set; } = true;
 	public bool Groupable { get; set; }
 	public bool Summarizable { get; set; }
+	public bool Chartable { get; set; }
 	public List<string> Operators { get; set; } = new();
 	public List<HrReportOptionDto> Options { get; set; } = new();
 }

@@ -13,6 +13,7 @@ public class HrPolicyAssignmentDto : EntityDto<Guid>
 	public List<string> TargetOrganizationNames { get; set; } = [];
 	public Guid AttendancePolicyId { get; set; }
 	public Guid PayrollPolicyId { get; set; }
+	public Guid? LeavePolicyId { get; set; }
 	public DateTime EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public bool IsActive { get; set; }
@@ -32,6 +33,7 @@ public class CreateUpdateHrPolicyAssignmentDto
 	public string? TargetDisplayName { get; set; }
 	public Guid AttendancePolicyId { get; set; }
 	public Guid PayrollPolicyId { get; set; }
+	public Guid? LeavePolicyId { get; set; }
 	public DateTime EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public bool IsActive { get; set; } = true;
@@ -44,8 +46,10 @@ public class UpsertEmployeePolicyOverrideDto
 {
 	public Guid EmployeeId { get; set; }
 	public Guid AcademicYearId { get; set; }
+	public Guid? AssignmentId { get; set; }
 	public Guid AttendancePolicyId { get; set; }
 	public Guid PayrollPolicyId { get; set; }
+	public Guid? LeavePolicyId { get; set; }
 	public DateTime EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public string? AssignmentReason { get; set; }
@@ -56,8 +60,10 @@ public class DisableEmployeePolicyOverrideDto
 {
 	public Guid EmployeeId { get; set; }
 	public Guid AcademicYearId { get; set; }
+	public Guid? AssignmentId { get; set; }
 	public DateTime EffectiveDate { get; set; }
 	public string? AssignmentReason { get; set; }
+	public string? ConfirmationToken { get; set; }
 }
 
 public class EffectiveEmployeePoliciesDto
@@ -74,9 +80,13 @@ public class EffectiveEmployeePoliciesDto
 	public int? MatchedPriority { get; set; }
 	public AttendancePolicyDto AttendancePolicy { get; set; } = new();
 	public PayrollPolicyDto PayrollPolicy { get; set; } = new();
+	public EffectiveLeavePolicyDto? LeavePolicy { get; set; }
 	public WorkCalendarPolicyDto? AttendanceWorkCalendarPolicy { get; set; }
 	public WorkCalendarPolicyDto? PayrollWorkCalendarPolicy { get; set; }
 	public List<EffectivePolicyResolutionStepDto> ResolutionSteps { get; set; } = [];
+	public string? ResolutionSummary { get; set; }
+	public string? RiskSummary { get; set; }
+	public string? RecommendedAction { get; set; }
 }
 
 public class EffectivePolicyResolutionStepDto
@@ -91,6 +101,13 @@ public class EffectivePolicyResolutionStepDto
 	public string SkipReason { get; set; } = "no_assignment";
 	public Guid? PayrollPolicyId { get; set; }
 	public Guid? AttendancePolicyId { get; set; }
+	public Guid? LeavePolicyId { get; set; }
+}
+
+public class EffectiveLeavePolicyDto
+{
+	public Guid Id { get; set; }
+	public string Name { get; set; } = string.Empty;
 }
 
 public class PolicyAssignmentPreviewRequestDto

@@ -18,6 +18,9 @@ public class HrReportExportJobConfiguration : IEntityTypeConfiguration<HrReportE
 		builder.Property(x => x.BlobName).HasMaxLength(512);
 		builder.Property(x => x.ErrorMessage).HasMaxLength(2048);
 		builder.Property(x => x.FilterJson).IsRequired().HasColumnType("jsonb");
+		builder.Property(x => x.RequestJson).IsRequired().HasColumnType("jsonb");
+		builder.Property(x => x.SharedUserIdsJson).IsRequired().HasColumnType("jsonb");
+		builder.Property(x => x.ProgressPercent).IsRequired();
 
 		builder.HasIndex(x => new { x.TenantId, x.RequestedByUserId, x.CreationTime })
 			.HasDatabaseName("IX_HR_ReportExportJobs_Tenant_User_Created");

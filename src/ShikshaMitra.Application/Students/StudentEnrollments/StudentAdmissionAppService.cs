@@ -35,7 +35,7 @@ public class StudentAdmissionAppService(
 	IGuidGenerator guidGenerator,
 	IStudentEmailService studentEmailService,
 	AdmissionManager admissionManager,
-	IUserScopeService userScopeService) : ApplicationService, IStudentAdmissionAppService
+	IUserScopeAccessService userScopeAccessService) : ApplicationService, IStudentAdmissionAppService
 {
 	/// <summary>
 	/// Gets a paginated list of students in admission stage with filters
@@ -58,7 +58,7 @@ public class StudentAdmissionAppService(
 			query = query.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission && s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Pending);
 		}
 
-		query = await ApplyCurrentUserScopeAsync(query);
+		query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
 		if (input.AcademicYearId.HasValue && input.AcademicYearId.Value != Guid.Empty)
 		{
@@ -114,56 +114,6 @@ public class StudentAdmissionAppService(
 		return new PagedResultDto<StudentDto>(totalCount, studentDtos);
 	}
 
-	private async Task<IQueryable<Student>> ApplyCurrentUserScopeAsync(IQueryable<Student> query)
-	{
-		var currentUserId = CurrentUser.Id;
-		if (!currentUserId.HasValue)
-		{
-			return query.Where(_ => false);
-		}
-
-		var scope = await userScopeService.GetUserScopeAsync(currentUserId.Value);
-		if (scope.IsAdmin)
-		{
-			return query;
-		}
-
-		if (!scope.HasAnyAccess)
-		{
-			return query.Where(_ => false);
-		}
-
-		var scopedQuery = query.Where(s =>
-			scope.HasWildcardAcademicYear ||
-			(s.AcademicYearId.HasValue && scope.WildcardBoardAcademicYearIds.Contains(s.AcademicYearId.Value)) ||
-			(s.DivisionId.HasValue && (
-				scope.DivisionIds.Contains(s.DivisionId.Value) ||
-				(scope.HasWildcardDivision && s.StandardId.HasValue && scope.WildcardDivisionStandardIds.Contains(s.StandardId.Value)))) ||
-			(s.StandardId.HasValue && (
-				scope.StandardIds.Contains(s.StandardId.Value) ||
-				(scope.HasWildcardStandard && s.AcademicMediumStageId.HasValue && scope.WildcardStandardMediumStageIds.Contains(s.AcademicMediumStageId.Value)))) ||
-			(s.AcademicMediumStageId.HasValue && (
-				scope.MediumStageIds.Contains(s.AcademicMediumStageId.Value) ||
-				(scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(s.AcademicMediumId)))) ||
-			scope.MediumIds.Contains(s.AcademicMediumId) ||
-			(scope.HasWildcardMedium && s.AcademicBoardId.HasValue && scope.WildcardMediumBoardIds.Contains(s.AcademicBoardId.Value)) ||
-			(s.AcademicBoardId.HasValue && scope.BoardIds.Contains(s.AcademicBoardId.Value)));
-
-		if (scope.HasWildcardAcademicYear)
-		{
-			return scopedQuery;
-		}
-
-		if (scope.AcademicYearIds.Any())
-		{
-			return scopedQuery.Where(s =>
-				!s.AcademicYearId.HasValue ||
-				scope.AcademicYearIds.Contains(s.AcademicYearId.Value));
-		}
-
-		return scopedQuery.Where(s => !s.AcademicYearId.HasValue);
-	}
-
 	/// <summary>
 	/// Assigns or changes division for a student
 	/// </summary>
@@ -174,6 +124,9 @@ public class StudentAdmissionAppService(
 
 		// Get student
 		var student = await studentRepository.GetAsync(studentId) ?? throw new Exception($"Student with ID {studentId} does not exist.");
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+			student,
+			operation: nameof(AssignDivisionAsync));
 
 		// Assign division using domain method
 		student.AssignDivision(input.DivisionId);
@@ -207,6 +160,9 @@ public class StudentAdmissionAppService(
 				{
 					throw new Exception($"Student with ID {item.StudentId} does not exist.");
 				}
+				await userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+					student,
+					operation: nameof(ChangeStatusBatchAsync));
 
 				// Apply action
 				if (item.Action == StudentEnrollmentApprovalState.Approved)

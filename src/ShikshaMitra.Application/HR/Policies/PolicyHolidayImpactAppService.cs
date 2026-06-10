@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 
@@ -11,6 +12,7 @@ namespace ShikshaMitra.HR.Policies;
 public class PolicyHolidayImpactAppService(PolicyHolidayImpactPreviewReader previewReader)
 	: ApplicationService, IPolicyHolidayImpactAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.PreviewImpact)]
 	public async Task<PolicyHolidayImpactPreviewDto> GetPreviewAsync(
 		Guid academicYearId,
 		Guid? workCalendarPolicyId,

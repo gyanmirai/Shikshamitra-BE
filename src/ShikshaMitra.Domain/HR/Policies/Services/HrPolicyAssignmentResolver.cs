@@ -62,6 +62,7 @@ public class HrPolicyAssignmentResolver(
 			.OrderByDescending(x => specificity[(x.TargetType, x.TargetKey)])
 			.ThenByDescending(x => x.Priority)
 			.ThenByDescending(x => x.EffectiveFrom)
+			.ThenBy(x => x.Id)
 			.FirstOrDefault();
 
 		var steps = BuildResolutionSteps(targets, candidates, winner);
@@ -105,6 +106,7 @@ public class HrPolicyAssignmentResolver(
 				.Where(x => x.TargetType == target.TargetType && x.TargetKey == target.TargetKey)
 				.OrderByDescending(x => x.Priority)
 				.ThenByDescending(x => x.EffectiveFrom)
+				.ThenBy(x => x.Id)
 				.ToList();
 
 			if (targetCandidates.Count == 0)
@@ -118,6 +120,7 @@ public class HrPolicyAssignmentResolver(
 					null,
 					"skipped",
 					"no_assignment",
+					null,
 					null,
 					null));
 				continue;
@@ -134,21 +137,50 @@ public class HrPolicyAssignmentResolver(
 					candidate.Id,
 					candidate.Priority,
 					isWinner ? "matched" : "skipped",
-					isWinner
-						? "winner"
-						: target.Specificity < (winner is null ? 0 : orderedTargets.First(x => x.TargetType == winner.TargetType && x.TargetKey == winner.TargetKey).Specificity)
-							? "lower_specificity"
-							: "lower_priority",
+					GetResolutionReason(candidate, target.Specificity, winner, orderedTargets),
 					candidate.PayrollPolicyId,
-					candidate.AttendancePolicyId));
+					candidate.AttendancePolicyId,
+					candidate.LeavePolicyId));
 			}
 		}
 
 		return steps;
 	}
 
+	private static string GetResolutionReason(
+		HrPolicyAssignment candidate,
+		int candidateSpecificity,
+		HrPolicyAssignment? winner,
+		IReadOnlyList<PolicyTargetKey> orderedTargets)
+	{
+		if (winner is null || winner.Id == candidate.Id)
+		{
+			return "winner";
+		}
+
+		var winnerSpecificity = orderedTargets
+			.First(x => x.TargetType == winner.TargetType && x.TargetKey == winner.TargetKey)
+			.Specificity;
+		if (candidateSpecificity < winnerSpecificity)
+		{
+			return "lower_specificity";
+		}
+
+		if (candidate.Priority < winner.Priority)
+		{
+			return "lower_priority";
+		}
+
+		if (candidate.EffectiveFrom.Date < winner.EffectiveFrom.Date)
+		{
+			return "lower_effective_date";
+		}
+
+		return "deterministic_tie_breaker";
+	}
+
 	private static HrPolicyResolutionStep BuildDefaultStep(string status, string reason) =>
-		new("default", null, null, "Academic year default", null, null, status, reason, null, null);
+		new("default", null, null, "Academic year default", null, null, status, reason, null, null, null);
 
 	private sealed record PolicyTargetKey(HrPolicyAssignmentTargetType TargetType, string TargetKey, int Specificity);
 }

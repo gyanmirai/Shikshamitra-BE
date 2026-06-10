@@ -52,9 +52,19 @@ public class WorkCalendarPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		IReadOnlyList<int>? customWeeklyOffs,
 		WorkCalendarHolidaySyncMode holidaySyncMode)
 	{
+		if (AcademicYearId == Guid.Empty)
+		{
+			throw new BusinessException(HRErrorCodes.AcademicYearRequired);
+		}
+
 		if (string.IsNullOrWhiteSpace(name))
 		{
 			throw new BusinessException(HRErrorCodes.WorkCalendarPolicyNameRequired);
+		}
+
+		if (status == HrPolicyStatus.Archived)
+		{
+			throw new BusinessException(HRErrorCodes.PolicyArchiveRequiresArchiveWorkflow);
 		}
 
 		if (status == HrPolicyStatus.Active && !effectiveFrom.HasValue)
@@ -65,6 +75,12 @@ public class WorkCalendarPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (effectiveFrom.HasValue && effectiveTo.HasValue && effectiveTo.Value.Date < effectiveFrom.Value.Date)
 		{
 			throw new BusinessException(HRErrorCodes.PolicyEffectiveRangeInvalid);
+		}
+
+		if (weeklyOffPattern == AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.Custom &&
+			(customWeeklyOffs is null || customWeeklyOffs.Count == 0))
+		{
+			throw new BusinessException(HRErrorCodes.InvalidCustomWeeklyOff);
 		}
 
 		Name = name.Trim();

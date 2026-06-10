@@ -39,14 +39,14 @@ public class PayrollSnapshotRefresher(
 		IReadOnlyCollection<Guid> employeeIds,
 		bool preserveReviewedSnapshots)
 	{
-		var idSet = employeeIds.ToHashSet();
-		var scopedEmployees = (await scopedEmployeeResolver.GetScopedPayrollEmployeesAsync(year, month, includeUnknownStageEmployees: false))
-			.Where(e => idSet.Contains(e.Id))
-			.ToList();
+		var scopedEmployees = await scopedEmployeeResolver.ResolveScopedEmployeesByIdsAsync(
+			year,
+			month,
+			employeeIds,
+			includeUnknownStageEmployees: false);
 
 		await RefreshAsync(internalMonthYear, year, month, academicYearId, scopedEmployees, preserveReviewedSnapshots);
 	}
-
 	public async Task RefreshAsync(
 		string internalMonthYear,
 		int year,

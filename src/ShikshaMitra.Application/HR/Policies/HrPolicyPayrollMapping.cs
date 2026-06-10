@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Payroll.Settings;
+using Volo.Abp;
 
 namespace ShikshaMitra.HR.Policies;
 
@@ -10,7 +11,8 @@ internal static partial class HrPolicyMapping
 	{
 		"total-month-days" => DayCalculationType.TotalMonthDays,
 		"manual-days" => DayCalculationType.ManualDays,
-		_ => DayCalculationType.WorkingDays
+		"working-days" or "" => DayCalculationType.WorkingDays,
+		_ => throw new BusinessException(HRErrorCodes.UnsupportedPayrollDayCalculationType)
 	};
 
 	public static string MapDayCalculationType(DayCalculationType value) => value switch
@@ -24,7 +26,8 @@ internal static partial class HrPolicyMapping
 	{
 		"half-day" => SaturdayWorkPolicy.HalfDay,
 		"off" => SaturdayWorkPolicy.Off,
-		_ => SaturdayWorkPolicy.FullDay
+		"full-day" or "" => SaturdayWorkPolicy.FullDay,
+		_ => throw new BusinessException(HRErrorCodes.UnsupportedSaturdayWorkPolicy)
 	};
 
 	public static string MapSaturdayWorkPolicy(SaturdayWorkPolicy value) => value switch

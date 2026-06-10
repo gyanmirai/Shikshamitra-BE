@@ -12,7 +12,7 @@ using Volo.Abp.Domain.Entities;
 namespace ShikshaMitra.HR.Employees.WorkExperienceContracts;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
+[Authorize]
 public class EmployeeWorkExperienceAppService(
 	IEmployeeRepository employeeRepository,
 	EmployeeManager employeeManager,
@@ -20,6 +20,7 @@ public class EmployeeWorkExperienceAppService(
 	: ApplicationService, IEmployeeWorkExperienceAppService
 {
 	/// <inheritdoc />
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<List<WorkExperienceContract>> GetAsync(Guid employeeId)
 	{
 		await employeeAuthorizationService.CheckEmployeeAccessAsync(employeeId);
@@ -33,6 +34,7 @@ public class EmployeeWorkExperienceAppService(
 	}
 
 	/// <inheritdoc />
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
 	public async Task UpsertAsync(Guid employeeId, List<WorkExperienceContract> input)
 	{
 		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);

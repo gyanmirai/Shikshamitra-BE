@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
@@ -19,7 +18,8 @@ public class StandardAppService(
 	IStandardRepository standardRepository,
 	IEducationMediumStageRepository educationMediumRepository,
 	StandardManager standardManager,
-	IUserScopeService userScopeService) : CrudAppService<
+	AcademicOrganizationScopeAccessService scopeAccessService,
+	ShiftReferenceValidator shiftReferenceValidator) : CrudAppService<
 	Standard,
 	StandardDto,
 	Guid,
@@ -28,6 +28,8 @@ public class StandardAppService(
 {
 	public override async Task<StandardDto> CreateAsync(CreateUpdateStandardDto input)
 	{
+		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
+
 		Standard standard = await standardManager.CreateAsync(
 			input.EducationMediumStageId,
 			input.Name,
@@ -41,6 +43,8 @@ public class StandardAppService(
 
 	public override async Task<StandardDto> UpdateAsync(Guid id, CreateUpdateStandardDto input)
 	{
+		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
+
 		Standard standard = await standardRepository.GetAsync(id);
 		await standardManager.UpdateAsync(standard, input.Name, input.AgeLowerLimit, input.ShiftId);
 		return ObjectMapper.Map<Standard, StandardDto>(standard);
@@ -81,20 +85,7 @@ public class StandardAppService(
 
 		standards = standards.OrderBy(x => x.CreationTime).ToList();
 
-		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id!.Value);
-		if (!scope.IsAdmin && !scope.HasTenantWideScope())
-		{
-			standards = standards.Where(s =>
-			{
-				bool stdFullAccess = scope.WildcardDivisionStandardIds.Contains(s.Id);
-				bool stdVisible = stdFullAccess || scope.StandardIds.Contains(s.Id);
-				if (!stdVisible)
-					return false;
-				if (!stdFullAccess)
-					s.Divisions = s.Divisions?.Where(d => scope.DivisionIds.Contains(d.Id)).ToList() ?? [];
-				return true;
-			}).ToList();
-		}
+		standards = await scopeAccessService.FilterStandardsAsync(standards);
 
 		return ObjectMapper.Map<List<Standard>, List<StandardDto>>(standards);
 	}

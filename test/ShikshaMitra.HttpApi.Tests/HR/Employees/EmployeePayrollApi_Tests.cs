@@ -1,4 +1,4 @@
-ï»¿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -6,12 +6,20 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Policies;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
 using Xunit;
 
 namespace ShikshaMitra.HR.Employees;
@@ -24,7 +32,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	public EmployeePayrollApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
-	#region Tier 0 â€” Critical
+	#region Tier 0 — Critical
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
@@ -65,9 +73,36 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Update_Employee_Payroll_With_Employee_Edit_Without_Bulk_Operations()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayEditPerm");
+		using var client = CreatePermissionClient(
+			ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit,
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add);
+
+		var response = await client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", BuildPayrollContract(), JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Employee_Payroll_Update_Without_Employee_Edit()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayNoEdit");
+		using var client = CreatePermissionClient(
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add);
+
+		var response = await client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", BuildPayrollContract(), JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+	}
+
 	#endregion
 
-	#region Tier 1 â€” Important
+	#region Tier 1 — Important
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -576,7 +611,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
-	#region Tier 1.5 â€” Validation Edge Cases
+	#region Tier 1.5 — Validation Edge Cases
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -782,6 +817,87 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
 		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Empty_PolicyOverride_AssignmentId_When_Disabling()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayEmptyOv");
+
+		var request = new PayrollContract
+		{
+			PolicyOverrideAction = "disable",
+			PolicyOverride = new EmployeePayrollPolicyOverrideContract
+			{
+				AcademicYearId = Guid.NewGuid(),
+				AssignmentId = Guid.Empty,
+				EffectiveFrom = DateTime.Today,
+			},
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", request, JsonOptions);
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.InternalServerError);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Pass_Selected_PolicyOverride_AssignmentId_When_Upserting()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayOverrideId");
+		var context = await SeedDuplicateEmployeeOverridePoliciesAsync(empId);
+		var previewResponse = await Client.PostAsJsonAsync("/api/hr/policy-assignments/impact-preview", new HrPolicyAssignmentImpactPreviewRequestDto
+		{
+			Action = HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction,
+			AssignmentId = context.SelectedAssignmentId,
+			Assignment = new CreateUpdateHrPolicyAssignmentDto
+			{
+				AcademicYearId = Factory.SeededAcademicYearId,
+				TargetType = "employee",
+				TargetKey = empId.ToString("D"),
+				TargetDisplayName = "Selected payroll override",
+				AttendancePolicyId = context.AttendancePolicyId,
+				PayrollPolicyId = context.ReplacementPayrollPolicyId,
+				EffectiveFrom = new DateTime(2026, 4, 1),
+				IsActive = true,
+				Priority = 100,
+				AssignmentReason = "Selected payroll override"
+			}
+		}, JsonOptions);
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await previewResponse.Content.ReadAsStringAsync());
+		var preview = await previewResponse.Content.ReadFromJsonAsync<HrPolicyImpactPreviewDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview!.RequiresConfirmation.ShouldBeTrue();
+		preview.ConfirmationToken.ShouldNotBeNullOrWhiteSpace();
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/payroll", new PayrollContract
+		{
+			PolicyOverrideAction = "upsert",
+			PolicyOverride = new EmployeePayrollPolicyOverrideContract
+			{
+				AcademicYearId = Factory.SeededAcademicYearId,
+				AssignmentId = context.SelectedAssignmentId,
+				PayrollPolicyId = context.ReplacementPayrollPolicyId,
+				AttendancePolicyId = context.AttendancePolicyId,
+				EffectiveFrom = new DateTime(2026, 4, 1),
+				AssignmentReason = "Selected payroll override",
+				ConfirmationToken = preview.ConfirmationToken
+			}
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		{
+			var selected = await assignmentRepository.GetAsync(context.SelectedAssignmentId);
+			var competing = await assignmentRepository.GetAsync(context.CompetingAssignmentId);
+			selected.PayrollPolicyId.ShouldBe(context.ReplacementPayrollPolicyId);
+			selected.IsActive.ShouldBeTrue();
+			competing.IsActive.ShouldBeFalse();
+		}
 	}
 
 	[Fact]
@@ -1030,7 +1146,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
-	#region Tier 2 â€” Extended
+	#region Tier 2 — Extended
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Extended)]
@@ -1071,4 +1187,149 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	#endregion
+
+	private HttpClient CreatePermissionClient(params string[] permissions)
+	{
+		var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(
+			AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			permissions.Length == 0 ? "__none__" : string.Join(",", permissions));
+		return client;
+	}
+
+	private static PayrollContract BuildPayrollContract() => new()
+	{
+		BankDetails = new BankDetailsContract
+		{
+			BankName = "State Bank of India",
+			BranchName = "Main Branch",
+			AccountHolderName = "Test Employee",
+			AccountNumber = "1234567890",
+			IfscCode = "SBIN0001234",
+		},
+		SalaryDetails = new SalaryDetailsContract
+		{
+			TotalWorkingHourPerMonth = 160m,
+			PunchId = "EMP001",
+		},
+	};
+
+	private async Task<PolicyOverrideSeedContext> SeedDuplicateEmployeeOverridePoliciesAsync(Guid employeeId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var workCalendarRepository = scope.ServiceProvider.GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
+		var payrollRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		{
+			var calendar = await workCalendarRepository.InsertAsync(new WorkCalendarPolicy(
+				Guid.NewGuid(),
+				tenantId,
+				Factory.SeededAcademicYearId,
+				$"Payroll Override Calendar {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				new DateTime(2026, 4, 1),
+				new DateTime(2027, 3, 31),
+				AttendanceWeeklyOffPattern.SaturdaySunday,
+				[],
+				WorkCalendarHolidaySyncMode.LinkedWithOverrides), autoSave: true);
+			var existingPayroll = await payrollRepository.InsertAsync(new PayrollPolicy(
+				Guid.NewGuid(),
+				tenantId,
+				Factory.SeededAcademicYearId,
+				calendar.Id,
+				$"Existing Override Payroll {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				false,
+				DayCalculationType.WorkingDays,
+				null,
+				[],
+				SaturdayWorkPolicy.FullDay,
+				[],
+				[]), autoSave: true);
+			var replacementPayroll = await payrollRepository.InsertAsync(new PayrollPolicy(
+				Guid.NewGuid(),
+				tenantId,
+				Factory.SeededAcademicYearId,
+				calendar.Id,
+				$"Replacement Override Payroll {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				false,
+				DayCalculationType.TotalMonthDays,
+				null,
+				[],
+				SaturdayWorkPolicy.FullDay,
+				[],
+				[]), autoSave: true);
+			var attendance = await attendanceRepository.InsertAsync(new AttendancePolicy(
+				Guid.NewGuid(),
+				tenantId,
+				Factory.SeededAcademicYearId,
+				calendar.Id,
+				$"Override Attendance {Guid.NewGuid():N}",
+				HrPolicyStatus.Active,
+				false,
+				AttendanceCaptureMode.ManualStatus,
+				75,
+				50,
+				0,
+				AttendanceMissingPunchBehavior.RequiresReview,
+				true,
+				0,
+				0,
+				AttendancePenaltyType.None,
+				0,
+				false,
+				0,
+				false,
+				null,
+				0,
+				AttendanceHolidayWorkBehavior.Paid,
+				false,
+				false), autoSave: true);
+			var targetKey = employeeId.ToString("D").ToLowerInvariant();
+			var competing = await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+				Guid.NewGuid(),
+				tenantId,
+				Factory.SeededAcademicYearId,
+				HrPolicyAssignmentTargetType.Employee,
+				targetKey,
+				"Competing payroll override",
+				attendance.Id,
+				existingPayroll.Id,
+				null,
+				new DateTime(2026, 4, 1),
+				null,
+				true,
+				200,
+				"Competing payroll override"), autoSave: true);
+			var selected = await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+				Guid.NewGuid(),
+				tenantId,
+				Factory.SeededAcademicYearId,
+				HrPolicyAssignmentTargetType.Employee,
+				targetKey,
+				"Selected payroll override",
+				attendance.Id,
+				existingPayroll.Id,
+				null,
+				new DateTime(2026, 4, 1),
+				null,
+				true,
+				100,
+				"Selected payroll override"), autoSave: true);
+
+			return new PolicyOverrideSeedContext(selected.Id, competing.Id, attendance.Id, replacementPayroll.Id);
+		}
+	}
+
+	private sealed record PolicyOverrideSeedContext(
+		Guid SelectedAssignmentId,
+		Guid CompetingAssignmentId,
+		Guid AttendancePolicyId,
+		Guid ReplacementPayrollPolicyId);
 }

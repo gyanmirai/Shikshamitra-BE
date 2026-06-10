@@ -30,6 +30,8 @@ public record ApprovedAttendanceLeaveRow(
 
 public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 {
+	Task<EmployeeLeave?> FindWithoutDetailsAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Check if employee has overlapping leave requests
     /// </summary>
@@ -53,6 +55,10 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 	Task<decimal> GetApprovedLeaveDaysAsync(
 		Guid employeeId,
 		Guid leavePolicyId);
+
+	Task<decimal> GetApprovedLeaveDaysByRuleAsync(
+		Guid employeeId,
+		Guid leavePolicyRuleId);
 
 	Task<List<PayrollApprovedLeaveRow>> GetApprovedPayrollLeaveRowsAsync(
 		IReadOnlyCollection<Guid> employeeIds,

@@ -1,4 +1,5 @@
 using ShikshaMitra.Common;
+using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using System;
@@ -24,10 +25,7 @@ public class HrReportEmployeeQueryService(
 			return query;
 		}
 
-		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
+		hrScopeAccessService.EnsureHasConcreteHrAccess(scope, nameof(BuildScopedEmployeeQueryAsync));
 
 		var accessibleStageIds = await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope);
 		var matchingUserIds = await organizationScopeResolver.GetUserIdsWithAnyStageAsync(accessibleStageIds);

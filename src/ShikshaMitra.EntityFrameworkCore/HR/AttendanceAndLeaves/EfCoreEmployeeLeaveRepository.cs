@@ -14,6 +14,14 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
 	: EfCoreRepository<ShikshaMitraDbContext, EmployeeLeave, Guid>(dbContextProvider), IEmployeeLeaveRepository
 {
+	public async Task<EmployeeLeave?> FindWithoutDetailsAsync(Guid id, CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet
+			.IgnoreAutoIncludes()
+			.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+	}
+
 	public async Task<bool> HasOverlappingLeaveAsync(
 		Guid employeeId,
 		DateTimeOffset startDate,
@@ -71,6 +79,22 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			.Where(x =>
 				x.EmployeeId == employeeId &&
 				x.LeavePolicyId == leavePolicyId &&
+				x.Status == EmployeeLeaveStatusType.Approved &&
+				!x.IsDeleted)
+			.ToListAsync();
+
+		return leaves.Sum(GetApprovedUnits);
+	}
+
+	public async Task<decimal> GetApprovedLeaveDaysByRuleAsync(
+		Guid employeeId,
+		Guid leavePolicyRuleId)
+	{
+		var dbSet = await GetDbSetAsync();
+		var leaves = await dbSet
+			.Where(x =>
+				x.EmployeeId == employeeId &&
+				x.LeavePolicyRuleId == leavePolicyRuleId &&
 				x.Status == EmployeeLeaveStatusType.Approved &&
 				!x.IsDeleted)
 			.ToListAsync();
@@ -207,6 +231,6 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			x.EndDate,
 			x.HalfDay,
 			x.ApprovedPaidType,
-			x.LeavePolicy != null ? x.LeavePolicy.PaidType : LeavePaidType.Unpaid));
+			x.LeavePolicyRule != null ? x.LeavePolicyRule.PaidType : LeavePaidType.Unpaid));
 	}
 }

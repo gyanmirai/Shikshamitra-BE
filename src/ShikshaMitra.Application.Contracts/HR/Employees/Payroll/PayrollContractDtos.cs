@@ -52,6 +52,8 @@ public class EmployeePayrollPolicyOverrideContract
 {
 	public Guid AcademicYearId { get; set; }
 
+	public Guid? AssignmentId { get; set; }
+
 	public Guid PayrollPolicyId { get; set; }
 
 	public Guid AttendancePolicyId { get; set; }

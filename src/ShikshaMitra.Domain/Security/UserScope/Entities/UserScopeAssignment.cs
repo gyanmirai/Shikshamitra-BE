@@ -150,7 +150,7 @@ public class UserScopeAssignment : FullAuditedAggregateRoot<Guid>, IMultiTenant,
             (!UserId.HasValue && string.IsNullOrWhiteSpace(RoleName)))
         {
             throw new BusinessException(
-                code: "UserScope:InvalidAssignment",
+                code: UserScopeErrorCodes.InvalidAssignment,
                 message: "UserScopeAssignment must have either UserId OR RoleName, not both or neither."
             );
         }
@@ -159,7 +159,7 @@ public class UserScopeAssignment : FullAuditedAggregateRoot<Guid>, IMultiTenant,
         if (!string.IsNullOrWhiteSpace(Description) && Description.Length > 500)
         {
             throw new BusinessException(
-                code: "UserScope:DescriptionTooLong",
+                code: UserScopeErrorCodes.DescriptionTooLong,
                 message: "Description cannot exceed 500 characters."
             );
         }
@@ -191,7 +191,7 @@ public class UserScopeAssignment : FullAuditedAggregateRoot<Guid>, IMultiTenant,
         if (!string.IsNullOrWhiteSpace(description) && description.Length > 500)
         {
             throw new BusinessException(
-                code: "UserScope:DescriptionTooLong",
+                code: UserScopeErrorCodes.DescriptionTooLong,
                 message: "Description cannot exceed 500 characters."
             );
         }

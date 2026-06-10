@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
+using ShikshaMitra.TenantSettings;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -17,7 +18,8 @@ public class EmployeeBasicInfoWorkflow(
 	EmployeeIdentifierUniquenessService identifierUniquenessService,
 	EmployeeCreationContactGuard contactGuard,
 	EmployeeIdentityCreationWorkflow identityCreationWorkflow,
-	IEmployeeEmailService emailService) : ApplicationService, ITransientDependency
+	IEmployeeEmailService emailService,
+	ShiftReferenceValidator shiftReferenceValidator) : ApplicationService, ITransientDependency
 {
 	public async Task<EmployeeDto> CreateAsync(CreateEmployeeBasicInfoDto input)
 	{
@@ -34,6 +36,7 @@ public class EmployeeBasicInfoWorkflow(
 		input.PanNo = EmployeeIdentifierNormalizer.NormalizePan(input.PanNo);
 		input.AdharNo = EmployeeIdentifierNormalizer.NormalizeAdhar(input.AdharNo);
 		await identifierUniquenessService.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo);
+		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
 
 		using var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });
 		try
@@ -129,6 +132,7 @@ public class EmployeeBasicInfoWorkflow(
 		input.PanNo = EmployeeIdentifierNormalizer.NormalizePan(input.PanNo);
 		input.AdharNo = EmployeeIdentifierNormalizer.NormalizeAdhar(input.AdharNo);
 		await identifierUniquenessService.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo, employeeId);
+		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
 
 		var employee = await employeeManager.UpdateEmployeeAsync(
 			employeeId,

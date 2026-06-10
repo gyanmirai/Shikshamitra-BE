@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,7 +14,7 @@ namespace ShikshaMitra.TenantSettings.Divisions;
 public class DivisionAppService(
 	IDivisionRepository divisionRepository,
 	DivisionManager divisionManager,
-	IUserScopeService userScopeService) : CrudAppService<
+	AcademicOrganizationScopeAccessService scopeAccessService) : CrudAppService<
 		Division,
 		DivisionDto,
 		Guid,
@@ -46,16 +46,8 @@ public class DivisionAppService(
 	{
 		var result = await base.GetListAsync(input);
 
-		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id!.Value);
-		if (!scope.IsAdmin && !scope.HasTenantWideScope())
-		{
-			result.Items = result.Items
-				.Where(d =>
-					scope.WildcardDivisionStandardIds.Contains(d.StandardId)
-					|| scope.DivisionIds.Contains(d.Id))
-				.ToList();
-			result.TotalCount = result.Items.Count;
-		}
+		result.Items = (await scopeAccessService.FilterDivisionsAsync(result.Items)).ToList();
+		result.TotalCount = result.Items.Count;
 
 		return result;
 	}

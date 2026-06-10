@@ -27,5 +27,9 @@ public interface ILeavePolicyRepository : IRepository<LeavePolicy, Guid>
 		bool includeInactive = false,
 		CancellationToken cancellationToken = default);
 
-	Task<LeavePolicy?> GetWithLeaveTypeAsync(Guid id, CancellationToken cancellationToken = default);
+	Task<LeavePolicy?> FindWithoutDetailsAsync(Guid id, CancellationToken cancellationToken = default);
+
+	Task<LeavePolicy?> GetWithRulesAsync(Guid id, CancellationToken cancellationToken = default);
+
+	Task<LeavePolicyRule?> GetRuleAsync(Guid leavePolicyId, Guid leaveTypeId, CancellationToken cancellationToken = default);
 }

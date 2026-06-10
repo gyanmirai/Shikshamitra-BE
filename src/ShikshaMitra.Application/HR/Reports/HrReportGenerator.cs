@@ -38,15 +38,19 @@ public class HrReportGenerator(
 		{
 			var scope = await userScopeService.GetUserScopeAsync(userId);
 			var source = ResolveSource(input);
-			var rows = await rowSourceReader.BuildRowsAsync(source, input, scope);
+			var rowResult = await rowSourceReader.BuildRowsResultAsync(source, input, scope, exportAllRows);
+			var rows = rowResult.IsDatabaseBacked
+				? rowResult.Rows
+				: HrReportRequestProcessor.ShapeRows(rowResult.Rows, input);
 
-			rows = HrReportRequestProcessor.ShapeRows(rows, input);
-
-			var totalCount = rows.Count;
+			var totalCount = rowResult.IsDatabaseBacked ? rowResult.TotalCount : rows.Count;
 			var columns = HrReportCatalog.ResolveColumns(source, input, rows);
 			var pageRows = exportAllRows
 				? rows.Take(HrReportRequestProcessor.MaxExportRows).ToList()
-				: rows.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToList();
+				: rowResult.IsDatabaseBacked
+					? rows
+					: rows.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToList();
+			var warnings = HrReportPreviewPresentation.BuildWarnings(source, input, exportAllRows, totalCount, rowResult.IsDatabaseBacked);
 
 			return new HrReportPreviewDto
 			{
@@ -57,7 +61,9 @@ public class HrReportGenerator(
 				PageSize = input.PageSize,
 				Columns = columns,
 				Rows = pageRows.Select(row => columns.ToDictionary(column => column.Id, column => row.GetValueOrDefault(column.Id))).ToList(),
-				NormalizedFilters = input.Filters
+				NormalizedFilters = input.Filters,
+				QueryWarnings = warnings,
+				Chart = HrReportPreviewPresentation.BuildChartPreview(input, rows)
 			};
 		}
 	}
@@ -99,4 +105,5 @@ public class HrReportGenerator(
 			_ => HrReportDataSources.Employee
 		};
 	}
+
 }

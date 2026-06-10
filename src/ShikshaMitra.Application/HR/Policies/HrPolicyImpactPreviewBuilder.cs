@@ -2,24 +2,24 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
-
 namespace ShikshaMitra.HR.Policies;
-
 public class HrPolicyImpactPreviewBuilder(
 	IRepository<HrPolicyAssignment, Guid> assignmentRepository,
 	IRepository<WorkCalendarPolicy, Guid> workCalendarPolicyRepository,
 	IRepository<PayrollPolicy, Guid> payrollPolicyRepository,
 	IRepository<AttendancePolicy, Guid> attendancePolicyRepository,
 	HrPolicyImpactConfirmationService confirmationService,
+	HrPolicyArchiveFallbackWarningService archiveFallbackWarningService,
 	HrPolicyWorkCalendarReferenceResolver workCalendarReferenceResolver,
 	HrPolicyAffectedEmployeeResolver affectedEmployeeResolver,
 	HrPolicyPayrollRiskReader payrollRiskReader,
-	IAsyncQueryableExecuter asyncExecuter) : ITransientDependency
+	HrPolicyDefaultReplacementWarningService defaultReplacementWarningService,
+	IAsyncQueryableExecuter asyncExecuter)
+	: ITransientDependency
 {
 	public async Task<HrPolicyImpactPreviewDto> BuildAsync(HrPolicyImpactPreviewRequestDto input)
 	{
@@ -35,20 +35,40 @@ public class HrPolicyImpactPreviewBuilder(
 
 		await FillCurrentVersionAsync(preview);
 		preview.ProposedVersion = preview.CurrentVersion.HasValue ? preview.CurrentVersion.Value + 1 : 1;
+		var isRestoreDraft = string.Equals(preview.Action, "restore-draft", StringComparison.OrdinalIgnoreCase);
 		var includeDraftReferences = string.Equals(preview.Action, "archive", StringComparison.OrdinalIgnoreCase);
-		var workCalendarRefs = await workCalendarReferenceResolver.ResolveAsync(policyType, input.PolicyId, academicYearId, includeDraftReferences);
+		var workCalendarRefs = isRestoreDraft
+			? WorkCalendarPolicyReferences.Empty
+			: await workCalendarReferenceResolver.ResolveAsync(policyType, input.PolicyId, academicYearId, includeDraftReferences);
 
-		var affectedAssignments = await GetAffectedAssignmentsAsync(policyType, input.PolicyId, academicYearId, workCalendarRefs);
+		var affectedAssignments = isRestoreDraft
+			? []
+			: await GetAffectedAssignmentsAsync(policyType, input.PolicyId, academicYearId, workCalendarRefs);
 		preview.AffectedAssignmentCount = affectedAssignments.Count;
+		await archiveFallbackWarningService.AddAsync(preview, affectedAssignments);
 
 		var affectedEmployees = await affectedEmployeeResolver.ResolveAsync(academicYearId, affectedAssignments);
 		preview.AffectedEmployeeCount = affectedEmployees.Count;
-		preview.AffectedEmployees = affectedEmployees.Sample.Select(ToAffectedEmployeeDto).ToList();
-
-		await payrollRiskReader.FillPayrollRiskAsync(preview, policyType, input.PolicyId);
+		preview.AffectedEmployees = affectedEmployees.Sample.Select(HrPolicyAssignmentProjection.MapAffectedEmployee).ToList();
+		if (!isRestoreDraft)
+		{
+			await payrollRiskReader.FillPayrollRiskAsync(preview, policyType, input.PolicyId);
+		}
 		HrPolicyImpactWarningBuilder.AddWorkCalendarReferenceWarning(preview, workCalendarRefs);
+		AddProposedWorkCalendarDeactivationWarning(preview, workCalendarRefs, input);
+		await AddProposedWorkCalendarStatusWarningAsync(preview, input);
+		await defaultReplacementWarningService.AddAsync(preview, input);
 		HrPolicyImpactWarningBuilder.AddWarnings(preview);
-		await confirmationService.AttachTokenAsync(preview);
+		if (isRestoreDraft)
+		{
+			preview.BlockingWarnings = HrPolicyImpactWarningBuilder.GetBlockingWarnings(preview);
+			preview.RequiresConfirmation = false;
+		}
+		else
+		{
+			await confirmationService.AttachTokenAsync(preview);
+		}
+		HrPolicyImpactWarningBuilder.FinalizeSummary(preview);
 		return preview;
 	}
 
@@ -90,10 +110,7 @@ public class HrPolicyImpactPreviewBuilder(
 
 	private async Task FillCurrentVersionAsync(HrPolicyImpactPreviewDto preview)
 	{
-		if (!preview.PolicyId.HasValue)
-		{
-			return;
-		}
+		if (!preview.PolicyId.HasValue) { return; }
 
 		preview.CurrentVersion = preview.PolicyType switch
 		{
@@ -113,10 +130,7 @@ public class HrPolicyImpactPreviewBuilder(
 		var query = (await assignmentRepository.GetQueryableAsync())
 			.Where(x => x.AcademicYearId == academicYearId && x.IsActive);
 
-		if (!policyId.HasValue)
-		{
-			return await asyncExecuter.ToListAsync(query);
-		}
+		if (!policyId.HasValue) { return await asyncExecuter.ToListAsync(query); }
 
 		query = policyType switch
 		{
@@ -132,15 +146,54 @@ public class HrPolicyImpactPreviewBuilder(
 		return await asyncExecuter.ToListAsync(query);
 	}
 
-	private static HrPolicyAffectedEmployeeDto ToAffectedEmployeeDto(Employee employee) => new()
+	private async Task AddProposedWorkCalendarStatusWarningAsync(HrPolicyImpactPreviewDto preview, HrPolicyImpactPreviewRequestDto input)
 	{
-		EmployeeId = employee.Id,
-		EmployeeCode = employee.EmployeeCode,
-		EmployeeName = employee.EmployeeName,
-		Department = employee.Department,
-		RoleId = employee.RoleId,
-		ShiftId = employee.ShiftId,
-		EmployeeType = employee.EmployeeGroup?.ToString()
-	};
+		var workCalendarId = preview.PolicyType switch
+		{
+			"payroll" => input.PayrollPolicy?.WorkCalendarPolicyId,
+			"attendance" => input.AttendancePolicy?.WorkCalendarPolicyId,
+			_ => null
+		};
 
+		if (!workCalendarId.HasValue || workCalendarId.Value == Guid.Empty)
+		{
+			return;
+		}
+
+		var workCalendar = await workCalendarPolicyRepository.FindAsync(workCalendarId.Value);
+		if (workCalendar == null)
+		{
+			HrPolicyImpactWarningBuilder.AddMissingWorkCalendarWarning(preview, workCalendarId.Value);
+			return;
+		}
+
+		if (workCalendar.AcademicYearId != preview.AcademicYearId)
+		{
+			HrPolicyImpactWarningBuilder.AddMismatchedWorkCalendarWarning(preview, workCalendar);
+			return;
+		}
+
+		var proposedPolicyStatus = preview.PolicyType switch
+		{
+			"payroll" when input.PayrollPolicy != null => HrPolicyMapping.ParsePolicyStatus(input.PayrollPolicy.Status),
+			"attendance" when input.AttendancePolicy != null => HrPolicyMapping.ParsePolicyStatus(input.AttendancePolicy.Status),
+			_ => (HrPolicyStatus?)null
+		};
+
+		HrPolicyImpactWarningBuilder.AddWorkCalendarStatusWarning(preview, workCalendar, proposedPolicyStatus);
+	}
+
+	private static void AddProposedWorkCalendarDeactivationWarning(
+		HrPolicyImpactPreviewDto preview,
+		WorkCalendarPolicyReferences workCalendarRefs,
+		HrPolicyImpactPreviewRequestDto input)
+	{
+		if (input.WorkCalendarPolicy == null)
+		{
+			return;
+		}
+
+		var proposedStatus = HrPolicyMapping.ParsePolicyStatus(input.WorkCalendarPolicy.Status);
+		HrPolicyImpactWarningBuilder.AddWorkCalendarDeactivationWarning(preview, workCalendarRefs, proposedStatus);
+	}
 }

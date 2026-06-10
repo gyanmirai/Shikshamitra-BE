@@ -122,6 +122,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		await SeedAttendanceScopeAsync(employee.Id, context.OrganizationId, monthYear);
 		await SaveSalaryComponentsAsync(employee.Id);
 		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.TotalMonthPayroll.Id);
+		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
 
 		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
 		var oldSlip = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
@@ -158,6 +159,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		await SeedAttendanceScopeAsync(employee.Id, context.OrganizationId, "2026-01");
 		await SaveSalaryComponentsAsync(employee.Id);
 		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.TotalMonthPayroll.Id);
+		await EnsurePayrollSnapshotAsync(employee.Id, "2026-01");
 
 		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
 		var oldSlip = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
@@ -208,6 +210,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		var basic = await CreateEarningComponentAsync($"Historical Basic {Guid.NewGuid():N}", 31000m);
 		var deduction = await CreateDeductionComponentAsync($"Historical Deduction {Guid.NewGuid():N}", 3100m);
 		await SaveSalaryComponentsAsync(employee.Id, [basic], [deduction]);
+		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
 
 		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
 		var original = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
@@ -238,6 +241,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		var basic = await CreateEarningComponentAsync($"Historical Basic {Guid.NewGuid():N}", 31000m);
 		var allowance = await CreateEarningComponentAsync($"Historical Allowance {Guid.NewGuid():N}", 6200m);
 		await SaveSalaryComponentsAsync(employee.Id, [basic, allowance], []);
+		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
 
 		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
 		var original = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
@@ -266,6 +270,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		await SeedAttendanceScopeAsync(employee.Id, context.OrganizationId, monthYear);
 		await SaveSalaryComponentsAsync(employee.Id);
 		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.TotalMonthPayroll.Id);
+		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
 
 		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
 		var oldSlip = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
@@ -432,6 +437,20 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 				IsTemp = false
 			}).ToList()
 		});
+
+	private async Task<RunPayrollItem> EnsurePayrollSnapshotAsync(Guid employeeId, string monthYear)
+	{
+		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
+		var preview = await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput
+		{
+			Month = monthYear,
+			Page = 0,
+			PageSize = 50,
+			ForceRefresh = true
+		});
+
+		return preview.Items.Single(x => x.EmployeeId == employeeId);
+	}
 
 	private async Task<EarningComponentDto> CreateEarningComponentAsync(string name, decimal amount) =>
 		await _earningComponentAppService.CreateAsync(new CreateEarningComponentDto

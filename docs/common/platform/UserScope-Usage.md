@@ -4,11 +4,27 @@
 
 UserScope provides hierarchical access control for academic entities. It supports wildcard access (NULL = ALL within parent hierarchy) and specific entity assignments.
 
+> Current persistence provider note: the backend is currently configured for PostgreSQL/Npgsql. UserScope EF indexes and filtered uniqueness are intentionally Npgsql-oriented.
+
 ---
 
 ## Quick Start
 
-### 1. Get User Scope
+### 1. Use the Application Access Gateway
+
+Application services should use `IUserScopeAccessService` for list filtering and direct access checks.
+
+```csharp
+var filteredQuery = await _userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+
+await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+    entity,
+    operation: nameof(UpdateAsync));
+```
+
+Use `IUserScopeService.GetUserScopeAsync` only inside UserScope infrastructure, module-specific scope gateways, or tests that are explicitly exercising raw scope semantics.
+
+### 2. Get Raw User Scope
 
 ```csharp
 var scope = await _userScopeService.GetUserScopeAsync(userId);
@@ -31,14 +47,9 @@ Returns `UserScopeContext` with:
 // Load entity (must include hierarchy properties)
 var student = await _studentRepository.GetAsync(studentId);
 
-// Get user scope
-var scope = await _userScopeService.GetUserScopeAsync(CurrentUser.GetId());
-
-// Check access
-if (!UserScopeQueryExtensions.HasAccessToEntity(student, scope))
-{
-    throw new UnauthorizedAccessException();
-}
+await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+    student,
+    operation: nameof(GetAsync));
 ```
 
 ### Query Filtering (Lists)
@@ -49,17 +60,14 @@ if (!UserScopeQueryExtensions.HasAccessToEntity(student, scope))
 // Get queryable
 var query = await _studentRepository.GetQueryableAsync();
 
-// Get user scope
-var scope = await _userScopeService.GetUserScopeAsync(CurrentUser.GetId());
-
-// Apply filter (automatically handles wildcards + hierarchy)
-var filteredQuery = query.ApplyUserScope(scope);
+// Apply filter through the Application gateway.
+var filteredQuery = await _userScopeAccessService.ApplyCurrentUserScopeAsync(query);
 var students = await AsyncExecuter.ToListAsync(filteredQuery);
 ```
 
-### Direct Scope Access (Simple Checks)
+### Direct Scope Access (Infrastructure Only)
 
-**Use when**: Simple checks without loading entities
+**Use when**: Implementing UserScope infrastructure or a module-specific gateway.
 
 ```csharp
 var scope = await _userScopeService.GetUserScopeAsync(userId);
@@ -150,31 +158,22 @@ This invalidates cache for **all users** with that role.
 public class StudentAppService : ApplicationService
 {
     private readonly IStudentRepository _studentRepository;
-    private readonly IUserScopeService _userScopeService;
+    private readonly IUserScopeAccessService _userScopeAccessService;
 
     public async Task<StudentDto> GetAsync(Guid id)
     {
-        // Load entity
         var student = await _studentRepository.GetAsync(id);
-        
-        // Check access
-        var scope = await _userScopeService.GetUserScopeAsync(CurrentUser.GetId());
-        if (!UserScopeQueryExtensions.HasAccessToEntity(student, scope))
-        {
-            throw new UnauthorizedAccessException();
-        }
+        await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+            student,
+            operation: nameof(GetAsync));
         
         return ObjectMapper.Map<Student, StudentDto>(student);
     }
 
     public async Task<List<StudentDto>> GetListAsync()
     {
-        // Get queryable
         var query = await _studentRepository.GetQueryableAsync();
-        
-        // Apply scope filter
-        var scope = await _userScopeService.GetUserScopeAsync(CurrentUser.GetId());
-        var filtered = query.ApplyUserScope(scope);
+        var filtered = await _userScopeAccessService.ApplyCurrentUserScopeAsync(query);
         
         // Execute query
         var students = await AsyncExecuter.ToListAsync(filtered);
@@ -196,6 +195,15 @@ var allItems = await _repository.GetListAsync();
 var scope = await _userScopeService.GetUserScopeAsync(userId);
 var accessible = allItems.FilterByUserScope(scope);
 ```
+
+### HR Reports
+
+HR report preview/export/schedule row sources must use the HR report scope gateway chain:
+
+- `HrReportGenerator` resolves the current `UserScopeContext`.
+- Employee-backed report sources (`Employee`, `Payroll`, `Attendance`, `Leave`, `Performance`) must build rows from `HrReportEmployeeQueryService`.
+- Policy assignment report rows must pass through `HrReportPolicyScopeService`; scoped HR users only see employee/group policy assignments that affect employees in their HR scope.
+- Policy audit rows are returned to scoped HR users only when the audit row is tied to a visible `policy_assignment`. Non-assignment policy audit rows remain HR-wide/permission-governed because the audit schema does not carry employee/stage metadata.
 
 ---
 

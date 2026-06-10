@@ -29,6 +29,11 @@ public class HrReportExportBackgroundJob(
 		using (currentTenant.Change(args.TenantId))
 		{
 			var job = await exportJobRepository.GetAsync(args.JobId);
+			if (job.Status == HrReportExportStatus.Cancelled)
+			{
+				return;
+			}
+
 			job.MarkRunning(clock.Now);
 			await exportJobRepository.UpdateAsync(job, autoSave: true);
 
@@ -45,7 +50,7 @@ public class HrReportExportBackgroundJob(
 
 				await using var stream = new MemoryStream(bytes);
 				await blobContainer.SaveAsync(blobName, stream, overrideExisting: true);
-				job.MarkCompleted(blobName, clock.Now);
+				job.MarkCompleted(blobName, clock.Now, report.TotalCount, bytes.LongLength);
 				await exportJobRepository.UpdateAsync(job, autoSave: true);
 			}
 			catch (Exception ex)

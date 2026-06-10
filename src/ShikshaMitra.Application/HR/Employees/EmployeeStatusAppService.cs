@@ -13,7 +13,7 @@ using Volo.Abp.EventBus.Distributed;
 namespace ShikshaMitra.HR.Employees;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
 public class EmployeeStatusAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeePayrollComponentRepository payrollComponentRepository,

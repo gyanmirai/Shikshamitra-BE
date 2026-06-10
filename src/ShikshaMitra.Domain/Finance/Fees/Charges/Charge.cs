@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;

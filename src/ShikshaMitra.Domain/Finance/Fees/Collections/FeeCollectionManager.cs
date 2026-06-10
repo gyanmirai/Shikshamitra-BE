@@ -21,13 +21,122 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 /// </summary>
 public class FeeCollectionManager(
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
+	IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository,
+	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
+	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
 	IDueFeeRepository dueFeeRepository,
+	IFeePaymentReceiptRepository feePaymentReceiptRepository,
+	FeeReceiptManager feeReceiptManager,
 	IReceiptNumberSequenceRepository receiptNumberSequenceRepository,
 	IClock clock,
 	ICurrentTenant currentTenant,
 	ICurrentUser currentUser
 ) : DomainService
 {
+	public sealed record CollectFeeTransactionCommand(
+		Guid StudentId,
+		Guid AcademicYearId,
+		Guid BoardId,
+		Guid EducationMediumId,
+		FeeCollectionStatus Status,
+		double ReceivedAmount,
+		string? Notes,
+		bool? BankReceiptConfirmed,
+		IReadOnlyList<(Guid FeeHeadId, double Amount)> FeeHeadGroups,
+		IReadOnlyList<(Guid ChargeId, double Amount)> ChargePayments,
+		IReadOnlyList<(Guid DueFeeId, double Amount)> DueFeeAllocations,
+		IReadOnlyList<(PaymentMethodEnum Method, double Amount, PaymentDetails? Details)> Payments);
+
+	public sealed record CollectFeeTransactionResult(
+		FeeRecordMetadata Metadata,
+		string ReceiptNumber,
+		List<FeeCollectionRecord> FeeCollectionRecords,
+		List<ChargeCollectionRecord> ChargeCollectionRecords,
+		List<FeePaymentReceipt> Receipts,
+		double FeeLinesTotal,
+		double ChargeLinesTotal);
+
+	public async Task<CollectFeeTransactionResult> ExecuteCollectionTransactionAsync(CollectFeeTransactionCommand command)
+	{
+		var receiptNumber = await GenerateReceiptNumberAsync();
+
+		var metadata = CreateMetadata(
+			command.StudentId,
+			command.AcademicYearId,
+			command.ReceivedAmount,
+			command.Status,
+			receiptNumber,
+			command.Notes);
+		await feeRecordMetadataRepository.InsertAsync(metadata, autoSave: false);
+
+		var feeCollectionRecords = CreateFeeCollectionRecords(
+			command.StudentId,
+			metadata.Id,
+			command.FeeHeadGroups);
+		await feeCollectionRecordRepository.InsertManyAsync(feeCollectionRecords, autoSave: false);
+
+		var chargeCollectionRecords = new List<ChargeCollectionRecord>();
+		if (command.ChargePayments.Count > 0)
+		{
+			chargeCollectionRecords = CreateChargeCollectionRecords(
+				command.StudentId,
+				metadata.Id,
+				command.ChargePayments);
+			await chargeCollectionRecordRepository.InsertManyAsync(chargeCollectionRecords, autoSave: false);
+		}
+
+		var paymentRecords = CreatePaymentRecords(
+			command.StudentId,
+			metadata.Id,
+			command.Payments,
+			command.Notes);
+		await paymentMethodRecordRepository.InsertManyAsync(paymentRecords, autoSave: false);
+
+		if (command.DueFeeAllocations.Count > 0)
+		{
+			var dueFees = await ApplyDueFeeAllocationsAsync(command.DueFeeAllocations);
+			await dueFeeRepository.UpdateManyAsync(dueFees, autoSave: false);
+
+			var allocationRows = command.DueFeeAllocations
+				.Select(a => new FeeCollectionDueFeeAllocation(
+					GuidGenerator.Create(),
+					currentTenant.Id,
+					metadata.Id,
+					a.DueFeeId,
+					a.Amount))
+				.ToList();
+			await dueFeeAllocationRepository.InsertManyAsync(allocationRows, autoSave: false);
+		}
+
+		var feeLinesTotal = feeCollectionRecords.Sum(r => r.Amount);
+		var chargeLinesTotal = chargeCollectionRecords.Sum(r => r.Amount);
+
+		var receipts = await feeReceiptManager.CreateReceiptsForTransactionAsync(
+			feeCollectionTransactionId: metadata.Id,
+			studentId: command.StudentId,
+			academicYearId: command.AcademicYearId,
+			boardId: command.BoardId,
+			educationMediumId: command.EducationMediumId,
+			feeLinesTotal: feeLinesTotal,
+			chargeLinesTotal: chargeLinesTotal,
+			paymentMethods: command.Payments.Select(p => p.Method).ToList(),
+			bankReceiptConfirmed: command.BankReceiptConfirmed,
+			remarks: command.Notes);
+
+		if (receipts.Count > 0)
+			await feePaymentReceiptRepository.InsertManyAsync(receipts, autoSave: false);
+
+		return new CollectFeeTransactionResult(
+			metadata,
+			receiptNumber,
+			feeCollectionRecords,
+			chargeCollectionRecords,
+			receipts,
+			feeLinesTotal,
+			chargeLinesTotal);
+	}
+
 	/// <summary>
 	/// Generates a unique, concurrent-safe receipt number in the format <c>REC-{YYYY}-{NNNNNN}</c>
 	/// using the <see cref="ReceiptNumberSequence"/> table (kind = null slot).

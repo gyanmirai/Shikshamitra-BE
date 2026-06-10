@@ -49,7 +49,9 @@ public class CollectFeeOutput
     /// </summary>
     public Guid? FeeReceiptId { get; set; }
 
-    public double ReceivedAmount { get; set; }
+	public Guid? ChargeReceiptId { get; set; }
+
+	public double ReceivedAmount { get; set; }
 
     public List<PaidDueFeeInfoDto> PaidDueFees { get; set; } = [];
 

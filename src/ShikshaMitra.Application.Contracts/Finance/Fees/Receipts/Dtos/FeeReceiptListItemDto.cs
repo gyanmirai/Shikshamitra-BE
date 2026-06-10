@@ -1,5 +1,4 @@
-using System;
-using ShikshaMitra.Finance.Receipts;
+﻿using System;
 
 namespace ShikshaMitra.Finance.Fees.Receipts.Dtos;
 

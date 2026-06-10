@@ -1,11 +1,8 @@
 ﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
-using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
-using ShikshaMitra.TenantSettings.Standards;
 using System;
-using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 

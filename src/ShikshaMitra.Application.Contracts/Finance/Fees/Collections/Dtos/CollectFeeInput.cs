@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
-using ShikshaMitra.Finance.FeeCollection;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 

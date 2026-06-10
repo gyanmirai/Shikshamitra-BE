@@ -47,11 +47,11 @@ public class EducationBoardAppService(
 
 		foreach (var board in result.Items)
 		{
-			board.EducationMediums = board.EducationMediums.OrderBy(x => x.Name).ToList();
+			board.EducationMediums = board.EducationMediums.OrderBy(x => x.CreationTime).ToList();
 
 			foreach (var medium in board.EducationMediums)
 			{
-				medium.EducationMediumStages = medium.EducationMediumStages.OrderBy(x => x.Name).ToList();
+				medium.EducationMediumStages = medium.EducationMediumStages.OrderBy(x => x.CreationTime).ToList();
 				foreach (var stage in medium.EducationMediumStages)
 				{
 					stage.Standards = stage.Standards.OrderBy(x => x.CreationTime).ToList();

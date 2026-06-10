@@ -1,12 +1,11 @@
-using System;
+﻿using System;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Finance.Fees.Receipts;
-using ShikshaMitra.Finance.FeeCollection;
-using ShikshaMitra.Finance.Receipts;
+using ShikshaMitra.Finance.FeeCollections;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Uow;
 

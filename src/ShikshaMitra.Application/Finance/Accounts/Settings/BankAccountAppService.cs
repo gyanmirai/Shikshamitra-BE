@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Settings.Dtos;
-using ShikshaMitra.Finance.Setting;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;

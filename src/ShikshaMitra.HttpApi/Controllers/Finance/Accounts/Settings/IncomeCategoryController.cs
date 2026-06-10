@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Accounts;
 using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
+using ShikshaMitra.Finance.Accounts.Transactions;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 

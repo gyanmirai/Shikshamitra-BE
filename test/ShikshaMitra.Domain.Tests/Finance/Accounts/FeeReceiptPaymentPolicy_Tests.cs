@@ -1,6 +1,6 @@
-﻿using ShikshaMitra.Finance.FeeCollection;
+﻿using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
-using ShikshaMitra.Finance.Receipts;
+using ShikshaMitra.Finance.Fees.Receipts;
 using Xunit;
 
 namespace ShikshaMitra.Finance.Accounts;

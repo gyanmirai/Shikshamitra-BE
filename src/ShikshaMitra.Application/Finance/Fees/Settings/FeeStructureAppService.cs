@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
-using ShikshaMitra.Finance.Collections;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
@@ -12,7 +11,7 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
-using ShikshaMitra.Finance.Setting;
+using ShikshaMitra.Finance.Fees.Collections;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 

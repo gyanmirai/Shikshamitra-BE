@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using Shouldly;

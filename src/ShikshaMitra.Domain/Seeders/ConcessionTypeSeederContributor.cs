@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
-using ShikshaMitra.Finance.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp.Data;

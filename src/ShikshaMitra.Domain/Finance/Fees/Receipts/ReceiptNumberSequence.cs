@@ -1,5 +1,4 @@
-using System;
-using ShikshaMitra.Finance.Receipts;
+﻿using System;
 using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.Finance.Fees.Receipts;

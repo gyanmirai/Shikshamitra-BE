@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.FeeCollectionTests;
 using ShikshaMitra.Finance.FeeReceipts;
+using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.Receipts.Dtos;
-using ShikshaMitra.Finance.Receipts;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Volo.Abp.Application.Dtos;

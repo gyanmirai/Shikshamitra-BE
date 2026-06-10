@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.Finance.Accounts;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance.Accounts.Transactions.Dtos;
 using Volo.Abp;

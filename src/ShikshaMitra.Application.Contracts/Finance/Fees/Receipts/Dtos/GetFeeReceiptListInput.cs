@@ -1,6 +1,5 @@
-using System;
+﻿using System;
 using ShikshaMitra.Finance.Common;
-using ShikshaMitra.Finance.Receipts;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Receipts.Dtos;

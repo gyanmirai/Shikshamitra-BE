@@ -1,11 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
-using ShikshaMitra.Finance.Collections;
-using ShikshaMitra.Finance.FeeCollection;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;

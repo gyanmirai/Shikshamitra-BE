@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using ShikshaMitra.Finance.Accounts.Settings.BankAccount;
 
 namespace ShikshaMitra.Finance.Accounts.Settings.Dtos;
 

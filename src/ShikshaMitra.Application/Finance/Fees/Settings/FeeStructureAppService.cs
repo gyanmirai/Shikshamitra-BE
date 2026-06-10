@@ -12,7 +12,6 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.Finance.Fees.Collections;
-using ShikshaMitra.Finance.Fees.Settings.FeeStructure;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 

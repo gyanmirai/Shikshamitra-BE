@@ -2,9 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.Collections;
-using ShikshaMitra.Finance.FeeAdjustment.Entities;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
+using ShikshaMitra.Finance.Fees.FeeAdjustment.Entities;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Repositories;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;

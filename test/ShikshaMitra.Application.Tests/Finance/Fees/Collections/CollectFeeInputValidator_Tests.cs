@@ -176,8 +176,6 @@ public class CollectFeeInputValidator_Tests
     [InlineData(PaymentMethodEnum.CreditCard)]
     [InlineData(PaymentMethodEnum.DebitCard)]
     [InlineData(PaymentMethodEnum.BankTransfer)]
-    [InlineData(PaymentMethodEnum.OnlinePaymentGateway)]
-    [InlineData(PaymentMethodEnum.WalletPrepaidCard)]
     public void Should_Reject_CashierDecided_Method_Without_BankReceiptConfirmed(PaymentMethodEnum method)
     {
         var input = ValidInput();
@@ -200,10 +198,6 @@ public class CollectFeeInputValidator_Tests
     [InlineData(PaymentMethodEnum.DebitCard, true)]
     [InlineData(PaymentMethodEnum.DebitCard, false)]
     [InlineData(PaymentMethodEnum.BankTransfer, false)]
-    [InlineData(PaymentMethodEnum.OnlinePaymentGateway, true)]
-    [InlineData(PaymentMethodEnum.OnlinePaymentGateway, false)]
-    [InlineData(PaymentMethodEnum.WalletPrepaidCard, true)]
-    [InlineData(PaymentMethodEnum.WalletPrepaidCard, false)]
     public void Should_Accept_CashierDecided_Method_With_BankReceiptConfirmed(
         PaymentMethodEnum method, bool bankConfirmed)
     {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -22,14 +22,24 @@ public class FinanceAuditTrailAppService(
 	IRepository<FinanceAuditEvent, Guid> repository,
 	IRepository<Student, Guid> studentRepository,
 	IRepository<Standard, Guid> standardRepository,
-	IRepository<Division, Guid> divisionRepository)
+	IRepository<Division, Guid> divisionRepository,
+	FinanceScopeAccessService financeScopeAccessService)
 	: ApplicationService, IFinanceAuditTrailAppService
 {
 	public async Task<PagedResultDto<FinanceAuditEventDto>> GetListAsync(FinanceAuditEventListRequestDto input)
 	{
 		await EnsureCanViewFinanceAuditAsync();
+
 		var query = await repository.GetQueryableAsync();
 		query = ApplyFilters(query, input);
+
+		// Apply user scope: pass non-student events (institutional) through,
+		// but restrict student events to only those within the caller's scope.
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		query = query.Where(x =>
+			x.StudentId == null ||
+			scopedStudentIds.Contains(x.StudentId.Value));
+
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(ApplySorting(query, input.Sorting)
 			.Skip(input.SkipCount)
@@ -75,6 +85,22 @@ public class FinanceAuditTrailAppService(
 				.Take(NormalizeMaxResultCount(input.MaxResultCount)));
 
 		var dtos = rows.Select(FinanceAuditTrailProjection.ToDto).ToList();
+
+		var sampleEvent = rows.FirstOrDefault();
+		if (sampleEvent?.StudentId.HasValue == true)
+		{
+			await financeScopeAccessService.EnsureStudentAccessibleAsync(sampleEvent.StudentId.Value);
+		}
+		else if (sampleEvent != null)
+		{
+			await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+				sampleEvent.AcademicYearId,
+				null,
+				null,
+				null,
+				null);
+		}
+
 		return new FinanceAuditCorrelationDto
 		{
 			CorrelationId = normalized,
@@ -91,6 +117,21 @@ public class FinanceAuditTrailAppService(
 	{
 		await EnsureCanViewFinanceAuditAsync();
 		var entity = await repository.GetAsync(id);
+
+		if (entity.StudentId.HasValue)
+		{
+			await financeScopeAccessService.EnsureStudentAccessibleAsync(entity.StudentId.Value);
+		}
+		else
+		{
+			await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+				entity.AcademicYearId,
+				null,
+				null,
+				null,
+				null);
+		}
+
 		return FinanceAuditTrailProjection.ToDto(entity);
 	}
 
@@ -98,6 +139,12 @@ public class FinanceAuditTrailAppService(
 		FinanceAuditStudentLookupRequestDto input)
 	{
 		await EnsureCanViewFinanceAuditAsync();
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			input.AcademicYearId,
+			null,
+			null,
+			null,
+			null);
 
 		var search = input.Search?.Trim() ?? string.Empty;
 		if (string.IsNullOrWhiteSpace(search))
@@ -118,6 +165,10 @@ public class FinanceAuditTrailAppService(
 		studentQ = studentQ.Where(s =>
 			s.AcademicYearId == input.AcademicYearId &&
 			s.Status == StudentLifeCycleStatusEnum.Enrolled);
+
+		// User scope — restrict lookup to students the caller can access
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		studentQ = studentQ.Where(s => scopedStudentIds.Contains(s.Id));
 
 		if (Guid.TryParse(search, out var studentId))
 		{

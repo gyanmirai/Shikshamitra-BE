@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
@@ -33,6 +34,7 @@ public class ConcessionRequestAppService(
 	IRepository<DueFee, Guid> dueFeeRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
+	FinanceScopeAccessService financeScopeAccessService,
 	ICurrentUser currentUser,
 	IGuidGenerator guidGenerator)
 	: ApplicationService, IConcessionRequestAppService
@@ -107,18 +109,25 @@ public class ConcessionRequestAppService(
 
 	public async Task<ConcessionApplicationsDto> GetApplicationsAsync(GetConcessionApplicationsInput input)
 	{
+		FinanceClassDivisionFilterValidator.Validate(input);
+
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+
 		var pageSize = Math.Min(input.MaxResultCount, 100);
 		var skip = input.SkipCount;
 		var status = input.Status.HasValue ? (ConcessionRequestStatus)input.Status.Value : (ConcessionRequestStatus?)null;
 
 		var counts = await concessionRequestRepository.GetStatusCountsAsync(
-			input.BoardId, input.EducationMediumId);
+			input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId,
+			scopedStudentIdsQuery: scopedStudentIds);
 
 		var items = await concessionRequestRepository.GetListForApplicationsAsync(
-			input.BoardId, input.EducationMediumId, status, skip, pageSize);
+			input.BoardId, input.EducationMediumId, status, input.StandardId, input.DivisionId, skip, pageSize,
+			scopedStudentIdsQuery: scopedStudentIds);
 
 		var total = await concessionRequestRepository.CountForApplicationsAsync(
-			input.BoardId, input.EducationMediumId, status);
+			input.BoardId, input.EducationMediumId, status, input.StandardId, input.DivisionId,
+			scopedStudentIdsQuery: scopedStudentIds);
 
 		var studentIds = items.Select(i => i.StudentId).Distinct().ToList();
 		var students = await studentRepository.GetListAsync(s => studentIds.Contains(s.Id));

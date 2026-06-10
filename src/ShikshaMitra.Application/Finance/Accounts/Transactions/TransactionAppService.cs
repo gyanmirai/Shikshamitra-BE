@@ -15,11 +15,25 @@ namespace ShikshaMitra.Finance.Accounts.Transactions;
 [RemoteService(false)]
 public class TransactionAppService(
 	IRepository<Transaction, Guid> transactionRepository,
-	IRepository<TransactionCategory, Guid> transactionCategoryRepository
+	IRepository<TransactionCategory, Guid> transactionCategoryRepository,
+	FinanceScopeAccessService financeScopeAccessService
 ) : ApplicationService, ITransactionAppService
 {
 	public async Task<TransactionListResponse> GetListAsync(Guid academicYearId, GetTransactionsRequest input, TransactionType transactionType)
 	{
+		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(
+				academicYearId, null, null, null, null))
+		{
+			return new TransactionListResponse
+			{
+				TotalCount = 0,
+				CurrentPage = input.Page,
+				PageSize = input.PageSize,
+				TotalPages = 0,
+				Items = []
+			};
+		}
+
 		var transactionQuery = await transactionRepository.GetQueryableAsync();
 		var categoryQuery = await transactionCategoryRepository.GetQueryableAsync();
 
@@ -56,6 +70,13 @@ public class TransactionAppService(
 
 	public async Task<TransactionCreateUpdateResponse> CreateAsync(Guid academicYearId, TransactionCreateRequest input, TransactionType transactionType)
 	{
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			academicYearId,
+			null,
+			null,
+			null,
+			null);
+
 		var category = await transactionCategoryRepository.FindAsync(input.CategoryId)
 			?? throw new BusinessException("ShikshaMitra:TransactionCategoryNotFound")
 				.WithData("CategoryId", input.CategoryId);
@@ -88,6 +109,12 @@ public class TransactionAppService(
 	public async Task<TransactionDetailsResponse> GetByIdAsync(Guid transactionId, TransactionType transactionType)
 	{
 		var transaction = await transactionRepository.GetAsync(transactionId);
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			transaction.AcademicYearId,
+			null,
+			null,
+			null,
+			null);
 
 		EnsureTransactionType(transaction, transactionType);
 
@@ -119,6 +146,12 @@ public class TransactionAppService(
 	public async Task<TransactionCreateUpdateResponse> UpdateAsync(Guid transactionId, TransactionUpdateRequest input, TransactionType transactionType)
 	{
 		var transaction = await transactionRepository.GetAsync(transactionId);
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			transaction.AcademicYearId,
+			null,
+			null,
+			null,
+			null);
 
 		EnsureTransactionType(transaction, transactionType);
 
@@ -150,6 +183,12 @@ public class TransactionAppService(
 	public async Task<TransactionDeleteResponse> DeleteAsync(Guid transactionId, TransactionType transactionType)
 	{
 		var transaction = await transactionRepository.GetAsync(transactionId);
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
+			transaction.AcademicYearId,
+			null,
+			null,
+			null,
+			null);
 
 		EnsureTransactionType(transaction, transactionType);
 

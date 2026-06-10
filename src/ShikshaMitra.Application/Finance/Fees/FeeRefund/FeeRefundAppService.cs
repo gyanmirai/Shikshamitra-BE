@@ -7,6 +7,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.FeeRefund.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;
@@ -28,30 +29,36 @@ public class FeeRefundAppService(
     IRepository<Student, Guid> studentRepository,
     IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
     FeeRefundManager feeRefundManager,
+    FinanceScopeAccessService financeScopeAccessService,
     ICurrentUser currentUser,
     IUnitOfWorkManager unitOfWorkManager
 ) : ApplicationService, IFeeRefundAppService
 {
-    // ── List ─────────────────────────────────────────────────────────────────
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     public async Task<PagedResultDto<FeeRefundRequestDto>> GetListAsync(GetFeeRefundsInput input)
     {
+        FinanceClassDivisionFilterValidator.Validate(input);
+
+        var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+
         var (items, totalCount) = await feeRefundRepository.GetListWithDetailsAsync(
-            studentId: input.StudentId,
-            academicMediumId: input.AcademicMediumId,
-            status: input.Status,
-            search: input.Search,
-            skipCount: input.SkipCount,
-            maxResultCount: input.MaxResultCount,
-            sorting: input.Sorting);
+            studentId:             input.StudentId,
+            academicMediumId:      input.AcademicMediumId,
+            standardId:            input.StandardId,
+            divisionId:            input.DivisionId,
+            status:                input.Status,
+            search:                input.Search,
+            skipCount:             input.SkipCount,
+            maxResultCount:        input.MaxResultCount,
+            sorting:               input.Sorting,
+            scopedStudentIdsQuery: scopedStudentIds);
 
         var studentMap = await BuildStudentMapAsync(items.Select(r => r.StudentId).Distinct());
         var dtos = items.Select(r => MapToDto(r, studentMap)).ToList();
         return new PagedResultDto<FeeRefundRequestDto>(totalCount, dtos);
     }
 
-    // ── Get single ───────────────────────────────────────────────────────────
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     public async Task<FeeRefundRequestDto> GetAsync(Guid id)
@@ -59,6 +66,8 @@ public class FeeRefundAppService(
         var request = await feeRefundRepository.FindWithLinesAsync(id)
             ?? throw new BusinessException(FeeRefundErrorCodes.RefundNotFound)
                 .WithData("Id", id);
+
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 
         var studentMap = await BuildStudentMapAsync([request.StudentId]);
         var dto = MapToDto(request, studentMap);
@@ -68,11 +77,12 @@ public class FeeRefundAppService(
         return dto;
     }
 
-    // ── Eligibility ──────────────────────────────────────────────────────────
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     public async Task<RefundEligibilityDto> GetEligibilityAsync(Guid studentId, Guid academicYearId)
     {
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
+
         var dueFees = await dueFeeRepository.GetListAsync(
             df => df.StudentId == studentId && df.PaidAmount > 0);
 
@@ -144,11 +154,12 @@ public class FeeRefundAppService(
         };
     }
 
-    // ── Create ───────────────────────────────────────────────────────────────
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add)]
     public async Task<FeeRefundRequestDto> CreateAsync(CreateFeeRefundRequestDto input)
     {
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
+
         using var uow = unitOfWorkManager.Begin(isTransactional: true);
 
         var lines = input.Lines
@@ -168,7 +179,6 @@ public class FeeRefundAppService(
         return MapToDto(request, studentMap);
     }
 
-    // ── Status transition ────────────────────────────────────────────────────
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve)]
     public async Task<FeeRefundRequestDto> UpdateStatusAsync(Guid id, UpdateFeeRefundStatusDto input)
@@ -176,6 +186,8 @@ public class FeeRefundAppService(
         var request = await feeRefundRepository.FindWithLinesAsync(id)
             ?? throw new BusinessException(FeeRefundErrorCodes.RefundNotFound)
                 .WithData("Id", id);
+
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 
         using var uow = unitOfWorkManager.Begin(isTransactional: true);
 
@@ -211,13 +223,6 @@ public class FeeRefundAppService(
         return MapToDto(request, studentMap);
     }
 
-    // ── Student snapshot helper ───────────────────────────────────────────────
-
-    /// <summary>
-    /// Loads students for the given IDs in a single batch query.
-    /// StudentConfiguration.AutoInclude() ensures ContactDetail, Standard, and Division
-    /// are always loaded together with the Student — no extra joins required.
-    /// </summary>
     private async Task<Dictionary<Guid, Student>> BuildStudentMapAsync(IEnumerable<Guid> studentIds)
     {
         var ids = studentIds.ToList();
@@ -226,7 +231,6 @@ public class FeeRefundAppService(
         return students.ToDictionary(s => s.Id);
     }
 
-    // ── Mapping ───────────────────────────────────────────────────────────────
 
     private static FeeRefundRequestDto MapToDto(FeeRefundRequest r, Dictionary<Guid, Student> studentMap)
     {
@@ -260,7 +264,6 @@ public class FeeRefundAppService(
                 })
                 .ToList(),
 
-            // Student snapshot — null-safe; falls back to empty/null when student not found
             StudentName      = fullName,
             StudentGrNo      = student?.GrNo,
             StudentRollNo    = student?.RollNo,

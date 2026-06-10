@@ -6,6 +6,7 @@ using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Academic.Timetable;
 using ShikshaMitra.Academic.Timetable.Timetables;
@@ -35,7 +36,10 @@ public class AcademicReportGenerator(
     IRepository<ChapterProgress, Guid> chapterProgressRepository,
     IRepository<ExamMark, Guid> examMarkRepository,
     IRepository<Exam, Guid> examRepository,
-    IRepository<Student, Guid> studentRepository) : ITransientDependency
+    IRepository<Student, Guid> studentRepository,
+    IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
+    IRepository<StudentSubmissionEntity, Guid> submissionRepository,
+    IRepository<AssignmentEntity, Guid> assignmentRepository) : ITransientDependency
 {
     public Task<AcademicReportOptionsDto> GetOptionsAsync(Guid userId, Guid? tenantId)
     {
@@ -63,7 +67,64 @@ public class AcademicReportGenerator(
                 new() { Id = AcademicReportTypes.MarksRangeResultList, Label = "Marks Range Result List" },
                 new() { Id = AcademicReportTypes.SubjectwiseMarksReport, Label = "Subject-wise Marks Report" },
                 new() { Id = AcademicReportTypes.DetailedResultSheet, Label = "Detailed Result Sheet" },
-                new() { Id = AcademicReportTypes.ExamSummaryReport, Label = "Exam Summary Report" }
+                new() { Id = AcademicReportTypes.ExamSummaryReport, Label = "Exam Summary Report" },
+
+                // Student Ranking / Bright-Weak
+                new() { Id = AcademicReportTypes.BrightStudentAnalysis, Label = "Bright Student Analysis" },
+                new() { Id = AcademicReportTypes.BrightStudentListSubjectWise, Label = "Bright Student List Subject Wise" },
+                new() { Id = AcademicReportTypes.WeakStudentAnalysis, Label = "Weak Student Analysis" },
+                new() { Id = AcademicReportTypes.WeakStudentAnalysisSubjectWise, Label = "Weak Student Analysis Subject Wise" },
+                new() { Id = AcademicReportTypes.StudentGradeAnalysis, Label = "Student Grade Analysis" },
+                new() { Id = AcademicReportTypes.ResultListPassFailOverallAnalysis, Label = "Result List Pass/Fail Overall Analysis" },
+                new() { Id = AcademicReportTypes.ResultListOverallGradeAnalysis, Label = "Result List Overall Grade Analysis" },
+
+                // Student-Wise Full Result
+                new() { Id = AcademicReportTypes.StudentAllBatchResult, Label = "Student All Batch Result" },
+                new() { Id = AcademicReportTypes.StudentAllExamResult, Label = "Student All Exam Result" },
+
+                // Subject Performance & Analysis
+                new() { Id = AcademicReportTypes.AverageSubjectMarkAnalysis, Label = "Average Subject Mark Analysis" },
+                new() { Id = AcademicReportTypes.SubjectAverageClassMarkAnalysis, Label = "Subject Average Class Mark Analysis" },
+                new() { Id = AcademicReportTypes.StudentGradeAnalysisSubjectWise, Label = "Student Grade Analysis Subject Wise" },
+                new() { Id = AcademicReportTypes.SubjectWiseGradeList, Label = "Subject Wise Grade List" },
+                new() { Id = AcademicReportTypes.ResultListPassFailAnalysisSubjectWise, Label = "Result List Pass/Fail Analysis Subject Wise" },
+                new() { Id = AcademicReportTypes.ResultListSubjectGradeAnalysis, Label = "Result List Subject Grade Analysis" },
+                new() { Id = AcademicReportTypes.ResultListWithSubject, Label = "Result List With Subject" },
+                new() { Id = AcademicReportTypes.ResultListWithSubjectFailedDetails, Label = "Result List With Subject Failed Details" },
+                new() { Id = AcademicReportTypes.ResultListWithSubjectGrade, Label = "Result List With Subject Grade" },
+                new() { Id = AcademicReportTypes.ResultListWithSubjectSmall, Label = "Result List With Subject Small" },
+                new() { Id = AcademicReportTypes.ResultListWithSubjectWithGrace, Label = "Result List With Subject With Grace" },
+
+                // Homework reports
+                new() { Id = AcademicReportTypes.DailyHomeworkReport, Label = "Daily Homework Report" },
+                new() { Id = AcademicReportTypes.ClasswiseHomeworkReport, Label = "Class-wise Homework Report" },
+                new() { Id = AcademicReportTypes.SubjectwiseHomeworkReport, Label = "Subject-wise Homework Report" },
+                new() { Id = AcademicReportTypes.TeacherwiseHomeworkReport, Label = "Teacher-wise Homework Report" },
+                new() { Id = AcademicReportTypes.StudentwiseHomeworkSummaryReport, Label = "Student-wise Homework Summary Report" },
+                new() { Id = AcademicReportTypes.HomeworkCompletionStatusReport, Label = "Homework Completion Status Report" },
+                new() { Id = AcademicReportTypes.PendingHomeworkReport, Label = "Pending Homework Report" },
+                new() { Id = AcademicReportTypes.OverdueHomeworkReport, Label = "Overdue Homework Report" },
+                new() { Id = AcademicReportTypes.HomeworkSubmissionHistoryReport, Label = "Homework Submission History Report" },
+                new() { Id = AcademicReportTypes.HomeworkWithAttachmentsReport, Label = "Homework with Attachments Report" },
+                new() { Id = AcademicReportTypes.HomeworkAcknowledgementReport, Label = "Homework Acknowledgement Report" },
+
+                // Assignment reports
+                new() { Id = AcademicReportTypes.AssignmentIssuanceReport, Label = "Assignment Issuance Report" },
+                new() { Id = AcademicReportTypes.AssignmentSubmissionReport, Label = "Assignment Submission Report" },
+                new() { Id = AcademicReportTypes.AssignmentEvaluationReport, Label = "Assignment Evaluation Report" },
+                new() { Id = AcademicReportTypes.AssignmentMarksReport, Label = "Assignment Marks Report" },
+                new() { Id = AcademicReportTypes.LateSubmissionReport, Label = "Late Submission Report" },
+                new() { Id = AcademicReportTypes.MissingAssignmentReport, Label = "Missing Assignment Report" },
+                new() { Id = AcademicReportTypes.AssignmentFeedbackReport, Label = "Assignment Feedback Report" },
+                new() { Id = AcademicReportTypes.AssignmentGradeDistributionReport, Label = "Assignment Grade Distribution Report" },
+                new() { Id = AcademicReportTypes.AssignmentPerformanceReport, Label = "Assignment Performance Report" },
+
+                // Analytics & Monitoring reports
+                new() { Id = AcademicReportTypes.HomeworkLoadAnalysisReport, Label = "Homework Load Analysis Report" },
+                new() { Id = AcademicReportTypes.AssignmentLoadAnalysisReport, Label = "Assignment Load Analysis Report" },
+                new() { Id = AcademicReportTypes.TeacherPerformanceInHomeworkEvaluationReport, Label = "Teacher Performance in Homework Evaluation Report" },
+                new() { Id = AcademicReportTypes.StudentPerformanceTrendReport, Label = "Student Performance Trend Report" },
+                new() { Id = AcademicReportTypes.ClasswiseOverallHomeworkAssignmentReport, Label = "Class-wise Overall Homework & Assignment Report" }
             },
             Statuses = new List<AcademicReportOptionDto>
             {
@@ -141,6 +202,109 @@ public class AcademicReportGenerator(
                 return await BuildDetailedResultSheetAsync(request, payload, exportAllRows);
             case AcademicReportTypes.ExamSummaryReport:
                 return await BuildExamSummaryReportAsync(request, payload, exportAllRows);
+
+            // Student Ranking / Bright-Weak
+            case AcademicReportTypes.BrightStudentAnalysis:
+                return await BuildBrightStudentAnalysisAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.BrightStudentListSubjectWise:
+                return await BuildBrightStudentListSubjectWiseAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.WeakStudentAnalysis:
+                return await BuildWeakStudentAnalysisAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.WeakStudentAnalysisSubjectWise:
+                return await BuildWeakStudentAnalysisSubjectWiseAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.StudentGradeAnalysis:
+                return await BuildStudentGradeAnalysisAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ResultListPassFailOverallAnalysis:
+                return await BuildResultListPassFailOverallAnalysisAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ResultListOverallGradeAnalysis:
+                return await BuildResultListOverallGradeAnalysisAsync(request, payload, exportAllRows);
+
+            // Student-Wise Full Result
+            case AcademicReportTypes.StudentAllBatchResult:
+                return await BuildStudentAllBatchResultAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.StudentAllExamResult:
+                return await BuildStudentAllExamResultAsync(request, payload, exportAllRows);
+
+            // Subject Performance & Analysis
+            case AcademicReportTypes.AverageSubjectMarkAnalysis:
+                return await BuildAverageSubjectMarkAnalysisAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.SubjectAverageClassMarkAnalysis:
+                return await BuildSubjectAverageClassMarkAnalysisAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.StudentGradeAnalysisSubjectWise:
+                return await BuildStudentGradeAnalysisSubjectWiseAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.SubjectWiseGradeList:
+                return await BuildSubjectWiseGradeListAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ResultListPassFailAnalysisSubjectWise:
+                return await BuildResultListPassFailAnalysisSubjectWiseAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ResultListSubjectGradeAnalysis:
+                return await BuildResultListSubjectGradeAnalysisAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ResultListWithSubject:
+                return await BuildResultListWithSubjectAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ResultListWithSubjectFailedDetails:
+                return await BuildResultListWithSubjectFailedDetailsAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ResultListWithSubjectGrade:
+                return await BuildResultListWithSubjectGradeAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ResultListWithSubjectSmall:
+                return await BuildResultListWithSubjectSmallAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ResultListWithSubjectWithGrace:
+                return await BuildResultListWithSubjectWithGraceAsync(request, payload, exportAllRows);
+
+            // Homework reports
+            case AcademicReportTypes.DailyHomeworkReport:
+                return await BuildDailyHomeworkReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ClasswiseHomeworkReport:
+                return await BuildClasswiseHomeworkReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.SubjectwiseHomeworkReport:
+                return await BuildSubjectwiseHomeworkReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.TeacherwiseHomeworkReport:
+                return await BuildTeacherwiseHomeworkReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.StudentwiseHomeworkSummaryReport:
+                return await BuildStudentwiseHomeworkSummaryReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.HomeworkCompletionStatusReport:
+                return await BuildHomeworkCompletionStatusReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.PendingHomeworkReport:
+                return await BuildPendingHomeworkReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.OverdueHomeworkReport:
+                return await BuildOverdueHomeworkReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.HomeworkSubmissionHistoryReport:
+                return await BuildHomeworkSubmissionHistoryReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.HomeworkWithAttachmentsReport:
+                return await BuildHomeworkWithAttachmentsReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.HomeworkAcknowledgementReport:
+                return await BuildHomeworkAcknowledgementReportAsync(request, payload, exportAllRows);
+
+            // Assignment reports
+            case AcademicReportTypes.AssignmentIssuanceReport:
+                return await BuildAssignmentIssuanceReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.AssignmentSubmissionReport:
+                return await BuildAssignmentSubmissionReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.AssignmentEvaluationReport:
+                return await BuildAssignmentEvaluationReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.AssignmentMarksReport:
+                return await BuildAssignmentMarksReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.LateSubmissionReport:
+                return await BuildLateSubmissionReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.MissingAssignmentReport:
+                return await BuildMissingAssignmentReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.AssignmentFeedbackReport:
+                return await BuildAssignmentFeedbackReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.AssignmentGradeDistributionReport:
+                return await BuildAssignmentGradeDistributionReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.AssignmentPerformanceReport:
+                return await BuildAssignmentPerformanceReportAsync(request, payload, exportAllRows);
+
+            // Analytics & Monitoring reports
+            case AcademicReportTypes.HomeworkLoadAnalysisReport:
+                return await BuildHomeworkLoadAnalysisReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.AssignmentLoadAnalysisReport:
+                return await BuildAssignmentLoadAnalysisReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.TeacherPerformanceInHomeworkEvaluationReport:
+                return await BuildTeacherPerformanceInHomeworkEvaluationReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.StudentPerformanceTrendReport:
+                return await BuildStudentPerformanceTrendReportAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ClasswiseOverallHomeworkAssignmentReport:
+                return await BuildClasswiseOverallHomeworkAssignmentReportAsync(request, payload, exportAllRows);
+
             default:
                 return await BuildChapterProgressReportAsync(query, request, payload, exportAllRows);
         }
@@ -1647,6 +1811,3239 @@ public class AcademicReportGenerator(
         payload.Page = 1;
         payload.PageSize = 1;
         payload.Rows = rows;
+        return payload;
+    }
+
+    // ─── Subject Performance & Analysis ─────────────────────────────────────
+
+    private async Task<AcademicReportPreviewDto> BuildAverageSubjectMarkAnalysisAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "TotalStudents", Label = "Total Students" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "HighestMarks", Label = "Highest Marks" },
+            new() { Id = "LowestMarks", Label = "Lowest Marks" },
+            new() { Id = "AverageMarks", Label = "Average Marks" },
+            new() { Id = "PassPercentage", Label = "Pass %" },
+            new() { Id = "FailPercentage", Label = "Fail %" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+
+        var marksToUse = data.Marks.Where(m => !m.IsAbsent).AsEnumerable();
+        if (request.Filters.SubjectIds?.Any() == true)
+            marksToUse = marksToUse.Where(m => request.Filters.SubjectIds.Contains(m.SubjectId));
+
+        var rows = marksToUse
+            .GroupBy(m => m.SubjectId)
+            .OrderBy(g => data.SubjectNames.GetValueOrDefault(g.Key, ""))
+            .Select(g =>
+            {
+                var subjectName = data.SubjectNames.GetValueOrDefault(g.Key, "—");
+                var maxMarks = subjectMaxMap.GetValueOrDefault(g.Key, 0);
+                var passMarks = subjectPassMap.GetValueOrDefault(g.Key, 0);
+                var marksList = g.Select(m => m.MarksObtained ?? 0).ToList();
+                var count = marksList.Count;
+                var highest = marksList.Max();
+                var lowest = marksList.Min();
+                var avg = Math.Round(marksList.Average(), 2);
+                var passed = marksList.Count(v => v >= passMarks);
+                var failed = count - passed;
+                var passPct = count > 0 ? Math.Round((double) passed / count * 100, 2) : 0;
+                var failPct = count > 0 ? Math.Round((double) failed / count * 100, 2) : 0;
+                return new Dictionary<string, string?>
+                {
+                    { "Subject", subjectName },
+                    { "TotalStudents", count.ToString() },
+                    { "TotalMarks", maxMarks.ToString("F0") },
+                    { "HighestMarks", highest.ToString("F2") },
+                    { "LowestMarks", lowest.ToString("F2") },
+                    { "AverageMarks", avg.ToString("F2") },
+                    { "PassPercentage", $"{passPct}%" },
+                    { "FailPercentage", $"{failPct}%" }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildSubjectAverageClassMarkAnalysisAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "ClassName", Label = "Class" },
+            new() { Id = "Division", Label = "Division" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "AverageMarks", Label = "Average Marks" },
+            new() { Id = "HighestMarks", Label = "Highest Marks" },
+            new() { Id = "LowestMarks", Label = "Lowest Marks" },
+            new() { Id = "PassPercentage", Label = "Pass Percentage" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var examQuery = await examRepository.WithDetailsAsync(e => e.ExamSubjects);
+        var exam = await asyncExecuter.FirstOrDefaultAsync(examQuery.Where(e => e.Id == request.Filters.ExamId.Value));
+        var (standards, divisions, _, _, _, _) = await LoadLookupsAsync();
+        var className = exam is not null ? standards.GetValueOrDefault(exam.StandardId, "—") : "—";
+
+        var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+
+        var marksToUse = data.Marks.Where(m => !m.IsAbsent).AsEnumerable();
+        if (request.Filters.SubjectIds?.Any() == true)
+            marksToUse = marksToUse.Where(m => request.Filters.SubjectIds.Contains(m.SubjectId));
+
+        var rows = marksToUse
+            .GroupBy(m => (m.DivisionId, m.SubjectId))
+            .OrderBy(g => divisions.GetValueOrDefault(g.Key.DivisionId, ""))
+            .ThenBy(g => data.SubjectNames.GetValueOrDefault(g.Key.SubjectId, ""))
+            .Select(g =>
+            {
+                var divisionName = divisions.GetValueOrDefault(g.Key.DivisionId, "—");
+                var subjectName = data.SubjectNames.GetValueOrDefault(g.Key.SubjectId, "—");
+                var maxMarks = subjectMaxMap.GetValueOrDefault(g.Key.SubjectId, 0);
+                var passMarks = subjectPassMap.GetValueOrDefault(g.Key.SubjectId, 0);
+                var marksList = g.Select(m => m.MarksObtained ?? 0).ToList();
+                var count = marksList.Count;
+                var avg = Math.Round(marksList.Average(), 2);
+                var highest = marksList.Max();
+                var lowest = marksList.Min();
+                var passed = marksList.Count(v => v >= passMarks);
+                var passPct = count > 0 ? Math.Round((double) passed / count * 100, 2) : 0;
+                return new Dictionary<string, string?>
+                {
+                    { "ClassName", className },
+                    { "Division", divisionName },
+                    { "Subject", subjectName },
+                    { "TotalMarks", maxMarks.ToString("F0") },
+                    { "AverageMarks", avg.ToString("F2") },
+                    { "HighestMarks", highest.ToString("F2") },
+                    { "LowestMarks", lowest.ToString("F2") },
+                    { "PassPercentage", $"{passPct}%" }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildStudentGradeAnalysisSubjectWiseAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "StudentCount", Label = "Student Count" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "HighestMarks", Label = "Highest Marks" },
+            new() { Id = "LowestMarks", Label = "Lowest Marks" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+
+        var marksToUse = data.Marks.Where(m => !m.IsAbsent).AsEnumerable();
+        if (request.Filters.SubjectIds?.Any() == true)
+            marksToUse = marksToUse.Where(m => request.Filters.SubjectIds.Contains(m.SubjectId));
+
+        var marksWithGrade = marksToUse.Select(m =>
+        {
+            var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
+            var obtained = m.MarksObtained ?? 0;
+            return (obtained, grade: ComputeGrade(obtained, maxMarks), maxMarks);
+        }).ToList();
+
+        var total = marksWithGrade.Count;
+        if (total == 0) { payload.TotalCount = 0; return payload; }
+
+        var gradeOrder = new[] { "A+", "A", "B+", "B", "C+", "C", "D", "F" };
+        var rows = gradeOrder
+            .Select(g =>
+            {
+                var group = marksWithGrade.Where(x => x.grade == g).ToList();
+                if (group.Count == 0) return null;
+                var pct = Math.Round((double) group.Count / total * 100, 2);
+                var maxMarks = group.First().maxMarks;
+                return new Dictionary<string, string?>
+                {
+                    { "Grade", g },
+                    { "StudentCount", group.Count.ToString() },
+                    { "Percentage", $"{pct}%" },
+                    { "TotalMarks", maxMarks.ToString("F0") },
+                    { "HighestMarks", group.Max(x => x.obtained).ToString("F2") },
+                    { "LowestMarks", group.Min(x => x.obtained).ToString("F2") }
+                };
+            })
+            .Where(r => r is not null).Select(r => r!).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildSubjectWiseGradeListAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "Marks", Label = "Marks" },
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "ResultStatus", Label = "Result Status" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+        var targetGrade = request.Filters.Grade;
+
+        var marksToUse = data.Marks
+            .Where(m => data.StudentMap.ContainsKey(m.StudentId) && !m.IsAbsent)
+            .AsEnumerable();
+        if (request.Filters.SubjectIds?.Any() == true)
+            marksToUse = marksToUse.Where(m => request.Filters.SubjectIds.Contains(m.SubjectId));
+
+        var rows = marksToUse
+            .Select(m =>
+            {
+                var student = data.StudentMap[m.StudentId];
+                var subjectName = data.SubjectNames.GetValueOrDefault(m.SubjectId, "—");
+                var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
+                var passMarks = subjectPassMap.GetValueOrDefault(m.SubjectId, 0);
+                var obtained = m.MarksObtained ?? 0;
+                var grade = ComputeGrade(obtained, maxMarks);
+                var status = obtained >= passMarks ? "Pass" : "Fail";
+                return (student, subjectName, obtained, grade, status);
+            })
+            .Where(x => string.IsNullOrWhiteSpace(targetGrade) || x.grade.Equals(targetGrade, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => BuildStudentName(x.student))
+            .ThenBy(x => x.subjectName)
+            .Select(x => new Dictionary<string, string?>
+            {
+                { "StudentName", BuildStudentName(x.student) },
+                { "Subject", x.subjectName },
+                { "Marks", x.obtained.ToString("F2") },
+                { "Grade", x.grade },
+                { "ResultStatus", x.status }
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildResultListPassFailAnalysisSubjectWiseAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "TotalStudents", Label = "Total Students" },
+            new() { Id = "Passed", Label = "Passed" },
+            new() { Id = "Failed", Label = "Failed" },
+            new() { Id = "PassPercentage", Label = "Pass %" },
+            new() { Id = "FailPercentage", Label = "Fail %" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
+
+        var marksToUse = data.Marks.Where(m => !m.IsAbsent).AsEnumerable();
+        if (request.Filters.SubjectIds?.Any() == true)
+            marksToUse = marksToUse.Where(m => request.Filters.SubjectIds.Contains(m.SubjectId));
+
+        var rows = marksToUse
+            .GroupBy(m => m.SubjectId)
+            .OrderBy(g => data.SubjectNames.GetValueOrDefault(g.Key, ""))
+            .Select(g =>
+            {
+                var subjectName = data.SubjectNames.GetValueOrDefault(g.Key, "—");
+                var passMarks = subjectPassMap.GetValueOrDefault(g.Key, 0);
+                var marksList = g.ToList();
+                var total = marksList.Count;
+                var passed = marksList.Count(m => (m.MarksObtained ?? 0) >= passMarks);
+                var failed = total - passed;
+                var passPct = total > 0 ? Math.Round((double) passed / total * 100, 2) : 0;
+                var failPct = total > 0 ? Math.Round((double) failed / total * 100, 2) : 0;
+                return new Dictionary<string, string?>
+                {
+                    { "Subject", subjectName },
+                    { "TotalStudents", total.ToString() },
+                    { "Passed", passed.ToString() },
+                    { "Failed", failed.ToString() },
+                    { "PassPercentage", $"{passPct}%" },
+                    { "FailPercentage", $"{failPct}%" }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildResultListSubjectGradeAnalysisAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        // Columns: Subject + one column per grade label
+        var gradeLabels = new[] { "A+", "A", "B+", "B", "C+", "C", "D", "F" };
+        payload.Columns = new List<AcademicReportColumnDto> { new() { Id = "Subject", Label = "Subject" } };
+        foreach (var g in gradeLabels)
+            payload.Columns.Add(new() { Id = $"Grade_{g.Replace("+", "Plus")}", Label = g });
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+
+        var marksToUse = data.Marks.Where(m => !m.IsAbsent).AsEnumerable();
+        if (request.Filters.SubjectIds?.Any() == true)
+            marksToUse = marksToUse.Where(m => request.Filters.SubjectIds.Contains(m.SubjectId));
+
+        var rows = marksToUse
+            .GroupBy(m => m.SubjectId)
+            .OrderBy(g => data.SubjectNames.GetValueOrDefault(g.Key, ""))
+            .Select(g =>
+            {
+                var subjectName = data.SubjectNames.GetValueOrDefault(g.Key, "—");
+                var maxMarks = subjectMaxMap.GetValueOrDefault(g.Key, 0);
+                var gradeCounts = g
+                    .GroupBy(m => ComputeGrade(m.MarksObtained ?? 0, maxMarks))
+                    .ToDictionary(x => x.Key, x => x.Count());
+
+                var row = new Dictionary<string, string?> { { "Subject", subjectName } };
+                foreach (var gl in gradeLabels)
+                    row[$"Grade_{gl.Replace("+", "Plus")}"] = gradeCounts.GetValueOrDefault(gl, 0).ToString();
+                return row;
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildResultListWithSubjectAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "RollNo", Label = "Roll No" },
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "Marks", Label = "Marks" },
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "Result", Label = "Result" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+
+        var rows = data.Marks
+            .Where(m => data.StudentMap.ContainsKey(m.StudentId))
+            .OrderBy(m => data.StudentMap[m.StudentId].RollNo)
+            .ThenBy(m => data.SubjectNames.GetValueOrDefault(m.SubjectId, ""))
+            .Select(m =>
+            {
+                var student = data.StudentMap[m.StudentId];
+                var subjectName = data.SubjectNames.GetValueOrDefault(m.SubjectId, "—");
+                var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
+                var passMarks = subjectPassMap.GetValueOrDefault(m.SubjectId, 0);
+                var obtained = m.IsAbsent ? 0 : (m.MarksObtained ?? 0);
+                var grade = m.IsAbsent ? "—" : ComputeGrade(obtained, maxMarks);
+                var result = m.IsAbsent ? "Absent" : obtained >= passMarks ? "Pass" : "Fail";
+                return new Dictionary<string, string?>
+                {
+                    { "RollNo", student.RollNo?.ToString() ?? "—" },
+                    { "StudentName", BuildStudentName(student) },
+                    { "Subject", subjectName },
+                    { "Marks", m.IsAbsent ? "Absent" : obtained.ToString("F2") },
+                    { "Grade", grade },
+                    { "Result", result }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildResultListWithSubjectFailedDetailsAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "RollNo", Label = "Roll No" },
+            new() { Id = "FailedSubject", Label = "Failed Subject" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "ObtainedMarks", Label = "Obtained Marks" },
+            new() { Id = "PassingMarks", Label = "Passing Marks" },
+            new() { Id = "DeficitMarks", Label = "Deficit Marks" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+
+        var rows = data.Marks
+            .Where(m => data.StudentMap.ContainsKey(m.StudentId) && !m.IsAbsent)
+            .Select(m =>
+            {
+                var student = data.StudentMap[m.StudentId];
+                var subjectName = data.SubjectNames.GetValueOrDefault(m.SubjectId, "—");
+                var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
+                var passMarks = subjectPassMap.GetValueOrDefault(m.SubjectId, 0);
+                var obtained = m.MarksObtained ?? 0;
+                var deficit = Math.Max(0, passMarks - obtained);
+                return (student, subjectName, maxMarks, obtained, passMarks, deficit, isFail: obtained < passMarks);
+            })
+            .Where(x => x.isFail)
+            .OrderBy(x => BuildStudentName(x.student))
+            .ThenBy(x => x.subjectName)
+            .Select(x => new Dictionary<string, string?>
+            {
+                { "StudentName", BuildStudentName(x.student) },
+                { "RollNo", x.student.RollNo?.ToString() ?? "—" },
+                { "FailedSubject", x.subjectName },
+                { "TotalMarks", x.maxMarks.ToString("F0") },
+                { "ObtainedMarks", x.obtained.ToString("F2") },
+                { "PassingMarks", x.passMarks.ToString("F0") },
+                { "DeficitMarks", x.deficit.ToString("F2") }
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildResultListWithSubjectGradeAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "Marks", Label = "Marks" },
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "Rank", Label = "Rank" },
+            new() { Id = "ResultStatus", Label = "Result Status" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+
+        var marksToUse = data.Marks.Where(m => !m.IsAbsent && data.StudentMap.ContainsKey(m.StudentId)).AsEnumerable();
+        if (request.Filters.SubjectIds?.Any() == true)
+            marksToUse = marksToUse.Where(m => request.Filters.SubjectIds.Contains(m.SubjectId));
+
+        // Per-subject rank
+        var subjectRankMap = marksToUse
+            .GroupBy(m => m.SubjectId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(m => m.MarksObtained ?? 0)
+                    .Select((m, i) => (m.StudentId, Rank: i + 1))
+                    .ToDictionary(x => x.StudentId, x => x.Rank));
+
+        var rows = marksToUse
+            .OrderBy(m => data.SubjectNames.GetValueOrDefault(m.SubjectId, ""))
+            .ThenByDescending(m => m.MarksObtained ?? 0)
+            .Select(m =>
+            {
+                var student = data.StudentMap[m.StudentId];
+                var subjectName = data.SubjectNames.GetValueOrDefault(m.SubjectId, "—");
+                var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
+                var passMarks = subjectPassMap.GetValueOrDefault(m.SubjectId, 0);
+                var obtained = m.MarksObtained ?? 0;
+                var grade = ComputeGrade(obtained, maxMarks);
+                var status = obtained >= passMarks ? "Pass" : "Fail";
+                var rank = subjectRankMap.TryGetValue(m.SubjectId, out var rm) && rm.TryGetValue(m.StudentId, out var r)
+                    ? r.ToString() : "—";
+                return new Dictionary<string, string?>
+                {
+                    { "StudentName", BuildStudentName(student) },
+                    { "Subject", subjectName },
+                    { "Marks", obtained.ToString("F2") },
+                    { "Grade", grade },
+                    { "Rank", rank },
+                    { "ResultStatus", status }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildResultListWithSubjectSmallAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "ObtainMarks", Label = "Obtain Marks" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "Result", Label = "Result" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var rows = data.Marks
+            .GroupBy(m => m.StudentId)
+            .Where(g => data.StudentMap.ContainsKey(g.Key))
+            .Select(g =>
+            {
+                var student = data.StudentMap[g.Key];
+                var isAbsent = g.All(m => m.IsAbsent);
+                var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                var pct = data.TotalMaxMarks > 0 ? Math.Round(obtained / data.TotalMaxMarks * 100, 2) : 0;
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks);
+                var result = isAbsent ? "Absent" : obtained >= data.TotalPassMarks ? "Pass" : "Fail";
+                return new Dictionary<string, string?>
+                {
+                    { "StudentName", BuildStudentName(student) },
+                    { "TotalMarks", data.TotalMaxMarks.ToString("F0") },
+                    { "ObtainMarks", isAbsent ? "Absent" : obtained.ToString("F2") },
+                    { "Percentage", isAbsent ? "—" : $"{pct}%" },
+                    { "Grade", grade },
+                    { "Result", result }
+                };
+            })
+            .OrderBy(r => r["StudentName"])
+            .ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildResultListWithSubjectWithGraceAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        // Grace Marks not in data model → shown as "—"; Final Marks = Obtained Marks
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "ObtainedMarks", Label = "Obtained Marks" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "GraceMarks", Label = "Grace Marks" },
+            new() { Id = "FinalMarks", Label = "Final Marks" },
+            new() { Id = "FinalGrade", Label = "Final Grade" },
+            new() { Id = "Status", Label = "Status" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+
+        var marksToUse = data.Marks.Where(m => !m.IsAbsent && data.StudentMap.ContainsKey(m.StudentId)).AsEnumerable();
+        if (request.Filters.SubjectIds?.Any() == true)
+            marksToUse = marksToUse.Where(m => request.Filters.SubjectIds.Contains(m.SubjectId));
+
+        var rows = marksToUse
+            .OrderBy(m => BuildStudentName(data.StudentMap[m.StudentId]))
+            .ThenBy(m => data.SubjectNames.GetValueOrDefault(m.SubjectId, ""))
+            .Select(m =>
+            {
+                var student = data.StudentMap[m.StudentId];
+                var subjectName = data.SubjectNames.GetValueOrDefault(m.SubjectId, "—");
+                var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
+                var passMarks = subjectPassMap.GetValueOrDefault(m.SubjectId, 0);
+                var obtained = m.MarksObtained ?? 0;
+                var grade = ComputeGrade(obtained, maxMarks);
+                var status = obtained >= passMarks ? "Pass" : "Fail";
+                return new Dictionary<string, string?>
+                {
+                    { "StudentName", BuildStudentName(student) },
+                    { "Subject", subjectName },
+                    { "ObtainedMarks", obtained.ToString("F2") },
+                    { "TotalMarks", maxMarks.ToString("F0") },
+                    { "GraceMarks", "—" },        // not in data model
+                    { "FinalMarks", obtained.ToString("F2") },
+                    { "FinalGrade", grade },
+                    { "Status", status }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    // ─── Student-Wise Full Result ─────────────────────────────────────────────
+
+    private async Task<AcademicReportPreviewDto> BuildStudentAllBatchResultAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        // StudentName added as first column since multiple students can be selected
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "ClassName", Label = "Class" },
+            new() { Id = "Division", Label = "Division" },
+            new() { Id = "ExamName", Label = "Exam Name" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "ObtainedMarks", Label = "Obtained Marks" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "Rank", Label = "Rank" },
+            new() { Id = "ResultStatus", Label = "Result Status" }
+        };
+
+        var studentIds = request.Filters.StudentIds;
+        if (studentIds is null || !studentIds.Any()) { payload.TotalCount = 0; return payload; }
+
+        // Load marks for target students
+        var marksQuery = await examMarkRepository.GetQueryableAsync();
+        marksQuery = marksQuery.Where(m => studentIds.Contains(m.StudentId));
+        if (request.Filters.DivisionIds?.Any() == true)
+            marksQuery = marksQuery.Where(m => request.Filters.DivisionIds.Contains(m.DivisionId));
+        var targetMarks = await asyncExecuter.ToListAsync(marksQuery);
+        if (!targetMarks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var examIds = targetMarks.Select(m => m.ExamId).Distinct().ToList();
+
+        // Load exams with subjects
+        var examQuery = await examRepository.WithDetailsAsync(e => e.ExamSubjects);
+        var exams = await asyncExecuter.ToListAsync(examQuery.Where(e => examIds.Contains(e.Id)));
+
+        // Apply optional class filter via Exam.StandardId
+        if (request.Filters.ClassIds?.Any() == true)
+        {
+            exams = exams.Where(e => request.Filters.ClassIds.Contains(e.StandardId)).ToList();
+            var validExamIds = exams.Select(e => e.Id).ToHashSet();
+            targetMarks = targetMarks.Where(m => validExamIds.Contains(m.ExamId)).ToList();
+            examIds = exams.Select(e => e.Id).ToList();
+        }
+
+        if (!exams.Any()) { payload.TotalCount = 0; return payload; }
+
+        // Load all marks across those exams for rank computation
+        var allMarksQuery = await examMarkRepository.GetQueryableAsync();
+        var allMarks = await asyncExecuter.ToListAsync(allMarksQuery.Where(m => examIds.Contains(m.ExamId)));
+
+        // Load target students
+        var studentQuery = await studentRepository.GetQueryableAsync();
+        var students = await asyncExecuter.ToListAsync(studentQuery.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = students.ToDictionary(s => s.Id);
+
+        var (standards, divisions, _, _, _, _) = await LoadLookupsAsync();
+
+        // Per-exam metadata
+        var examMetaMap = exams.ToDictionary(e => e.Id, e => (
+            ExamName: e.ExamName,
+            ClassName: standards.GetValueOrDefault(e.StandardId, "—"),
+            TotalMax: e.ExamSubjects.Sum(s => s.TotalMarks ?? 0),
+            TotalPass: e.ExamSubjects.Sum(s => s.PassingMarks ?? 0)
+        ));
+
+        // Per-exam: rank all participants by obtained marks desc
+        var examRankMap = examIds.ToDictionary(
+            examId => examId,
+            examId => allMarks
+                .Where(m => m.ExamId == examId)
+                .GroupBy(m => m.StudentId)
+                .Select(g =>
+                {
+                    var obtained = g.All(m => m.IsAbsent) ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                    return (StudentId: g.Key, Obtained: obtained);
+                })
+                .OrderByDescending(x => x.Obtained)
+                .Select((x, i) => (x.StudentId, Rank: i + 1))
+                .ToDictionary(x => x.StudentId, x => x.Rank));
+
+        var rows = targetMarks
+            .GroupBy(m => (m.StudentId, m.ExamId))
+            .Where(g => studentMap.ContainsKey(g.Key.StudentId) && examMetaMap.ContainsKey(g.Key.ExamId))
+            .Select(g =>
+            {
+                var student = studentMap[g.Key.StudentId];
+                var meta = examMetaMap[g.Key.ExamId];
+                var divisionName = divisions.GetValueOrDefault(g.First().DivisionId, "—");
+                var isAbsent = g.All(m => m.IsAbsent);
+                var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                var pct = meta.TotalMax > 0 ? Math.Round(obtained / meta.TotalMax * 100, 2) : 0;
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, meta.TotalMax);
+                var status = isAbsent ? "Absent" : obtained >= meta.TotalPass ? "Pass" : "Fail";
+                var rank = !isAbsent && examRankMap.TryGetValue(g.Key.ExamId, out var rm) && rm.TryGetValue(g.Key.StudentId, out var r)
+                    ? r.ToString() : "—";
+                return new Dictionary<string, string?>
+                {
+                    { "StudentName", BuildStudentName(student) },
+                    { "ClassName", meta.ClassName },
+                    { "Division", divisionName },
+                    { "ExamName", meta.ExamName },
+                    { "TotalMarks", meta.TotalMax.ToString("F0") },
+                    { "ObtainedMarks", isAbsent ? "Absent" : obtained.ToString("F2") },
+                    { "Percentage", isAbsent ? "—" : $"{pct}%" },
+                    { "Grade", grade },
+                    { "Rank", rank },
+                    { "ResultStatus", status }
+                };
+            })
+            .OrderBy(r => r["StudentName"])
+            .ThenBy(r => r["ExamName"])
+            .ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildStudentAllExamResultAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "ExamName", Label = "Exam Name" },
+            new() { Id = "ExamDate", Label = "Exam Date" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "ObtainedMarks", Label = "Obtained Marks" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "Rank", Label = "Rank" },
+            new() { Id = "ResultStatus", Label = "Result Status" }
+        };
+
+        var studentIds = request.Filters.StudentIds;
+        if (studentIds is null || !studentIds.Any()) { payload.TotalCount = 0; return payload; }
+
+        // Load marks for target student(s)
+        var marksQuery = await examMarkRepository.GetQueryableAsync();
+        marksQuery = marksQuery.Where(m => studentIds.Contains(m.StudentId));
+        if (request.Filters.DivisionIds?.Any() == true)
+            marksQuery = marksQuery.Where(m => request.Filters.DivisionIds.Contains(m.DivisionId));
+        var targetMarks = await asyncExecuter.ToListAsync(marksQuery);
+        if (!targetMarks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var examIds = targetMarks.Select(m => m.ExamId).Distinct().ToList();
+
+        // Load exams with subjects
+        var examQuery = await examRepository.WithDetailsAsync(e => e.ExamSubjects);
+        var exams = await asyncExecuter.ToListAsync(examQuery.Where(e => examIds.Contains(e.Id)));
+
+        // Apply optional class filter
+        if (request.Filters.ClassIds?.Any() == true)
+        {
+            exams = exams.Where(e => request.Filters.ClassIds.Contains(e.StandardId)).ToList();
+            var validExamIds = exams.Select(e => e.Id).ToHashSet();
+            targetMarks = targetMarks.Where(m => validExamIds.Contains(m.ExamId)).ToList();
+            examIds = exams.Select(e => e.Id).ToList();
+        }
+
+        if (!exams.Any()) { payload.TotalCount = 0; return payload; }
+
+        // Load all marks for rank computation
+        var allMarksQuery = await examMarkRepository.GetQueryableAsync();
+        var allMarks = await asyncExecuter.ToListAsync(allMarksQuery.Where(m => examIds.Contains(m.ExamId)));
+
+        // Per-exam metadata (ExamDate = earliest subject date, empty if none set)
+        var examMetaMap = exams.ToDictionary(e => e.Id, e => (
+            ExamName: e.ExamName,
+            ExamDate: e.ExamSubjects
+                .Where(s => s.ExamDate.HasValue)
+                .OrderBy(s => s.ExamDate)
+                .Select(s => s.ExamDate!.Value.ToString("yyyy-MM-dd"))
+                .FirstOrDefault() ?? "—",
+            TotalMax: e.ExamSubjects.Sum(s => s.TotalMarks ?? 0),
+            TotalPass: e.ExamSubjects.Sum(s => s.PassingMarks ?? 0)
+        ));
+
+        // Per-exam: rank all participants
+        var examRankMap = examIds.ToDictionary(
+            examId => examId,
+            examId => allMarks
+                .Where(m => m.ExamId == examId)
+                .GroupBy(m => m.StudentId)
+                .Select(g =>
+                {
+                    var obtained = g.All(m => m.IsAbsent) ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                    return (StudentId: g.Key, Obtained: obtained);
+                })
+                .OrderByDescending(x => x.Obtained)
+                .Select((x, i) => (x.StudentId, Rank: i + 1))
+                .ToDictionary(x => x.StudentId, x => x.Rank));
+
+        var rows = targetMarks
+            .GroupBy(m => (m.StudentId, m.ExamId))
+            .Where(g => examMetaMap.ContainsKey(g.Key.ExamId))
+            .Select(g =>
+            {
+                var meta = examMetaMap[g.Key.ExamId];
+                var isAbsent = g.All(m => m.IsAbsent);
+                var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                var pct = meta.TotalMax > 0 ? Math.Round(obtained / meta.TotalMax * 100, 2) : 0;
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, meta.TotalMax);
+                var status = isAbsent ? "Absent" : obtained >= meta.TotalPass ? "Pass" : "Fail";
+                var rank = !isAbsent && examRankMap.TryGetValue(g.Key.ExamId, out var rm) && rm.TryGetValue(g.Key.StudentId, out var r)
+                    ? r.ToString() : "—";
+                return new Dictionary<string, string?>
+                {
+                    { "ExamName", meta.ExamName },
+                    { "ExamDate", meta.ExamDate },
+                    { "TotalMarks", meta.TotalMax.ToString("F0") },
+                    { "ObtainedMarks", isAbsent ? "Absent" : obtained.ToString("F2") },
+                    { "Percentage", isAbsent ? "—" : $"{pct}%" },
+                    { "Grade", grade },
+                    { "Rank", rank },
+                    { "ResultStatus", status }
+                };
+            })
+            .OrderBy(r => r["ExamName"])
+            .ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    // ─── Student Ranking / Bright-Weak ───────────────────────────────────────
+
+    private async Task<AcademicReportPreviewDto> BuildBrightStudentAnalysisAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Rank", Label = "Rank" },
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "RollNo", Label = "Roll No" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "TotalMarks", Label = "Total Marks" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var targetGrade = request.Filters.Grade;
+
+        var ranked = data.Marks
+            .GroupBy(m => m.StudentId)
+            .Where(g => data.StudentMap.ContainsKey(g.Key))
+            .Select(g =>
+            {
+                var student = data.StudentMap[g.Key];
+                var isAbsent = g.All(m => m.IsAbsent);
+                var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                var pct = data.TotalMaxMarks > 0 ? Math.Round(obtained / data.TotalMaxMarks * 100, 2) : 0;
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks);
+                return (student, obtained, pct, grade, isAbsent);
+            })
+            .Where(x => !x.isAbsent)
+            .Where(x => string.IsNullOrWhiteSpace(targetGrade) || x.grade.Equals(targetGrade, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.pct)
+            .ToList();
+
+        var rows = ranked.Select((x, i) => new Dictionary<string, string?>
+        {
+            { "Rank", (i + 1).ToString() },
+            { "StudentName", BuildStudentName(x.student) },
+            { "RollNo", x.student.RollNo?.ToString() ?? "—" },
+            { "Percentage", $"{x.pct}%" },
+            { "Grade", x.grade },
+            { "TotalMarks", x.obtained.ToString("F2") }
+        }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildBrightStudentListSubjectWiseAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Rank", Label = "Rank" },
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "Marks", Label = "Marks" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "Grade", Label = "Grade" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var targetGrade = request.Filters.Grade;
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+
+        var marksToUse = data.Marks.AsEnumerable();
+        if (request.Filters.SubjectIds?.Any() == true)
+            marksToUse = marksToUse.Where(m => request.Filters.SubjectIds.Contains(m.SubjectId));
+
+        var rows = new List<Dictionary<string, string?>>();
+        foreach (var subjectGroup in marksToUse
+            .Where(m => data.StudentMap.ContainsKey(m.StudentId) && !m.IsAbsent)
+            .GroupBy(m => m.SubjectId)
+            .OrderBy(g => data.SubjectNames.GetValueOrDefault(g.Key, "")))
+        {
+            var subjectName = data.SubjectNames.GetValueOrDefault(subjectGroup.Key, "—");
+            var subjectMax = subjectMaxMap.GetValueOrDefault(subjectGroup.Key, 0);
+
+            var ranked = subjectGroup
+                .Select(m =>
+                {
+                    var obtained = m.MarksObtained ?? 0;
+                    var pct = subjectMax > 0 ? Math.Round(obtained / subjectMax * 100, 2) : 0;
+                    var grade = ComputeGrade(obtained, subjectMax);
+                    return (m, obtained, pct, grade);
+                })
+                .Where(x => string.IsNullOrWhiteSpace(targetGrade) || x.grade.Equals(targetGrade, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(x => x.obtained)
+                .ToList();
+
+            rows.AddRange(ranked.Select((x, i) => new Dictionary<string, string?>
+            {
+                { "Rank", (i + 1).ToString() },
+                { "StudentName", BuildStudentName(data.StudentMap[x.m.StudentId]) },
+                { "Subject", subjectName },
+                { "Marks", x.obtained.ToString("F2") },
+                { "Percentage", $"{x.pct}%" },
+                { "Grade", x.grade }
+            }));
+        }
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildWeakStudentAnalysisAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "FailedSubjects", Label = "Failed Subjects" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
+
+        var rows = data.Marks
+            .GroupBy(m => m.StudentId)
+            .Where(g => data.StudentMap.ContainsKey(g.Key))
+            .Select(g =>
+            {
+                var student = data.StudentMap[g.Key];
+                var isAbsent = g.All(m => m.IsAbsent);
+                var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                var pct = data.TotalMaxMarks > 0 ? Math.Round(obtained / data.TotalMaxMarks * 100, 2) : 0;
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks);
+                var failedSubjects = g
+                    .Where(m => !m.IsAbsent && (m.MarksObtained ?? 0) < subjectPassMap.GetValueOrDefault(m.SubjectId, 0))
+                    .Select(m => data.SubjectNames.GetValueOrDefault(m.SubjectId, "—"))
+                    .ToList();
+                return (student, pct, grade, failedSubjects, isAbsent);
+            })
+            .Where(x => x.failedSubjects.Any() || x.isAbsent)
+            .OrderBy(x => x.pct)
+            .Select(x => new Dictionary<string, string?>
+            {
+                { "StudentName", BuildStudentName(x.student) },
+                { "Percentage", x.isAbsent ? "Absent" : $"{x.pct}%" },
+                { "Grade", x.grade },
+                { "FailedSubjects", x.isAbsent ? "Absent" : string.Join(", ", x.failedSubjects) }
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildWeakStudentAnalysisSubjectWiseAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "ObtainedMarks", Label = "Obtained Marks" },
+            new() { Id = "PassingMarks", Label = "Passing Marks" },
+            new() { Id = "GapMarks", Label = "Gap Marks" },
+            new() { Id = "Status", Label = "Status" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
+        var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
+
+        var marksToUse = data.Marks.AsEnumerable();
+        if (request.Filters.SubjectIds?.Any() == true)
+            marksToUse = marksToUse.Where(m => request.Filters.SubjectIds.Contains(m.SubjectId));
+
+        var rows = marksToUse
+            .Where(m => data.StudentMap.ContainsKey(m.StudentId) && !m.IsAbsent)
+            .Select(m =>
+            {
+                var student = data.StudentMap[m.StudentId];
+                var subjectName = data.SubjectNames.GetValueOrDefault(m.SubjectId, "—");
+                var totalMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
+                var passingMarks = subjectPassMap.GetValueOrDefault(m.SubjectId, 0);
+                var obtained = m.MarksObtained ?? 0;
+                var gap = Math.Max(0, passingMarks - obtained);
+                var status = obtained >= passingMarks ? "Pass" : "Fail";
+                return (student, subjectName, totalMarks, obtained, passingMarks, gap, status);
+            })
+            .Where(x => x.status == "Fail")
+            .OrderBy(x => BuildStudentName(x.student))
+            .ThenBy(x => x.subjectName)
+            .Select(x => new Dictionary<string, string?>
+            {
+                { "StudentName", BuildStudentName(x.student) },
+                { "Subject", x.subjectName },
+                { "TotalMarks", x.totalMarks.ToString("F0") },
+                { "ObtainedMarks", x.obtained.ToString("F2") },
+                { "PassingMarks", x.passingMarks.ToString("F0") },
+                { "GapMarks", x.gap.ToString("F2") },
+                { "Status", x.status }
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildStudentGradeAnalysisAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "StudentCount", Label = "Student Count" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "HighestMarks", Label = "Highest Marks" },
+            new() { Id = "LowestMarks", Label = "Lowest Marks" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var studentTotals = data.Marks
+            .GroupBy(m => m.StudentId)
+            .Where(g => data.StudentMap.ContainsKey(g.Key))
+            .Select(g =>
+            {
+                var isAbsent = g.All(m => m.IsAbsent);
+                var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                var grade = isAbsent ? "Absent" : ComputeGrade(obtained, data.TotalMaxMarks);
+                return (obtained, grade, isAbsent);
+            }).ToList();
+
+        var total = studentTotals.Count;
+        var gradeOrder = new[] { "A+", "A", "B+", "B", "C+", "C", "D", "F", "Absent" };
+
+        var rows = gradeOrder
+            .Select(g =>
+            {
+                var group = studentTotals.Where(x => x.grade == g).ToList();
+                var count = group.Count;
+                if (count == 0) return null;
+                var pct = total > 0 ? Math.Round((double) count / total * 100, 2) : 0;
+                var present = group.Where(x => !x.isAbsent).ToList();
+                var highest = present.Any() ? present.Max(x => x.obtained) : 0;
+                var lowest = present.Any() ? present.Min(x => x.obtained) : 0;
+                return new Dictionary<string, string?>
+                {
+                    { "Grade", g },
+                    { "StudentCount", count.ToString() },
+                    { "Percentage", $"{pct}%" },
+                    { "HighestMarks", present.Any() ? highest.ToString("F2") : "—" },
+                    { "LowestMarks", present.Any() ? lowest.ToString("F2") : "—" }
+                };
+            })
+            .Where(r => r is not null)
+            .Select(r => r!)
+            .ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildResultListPassFailOverallAnalysisAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "TotalStudents", Label = "Total Students" },
+            new() { Id = "Appeared", Label = "Appeared" },
+            new() { Id = "Passed", Label = "Passed" },
+            new() { Id = "Failed", Label = "Failed" },
+            new() { Id = "PassPercentage", Label = "Pass %" },
+            new() { Id = "FailPercentage", Label = "Fail %" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var studentTotals = data.Marks
+            .GroupBy(m => m.StudentId)
+            .Select(g =>
+            {
+                var isAbsent = g.All(m => m.IsAbsent);
+                var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                var passed = !isAbsent && obtained >= data.TotalPassMarks;
+                return (isAbsent, passed);
+            }).ToList();
+
+        var total = studentTotals.Count;
+        var absent = studentTotals.Count(s => s.isAbsent);
+        var appeared = total - absent;
+        var passed = studentTotals.Count(s => s.passed);
+        var failed = appeared - passed;
+        var passPct = total > 0 ? Math.Round((double) passed / total * 100, 2) : 0;
+        var failPct = total > 0 ? Math.Round((double) failed / total * 100, 2) : 0;
+
+        var rows = new List<Dictionary<string, string?>>
+        {
+            new()
+            {
+                { "TotalStudents", total.ToString() },
+                { "Appeared", appeared.ToString() },
+                { "Passed", passed.ToString() },
+                { "Failed", failed.ToString() },
+                { "PassPercentage", $"{passPct}%" },
+                { "FailPercentage", $"{failPct}%" }
+            }
+        };
+
+        payload.TotalCount = 1;
+        payload.Page = 1;
+        payload.PageSize = 1;
+        payload.Rows = rows;
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildResultListOverallGradeAnalysisAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "StudentCount", Label = "Student Count" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "RankRange", Label = "Rank Range" }
+        };
+
+        if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
+        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var ranked = data.Marks
+            .GroupBy(m => m.StudentId)
+            .Where(g => data.StudentMap.ContainsKey(g.Key))
+            .Select(g =>
+            {
+                var isAbsent = g.All(m => m.IsAbsent);
+                var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                var grade = isAbsent ? "Absent" : ComputeGrade(obtained, data.TotalMaxMarks);
+                return (obtained, grade, isAbsent);
+            })
+            .OrderByDescending(x => x.obtained)
+            .Select((x, i) => (x.obtained, x.grade, rank: i + 1))
+            .ToList();
+
+        var total = ranked.Count;
+        var gradeOrder = new[] { "A+", "A", "B+", "B", "C+", "C", "D", "F", "Absent" };
+
+        var rows = gradeOrder
+            .Select(g =>
+            {
+                var group = ranked.Where(x => x.grade == g).ToList();
+                var count = group.Count;
+                if (count == 0) return null;
+                var pct = total > 0 ? Math.Round((double) count / total * 100, 2) : 0;
+                var minRank = group.Min(x => x.rank);
+                var maxRank = group.Max(x => x.rank);
+                var rankRange = minRank == maxRank ? minRank.ToString() : $"{minRank}–{maxRank}";
+                return new Dictionary<string, string?>
+                {
+                    { "Grade", g },
+                    { "StudentCount", count.ToString() },
+                    { "Percentage", $"{pct}%" },
+                    { "RankRange", rankRange }
+                };
+            })
+            .Where(r => r is not null)
+            .Select(r => r!)
+            .ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    // ─── Homework reports ─────────────────────────────────────────────────────
+
+    private static IEnumerable<(Guid DivisionId, DateTime DueDate)> GetHomeworkSchedules(HomeworkAssignmentEntity hw)
+    {
+        if (hw.DivisionSchedules.Any())
+            return hw.DivisionSchedules.Select(ds => (ds.DivisionId, ds.DueDate));
+        if (hw.DivisionId.HasValue && hw.DueDate.HasValue)
+            return new[] { (hw.DivisionId.Value, hw.DueDate.Value) };
+        return [];
+    }
+
+    private async Task<(
+        List<HomeworkAssignmentEntity> Homeworks,
+        Dictionary<Guid, string> Subjects,
+        Dictionary<Guid, string> Standards,
+        Dictionary<Guid, string> Divisions,
+        Dictionary<Guid, string> TeacherByUserId,
+        List<StudentSubmissionEntity> Submissions)> LoadHomeworkContextAsync(AcademicReportFilterDto filters)
+    {
+        var hwQuery = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
+
+        if (filters.FromDate.HasValue)
+            hwQuery = hwQuery.Where(h => h.CreationTime >= filters.FromDate.Value);
+        if (filters.ToDate.HasValue)
+            hwQuery = hwQuery.Where(h => h.CreationTime < filters.ToDate.Value.AddDays(1));
+        if (filters.ClassIds?.Any() == true)
+            hwQuery = hwQuery.Where(h => filters.ClassIds.Contains(h.StandardId));
+        if (filters.SubjectIds?.Any() == true)
+            hwQuery = hwQuery.Where(h => filters.SubjectIds.Contains(h.SubjectId));
+
+        if (filters.TeacherIds?.Any() == true)
+        {
+            var empQ = await employeeRepository.GetQueryableAsync();
+            var teacherUserIds = await asyncExecuter.ToListAsync(
+                empQ.Where(e => filters.TeacherIds.Contains(e.Id) && e.UserId != null)
+                    .Select(e => e.UserId!.Value));
+            hwQuery = teacherUserIds.Any()
+                ? hwQuery.Where(h => h.CreatorId.HasValue && teacherUserIds.Contains(h.CreatorId.Value))
+                : hwQuery.Where(h => false);
+        }
+
+        var homeworks = await asyncExecuter.ToListAsync(hwQuery);
+
+        if (filters.DivisionIds?.Any() == true)
+        {
+            homeworks = homeworks
+                .Where(h => (h.DivisionId.HasValue && filters.DivisionIds.Contains(h.DivisionId.Value))
+                         || h.DivisionSchedules.Any(ds => filters.DivisionIds.Contains(ds.DivisionId)))
+                .ToList();
+        }
+
+        var subjects = (await subjectRepository.GetListAsync()).ToDictionary(s => s.Id, s => s.Name);
+        var standards = (await standardRepository.GetListAsync()).ToDictionary(s => s.Id, s => s.Name);
+        var divisions = (await divisionRepository.GetListAsync()).ToDictionary(d => d.Id, d => d.Name);
+
+        var empQuery = await employeeRepository.GetQueryableAsync();
+        var employees = await asyncExecuter.ToListAsync(empQuery.Where(e => e.UserId != null));
+        var teacherByUserId = employees.ToDictionary(e => e.UserId!.Value, e => e.EmployeeName);
+
+        var hwIds = homeworks.Select(h => h.Id).ToList();
+        List<StudentSubmissionEntity> submissions = [];
+        if (hwIds.Any())
+        {
+            var subQ = await submissionRepository.GetQueryableAsync();
+            subQ = subQ.Where(s => s.HomeworkAssignmentId.HasValue && hwIds.Contains(s.HomeworkAssignmentId.Value));
+            if (filters.DivisionIds?.Any() == true)
+                subQ = subQ.Where(s => filters.DivisionIds.Contains(s.DivisionId));
+            if (filters.StudentIds?.Any() == true)
+                subQ = subQ.Where(s => filters.StudentIds.Contains(s.StudentId));
+            submissions = await asyncExecuter.ToListAsync(subQ);
+        }
+
+        return (homeworks, subjects, standards, divisions, teacherByUserId, submissions);
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildDailyHomeworkReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "HomeworkDate", Label = "Homework Date" },
+            new() { Id = "Class", Label = "Class" },
+            new() { Id = "Division", Label = "Division" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "HomeworkTitle", Label = "Homework Title" },
+            new() { Id = "AssignedBy", Label = "Assigned By" },
+            new() { Id = "DueDate", Label = "Due Date" },
+            new() { Id = "TotalStudents", Label = "Total Students" },
+            new() { Id = "SubmissionCount", Label = "Submission Count" },
+            new() { Id = "Status", Label = "Status" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!homeworks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var submissionsByHw = submissions
+            .GroupBy(s => (s.HomeworkAssignmentId!.Value, s.DivisionId))
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // Load student counts per division
+        var divisionIds = homeworks.SelectMany(GetHomeworkSchedules).Select(x => x.DivisionId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentCountByDiv = await asyncExecuter.ToListAsync(
+            studentQ.Where(s => s.DivisionId.HasValue && divisionIds.Contains(s.DivisionId.Value))
+                    .GroupBy(s => s.DivisionId!.Value)
+                    .Select(g => new { DivisionId = g.Key, Count = g.Count() }));
+        var studentCountMap = studentCountByDiv.ToDictionary(x => x.DivisionId, x => x.Count);
+
+        var rows = new List<Dictionary<string, string?>>();
+        foreach (var hw in homeworks.OrderBy(h => h.CreationTime))
+        {
+            var className = standards.GetValueOrDefault(hw.StandardId, "—");
+            var subjectName = subjects.GetValueOrDefault(hw.SubjectId, "—");
+            var assignedBy = hw.CreatorId.HasValue ? teacherByUserId.GetValueOrDefault(hw.CreatorId.Value, "—") : "—";
+
+            foreach (var (divId, dueDate) in GetHomeworkSchedules(hw))
+            {
+                var divName = divisions.GetValueOrDefault(divId, "—");
+                var totalStudents = studentCountMap.GetValueOrDefault(divId, 0);
+                var subs = submissionsByHw.GetValueOrDefault((hw.Id, divId), new());
+                var submittedCount = subs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+
+                rows.Add(new Dictionary<string, string?>
+                {
+                    { "HomeworkDate", hw.CreationTime.ToString("yyyy-MM-dd") },
+                    { "Class", className },
+                    { "Division", divName },
+                    { "Subject", subjectName },
+                    { "HomeworkTitle", hw.Title },
+                    { "AssignedBy", assignedBy },
+                    { "DueDate", dueDate.ToString("yyyy-MM-dd") },
+                    { "TotalStudents", totalStudents.ToString() },
+                    { "SubmissionCount", submittedCount.ToString() },
+                    { "Status", hw.Status.ToString() }
+                });
+            }
+        }
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildClasswiseHomeworkReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Class", Label = "Class" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "HomeworkTitle", Label = "Homework Title" },
+            new() { Id = "AssignedDate", Label = "Assigned Date" },
+            new() { Id = "DueDate", Label = "Due Date" },
+            new() { Id = "Teacher", Label = "Teacher" },
+            new() { Id = "SubmissionRate", Label = "Submission Rate (%)" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!homeworks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var submissionsByHw = submissions
+            .GroupBy(s => (s.HomeworkAssignmentId!.Value, s.DivisionId))
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var divisionIds = homeworks.SelectMany(GetHomeworkSchedules).Select(x => x.DivisionId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentCountByDiv = await asyncExecuter.ToListAsync(
+            studentQ.Where(s => s.DivisionId.HasValue && divisionIds.Contains(s.DivisionId.Value))
+                    .GroupBy(s => s.DivisionId!.Value)
+                    .Select(g => new { DivisionId = g.Key, Count = g.Count() }));
+        var studentCountMap = studentCountByDiv.ToDictionary(x => x.DivisionId, x => x.Count);
+
+        var rows = new List<Dictionary<string, string?>>();
+        foreach (var hw in homeworks.OrderBy(h => h.StandardId).ThenBy(h => h.SubjectId))
+        {
+            var className = standards.GetValueOrDefault(hw.StandardId, "—");
+            var subjectName = subjects.GetValueOrDefault(hw.SubjectId, "—");
+            var teacher = hw.CreatorId.HasValue ? teacherByUserId.GetValueOrDefault(hw.CreatorId.Value, "—") : "—";
+
+            foreach (var (divId, dueDate) in GetHomeworkSchedules(hw))
+            {
+                var total = studentCountMap.GetValueOrDefault(divId, 0);
+                var subs = submissionsByHw.GetValueOrDefault((hw.Id, divId), new());
+                var submitted = subs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                var rate = total > 0 ? Math.Round((double) submitted / total * 100, 2) : 0;
+
+                rows.Add(new Dictionary<string, string?>
+                {
+                    { "Class", className },
+                    { "Subject", subjectName },
+                    { "HomeworkTitle", hw.Title },
+                    { "AssignedDate", hw.CreationTime.ToString("yyyy-MM-dd") },
+                    { "DueDate", dueDate.ToString("yyyy-MM-dd") },
+                    { "Teacher", teacher },
+                    { "SubmissionRate", $"{rate}%" }
+                });
+            }
+        }
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildSubjectwiseHomeworkReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "StudentCount", Label = "Student Count" },
+            new() { Id = "HomeworkCount", Label = "Homework Count" },
+            new() { Id = "AssignedTeacher", Label = "Assigned Teacher" },
+            new() { Id = "AverageSubmissionRate", Label = "Average Submission Rate" },
+            new() { Id = "CompletionRate", Label = "Completion Rate" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!homeworks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var submissionsByHw = submissions
+            .GroupBy(s => s.HomeworkAssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var divisionIds = homeworks.SelectMany(GetHomeworkSchedules).Select(x => x.DivisionId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentCountByDiv = await asyncExecuter.ToListAsync(
+            studentQ.Where(s => s.DivisionId.HasValue && divisionIds.Contains(s.DivisionId.Value))
+                    .GroupBy(s => s.DivisionId!.Value)
+                    .Select(g => new { DivisionId = g.Key, Count = g.Count() }));
+        var studentCountMap = studentCountByDiv.ToDictionary(x => x.DivisionId, x => x.Count);
+
+        var rows = homeworks
+            .GroupBy(h => h.SubjectId)
+            .OrderBy(g => subjects.GetValueOrDefault(g.Key, ""))
+            .Select(g =>
+            {
+                var subjectName = subjects.GetValueOrDefault(g.Key, "—");
+                var hwList = g.ToList();
+                var hwIds = hwList.Select(h => h.Id).ToHashSet();
+                var subs = submissions.Where(s => s.HomeworkAssignmentId.HasValue && hwIds.Contains(s.HomeworkAssignmentId.Value)).ToList();
+                var studentCount = subs.Select(s => s.StudentId).Distinct().Count();
+                var teachers = hwList
+                    .Where(h => h.CreatorId.HasValue)
+                    .Select(h => teacherByUserId.GetValueOrDefault(h.CreatorId!.Value, ""))
+                    .Distinct()
+                    .Where(t => !string.IsNullOrEmpty(t))
+                    .ToList();
+
+                // Per-homework submission rates
+                var rates = hwList.Select(hw =>
+                {
+                    var hwSubs = submissionsByHw.GetValueOrDefault(hw.Id, new());
+                    var total = GetHomeworkSchedules(hw).Sum(x => studentCountMap.GetValueOrDefault(x.DivisionId, 0));
+                    var submitted = hwSubs.Count(s => s.Status is SubmissionStatus.Submitted
+                        or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                        or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                    return total > 0 ? (double) submitted / total * 100 : 0;
+                }).ToList();
+
+                var avgRate = rates.Any() ? Math.Round(rates.Average(), 2) : 0;
+                var totalAssigned = subs.Count;
+                var totalSubmitted = subs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                var completionRate = totalAssigned > 0 ? Math.Round((double) totalSubmitted / totalAssigned * 100, 2) : 0;
+
+                return new Dictionary<string, string?>
+                {
+                    { "Subject", subjectName },
+                    { "StudentCount", studentCount.ToString() },
+                    { "HomeworkCount", hwList.Count.ToString() },
+                    { "AssignedTeacher", teachers.Any() ? string.Join(", ", teachers) : "—" },
+                    { "AverageSubmissionRate", $"{avgRate}%" },
+                    { "CompletionRate", $"{completionRate}%" }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildTeacherwiseHomeworkReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Teacher", Label = "Teacher" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "Class", Label = "Class" },
+            new() { Id = "Division", Label = "Division" },
+            new() { Id = "HomeworkAssigned", Label = "Homework Assigned" },
+            new() { Id = "TotalStudents", Label = "Total Students" },
+            new() { Id = "SubmissionRate", Label = "Submission Rate" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!homeworks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var divisionIds = homeworks.SelectMany(GetHomeworkSchedules).Select(x => x.DivisionId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentCountByDiv = await asyncExecuter.ToListAsync(
+            studentQ.Where(s => s.DivisionId.HasValue && divisionIds.Contains(s.DivisionId.Value))
+                    .GroupBy(s => s.DivisionId!.Value)
+                    .Select(g => new { DivisionId = g.Key, Count = g.Count() }));
+        var studentCountMap = studentCountByDiv.ToDictionary(x => x.DivisionId, x => x.Count);
+
+        // Expand: one row per (creatorId, subjectId, standardId, divisionId)
+        var expanded = homeworks
+            .SelectMany(hw => GetHomeworkSchedules(hw)
+                .Select(s => (hw, divId: s.DivisionId, dueDate: s.DueDate)))
+            .ToList();
+
+        var rows = expanded
+            .GroupBy(x => (x.hw.CreatorId, x.hw.SubjectId, x.hw.StandardId, x.divId))
+            .OrderBy(g => g.Key.CreatorId.HasValue ? teacherByUserId.GetValueOrDefault(g.Key.CreatorId.Value, "") : "")
+            .Select(g =>
+            {
+                var teacherName = g.Key.CreatorId.HasValue
+                    ? teacherByUserId.GetValueOrDefault(g.Key.CreatorId.Value, "—") : "—";
+                var subjectName = subjects.GetValueOrDefault(g.Key.SubjectId, "—");
+                var className = standards.GetValueOrDefault(g.Key.StandardId, "—");
+                var divName = divisions.GetValueOrDefault(g.Key.Item4, "—");
+                var hwIds = g.Select(x => x.hw.Id).Distinct().ToHashSet();
+                var total = studentCountMap.GetValueOrDefault(g.Key.Item4, 0);
+                var subs = submissions.Where(s =>
+                    s.HomeworkAssignmentId.HasValue && hwIds.Contains(s.HomeworkAssignmentId.Value)
+                    && s.DivisionId == g.Key.Item4).ToList();
+                var submitted = subs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                var rate = total > 0 ? Math.Round((double) submitted / (total * hwIds.Count) * 100, 2) : 0;
+
+                return new Dictionary<string, string?>
+                {
+                    { "Teacher", teacherName },
+                    { "Subject", subjectName },
+                    { "Class", className },
+                    { "Division", divName },
+                    { "HomeworkAssigned", hwIds.Count.ToString() },
+                    { "TotalStudents", total.ToString() },
+                    { "SubmissionRate", $"{rate}%" }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildStudentwiseHomeworkSummaryReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "StudentName", Label = "Student Name" },
+            new() { Id = "Class", Label = "Class" },
+            new() { Id = "Division", Label = "Division" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "AssignedHomework", Label = "Assigned Homework" },
+            new() { Id = "Submitted", Label = "Submitted" },
+            new() { Id = "Pending", Label = "Pending" },
+            new() { Id = "Overdue", Label = "Overdue" },
+            new() { Id = "CompletionPercent", Label = "Completion %" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!submissions.Any()) { payload.TotalCount = 0; return payload; }
+
+        var hwSubjectMap = homeworks.ToDictionary(h => h.Id, h => h.SubjectId);
+        var hwStandardMap = homeworks.ToDictionary(h => h.Id, h => h.StandardId);
+        var today = DateTime.UtcNow.Date;
+
+        var studentIds = submissions.Select(s => s.StudentId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        var rows = submissions
+            .Where(s => s.HomeworkAssignmentId.HasValue && hwSubjectMap.ContainsKey(s.HomeworkAssignmentId.Value))
+            .GroupBy(s => (s.StudentId, s.HomeworkAssignmentId!.Value == Guid.Empty ? Guid.Empty
+                : hwSubjectMap[s.HomeworkAssignmentId.Value]))
+            .OrderBy(g => studentMap.ContainsKey(g.Key.StudentId)
+                ? BuildStudentName(studentMap[g.Key.StudentId]) : "")
+            .Select(g =>
+            {
+                if (!studentMap.TryGetValue(g.Key.StudentId, out var student)) return null;
+                var subjectName = subjects.GetValueOrDefault(g.Key.Item2, "—");
+                var divName = divisions.GetValueOrDefault(g.First().DivisionId, "—");
+                var hwSample = homeworks.FirstOrDefault(h => h.Id == g.First().HomeworkAssignmentId!.Value);
+                var className = hwSample is not null ? standards.GetValueOrDefault(hwSample.StandardId, "—") : "—";
+
+                var total = g.Count();
+                var submitted = g.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                var pending = g.Count(s => (s.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft)
+                    && s.DueDate.Date >= today);
+                var overdue = g.Count(s => (s.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft)
+                    && s.DueDate.Date < today);
+                var completionPct = total > 0 ? Math.Round((double) submitted / total * 100, 2) : 0;
+
+                return new Dictionary<string, string?>
+                {
+                    { "StudentName", BuildStudentName(student) },
+                    { "Class", className },
+                    { "Division", divName },
+                    { "Subject", subjectName },
+                    { "AssignedHomework", total.ToString() },
+                    { "Submitted", submitted.ToString() },
+                    { "Pending", pending.ToString() },
+                    { "Overdue", overdue.ToString() },
+                    { "CompletionPercent", $"{completionPct}%" }
+                };
+            })
+            .Where(r => r is not null).Select(r => r!).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildHomeworkCompletionStatusReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "HomeworkTitle", Label = "Homework Title" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "AssignedStudents", Label = "Assigned Students" },
+            new() { Id = "Submitted", Label = "Submitted" },
+            new() { Id = "Pending", Label = "Pending" },
+            new() { Id = "CompletionPercent", Label = "Completion %" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!homeworks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var submissionsByHw = submissions
+            .GroupBy(s => s.HomeworkAssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var rows = homeworks
+            .OrderBy(h => h.CreationTime)
+            .Select(hw =>
+            {
+                var subjectName = subjects.GetValueOrDefault(hw.SubjectId, "—");
+                var hwSubs = submissionsByHw.GetValueOrDefault(hw.Id, new());
+                var assignedStudents = hwSubs.Select(s => s.StudentId).Distinct().Count();
+                var submitted = hwSubs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                var pending = assignedStudents - submitted;
+                var completionPct = assignedStudents > 0
+                    ? Math.Round((double) submitted / assignedStudents * 100, 2) : 0;
+
+                return new Dictionary<string, string?>
+                {
+                    { "HomeworkTitle", hw.Title },
+                    { "Subject", subjectName },
+                    { "AssignedStudents", assignedStudents.ToString() },
+                    { "Submitted", submitted.ToString() },
+                    { "Pending", pending < 0 ? "0" : pending.ToString() },
+                    { "CompletionPercent", $"{completionPct}%" }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildPendingHomeworkReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Student", Label = "Student" },
+            new() { Id = "Class", Label = "Class" },
+            new() { Id = "Division", Label = "Division" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "Homework", Label = "Homework" },
+            new() { Id = "DueDate", Label = "Due Date" },
+            new() { Id = "DaysPending", Label = "Days Pending" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!submissions.Any()) { payload.TotalCount = 0; return payload; }
+
+        var hwMap = homeworks.ToDictionary(h => h.Id);
+        var today = DateTime.UtcNow.Date;
+
+        var studentIds = submissions.Select(s => s.StudentId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        var rows = submissions
+            .Where(s => s.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft
+                        && s.HomeworkAssignmentId.HasValue && hwMap.ContainsKey(s.HomeworkAssignmentId.Value)
+                        && studentMap.ContainsKey(s.StudentId))
+            .OrderBy(s => s.DueDate)
+            .Select(s =>
+            {
+                var hw = hwMap[s.HomeworkAssignmentId!.Value];
+                var student = studentMap[s.StudentId];
+                var className = standards.GetValueOrDefault(hw.StandardId, "—");
+                var divName = divisions.GetValueOrDefault(s.DivisionId, "—");
+                var subjectName = subjects.GetValueOrDefault(hw.SubjectId, "—");
+                var daysPending = Math.Max(0, (today - s.DueDate.Date).Days);
+
+                return new Dictionary<string, string?>
+                {
+                    { "Student", BuildStudentName(student) },
+                    { "Class", className },
+                    { "Division", divName },
+                    { "Subject", subjectName },
+                    { "Homework", hw.Title },
+                    { "DueDate", s.DueDate.ToString("yyyy-MM-dd") },
+                    { "DaysPending", daysPending.ToString() }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildOverdueHomeworkReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Student", Label = "Student" },
+            new() { Id = "Homework", Label = "Homework" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "DueDate", Label = "Due Date" },
+            new() { Id = "OverdueDays", Label = "Overdue Days" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!submissions.Any()) { payload.TotalCount = 0; return payload; }
+
+        var hwMap = homeworks.ToDictionary(h => h.Id);
+        var today = DateTime.UtcNow.Date;
+
+        var studentIds = submissions.Select(s => s.StudentId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        var rows = submissions
+            .Where(s => s.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft
+                        && s.DueDate.Date < today
+                        && s.HomeworkAssignmentId.HasValue && hwMap.ContainsKey(s.HomeworkAssignmentId.Value)
+                        && studentMap.ContainsKey(s.StudentId))
+            .OrderByDescending(s => (today - s.DueDate.Date).Days)
+            .Select(s =>
+            {
+                var hw = hwMap[s.HomeworkAssignmentId!.Value];
+                var student = studentMap[s.StudentId];
+                var subjectName = subjects.GetValueOrDefault(hw.SubjectId, "—");
+                var overdueDays = (today - s.DueDate.Date).Days;
+
+                return new Dictionary<string, string?>
+                {
+                    { "Student", BuildStudentName(student) },
+                    { "Homework", hw.Title },
+                    { "Subject", subjectName },
+                    { "DueDate", s.DueDate.ToString("yyyy-MM-dd") },
+                    { "OverdueDays", overdueDays.ToString() }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildHomeworkSubmissionHistoryReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "SubmissionDate", Label = "Submission Date" },
+            new() { Id = "Student", Label = "Student" },
+            new() { Id = "Homework", Label = "Homework" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "SubmittedOnTime", Label = "Submitted On Time" },
+            new() { Id = "SubmissionStatus", Label = "Submission Status" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!submissions.Any()) { payload.TotalCount = 0; return payload; }
+
+        var hwMap = homeworks.ToDictionary(h => h.Id);
+
+        var studentIds = submissions.Select(s => s.StudentId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        var rows = submissions
+            .Where(s => s.HomeworkAssignmentId.HasValue && hwMap.ContainsKey(s.HomeworkAssignmentId.Value)
+                        && studentMap.ContainsKey(s.StudentId))
+            .OrderByDescending(s => s.SubmissionDate ?? DateTimeOffset.MinValue)
+            .Select(s =>
+            {
+                var hw = hwMap[s.HomeworkAssignmentId!.Value];
+                var student = studentMap[s.StudentId];
+                var subjectName = subjects.GetValueOrDefault(hw.SubjectId, "—");
+                var submittedOnTime = s.SubmissionDate.HasValue
+                    ? (s.SubmissionDate.Value.UtcDateTime.Date <= s.DueDate.Date ? "Yes" : "No")
+                    : "—";
+
+                return new Dictionary<string, string?>
+                {
+                    { "SubmissionDate", s.SubmissionDate.HasValue
+                        ? s.SubmissionDate.Value.ToString("yyyy-MM-dd") : "—" },
+                    { "Student", BuildStudentName(student) },
+                    { "Homework", hw.Title },
+                    { "Subject", subjectName },
+                    { "SubmittedOnTime", submittedOnTime },
+                    { "SubmissionStatus", s.Status.ToString() }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildHomeworkWithAttachmentsReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "HomeworkTitle", Label = "Homework Title" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "Teacher", Label = "Teacher" },
+            new() { Id = "AttachmentCount", Label = "Attachment Count" },
+            new() { Id = "AttachmentType", Label = "Attachment Type" },
+            new() { Id = "AssignedDate", Label = "Assigned Date" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, _) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        // Only homework with attachments (AttachmentsJson or legacy DocumentUrl)
+        var withAttachments = homeworks
+            .Where(h => !string.IsNullOrWhiteSpace(h.AttachmentsJson) || !string.IsNullOrWhiteSpace(h.DocumentUrl))
+            .OrderBy(h => h.CreationTime)
+            .ToList();
+
+        if (!withAttachments.Any()) { payload.TotalCount = 0; return payload; }
+
+        var rows = withAttachments.Select(hw =>
+        {
+            var subjectName = subjects.GetValueOrDefault(hw.SubjectId, "—");
+            var teacher = hw.CreatorId.HasValue
+                ? teacherByUserId.GetValueOrDefault(hw.CreatorId.Value, "—") : "—";
+            int count;
+            if (!string.IsNullOrWhiteSpace(hw.AttachmentsJson))
+            {
+                try
+                {
+                    var arr = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement[]>(hw.AttachmentsJson);
+                    count = arr?.Length ?? 1;
+                }
+                catch { count = 1; }
+            }
+            else
+            {
+                count = 1; // legacy DocumentUrl = 1 attachment
+            }
+
+            return new Dictionary<string, string?>
+            {
+                { "HomeworkTitle", hw.Title },
+                { "Subject", subjectName },
+                { "Teacher", teacher },
+                { "AttachmentCount", count.ToString() },
+                { "AttachmentType", "—" },  // type not stored in model
+                { "AssignedDate", hw.CreationTime.ToString("yyyy-MM-dd") }
+            };
+        }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildHomeworkAcknowledgementReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        // Acknowledgement tracking not in data model; columns shown but acknowledgement fields are "—"
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Homework", Label = "Homework" },
+            new() { Id = "Student", Label = "Student" },
+            new() { Id = "AcknowledgedBy", Label = "Acknowledged By" },
+            new() { Id = "AcknowledgementDate", Label = "Acknowledgement Date" },
+            new() { Id = "Status", Label = "Status" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!submissions.Any()) { payload.TotalCount = 0; return payload; }
+
+        var hwMap = homeworks.ToDictionary(h => h.Id);
+        var studentIds = submissions.Select(s => s.StudentId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        var rows = submissions
+            .Where(s => s.HomeworkAssignmentId.HasValue && hwMap.ContainsKey(s.HomeworkAssignmentId.Value)
+                        && studentMap.ContainsKey(s.StudentId))
+            .OrderBy(s => s.HomeworkAssignmentId)
+            .ThenBy(s => BuildStudentName(studentMap[s.StudentId]))
+            .Select(s => new Dictionary<string, string?>
+            {
+                { "Homework", hwMap[s.HomeworkAssignmentId!.Value].Title },
+                { "Student", BuildStudentName(studentMap[s.StudentId]) },
+                { "AcknowledgedBy", "—" },
+                { "AcknowledgementDate", "—" },
+                { "Status", "—" }
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    // ─── Assignment reports ───────────────────────────────────────────────────
+
+    private static IEnumerable<(Guid DivisionId, DateTime DueDate)> GetAssignmentSchedules(AssignmentEntity a)
+    {
+        if (a.DivisionSchedules.Any())
+            return a.DivisionSchedules.Select(ds => (ds.DivisionId, ds.DueDate));
+        return new[] { (a.DivisionId, DateTime.MaxValue) };
+    }
+
+    private async Task<(
+        List<AssignmentEntity> Assignments,
+        Dictionary<Guid, string> Subjects,
+        Dictionary<Guid, string> Standards,
+        Dictionary<Guid, string> Divisions,
+        Dictionary<Guid, string> TeacherByUserId,
+        List<StudentSubmissionEntity> Submissions)> LoadAssignmentContextAsync(AcademicReportFilterDto filters)
+    {
+        var aQuery = await assignmentRepository.WithDetailsAsync(a => a.DivisionSchedules);
+
+        if (filters.FromDate.HasValue)
+            aQuery = aQuery.Where(a => a.CreationTime >= filters.FromDate.Value);
+        if (filters.ToDate.HasValue)
+            aQuery = aQuery.Where(a => a.CreationTime < filters.ToDate.Value.AddDays(1));
+        if (filters.ClassIds?.Any() == true)
+            aQuery = aQuery.Where(a => filters.ClassIds.Contains(a.StandardId));
+        if (filters.SubjectIds?.Any() == true)
+            aQuery = aQuery.Where(a => filters.SubjectIds.Contains(a.SubjectId));
+        if (filters.AssignmentIds?.Any() == true)
+            aQuery = aQuery.Where(a => filters.AssignmentIds.Contains(a.Id));
+
+        if (filters.TeacherIds?.Any() == true)
+        {
+            var empQ = await employeeRepository.GetQueryableAsync();
+            var teacherUserIds = await asyncExecuter.ToListAsync(
+                empQ.Where(e => filters.TeacherIds.Contains(e.Id) && e.UserId != null)
+                    .Select(e => e.UserId!.Value));
+            aQuery = teacherUserIds.Any()
+                ? aQuery.Where(a => a.CreatorId.HasValue && teacherUserIds.Contains(a.CreatorId.Value))
+                : aQuery.Where(a => false);
+        }
+
+        var assignments = await asyncExecuter.ToListAsync(aQuery);
+
+        if (filters.DivisionIds?.Any() == true)
+        {
+            assignments = assignments
+                .Where(a => filters.DivisionIds.Contains(a.DivisionId)
+                         || a.DivisionSchedules.Any(ds => filters.DivisionIds.Contains(ds.DivisionId)))
+                .ToList();
+        }
+
+        var subjects = (await subjectRepository.GetListAsync()).ToDictionary(s => s.Id, s => s.Name);
+        var standards = (await standardRepository.GetListAsync()).ToDictionary(s => s.Id, s => s.Name);
+        var divisions = (await divisionRepository.GetListAsync()).ToDictionary(d => d.Id, d => d.Name);
+
+        var empQuery = await employeeRepository.GetQueryableAsync();
+        var employees = await asyncExecuter.ToListAsync(empQuery.Where(e => e.UserId != null));
+        var teacherByUserId = employees.ToDictionary(e => e.UserId!.Value, e => e.EmployeeName);
+
+        var aIds = assignments.Select(a => a.Id).ToList();
+        List<StudentSubmissionEntity> submissions = [];
+        if (aIds.Any())
+        {
+            var subQ = await submissionRepository.GetQueryableAsync();
+            subQ = subQ.Where(s => s.AssignmentId.HasValue && aIds.Contains(s.AssignmentId.Value));
+            if (filters.DivisionIds?.Any() == true)
+                subQ = subQ.Where(s => filters.DivisionIds.Contains(s.DivisionId));
+            if (filters.StudentIds?.Any() == true)
+                subQ = subQ.Where(s => filters.StudentIds.Contains(s.StudentId));
+            submissions = await asyncExecuter.ToListAsync(subQ);
+        }
+
+        return (assignments, subjects, standards, divisions, teacherByUserId, submissions);
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildAssignmentIssuanceReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "AssignmentTitle", Label = "Assignment Title" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "Class", Label = "Class" },
+            new() { Id = "Division", Label = "Division" },
+            new() { Id = "AssignedBy", Label = "Assigned By" },
+            new() { Id = "AssignedDate", Label = "Assigned Date" },
+            new() { Id = "DueDate", Label = "Due Date" },
+            new() { Id = "TotalStudents", Label = "Total Students" },
+            new() { Id = "Status", Label = "Status" }
+        };
+
+        var (assignments, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!assignments.Any()) { payload.TotalCount = 0; return payload; }
+
+        var divisionIds = assignments.SelectMany(GetAssignmentSchedules).Select(x => x.DivisionId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentCountByDiv = await asyncExecuter.ToListAsync(
+            studentQ.Where(s => s.DivisionId.HasValue && divisionIds.Contains(s.DivisionId.Value))
+                    .GroupBy(s => s.DivisionId!.Value)
+                    .Select(g => new { DivisionId = g.Key, Count = g.Count() }));
+        var studentCountMap = studentCountByDiv.ToDictionary(x => x.DivisionId, x => x.Count);
+
+        var rows = new List<Dictionary<string, string?>>();
+        foreach (var a in assignments.OrderBy(a => a.CreationTime))
+        {
+            var subjectName = subjects.GetValueOrDefault(a.SubjectId, "—");
+            var className = standards.GetValueOrDefault(a.StandardId, "—");
+            var assignedBy = a.CreatorId.HasValue ? teacherByUserId.GetValueOrDefault(a.CreatorId.Value, "—") : "—";
+
+            foreach (var (divId, dueDate) in GetAssignmentSchedules(a))
+            {
+                var divName = divisions.GetValueOrDefault(divId, "—");
+                var totalStudents = studentCountMap.GetValueOrDefault(divId, 0);
+                rows.Add(new Dictionary<string, string?>
+                {
+                    { "AssignmentTitle", a.Title },
+                    { "Subject", subjectName },
+                    { "Class", className },
+                    { "Division", divName },
+                    { "AssignedBy", assignedBy },
+                    { "AssignedDate", a.CreationTime.ToString("yyyy-MM-dd") },
+                    { "DueDate", dueDate == DateTime.MaxValue ? "—" : dueDate.ToString("yyyy-MM-dd") },
+                    { "TotalStudents", totalStudents.ToString() },
+                    { "Status", a.Status.ToString() }
+                });
+            }
+        }
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildAssignmentSubmissionReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Assignment", Label = "Assignment" },
+            new() { Id = "Student", Label = "Student" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "SubmissionDate", Label = "Submission Date" },
+            new() { Id = "SubmissionStatus", Label = "Submission Status" },
+            new() { Id = "DueDate", Label = "Due Date" }
+        };
+
+        var (assignments, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!submissions.Any()) { payload.TotalCount = 0; return payload; }
+
+        var aMap = assignments.ToDictionary(a => a.Id);
+        var studentIds = submissions.Select(s => s.StudentId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        var rows = submissions
+            .Where(s => s.AssignmentId.HasValue && aMap.ContainsKey(s.AssignmentId.Value)
+                        && studentMap.ContainsKey(s.StudentId))
+            .OrderBy(s => s.AssignmentId)
+            .ThenBy(s => BuildStudentName(studentMap[s.StudentId]))
+            .Select(s =>
+            {
+                var a = aMap[s.AssignmentId!.Value];
+                var subjectName = subjects.GetValueOrDefault(a.SubjectId, "—");
+                return new Dictionary<string, string?>
+                {
+                    { "Assignment", a.Title },
+                    { "Student", BuildStudentName(studentMap[s.StudentId]) },
+                    { "Subject", subjectName },
+                    { "SubmissionDate", s.SubmissionDate.HasValue
+                        ? s.SubmissionDate.Value.ToString("yyyy-MM-dd") : "—" },
+                    { "SubmissionStatus", s.Status.ToString() },
+                    { "DueDate", s.DueDate.ToString("yyyy-MM-dd") }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildAssignmentEvaluationReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Assignment", Label = "Assignment" },
+            new() { Id = "EvaluatedBy", Label = "Evaluated By" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "EvaluationDate", Label = "Evaluation Date" },
+            new() { Id = "StudentsEvaluated", Label = "Students Evaluated" },
+            new() { Id = "PendingEvaluations", Label = "Pending Evaluations" },
+            new() { Id = "Status", Label = "Status" }
+        };
+
+        var (assignments, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!assignments.Any()) { payload.TotalCount = 0; return payload; }
+
+        var submissionsByAssignment = submissions
+            .GroupBy(s => s.AssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var rows = assignments
+            .OrderBy(a => a.Title)
+            .Select(a =>
+            {
+                var subjectName = subjects.GetValueOrDefault(a.SubjectId, "—");
+                var subs = submissionsByAssignment.GetValueOrDefault(a.Id, new());
+                var evaluated = subs.Where(s => s.Status == SubmissionStatus.Reviewed).ToList();
+                var pendingEval = subs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.NeedsReview or SubmissionStatus.Late);
+
+                var evaluators = evaluated
+                    .Where(s => s.ReviewedBy.HasValue)
+                    .Select(s => teacherByUserId.GetValueOrDefault(s.ReviewedBy!.Value, ""))
+                    .Distinct()
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .ToList();
+
+                var latestReview = evaluated
+                    .Where(s => s.ReviewedAt.HasValue)
+                    .Select(s => s.ReviewedAt!.Value)
+                    .DefaultIfEmpty()
+                    .Max();
+
+                return new Dictionary<string, string?>
+                {
+                    { "Assignment", a.Title },
+                    { "EvaluatedBy", evaluators.Any() ? string.Join(", ", evaluators) : "—" },
+                    { "Subject", subjectName },
+                    { "EvaluationDate", latestReview == default ? "—" : latestReview.ToString("yyyy-MM-dd") },
+                    { "StudentsEvaluated", evaluated.Count.ToString() },
+                    { "PendingEvaluations", pendingEval.ToString() },
+                    { "Status", a.Status.ToString() }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildAssignmentMarksReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Student", Label = "Student" },
+            new() { Id = "Assignment", Label = "Assignment" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "ObtainedMarks", Label = "Obtained Marks" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "Grade", Label = "Grade" }
+        };
+
+        var (assignments, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!submissions.Any()) { payload.TotalCount = 0; return payload; }
+
+        var aMap = assignments.ToDictionary(a => a.Id);
+        var studentIds = submissions.Select(s => s.StudentId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        var rows = submissions
+            .Where(s => s.AssignmentId.HasValue && aMap.ContainsKey(s.AssignmentId.Value)
+                        && studentMap.ContainsKey(s.StudentId)
+                        && s.Marks.HasValue)
+            .OrderBy(s => BuildStudentName(studentMap[s.StudentId]))
+            .ThenBy(s => s.AssignmentId)
+            .Select(s =>
+            {
+                var a = aMap[s.AssignmentId!.Value];
+                var subjectName = subjects.GetValueOrDefault(a.SubjectId, "—");
+                var obtained = (double) (s.Marks ?? 0);
+                var total = (double) (s.TotalMarks ?? a.TotalMarks);
+                var pct = total > 0 ? Math.Round(obtained / total * 100, 2) : 0;
+                var grade = ComputeGrade(obtained, total);
+                return new Dictionary<string, string?>
+                {
+                    { "Student", BuildStudentName(studentMap[s.StudentId]) },
+                    { "Assignment", a.Title },
+                    { "Subject", subjectName },
+                    { "ObtainedMarks", obtained.ToString("F2") },
+                    { "TotalMarks", total.ToString("F0") },
+                    { "Percentage", $"{pct}%" },
+                    { "Grade", grade }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildLateSubmissionReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Student", Label = "Student" },
+            new() { Id = "Assignment", Label = "Assignment" },
+            new() { Id = "DueDate", Label = "Due Date" },
+            new() { Id = "SubmissionDate", Label = "Submission Date" },
+            new() { Id = "DelayDays", Label = "Delay Days" },
+            new() { Id = "Subject", Label = "Subject" }
+        };
+
+        var (assignments, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!submissions.Any()) { payload.TotalCount = 0; return payload; }
+
+        var aMap = assignments.ToDictionary(a => a.Id);
+        var studentIds = submissions.Select(s => s.StudentId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        var rows = submissions
+            .Where(s => s.Status == SubmissionStatus.Late
+                        || (s.SubmissionDate.HasValue && s.SubmissionDate.Value.UtcDateTime.Date > s.DueDate.Date))
+            .Where(s => s.AssignmentId.HasValue && aMap.ContainsKey(s.AssignmentId.Value)
+                        && studentMap.ContainsKey(s.StudentId))
+            .OrderByDescending(s => s.SubmissionDate.HasValue
+                ? (s.SubmissionDate.Value.UtcDateTime.Date - s.DueDate.Date).Days : 0)
+            .Select(s =>
+            {
+                var a = aMap[s.AssignmentId!.Value];
+                var subjectName = subjects.GetValueOrDefault(a.SubjectId, "—");
+                var delayDays = s.SubmissionDate.HasValue
+                    ? Math.Max(0, (s.SubmissionDate.Value.UtcDateTime.Date - s.DueDate.Date).Days)
+                    : 0;
+                return new Dictionary<string, string?>
+                {
+                    { "Student", BuildStudentName(studentMap[s.StudentId]) },
+                    { "Assignment", a.Title },
+                    { "DueDate", s.DueDate.ToString("yyyy-MM-dd") },
+                    { "SubmissionDate", s.SubmissionDate.HasValue
+                        ? s.SubmissionDate.Value.ToString("yyyy-MM-dd") : "—" },
+                    { "DelayDays", delayDays.ToString() },
+                    { "Subject", subjectName }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildMissingAssignmentReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Student", Label = "Student" },
+            new() { Id = "Assignment", Label = "Assignment" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "DueDate", Label = "Due Date" },
+            new() { Id = "PendingDays", Label = "Pending Days" },
+            new() { Id = "Teacher", Label = "Teacher" }
+        };
+
+        var (assignments, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!submissions.Any()) { payload.TotalCount = 0; return payload; }
+
+        var aMap = assignments.ToDictionary(a => a.Id);
+        var today = DateTime.UtcNow.Date;
+
+        var studentIds = submissions.Select(s => s.StudentId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        var rows = submissions
+            .Where(s => s.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft
+                        && s.AssignmentId.HasValue && aMap.ContainsKey(s.AssignmentId.Value)
+                        && studentMap.ContainsKey(s.StudentId))
+            .OrderBy(s => s.DueDate)
+            .Select(s =>
+            {
+                var a = aMap[s.AssignmentId!.Value];
+                var subjectName = subjects.GetValueOrDefault(a.SubjectId, "—");
+                var teacher = a.CreatorId.HasValue ? teacherByUserId.GetValueOrDefault(a.CreatorId.Value, "—") : "—";
+                var pendingDays = Math.Max(0, (today - s.DueDate.Date).Days);
+                return new Dictionary<string, string?>
+                {
+                    { "Student", BuildStudentName(studentMap[s.StudentId]) },
+                    { "Assignment", a.Title },
+                    { "Subject", subjectName },
+                    { "DueDate", s.DueDate.ToString("yyyy-MM-dd") },
+                    { "PendingDays", pendingDays.ToString() },
+                    { "Teacher", teacher }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildAssignmentFeedbackReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Student", Label = "Student" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "Assignment", Label = "Assignment" },
+            new() { Id = "Teacher", Label = "Teacher" },
+            new() { Id = "FeedbackDate", Label = "Feedback Date" },
+            new() { Id = "FeedbackRemarks", Label = "Feedback Remarks" },
+            new() { Id = "Rating", Label = "Rating" }
+        };
+
+        var (assignments, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!submissions.Any()) { payload.TotalCount = 0; return payload; }
+
+        var aMap = assignments.ToDictionary(a => a.Id);
+        var studentIds = submissions.Select(s => s.StudentId).Distinct().ToList();
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        var rows = submissions
+            .Where(s => (!string.IsNullOrWhiteSpace(s.Feedback) || !string.IsNullOrWhiteSpace(s.Remarks))
+                        && s.AssignmentId.HasValue && aMap.ContainsKey(s.AssignmentId.Value)
+                        && studentMap.ContainsKey(s.StudentId))
+            .OrderBy(s => s.ReviewedAt ?? DateTimeOffset.MaxValue)
+            .Select(s =>
+            {
+                var a = aMap[s.AssignmentId!.Value];
+                var subjectName = subjects.GetValueOrDefault(a.SubjectId, "—");
+                var teacher = s.ReviewedBy.HasValue ? teacherByUserId.GetValueOrDefault(s.ReviewedBy.Value, "—") : "—";
+                var remarks = !string.IsNullOrWhiteSpace(s.Feedback) ? s.Feedback
+                    : !string.IsNullOrWhiteSpace(s.Remarks) ? s.Remarks : "—";
+                return new Dictionary<string, string?>
+                {
+                    { "Student", BuildStudentName(studentMap[s.StudentId]) },
+                    { "Subject", subjectName },
+                    { "Assignment", a.Title },
+                    { "Teacher", teacher },
+                    { "FeedbackDate", s.ReviewedAt.HasValue
+                        ? s.ReviewedAt.Value.ToString("yyyy-MM-dd") : "—" },
+                    { "FeedbackRemarks", remarks },
+                    { "Rating", "—" }    // not in data model
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildAssignmentGradeDistributionReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Grade", Label = "Grade" },
+            new() { Id = "Assignment", Label = "Assignment" },
+            new() { Id = "StudentCount", Label = "Student Count" },
+            new() { Id = "Percentage", Label = "Percentage" },
+            new() { Id = "HighestMarks", Label = "Highest Marks" },
+            new() { Id = "LowestMarks", Label = "Lowest Marks" }
+        };
+
+        var (assignments, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!assignments.Any()) { payload.TotalCount = 0; return payload; }
+
+        var aMap = assignments.ToDictionary(a => a.Id);
+        var gradeOrder = new[] { "A+", "A", "B+", "B", "C+", "C", "D", "F" };
+
+        var gradedSubs = submissions
+            .Where(s => s.Marks.HasValue && s.AssignmentId.HasValue && aMap.ContainsKey(s.AssignmentId.Value))
+            .Select(s =>
+            {
+                var a = aMap[s.AssignmentId!.Value];
+                var obtained = (double) (s.Marks ?? 0);
+                var total = (double) (s.TotalMarks ?? a.TotalMarks);
+                return (s.StudentId, AssignmentTitle: a.Title, AssignmentId: a.Id, obtained, total,
+                    grade: ComputeGrade(obtained, total));
+            })
+            .ToList();
+
+        var rows = new List<Dictionary<string, string?>>();
+        foreach (var aGroup in gradedSubs.GroupBy(x => x.AssignmentId))
+        {
+            var assignmentTitle = aGroup.First().AssignmentTitle;
+            var totalInAssignment = aGroup.Count();
+            foreach (var grade in gradeOrder)
+            {
+                var gradeGroup = aGroup.Where(x => x.grade == grade).ToList();
+                if (!gradeGroup.Any()) continue;
+                var pct = totalInAssignment > 0
+                    ? Math.Round((double) gradeGroup.Count / totalInAssignment * 100, 2) : 0;
+                rows.Add(new Dictionary<string, string?>
+                {
+                    { "Grade", grade },
+                    { "Assignment", assignmentTitle },
+                    { "StudentCount", gradeGroup.Count.ToString() },
+                    { "Percentage", $"{pct}%" },
+                    { "HighestMarks", gradeGroup.Max(x => x.obtained).ToString("F2") },
+                    { "LowestMarks", gradeGroup.Min(x => x.obtained).ToString("F2") }
+                });
+            }
+        }
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildAssignmentPerformanceReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Class", Label = "Class" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "TotalAssignments", Label = "Total Assignments" },
+            new() { Id = "AverageScore", Label = "Average Score" },
+            new() { Id = "HighestScore", Label = "Highest Score" },
+            new() { Id = "LowestScore", Label = "Lowest Score" },
+            new() { Id = "CompletionRate", Label = "Completion Rate" }
+        };
+
+        var (assignments, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!assignments.Any()) { payload.TotalCount = 0; return payload; }
+
+        var aMap = assignments.ToDictionary(a => a.Id);
+        var submissionsByAssignment = submissions
+            .GroupBy(s => s.AssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var rows = assignments
+            .GroupBy(a => (a.StandardId, a.SubjectId))
+            .OrderBy(g => standards.GetValueOrDefault(g.Key.StandardId, ""))
+            .ThenBy(g => subjects.GetValueOrDefault(g.Key.SubjectId, ""))
+            .Select(g =>
+            {
+                var className = standards.GetValueOrDefault(g.Key.StandardId, "—");
+                var subjectName = subjects.GetValueOrDefault(g.Key.SubjectId, "—");
+                var aList = g.ToList();
+
+                var gradedSubs = aList
+                    .SelectMany(a => submissionsByAssignment.GetValueOrDefault(a.Id, new())
+                        .Where(s => s.Marks.HasValue)
+                        .Select(s => new
+                        {
+                            obtained = (double) (s.Marks ?? 0),
+                            total = (double) (s.TotalMarks ?? a.TotalMarks)
+                        }))
+                    .ToList();
+
+                var allSubs = aList
+                    .SelectMany(a => submissionsByAssignment.GetValueOrDefault(a.Id, new()))
+                    .ToList();
+                var submitted = allSubs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                var completionRate = allSubs.Count > 0
+                    ? Math.Round((double) submitted / allSubs.Count * 100, 2) : 0;
+
+                var avgScore = gradedSubs.Any()
+                    ? Math.Round(gradedSubs.Average(x => x.total > 0 ? x.obtained / x.total * 100 : 0), 2) : 0;
+                var highest = gradedSubs.Any() ? gradedSubs.Max(x => x.obtained) : 0;
+                var lowest = gradedSubs.Any() ? gradedSubs.Min(x => x.obtained) : 0;
+
+                return new Dictionary<string, string?>
+                {
+                    { "Class", className },
+                    { "Subject", subjectName },
+                    { "TotalAssignments", aList.Count.ToString() },
+                    { "AverageScore", $"{avgScore}%" },
+                    { "HighestScore", highest.ToString("F2") },
+                    { "LowestScore", lowest.ToString("F2") },
+                    { "CompletionRate", $"{completionRate}%" }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    // ─── Analytics & Monitoring reports ──────────────────────────────────────
+
+    private static string ComputeLoadStatus(double avgPerWeek, double lowThreshold, double highThreshold)
+        => avgPerWeek <= lowThreshold ? "Low" : avgPerWeek <= highThreshold ? "Medium" : "High";
+
+    private async Task<AcademicReportPreviewDto> BuildHomeworkLoadAnalysisReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Class", Label = "Class" },
+            new() { Id = "Division", Label = "Division" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "HomeworkCount", Label = "Homework Count" },
+            new() { Id = "TotalQuestionsTasks", Label = "Total Questions/Tasks" },
+            new() { Id = "AvgHomeworkPerWeek", Label = "Average Homework Per Week" },
+            new() { Id = "AvgCompletionRate", Label = "Average Completion Rate" },
+            new() { Id = "LoadStatus", Label = "Load Status" }
+        };
+
+        var (homeworks, subjects, standards, divisions, _, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!homeworks.Any()) { payload.TotalCount = 0; return payload; }
+
+        var submissionsByHw = submissions
+            .GroupBy(s => s.HomeworkAssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // Determine week span for per-week rate
+        double spanWeeks;
+        if (request.Filters.FromDate.HasValue && request.Filters.ToDate.HasValue)
+        {
+            spanWeeks = Math.Max(1, (request.Filters.ToDate.Value - request.Filters.FromDate.Value).TotalDays / 7);
+        }
+        else
+        {
+            var earliest = homeworks.Min(h => h.CreationTime);
+            var latest = homeworks.Max(h => h.CreationTime);
+            spanWeeks = Math.Max(1, (latest - earliest).TotalDays / 7);
+        }
+
+        // Expand homeworks to (standardId, divisionId, subjectId) rows
+        var expanded = homeworks.SelectMany(hw =>
+            GetHomeworkSchedules(hw).Select(s => (hw, divId: s.DivisionId))).ToList();
+
+        var rows = expanded
+            .GroupBy(x => (x.hw.StandardId, x.divId, x.hw.SubjectId))
+            .OrderBy(g => standards.GetValueOrDefault(g.Key.StandardId, ""))
+            .ThenBy(g => divisions.GetValueOrDefault(g.Key.divId, ""))
+            .ThenBy(g => subjects.GetValueOrDefault(g.Key.SubjectId, ""))
+            .Select(g =>
+            {
+                var className = standards.GetValueOrDefault(g.Key.StandardId, "—");
+                var divName = divisions.GetValueOrDefault(g.Key.divId, "—");
+                var subjectName = subjects.GetValueOrDefault(g.Key.SubjectId, "—");
+                var hwIds = g.Select(x => x.hw.Id).Distinct().ToHashSet();
+                var hwCount = hwIds.Count;
+                var avgPerWeek = Math.Round(hwCount / spanWeeks, 2);
+
+                // Avg completion rate per homework
+                var rates = hwIds.Select(id =>
+                {
+                    var subs = submissionsByHw.GetValueOrDefault(id, new());
+                    var divSubs = subs.Where(s => s.DivisionId == g.Key.divId).ToList();
+                    var submitted = divSubs.Count(s => s.Status is SubmissionStatus.Submitted
+                        or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                        or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                    return divSubs.Count > 0 ? (double) submitted / divSubs.Count * 100 : 0;
+                }).ToList();
+                var avgCompletion = rates.Any() ? Math.Round(rates.Average(), 2) : 0;
+
+                return new Dictionary<string, string?>
+                {
+                    { "Class", className },
+                    { "Division", divName },
+                    { "Subject", subjectName },
+                    { "HomeworkCount", hwCount.ToString() },
+                    { "TotalQuestionsTasks", "—" },    // not in data model
+                    { "AvgHomeworkPerWeek", avgPerWeek.ToString("F2") },
+                    { "AvgCompletionRate", $"{avgCompletion}%" },
+                    { "LoadStatus", ComputeLoadStatus(avgPerWeek, 3, 7) }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildAssignmentLoadAnalysisReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Class", Label = "Class" },
+            new() { Id = "Division", Label = "Division" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "AssignmentCount", Label = "Assignment Count" },
+            new() { Id = "TotalMarks", Label = "Total Marks" },
+            new() { Id = "AvgAssignmentsPerMonth", Label = "Average Assignments Per Month" },
+            new() { Id = "SubmissionRate", Label = "Submission Rate" },
+            new() { Id = "LoadStatus", Label = "Load Status" }
+        };
+
+        var (assignments, subjects, standards, divisions, _, submissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!assignments.Any()) { payload.TotalCount = 0; return payload; }
+
+        double spanMonths;
+        if (request.Filters.FromDate.HasValue && request.Filters.ToDate.HasValue)
+        {
+            spanMonths = Math.Max(1, (request.Filters.ToDate.Value - request.Filters.FromDate.Value).TotalDays / 30.44);
+        }
+        else
+        {
+            var earliest = assignments.Min(a => a.CreationTime);
+            var latest = assignments.Max(a => a.CreationTime);
+            spanMonths = Math.Max(1, (latest - earliest).TotalDays / 30.44);
+        }
+
+        var submissionsByAssignment = submissions
+            .GroupBy(s => s.AssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var expanded = assignments.SelectMany(a =>
+            GetAssignmentSchedules(a).Select(s => (a, divId: s.DivisionId))).ToList();
+
+        var rows = expanded
+            .GroupBy(x => (x.a.StandardId, x.divId, x.a.SubjectId))
+            .OrderBy(g => standards.GetValueOrDefault(g.Key.StandardId, ""))
+            .ThenBy(g => divisions.GetValueOrDefault(g.Key.divId, ""))
+            .ThenBy(g => subjects.GetValueOrDefault(g.Key.SubjectId, ""))
+            .Select(g =>
+            {
+                var className = standards.GetValueOrDefault(g.Key.StandardId, "—");
+                var divName = divisions.GetValueOrDefault(g.Key.divId, "—");
+                var subjectName = subjects.GetValueOrDefault(g.Key.SubjectId, "—");
+                var aList = g.Select(x => x.a).Distinct().ToList();
+                var aIds = aList.Select(a => a.Id).ToHashSet();
+
+                var totalMarks = aList.Sum(a => (double) a.TotalMarks);
+                var avgPerMonth = Math.Round(aList.Count / spanMonths, 2);
+
+                var allSubs = aList.SelectMany(a =>
+                    submissionsByAssignment.GetValueOrDefault(a.Id, new())
+                    .Where(s => s.DivisionId == g.Key.divId)).ToList();
+                var submitted = allSubs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                var submissionRate = allSubs.Count > 0
+                    ? Math.Round((double) submitted / allSubs.Count * 100, 2) : 0;
+
+                return new Dictionary<string, string?>
+                {
+                    { "Class", className },
+                    { "Division", divName },
+                    { "Subject", subjectName },
+                    { "AssignmentCount", aList.Count.ToString() },
+                    { "TotalMarks", totalMarks.ToString("F0") },
+                    { "AvgAssignmentsPerMonth", avgPerMonth.ToString("F2") },
+                    { "SubmissionRate", $"{submissionRate}%" },
+                    { "LoadStatus", ComputeLoadStatus(avgPerMonth, 2, 4) }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildTeacherPerformanceInHomeworkEvaluationReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Teacher", Label = "Teacher" },
+            new() { Id = "HomeworkAssigned", Label = "Homework Assigned" },
+            new() { Id = "HomeworkEvaluated", Label = "Homework Evaluated" },
+            new() { Id = "PendingEvaluation", Label = "Pending Evaluation" },
+            new() { Id = "AvgEvaluationTime", Label = "Average Evaluation Time" },
+            new() { Id = "EvaluationCompletionPercent", Label = "Evaluation Completion %" }
+        };
+
+        var (homeworks, subjects, standards, divisions, teacherByUserId, submissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+
+        if (!homeworks.Any()) { payload.TotalCount = 0; return payload; }
+
+        // Group homeworks by CreatorId (teacher)
+        var hwByCreator = homeworks
+            .Where(h => h.CreatorId.HasValue)
+            .GroupBy(h => h.CreatorId!.Value)
+            .ToList();
+
+        var hwIds = homeworks.Select(h => h.Id).ToHashSet();
+        var submissionsByHw = submissions
+            .Where(s => s.HomeworkAssignmentId.HasValue && hwIds.Contains(s.HomeworkAssignmentId.Value))
+            .GroupBy(s => s.HomeworkAssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var rows = hwByCreator
+            .OrderBy(g => teacherByUserId.GetValueOrDefault(g.Key, ""))
+            .Select(g =>
+            {
+                var teacherName = teacherByUserId.GetValueOrDefault(g.Key, "—");
+                var hwAssigned = g.Count();
+                var allSubs = g.SelectMany(hw =>
+                    submissionsByHw.GetValueOrDefault(hw.Id, new())).ToList();
+
+                var evaluated = allSubs.Where(s => s.Status == SubmissionStatus.Reviewed
+                    && s.ReviewedBy.HasValue).ToList();
+                var pending = allSubs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.NeedsReview or SubmissionStatus.Late);
+
+                // Avg evaluation time = avg (ReviewedAt - SubmissionDate)
+                var evalTimes = evaluated
+                    .Where(s => s.ReviewedAt.HasValue && s.SubmissionDate.HasValue)
+                    .Select(s => (s.ReviewedAt!.Value - s.SubmissionDate!.Value).TotalHours)
+                    .ToList();
+                var avgEvalHours = evalTimes.Any() ? Math.Round(evalTimes.Average(), 1) : 0;
+                var avgEvalTimeStr = avgEvalHours < 24
+                    ? $"{avgEvalHours} hrs"
+                    : $"{Math.Round(avgEvalHours / 24, 1)} days";
+
+                var total = evaluated.Count + pending;
+                var completionPct = total > 0
+                    ? Math.Round((double) evaluated.Count / total * 100, 2) : 0;
+
+                return new Dictionary<string, string?>
+                {
+                    { "Teacher", teacherName },
+                    { "HomeworkAssigned", hwAssigned.ToString() },
+                    { "HomeworkEvaluated", evaluated.Count.ToString() },
+                    { "PendingEvaluation", pending.ToString() },
+                    { "AvgEvaluationTime", evalTimes.Any() ? avgEvalTimeStr : "—" },
+                    { "EvaluationCompletionPercent", $"{completionPct}%" }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildStudentPerformanceTrendReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Student", Label = "Student" },
+            new() { Id = "Subject", Label = "Subject" },
+            new() { Id = "HomeworkAverage", Label = "Homework Average" },
+            new() { Id = "AssignmentAverage", Label = "Assignment Average" },
+            new() { Id = "PreviousPeriodScore", Label = "Previous Period Score" },
+            new() { Id = "CurrentPeriodScore", Label = "Current Period Score" },
+            new() { Id = "GrowthPercent", Label = "Growth %" }
+        };
+
+        if (request.Filters.StudentIds?.Any() != true) { payload.TotalCount = 0; return payload; }
+
+        // Load both homework and assignment data
+        var (homeworks, hwSubjects, hwStandards, hwDivisions, _, hwSubmissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+        var (assignments, aSubjects, _, _, _, aSubmissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        var subjects = hwSubjects.Keys.Union(aSubjects.Keys)
+            .ToDictionary(id => id, id => hwSubjects.ContainsKey(id) ? hwSubjects[id] : aSubjects[id]);
+
+        var studentIds = request.Filters.StudentIds!;
+        var studentQ = await studentRepository.GetQueryableAsync();
+        var studentList = await asyncExecuter.ToListAsync(studentQ.Where(s => studentIds.Contains(s.Id)));
+        var studentMap = studentList.ToDictionary(s => s.Id);
+
+        // Split period in half if dates provided
+        DateTime? midPoint = null;
+        if (request.Filters.FromDate.HasValue && request.Filters.ToDate.HasValue)
+            midPoint = request.Filters.FromDate.Value + (request.Filters.ToDate.Value - request.Filters.FromDate.Value) / 2;
+
+        var hwSubjectMap = homeworks.ToDictionary(h => h.Id, h => h.SubjectId);
+        var aSubjectMap = assignments.ToDictionary(a => a.Id, a => a.SubjectId);
+
+        // Combine all subjectIds from both sources
+        var allSubjectIds = hwSubmissions.Where(s => s.HomeworkAssignmentId.HasValue && hwSubjectMap.ContainsKey(s.HomeworkAssignmentId.Value))
+            .Select(s => hwSubjectMap[s.HomeworkAssignmentId!.Value])
+            .Union(aSubmissions.Where(s => s.AssignmentId.HasValue && aSubjectMap.ContainsKey(s.AssignmentId.Value))
+            .Select(s => aSubjectMap[s.AssignmentId!.Value]))
+            .Distinct().ToList();
+
+        var rows = new List<Dictionary<string, string?>>();
+        foreach (var studentId in studentIds)
+        {
+            if (!studentMap.TryGetValue(studentId, out var student)) continue;
+            var studentName = BuildStudentName(student);
+
+            foreach (var subjectId in allSubjectIds)
+            {
+                var subjectName = subjects.GetValueOrDefault(subjectId, "—");
+
+                // Homework average (completion %) for this student+subject
+                var hwSubs = hwSubmissions.Where(s => s.StudentId == studentId
+                    && s.HomeworkAssignmentId.HasValue
+                    && hwSubjectMap.GetValueOrDefault(s.HomeworkAssignmentId.Value) == subjectId).ToList();
+                var hwSubmitted = hwSubs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                var hwAvg = hwSubs.Count > 0 ? Math.Round((double) hwSubmitted / hwSubs.Count * 100, 2) : 0;
+
+                // Assignment average (marks %) for this student+subject
+                var aSubs = aSubmissions.Where(s => s.StudentId == studentId
+                    && s.AssignmentId.HasValue
+                    && aSubjectMap.GetValueOrDefault(s.AssignmentId.Value) == subjectId
+                    && s.Marks.HasValue).ToList();
+                var aScores = aSubs.Select(s =>
+                {
+                    var aEntity = assignments.FirstOrDefault(a => a.Id == s.AssignmentId);
+                    var total = (double) (s.TotalMarks ?? aEntity?.TotalMarks ?? 0);
+                    return total > 0 ? (double) s.Marks!.Value / total * 100 : 0;
+                }).ToList();
+                var aAvg = aScores.Any() ? Math.Round(aScores.Average(), 2) : 0;
+
+                if (hwSubs.Count == 0 && aSubs.Count == 0) continue;
+
+                // Period split scores (using assignment marks as score proxy)
+                string prevScore = "—", currScore = "—", growth = "—";
+                if (midPoint.HasValue && aSubs.Any())
+                {
+                    var prevSubs = aSubs.Where(s => s.SubmissionDate.HasValue
+                        && s.SubmissionDate.Value.UtcDateTime < midPoint.Value).ToList();
+                    var currSubs = aSubs.Where(s => s.SubmissionDate.HasValue
+                        && s.SubmissionDate.Value.UtcDateTime >= midPoint.Value).ToList();
+
+                    double CalcAvgScore(List<StudentSubmissionEntity> list)
+                    {
+                        var scores = list.Select(s =>
+                        {
+                            var aEntity = assignments.FirstOrDefault(a => a.Id == s.AssignmentId);
+                            var total = (double) (s.TotalMarks ?? aEntity?.TotalMarks ?? 0);
+                            return total > 0 ? (double) s.Marks!.Value / total * 100 : 0;
+                        }).ToList();
+                        return scores.Any() ? Math.Round(scores.Average(), 2) : 0;
+                    }
+
+                    var prev = CalcAvgScore(prevSubs);
+                    var curr = CalcAvgScore(currSubs);
+                    prevScore = prevSubs.Any() ? $"{prev}%" : "—";
+                    currScore = currSubs.Any() ? $"{curr}%" : "—";
+                    if (prevSubs.Any() && currSubs.Any() && prev > 0)
+                        growth = $"{Math.Round((curr - prev) / prev * 100, 2)}%";
+                }
+
+                rows.Add(new Dictionary<string, string?>
+                {
+                    { "Student", studentName },
+                    { "Subject", subjectName },
+                    { "HomeworkAverage", hwSubs.Count > 0 ? $"{hwAvg}%" : "—" },
+                    { "AssignmentAverage", aScores.Any() ? $"{aAvg}%" : "—" },
+                    { "PreviousPeriodScore", prevScore },
+                    { "CurrentPeriodScore", currScore },
+                    { "GrowthPercent", growth }
+                });
+            }
+        }
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildClasswiseOverallHomeworkAssignmentReportAsync(
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "Class", Label = "Class" },
+            new() { Id = "Division", Label = "Division" },
+            new() { Id = "TotalHomework", Label = "Total Homework" },
+            new() { Id = "TotalAssignments", Label = "Total Assignments" },
+            new() { Id = "HomeworkCompletionPercent", Label = "Homework Completion %" },
+            new() { Id = "AssignmentSubmissionPercent", Label = "Assignment Submission %" },
+            new() { Id = "AverageMarks", Label = "Average Marks" },
+            new() { Id = "OverallAcademicScore", Label = "Overall Academic Score" }
+        };
+
+        var (homeworks, hwSubjects, standards, divisions, _, hwSubmissions) =
+            await LoadHomeworkContextAsync(request.Filters);
+        var (assignments, _, _, _, _, aSubmissions) =
+            await LoadAssignmentContextAsync(request.Filters);
+
+        if (!homeworks.Any() && !assignments.Any()) { payload.TotalCount = 0; return payload; }
+
+        var hwSubmissionsByHw = hwSubmissions
+            .GroupBy(s => s.HomeworkAssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        var aSubmissionsByA = aSubmissions
+            .GroupBy(s => s.AssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // Collect all (standardId, divisionId) combinations
+        var hwPairs = homeworks.SelectMany(h => GetHomeworkSchedules(h).Select(s => (h.StandardId, divId: s.DivisionId, hwId: h.Id)));
+        var aPairs = assignments.SelectMany(a => GetAssignmentSchedules(a).Select(s => (a.StandardId, divId: s.DivisionId, aId: a.Id)));
+
+        var allPairs = hwPairs.Select(x => (x.StandardId, x.divId))
+            .Union(aPairs.Select(x => (x.StandardId, x.divId)))
+            .Distinct().ToList();
+
+        var rows = allPairs
+            .OrderBy(p => standards.GetValueOrDefault(p.StandardId, ""))
+            .ThenBy(p => divisions.GetValueOrDefault(p.divId, ""))
+            .Select(p =>
+            {
+                var className = standards.GetValueOrDefault(p.StandardId, "—");
+                var divName = divisions.GetValueOrDefault(p.divId, "—");
+
+                var divHwIds = homeworks
+                    .Where(h => h.StandardId == p.StandardId
+                        && GetHomeworkSchedules(h).Any(s => s.DivisionId == p.divId))
+                    .Select(h => h.Id).ToHashSet();
+                var divAIds = assignments
+                    .Where(a => a.StandardId == p.StandardId
+                        && GetAssignmentSchedules(a).Any(s => s.DivisionId == p.divId))
+                    .Select(a => a.Id).ToHashSet();
+
+                // Homework completion
+                var hwSubs = divHwIds.SelectMany(id => hwSubmissionsByHw.GetValueOrDefault(id, new())
+                    .Where(s => s.DivisionId == p.divId)).ToList();
+                var hwSubmitted = hwSubs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                var hwCompletion = hwSubs.Count > 0
+                    ? Math.Round((double) hwSubmitted / hwSubs.Count * 100, 2) : 0;
+
+                // Assignment submission
+                var aSubs = divAIds.SelectMany(id => aSubmissionsByA.GetValueOrDefault(id, new())
+                    .Where(s => s.DivisionId == p.divId)).ToList();
+                var aSubmitted = aSubs.Count(s => s.Status is SubmissionStatus.Submitted
+                    or SubmissionStatus.Late or SubmissionStatus.Reviewed
+                    or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
+                var aSubmission = aSubs.Count > 0
+                    ? Math.Round((double) aSubmitted / aSubs.Count * 100, 2) : 0;
+
+                // Average marks (assignment marks %)
+                var markedSubs = aSubs.Where(s => s.Marks.HasValue).ToList();
+                var avgMarks = markedSubs.Any()
+                    ? Math.Round(markedSubs.Select(s =>
+                    {
+                        var a = assignments.FirstOrDefault(a => a.Id == s.AssignmentId);
+                        var total = (double) (s.TotalMarks ?? a?.TotalMarks ?? 0);
+                        return total > 0 ? (double) s.Marks!.Value / total * 100 : 0;
+                    }).Average(), 2)
+                    : 0;
+
+                var overallScore = Math.Round((hwCompletion + aSubmission + avgMarks) / 3, 2);
+
+                return new Dictionary<string, string?>
+                {
+                    { "Class", className },
+                    { "Division", divName },
+                    { "TotalHomework", divHwIds.Count.ToString() },
+                    { "TotalAssignments", divAIds.Count.ToString() },
+                    { "HomeworkCompletionPercent", $"{hwCompletion}%" },
+                    { "AssignmentSubmissionPercent", $"{aSubmission}%" },
+                    { "AverageMarks", markedSubs.Any() ? $"{avgMarks}%" : "—" },
+                    { "OverallAcademicScore", $"{overallScore}%" }
+                };
+            }).ToList();
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
         return payload;
     }
 }

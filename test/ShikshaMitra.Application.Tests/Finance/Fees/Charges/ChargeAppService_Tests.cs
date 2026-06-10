@@ -54,6 +54,7 @@ public abstract class ChargeAppService_Tests<TStartupModule> : ShikshaMitraAppli
 		var academicYearId = Guid.NewGuid();
 		var request = new CreateChargeRequest
 		{
+			ChargeName = "Test Charge",
 			StudentId = Guid.NewGuid(),
 			ChargeCategoryId = Guid.NewGuid(),
 			PurposeDescription = "Test charge description",

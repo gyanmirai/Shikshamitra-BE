@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using FluentValidation;
 using ShikshaMitra.Finance.Collections;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.FeeAdjustment;
 
 namespace ShikshaMitra.Finance.FeeAdjustment.Dtos;
@@ -39,11 +40,13 @@ public class CreateFeeAdjustmentDto
 
 public class UpdateFeeAdjustmentDto : CreateFeeAdjustmentDto;
 
-public class GetFeeAdjustmentApplicationsInput
+public class GetFeeAdjustmentApplicationsInput : IFinanceClassDivisionFilter
 {
     public Guid BoardId { get; set; }
     public Guid EducationMediumId { get; set; }
     public Guid AcademicYearId { get; set; }
+    public Guid? StandardId { get; set; }
+    public Guid? DivisionId { get; set; }
     public FeeAdjustmentStatus? Status { get; set; }
 
     /// <summary>When true, returns PartiallyApplied and Applied items (approved tab).</summary>

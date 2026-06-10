@@ -393,62 +393,6 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     }
 
     [Fact]
-    [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Collect_Fee_With_OnlinePaymentGateway_Returns_201()
-    {
-        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
-        var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
-        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, amount: 600d);
-
-        var input = new CollectFeeInput
-        {
-            StudentId = studentId,
-            AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
-            PaymentConfirmed = true,
-            DueFeePayments = new List<DueFeePaymentDto>
-            {
-                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 600d },
-            },
-            Payments = new List<FeePaymentDto>
-            {
-                new() { PaymentMethod = PaymentMethodEnum.OnlinePaymentGateway, Amount = 600d, Details = new() { { "transactionId", "PG123" } } },
-            },
-        };
-
-        var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
-
-        response.StatusCode.ShouldBe(HttpStatusCode.Created);
-    }
-
-    [Fact]
-    [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Collect_Fee_With_WalletPrepaidCard_Returns_201()
-    {
-        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
-        var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
-        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, amount: 400d);
-
-        var input = new CollectFeeInput
-        {
-            StudentId = studentId,
-            AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
-            PaymentConfirmed = true,
-            DueFeePayments = new List<DueFeePaymentDto>
-            {
-                new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 400d },
-            },
-            Payments = new List<FeePaymentDto>
-            {
-                new() { PaymentMethod = PaymentMethodEnum.WalletPrepaidCard, Amount = 400d, Details = new() { { "transactionId", "W123" } } },
-            },
-        };
-
-        var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
-
-        response.StatusCode.ShouldBe(HttpStatusCode.Created);
-    }
-
-    [Fact]
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Collect_Fee_With_Cheque_Without_Details_Returns_400()
     {

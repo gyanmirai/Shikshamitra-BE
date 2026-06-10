@@ -1,45 +1,31 @@
-using System;
-using System.ComponentModel.DataAnnotations;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Accounts.Reconciliation;
 using ShikshaMitra.Finance.Accounts.Reconciliation.Dtos;
+using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Receipts;
+using System.ComponentModel.DataAnnotations;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Finance.Accounts;
 
-/// <summary>
-/// HTTP API for the Finance Reconciliation inbox.
-/// All state-mutating actions use PATCH (HR Leave pattern).
-/// </summary>
 [Area("app")]
 [RemoteService(Name = "Default")]
 [Route("api/v1/finance/reconciliations")]
 [Authorize]
-public class ReconciliationController : AbpControllerBase
+public class ReconciliationController(
+	IReconciliationAppService appService
+) : AbpControllerBase
 {
-    private readonly IReconciliationAppService _appService;
-
-    public ReconciliationController(IReconciliationAppService appService)
-    {
-        _appService = appService;
-    }
-
-    /// <summary>
-    /// Returns the paged reconciliation inbox, plus badge counts for all 7 payment tabs.
-    /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(ReconciliationListResponse), StatusCodes.Status200OK)]
     public virtual async Task<ReconciliationListResponse> GetListAsync(
         [FromQuery, Required] Guid academicYearId,
         [FromQuery] int? month,
         [FromQuery] int? year,
-        [FromQuery] string? paymentMethod,
+        [FromQuery] PaymentMethodEnum? paymentMethod,
         [FromQuery] FeeReceiptVerificationStatus? status,
         [FromQuery] string? search,
         [FromQuery, Range(1, int.MaxValue)] int page = 1,
@@ -57,13 +43,9 @@ public class ReconciliationController : AbpControllerBase
             Page               = page,
             PageSize           = pageSize,
         };
-        return await _appService.GetListAsync(input, cancellationToken);
+        return await appService.GetListAsync(input, cancellationToken);
     }
 
-    /// <summary>
-    /// Returns only the badge counts for all 7 payment-method tabs.
-    /// Lightweight endpoint for refreshing counts without re-fetching list rows.
-    /// </summary>
     [HttpGet("tab-counts")]
     [ProducesResponseType(typeof(ReconciliationTabCountsDto), StatusCodes.Status200OK)]
     public virtual async Task<ReconciliationTabCountsDto> GetTabCountsAsync(
@@ -72,13 +54,9 @@ public class ReconciliationController : AbpControllerBase
         [FromQuery] int? year,
         CancellationToken cancellationToken = default)
     {
-        return await _appService.GetTabCountsAsync(academicYearId, month, year, cancellationToken);
+        return await appService.GetTabCountsAsync(academicYearId, month, year, cancellationToken);
     }
 
-    /// <summary>
-    /// Approves a pending provisional fee receipt.
-    /// Creates a final FIN-* receipt and marks the provisional as Verified.
-    /// </summary>
     [HttpPatch("{id:guid}/approve")]
     [ProducesResponseType(typeof(ReconciliationActionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -88,13 +66,9 @@ public class ReconciliationController : AbpControllerBase
         [FromBody] ApproveReconciliationInput? body,
         CancellationToken cancellationToken = default)
     {
-        return await _appService.ApproveAsync(id, body ?? new ApproveReconciliationInput(), cancellationToken);
+        return await appService.ApproveAsync(id, body ?? new ApproveReconciliationInput(), cancellationToken);
     }
 
-    /// <summary>
-    /// Rejects a pending provisional fee receipt with mandatory remarks.
-    /// Reverses all DueFee allocations and marks the collection transaction as Reversed.
-    /// </summary>
     [HttpPatch("{id:guid}/reject")]
     [ProducesResponseType(typeof(ReconciliationActionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -104,6 +78,6 @@ public class ReconciliationController : AbpControllerBase
         [FromBody, Required] RejectReconciliationInput body,
         CancellationToken cancellationToken = default)
     {
-        return await _appService.RejectAsync(id, body, cancellationToken);
+        return await appService.RejectAsync(id, body, cancellationToken);
     }
 }

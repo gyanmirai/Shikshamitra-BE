@@ -6,9 +6,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Charges;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
-using ShikshaMitra.Finance.Fees.Settings;
+using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -18,78 +19,92 @@ using Volo.Abp.Users;
 
 namespace ShikshaMitra.Finance.Fees.Charges;
 
-/// <summary>
-/// Handles student charge CRUD, approval, and rejection.
-/// Business rules (scope derivation, maker-checker) are enforced by
-/// <see cref="ChargeManager"/> and the <see cref="Charge"/> aggregate root.
-/// </summary>
 [RemoteService(false)]
 [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.View)]
 public class ChargeAppService(
-	IChargeRepository chargeRepository,
+	IChargeRequestRepository chargeRequestRepository,
+	IRepository<Charge, Guid> chargeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<IdentityUser, Guid> userRepository,
 	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
+	IRepository<Student, Guid> studentRepository,
+	FinanceScopeAccessService financeScopeAccessService,
 	ICurrentUser currentUser,
-	ChargeManager chargeManager,
+	ChargeRequestManager chargeRequestManager,
+	FinanceAuditWriter financeAuditWriter,
 	ILogger<ChargeAppService> logger)
 	: ApplicationService, IChargeAppService
 {
 	private const int MaxPageSize = 100;
 
-	// ── Create ──────────────────────────────────────────────
-
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Add)]
 	public async Task<ChargeResponse> CreateAsync(Guid academicYearId, CreateChargeRequest input)
 	{
-		logger.LogDebug(
-			"[ChargeAppService] Creating charge: AcademicYearId={AcademicYearId}, StudentId={StudentId}, CategoryId={CategoryId}, Amount={Amount}",
-			academicYearId, input.StudentId, input.ChargeCategoryId, input.Amount);
-
 		await EnsureAcademicYearExistsAsync(academicYearId);
 
-		var charge = await chargeManager.CreateAsync(
-			tenantId: CurrentTenant.Id,
-			academicYearId: academicYearId,
-			studentId: input.StudentId,
-			chargeCategoryId: input.ChargeCategoryId,
-			purposeDescription: input.PurposeDescription,
-			amount: input.Amount,
-			dueDate: input.DueDate,
-			priority: (ChargePriority)input.Priority,
-			requestorId: currentUser.Id!.Value,
-			additionalNotes: input.AdditionalNotes);
+		var audienceDto = await ResolveAudienceDtoAsync(input);
+		var audience = ChargeAudienceMapper.ToDomain(audienceDto);
+		var snapshot = ChargeAudienceMapper.SerializeSnapshot(audienceDto);
 
-		logger.LogDebug(
-			"[ChargeAppService] Charge created: ChargeId={ChargeId}, Status={Status}",
-			charge.Id, charge.Status);
+		var (request, lines) = await chargeRequestManager.CreateAsync(
+			CurrentTenant.Id,
+			academicYearId,
+			input.ChargeName,
+			input.ChargeCategoryId,
+			input.PurposeDescription,
+			input.Amount,
+			input.DueDate,
+			(ChargePriority)input.Priority,
+			audience,
+			snapshot,
+			currentUser.Id!.Value,
+			input.AdditionalNotes);
 
-		var detail = await GetChargeDetailsOrThrowAsync(charge.Id);
-		return BuildChargeResponse(detail, message: charge.Status == ChargeStatus.Pending
-			? "Charge created successfully and pending approval"
-			: "Charge created and approved successfully");
+		await CurrentUnitOfWork!.SaveChangesAsync();
+
+		await financeAuditWriter.WriteAsync(
+			academicYearId,
+			FinanceAuditEntityTypes.FeeCharge,
+			request.Id,
+			request.ChargeName,
+			FinanceAuditActions.AddCharge,
+			$"Charge request created for {lines.Count} student(s).",
+			context: new { request.Id, StudentCount = lines.Count });
+
+		logger.LogInformation("Charge request created: {ChargeRequestId}, Lines={Count}", request.Id, lines.Count);
+
+		return await BuildChargeResponseAsync(request, lines.Count,
+			lines.All(l => l.Status == ChargeStatus.Pending)
+				? "Charge created successfully and pending approval"
+				: "Charge created and approved successfully");
 	}
-
-	// ── Read ─────────────────────────────────────────────────
 
 	public async Task<ChargeListResponse> GetAllAsync(Guid academicYearId, GetChargesRequest input)
 	{
+		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(
+				academicYearId,
+				input.BoardId,
+				input.EducationMediumId,
+				null,
+				null))
+		{
+			return new ChargeListResponse
+			{
+				Success = true,
+				Items = [],
+				TotalCount = 0,
+				CurrentPage = input.Page,
+				PageSize = input.PageSize,
+				TotalPages = 0,
+				Message = "Charges retrieved successfully"
+			};
+		}
+
 		var pageSize = Math.Min(input.PageSize, MaxPageSize);
-
-		var filteredQuery = await chargeRepository.GetChargesQueryAsync(
-			academicYearId,
-			input.Status,
-			input.BoardId,
-			input.EducationMediumId,
-			input.Search);
-		var statusCounts = await GetStatusCountsAsync(academicYearId);
-
-		var totalCount = await AsyncExecuter.CountAsync(filteredQuery);
-
-		var items = await AsyncExecuter.ToListAsync(
-			filteredQuery
-				.Skip((input.Page - 1) * pageSize)
-				.Take(pageSize));
+		var (items, totalCount) = await chargeRequestRepository.GetChargeRequestsPagedAsync(
+			academicYearId, input.Status, input.Page, pageSize,
+			input.BoardId, input.EducationMediumId, input.Search);
+		var statusCounts = await chargeRequestRepository.GetStatusCountsAsync(academicYearId);
 
 		return new ChargeListResponse
 		{
@@ -106,314 +121,464 @@ public class ChargeAppService(
 		};
 	}
 
+	public async Task<ChargeLineListResponse> GetLinesAsync(Guid academicYearId, GetChargeLinesRequest input)
+	{
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+
+		var pageSize = Math.Min(input.PageSize, MaxPageSize);
+		var query = (await chargeRequestRepository.GetChargeLinesQueryAsync(
+			academicYearId, input.Status, input.BoardId, input.EducationMediumId))
+			.Where(x => scopedStudentIds.Contains(x.Student.Id));
+
+		var totalCount = await AsyncExecuter.CountAsync(query);
+		var lines = await AsyncExecuter.ToListAsync(
+			query
+				.OrderByDescending(x => x.Charge.AppliedOn)
+				.Skip((input.Page - 1) * pageSize)
+				.Take(pageSize));
+
+		var categoryIds = lines.Select(l => l.Charge.ChargeCategoryId).Distinct().ToList();
+		var categories = categoryIds.Count > 0
+			? await chargeCategoryRepository.GetListAsync(c => categoryIds.Contains(c.Id))
+			: [];
+		var categoryMap = categories.ToDictionary(c => c.Id);
+
+		return new ChargeLineListResponse
+		{
+			Success = true,
+			Items = lines.Select(line =>
+			{
+				categoryMap.TryGetValue(line.Charge.ChargeCategoryId, out var category);
+				return MapToLineListItem(line, category);
+			}).ToList(),
+			TotalCount = totalCount,
+			Message = "Charge lines retrieved successfully"
+		};
+	}
+
 	public async Task<ChargeDetailResponse> GetByIdAsync(Guid chargeId)
 	{
-		var detail = await GetChargeDetailsOrThrowAsync(chargeId);
+		var detail = await GetChargeRequestDetailsOrThrowAsync(chargeId);
+		var category = detail.Category;
+		var audience = ChargeAudienceMapper.DeserializeSnapshot(detail.Request.AudienceSnapshot);
 
-		IdentityUser? approver = null;
-		if (detail.Charge.ApprovedBy.HasValue)
-			approver = await userRepository.FindAsync(detail.Charge.ApprovedBy.Value);
+		IdentityUser? lastActor = null;
+		var lastLine = detail.Lines
+			.Select(l => l.Charge)
+			.Where(c => c.ApprovedBy.HasValue)
+			.OrderByDescending(c => c.ApprovedOn)
+			.FirstOrDefault();
+
+		if (lastLine?.ApprovedBy is Guid actorId)
+		{
+			lastActor = await userRepository.FindAsync(actorId);
+		}
 
 		return new ChargeDetailResponse
 		{
 			Success = true,
-			Data = MapToDetailData(detail, approver),
+			Data = new ChargeDetailData
+			{
+				ChargeId = detail.Request.Id,
+				ChargeName = detail.Request.ChargeName,
+				ChargeCategoryId = detail.Request.ChargeCategoryId,
+				CategoryName = category.Name,
+				PurposeDescription = detail.Request.PurposeDescription,
+				Amount = detail.Request.Amount,
+				DueDate = detail.Request.DueDate,
+				AppliedOn = detail.Request.AppliedOn,
+				Priority = (int)detail.Request.Priority,
+				Status = (int)DeriveRequestStatus(detail.Lines.Select(l => l.Charge.Status).ToList()),
+				AdditionalNotes = detail.Request.AdditionalNotes,
+				Audience = audience,
+				AppliedCount = detail.Lines.Count(l => l.Charge.Status == ChargeStatus.Approved),
+				IsApprovalRequired = category.IsApprovalRequired,
+				Students = detail.Lines.Select(MapToStudentLine).ToList(),
+				Requestor = new RequestorInfo
+				{
+					RequestorId = detail.Requestor.Id,
+					RequestorName = detail.Requestor.Name ?? detail.Requestor.UserName ?? string.Empty,
+					RequestorRole = "User",
+					RequestedOn = detail.Request.AppliedOn
+				},
+				ApprovalDetails = new ApprovalDetails
+				{
+					ApprovedBy = lastLine?.ApprovedBy,
+					ApprovedByName = lastActor?.Name ?? lastActor?.UserName,
+					ApprovedOn = lastLine?.ApprovedOn,
+					ApprovalNotes = lastLine?.ApprovalNotes
+				},
+				AcademicYearId = detail.Request.AcademicYearId,
+				AcademicYearName = detail.AcademicYear.Name
+			},
 			Message = "Charge details retrieved successfully"
 		};
 	}
 
-	// ── Update ───────────────────────────────────────────────
-
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Update)]
 	public async Task<ChargeResponse> UpdateAsync(Guid chargeId, UpdateChargeRequest input)
 	{
-		var charge = await GetChargeOrThrowAsync(chargeId);
+		var request = await GetChargeRequestOrThrowAsync(chargeId);
+		await EnsureAllLinesPendingOrThrowAsync(chargeId, forDelete: false);
 
-		charge.Update(
-			input.ChargeCategoryId,
-			input.PurposeDescription,
-			input.Amount,
-			input.DueDate,
-			input.Priority.HasValue ? (ChargePriority)input.Priority.Value : null,
-			input.AdditionalNotes);
+		if (input.Audience is not null)
+		{
+			var audience = ChargeAudienceMapper.ToDomain(input.Audience);
+			var snapshot = ChargeAudienceMapper.SerializeSnapshot(input.Audience);
+			await chargeRequestManager.SyncAudienceAsync(
+				request,
+				audience,
+				snapshot,
+				input.ChargeName,
+				input.ChargeCategoryId,
+				input.PurposeDescription,
+				input.Amount,
+				input.DueDate,
+				input.Priority.HasValue ? (ChargePriority)input.Priority.Value : null,
+				input.AdditionalNotes,
+				request.AcademicYearId);
+		}
+		else
+		{
+			request.Update(
+				input.ChargeName,
+				input.ChargeCategoryId,
+				input.PurposeDescription,
+				input.Amount,
+				input.DueDate,
+				input.Priority.HasValue ? (ChargePriority)input.Priority.Value : null,
+				input.AdditionalNotes);
 
-		// Re-evaluate approval status based on the effective category.
-		// This mirrors the create-flow logic in ChargeManager and ensures that
-		// switching to (or keeping) a category with IsApprovalRequired=false
-		// auto-approves the charge without requiring a manual approval step.
-		var category = await chargeCategoryRepository.FindAsync(charge.ChargeCategoryId);
-		if (category is not null && !category.IsApprovalRequired)
-			charge.AutoApprove();
+			var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == chargeId && c.Status == ChargeStatus.Pending);
+			var category = await chargeCategoryRepository.FindAsync(request.ChargeCategoryId);
+			foreach (var line in lines)
+			{
+				line.Update(
+					request.ChargeCategoryId,
+					request.PurposeDescription,
+					request.Amount,
+					request.DueDate,
+					request.Priority,
+					request.AdditionalNotes);
 
-		await chargeRepository.UpdateAsync(charge, autoSave: true);
+				if (category is not null && !category.IsApprovalRequired)
+				{
+					line.AutoApprove();
+				}
+			}
+		}
 
-		var detail = await GetChargeDetailsOrThrowAsync(chargeId);
-		return BuildChargeResponse(detail, message: charge.Status == ChargeStatus.Pending
-			? "Charge updated successfully"
-			: "Charge updated and approved successfully");
+		await chargeRequestRepository.UpdateAsync(request, autoSave: true);
+
+		await financeAuditWriter.WriteAsync(
+			request.AcademicYearId,
+			FinanceAuditEntityTypes.FeeCharge,
+			request.Id,
+			request.ChargeName,
+			FinanceAuditActions.Update,
+			"Charge request updated.");
+
+		var lineCount = await chargeRepository.CountAsync(c => c.ChargeRequestId == chargeId);
+		return await BuildChargeResponseAsync(request, lineCount, "Charge updated successfully");
 	}
-
-	// ── Approve / Reject ─────────────────────────────────────
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve)]
 	public async Task<ApprovalResponse> ApproveAsync(Guid chargeId, ApproveChargeRequest input)
 	{
-		var charge = await GetChargeOrThrowAsync(chargeId);
-		charge.Approve(currentUser.Id!.Value, input.ApprovalNotes);
-		await chargeRepository.UpdateAsync(charge);
+		var request = await GetChargeRequestOrThrowAsync(chargeId);
+		var (processed, remaining) = await chargeRequestManager.ApproveLinesAsync(
+			request, input.StudentIds, currentUser.Id!.Value, input.ApprovalNotes);
+
+		await CurrentUnitOfWork!.SaveChangesAsync();
 
 		var approver = await userRepository.FindAsync(currentUser.Id!.Value);
 
-		logger.LogInformation(
-			"[ChargeAppService] Charge approved: ChargeId={ChargeId}, ApprovedBy={ApprovedBy}",
-			charge.Id, currentUser.Id.Value);
+		await financeAuditWriter.WriteAsync(
+			request.AcademicYearId,
+			FinanceAuditEntityTypes.FeeCharge,
+			request.Id,
+			request.ChargeName,
+			FinanceAuditActions.Approve,
+			$"Approved charge lines for {processed} student(s).",
+			reason: input.ApprovalNotes);
 
 		return new ApprovalResponse
 		{
 			Success = true,
 			Data = new ApprovalData
 			{
-				ChargeId = charge.Id,
+				ChargeId = request.Id,
 				Status = (int)ChargeStatus.Approved,
+				ProcessedCount = processed,
+				RemainingPendingCount = remaining,
 				ApprovedBy = currentUser.Id!.Value,
 				ApprovedByName = approver?.Name ?? approver?.UserName ?? currentUser.UserName ?? string.Empty,
-				ApprovedOn = charge.ApprovedOn!.Value,
+				ApprovedOn = DateTime.UtcNow,
 				ApprovalNotes = input.ApprovalNotes
 			},
-			Message = "Charge approved successfully"
+			Message = processed == 1
+				? "Charge approved successfully for 1 student"
+				: $"Charge approved successfully for {processed} students"
 		};
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject)]
 	public async Task<RejectionResponse> RejectAsync(Guid chargeId, RejectChargeRequest input)
 	{
-		var charge = await GetChargeOrThrowAsync(chargeId);
-		charge.Reject(currentUser.Id!.Value, input.RejectionReason);
-		await chargeRepository.UpdateAsync(charge, autoSave: true);
+		var request = await GetChargeRequestOrThrowAsync(chargeId);
+		var (processed, remaining) = await chargeRequestManager.RejectLinesAsync(
+			request, input.StudentIds, currentUser.Id!.Value, input.RejectionReason);
+
+		await CurrentUnitOfWork!.SaveChangesAsync();
 
 		var rejector = await userRepository.FindAsync(currentUser.Id!.Value);
 
-		logger.LogInformation(
-			"[ChargeAppService] Charge rejected: ChargeId={ChargeId}, RejectedBy={RejectedBy}",
-			charge.Id, currentUser.Id.Value);
+		await financeAuditWriter.WriteAsync(
+			request.AcademicYearId,
+			FinanceAuditEntityTypes.FeeCharge,
+			request.Id,
+			request.ChargeName,
+			FinanceAuditActions.Reject,
+			$"Rejected charge lines for {processed} student(s).",
+			reason: input.RejectionReason);
 
 		return new RejectionResponse
 		{
 			Success = true,
 			Data = new RejectionData
 			{
-				ChargeId = charge.Id,
+				ChargeId = request.Id,
 				Status = (int)ChargeStatus.Rejected,
+				ProcessedCount = processed,
+				RemainingPendingCount = remaining,
 				RejectedBy = currentUser.Id!.Value,
 				RejectedByName = rejector?.Name ?? rejector?.UserName ?? currentUser.UserName ?? string.Empty,
-				RejectedOn = charge.ApprovedOn!.Value,
+				RejectedOn = DateTime.UtcNow,
 				RejectionReason = input.RejectionReason
 			},
-			Message = "Charge rejected successfully"
+			Message = processed == 1
+				? "Charge rejected successfully for 1 student"
+				: $"Charge rejected successfully for {processed} students"
 		};
 	}
-
-	// ── Delete ───────────────────────────────────────────────
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Delete)]
 	public async Task DeleteAsync(Guid chargeId)
 	{
-		var charge = await GetChargeOrThrowAsync(chargeId);
-		charge.ValidateCanDelete();
-		await chargeRepository.DeleteAsync(charge, autoSave: true);
+		var request = await GetChargeRequestOrThrowAsync(chargeId);
+		await EnsureAllLinesPendingOrThrowAsync(chargeId, forDelete: true);
+
+		var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == chargeId);
+		foreach (var line in lines)
+		{
+			line.ValidateCanDelete();
+			await chargeRepository.DeleteAsync(line, autoSave: false);
+		}
+
+		await chargeRequestRepository.DeleteAsync(request, autoSave: true);
+
+		await financeAuditWriter.WriteAsync(
+			request.AcademicYearId,
+			FinanceAuditEntityTypes.FeeCharge,
+			request.Id,
+			request.ChargeName,
+			FinanceAuditActions.Delete,
+			"Charge request deleted.");
 	}
 
-	// ── Private guards ───────────────────────────────────────
-
-	/// <summary>Returns the charge or throws <see cref="BusinessException"/> when not found.</summary>
-	private async Task<Charge> GetChargeOrThrowAsync(Guid chargeId)
+	private async Task<ChargeAudienceDto> ResolveAudienceDtoAsync(CreateChargeRequest input)
 	{
-		return await chargeRepository.FindAsync(chargeId)
-			?? throw new BusinessException(FinanceChargeErrorCodes.ChargeNotFound)
-				.WithData("ChargeId", chargeId);
+		if (input.Audience is not null)
+		{
+			return input.Audience;
+		}
+
+		if (!input.StudentId.HasValue)
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.EmptyChargeAudience);
+		}
+
+		var student = await studentRepository.FindAsync(input.StudentId.Value)
+			?? throw new BusinessException(FinanceChargeErrorCodes.StudentNotFound)
+				.WithData("StudentId", input.StudentId.Value);
+
+		return ChargeAudienceMapper.BuildLegacyAudience(student, input.StudentId.Value);
 	}
 
-	/// <summary>Returns the charge with all joined details or throws when not found.</summary>
-	private async Task<ChargeJoinResult> GetChargeDetailsOrThrowAsync(Guid chargeId)
+	private async Task<ChargeResponse> BuildChargeResponseAsync(ChargeRequest request, int studentCount, string message)
 	{
-		return await chargeRepository.GetChargeWithDetailsAsync(chargeId)
-			?? throw new BusinessException(FinanceChargeErrorCodes.ChargeNotFound)
-				.WithData("ChargeId", chargeId);
-	}
+		var category = await chargeCategoryRepository.GetAsync(request.ChargeCategoryId);
+		var requestor = await userRepository.GetAsync(request.RequestorId);
+		var academicYear = await academicYearRepository.GetAsync(request.AcademicYearId);
+		var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == request.Id);
+		var status = DeriveRequestStatus(lines.Select(l => l.Status).ToList());
 
-	private async Task EnsureAcademicYearExistsAsync(Guid academicYearId)
-	{
-		var exists = await academicYearRepository.FindAsync(academicYearId);
-		if (exists is null)
-			throw new BusinessException(FinanceChargeErrorCodes.AcademicYearNotFound)
-				.WithData("AcademicYearId", academicYearId);
-	}
-
-	// ── Query building ───────────────────────────────────────
-
-	private static IQueryable<ChargeJoinResult> ApplySorting(IQueryable<ChargeJoinResult> query, string? sortBy, string? sortOrder)
-	{
-		// Sorting is deferred to a future implementation with dynamic LINQ or
-		// explicit switch on allow-listed column names. Default order (AppliedOn DESC)
-		// is provided by the DB index on the charge table.
-		return query;
-	}
-
-	private async Task<StatusCounts> GetStatusCountsAsync(Guid academicYearId)
-	{
-		var charges = await chargeRepository.GetQueryableAsync();
-		var counts = await AsyncExecuter.ToListAsync(
-			charges
-				.Where(c => c.AcademicYearId == academicYearId)
-				.GroupBy(c => c.Status)
-				.Select(g => new { Status = g.Key, Count = g.Count() }));
-
-		return new StatusCounts(
-			Pending: counts.FirstOrDefault(x => x.Status == ChargeStatus.Pending)?.Count ?? 0,
-			Approved: counts.FirstOrDefault(x => x.Status == ChargeStatus.Approved)?.Count ?? 0,
-			Rejected: counts.FirstOrDefault(x => x.Status == ChargeStatus.Rejected)?.Count ?? 0);
-	}
-
-	// ── Mapping helpers ──────────────────────────────────────
-
-	private static ChargeResponse BuildChargeResponse(ChargeJoinResult r, string message)
-	{
 		return new ChargeResponse
 		{
 			Success = true,
-			Data = MapToChargeData(r),
+			Data = new ChargeData
+			{
+				ChargeId = request.Id,
+				ChargeName = request.ChargeName,
+				ResolvedStudentCount = studentCount,
+				ChargeCategoryId = request.ChargeCategoryId,
+				CategoryName = category.Name,
+				PurposeDescription = request.PurposeDescription,
+				Amount = request.Amount,
+				DueDate = request.DueDate,
+				AppliedOn = request.AppliedOn,
+				Priority = (int)request.Priority,
+				Status = (int)status,
+				BoardId = request.BoardId,
+				EducationMediumId = request.EducationMediumId,
+				AdditionalNotes = request.AdditionalNotes,
+				RequestorId = request.RequestorId,
+				RequestorName = requestor.Name ?? requestor.UserName ?? string.Empty,
+				RequestedOn = request.AppliedOn,
+				AcademicYearId = request.AcademicYearId,
+				AcademicYearName = academicYear.Name
+			},
 			Message = message
 		};
 	}
 
-	private static ChargeData MapToChargeData(ChargeJoinResult r)
+	private static ChargeListItem MapToListItem(ChargeRequestJoinResult r)
 	{
-		return new ChargeData
-		{
-			ChargeId = r.Charge.Id,
-			ChargeCategoryId = r.Charge.ChargeCategoryId,
-			CategoryName = r.Category.Name,
-			PurposeDescription = r.Charge.PurposeDescription,
-			Amount = r.Charge.Amount,
-			DueDate = r.Charge.DueDate,
-			AppliedOn = r.Charge.AppliedOn,
-			Priority = (int)r.Charge.Priority,
-			Status = (int)r.Charge.Status,
-			BoardId = r.Board.Id,
-			BoardName = r.Board.Type.ToString(),
-			EducationMediumId = r.Medium.Id,
-			EducationMediumName = r.Medium.Name,
-			StandardId = r.Standard.Id,
-			StandardName = r.Standard.Name,
-			DivisionId = r.Division.Id,
-			DivisionName = r.Division.Name,
-			StudentId = r.Student.Id,
-			StudentName = $"{r.Student.FirstName} {r.Student.MiddleName} {r.Student.LastName}".Trim(),
-			GrNumber = r.Student.GrNo?.ToString() ?? "",
-			RollNumber = r.Student.RollNo?.ToString() ?? "",
-			AdditionalNotes = r.Charge.AdditionalNotes,
-			RequestorId = r.Requestor.Id,
-			RequestorName = r.Requestor.Name ?? r.Requestor.UserName,
-			RequestorRole = "User",
-			RequestedOn = r.Charge.AppliedOn,
-			AcademicYearId = r.Charge.AcademicYearId,
-			AcademicYearName = r.AcademicYear.Name,
-			CreatedAt = r.Charge.CreationTime,
-			UpdatedAt = r.Charge.LastModificationTime ?? r.Charge.CreationTime
-		};
-	}
+		var partiallyProcessed = r.PendingCount == 0 && r.ApprovedCount > 0 && r.RejectedCount > 0;
+		var status = r.PendingCount > 0
+			? ChargeStatus.Pending
+			: r.RejectedCount == r.StudentCount
+				? ChargeStatus.Rejected
+				: ChargeStatus.Approved;
 
-	private static ChargeDetailData MapToDetailData(ChargeJoinResult r, IdentityUser? approver)
-	{
-		return new ChargeDetailData
-		{
-			ChargeId = r.Charge.Id,
-			ChargeCategoryId = r.Charge.ChargeCategoryId,
-			CategoryName = r.Category.Name,
-			PurposeDescription = r.Charge.PurposeDescription,
-			Amount = r.Charge.Amount,
-			DueDate = r.Charge.DueDate,
-			AppliedOn = r.Charge.AppliedOn,
-			Priority = (int)r.Charge.Priority,
-			Status = (int)r.Charge.Status,
-			AdditionalNotes = r.Charge.AdditionalNotes,
-			AcademicYearId = r.Charge.AcademicYearId,
-			AcademicYearName = r.AcademicYear.Name,
-			CreatedAt = r.Charge.CreationTime,
-			UpdatedAt = r.Charge.LastModificationTime ?? r.Charge.CreationTime,
-			Student = MapToStudentInfo(r),
-			Requestor = new RequestorInfo
-			{
-				RequestorId = r.Requestor.Id,
-				RequestorName = r.Requestor.Name ?? r.Requestor.UserName,
-				RequestorRole = "User",
-				RequestedOn = r.Charge.AppliedOn
-			},
-			ApprovalDetails = new ApprovalDetails
-			{
-				ApprovedBy = r.Charge.ApprovedBy,
-				ApprovedByName = approver?.Name ?? approver?.UserName,
-				ApprovedOn = r.Charge.ApprovedOn,
-				ApprovalNotes = r.Charge.ApprovalNotes
-			}
-		};
-	}
-
-	private static StudentInfo MapToStudentInfo(ChargeJoinResult r)
-	{
-		return new StudentInfo
-		{
-			StudentId = r.Student.Id,
-			StudentName = $"{r.Student.FirstName} {r.Student.MiddleName} {r.Student.LastName}".Trim(),
-			GrNumber = r.Student.GrNo?.ToString() ?? "",
-			RollNumber = r.Student.RollNo?.ToString() ?? "",
-			BoardId = r.Board.Id,
-			BoardName = r.Board.Type.ToString(),
-			EducationMediumId = r.Medium.Id,
-			EducationMediumName = r.Medium.Name,
-			StandardId = r.Standard.Id,
-			StandardName = r.Standard.Name,
-			DivisionId = r.Division.Id,
-			DivisionName = r.Division.Name,
-			ContactNumber = r.Student.ContactDetail?.PrimaryContactNo,
-			EmailAddress = r.Student.ContactDetail?.Email
-		};
-	}
-
-	private static ChargeListItem MapToListItem(ChargeJoinResult r)
-	{
 		return new ChargeListItem
 		{
-			ChargeId = r.Charge.Id,
-			StudentId = r.Student.Id,
-			StudentName = $"{r.Student.FirstName} {r.Student.MiddleName} {r.Student.LastName}".Trim(),
-			GrNumber = r.Student.GrNo?.ToString() ?? "",
-			RollNumber = r.Student.RollNo?.ToString() ?? "",
-			BoardId = r.Board.Id,
-			BoardName = r.Board.Type.ToString(),
-			EducationMediumId = r.Medium.Id,
-			EducationMediumName = r.Medium.Name,
-			StandardId = r.Standard.Id,
-			StandardName = r.Standard.Name,
-			DivisionId = r.Division.Id,
-			DivisionName = r.Division.Name,
+			ChargeId = r.Request.Id,
+			ChargeName = r.Request.ChargeName,
+			BoardId = r.Request.BoardId,
+			EducationMediumId = r.Request.EducationMediumId,
 			ChargeCategoryId = r.Category.Id,
 			CategoryName = r.Category.Name,
-			Amount = r.Charge.Amount,
-			PurposeDescription = r.Charge.PurposeDescription,
-			DueDate = r.Charge.DueDate,
-			AppliedOn = r.Charge.AppliedOn,
-			Priority = (int)r.Charge.Priority,
-			Status = (int)r.Charge.Status,
+			Amount = r.Request.Amount,
+			PurposeDescription = r.Request.PurposeDescription,
+			DueDate = r.Request.DueDate,
+			AppliedOn = r.Request.AppliedOn,
+			Priority = (int)r.Request.Priority,
+			Status = (int)status,
+			StudentCount = r.StudentCount,
+			PendingCount = r.PendingCount,
+			ApprovedCount = r.ApprovedCount,
+			RejectedCount = r.RejectedCount,
+			PartiallyProcessed = partiallyProcessed,
 			RequestorId = r.Requestor.Id,
-			RequestorName = r.Requestor.Name ?? r.Requestor.UserName,
-			RequestorRole = "User",
-			RequestedOn = r.Charge.AppliedOn,
-			AdditionalNotes = r.Charge.AdditionalNotes
+			RequestorName = r.Requestor.Name ?? r.Requestor.UserName ?? string.Empty,
+			RequestedOn = r.Request.AppliedOn,
+			AdditionalNotes = r.Request.AdditionalNotes
 		};
 	}
 
-	// ── Private types ────────────────────────────────────────
+	private static ChargeLineListItem MapToLineListItem(ChargeLineJoinResult line, ChargeCategory? category)
+	{
+		var student = line.Student;
+		return new ChargeLineListItem
+		{
+			ChargeId = line.Charge.ChargeRequestId,
+			ChargeLineId = line.Charge.Id,
+			ChargeName = line.Charge.ChargeName,
+			StudentId = student.Id,
+			StudentName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
+			GrNumber = student.GrNo?.ToString() ?? string.Empty,
+			RollNumber = student.RollNo?.ToString() ?? string.Empty,
+			StandardName = line.Standard.Name,
+			DivisionName = line.Division.Name,
+			ChargeCategoryId = line.Charge.ChargeCategoryId,
+			CategoryName = category?.Name ?? string.Empty,
+			Amount = line.Charge.Amount,
+			PurposeDescription = line.Charge.PurposeDescription,
+			DueDate = line.Charge.DueDate,
+			Status = (int)line.Charge.Status
+		};
+	}
 
-	private record StatusCounts(int Pending, int Approved, int Rejected);
+	private static ChargeStudentLineDto MapToStudentLine(ChargeLineJoinResult line)
+	{
+		var student = line.Student;
+		return new ChargeStudentLineDto
+		{
+			StudentId = student.Id,
+			StudentName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
+			GrNumber = student.GrNo?.ToString() ?? string.Empty,
+			RollNumber = student.RollNo,
+			StandardName = line.Standard.Name,
+			DivisionName = line.Division.Name,
+			Status = (int)line.Charge.Status
+		};
+	}
+
+	private static ChargeStatus DeriveRequestStatus(IReadOnlyList<ChargeStatus> lineStatuses)
+	{
+		if (lineStatuses.Count == 0)
+		{
+			return ChargeStatus.Pending;
+		}
+
+		if (lineStatuses.Any(s => s == ChargeStatus.Pending))
+		{
+			return ChargeStatus.Pending;
+		}
+
+		if (lineStatuses.All(s => s == ChargeStatus.Rejected))
+		{
+			return ChargeStatus.Rejected;
+		}
+
+		return ChargeStatus.Approved;
+	}
+
+	private async Task<ChargeRequest> GetChargeRequestOrThrowAsync(Guid chargeRequestId)
+	{
+		return await chargeRequestRepository.FindAsync(chargeRequestId)
+			?? throw new BusinessException(FinanceChargeErrorCodes.ChargeRequestNotFound)
+				.WithData("ChargeId", chargeRequestId);
+	}
+
+	private async Task<ChargeRequestDetailResult> GetChargeRequestDetailsOrThrowAsync(Guid chargeRequestId)
+	{
+		return await chargeRequestRepository.GetWithLinesAsync(chargeRequestId)
+			?? throw new BusinessException(FinanceChargeErrorCodes.ChargeRequestNotFound)
+				.WithData("ChargeId", chargeRequestId);
+	}
+
+	private async Task EnsureAcademicYearExistsAsync(Guid academicYearId)
+	{
+		if (await academicYearRepository.FindAsync(academicYearId) is null)
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.AcademicYearNotFound)
+				.WithData("AcademicYearId", academicYearId);
+		}
+	}
+
+	private async Task EnsureAllLinesPendingOrThrowAsync(Guid chargeRequestId, bool forDelete)
+	{
+		var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == chargeRequestId);
+		if (lines.Count == 0)
+		{
+			return;
+		}
+
+		if (forDelete)
+		{
+			if (lines.Any(l => l.Status != ChargeStatus.Pending))
+			{
+				throw new BusinessException(FinanceChargeErrorCodes.ChargeRequestNotFullyPending);
+			}
+
+			return;
+		}
+
+		if (lines.Any(l => l.Status == ChargeStatus.Approved))
+		{
+			// Updates allowed when some lines approved — audience sync handles restrictions
+		}
+	}
 }

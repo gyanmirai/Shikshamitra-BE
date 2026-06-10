@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.Concessions;
@@ -21,18 +22,27 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
+		Guid? standardId,
+		Guid? divisionId,
 		int skip,
 		int take,
+		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		CancellationToken cancellationToken = default);
 
 	Task<int> CountForApplicationsAsync(
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
+		Guid? standardId,
+		Guid? divisionId,
+		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		CancellationToken cancellationToken = default);
 
 	Task<Dictionary<ConcessionRequestStatus, int>> GetStatusCountsAsync(
 		Guid boardId,
 		Guid educationMediumId,
+		Guid? standardId,
+		Guid? divisionId,
+		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		CancellationToken cancellationToken = default);
 }

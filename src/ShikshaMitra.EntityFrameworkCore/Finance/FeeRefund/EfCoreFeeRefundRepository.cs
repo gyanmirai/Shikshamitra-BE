@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -20,11 +20,14 @@ public class EfCoreFeeRefundRepository(
     public async Task<(List<FeeRefundRequest> Items, int TotalCount)> GetListWithDetailsAsync(
         Guid? studentId = null,
         Guid? academicMediumId = null,
+        Guid? standardId = null,
+        Guid? divisionId = null,
         FeeRefundStatus? status = null,
         string? search = null,
         int skipCount = 0,
         int maxResultCount = 20,
         string? sorting = null,
+        IQueryable<Guid>? scopedStudentIdsQuery = null,
         CancellationToken cancellationToken = default)
     {
         var dbContext = await GetDbContextAsync();
@@ -34,16 +37,32 @@ public class EfCoreFeeRefundRepository(
         if (studentId.HasValue)
             query = query.Where(r => r.StudentId == studentId.Value);
 
-        if (academicMediumId.HasValue)
+        if (academicMediumId.HasValue || standardId.HasValue || divisionId.HasValue)
         {
-            // Resolve the set of student IDs that belong to the requested medium,
-            // then restrict the refund list to those students.
-            var mediumStudentIds = dbContext.Set<Student>()
-                .Where(s => s.AcademicMediumId == academicMediumId.Value)
-                .Select(s => s.Id);
+            var studentQuery = dbContext.Set<Student>().AsQueryable();
 
-            query = query.Where(r => mediumStudentIds.Contains(r.StudentId));
+            if (academicMediumId.HasValue)
+            {
+                studentQuery = studentQuery.Where(s => s.AcademicMediumId == academicMediumId.Value);
+            }
+
+            if (standardId.HasValue)
+            {
+                studentQuery = studentQuery.Where(s => s.StandardId == standardId.Value);
+            }
+
+            if (divisionId.HasValue)
+            {
+                studentQuery = studentQuery.Where(s => s.DivisionId == divisionId.Value);
+            }
+
+            var filteredStudentIds = studentQuery.Select(s => s.Id);
+            query = query.Where(r => filteredStudentIds.Contains(r.StudentId));
         }
+
+        // User scope — restrict to students within the caller's access scope
+        if (scopedStudentIdsQuery != null)
+            query = query.Where(r => scopedStudentIdsQuery.Contains(r.StudentId));
 
         if (status.HasValue)
             query = query.Where(r => r.Status == status.Value);

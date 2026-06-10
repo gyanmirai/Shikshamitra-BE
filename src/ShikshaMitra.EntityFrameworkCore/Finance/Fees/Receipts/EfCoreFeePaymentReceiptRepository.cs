@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -161,15 +161,22 @@ public class EfCoreFeePaymentReceiptRepository(
         Guid academicYearId,
         int? month,
         int? year,
+        IQueryable<Guid>? scopedStudentIdsQuery = null,
         CancellationToken cancellationToken = default)
     {
         var db = await GetDbContextAsync();
 
         // One grouped query: join receipts to payment method records, group by method + status
-        var q = from r in db.Set<FeePaymentReceipt>()
-                where r.AcademicYearId == academicYearId
-                   && r.ReceiptKind == FeeReceiptKind.ProvisionalFee
-                   && r.ReceiptScope == FeeReceiptScope.Fee
+        var receiptQ = db.Set<FeePaymentReceipt>()
+            .Where(r => r.AcademicYearId == academicYearId
+                     && r.ReceiptKind == FeeReceiptKind.ProvisionalFee
+                     && r.ReceiptScope == FeeReceiptScope.Fee);
+
+        // User scope — only count receipts for students accessible to the caller
+        if (scopedStudentIdsQuery != null)
+            receiptQ = receiptQ.Where(r => scopedStudentIdsQuery.Contains(r.StudentId));
+
+        var q = from r in receiptQ
                 join pmr in db.Set<PaymentMethodRecord>()
                     on r.FeeCollectionTransactionId equals pmr.FeeRecordMetadataId
                 where pmr.PaymentMethod != PaymentMethodEnum.Cash
@@ -247,6 +254,10 @@ public class EfCoreFeePaymentReceiptRepository(
             }
         }
 
+        // User scope — only receipts whose student is within the caller's access scope
+        if (filter.ScopedStudentIdsQuery != null)
+            query = query.Where(r => filter.ScopedStudentIdsQuery.Contains(r.StudentId));
+
         return query;
     }
 
@@ -270,6 +281,25 @@ public class EfCoreFeePaymentReceiptRepository(
         // ── Receipt kind filter ───────────────────────────────────────────────
         if (filter.ReceiptKind.HasValue)
             query = query.Where(r => r.ReceiptKind == filter.ReceiptKind.Value);
+
+        // ── Class / division filter (via student) ─────────────────────────────
+        if (filter.StandardId.HasValue || filter.DivisionId.HasValue)
+        {
+            var studentQ = dbContext.Set<Student>().AsQueryable();
+
+            if (filter.StandardId.HasValue)
+                studentQ = studentQ.Where(s => s.StandardId == filter.StandardId.Value);
+
+            if (filter.DivisionId.HasValue)
+                studentQ = studentQ.Where(s => s.DivisionId == filter.DivisionId.Value);
+
+            var studentIds = studentQ.Select(s => s.Id);
+            query = query.Where(r => studentIds.Contains(r.StudentId));
+        }
+
+        // ── User scope filter ─────────────────────────────────────────────────
+        if (filter.ScopedStudentIdsQuery != null)
+            query = query.Where(r => filter.ScopedStudentIdsQuery.Contains(r.StudentId));
 
         // ── Free-text search ──────────────────────────────────────────────────
         if (!string.IsNullOrWhiteSpace(filter.Search))

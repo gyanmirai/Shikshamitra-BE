@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Receipts;
@@ -92,15 +92,12 @@ public class ReconciliationTabCountsDto
     public int CreditCardPending { get; set; }
     public int CreditCardApproved { get; set; }
     public int CreditCardRejected { get; set; }
-    public int UpiPending { get; set; }
+	public int DebitCardPending { get; set; }
+	public int DebitCardApproved { get; set; }
+	public int DebitCardRejected { get; set; }
+	public int UpiPending { get; set; }
     public int UpiApproved { get; set; }
     public int UpiRejected { get; set; }
-    public int OnlineGatewayPending { get; set; }
-    public int OnlineGatewayApproved { get; set; }
-    public int OnlineGatewayRejected { get; set; }
-    public int WalletPending { get; set; }
-    public int WalletApproved { get; set; }
-    public int WalletRejected { get; set; }
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
@@ -161,7 +158,7 @@ public class GetReconciliationListInput
     /// "UPI", "OnlineGateway", "Wallet") to <see cref="PaymentMethodEnum"/>.
     /// Null = all methods.
     /// </summary>
-    public string? PaymentMethod { get; set; }
+    public PaymentMethodEnum? PaymentMethod { get; set; }
 
     /// <summary>Optional verification status filter. Null = all statuses (Pending by default in UI).</summary>
     public FeeReceiptVerificationStatus? VerificationStatus { get; set; }

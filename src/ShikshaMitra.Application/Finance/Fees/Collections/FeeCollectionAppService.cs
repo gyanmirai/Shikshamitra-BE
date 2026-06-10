@@ -24,6 +24,7 @@ using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Audit;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -71,6 +72,7 @@ public class FeeCollectionAppService(
 	FeeReceiptManager feeReceiptManager,
 	IFeePaymentReceiptRepository feePaymentReceiptRepository,
 	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
+	FinanceScopeAccessService financeScopeAccessService,
 	IAsyncQueryableExecuter asyncExecuter,
 	IClock clock
 ) : ApplicationService, IFeeCollectionAppService
@@ -91,6 +93,7 @@ public class FeeCollectionAppService(
 		EnsureNotEmpty(input.AcademicYearId, nameof(input.AcademicYearId));
 		EnsureNotEmpty(input.BoardId, nameof(input.BoardId));
 		EnsureNotEmpty(input.EducationMediumId, nameof(input.EducationMediumId));
+		FinanceClassDivisionFilterValidator.Validate(input);
 	}
 
 	public async Task<PagedResultDto<FeeCollectionSummaryItemDto>> GetSummaryAsync(
@@ -159,8 +162,16 @@ public class FeeCollectionAppService(
 		studentQ = studentQ.Where(s =>
 			s.AcademicYearId   == input.AcademicYearId  &&
 			s.AcademicBoardId  == input.BoardId          &&
-			s.AcademicMediumId == input.EducationMediumId &&
-			s.Status           == StudentLifeCycleStatusEnum.Enrolled);
+			s.AcademicMediumId == input.EducationMediumId);
+
+		if (IsPrivilegedUser())
+		{
+			studentQ = studentQ.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled || s.Status == StudentLifeCycleStatusEnum.Left || s.Status == StudentLifeCycleStatusEnum.InActive);
+		}
+		else
+		{
+			studentQ = studentQ.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled);
+		}
 
 		if (input.StandardId.HasValue)
 			studentQ = studentQ.Where(s => s.StandardId == input.StandardId.Value);
@@ -175,6 +186,10 @@ public class FeeCollectionAppService(
 				(s.LastName   != null && s.LastName.ToLower().Contains(term))   ||
 				(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)));
 		}
+
+		// User scope — restrict to students accessible by the current user
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		studentQ = studentQ.Where(s => scopedStudentIds.Contains(s.Id));
 
 		var students = await asyncExecuter.ToListAsync(
 			studentQ.Select(s => new
@@ -554,6 +569,9 @@ public class FeeCollectionAppService(
 			throw new BusinessException(FeeCollectionErrorCodes.StudentAcademicYearMismatch);
 		}
 
+		// 1c. Verify the student is within the current user's scope
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
+
 		// 2. Validate and load referenced DueFees
 		var dueFeeMap = new Dictionary<Guid, DueFee>();
 		var feeHeadMap = new Dictionary<Guid, FeeHead>();
@@ -906,7 +924,9 @@ public class FeeCollectionAppService(
 					.Select(r => new PaidChargeInfoDto
 					{
 						ChargeId = r.ChargeId,
-						ChargeName = chargeMap[r.ChargeId].PurposeDescription,
+						ChargeName = string.IsNullOrWhiteSpace(chargeMap[r.ChargeId].ChargeName)
+							? chargeMap[r.ChargeId].PurposeDescription
+							: chargeMap[r.ChargeId].ChargeName,
 						AmountPaid = r.Amount,
 					})
 					.ToList()
@@ -933,12 +953,12 @@ public class FeeCollectionAppService(
 	{
 		EnsureNotEmpty(academicYearId, "academicYearId");
 
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
+
 		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
 
-		// ── Student info ─────────────────────────────────────────────────
 		var studentInfo = BuildStudentInfo(student);
 
-		// ── Fee-head structure ────────────────────────────────────────────
 		var feeStructureAssignment = await studentFeeStructureRepository
 			.FirstOrDefaultAsync(x => x.StudentId == studentId);
 
@@ -1029,7 +1049,7 @@ public class FeeCollectionAppService(
 				return new ChargeDetailDto
 				{
 					ChargeId = c.Id,
-					Name = c.PurposeDescription,
+					Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
 					Amount = net,
 					PaidAmount = paid,
 					PendingAmount = pending,
@@ -1054,6 +1074,8 @@ public class FeeCollectionAppService(
 		Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		EnsureNotEmpty(academicYearId, "academicYearId");
+
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
 
 		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
 		var studentSummary = BuildStudentSummary(student);
@@ -1146,7 +1168,7 @@ public class FeeCollectionAppService(
 				return new FeeChargeDetailDto
 				{
 					ChargeId = c.Id,
-					Name = c.PurposeDescription,
+					Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
 					Amount = net,
 					PaidAmount = paid,
 					PendingAmount = pending,
@@ -1251,53 +1273,34 @@ public class FeeCollectionAppService(
 		public int? RollNo { get; init; }
 		public string ContactNo { get; init; } = string.Empty;
 		public string Email { get; init; } = string.Empty;
+		public Guid? FeeStructureId { get; set; }
 	}
 
 	private async Task<StudentSnapshot> GetStudentSnapshotAsync(Guid studentId, CancellationToken cancellationToken)
 	{
-		var studentQ = await studentRepository.GetQueryableAsync();
-		var boardQ = await educationBoardRepository.GetQueryableAsync();
-		var mediumQ = await educationMediumRepository.GetQueryableAsync();
-		var standardQ = await standardRepository.GetQueryableAsync();
-		var divisionQ = await divisionRepository.GetQueryableAsync();
-		var contactQ = await studentContactDetailRepository.GetQueryableAsync();
+		var student = await studentRepository.FindAsync(studentId) ?? throw new BusinessException("Student not found");
 
-		var query =
-			from s in studentQ
-			join b in boardQ on s.AcademicBoardId equals (Guid?)b.Id into bj
-			from b in bj.DefaultIfEmpty()
-			join m in mediumQ on s.AcademicMediumId equals m.Id into mj
-			from m in mj.DefaultIfEmpty()
-			join st in standardQ on s.StandardId equals (Guid?)st.Id into stj
-			from st in stj.DefaultIfEmpty()
-			join d in divisionQ on s.DivisionId equals (Guid?)d.Id into dj
-			from d in dj.DefaultIfEmpty()
-			join c in contactQ on s.Id equals c.Id into cj
-			from c in cj.DefaultIfEmpty()
-			where s.Id == studentId
-			select new StudentSnapshot
-			{
-				Id = s.Id,
-				FirstName = s.FirstName,
-				MiddleName = s.MiddleName,
-				LastName = s.LastName,
-				AcademicBoardId = s.AcademicBoardId,
-				BoardType = b != null ? (EducationBoardType?)b.Type : null,
-				AcademicMediumId = s.AcademicMediumId,
-				EducationMediumName = m != null ? m.Name : string.Empty,
-				StandardId = s.StandardId,
-				StandardName = st != null ? st.Name : string.Empty,
-				DivisionId = s.DivisionId,
-				DivisionName = d != null ? d.Name : string.Empty,
-				GrNo = s.GrNo,
-				RollNo = s.RollNo,
-				ContactNo = c != null ? c.PrimaryContactNo : string.Empty,
-				Email = c != null ? (c.Email ?? string.Empty) : string.Empty,
-			};
+		return new StudentSnapshot
+		{
+			Id = student.Id,
+			FirstName = student.FirstName,
+			MiddleName = student.MiddleName,
+			LastName = student.LastName,
+			AcademicBoardId = student.AcademicBoardId,
+			BoardType = student.AcademicBoard?.Type,
+			AcademicMediumId = student.AcademicMediumId,
+			EducationMediumName = student.AcademicMedium?.Name ?? string.Empty,
+			StandardId = student.StandardId,
+			StandardName = student.Standard?.Name ?? string.Empty,
+			DivisionId = student.DivisionId,
+			DivisionName = student.Division?.Name ?? string.Empty,
+			GrNo = student.GrNo,
+			RollNo = student.RollNo,
+			ContactNo = student.ContactDetail?.PrimaryContactNo ?? string.Empty,
+			Email = student.ContactDetail?.Email ?? string.Empty,
+			FeeStructureId = student.FeeStructureId,
+		};
 
-		var snapshot = await asyncExecuter.FirstOrDefaultAsync(query, cancellationToken);
-
-		return snapshot ?? throw new EntityNotFoundException(typeof(Student), studentId);
 	}
 
 	private static StudentInfoDto BuildStudentInfo(StudentSnapshot student) => new()
@@ -1317,7 +1320,7 @@ public class FeeCollectionAppService(
 		ContactNo = student.ContactNo,
 		Email = student.Email,
 		FeeStructureName = string.Empty,
-		IsFeeStructureAssigned = false,
+		IsFeeStructureAssigned = student.FeeStructureId.HasValue,
 	};
 
 	private static StudentSummaryDto BuildStudentSummary(StudentSnapshot student) => new()
@@ -1349,4 +1352,7 @@ public class FeeCollectionAppService(
 		public double?  TotalCharges    { get; init; }
 		public double?  PendingCharges  { get; init; }
 	}
+
+	private bool IsPrivilegedUser() => CurrentUser.IsInRole("admin")
+			|| CurrentUser.IsInRole("Finance Officer");
 }

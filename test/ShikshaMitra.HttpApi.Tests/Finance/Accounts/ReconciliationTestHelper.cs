@@ -122,16 +122,6 @@ public static class ReconciliationTestHelper
                 { "cardLast4", "1234" },
                 { "bankName", "Test Bank" },
             },
-            PaymentMethodEnum.OnlinePaymentGateway => new System.Collections.Generic.Dictionary<string, object?>
-            {
-                { "transactionId", "OG123" },
-                { "gatewayName", "Razorpay" },
-            },
-            PaymentMethodEnum.WalletPrepaidCard => new System.Collections.Generic.Dictionary<string, object?>
-            {
-                { "transactionId", "WL123" },
-                { "walletProvider", "Paytm" },
-            },
             _ => null,
         };
 
@@ -147,9 +137,7 @@ public static class ReconciliationTestHelper
                 PaymentMethodEnum.UPI or
                 PaymentMethodEnum.CreditCard or
                 PaymentMethodEnum.DebitCard or
-                PaymentMethodEnum.BankTransfer or
-                PaymentMethodEnum.OnlinePaymentGateway or
-                PaymentMethodEnum.WalletPrepaidCard
+                PaymentMethodEnum.BankTransfer
                 ? false
                 : null,
             DueFeePayments = new System.Collections.Generic.List<DueFeePaymentDto>

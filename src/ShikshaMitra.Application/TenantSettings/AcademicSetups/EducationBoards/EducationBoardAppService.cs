@@ -54,10 +54,10 @@ public class EducationBoardAppService(
 				medium.EducationMediumStages = medium.EducationMediumStages.OrderBy(x => x.Name).ToList();
 				foreach (var stage in medium.EducationMediumStages)
 				{
-					stage.Standards = stage.Standards.OrderBy(x => x.Name).ToList();
+					stage.Standards = stage.Standards.OrderBy(x => x.CreationTime).ToList();
 					foreach (var standard in stage.Standards)
 					{
-						standard.Divisions = standard.Divisions.OrderBy(x => x.Name).ToList();
+						standard.Divisions = standard.Divisions.OrderBy(x => x.CreationTime).ToList();
 					}
 				}
 			}

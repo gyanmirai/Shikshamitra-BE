@@ -173,9 +173,11 @@ public class ChapterProgressAppService(
 		// Get all chapters for the subject
 		// AssignedSubjectChapter.AssignedSubjectId is the AssignedSubject.Id (not Subject.Id)
 		// Look up the AssignedSubject row for this (classId, subjectId) pair
-		var assignment = await subjectAssignmentRepository.FindAsync(a =>
+		// Use GetListAsync+FirstOrDefault instead of FindAsync to avoid InvalidOperationException
+		// when duplicate AssignedSubject rows exist for the same (StandardId, SubjectId).
+		var assignment = (await subjectAssignmentRepository.GetListAsync(a =>
 			a.StandardId == classId && a.SubjectId == subjectId
-		);
+		)).FirstOrDefault();
 		if (assignment == null)
 		{
 			return new PaginatedChapterProgressResponseDto { TotalRecords = 0, Records = [] };

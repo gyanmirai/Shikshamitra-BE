@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Receipts;
 using Volo.Abp.Application.Dtos;
 
@@ -8,7 +9,7 @@ namespace ShikshaMitra.Finance.Fees.Receipts.Dtos;
 /// Input for the paginated receipt list API.
 /// Board + Medium are required; Month and ReceiptKind are optional.
 /// </summary>
-public class GetFeeReceiptListInput : PagedAndSortedResultRequestDto
+public class GetFeeReceiptListInput : PagedAndSortedResultRequestDto, IFinanceClassDivisionFilter
 {
     // ── Required context ──────────────────────────────────────────────────────
 
@@ -26,4 +27,8 @@ public class GetFeeReceiptListInput : PagedAndSortedResultRequestDto
 
     /// <summary>Free-text search over receipt number, student name, or GR number.</summary>
     public string? Search { get; set; }
+
+    public Guid? StandardId { get; set; }
+
+    public Guid? DivisionId { get; set; }
 }

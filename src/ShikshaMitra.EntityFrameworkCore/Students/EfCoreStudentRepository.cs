@@ -55,6 +55,35 @@ public class EfCoreStudentRepository(
     }
 
     /// <inheritdoc/>
+    public async Task<List<Student>> GetActiveStudentsInScopeAsync(
+        Guid academicYearId,
+        Guid boardId,
+        Guid educationMediumId,
+        IReadOnlyList<Guid> classIds,
+        IReadOnlyList<Guid>? divisionIds = null,
+        CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+        var classIdSet = classIds.ToList();
+
+        var query = dbSet.Where(s =>
+            s.AcademicYearId == academicYearId
+            && s.AcademicBoardId == boardId
+            && s.AcademicMediumId == educationMediumId
+            && s.StandardId != null
+            && classIdSet.Contains(s.StandardId.Value)
+            && s.Status == StudentLifeCycleStatusEnum.Enrolled);
+
+        if (divisionIds is { Count: > 0 })
+        {
+            var divisionIdSet = divisionIds.ToList();
+            query = query.Where(s => s.DivisionId != null && divisionIdSet.Contains(s.DivisionId.Value));
+        }
+
+        return await query.ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task<Dictionary<int, Student>> GetStudentsByGrNosAsync(
         IEnumerable<int> grNos,
         CancellationToken cancellationToken = default)

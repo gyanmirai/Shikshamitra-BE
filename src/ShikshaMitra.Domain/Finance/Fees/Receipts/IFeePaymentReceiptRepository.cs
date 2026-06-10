@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.FeeCollection;
@@ -40,6 +41,7 @@ public interface IFeePaymentReceiptRepository : IRepository<FeePaymentReceipt, G
         Guid academicYearId,
         int? month,
         int? year,
+        IQueryable<Guid>? scopedStudentIdsQuery = null,
         CancellationToken cancellationToken = default);
     /// <summary>
     /// Returns the total count and a paged, sorted slice of receipts matching
@@ -72,6 +74,9 @@ public sealed class FeeReceiptListFilter
     public Guid BoardId { get; init; }
     public Guid EducationMediumId { get; init; }
 
+    /// <summary>When set, restricts results to students accessible by the current user scope.</summary>
+    public IQueryable<Guid>? ScopedStudentIdsQuery { get; init; }
+
     /// <summary>Month (1–12) derived from <see cref="FeePaymentReceipt.ReceiptDate"/>. Null = all months.</summary>
     public int? Month { get; init; }
 
@@ -80,6 +85,10 @@ public sealed class FeeReceiptListFilter
 
     /// <summary>Free-text: matches receipt number, student name, or GR number.</summary>
     public string? Search { get; init; }
+
+    public Guid? StandardId { get; init; }
+
+    public Guid? DivisionId { get; init; }
 
     public int SkipCount { get; init; }
     public int MaxResultCount { get; init; } = 20;
@@ -103,6 +112,9 @@ public sealed class ReconciliationListFilter
 
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 50;
+
+    /// <summary>When set, restricts results to students accessible by the current user scope.</summary>
+    public IQueryable<Guid>? ScopedStudentIdsQuery { get; init; }
 }
 
 /// <summary>

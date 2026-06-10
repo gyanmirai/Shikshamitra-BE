@@ -370,6 +370,7 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 				null,
 				policy.Id,
 				defaultPayroll.Id,
+				null,
 				targetDate.Date,
 				null,
 				true,

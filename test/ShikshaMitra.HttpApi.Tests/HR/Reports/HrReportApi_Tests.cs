@@ -1070,6 +1070,7 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 					assignment.TargetDisplayName,
 					policyPair.Attendance.Id,
 					policyPair.Payroll.Id,
+					null,
 					DateTime.UtcNow.Date,
 					null,
 					true,
@@ -1094,9 +1095,19 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 				await SeedReportAttendanceAsync(outOfScopeEmployee.Id, outOfScopeStageId, "Scoped out-of-scope report attendance");
 				break;
 			case HrReportDataSources.Leave:
-				var leavePolicyId = await GetSeededLeavePolicyIdAsync();
-				await SeedReportLeaveAsync(inScopeEmployee.Id, leavePolicyId, "Scoped in-scope report leave");
-				await SeedReportLeaveAsync(outOfScopeEmployee.Id, leavePolicyId, "Scoped out-of-scope report leave");
+				var leavePolicy = await GetSeededLeavePolicyAsync();
+				await SeedReportLeaveAsync(
+					inScopeEmployee.Id,
+					leavePolicy.PolicyId,
+					leavePolicy.RuleId,
+					leavePolicy.LeaveTypeId,
+					"Scoped in-scope report leave");
+				await SeedReportLeaveAsync(
+					outOfScopeEmployee.Id,
+					leavePolicy.PolicyId,
+					leavePolicy.RuleId,
+					leavePolicy.LeaveTypeId,
+					"Scoped out-of-scope report leave");
 				break;
 			case HrReportDataSources.Payroll:
 				await SeedReportPayrollSnapshotAsync(inScopeEmployee, "2026-06", 1111m);
@@ -1167,7 +1178,12 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	private async Task SeedReportLeaveAsync(Guid employeeId, Guid leavePolicyId, string reason)
+	private async Task SeedReportLeaveAsync(
+		Guid employeeId,
+		Guid leavePolicyId,
+		Guid leavePolicyRuleId,
+		Guid leaveTypeId,
+		string reason)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -1184,6 +1200,8 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 				tenantId,
 				employeeId,
 				leavePolicyId,
+				leavePolicyRuleId,
+				leaveTypeId,
 				new DateTimeOffset(leaveDate),
 				new DateTimeOffset(leaveDate),
 				reason);
@@ -1195,7 +1213,7 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	private async Task<Guid> GetSeededLeavePolicyIdAsync()
+	private async Task<(Guid PolicyId, Guid RuleId, Guid LeaveTypeId)> GetSeededLeavePolicyAsync()
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -1203,6 +1221,7 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
 		var leaveTypeRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
 		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
+		var leavePolicyRuleRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicyRule, Guid>>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
 		using (currentTenant.Change(tenantId))
@@ -1211,7 +1230,10 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 			var policies = await leavePolicyRepository.GetListAsync();
 			if (policies.Count > 0)
 			{
-				return policies.First().Id;
+				var policyId = policies.First().Id;
+				var rules = await leavePolicyRuleRepository.GetListAsync(x => x.LeavePolicyId == policyId && x.IsActive);
+				var rule = rules.First();
+				return (policyId, rule.Id, rule.LeaveTypeId);
 			}
 
 			var academicYears = await academicYearRepository.GetListAsync();
@@ -1227,18 +1249,32 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 				tenantId,
 				academicYearId,
 				$"Report Scope Leave Policy {Guid.NewGuid():N}"[..50],
+				academicYears.First().StartDate,
+				academicYears.First().EndDate,
+				HrPolicyStatus.Active);
+			var policyRule = new LeavePolicyRule(
+				Guid.NewGuid(),
+				tenantId,
+				policy.Id,
 				leaveType.Id,
 				LeaveAccrualPolicyType.Yearly,
 				12,
 				LeavePaidType.Paid,
 				carryForward: false,
+				carryForwardLimit: null,
 				encashable: false,
 				encashmentTiming: null,
-				requiresApproval: true);
+				requiresApproval: true,
+				minNoticeDays: 0,
+				maxDaysPerRequest: 30,
+				allowHalfDay: true,
+				attachmentRequiredAfterDays: null,
+				allowNegativeBalance: false);
+			policy.ReplaceRules([policyRule]);
 			await leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
 			await leavePolicyRepository.InsertAsync(policy, autoSave: false);
 			await uow.CompleteAsync();
-			return policy.Id;
+			return (policy.Id, policyRule.Id, leaveType.Id);
 		}
 	}
 

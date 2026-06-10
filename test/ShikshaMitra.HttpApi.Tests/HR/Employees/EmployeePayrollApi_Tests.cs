@@ -1,4 +1,4 @@
-ï»¿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -32,7 +32,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	public EmployeePayrollApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
-	#region Tier 0 â€” Critical
+	#region Tier 0 — Critical
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
@@ -102,7 +102,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
-	#region Tier 1 â€” Important
+	#region Tier 1 — Important
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -611,7 +611,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
-	#region Tier 1.5 â€” Validation Edge Cases
+	#region Tier 1.5 — Validation Edge Cases
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -1146,7 +1146,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
-	#region Tier 2 â€” Extended
+	#region Tier 2 — Extended
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Extended)]
@@ -1301,6 +1301,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 				"Competing payroll override",
 				attendance.Id,
 				existingPayroll.Id,
+				null,
 				new DateTime(2026, 4, 1),
 				null,
 				true,
@@ -1315,6 +1316,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 				"Selected payroll override",
 				attendance.Id,
 				existingPayroll.Id,
+				null,
 				new DateTime(2026, 4, 1),
 				null,
 				true,

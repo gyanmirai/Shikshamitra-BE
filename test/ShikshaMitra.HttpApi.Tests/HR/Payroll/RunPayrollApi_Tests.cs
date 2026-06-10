@@ -1164,6 +1164,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				"Mid-month override employee",
 				defaultAttendance.Id,
 				overridePayroll.Id,
+				null,
 				effectiveFrom,
 				null,
 				true,
@@ -1278,6 +1279,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				assignment.Update(
 					assignment.AttendancePolicyId,
 					assignment.PayrollPolicyId,
+					assignment.LeavePolicyId,
 					assignment.EffectiveFrom,
 					assignment.EffectiveTo,
 					isActive: false,
@@ -1331,6 +1333,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				assignment.Update(
 					assignment.AttendancePolicyId,
 					assignment.PayrollPolicyId,
+					assignment.LeavePolicyId,
 					assignment.EffectiveFrom,
 					assignment.EffectiveTo,
 					isActive: true,

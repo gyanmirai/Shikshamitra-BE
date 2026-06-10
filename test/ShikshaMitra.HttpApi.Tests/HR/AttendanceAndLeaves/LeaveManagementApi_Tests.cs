@@ -217,7 +217,13 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var (policy, leaveType) = await CreateLeavePolicyFixtureAsync("AdminApprove");
 		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		var leaveDate = FirstNonSunday(startDate);
-		var created = await SeedPendingLeaveRequestAsync(employee.Id, policy.Id, leaveDate, "Admin created leave for approval");
+		var created = await SeedPendingLeaveRequestAsync(
+			employee.Id,
+			policy.Id,
+			policy.Rules[0].Id,
+			leaveType.Id,
+			leaveDate,
+			"Admin created leave for approval");
 
 		var response = await Client.PatchAsJsonAsync(
 			$"{BaseUrl}/{created}/approve",
@@ -244,14 +250,20 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	public async Task Admin_Should_Create_Employee_Leave_And_Reject_It()
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"AdminRejectLeave{Guid.NewGuid():N}");
-		var (policy, _) = await CreateLeavePolicyFixtureAsync("AdminReject");
+		var (policy, leaveType) = await CreateLeavePolicyFixtureAsync("AdminReject");
 		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		var leaveDate = FirstNonSunday(startDate).AddDays(1);
 		if (leaveDate.DayOfWeek == DayOfWeek.Sunday)
 		{
 			leaveDate = leaveDate.AddDays(1);
 		}
-		var created = await SeedPendingLeaveRequestAsync(employee.Id, policy.Id, leaveDate, "Admin created leave for rejection");
+		var created = await SeedPendingLeaveRequestAsync(
+			employee.Id,
+			policy.Id,
+			policy.Rules[0].Id,
+			leaveType.Id,
+			leaveDate,
+			"Admin created leave for rejection");
 
 		var response = await Client.PatchAsJsonAsync(
 			$"{BaseUrl}/{created}/reject",
@@ -442,14 +454,22 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var policyRequest = new LeavePolicyCreateRequest
 		{
 			PolicyTitle = $"{marker}-Policy-{Guid.NewGuid():N}",
-			LeaveType = leaveType.Id,
-			AccrualPolicyType = "Yearly",
-			LeaveCount = 12,
-			PaidType = "Paid",
-			CarryForward = false,
-			EncashmentAllowed = false,
-			RequiresApproval = true,
-			Description = "Leave policy for leave management workflow tests"
+			Status = "Active",
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Description = "Leave policy for leave management workflow tests",
+			Rules =
+			[
+				new LeavePolicyRuleRequest
+				{
+					LeaveTypeId = leaveType.Id,
+					AccrualPolicyType = "Yearly",
+					LeaveCount = 12,
+					PaidType = "Paid",
+					CarryForward = false,
+					EncashmentAllowed = false,
+					RequiresApproval = true
+				}
+			]
 		};
 		var policyResponse = await Client.PostAsJsonAsync(
 			$"{LeavePoliciesUrl}?academicYearId={AcademicYearId}",
@@ -465,6 +485,8 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	private async Task<Guid> SeedPendingLeaveRequestAsync(
 		Guid employeeId,
 		Guid leavePolicyId,
+		Guid leavePolicyRuleId,
+		Guid leaveTypeId,
 		DateTime leaveDate,
 		string reason)
 	{
@@ -480,6 +502,8 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 				tenantId,
 				employeeId,
 				leavePolicyId,
+				leavePolicyRuleId,
+				leaveTypeId,
 				new DateTimeOffset(leaveDate.Date),
 				new DateTimeOffset(leaveDate.Date),
 				reason);

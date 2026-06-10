@@ -890,6 +890,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				null,
 				policy.Id,
 				defaultPayroll.Id,
+				null,
 				targetDate.Date,
 				null,
 				true,
@@ -964,6 +965,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				null,
 				policy.Id,
 				defaultPayroll.Id,
+				null,
 				targetDate.Date,
 				null,
 				true,
@@ -1055,14 +1057,28 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				tenantId,
 				academicYear.Id,
 				$"AL Policy {suffix}",
+				academicYear.StartDate,
+				academicYear.EndDate,
+				HrPolicyStatus.Active);
+			var leavePolicyRule = new LeavePolicyRule(
+				guidGenerator.Create(),
+				tenantId,
+				leavePolicy.Id,
 				leaveType.Id,
 				LeaveAccrualPolicyType.Yearly,
 				12,
 				LeavePaidType.Paid,
 				carryForward: false,
+				carryForwardLimit: null,
 				encashable: false,
 				encashmentTiming: null,
-				requiresApproval: true);
+				requiresApproval: true,
+				minNoticeDays: 0,
+				maxDaysPerRequest: 30,
+				allowHalfDay: true,
+				attachmentRequiredAfterDays: null,
+				allowNegativeBalance: false);
+			leavePolicy.ReplaceRules([leavePolicyRule]);
 			await leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
 
 			var start = new DateTimeOffset(startDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
@@ -1072,6 +1088,8 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				tenantId,
 				employeeId,
 				leavePolicy.Id,
+				leavePolicyRule.Id,
+				leaveType.Id,
 				start,
 				end,
 				"Attendance approved leave overlay test",

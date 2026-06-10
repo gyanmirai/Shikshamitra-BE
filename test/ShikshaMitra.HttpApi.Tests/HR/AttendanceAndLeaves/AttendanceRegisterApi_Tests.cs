@@ -691,6 +691,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 				null,
 				policy.Id,
 				defaultPayroll.Id,
+				null,
 				targetDate.Date,
 				null,
 				true,

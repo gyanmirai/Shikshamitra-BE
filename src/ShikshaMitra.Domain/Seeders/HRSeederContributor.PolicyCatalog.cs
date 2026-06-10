@@ -96,12 +96,12 @@ public partial class HRSeederContributor
 				: null;
 		}
 
-		async Task SeedPolicyAsync(string policyName, string description, params Task<LeavePolicyRuleInput?>[] ruleTasks)
+		async Task SeedPolicyAsync(string policyName, string description, params Func<Task<LeavePolicyRuleInput?>>[] ruleFactories)
 		{
 			var rules = new List<LeavePolicyRuleInput>();
-			foreach (var ruleTask in ruleTasks)
+			foreach (var ruleFactory in ruleFactories)
 			{
-				var rule = await ruleTask;
+				var rule = await ruleFactory();
 				if (rule != null)
 				{
 					rules.Add(rule);
@@ -127,25 +127,25 @@ public partial class HRSeederContributor
 		await SeedPolicyAsync(
 			"Teaching Staff Leave Policy",
 			"Teaching staff yearly leave entitlements.",
-			RuleAsync("Casual Leave", 12, LeavePaidType.Paid),
-			RuleAsync("Sick Leave", 10, LeavePaidType.Paid),
-			RuleAsync("Earned Leave", 15, LeavePaidType.Paid, carryForward: true, encashable: true),
-			RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
+			() => RuleAsync("Casual Leave", 12, LeavePaidType.Paid),
+			() => RuleAsync("Sick Leave", 10, LeavePaidType.Paid),
+			() => RuleAsync("Earned Leave", 15, LeavePaidType.Paid, carryForward: true, encashable: true),
+			() => RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
 
 		await SeedPolicyAsync(
 			"Admin Staff Leave Policy",
 			"Admin staff yearly leave entitlements.",
-			RuleAsync("Casual Leave", 10, LeavePaidType.Paid),
-			RuleAsync("Sick Leave", 8, LeavePaidType.Paid),
-			RuleAsync("Earned Leave", 12, LeavePaidType.Paid, carryForward: true),
-			RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
+			() => RuleAsync("Casual Leave", 10, LeavePaidType.Paid),
+			() => RuleAsync("Sick Leave", 8, LeavePaidType.Paid),
+			() => RuleAsync("Earned Leave", 12, LeavePaidType.Paid, carryForward: true),
+			() => RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
 
 		await SeedPolicyAsync(
 			"Contract Staff Leave Policy",
 			"Contract staff yearly leave entitlements.",
-			RuleAsync("Casual Leave", 6, LeavePaidType.Paid),
-			RuleAsync("Sick Leave", 6, LeavePaidType.Paid),
-			RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
+			() => RuleAsync("Casual Leave", 6, LeavePaidType.Paid),
+			() => RuleAsync("Sick Leave", 6, LeavePaidType.Paid),
+			() => RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
 
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}

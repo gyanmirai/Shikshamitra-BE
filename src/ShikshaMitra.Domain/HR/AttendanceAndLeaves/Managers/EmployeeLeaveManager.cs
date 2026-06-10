@@ -24,19 +24,23 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 	public Task<EmployeeLeave> CreateAsync(
 		Guid employeeId,
 		Guid leavePolicyId,
+		Guid leavePolicyRuleId,
+		Guid leaveTypeId,
 		DateTimeOffset startDate,
 		DateTimeOffset endDate,
 		string description,
 		bool halfDay = false)
 	{
 		var leaveId = guidGenerator.Create();
-		var tenantId = CurrentTenant?.Id ?? Guid.Empty;
+		var tenantId = CurrentTenant.Id;
 
 		var leave = EmployeeLeave.Create(
 			leaveId,
 			tenantId,
 			employeeId,
 			leavePolicyId,
+			leavePolicyRuleId,
+			leaveTypeId,
 			startDate,
 			endDate,
 			description,

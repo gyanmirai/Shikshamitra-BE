@@ -7,6 +7,15 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.AttendanceRegister;
 
 internal static class AttendanceRegisterAdjustmentMapper
 {
+	private static readonly string[] SupportedDateFormats =
+	[
+		"dd-MM-yyyy",
+		"d-M-yyyy",
+		"yyyy-MM-dd",
+		"dd/MM/yyyy",
+		"d/M/yyyy"
+	];
+
 	public static AttendanceRegisterAdjustmentRowResult ToUpdated(EmployeeAttendance row) =>
 		new()
 		{
@@ -44,14 +53,14 @@ internal static class AttendanceRegisterAdjustmentMapper
 
 	public static DateOnly ParseAdjustmentDate(string? value)
 	{
-		if (DateOnly.TryParse(value, CultureInfo.InvariantCulture, out var parsed))
+		if (DateTime.TryParseExact(
+			    (value ?? string.Empty).Trim(),
+			    SupportedDateFormats,
+			    CultureInfo.InvariantCulture,
+			    DateTimeStyles.None,
+			    out var parsed))
 		{
-			return parsed;
-		}
-
-		if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
-		{
-			return DateOnly.FromDateTime(dto.Date);
+			return DateOnly.FromDateTime(parsed);
 		}
 
 		throw new BusinessException(HRErrorCodes.AttendanceInvalidDateFormat);

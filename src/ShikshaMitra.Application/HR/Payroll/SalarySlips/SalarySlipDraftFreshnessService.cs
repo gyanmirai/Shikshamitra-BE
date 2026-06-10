@@ -4,19 +4,26 @@ using ShikshaMitra.HR;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Timing;
 using static ShikshaMitra.HR.Payroll.SalarySlips.SalarySlipSnapshotMatcher;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 public class SalarySlipDraftFreshnessService(
 	SalarySlipManager salarySlipManager,
-	SalarySlipSnapshotReader snapshotReader) : ITransientDependency
+	SalarySlipSnapshotReader snapshotReader,
+	IClock clock) : ITransientDependency
 {
 	public async Task<SalarySlip> EnsureFreshAsync(
 		SalarySlip salarySlip,
 		bool hadExistingSalarySlip)
 	{
 		if (salarySlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
+		{
+			return salarySlip;
+		}
+
+		if (ShouldKeepExistingDraft(salarySlip, hadExistingSalarySlip))
 		{
 			return salarySlip;
 		}
@@ -41,15 +48,13 @@ public class SalarySlipDraftFreshnessService(
 				ParseDayCalculationMode(snapshot.DayCalculationMode));
 	}
 
-	private static string NormalizeMonthYear(string monthYear)
-	{
-		if (!PayrollMonthNormalizer.TryNormalizeToInternal(monthYear, out var normalizedMonthYear))
-		{
-			throw new BusinessException(string.IsNullOrWhiteSpace(monthYear)
-				? HRErrorCodes.MonthYearRequired
-				: HRErrorCodes.InvalidMonthYearFormat);
-		}
+	internal bool ShouldKeepExistingDraft(SalarySlip salarySlip, bool hadExistingSalarySlip) =>
+		hadExistingSalarySlip && IsHistoricalMonth(salarySlip.MonthYear);
 
-		return normalizedMonthYear;
+	private bool IsHistoricalMonth(string monthYear)
+	{
+		var (year, month, _) = PayrollRunRules.ParseMonth(monthYear);
+		var current = clock.Now;
+		return year < current.Year || (year == current.Year && month < current.Month);
 	}
 }

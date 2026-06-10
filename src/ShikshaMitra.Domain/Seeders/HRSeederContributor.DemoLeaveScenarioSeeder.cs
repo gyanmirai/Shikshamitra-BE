@@ -53,13 +53,14 @@ public partial class HRSeederContributor
 			return;
 		}
 
-		var leavePolicies = await _leavePolicyRepository.GetListAsync(x => x.AcademicYearId == academicYear.Id);
-		var casual = leavePolicies.FirstOrDefault(x => x.PolicyName.Contains("Casual", StringComparison.OrdinalIgnoreCase));
-		var sick = leavePolicies.FirstOrDefault(x => x.PolicyName.Contains("Sick", StringComparison.OrdinalIgnoreCase));
-		var lossOfPay = leavePolicies.FirstOrDefault(x =>
-			x.PolicyName.Contains("Loss", StringComparison.OrdinalIgnoreCase) ||
-			x.PolicyName.Contains("LOP", StringComparison.OrdinalIgnoreCase));
-		if (casual == null || sick == null)
+		var leavePolicy = (await _leavePolicyRepository.GetListAsync(
+				x => x.AcademicYearId == academicYear.Id,
+				includeDetails: true))
+			.FirstOrDefault(x => x.PolicyName.Contains("Teaching", StringComparison.OrdinalIgnoreCase));
+		var casual = leavePolicy?.Rules.FirstOrDefault(x => x.LeaveType?.Type.Contains("Casual", StringComparison.OrdinalIgnoreCase) == true);
+		var sick = leavePolicy?.Rules.FirstOrDefault(x => x.LeaveType?.Type.Contains("Sick", StringComparison.OrdinalIgnoreCase) == true);
+		var lossOfPay = leavePolicy?.Rules.FirstOrDefault(x => x.LeaveType?.Type.Contains("Loss", StringComparison.OrdinalIgnoreCase) == true);
+		if (leavePolicy == null || casual == null || sick == null)
 		{
 			return;
 		}
@@ -69,10 +70,10 @@ public partial class HRSeederContributor
 		var insertedCount = 0;
 		var scenarios = new List<LeaveSeedScenario>
 		{
-			new("HR seed approved sick leave", EmployeeLeaveStatusType.Approved, sick, 2),
-			new("HR seed pending casual leave", EmployeeLeaveStatusType.Pending, casual, 5),
-			new("HR seed rejected casual leave", EmployeeLeaveStatusType.Rejected, casual, 8, "Seeded rejection scenario."),
-			new("HR seed approved loss of pay leave", EmployeeLeaveStatusType.Approved, lossOfPay ?? casual, 11)
+			new("HR seed approved sick leave", EmployeeLeaveStatusType.Approved, leavePolicy, sick, 2),
+			new("HR seed pending casual leave", EmployeeLeaveStatusType.Pending, leavePolicy, casual, 5),
+			new("HR seed rejected casual leave", EmployeeLeaveStatusType.Rejected, leavePolicy, casual, 8, "Seeded rejection scenario."),
+			new("HR seed approved loss of pay leave", EmployeeLeaveStatusType.Approved, leavePolicy, lossOfPay ?? casual, 11)
 		};
 
 		for (var i = 0; i < candidates.Count && i < scenarios.Count; i++)
@@ -90,6 +91,8 @@ public partial class HRSeederContributor
 			var leave = await _employeeLeaveManager.CreateAsync(
 				employeeId,
 				scenario.Policy.Id,
+				scenario.Rule.Id,
+				scenario.Rule.LeaveTypeId,
 				new DateTimeOffset(leaveDate, TimeSpan.FromHours(5.5)),
 				new DateTimeOffset(leaveDate, TimeSpan.FromHours(5.5)),
 				scenario.Description);
@@ -113,6 +116,7 @@ public partial class HRSeederContributor
 		string Description,
 		EmployeeLeaveStatusType Status,
 		LeavePolicy Policy,
+		LeavePolicyRule Rule,
 		int BusinessDay,
 		string? RejectionReason = null);
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
+using ShikshaMitra.Audit;
 
 namespace ShikshaMitra.HR.Audit;
 
@@ -23,8 +24,8 @@ public static class HrAuditTrailProjection
 			ActorUserId = entity.ActorUserId,
 			ActorNameSnapshot = entity.ActorNameSnapshot,
 			OccurredAt = entity.OccurredAt,
-			OccurredAtUtc = NormalizeUtc(entity.OccurredAt),
-			OccurredAtDisplay = string.Empty,
+			OccurredAtUtc = AuditTimestampDisplay.NormalizeUtc(entity.OccurredAt),
+			OccurredAtDisplay = AuditTimestampDisplay.FormatInstitutionTime(entity.OccurredAt),
 			ActorDisplayName = entity.ActorNameSnapshot ?? entity.ActorUserId?.ToString() ?? "System",
 			ActionLabel = ToLabel(entity.Action),
 			Reason = entity.Reason,
@@ -52,13 +53,6 @@ public static class HrAuditTrailProjection
 			return [];
 		}
 	}
-
-	private static DateTime NormalizeUtc(DateTime value) => value.Kind switch
-	{
-		DateTimeKind.Utc => value,
-		DateTimeKind.Local => value.ToUniversalTime(),
-		_ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
-	};
 
 	private static string ToLabel(string value) =>
 		CultureInfo.InvariantCulture.TextInfo.ToTitleCase(HrAuditTrailQuery.Normalize(value).Replace("_", " "));

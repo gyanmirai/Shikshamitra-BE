@@ -16,6 +16,7 @@ public class HrReportRequestDto
 	public List<HrReportSortDto>? Sorts { get; set; }
 	public List<string>? Groups { get; set; }
 	public List<HrReportSummaryDto>? Summaries { get; set; }
+	public HrReportChartDefinitionDto? Chart { get; set; }
 	public HrReportFilterDto Filters { get; set; } = new();
 }
 
@@ -59,4 +60,13 @@ public class HrReportSummaryDto
 {
 	public string Field { get; set; } = string.Empty;
 	public string Function { get; set; } = HrReportSummaryFunction.Count;
+}
+
+public class HrReportChartDefinitionDto
+{
+	public string Type { get; set; } = HrReportChartType.None;
+	public string? CategoryField { get; set; }
+	public string? ValueField { get; set; }
+	public string? Function { get; set; } = HrReportSummaryFunction.Count;
+	public string? Title { get; set; }
 }

@@ -119,6 +119,21 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		bool sandwichRuleEnabled,
 		bool payrollPreviewEnabled)
 	{
+		if (AcademicYearId == Guid.Empty)
+		{
+			throw new BusinessException(HRErrorCodes.AcademicYearRequired);
+		}
+
+		if (workCalendarPolicyId == Guid.Empty)
+		{
+			throw new BusinessException(HRErrorCodes.WorkCalendarPolicyRequired);
+		}
+
+		if (status == HrPolicyStatus.Archived)
+		{
+			throw new BusinessException(HRErrorCodes.PolicyArchiveRequiresArchiveWorkflow);
+		}
+
 		AttendancePolicyRuleValidator.Validate(name, status, isDefault, fullDayThresholdPercentage, halfDayThresholdPercentage, absentThresholdPercentage, graceTime, maxLateAllowedPerMonth, penaltyCountThreshold, earlyExitGraceTime, overtimeEnabled, overtimeRate, minOvertimeMinutes);
 
 		WorkCalendarPolicyId = workCalendarPolicyId;

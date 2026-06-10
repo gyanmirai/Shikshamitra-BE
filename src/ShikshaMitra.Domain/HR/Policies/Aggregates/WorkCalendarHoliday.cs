@@ -52,6 +52,16 @@ public class WorkCalendarHoliday : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		bool isIncluded,
 		string? notes)
 	{
+		if (academicYearId == Guid.Empty)
+		{
+			throw new BusinessException(HRErrorCodes.AcademicYearRequired);
+		}
+
+		if (workCalendarPolicyId == Guid.Empty)
+		{
+			throw new BusinessException(HRErrorCodes.WorkCalendarPolicyRequired);
+		}
+
 		if (string.IsNullOrWhiteSpace(holidayName))
 		{
 			throw new BusinessException(HRErrorCodes.WorkCalendarHolidayNameRequired);

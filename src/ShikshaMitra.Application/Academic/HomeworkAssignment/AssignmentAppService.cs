@@ -33,7 +33,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 	private readonly IRepository<Subject, Guid> _subjectRepository;
 	private readonly IAssignmentTypeRepository _assignmentTypeRepository;
 	private readonly IRepository<IdentityUser, Guid> _userRepository;
-	private readonly IUserScopeService _userScopeService;
+	private readonly IUserScopeAccessService _userScopeAccessService;
 	private readonly AssignmentManager _assignmentManager;
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
 
@@ -45,7 +45,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		IRepository<Subject, Guid> subjectRepository,
 		IAssignmentTypeRepository assignmentTypeRepository,
 		IRepository<IdentityUser, Guid> userRepository,
-		IUserScopeService userScopeService,
+		IUserScopeAccessService userScopeAccessService,
 		AssignmentManager assignmentManager,
 		IAsyncQueryableExecuter asyncExecuter
 	)
@@ -57,7 +57,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		_subjectRepository = subjectRepository;
 		_assignmentTypeRepository = assignmentTypeRepository;
 		_userRepository = userRepository;
-		_userScopeService = userScopeService;
+		_userScopeAccessService = userScopeAccessService;
 		_assignmentManager = assignmentManager;
 		_asyncExecuter = asyncExecuter;
 	}
@@ -156,30 +156,18 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		GetAssignmentFilterDto filter
 	)
 	{
-		// 1. Get user scope for filtering
-		var userScope = await _userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
-
-		// 2. Build query with eager loading
+		// 1. Build query with eager loading
 		var query = await _assignmentRepository.WithDetailsAsync(a =>
 			a.DivisionSchedules,
 			a => a.AssignmentType
 		);
 
-		// 3. Apply UserScope filtering (manual for now since extension is in EF layer)
-		// TODO: Move to repository layer for better performance
-		if (!userScope.IsAdmin)
-		{
-			// Apply basic filtering - full implementation would use UserScopeQueryExtensions
-			if (userScope.StandardIds.Any())
-			{
-				query = query.Where(a => userScope.StandardIds.Contains(a.StandardId));
-			}
-		}
+		query = await _userScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
-		// 4. Apply medium filter
+		// 2. Apply medium filter
 		query = query.Where(a => a.EducationMediumId == academicMediumId);
 
-		// 5. Apply optional filters
+		// 3. Apply optional filters
 		if (filter.ClassId.HasValue)
 		{
 			query = query.Where(a => a.StandardId == filter.ClassId.Value);
@@ -209,13 +197,13 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 			}
 		}
 
-		// 6. Order by creation time (newest first)
+		// 4. Order by creation time (newest first)
 		query = query.OrderByDescending(a => a.CreationTime);
 
-		// 7. Execute query
+		// 5. Execute query
 		var assignments = await _asyncExecuter.ToListAsync(query);
 
-		// 8. Batch-load related entities to prevent N+1 queries
+		// 6. Batch-load related entities to prevent N+1 queries
 		var standardIds = assignments.Select(a => a.StandardId).Distinct().ToList();
 		var subjectIds = assignments.Select(a => a.SubjectId).Distinct().ToList();
 		var divisionIds = assignments
@@ -244,7 +232,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 			c => $"{c.Name} {c.Surname}".Trim()
 		);
 
-		// 9. Map to DTOs with batch-loaded data
+		// 7. Map to DTOs with batch-loaded data
 		var dtos = new List<AssignmentDto>();
 		foreach (var assignment in assignments)
 		{
@@ -284,13 +272,9 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 			throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", id);
 		}
 
-		// 2. Check UserScope access (basic check for now)
-		var userScope = await _userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
-		if (!userScope.IsAdmin && userScope.StandardIds.Any() &&
-			!userScope.StandardIds.Contains(assignment.StandardId))
-		{
-			throw new BusinessException("Volo.Abp:010001"); // Unauthorized
-		}
+		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+			assignment,
+			operation: nameof(GetAsync));
 
 		// 3. Map to DTO
 		var dto = await MapToAssignmentDtoAsync(assignment);
@@ -320,6 +304,9 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		{
 			throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", id);
 		}
+		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+			assignment,
+			operation: nameof(UpdateAsync));
 
 		// 3. Validate assignment type
 		await _assignmentManager.ValidateAssignmentTypeAsync(input.AssignmentTypeId);
@@ -352,6 +339,9 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		assignment.SubjectId = input.SubjectId;
 		assignment.AssignmentTypeId = input.AssignmentTypeId;
 		assignment.SubmissionType = (SubmissionType) input.SubmissionType;
+		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+			assignment,
+			operation: $"{nameof(UpdateAsync)}:TargetScope");
 
 		// 6. Update division schedules (delete old, add new)
 		// Capture existing schedules before clearing
@@ -399,6 +389,9 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		{
 			throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", id);
 		}
+		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+			assignment,
+			operation: nameof(PublishAsync));
 
 		// 2. Publish all divisions
 		assignment.PublishAll();
@@ -433,6 +426,9 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		{
 			throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", id);
 		}
+		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+			assignment,
+			operation: nameof(DeleteAsync));
 
 		// 2. Soft delete
 		await _assignmentRepository.DeleteAsync(assignment);

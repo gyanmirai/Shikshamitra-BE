@@ -17,44 +17,68 @@ public class LeaveTypeReference
 {
 	public Guid Id { get; set; }
 	public string Name { get; set; } = string.Empty;
+	public string? Color { get; set; }
+}
+
+public class LeavePolicyRuleItem
+{
+	public Guid Id { get; set; }
+	public LeaveTypeReference LeaveType { get; set; } = new();
+	public string AccrualPolicyType { get; set; } = "Monthly";
+	public int LeaveCount { get; set; }
+	public bool CarryForward { get; set; }
+	public int? CarryForwardLimit { get; set; }
+	public bool EncashmentAllowed { get; set; }
+	public string? EncashmentTiming { get; set; }
+	public string PaidType { get; set; } = "Paid";
+	public bool RequiresApproval { get; set; }
+	public int MinNoticeDays { get; set; }
+	public int MaxDaysPerRequest { get; set; }
+	public bool AllowHalfDay { get; set; }
+	public int? AttachmentRequiredAfterDays { get; set; }
+	public bool AllowNegativeBalance { get; set; }
+	public bool IsActive { get; set; }
 }
 
 public class LeavePolicyItem
 {
 	public Guid Id { get; set; }
 	public string PolicyTitle { get; set; } = string.Empty;
-	public LeaveTypeReference LeaveType { get; set; } = new();
+	public string Status { get; set; } = "Draft";
+	public DateTime EffectiveFrom { get; set; }
+	public DateTime? EffectiveTo { get; set; }
+	public int RuleCount { get; set; }
+	public string? Description { get; set; }
+	public List<LeavePolicyRuleItem> Rules { get; set; } = new();
+}
+
+public class LeavePolicyRuleRequest
+{
+	public Guid LeaveTypeId { get; set; }
 	public string AccrualPolicyType { get; set; } = "Monthly";
 	public int LeaveCount { get; set; }
+	public string PaidType { get; set; } = "Paid";
 	public bool CarryForward { get; set; }
+	public int? CarryForwardLimit { get; set; }
 	public bool EncashmentAllowed { get; set; }
 	public string? EncashmentTiming { get; set; }
-	public string PaidType { get; set; } = "Paid";
-	public bool RequiresApproval { get; set; }
-	public string? Description { get; set; }
+	public bool RequiresApproval { get; set; } = true;
+	public int MinNoticeDays { get; set; } = 2;
+	public int MaxDaysPerRequest { get; set; } = 30;
+	public bool AllowHalfDay { get; set; } = true;
+	public int? AttachmentRequiredAfterDays { get; set; }
+	public bool AllowNegativeBalance { get; set; }
+	public bool IsActive { get; set; } = true;
 }
 
 public class LeavePolicyCreateRequest
 {
 	public string PolicyTitle { get; set; } = string.Empty;
-
-	public Guid LeaveType { get; set; }
-
-	public string AccrualPolicyType { get; set; } = "Monthly";
-
-	public int LeaveCount { get; set; }
-
-	public string PaidType { get; set; } = "Paid";
-
-	public bool CarryForward { get; set; }
-
-	public bool EncashmentAllowed { get; set; }
-
-	public string? EncashmentTiming { get; set; }
-
-	public bool RequiresApproval { get; set; }
-
+	public string Status { get; set; } = "Active";
+	public DateTime EffectiveFrom { get; set; }
+	public DateTime? EffectiveTo { get; set; }
 	public string? Description { get; set; }
+	public List<LeavePolicyRuleRequest> Rules { get; set; } = new();
 }
 
 public class LeavePolicyUpdateRequest : LeavePolicyCreateRequest
@@ -69,29 +93,42 @@ public class LeavePolicyCreateRequestValidator : AbstractValidator<LeavePolicyCr
 			.NotEmpty()
 			.MaximumLength(LeavePolicyConsts.MaxPolicyNameLength);
 
-		RuleFor(x => x.LeaveType)
+		RuleFor(x => x.Status)
+			.NotEmpty()
+			.Matches("^(Draft|Active|Archived)$")
+			.WithMessage("Status must be Draft, Active, or Archived");
+
+		RuleFor(x => x.EffectiveFrom)
 			.NotEmpty();
 
-		RuleFor(x => x.AccrualPolicyType)
-			.NotEmpty()
-			.Matches("^(Monthly|Yearly)$")
-			.WithMessage("AccrualPolicyType must be Monthly or Yearly");
+		RuleFor(x => x.EffectiveTo)
+			.Must((request, effectiveTo) => !effectiveTo.HasValue || effectiveTo.Value.Date >= request.EffectiveFrom.Date)
+			.WithMessage("EffectiveTo cannot be before EffectiveFrom");
 
-		RuleFor(x => x.LeaveCount)
-			.InclusiveBetween(LeavePolicyConsts.MinLeaveCount, LeavePolicyConsts.MaxLeaveCount);
+		RuleFor(x => x.Rules)
+			.NotEmpty();
 
-		RuleFor(x => x.PaidType)
-			.NotEmpty()
-			.Matches("^(Paid|Unpaid)$")
-			.WithMessage("PaidType must be 'Paid' or 'Unpaid'");
-
-		RuleFor(x => x.EncashmentTiming)
-			.Matches("^(next_payroll|end_of_year)$")
-			.WithMessage("EncashmentTiming must be next_payroll or end_of_year")
-			.When(x => x.EncashmentTiming is not null);
+		RuleForEach(x => x.Rules)
+			.SetValidator(new LeavePolicyRuleRequestValidator());
 
 		RuleFor(x => x.Description)
 			.MaximumLength(LeavePolicyConsts.MaxDescriptionLength);
+	}
+}
+
+public class LeavePolicyRuleRequestValidator : AbstractValidator<LeavePolicyRuleRequest>
+{
+	public LeavePolicyRuleRequestValidator()
+	{
+		RuleFor(x => x.LeaveTypeId).NotEmpty();
+		RuleFor(x => x.AccrualPolicyType).NotEmpty().Matches("^(Monthly|Yearly)$");
+		RuleFor(x => x.LeaveCount).GreaterThanOrEqualTo(0);
+		RuleFor(x => x.PaidType).NotEmpty().Matches("^(Paid|Unpaid)$");
+		RuleFor(x => x.EncashmentTiming).Matches("^(next_payroll|end_of_year)$").When(x => x.EncashmentTiming is not null);
+		RuleFor(x => x.EncashmentTiming).NotEmpty().When(x => x.EncashmentAllowed);
+		RuleFor(x => x.MinNoticeDays).GreaterThanOrEqualTo(0);
+		RuleFor(x => x.MaxDaysPerRequest).GreaterThan(0);
+		RuleFor(x => x.AttachmentRequiredAfterDays).GreaterThanOrEqualTo(0).When(x => x.AttachmentRequiredAfterDays.HasValue);
 	}
 }
 
@@ -103,35 +140,13 @@ public class LeavePolicyUpdateRequestValidator : AbstractValidator<LeavePolicyUp
 	}
 }
 
-public class LeavePolicyResponse
+public class LeavePolicyResponse : LeavePolicyItem
 {
-	public Guid Id { get; set; }
-	public string PolicyTitle { get; set; } = string.Empty;
-	public Guid LeaveType { get; set; }
-	public string AccrualPolicyType { get; set; } = "Monthly";
-	public int LeaveCount { get; set; }
-	public string PaidType { get; set; } = "Paid";
-	public bool CarryForward { get; set; }
-	public bool EncashmentAllowed { get; set; }
-	public string? EncashmentTiming { get; set; }
-	public bool RequiresApproval { get; set; }
-	public string? Description { get; set; }
 	public DateTime CreatedAt { get; set; }
 }
 
-public class LeavePolicyDetailResponse
+public class LeavePolicyDetailResponse : LeavePolicyItem
 {
-	public Guid Id { get; set; }
-	public string PolicyTitle { get; set; } = string.Empty;
-	public LeaveTypeReference LeaveType { get; set; } = new();
-	public string AccrualPolicyType { get; set; } = "Monthly";
-	public int LeaveCount { get; set; }
-	public string PaidType { get; set; } = "Paid";
-	public bool CarryForward { get; set; }
-	public bool EncashmentAllowed { get; set; }
-	public string? EncashmentTiming { get; set; }
-	public bool RequiresApproval { get; set; }
-	public string? Description { get; set; }
 }
 
 public class LeavePolicyDeleteResponse

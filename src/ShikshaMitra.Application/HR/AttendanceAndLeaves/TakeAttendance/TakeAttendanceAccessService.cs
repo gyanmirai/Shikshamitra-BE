@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.HR;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -29,22 +30,17 @@ public class TakeAttendanceAccessService(
 			return scope;
 		}
 
-		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
-		{
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-		}
+		hrScopeAccessService.EnsureHasConcreteHrAccess(scope, nameof(EnsureCanOperateAttendanceAsync));
 
 		return scope;
 	}
 
 	public async Task EnsureEmployeeScopeAllowedAsync(UserScopeContext scope, Guid? employeeStageId)
 	{
-		if (await hrScopeAccessService.CanAccessEmployeeStageAsync(scope, employeeStageId))
-		{
-			return;
-		}
-
-		throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		await hrScopeAccessService.EnsureCanAccessEmployeeStageAsync(
+			scope,
+			employeeStageId,
+			nameof(EnsureEmployeeScopeAllowedAsync));
 	}
 
 	public async Task<HashSet<Guid>> ResolveAccessibleStageIdsAsync(UserScopeContext scope) =>

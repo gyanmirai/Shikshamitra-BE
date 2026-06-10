@@ -2,6 +2,7 @@
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -11,7 +12,8 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups.EducationalMediums;
 [Authorize]
 public class EducationMediumStageAppService(
 	IEducationMediumStageRepository educationMediumStageRepository,
-	EducationMediumStageManager educationMediumStageManager) : CrudAppService<
+	EducationMediumStageManager educationMediumStageManager,
+	AcademicOrganizationScopeAccessService scopeAccessService) : CrudAppService<
 	EducationMediumStage,
 	EducationMediumStageDto,
 	Guid,
@@ -34,5 +36,14 @@ public class EducationMediumStageAppService(
 		EducationMediumStage? educationMediumStage = await educationMediumStageRepository.GetAsync(id);
 		await educationMediumStageManager.UpdateAsync(educationMediumStage, input.Name);
 		return ObjectMapper.Map<EducationMediumStage, EducationMediumStageDto>(educationMediumStage);
+	}
+
+	public override async Task<PagedResultDto<EducationMediumStageDto>> GetListAsync(
+		PagedAndSortedResultRequestDto input)
+	{
+		var result = await base.GetListAsync(input);
+		result.Items = (await scopeAccessService.FilterStagesAsync(result.Items)).ToList();
+		result.TotalCount = result.Items.Count;
+		return result;
 	}
 }

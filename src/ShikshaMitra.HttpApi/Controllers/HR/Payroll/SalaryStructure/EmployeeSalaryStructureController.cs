@@ -68,7 +68,7 @@ public class EmployeeSalaryStructureController : AbpControllerBase
 	{
 		try
 		{
-			await _authorizationService.CheckSensitiveFieldAccessAsync(employeeId);
+			await _authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 			await _salaryStructureAppService.UpdateAsync(employeeId, input);
 			return Ok();
 		}

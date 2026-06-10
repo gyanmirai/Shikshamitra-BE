@@ -11,20 +11,14 @@ internal static class AttendanceTrackingFormatting
 {
 	public static DateTime ParseDate(string dateString)
 	{
-		if (DateTime.TryParseExact(dateString, "dd-MM-yyyy", CultureInfo.InvariantCulture,
-			    DateTimeStyles.None, out var result))
+		if (DateTime.TryParseExact(
+			    dateString,
+			    ["dd-MM-yyyy", "d-M-yyyy", "yyyy-MM-dd", "dd/MM/yyyy", "d/M/yyyy"],
+			    CultureInfo.InvariantCulture,
+			    DateTimeStyles.None,
+			    out var result))
 		{
 			return result;
-		}
-
-		if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.None, out result))
-		{
-			return result;
-		}
-
-		if (DateTimeOffset.TryParse(dateString, out var dto))
-		{
-			return dto.DateTime;
 		}
 
 		throw new BusinessException(HRErrorCodes.AttendanceInvalidDateFormat);

@@ -1,44 +1,47 @@
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
-using ShikshaMitra.HR.Audit;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
-
 namespace ShikshaMitra.HR.Policies;
 
 [RemoteService(false)]
 public class AttendancePolicyMutationService(
 	IRepository<AttendancePolicy, Guid> repository,
 	AttendancePolicyImpactGuard impactGuard,
-	HrPolicyVersionAppService versionAppService,
 	AttendancePolicyDefaultService defaultService,
+	HrPolicyArchiveAssignmentRepairService archiveAssignmentRepairService,
 	HrPolicyWorkCalendarValidator workCalendarValidator,
-	HrAuditWriter auditWriter)
+	AttendancePolicyHistoryWriter historyWriter)
 	: ApplicationService
 {
 	public async Task<AttendancePolicyDto> CreateAsync(CreateUpdateAttendancePolicyDto input)
 	{
-		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, input.AcademicYearId);
 		var entity = AttendancePolicyModelBuilder.Build(GuidGenerator.Create(), CurrentTenant.Id, input);
+		HrPolicyStatusGuard.EnsureArchiveUsesArchiveWorkflow(entity.Status);
+		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, input.AcademicYearId, entity.Status);
 		if (entity.IsDefault)
 		{
+			HrPolicyStatusGuard.EnsureDefaultIsActive(entity.Status);
+			await impactGuard.EnsureCreateDefaultConfirmedAsync(entity.AcademicYearId, input);
 			await defaultService.ClearDefaultsAsync(entity.AcademicYearId);
 		}
 
 		await repository.InsertAsync(entity, autoSave: true);
 		var dto = HrPolicyMapping.ToDto(entity);
-		await versionAppService.CaptureAsync("attendance", dto, "created");
-		await auditWriter.WriteAsync(entity.AcademicYearId, "attendance_policy", entity.Id, entity.Name, "created", $"Created attendance policy {entity.Name}.");
+		await historyWriter.CreatedAsync(dto);
 		return dto;
 	}
 
 	public async Task<AttendancePolicyDto> UpdateAsync(Guid id, CreateUpdateAttendancePolicyDto input)
 	{
-		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, input.AcademicYearId);
 		var entity = await repository.GetAsync(id);
+		HrPolicyStatusGuard.EnsureEditable(entity.Status);
+		EnsureAcademicYearUnchanged(entity.AcademicYearId, input.AcademicYearId);
 		var status = HrPolicyMapping.ParsePolicyStatus(input.Status);
+		HrPolicyStatusGuard.EnsureArchiveUsesArchiveWorkflow(status);
+		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, entity.AcademicYearId, status);
 		var captureMode = HrPolicyMapping.ParseCaptureMode(input.CaptureMode);
 		var missingPunchBehavior = HrPolicyMapping.ParseMissingPunchBehavior(input.MissingPunchBehavior);
 		var penaltyType = HrPolicyMapping.ParsePenaltyType(input.PenaltyType);
@@ -64,6 +67,10 @@ public class AttendancePolicyMutationService(
 			await impactGuard.EnsureUpdateConfirmedAsync(id, entity.AcademicYearId, input);
 		}
 
+		if (input.IsDefault)
+		{
+			HrPolicyStatusGuard.EnsureDefaultIsActive(status);
+		}
 		await defaultService.EnsureDefaultRemainsAsync(entity, input.IsDefault, status);
 		entity.Update(
 			input.WorkCalendarPolicyId,
@@ -96,21 +103,14 @@ public class AttendancePolicyMutationService(
 
 		await repository.UpdateAsync(entity, autoSave: true);
 		var dto = HrPolicyMapping.ToDto(entity);
-		await versionAppService.CaptureAsync("attendance", dto, "edited");
-		await auditWriter.WriteAsync(
-			entity.AcademicYearId,
-			"attendance_policy",
-			entity.Id,
-			entity.Name,
-			"edited",
-			$"Edited attendance policy {entity.Name}.",
-			changedFields: HrAuditWriter.Diff(before, dto, "lastModificationTime", "lastModifierId"));
+		await historyWriter.EditedAsync(before, dto);
 		return dto;
 	}
 
 	public async Task<AttendancePolicyDto> CloneAsync(Guid id, HrPolicyCloneRequestDto input)
 	{
 		var source = await repository.GetAsync(id);
+		await workCalendarValidator.EnsureUsableAsync(source.WorkCalendarPolicyId, source.AcademicYearId, HrPolicyStatus.Draft);
 		var entity = new AttendancePolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
@@ -140,27 +140,24 @@ public class AttendancePolicyMutationService(
 
 		await repository.InsertAsync(entity, autoSave: true);
 		var dto = HrPolicyMapping.ToDto(entity);
-		await versionAppService.CaptureAsync("attendance", dto, "cloned");
-		await auditWriter.WriteAsync(
-			entity.AcademicYearId,
-			"attendance_policy",
-			entity.Id,
-			entity.Name,
-			"cloned",
-			$"Cloned attendance policy from {source.Name}.",
-			context: new { sourcePolicyId = source.Id, sourcePolicyName = source.Name });
+		await historyWriter.ClonedAsync(dto, source);
 		return dto;
 	}
 
 	public async Task DeleteAsync(Guid id)
 	{
 		var entity = await repository.GetAsync(id);
+		if (entity.Status == HrPolicyStatus.Archived)
+		{
+			return;
+		}
+
 		await defaultService.EnsureDefaultRemainsAsync(entity, isDefaultAfterUpdate: false, statusAfterUpdate: HrPolicyStatus.Archived);
 		await impactGuard.EnsureArchiveConfirmedAsync(id, entity.AcademicYearId);
+		await archiveAssignmentRepairService.ReassignAttendanceReferencesToDefaultAsync(entity);
 		entity.Archive();
 		await repository.UpdateAsync(entity, autoSave: true);
-		await versionAppService.CaptureAsync("attendance", HrPolicyMapping.ToDto(entity), "archived");
-		await auditWriter.WriteAsync(entity.AcademicYearId, "attendance_policy", entity.Id, entity.Name, "archived", $"Archived attendance policy {entity.Name}.");
+		await historyWriter.ArchivedAsync(HrPolicyMapping.ToDto(entity));
 	}
 
 	public async Task<AttendancePolicyDto> UnarchiveAsync(Guid id)
@@ -174,8 +171,7 @@ public class AttendancePolicyMutationService(
 		entity.Unarchive();
 		await repository.UpdateAsync(entity, autoSave: true);
 		var dto = HrPolicyMapping.ToDto(entity);
-		await versionAppService.CaptureAsync("attendance", dto, "unarchived");
-		await auditWriter.WriteAsync(entity.AcademicYearId, "attendance_policy", entity.Id, entity.Name, "unarchived", $"Unarchived attendance policy {entity.Name} as draft.");
+		await historyWriter.UnarchivedAsync(dto);
 		return dto;
 	}
 
@@ -183,14 +179,22 @@ public class AttendancePolicyMutationService(
 	{
 		var entity = await repository.GetAsync(id);
 		HrPolicyMapping.EnsureActive(entity.Status);
+		await workCalendarValidator.EnsureUsableAsync(entity.WorkCalendarPolicyId, entity.AcademicYearId, entity.Status);
 		await impactGuard.EnsureSetDefaultConfirmedAsync(id, entity.AcademicYearId);
 		await defaultService.ClearDefaultsAsync(entity.AcademicYearId, entity.Id);
 		entity.SetDefault(true);
 		await repository.UpdateAsync(entity, autoSave: true);
 		var dto = HrPolicyMapping.ToDto(entity);
-		await versionAppService.CaptureAsync("attendance", dto, "set-default");
-		await auditWriter.WriteAsync(entity.AcademicYearId, "attendance_policy", entity.Id, entity.Name, "set_default", $"Set attendance policy {entity.Name} as default.");
+		await historyWriter.SetDefaultAsync(dto);
 		return dto;
+	}
+
+	private static void EnsureAcademicYearUnchanged(Guid entityAcademicYearId, Guid inputAcademicYearId)
+	{
+		if (entityAcademicYearId != inputAcademicYearId)
+		{
+			throw new BusinessException(HRErrorCodes.HrPolicyAssignmentAcademicYearMismatch);
+		}
 	}
 
 }

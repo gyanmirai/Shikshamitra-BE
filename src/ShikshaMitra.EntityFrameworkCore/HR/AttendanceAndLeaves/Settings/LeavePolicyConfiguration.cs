@@ -19,48 +19,28 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 			.IsRequired()
 			.HasMaxLength(LeavePolicyConsts.MaxPolicyNameLength);
 
-		builder.Property(x => x.LeaveTypeId)
-			.IsRequired();
-
-		builder.Property(x => x.AccrualPolicyType)
-			.IsRequired();
-
-		builder.Property(x => x.LeaveCount)
-			.IsRequired();
-
-		builder.Property(x => x.PaidType)
-			.IsRequired();
-
-		builder.Property(x => x.CarryForward)
-			.IsRequired()
-			.HasDefaultValue(false);
-
-		builder.Property(x => x.Encashable)
-			.IsRequired()
-			.HasDefaultValue(false);
-
-		builder.Property(x => x.EncashmentTiming);
-
-		builder.Property(x => x.RequiresApproval)
-			.IsRequired()
-			.HasDefaultValue(true);
-
 		builder.Property(x => x.Description)
 			.HasMaxLength(LeavePolicyConsts.MaxDescriptionLength);
+
+		builder.Property(x => x.Status)
+			.IsRequired();
+
+		builder.Property(x => x.EffectiveFrom)
+			.IsRequired();
 
 		builder.Property(x => x.IsActive)
 			.IsRequired()
 			.HasDefaultValue(true);
 
-		builder.HasOne(x => x.LeaveType)
-			.WithMany()
-			.HasForeignKey(x => x.LeaveTypeId)
-			.OnDelete(DeleteBehavior.Restrict);
-
 		builder.HasOne(x => x.AcademicYear)
 			.WithMany()
 			.HasForeignKey(x => x.AcademicYearId)
 			.OnDelete(DeleteBehavior.Restrict);
+
+		builder.HasMany(x => x.Rules)
+			.WithOne(x => x.LeavePolicy)
+			.HasForeignKey(x => x.LeavePolicyId)
+			.OnDelete(DeleteBehavior.Cascade);
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.PolicyName })
 			.IsUnique()
@@ -69,7 +49,7 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsActive })
 			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_IsActive");
 
-		builder.HasIndex(x => x.LeaveTypeId)
-			.HasDatabaseName("IX_EmployeeLeavePolicies_LeaveTypeId");
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Status })
+			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_Status");
 	}
 }

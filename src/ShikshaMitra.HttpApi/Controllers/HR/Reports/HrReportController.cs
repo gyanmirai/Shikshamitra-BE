@@ -75,6 +75,13 @@ public class HrReportController(IHrReportAppService reportAppService) : AbpContr
 		return reportAppService.PreviewAsync(input);
 	}
 
+	[HttpPost("preview-v2")]
+	[ProducesResponseType(typeof(HrReportPreviewDto), StatusCodes.Status200OK)]
+	public Task<HrReportPreviewDto> GetPreviewAsync([FromBody] HrReportRequestDto input)
+	{
+		return reportAppService.GetPreviewAsync(input);
+	}
+
 	[HttpPost("exports")]
 	[ProducesResponseType(typeof(HrReportExportCreateResponseDto), StatusCodes.Status202Accepted)]
 	public async Task<IActionResult> CreateExportAsync([FromBody] HrReportRequestDto input)
@@ -97,11 +104,90 @@ public class HrReportController(IHrReportAppService reportAppService) : AbpContr
 		return reportAppService.GetExportAsync(jobId);
 	}
 
+	[HttpPost("exports/{jobId:guid}/cancel")]
+	[ProducesResponseType(typeof(HrReportExportJobDto), StatusCodes.Status200OK)]
+	public Task<HrReportExportJobDto> CancelExportAsync(Guid jobId)
+	{
+		return reportAppService.CancelExportAsync(jobId);
+	}
+
+	[HttpPost("exports/{jobId:guid}/retry")]
+	[ProducesResponseType(typeof(HrReportExportCreateResponseDto), StatusCodes.Status202Accepted)]
+	public Task<HrReportExportCreateResponseDto> RetryExportAsync(Guid jobId)
+	{
+		return reportAppService.RetryExportAsync(jobId);
+	}
+
+	[HttpPost("exports/{jobId:guid}/regenerate")]
+	[ProducesResponseType(typeof(HrReportExportCreateResponseDto), StatusCodes.Status202Accepted)]
+	public Task<HrReportExportCreateResponseDto> RegenerateExportAsync(Guid jobId)
+	{
+		return reportAppService.RegenerateExportAsync(jobId);
+	}
+
+	[HttpPost("exports/{jobId:guid}/share")]
+	[ProducesResponseType(typeof(HrReportExportJobDto), StatusCodes.Status200OK)]
+	public Task<HrReportExportJobDto> ShareExportAsync(Guid jobId, [FromBody] HrReportShareExportRequestDto input)
+	{
+		return reportAppService.ShareExportAsync(jobId, input);
+	}
+
 	[HttpGet("exports/{jobId:guid}/download")]
 	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
 	public async Task<IActionResult> DownloadExportAsync(Guid jobId)
 	{
 		var file = await reportAppService.DownloadExportAsync(jobId);
 		return File(file.Bytes, file.ContentType, file.FileName);
+	}
+
+	[HttpGet("schedules")]
+	[ProducesResponseType(typeof(HrReportScheduleListDto), StatusCodes.Status200OK)]
+	public Task<HrReportScheduleListDto> GetSchedulesAsync()
+	{
+		return reportAppService.GetSchedulesAsync();
+	}
+
+	[HttpPost("schedules")]
+	[ProducesResponseType(typeof(HrReportScheduleDto), StatusCodes.Status201Created)]
+	public async Task<IActionResult> CreateScheduleAsync([FromBody] HrReportScheduleRequestDto input)
+	{
+		var schedule = await reportAppService.CreateScheduleAsync(input);
+		return Created($"api/hr/reports/schedules/{schedule.Id}", schedule);
+	}
+
+	[HttpPut("schedules/{id:guid}")]
+	[ProducesResponseType(typeof(HrReportScheduleDto), StatusCodes.Status200OK)]
+	public Task<HrReportScheduleDto> UpdateScheduleAsync(Guid id, [FromBody] HrReportScheduleRequestDto input)
+	{
+		return reportAppService.UpdateScheduleAsync(id, input);
+	}
+
+	[HttpPost("schedules/{id:guid}/pause")]
+	[ProducesResponseType(typeof(HrReportScheduleDto), StatusCodes.Status200OK)]
+	public Task<HrReportScheduleDto> PauseScheduleAsync(Guid id)
+	{
+		return reportAppService.PauseScheduleAsync(id);
+	}
+
+	[HttpPost("schedules/{id:guid}/resume")]
+	[ProducesResponseType(typeof(HrReportScheduleDto), StatusCodes.Status200OK)]
+	public Task<HrReportScheduleDto> ResumeScheduleAsync(Guid id)
+	{
+		return reportAppService.ResumeScheduleAsync(id);
+	}
+
+	[HttpPost("schedules/{id:guid}/run-now")]
+	[ProducesResponseType(typeof(HrReportScheduleRunResponseDto), StatusCodes.Status202Accepted)]
+	public Task<HrReportScheduleRunResponseDto> RunScheduleNowAsync(Guid id)
+	{
+		return reportAppService.RunScheduleNowAsync(id);
+	}
+
+	[HttpDelete("schedules/{id:guid}")]
+	[ProducesResponseType(StatusCodes.Status204NoContent)]
+	public async Task<IActionResult> DeleteScheduleAsync(Guid id)
+	{
+		await reportAppService.DeleteScheduleAsync(id);
+		return NoContent();
 	}
 }

@@ -68,7 +68,7 @@ internal static class EmployeeLeaveSqlitePageQuery
 				x.Status,
 				x.LeavePolicyId,
 				x.LeavePolicy != null ? x.LeavePolicy.AcademicYearId : null,
-				x.LeavePolicy != null ? x.LeavePolicy.LeaveTypeId : null,
+				x.LeaveTypeId,
 				x.Employee != null ? x.Employee.EmployeeCode : string.Empty,
 				x.Employee != null ? x.Employee.FirstName : null,
 				x.Employee != null ? x.Employee.LastName : null,

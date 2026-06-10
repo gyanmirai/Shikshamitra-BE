@@ -15,16 +15,20 @@ public class PayrollPolicyWorkflow(
 	HrPolicyImpactConfirmationService confirmationService,
 	HrPolicyVersionAppService versionAppService,
 	PayrollPolicyDefaultService defaultService,
+	HrPolicyArchiveAssignmentRepairService archiveAssignmentRepairService,
 	HrPolicyWorkCalendarValidator workCalendarValidator,
 	HrAuditWriter auditWriter) : ApplicationService, ITransientDependency
 {
 	public async Task<PayrollPolicyDto> CreateAsync(CreateUpdatePayrollPolicyDto input)
 	{
-		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, input.AcademicYearId);
 		var entity = PayrollPolicyModelBuilder.Build(GuidGenerator.Create(), CurrentTenant.Id, input);
+		HrPolicyStatusGuard.EnsureArchiveUsesArchiveWorkflow(entity.Status);
+		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, input.AcademicYearId, entity.Status);
 
 		if (entity.IsDefault)
 		{
+			HrPolicyStatusGuard.EnsureDefaultIsActive(entity.Status);
+			await EnsureCreateDefaultConfirmedAsync(input);
 			await defaultService.ClearDefaultsAsync(entity.AcademicYearId);
 		}
 
@@ -37,10 +41,13 @@ public class PayrollPolicyWorkflow(
 
 	public async Task<PayrollPolicyDto> UpdateAsync(Guid id, CreateUpdatePayrollPolicyDto input)
 	{
-		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, input.AcademicYearId);
 		var entity = await repository.GetAsync(id);
+		HrPolicyStatusGuard.EnsureEditable(entity.Status);
 		var before = HrPolicyMapping.ToDto(entity);
+		EnsureAcademicYearUnchanged(entity.AcademicYearId, input.AcademicYearId);
 		var status = HrPolicyMapping.ParsePolicyStatus(input.Status);
+		HrPolicyStatusGuard.EnsureArchiveUsesArchiveWorkflow(status);
+		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, entity.AcademicYearId, status);
 		var dayCalculationType = HrPolicyMapping.ParseDayCalculationType(input.DayCalculationType);
 		var manualMonthDays = HrPolicyMapping.ToManualMonths(input.ManualMonthDays);
 		var saturdayWorkPolicy = HrPolicyMapping.ParseSaturdayWorkPolicy(input.SaturdayWorkPolicy);
@@ -64,6 +71,10 @@ public class PayrollPolicyWorkflow(
 			await confirmationService.EnsureConfirmedAsync(preview);
 		}
 
+		if (input.IsDefault)
+		{
+			HrPolicyStatusGuard.EnsureDefaultIsActive(status);
+		}
 		await defaultService.EnsureDefaultRemainsAsync(entity, input.IsDefault, status);
 		entity.Update(
 			input.WorkCalendarPolicyId,
@@ -91,6 +102,7 @@ public class PayrollPolicyWorkflow(
 	public async Task<PayrollPolicyDto> CloneAsync(Guid id, HrPolicyCloneRequestDto input)
 	{
 		var source = await repository.GetAsync(id);
+		await workCalendarValidator.EnsureUsableAsync(source.WorkCalendarPolicyId, source.AcademicYearId, HrPolicyStatus.Draft);
 		var entity = new PayrollPolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
@@ -113,9 +125,26 @@ public class PayrollPolicyWorkflow(
 		return dto;
 	}
 
+	private async Task EnsureCreateDefaultConfirmedAsync(CreateUpdatePayrollPolicyDto input)
+	{
+		var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
+		{
+			PolicyType = "payroll",
+			AcademicYearId = input.AcademicYearId,
+			Action = "create-default",
+			PayrollPolicy = input
+		});
+		await confirmationService.EnsureConfirmedAsync(preview);
+	}
+
 	public async Task DeleteAsync(Guid id)
 	{
 		var entity = await repository.GetAsync(id);
+		if (entity.Status == HrPolicyStatus.Archived)
+		{
+			return;
+		}
+
 		await defaultService.EnsureDefaultRemainsAsync(entity, isDefaultAfterUpdate: false, statusAfterUpdate: HrPolicyStatus.Archived);
 		var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
 		{
@@ -125,6 +154,7 @@ public class PayrollPolicyWorkflow(
 			Action = "archive"
 		});
 		await confirmationService.EnsureConfirmedAsync(preview);
+		await archiveAssignmentRepairService.ReassignPayrollReferencesToDefaultAsync(entity);
 		entity.Archive();
 		await repository.UpdateAsync(entity, autoSave: true);
 		var archivedDto = HrPolicyMapping.ToDto(entity);
@@ -152,6 +182,7 @@ public class PayrollPolicyWorkflow(
 	{
 		var entity = await repository.GetAsync(id);
 		HrPolicyMapping.EnsureActive(entity.Status);
+		await workCalendarValidator.EnsureUsableAsync(entity.WorkCalendarPolicyId, entity.AcademicYearId, entity.Status);
 		var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
 		{
 			PolicyType = "payroll",
@@ -167,6 +198,14 @@ public class PayrollPolicyWorkflow(
 		await versionAppService.CaptureAsync("payroll", dto, "set-default");
 		await auditWriter.WriteAsync(dto.AcademicYearId, "payroll_policy", dto.Id, dto.Name, "set_default", $"Set payroll policy {dto.Name} as default");
 		return dto;
+	}
+
+	private static void EnsureAcademicYearUnchanged(Guid entityAcademicYearId, Guid inputAcademicYearId)
+	{
+		if (entityAcademicYearId != inputAcademicYearId)
+		{
+			throw new BusinessException(HRErrorCodes.HrPolicyAssignmentAcademicYearMismatch);
+		}
 	}
 
 }

@@ -36,6 +36,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
     private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
     private readonly IRepository<Standard, Guid> _standardRepository;
     private readonly IRepository<Division, Guid> _divisionRepository;
+    private readonly UserScopeAssignmentManager _assignmentManager;
 
     public UserScopeAppService(
         IUserScopeAssignmentRepository scopeRepository,
@@ -48,7 +49,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         IRepository<EducationMedium, Guid> educationMediumRepository,
         IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
         IRepository<Standard, Guid> standardRepository,
-        IRepository<Division, Guid> divisionRepository)
+        IRepository<Division, Guid> divisionRepository,
+        UserScopeAssignmentManager assignmentManager)
     {
         _scopeRepository = scopeRepository;
         _userScopeService = userScopeService;
@@ -61,6 +63,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         _educationMediumStageRepository = educationMediumStageRepository;
         _standardRepository = standardRepository;
         _divisionRepository = divisionRepository;
+        _assignmentManager = assignmentManager;
     }
 
     [Authorize(ShikshaMitraPermissions.UserScope.Assign)]
@@ -71,35 +74,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
             _logger.LogInformation("Attempting to assign scope. UserId: {UserId}, RoleName: {RoleName}",
                 input.UserId, input.RoleName);
 
-            // Note: This validation is also enforced at DTO level via IValidatableObject
-            // Keeping it here as a defensive programming practice
-            // Validation: Either UserId OR RoleName must be provided
-            if ((!input.UserId.HasValue && string.IsNullOrWhiteSpace(input.RoleName)) ||
-                (input.UserId.HasValue && !string.IsNullOrWhiteSpace(input.RoleName)))
-            {
-                throw new UserFriendlyException(
-                    "Either UserId or RoleName must be provided, but not both.",
-                    code: "UserScope:InvalidInput"
-                );
-            }
-
-            // Validate user exists if UserId is provided
-            if (input.UserId.HasValue)
-            {
-                var userExists = await _userRepository.FindAsync(input.UserId.Value);
-                if (userExists == null)
-                {
-                    throw new EntityNotFoundException(
-                        typeof(IdentityUser),
-                        input.UserId.Value
-                    );
-                }
-            }
-
-            // Create new assignment
-            var assignment = new UserScopeAssignment(
-                GuidGenerator.Create(),
-                CurrentTenant.Id,
+            var assignment = await _assignmentManager.CreateAsync(
                 input.UserId,
                 input.RoleName,
                 input.AcademicYearId,
@@ -111,39 +86,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 input.Description
             );
 
-            try
-            {
-                await _scopeRepository.InsertAsync(assignment);
-            }
-            catch (Exception dbEx) when (IsConstraintViolationException(dbEx))
-            {
-                // Handle unique constraint violation (UQ_UserScopeAssignment)
-                if (IsUniqueConstraintViolation(dbEx))
-                {
-                    _logger.LogWarning(dbEx,
-                        "Duplicate scope assignment detected. UserId: {UserId}, RoleName: {RoleName}",
-                        input.UserId, input.RoleName);
-                    throw new UserFriendlyException(
-                        "This scope assignment already exists for the user/role with the specified parameters.",
-                        code: "UserScope:AlreadyExists"
-                    );
-                }
-
-                // Handle foreign key constraint violation
-                if (IsForeignKeyViolation(dbEx))
-                {
-                    var correlationId = Guid.NewGuid();
-                    _logger.LogWarning(dbEx,
-                        "Foreign key violation during scope assignment. UserId: {UserId}, RoleName: {RoleName}, CorrelationId: {CorrelationId}",
-                        input.UserId, input.RoleName, correlationId);
-                    throw new UserFriendlyException(
-                        $"One or more referenced entities (Standard, Division, Board, Medium, etc.) do not exist. Please verify all IDs are valid. (Ref: {correlationId})",
-                        code: "UserScope:ForeignKeyViolation"
-                    );
-                }
-
-                throw;
-            }
+            await _scopeRepository.InsertAsync(assignment);
 
             // Invalidate cache for the user or role
             if (input.UserId.HasValue)
@@ -163,7 +106,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
             return ObjectMapper.Map<UserScopeAssignment, UserScopeAssignmentDto>(assignment);
         }
-        catch (UserFriendlyException)
+        catch (BusinessException)
         {
             throw;
         }
@@ -173,10 +116,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
             _logger.LogError(ex, "Error assigning user scope. UserId: {UserId}, RoleName: {RoleName}, CorrelationId: {CorrelationId}",
                 input.UserId, input.RoleName, correlationId);
 
-            throw new UserFriendlyException(
-                $"An error occurred while assigning the scope. Please contact support with reference: {correlationId}",
-                code: "UserScope:AssignmentFailed"
-            );
+            throw new BusinessException(UserScopeErrorCodes.AssignmentFailed)
+                .WithData("CorrelationId", correlationId);
         }
     }
 
@@ -195,7 +136,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
             if (input.UserIds == null || !input.UserIds.Any())
             {
                 throw new BusinessException(
-                    code: "UserScope:NoUsers",
+                    code: UserScopeErrorCodes.NoUsers,
                     message: "At least one user ID must be provided."
                 );
             }
@@ -204,16 +145,12 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
             var distinctUserIds = input.UserIds.Distinct().ToList();
             var missingUserIds = new List<Guid>();
 
-            // Check in batches to avoid N+1 while respecting ABP repository pattern
-            var batchSize = 50;
-            for (int i = 0; i < distinctUserIds.Count; i += batchSize)
+            foreach (var userId in distinctUserIds)
             {
-                var batch = distinctUserIds.Skip(i).Take(batchSize).ToList();
-                var foundUsers = await Task.WhenAll(
-                    batch.Select(async userId => new { UserId = userId, Exists = await _userRepository.FindAsync(userId) != null })
-                );
-
-                missingUserIds.AddRange(foundUsers.Where(x => !x.Exists).Select(x => x.UserId));
+                if (await _userRepository.FindAsync(userId) == null)
+                {
+                    missingUserIds.Add(userId);
+                }
             }
 
             if (missingUserIds.Any())
@@ -222,11 +159,9 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                     "Bulk assignment failed - users not found. MissingUserIds: [{MissingUserIds}], CorrelationId: {CorrelationId}",
                     string.Join(", ", missingUserIds), correlationId);
 
-                throw new UserFriendlyException(
-                    message: $"The following user IDs do not exist: {string.Join(", ", missingUserIds)}. (Ref: {correlationId})",
-                    code: "UserScope:UsersNotFound",
-                    details: string.Join(", ", missingUserIds)
-                );
+                throw new BusinessException(UserScopeErrorCodes.UsersNotFound)
+                    .WithData("UserIds", string.Join(", ", missingUserIds))
+                    .WithData("CorrelationId", correlationId);
             }
 
             // Generate all combinations of scope parameters
@@ -243,6 +178,31 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
             try
             {
+                var newAssignments = new List<UserScopeAssignment>(totalCombinations);
+
+                foreach (var userId in distinctUserIds)
+                {
+                    foreach (var scope in scopeCombinations)
+                    {
+                        var assignment = await _assignmentManager.CreateAsync(
+                            userId,
+                            null,
+                            scope.AcademicYearId,
+                            scope.EducationBoardId,
+                            scope.EducationMediumId,
+                            scope.EducationMediumStageId,
+                            scope.StandardId,
+                            scope.DivisionId,
+                            input.Description,
+                            checkDuplicate: false
+                        );
+
+                        newAssignments.Add(assignment);
+                    }
+                }
+
+                createdCount = newAssignments.Count;
+
                 // STEP 1: Delete all existing scope assignments for the specified users - OPTIMIZED: Bulk delete
                 _logger.LogInformation(
                     "Step 1/2: Deleting existing scope assignments for {UserCount} users. CorrelationId: {CorrelationId}",
@@ -267,32 +227,6 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 _logger.LogInformation(
                     "Step 2/2: Creating {TotalCombinations} new scope assignments. CorrelationId: {CorrelationId}",
                     totalCombinations, correlationId);
-
-                var newAssignments = new List<UserScopeAssignment>(totalCombinations);
-
-                foreach (var userId in distinctUserIds)
-                {
-                    foreach (var scope in scopeCombinations)
-                    {
-                        var assignment = new UserScopeAssignment(
-                            GuidGenerator.Create(),
-                            CurrentTenant.Id,
-                            userId,
-                            null,
-                            scope.AcademicYearId,
-                            scope.EducationBoardId,
-                            scope.EducationMediumId,
-                            scope.EducationMediumStageId,
-                            scope.StandardId,
-                            scope.DivisionId,
-                            input.Description
-                        );
-
-                        newAssignments.Add(assignment);
-                    }
-                }
-
-                createdCount = newAssignments.Count;
 
                 if (createdCount > 0)
                 {
@@ -335,18 +269,12 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                         "Bulk assignment failed due to invalid references. CorrelationId: {CorrelationId}",
                         correlationId);
 
-                    throw new UserFriendlyException(
-                        $"One or more referenced entities (Standard, Division, Board, Medium, etc.) do not exist. No changes were made. Please verify all IDs are valid. (Ref: {correlationId})",
-                        code: "UserScope:InvalidReferences"
-                    );
+                    throw new BusinessException(UserScopeErrorCodes.InvalidReferences)
+                        .WithData("CorrelationId", correlationId);
                 }
 
                 throw;
             }
-        }
-        catch (UserFriendlyException)
-        {
-            throw;
         }
         catch (BusinessException)
         {
@@ -358,10 +286,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 "Error during bulk scope assignment. CorrelationId: {CorrelationId}",
                 correlationId);
 
-            throw new UserFriendlyException(
-                $"An error occurred during bulk assignment. No changes were made. Please contact support with reference: {correlationId}",
-                code: "UserScope:BulkAssignFailed"
-            );
+            throw new BusinessException(UserScopeErrorCodes.BulkAssignFailed)
+                .WithData("CorrelationId", correlationId);
         }
     }
 
@@ -370,8 +296,6 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
     /// </summary>
     private List<ScopeParameterCombination> GenerateScopeCombinations(BulkScopeAssignmentDto input)
     {
-        var combinations = new List<ScopeParameterCombination>();
-
         // Start with a single empty combination
         var currentCombinations = new List<ScopeParameterCombination> { new ScopeParameterCombination() };
 
@@ -392,7 +316,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 var newCombinations = new List<ScopeParameterCombination>();
                 foreach (var combo in currentCombinations)
                 {
-                    foreach (var id in ids)
+                    foreach (var id in ids.Distinct())
                     {
                         var newCombo = combo.Clone();
                         setter(newCombo, id);
@@ -450,10 +374,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
             var assignment = await _repository.FindAsync(id);
             if (assignment == null)
             {
-                throw new UserFriendlyException(
-                    $"Scope assignment with ID '{id}' does not exist.",
-                    code: "UserScope:AssignmentNotFound"
-                );
+                throw new BusinessException(UserScopeErrorCodes.AssignmentNotFound)
+                    .WithData("AssignmentId", id);
             }
 
             await _repository.DeleteAsync(assignment);
@@ -471,7 +393,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
             _logger.LogInformation("Scope assignment {AssignmentId} revoked successfully", id);
         }
-        catch (UserFriendlyException)
+        catch (BusinessException)
         {
             throw;
         }
@@ -479,10 +401,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         {
             var correlationId = Guid.NewGuid();
             _logger.LogError(ex, "Error revoking scope assignment {AssignmentId}, CorrelationId: {CorrelationId}", id, correlationId);
-            throw new UserFriendlyException(
-                $"An error occurred while revoking the scope assignment. Please contact support with reference: {correlationId}",
-                code: "UserScope:RevokeFailed"
-            );
+            throw new BusinessException(UserScopeErrorCodes.RevokeFailed)
+                .WithData("CorrelationId", correlationId);
         }
     }
 
@@ -541,10 +461,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         {
             var correlationId = Guid.NewGuid();
             _logger.LogError(ex, "Error getting scope for user {UserId}, CorrelationId: {CorrelationId}", userId, correlationId);
-            throw new UserFriendlyException(
-                $"An error occurred while retrieving user scope. Please contact support with reference: {correlationId}",
-                code: "UserScope:GetScopeFailed"
-            );
+            throw new BusinessException(UserScopeErrorCodes.GetScopeFailed)
+                .WithData("CorrelationId", correlationId);
         }
     }
 
@@ -575,10 +493,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 var yearExists = await _academicYearRepository.FindAsync(academicYearId.Value);
                 if (yearExists == null)
                 {
-                    throw new UserFriendlyException(
-                        $"Academic year with ID '{academicYearId.Value}' does not exist.",
-                        code: "UserScope:AcademicYearNotFound"
-                    );
+                    throw new BusinessException(UserScopeErrorCodes.AcademicYearNotFound)
+                        .WithData("AcademicYearId", academicYearId.Value);
                 }
             }
 
@@ -616,7 +532,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         {
             throw;
         }
-        catch (UserFriendlyException)
+        catch (BusinessException)
         {
             throw;
         }
@@ -624,10 +540,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         {
             var correlationId = Guid.NewGuid();
             _logger.LogError(ex, "Error getting hierarchical scope for user {UserId}, CorrelationId: {CorrelationId}", userId, correlationId);
-            throw new UserFriendlyException(
-                $"An error occurred while retrieving user scope hierarchy. Please contact support with reference: {correlationId}",
-                code: "UserScope:GetHierarchyFailed"
-            );
+            throw new BusinessException(UserScopeErrorCodes.GetHierarchyFailed)
+                .WithData("CorrelationId", correlationId);
         }
     }
 

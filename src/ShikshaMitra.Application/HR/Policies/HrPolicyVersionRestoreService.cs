@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Audit;
@@ -13,17 +12,15 @@ namespace ShikshaMitra.HR.Policies;
 [RemoteService(false)]
 public class HrPolicyVersionRestoreService(
 	IRepository<WorkCalendarPolicy, Guid> workCalendarRepository,
-	IRepository<WorkCalendarHoliday, Guid> holidaySnapshotRepository,
 	IRepository<PayrollPolicy, Guid> payrollPolicyRepository,
 	IRepository<AttendancePolicy, Guid> attendancePolicyRepository,
+	WorkCalendarHolidaySnapshotService holidaySnapshotService,
+	HrPolicyWorkCalendarValidator workCalendarValidator,
 	HrPolicyVersionCaptureService captureService,
 	HrAuditWriter auditWriter)
 	: ApplicationService, ITransientDependency
 {
-	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-	{
-		WriteIndented = false
-	};
+	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
 	public async Task<object> RestoreDraftAsync(HrPolicyVersion version, string policyType, Guid policyId, HrPolicyRestoreDraftRequestDto input)
 	{
@@ -51,6 +48,8 @@ public class HrPolicyVersionRestoreService(
 	private async Task<WorkCalendarPolicyDto> RestoreWorkCalendarAsync(HrPolicyVersion version, HrPolicyRestoreDraftRequestDto input)
 	{
 		var snapshot = Deserialize<WorkCalendarPolicyDto>(version.SnapshotJson);
+		EnsureSnapshotAcademicYearMatchesVersion(snapshot.AcademicYearId, version.AcademicYearId);
+		await holidaySnapshotService.ValidateHolidaysAsync(snapshot.AcademicYearId, snapshot.Holidays);
 		var entity = new WorkCalendarPolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
@@ -63,64 +62,19 @@ public class HrPolicyVersionRestoreService(
 			snapshot.CustomWeeklyOffs,
 			HrPolicyMapping.ParseHolidaySyncMode(snapshot.HolidaySyncMode));
 		await workCalendarRepository.InsertAsync(entity, autoSave: true);
-		await RestoreWorkCalendarHolidaysAsync(entity.Id, snapshot);
+		await holidaySnapshotService.ReplaceHolidaysAsync(entity.Id, snapshot.AcademicYearId, snapshot.Holidays);
 		var dto = HrPolicyMapping.ToDto(entity);
-		dto.Holidays = await GetWorkCalendarHolidaysAsync(entity.Id);
+		dto.Holidays = await holidaySnapshotService.GetHolidaysAsync(entity.Id);
 		dto.HolidaySummary = HrPolicyMapping.BuildHolidaySummary(dto.Holidays);
 		await captureService.CaptureAsync("work_calendar", dto, "restore-draft", input.ChangeReason);
 		return dto;
 	}
 
-	private async Task RestoreWorkCalendarHolidaysAsync(Guid restoredPolicyId, WorkCalendarPolicyDto snapshot)
-	{
-		if (snapshot.Holidays.Count == 0)
-		{
-			return;
-		}
-
-		foreach (var row in snapshot.Holidays)
-		{
-			var fromDate = (row.FromDate ?? row.Date).Date;
-			var toDate = (row.ToDate ?? row.Date).Date;
-			if (toDate < fromDate)
-			{
-				toDate = fromDate;
-			}
-
-			var holiday = new WorkCalendarHoliday(
-				GuidGenerator.Create(),
-				CurrentTenant.Id,
-				snapshot.AcademicYearId,
-				restoredPolicyId,
-				fromDate,
-				toDate,
-				row.HolidayName,
-				HrPolicyMapping.ParseWorkCalendarHolidaySource(row.Source),
-				row.CalendarHolidayId,
-				row.IsIncluded,
-				row.Notes);
-			await holidaySnapshotRepository.InsertAsync(holiday, autoSave: false);
-		}
-
-		if (UnitOfWorkManager.Current is not null)
-		{
-			await UnitOfWorkManager.Current.SaveChangesAsync();
-		}
-	}
-
-	private async Task<System.Collections.Generic.List<WorkCalendarHolidayDto>> GetWorkCalendarHolidaysAsync(Guid policyId)
-	{
-		var query = await holidaySnapshotRepository.GetQueryableAsync();
-		var rows = await AsyncExecuter.ToListAsync(query
-			.Where(x => x.WorkCalendarPolicyId == policyId)
-			.OrderBy(x => x.FromDate)
-			.ThenBy(x => x.HolidayName));
-		return rows.Select(HrPolicyMapping.ToDto).ToList();
-	}
-
 	private async Task<PayrollPolicy> RestorePayrollPolicyAsync(HrPolicyVersion version, HrPolicyRestoreDraftRequestDto input)
 	{
 		var snapshot = Deserialize<PayrollPolicyDto>(version.SnapshotJson);
+		EnsureSnapshotAcademicYearMatchesVersion(snapshot.AcademicYearId, version.AcademicYearId);
+		await workCalendarValidator.EnsureUsableAsync(snapshot.WorkCalendarPolicyId, snapshot.AcademicYearId, HrPolicyStatus.Draft);
 		var entity = new PayrollPolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
@@ -142,6 +96,8 @@ public class HrPolicyVersionRestoreService(
 	private async Task<AttendancePolicy> RestoreAttendancePolicyAsync(HrPolicyVersion version, HrPolicyRestoreDraftRequestDto input)
 	{
 		var snapshot = Deserialize<AttendancePolicyDto>(version.SnapshotJson);
+		EnsureSnapshotAcademicYearMatchesVersion(snapshot.AcademicYearId, version.AcademicYearId);
+		await workCalendarValidator.EnsureUsableAsync(snapshot.WorkCalendarPolicyId, snapshot.AcademicYearId, HrPolicyStatus.Draft);
 		var entity = new AttendancePolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
@@ -173,9 +129,22 @@ public class HrPolicyVersionRestoreService(
 		return entity;
 	}
 
-	private static T Deserialize<T>(string json) =>
-		JsonSerializer.Deserialize<T>(json, JsonOptions) ?? throw new BusinessException(HRErrorCodes.HrPolicyInvalidVersionSnapshot);
+	private static T Deserialize<T>(string json)
+	{
+		try
+		{
+			return JsonSerializer.Deserialize<T>(json, JsonOptions) ?? throw InvalidSnapshot();
+		}
+		catch (JsonException ex) { throw InvalidSnapshot(ex); }
+	}
+	private static BusinessException InvalidSnapshot(Exception? ex = null) =>
+		new(HRErrorCodes.HrPolicyInvalidVersionSnapshot, innerException: ex);
 
 	private static string BuildRestoredName(string? requestedName, string sourceName, int version) =>
 		string.IsNullOrWhiteSpace(requestedName) ? $"{sourceName} v{version} Restore Draft" : requestedName.Trim();
+
+	private static void EnsureSnapshotAcademicYearMatchesVersion(Guid snapshotAcademicYearId, Guid versionAcademicYearId)
+	{
+		if (snapshotAcademicYearId != versionAcademicYearId) { throw new BusinessException(HRErrorCodes.HrPolicyAssignmentAcademicYearMismatch); }
+	}
 }

@@ -63,9 +63,24 @@ public class PayrollPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		IReadOnlyList<PayrollHolidayOverride>? holidayOverrides,
 		IReadOnlyList<PayrollLockedMonthSetting>? lockedMonthSettings = null)
 	{
+		if (AcademicYearId == Guid.Empty)
+		{
+			throw new BusinessException(HRErrorCodes.AcademicYearRequired);
+		}
+
+		if (workCalendarPolicyId == Guid.Empty)
+		{
+			throw new BusinessException(HRErrorCodes.WorkCalendarPolicyRequired);
+		}
+
 		if (string.IsNullOrWhiteSpace(name))
 		{
 			throw new BusinessException(HRErrorCodes.PayrollPolicyNameRequired);
+		}
+
+		if (status == HrPolicyStatus.Archived)
+		{
+			throw new BusinessException(HRErrorCodes.PolicyArchiveRequiresArchiveWorkflow);
 		}
 
 		if (isDefault && status != HrPolicyStatus.Active)
@@ -139,6 +154,11 @@ public class PayrollPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 
 		var normalizedMonths = manualMonthDays?.OrderBy(x => x.Year).ThenBy(x => x.Month).ToList() ?? new List<DayCalculationManualMonth>();
+		if (normalizedMonths.Select(x => new { x.Year, x.Month }).Distinct().Count() != normalizedMonths.Count)
+		{
+			throw new BusinessException(HRErrorCodes.DuplicateManualMonthDays);
+		}
+
 		if (normalizedMonths.Count > 0)
 		{
 			ManualDays = null;
@@ -156,13 +176,22 @@ public class PayrollPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		throw new BusinessException(HRErrorCodes.InvalidManualDays);
 	}
 
-	private static List<PayrollHolidayOverride> NormalizeHolidayOverrides(IReadOnlyList<PayrollHolidayOverride>? holidayOverrides) =>
-		holidayOverrides?
+	private static List<PayrollHolidayOverride> NormalizeHolidayOverrides(IReadOnlyList<PayrollHolidayOverride>? holidayOverrides)
+	{
+		var normalized = holidayOverrides?
 			.Select(x => new PayrollHolidayOverride(x.Date.Date, x.HolidayName?.Trim() ?? "Payroll holiday", x.IncludedInPayroll, x.CalendarHolidayId))
 			.OrderBy(x => x.Date)
 			.ThenBy(x => x.CalendarHolidayId)
 			.ToList()
 		?? new List<PayrollHolidayOverride>();
+
+		if (normalized.Select(x => x.Date.Date).Distinct().Count() != normalized.Count)
+		{
+			throw new BusinessException(HRErrorCodes.DuplicatePayrollHolidayOverride);
+		}
+
+		return normalized;
+	}
 
 	private static string? SerializeOrNull<T>(IReadOnlyList<T>? values) =>
 		values is null || values.Count == 0 ? null : JsonSerializer.Serialize(values);

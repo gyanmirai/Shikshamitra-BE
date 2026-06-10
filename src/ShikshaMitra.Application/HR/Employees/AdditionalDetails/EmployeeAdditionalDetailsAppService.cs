@@ -9,7 +9,7 @@ using Volo.Abp.Domain.Entities;
 namespace ShikshaMitra.HR.Employees.AdditionalDetails;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
+[Authorize]
 public class EmployeeAdditionalDetailsAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeAdditionalDetailsRepository additionalDetailsRepository,
@@ -17,6 +17,7 @@ public class EmployeeAdditionalDetailsAppService(
 	: ApplicationService, IEmployeeAdditionalDetailsAppService
 {
 	/// <inheritdoc />
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<EmployeeAdditionalDetailsDto> GetAsync(Guid employeeId)
 	{
 		await employeeAuthorizationService.CheckEmployeeAccessAsync(employeeId);
@@ -37,7 +38,7 @@ public class EmployeeAdditionalDetailsAppService(
 	}
 
 	/// <inheritdoc />
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
 	public async Task<(EmployeeAdditionalDetailsDto Result, bool IsCreated)> UpsertAsync(
 		Guid employeeId,
 		EmployeeAdditionalDetailsUpsertDto input)
@@ -88,7 +89,7 @@ public class EmployeeAdditionalDetailsAppService(
 	}
 
 	/// <inheritdoc />
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
 	public async Task<EmployeeAdditionalDetailsDto> PatchAsync(
 		Guid employeeId,
 		EmployeeAdditionalDetailsPatchDto input)

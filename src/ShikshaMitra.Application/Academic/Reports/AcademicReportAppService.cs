@@ -45,6 +45,7 @@ public class AcademicReportAppService(
         var expiresAt = DateTime.UtcNow.AddDays(7);
 
         var filterJson = JsonSerializer.Serialize(input.Filters);
+        var requestJson = JsonSerializer.Serialize(input);
 
         var job = new ShikshaMitra.HR.Reports.HrReportExportJob(
             jobId,
@@ -53,6 +54,7 @@ public class AcademicReportAppService(
             input.ReportType,
             input.Format,
             filterJson,
+            requestJson,
             expiresAt
         );
 

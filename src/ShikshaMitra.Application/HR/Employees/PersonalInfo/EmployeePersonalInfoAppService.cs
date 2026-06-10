@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
+using ShikshaMitra.TenantSettings;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -14,7 +15,7 @@ namespace ShikshaMitra.HR.Employees.PersonalInfo;
 /// Single owner of employee lifecycle: create, read, update basic info.
 /// </summary>
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
+[Authorize]
 public class EmployeePersonalInfoAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeeFamilyMemberRepository familyMemberRepository,
@@ -22,7 +23,8 @@ public class EmployeePersonalInfoAppService(
 	EmployeePersonalInfoCreationWorkflow creationWorkflow,
 	EmployeeOrganizationAssignmentSyncer organizationAssignmentSyncer,
 	EmployeeIdentityUniquenessChecker identityUniquenessChecker,
-	EmployeePersonalInfoProjection personalInfoProjection
+	EmployeePersonalInfoProjection personalInfoProjection,
+	ShiftReferenceValidator shiftReferenceValidator
 )
 	: ApplicationService, IEmployeePersonalInfoAppService
 {
@@ -41,17 +43,20 @@ public class EmployeePersonalInfoAppService(
 		return await creationWorkflow.CreateAsync(input, profilePictureFileName, profilePictureContent);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<EmployeePersonalInfoDto> GetAsync(Guid id)
 	{
 		var employee = await employeeRepository.GetAsync(id);
 		return await personalInfoProjection.ToPersonalInfoDtoAsync(employee);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
 	public async Task<EmployeePersonalInfoDto> UpdateAsync(Guid id, UpdateEmployeePersonalInfoDto input)
 	{
 		var existingEmployee = await employeeRepository.GetAsync(id);
 		input.PanNo = EmployeeIdentityUniquenessChecker.NormalizePan(input.PanNo);
 		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo, id);
+		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
 
 		var employee = await employeeManager.UpdateEmployeeAsync(
 			employeeId: id,

@@ -149,6 +149,18 @@ public class ProfessionalManagementController : AbpControllerBase
 	public Task<List<PerformanceSqaaEvidenceDto>> GetSqaaEvidenceAsync([FromQuery] Guid? cycleId = null, [FromQuery] PerformanceBoardType? boardType = null, [FromQuery] PerformanceStaffCategory? staffCategory = null, [FromQuery] PerformanceSqaaDomain? sqaaDomain = null) =>
 		_appService.GetSqaaEvidenceAsync(cycleId, boardType, staffCategory, sqaaDomain);
 
+	[HttpGet("reports/sqaaf-readiness")]
+	public Task<List<PerformanceSqaaReadinessDomainDto>> GetSqaafReadinessAsync([FromQuery] Guid? cycleId = null, [FromQuery] PerformanceBoardType? boardType = null, [FromQuery] PerformanceStaffCategory? staffCategory = null, [FromQuery] PerformanceSqaaDomain? sqaaDomain = null) =>
+		_appService.GetSqaafReadinessAsync(cycleId, boardType, staffCategory, sqaaDomain);
+
+	[HttpGet("reports/sqaaf-audit-pack")]
+	public Task<PerformanceSqaaAuditPackDto> GetSqaafAuditPackAsync([FromQuery] Guid? cycleId = null, [FromQuery] PerformanceBoardType? boardType = null, [FromQuery] PerformanceStaffCategory? staffCategory = null, [FromQuery] PerformanceSqaaDomain? sqaaDomain = null) =>
+		_appService.GetSqaafAuditPackAsync(cycleId, boardType, staffCategory, sqaaDomain);
+
+	[HttpGet("reports/sqaaf-audit-pack/export")]
+	public Task<PerformanceSqaaAuditPackExportDto> GetSqaafAuditPackExportAsync([FromQuery] Guid? cycleId = null, [FromQuery] PerformanceBoardType? boardType = null, [FromQuery] PerformanceStaffCategory? staffCategory = null, [FromQuery] PerformanceSqaaDomain? sqaaDomain = null) =>
+		_appService.GetSqaafAuditPackExportAsync(cycleId, boardType, staffCategory, sqaaDomain);
+
 	[HttpGet("audit")]
 	public Task<List<PerformanceAuditEventDto>> GetAuditTrailAsync([FromQuery] Guid? reviewId = null) => _appService.GetAuditTrailAsync(reviewId);
 

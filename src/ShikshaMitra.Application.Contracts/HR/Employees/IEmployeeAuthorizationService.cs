@@ -21,15 +21,4 @@ public interface IEmployeeAuthorizationService
 	/// </summary>
 	/// <param name="employeeId">The employee ID to check access for.</param>
 	Task CheckEmployeeModifyAccessAsync(Guid employeeId);
-
-	/// <summary>
-	/// Checks if the current user can modify sensitive fields (salary, role, etc.).
-	/// </summary>
-	/// <param name="employeeId">The employee ID to check access for.</param>
-	Task CheckSensitiveFieldAccessAsync(Guid employeeId);
-
-	/// <summary>
-	/// Checks if the current user can perform bulk operations.
-	/// </summary>
-	Task CheckBulkOperationAccessAsync();
 }

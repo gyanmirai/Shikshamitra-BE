@@ -42,9 +42,10 @@ public partial class HRSeederContributor
 				existing.Update(
 					attendancePolicy.Id,
 					payrollPolicy.Id,
+					null,
 					effectiveFrom,
 					effectiveTo,
-					isActive: true,
+					true,
 					priority,
 					reason);
 				await _hrPolicyAssignmentRepository.UpdateAsync(existing, autoSave: false);
@@ -62,9 +63,10 @@ public partial class HRSeederContributor
 			targetDisplayName,
 			attendancePolicy.Id,
 			payrollPolicy.Id,
+			null,
 			effectiveFrom,
 			effectiveTo,
-			isActive: true,
+			true,
 			priority,
 			reason);
 		await _hrPolicyAssignmentRepository.InsertAsync(assignment, autoSave: false);

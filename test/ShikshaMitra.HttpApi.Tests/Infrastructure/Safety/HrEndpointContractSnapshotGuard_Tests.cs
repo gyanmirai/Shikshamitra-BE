@@ -15,8 +15,8 @@ namespace ShikshaMitra.Infrastructure.Safety;
 [TestModule(TestTraits.Modules.HR)]
 public class HrEndpointContractSnapshotGuard_Tests
 {
-	private const int ExpectedEndpointCount = 262;
-	private const string ExpectedSnapshotHash = "e7727148685aed3ec4a22ccf4c3312d36a1b8957abd14f0c72c4e0721d4aea28";
+	private const int ExpectedEndpointCount = 281;
+	private const string ExpectedSnapshotHash = "008fab21563b538436d379e4f4899c252626a47a539ee198a27f9ad4ae767bb0";
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -35,6 +35,91 @@ public class HrEndpointContractSnapshotGuard_Tests
 		hash.ShouldBe(
 			ExpectedSnapshotHash,
 			$"HR endpoint contract snapshot changed. Review route/DTO compatibility, then update the approved hash if intentional.{Environment.NewLine}{snapshot}");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Policy_Holiday_Impact_Preview_Should_Require_Impact_Permission()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var servicePath = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.Application",
+			"HR",
+			"Policies",
+			"PolicyHolidayImpactAppService.cs");
+		var text = File.ReadAllText(servicePath);
+
+		Regex.IsMatch(
+				text,
+				@"\[Authorize\(ShikshaMitraSubmodulePermissions\.HR\.Policies\.PreviewImpact\)\]\s*public\s+async\s+Task<PolicyHolidayImpactPreviewDto>\s+GetPreviewAsync",
+				RegexOptions.CultureInvariant)
+			.ShouldBeTrue("Holiday impact preview exposes policy/payroll impact details and must not fall back to broad authenticated access.");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Hr_Policy_App_Service_Methods_Should_Keep_Specific_Permissions()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var expectations = new[]
+		{
+			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "GetListAsync", "View"),
+			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "GetAsync", "View"),
+			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "GetHolidaysAsync", "View"),
+			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "GetHolidayImportPreviewAsync", "View"),
+			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "CreateAsync", "Create"),
+			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "UpdateAsync", "Edit"),
+			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "CloneAsync", "Clone"),
+			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "DeleteAsync", "Archive"),
+			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "UnarchiveAsync", "Archive"),
+			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "GetListAsync", "View"),
+			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "GetAsync", "View"),
+			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "CreateAsync", "Create"),
+			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "UpdateAsync", "Edit"),
+			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "CloneAsync", "Clone"),
+			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "DeleteAsync", "Archive"),
+			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "UnarchiveAsync", "Archive"),
+			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "SetDefaultAsync", "SetDefault"),
+			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "GetListAsync", "View"),
+			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "GetAsync", "View"),
+			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "CreateAsync", "Create"),
+			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "UpdateAsync", "Edit"),
+			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "CloneAsync", "Clone"),
+			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "DeleteAsync", "Archive"),
+			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "UnarchiveAsync", "Archive"),
+			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "SetDefaultAsync", "SetDefault"),
+			new PolicyPermissionExpectation("HrPolicyAssignmentAppService.cs", "GetListAsync", "View"),
+			new PolicyPermissionExpectation("HrPolicyAssignmentAppService.cs", "GetAsync", "View"),
+			new PolicyPermissionExpectation("HrPolicyAssignmentAppService.cs", "CreateAsync", "Assign"),
+			new PolicyPermissionExpectation("HrPolicyAssignmentAppService.cs", "UpdateAsync", "Assign"),
+			new PolicyPermissionExpectation("HrPolicyAssignmentAppService.cs", "UpsertEmployeeOverrideAsync", "Assign"),
+			new PolicyPermissionExpectation("HrPolicyAssignmentAppService.cs", "DisableEmployeeOverrideAsync", "Assign"),
+			new PolicyPermissionExpectation("HrPolicyAssignmentAppService.cs", "PreviewImpactAsync", "PreviewImpact"),
+			new PolicyPermissionExpectation("HrPolicyAssignmentAppService.cs", "DeleteAsync", "Assign"),
+			new PolicyPermissionExpectation("HrPolicyAssignmentAppService.cs", "GetEffectivePoliciesAsync", "View"),
+			new PolicyPermissionExpectation("HrPolicyAssignmentAppService.cs", "GetPreviewAsync", "View"),
+			new PolicyPermissionExpectation("HrPolicySafetyAppService.cs", "PreviewPolicyImpactAsync", "PreviewImpact"),
+			new PolicyPermissionExpectation("HrPolicySafetyAppService.cs", "GetAuditSummaryAsync", "ViewAudit"),
+			new PolicyPermissionExpectation("HrPolicyVersionAppService.cs", "GetListAsync", "View"),
+			new PolicyPermissionExpectation("HrPolicyVersionAppService.cs", "GetAsync", "View"),
+			new PolicyPermissionExpectation("HrPolicyVersionAppService.cs", "CompareAsync", "View"),
+			new PolicyPermissionExpectation("HrPolicyVersionAppService.cs", "GetRestorePreviewAsync", "PreviewImpact"),
+			new PolicyPermissionExpectation("HrPolicyVersionAppService.cs", "RestoreDraftAsync", "Clone"),
+			new PolicyPermissionExpectation("PolicyHolidayImpactAppService.cs", "GetPreviewAsync", "PreviewImpact")
+		};
+		var policyRoot = Path.Combine(repoRoot, "src", "ShikshaMitra.Application", "HR", "Policies");
+		var violations = expectations
+			.Where(expectation =>
+			{
+				var text = File.ReadAllText(Path.Combine(policyRoot, expectation.FileName));
+				return !HasPermissionAttributeForMethod(text, expectation.MethodName, expectation.Permission);
+			})
+			.Select(expectation => $"{expectation.FileName}.{expectation.MethodName} must require HR.Policies.{expectation.Permission}")
+			.ToList();
+
+		violations.ShouldBeEmpty();
 	}
 
 	private static List<string> BuildEndpointInventory(string controllersRoot)
@@ -127,6 +212,27 @@ public class HrEndpointContractSnapshotGuard_Tests
 		throw new InvalidOperationException("Could not read a balanced controller action parameter list.");
 	}
 
+	private static bool HasPermissionAttributeForMethod(string text, string methodName, string permission)
+	{
+		var methodMatch = Regex.Match(
+			text,
+			$@"^\s*public\s+(?:async\s+)?Task[^\r\n]*\s+{methodName}\s*\(",
+			RegexOptions.CultureInvariant | RegexOptions.Multiline);
+		if (!methodMatch.Success)
+		{
+			return false;
+		}
+
+		var precedingText = text[..methodMatch.Index];
+		var previousPublicMethodIndex = precedingText.LastIndexOf("public ", StringComparison.Ordinal);
+		var previousClassAuthorizeIndex = precedingText.LastIndexOf("[Authorize]", StringComparison.Ordinal);
+		var searchStart = Math.Max(previousPublicMethodIndex, previousClassAuthorizeIndex);
+		var methodPreamble = precedingText[searchStart..];
+		return methodPreamble.Contains(
+			$"[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.{permission})]",
+			StringComparison.Ordinal);
+	}
+
 	private static Regex ClassRoutePattern() =>
 		new(
 			@"\[Route\(""(?<route>[^""]+)""\)\][\s\S]*?class\s+(?<class>[A-Za-z_][A-Za-z0-9_]*)",
@@ -157,4 +263,6 @@ public class HrEndpointContractSnapshotGuard_Tests
 
 		throw new InvalidOperationException("Could not find repository root from test execution directory.");
 	}
+
+	private sealed record PolicyPermissionExpectation(string FileName, string MethodName, string Permission);
 }

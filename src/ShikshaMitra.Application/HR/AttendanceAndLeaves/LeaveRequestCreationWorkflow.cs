@@ -38,10 +38,10 @@ public class LeaveRequestCreationWorkflow(
 
 		var actorContext = await leaveActorAccessService.ResolveContextAsync();
 
-		var policyId = input.LeavePolicyId;
-		if (policyId == Guid.Empty)
+		var leaveTypeId = input.LeaveTypeId;
+		if (leaveTypeId == Guid.Empty)
 		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
+			throw new BusinessException(HRErrorCodes.LeaveTypeNotFound);
 		}
 
 		var targetEmployeeId = input.ForEmployeeId
@@ -62,20 +62,23 @@ public class LeaveRequestCreationWorkflow(
 			throw new BusinessException(HRErrorCodes.LeaveTargetEmployeeInactive);
 		}
 
-		var resolvedPolicyId = await leaveValidationService.ValidateLeaveRequestAsync(
+		var attachmentBytes = await LeaveAttachmentProcessor.ExtractAttachmentBytesAsync(attachment);
+
+		var resolved = await leaveValidationService.ValidateLeaveRequestAsync(
 			targetEmployee.Id,
-			policyId,
+			leaveTypeId,
 			input.StartDate,
 			input.EndDate,
 			input.HalfDay,
 			academicYearId,
-			enforceEmployeeTimingRules);
-
-		var attachmentBytes = await LeaveAttachmentProcessor.ExtractAttachmentBytesAsync(attachment);
+			enforceEmployeeTimingRules,
+			hasAttachment: attachmentBytes is { Length: > 0 });
 
 		var leave = await employeeLeaveManager.CreateAsync(
 			targetEmployee.Id,
-			resolvedPolicyId,
+			resolved.LeavePolicy.Id,
+			resolved.Rule.Id,
+			resolved.Rule.LeaveTypeId,
 			new DateTimeOffset(input.StartDate),
 			new DateTimeOffset(input.EndDate),
 			input.Reason,

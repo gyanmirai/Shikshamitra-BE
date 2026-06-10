@@ -12,10 +12,25 @@ public class HrReportPreviewDto
 	public List<HrReportColumnDto> Columns { get; set; } = new();
 	public List<Dictionary<string, string?>> Rows { get; set; } = new();
 	public HrReportFilterDto NormalizedFilters { get; set; } = new();
+	public List<string> QueryWarnings { get; set; } = new();
+	public HrReportChartPreviewDto? Chart { get; set; }
 }
 
 public class HrReportColumnDto
 {
 	public string Id { get; set; } = string.Empty;
 	public string Label { get; set; } = string.Empty;
+}
+
+public class HrReportChartPreviewDto
+{
+	public string Type { get; set; } = HrReportChartType.None;
+	public string Title { get; set; } = string.Empty;
+	public List<HrReportChartPointDto> Points { get; set; } = new();
+}
+
+public class HrReportChartPointDto
+{
+	public string Label { get; set; } = string.Empty;
+	public decimal Value { get; set; }
 }

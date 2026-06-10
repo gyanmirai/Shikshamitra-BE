@@ -57,7 +57,7 @@ public class PayrollController : AbpControllerBase
 		[FromRoute, Required] Guid employeeId,
 		[FromBody, Required] PayrollContract request)
 	{
-		await _authorizationService.CheckSensitiveFieldAccessAsync(employeeId);
+		await _authorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 		await _payrollAppService.UpdatePayrollContractAsync(employeeId, request);
 		return Ok();
 	}

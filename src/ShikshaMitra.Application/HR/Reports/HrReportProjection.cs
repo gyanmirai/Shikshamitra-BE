@@ -29,7 +29,7 @@ internal static class HrReportProjection
 		};
 	}
 
-	public static HrReportExportJobDto ToJobDto(HrReportExportJob job)
+	public static HrReportExportJobDto ToJobDto(HrReportExportJob job, DateTime now)
 	{
 		var format = NormalizeFormat(job.Format);
 		return new HrReportExportJobDto
@@ -40,6 +40,13 @@ internal static class HrReportProjection
 			Status = job.Status,
 			FileName = job.Status == HrReportExportStatus.Completed ? BuildFileName(job.ReportType, format) : null,
 			ErrorMessage = job.ErrorMessage,
+			ProgressPercent = job.ProgressPercent,
+			RowCount = job.RowCount,
+			FileSizeBytes = job.FileSizeBytes,
+			RequestedByUserId = job.RequestedByUserId,
+			GeneratedAt = job.CompletedAt,
+			IsExpired = job.ExpiresAt <= now,
+			SharedUserIds = [.. job.GetSharedUserIds()],
 			CreationTime = job.CreationTime,
 			StartedAt = job.StartedAt,
 			CompletedAt = job.CompletedAt,

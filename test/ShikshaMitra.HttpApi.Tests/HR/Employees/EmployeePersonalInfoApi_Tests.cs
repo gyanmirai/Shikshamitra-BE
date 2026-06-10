@@ -5,8 +5,10 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
@@ -107,6 +109,33 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		body.LastName.ShouldBe("UpdatedDoe");
 		body.PanNo.ShouldBe(updateRequest.PanNo);
 		body.AdharNo.ShouldBe(updateRequest.AdharNo);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Update_Personal_Info_With_Employee_Edit_Only()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "UpdateEditOnly");
+		using var client = CreatePermissionClient(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit);
+		var updateRequest = EmployeeTestHelper.BuildPersonalInfoRequest("EditOnly");
+
+		var response = await client.PutAsJsonAsync($"{BaseUrl}/{created.Id}/personal-info", updateRequest, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Personal_Info_Update_Without_Employee_Edit()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "UpdateNoEdit");
+		using var client = CreatePermissionClient(
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add);
+		var updateRequest = EmployeeTestHelper.BuildPersonalInfoRequest("NoEdit");
+
+		var response = await client.PutAsJsonAsync($"{BaseUrl}/{created.Id}/personal-info", updateRequest, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
 	}
 
 	[Fact]
@@ -323,4 +352,13 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	#endregion
+
+	private HttpClient CreatePermissionClient(params string[] permissions)
+	{
+		var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(
+			AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			permissions.Length == 0 ? "__none__" : string.Join(",", permissions));
+		return client;
+	}
 }

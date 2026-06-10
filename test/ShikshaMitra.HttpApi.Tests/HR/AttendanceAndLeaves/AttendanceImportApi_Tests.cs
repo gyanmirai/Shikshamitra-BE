@@ -51,7 +51,7 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Csv_Import_Should_Preserve_Raw_Punches_For_Manual_Status_Policy()
+	public async Task Csv_Import_Should_Strip_Raw_Punches_For_Manual_Status_Policy()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
@@ -73,15 +73,15 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 		confirmResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
 		var attendance = await GetAttendanceAsync(employee.Id, attendanceDate);
-		attendance.TimeIn.ShouldNotBeNull();
-		attendance.TimeOut.ShouldNotBeNull();
+		attendance.TimeIn.ShouldBeNull();
+		attendance.TimeOut.ShouldBeNull();
 		attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.Present);
 		attendance.Source.ShouldBe(AttendanceRecordSource.CsvImport);
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Integration_Run_Should_Preserve_Raw_Punches_For_Manual_Status_Policy()
+	public async Task Integration_Run_Should_Strip_Raw_Punches_For_Manual_Status_Policy()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
@@ -110,9 +110,112 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
 		var attendance = await GetAttendanceAsync(employee.Id, attendanceDate);
-		attendance.TimeIn.ShouldNotBeNull();
-		attendance.TimeOut.ShouldNotBeNull();
+		attendance.TimeIn.ShouldBeNull();
+		attendance.TimeOut.ShouldBeNull();
 		attendance.Source.ShouldBe(AttendanceRecordSource.Integration);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Integration_Run_Should_Store_TimeOnly_Punches_On_Selected_Attendance_Date()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 13);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"IntegrationTimeOnly{Guid.NewGuid():N}");
+
+		var response = await Client.PostAsJsonAsync(IntegrationRunsUrl, new AttendanceIntegrationRunRequestDto
+		{
+			FileName = $"integration-time-only-{Guid.NewGuid():N}.json",
+			RunSource = AttendanceImportRunSource.Integration,
+			IntegrationProvider = "regression-test",
+			Rows =
+			[
+				new AttendanceIntegrationRunRowDto
+				{
+					EmployeeId = employee.Id,
+					AttendanceDate = "2026-04-13",
+					TimeIn = "09:00:00",
+					TimeOut = "17:30:00",
+					Status = EmployeeAttendanceStatusType.Present,
+					Remarks = "Integration time-only punch"
+				}
+			]
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var attendance = await GetAttendanceAsync(employee.Id, attendanceDate);
+		DateOnly.FromDateTime(attendance.TimeIn!.Value.DateTime).ShouldBe(attendanceDate);
+		DateOnly.FromDateTime(attendance.TimeOut!.Value.DateTime).ShouldBe(attendanceDate);
+		attendance.TimeIn.Value.TimeOfDay.ShouldBe(new TimeSpan(9, 0, 0));
+		attendance.TimeOut.Value.TimeOfDay.ShouldBe(new TimeSpan(17, 30, 0));
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Integration_Run_Should_Normalize_DateTime_Punches_To_Selected_Attendance_Date()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 14);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"IntegrationNormalize{Guid.NewGuid():N}");
+
+		var response = await Client.PostAsJsonAsync(IntegrationRunsUrl, new AttendanceIntegrationRunRequestDto
+		{
+			FileName = $"integration-normalize-{Guid.NewGuid():N}.json",
+			RunSource = AttendanceImportRunSource.Integration,
+			IntegrationProvider = "regression-test",
+			Rows =
+			[
+				new AttendanceIntegrationRunRowDto
+				{
+					EmployeeId = employee.Id,
+					AttendanceDate = "2026-04-14",
+					TimeIn = "2026-04-20T09:15:00-07:00",
+					TimeOut = "2026-04-20T17:45:00-07:00",
+					Status = EmployeeAttendanceStatusType.Present,
+					Remarks = "Integration mismatched punch date"
+				}
+			]
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var attendance = await GetAttendanceAsync(employee.Id, attendanceDate);
+		DateOnly.FromDateTime(attendance.TimeIn!.Value.DateTime).ShouldBe(attendanceDate);
+		DateOnly.FromDateTime(attendance.TimeOut!.Value.DateTime).ShouldBe(attendanceDate);
+		attendance.TimeIn.Value.TimeOfDay.ShouldBe(new TimeSpan(9, 15, 0));
+		attendance.TimeOut.Value.TimeOfDay.ShouldBe(new TimeSpan(17, 45, 0));
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Integration_Run_Should_Reject_Timestamp_AttendanceDate()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"IntegrationTimestamp{Guid.NewGuid():N}");
+
+		var response = await Client.PostAsJsonAsync(IntegrationRunsUrl, new AttendanceIntegrationRunRequestDto
+		{
+			FileName = $"integration-timestamp-{Guid.NewGuid():N}.json",
+			RunSource = AttendanceImportRunSource.Integration,
+			IntegrationProvider = "regression-test",
+			Rows =
+			[
+				new AttendanceIntegrationRunRowDto
+				{
+					EmployeeId = employee.Id,
+					AttendanceDate = "2026-04-15T22:15:34-07:00",
+					TimeIn = "09:00:00",
+					TimeOut = "17:30:00",
+					Status = EmployeeAttendanceStatusType.Present
+				}
+			]
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var payload = await response.Content.ReadAsStringAsync();
+		payload.ShouldContain(HRErrorCodes.AttendanceInvalidDateFormat);
 	}
 
 	[Fact]
@@ -134,6 +237,22 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 		var confirm = await confirmResponse.Content.ReadFromJsonAsync<AttendanceImportConfirmResponseDto>(JsonOptions);
 		confirm.ShouldNotBeNull();
 		confirm.ProcessedRows.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Preview_Should_Reject_Timestamp_AttendanceDate_String()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"ImportTimestamp{Guid.NewGuid():N}");
+		using var content = BuildCsvUpload($"2026-04-16T22:15:34-07:00,{employee.EmployeeCode},09:00 AM,05:30 PM,,Timestamp date,{employee.FullName},{employee.MobileNo}");
+
+		var response = await Client.PostAsync($"{BaseUrl}/preview", content);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<AttendanceImportPreviewResponseDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.CanConfirm.ShouldBeFalse();
+		body.Rows.Single().Errors.ShouldContain(x => x.Contains("date-only", StringComparison.OrdinalIgnoreCase));
 	}
 
 	[Fact]
@@ -251,6 +370,7 @@ public class AttendanceImportApi_Tests : ShikshaMitraApiTestBase
 				null,
 				policy.Id,
 				defaultPayroll.Id,
+				null,
 				targetDate.Date,
 				null,
 				true,

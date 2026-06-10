@@ -4,7 +4,7 @@ namespace ShikshaMitra.Security.UserScope;
 
 /// <summary>
 /// Marker interface for entities that support user scope filtering.
-/// Entities implementing this interface will have automatic scope-based filtering applied via EF Core global query filters.
+/// Entities implementing this interface can be filtered with <see cref="UserScopeQueryExtensions"/>.
 /// </summary>
 /// <remarks>
 /// UserScopeContext applies effective wildcard access:

@@ -18,6 +18,18 @@ public class AttendancePolicyImpactGuard(
 	public Task EnsureSetDefaultConfirmedAsync(Guid policyId, Guid academicYearId) =>
 		EnsureConfirmedAsync(policyId, academicYearId, "set-default");
 
+	public async Task EnsureCreateDefaultConfirmedAsync(Guid academicYearId, CreateUpdateAttendancePolicyDto input)
+	{
+		var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
+		{
+			PolicyType = "attendance",
+			AcademicYearId = academicYearId,
+			Action = "create-default",
+			AttendancePolicy = input
+		});
+		await confirmationService.EnsureConfirmedAsync(preview);
+	}
+
 	private async Task EnsureConfirmedAsync(
 		Guid policyId,
 		Guid academicYearId,

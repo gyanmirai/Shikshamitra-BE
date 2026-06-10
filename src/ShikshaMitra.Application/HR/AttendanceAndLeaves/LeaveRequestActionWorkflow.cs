@@ -1,5 +1,6 @@
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using System;
 using System.Linq;
@@ -14,6 +15,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class LeaveRequestActionWorkflow(
 	IEmployeeLeaveRepository employeeLeaveRepository,
 	EmployeeLeaveManager employeeLeaveManager,
+	ILeavePolicyRepository leavePolicyRepository,
 	LeaveValidationService leaveValidationService,
 	LeaveActorAccessService leaveActorAccessService,
 	LeaveWorkCalendarUnitService leaveWorkCalendarUnitService,
@@ -22,9 +24,12 @@ public class LeaveRequestActionWorkflow(
 {
 	public async Task<LeaveActionResultDto> ApproveAsync(Guid leaveRequestId)
 	{
-		var query = await employeeLeaveRepository.WithDetailsAsync(x => x.Employee!, x => x.LeavePolicy!);
-		var leave = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == leaveRequestId))
+		var leave = await employeeLeaveRepository.FindWithoutDetailsAsync(leaveRequestId)
 			?? throw new EntityNotFoundException(typeof(EmployeeLeave), leaveRequestId);
+		var leavePolicy = await leavePolicyRepository.GetWithRulesAsync(leave.LeavePolicyId)
+			?? throw new EntityNotFoundException(typeof(LeavePolicy), leave.LeavePolicyId);
+		var leaveRule = leavePolicy.Rules.FirstOrDefault(x => x.Id == leave.LeavePolicyRuleId)
+			?? throw new BusinessException(HRErrorCodes.LeavePolicyRuleNotFound);
 
 		EnsureNotTerminalForApproverAction(leave.Status);
 		if (!IsValidStatusTransition(leave.Status, EmployeeLeaveStatusType.Approved))
@@ -42,20 +47,20 @@ public class LeaveRequestActionWorkflow(
 
 		await leaveValidationService.EnsureSufficientLeaveBalanceAsync(
 			leave.EmployeeId,
-			leave.LeavePolicyId,
+			leave.LeavePolicyRuleId,
 			leave.StartDate.DateTime,
 			leave.EndDate.DateTime,
 			leave.HalfDay);
 
 		await employeeLeaveManager.ApproveAsync(
 			leave,
-			leave.LeavePolicy!.PaidType,
+			leaveRule.PaidType,
 			await leaveWorkCalendarUnitService.CalculateUnitsAsync(
 				leave.EmployeeId,
 				leave.StartDate.DateTime,
 				leave.EndDate.DateTime,
 				leave.HalfDay,
-				leave.LeavePolicy.AcademicYearId));
+				leavePolicy.AcademicYearId));
 		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { leave.EmployeeId });
 
 		return new LeaveActionResultDto

@@ -38,6 +38,10 @@ public static partial class HRErrorCodes
 	public const string LeaveTargetEmployeeInactive = "HR:Leave:020034";
 	public const string LeaveHalfDayMustBeSingleDate = "HR:Leave:020035";
 	public const string LeaveTypeNotFound = "HR:Leave:020036";
+	public const string LeavePolicyRuleNotFound = "HR:Leave:020037";
+	public const string LeavePolicyDuplicateLeaveTypeRule = "HR:Leave:020038";
+	public const string LeaveHalfDayNotAllowed = "HR:Leave:020039";
+	public const string LeaveAttachmentRequired = "HR:Leave:020040";
 	public const string LeaveEncashmentTimingRequired = "ShikshaMitra:EncashmentTimingRequired";
 	public const string LeaveTypeAlreadyExists = "ShikshaMitra:LeaveTypeAlreadyExists";
 	public const string LeavePolicyNameAlreadyExists = "ShikshaMitra:LeavePolicyNameAlreadyExists";

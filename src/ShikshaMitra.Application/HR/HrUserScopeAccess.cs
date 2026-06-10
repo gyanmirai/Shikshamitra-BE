@@ -2,10 +2,8 @@ using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using Volo.Abp;
-using Volo.Abp.Application.Services;
-using Volo.Abp.DependencyInjection;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ShikshaMitra.HR;
 
@@ -23,9 +21,35 @@ public static class HrUserScopeAccess
 		scope.BoardIds.Count > 0 ||
 		scope.MediumIds.Count > 0;
 
+	public static bool HasSingleConcreteMediumStage(UserScopeContext scope) =>
+		scope.MediumStageIds.Count == 1;
+
 	public static bool CanAccessEmployeeStage(UserScopeContext scope, Guid? employeeStageId) =>
 		HasHrWideAccess(scope) ||
 		(employeeStageId.HasValue && scope.CanAccessMediumStage(employeeStageId.Value));
+
+	public static string BuildScopeSummaryKey(UserScopeContext scope)
+	{
+		if (HasHrWideAccess(scope))
+		{
+			return "hr-wide";
+		}
+
+		var raw = string.Join("|",
+			$"ay:{JoinIds(scope.AcademicYearIds)}",
+			$"b:{JoinIds(scope.BoardIds)}",
+			$"m:{JoinIds(scope.MediumIds)}",
+			$"ms:{JoinIds(scope.MediumStageIds)}",
+			$"s:{JoinIds(scope.StandardIds)}",
+			$"d:{JoinIds(scope.DivisionIds)}",
+			$"way:{JoinIds(scope.WildcardBoardAcademicYearIds)}",
+			$"wb:{JoinIds(scope.WildcardMediumBoardIds)}",
+			$"wm:{JoinIds(scope.WildcardMediumStageMediumIds)}",
+			$"wms:{JoinIds(scope.WildcardStandardMediumStageIds)}",
+			$"ws:{JoinIds(scope.WildcardDivisionStandardIds)}");
+		var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
+		return $"hr-scoped-{Convert.ToHexString(hash)[..32].ToLowerInvariant()}";
+	}
 
 	public static List<Guid> FilterEmployeeIdsByStage(
 		IReadOnlyCollection<Guid> employeeIds,
@@ -50,120 +74,7 @@ public static class HrUserScopeAccess
 			})
 			.ToList();
 	}
-}
 
-[RemoteService(false)]
-public class HrUserScopeAccessService(HrMediumStageScopeReader stageScopeReader)
-	: ApplicationService, ITransientDependency
-{
-	public async Task<bool> CanAccessEmployeeStageAsync(UserScopeContext scope, Guid? employeeStageId)
-	{
-		if (HrUserScopeAccess.HasHrWideAccess(scope))
-		{
-			return true;
-		}
-
-		if (!employeeStageId.HasValue)
-		{
-			return false;
-		}
-
-		var stageScopes = await stageScopeReader.GetByStageIdsAsync([employeeStageId.Value]);
-		stageScopes.TryGetValue(employeeStageId.Value, out var stageScope);
-		return scope.CanAccessMediumStage(
-			employeeStageId.Value,
-			stageScope?.MediumId,
-			stageScope?.BoardId,
-			stageScope?.AcademicYearId);
-	}
-
-	public async Task<List<Guid>> FilterEmployeeIdsByStageAsync(
-		IReadOnlyCollection<Guid> employeeIds,
-		IReadOnlyDictionary<Guid, Guid?> employeeStageMap,
-		UserScopeContext scope,
-		bool includeUnknownStageEmployees)
-	{
-		if (HrUserScopeAccess.HasHrWideAccess(scope))
-		{
-			return employeeIds.ToList();
-		}
-
-		var stageIds = employeeStageMap.Values
-			.Where(x => x.HasValue)
-			.Select(x => x!.Value)
-			.Distinct()
-			.ToList();
-		var stageScopes = await stageScopeReader.GetByStageIdsAsync(stageIds);
-
-		return employeeIds
-			.Where(id =>
-			{
-				if (!employeeStageMap.TryGetValue(id, out var stageId) || !stageId.HasValue)
-				{
-					return includeUnknownStageEmployees;
-				}
-
-				stageScopes.TryGetValue(stageId.Value, out var parentScope);
-				return scope.CanAccessMediumStage(
-					stageId.Value,
-					parentScope?.MediumId,
-					parentScope?.BoardId,
-					parentScope?.AcademicYearId);
-			})
-			.ToList();
-	}
-
-	public async Task<List<Guid>> FilterEmployeeIdsByStagesAsync(
-		IReadOnlyCollection<Guid> employeeIds,
-		IReadOnlyDictionary<Guid, IReadOnlyCollection<Guid>> employeeStageMap,
-		UserScopeContext scope,
-		bool includeUnknownStageEmployees)
-	{
-		if (HrUserScopeAccess.HasHrWideAccess(scope))
-		{
-			return employeeIds.ToList();
-		}
-
-		var stageIds = employeeStageMap.Values
-			.SelectMany(x => x)
-			.Distinct()
-			.ToList();
-		var stageScopes = await stageScopeReader.GetByStageIdsAsync(stageIds);
-
-		return employeeIds
-			.Where(id =>
-			{
-				if (!employeeStageMap.TryGetValue(id, out var employeeStageIds) || employeeStageIds.Count == 0)
-				{
-					return includeUnknownStageEmployees;
-				}
-
-				return employeeStageIds.Any(stageId =>
-				{
-					stageScopes.TryGetValue(stageId, out var parentScope);
-					return scope.CanAccessMediumStage(
-						stageId,
-						parentScope?.MediumId,
-						parentScope?.BoardId,
-						parentScope?.AcademicYearId);
-				});
-			})
-			.ToList();
-	}
-
-	public async Task<List<Guid>> ResolveAccessibleStageIdsAsync(UserScopeContext scope)
-	{
-		if (HrUserScopeAccess.HasHrWideAccess(scope))
-		{
-			return new List<Guid>();
-		}
-
-		var rows = await stageScopeReader.GetAllAsync();
-
-		return rows
-			.Where(x => scope.CanAccessMediumStage(x.StageId, x.MediumId, x.BoardId, x.AcademicYearId))
-			.Select(x => x.StageId)
-			.Distinct()
-			.ToList();
-	}
+	private static string JoinIds(IEnumerable<Guid> ids) =>
+		string.Join(",", ids.OrderBy(x => x).Select(x => x.ToString("N")));
 }

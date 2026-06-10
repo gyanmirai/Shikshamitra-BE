@@ -13,6 +13,7 @@ public class LeaveTypeAppService(
 	IRepository<LeaveType, Guid> repository,
 	LeaveTypeManager leaveTypeManager,
 	LeaveTypeCacheService cacheService,
+	LeavePolicyCacheService leavePolicyCacheService,
 	LeaveTypeReadService readService) : CrudAppService<
 		LeaveType,
 		LeaveTypeDto,
@@ -105,5 +106,7 @@ public class LeaveTypeAppService(
 	{
 		await cacheService.ClearActiveAsync();
 		await cacheService.ClearContractAsync(academicYearId);
+		await leavePolicyCacheService.ClearActiveAsync();
+		await leavePolicyCacheService.ClearContractAsync(academicYearId);
 	}
 }

@@ -78,26 +78,14 @@ public class WorkCalendarHolidaySnapshotService(
 		return rows;
 	}
 
+	public async Task ValidateHolidaysAsync(Guid academicYearId, List<WorkCalendarHolidayDto>? holidays)
+	{
+		_ = await NormalizeAndValidateAsync(academicYearId, holidays);
+	}
+
 	public async Task ReplaceHolidaysAsync(Guid workCalendarPolicyId, Guid academicYearId, List<WorkCalendarHolidayDto>? holidays)
 	{
-		if (academicYearId == Guid.Empty)
-		{
-			throw new BusinessException(HRErrorCodes.AcademicYearRequired)
-				.WithData("field", nameof(academicYearId));
-		}
-
-		if (holidays is null || holidays.Count == 0)
-		{
-			await holidaySnapshotRepository.DeleteAsync(x => x.WorkCalendarPolicyId == workCalendarPolicyId, autoSave: true);
-			return;
-		}
-
-		var academicYear = await academicYearRepository.GetAsync(academicYearId);
-		var normalizedRows = holidays
-			.OrderBy(WorkCalendarPolicyChangeDetector.ResolveHolidayFromDate)
-			.ThenBy(x => x.HolidayName)
-			.ToList();
-		WorkCalendarHolidaySnapshotValidator.ValidateRows(normalizedRows, academicYear);
+		var normalizedRows = await NormalizeAndValidateAsync(academicYearId, holidays);
 
 		await holidaySnapshotRepository.DeleteAsync(x => x.WorkCalendarPolicyId == workCalendarPolicyId, autoSave: true);
 		foreach (var row in normalizedRows)
@@ -123,5 +111,27 @@ public class WorkCalendarHolidaySnapshotService(
 		{
 			await UnitOfWorkManager.Current.SaveChangesAsync();
 		}
+	}
+
+	private async Task<List<WorkCalendarHolidayDto>> NormalizeAndValidateAsync(Guid academicYearId, List<WorkCalendarHolidayDto>? holidays)
+	{
+		if (academicYearId == Guid.Empty)
+		{
+			throw new BusinessException(HRErrorCodes.AcademicYearRequired)
+				.WithData("field", nameof(academicYearId));
+		}
+
+		if (holidays is null || holidays.Count == 0)
+		{
+			return [];
+		}
+
+		var academicYear = await academicYearRepository.GetAsync(academicYearId);
+		var normalizedRows = holidays
+			.OrderBy(WorkCalendarPolicyChangeDetector.ResolveHolidayFromDate)
+			.ThenBy(x => x.HolidayName)
+			.ToList();
+		WorkCalendarHolidaySnapshotValidator.ValidateRows(normalizedRows, academicYear);
+		return normalizedRows;
 	}
 }

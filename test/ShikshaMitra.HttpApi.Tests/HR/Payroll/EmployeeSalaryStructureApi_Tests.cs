@@ -5,8 +5,10 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -111,6 +113,33 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 		payload.DeductionComponents[0].IsFixed.ShouldBeTrue();
 		payload.DeductionComponents[0].IsTemp.ShouldBeFalse();
 		payload.DeductionComponents[0].ApplicableMonth.ShouldBe(applicableMonth);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Update_Salary_Structure_With_Employee_Edit_And_Payroll_Permission()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalEditPerm");
+		using var client = CreatePermissionClient(
+			ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit,
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add);
+
+		var response = await client.PutAsJsonAsync(Url(empId), BuildSalaryStructureUpdate(), JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Salary_Structure_Update_Without_Employee_Edit()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalNoEdit");
+		using var client = CreatePermissionClient(
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add);
+
+		var response = await client.PutAsJsonAsync(Url(empId), BuildSalaryStructureUpdate(), JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
 	}
 
 	[Fact]
@@ -609,4 +638,37 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	#endregion
+
+	private HttpClient CreatePermissionClient(params string[] permissions)
+	{
+		var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(
+			AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			permissions.Length == 0 ? "__none__" : string.Join(",", permissions));
+		return client;
+	}
+
+	private static UpdateSalaryStructureDto BuildSalaryStructureUpdate() => new()
+	{
+		EarningComponents =
+		[
+			new()
+			{
+				Name = "Basic Salary",
+				Amount = 10000m,
+				IsFixed = true,
+				IsTemp = false
+			}
+		],
+		DeductionComponents =
+		[
+			new()
+			{
+				Name = "Professional Tax",
+				Amount = 200m,
+				IsFixed = true,
+				IsTemp = false
+			}
+		]
+	};
 }

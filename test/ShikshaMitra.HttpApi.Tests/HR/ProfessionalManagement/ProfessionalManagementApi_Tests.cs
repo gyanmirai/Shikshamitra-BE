@@ -58,6 +58,62 @@ public class ProfessionalManagementApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Sqaaf_Readiness_Report_With_Domain_Summaries_Without_Exception()
+	{
+		var created = await CreateTemplateAsync($"CBSE SQAAF Readiness API Template {Guid.NewGuid():N}");
+		await PublishTemplateAsync(created.Id);
+
+		var response = await Client.GetAsync($"{BaseUrl}/reports/sqaaf-readiness?boardType=1&staffCategory=0");
+		var raw = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, raw);
+		var rows = await response.Content.ReadFromJsonAsync<PerformanceSqaaReadinessDomainDto[]>(JsonOptions);
+		rows.ShouldNotBeNull();
+		rows.ShouldContain(x =>
+			x.Domain == PerformanceSqaaDomain.CurriculumPedagogyAssessment &&
+			x.MappedCriteria >= 1 &&
+			x.ReadinessPercentage >= 0 &&
+			x.ReadinessPercentage <= 100);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Sqaaf_Audit_Pack_With_Missing_Evidence_Checklist_Without_Exception()
+	{
+		var created = await CreateTemplateAsync($"CBSE SQAAF Audit Pack API Template {Guid.NewGuid():N}");
+		await PublishTemplateAsync(created.Id);
+
+		var response = await Client.GetAsync($"{BaseUrl}/reports/sqaaf-audit-pack?boardType=1&staffCategory=0");
+		var raw = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, raw);
+		var body = await response.Content.ReadFromJsonAsync<PerformanceSqaaAuditPackDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Domains.ShouldContain(x => x.Domain == PerformanceSqaaDomain.CurriculumPedagogyAssessment);
+		body.MissingEvidenceItems.ShouldNotBeNull();
+		body.OverallReadinessPercentage.ShouldBeInRange(0, 100);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Sqaaf_Audit_Pack_Export_Without_Exception()
+	{
+		var created = await CreateTemplateAsync($"CBSE SQAAF Export API Template {Guid.NewGuid():N}");
+		await PublishTemplateAsync(created.Id);
+
+		var response = await Client.GetAsync($"{BaseUrl}/reports/sqaaf-audit-pack/export?boardType=1&staffCategory=0");
+		var raw = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, raw);
+		var body = await response.Content.ReadFromJsonAsync<PerformanceSqaaAuditPackExportDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.FileName.ShouldEndWith(".csv");
+		body.ContentType.ShouldBe("text/csv");
+		body.ContentBase64.ShouldNotBeNullOrWhiteSpace();
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Return_Defaults_With_Cbse_Gseb_And_Sqaaf_Metadata()
 	{

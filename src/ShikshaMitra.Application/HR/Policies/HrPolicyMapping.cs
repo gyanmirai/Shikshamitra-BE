@@ -8,7 +8,8 @@ internal static partial class HrPolicyMapping
 	{
 		"active" => HrPolicyStatus.Active,
 		"archived" => HrPolicyStatus.Archived,
-		_ => HrPolicyStatus.Draft
+		"draft" or "" => HrPolicyStatus.Draft,
+		_ => throw new BusinessException(HRErrorCodes.UnsupportedPolicyStatus)
 	};
 
 	public static string MapPolicyStatus(HrPolicyStatus value) => value switch

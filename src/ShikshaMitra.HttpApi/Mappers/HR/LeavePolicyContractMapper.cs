@@ -54,12 +54,12 @@ public static class LeavePolicyContractMapper
 		{
 			Id = dto.Id.ToString(),
 			PolicyTitle = dto.PolicyName,
-			LeaveType = Guid.TryParse(dto.LeaveType, out var leaveTypeId) ? leaveTypeId : Guid.Empty,
-			MaxLeavePerYear = dto.MaximumDaysPerYear,
-			PaidType = dto.PaidType,
-			CarryForward = dto.CarryForward,
-			EncashmentAllowed = dto.Encashable,
-			RequiresApproval = dto.RequiresApproval,
+			LeaveType = Guid.Empty,
+			MaxLeavePerYear = dto.RuleCount,
+			PaidType = string.Empty,
+			CarryForward = false,
+			EncashmentAllowed = false,
+			RequiresApproval = false,
 			Description = dto.Description,
 			CreatedAt = dto.CreationTime
 		};
@@ -74,12 +74,12 @@ public static class LeavePolicyContractMapper
 		{
 			Id = dto.Id.ToString(),
 			PolicyTitle = dto.PolicyName,
-			LeaveType = Guid.TryParse(dto.LeaveType, out var leaveTypeId) ? leaveTypeId : Guid.Empty,
-			MaxLeavePerYear = dto.MaximumDaysPerYear,
-			PaidType = dto.PaidType,
-			CarryForward = dto.CarryForward,
-			EncashmentAllowed = dto.Encashable,
-			RequiresApproval = dto.RequiresApproval,
+			LeaveType = Guid.Empty,
+			MaxLeavePerYear = dto.RuleCount,
+			PaidType = string.Empty,
+			CarryForward = false,
+			EncashmentAllowed = false,
+			RequiresApproval = false,
 			Description = dto.Description,
 			UpdatedAt = dto.LastModificationTime ?? dto.CreationTime
 		};
@@ -94,12 +94,12 @@ public static class LeavePolicyContractMapper
 		{
 			Id = index,
 			Title = dto.PolicyName,
-			LeaveType = dto.LeaveType,
-			MaximumPerYear = dto.MaximumDaysPerYear,
-			CarryForward = dto.CarryForward ? "Yes" : "No",
-			Encashable = dto.Encashable ? "Yes" : "No",
-			PaidType = dto.PaidType,
-			RequiresApproval = dto.RequiresApproval ? "Yes" : "No"
+			LeaveType = $"{dto.RuleCount} rule(s)",
+			MaximumPerYear = dto.RuleCount,
+			CarryForward = "-",
+			Encashable = "-",
+			PaidType = "-",
+			RequiresApproval = "-"
 		};
 	}
 

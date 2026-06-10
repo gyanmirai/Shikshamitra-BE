@@ -5,60 +5,45 @@ using System.Threading.Tasks;
 using ShikshaMitra.Groups;
 using ShikshaMitra.HR.Employees;
 using Volo.Abp.DependencyInjection;
-using Volo.Abp.Domain.Repositories;
-using Volo.Abp.Linq;
 using static ShikshaMitra.HR.Policies.HrPolicyAssignmentProjection;
 
 namespace ShikshaMitra.HR.Policies;
 
 public class HrPolicyEffectiveAssignmentConflictBuilder(
-	IRepository<HrPolicyAssignment, Guid> assignmentRepository,
-	IRepository<Employee, Guid> employeeRepository,
-	IGroupRepository groupRepository,
-	IRepository<AttendancePolicy, Guid> attendancePolicyRepository,
-	IRepository<PayrollPolicy, Guid> payrollPolicyRepository,
-	IAsyncQueryableExecuter asyncExecuter)
-	: ITransientDependency
+	HrPolicyEffectiveAssignmentLookupReader lookupReader) : ITransientDependency
 {
 	public async Task<List<HrPolicyEffectiveAssignmentConflictDto>> BuildAsync(
 		HrPolicyAssignmentTargetType targetType,
 		string targetKey,
 		CreateUpdateHrPolicyAssignmentDto proposed,
-		IReadOnlyCollection<HrPolicyAffectedEmployeeDto> affectedEmployees)
+		IReadOnlyCollection<HrPolicyAffectedEmployeeDto> affectedEmployees,
+		Guid? proposedAssignmentId = null)
 	{
 		if (targetType != HrPolicyAssignmentTargetType.Group || affectedEmployees.Count == 0 || !Guid.TryParse(targetKey, out var proposedGroupId))
 		{
 			return [];
 		}
 
-		var date = proposed.EffectiveFrom.Date;
-		var groups = await groupRepository.GetListWithDetailsAsync(proposed.AcademicYearId);
-		var proposedGroup = groups.FirstOrDefault(x => x.Id == proposedGroupId);
-		if (proposedGroup == null)
+		var lookup = await lookupReader.ReadAsync(proposed, affectedEmployees, proposedGroupId, proposedAssignmentId);
+		if (lookup.ProposedGroup == null)
 		{
 			return [];
 		}
 
-		var affectedEmployeeIds = affectedEmployees.Select(e => e.EmployeeId).ToList();
-		var employeeQuery = await employeeRepository.GetQueryableAsync();
-		var employees = await asyncExecuter.ToListAsync(employeeQuery.Where(x => affectedEmployeeIds.Contains(x.Id)));
-		var activeGroupAssignments = await GetActiveGroupAssignmentsAsync(proposed.AcademicYearId, date);
-		var payrollNames = await GetPayrollNamesAsync(activeGroupAssignments, proposed.PayrollPolicyId);
-		var attendanceNames = await GetAttendanceNamesAsync(activeGroupAssignments, proposed.AttendancePolicyId);
-		var groupMap = groups.ToDictionary(x => x.Id);
+		var start = proposed.EffectiveFrom.Date;
 
 		var conflicts = new List<HrPolicyEffectiveAssignmentConflictDto>();
-		foreach (var employee in employees)
+		foreach (var employee in lookup.Employees)
 		{
 			var candidates = BuildCandidates(
 				employee,
-				proposedGroup,
+				lookup.ProposedGroup,
 				targetKey,
 				proposed,
-				activeGroupAssignments,
-				groupMap,
-				payrollNames,
-				attendanceNames);
+				lookup.ActiveAssignments,
+				lookup.GroupMap,
+				lookup.PayrollNames,
+				lookup.AttendanceNames);
 
 			if (candidates.Count <= 1)
 			{
@@ -71,7 +56,11 @@ public class HrPolicyEffectiveAssignmentConflictBuilder(
 				EmployeeId = employee.Id,
 				EmployeeCode = employee.EmployeeCode,
 				EmployeeName = employee.EmployeeName,
-				Date = date,
+				Date = candidates
+					.Where(x => x.AssignmentId.HasValue)
+					.Select(x => x.EffectiveFrom > start ? x.EffectiveFrom : start)
+					.DefaultIfEmpty(start)
+					.Min(),
 				WinningAssignment = winner,
 				CandidateAssignments = candidates
 			});
@@ -80,43 +69,12 @@ public class HrPolicyEffectiveAssignmentConflictBuilder(
 		return conflicts;
 	}
 
-	private async Task<List<HrPolicyAssignment>> GetActiveGroupAssignmentsAsync(Guid academicYearId, DateTime date)
-	{
-		var assignmentQuery = await assignmentRepository.GetQueryableAsync();
-		return await asyncExecuter.ToListAsync(assignmentQuery.Where(x =>
-			x.AcademicYearId == academicYearId &&
-			x.TargetType == HrPolicyAssignmentTargetType.Group &&
-			x.IsActive &&
-			x.EffectiveFrom <= date &&
-			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= date)));
-	}
-
-	private async Task<Dictionary<Guid, string>> GetPayrollNamesAsync(
-		IReadOnlyCollection<HrPolicyAssignment> activeGroupAssignments,
-		Guid proposedPayrollPolicyId)
-	{
-		var payrollIds = activeGroupAssignments.Select(x => x.PayrollPolicyId).Append(proposedPayrollPolicyId).Distinct().ToList();
-		var payrollQuery = await payrollPolicyRepository.GetQueryableAsync();
-		return (await asyncExecuter.ToListAsync(payrollQuery.Where(x => payrollIds.Contains(x.Id))))
-			.ToDictionary(x => x.Id, x => x.Name);
-	}
-
-	private async Task<Dictionary<Guid, string>> GetAttendanceNamesAsync(
-		IReadOnlyCollection<HrPolicyAssignment> activeGroupAssignments,
-		Guid proposedAttendancePolicyId)
-	{
-		var attendanceIds = activeGroupAssignments.Select(x => x.AttendancePolicyId).Append(proposedAttendancePolicyId).Distinct().ToList();
-		var attendanceQuery = await attendancePolicyRepository.GetQueryableAsync();
-		return (await asyncExecuter.ToListAsync(attendanceQuery.Where(x => attendanceIds.Contains(x.Id))))
-			.ToDictionary(x => x.Id, x => x.Name);
-	}
-
 	private static List<HrPolicyEffectiveAssignmentCandidateDto> BuildCandidates(
 		Employee employee,
 		Group proposedGroup,
 		string targetKey,
 		CreateUpdateHrPolicyAssignmentDto proposed,
-		IReadOnlyCollection<HrPolicyAssignment> activeGroupAssignments,
+		IReadOnlyCollection<HrPolicyAssignment> activeAssignments,
 		IReadOnlyDictionary<Guid, Group> groupMap,
 		IReadOnlyDictionary<Guid, string> payrollNames,
 		IReadOnlyDictionary<Guid, string> attendanceNames)
@@ -126,6 +84,7 @@ public class HrPolicyEffectiveAssignmentConflictBuilder(
 		{
 			candidates.Add(MapCandidate(
 				null,
+				HrPolicyAssignmentTargetType.Group,
 				targetKey,
 				proposed.TargetDisplayName,
 				proposed.PayrollPolicyId,
@@ -137,17 +96,16 @@ public class HrPolicyEffectiveAssignmentConflictBuilder(
 				attendanceNames));
 		}
 
-		foreach (var assignment in activeGroupAssignments)
+		foreach (var assignment in activeAssignments)
 		{
-			if (!Guid.TryParse(assignment.TargetKey, out var groupId) ||
-				!groupMap.TryGetValue(groupId, out var group) ||
-				!HrPolicyGroupMembership.MatchesEmployee(group, employee))
+			if (!MatchesEmployee(assignment, employee, groupMap))
 			{
 				continue;
 			}
 
 			candidates.Add(MapCandidate(
 				assignment.Id,
+				assignment.TargetType,
 				assignment.TargetKey,
 				assignment.TargetDisplayName,
 				assignment.PayrollPolicyId,
@@ -162,19 +120,66 @@ public class HrPolicyEffectiveAssignmentConflictBuilder(
 		return candidates;
 	}
 
+	private static bool MatchesEmployee(
+		HrPolicyAssignment assignment,
+		Employee employee,
+		IReadOnlyDictionary<Guid, Group> groupMap) => assignment.TargetType switch
+	{
+		HrPolicyAssignmentTargetType.Employee =>
+			string.Equals(assignment.TargetKey, employee.Id.ToString("D"), StringComparison.OrdinalIgnoreCase),
+		HrPolicyAssignmentTargetType.Group when Guid.TryParse(assignment.TargetKey, out var groupId) &&
+			groupMap.TryGetValue(groupId, out var group) =>
+			HrPolicyGroupMembership.MatchesEmployee(group, employee),
+		_ => false
+	};
+
 	private static HrPolicyEffectiveAssignmentCandidateDto MarkWinner(List<HrPolicyEffectiveAssignmentCandidateDto> candidates)
 	{
 		var winner = candidates
-			.OrderByDescending(x => x.Priority)
+			.OrderByDescending(x => string.Equals(x.TargetType, "employee", StringComparison.OrdinalIgnoreCase) ? 100 : 50)
+			.ThenByDescending(x => x.Priority)
 			.ThenByDescending(x => x.EffectiveFrom)
+			.ThenBy(x => x.AssignmentId ?? Guid.Empty)
 			.First();
 
 		foreach (var candidate in candidates)
 		{
 			candidate.Status = ReferenceEquals(candidate, winner) ? "matched" : "skipped";
-			candidate.SkipReason = ReferenceEquals(candidate, winner) ? "winner" : "lower_priority";
+			candidate.SkipReason = GetSkipReason(candidate, winner);
 		}
 
 		return winner;
 	}
+
+	private static string GetSkipReason(
+		HrPolicyEffectiveAssignmentCandidateDto candidate,
+		HrPolicyEffectiveAssignmentCandidateDto winner)
+	{
+		if (ReferenceEquals(candidate, winner))
+		{
+			return "winner";
+		}
+
+		var candidateSpecificity = GetSpecificity(candidate.TargetType);
+		var winnerSpecificity = GetSpecificity(winner.TargetType);
+		if (candidateSpecificity < winnerSpecificity)
+		{
+			return "lower_specificity";
+		}
+
+		if (candidate.Priority < winner.Priority)
+		{
+			return "lower_priority";
+		}
+
+		if (candidate.EffectiveFrom.Date < winner.EffectiveFrom.Date)
+		{
+			return "lower_effective_date";
+		}
+
+		return "deterministic_tie_breaker";
+	}
+
+	private static int GetSpecificity(string targetType) =>
+		string.Equals(targetType, "employee", StringComparison.OrdinalIgnoreCase) ? 100 : 50;
 }

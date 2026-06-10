@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Audit;
-using ShikshaMitra.Finance.Charges;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;

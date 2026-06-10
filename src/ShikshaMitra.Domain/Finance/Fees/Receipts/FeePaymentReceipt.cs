@@ -1,6 +1,5 @@
-using System;
+﻿using System;
 using ShikshaMitra.Finance.FeeCollection;
-using ShikshaMitra.Finance.Receipts;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;

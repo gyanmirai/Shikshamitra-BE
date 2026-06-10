@@ -1,6 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
-using ShikshaMitra.Finance.Charges;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;

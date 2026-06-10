@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.Curriculum;
-using ShikshaMitra.Finance.FeeRefund;
+using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.HR.Employees;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -8,10 +8,10 @@ using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.FeeCollectionTests;
-using ShikshaMitra.Finance.Collections;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
+using ShikshaMitra.Finance.Fees.Collections;
 
 namespace ShikshaMitra.Finance.FeeStructureAssignment;
 

@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Finance.Setting;
+﻿using ShikshaMitra.Finance.Accounts.Settings.BankAccount;
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;

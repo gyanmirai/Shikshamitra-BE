@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.Receipts.Dtos;
-using ShikshaMitra.Finance.Receipts;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;

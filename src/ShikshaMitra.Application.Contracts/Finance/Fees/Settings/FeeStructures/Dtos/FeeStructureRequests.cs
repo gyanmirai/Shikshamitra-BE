@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Finance.Collections;
+﻿using ShikshaMitra.Finance.Fees.Collections;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;

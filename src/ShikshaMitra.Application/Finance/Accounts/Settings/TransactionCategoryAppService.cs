@@ -6,8 +6,8 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
-using ShikshaMitra.Finance.Accounts;
 using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
+using ShikshaMitra.Finance.Accounts.Transactions;
 
 namespace ShikshaMitra.Finance.Accounts.Settings;
 

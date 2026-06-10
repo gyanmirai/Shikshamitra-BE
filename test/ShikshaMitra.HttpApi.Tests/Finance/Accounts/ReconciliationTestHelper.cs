@@ -2,8 +2,8 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.FeeCollectionTests;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 
 namespace ShikshaMitra.Finance.Accounts.Reconciliation;

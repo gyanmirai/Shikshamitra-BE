@@ -1,8 +1,8 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.Receipts;
+using ShikshaMitra.Finance.Fees.Receipts;
 using Xunit;
 
 namespace ShikshaMitra.Finance.Receipts;

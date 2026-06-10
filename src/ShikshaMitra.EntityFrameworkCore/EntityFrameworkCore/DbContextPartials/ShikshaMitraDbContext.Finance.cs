@@ -2,9 +2,6 @@
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Accounts.Incomes;
-using ShikshaMitra.Finance.FeeAdjustment.Aggregates;
-using ShikshaMitra.Finance.FeeAdjustment.Entities;
-using ShikshaMitra.Finance.FeeRefund;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
@@ -14,6 +11,9 @@ using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Students.Fees;
+using ShikshaMitra.Finance.Fees.FeeRefund;
+using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
+using ShikshaMitra.Finance.Fees.FeeAdjustment.Entities;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 

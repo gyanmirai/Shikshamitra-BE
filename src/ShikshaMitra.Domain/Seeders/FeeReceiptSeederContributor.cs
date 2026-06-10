@@ -1,12 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
-using ShikshaMitra.Finance.Receipts;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -16,6 +14,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
+using ShikshaMitra.Finance.Fees.Collections;
 
 namespace ShikshaMitra.Seeders;
 

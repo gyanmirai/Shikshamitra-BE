@@ -1,6 +1,5 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
-using ShikshaMitra.Finance.FeeCollection;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 

@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.FeeCollection;
-using ShikshaMitra.Finance.Receipts;
+using ShikshaMitra.Finance.Fees.Collections;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.Receipts;

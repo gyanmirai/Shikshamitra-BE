@@ -1,10 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.FeeCollection;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
-using ShikshaMitra.Finance.Receipts;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Timing;

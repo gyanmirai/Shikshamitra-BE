@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Finance.Audit;
+using ShikshaMitra.Finance.Audit;
 using System;
 using System.Collections.Generic;
 
@@ -50,6 +50,12 @@ public class CollectFeeOutput
     public Guid? FeeReceiptId { get; set; }
 
 	public Guid? ChargeReceiptId { get; set; }
+
+	/// <summary>
+	/// Charge receipt number (KCH-*) when charge lines were present in this transaction.
+	/// Null when no charge lines were included.
+	/// </summary>
+	public string? ChargeReceiptNumber { get; set; }
 
 	public double ReceivedAmount { get; set; }
 

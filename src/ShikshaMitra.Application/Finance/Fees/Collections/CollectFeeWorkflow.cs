@@ -34,13 +34,15 @@ public class CollectFeeWorkflow(
 	FeeCollectionManager feeCollectionManager,
 	FinanceAuditWriter financeAuditWriter,
 	FinanceScopeAccessService financeScopeAccessService,
+	IFeeReceiptPdfGenerator pdfGenerator,
+	FeeReceiptBlobManager blobManager,
 	IClock clock
 ) : ApplicationService, ITransientDependency
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.Add)]
 	public async Task<CollectFeeOutput> CollectFeeAsync(CollectFeeInput input)
 	{
-		var student = await ValidateAndLoadStudentForCollectionAsync(input);
+		var (student, academicYear) = await ValidateAndLoadStudentForCollectionAsync(input);
 		var dueFeeContext = await LoadAndValidateDueFeesContextAsync(input);
 		var chargeContext = await LoadAndValidateChargesContextAsync(input);
 
@@ -94,6 +96,11 @@ public class CollectFeeWorkflow(
 			GrNo = student.GrNo?.ToString(),
 			RollNo = student.RollNo?.ToString()
 		};
+
+		// ── Eager PDF generation ─────────────────────────────────────────────────────────────────
+		// Generates and persists receipt PDFs before SaveChanges so PdfBlobName is written
+		// atomically with the receipt row, making the download URL available in the response.
+		await GenerateAndStoreReceiptPdfsAsync(transaction.Receipts, student, academicYear);
 
 		var allocationLines = new List<FinanceAuditAllocationLineDto>();
 		var paymentChangedFields = new List<FinanceAuditChangedFieldDto>
@@ -182,6 +189,39 @@ public class CollectFeeWorkflow(
 			auditEventIds.Add(receiptWrite.EventId);
 		}
 
+		// ── Charge receipt audit ─────────────────────────────────────────────────────────────────
+		var chargeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Charge);
+		if (chargeReceipt != null)
+		{
+			var chargeReceiptWrite = await financeAuditWriter.WriteAsync(
+				input.AcademicYearId,
+				FinanceAuditEntityTypes.FeeReceipt,
+				chargeReceipt.Id,
+				chargeReceipt.ReceiptNumber,
+				FinanceAuditActions.GenerateReceipt,
+				$"Charge receipt {chargeReceipt.ReceiptNumber} generated",
+				studentContext,
+				null,
+				[
+					new FinanceAuditChangedFieldDto
+					{
+						Field    = "receiptNumber",
+						OldValue = null,
+						NewValue = chargeReceipt.ReceiptNumber
+					},
+					new FinanceAuditChangedFieldDto
+					{
+						Field    = "amount",
+						OldValue = null,
+						NewValue = transaction.ChargeLinesTotal.ToString("F2")
+					}
+				],
+				new { chargeReceiptId = chargeReceipt.Id, chargeReceiptNumber = chargeReceipt.ReceiptNumber },
+				correlationId,
+				paymentWrite.EventId);
+			auditEventIds.Add(chargeReceiptWrite.EventId);
+		}
+
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
 		Logger.LogInformation(
@@ -194,6 +234,8 @@ public class CollectFeeWorkflow(
 			ReceiptNumber = transaction.ReceiptNumber,
 			FeeReceiptNumber = feeReceipt?.ReceiptNumber,
 			FeeReceiptId = feeReceipt?.Id,
+			ChargeReceiptId = chargeReceipt?.Id,
+			ChargeReceiptNumber = chargeReceipt?.ReceiptNumber,
 			StudentId = input.StudentId,
 			AcademicYearId = input.AcademicYearId,
 			TotalAmount = received,
@@ -245,16 +287,21 @@ public class CollectFeeWorkflow(
 		};
 	}
 
-	private async Task<Student> ValidateAndLoadStudentForCollectionAsync(CollectFeeInput input)
+	/// <summary>
+	/// Validates the collection context and loads both the <see cref="Student"/> and
+	/// <see cref="AcademicYear"/> needed for domain validation and eager receipt PDF generation,
+	/// avoiding a second round-trip later in the workflow.
+	/// </summary>
+	private async Task<(Student Student, AcademicYear AcademicYear)> ValidateAndLoadStudentForCollectionAsync(CollectFeeInput input)
 	{
-		await academicYearRepository.GetAsync(input.AcademicYearId);
+		var academicYear = await academicYearRepository.GetAsync(input.AcademicYearId);
 
 		var student = await studentRepository.GetAsync(input.StudentId);
 		if (student.AcademicYearId != input.AcademicYearId)
 			throw new BusinessException(FeeCollectionErrorCodes.StudentAcademicYearMismatch);
 
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
-		return student;
+		return (student, academicYear);
 	}
 
 	private async Task<DueFeeValidationContext> LoadAndValidateDueFeesContextAsync(CollectFeeInput input)
@@ -386,6 +433,30 @@ public class CollectFeeWorkflow(
 		return FeeReceiptPaymentPolicy.RequiresVerification(paymentMethods)
 			? FeeCollectionStatus.InReconciliation
 			: (isAnyPartial ? FeeCollectionStatus.Partial : FeeCollectionStatus.Paid);
+	}
+
+	/// <summary>
+	/// Eagerly generates a PDF for every <see cref="FeePaymentReceipt"/> produced by this
+	/// collection event and persists each document to ABP Blob Storing, setting
+	/// <see cref="FeePaymentReceipt.PdfBlobName"/> before the Unit-of-Work is saved.
+	/// <para>
+	/// By generating PDFs inside the same UoW scope, the blob name is committed atomically
+	/// with the receipt row — the client can request the download URL immediately from the
+	/// post-payment response without triggering a separate lazy-generation round-trip.
+	/// </para>
+	/// </summary>
+	private async Task GenerateAndStoreReceiptPdfsAsync(
+		IReadOnlyList<FeePaymentReceipt> receipts,
+		Student student,
+		AcademicYear academicYear,
+		CancellationToken cancellationToken = default)
+	{
+		foreach (var receipt in receipts)
+		{
+			var pdfBytes = await pdfGenerator.GenerateAsync(receipt, student, academicYear, cancellationToken);
+			var blobName = await blobManager.SavePdfAsync(receipt.Id, receipt.ReceiptKind, pdfBytes, cancellationToken);
+			receipt.SetPdfBlobName(blobName);
+		}
 	}
 
 	private static Dictionary<Guid, double> BuildDueFeeBeforeSnapshots(

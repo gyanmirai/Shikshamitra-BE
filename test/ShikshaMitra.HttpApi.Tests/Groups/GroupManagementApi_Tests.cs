@@ -74,6 +74,62 @@ public class GroupManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Lightweight_List_Should_Return_Member_Counts()
+	{
+		var employeeA = await EmployeeTestHelper.CreateEmployeeAsync(Client, "CalendarLightListA");
+		var employeeB = await EmployeeTestHelper.CreateEmployeeAsync(Client, "CalendarLightListB");
+		var manualGroup = await CreateEmployeeGroupAsync("CalendarLightList", new[]
+		{
+			employeeA.Id,
+			employeeB.Id
+		});
+		var ruleMarker = $"RuleLight{Guid.NewGuid():N}"[..20];
+		var ruleEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, ruleMarker);
+		var ruleGroupInput = new CreateUpdateGroupDto
+		{
+			Name = TestDataHelper.UniqueName("CalendarLightRule"),
+			RuleBased = new RuleBasedSelectionDto
+			{
+				RoleIds = new List<Guid> { ruleEmployee.RoleId },
+				EmployeeFilters = new List<CreateEmployeeRuleDto>
+				{
+					new()
+					{
+						Field = EmployeeRuleField.Name,
+						Operator = RuleOperator.Contains,
+						Value = ruleMarker,
+					}
+				}
+			}
+		};
+		var createRuleResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}?academicYearId={Factory.SeededAcademicYearId}",
+			ruleGroupInput,
+			JsonOptions);
+		createRuleResponse.EnsureSuccessStatusCode();
+		var ruleGroup = await createRuleResponse.Content.ReadFromJsonAsync<GroupDto>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to create rule-based group.");
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}?academicYearId={Factory.SeededAcademicYearId}&includeDetails=false&maxResultCount=50");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<PagedResultDto<GroupDto>>(JsonOptions);
+		body.ShouldNotBeNull();
+		var listedManualGroup = body.Items.Single(item => item.Id == manualGroup.Id);
+		listedManualGroup.NameBased.ShouldBeNull();
+		listedManualGroup.RuleBased.ShouldBeNull();
+		listedManualGroup.EmployeeCount.ShouldBe(2);
+		listedManualGroup.MemberCount.ShouldBe(2);
+		var listedRuleGroup = body.Items.Single(item => item.Id == ruleGroup.Id);
+		listedRuleGroup.NameBased.ShouldBeNull();
+		listedRuleGroup.RuleBased.ShouldBeNull();
+		listedRuleGroup.EmployeeCount.ShouldBe(1);
+		listedRuleGroup.MemberCount.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Allow_Same_Group_Name_In_Different_Academic_Years()
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "CalendarSameName");

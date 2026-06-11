@@ -7,20 +7,19 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
 public class StudentAdditionalDetailsAppService(
-    IRepository<Student, Guid> studentRepository,
+    IStudentRepository studentRepository,
     IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
     EntityValidationService validationService,
-    ILibraryMemberAppService libraryMemberAppService
-) : StudentRegistrationBaseAppService(studentRepository, validationService),
+    ILibraryMemberAppService libraryMemberAppService,
+    StudentScopeAccessService studentScopeAccessService
+) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentAdditionalDetailsAppService
 {
     public async Task<StudentAdditionalDetailsDto> GetAdditionalDetailsAsync(Guid studentId)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(GetAdditionalDetailsAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetails);
 
         var additionalDetail = student.AdditionalDetail;
@@ -45,11 +44,9 @@ public class StudentAdditionalDetailsAppService(
 
     public async Task<StudentAdditionalDetailsDto> UpdateAdditionalDetailsAsync(Guid studentId, UpdateAdditionalDetailsDto input)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(UpdateAdditionalDetailsAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetailsUpdate);
 
         validationService.ValidateAdditionalDetailExists(student);

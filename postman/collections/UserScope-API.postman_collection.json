@@ -348,7 +348,7 @@
                                                                                "bulk-assign"
                                                                            ]
                                                               },
-                                                      "description":  "**OVERWRITE STRATEGY**: Deletes all existing assignments for specified users, then creates new ones.\n\nAssign specific divisions to user(s) in one request\n\n**Use Case:** Teacher handles 2-3 specific divisions\n\n**Efficient:** Single API call creates multiple assignments"
+                                                      "description":  "**ACADEMIC-YEAR-SCOPED OVERWRITE STRATEGY**: Deletes existing assignments only for specified users and supplied academic years, then creates new ones. Other academic years are preserved.\n\nAssign specific divisions to user(s) in one request\n\n**Use Case:** Teacher handles 2-3 specific divisions\n\n**Efficient:** Single API call creates multiple assignments"
                                                   },
                                       "response":  [
 
@@ -393,7 +393,7 @@
                                                                                "bulk-assign"
                                                                            ]
                                                               },
-                                                      "description":  "**OVERWRITE STRATEGY**: Deletes all existing assignments for specified users, then creates new ones.\n\nAssign multiple users to same scope\n\n**Use Case:** Multiple teachers for same class\n\n**Efficient:** Batch operation"
+                                                      "description":  "**ACADEMIC-YEAR-SCOPED OVERWRITE STRATEGY**: Deletes existing assignments only for specified users and supplied academic years, then creates new ones. Other academic years are preserved.\n\nAssign multiple users to same scope\n\n**Use Case:** Multiple teachers for same class\n\n**Efficient:** Batch operation"
                                                   },
                                       "response":  [
 

@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ShikshaMitra.Students.Documents;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -33,6 +34,15 @@ public class StudentDocumentConfiguration : IEntityTypeConfiguration<StudentDocu
 		builder.Property(x => x.Size)
 			.IsRequired();
 
+		builder.Property(x => x.Sha256Hash)
+			.HasMaxLength(128);
+
+		builder.Property(x => x.StorageStatus)
+			.HasDefaultValue(StudentDocumentStorageStatus.Stored);
+
+		builder.Property(x => x.IsSensitive)
+			.HasDefaultValue(false);
+
 		// Configure relationships
 		builder.HasOne<Student>()
 			.WithMany()
@@ -49,6 +59,7 @@ public class StudentDocumentConfiguration : IEntityTypeConfiguration<StudentDocu
 		// Add indexes for better query performance
 		builder.HasIndex(x => x.StudentId);
 		builder.HasIndex(x => new { x.StudentId, x.DocumentTypeId });
+		builder.HasIndex(x => new { x.StudentId, x.DocumentTypeId, x.Sha256Hash });
 		builder.HasIndex(x => x.DocumentTypeId);
 	}
 }

@@ -57,6 +57,7 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 			.Where(x => x.AcademicYearId == academicYearId);
 
 		query = ApplyActiveFilter(query, includeInactive);
+		query = ApplyUsableLeaveTypeFilter(query, includeInactive);
 		query = ApplySearch(query, search);
 
 		query = !string.IsNullOrWhiteSpace(sorting)
@@ -75,6 +76,7 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 		var dbSet = await GetDbSetAsync();
 		IQueryable<LeavePolicy> query = dbSet.Where(x => x.AcademicYearId == academicYearId);
 		query = ApplyActiveFilter(query, includeInactive);
+		query = ApplyUsableLeaveTypeFilter(query, includeInactive);
 		query = ApplySearch(query, search);
 
 		return await query.LongCountAsync(cancellationToken);
@@ -111,6 +113,15 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 
 	private static IQueryable<LeavePolicy> ApplyActiveFilter(IQueryable<LeavePolicy> query, bool includeInactive) =>
 		includeInactive ? query : query.Where(x => x.IsActive);
+
+	private static IQueryable<LeavePolicy> ApplyUsableLeaveTypeFilter(IQueryable<LeavePolicy> query, bool includeInactive) =>
+		includeInactive
+			? query
+			: query.Where(x => x.Rules.Any(rule =>
+				rule.IsActive &&
+				rule.LeaveType != null &&
+				rule.LeaveType.IsActive &&
+				!rule.LeaveType.IsDeleted));
 
 	private static IQueryable<LeavePolicy> ApplySearch(IQueryable<LeavePolicy> query, string? search)
 	{

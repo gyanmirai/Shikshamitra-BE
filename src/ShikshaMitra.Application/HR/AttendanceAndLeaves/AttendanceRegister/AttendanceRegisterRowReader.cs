@@ -129,22 +129,6 @@ public class AttendanceRegisterRowReader(
 			x.AttendanceDate >= startDate &&
 			x.AttendanceDate <= endDate);
 
-		if (input.EducationMediumStageId.HasValue)
-		{
-			attendanceQuery = attendanceQuery.Where(x =>
-				x.EducationMediumStageId == input.EducationMediumStageId.Value);
-		}
-		else if (input.AcademicYearId.HasValue)
-		{
-			var allowedStageIds = employees
-				.SelectMany(x => x.AssignedStageIds)
-				.Distinct()
-				.ToList();
-			attendanceQuery = attendanceQuery.Where(x =>
-				x.EducationMediumStageId.HasValue &&
-				allowedStageIds.Contains(x.EducationMediumStageId.Value));
-		}
-
 		var attendanceRows = await asyncExecuter.ToListAsync(attendanceQuery);
 		var attendanceByEmployeeDate = attendanceRows
 			.GroupBy(x => (x.EmployeeId, x.AttendanceDate))

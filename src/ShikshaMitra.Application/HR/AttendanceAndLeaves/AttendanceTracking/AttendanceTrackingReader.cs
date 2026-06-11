@@ -17,7 +17,7 @@ public class AttendanceTrackingReader(
 	{
 		var scope = await accessService.EnsureCanReadAttendanceTrackingAsync();
 		await accessService.EnsureMediumStageInScopeAsync(scope, input.EducationMediumStageId);
-		return await dateWiseReader.GetDateWiseAsync(input);
+		return await dateWiseReader.GetDateWiseAsync(input, scope);
 	}
 
 	public async Task<AttendanceEmployeeWiseResponse> GetEmployeeWiseAsync(GetAttendanceEmployeeWiseInput input)

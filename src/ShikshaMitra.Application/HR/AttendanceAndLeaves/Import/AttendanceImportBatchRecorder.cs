@@ -12,6 +12,7 @@ using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Timing;
 using Volo.Abp.Users;
+using Volo.Abp.BlobStoring;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
@@ -22,6 +23,7 @@ public class AttendanceImportBatchRecorder(
 	ICurrentTenant currentTenant,
 	ICurrentUser currentUser,
 	IClock clock,
+	IBlobContainer blobContainer,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
@@ -57,6 +59,8 @@ public class AttendanceImportBatchRecorder(
 	internal async Task<AttendanceImportBatch> CreateAsync(
 		Guid batchId,
 		string fileName,
+		string? contentType,
+		byte[] fileContent,
 		List<AttendanceImportPreviewRow> previewRows,
 		string? monthYear,
 		string? previewToken,
@@ -76,6 +80,9 @@ public class AttendanceImportBatchRecorder(
 			.Take(20)
 			.ToList();
 
+		var originalFileBlobName = BuildOriginalFileBlobName(batchId, fileName);
+		await blobContainer.SaveAsync(originalFileBlobName, fileContent, overrideExisting: true);
+
 		var importBatch = new AttendanceImportBatch(
 			batchId,
 			currentTenant.Id,
@@ -91,7 +98,9 @@ public class AttendanceImportBatchRecorder(
 			previewRows.Count(x => x.Action == "create"),
 			previewRows.Count(x => x.Action == "replace"),
 			errorsSummary,
-			warningsSummary);
+			warningsSummary,
+			originalFileBlobName: originalFileBlobName,
+			originalFileContentType: NormalizeContentType(contentType));
 
 		if (!string.IsNullOrWhiteSpace(previewToken) && previewTokenExpiresAt.HasValue)
 		{
@@ -128,6 +137,22 @@ public class AttendanceImportBatchRecorder(
 
 	private static string NormalizeImportFileName(string? value) =>
 		(value ?? string.Empty).Trim().ToLowerInvariant();
+
+	private static string BuildOriginalFileBlobName(Guid batchId, string fileName)
+	{
+		var safeFileName = string.Join("_", (fileName ?? "attendance-import").Split(System.IO.Path.GetInvalidFileNameChars()));
+		if (string.IsNullOrWhiteSpace(safeFileName))
+		{
+			safeFileName = "attendance-import";
+		}
+
+		return $"hr/attendance-imports/{batchId:N}/original/{safeFileName}";
+	}
+
+	private static string NormalizeContentType(string? contentType) =>
+		string.IsNullOrWhiteSpace(contentType)
+			? "application/octet-stream"
+			: AttendanceImportPreviewMapper.TruncateForStorage(contentType, 100)!;
 
 	private static string? ToApiMonthYear(string? internalMonthYear)
 	{

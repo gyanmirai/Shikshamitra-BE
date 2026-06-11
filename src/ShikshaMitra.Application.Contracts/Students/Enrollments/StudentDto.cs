@@ -59,4 +59,9 @@ public class StudentDto : EntityDto
 	/// True when a fee structure has been assigned to the student.
 	/// </summary>
 	public bool IsFeeStructureAssigned { get; set; } = false;
+
+	public bool HasPhoto { get; set; }
+	public string? PhotoUrl { get; set; }
+	public int RequiredDocumentsCount { get; set; }
+	public int UploadedDocumentsCount { get; set; }
 }

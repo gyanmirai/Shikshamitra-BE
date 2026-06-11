@@ -125,7 +125,7 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Get_Employee_Wise_Attendance_With_AcademicYearId_Filtering_Inferred_Stages()
+	public async Task Should_Get_Employee_Wise_Attendance_With_AcademicYearId_When_Attendance_Stage_Is_Stale()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
@@ -151,8 +151,41 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 		var payload = await response.Content.ReadFromJsonAsync<AttendanceEmployeeWiseResponse>()
 			?? throw new InvalidOperationException("Failed to deserialize employee-wise attendance response.");
 		payload.TotalCount.ShouldBe(2);
-		payload.AttendanceSummary.Present.ShouldBe(1);
-		payload.AttendanceSummary.Absent.ShouldBe(1);
+		payload.AttendanceSummary.Present.ShouldBe(2);
+		payload.AttendanceSummary.Absent.ShouldBe(0);
+		payload.Items.All(x => x.Status == AttendanceTrackingStatus.Present).ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Date_Wise_Attendance_With_Stage_Filter_When_Attendance_Stage_Is_Stale()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var seeded = await SeedAttendanceAcademicOrganizationsAsync();
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			"TrackDateStaleStage",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		await AssignEmployeeToStageAsync(employee.Id, seeded.CurrentYearStageId);
+		await AssignEmployeeToStageAsync(employee.Id, seeded.OtherYearStageId);
+		await SeedAttendanceAsync(employee.Id, attendanceDate, seeded.OtherYearStageId);
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/date-wise?attendanceDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10&educationMediumStageId={seeded.CurrentYearStageId:D}");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
+
+		var payload = await response.Content.ReadFromJsonAsync<AttendanceDateWiseResponse>()
+			?? throw new InvalidOperationException("Failed to deserialize date-wise attendance response.");
+		payload.TotalCount.ShouldBe(1);
+		payload.Summary.Present.ShouldBe(1);
+		payload.Summary.Absent.ShouldBe(0);
+		payload.Items.Single().EmployeeId.ShouldBe(employee.Id.ToString());
+		payload.Items.Single().Status.ShouldBe(AttendanceTrackingStatus.Present);
 	}
 
 	[Fact]

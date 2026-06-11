@@ -22,9 +22,10 @@ public interface IUserScopeAppService : IApplicationService
     /// Creates assignments for all combinations (cartesian product) of the provided scope parameters.
     /// For example: 2 users × 3 boards × 2 standards = 12 assignments.
     ///
-    /// IMPORTANT - OVERWRITE STRATEGY:
-    /// This operation first DELETES all existing scope assignments for the specified users,
-    /// then creates the new assignments. This is NOT an append operation.
+    /// IMPORTANT - ACADEMIC-YEAR-SCOPED OVERWRITE STRATEGY:
+    /// This operation first DELETES existing scope assignments for the specified users
+    /// only within the supplied AcademicYearIds, then creates the new assignments.
+    /// Assignments for other academic years are preserved.
     ///
     /// The entire operation is transactional - either all operations (delete + create) succeed or none are applied.
     /// </summary>

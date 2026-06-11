@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
@@ -12,6 +13,22 @@ namespace ShikshaMitra.Students;
 /// </summary>
 public interface IStudentRepository : IRepository<Student, Guid>
 {
+    /// <summary>
+    /// Returns a student query without configured automatic navigation includes.
+    /// Use for list projections where loading the whole aggregate graph would be wasteful.
+    /// </summary>
+    Task<IQueryable<Student>> GetQueryableWithoutAutoIncludesAsync();
+
+    /// <summary>
+    /// Gets a student with only the aggregate parts required for inquiry editing.
+    /// </summary>
+    Task<Student?> GetInquiryForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a student with the registration section aggregate parts used by registration forms.
+    /// </summary>
+    Task<Student?> GetRegistrationAggregateAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Gets a student with all 1:1 aggregate parts eagerly loaded
     /// (AdditionalDetail, ContactDetail, FamilyDetail, CommunicationDetail,

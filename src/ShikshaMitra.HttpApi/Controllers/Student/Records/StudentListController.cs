@@ -1,9 +1,12 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Validation;
 
 namespace ShikshaMitra.HttpApi.Controllers.Students.Records;
 
@@ -14,31 +17,114 @@ public class StudentListController(
 	IStudentListAppService studentListAppService
 ) : AbpController
 {
-	// get students by division is handled by StudentController.GetStudentsByDivisionAsync to keep pagination and search concerns together.
+	private const long MaxPhotoUploadBytes = 5 * 1024 * 1024;
+
 	[HttpGet("{divisionId}")]
-	public async Task<PagedResultDto<StudentDto>> GetStudentsByDivision(Guid divisionId, [FromQuery] int skipCount = 0,
+	public async Task<PagedResultDto<StudentDto>> GetStudentsByDivision(
+		Guid divisionId,
+		[FromQuery] int skipCount = 0,
 		[FromQuery] int maxResultCount = 10,
 		[FromQuery] string? searchTerm = null)
 	{
 		return await studentListAppService.GetStudentsByDivisionAsync(divisionId, skipCount, maxResultCount, searchTerm);
 	}
 
-	/// <summary>
-	/// Changes the operational status (Active / Inactive / Left) of an enrolled student.
-	/// A status-change history entry with the provided remarks is automatically persisted.
-	/// </summary>
+	[HttpGet("/api/students/records/dashboard-summary")]
+	public async Task<StudentDashboardSummaryDto> GetDashboardSummary()
+	{
+		return await studentListAppService.GetDashboardSummaryAsync();
+	}
+
+	[HttpGet("/api/students/records/attendance-dashboard-summary")]
+	public async Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummary()
+	{
+		return await studentListAppService.GetAttendanceDashboardSummaryAsync();
+	}
+
+	[HttpPost("/api/students/records/{studentId}/photo")]
+	[Consumes("multipart/form-data")]
+	public async Task<StudentPhotoUploadResultDto> UploadPhoto(
+		Guid studentId,
+		[FromForm] StudentPhotoUploadRequest request)
+	{
+		if (request.File == null || request.File.Length == 0)
+		{
+			throw new BadHttpRequestException("No photo was uploaded.");
+		}
+
+		if (request.File.Length > MaxPhotoUploadBytes)
+		{
+			throw new BadHttpRequestException("Uploaded photo exceeds the allowed size.");
+		}
+
+		var content = await ReadBoundedAsync(request.File, MaxPhotoUploadBytes, HttpContext.RequestAborted);
+
+		return await studentListAppService.UploadPhotoAsync(studentId, new UploadStudentPhotoDto
+		{
+			FileName = request.File.FileName,
+			ContentType = request.File.ContentType,
+			Content = content
+		});
+	}
+
+	[HttpGet("/api/students/records/{studentId}/photo")]
+	public async Task<IActionResult> GetPhoto(Guid studentId)
+	{
+		var photo = await studentListAppService.GetPhotoAsync(studentId);
+		if (photo == null)
+		{
+			return NotFound();
+		}
+
+		return File(photo.Content, photo.ContentType, photo.FileName);
+	}
+
 	[HttpPut("{studentId}/status")]
 	public async Task ChangeStudentStatus(Guid studentId, [FromBody] ChangeStudentStatusDto input)
 	{
 		await studentListAppService.ChangeStudentStatusAsync(studentId, input);
 	}
 
-	/// <summary>
-	/// Returns the full audited status-change history for a student, newest entry first.
-	/// </summary>
 	[HttpGet("{studentId}/status/history")]
 	public async Task<List<StudentStatusHistoryDto>> GetStatusHistory(Guid studentId)
 	{
 		return await studentListAppService.GetStatusHistoryAsync(studentId);
 	}
+
+	private static async Task<byte[]> ReadBoundedAsync(
+		IFormFile file,
+		long maxBytes,
+		CancellationToken cancellationToken)
+	{
+		await using var inputStream = file.OpenReadStream();
+		using var memoryStream = new MemoryStream(capacity: (int)Math.Min(file.Length, 1024 * 1024));
+		var buffer = new byte[81920];
+		long totalRead = 0;
+
+		while (true)
+		{
+			var read = await inputStream.ReadAsync(buffer, cancellationToken);
+			if (read == 0)
+			{
+				break;
+			}
+
+			totalRead += read;
+			if (totalRead > maxBytes)
+			{
+				throw new BadHttpRequestException("Uploaded photo exceeds the allowed size.");
+			}
+
+			await memoryStream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+		}
+
+		return memoryStream.ToArray();
+	}
+}
+
+public class StudentPhotoUploadRequest
+{
+	[Required]
+	[DisableValidation]
+	public IFormFile? File { get; set; }
 }

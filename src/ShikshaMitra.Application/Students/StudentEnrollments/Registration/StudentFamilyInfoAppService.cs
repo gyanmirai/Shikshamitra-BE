@@ -9,22 +9,22 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
 public class StudentFamilyInfoAppService(
-    IRepository<Student, Guid> studentRepository,
+    IStudentRepository studentRepository,
+    IRepository<StudentFamilyDetail, Guid> familyDetailRepository,
     EntityValidationService validationService,
-    StudentRegistrationMappingHelper mappingHelper
-) : StudentRegistrationBaseAppService(studentRepository, validationService),
+    StudentRegistrationMappingHelper mappingHelper,
+    StudentScopeAccessService studentScopeAccessService
+) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentFamilyInfoAppService
 {
     public async Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(GetFamilyInfoAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyInfo);
 
-        var familyDetail = student.FamilyDetail;
+        var familyDetail = await familyDetailRepository.FindAsync(studentId);
 
         var result = new StudentFamilyInfoDto
         {
@@ -43,8 +43,13 @@ public class StudentFamilyInfoAppService(
         {
             var siblings = await studentRepository
                 .GetListAsync(s => familyDetail.SiblingStudentIds.Contains(s.Id));
+            var scopedSiblingIds = (await studentScopeAccessService.ApplyCurrentUserScopeAsync(
+                    siblings.AsQueryable()))
+                .Select(s => s.Id)
+                .ToHashSet();
 
             result.SiblingStudents = siblings
+                .Where(s => scopedSiblingIds.Contains(s.Id))
                 .Select(s => new SiblingStudentDto
                 {
                     StudentId = s.Id,
@@ -61,14 +66,18 @@ public class StudentFamilyInfoAppService(
 
     public async Task<StudentFamilyInfoDto> UpdateFamilyInfoAsync(Guid studentId, UpdateFamilyInfoDto input)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(UpdateFamilyInfoAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyUpdate);
 
         await validationService.ValidateSiblingStudentsExistAsync(input.SiblingStudentIds);
+        if (input.SiblingStudentIds != null)
+        {
+            await studentScopeAccessService.EnsureCanAccessStudentsAsync(
+                input.SiblingStudentIds,
+                nameof(UpdateFamilyInfoAsync));
+        }
 
         var fatherDetails = input.FatherDetails != null
             ? mappingHelper.MapDtoToParentGuardianDetails(input.FatherDetails) : null;
@@ -77,9 +86,19 @@ public class StudentFamilyInfoAppService(
         var guardianDetails = input.GuardianDetails != null
             ? mappingHelper.MapDtoToParentGuardianDetails(input.GuardianDetails) : null;
 
-        student.UpdateFamilyInfo(fatherDetails, motherDetails, guardianDetails, input.SiblingStudentIds);
+        var existingFamilyDetail = await familyDetailRepository.FindAsync(studentId);
+        var familyDetail = existingFamilyDetail ?? new StudentFamilyDetail(student.Id, student.TenantId);
+        var shouldCreateFamilyDetail = existingFamilyDetail == null;
+        familyDetail.UpdateFamilyInformation(fatherDetails, motherDetails, guardianDetails, input.SiblingStudentIds);
 
-        await studentRepository.UpdateAsync(student, autoSave: true);
+        if (shouldCreateFamilyDetail)
+        {
+            await familyDetailRepository.InsertAsync(familyDetail, autoSave: true);
+        }
+        else
+        {
+            await familyDetailRepository.UpdateAsync(familyDetail, autoSave: true);
+        }
 
         return await GetFamilyInfoAsync(studentId);
     }

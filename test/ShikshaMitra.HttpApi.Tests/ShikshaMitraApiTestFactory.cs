@@ -21,6 +21,7 @@ using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Infrastructure;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -102,6 +103,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			// correctly. Without this, the charge requestor JOIN returns null and the charge is
 			// reported as "not found" immediately after creation.
 			await EnsureTestAuthUserExistsAsync(services, tenantId, lookupNormalizer);
+			await EnsureTestAuthUserHasTenantWideScopeAsync(services, tenantId);
 
 			var shiftRepo = services.GetRequiredService<IRepository<ShiftManagement, Guid>>();
 			var fullDayShift = await (await shiftRepo.GetQueryableAsync()).AsNoTracking()
@@ -174,6 +176,37 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		await dbContext.SaveChangesAsync();
 	}
 
+	private static async Task EnsureTestAuthUserHasTenantWideScopeAsync(
+		IServiceProvider services,
+		Guid tenantId)
+	{
+		var scopeRepository = services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		var userScopeService = services.GetRequiredService<IUserScopeService>();
+		var testUserId = Guid.Parse(TestAuthHandler.TestUserId);
+		var queryable = await scopeRepository.GetQueryableAsync();
+
+		if (!queryable.Any(x =>
+			    x.UserId == testUserId &&
+			    x.AcademicYearId == null &&
+			    x.EducationBoardId == null &&
+			    x.EducationMediumId == null &&
+			    x.EducationMediumStageId == null &&
+			    x.StandardId == null &&
+			    x.DivisionId == null &&
+			    x.IsActive))
+		{
+			await scopeRepository.InsertAsync(
+				new UserScopeAssignment(
+					Guid.NewGuid(),
+					tenantId,
+					userId: testUserId,
+					description: "API test default tenant-wide scope"),
+				autoSave: true);
+		}
+
+		await userScopeService.InvalidateUserScopeCacheAsync(testUserId);
+	}
+
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
 		builder.UseEnvironment("Development");
@@ -181,6 +214,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		{
 			configuration.AddInMemoryCollection(new Dictionary<string, string?>
 			{
+				["DevAutoAuth:Enabled"] = "false",
 				["ShikshaMitra:Seeders:HR:SeedSampleApprovedLeaves"] = "false"
 			});
 		});

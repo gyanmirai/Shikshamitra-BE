@@ -76,6 +76,24 @@ public class HrAutomatedAttendanceRunsController(
 		});
 	}
 
+	[HttpGet("{importId:guid}/download-file")]
+	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+	public virtual async Task<IActionResult> DownloadFileAsync([FromRoute] Guid importId)
+	{
+		await EnsureHrRunLogReadAccessAsync();
+		var file = await attendanceImportLogAppService.DownloadFileAsync(importId);
+		return File(file.Content, file.ContentType, file.FileName);
+	}
+
+	[HttpGet("{importId:guid}/download-error-report")]
+	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+	public virtual async Task<IActionResult> DownloadErrorReportAsync([FromRoute] Guid importId)
+	{
+		await EnsureHrRunLogReadAccessAsync();
+		var file = await attendanceImportLogAppService.DownloadErrorReportAsync(importId);
+		return File(file.Content, file.ContentType, file.FileName);
+	}
+
 	[HttpPost("{importId:guid}/rows/save")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.Add)]
 	[ProducesResponseType(typeof(AttendanceImportRowsSaveOutput), StatusCodes.Status200OK)]

@@ -110,7 +110,7 @@ POST /api/app/user-scope/bulk-assign
 ```typescript
 {
   userIds: Guid[]                    // REQUIRED: Min 1
-  academicYearIds?: Guid[]           // NULL/empty = ALL
+  academicYearIds: Guid[]            // REQUIRED: year slice to replace
   educationBoardIds?: Guid[]         // NULL/empty = ALL
   educationMediumIds?: Guid[]        // NULL/empty = ALL
   educationMediumStageIds?: Guid[]   // NULL/empty = ALL
@@ -132,9 +132,9 @@ POST /api/app/user-scope/bulk-assign
 
 ## 🔄 OVERWRITE Strategy
 
-**Important:** Bulk assign now OVERWRITES existing assignments
+**Important:** Bulk assign now overwrites existing assignments only within the supplied academic years.
 
-1. **Deletes** all existing assignments for specified users
+1. **Deletes** existing assignments for specified users and supplied academic years
 2. **Creates** new assignments based on parameters
 3. **Transactional** - all succeed or all rollback
 
@@ -154,7 +154,7 @@ Second call: { deletedAssignments: 1, assignmentsCreated: 2 }
 users × academicYears × boards × mediums × stages × standards × divisions
 ```
 
-Where NULL/empty = 1 (wildcard)
+Where NULL/empty below academic year = 1 (wildcard)
 
 ### Examples
 | Users | Standards | Divisions | Result |
@@ -209,13 +209,13 @@ DELETE /api/app/user-scope/revoke-all/{userId}
 
 **Valid:**
 ```json
-✅ { "userIds": ["user1"], "standardIds": ["std1"] }
-✅ { "userIds": ["user1"], "standardIds": null, "divisionIds": ["div1"] }
+✅ { "userIds": ["user1"], "academicYearIds": ["2024"], "standardIds": ["std1"] }
+✅ { "userIds": ["user1"], "academicYearIds": ["2024"], "standardIds": null, "divisionIds": ["div1"] }
 ```
 
 **Invalid:**
 ```json
-❌ { "userIds": ["user1"] }  // No scope parameters
+❌ { "userIds": ["user1"] }  // Missing academicYearIds
 ❌ { "userIds": [] }          // No users
 ```
 

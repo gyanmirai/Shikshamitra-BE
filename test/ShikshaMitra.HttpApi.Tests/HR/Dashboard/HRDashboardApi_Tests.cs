@@ -10,6 +10,7 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.ReportingManagerInfo;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Data;
@@ -51,6 +52,29 @@ public class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 		document.RootElement.TryGetProperty("payroll", out _).ShouldBeTrue();
 		document.RootElement.TryGetProperty("celebrations", out _).ShouldBeTrue();
 		document.RootElement.TryGetProperty("insights", out _).ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Scoped_Dashboard_Should_Include_Assigned_Employee_Without_Attendance_Rows()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var marker = $"DashboardScoped{Guid.NewGuid():N}";
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, marker);
+		var scopedUserId = Guid.NewGuid();
+		await EnsureUserHasStageScopeAsync(scopedUserId, EmployeeTestHelper.DefaultMediumStageId);
+		var scopedClient = CreateClientAs(scopedUserId);
+
+		var response = await scopedClient.GetAsync($"{BaseUrl}/summary?date=2026-05-23&month=2026-05&range=7");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
+
+		var payload = await response.Content.ReadFromJsonAsync<HRDashboardSummaryDto>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize HR dashboard summary.");
+		payload.Workforce.TotalActiveStaff.ShouldBeGreaterThan(0);
+		payload.Workforce.RecentEmployees.ShouldContain(x => x.Id == employee.Id);
 	}
 
 	[Fact]
@@ -315,6 +339,30 @@ public class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 				await repository.HardDeleteAsync(preview, autoSave: false);
 			}
 
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task EnsureUserHasStageScopeAsync(Guid userId, Guid stageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var scopeRepository = scope.ServiceProvider.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		var userScopeService = scope.ServiceProvider.GetRequiredService<IUserScopeService>();
+
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await scopeRepository.InsertAsync(
+				new UserScopeAssignment(
+					Guid.NewGuid(),
+					Guid.Parse(TestAuthHandler.TestTenantId),
+					userId: userId,
+					educationMediumStageId: stageId,
+					description: "API regression test HR dashboard stage scope"),
+				autoSave: false);
+			await userScopeService.InvalidateUserScopeCacheAsync(userId);
 			await uow.CompleteAsync();
 		}
 	}

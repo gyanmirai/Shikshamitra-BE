@@ -11,6 +11,7 @@ using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -35,6 +36,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 	public StudentLifeCycleStatusEnum Status { get; private set; }
 	public StudentEnrollmentApprovalState AdmissionApprovalStatus { get; private set; }
 	public string? AdmissionApprovalRemarks { get; private set; }
+	public string? PhotoBlobName { get; private set; }
 	public Guid? FeeStructureId { get; set; }
 
 	// Navigation properties to aggregate parts (1:1 relationships)
@@ -401,6 +403,11 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 
 		StatusHistories.Add(history);
 		ChangeStatus(targetLifecycleStatus);
+	}
+
+	public void SetPhotoBlobName(string blobName)
+	{
+		PhotoBlobName = Check.NotNullOrWhiteSpace(blobName, nameof(blobName), maxLength: 512);
 	}
 
 	/// <summary>

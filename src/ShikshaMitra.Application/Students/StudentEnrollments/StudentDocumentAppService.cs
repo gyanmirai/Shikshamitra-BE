@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.Students.Documents;
 using ShikshaMitra.Students.StudentEnrollments.Documents;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -15,10 +16,14 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public class StudentDocumentAppService : ApplicationService, IStudentDocumentAppService
 {
 	private readonly StudentDocumentManager _documentManager;
+	private readonly StudentScopeAccessService _studentScopeAccessService;
 
-	public StudentDocumentAppService(StudentDocumentManager documentManager)
+	public StudentDocumentAppService(
+		StudentDocumentManager documentManager,
+		StudentScopeAccessService studentScopeAccessService)
 	{
 		_documentManager = documentManager;
+		_studentScopeAccessService = studentScopeAccessService;
 	}
 
 	/// <summary>
@@ -30,6 +35,7 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 	{
 		try
 		{
+			await _studentScopeAccessService.GetStudentAsync(studentId, nameof(UploadDocumentAsync));
 			Logger.LogInformation(
 				"Uploading document for student {StudentId}, DocumentType {DocumentTypeId}, File {FileName}",
 				studentId, input.DocumentTypeId, input.FileName);
@@ -57,7 +63,10 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 				Message = wasReplaced
 					? "Document replaced successfully"
 					: "Document uploaded successfully",
-				WasReplaced = wasReplaced
+				WasReplaced = wasReplaced,
+				Sha256Hash = document.IsSensitive ? null : document.Sha256Hash,
+				StorageStatus = document.StorageStatus,
+				IsSensitive = document.IsSensitive
 			};
 		}
 		catch (BusinessException ex)
@@ -84,6 +93,7 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 	{
 		try
 		{
+			await _studentScopeAccessService.GetStudentAsync(studentId, nameof(GetDocumentListAsync));
 			Logger.LogDebug("Retrieving document list for student {StudentId}", studentId);
 
 			// Get all document types and uploaded documents for the student
@@ -100,7 +110,14 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 				Size = d.uploadedDocument?.Size ?? 0,
 				CreationTime = d.uploadedDocument?.CreationTime ?? default,
 				CreatorId = d.uploadedDocument?.CreatorId,
-				IsUploaded = d.uploadedDocument != null
+				IsUploaded = d.uploadedDocument != null,
+				Sha256Hash = d.uploadedDocument is { IsSensitive: false } ? d.uploadedDocument.Sha256Hash : null,
+				StorageStatus = d.uploadedDocument?.StorageStatus ?? StudentDocumentStorageStatus.PendingValidation,
+				UploadedByUserId = d.uploadedDocument?.UploadedByUserId,
+				ValidatedAt = d.uploadedDocument?.ValidatedAt,
+				DownloadCount = d.uploadedDocument?.DownloadCount ?? 0,
+				LastDownloadedAt = d.uploadedDocument?.LastDownloadedAt,
+				IsSensitive = d.uploadedDocument?.IsSensitive ?? false
 			}).ToList();
 
 			Logger.LogDebug(
@@ -128,6 +145,7 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 	{
 		try
 		{
+			await _studentScopeAccessService.GetStudentAsync(studentId, nameof(GetDocumentAsync));
 			Logger.LogInformation(
 				"Downloading document {DocumentId} for student {StudentId}",
 				documentId, studentId);
@@ -169,6 +187,7 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 	{
 		try
 		{
+			await _studentScopeAccessService.GetStudentAsync(studentId, nameof(DeleteDocumentAsync));
 			Logger.LogInformation(
 				"Deleting document {DocumentId} for student {StudentId}",
 				documentId, studentId);
@@ -203,6 +222,7 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 	{
 		try
 		{
+			await _studentScopeAccessService.GetStudentAsync(studentId, nameof(GetRequiredDocumentsStatusAsync));
 			Logger.LogDebug(
 				"Retrieving required documents status for student {StudentId}",
 				studentId);

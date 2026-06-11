@@ -17,13 +17,16 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 {
 	private readonly IRepository<InquiryPreference, Guid> _inquiryPreferenceRepository;
 	private readonly InquiryPreferenceManager _inquiryPreferenceManager;
+	private readonly StudentScopeAccessService _studentScopeAccessService;
 
 	public InquiryPreferenceAppService(
 		IRepository<InquiryPreference, Guid> inquiryPreferenceRepository,
-		InquiryPreferenceManager inquiryPreferenceManager)
+		InquiryPreferenceManager inquiryPreferenceManager,
+		StudentScopeAccessService studentScopeAccessService)
 	{
 		_inquiryPreferenceRepository = inquiryPreferenceRepository;
 		_inquiryPreferenceManager = inquiryPreferenceManager;
+		_studentScopeAccessService = studentScopeAccessService;
 	}
 
 	/// <summary>
@@ -31,6 +34,10 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 	/// </summary>
     public async Task<PagedResultDto<InquiryPreferenceDto>> GetListAsync(PagedAndSortedResultRequestDto input, Guid academicYearId)
 	{
+		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+			academicYearId,
+			nameof(GetListAsync));
+
 		var queryable = await _inquiryPreferenceRepository.GetQueryableAsync();
 
 		// Filter by current tenant
@@ -78,11 +85,15 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 			throw new BusinessException("InquiryPreference:NotFound")
 				.WithData("Id", id);
 		}
+		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+			inquiryPreference.AcademicYearId,
+			nameof(GetAsync));
 
 		return new InquiryPreferenceDto
 		{
 			Id = inquiryPreference.Id,
 			PreferenceName = inquiryPreference.PreferenceName,
+			AcademicYearId = inquiryPreference.AcademicYearId,
 			CreationTime = inquiryPreference.CreationTime,
 			CreatorId = inquiryPreference.CreatorId,
 			LastModificationTime = inquiryPreference.LastModificationTime,
@@ -95,6 +106,10 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 	/// </summary>
     public async Task<InquiryPreferenceDto> CreateAsync(Guid academicYearId, CreateUpdateInquiryPreferenceDto input)
 	{
+		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+			academicYearId,
+			nameof(CreateAsync));
+
         var inquiryPreference = await _inquiryPreferenceManager.CreateAsync(
             CurrentTenant.Id,
             academicYearId,
@@ -126,6 +141,9 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 			throw new BusinessException("InquiryPreference:NotFound")
 				.WithData("Id", id);
 		}
+		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+			inquiryPreference.AcademicYearId,
+			nameof(UpdateAsync));
 
         await _inquiryPreferenceManager.UpdateAsync(
             inquiryPreference,
@@ -159,6 +177,9 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 			throw new BusinessException("InquiryPreference:NotFound")
 				.WithData("Id", id);
 		}
+		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+			inquiryPreference.AcademicYearId,
+			nameof(DeleteAsync));
 
 		await _inquiryPreferenceRepository.DeleteAsync(inquiryPreference, autoSave: true);
 	}

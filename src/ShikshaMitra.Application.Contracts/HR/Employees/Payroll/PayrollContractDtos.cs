@@ -82,4 +82,6 @@ public class SalaryComponentContract
 	public bool? IsFixed { get; set; }
 
 	public bool? IsTemp { get; set; }
+
+	public DateTime? ApplicableMonth { get; set; }
 }

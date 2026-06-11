@@ -510,7 +510,53 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Grouped_Register_Should_Filter_Inferred_Attendance_By_AcademicYear()
+	public async Task Grouped_Register_Should_Show_Take_Attendance_Data_When_AcademicYear_Filter_Is_Selected()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var marker = $"RegTakenYear{Guid.NewGuid():N}";
+		var attendanceDate = DateTime.UtcNow.AddDays(-1);
+		var attendanceDateText = attendanceDate.ToString("dd-MM-yyyy");
+		var startEnd = attendanceDate.ToString("yyyy-MM-dd");
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			marker,
+			dateOfJoining: attendanceDate.AddDays(-10));
+
+		var saveResponse = await Client.PostAsJsonAsync($"{TakeAttendanceUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDateText,
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					InTime = "09:00:00",
+					OutTime = "17:00:00"
+				}
+			]
+		}, JsonOptions);
+		saveResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var response = await Client.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={startEnd}&endDate={startEnd}&academicYearId={Factory.SeededAcademicYearId:D}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
+		var day = payload.Items.Single(x => x.EmployeeId == employee.Id).Days.Single();
+
+		day.Status.ShouldBe(AttendanceRegisterStatus.Present);
+		day.IsMarked.ShouldBeTrue();
+		day.AttendanceId.ShouldNotBeNull();
+		payload.Summary.Present.ShouldBe(1);
+		payload.Summary.NotMarked.ShouldBe(0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Grouped_Register_Should_Show_Attendance_With_Stale_Stage_When_AcademicYear_Filter_Is_Selected()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
@@ -534,11 +580,25 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
 		var day = payload.Items.Single(x => x.EmployeeId == employee.Id).Days.Single();
 
-		day.Status.ShouldBe(AttendanceRegisterStatus.NotMarked);
-		day.IsMarked.ShouldBeFalse();
-		day.AttendanceId.ShouldBeNull();
-		payload.Summary.Present.ShouldBe(0);
-		payload.Summary.NotMarked.ShouldBe(1);
+		day.Status.ShouldBe(AttendanceRegisterStatus.Present);
+		day.IsMarked.ShouldBeTrue();
+		day.AttendanceId.ShouldNotBeNull();
+		day.EducationMediumStageId.ShouldBe(seeded.CurrentYearStageId);
+		payload.Summary.Present.ShouldBe(1);
+		payload.Summary.NotMarked.ShouldBe(0);
+
+		var stageResponse = await Client.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&educationMediumStageId={seeded.CurrentYearStageId:D}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+		stageResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var stagePayload = await stageResponse.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
+		var stageDay = stagePayload.Items.Single(x => x.EmployeeId == employee.Id).Days.Single();
+
+		stageDay.Status.ShouldBe(AttendanceRegisterStatus.Present);
+		stageDay.IsMarked.ShouldBeTrue();
+		stageDay.AttendanceId.ShouldNotBeNull();
+		stageDay.EducationMediumStageId.ShouldBe(seeded.CurrentYearStageId);
 	}
 
 	[Fact]

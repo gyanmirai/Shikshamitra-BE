@@ -38,13 +38,21 @@ public class SalarySlipWorkflow(
 			await accessService.EnsureEmployeeScopeAllowedAsync(employeeId);
 			salarySlipManager.ValidateMonthYearFormat(monthYear);
 			var normalizedMonthYear = SalarySlipMonthYearNormalizer.Normalize(monthYear);
-			var hadExistingSalarySlip = await salarySlipRepository.GetByEmployeeAndMonthAsync(
+			var existingSalarySlip = await salarySlipRepository.GetByEmployeeAndMonthAsync(
 				employeeId,
-				normalizedMonthYear) != null;
+				normalizedMonthYear);
+			var hadExistingSalarySlip = existingSalarySlip != null;
+
+			if (existingSalarySlip != null &&
+			    draftFreshnessService.ShouldKeepExistingDraft(existingSalarySlip, hadExistingSalarySlip))
+			{
+				var existingEmployee = await employeeRepository.GetAsync(existingSalarySlip.EmployeeId, includeDetails: false);
+				return await salarySlipDtoMapper.ToDtoAsync(existingSalarySlip, existingEmployee);
+			}
 
 			var salarySlip = await snapshotGenerationService.GenerateOrGetFromSnapshotAsync(
 				employeeId,
-				monthYear);
+				normalizedMonthYear);
 			salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip, hadExistingSalarySlip);
 
 			var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);

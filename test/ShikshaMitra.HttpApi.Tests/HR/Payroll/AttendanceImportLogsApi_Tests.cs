@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -208,6 +209,61 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 			first.GetProperty("statusCode").ValueKind.ShouldBe(JsonValueKind.Number);
 			first.GetProperty("status").ValueKind.ShouldBe(JsonValueKind.String);
 		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Download_Original_Attendance_Import_File()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ImportDownload");
+		var fileName = $"download-original-{Guid.NewGuid():N}.csv";
+		using var upload = BuildCsvUploadWithFileName(
+			fileName,
+			$"11-04-2026,{employee.EmployeeCode},09:00 AM,05:30 PM,,Regular shift,{employee.FullName},{employee.MobileNo}");
+
+		var importId = await UploadConfirmAndFindImportAsync(fileName, upload);
+
+		var response = await Client.GetAsync($"{HrAutomatedRunsUrl}/{importId}/download-file");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.Content.Headers.ContentType?.MediaType.ShouldBe("text/csv");
+		GetDownloadFileName(response).ShouldBe(fileName);
+		var bytes = await response.Content.ReadAsByteArrayAsync();
+		bytes.Length.ShouldBeGreaterThan(0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Download_Attendance_Import_Error_Report()
+	{
+		var fileName = $"download-errors-{Guid.NewGuid():N}.csv";
+		using var upload = BuildCsvUploadWithFileName(
+			fileName,
+			"11-04-2026,UNKNOWN-EMP,09:00 AM,05:30 PM,,Unknown employee,Missing Person,9876543210");
+
+		var importId = await UploadPreviewAndFindImportAsync(fileName, upload);
+
+		var response = await Client.GetAsync($"{HrAutomatedRunsUrl}/{importId}/download-error-report");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.Content.Headers.ContentType?.MediaType.ShouldBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+		GetDownloadFileName(response).ShouldBe($"{Path.GetFileNameWithoutExtension(fileName)}-error-report.xlsx");
+		var bytes = await response.Content.ReadAsByteArrayAsync();
+		bytes.Length.ShouldBeGreaterThan(0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Return_Clear_Response_When_Error_Report_Has_No_Error_Rows()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ImportNoErrors");
+		var fileName = $"download-no-errors-{Guid.NewGuid():N}.csv";
+		using var upload = BuildCsvUploadWithFileName(
+			fileName,
+			$"11-04-2026,{employee.EmployeeCode},09:00 AM,05:30 PM,,Regular shift,{employee.FullName},{employee.MobileNo}");
+
+		var importId = await UploadConfirmAndFindImportAsync(fileName, upload);
+
+		var response = await Client.GetAsync($"{HrAutomatedRunsUrl}/{importId}/download-error-report");
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
 	}
 
 	[Fact]
@@ -533,6 +589,20 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 		return listBody.Items[0].Id;
 	}
 
+	private async Task<Guid> UploadPreviewAndFindImportAsync(string fileName, MultipartFormDataContent upload)
+	{
+		var previewResponse = await Client.PostAsync($"{AttendanceImportUrl}/preview", upload);
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var listResponse = await Client.GetAsync(
+			$"{HrAutomatedRunsUrl}?search={Uri.EscapeDataString(fileName)}&skipCount=0&maxResultCount=5");
+		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var listBody = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<AttendanceImportLogListItemDto>>(JsonOptions);
+		listBody.ShouldNotBeNull();
+		listBody.Items.Count.ShouldBe(1);
+		return listBody.Items[0].Id;
+	}
+
 	private async Task<PagedResultDto<AttendanceImportRowDto>> GetRowsAsync(Guid importId)
 	{
 		var rowsResponse = await Client.GetAsync($"{HrAutomatedRunsUrl}/{importId}/rows?skipCount=0&maxResultCount=50");
@@ -637,4 +707,8 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 		content.Add(file, "File", fileName);
 		return content;
 	}
+
+	private static string? GetDownloadFileName(HttpResponseMessage response) =>
+		response.Content.Headers.ContentDisposition?.FileNameStar ??
+		response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
 }

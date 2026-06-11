@@ -20,6 +20,8 @@ public class AttendanceTrackingEmployeeWiseReader(
 		GetAttendanceEmployeeWiseInput input,
 		IReadOnlyCollection<Guid> educationMediumStageIds)
 	{
+		_ = educationMediumStageIds;
+
 		var startDate = AttendanceTrackingFormatting.ParseDate(input.StartDate);
 		var endDate = AttendanceTrackingFormatting.ParseDate(input.EndDate);
 
@@ -36,7 +38,6 @@ public class AttendanceTrackingEmployeeWiseReader(
 
 		var startDateOnly = DateOnly.FromDateTime(startDate);
 		var endDateOnly = DateOnly.FromDateTime(endDate);
-		var stageIds = educationMediumStageIds.Distinct().ToList();
 
 		var attendanceQuery = await attendanceRepository.GetQueryableAsync();
 		var leaveQuery = await leaveRepository.GetQueryableAsync();
@@ -44,8 +45,6 @@ public class AttendanceTrackingEmployeeWiseReader(
 		var attendanceRecords = await AsyncExecuter.ToListAsync(
 			attendanceQuery
 				.Where(a => a.EmployeeId == input.EmployeeId &&
-				            a.EducationMediumStageId.HasValue &&
-				            stageIds.Contains(a.EducationMediumStageId.Value) &&
 				            a.AttendanceDate >= startDateOnly &&
 				            a.AttendanceDate <= endDateOnly)
 				.OrderBy(a => a.AttendanceDate));

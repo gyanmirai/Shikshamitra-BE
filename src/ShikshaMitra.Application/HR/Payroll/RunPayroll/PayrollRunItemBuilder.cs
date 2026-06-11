@@ -45,7 +45,9 @@ internal static class PayrollRunItemBuilder
 			holidays,
 			leaveUnitsByDate,
 			previousMonthNetPay,
-			employmentStartDate);
+			employmentStartDate,
+			employee.Shift,
+			resolvedPolicies.AttendancePolicy);
 
 		return new RunPayrollItem
 		{

@@ -20,6 +20,9 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 		builder.Property(x => x.AdmissionApprovalRemarks)
 			.HasMaxLength(1000);
 
+		builder.Property(x => x.PhotoBlobName)
+			.HasMaxLength(512);
+
 		// Add indexes for filtering by admission status and academic year
 		builder.HasIndex(x => new { x.AdmissionApprovalStatus, x.DivisionId });
 		builder.HasIndex(x => new { x.AcademicYearId, x.Status });

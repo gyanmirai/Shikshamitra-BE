@@ -8,9 +8,9 @@ namespace ShikshaMitra.Security.UserScope;
 /// DTO for bulk scope assignment to multiple users supporting multiple values at each hierarchical level.
 /// Creates assignments for all combinations (cartesian product) of the provided scope parameters.
 /// Example: 2 users × 2 boards × 3 standards × 2 divisions = 24 assignments.
-/// This operation is transactional and follows an OVERWRITE strategy:
-/// - First, deletes ALL existing scope assignments for the specified users
-/// - Then, creates the new assignments based on the provided parameters
+/// This operation is transactional and follows an ACADEMIC-YEAR-SCOPED OVERWRITE strategy:
+/// - First, deletes existing scope assignments only for the specified users and academic years
+/// - Then, creates the new assignments based on the provided parameters for those years
 /// - Either all operations succeed or none are applied (rollback)
 /// </summary>
 public class BulkScopeAssignmentDto : IValidatableObject
@@ -23,7 +23,7 @@ public class BulkScopeAssignmentDto : IValidatableObject
     public List<Guid> UserIds { get; set; } = new();
 
     /// <summary>
-    /// List of Academic Year IDs. NULL or empty = all academic years.
+    /// List of Academic Year IDs to replace. Required for bulk assignment.
     /// Creates one assignment per academic year (if multiple provided).
     /// </summary>
     public List<Guid>? AcademicYearIds { get; set; }
@@ -70,6 +70,13 @@ public class BulkScopeAssignmentDto : IValidatableObject
     /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
+        if (AcademicYearIds == null || AcademicYearIds.Count == 0)
+        {
+            yield return new ValidationResult(
+                "At least one academic year must be provided. Bulk assignment replaces permissions only within the supplied academic year scope.",
+                new[] { nameof(AcademicYearIds) });
+        }
+
         // Validate that at least one scope parameter is provided
         var hasScopeParams = (AcademicYearIds?.Count > 0) ||
                             (EducationBoardIds?.Count > 0) ||

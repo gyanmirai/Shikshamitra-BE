@@ -20,13 +20,11 @@ public class EfCoreAttendanceDayRepository(IDbContextProvider<ShikshaMitraDbCont
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
-		var query = dbSet.AsQueryable();
+		var query = dbSet.IgnoreAutoIncludes();
 
 		if (includeEntries)
 		{
-			query = query
-				.Include(ad => ad.Entries)
-					.ThenInclude(ae => ae.Student);
+			query = query.Include(ad => ad.Entries);
 		}
 
 		return await query
@@ -45,8 +43,8 @@ public class EfCoreAttendanceDayRepository(IDbContextProvider<ShikshaMitraDbCont
 		var dbSet = await GetDbSetAsync();
 
 		return await dbSet
+			.IgnoreAutoIncludes()
 			.Include(ad => ad.Entries)
-				.ThenInclude(ae => ae.Student)
 			.FirstOrDefaultAsync(ad => ad.Id == id, cancellationToken);
 	}
 }

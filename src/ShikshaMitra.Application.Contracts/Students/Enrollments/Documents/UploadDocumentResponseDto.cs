@@ -1,5 +1,7 @@
 ﻿using System;
 
+using ShikshaMitra.Students.Documents;
+
 namespace ShikshaMitra.Students.StudentEnrollments.Documents;
 
 /// <summary>
@@ -21,4 +23,10 @@ public class UploadDocumentResponseDto
 	/// Indicates whether an existing document was replaced
 	/// </summary>
 	public bool WasReplaced { get; set; }
+
+	public string? Sha256Hash { get; set; }
+
+	public StudentDocumentStorageStatus StorageStatus { get; set; } = StudentDocumentStorageStatus.Stored;
+
+	public bool IsSensitive { get; set; }
 }

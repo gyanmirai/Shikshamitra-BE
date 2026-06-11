@@ -16,14 +16,24 @@ namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 public class EntranceExamSlotAppService(
 	IRepository<EntranceExamSlot, Guid> slotRepository,
 	IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
-	EntranceExamSlotManager slotManager) : ShikshaMitraAppService, IEntranceExamSlotAppService
+	EntranceExamSlotManager slotManager,
+	StudentScopeAccessService studentScopeAccessService) : ShikshaMitraAppService, IEntranceExamSlotAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsEntranceExamSlots.View)]
 	public async Task<PagedResultDto<EntranceExamSlotDto>> GetListAsync(GetEntranceExamSlotsInput input)
 	{
 		var queryable = await slotRepository.GetQueryableAsync();
+		var academicYearScope = await studentScopeAccessService.GetCurrentUserAcademicYearScopeAsync();
+		if (!academicYearScope.HasAllAcademicYears)
+		{
+			queryable = queryable.Where(s => academicYearScope.AcademicYearIds.Contains(s.AcademicYearId));
+		}
+
 		if (input.AcademicYearId.HasValue)
 		{
+			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+				input.AcademicYearId.Value,
+				nameof(GetListAsync));
 			queryable = queryable.Where(s => s.AcademicYearId == input.AcademicYearId.Value);
 		}
 
@@ -61,6 +71,7 @@ public class EntranceExamSlotAppService(
 	public async Task<EntranceExamSlotDetailDto> GetAsync(Guid id)
 	{
 		var slot = await slotRepository.GetAsync(id);
+		await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(slot.AcademicYearId, nameof(GetAsync));
 		var enrolledCount = await GetEnrolledCountForSlotAsync(id);
 
 		var dto = ObjectMapper.Map<EntranceExamSlot, EntranceExamSlotDetailDto>(slot);
@@ -73,6 +84,10 @@ public class EntranceExamSlotAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsEntranceExamSlots.Add)]
 	public async Task<EntranceExamSlotDto> CreateAsync(CreateEntranceExamSlotDto input)
 	{
+		await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+			input.AcademicYearId,
+			nameof(CreateAsync));
+
 		var slot = await slotManager.CreateAsync(
 			input.AcademicYearId,
 			input.SlotName,
@@ -94,6 +109,7 @@ public class EntranceExamSlotAppService(
 	public async Task<EntranceExamSlotDto> UpdateAsync(Guid id, UpdateEntranceExamSlotDto input)
 	{
 		var slot = await slotRepository.GetAsync(id);
+		await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(slot.AcademicYearId, nameof(UpdateAsync));
 
 		var enrolledCount = await GetEnrolledCountForSlotAsync(id);
 		if (input.StudentLimit < enrolledCount)
@@ -123,6 +139,9 @@ public class EntranceExamSlotAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsEntranceExamSlots.Delete)]
 	public async Task DeleteAsync(Guid id)
 	{
+		var slot = await slotRepository.GetAsync(id);
+		await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(slot.AcademicYearId, nameof(DeleteAsync));
+
 		var enrolledCount = await GetEnrolledCountForSlotAsync(id);
 		if (enrolledCount > 0)
 		{
@@ -130,7 +149,7 @@ public class EntranceExamSlotAppService(
 				.WithData("enrolledCount", enrolledCount);
 		}
 
-		await slotRepository.DeleteAsync(id);
+		await slotRepository.DeleteAsync(slot);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsEntranceExamSlots.View)]
@@ -138,6 +157,11 @@ public class EntranceExamSlotAppService(
 	{
 		var slotQueryable = await slotRepository.GetQueryableAsync();
 		var detailQueryable = await studentAdditionalDetailRepository.GetQueryableAsync();
+		var academicYearScope = await studentScopeAccessService.GetCurrentUserAcademicYearScopeAsync();
+		if (!academicYearScope.HasAllAcademicYears)
+		{
+			slotQueryable = slotQueryable.Where(s => academicYearScope.AcademicYearIds.Contains(s.AcademicYearId));
+		}
 
 		// Compute enrolled count per slot as a DB-side subquery — avoids N+1 and in-memory paging
 		var enrolledPerSlot = detailQueryable
@@ -156,6 +180,9 @@ public class EntranceExamSlotAppService(
 
 		if (input.AcademicYearId.HasValue)
 		{
+			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+				input.AcademicYearId.Value,
+				nameof(GetAvailableSlotsAsync));
 			availableQuery = availableQuery.Where(x => x.slot.AcademicYearId == input.AcademicYearId.Value);
 		}
 

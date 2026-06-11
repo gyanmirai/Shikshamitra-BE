@@ -19,12 +19,14 @@ public class UserScopeApplicationGuardrail_Tests
 		@"Security\UserScope\UserScopeAccessService.cs",
 		@"TenantSettings\AcademicSetups\AcademicOrganizationScopeAccessService.cs",
 		@"TenantSettings\AcademicSetups\EducationBoards\EducationBoardScopeFilter.cs",
+		@"Finance\FinanceScopeAccessService.cs",
 		@"HR\HrUserScopeAccess.cs",
 		@"HR\HrUserScopeAccessService.cs",
 		@"HR\Employees\HrEmployeeScopeQueryService.cs",
 		@"HR\Dashboard\HRDashboardScopeService.cs",
 		@"HR\AttendanceAndLeaves\TakeAttendance\TakeAttendanceAccessService.cs",
-		@"HR\AttendanceAndLeaves\TakeAttendance\TakeAttendanceDayReader.cs"
+		@"HR\AttendanceAndLeaves\TakeAttendance\TakeAttendanceDayReader.cs",
+		@"Students\StudentScopeAccessService.cs"
 	};
 
 	[Fact]
@@ -55,5 +57,34 @@ public class UserScopeApplicationGuardrail_Tests
 			.ToList();
 
 		violations.ShouldBeEmpty();
+	}
+
+	[Fact]
+	public void Demo_Scope_Seeders_Should_Not_Reintroduce_Role_Derived_Or_Destructive_User_Scope_Seeding()
+	{
+		var seedersRoot = Path.GetFullPath(Path.Combine(
+			AppContext.BaseDirectory,
+			"..",
+			"..",
+			"..",
+			"..",
+			"..",
+			"src",
+			"ShikshaMitra.Domain",
+			"Seeders"));
+
+		var staffScopeSeeder = File.ReadAllText(Path.Combine(seedersRoot, "StaffUserScopeSeederContributor.cs"));
+		staffScopeSeeder.ShouldNotContain("new UserScopeAssignment");
+		staffScopeSeeder.ShouldNotContain("DeleteAsync");
+		staffScopeSeeder.ShouldNotContain("DeleteManyAsync");
+
+		var academicScopeSyncer = File.ReadAllText(Path.Combine(seedersRoot, "AcademicPermissionUserScopeSyncer.cs"));
+		academicScopeSyncer.ShouldNotContain("DeleteAsync");
+		academicScopeSyncer.ShouldNotContain("DeleteManyAsync");
+		academicScopeSyncer.ShouldContain("Derived from Academic Permissions");
+
+		var testLoginSeeder = File.ReadAllText(Path.Combine(seedersRoot, "TestLoginSeederContributor.cs"));
+		testLoginSeeder.ShouldNotContain("student-demo");
+		testLoginSeeder.ShouldNotContain("\"Student\"");
 	}
 }

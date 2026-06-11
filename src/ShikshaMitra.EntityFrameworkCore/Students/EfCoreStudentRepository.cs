@@ -18,6 +18,36 @@ public class EfCoreStudentRepository(
     : EfCoreRepository<ShikshaMitraDbContext, Student, Guid>(dbContextProvider), IStudentRepository
 {
     /// <inheritdoc/>
+    public async Task<IQueryable<Student>> GetQueryableWithoutAutoIncludesAsync()
+    {
+        var dbSet = await GetDbSetAsync();
+        return dbSet.IgnoreAutoIncludes().AsNoTracking();
+    }
+
+    /// <inheritdoc/>
+    public async Task<Student?> GetInquiryForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+        return await dbSet
+            .IgnoreAutoIncludes()
+            .Include(s => s.AdditionalDetail)
+            .Include(s => s.ContactDetail)
+            .Include(s => s.FamilyDetail)
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<Student?> GetRegistrationAggregateAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+        return await dbSet
+            .IgnoreAutoIncludes()
+            .Include(s => s.AdditionalDetail)
+            .Include(s => s.ContactDetail)
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task<Student?> GetWithDetailsAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var dbSet = await GetDbSetAsync();

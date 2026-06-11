@@ -129,7 +129,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         try
         {
             _logger.LogInformation(
-                "Attempting transactional bulk scope assignment with OVERWRITE strategy. UserCount: {UserCount}, CorrelationId: {CorrelationId}",
+                "Attempting transactional bulk scope assignment with ACADEMIC_YEAR_SCOPED_OVERWRITE strategy. UserCount: {UserCount}, CorrelationId: {CorrelationId}",
                 input.UserIds?.Count ?? 0, correlationId);
 
             // Validate input
@@ -138,6 +138,15 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 throw new BusinessException(
                     code: UserScopeErrorCodes.NoUsers,
                     message: "At least one user ID must be provided."
+                );
+            }
+
+            var targetAcademicYearIds = input.AcademicYearIds?.Distinct().ToList() ?? [];
+            if (targetAcademicYearIds.Count == 0)
+            {
+                throw new BusinessException(
+                    code: UserScopeErrorCodes.InvalidInput,
+                    message: "At least one academic year ID must be provided for bulk scope assignment."
                 );
             }
 
@@ -203,13 +212,17 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
                 createdCount = newAssignments.Count;
 
-                // STEP 1: Delete all existing scope assignments for the specified users - OPTIMIZED: Bulk delete
+                // STEP 1: Replace only the academic-year slice being edited.
                 _logger.LogInformation(
-                    "Step 1/2: Deleting existing scope assignments for {UserCount} users. CorrelationId: {CorrelationId}",
-                    distinctUserIds.Count, correlationId);
+                    "Step 1/2: Deleting existing scope assignments for {UserCount} users in {AcademicYearCount} academic years. CorrelationId: {CorrelationId}",
+                    distinctUserIds.Count, targetAcademicYearIds.Count, correlationId);
 
                 var existingQuery = (await _scopeRepository.GetQueryableAsync())
-                    .Where(x => x.UserId.HasValue && distinctUserIds.Contains(x.UserId.Value));
+                    .Where(x =>
+                        x.UserId.HasValue &&
+                        distinctUserIds.Contains(x.UserId.Value) &&
+                        x.AcademicYearId.HasValue &&
+                        targetAcademicYearIds.Contains(x.AcademicYearId.Value));
 
                 var existingAssignments = await AsyncExecuter.ToListAsync(existingQuery);
                 deletedCount = existingAssignments.Count;
@@ -258,7 +271,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                     AssignmentsCreated = createdCount,
                     TotalCombinations = totalCombinations,
                     AffectedUserIds = affectedUserIds.ToList(),
-                    Message = $"Successfully replaced scope assignments for {affectedUserIds.Count} users. Deleted {deletedCount} old assignments and created {createdCount} new assignments."
+                    Message = $"Successfully replaced scope assignments for {affectedUserIds.Count} users in {targetAcademicYearIds.Count} academic years. Deleted {deletedCount} old assignments and created {createdCount} new assignments."
                 };
             }
             catch (Exception dbEx) when (IsConstraintViolationException(dbEx))

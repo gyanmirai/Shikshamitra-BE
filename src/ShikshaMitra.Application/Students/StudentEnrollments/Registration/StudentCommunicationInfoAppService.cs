@@ -9,20 +9,19 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
 public class StudentCommunicationInfoAppService(
-    IRepository<Student, Guid> studentRepository,
+    IStudentRepository studentRepository,
     IRepository<StudentCommunicationDetail, Guid> studentCommunicationDetailRepository,
     EntityValidationService validationService,
-    StudentRegistrationMappingHelper mappingHelper
-) : StudentRegistrationBaseAppService(studentRepository, validationService),
+    StudentRegistrationMappingHelper mappingHelper,
+    StudentScopeAccessService studentScopeAccessService
+) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentCommunicationInfoAppService
 {
     public async Task<StudentCommunicationInfoDto> GetCommunicationInfoAsync(Guid studentId)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(GetCommunicationInfoAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForCommunicationInfo);
 
         var communicationDetail = await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -47,11 +46,9 @@ public class StudentCommunicationInfoAppService(
 
     public async Task<StudentCommunicationInfoDto> UpdateCommunicationInfoAsync(Guid studentId, UpdateCommunicationInfoDto input)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(UpdateCommunicationInfoAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForCommunicationUpdate);
 
         var communicationDetail = await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);

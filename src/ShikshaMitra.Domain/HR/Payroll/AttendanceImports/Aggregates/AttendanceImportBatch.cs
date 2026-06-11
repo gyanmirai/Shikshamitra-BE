@@ -26,6 +26,8 @@ public class AttendanceImportBatch : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	public string? PreviewToken { get; private set; }
 	public DateTime? PreviewTokenExpiresAt { get; private set; }
 	public DateTime? ConfirmedAt { get; private set; }
+	public string? OriginalFileBlobName { get; private set; }
+	public string? OriginalFileContentType { get; private set; }
 	public List<string> ErrorsSummary { get; private set; } = [];
 	public List<string> WarningsSummary { get; private set; } = [];
 
@@ -67,7 +69,9 @@ public class AttendanceImportBatch : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		string? integrationProvider = null,
 		DateTime? runStartedAt = null,
 		DateTime? runFinishedAt = null,
-		bool isBatchLocked = false) : base(id)
+		bool isBatchLocked = false,
+		string? originalFileBlobName = null,
+		string? originalFileContentType = null) : base(id)
 	{
 		TenantId = tenantId;
 		FileName = fileName;
@@ -82,6 +86,8 @@ public class AttendanceImportBatch : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		InvalidRows = invalidRows;
 		CreateCount = createCount;
 		ReplaceCount = replaceCount;
+		OriginalFileBlobName = originalFileBlobName;
+		OriginalFileContentType = originalFileContentType;
 		ErrorsSummary = errorsSummary;
 		WarningsSummary = warningsSummary;
 		RunSource = runSource;
@@ -96,6 +102,12 @@ public class AttendanceImportBatch : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	{
 		PreviewToken = previewToken;
 		PreviewTokenExpiresAt = previewTokenExpiresAt;
+	}
+
+	public void SetOriginalFile(string blobName, string? contentType)
+	{
+		OriginalFileBlobName = blobName;
+		OriginalFileContentType = contentType;
 	}
 
 	public void MarkConfirmed(

@@ -13,7 +13,7 @@ public class AttendanceImportAppService(
 	: ApplicationService, IAttendanceImportAppService
 {
 	public Task<AttendanceImportPreviewResponseDto> PreviewAsync(string fileName, string? contentType, byte[] fileContent) =>
-		previewWorkflow.PreviewAsync(fileName, fileContent);
+		previewWorkflow.PreviewAsync(fileName, contentType, fileContent);
 
 	public Task<AttendanceImportConfirmResponseDto> ConfirmAsync(AttendanceImportConfirmRequestDto input) =>
 		confirmWorkflow.ConfirmAsync(input);

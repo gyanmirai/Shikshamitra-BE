@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Common;
+using ShikshaMitra.Students.Compliance;
 using System;
 
 namespace ShikshaMitra.Students.Enrollments.Registrations;
@@ -23,9 +24,17 @@ public class StudentGeneralDetailsDto
 	public string? Email { get; set; }
 
 	public string? AdharNo { get; set; }
+	public string? AadhaarMasked { get; set; }
+	public IdentityVerificationStatus AadhaarVerificationStatus { get; set; } = IdentityVerificationStatus.NotProvided;
 	public string? ApparId { get; set; }
+	public ConsentStatus ApaarConsentStatus { get; set; } = ConsentStatus.NotAsked;
+	public IdentityVerificationStatus ApaarVerificationStatus { get; set; } = IdentityVerificationStatus.NotProvided;
 	public string? PanNo { get; set; }
 	public string? PennNo { get; set; }
+	public string? UdiseStudentCode { get; set; }
+	public UdiseSyncStatus UdiseSyncStatus { get; set; } = UdiseSyncStatus.NotReady;
+	public bool? RteStatus { get; set; }
+	public ScholarshipStatus ScholarshipStatus { get; set; } = ScholarshipStatus.NotApplicable;
 	public Guid? InquiryPreferenceId { get; set; }
 	public ReligionEnum? Religion { get; set; }
 	public string FamilyCast { get; set; }

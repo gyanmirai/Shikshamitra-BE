@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Students.Attendance.Settings;
 using Volo.Abp;
-using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
 
@@ -13,7 +12,6 @@ namespace ShikshaMitra.Students.Attendance;
 /// Domain manager for StudentLeave entity - handles business logic and validation
 /// </summary>
 public class StudentLeaveManager(
-	IRepository<Student, Guid> studentRepository,
 	IStudentLeaveTypeRepository studentLeaveTypeRepository,
 	IGuidGenerator guidGenerator
 ) : DomainService
@@ -22,7 +20,7 @@ public class StudentLeaveManager(
 	/// Creates a new student leave request with validation
 	/// </summary>
 	public async Task<StudentLeave> CreateAsync(
-		Guid studentId,
+		Student student,
 		Guid studentLeaveTypeId,
 		bool isHalfDay,
 		DateTimeOffset leaveDate,
@@ -32,13 +30,7 @@ public class StudentLeaveManager(
 		string? attachmentFileName,
 		string? attachmentContentType)
 	{
-		// Validate student exists
-		var student = await studentRepository.GetAsync(studentId);
-		if (student == null)
-		{
-			throw new BusinessException("StudentLeave:StudentNotFound")
-				.WithData("StudentId", studentId);
-		}
+		Check.NotNull(student, nameof(student));
 
 		// Validate leave type exists and is active
 		var leaveType = await studentLeaveTypeRepository.GetAsync(studentLeaveTypeId);
@@ -64,7 +56,7 @@ public class StudentLeaveManager(
 		var leave = new StudentLeave(
 			guidGenerator.Create(),
 			CurrentTenant.Id,
-			studentId,
+			student.Id,
 			student.AcademicMediumId,
 			student.StandardId,
 			student.DivisionId,

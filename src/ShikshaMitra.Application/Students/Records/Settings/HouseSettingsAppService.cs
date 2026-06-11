@@ -14,7 +14,8 @@ namespace ShikshaMitra.Students.Records.Settings;
 public class HouseSettingsAppService(
 	IRepository<HouseSettings, Guid> houseSettingsRepository,
 	IRepository<EducationMedium, Guid> academicMediumRepository,
-	IGuidGenerator guidGenerator
+	IGuidGenerator guidGenerator,
+	StudentScopeAccessService studentScopeAccessService
 ) : ApplicationService, IHouseSettingsAppService
 {
 	public async Task CreateHouseSettingsAsync(Guid academicMediumId, CreateUpdateHouseSettingsDto createHouseSettingsDto)
@@ -23,6 +24,9 @@ public class HouseSettingsAppService(
 		{
 			// validate academic medium exists
 			var academicMedium = await academicMediumRepository.GetAsync(academicMediumId) ?? throw new EntityNotFoundException("Academic medium not found.");
+			await studentScopeAccessService.EnsureCanAccessMediumAsync(
+				academicMediumId,
+				nameof(CreateHouseSettingsAsync));
 
 			var houseSetting = new HouseSettings(
 				guidGenerator.Create(),
@@ -50,6 +54,9 @@ public class HouseSettingsAppService(
 		try
 		{
 			var houseSetting = await houseSettingsRepository.GetAsync(houseSettingsId) ?? throw new EntityNotFoundException("House setting not found.");
+			await studentScopeAccessService.EnsureCanAccessMediumAsync(
+				houseSetting.AcademicMediumId,
+				nameof(GetHouseSettingsAsync));
 			return ObjectMapper.Map<HouseSettings, HouseSettingsDto>(houseSetting);
 		}
 		catch (EntityNotFoundException ex)
@@ -68,6 +75,9 @@ public class HouseSettingsAppService(
 		{
 			// validate academic medium exists
 			var academicMedium = await academicMediumRepository.GetAsync(academicMediumId) ?? throw new EntityNotFoundException("Academic medium not found.");
+			await studentScopeAccessService.EnsureCanAccessMediumAsync(
+				academicMediumId,
+				nameof(GetHouseSettingsByAcademicMediumAsync));
 			var houseSettings = await houseSettingsRepository.GetListAsync(h => h.AcademicMediumId == academicMediumId);
 			return ObjectMapper.Map<List<HouseSettings>, List<HouseSettingsDto>>(houseSettings);
 		}
@@ -86,6 +96,9 @@ public class HouseSettingsAppService(
 		try
 		{
 			var houseSetting = await houseSettingsRepository.GetAsync(houseSettingsId) ?? throw new EntityNotFoundException("House setting not found.");
+			await studentScopeAccessService.EnsureCanAccessMediumAsync(
+				houseSetting.AcademicMediumId,
+				nameof(UpdateHouseSettingsAsync));
 
 			houseSetting.UpdateDetails(
 				updateHouseSettingsDto.Name,
@@ -113,6 +126,9 @@ public class HouseSettingsAppService(
 		try
 		{
 			var houseSetting = await houseSettingsRepository.GetAsync(houseSettingsId) ?? throw new EntityNotFoundException("House setting not found.");
+			await studentScopeAccessService.EnsureCanAccessMediumAsync(
+				houseSetting.AcademicMediumId,
+				nameof(DeleteHouseSettingsAsync));
 			await houseSettingsRepository.DeleteAsync(houseSetting, autoSave: true);
 		}
 		catch (EntityNotFoundException ex)

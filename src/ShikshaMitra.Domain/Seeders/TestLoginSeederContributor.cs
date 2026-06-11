@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.Employees;
-using ShikshaMitra.Students;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,14 +19,12 @@ public class TestLoginSeederContributor : BaseSeederContributor
 	private const string SeedFlagKey = "SeedTestLogins";
 	private const string TempPassword = "Temp@123";
 	private static readonly Guid DdvsTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-	private const string LinkedStudentEmail = "student-demo@ddvs.com";
 
 	private readonly IConfiguration _configuration;
 	private readonly IdentityUserManager _userManager;
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly ILookupNormalizer _lookupNormalizer;
-	private readonly IStudentRepository _studentRepository;
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly ILogger<TestLoginSeederContributor> _logger;
 	private List<Employee>? _employeeAliasCache;
@@ -41,7 +38,6 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		IIdentityUserRepository userRepository,
 		IIdentityRoleRepository roleRepository,
 		ILookupNormalizer lookupNormalizer,
-		IStudentRepository studentRepository,
 		IEmployeeRepository employeeRepository,
 		ILogger<TestLoginSeederContributor> logger)
 		: base(currentTenant, guidGenerator, unitOfWork)
@@ -51,7 +47,6 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		_userRepository = userRepository;
 		_roleRepository = roleRepository;
 		_lookupNormalizer = lookupNormalizer;
-		_studentRepository = studentRepository;
 		_employeeRepository = employeeRepository;
 		_logger = logger;
 	}
@@ -68,8 +63,6 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			return;
 		}
 
-		var linkedStudentEmail = await EnsureLinkedStudentEmailAsync();
-
 		var credentialSpecs = new List<TestLoginSpec>
 		{
 			new("admin-ddvs", "admin-ddvs@ddvs.com", "Admin", "DDVS", "admin", ["admin1@gmail.com", "ddvs@gmail.com"], ["admin1"]),
@@ -80,18 +73,6 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			new("clerk-office", "clerk-office@ddvs.com", "Clerk", "Office", "Clerk", ["clerk1@ddvs.com", "clerk@school.edu", "raj.baku@ddvs.com"], ["clerk1"]),
 			new("finance-officer", "finance-officer@ddvs.com", "Finance", "Officer", "Finance Officer", ["finance1@ddvs.com", "suresh.patil@school.edu", "punam.badgujar@ddvs.com"], ["finance1"])
 		};
-
-		if (!string.IsNullOrWhiteSpace(linkedStudentEmail))
-		{
-			credentialSpecs.Add(new TestLoginSpec(
-				"student-demo",
-				linkedStudentEmail,
-				"Student",
-				"User",
-				"Student",
-				["student1@ddvs.com", "student.demo@school.edu"],
-				["student1", "studentdemo"]));
-		}
 
 		foreach (var spec in credentialSpecs)
 		{
@@ -126,35 +107,6 @@ public class TestLoginSeederContributor : BaseSeederContributor
 				result = false;
 				return false;
 		}
-	}
-
-	private async Task<string?> EnsureLinkedStudentEmailAsync()
-	{
-		var students = await _studentRepository.GetListAsync();
-		var student = students.Count > 0 ? students[0] : null;
-		if (student?.ContactDetail == null)
-		{
-			return null;
-		}
-
-		if (!string.Equals(student.ContactDetail.Email, LinkedStudentEmail, StringComparison.OrdinalIgnoreCase))
-		{
-			student.ContactDetail.UpdateContactInfo(
-				student.ContactDetail.PrimaryContactNo,
-				student.ContactDetail.SecondaryContactNo,
-				LinkedStudentEmail,
-				student.ContactDetail.Address1,
-				student.ContactDetail.Address2,
-				student.ContactDetail.Address3,
-				student.ContactDetail.City,
-				student.ContactDetail.State,
-				student.ContactDetail.Country,
-				student.ContactDetail.Pincode);
-
-			await _studentRepository.UpdateAsync(student, autoSave: true);
-		}
-
-		return LinkedStudentEmail;
 	}
 
 	private async Task EnsureUserWithTempPasswordAsync(TestLoginSpec spec)

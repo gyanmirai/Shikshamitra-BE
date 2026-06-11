@@ -25,18 +25,21 @@ public class StudentManagementAppService(
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<StudentManagementSettings, Guid> studentManagementSettingsRepository,
-	IUserScopeAccessService userScopeAccessService
+	IUserScopeAccessService userScopeAccessService,
+	StudentScopeAccessService studentScopeAccessService
 ) : ApplicationService, IStudentManagementAppService
 {
 	public async Task<(List<StudentRecordDto> StudentRecords, ArrangementTypeEnum? ArrangementType, ArrangementByEnum? ArrangementBy)> GetStudentRecords(Guid divisionId)
 	{
 		try
 		{
+			await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(GetStudentRecords));
+
 			// Get students with their additional details
 			var query = (await studentRepository.WithDetailsAsync())
 				.Where(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled);
 
-			query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+			query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 			var students = await AsyncExecuter.ToListAsync(query);
 
 			// Get arrangement settings for the division
@@ -97,6 +100,14 @@ public class StudentManagementAppService(
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
 		await EnsureCanAccessStudentAsync(student, nameof(AssignHouseToStudent));
+
+		var house = await houseSettingsRepository.GetAsync(houseId);
+		await studentScopeAccessService.EnsureCanAccessMediumAsync(house.AcademicMediumId, nameof(AssignHouseToStudent));
+		if (house.AcademicMediumId != student.AcademicMediumId)
+		{
+			throw new UserFriendlyException("House does not belong to the student's academic medium.");
+		}
+
 		// assign house to student only if he is not assigned with other house
 		if (student.AdditionalDetail?.HouseId != null)
 		{
@@ -189,11 +200,13 @@ public class StudentManagementAppService(
 	{
 		try
 		{
+			await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(GetGrProjections));
+
 			// get students in division which gr no is null
 			var query = (await studentRepository.WithDetailsAsync())
 				.Where(s => s.DivisionId == divisionId);
 
-			query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+			query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 			var students = await AsyncExecuter.ToListAsync(query);
 
 			// Find board from divisionId
@@ -267,11 +280,13 @@ public class StudentManagementAppService(
 	{
 		try
 		{
+			await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(GetRollNumberProjections));
+
 			// get students in division which roll no is null
 			var query = (await studentRepository.WithDetailsAsync())
 				.Where(s => s.DivisionId == divisionId && s.RollNo == null);
 
-			query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+			query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 			var students = await AsyncExecuter.ToListAsync(query);
 
 			// arrange by first name or last name within the above arrangement
@@ -339,10 +354,16 @@ public class StudentManagementAppService(
 
 	public async Task StoreRollNumbers(Guid divisionId, List<UpdateStudentRollNumberDto> updateStudentRollNumberDto, ArrangementTypeEnum? arrangementType, ArrangementByEnum? arrangementBy)
 	{
+		await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(StoreRollNumbers));
+
 		foreach (var studentRollNumberDto in updateStudentRollNumberDto)
 		{
 			var student = await studentRepository.GetAsync(studentRollNumberDto.StudentId, includeDetails: true);
 			await EnsureCanAccessStudentAsync(student, nameof(StoreRollNumbers));
+			if (student.DivisionId != divisionId)
+			{
+				throw new UserFriendlyException("Student does not belong to the selected division.");
+			}
 
 			// check that roll no is not assigned to any other student in same division
 			var existingStudentWithRollNo = await studentRepository.FirstOrDefaultAsync(s => s.DivisionId == student.DivisionId && s.RollNo == studentRollNumberDto.RollNo && s.Id != student.Id);

@@ -78,14 +78,14 @@ public class ChargeAppService(
 				: "Charge created and approved successfully");
 	}
 
-	public async Task<ChargeListResponse> GetAllAsync(Guid academicYearId, GetChargesRequest input)
+	public async Task<ChargeListResponse> GetAllAsync(GetChargesRequest input)
 	{
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(
-				academicYearId,
-				input.BoardId,
-				input.EducationMediumId,
-				null,
-				null))
+			null,
+			input.BoardId,
+			input.EducationMediumId,
+			null,
+			null))
 		{
 			return new ChargeListResponse
 			{
@@ -101,9 +101,13 @@ public class ChargeAppService(
 
 		var pageSize = Math.Min(input.PageSize, MaxPageSize);
 		var (items, totalCount) = await chargeRequestRepository.GetChargeRequestsPagedAsync(
-			academicYearId, input.Status, input.Page, pageSize,
-			input.BoardId, input.EducationMediumId, input.Search);
-		var statusCounts = await chargeRequestRepository.GetStatusCountsAsync(academicYearId);
+			input.Status, input.Page, pageSize,
+			input.BoardId, input.EducationMediumId,
+			input.StandardId, input.DivisionId,
+			input.Search);
+		var statusCounts = await chargeRequestRepository.GetStatusCountsAsync(
+			input.BoardId, input.EducationMediumId,
+			input.StandardId, input.DivisionId);
 
 		return new ChargeListResponse
 		{
@@ -114,8 +118,7 @@ public class ChargeAppService(
 			PageSize = pageSize,
 			TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
 			PendingCount = statusCounts.Pending,
-			ApprovedCount = statusCounts.Approved,
-			RejectedCount = statusCounts.Rejected,
+			ProcessedCount = statusCounts.Processed,
 			Message = "Charges retrieved successfully"
 		};
 	}
@@ -126,7 +129,7 @@ public class ChargeAppService(
 
 		var pageSize = Math.Min(input.PageSize, MaxPageSize);
 		var query = (await chargeRequestRepository.GetChargeLinesQueryAsync(
-			academicYearId, input.Status, input.BoardId, input.EducationMediumId))
+			input.Status, input.BoardId, input.EducationMediumId))
 			.Where(x => scopedStudentIds.Contains(x.Student.Id));
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
@@ -443,12 +446,8 @@ public class ChargeAppService(
 
 	private static ChargeListItem MapToListItem(ChargeRequestJoinResult r)
 	{
-		var partiallyProcessed = r.PendingCount == 0 && r.ApprovedCount > 0 && r.RejectedCount > 0;
-		var status = r.PendingCount > 0
-			? ChargeStatus.Pending
-			: r.RejectedCount == r.StudentCount
-				? ChargeStatus.Rejected
-				: ChargeStatus.Approved;
+		// DisplayStatus: 0 = Pending (any line still pending), 1 = Processed (all actioned)
+		var displayStatus = r.PendingCount > 0 ? 0 : 1;
 
 		return new ChargeListItem
 		{
@@ -463,12 +462,9 @@ public class ChargeAppService(
 			DueDate = r.Request.DueDate,
 			AppliedOn = r.Request.AppliedOn,
 			Priority = (int)r.Request.Priority,
-			Status = (int)status,
+			DisplayStatus = displayStatus,
 			StudentCount = r.StudentCount,
-			PendingCount = r.PendingCount,
-			ApprovedCount = r.ApprovedCount,
-			RejectedCount = r.RejectedCount,
-			PartiallyProcessed = partiallyProcessed,
+			ProcessedCount = r.ProcessedCount,
 			RequestorId = r.Requestor.Id,
 			RequestorName = r.Requestor.Name ?? r.Requestor.UserName ?? string.Empty,
 			RequestedOn = r.Request.AppliedOn,

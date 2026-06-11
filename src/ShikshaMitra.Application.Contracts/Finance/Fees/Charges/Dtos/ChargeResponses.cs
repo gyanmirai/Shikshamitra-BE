@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.Charges.Dtos;
@@ -41,9 +41,10 @@ public class ChargeListResponse
 	public int CurrentPage { get; set; }
 	public int PageSize { get; set; }
 	public int TotalPages { get; set; }
+	/// <summary>Number of charge requests that still have at least one pending line.</summary>
 	public int PendingCount { get; set; }
-	public int ApprovedCount { get; set; }
-	public int RejectedCount { get; set; }
+	/// <summary>Number of charge requests where all lines are actioned (approved or rejected).</summary>
+	public int ProcessedCount { get; set; }
 	public string Message { get; set; } = string.Empty;
 }
 
@@ -58,14 +59,14 @@ public class ChargeListItem
 	public DateTime DueDate { get; set; }
 	public DateTime AppliedOn { get; set; }
 	public int Priority { get; set; }
-	public int Status { get; set; }
+	/// <summary>0 = Pending, 1 = Processed</summary>
+	public int DisplayStatus { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid EducationMediumId { get; set; }
+	/// <summary>Total number of student lines in this charge request.</summary>
 	public int StudentCount { get; set; }
-	public int PendingCount { get; set; }
-	public int ApprovedCount { get; set; }
-	public int RejectedCount { get; set; }
-	public bool PartiallyProcessed { get; set; }
+	/// <summary>Number of lines that are no longer pending (approved + rejected).</summary>
+	public int ProcessedCount { get; set; }
 	public Guid RequestorId { get; set; }
 	public string RequestorName { get; set; } = string.Empty;
 	public DateTime RequestedOn { get; set; }

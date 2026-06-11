@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -25,4 +25,9 @@ public interface IStudentListAppService : IApplicationService
 	/// Returns the full status-change history for a student, newest first.
 	/// </summary>
 	Task<List<StudentStatusHistoryDto>> GetStatusHistoryAsync(Guid studentId);
+
+	/// <summary>
+	/// Retrieves enrolled students matching the specified academic scope.
+	/// </summary>
+	Task<List<StudentLookupDto>> GetStudentsByScopeAsync(GetStudentsByScopeRequest input);
 }

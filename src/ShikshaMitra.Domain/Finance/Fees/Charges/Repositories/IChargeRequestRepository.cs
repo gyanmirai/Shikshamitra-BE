@@ -22,8 +22,7 @@ public record ChargeRequestJoinResult(
 	AcademicYear AcademicYear,
 	int StudentCount,
 	int PendingCount,
-	int ApprovedCount,
-	int RejectedCount);
+	int ProcessedCount);
 
 public record ChargeRequestDetailResult(
 	ChargeRequest Request,
@@ -48,26 +47,30 @@ public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 	/// Returns a paged list of charge requests with per-request student counts,
 	/// along with the total filtered count. Handles ordering and pagination
 	/// inside the repository to avoid EF Core correlated-subquery translation errors.
+	/// status: 0 = Pending (any pending line), 1 = Processed (all lines actioned).
 	/// </summary>
 	Task<(List<ChargeRequestJoinResult> Items, int TotalCount)> GetChargeRequestsPagedAsync(
-		Guid academicYearId,
 		int status,
 		int page,
 		int pageSize,
 		Guid? boardId = null,
 		Guid? educationMediumId = null,
+		Guid? standardId = null,
+		Guid? divisionId = null,
 		string? search = null,
 		CancellationToken cancellationToken = default);
 
 	Task<IQueryable<ChargeLineJoinResult>> GetChargeLinesQueryAsync(
-		Guid academicYearId,
 		int? status = null,
 		Guid? boardId = null,
 		Guid? educationMediumId = null);
 
 	Task<ChargeRequestStatusCounts> GetStatusCountsAsync(
-		Guid academicYearId,
+		Guid? boardId = null,
+		Guid? educationMediumId = null,
+		Guid? standardId = null,
+		Guid? divisionId = null,
 		CancellationToken cancellationToken = default);
 }
 
-public record ChargeRequestStatusCounts(int Pending, int Approved, int Rejected);
+public record ChargeRequestStatusCounts(int Pending, int Processed);

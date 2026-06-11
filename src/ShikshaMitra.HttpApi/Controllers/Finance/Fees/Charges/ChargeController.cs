@@ -45,7 +45,9 @@ public class ChargeController(IChargeAppService chargeAppService) : AbpControlle
 		[FromQuery] string? sortBy = null,
 		[FromQuery] string? sortOrder = "asc",
 		[FromQuery] Guid? educationMediumId = null,
-		[FromQuery] Guid? boardId = null)
+		[FromQuery] Guid? boardId = null,
+		[FromQuery] Guid? standardId = null,
+		[FromQuery] Guid? divisionId = null)
 	{
 		var request = new GetChargesRequest
 		{
@@ -56,10 +58,12 @@ public class ChargeController(IChargeAppService chargeAppService) : AbpControlle
 			SortBy = sortBy,
 			SortOrder = sortOrder,
 			EducationMediumId = educationMediumId,
-			BoardId = boardId
+			BoardId = boardId,
+			StandardId = standardId,
+			DivisionId = divisionId
 		};
 
-		return chargeAppService.GetAllAsync(academicYearId, request);
+		return chargeAppService.GetAllAsync(request);
 	}
 
 	/// <summary>

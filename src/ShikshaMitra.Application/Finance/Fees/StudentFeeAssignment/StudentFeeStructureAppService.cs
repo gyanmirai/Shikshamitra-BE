@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using ShikshaMitra.Finance;
 using ShikshaMitra.Students;
 using Volo.Abp;
 using Volo.Abp.Application.Services;

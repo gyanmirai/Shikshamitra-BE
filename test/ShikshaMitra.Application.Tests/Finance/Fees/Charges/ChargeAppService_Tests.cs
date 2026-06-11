@@ -27,7 +27,7 @@ public abstract class ChargeAppService_Tests<TStartupModule> : ShikshaMitraAppli
 		var request = new GetChargesRequest { Page = 1, PageSize = 10 };
 
 		// Act
-		var result = await _chargeAppService.GetAllAsync(academicYearId, request);
+		var result = await _chargeAppService.GetAllAsync(request);
 
 		// Assert
 		result.ShouldNotBeNull();
@@ -42,7 +42,7 @@ public abstract class ChargeAppService_Tests<TStartupModule> : ShikshaMitraAppli
 		var academicYearId = Guid.NewGuid();
 		var request = new GetChargesRequest { Page = 1, PageSize = 999 };
 
-		var result = await _chargeAppService.GetAllAsync(academicYearId, request);
+		var result = await _chargeAppService.GetAllAsync(request);
 
 		result.PageSize.ShouldBeLessThanOrEqualTo(100);
 	}

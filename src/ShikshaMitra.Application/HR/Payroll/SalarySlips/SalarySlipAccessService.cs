@@ -2,19 +2,19 @@ using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 [RemoteService(false)]
 public class SalarySlipAccessService(
-	IRepository<EmployeeAttendance, Guid> employeeAttendanceRepository,
 	IUserScopeService userScopeService,
-	HrUserScopeAccessService hrScopeAccessService)
+	HrUserScopeAccessService hrScopeAccessService,
+	HrEmployeeScopeQueryService employeeScopeQueryService)
 	: ApplicationService
 {
 	public async Task EnsureEmployeeScopeAllowedAsync(Guid employeeId)
@@ -25,12 +25,23 @@ public class SalarySlipAccessService(
 			return;
 		}
 
-		var employeeStageId = await ResolveEmployeeStageAsync(employeeId);
-		await hrScopeAccessService.EnsureCanAccessEmployeeStageAsync(
+		var stageLookup = await employeeScopeQueryService.BuildEmployeeStageLookupAsync([employeeId]);
+		if (!stageLookup.TryGetValue(employeeId, out var stageIds) || stageIds.Count == 0)
+		{
+			hrScopeAccessService.LogDeniedAccess(scope, nameof(EnsureEmployeeScopeAllowedAsync), "Employee", employeeId);
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+
+		var accessibleEmployeeIds = await hrScopeAccessService.FilterEmployeeIdsByStagesAsync(
+			[employeeId],
+			stageLookup.ToDictionary(x => x.Key, x => (IReadOnlyCollection<Guid>)x.Value),
 			scope,
-			employeeStageId,
-			nameof(EnsureEmployeeScopeAllowedAsync),
-			employeeId);
+			includeUnknownStageEmployees: false);
+		if (accessibleEmployeeIds.Count == 0)
+		{
+			hrScopeAccessService.LogDeniedAccess(scope, nameof(EnsureEmployeeScopeAllowedAsync), "Employee", employeeId);
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
 	}
 
 	private async Task<UserScopeContext> EnsureCanOperatePayrollAsync()
@@ -50,16 +61,5 @@ public class SalarySlipAccessService(
 		hrScopeAccessService.EnsureHasConcreteHrAccess(scope, nameof(EnsureCanOperatePayrollAsync));
 
 		return scope;
-	}
-
-	private async Task<Guid?> ResolveEmployeeStageAsync(Guid employeeId)
-	{
-		var attendanceQuery = await employeeAttendanceRepository.GetQueryableAsync();
-
-		return await AsyncExecuter.FirstOrDefaultAsync(
-			attendanceQuery
-				.Where(a => a.EmployeeId == employeeId && a.EducationMediumStageId.HasValue)
-				.OrderByDescending(a => a.AttendanceDate)
-				.Select(a => a.EducationMediumStageId));
 	}
 }

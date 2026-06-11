@@ -6,6 +6,9 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 
 public class GetAttendanceDateWiseInputValidator : AbstractValidator<GetAttendanceDateWiseInput>
 {
+	private static readonly string[] SupportedDateFormats =
+		["dd-MM-yyyy", "d-M-yyyy", "yyyy-MM-dd", "dd/MM/yyyy", "d/M/yyyy"];
+
 	public GetAttendanceDateWiseInputValidator()
 	{
 		RuleFor(x => x.AttendanceDate)
@@ -22,21 +25,12 @@ public class GetAttendanceDateWiseInputValidator : AbstractValidator<GetAttendan
 
 	private static bool BeValidDate(string dateString)
 	{
-		if (string.IsNullOrWhiteSpace(dateString))
-		{
-			return false;
-		}
-
-		if (DateTime.TryParseExact(dateString, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
-		{
-			return true;
-		}
-
-		if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out _))
-		{
-			return true;
-		}
-
-		return DateTimeOffset.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out _);
+		return !string.IsNullOrWhiteSpace(dateString) &&
+		       DateTime.TryParseExact(
+			       dateString,
+			       SupportedDateFormats,
+			       CultureInfo.InvariantCulture,
+			       DateTimeStyles.None,
+			       out _);
 	}
 }

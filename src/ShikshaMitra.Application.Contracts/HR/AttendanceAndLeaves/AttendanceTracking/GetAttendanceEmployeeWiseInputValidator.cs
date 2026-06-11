@@ -6,6 +6,9 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.AttendanceTracking;
 
 public class GetAttendanceEmployeeWiseInputValidator : AbstractValidator<GetAttendanceEmployeeWiseInput>
 {
+	private static readonly string[] SupportedDateFormats =
+		["dd-MM-yyyy", "d-M-yyyy", "yyyy-MM-dd", "dd/MM/yyyy", "d/M/yyyy"];
+
 	public GetAttendanceEmployeeWiseInputValidator()
 	{
 		RuleFor(x => x.EmployeeId).NotEmpty();
@@ -49,22 +52,11 @@ public class GetAttendanceEmployeeWiseInputValidator : AbstractValidator<GetAtte
 			return false;
 		}
 
-		if (DateTime.TryParseExact(dateString, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out result))
-		{
-			return true;
-		}
-
-		if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out result))
-		{
-			return true;
-		}
-
-		if (DateTimeOffset.TryParse(dateString, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
-		{
-			result = dto.DateTime;
-			return true;
-		}
-
-		return false;
+		return DateTime.TryParseExact(
+			dateString,
+			SupportedDateFormats,
+			CultureInfo.InvariantCulture,
+			DateTimeStyles.None,
+			out result);
 	}
 }

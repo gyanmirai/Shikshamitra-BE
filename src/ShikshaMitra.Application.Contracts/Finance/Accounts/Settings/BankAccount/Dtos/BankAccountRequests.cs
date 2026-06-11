@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using ShikshaMitra.Finance.Setting;
 
 namespace ShikshaMitra.Finance.Accounts.Settings.Dtos;
 

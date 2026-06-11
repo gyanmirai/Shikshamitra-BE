@@ -1,5 +1,5 @@
 ﻿using ShikshaMitra.Common;
-using ShikshaMitra.Finance.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Concessions;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Domain.Entities.Auditing;

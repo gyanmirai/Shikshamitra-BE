@@ -9,7 +9,7 @@ public interface IChargeAppService : IApplicationService
 {
 	Task<ChargeResponse> CreateAsync(Guid academicYearId, CreateChargeRequest input);
 
-	Task<ChargeListResponse> GetAllAsync(Guid academicYearId, GetChargesRequest input);
+	Task<ChargeListResponse> GetAllAsync(GetChargesRequest input);
 
 	Task<ChargeLineListResponse> GetLinesAsync(Guid academicYearId, GetChargeLinesRequest input);
 

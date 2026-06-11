@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.Charges.Dtos;
@@ -66,6 +66,7 @@ public class GetChargesRequest
 
 	public string? Search { get; set; }
 
+	/// <summary>0 = Pending (has at least one pending line), 1 = Processed (all lines actioned).</summary>
 	public int Status { get; set; } = 0;
 
 	public string? SortBy { get; set; }
@@ -75,6 +76,12 @@ public class GetChargesRequest
 	public Guid? EducationMediumId { get; set; }
 
 	public Guid? BoardId { get; set; }
+
+	/// <summary>Filter by a specific standard (class). Only requests with at least one student in this standard are returned.</summary>
+	public Guid? StandardId { get; set; }
+
+	/// <summary>Filter by a specific division. Only requests with at least one student in this division are returned.</summary>
+	public Guid? DivisionId { get; set; }
 }
 
 public class GetChargeLinesRequest

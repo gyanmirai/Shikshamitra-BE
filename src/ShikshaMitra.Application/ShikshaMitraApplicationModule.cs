@@ -1,8 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using ShikshaMitra.Finance.Fees.Collections;
-using ShikshaMitra.Finance.FeeAdjustment;
 using ShikshaMitra.Security.Permissions;
 using Volo.Abp.Account;
 using Volo.Abp.AutoMapper;

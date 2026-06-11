@@ -1,5 +1,4 @@
-﻿using ShikshaMitra.Finance.Collections;
-using ShikshaMitra.Finance.Setting;
+﻿using ShikshaMitra.Finance.Fees.Collections;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;

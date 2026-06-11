@@ -1,7 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.Finance.Common;
-using ShikshaMitra.Finance.FeeCollection;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;

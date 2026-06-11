@@ -91,6 +91,12 @@ public class StudentListController(
 		return await studentListAppService.GetStatusHistoryAsync(studentId);
 	}
 
+	[HttpGet("by-scope")]
+	public async Task<List<StudentLookupDto>> GetStudentsByScope([FromQuery] GetStudentsByScopeRequest input)
+	{
+		return await studentListAppService.GetStudentsByScopeAsync(input);
+	}
+
 	private static async Task<byte[]> ReadBoundedAsync(
 		IFormFile file,
 		long maxBytes,

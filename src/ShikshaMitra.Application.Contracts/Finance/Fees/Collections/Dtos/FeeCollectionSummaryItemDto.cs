@@ -1,5 +1,4 @@
 ﻿using System;
-using ShikshaMitra.Finance.FeeCollection;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 
@@ -28,6 +27,16 @@ public class FeeCollectionSummaryItemDto
 	public string StandardDivision { get; set; } = string.Empty;
 
 	/// <summary>
+	/// Unique identifier of the academic standard (class) the student is enrolled in.
+	/// </summary>
+	public Guid StandardId { get; set; }
+
+	/// <summary>
+	/// Unique identifier of the division the student is enrolled in.
+	/// </summar
+	public Guid DivisionId { get; set; }
+
+	/// <summary>
 	/// Sum of all fee-structure detail amounts assigned to the student
 	/// for the requested academic year.
 	/// </summary>
@@ -53,6 +62,11 @@ public class FeeCollectionSummaryItemDto
 	/// Sum of unpaid approved charge balances (amount minus collected, excluding reversed payments).
 	/// </summary>
 	public double PendingCharges { get; set; }
+
+	/// <summary>
+	/// Flag indicating whether any fee structure is assigned to the student for the requested academic year.
+	/// </summary>
+	public bool IsFeeStructureAssigned { get; set; } = false;
 
 	/// <summary>
 	/// Computed fee status.

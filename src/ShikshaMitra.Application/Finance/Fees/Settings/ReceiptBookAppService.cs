@@ -9,7 +9,6 @@ using Volo.Abp;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
-using ShikshaMitra.Finance.Setting;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 

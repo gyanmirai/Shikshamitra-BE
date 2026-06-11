@@ -242,6 +242,68 @@ public class StudentListAppService(
 			.ToList();
 	}
 
+	public async Task<List<StudentLookupDto>> GetStudentsByScopeAsync(GetStudentsByScopeRequest input)
+	{
+		var classIdSet = input.ClassIds.Distinct().ToList();
+
+		// Division selection is only allowed/applied when exactly one standard is selected.
+		var divisionIdSet = classIdSet.Count == 1 && input.DivisionIds != null
+			? input.DivisionIds.Distinct().ToList()
+			: null;
+
+		// 1. Verify that the logged-in user has access to the requested Academic Year and Medium
+		await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(input.AcademicYearId, nameof(GetStudentsByScopeAsync));
+		await studentScopeAccessService.EnsureCanAccessMediumAsync(input.EducationMediumId, nameof(GetStudentsByScopeAsync));
+
+		// 2. Verify that the logged-in user has access to all requested Classes/Standards
+		foreach (var classId in classIdSet)
+		{
+			await studentScopeAccessService.EnsureCanAccessStandardAsync(classId, nameof(GetStudentsByScopeAsync));
+		}
+
+		// 3. Verify that the logged-in user has access to all requested Divisions (if applicable)
+		if (divisionIdSet is { Count: > 0 })
+		{
+			foreach (var divisionId in divisionIdSet)
+			{
+				await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(GetStudentsByScopeAsync));
+			}
+		}
+
+		var query = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
+			.Where(s =>
+				s.AcademicYearId == input.AcademicYearId
+				&& s.AcademicBoardId == input.BoardId
+				&& s.AcademicMediumId == input.EducationMediumId
+				&& s.StandardId != null
+				&& classIdSet.Contains(s.StandardId.Value)
+				&& s.Status == StudentLifeCycleStatusEnum.Enrolled);
+
+		if (divisionIdSet is { Count: > 0 })
+		{
+			query = query.Where(s => s.DivisionId != null && divisionIdSet.Contains(s.DivisionId.Value));
+		}
+
+		// 4. Enforce row-level query filtering based on user scope
+		query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
+
+		return await AsyncExecuter.ToListAsync(
+			query
+				.OrderBy(s => s.RollNo)
+				.ThenBy(s => s.FirstName)
+				.Select(s => new StudentLookupDto
+				{
+					StudentId = s.Id,
+					StudentName = (s.FirstName + " " + (s.MiddleName ?? string.Empty) + " " + s.LastName).Trim(),
+					GrNo = s.GrNo,
+					RollNo = s.RollNo,
+					StandardId = s.StandardId,
+					StandardName = s.Standard != null ? s.Standard.Name : string.Empty,
+					DivisionId = s.DivisionId,
+					DivisionName = s.Division != null ? s.Division.Name : string.Empty
+				}));
+	}
+
 	private async Task<IQueryable<Student>> GetScopedEnrolledStudentsQueryAsync()
 	{
 		var query = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())

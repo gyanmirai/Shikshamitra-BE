@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using FluentValidation;
-using ShikshaMitra.Finance.FeeCollection;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Collections;

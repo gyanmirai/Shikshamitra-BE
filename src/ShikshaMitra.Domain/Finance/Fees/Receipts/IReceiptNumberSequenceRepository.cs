@@ -1,7 +1,6 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.Receipts;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.Receipts;

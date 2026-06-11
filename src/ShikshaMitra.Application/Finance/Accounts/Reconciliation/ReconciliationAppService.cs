@@ -8,9 +8,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Accounts.Reconciliation.Dtos;
-using ShikshaMitra.Finance.FeeCollection;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Receipts;
-using ShikshaMitra.Finance.Receipts;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Users;
@@ -176,7 +175,7 @@ public class ReconciliationAppService(
             Success = true,
             Data = new ReconciliationActionData
             {
-                ReceiptId          = receipt.Id,
+                ReceiptId          = receipt.LinkedFinalReceiptId ?? Guid.Empty,
                 VerificationStatus = receipt.VerificationStatus,
                 Status             = statusInt,
                 StatusLabel        = statusLabel,

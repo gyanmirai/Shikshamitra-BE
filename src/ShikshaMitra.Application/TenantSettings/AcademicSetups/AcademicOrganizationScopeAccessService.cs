@@ -13,11 +13,15 @@ using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.TenantSettings.EducationBoards;
 
 [RemoteService(false)]
-public class AcademicOrganizationScopeAccessService(IUserScopeAccessService userScopeAccessService)
+public class AcademicOrganizationScopeAccessService(
+	IUserScopeAccessService userScopeAccessService,
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<EducationMediumStage, Guid> stageRepository)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<IReadOnlyList<EducationBoardDto>> PruneBoardTreeAsync(
@@ -124,8 +128,34 @@ public class AcademicOrganizationScopeAccessService(IUserScopeAccessService user
 	public async Task<bool> CanAccessMediumAsync(Guid mediumId)
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-		return scope.HasTenantWideScope()
+
+		// Fast path: tenant-wide, directly assigned medium, or stage-wildcard in this medium
+		if (scope.HasTenantWideScope()
 			|| scope.MediumIds.Contains(mediumId)
-			|| scope.WildcardMediumStageMediumIds.Contains(mediumId);
+			|| scope.WildcardMediumStageMediumIds.Contains(mediumId))
+		{
+			return true;
+		}
+
+		// DB lookup: check if any of the user's assigned standards belong to this medium
+		// (covers scope assignments stored with only AcademicYearId + StandardId, without EducationMediumId)
+		var standardIds = scope.StandardIds
+			.Union(scope.WildcardDivisionStandardIds)
+			.Distinct()
+			.ToList();
+
+		if (standardIds.Count == 0)
+			return false;
+
+		var standardQuery = await standardRepository.GetQueryableAsync();
+		var stageQuery = await stageRepository.GetQueryableAsync();
+
+		return await AsyncExecuter.AnyAsync(
+			from s in standardQuery
+			where standardIds.Contains(s.Id)
+			join st in stageQuery on s.EducationMediumStageId equals st.Id
+			where st.EducationMediumId == mediumId
+			select s
+		);
 	}
 }

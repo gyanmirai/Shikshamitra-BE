@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.Accounts;
 using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
+using ShikshaMitra.Finance.Accounts.Transactions;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Finance.Accounts.Settings;

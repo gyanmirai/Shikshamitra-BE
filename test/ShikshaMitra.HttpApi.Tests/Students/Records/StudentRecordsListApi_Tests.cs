@@ -122,6 +122,41 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
     }
 
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Retrieve_Students_By_Academic_Scope()
+    {
+        var studentDetails = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "ScopeTest");
+        await MoveRegistrationToEnrolledAsync(studentDetails.StudentId);
+
+        Guid academicYearId;
+        Guid boardId;
+        Guid educationMediumId;
+        Guid standardId;
+        Guid divisionId;
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+            var student = await studentRepository.GetAsync(studentDetails.StudentId);
+            academicYearId = student.AcademicYearId!.Value;
+            boardId = student.AcademicBoardId!.Value;
+            educationMediumId = student.AcademicMediumId;
+            standardId = student.StandardId!.Value;
+            divisionId = student.DivisionId!.Value;
+        }
+
+        var url = $"/api/students/records/list/by-scope?academicYearId={academicYearId}&boardId={boardId}&educationMediumId={educationMediumId}&classIds={standardId}&divisionIds={divisionId}";
+        var response = await Client.GetAsync(url);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var students = await response.Content.ReadFromJsonAsync<System.Collections.Generic.List<StudentLookupDto>>(JsonOptions);
+
+        students.ShouldNotBeNull();
+        students.Count.ShouldBeGreaterThanOrEqualTo(1);
+        students.Any(s => s.StudentId == studentDetails.StudentId).ShouldBeTrue();
+    }
+
     private async Task MoveRegistrationToEnrolledAsync(Guid studentId)
     {
         using var scope = Factory.Services.CreateScope();

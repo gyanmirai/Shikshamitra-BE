@@ -1,6 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
-using ShikshaMitra.Finance.Charges;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -11,6 +10,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.Identity;
@@ -18,7 +18,10 @@ using Volo.Abp.Identity;
 namespace ShikshaMitra.EntityFrameworkCore.Finance.Fees.Charges;
 
 public class EfCoreChargeRequestRepository(
-	IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
+	IDbContextProvider<ShikshaMitraDbContext> dbContextProvider,
+	IRepository<Charge, Guid> chargeRepository,
+	IRepository<ChargeCategory, Guid> chargeCategoryRepository
+	)
 	: EfCoreRepository<ShikshaMitraDbContext, ChargeRequest, Guid>(dbContextProvider), IChargeRequestRepository
 {
 	public async Task<ChargeRequestDetailResult?> GetWithLinesAsync(
@@ -59,123 +62,104 @@ public class EfCoreChargeRequestRepository(
 	}
 
 	public async Task<(List<ChargeRequestJoinResult> Items, int TotalCount)> GetChargeRequestsPagedAsync(
-		Guid academicYearId,
 		int status,
 		int page,
 		int pageSize,
 		Guid? boardId = null,
 		Guid? educationMediumId = null,
+		Guid? standardId = null,
+		Guid? divisionId = null,
 		string? search = null,
 		CancellationToken cancellationToken = default)
 	{
-		var db = await GetDbContextAsync();
-		var chargeStatus = (ChargeStatus)status;
-		var searchLower = search?.ToLower();
+		var chargeQuery = await GetQueryableAsync();
 
-		// Step 1: Build a lean filter query on ChargeRequest only (no subqueries in SELECT).
-		var filterQuery = db.Set<ChargeRequest>().AsNoTracking()
-			.Where(r => r.AcademicYearId == academicYearId);
+		chargeQuery = boardId.HasValue
+			? chargeQuery.Where(r => r.BoardId == boardId.Value)
+			: chargeQuery.Where(r => r.BoardId != Guid.Empty);
 
-		if (boardId.HasValue)
-			filterQuery = filterQuery.Where(r => r.BoardId == boardId.Value);
+		chargeQuery = educationMediumId.HasValue ?
+			chargeQuery.Where(r => r.EducationMediumId == educationMediumId.Value) :
+			chargeQuery.Where(r => r.EducationMediumId != Guid.Empty);
 
-		if (educationMediumId.HasValue)
-			filterQuery = filterQuery.Where(r => r.EducationMediumId == educationMediumId.Value);
+		var chargeLineQuery = await chargeRepository.GetQueryableAsync();
 
-		if (searchLower != null)
+		if (standardId.HasValue || divisionId.HasValue)
 		{
-			filterQuery = filterQuery.Where(r =>
-				EF.Functions.ILike(r.ChargeName, "%" + searchLower + "%") ||
-				EF.Functions.ILike(r.PurposeDescription, "%" + searchLower + "%"));
+			if (standardId.HasValue)
+				chargeLineQuery = chargeLineQuery.Where(c => c.StandardId == standardId.Value);
+			if (divisionId.HasValue)
+				chargeLineQuery = chargeLineQuery.Where(c => c.DivisionId == divisionId.Value);
+			var requestIds = await chargeLineQuery.Select(c => c.ChargeRequestId).Distinct().ToListAsync(cancellationToken);
+			chargeQuery = chargeQuery.Where(r => requestIds.Contains(r.Id));
 		}
 
-		// Status filter: use EXISTS on Charge lines — translates cleanly without client-side eval.
-		var chargeLines = db.Set<Charge>().AsNoTracking().Where(c => c.AcademicYearId == academicYearId);
-		filterQuery = chargeStatus switch
+		// Apply status filter.
+		if (status == 0)
 		{
-			ChargeStatus.Pending => filterQuery.Where(r =>
-				chargeLines.Any(c => c.ChargeRequestId == r.Id && c.Status == ChargeStatus.Pending)),
-			ChargeStatus.Rejected => filterQuery.Where(r =>
-				chargeLines.Any(c => c.ChargeRequestId == r.Id) &&
-				!chargeLines.Any(c => c.ChargeRequestId == r.Id && c.Status == ChargeStatus.Pending) &&
-				!chargeLines.Any(c => c.ChargeRequestId == r.Id && c.Status == ChargeStatus.Approved)),
-			_ => filterQuery.Where(r =>
-				chargeLines.Any(c => c.ChargeRequestId == r.Id && c.Status == ChargeStatus.Approved) &&
-				!chargeLines.Any(c => c.ChargeRequestId == r.Id && c.Status == ChargeStatus.Pending))
-		};
+			// if status is 0, means get all charges whose at least one line is pending.
+			var pendingRequestIds = await chargeLineQuery.Where(c => c.Status == ChargeStatus.Pending)
+				.Select(c => c.ChargeRequestId)
+				.Distinct()
+				.ToListAsync(cancellationToken);
+			chargeQuery = chargeQuery.Where(r => pendingRequestIds.Contains(r.Id));
+		}
+		else
+		{
+			// if status is 1, means get all charges whose all lines are processed.
+			var processedRequestIds = await chargeLineQuery.Where(c => c.Status != ChargeStatus.Pending)
+				.Select(c => c.ChargeRequestId)
+				.Distinct()
+				.ToListAsync(cancellationToken);
+			chargeQuery = chargeQuery.Where(r => processedRequestIds.Contains(r.Id));
+		}
 
-		// Step 2: COUNT on the simple filter query — no correlated subqueries.
-		var totalCount = await filterQuery.CountAsync(cancellationToken);
+		// get total count before applying pagination.
+		var totalCount = await chargeQuery.CountAsync(cancellationToken);
 
-		if (totalCount == 0)
-			return ([], 0);
-
-		// Step 3: Page raw ChargeRequest rows ordered by AppliedOn — simple ORDER BY + LIMIT.
-		var pagedRequests = await filterQuery
-			.OrderByDescending(r => r.AppliedOn)
+		// get actual data with pagination using abp code structure
+		var charges = await chargeQuery
+			.OrderByDescending(r => r.CreationTime)
 			.Skip((page - 1) * pageSize)
 			.Take(pageSize)
 			.ToListAsync(cancellationToken);
 
-		var requestIds = pagedRequests.Select(r => r.Id).ToList();
+		var chargeLines = await chargeLineQuery.OrderByDescending(r => r.CreationTime).ToListAsync(cancellationToken);
 
-		// Step 4: Batch-load lookup entities for the paged set only.
-		var categoryIds = pagedRequests.Select(r => r.ChargeCategoryId).Distinct().ToList();
-		var requestorIds = pagedRequests.Select(r => r.RequestorId).Distinct().ToList();
+		var chargeCategoryIds = charges.Select(c => c.ChargeCategoryId).Distinct().ToList();
+		var chargeCategories = await chargeCategoryRepository.GetListAsync(c => chargeCategoryIds.Contains(c.Id));
 
-		var categories = await db.Set<ChargeCategory>().AsNoTracking()
-			.Where(c => categoryIds.Contains(c.Id))
-			.ToListAsync(cancellationToken);
+		// fetch requestor and academic year details if needed (not included in current result projection to avoid complexity, can be added if required)
+		var requestorIds = charges.Select(c => c.RequestorId).Distinct().ToList();
+		var academicYearIds = charges.Select(c => c.AcademicYearId).Distinct().ToList();
 
-		var academicYear = await db.Set<AcademicYear>().AsNoTracking()
-			.Where(a => a.Id == academicYearId)
-			.FirstOrDefaultAsync(cancellationToken);
-
-		var requestors = await db.Set<IdentityUser>().AsNoTracking()
+		var requestors = await GetDbContextAsync().Result.Set<IdentityUser>().AsNoTracking()
 			.Where(u => requestorIds.Contains(u.Id))
-			.ToListAsync(cancellationToken);
+			.ToDictionaryAsync(u => u.Id, cancellationToken);
 
-		// Step 5: Batch aggregate counts per request in a single GROUP BY query.
-		var counts = await db.Set<Charge>().AsNoTracking()
-			.Where(c => requestIds.Contains(c.ChargeRequestId))
-			.GroupBy(c => c.ChargeRequestId)
-			.Select(g => new
-			{
-				RequestId = g.Key,
-				Total = g.Count(),
-				Pending = g.Count(c => c.Status == ChargeStatus.Pending),
-				Approved = g.Count(c => c.Status == ChargeStatus.Approved),
-				Rejected = g.Count(c => c.Status == ChargeStatus.Rejected)
-			})
-			.ToListAsync(cancellationToken);
+		var academicYears = await GetDbContextAsync().Result.Set<AcademicYear>().AsNoTracking()
+			.Where(a => academicYearIds.Contains(a.Id))
+			.ToDictionaryAsync(a => a.Id, cancellationToken);
 
-		// Step 6: Combine in memory — all data is already materialised.
-		var categoryMap = categories.ToDictionary(c => c.Id);
-		var requestorMap = requestors.ToDictionary(u => u.Id);
-		var countMap = counts.ToDictionary(c => c.RequestId);
+		// Join charges with categories and project to result.
+		var result = from charge in charges
+					 join category in chargeCategories on charge.ChargeCategoryId equals category.Id
+					 let requestor = requestors.ContainsKey(charge.RequestorId) ? requestors[charge.RequestorId] : null
+					 let academicYear = academicYears.ContainsKey(charge.AcademicYearId) ? academicYears[charge.AcademicYearId] : null
+					 select new ChargeRequestJoinResult(
+						 charge,
+						 category,
+						 requestor!,
+						 academicYear!,
+						 chargeLines.Count(cl => cl.ChargeRequestId == charge.Id),
+						 chargeLines.Count(cl => cl.ChargeRequestId == charge.Id && cl.Status == ChargeStatus.Pending),
+						 chargeLines.Count(cl => cl.ChargeRequestId == charge.Id && cl.Status != ChargeStatus.Pending)
+					 );
 
-		var items = pagedRequests.Select(r =>
-		{
-			countMap.TryGetValue(r.Id, out var cnt);
-			categoryMap.TryGetValue(r.ChargeCategoryId, out var cat);
-			requestorMap.TryGetValue(r.RequestorId, out var requestor);
-
-			return new ChargeRequestJoinResult(
-				r,
-				cat!,
-				requestor!,
-				academicYear!,
-				cnt?.Total ?? 0,
-				cnt?.Pending ?? 0,
-				cnt?.Approved ?? 0,
-				cnt?.Rejected ?? 0);
-		}).ToList();
-
-		return (items, totalCount);
+		return (result.ToList(), totalCount);
 	}
 
 	public async Task<IQueryable<ChargeLineJoinResult>> GetChargeLinesQueryAsync(
-		Guid academicYearId,
 		int? status = null,
 		Guid? boardId = null,
 		Guid? educationMediumId = null)
@@ -186,7 +170,6 @@ public class EfCoreChargeRequestRepository(
 			join student in db.Set<Student>().AsNoTracking() on charge.StudentId equals student.Id
 			join standard in db.Set<Standard>().AsNoTracking() on charge.StandardId equals standard.Id
 			join division in db.Set<Division>().AsNoTracking() on charge.DivisionId equals division.Id
-			where charge.AcademicYearId == academicYearId
 			where !status.HasValue || charge.Status == (ChargeStatus)status.Value
 			where !boardId.HasValue || charge.BoardId == boardId.Value
 			where !educationMediumId.HasValue || charge.EducationMediumId == educationMediumId.Value
@@ -194,27 +177,52 @@ public class EfCoreChargeRequestRepository(
 	}
 
 	public async Task<ChargeRequestStatusCounts> GetStatusCountsAsync(
-		Guid academicYearId,
+		Guid? boardId = null,
+		Guid? educationMediumId = null,
+		Guid? standardId = null,
+		Guid? divisionId = null,
 		CancellationToken cancellationToken = default)
 	{
 		var db = await GetDbContextAsync();
 
+		// Build a base query of charge requests in scope.
+		var requestQuery = db.Set<ChargeRequest>().AsNoTracking();
+
+		if (boardId.HasValue)
+			requestQuery = requestQuery.Where(r => r.BoardId == boardId.Value);
+
+		if (educationMediumId.HasValue)
+			requestQuery = requestQuery.Where(r => r.EducationMediumId == educationMediumId.Value);
+
+		var chargeLines = db.Set<Charge>().AsNoTracking();
+
+		if (standardId.HasValue)
+			requestQuery = requestQuery.Where(r =>
+				chargeLines.Any(c => c.ChargeRequestId == r.Id && c.StandardId == standardId.Value));
+
+		if (divisionId.HasValue)
+			requestQuery = requestQuery.Where(r =>
+				chargeLines.Any(c => c.ChargeRequestId == r.Id && c.DivisionId == divisionId.Value));
+
+		// Get all in-scope request IDs.
+		var requestIds = await requestQuery.Select(r => r.Id).ToListAsync(cancellationToken);
+
+		if (requestIds.Count == 0)
+			return new ChargeRequestStatusCounts(0, 0);
+
+		// Aggregate per-request pending line counts.
 		var lineStats = await db.Set<Charge>().AsNoTracking()
-			.Where(c => c.AcademicYearId == academicYearId)
+			.Where(c => requestIds.Contains(c.ChargeRequestId))
 			.GroupBy(c => c.ChargeRequestId)
 			.Select(g => new
 			{
-				PendingCount = g.Count(x => x.Status == ChargeStatus.Pending),
-				ApprovedCount = g.Count(x => x.Status == ChargeStatus.Approved),
-				RejectedCount = g.Count(x => x.Status == ChargeStatus.Rejected),
-				StudentCount = g.Count()
+				HasPending = g.Any(x => x.Status == ChargeStatus.Pending),
 			})
 			.ToListAsync(cancellationToken);
 
-		var pending = lineStats.Count(s => s.PendingCount > 0);
-		var rejected = lineStats.Count(s => s.PendingCount == 0 && s.RejectedCount == s.StudentCount);
-		var approved = lineStats.Count(s => s.PendingCount == 0 && s.ApprovedCount > 0);
+		var pending = lineStats.Count(s => s.HasPending);
+		var processed = lineStats.Count(s => !s.HasPending);
 
-		return new ChargeRequestStatusCounts(pending, approved, rejected);
+		return new ChargeRequestStatusCounts(pending, processed);
 	}
 }

@@ -1,6 +1,5 @@
-using System;
-using ShikshaMitra.Finance.Collections;
-using ShikshaMitra.Finance.FeeCollection;
+﻿using System;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp;
 using Xunit;

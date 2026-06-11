@@ -1,15 +1,14 @@
+﻿using ShikshaMitra.Finance.Fees.Charges;
+using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Students;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.Charges;
-using ShikshaMitra.Finance.Fees.Charges;
-using ShikshaMitra.Finance.FeeCollection;
-using ShikshaMitra.Finance.Fees.FeeCollection;
-using ShikshaMitra.Finance.Fees.Receipts;
-using ShikshaMitra.Finance.Receipts;
-using ShikshaMitra.Finance.Reconciliation;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
@@ -31,9 +30,12 @@ public class ReconciliationManager(
     IDueFeeRepository dueFeeRepository,
     IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
     IRepository<Charge, Guid> chargeRepository,
-    FeeReceiptManager feeReceiptManager,
+	IRepository<Student, Guid> studentRepository,
+	FeeReceiptManager feeReceiptManager,
     FeeCollectionManager feeCollectionManager,
-    IClock clock,
+	IFeeReceiptPdfGenerator pdfGenerator,
+	FeeReceiptBlobManager blobManager,
+	IClock clock,
     ICurrentTenant currentTenant
 ) : DomainService
 {
@@ -75,7 +77,13 @@ public class ReconciliationManager(
         finalReceipt.SetLinkedProvisionalReceiptId(provisional.Id);
         await receiptRepository.InsertAsync(finalReceipt, autoSave: false);
 
-        provisional.MarkVerified(finalReceipt.Id, remarks);
+		var student = await studentRepository.GetAsync(provisional.StudentId, cancellationToken: cancellationToken)
+			?? throw new BusinessException("Student not found")
+				.WithData("StudentId", provisional.StudentId);
+
+		await GenerateAndStoreReceiptPdfsAsync(new[] { finalReceipt }, student, student?.AcademicYear, cancellationToken);
+
+		provisional.MarkVerified(finalReceipt.Id, remarks);
 
         // Update the parent FeeRecordMetadata Status to Paid or Partial
         var metadata = await metadataRepository.FindAsync(provisional.FeeCollectionTransactionId, cancellationToken: cancellationToken);
@@ -127,7 +135,7 @@ public class ReconciliationManager(
             await metadataRepository.UpdateAsync(metadata, autoSave: false);
         }
 
-        return provisional;
+        return finalReceipt;
     }
 
     /// <summary>
@@ -196,4 +204,18 @@ public class ReconciliationManager(
             throw new BusinessException(ReconciliationErrorCodes.AlreadyRejected)
                 .WithData("ReceiptId", receipt.Id);
     }
+
+	private async Task GenerateAndStoreReceiptPdfsAsync(
+		IReadOnlyList<FeePaymentReceipt> receipts,
+		Student student,
+		AcademicYear academicYear,
+		CancellationToken cancellationToken = default)
+	{
+		foreach (var receipt in receipts)
+		{
+			var pdfBytes = await pdfGenerator.GenerateAsync(receipt, student, academicYear, cancellationToken);
+			var blobName = await blobManager.SavePdfAsync(receipt.Id, receipt.ReceiptKind, pdfBytes, cancellationToken);
+			receipt.SetPdfBlobName(blobName);
+		}
+	}
 }

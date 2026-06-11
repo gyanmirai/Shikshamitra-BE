@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using ShikshaMitra.Finance.FeeCollection;
-using ShikshaMitra.Finance.Receipts;
+using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.Receipts;
 
 namespace ShikshaMitra.Finance.Accounts.Reconciliation.Dtos;
 

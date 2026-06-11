@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
@@ -10,7 +10,6 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.Receipts;
-using ShikshaMitra.Finance.Receipts;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;

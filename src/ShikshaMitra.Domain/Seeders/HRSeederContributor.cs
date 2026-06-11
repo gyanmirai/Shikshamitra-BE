@@ -13,6 +13,8 @@ using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.ProfessionalManagement;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
@@ -69,6 +71,8 @@ public partial class HRSeederContributor : BaseSeederContributor
 			IRepository<ShiftManagement, Guid> shiftRepository,
 			IEmployeeRepository employeeRepository,
 			IRepository<EmployeeOrganizationAssignment, Guid> employeeOrganizationAssignmentRepository,
+			IRepository<EducationMediumStagePermission, Guid> educationMediumStagePermissionRepository,
+			AcademicSetupPermissionManager academicSetupPermissionManager,
 			IEmployeeFamilyMemberRepository familyMemberRepository,
 			IDocumentSettingRepository documentSettingRepository,
 			EmployeeManager employeeManager,
@@ -126,6 +130,8 @@ public partial class HRSeederContributor : BaseSeederContributor
 		_shiftRepository = shiftRepository;
 		_employeeRepository = employeeRepository;
 		_employeeOrganizationAssignmentRepository = employeeOrganizationAssignmentRepository;
+		_educationMediumStagePermissionRepository = educationMediumStagePermissionRepository;
+		_academicSetupPermissionManager = academicSetupPermissionManager;
 		_familyMemberRepository = familyMemberRepository;
 		_documentSettingRepository = documentSettingRepository;
 		_employeeManager = employeeManager;

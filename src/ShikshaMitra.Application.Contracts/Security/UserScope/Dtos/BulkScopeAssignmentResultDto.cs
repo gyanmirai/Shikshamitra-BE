@@ -5,7 +5,7 @@ namespace ShikshaMitra.Security.UserScope;
 
 /// <summary>
 /// Response DTO for bulk scope assignment operations.
-/// Provides information about the transactional bulk assignment operation with overwrite strategy.
+/// Provides information about the transactional bulk assignment operation with academic-year-scoped overwrite strategy.
 /// </summary>
 public class BulkScopeAssignmentResultDto
 {

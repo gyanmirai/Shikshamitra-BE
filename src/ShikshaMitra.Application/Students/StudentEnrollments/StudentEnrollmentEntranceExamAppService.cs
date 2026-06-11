@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Enrollments.Admissions;
 using ShikshaMitra.Students.Enrollments.EntranceExams;
 using ShikshaMitra.Students.StudentEnrollments.Managers;
@@ -26,50 +26,102 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 [Authorize]
 [RemoteService(false)]
 public class StudentEnrollmentEntranceExamAppService(
-	IRepository<Student, Guid> studentRepository,
+	IStudentRepository studentRepository,
 	IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
 	IRepository<EntranceExamSlot, Guid> entranceExamSlotRepository,
 	IRepository<EducationMedium, Guid> educationMediumRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<EducationBoard, Guid> educationBoardRepository,
-	EntranceExamManager entranceExamManager) : ShikshaMitraAppService, IStudentEnrollmentEntranceExamAppService
+	EntranceExamManager entranceExamManager,
+	StudentScopeAccessService studentScopeAccessService) : ShikshaMitraAppService, IStudentEnrollmentEntranceExamAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.View)]
 	public async Task<PagedResultDto<EntranceExamStudentDto>> GetListAsync(GetEntranceExamStudentsInput input)
 	{
-		var studentQueryable = await studentRepository.GetQueryableAsync();
-		studentQueryable = studentQueryable.Where(x => x.AcademicMediumId == input.EducationMediumId && x.AdditionalDetail.EntranceExamStartDateTime >= input.StartDate && x.AdditionalDetail.EntranceExamStartDateTime <= input.EndDate && x.Status == StudentLifeCycleStatusEnum.EntranceExam);
+		var studentQueryable = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		studentQueryable = await studentScopeAccessService.ApplyCurrentUserScopeAsync(studentQueryable);
+
+		var additionalDetailQueryable = await studentAdditionalDetailRepository.GetQueryableAsync();
+		var educationBoardQueryable = await educationBoardRepository.GetQueryableAsync();
+		var educationMediumQueryable = await educationMediumRepository.GetQueryableAsync();
+		var standardQueryable = await standardRepository.GetQueryableAsync();
+
+		var query =
+			from student in studentQueryable
+			join additionalDetail in additionalDetailQueryable on student.Id equals additionalDetail.Id
+			join educationBoard in educationBoardQueryable on student.AcademicBoardId equals educationBoard.Id
+			join educationMedium in educationMediumQueryable on student.AcademicMediumId equals educationMedium.Id
+			join standardJoin in standardQueryable on student.StandardId equals standardJoin.Id into standardGroup
+			from standard in standardGroup.DefaultIfEmpty()
+			where student.Status == StudentLifeCycleStatusEnum.EntranceExam
+			select new
+			{
+				Student = student,
+				AdditionalDetail = additionalDetail,
+				EducationBoard = educationBoard,
+				EducationMedium = educationMedium,
+				Standard = standard
+			};
+
+		if (input.EducationMediumId.HasValue)
+		{
+			query = query.Where(x => x.Student.AcademicMediumId == input.EducationMediumId.Value);
+		}
+
+		if (input.StandardId.HasValue)
+		{
+			query = query.Where(x => x.Student.StandardId == input.StandardId.Value);
+		}
+
+		if (input.StartDate.HasValue)
+		{
+			query = query.Where(x => x.AdditionalDetail.EntranceExamStartDateTime >= input.StartDate.Value);
+		}
+
+		if (input.EndDate.HasValue)
+		{
+			query = query.Where(x => x.AdditionalDetail.EntranceExamStartDateTime <= input.EndDate.Value);
+		}
+
+		if (input.ExamStatus.HasValue)
+		{
+			query = query.Where(x => x.AdditionalDetail.EntranceExamStatus == input.ExamStatus.Value);
+		}
 
 		if (!input.SearchTerm.IsNullOrWhiteSpace())
 		{
 			var searchTerm = input.SearchTerm.ToLower();
-			studentQueryable = studentQueryable.Where(x =>
-				(x.FirstName != null && x.FirstName.ToLower().Contains(searchTerm)) ||
-				(x.MiddleName != null && x.MiddleName.ToLower().Contains(searchTerm)) ||
-				(x.LastName != null && x.LastName.ToLower().Contains(searchTerm)));
+			query = query.Where(x =>
+				(x.Student.FirstName != null && x.Student.FirstName.ToLower().Contains(searchTerm)) ||
+				(x.Student.MiddleName != null && x.Student.MiddleName.ToLower().Contains(searchTerm)) ||
+				(x.Student.LastName != null && x.Student.LastName.ToLower().Contains(searchTerm)));
 		}
 
-		var totalCount = await AsyncExecuter.CountAsync(studentQueryable);
+		var totalCount = await AsyncExecuter.CountAsync(query);
 
-		if (!input.Sorting.IsNullOrWhiteSpace())
+		var sorting = input.Sorting?.Trim().ToLowerInvariant();
+		query = sorting switch
 		{
-			studentQueryable = studentQueryable.OrderBy(input.Sorting);
-		}
-		else
+			"studentname desc" or "studentname descending" =>
+				query.OrderByDescending(x => x.Student.FirstName).ThenByDescending(x => x.Student.LastName),
+			"studentname" or "studentname asc" or "studentname ascending" =>
+				query.OrderBy(x => x.Student.FirstName).ThenBy(x => x.Student.LastName),
+			"examstarttime desc" or "examstarttime descending" =>
+				query.OrderByDescending(x => x.Student.FirstName).ThenByDescending(x => x.Student.LastName),
+			"examstatus desc" or "examstatus descending" =>
+				query.OrderByDescending(x => x.AdditionalDetail.EntranceExamStatus).ThenBy(x => x.Student.FirstName),
+			"examstatus" or "examstatus asc" or "examstatus ascending" =>
+				query.OrderBy(x => x.AdditionalDetail.EntranceExamStatus).ThenBy(x => x.Student.FirstName),
+			_ => query.OrderBy(x => x.Student.FirstName).ThenBy(x => x.Student.LastName).ThenBy(x => x.Student.Id)
+		};
+
+		var rows = await AsyncExecuter.ToListAsync(query.Skip(input.SkipCount).Take(input.MaxResultCount));
+		var results = rows.Select(x => new EntranceExamStudentDto
 		{
-			studentQueryable = studentQueryable.OrderBy(x => x.AdditionalDetail.EntranceExamStartDateTime).ThenBy(x => x.FirstName);
-		}
-
-		studentQueryable = studentQueryable.Skip(input.SkipCount).Take(input.MaxResultCount);
-
-		var students = await AsyncExecuter.ToListAsync(studentQueryable);
-
-		var results = await AsyncExecuter.ToListAsync(studentQueryable.Select(x => new EntranceExamStudentDto
-		{
-			StudentId = x.Id,
-			StudentName = x.FirstName + " " + x.MiddleName + " " + x.LastName,
-			EducationBoard = x.AcademicBoard.Type.ToString(),
-			EducationMedium = x.AcademicMedium.Name,
+			StudentId = x.Student.Id,
+			StudentName = BuildStudentName(x.Student.FirstName, x.Student.MiddleName, x.Student.LastName),
+			EducationBoard = x.EducationBoard.Type.ToString(),
+			EducationMedium = x.EducationMedium.Name,
 			Standard = x.Standard != null ? x.Standard.Name : string.Empty,
 			ExamStartTime = x.AdditionalDetail.EntranceExamStartDateTime,
 			ExamEndTime = x.AdditionalDetail.EntranceExamEndDateTime,
@@ -80,9 +132,9 @@ public class StudentEnrollmentEntranceExamAppService(
 			Percentage = x.AdditionalDetail.EntranceExamPercentage,
 			ExamStatus = x.AdditionalDetail.EntranceExamStatus,
 			Progress = CalculateRegistrationProgressPercentage(x.AdditionalDetail.StudentRegistrationState),
-			ExamStatusDisplay = x.AdditionalDetail.EntranceExamStatus != null ? x.AdditionalDetail.EntranceExamStatus.ToString() : "Not Scheduled",
-			EnrollmentState = x.Status
-		}));
+			ExamStatusDisplay = x.AdditionalDetail.EntranceExamStatus?.ToString() ?? "Not Scheduled",
+			EnrollmentState = x.Student.Status
+		}).ToList();
 
 		return new PagedResultDto<EntranceExamStudentDto>(totalCount, results);
 	}
@@ -91,6 +143,7 @@ public class StudentEnrollmentEntranceExamAppService(
 	public async Task<EntranceExamDetailDto> GetAsync(Guid studentId)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true) ?? throw new EntityNotFoundException(typeof(Student), studentId);
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(GetAsync));
 
 		return new EntranceExamDetailDto
 		{
@@ -122,8 +175,16 @@ public class StudentEnrollmentEntranceExamAppService(
 	public async Task ScheduleExamAsync(Guid studentId, ScheduleEntranceExamDto input)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true) ?? throw new EntityNotFoundException(typeof(Student), studentId);
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(ScheduleExamAsync));
 
 		var slot = await entranceExamSlotRepository.GetAsync(input.EntranceExamSlotId);
+		await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(slot.AcademicYearId, nameof(ScheduleExamAsync));
+		if (student.AcademicYearId != slot.AcademicYearId)
+		{
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+				.WithData("StudentId", student.Id)
+				.WithData("EntranceExamSlotId", slot.Id);
+		}
 
 		await entranceExamManager.ValidateScheduling(student.Id, slot.Id);
 
@@ -134,6 +195,7 @@ public class StudentEnrollmentEntranceExamAppService(
 	public async Task<EntranceExamResultResponseDto> UploadResultAsync(Guid studentId, UploadEntranceExamResultDto input)
 	{
 		var student = await studentRepository.GetAsync(studentId) ?? throw new EntityNotFoundException(typeof(Student), studentId);
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(UploadResultAsync));
 
 		await entranceExamManager.ValidateResultUpload(student.Id, input.TotalMarks, input.PassingMarks, input.ObtainedMarks);
 
@@ -169,6 +231,7 @@ public class StudentEnrollmentEntranceExamAppService(
 		}
 
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(MoveToAdmissionAsync));
 
 		if (!IsStudentAllowedToMoveToAdmission(student))
 		{
@@ -183,6 +246,7 @@ public class StudentEnrollmentEntranceExamAppService(
 	{
 		// Pre-load all students in a single query for name resolution — avoids per-iteration DB calls
 		var studentQueryable = await studentRepository.GetQueryableAsync();
+		studentQueryable = await studentScopeAccessService.ApplyCurrentUserScopeAsync(studentQueryable);
 		var preLoaded = await AsyncExecuter.ToListAsync(
 			studentQueryable.Where(s => input.StudentIds.Contains(s.Id)));
 		var nameMap = preLoaded.ToDictionary(

@@ -17,7 +17,8 @@ namespace ShikshaMitra.Students.Records;
 [RemoteService(false)]
 public class StudentAppService(
 	IRepository<Student, Guid> studentRepository,
-	IAsyncQueryableExecuter asyncExecuter
+	IAsyncQueryableExecuter asyncExecuter,
+	StudentScopeAccessService studentScopeAccessService
 ) : ApplicationService, IStudentAppService
 {
 	public async Task<PagedResultDto<StudentDto>> GetStudentsByDivisionAsync(
@@ -35,6 +36,7 @@ public class StudentAppService(
 			// Build the query with filters
 			var queryable = await studentRepository.GetQueryableAsync();
 			var filteredQuery = ApplyFilters(queryable, divisionId, searchTerm);
+			filteredQuery = await studentScopeAccessService.ApplyCurrentUserScopeAsync(filteredQuery);
 
 			// Get total count for pagination before applying skip/take
 			var totalCount = await asyncExecuter.CountAsync(filteredQuery);

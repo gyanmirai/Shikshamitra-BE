@@ -9,9 +9,10 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
 public class StudentRegistrationQueryAppService(
-    IRepository<Student, Guid> studentRepository,
-    EntityValidationService validationService
-) : StudentRegistrationBaseAppService(studentRepository, validationService),
+    IStudentRepository studentRepository,
+    EntityValidationService validationService,
+    StudentScopeAccessService studentScopeAccessService
+) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentRegistrationQueryAppService
 {
     public async Task<PagedResultDto<StudentDto>> GetRegistrationFormsByMediumAsync(
@@ -32,6 +33,7 @@ public class StudentRegistrationQueryAppService(
             .Where(s => s.Status == StudentLifeCycleStatusEnum.RegistrationFormIssued
                 && s.AcademicMediumId == academicMediumId
                 && s.TenantId == CurrentTenant.Id);
+        query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
         query = ApplySearchFilter(query, searchTerm);
 
@@ -71,6 +73,7 @@ public class StudentRegistrationQueryAppService(
             .Where(s => (s.Status == StudentLifeCycleStatusEnum.Registration || s.Status == StudentLifeCycleStatusEnum.EntranceExam)
                 && s.AcademicMediumId == academicMediumId
                 && s.TenantId == CurrentTenant.Id);
+        query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
         query = ApplySearchFilter(query, searchTerm);
 
@@ -106,6 +109,7 @@ public class StudentRegistrationQueryAppService(
                     (s.MiddleName != null && s.MiddleName.ToLower().Contains(normalizedSearchTerm)) ||
                     (s.LastName != null && s.LastName.ToLower().Contains(normalizedSearchTerm))
                 ));
+        query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
         var students = await AsyncExecuter.ToListAsync(query);
 

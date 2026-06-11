@@ -45,9 +45,11 @@ public static class StudentEnrollmentTestHelper
             $"{InquiryBaseUrl}/{DefaultAcademicMediumId}/inquiries?maxResultCount=1");
         listResponse.EnsureSuccessStatusCode();
 
-        var list = await listResponse.Content
-            .ReadFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<StudentDto>>(JsonOptions)
+        var listResult = await listResponse.Content
+            .ReadFromJsonAsync<Result<Volo.Abp.Application.Dtos.PagedResultDto<StudentDto>>>(JsonOptions)
             ?? throw new InvalidOperationException("Failed to list inquiries after create");
+        var list = listResult.Data
+            ?? throw new InvalidOperationException("Inquiry list response did not contain data");
 
         if (list.Items.Count == 0)
             throw new InvalidOperationException("No inquiries found after create");
@@ -109,9 +111,11 @@ public static class StudentEnrollmentTestHelper
         var listResponse = await client.GetAsync(
             $"{InquiryBaseUrl}/{DefaultAcademicMediumId}/inquiries?maxResultCount=50");
         listResponse.EnsureSuccessStatusCode();
-        var list = await listResponse.Content
-            .ReadFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<StudentDto>>(JsonOptions)
+        var listResult = await listResponse.Content
+            .ReadFromJsonAsync<Result<Volo.Abp.Application.Dtos.PagedResultDto<StudentDto>>>(JsonOptions)
             ?? throw new InvalidOperationException("Failed to list inquiries");
+        var list = listResult.Data
+            ?? throw new InvalidOperationException("Inquiry list response did not contain data");
 
         if (list.Items.Count == 0)
             throw new InvalidOperationException("No inquiries found after create");

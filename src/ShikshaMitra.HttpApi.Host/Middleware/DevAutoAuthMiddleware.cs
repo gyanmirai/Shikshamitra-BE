@@ -41,6 +41,12 @@ public class DevAutoAuthMiddleware : ITransientDependency
 
     public async Task InvokeAsync(HttpContext context)
     {
+        if (string.Equals(_configuration["DevAutoAuth:Enabled"], "false", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         var request = context.Request;
 
         // Skip: already has a token, or is an auth endpoint itself

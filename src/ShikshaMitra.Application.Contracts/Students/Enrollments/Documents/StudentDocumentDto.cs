@@ -1,4 +1,5 @@
 ﻿using System;
+using ShikshaMitra.Students.Documents;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Documents;
@@ -54,4 +55,18 @@ public class StudentDocumentDto : EntityDto<Guid>
 	public Guid? CreatorId { get; set; }
 
 	public bool IsUploaded { get; set; } = false;
+
+	public string? Sha256Hash { get; set; }
+
+	public StudentDocumentStorageStatus StorageStatus { get; set; } = StudentDocumentStorageStatus.Stored;
+
+	public Guid? UploadedByUserId { get; set; }
+
+	public DateTimeOffset? ValidatedAt { get; set; }
+
+	public int DownloadCount { get; set; }
+
+	public DateTimeOffset? LastDownloadedAt { get; set; }
+
+	public bool IsSensitive { get; set; }
 }

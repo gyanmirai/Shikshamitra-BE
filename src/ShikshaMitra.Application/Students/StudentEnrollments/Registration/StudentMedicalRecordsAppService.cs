@@ -6,19 +6,18 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
 public class StudentMedicalRecordsAppService(
-    IRepository<Student, Guid> studentRepository,
+    IStudentRepository studentRepository,
     IRepository<StudentMedicalRecord, Guid> studentMedicalRecordRepository,
-    EntityValidationService validationService
-) : StudentRegistrationBaseAppService(studentRepository, validationService),
+    EntityValidationService validationService,
+    StudentScopeAccessService studentScopeAccessService
+) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentMedicalRecordsAppService
 {
     public async Task<StudentMedicalRecordsDto> GetMedicalRecordsAsync(Guid studentId)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(GetMedicalRecordsAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecords);
 
         var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -44,11 +43,9 @@ public class StudentMedicalRecordsAppService(
 
     public async Task<StudentMedicalRecordsDto> UpdateMedicalRecordsAsync(Guid studentId, UpdateMedicalRecordsDto input)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(UpdateMedicalRecordsAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecordsUpdate);
 
         var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);

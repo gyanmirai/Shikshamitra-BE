@@ -7,6 +7,7 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Uow;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -136,7 +137,7 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		var academicYearId = await GetAcademicYearIdAsync();
 		var leaveType = await CreateLeaveTypeAsync($"LT-{Guid.NewGuid():N}");
 
-		var ex = await Should.ThrowAsync<BusinessException>(() =>
+		var ex = await Should.ThrowAsync<AbpValidationException>(() =>
 			_leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
 			{
 				PolicyTitle = $"Policy-{Guid.NewGuid():N}",
@@ -144,7 +145,8 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 				Rules = [Rule(leaveType.Id, accrualPolicyType: "Monthly", leaveCount: 8, encashmentAllowed: true, encashmentTiming: null)]
 			}));
 
-		ex.Code.ShouldBe("ShikshaMitra:EncashmentTimingRequired");
+		ex.ValidationErrors.ShouldContain(error =>
+			error.MemberNames.Any(memberName => memberName.Contains(nameof(LeavePolicyRuleRequest.EncashmentTiming))));
 	}
 
 	[Fact]

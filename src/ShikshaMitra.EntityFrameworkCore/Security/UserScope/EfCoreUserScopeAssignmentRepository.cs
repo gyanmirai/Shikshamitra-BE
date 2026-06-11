@@ -7,6 +7,10 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.Identity;
@@ -74,51 +78,63 @@ public class EfCoreUserScopeAssignmentRepository :
         var dbContext = await GetDbContextAsync();
         var baseQuery = await GetQueryableAsync();
 
-        // Get the division's standard ID to enforce hierarchical constraints
-        var division = await dbContext.Set<ShikshaMitra.TenantSettings.Divisions.Division>()
-            .Where(d => d.Id == divisionId)
-            .Select(d => new { d.StandardId })
+        // Resolve the division's full hierarchy to enforce year/parent constraints for wildcard assignments.
+        var divisionScope = await (
+            from division in dbContext.Set<Division>()
+            join standard in dbContext.Set<Standard>() on division.StandardId equals standard.Id
+            join stage in dbContext.Set<EducationMediumStage>() on standard.EducationMediumStageId equals stage.Id
+            join medium in dbContext.Set<EducationMedium>() on stage.EducationMediumId equals medium.Id
+            join board in dbContext.Set<EducationBoard>() on medium.EducationBoardId equals board.Id
+            where division.Id == divisionId
+            select new
+            {
+                DivisionId = division.Id,
+                StandardId = standard.Id,
+                EducationMediumStageId = stage.Id,
+                EducationMediumId = medium.Id,
+                EducationBoardId = board.Id,
+                AcademicYearId = board.AcademicYearId
+            })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (division == null)
+        if (divisionScope == null)
         {
             return new List<Guid>();
         }
 
-        // Get direct user assignments with hierarchical validation
-        // User has access if:
-        // 1. Exact division match (DivisionId == divisionId), OR
-        // 2. Wildcard division (DivisionId == null) WITHIN the division's parent standard
-        var directUserIds = await baseQuery
+        var matchingAssignments = baseQuery
             .Where(x =>
-                x.UserId.HasValue &&
                 x.IsActive &&
                 !x.IsDeleted &&
                 (
                     // Exact division match
-                    (x.DivisionId.HasValue && x.DivisionId.Value == divisionId) ||
+                    x.DivisionId == divisionScope.DivisionId ||
                     // Wildcard division WITHIN parent standard constraint
-                    (!x.DivisionId.HasValue && x.StandardId.HasValue && x.StandardId.Value == division.StandardId) ||
-                    // Wildcard standard (implies access to all divisions in that standard)
-                    (!x.StandardId.HasValue && !x.DivisionId.HasValue)
-                ))
+                    (!x.DivisionId.HasValue && x.StandardId == divisionScope.StandardId) ||
+                    // Wildcard standard WITHIN parent medium stage constraint
+                    (!x.StandardId.HasValue && x.EducationMediumStageId == divisionScope.EducationMediumStageId) ||
+                    // Wildcard medium stage WITHIN parent medium constraint
+                    (!x.EducationMediumStageId.HasValue && x.EducationMediumId == divisionScope.EducationMediumId) ||
+                    // Wildcard medium WITHIN parent board constraint
+                    (!x.EducationMediumId.HasValue && x.EducationBoardId == divisionScope.EducationBoardId) ||
+                    // Wildcard board WITHIN academic year constraint
+                    (!x.EducationBoardId.HasValue && x.AcademicYearId == divisionScope.AcademicYearId) ||
+                    // Organization-wide wildcard
+                    (!x.AcademicYearId.HasValue &&
+                     !x.EducationBoardId.HasValue &&
+                     !x.EducationMediumId.HasValue &&
+                     !x.EducationMediumStageId.HasValue &&
+                     !x.StandardId.HasValue &&
+                     !x.DivisionId.HasValue)
+                ));
+
+        var directUserIds = await matchingAssignments
+            .Where(x => x.UserId.HasValue)
             .Select(x => x.UserId.Value)
             .ToListAsync(cancellationToken);
 
-        // Get role-based assignments with hierarchical validation
-        var roleNames = await baseQuery
-            .Where(x =>
-                x.RoleName != null &&
-                x.IsActive &&
-                !x.IsDeleted &&
-                (
-                    // Exact division match
-                    (x.DivisionId.HasValue && x.DivisionId.Value == divisionId) ||
-                    // Wildcard division WITHIN parent standard constraint
-                    (!x.DivisionId.HasValue && x.StandardId.HasValue && x.StandardId.Value == division.StandardId) ||
-                    // Wildcard standard (implies access to all divisions in that standard)
-                    (!x.StandardId.HasValue && !x.DivisionId.HasValue)
-                ))
+        var roleNames = await matchingAssignments
+            .Where(x => x.RoleName != null)
             .Select(x => x.RoleName)
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -147,54 +163,59 @@ public class EfCoreUserScopeAssignmentRepository :
         var dbContext = await GetDbContextAsync();
         var baseQuery = await GetQueryableAsync();
 
-        // Get the standard's parent ID (EducationMediumStageId) to enforce hierarchical constraints
-        var standard = await dbContext.Set<ShikshaMitra.TenantSettings.Standards.Standard>()
-            .Where(s => s.Id == standardId)
-            .Select(s => new { s.EducationMediumStageId })
+        // Resolve the standard's full hierarchy to enforce year/parent constraints for wildcard assignments.
+        var standardScope = await (
+            from standard in dbContext.Set<Standard>()
+            join stage in dbContext.Set<EducationMediumStage>() on standard.EducationMediumStageId equals stage.Id
+            join medium in dbContext.Set<EducationMedium>() on stage.EducationMediumId equals medium.Id
+            join board in dbContext.Set<EducationBoard>() on medium.EducationBoardId equals board.Id
+            where standard.Id == standardId
+            select new
+            {
+                StandardId = standard.Id,
+                EducationMediumStageId = stage.Id,
+                EducationMediumId = medium.Id,
+                EducationBoardId = board.Id,
+                AcademicYearId = board.AcademicYearId
+            })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (standard == null)
+        if (standardScope == null)
         {
             return new List<Guid>();
         }
 
-        // Get direct user assignments with hierarchical validation
-        // User has access if:
-        // 1. Exact standard match (StandardId == standardId), OR
-        // 2. Wildcard standard (StandardId == null) WITHIN the standard's parent medium stage, OR
-        // 3. Wildcard medium stage (implies access to all standards in that stage)
-        var directUserIds = await baseQuery
+        var matchingAssignments = baseQuery
             .Where(x =>
-                x.UserId.HasValue &&
                 x.IsActive &&
                 !x.IsDeleted &&
                 (
                     // Exact standard match
-                    (x.StandardId.HasValue && x.StandardId.Value == standardId) ||
+                    x.StandardId == standardScope.StandardId ||
                     // Wildcard standard WITHIN parent medium stage constraint
-                    (!x.StandardId.HasValue && x.EducationMediumStageId.HasValue &&
-                     x.EducationMediumStageId.Value == standard.EducationMediumStageId) ||
-                    // Wildcard medium stage (implies access to all standards in any stage)
-                    (!x.EducationMediumStageId.HasValue && !x.StandardId.HasValue)
-                ))
+                    (!x.StandardId.HasValue && x.EducationMediumStageId == standardScope.EducationMediumStageId) ||
+                    // Wildcard medium stage WITHIN parent medium constraint
+                    (!x.EducationMediumStageId.HasValue && x.EducationMediumId == standardScope.EducationMediumId) ||
+                    // Wildcard medium WITHIN parent board constraint
+                    (!x.EducationMediumId.HasValue && x.EducationBoardId == standardScope.EducationBoardId) ||
+                    // Wildcard board WITHIN academic year constraint
+                    (!x.EducationBoardId.HasValue && x.AcademicYearId == standardScope.AcademicYearId) ||
+                    // Organization-wide wildcard
+                    (!x.AcademicYearId.HasValue &&
+                     !x.EducationBoardId.HasValue &&
+                     !x.EducationMediumId.HasValue &&
+                     !x.EducationMediumStageId.HasValue &&
+                     !x.StandardId.HasValue &&
+                     !x.DivisionId.HasValue)
+                ));
+
+        var directUserIds = await matchingAssignments
+            .Where(x => x.UserId.HasValue)
             .Select(x => x.UserId.Value)
             .ToListAsync(cancellationToken);
 
-        // Get role-based assignments with hierarchical validation
-        var roleNames = await baseQuery
-            .Where(x =>
-                x.RoleName != null &&
-                x.IsActive &&
-                !x.IsDeleted &&
-                (
-                    // Exact standard match
-                    (x.StandardId.HasValue && x.StandardId.Value == standardId) ||
-                    // Wildcard standard WITHIN parent medium stage constraint
-                    (!x.StandardId.HasValue && x.EducationMediumStageId.HasValue &&
-                     x.EducationMediumStageId.Value == standard.EducationMediumStageId) ||
-                    // Wildcard medium stage (implies access to all standards in any stage)
-                    (!x.EducationMediumStageId.HasValue && !x.StandardId.HasValue)
-                ))
+        var roleNames = await matchingAssignments
+            .Where(x => x.RoleName != null)
             .Select(x => x.RoleName)
             .Distinct()
             .ToListAsync(cancellationToken);

@@ -50,11 +50,12 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 			endDate,
 			tenantId);
 
-		query = query.OrderBy(sorting ?? nameof(StudentLeave.LeaveDate) + " DESC");
-
-		return await query
-			.PageBy(skipCount, maxResultCount)
-			.ToListAsync(GetCancellationToken(cancellationToken));
+		return await ApplySortingAndPagingAsync(
+			query,
+			sorting,
+			maxResultCount,
+			skipCount,
+			cancellationToken);
 	}
 
 	public async Task<long> GetCountAsync(
@@ -93,6 +94,7 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 		var query = await GetQueryableAsync();
 
 		return await query
+			.IgnoreAutoIncludes()
 			.Include(x => x.Student)
 				.ThenInclude(x => x!.AcademicMedium)
 			.Include(x => x.Student)
@@ -134,6 +136,7 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 			tenantId);
 
 		query = query
+			.IgnoreAutoIncludes()
 			.Include(x => x.Student)
 				.ThenInclude(x => x!.AcademicMedium)
 			.Include(x => x.Student)
@@ -142,12 +145,44 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 				.ThenInclude(x => x!.Division)
 			.Include(x => x.StudentLeaveType);
 
-		query = query.OrderBy(sorting ?? nameof(StudentLeave.LeaveDate) + " DESC");
+		return await ApplySortingAndPagingAsync(
+			query,
+			sorting,
+			maxResultCount,
+			skipCount,
+			cancellationToken);
+	}
+
+	private async Task<List<StudentLeave>> ApplySortingAndPagingAsync(
+		IQueryable<StudentLeave> query,
+		string? sorting,
+		int maxResultCount,
+		int skipCount,
+		CancellationToken cancellationToken)
+	{
+		var effectiveSorting = sorting ?? nameof(StudentLeave.LeaveDate) + " DESC";
+
+		if (IsLeaveDateSorting(effectiveSorting))
+		{
+			var leaves = await query.ToListAsync(GetCancellationToken(cancellationToken));
+			var orderedLeaves = effectiveSorting.Contains("ASC", StringComparison.OrdinalIgnoreCase)
+				? leaves.OrderBy(l => l.LeaveDate).ThenBy(l => l.Id)
+				: leaves.OrderByDescending(l => l.LeaveDate).ThenBy(l => l.Id);
+
+			return orderedLeaves
+				.Skip(skipCount)
+				.Take(maxResultCount)
+				.ToList();
+		}
 
 		return await query
+			.OrderBy(effectiveSorting)
 			.PageBy(skipCount, maxResultCount)
 			.ToListAsync(GetCancellationToken(cancellationToken));
 	}
+
+	private static bool IsLeaveDateSorting(string sorting) =>
+		sorting.TrimStart().StartsWith(nameof(StudentLeave.LeaveDate), StringComparison.OrdinalIgnoreCase);
 
 	private IQueryable<StudentLeave> ApplyFilter(
 		IQueryable<StudentLeave> query,

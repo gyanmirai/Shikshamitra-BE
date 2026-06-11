@@ -6,19 +6,18 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
 public class StudentPreviousSchoolDetailsAppService(
-    IRepository<Student, Guid> studentRepository,
+    IStudentRepository studentRepository,
     IRepository<StudentPreviousSchoolDetail, Guid> studentPreviousSchoolDetailRepository,
-    EntityValidationService validationService
-) : StudentRegistrationBaseAppService(studentRepository, validationService),
+    EntityValidationService validationService,
+    StudentScopeAccessService studentScopeAccessService
+) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentPreviousSchoolDetailsAppService
 {
     public async Task<StudentPreviousSchoolDetailsDto> GetPreviousSchoolDetailsAsync(Guid studentId)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(GetPreviousSchoolDetailsAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchool);
 
         var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -43,11 +42,9 @@ public class StudentPreviousSchoolDetailsAppService(
 
     public async Task<StudentPreviousSchoolDetailsDto> UpdatePreviousSchoolDetailsAsync(Guid studentId, UpdatePreviousSchoolDetailsDto input)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(UpdatePreviousSchoolDetailsAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchoolUpdate);
 
         var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);

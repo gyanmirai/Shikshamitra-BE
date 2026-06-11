@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Attendance;
+using ShikshaMitra.Students.Compliance;
+using ShikshaMitra.Students.Documents;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 
@@ -20,6 +22,8 @@ public partial class ShikshaMitraDbContext
     public DbSet<StudentPreviousSchoolDetail> StudentPreviousSchoolDetails { get; set; }
     public DbSet<StudentBankDetail> StudentBankDetails { get; set; }
     public DbSet<StudentDocument> StudentDocuments { get; set; }
+    public DbSet<StudentIdentityCompliance> StudentIdentityCompliances { get; set; }
+    public DbSet<StudentDocumentAccessAudit> StudentDocumentAccessAudits { get; set; }
     public DbSet<StudentNote> StudentNotes { get; set; }
 
     // ───────────────────────────────────────────────

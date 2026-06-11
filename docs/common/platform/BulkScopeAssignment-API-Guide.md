@@ -5,7 +5,7 @@
 The enhanced bulk scope assignment API supports **lists at every hierarchical level**, allowing you to create multiple scope assignments in a single API call using a **cartesian product** approach.
 
 **Important Features:**
-- ⚠️ **OVERWRITE STRATEGY**: This API **DELETES all existing scope assignments** for the specified users before creating new ones. This is NOT an append operation.
+- ⚠️ **ACADEMIC-YEAR-SCOPED OVERWRITE STRATEGY**: This API **DELETES existing scope assignments only for the specified users and supplied academic years** before creating new ones. Assignments for other academic years are preserved.
 - 🔒 **Transactional**: Either all operations (delete old + create new) succeed or none are applied. This ensures data consistency.
 
 ## API Endpoint
@@ -18,8 +18,8 @@ POST /api/app/user-scope/bulk-assign
 
 The API operates in two steps within a single transaction:
 
-**Step 1**: Delete all existing scope assignments for the specified users  
-**Step 2**: Create assignments for all combinations of the provided scope parameters
+**Step 1**: Delete existing scope assignments for the specified users only within the supplied academic years.
+**Step 2**: Create assignments for all combinations of the provided scope parameters for those academic years.
 
 **Formula**: `Total New Assignments = Users × AcademicYears × Boards × Mediums × MediumStages × Standards × Divisions`
 
@@ -43,7 +43,7 @@ The API operates in two steps within a single transaction:
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `userIds` | `List<Guid>` | ✅ Required | List of user IDs to assign scopes to |
-| `academicYearIds` | `List<Guid>?` | Optional | List of academic year IDs (null/empty = all years) |
+| `academicYearIds` | `List<Guid>` | ✅ Required | List of academic year IDs to replace. Null/empty is rejected. |
 | `educationBoardIds` | `List<Guid>?` | Optional | List of education board IDs (null/empty = all boards) |
 | `educationMediumIds` | `List<Guid>?` | Optional | List of education medium IDs (null/empty = all mediums) |
 | `educationMediumStageIds` | `List<Guid>?` | Optional | List of medium stage IDs (null/empty = all stages) |
@@ -52,8 +52,8 @@ The API operates in two steps within a single transaction:
 | `description` | `string?` | Optional | Description for all assignments (max 500 chars) |
 
 **Important Validation Notes:**
-- ⚠️ **At least one scope parameter must be provided with values** (cannot have all parameters as null/empty)
-- NULL or empty list at a hierarchy level means "all access" at that level
+- ⚠️ **At least one academic year must be provided**. Bulk assignment never means "all academic years" by omission.
+- NULL or empty list below academic year means "all access" at that lower hierarchy level
 - Example: `educationBoardIds: ["board-x"]` with `standardIds: null` = Board X → All Standards → All Divisions
 
 ## Response Structure
@@ -64,7 +64,7 @@ The API operates in two steps within a single transaction:
   "assignmentsCreated": 12,
   "totalCombinations": 12,
   "affectedUserIds": ["guid1", "guid2"],
-  "message": "Successfully replaced scope assignments for 2 users. Deleted 5 old assignments and created 12 new assignments."
+  "message": "Successfully replaced scope assignments for 2 users in 1 academic years. Deleted 5 old assignments and created 12 new assignments."
 }
 ```
 
@@ -78,10 +78,10 @@ The API operates in two steps within a single transaction:
 | `affectedUserIds` | `List<Guid>` | List of users whose assignments were replaced (empty if operation failed) |
 | `message` | `string` | Human-readable message describing the result |
 
-## Transactional Behavior with Overwrite Strategy
+## Transactional Behavior with Academic-Year-Scoped Overwrite Strategy
 
 ### ✅ All Operations Succeed
-1. All existing assignments for specified users are deleted
+1. Existing assignments for specified users and supplied academic years are deleted
 2. All new assignments are created
 3. User caches are invalidated
 4. Success response is returned with delete/create counts
@@ -92,19 +92,19 @@ The API operates in two steps within a single transaction:
 - No new assignments are created
 - Error response is returned with details
 
-### Important Notes on Overwrite Strategy
+### Important Notes on Academic-Year-Scoped Overwrite Strategy
 
-⚠️ **WARNING**: This operation will **DELETE ALL existing scope assignments** for the specified users before creating new ones.
+⚠️ **WARNING**: This operation will **DELETE existing scope assignments only in the supplied academic years** for the specified users before creating new ones. Other academic years are preserved.
 
 **Example Scenario:**
-- User A has 3 existing scope assignments (Board X, Standard 1, Division A/B/C)
-- You call bulk assign for User A with (Board Y, Standard 2)
-- Result: The 3 old assignments are deleted, 1 new assignment is created
+- User A has assignments in 2024-25 and 2025-26
+- You call bulk assign for User A with `academicYearIds: ["2025-26"]` and (Board Y, Standard 2)
+- Result: 2025-26 assignments are replaced; 2024-25 assignments remain unchanged
 
 **Use Cases:**
-- ✅ **Reassigning** users to completely different scopes
+- ✅ **Reassigning** users to different scopes within a selected academic year
 - ✅ **Resetting** user permissions
-- ✅ **Replacing** all assignments without worrying about duplicates
+- ✅ **Replacing** selected-year assignments without worrying about duplicates
 - ❌ **Adding** new assignments while keeping existing ones (use individual assign API instead)
 
 ### Common Failure Scenarios
@@ -127,12 +127,13 @@ The API operates in two steps within a single transaction:
 ```json
 {
   "userIds": ["user-guid-1", "user-guid-2"],
+  "academicYearIds": ["2024-guid"],
   "educationBoardIds": ["board-a-guid", "board-b-guid"],
   "standardIds": ["standard-1-guid", "standard-2-guid", "standard-3-guid"]
 }
 ```
 
-**Result**: Creates **12 assignments** (2 users × 2 boards × 3 standards = 12)
+**Result**: Creates **12 assignments** (2 users × 1 year × 2 boards × 3 standards = 12)
 
 **Response (Success):**
 ```json
@@ -141,7 +142,7 @@ The API operates in two steps within a single transaction:
   "assignmentsCreated": 12,
   "totalCombinations": 12,
   "affectedUserIds": ["user-guid-1", "user-guid-2"],
-  "message": "Successfully replaced scope assignments for 2 users. Deleted 0 old assignments and created 12 new assignments."
+  "message": "Successfully replaced scope assignments for 2 users in 1 academic years. Deleted 0 old assignments and created 12 new assignments."
 }
 ```
 
@@ -178,7 +179,7 @@ Combinations created:
   "assignmentsCreated": 8,
   "totalCombinations": 8,
   "affectedUserIds": ["teacher-1-guid"],
-  "message": "Successfully replaced scope assignments for 1 users. Deleted 3 old assignments and created 8 new assignments."
+  "message": "Successfully replaced scope assignments for 1 users in 1 academic years. Deleted 3 old assignments and created 8 new assignments."
 }
 ```
 
@@ -192,6 +193,7 @@ Combinations created:
     "teacher-2-guid",
     "teacher-3-guid"
   ],
+  "academicYearIds": ["2024-guid"],
   "educationBoardIds": [
     "board-cbse-guid",
     "board-icse-guid",
@@ -205,7 +207,7 @@ Combinations created:
 }
 ```
 
-**Result**: Creates **18 assignments** (3 users × 3 boards × 2 standards = 18)
+**Result**: Creates **18 assignments** (3 users × 1 year × 3 boards × 2 standards = 18)
 
 ### Example 4: Assignment with Minimal Scope (Board-level Access)
 
@@ -213,18 +215,20 @@ Combinations created:
 ```json
 {
   "userIds": ["admin-user-guid"],
+  "academicYearIds": ["2024-guid"],
   "educationBoardIds": ["cbse-board-guid"],
   "description": "Admin access to all standards and divisions under CBSE board"
 }
 ```
 
 **Explanation:**
-- `educationBoardIds` is specified (required - at least one scope parameter)
-- `academicYearIds`, `educationMediumIds`, `educationMediumStageIds`, `standardIds`, `divisionIds` are null/omitted
+- `academicYearIds` is specified and defines the year slice to replace
+- `educationBoardIds` is specified
+- `educationMediumIds`, `educationMediumStageIds`, `standardIds`, `divisionIds` are null/omitted
 - NULL values at lower hierarchy levels = access to ALL at those levels
 - Result: Access to the specified board, with ALL standards and divisions under it
 
-**Result**: Creates **1 assignment** (CBSE Board → All Standards → All Divisions)
+**Result**: Creates **1 assignment** (2024 → CBSE Board → All Standards → All Divisions)
 
 ### Example 5: Multiple Boards with Specific Standards
 
@@ -232,32 +236,35 @@ Combinations created:
 ```json
 {
   "userIds": ["coordinator-guid"],
+  "academicYearIds": ["2024-guid"],
   "educationBoardIds": ["cbse-guid", "icse-guid"],
   "standardIds": ["class-8-guid", "class-9-guid"],
   "description": "Coordinator for Class 8 and 9 across CBSE and ICSE"
 }
 ```
 
-**Result**: Creates **4 assignments** (2 boards × 2 standards = 4)
-- CBSE → Class 8 → All Divisions
-- CBSE → Class 9 → All Divisions
-- ICSE → Class 8 → All Divisions
-- ICSE → Class 9 → All Divisions
+**Result**: Creates **4 assignments** (1 year × 2 boards × 2 standards = 4)
+- 2024 → CBSE → Class 8 → All Divisions
+- 2024 → CBSE → Class 9 → All Divisions
+- 2024 → ICSE → Class 8 → All Divisions
+- 2024 → ICSE → Class 9 → All Divisions
 
 **Note**: `divisionIds` is null/omitted, meaning access to ALL divisions in each class.
 
-### Example 6: Overwrite Existing Assignments
+### Example 6: Overwrite Existing Assignments for One Academic Year
 
-**Scenario**: User has 2 existing assignments, we want to replace them completely
+**Scenario**: User has assignments in multiple academic years, and we want to replace only the 2024 scope
 
 **Existing Assignments for user-guid-1:**
-- Board A → Standard 1 → Division A
-- Board A → Standard 1 → Division B
+- 2023 → Board A → Standard 1 → Division A
+- 2024 → Board A → Standard 1 → Division B
+- 2024 → Board A → Standard 1 → Division C
 
 **Request:**
 ```json
 {
   "userIds": ["user-guid-1"],
+  "academicYearIds": ["2024-guid"],
   "educationBoardIds": ["board-b-guid"],
   "standardIds": ["standard-2-guid", "standard-3-guid"]
 }
@@ -270,15 +277,16 @@ Combinations created:
   "assignmentsCreated": 2,
   "totalCombinations": 2,
   "affectedUserIds": ["user-guid-1"],
-  "message": "Successfully replaced scope assignments for 1 users. Deleted 2 old assignments and created 2 new assignments."
+  "message": "Successfully replaced scope assignments for 1 users in 1 academic years. Deleted 2 old assignments and created 2 new assignments."
 }
 ```
 
 **Result**: 
-- ❌ Deleted: Board A → Standard 1 → Division A
-- ❌ Deleted: Board A → Standard 1 → Division B
-- ✅ Created: Board B → Standard 2
-- ✅ Created: Board B → Standard 3
+- ✅ Preserved: 2023 → Board A → Standard 1 → Division A
+- ❌ Deleted: 2024 → Board A → Standard 1 → Division B
+- ❌ Deleted: 2024 → Board A → Standard 1 → Division C
+- ✅ Created: 2024 → Board B → Standard 2
+- ✅ Created: 2024 → Board B → Standard 3
 
 ### Example 7: Failure - Invalid Board ID
 
@@ -286,6 +294,7 @@ Combinations created:
 ```json
 {
   "userIds": ["user-guid-1", "user-guid-2"],
+  "academicYearIds": ["2024-guid"],
   "educationBoardIds": ["invalid-board-guid", "board-b-guid"],
   "standardIds": ["standard-1-guid"]
 }
@@ -304,7 +313,7 @@ Combinations created:
 
 **Result**: **No changes made** - existing assignments preserved (transaction rolled back)
 
-### Example 8: Validation Failure - All Scope Parameters Null
+### Example 8: Validation Failure - Missing Academic Year
 
 **Request:**
 ```json
@@ -323,8 +332,8 @@ Combinations created:
     "message": "One or more validation errors occurred.",
     "validationErrors": [
       {
-        "members": ["AcademicYearIds", "EducationBoardIds", "EducationMediumIds", "EducationMediumStageIds", "StandardIds", "DivisionIds"],
-        "message": "At least one scope parameter (AcademicYearIds, EducationBoardIds, EducationMediumIds, EducationMediumStageIds, StandardIds, or DivisionIds) must be provided."
+        "members": ["AcademicYearIds"],
+        "message": "At least one academic year must be provided. Bulk assignment replaces permissions only within the supplied academic year scope."
       }
     ]
   }
@@ -337,6 +346,7 @@ Combinations created:
 ```json
 {
   "userIds": ["user-guid-1"],
+  "academicYearIds": ["2024-guid"],
   "educationBoardIds": ["cbse-guid"]  // ✅ Now valid
 }
 ```
@@ -344,9 +354,10 @@ Combinations created:
 ## Best Practices
 
 1. **Understand the Overwrite Behavior** ⚠️
-   - This API **DELETES ALL existing assignments** for the specified users
+   - This API **DELETES existing assignments only for the supplied academic years** for the specified users
+   - Saving 2026-27 does not erase 2025-26
    - If you want to **add** assignments while keeping existing ones, use the individual `AssignScopeAsync` API instead
-   - Best for: Complete permission resets, role changes, organizational restructuring
+   - Best for: Selected-year permission resets, role changes, organizational restructuring
 
 2. **Validate References First**: Ensure all GUIDs exist before calling the API
    - Check that all user IDs exist
@@ -355,7 +366,7 @@ Combinations created:
    
 3. **Preview Before Execute**: Consider implementing a preview/dry-run
    - Query existing assignments using `GetAllAssignmentsAsync` 
-   - Show users what will be deleted and created
+   - Show users what will be deleted and created for the selected academic year
    - Confirm before executing the bulk operation
 
 4. **Limit Combinations**: Be mindful of cartesian product explosion
@@ -383,7 +394,8 @@ Combinations created:
 
 **Validation Errors** (400 Bad Request):
 - Missing `userIds` or empty list
-- All scope parameters (educationBoardIds, standardIds, etc.) are null/empty
+- Missing or empty `academicYearIds`
+- All lower scope parameters (educationBoardIds, standardIds, etc.) are null/empty only if an academic-year-wide assignment is not intended
 - Invalid GUID format
 - Description exceeds 500 characters
 
@@ -430,9 +442,9 @@ catch (UserFriendlyException ex)
 ## Validation Rules
 
 1. **At least one `userId` is required**
-2. **At least one scope parameter must have values** (cannot have all parameters as null/empty)
-   - Valid: `{ educationBoardIds: ["board1"], standardIds: null }` ✅
-   - Invalid: `{ educationBoardIds: null, standardIds: null, divisionIds: null }` ❌
+2. **At least one `academicYearId` is required**
+   - Valid: `{ academicYearIds: ["2024"], educationBoardIds: ["board1"], standardIds: null }` ✅
+   - Invalid: `{ educationBoardIds: ["board1"], standardIds: null }` ❌
 3. All `userIds` must exist in the system
 4. Description max length: 500 characters
 5. Duplicate user IDs in the list are automatically deduplicated
@@ -441,10 +453,11 @@ catch (UserFriendlyException ex)
 
 | Scenario | Meaning |
 |----------|---------|
+| `academicYearIds: ["2024"]` | Replace only the 2024 academic-year slice |
+| `academicYearIds: null` or omitted | ❌ Validation error |
 | `educationBoardIds: ["board-x"]` | Access to Board X |
 | `standardIds: null` or omitted | Access to ALL standards (within specified board) |
 | `divisionIds: []` (empty array) | Access to ALL divisions (within specified standards) |
-| All parameters null/empty | ❌ **Validation Error** - At least one must have values |
 
 ## HTTP Status Codes
 
@@ -471,6 +484,7 @@ catch (UserFriendlyException ex)
 ```json
 {
   "userIds": ["user1", "user2"],
+  "academicYearIds": ["2024-guid"],
   "educationBoardIds": ["board-guid"],
   "standardIds": ["standard-guid"],
   "divisionIds": ["div1", "div2"]
@@ -480,7 +494,7 @@ catch (UserFriendlyException ex)
 **Key Changes:**
 - All singular properties are now lists (e.g., `educationBoardId` → `educationBoardIds`)
 - Response type changed from `int` to `BulkScopeAssignmentResultDto`
-- **OVERWRITE STRATEGY**: All existing assignments for specified users are deleted before creating new ones
+- **ACADEMIC-YEAR-SCOPED OVERWRITE STRATEGY**: Existing assignments for specified users are deleted only within the supplied academic years before creating new ones
 - **Transactional behavior**: All operations (delete + create) succeed or none are applied
 - No duplicate errors - overwrite strategy handles this automatically
 - Response includes both `deletedAssignments` and `assignmentsCreated` counts

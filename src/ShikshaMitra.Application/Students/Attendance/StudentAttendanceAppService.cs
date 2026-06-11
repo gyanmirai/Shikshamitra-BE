@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Students;
 using ShikshaMitra.Students.Attendance;
 using System;
 using System.Collections.Generic;
@@ -18,23 +19,25 @@ namespace ShikshaMitra.Students.Attendance;
 [RemoteService(false)]
 public class StudentAttendanceAppService : ApplicationService, IStudentAttendanceAppService
 {
-	private readonly IRepository<Student, Guid> _studentRepository;
+	private readonly IStudentRepository _studentRepository;
 	private readonly IAttendanceDayRepository _attendanceDayRepository;
 	private readonly AttendanceManager _attendanceManager;
 	private readonly IRepository<TenantSettings.AcademicYears.AcademicYear, Guid> _academicYearRepository;
 	private readonly IRepository<TenantSettings.Standards.Standard, Guid> _standardRepository;
 	private readonly IRepository<TenantSettings.Divisions.Division, Guid> _divisionRepository;
 	private readonly IRepository<TenantSettings.EducationMediums.EducationMedium, Guid> _educationMediumRepository;
+	private readonly StudentScopeAccessService _studentScopeAccessService;
 
 	public StudentAttendanceAppService(
-		IRepository<Student, Guid> studentRepository,
+		IStudentRepository studentRepository,
 		IAttendanceDayRepository attendanceDayRepository,
 		IAttendanceEntryRepository attendanceEntryRepository,
 		AttendanceManager attendanceManager,
 		IRepository<TenantSettings.AcademicYears.AcademicYear, Guid> academicYearRepository,
 		IRepository<TenantSettings.Standards.Standard, Guid> standardRepository,
 		IRepository<TenantSettings.Divisions.Division, Guid> divisionRepository,
-		IRepository<TenantSettings.EducationMediums.EducationMedium, Guid> educationMediumRepository)
+		IRepository<TenantSettings.EducationMediums.EducationMedium, Guid> educationMediumRepository,
+		StudentScopeAccessService studentScopeAccessService)
 	{
 		_studentRepository = studentRepository;
 		_attendanceDayRepository = attendanceDayRepository;
@@ -43,6 +46,7 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 		_standardRepository = standardRepository;
 		_divisionRepository = divisionRepository;
 		_educationMediumRepository = educationMediumRepository;
+		_studentScopeAccessService = studentScopeAccessService;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.View)]
@@ -51,10 +55,10 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 		// Validate inputs
 		await ValidateInputsAsync(input.AcademicYearId, input.StandardId, input.DivisionId);
 
-		// Get students enrolled in the specified Standard and Division
-		var students = await _studentRepository.GetListAsync(s =>
-			s.StandardId == input.StandardId &&
-			s.DivisionId == input.DivisionId);
+		var studentQuery = (await _studentRepository.GetQueryableWithoutAutoIncludesAsync())
+			.Where(s => s.StandardId == input.StandardId && s.DivisionId == input.DivisionId);
+		studentQuery = await _studentScopeAccessService.ApplyCurrentUserScopeAsync(studentQuery);
+		var students = await AsyncExecuter.ToListAsync(studentQuery);
 
 		var standard = await _standardRepository.GetAsync(input.StandardId);
 		var division = await _divisionRepository.GetAsync(input.DivisionId);
@@ -115,6 +119,12 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 	{
 		// Validate inputs
 		await ValidateInputsAsync(input.AcademicYearId, input.StandardId, input.DivisionId);
+		await _studentScopeAccessService.EnsureStudentsMatchAttendanceScopeAsync(
+			input.Entries.Select(e => e.StudentId),
+			input.AcademicYearId,
+			input.StandardId,
+			input.DivisionId,
+			nameof(MarkAttendanceAsync));
 
 		// Validate date is not in the future
 		if (input.Date.Date > DateTime.Today)
@@ -254,6 +264,12 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 				.WithData("DivisionId", divisionId)
 				.WithData("StandardId", standardId);
 		}
+
+		await _studentScopeAccessService.EnsureCanAccessAttendanceScopeAsync(
+			academicYearId,
+			standardId,
+			divisionId,
+			nameof(ValidateInputsAsync));
 	}
 
 	#endregion

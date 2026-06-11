@@ -34,7 +34,8 @@ public class StudentAdmissionAppService(
 	IGuidGenerator guidGenerator,
 	IStudentEmailService studentEmailService,
 	AdmissionManager admissionManager,
-	IUserScopeAccessService userScopeAccessService) : ApplicationService, IStudentAdmissionAppService
+	IUserScopeAccessService userScopeAccessService,
+	StudentScopeAccessService studentScopeAccessService) : ApplicationService, IStudentAdmissionAppService
 {
 	/// <summary>
 	/// Gets a paginated list of students in admission stage with filters
@@ -45,7 +46,7 @@ public class StudentAdmissionAppService(
 		var query = (await studentRepository.GetQueryableAsync())
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission);
 
-		query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+		query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
 		if (input.AcademicYearId.HasValue && input.AcademicYearId.Value != Guid.Empty)
 		{
@@ -114,6 +115,9 @@ public class StudentAdmissionAppService(
 		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(
 			student,
 			operation: nameof(AssignDivisionAsync));
+		await studentScopeAccessService.EnsureCanAccessDivisionAsync(
+			input.DivisionId,
+			nameof(AssignDivisionAsync));
 
 		// Assign division using domain method
 		student.AssignDivision(input.DivisionId);

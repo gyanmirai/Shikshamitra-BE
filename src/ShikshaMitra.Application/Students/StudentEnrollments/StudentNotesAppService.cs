@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 
@@ -13,14 +14,14 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 [RemoteService(false)]
 public class StudentNotesAppService(
 		IRepository<StudentNote, Guid> noteRepository,
-		IRepository<Student, Guid> studentRepository,
-		IIdentityUserRepository identityUserRepository
+		IStudentRepository studentRepository,
+		IIdentityUserRepository identityUserRepository,
+		StudentScopeAccessService studentScopeAccessService
 ) : ApplicationService, IStudentNotesAppService
 {
     public async Task<List<StudentNoteDto>> GetAllAsync(Guid studentId)
     {
-        // Validate student exists
-        var student = await studentRepository.FindAsync(studentId) ?? throw new UserFriendlyException($"Student not found: {studentId}");
+        await GetScopedStudentAsync(studentId, nameof(GetAllAsync));
 		var notes = await noteRepository.GetListAsync(x => x.StudentId == studentId, includeDetails: true);
 
 		var dtos = ObjectMapper.Map<List<StudentNote>, List<StudentNoteDto>>(notes.OrderByDescending(x => x.CreationTime).ToList());
@@ -52,8 +53,7 @@ public class StudentNotesAppService(
 
     public async Task CreateAsync(Guid studentId, CreateUpdateStudentNoteDto input)
     {
-        // Validate student exists
-        var student = await studentRepository.FindAsync(studentId) ?? throw new UserFriendlyException($"Student not found: {studentId}");
+        await GetScopedStudentAsync(studentId, nameof(CreateAsync));
 		var note = new StudentNote(
             GuidGenerator.Create(),
             CurrentTenant.Id,
@@ -68,6 +68,7 @@ public class StudentNotesAppService(
     public async Task UpdateAsync(Guid id, CreateUpdateStudentNoteDto input)
     {
         var note = await noteRepository.GetAsync(id);
+		await GetScopedStudentAsync(note.StudentId, nameof(UpdateAsync));
         // Only allow update if note exists
         note.Update(input.Note, input.NextReminderDate, input.Status);
         await noteRepository.UpdateAsync(note, autoSave: true);
@@ -75,6 +76,18 @@ public class StudentNotesAppService(
 
     public async Task DeleteAsync(Guid id)
     {
-        await noteRepository.DeleteAsync(id);
+		var note = await noteRepository.GetAsync(id);
+		await GetScopedStudentAsync(note.StudentId, nameof(DeleteAsync));
+        await noteRepository.DeleteAsync(note, autoSave: true);
     }
+
+	private async Task<Student> GetScopedStudentAsync(Guid studentId, string operation)
+	{
+		var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var student = await AsyncExecuter.FirstOrDefaultAsync(query.Where(student => student.Id == studentId))
+		              ?? throw new EntityNotFoundException(typeof(Student), studentId);
+
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, operation);
+		return student;
+	}
 }

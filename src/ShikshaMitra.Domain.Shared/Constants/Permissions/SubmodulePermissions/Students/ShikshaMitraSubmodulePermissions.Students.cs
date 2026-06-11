@@ -60,6 +60,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Students.Enrollment.Settings.EntranceExamSlots", new SubmoduleInfo(Enrollment_SettingsEntranceExamSlots.All, Enrollment_SettingsEntranceExamSlots.DisplayNames) },
 			{ "Students.Enrollment.Settings.RegistrationFormAmount", new SubmoduleInfo(Enrollment_SettingsRegistrationFormAmount.All, Enrollment_SettingsRegistrationFormAmount.DisplayNames) },
 			{ "Students.Enrollment.Settings.FormNumberSeries", new SubmoduleInfo(Enrollment_SettingsFormNumberSeries.All, Enrollment_SettingsFormNumberSeries.DisplayNames) },
+			{ "Students.IdentityCompliance", new SubmoduleInfo(IdentityCompliance.All, IdentityCompliance.DisplayNames) },
 
 			// Records submodules (defined in Students.Records.cs)
 			{ "Students.Records.StudentList", new SubmoduleInfo(Records_StudentList.All, Records_StudentList.DisplayNames) },

@@ -488,19 +488,75 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		await _deductionComponentAppService.DeleteConfirmedAsync(id, preview.PreviewHash);
 	}
 
-	private Task<HrPolicyAssignmentDto> UpsertEmployeePayrollPolicyAsync(
+	private async Task<HrPolicyAssignmentDto> UpsertEmployeePayrollPolicyAsync(
 		PayrollPolicyContext context,
 		Guid employeeId,
-		Guid payrollPolicyId) =>
-		_assignments.UpsertEmployeeOverrideAsync(new UpsertEmployeePolicyOverrideDto
+		Guid payrollPolicyId)
+	{
+		var effectiveFrom = new DateTime(context.Year, 1, 1);
+		var reason = "Salary slip policy staleness regression";
+		var targetKey = employeeId.ToString("D").ToLowerInvariant();
+		var assignmentId = await FindExistingEmployeeAssignmentIdAsync(context.AcademicYearId, targetKey, effectiveFrom);
+		var input = new UpsertEmployeePolicyOverrideDto
 		{
 			EmployeeId = employeeId,
 			AcademicYearId = context.AcademicYearId,
+			AssignmentId = assignmentId,
 			AttendancePolicyId = context.AttendancePolicy.Id,
 			PayrollPolicyId = payrollPolicyId,
-			EffectiveFrom = new DateTime(context.Year, 1, 1),
-			AssignmentReason = "Salary slip policy staleness regression"
+			EffectiveFrom = effectiveFrom,
+			AssignmentReason = reason
+		};
+
+		var preview = await _assignments.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
+		{
+			Action = assignmentId.HasValue ? HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction : "create",
+			AssignmentId = assignmentId,
+			Assignment = new CreateUpdateHrPolicyAssignmentDto
+			{
+				AcademicYearId = context.AcademicYearId,
+				TargetType = "employee",
+				TargetKey = targetKey,
+				AttendancePolicyId = context.AttendancePolicy.Id,
+				PayrollPolicyId = payrollPolicyId,
+				EffectiveFrom = effectiveFrom,
+				IsActive = true,
+				Priority = 100,
+				AssignmentReason = reason
+			}
 		});
+
+		if (preview.RequiresConfirmation)
+		{
+			preview.ConfirmationToken.ShouldNotBeNullOrWhiteSpace();
+			input.ConfirmationToken = preview.ConfirmationToken;
+		}
+
+		return await _assignments.UpsertEmployeeOverrideAsync(input);
+	}
+
+	private async Task<Guid?> FindExistingEmployeeAssignmentIdAsync(Guid academicYearId, string targetKey, DateTime effectiveFrom)
+	{
+		var effectiveEnd = DateTime.MaxValue.Date;
+		var assignments = await _assignments.GetListAsync(new PolicyListRequestDto
+		{
+			AcademicYearId = academicYearId,
+			TargetType = "employee",
+			MaxResultCount = 1000
+		});
+
+		return assignments.Items
+			.Where(x =>
+				string.Equals(x.TargetKey, targetKey, StringComparison.OrdinalIgnoreCase) &&
+				x.IsActive &&
+				x.EffectiveFrom.Date <= effectiveEnd &&
+				(!x.EffectiveTo.HasValue || x.EffectiveTo.Value.Date >= effectiveFrom.Date))
+			.OrderByDescending(x => x.Priority)
+			.ThenByDescending(x => x.EffectiveFrom)
+			.ThenBy(x => x.Id)
+			.Select(x => (Guid?) x.Id)
+			.FirstOrDefault();
+	}
 
 	private async Task<PayrollRunItemSnapshot> GetPayrollSnapshotAsync(Guid employeeId, string monthYear)
 	{

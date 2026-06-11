@@ -10,6 +10,10 @@ namespace ShikshaMitra.Students.Records;
 public interface IStudentListAppService : IApplicationService
 {
 	Task<PagedResultDto<StudentDto>> GetStudentsByDivisionAsync(Guid divisionId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null);
+	Task<StudentPhotoUploadResultDto> UploadPhotoAsync(Guid studentId, UploadStudentPhotoDto input);
+	Task<StudentPhotoDownloadDto?> GetPhotoAsync(Guid studentId);
+	Task<StudentDashboardSummaryDto> GetDashboardSummaryAsync();
+	Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummaryAsync();
 
 	/// <summary>
 	/// Changes the operational status of an enrolled student and records an

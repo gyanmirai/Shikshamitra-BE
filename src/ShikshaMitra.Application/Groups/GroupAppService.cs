@@ -83,33 +83,33 @@ public class GroupAppService : ApplicationService, IGroupAppService
 
         if (!input.IncludeDetails)
         {
-            var query = (await _repository.GetQueryableAsync())
-                .Where(x => x.AcademicYearId == input.AcademicYearId);
+            var lightweightDtos = new List<GroupDto>();
+            var groupsWithCounts = await _groupRepository.GetListWithDetailsAsync(
+                input.AcademicYearId,
+                input.Filter,
+                input.SkipCount,
+                input.MaxResultCount);
 
-            if (!string.IsNullOrWhiteSpace(input.Filter))
+            foreach (var group in groupsWithCounts)
             {
-                query = query.Where(x => x.Name.Contains(input.Filter) ||
-                                         (x.Description != null && x.Description.Contains(input.Filter)));
+                var countDto = await MapToDtoAsync(group);
+
+                lightweightDtos.Add(new GroupDto
+                {
+                    Id = group.Id,
+                    TenantId = group.TenantId ?? Guid.Empty,
+                    AcademicYearId = group.AcademicYearId,
+                    Name = group.Name,
+                    Description = group.Description,
+                    MemberCount = countDto.MemberCount,
+                    StudentCount = countDto.StudentCount,
+                    EmployeeCount = countDto.EmployeeCount,
+                    CreationTime = group.CreationTime,
+                    CreatorId = group.CreatorId,
+                    LastModificationTime = group.LastModificationTime,
+                    LastModifierId = group.LastModifierId
+                });
             }
-
-            var lightweightGroups = await AsyncExecuter.ToListAsync(
-                query
-                    .OrderBy(x => x.Name)
-                    .Skip(input.SkipCount)
-                    .Take(input.MaxResultCount));
-
-            var lightweightDtos = lightweightGroups.Select(group => new GroupDto
-            {
-                Id = group.Id,
-                TenantId = group.TenantId ?? Guid.Empty,
-                AcademicYearId = group.AcademicYearId,
-                Name = group.Name,
-                Description = group.Description,
-                CreationTime = group.CreationTime,
-                CreatorId = group.CreatorId,
-                LastModificationTime = group.LastModificationTime,
-                LastModifierId = group.LastModifierId
-            }).ToList();
 
             return new PagedResultDto<GroupDto>(totalCount, lightweightDtos);
         }

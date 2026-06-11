@@ -54,6 +54,12 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		result.PanNo.ShouldBe(input.PanNo);
 		result.AdharNo.ShouldBe(input.AdharNo);
 		result.EmployeeCode.ShouldNotBeNullOrEmpty();
+		result.UserId.ShouldNotBeNull();
+		result.UserId.Value.ShouldNotBe(Guid.Empty);
+
+		var linkedUser = await _userRepository.FindAsync(result.UserId.Value);
+		linkedUser.ShouldNotBeNull();
+		linkedUser!.Email.ShouldBe(input.Email);
 	}
 
 	[Fact]

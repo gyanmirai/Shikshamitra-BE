@@ -1,6 +1,8 @@
 ﻿using ShikshaMitra.Students.Enrollments.Inquiries;
 using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,11 +17,12 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 
 [RemoteService(false)]
 public class StudentInquiryAppService(
-	IRepository<Student, Guid> studentRepository,
+	IStudentRepository studentRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IGuidGenerator guidGenerator,
 	StudentEnrollmentManager studentEnrollmentManager,
-	EntityValidationService validationService
+	EntityValidationService validationService,
+	StudentScopeAccessService studentScopeAccessService
 ) : ApplicationService, IStudentInquiryAppService
 {
 	public async Task CreateStudentInquiryAsync(
@@ -35,6 +38,13 @@ public class StudentInquiryAppService(
 		{
 			throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard does not belong to the specified Academic Medium");
 		}
+		await studentScopeAccessService.EnsureCanAccessStandardAsync(
+			createStudentInquiryDto.StandardId,
+			nameof(CreateStudentInquiryAsync));
+		await studentScopeAccessService.EnsureCanUseInquiryPreferenceAsync(
+			createStudentInquiryDto.InquiryPreferenceId,
+			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			nameof(CreateStudentInquiryAsync));
 
 		// Generate inquiry number before creating entities
 		var inquiryNo = await studentEnrollmentManager.GenerateInquiryNumberAsync(
@@ -79,8 +89,17 @@ public class StudentInquiryAppService(
 
 	public async Task<StudentDto> GetInquiryByIdAsync(Guid studentId)
 	{
-		// Load the complete aggregate with all details
-		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		var lightweightQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var student = await AsyncExecuter.FirstOrDefaultAsync(lightweightQuery.Where(s =>
+			s.Id == studentId &&
+			s.TenantId == CurrentTenant.Id));
+
+		if (student == null)
+		{
+			throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
+		}
+
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(GetInquiryByIdAsync));
 
 		// ABP data filters enforce tenant isolation; validate the lifecycle state
 		validationService.ValidateStudentStatus(
@@ -89,7 +108,10 @@ public class StudentInquiryAppService(
 			StudentRegistrationErrorCodes.StudentNotInInquiryStatus
 		);
 
-		return ObjectMapper.Map<Student, StudentDto>(student);
+		var dto = await AsyncExecuter.FirstOrDefaultAsync(
+			ProjectToStudentDto(lightweightQuery.Where(s => s.Id == studentId)));
+
+		return dto ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
 	}
 
 	public async Task<PagedResultDto<StudentDto>> GetInquiriesByMediumAsync(
@@ -101,17 +123,11 @@ public class StudentInquiryAppService(
 	{
 		await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
 
-		// Get queryable with related details included for proper mapping
-		var queryable = await studentRepository.WithDetailsAsync(
-			 s => s.AdditionalDetail,
-			 s => s.ContactDetail,
-			 s => s.Notes
-		);
-
-		var query = queryable
+		var query = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
 			.Where(s => s.Status == StudentLifeCycleStatusEnum.Inquiry
 				&& s.AcademicMediumId == academicMediumId
 				&& s.TenantId == CurrentTenant.Id);
+		query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
 		// Implement search functionality
 		if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -133,13 +149,10 @@ public class StudentInquiryAppService(
 			return new PagedResultDto<StudentDto>(0, new List<StudentDto>());
 		}
 
-		var pagedQuery = query
+		var resultList = await AsyncExecuter.ToListAsync(ProjectToStudentDto(query
 			.OrderByDescending(x => x.CreationTime)
 			.Skip(skipCount)
-			.Take(maxResultCount);
-
-		var results = await AsyncExecuter.ToListAsync(pagedQuery);
-		var resultList = ObjectMapper.Map<List<Student>, List<StudentDto>>(results);
+			.Take(maxResultCount)));
 
 		return new PagedResultDto<StudentDto>(totalCount, resultList);
 	}
@@ -152,8 +165,9 @@ public class StudentInquiryAppService(
 		await validationService.ValidateAcademicMediumExistsAsync(updateInquiryDto.AcademicMediumId);
 		await validationService.ValidateStandardExistsAsync(updateInquiryDto.StandardId);
 
-		// Load the complete aggregate (with all parts due to AutoInclude)
-		var student = await studentRepository.GetAsync(studentId);
+		var student = await studentRepository.GetInquiryForUpdateAsync(studentId)
+			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(UpdateInquiryAsync));
 
 		// Guard against updating a student that is no longer in inquiry state
 		validationService.ValidateStudentStatus(
@@ -163,6 +177,13 @@ public class StudentInquiryAppService(
 		);
 
 		var standard = await standardRepository.GetAsync(updateInquiryDto.StandardId, includeDetails: true) ?? throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard not found");
+		await studentScopeAccessService.EnsureCanAccessStandardAsync(
+			updateInquiryDto.StandardId,
+			nameof(UpdateInquiryAsync));
+		await studentScopeAccessService.EnsureCanUseInquiryPreferenceAsync(
+			updateInquiryDto.InquiryPreferenceId,
+			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			nameof(UpdateInquiryAsync));
 
 		// Update the aggregate using its business method
 		// This maintains aggregate consistency
@@ -194,7 +215,9 @@ public class StudentInquiryAppService(
 
 		// Single repository call - EF Core tracks changes to all parts
 		await studentRepository.UpdateAsync(student, autoSave: true);
-		return ObjectMapper.Map<Student, StudentDto>(student);
+		var dtoQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var dto = await AsyncExecuter.FirstOrDefaultAsync(ProjectToStudentDto(dtoQuery.Where(s => s.Id == studentId)));
+		return dto ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
 	}
 
 	public async Task AssignRegistrationFormAsync(
@@ -204,6 +227,7 @@ public class StudentInquiryAppService(
 	{
 		// Load the complete aggregate
 		var student = await studentRepository.GetAsync(studentId);
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(AssignRegistrationFormAsync));
 
 		await studentEnrollmentManager.ValidateFormNumberUniqueAsync(issueFormDto.FormNumber, student.AcademicYearId ?? Guid.Empty);
 
@@ -212,5 +236,43 @@ public class StudentInquiryAppService(
 
 		// Single update call
 		await studentRepository.UpdateAsync(student, autoSave: true);
+	}
+
+	private static IQueryable<StudentDto> ProjectToStudentDto(IQueryable<Student> query)
+	{
+		return query.Select(x => new StudentDto
+		{
+			StudentId = x.Id,
+			InquiryNo = x.AdditionalDetail != null ? x.AdditionalDetail.InquiryNo ?? string.Empty : string.Empty,
+			FormNo = x.AdditionalDetail != null ? x.AdditionalDetail.RegistrationFormNo : null,
+			StudentName = ((x.FirstName ?? string.Empty) + " " + (x.MiddleName ?? string.Empty) + " " + (x.LastName ?? string.Empty)).Trim(),
+			FirstName = x.FirstName,
+			MiddleName = x.MiddleName,
+			LastName = x.LastName,
+			AcademicYearId = x.AcademicYearId,
+			AcademicBoardId = x.AcademicBoardId,
+			AcademicMediumId = x.AcademicMediumId,
+			StandardId = x.StandardId ?? Guid.Empty,
+			Standard = x.Standard != null ? x.Standard.Name : string.Empty,
+			DivisionId = x.DivisionId,
+			Division = x.Division != null ? x.Division.Name : null,
+			DateOfBirth = x.AdditionalDetail != null ? x.AdditionalDetail.DateOfBirth : null,
+			DateOfInquiry = x.AdditionalDetail != null ? x.AdditionalDetail.DateOfInquiry : null,
+			Gender = x.AdditionalDetail != null ? x.AdditionalDetail.Gender : null,
+			Category = x.AdditionalDetail != null ? x.AdditionalDetail.Category : Category.General,
+			Address1 = x.ContactDetail != null ? x.ContactDetail.Address1 : null,
+			Address2 = x.ContactDetail != null ? x.ContactDetail.Address2 : null,
+			Address3 = x.ContactDetail != null ? x.ContactDetail.Address3 : null,
+			City = x.ContactDetail != null ? x.ContactDetail.City : null,
+			State = x.ContactDetail != null ? x.ContactDetail.State : null,
+			Country = x.ContactDetail != null ? x.ContactDetail.Country : null,
+			PinCode = x.ContactDetail != null ? x.ContactDetail.Pincode : null,
+			PrimaryContactNo = x.ContactDetail != null ? x.ContactDetail.PrimaryContactNo : null,
+			SecondaryContactNo = x.ContactDetail != null ? x.ContactDetail.SecondaryContactNo : null,
+			Email = x.ContactDetail != null ? x.ContactDetail.Email : null,
+			PreviousSchool = x.AdditionalDetail != null ? x.AdditionalDetail.PreviousSchool : null,
+			InquiryPreferenceId = x.AdditionalDetail != null ? x.AdditionalDetail.InquiryPreferenceId : null,
+			IsFeeStructureAssigned = x.FeeStructureId.HasValue
+		});
 	}
 }

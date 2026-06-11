@@ -3,14 +3,20 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Common;
 using ShikshaMitra.Infrastructure.Data;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Enrollment;
 using ShikshaMitra.Students.Enrollments.Inquiries;
 using ShikshaMitra.Students.StudentEnrollments;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.Students.Enrollments;
@@ -53,8 +59,9 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
         var listResponse = await Client.GetAsync(
             $"{BaseUrl}/{StudentEnrollmentTestHelper.DefaultAcademicMediumId}/inquiries?maxResultCount=50");
         listResponse.EnsureSuccessStatusCode();
-        var list = await listResponse.Content
-            .ReadFromJsonAsync<PagedResultDto<StudentDto>>(JsonOptions);
+        var listResult = await listResponse.Content
+            .ReadFromJsonAsync<Common.Responses.Result<PagedResultDto<StudentDto>>>(JsonOptions);
+        var list = listResult?.Data;
         list.ShouldNotBeNull();
         list.Items.Count.ShouldBeGreaterThan(0);
 
@@ -81,8 +88,9 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
         var listResponse = await Client.GetAsync(
             $"{BaseUrl}/{StudentEnrollmentTestHelper.DefaultAcademicMediumId}/inquiries?maxResultCount=50");
         listResponse.EnsureSuccessStatusCode();
-        var list = await listResponse.Content
-            .ReadFromJsonAsync<PagedResultDto<StudentDto>>(JsonOptions);
+        var listResult = await listResponse.Content
+            .ReadFromJsonAsync<Common.Responses.Result<PagedResultDto<StudentDto>>>(JsonOptions);
+        var list = listResult?.Data;
         var studentId = list!.Items[0].StudentId;
 
         // Act – update the inquiry
@@ -159,6 +167,24 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
         body.Data.ShouldNotBeNull();
     }
 
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Scoped_User_Should_Not_Get_OutOfScope_Inquiry_By_Id()
+    {
+        var studentId = await StudentEnrollmentTestHelper.CreateInquiryAndGetIdAsync(
+            Client,
+            "InqScopeDenied");
+        var scopedUserId = Guid.NewGuid();
+        await SeedAcademicYearScopeAsync(scopedUserId, Guid.NewGuid());
+        var scopedClient = CreateClientAs(scopedUserId);
+
+        var response = await scopedClient.GetAsync($"{BaseUrl}/inquiries/{studentId}");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        content.ShouldContain(UserScopeErrorCodes.AccessDenied);
+    }
+
     #endregion
 
     #region Tier 2 — Extended
@@ -175,8 +201,9 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
 
         var listResponse = await Client.GetAsync(
             $"{BaseUrl}/{StudentEnrollmentTestHelper.DefaultAcademicMediumId}/inquiries?maxResultCount=50");
-        var list = await listResponse.Content
-            .ReadFromJsonAsync<PagedResultDto<StudentDto>>(JsonOptions);
+        var listResult = await listResponse.Content
+            .ReadFromJsonAsync<Common.Responses.Result<PagedResultDto<StudentDto>>>(JsonOptions);
+        var list = listResult?.Data;
         var studentId = list!.Items[0].StudentId;
 
         var getResponse = await Client.GetAsync($"{BaseUrl}/inquiries/{studentId}");
@@ -198,8 +225,9 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
 
         var listResponse = await Client.GetAsync(
             $"{BaseUrl}/{StudentEnrollmentTestHelper.DefaultAcademicMediumId}/inquiries?maxResultCount=50");
-        var list = await listResponse.Content
-            .ReadFromJsonAsync<PagedResultDto<StudentDto>>(JsonOptions);
+        var listResult = await listResponse.Content
+            .ReadFromJsonAsync<Common.Responses.Result<PagedResultDto<StudentDto>>>(JsonOptions);
+        var list = listResult?.Data;
         var studentId = list!.Items[0].StudentId;
 
         var updateDto = StudentEnrollmentTestHelper.BuildInquiryDto("InqOverNew");
@@ -229,4 +257,30 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
     }
 
     #endregion
+
+    private async Task SeedAcademicYearScopeAsync(Guid userId, Guid academicYearId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var scopeRepository = scope.ServiceProvider.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+        var userScopeService = scope.ServiceProvider.GetRequiredService<IUserScopeService>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            await scopeRepository.InsertAsync(
+                new UserScopeAssignment(
+                    Guid.NewGuid(),
+                    tenantId,
+                    userId: userId,
+                    academicYearId: academicYearId,
+                    description: "Student API out-of-scope regression test"),
+                autoSave: false);
+
+            await userScopeService.InvalidateUserScopeCacheAsync(userId);
+            await uow.CompleteAsync();
+        }
+    }
 }

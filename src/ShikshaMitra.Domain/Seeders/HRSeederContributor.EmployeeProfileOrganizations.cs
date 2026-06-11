@@ -14,6 +14,7 @@ using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.ProfessionalManagement;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
@@ -82,9 +83,61 @@ public partial class HRSeederContributor
 			await _employeeOrganizationAssignmentRepository.InsertManyAsync(assignments, autoSave: true);
 		}
 
+		await EnsureEmployeeAcademicStagePermissionsAsync(employeesByEmail.Values);
+
 		_logger.LogInformation(
 			"[HRSeeder] Employee organization assignments inserted={InsertedCount}",
 			assignments.Count);
+	}
+
+	private async Task EnsureEmployeeAcademicStagePermissionsAsync(IEnumerable<Employee> employees)
+	{
+		var employeesWithUsers = employees
+			.Where(x => x.UserId.HasValue)
+			.ToList();
+		if (employeesWithUsers.Count == 0)
+		{
+			return;
+		}
+
+		var employeeIds = employeesWithUsers.Select(x => x.Id).ToHashSet();
+		var userIdByEmployeeId = employeesWithUsers.ToDictionary(x => x.Id, x => x.UserId!.Value);
+		var assignments = await _employeeOrganizationAssignmentRepository.GetListAsync(x => employeeIds.Contains(x.EmployeeId));
+		if (assignments.Count == 0)
+		{
+			return;
+		}
+
+		var userIds = userIdByEmployeeId.Values.ToHashSet();
+		var existingPermissions = await _educationMediumStagePermissionRepository.GetListAsync(x =>
+			x.UserId.HasValue &&
+			userIds.Contains(x.UserId.Value));
+		var existingKeys = existingPermissions
+			.Select(x => (x.UserId!.Value, x.EducationMediumStageId))
+			.ToHashSet();
+
+		var permissionsToInsert = new List<EducationMediumStagePermission>();
+		foreach (var assignment in assignments)
+		{
+			if (!userIdByEmployeeId.TryGetValue(assignment.EmployeeId, out var userId))
+			{
+				continue;
+			}
+
+			if (!existingKeys.Add((userId, assignment.EducationMediumStageId)))
+			{
+				continue;
+			}
+
+			permissionsToInsert.AddRange(_academicSetupPermissionManager.CreateEducationMediumStagePermissions(
+				userId,
+				[assignment.EducationMediumStageId]));
+		}
+
+		if (permissionsToInsert.Count > 0)
+		{
+			await _educationMediumStagePermissionRepository.InsertManyAsync(permissionsToInsert, autoSave: true);
+		}
 	}
 
 	private static IEnumerable<(FamilyRelationType RelationType, ContactDetails? Details)> BuildSeedFamilyDetails(

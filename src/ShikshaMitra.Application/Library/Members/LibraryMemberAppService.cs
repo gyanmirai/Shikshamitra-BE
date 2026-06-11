@@ -26,7 +26,7 @@ namespace ShikshaMitra.Library.Members;
 [RemoteService(false)]
 public class LibraryMemberAppService(
 IRepository<LibraryMember, Guid> libraryMemberRepository,
-IRepository<Student, Guid> studentRepository,
+IStudentRepository studentRepository,
 IRepository<Employee, Guid> employeeRepository,
 IRepository<BookIssue, Guid> bookIssueRepository,
 IRepository<BookReservation, Guid> bookReservationRepository,
@@ -43,7 +43,7 @@ IGuidGenerator guidGenerator
 {
   public async Task CreateLibraryMember(Guid studentId, bool isActive = true)
   {
-    var student = await studentRepository.GetAsync(studentId) ?? throw new EntityNotFoundException($"Student with id: {studentId} not found");
+    var student = await GetStudentForLibraryMemberAsync(studentId);
 
     var memberIdentifier = libraryMemberManager.GetMemberIdentifier(student);
 
@@ -60,7 +60,7 @@ IGuidGenerator guidGenerator
 
   public async Task HandleLibraryMemberAsync(Guid studentId, bool isActive = true)
   {
-    var student = await studentRepository.GetAsync(studentId) ?? throw new EntityNotFoundException($"Student with id: {studentId} not found");
+    await GetStudentForLibraryMemberAsync(studentId);
 
     var libraryMember = await libraryMemberRepository.FindAsync(x => x.StudentId == studentId);
     if (libraryMember != null)
@@ -72,6 +72,14 @@ IGuidGenerator guidGenerator
     {
       await CreateLibraryMember(studentId, isActive);
     }
+  }
+
+  private async Task<Student> GetStudentForLibraryMemberAsync(Guid studentId)
+  {
+    var queryable = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+    var student = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(student => student.Id == studentId));
+
+    return student ?? throw new EntityNotFoundException($"Student with id: {studentId} not found");
   }
 
   public async Task<PagedResultDto<LibraryMemberDto>> GetListAsync(GetLibraryMembersInput input)

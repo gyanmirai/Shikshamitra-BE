@@ -6,19 +6,18 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
 public class StudentBankDetailsAppService(
-    IRepository<Student, Guid> studentRepository,
+    IStudentRepository studentRepository,
     IRepository<StudentBankDetail, Guid> studentBankDetailRepository,
-    EntityValidationService validationService
-) : StudentRegistrationBaseAppService(studentRepository, validationService),
+    EntityValidationService validationService,
+    StudentScopeAccessService studentScopeAccessService
+) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentBankDetailsAppService
 {
     public async Task<StudentBankDetailsDto> GetBankDetailsAsync(Guid studentId)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(GetBankDetailsAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForBankDetails);
 
         var bankDetail = await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
@@ -41,11 +40,9 @@ public class StudentBankDetailsAppService(
 
     public async Task<StudentBankDetailsDto> UpdateBankDetailsAsync(Guid studentId, UpdateBankDetailsDto input)
     {
-        var student = await studentRepository.GetAsync(studentId);
-
-        validationService.ValidateStudentStatus(
-            student,
-            RegistrationStatuses,
+        var student = await GetScopedRegistrationStudentAsync(
+            studentId,
+            nameof(UpdateBankDetailsAsync),
             StudentRegistrationErrorCodes.InvalidStudentStatusForBankDetailsUpdate);
 
         var bankDetail = await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);

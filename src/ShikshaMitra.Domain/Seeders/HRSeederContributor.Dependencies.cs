@@ -15,7 +15,9 @@ using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.ProfessionalManagement;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
@@ -62,6 +64,8 @@ public partial class HRSeederContributor
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IRepository<EmployeeOrganizationAssignment, Guid> _employeeOrganizationAssignmentRepository;
+	private readonly IRepository<EducationMediumStagePermission, Guid> _educationMediumStagePermissionRepository;
+	private readonly AcademicSetupPermissionManager _academicSetupPermissionManager;
 	private readonly IEmployeeFamilyMemberRepository _familyMemberRepository;
 	private readonly IDocumentSettingRepository _documentSettingRepository;
 	private readonly EmployeeManager _employeeManager;

@@ -1,0 +1,288 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Students.Attendance;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
+using Volo.Abp;
+using Volo.Abp.Application.Services;
+using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Entities;
+using Volo.Abp.Domain.Repositories;
+
+namespace ShikshaMitra.Students;
+
+[RemoteService(false)]
+public class StudentScopeAccessService(
+	IUserScopeAccessService userScopeAccessService,
+	IStudentRepository studentRepository,
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<Division, Guid> divisionRepository,
+	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
+	IRepository<EducationMedium, Guid> educationMediumRepository,
+	IRepository<EducationBoard, Guid> educationBoardRepository,
+	IRepository<InquiryPreference, Guid> inquiryPreferenceRepository)
+	: ApplicationService, ITransientDependency
+{
+	public async Task<IQueryable<Student>> ApplyCurrentUserScopeAsync(IQueryable<Student> query)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+
+		if (scope.IsAdmin)
+		{
+			return query;
+		}
+
+		if (!scope.HasAnyAccess)
+		{
+			return query.Where(_ => false);
+		}
+
+		return query.Where(s =>
+			scope.HasWildcardAcademicYear ||
+			(s.AcademicYearId.HasValue &&
+			 (scope.AcademicYearIds.Contains(s.AcademicYearId.Value) ||
+			  scope.WildcardBoardAcademicYearIds.Contains(s.AcademicYearId.Value))) ||
+			(s.DivisionId.HasValue &&
+			 (scope.DivisionIds.Contains(s.DivisionId.Value) ||
+			  (scope.HasWildcardDivision &&
+			   s.StandardId.HasValue &&
+			   scope.WildcardDivisionStandardIds.Contains(s.StandardId.Value)))) ||
+			(s.StandardId.HasValue &&
+			 (scope.StandardIds.Contains(s.StandardId.Value) ||
+			  (scope.HasWildcardStandard &&
+			   s.AcademicMediumStageId.HasValue &&
+			   scope.WildcardStandardMediumStageIds.Contains(s.AcademicMediumStageId.Value)))) ||
+			(s.AcademicMediumStageId.HasValue &&
+			 (scope.MediumStageIds.Contains(s.AcademicMediumStageId.Value) ||
+			  (scope.HasWildcardMediumStage &&
+			   scope.WildcardMediumStageMediumIds.Contains(s.AcademicMediumId)))) ||
+			scope.MediumIds.Contains(s.AcademicMediumId) ||
+			(scope.HasWildcardMedium &&
+			 s.AcademicBoardId.HasValue &&
+			 scope.WildcardMediumBoardIds.Contains(s.AcademicBoardId.Value)) ||
+			(s.AcademicBoardId.HasValue && scope.BoardIds.Contains(s.AcademicBoardId.Value)));
+	}
+
+	public async Task EnsureCanAccessStudentAsync(Student student, string operation)
+	{
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, operation: operation);
+	}
+
+	public async Task<Student> GetStudentAsync(Guid studentId, string operation, bool includeDetails = false)
+	{
+		Student? student;
+		if (includeDetails)
+		{
+			student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		}
+		else
+		{
+			var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+			student = await AsyncExecuter.FirstOrDefaultAsync(query.Where(s => s.Id == studentId));
+		}
+
+		if (student == null)
+		{
+			throw new EntityNotFoundException(typeof(Student), studentId);
+		}
+
+		await EnsureCanAccessStudentAsync(student, operation);
+		return student;
+	}
+
+	public async Task EnsureCanAccessStudentsAsync(IEnumerable<Guid> studentIds, string operation)
+	{
+		foreach (var studentId in studentIds.Distinct())
+		{
+			await GetStudentAsync(studentId, operation);
+		}
+	}
+
+	public async Task EnsureCanAccessLeaveAsync(StudentLeave leave, string operation)
+	{
+		if (leave.Student == null)
+		{
+			await GetStudentAsync(leave.StudentId, operation);
+			return;
+		}
+
+		await EnsureCanAccessStudentAsync(leave.Student, operation);
+	}
+
+	public async Task EnsureCanAccessStandardAsync(Guid standardId, string operation)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		var standardScope = await BuildStandardScopeAsync(standardId);
+		userScopeAccessService.EnsureCanAccess(standardScope, scope, operation: operation);
+	}
+
+	public async Task EnsureCanAccessMediumAsync(Guid mediumId, string operation)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		var mediumScope = await BuildMediumScopeAsync(mediumId);
+		userScopeAccessService.EnsureCanAccess(mediumScope, scope, operation: operation);
+	}
+
+	public async Task EnsureCanAccessAcademicYearAsync(Guid academicYearId, string operation)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		if (CanAccessAcademicYear(scope, academicYearId))
+		{
+			return;
+		}
+
+		throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+			.WithData("AcademicYearId", academicYearId)
+			.WithData("Operation", operation);
+	}
+
+	public async Task EnsureCanUseInquiryPreferenceAsync(
+		Guid? inquiryPreferenceId,
+		Guid academicYearId,
+		string operation)
+	{
+		if (!inquiryPreferenceId.HasValue)
+		{
+			return;
+		}
+
+		var inquiryPreference = await inquiryPreferenceRepository.GetAsync(inquiryPreferenceId.Value);
+		if (inquiryPreference.AcademicYearId != academicYearId)
+		{
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+				.WithData("InquiryPreferenceId", inquiryPreference.Id)
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("Operation", operation);
+		}
+
+		await EnsureCanAccessAcademicYearAsync(inquiryPreference.AcademicYearId, operation);
+	}
+
+	public async Task<(bool HasAllAcademicYears, IReadOnlyCollection<Guid> AcademicYearIds)> GetCurrentUserAcademicYearScopeAsync()
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		if (scope.IsAdmin || scope.HasWildcardAcademicYear)
+		{
+			return (true, Array.Empty<Guid>());
+		}
+
+		return (
+			false,
+			scope.AcademicYearIds
+				.Concat(scope.WildcardBoardAcademicYearIds)
+				.Distinct()
+				.ToList());
+	}
+
+	public async Task EnsureCanAccessDivisionAsync(Guid divisionId, string operation)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		var divisionScope = await BuildDivisionScopeAsync(divisionId);
+		userScopeAccessService.EnsureCanAccess(divisionScope, scope, operation: operation);
+	}
+
+	public async Task EnsureCanAccessAttendanceScopeAsync(
+		Guid academicYearId,
+		Guid standardId,
+		Guid divisionId,
+		string operation)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		var divisionScope = await BuildDivisionScopeAsync(divisionId);
+		var attendanceScope = divisionScope with { AcademicYearId = academicYearId, StandardId = standardId };
+		userScopeAccessService.EnsureCanAccess(attendanceScope, scope, operation: operation);
+	}
+
+	public async Task EnsureStudentsMatchAttendanceScopeAsync(
+		IEnumerable<Guid> studentIds,
+		Guid academicYearId,
+		Guid standardId,
+		Guid divisionId,
+		string operation)
+	{
+		var requestedStudentIds = studentIds.Distinct().ToList();
+		var studentQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var students = await AsyncExecuter.ToListAsync(
+			studentQuery.Where(s => requestedStudentIds.Contains(s.Id)));
+
+		foreach (var student in students)
+		{
+			await EnsureCanAccessStudentAsync(student, operation);
+			if (student.AcademicYearId != academicYearId ||
+			    student.StandardId != standardId ||
+			    student.DivisionId != divisionId)
+			{
+				throw new Volo.Abp.BusinessException(UserScopeErrorCodes.AccessDenied)
+					.WithData("StudentId", student.Id)
+					.WithData("Operation", operation);
+			}
+		}
+	}
+
+	private static bool CanAccessAcademicYear(UserScopeContext scope, Guid academicYearId) =>
+		scope.IsAdmin ||
+		scope.HasWildcardAcademicYear ||
+		scope.AcademicYearIds.Contains(academicYearId) ||
+		scope.WildcardBoardAcademicYearIds.Contains(academicYearId);
+
+	private async Task<AcademicOrganizationScopeRow> BuildStandardScopeAsync(Guid standardId)
+	{
+		var standard = await standardRepository.GetAsync(standardId);
+		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
+		var medium = await educationMediumRepository.GetAsync(stage.EducationMediumId);
+		var board = await educationBoardRepository.GetAsync(medium.EducationBoardId);
+
+		return new AcademicOrganizationScopeRow(
+			board.AcademicYearId,
+			board.Id,
+			medium.Id,
+			stage.Id,
+			standard.Id,
+			null);
+	}
+
+	private async Task<AcademicOrganizationScopeRow> BuildMediumScopeAsync(Guid mediumId)
+	{
+		var medium = await educationMediumRepository.GetAsync(mediumId);
+		var board = await educationBoardRepository.GetAsync(medium.EducationBoardId);
+
+		return new AcademicOrganizationScopeRow(
+			board.AcademicYearId,
+			board.Id,
+			medium.Id,
+			null,
+			null,
+			null);
+	}
+
+	private async Task<AcademicOrganizationScopeRow> BuildDivisionScopeAsync(Guid divisionId)
+	{
+		var division = await divisionRepository.GetAsync(divisionId);
+		var standard = await standardRepository.GetAsync(division.StandardId);
+		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
+		var medium = await educationMediumRepository.GetAsync(stage.EducationMediumId);
+		var board = await educationBoardRepository.GetAsync(medium.EducationBoardId);
+
+		return new AcademicOrganizationScopeRow(
+			board.AcademicYearId,
+			board.Id,
+			medium.Id,
+			stage.Id,
+			standard.Id,
+			division.Id);
+	}
+
+	private sealed record AcademicOrganizationScopeRow(
+		Guid? AcademicYearId,
+		Guid? EducationBoardId,
+		Guid? EducationMediumId,
+		Guid? EducationMediumStageId,
+		Guid? StandardId,
+		Guid? DivisionId) : IUserScopedEntity;
+}

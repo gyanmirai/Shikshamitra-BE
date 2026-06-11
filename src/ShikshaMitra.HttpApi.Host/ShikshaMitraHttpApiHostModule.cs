@@ -233,6 +233,9 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 			options.Applications["Angular"].RootUrl = configuration["App:ClientUrl"];
 			options.Applications["Angular"].Urls[AccountUrlNames.PasswordReset] = "account/reset-password";
+
+			options.Applications["shikshamitra-nextjs"].RootUrl = configuration["App:ClientUrl"];
+			options.Applications["shikshamitra-nextjs"].Urls[AccountUrlNames.PasswordReset] = "account/reset-password";
 		});
 	}
 

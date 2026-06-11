@@ -38,12 +38,6 @@ public class PayrollSnapshotReviewInvalidator(
 			.ToList();
 		var affectedMonths = affectedKeys.Select(x => x.MonthYear).Distinct().ToHashSet();
 
-		foreach (var snapshot in snapshots.Where(x => x.ReviewStatus == ReviewStatuses.Reviewed))
-		{
-			snapshot.MarkPending();
-			await payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: false);
-		}
-
 		var reviewQuery = await payrollRunReviewRepository.GetQueryableAsync();
 		var candidateReviews = await asyncExecuter.ToListAsync(reviewQuery.Where(x =>
 			affectedMonths.Contains(x.MonthYear) &&
@@ -52,6 +46,11 @@ public class PayrollSnapshotReviewInvalidator(
 			         affectedKeys.Any(key => key.MonthYear == review.MonthYear && key.EmployeeId == review.EmployeeId)))
 		{
 			await payrollRunReviewRepository.DeleteAsync(review, autoSave: false);
+		}
+
+		foreach (var snapshot in snapshots)
+		{
+			await payrollRunItemSnapshotRepository.DeleteAsync(snapshot, autoSave: false);
 		}
 
 		if (unitOfWorkManager.Current != null)

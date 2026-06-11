@@ -103,7 +103,7 @@ public class EmployeePayrollContractWriter(
 			amount,
 			isFixed,
 			isTemp: line.IsTemp ?? resolved.ExistingPayrollComponent?.IsTemp ?? master is null,
-			applicableMonth: null,
+			applicableMonth: line.ApplicableMonth ?? resolved.ExistingPayrollComponent?.ApplicableMonth,
 			master is null
 				? resolved.ExistingPayrollComponent?.ComponentType ?? SalaryComponentType.Fixed
 				: master.CalculationType == CalculationType.Amount
@@ -137,7 +137,7 @@ public class EmployeePayrollContractWriter(
 			amount,
 			isFixed,
 			isTemp: line.IsTemp ?? resolved.ExistingPayrollComponent?.IsTemp ?? master is null,
-			applicableMonth: null,
+			applicableMonth: line.ApplicableMonth ?? resolved.ExistingPayrollComponent?.ApplicableMonth,
 			master is null
 				? resolved.ExistingPayrollComponent?.ComponentType ?? SalaryComponentType.Fixed
 				: master.CalculationType == CalculationType.Amount

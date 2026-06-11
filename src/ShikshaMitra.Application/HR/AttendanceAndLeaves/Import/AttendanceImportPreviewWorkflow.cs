@@ -19,7 +19,7 @@ public class AttendanceImportPreviewWorkflow(
 	AttendanceImportBatchRecorder batchRecorder)
 	: ApplicationService, ITransientDependency
 {
-	public async Task<AttendanceImportPreviewResponseDto> PreviewAsync(string fileName, byte[] fileContent)
+	public async Task<AttendanceImportPreviewResponseDto> PreviewAsync(string fileName, string? contentType, byte[] fileContent)
 	{
 		AttendanceImportFileParser.ValidateUpload(fileName, fileContent);
 
@@ -55,6 +55,8 @@ public class AttendanceImportPreviewWorkflow(
 			await batchRecorder.CreateAsync(
 				batchId,
 				fileName,
+				contentType,
+				fileContent,
 				previewRows,
 				monthYear,
 				previewToken,

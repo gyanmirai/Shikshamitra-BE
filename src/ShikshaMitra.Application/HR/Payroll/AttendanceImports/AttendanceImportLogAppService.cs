@@ -9,6 +9,7 @@ namespace ShikshaMitra.HR.Payroll.AttendanceImports;
 [RemoteService(false)]
 public class AttendanceImportLogAppService(
 	AttendanceImportLogReader reader,
+	AttendanceImportDownloadService downloadService,
 	AttendanceImportRowsSaveWorkflow rowsSaveWorkflow,
 	AttendanceImportBatchStateWorkflow batchStateWorkflow)
 	: ApplicationService, IAttendanceImportLogAppService
@@ -21,6 +22,12 @@ public class AttendanceImportLogAppService(
 
 	public Task<PagedResultDto<AttendanceImportRowDto>> GetRowsAsync(Guid importId, GetAttendanceImportRowsInput input) =>
 		reader.GetRowsAsync(importId, input);
+
+	public Task<AttendanceImportDownloadDto> DownloadFileAsync(Guid importId) =>
+		downloadService.DownloadFileAsync(importId);
+
+	public Task<AttendanceImportDownloadDto> DownloadErrorReportAsync(Guid importId) =>
+		downloadService.DownloadErrorReportAsync(importId);
 
 	public Task<AttendanceImportRowsSaveOutput> SaveRowsAsync(Guid importId, AttendanceImportRowsSaveInput input) =>
 		rowsSaveWorkflow.SaveRowsAsync(importId, input);

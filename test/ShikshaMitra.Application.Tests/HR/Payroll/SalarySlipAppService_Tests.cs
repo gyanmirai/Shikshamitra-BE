@@ -307,7 +307,85 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		refreshedSlip.NetSalary.ShouldBe(oldSlip.NetSalary);
 	}
 
-	private async Task<PayrollPolicyContext> CreatePayrollPolicyContextAsync(int year = 2026)
+	[Fact]
+	public async Task GetSalarySlipAsync_Should_Include_Overtime_Earning_From_Attendance()
+	{
+		var monthYear = CurrentPayrollMonth();
+		var context = await CreatePayrollPolicyContextAsync(
+			PayrollYear(monthYear),
+			overtimeEnabled: true,
+			overtimeRate: "2.0x",
+			minOvertimeMinutes: 30);
+		var shiftId = await CreateShiftAsync(new TimeOnly(7, 0), new TimeOnly(17, 30));
+		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear), shiftId);
+		await SeedAttendanceScopeAsync(
+			employee.Id,
+			context.OrganizationId,
+			monthYear,
+			new TimeOnly(7, 0),
+			new TimeOnly(19, 0));
+		await SaveSalaryComponentsAsync(employee.Id, isTemp: false);
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.WorkingDaysPayroll.Id);
+
+		var payrollRow = await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
+		var overtime = payrollRow.EarningComponents.Single(x => x.Name == "Overtime Pay");
+		var regularSalary = Math.Round(31000m / (decimal)payrollRow.BasisDays, 2, MidpointRounding.AwayFromZero);
+		var expectedOvertime = CalculateExpectedOvertime(
+			monthlyGrossSalary: 31000m,
+			basisDays: (decimal)payrollRow.BasisDays,
+			shiftStart: new TimeOnly(7, 0),
+			shiftEnd: new TimeOnly(17, 30),
+			overtimeMinutes: 90m,
+			multiplier: 2m);
+		overtime.Amount.ShouldBe((double)expectedOvertime);
+		payrollRow.GrossSalary.ShouldBe((double)(regularSalary + expectedOvertime));
+		payrollRow.NetPay.ShouldBe((double)(regularSalary + expectedOvertime));
+
+		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
+		var salarySlip = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
+		{
+			EmployeeId = employee.Id,
+			MonthYear = monthYear
+		});
+
+		salarySlip.Earnings.ShouldContain(x => x.Name == "Overtime Pay" && x.Amount == expectedOvertime);
+		salarySlip.TotalEarning.ShouldBe(regularSalary + expectedOvertime);
+		salarySlip.NetSalary.ShouldBe(regularSalary + expectedOvertime);
+	}
+
+	[Fact]
+	public async Task GetSalarySlipAsync_Should_Not_Add_Overtime_Earning_Below_Threshold()
+	{
+		var monthYear = CurrentPayrollMonth();
+		var context = await CreatePayrollPolicyContextAsync(
+			PayrollYear(monthYear),
+			overtimeEnabled: true,
+			overtimeRate: "2.0x",
+			minOvertimeMinutes: 30);
+		var shiftId = await CreateShiftAsync(new TimeOnly(7, 0), new TimeOnly(17, 30));
+		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear), shiftId);
+		await SeedAttendanceScopeAsync(
+			employee.Id,
+			context.OrganizationId,
+			monthYear,
+			new TimeOnly(7, 0),
+			new TimeOnly(17, 45));
+		await SaveSalaryComponentsAsync(employee.Id, isTemp: false);
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.WorkingDaysPayroll.Id);
+
+		var payrollRow = await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
+		var regularSalary = Math.Round(31000m / (decimal)payrollRow.BasisDays, 2, MidpointRounding.AwayFromZero);
+
+		payrollRow.EarningComponents.ShouldNotContain(x => x.Name == "Overtime Pay");
+		payrollRow.GrossSalary.ShouldBe((double)regularSalary);
+		payrollRow.NetPay.ShouldBe((double)regularSalary);
+	}
+
+	private async Task<PayrollPolicyContext> CreatePayrollPolicyContextAsync(
+		int year = 2026,
+		bool overtimeEnabled = false,
+		string? overtimeRate = null,
+		int? minOvertimeMinutes = null)
 	{
 		var academicYearId = await CreateAcademicYearAsync(year);
 		var organizationId = await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
@@ -353,6 +431,9 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			AbsentThresholdPercentage = 0,
 			MissingPunchBehavior = "requires_review",
 			ManualCorrectionAllowed = true,
+			OvertimeEnabled = overtimeEnabled,
+			OvertimeRate = overtimeRate,
+			MinOvertimeMinutes = minOvertimeMinutes,
 			HolidayWorkBehavior = "paid",
 			PayrollPreviewEnabled = true
 		});
@@ -360,10 +441,10 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		return new PayrollPolicyContext(year, academicYearId, organizationId, workingDays, totalMonth, attendance);
 	}
 
-	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(DateOnly? dateOfJoining = null)
+	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(DateOnly? dateOfJoining = null, Guid? shiftId = null)
 	{
 		var roleId = await EnsureRoleExistsAsync();
-		var shiftId = await EnsureShiftExistsAsync();
+		var resolvedShiftId = shiftId ?? await EnsureShiftExistsAsync();
 		var organizationId = await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		return await _employeePersonalInfo.CreateAsync(new CreateEmployeePersonalInfoDto
 		{
@@ -378,28 +459,35 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			DateOfJoining = dateOfJoining ?? DateOnly.FromDateTime(new DateTime(2026, 1, 1)),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
-			ShiftId = shiftId,
+			ShiftId = resolvedShiftId,
 			OrganizationIds = [organizationId]
 		});
 	}
 
-	private async Task SeedAttendanceScopeAsync(Guid employeeId, Guid organizationId, string monthYear)
+	private async Task SeedAttendanceScopeAsync(
+		Guid employeeId,
+		Guid organizationId,
+		string monthYear,
+		TimeOnly? timeIn = null,
+		TimeOnly? timeOut = null)
 	{
 		var attendanceDate = FirstDayOfMonth(monthYear);
 		var attendanceDateTime = attendanceDate.ToDateTime(TimeOnly.MinValue);
+		var resolvedTimeIn = timeIn ?? new TimeOnly(9, 0);
+		var resolvedTimeOut = timeOut ?? new TimeOnly(17, 0);
 		await _attendanceRepository.InsertAsync(new EmployeeAttendance
 		{
 			TenantId = _currentTenant.Id,
 			EmployeeId = employeeId,
 			AttendanceDate = attendanceDate,
 			StatusType = EmployeeAttendanceStatusType.Present,
-			TimeIn = new DateTimeOffset(attendanceDateTime.AddHours(9), TimeSpan.Zero),
-			TimeOut = new DateTimeOffset(attendanceDateTime.AddHours(17), TimeSpan.Zero),
+			TimeIn = new DateTimeOffset(attendanceDateTime.Add(resolvedTimeIn.ToTimeSpan()), TimeSpan.Zero),
+			TimeOut = new DateTimeOffset(attendanceDateTime.Add(resolvedTimeOut.ToTimeSpan()), TimeSpan.Zero),
 			EducationMediumStageId = organizationId
 		}, autoSave: true);
 	}
 
-	private Task SaveSalaryComponentsAsync(Guid employeeId) =>
+	private Task SaveSalaryComponentsAsync(Guid employeeId, bool isTemp = true) =>
 		_employeePayrollAppService.UpdatePayrollContractAsync(employeeId, new PayrollContract
 		{
 			EarningComponents = new List<SalaryComponentContract>
@@ -409,7 +497,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 					Name = "Basic",
 					Amount = 31000m,
 					IsFixed = true,
-					IsTemp = true
+					IsTemp = isTemp
 				}
 			}
 		});
@@ -633,6 +721,18 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		return shift.Id;
 	}
 
+	private async Task<Guid> CreateShiftAsync(TimeOnly startTime, TimeOnly endTime)
+	{
+		var shift = new ShiftManagement
+		{
+			ShiftName = $"SalarySlipShift-{_guidGenerator.Create():N}",
+			StartTime = startTime,
+			EndTime = endTime
+		};
+		await _shiftRepository.InsertAsync(shift, autoSave: true);
+		return shift.Id;
+	}
+
 	private async Task<Guid> CreateAcademicYearAsync()
 	{
 		return await CreateAcademicYearAsync(2026);
@@ -681,6 +781,19 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 
 	private static DateOnly FirstDayOfMonth(string monthYear) =>
 		new(PayrollYear(monthYear), PayrollMonth(monthYear), 1);
+
+	private static decimal CalculateExpectedOvertime(
+		decimal monthlyGrossSalary,
+		decimal basisDays,
+		TimeOnly shiftStart,
+		TimeOnly shiftEnd,
+		decimal overtimeMinutes,
+		decimal multiplier)
+	{
+		var shiftHours = (decimal)(shiftEnd.ToTimeSpan() - shiftStart.ToTimeSpan()).TotalHours;
+		var overtimeHours = overtimeMinutes / 60m;
+		return Math.Round(monthlyGrossSalary / basisDays / shiftHours * overtimeHours * multiplier, 2, MidpointRounding.AwayFromZero);
+	}
 
 	private sealed record PayrollPolicyContext(
 		int Year,

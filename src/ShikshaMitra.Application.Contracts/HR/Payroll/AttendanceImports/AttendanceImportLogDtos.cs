@@ -104,6 +104,13 @@ public class AttendanceImportRowsSaveOutput
 	public int UpsertedCount { get; set; }
 }
 
+public class AttendanceImportDownloadDto
+{
+	public string FileName { get; set; } = string.Empty;
+	public string ContentType { get; set; } = "application/octet-stream";
+	public byte[] Content { get; set; } = [];
+}
+
 public class AttendanceImportRowsSaveInputValidator : AbstractValidator<AttendanceImportRowsSaveInput>
 {
 	public AttendanceImportRowsSaveInputValidator()

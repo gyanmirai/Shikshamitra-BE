@@ -39,6 +39,12 @@ public class AttendanceImportBatchConfiguration : IEntityTypeConfiguration<Atten
 		builder.Property(x => x.PreviewToken)
 			.HasMaxLength(64);
 
+		builder.Property(x => x.OriginalFileBlobName)
+			.HasMaxLength(512);
+
+		builder.Property(x => x.OriginalFileContentType)
+			.HasMaxLength(100);
+
 		builder.Property(x => x.ErrorsSummary)
 			.HasConversion(
 				v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),

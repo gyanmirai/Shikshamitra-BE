@@ -59,27 +59,27 @@ public class AttendanceIntegrationRunWorkflow(
 			: (payrollMonthApi.Length > 20 ? payrollMonthApi[..20] : payrollMonthApi);
 
 		return new AttendanceImportBatch(
-			batchId,
-			CurrentTenant.Id,
-			string.IsNullOrWhiteSpace(input.FileName) ? "integration-run" : input.FileName[..Math.Min(input.FileName.Length, 255)],
-			userId,
-			userName.Length > 128 ? userName[..128] : userName,
-			Clock.Now,
-			monthYear,
-			payrollMonthStored,
-			input.Rows.Count,
-			input.Rows.Count,
-			0,
-			0,
-			0,
-			[],
-			[],
-			input.RunSource,
-			AttendanceIntegrationRunParsing.Truncate(input.ExternalCorrelationId, 128),
-			AttendanceIntegrationRunParsing.Truncate(input.IntegrationProvider, 128),
-			Clock.Now,
-			null,
-			false);
+			id: batchId,
+			tenantId: CurrentTenant.Id,
+			fileName: string.IsNullOrWhiteSpace(input.FileName) ? "integration-run" : input.FileName[..Math.Min(input.FileName.Length, 255)],
+			importedByUserId: userId,
+			importedByName: userName.Length > 128 ? userName[..128] : userName,
+			importedAt: Clock.Now,
+			payrollMonthYear: monthYear,
+			payrollMonth: payrollMonthStored,
+			totalRows: input.Rows.Count,
+			validRows: input.Rows.Count,
+			invalidRows: 0,
+			createCount: 0,
+			replaceCount: 0,
+			errorsSummary: [],
+			warningsSummary: [],
+			runSource: input.RunSource,
+			externalCorrelationId: AttendanceIntegrationRunParsing.Truncate(input.ExternalCorrelationId, 128),
+			integrationProvider: AttendanceIntegrationRunParsing.Truncate(input.IntegrationProvider, 128),
+			runStartedAt: Clock.Now,
+			runFinishedAt: null,
+			isBatchLocked: false);
 	}
 
 	private static string ResolvePayrollMonth(List<ParsedIntegrationRow> parsedRows)

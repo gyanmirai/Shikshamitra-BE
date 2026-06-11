@@ -120,6 +120,42 @@ public class UserScopeAppService_BulkAssign_Tests
     }
 
     [Fact]
+    public async Task BulkAssignAsync_Should_Save_Parent_Medium_Node_As_Full_Stage_Access()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var user = await CreateUserAsync();
+            var hierarchy = await CreateAcademicHierarchyAsync();
+
+            await WithUnitOfWorkAsync(() => _userScopeAppService.BulkAssignAsync(new BulkScopeAssignmentDto
+            {
+                UserIds = [user.Id],
+                AcademicYearIds = [hierarchy.AcademicYearId],
+                EducationBoardIds = [hierarchy.BoardId],
+                EducationMediumIds = [hierarchy.MediumId]
+            }));
+
+            var assignments = await GetUserAssignmentsAsync(user.Id);
+            var assignment = assignments.Single();
+            assignment.AcademicYearId.ShouldBe(hierarchy.AcademicYearId);
+            assignment.EducationBoardId.ShouldBe(hierarchy.BoardId);
+            assignment.EducationMediumId.ShouldBe(hierarchy.MediumId);
+            assignment.EducationMediumStageId.ShouldBeNull();
+            assignment.GrantsAllMediumStagesInMedium().ShouldBeTrue();
+
+            var hierarchyResult = await WithUnitOfWorkAsync(() =>
+                _userScopeAppService.GetUserScopeHierarchyAsync(user.Id, hierarchy.AcademicYearId));
+            var mediumNode = hierarchyResult.AccessibleHierarchy
+                .Single()
+                .Boards.Single(x => x.BoardId == hierarchy.BoardId)
+                .Mediums.Single(x => x.MediumId == hierarchy.MediumId);
+
+            mediumNode.HasFullMediumStageAccess.ShouldBeTrue();
+            mediumNode.MediumStages.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
     public async Task BulkAssignAsync_Should_Reject_Missing_Academic_Year()
     {
         using (_currentTenant.Change(TestTenantId))

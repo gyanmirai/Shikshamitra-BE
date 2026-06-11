@@ -62,6 +62,21 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Date_Wise_Attendance_With_Year_Month_Day_Date()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var today = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+		var mediumStageId = EmployeeTestHelper.DefaultMediumStageId;
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/date-wise?attendanceDate={today}&page=1&pageSize=10&educationMediumStageId={mediumStageId}");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
+	}
+
 	#endregion
 
 	#region Tier 1 — Important
@@ -71,13 +86,13 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Get_Employee_Wise_Attendance_With_Pagination_Fields()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
-		var employeeId = Guid.NewGuid();
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "TrackPage");
 		var mediumStageId = EmployeeTestHelper.DefaultMediumStageId;
 		var start = DateTime.UtcNow.AddDays(-30).ToString("dd-MM-yyyy");
 		var end = DateTime.UtcNow.ToString("dd-MM-yyyy");
 
 		var response = await Client.GetAsync(
-			$"{BaseUrl}/employee-wise?employeeId={employeeId}&startDate={start}&endDate={end}&page=1&pageSize=10&educationMediumStageId={mediumStageId}&search=mon");
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate={start}&endDate={end}&page=1&pageSize=10&educationMediumStageId={mediumStageId}&search=mon");
 		var rawPayload = await response.Content.ReadAsStringAsync();
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
@@ -95,6 +110,23 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 			items[0].TryGetProperty("status", out var status).ShouldBeTrue();
 			status.ValueKind.ShouldBe(JsonValueKind.Number);
 		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Get_Employee_Wise_Attendance_With_Year_Month_Day_Dates()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "TrackYmd");
+		var mediumStageId = EmployeeTestHelper.DefaultMediumStageId;
+		var start = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-2)).ToString("yyyy-MM-dd");
+		var end = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate={start}&endDate={end}&page=1&pageSize=10&educationMediumStageId={mediumStageId}");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
 	}
 
 	[Fact]
@@ -125,7 +157,7 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Get_Employee_Wise_Attendance_With_AcademicYearId_When_Attendance_Stage_Is_Stale()
+	public async Task Should_Get_Employee_Wise_Attendance_With_AcademicYearId_Filters_Attendance_To_Year_Stage()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
@@ -151,14 +183,46 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 		var payload = await response.Content.ReadFromJsonAsync<AttendanceEmployeeWiseResponse>()
 			?? throw new InvalidOperationException("Failed to deserialize employee-wise attendance response.");
 		payload.TotalCount.ShouldBe(2);
-		payload.AttendanceSummary.Present.ShouldBe(2);
-		payload.AttendanceSummary.Absent.ShouldBe(0);
-		payload.Items.All(x => x.Status == AttendanceTrackingStatus.Present).ShouldBeTrue();
+		payload.AttendanceSummary.Present.ShouldBe(1);
+		payload.AttendanceSummary.Absent.ShouldBe(1);
+		payload.Items.Count(x => x.Status == AttendanceTrackingStatus.Present).ShouldBe(1);
+		payload.Items.Count(x => x.Status == AttendanceTrackingStatus.Absent).ShouldBe(1);
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Get_Date_Wise_Attendance_With_Stage_Filter_When_Attendance_Stage_Is_Stale()
+	public async Task Should_Ignore_Employee_Wise_Attendance_When_Row_Stage_Is_Not_In_Scope()
+	{
+		var seeded = await SeedAttendanceAcademicOrganizationsAsync();
+		var scopedUserId = Guid.NewGuid();
+		await EnsureUserHasStageScopeAsync(scopedUserId, seeded.CurrentYearStageId);
+		var scopedClient = CreateClientAs(scopedUserId);
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			"TrackScopedStale",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		await ReplaceEmployeeStageAssignmentsAsync(employee.Id, seeded.CurrentYearStageId);
+		await SeedAttendanceAsync(employee.Id, attendanceDate, seeded.OtherYearStageId);
+
+		var response = await scopedClient.GetAsync(
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate={attendanceDate:dd-MM-yyyy}&endDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
+
+		var payload = await response.Content.ReadFromJsonAsync<AttendanceEmployeeWiseResponse>()
+			?? throw new InvalidOperationException("Failed to deserialize employee-wise attendance response.");
+		payload.TotalCount.ShouldBe(1);
+		payload.AttendanceSummary.Present.ShouldBe(0);
+		payload.AttendanceSummary.Absent.ShouldBe(1);
+		payload.Items.Single().Status.ShouldBe(AttendanceTrackingStatus.Absent);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Ignore_Date_Wise_Attendance_When_Row_Stage_Does_Not_Match_Filter()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
@@ -181,11 +245,38 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 
 		var payload = await response.Content.ReadFromJsonAsync<AttendanceDateWiseResponse>()
 			?? throw new InvalidOperationException("Failed to deserialize date-wise attendance response.");
-		payload.TotalCount.ShouldBe(1);
-		payload.Summary.Present.ShouldBe(1);
+		payload.TotalCount.ShouldBe(0);
+		payload.Summary.Present.ShouldBe(0);
 		payload.Summary.Absent.ShouldBe(0);
-		payload.Items.Single().EmployeeId.ShouldBe(employee.Id.ToString());
-		payload.Items.Single().Status.ShouldBe(AttendanceTrackingStatus.Present);
+		payload.Items.Count.ShouldBe(0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Ignore_Employee_Wise_Attendance_When_Row_Has_No_Stage()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			"TrackNullStage",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		await SeedAttendanceAsync(employee.Id, attendanceDate, null);
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate={attendanceDate:dd-MM-yyyy}&endDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10&educationMediumStageId={EmployeeTestHelper.DefaultMediumStageId:D}");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
+
+		var payload = await response.Content.ReadFromJsonAsync<AttendanceEmployeeWiseResponse>()
+			?? throw new InvalidOperationException("Failed to deserialize employee-wise attendance response.");
+		payload.TotalCount.ShouldBe(1);
+		payload.AttendanceSummary.Present.ShouldBe(0);
+		payload.AttendanceSummary.Absent.ShouldBe(1);
+		payload.Items.Single().Status.ShouldBe(AttendanceTrackingStatus.Absent);
 	}
 
 	[Fact]
@@ -196,10 +287,15 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 
 		var seeded = await SeedAttendanceAcademicOrganizationsAsync();
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-		var employeeId = Guid.NewGuid();
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			"TrackStageYear",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		await ReplaceEmployeeStageAssignmentsAsync(employee.Id, seeded.OtherYearStageId);
 
 		var response = await Client.GetAsync(
-			$"{BaseUrl}/employee-wise?employeeId={employeeId:D}&startDate={attendanceDate:dd-MM-yyyy}&endDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10&educationMediumStageId={seeded.OtherYearStageId:D}&academicYearId={seeded.AcademicYearId:D}");
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate={attendanceDate:dd-MM-yyyy}&endDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10&educationMediumStageId={seeded.OtherYearStageId:D}&academicYearId={seeded.AcademicYearId:D}");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
@@ -208,14 +304,43 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Reject_Employee_Wise_When_Provided_EducationMediumStageId_Is_Out_Of_Scope()
 	{
+		var seeded = await SeedAttendanceAcademicOrganizationsAsync();
 		var scopedUserId = Guid.NewGuid();
-		await EnsureUserHasStageScopeAsync(scopedUserId, EmployeeTestHelper.DefaultMediumStageId);
+		await EnsureUserHasStageScopeAsync(scopedUserId, seeded.CurrentYearStageId);
 		var scopedClient = CreateClientAs(scopedUserId);
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-		var employeeId = Guid.NewGuid();
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			"TrackOutOfScope",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		await ReplaceEmployeeStageAssignmentsAsync(employee.Id, seeded.OtherYearStageId);
 
 		var response = await scopedClient.GetAsync(
-			$"{BaseUrl}/employee-wise?employeeId={employeeId:D}&startDate={attendanceDate:dd-MM-yyyy}&endDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10&educationMediumStageId={Guid.NewGuid():D}");
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate={attendanceDate:dd-MM-yyyy}&endDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10&educationMediumStageId={seeded.OtherYearStageId:D}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Employee_Wise_When_Employee_Is_Not_Assigned_To_Provided_Stage()
+	{
+		var seeded = await SeedAttendanceAcademicOrganizationsAsync();
+		var scopedUserId = Guid.NewGuid();
+		await EnsureUserHasStageScopeAsync(scopedUserId, seeded.CurrentYearStageId);
+		var scopedClient = CreateClientAs(scopedUserId);
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			"TrackStageLeak",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		await ReplaceEmployeeStageAssignmentsAsync(employee.Id, seeded.OtherYearStageId);
+		await SeedAttendanceAsync(employee.Id, attendanceDate, seeded.OtherYearStageId);
+
+		var response = await scopedClient.GetAsync(
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate={attendanceDate:dd-MM-yyyy}&endDate={attendanceDate:dd-MM-yyyy}&page=1&pageSize=10&educationMediumStageId={seeded.CurrentYearStageId:D}");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
@@ -244,6 +369,55 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 			$"{BaseUrl}/date-wise?attendanceDate=not-a-date&status=PRESENT&page=1&pageSize=10&educationMediumStageId={mediumStageId}");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Timestamp_AttendanceDate_With_400()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var mediumStageId = EmployeeTestHelper.DefaultMediumStageId;
+		var timestamp = Uri.EscapeDataString("2026-06-01T22:15:34-07:00");
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/date-wise?attendanceDate={timestamp}&status=PRESENT&page=1&pageSize=10&educationMediumStageId={mediumStageId}");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		rawPayload.Contains("attendanceDate", StringComparison.OrdinalIgnoreCase).ShouldBeTrue(rawPayload);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Timestamp_EmployeeWise_StartDate_With_400()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "TrackStartTimestamp");
+		var mediumStageId = EmployeeTestHelper.DefaultMediumStageId;
+		var start = Uri.EscapeDataString("2026-06-01T22:15:34-07:00");
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate={start}&endDate=2026-06-02&page=1&pageSize=10&educationMediumStageId={mediumStageId}");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		rawPayload.Contains("startDate", StringComparison.OrdinalIgnoreCase).ShouldBeTrue(rawPayload);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Timestamp_EmployeeWise_EndDate_With_400()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "TrackEndTimestamp");
+		var mediumStageId = EmployeeTestHelper.DefaultMediumStageId;
+		var end = Uri.EscapeDataString("2026-06-02T22:15:34-07:00");
+
+		var response = await Client.GetAsync(
+			$"{BaseUrl}/employee-wise?employeeId={employee.Id:D}&startDate=2026-06-01&endDate={end}&page=1&pageSize=10&educationMediumStageId={mediumStageId}");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		rawPayload.Contains("endDate", StringComparison.OrdinalIgnoreCase).ShouldBeTrue(rawPayload);
 	}
 
 	[Fact]
@@ -327,6 +501,31 @@ public class AttendanceTrackingApi_Tests : ShikshaMitraApiTestBase
 					new EmployeeOrganizationAssignment(Guid.NewGuid(), tenantId, employeeId, stageId),
 					autoSave: false);
 			}
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task ReplaceEmployeeStageAssignmentsAsync(Guid employeeId, Guid stageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var assignmentRepository =
+			scope.ServiceProvider.GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var existing = await assignmentRepository.GetListAsync(x => x.EmployeeId == employeeId);
+			foreach (var assignment in existing)
+			{
+				await assignmentRepository.DeleteAsync(assignment, autoSave: false);
+			}
+
+			await assignmentRepository.InsertAsync(
+				new EmployeeOrganizationAssignment(Guid.NewGuid(), tenantId, employeeId, stageId),
+				autoSave: false);
 			await uow.CompleteAsync();
 		}
 	}

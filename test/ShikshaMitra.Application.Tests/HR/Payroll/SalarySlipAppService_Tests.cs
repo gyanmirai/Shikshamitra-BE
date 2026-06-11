@@ -12,6 +12,7 @@ using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -40,10 +41,13 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	private readonly IPayrollPolicyAppService _payrollPolicies;
 	private readonly IAttendancePolicyAppService _attendancePolicies;
 	private readonly IHrPolicyAssignmentAppService _assignments;
+	private readonly SalarySlipAccessService _salarySlipAccessService;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
+	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
 	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IdentityUserManager _userManager;
+	private readonly IUserScopeService _userScopeService;
 	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly IAcademicYearRepository _academicYearRepository;
@@ -65,10 +69,13 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		_payrollPolicies = GetRequiredService<IPayrollPolicyAppService>();
 		_attendancePolicies = GetRequiredService<IAttendancePolicyAppService>();
 		_assignments = GetRequiredService<IHrPolicyAssignmentAppService>();
+		_salarySlipAccessService = GetRequiredService<SalarySlipAccessService>();
 		_attendanceRepository = GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		_payrollRunItemSnapshotRepository = GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_userManager = GetRequiredService<IdentityUserManager>();
+		_userScopeService = GetRequiredService<IUserScopeService>();
 		_currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
 		_academicYearRepository = GetRequiredService<IAcademicYearRepository>();
@@ -111,6 +118,66 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			await _salarySlipAppService.GenerateSalarySlipPdfAsync(Guid.NewGuid(), "2026-04"));
 
 		ex.Code.ShouldBe(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+	}
+
+	[Fact]
+	public async Task SalarySlipAccess_Should_Allow_Assigned_Employee_Without_Attendance_Rows()
+	{
+		var organizationId = await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+		var employee = await CreateEmployeeAsync(organizationId: organizationId);
+		var userId = Guid.NewGuid();
+		await SeedPayrollStageScopeAsync(userId, organizationId);
+
+		using (_currentPrincipalAccessor.Change(BuildPayrollScopePrincipal(userId)))
+		{
+			await WithUnitOfWorkAsync(async () =>
+			{
+				await _salarySlipAccessService.EnsureEmployeeScopeAllowedAsync(employee.Id);
+			});
+		}
+	}
+
+	[Fact]
+	public async Task SalarySlipAccess_Should_Allow_Assigned_Employee_When_Attendance_Stage_Is_Stale()
+	{
+		var organizationId = await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+		var employee = await CreateEmployeeAsync(organizationId: organizationId);
+		var staleStageId = Guid.NewGuid();
+		var userId = Guid.NewGuid();
+		await SeedPayrollStageScopeAsync(userId, organizationId);
+		await SeedAttendanceScopeAsync(employee.Id, staleStageId, "2026-04");
+
+		using (_currentPrincipalAccessor.Change(BuildPayrollScopePrincipal(userId)))
+		{
+			await WithUnitOfWorkAsync(async () =>
+			{
+				await _salarySlipAccessService.EnsureEmployeeScopeAllowedAsync(employee.Id);
+			});
+		}
+	}
+
+	[Fact]
+	public async Task SalarySlipAccess_Should_Deny_When_Only_Stale_Attendance_Stage_Is_InScope()
+	{
+		var organizationId = await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+		var employee = await CreateEmployeeAsync(organizationId: organizationId);
+		var staleStageId = Guid.NewGuid();
+		var userId = Guid.NewGuid();
+		await SeedPayrollStageScopeAsync(userId, staleStageId);
+		await SeedAttendanceScopeAsync(employee.Id, staleStageId, "2026-04");
+
+		using (_currentPrincipalAccessor.Change(BuildPayrollScopePrincipal(userId)))
+		{
+			var ex = await Should.ThrowAsync<BusinessException>(async () =>
+				await WithUnitOfWorkAsync(async () =>
+				{
+					await _salarySlipAccessService.EnsureEmployeeScopeAllowedAsync(employee.Id);
+				}));
+
+			ex.Code.ShouldBe(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		}
+
+		organizationId.ShouldNotBe(staleStageId);
 	}
 
 	[Fact]
@@ -441,11 +508,15 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		return new PayrollPolicyContext(year, academicYearId, organizationId, workingDays, totalMonth, attendance);
 	}
 
-	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(DateOnly? dateOfJoining = null, Guid? shiftId = null)
+	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(
+		DateOnly? dateOfJoining = null,
+		Guid? shiftId = null,
+		Guid? organizationId = null)
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var resolvedShiftId = shiftId ?? await EnsureShiftExistsAsync();
-		var organizationId = await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+		var resolvedOrganizationId = organizationId
+			?? await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		return await _employeePersonalInfo.CreateAsync(new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Payslip",
@@ -460,7 +531,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
 			ShiftId = resolvedShiftId,
-			OrganizationIds = [organizationId]
+			OrganizationIds = [resolvedOrganizationId]
 		});
 	}
 
@@ -688,6 +759,40 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			new Claim(AbpClaimTypes.Role, adminRole.Name),
 			new Claim(AbpClaimTypes.TenantId, (_currentTenant.Id ?? Guid.Empty).ToString())
 		})));
+	}
+
+	private async Task SeedPayrollStageScopeAsync(Guid userId, Guid stageId)
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			await _scopeRepository.InsertAsync(
+				new UserScopeAssignment(
+					Guid.NewGuid(),
+					_currentTenant.Id,
+					userId: userId,
+					educationMediumStageId: stageId,
+					description: "Salary slip payroll scope regression test"),
+				autoSave: true);
+
+			await _userScopeService.InvalidateUserScopeCacheAsync(userId);
+		});
+	}
+
+	private ClaimsPrincipal BuildPayrollScopePrincipal(Guid userId)
+	{
+		var claims = new List<Claim>
+		{
+			new(AbpClaimTypes.UserId, userId.ToString()),
+			new(AbpClaimTypes.UserName, $"salary-slip-scope-{userId:N}"),
+			new(AbpClaimTypes.Email, $"salary-slip-scope-{userId:N}@test.local")
+		};
+
+		if (_currentTenant.Id.HasValue)
+		{
+			claims.Add(new Claim(AbpClaimTypes.TenantId, _currentTenant.Id.Value.ToString()));
+		}
+
+		return new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
 	}
 
 	private async Task<Guid> EnsureRoleExistsAsync()

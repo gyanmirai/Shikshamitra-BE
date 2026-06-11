@@ -304,7 +304,6 @@ public class StudentListAppService(
 				}));
 	}
 
-
 	private async Task<IQueryable<Student>> GetScopedEnrolledStudentsQueryAsync()
 	{
 		var query = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())

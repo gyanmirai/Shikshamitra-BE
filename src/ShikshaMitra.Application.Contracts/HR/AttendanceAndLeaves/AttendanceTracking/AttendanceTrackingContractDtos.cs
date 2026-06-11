@@ -139,7 +139,7 @@ public class AttendanceSummary
 public class GetAttendanceDateWiseInput
 {
 	/// <summary>
-	/// Attendance date (supports DD-MM-YYYY format and ISO date-time)
+	/// Attendance date in a date-only format such as dd-MM-yyyy or yyyy-MM-dd.
 	/// </summary>
 	public string AttendanceDate { get; set; } = string.Empty;
 
@@ -163,12 +163,12 @@ public class GetAttendanceEmployeeWiseInput
 	public Guid EmployeeId { get; set; }
 
 	/// <summary>
-	/// Start date (DD-MM-YYYY format)
+	/// Start date in a date-only format such as dd-MM-yyyy or yyyy-MM-dd.
 	/// </summary>
 	public string StartDate { get; set; } = string.Empty;
 
 	/// <summary>
-	/// End date (DD-MM-YYYY format)
+	/// End date in a date-only format such as dd-MM-yyyy or yyyy-MM-dd.
 	/// </summary>
 	public string EndDate { get; set; } = string.Empty;
 

@@ -20,8 +20,6 @@ public class AttendanceTrackingEmployeeWiseReader(
 		GetAttendanceEmployeeWiseInput input,
 		IReadOnlyCollection<Guid> educationMediumStageIds)
 	{
-		_ = educationMediumStageIds;
-
 		var startDate = AttendanceTrackingFormatting.ParseDate(input.StartDate);
 		var endDate = AttendanceTrackingFormatting.ParseDate(input.EndDate);
 
@@ -42,12 +40,19 @@ public class AttendanceTrackingEmployeeWiseReader(
 		var attendanceQuery = await attendanceRepository.GetQueryableAsync();
 		var leaveQuery = await leaveRepository.GetQueryableAsync();
 
+		var scopedAttendanceQuery = attendanceQuery
+			.Where(a => a.EmployeeId == input.EmployeeId &&
+			            a.AttendanceDate >= startDateOnly &&
+			            a.AttendanceDate <= endDateOnly);
+		if (educationMediumStageIds.Count > 0)
+		{
+			scopedAttendanceQuery = scopedAttendanceQuery.Where(a =>
+				a.EducationMediumStageId.HasValue &&
+				educationMediumStageIds.Contains(a.EducationMediumStageId.Value));
+		}
+
 		var attendanceRecords = await AsyncExecuter.ToListAsync(
-			attendanceQuery
-				.Where(a => a.EmployeeId == input.EmployeeId &&
-				            a.AttendanceDate >= startDateOnly &&
-				            a.AttendanceDate <= endDateOnly)
-				.OrderBy(a => a.AttendanceDate));
+			scopedAttendanceQuery.OrderBy(a => a.AttendanceDate));
 
 		var startDateTime = new DateTimeOffset(startDate.Date, TimeSpan.Zero);
 		var endDateTime = new DateTimeOffset(endDate.Date.AddDays(1).AddTicks(-1), TimeSpan.Zero);

@@ -61,7 +61,8 @@ public class AttendanceTrackingDateWiseReader(
 		var attendanceRows = await AsyncExecuter.ToListAsync(
 			attendanceQuery.Where(a =>
 				employeeIds.Contains(a.EmployeeId) &&
-				a.AttendanceDate == targetDateOnly));
+				a.AttendanceDate == targetDateOnly &&
+				a.EducationMediumStageId == input.EducationMediumStageId));
 		var attendanceByEmployee = attendanceRows
 			.GroupBy(a => a.EmployeeId)
 			.ToDictionary(

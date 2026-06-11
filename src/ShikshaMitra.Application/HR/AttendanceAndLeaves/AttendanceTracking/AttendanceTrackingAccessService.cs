@@ -52,16 +52,6 @@ public class AttendanceTrackingAccessService(
 		Guid? educationMediumStageId,
 		Guid? academicYearId)
 	{
-		if (educationMediumStageId.HasValue)
-		{
-			await EnsureMediumStageInScopeAsync(scope, educationMediumStageId.Value);
-			if (academicYearId.HasValue && !await StageBelongsToAcademicYearAsync(educationMediumStageId.Value, academicYearId.Value))
-			{
-				throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
-			}
-			return [educationMediumStageId.Value];
-		}
-
 		var employeeStageLookup = await employeeScopeQueryService.BuildEmployeeStageLookupAsync([employeeId]);
 		if (!employeeStageLookup.TryGetValue(employeeId, out var employeeStageIds) || employeeStageIds.Count == 0)
 		{
@@ -70,6 +60,27 @@ public class AttendanceTrackingAccessService(
 		}
 
 		var distinctStageIds = employeeStageIds.Distinct().ToList();
+		if (educationMediumStageId.HasValue)
+		{
+			await EnsureMediumStageInScopeAsync(scope, educationMediumStageId.Value);
+			if (!distinctStageIds.Contains(educationMediumStageId.Value))
+			{
+				hrScopeAccessService.LogDeniedAccess(
+					scope,
+					nameof(ResolveEmployeeWiseStageIdsAsync),
+					"Employee",
+					employeeId,
+					educationMediumStageId.Value);
+				throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+			}
+
+			if (academicYearId.HasValue && !await StageBelongsToAcademicYearAsync(educationMediumStageId.Value, academicYearId.Value))
+			{
+				throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+			}
+			return [educationMediumStageId.Value];
+		}
+
 		if (academicYearId.HasValue)
 		{
 			distinctStageIds = await FilterStageIdsByAcademicYearAsync(distinctStageIds, academicYearId.Value);

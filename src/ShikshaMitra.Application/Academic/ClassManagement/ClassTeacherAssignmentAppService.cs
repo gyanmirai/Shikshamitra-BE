@@ -61,9 +61,9 @@ public class ClassTeacherAssignmentAppService(
 		{
 			// Return empty assignments for all class-division combinations
 			var emptyResult = new List<ClassTeacherRowDto>();
-			foreach (var standard in standards)
+			foreach (var standard in standards.OrderBy(s => s.AgeLowerLimit))
 			{
-				var standardDivisions = divisions.Where(d => d.StandardId == standard.Id);
+				var standardDivisions = divisions.Where(d => d.StandardId == standard.Id).OrderBy(d => d.Name);
 				foreach (var division in standardDivisions)
 				{
 					emptyResult.Add(new ClassTeacherRowDto
@@ -90,9 +90,9 @@ public class ClassTeacherAssignmentAppService(
 
 		var result = new List<ClassTeacherRowDto>();
 
-		foreach (var standard in standards)
+		foreach (var standard in standards.OrderBy(s => s.AgeLowerLimit))
 		{
-			var standardDivisions = divisions.Where(d => d.StandardId == standard.Id);
+			var standardDivisions = divisions.Where(d => d.StandardId == standard.Id).OrderBy(d => d.Name);
 
 			foreach (var division in standardDivisions)
 			{

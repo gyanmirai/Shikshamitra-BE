@@ -28,7 +28,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<Subject, Guid> _subjectRepository;
-	private readonly IRepository<HomeworkAssignmentType, Guid> _homeworkTypeRepository;
 	private readonly StudentSubmissionManager _submissionManager;
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
 
@@ -38,7 +37,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		IRepository<Student, Guid> studentRepository,
 		IRepository<Standard, Guid> standardRepository,
 		IRepository<Subject, Guid> subjectRepository,
-		IRepository<HomeworkAssignmentType, Guid> homeworkTypeRepository,
 		StudentSubmissionManager submissionManager,
 		IAsyncQueryableExecuter asyncExecuter
 	)
@@ -48,7 +46,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		_studentRepository = studentRepository;
 		_standardRepository = standardRepository;
 		_subjectRepository = subjectRepository;
-		_homeworkTypeRepository = homeworkTypeRepository;
 		_submissionManager = submissionManager;
 		_asyncExecuter = asyncExecuter;
 	}
@@ -63,7 +60,11 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	)
 	{
 		// 1. Validate homework exists and belongs to medium
-		var homeworkQuery = await _homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
+		var homeworkQuery = await _homeworkRepository.WithDetailsAsync(
+			h => h.DivisionSchedules,
+			h => h.HomeworkType,
+			h => h.HomeworkAssignmentType
+		);
 		var homework = await _asyncExecuter.FirstOrDefaultAsync(
 			homeworkQuery.Where(h => h.Id == filter.HomeworkId && h.EducationMediumId == academicMediumId)
 		);
@@ -113,11 +114,10 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		// Create a dictionary for quick lookup
 		var submissionDict = submissions.ToDictionary(s => s.StudentId);
 
-		// 5. Get homework type name
-		var homeworkType = homework.HomeworkAssignmentTypeId.HasValue
-			? await _homeworkTypeRepository.FindAsync(homework.HomeworkAssignmentTypeId.Value)
-			: null;
-		var homeworkTypeName = homeworkType?.Name ?? "Homework";
+		// 5. Resolve homework type name: prefer new HomeworkType, fall back to legacy HomeworkAssignmentType
+		var homeworkTypeName = homework.HomeworkType?.Name
+			?? homework.HomeworkAssignmentType?.Name
+			?? "Homework";
 
 		// 6. Build response - Left join students with submissions
 		var submissionDtos = new List<HomeworkSubmissionDto>();

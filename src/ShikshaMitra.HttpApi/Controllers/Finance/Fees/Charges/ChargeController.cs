@@ -1,6 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Fees.Charges;
@@ -14,16 +12,9 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Charges;
 [Area("app")]
 [Route("api/charges")]
 [Authorize]
-public class ChargeController : AbpController
+public class ChargeController(IChargeAppService chargeAppService) : AbpController
 {
 	private const int MaxChargePageSize = 100;
-
-	private readonly IChargeAppService _chargeAppService;
-
-	public ChargeController(IChargeAppService chargeAppService)
-	{
-		_chargeAppService = chargeAppService;
-	}
 
 	/// <summary>
 	/// Create a new charge for a student.
@@ -35,7 +26,7 @@ public class ChargeController : AbpController
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<ChargeResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateChargeRequest input)
 	{
-		return _chargeAppService.CreateAsync(academicYearId, input);
+		return chargeAppService.CreateAsync(academicYearId, input);
 	}
 
 	/// <summary>
@@ -68,7 +59,7 @@ public class ChargeController : AbpController
 			BoardId = boardId
 		};
 
-		return _chargeAppService.GetAllAsync(academicYearId, request);
+		return chargeAppService.GetAllAsync(academicYearId, request);
 	}
 
 	/// <summary>
@@ -93,7 +84,7 @@ public class ChargeController : AbpController
 			BoardId = boardId
 		};
 
-		return _chargeAppService.GetLinesAsync(academicYearId, request);
+		return chargeAppService.GetLinesAsync(academicYearId, request);
 	}
 
 	/// <summary>
@@ -105,7 +96,7 @@ public class ChargeController : AbpController
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<ChargeDetailResponse> GetByIdAsync(Guid chargeId)
 	{
-		return _chargeAppService.GetByIdAsync(chargeId);
+		return chargeAppService.GetByIdAsync(chargeId);
 	}
 
 	/// <summary>
@@ -117,7 +108,7 @@ public class ChargeController : AbpController
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<ChargeResponse> UpdateAsync(Guid chargeId, [FromBody] UpdateChargeRequest input)
 	{
-		return _chargeAppService.UpdateAsync(chargeId, input);
+		return chargeAppService.UpdateAsync(chargeId, input);
 	}
 
 	/// <summary>
@@ -129,7 +120,7 @@ public class ChargeController : AbpController
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<ApprovalResponse> ApproveAsync(Guid chargeId, [FromBody] ApproveChargeRequest input)
 	{
-		return _chargeAppService.ApproveAsync(chargeId, input);
+		return chargeAppService.ApproveAsync(chargeId, input);
 	}
 
 	/// <summary>
@@ -141,7 +132,7 @@ public class ChargeController : AbpController
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task<RejectionResponse> RejectAsync(Guid chargeId, [FromBody] RejectChargeRequest input)
 	{
-		return _chargeAppService.RejectAsync(chargeId, input);
+		return chargeAppService.RejectAsync(chargeId, input);
 	}
 
 	/// <summary>
@@ -153,6 +144,6 @@ public class ChargeController : AbpController
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public Task DeleteAsync(Guid chargeId)
 	{
-		return _chargeAppService.DeleteAsync(chargeId);
+		return chargeAppService.DeleteAsync(chargeId);
 	}
 }

@@ -175,7 +175,7 @@ public class ReconciliationAppService(
             Success = true,
             Data = new ReconciliationActionData
             {
-                ReceiptId          = receipt.Id,
+                ReceiptId          = receipt.LinkedFinalReceiptId ?? Guid.Empty,
                 VerificationStatus = receipt.VerificationStatus,
                 Status             = statusInt,
                 StatusLabel        = statusLabel,

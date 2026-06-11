@@ -119,7 +119,7 @@ public class FeeCollectionSummaryQueryService(
 			studentQ.Select(s => new
 			{
 				s.Id, s.FirstName, s.MiddleName, s.LastName,
-				s.GrNo, s.RollNo, s.StandardId, s.DivisionId, s.Standard, s.Division
+				s.GrNo, s.RollNo, s.StandardId, s.DivisionId, s.Standard, s.Division, s.FeeStructureId
 			}),
 			cancellationToken);
 
@@ -158,13 +158,16 @@ public class FeeCollectionSummaryQueryService(
 				GrNo            = s.GrNo?.ToString() ?? string.Empty,
 				RollNo          = s.RollNo?.ToString() ?? string.Empty,
 				StandardName    = s.Standard?.Name ?? string.Empty,
+				StandardId		= s.StandardId ?? Guid.Empty,
 				DivisionName    = s.Division?.Name ?? string.Empty,
+				DivisionId		= s.DivisionId ?? Guid.Empty,
 				TotalFees       = fa.Total,
 				PaidFees        = fa.Paid,
 				OutstandingFees = fa.Outstanding,
 				OverdueFees     = ov.Overdue,
 				TotalCharges    = ca.TotalCharges,
 				PendingCharges  = ca.PendingCharges,
+				IsFeeStructureAssigned = s.FeeStructureId != null,
 			};
 		}).ToList();
 	}
@@ -285,6 +288,8 @@ public class FeeCollectionSummaryQueryService(
 				StudentName      = BuildFullName(r.FirstName, r.MiddleName, r.LastName),
 				GrNumber         = r.GrNo,
 				RollNumber       = r.RollNo,
+				StandardId       = r.StandardId,
+				DivisionId		 = r.DivisionId,
 				StandardDivision = string.IsNullOrEmpty(r.DivisionName)
 					? r.StandardName
 					: $"{r.StandardName} - {r.DivisionName}",
@@ -294,6 +299,7 @@ public class FeeCollectionSummaryQueryService(
 				OverdueFees = overdue ?? 0d,
 				TotalCharges = r.TotalCharges ?? 0d,
 				PendingCharges = r.PendingCharges ?? 0d,
+				IsFeeStructureAssigned = r.IsFeeStructureAssigned,
 				Status = (outstanding ?? 0d) <= 0d
 					? FeeCollectionStatus.Paid
 					: (overdue ?? 0d) > 0d
@@ -463,7 +469,9 @@ public class FeeCollectionSummaryQueryService(
 		public string? LastName        { get; init; }
 		public string  GrNo            { get; init; } = string.Empty;
 		public string  RollNo          { get; init; } = string.Empty;
+		public Guid StandardId { get; set; }
 		public string  StandardName    { get; init; } = string.Empty;
+		public Guid DivisionId { get; set; }
 		public string  DivisionName    { get; init; } = string.Empty;
 		public double?  TotalFees       { get; init; }
 		public double?  PaidFees        { get; init; }
@@ -471,6 +479,7 @@ public class FeeCollectionSummaryQueryService(
 		public double?  OverdueFees     { get; init; }
 		public double?  TotalCharges    { get; init; }
 		public double?  PendingCharges  { get; init; }
+		public bool IsFeeStructureAssigned { get; set; } = false;
 	}
 
 	private async Task<IQueryable<Student>> BuildFilteredStudentQueryAsync(
@@ -507,6 +516,6 @@ public class FeeCollectionSummaryQueryService(
 		}
 
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-		return studentQ.Where(s => scopedStudentIds.Contains(s.Id));
+		return studentQ.Where(s => scopedStudentIds.Contains(s.Id)).OrderBy(s => s.Standard.CreationTime).ThenBy(s => s.Division.CreationTime).ThenBy(s => s.RollNo);
 	}
 }

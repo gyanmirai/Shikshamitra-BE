@@ -7733,14 +7733,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(7)
                         .HasColumnType("character varying(7)");
 
-                    b.Property<string>("OriginalFileBlobName")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("OriginalFileContentType")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<string>("PreviewToken")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");

@@ -250,6 +250,7 @@ public static class ShikshaMitraSubModulePermissions
 		FinanceSettingsBankAccount,
 		FinanceAuditing,
 		FinanceAdjustment,
+		FinanceFeeStructureAssign,
 		CommunicationDashboard,
 		Announcements,
 		CommunicationNotification,
@@ -407,6 +408,7 @@ public static class ShikshaMitraSubModulePermissions
 		{ FinanceSettingsBankAccount, $"{DisplayNamePrefix}.FinanceSettingsBankAccount" },
 		{ FinanceAuditing, $"{DisplayNamePrefix}.FinanceAuditing" },
 		{ FinanceAdjustment, $"{DisplayNamePrefix}.FinanceAdjustment" },
+		{ FinanceFeeStructureAssign, $"{DisplayNamePrefix}.FinanceFeeStructureAssign" },
 
 		// Communication module submodules
 		{ CommunicationDashboard, $"{DisplayNamePrefix}.CommunicationDashboard" },

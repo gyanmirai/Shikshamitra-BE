@@ -40,6 +40,8 @@ public class UpdateLeavePolicyDto
 	/// </summary>
 	public bool RequiresApproval { get; set; } = true;
 
+	public bool IsDefault { get; set; } = false;
+
 	/// <summary>
 	/// Optional description
 	/// </summary>

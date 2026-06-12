@@ -27,10 +27,16 @@ public class LeavePolicyManager : DomainService
 		DateTime effectiveFrom,
 		DateTime? effectiveTo,
 		HrPolicyStatus status,
+		bool isDefault,
 		IEnumerable<LeavePolicyRuleInput> rules,
 		string? description = null)
 	{
 		await CheckPolicyNameAvailabilityAsync(academicYearId, policyName);
+		var defaultAfterCreate = await ResolveDefaultAfterCreateAsync(academicYearId, status, isDefault);
+		if (defaultAfterCreate)
+		{
+			await ClearDefaultsAsync(academicYearId);
+		}
 
 		var policy = new LeavePolicy(
 			GuidGenerator.Create(),
@@ -40,6 +46,7 @@ public class LeavePolicyManager : DomainService
 			effectiveFrom,
 			effectiveTo,
 			status,
+			defaultAfterCreate,
 			description
 		);
 
@@ -53,6 +60,7 @@ public class LeavePolicyManager : DomainService
 		DateTime effectiveFrom,
 		DateTime? effectiveTo,
 		HrPolicyStatus status,
+		bool isDefault,
 		IEnumerable<LeavePolicyRuleInput> rules,
 		string? description)
 	{
@@ -61,13 +69,36 @@ public class LeavePolicyManager : DomainService
 			await CheckPolicyNameAvailabilityAsync(leavePolicy.AcademicYearId, policyName, leavePolicy.Id);
 		}
 
+		await EnsureDefaultCanChangeAsync(leavePolicy, isDefault, status);
+		if (isDefault)
+		{
+			await ClearDefaultsAsync(leavePolicy.AcademicYearId, leavePolicy.Id);
+		}
+
 		leavePolicy.Update(
 			policyName,
 			effectiveFrom,
 			effectiveTo,
 			status,
+			isDefault,
 			description);
 		leavePolicy.ReplaceRules(await BuildRulesAsync(leavePolicy.Id, leavePolicy.AcademicYearId, rules));
+	}
+
+	public async Task EnsureCanDeactivateAsync(LeavePolicy leavePolicy)
+	{
+		await EnsureDefaultCanChangeAsync(leavePolicy, isDefaultAfterUpdate: false, HrPolicyStatus.Archived);
+	}
+
+	public async Task SetDefaultAsync(LeavePolicy leavePolicy)
+	{
+		if (leavePolicy.Status != HrPolicyStatus.Active || !leavePolicy.IsActive)
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
+		}
+
+		await ClearDefaultsAsync(leavePolicy.AcademicYearId, leavePolicy.Id);
+		leavePolicy.SetDefault(true);
 	}
 
 	private async Task CheckPolicyNameAvailabilityAsync(Guid academicYearId, string policyName, Guid? excludeId = null)
@@ -76,6 +107,52 @@ public class LeavePolicyManager : DomainService
 		{
 			throw new BusinessException(HRErrorCodes.LeavePolicyNameAlreadyExists)
 				.WithData("policyName", policyName);
+		}
+	}
+
+	private async Task<bool> ResolveDefaultAfterCreateAsync(Guid academicYearId, HrPolicyStatus status, bool requestedDefault)
+	{
+		if (requestedDefault && status != HrPolicyStatus.Active)
+		{
+			throw new BusinessException(HRErrorCodes.DefaultPolicyMustBeActive);
+		}
+
+		if (status != HrPolicyStatus.Active)
+		{
+			return false;
+		}
+
+		return requestedDefault || !await _leavePolicyRepository.HasActiveDefaultAsync(academicYearId);
+	}
+
+	private async Task EnsureDefaultCanChangeAsync(
+		LeavePolicy leavePolicy,
+		bool isDefaultAfterUpdate,
+		HrPolicyStatus statusAfterUpdate)
+	{
+		if (isDefaultAfterUpdate && statusAfterUpdate != HrPolicyStatus.Active)
+		{
+			throw new BusinessException(HRErrorCodes.DefaultPolicyMustBeActive);
+		}
+
+		if (!leavePolicy.IsDefault || (isDefaultAfterUpdate && statusAfterUpdate == HrPolicyStatus.Active))
+		{
+			return;
+		}
+
+		if (!await _leavePolicyRepository.HasActiveDefaultAsync(leavePolicy.AcademicYearId, leavePolicy.Id))
+		{
+			throw new BusinessException(HRErrorCodes.DefaultLeavePolicyRequired);
+		}
+	}
+
+	private async Task ClearDefaultsAsync(Guid academicYearId, Guid? excludeId = null)
+	{
+		var defaults = await _leavePolicyRepository.GetActiveDefaultsAsync(academicYearId, excludeId);
+		foreach (var item in defaults)
+		{
+			item.SetDefault(false);
+			await _leavePolicyRepository.UpdateAsync(item, autoSave: false);
 		}
 	}
 

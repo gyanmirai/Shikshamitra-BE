@@ -16,5 +16,10 @@ public interface IEmployeeStatusAppService : IApplicationService
 	/// <param name="input">The status change request.</param>
 	/// <returns>Response containing previous and current status.</returns>
 	Task<EmployeeStatusResponseDto> ChangeStatusAsync(Guid employeeId, ChangeEmployeeStatusDto input);
+
+	/// <summary>
+	/// Checks whether an employee can be moved to a non-active status.
+	/// </summary>
+	Task<EmployeeStatusDeactivationCheckDto> GetDeactivationCheckAsync(Guid employeeId);
 }
 

@@ -68,6 +68,15 @@ public class LeavePoliciesController : AbpControllerBase
 		return await _leavePolicyAppService.UpdateLeavePolicyAsync(id, request);
 	}
 
+	[HttpPatch("{id}/set-default")]
+	[ProducesResponseType(typeof(LeavePolicyDetailResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<LeavePolicyDetailResponse> SetDefaultAsync([FromRoute, Required] Guid id)
+	{
+		return await _leavePolicyAppService.SetDefaultAsync(id);
+	}
+
 	[HttpDelete("{id}")]
 	[ProducesResponseType(typeof(LeavePolicyDeleteResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status404NotFound)]

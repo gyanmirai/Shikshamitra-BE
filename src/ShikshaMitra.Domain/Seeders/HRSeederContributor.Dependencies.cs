@@ -56,7 +56,7 @@ public partial class HRSeederContributor
 	private readonly IGroupRepository _groupRepository;
 	private readonly IRepository<Holiday, Guid> _holidayRepository;
 	private readonly IRepository<HolidayType, Guid> _holidayTypeRepository;
-	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
+	private readonly ILeavePolicyRepository _leavePolicyRepository;
 	private readonly LeavePolicyManager _leavePolicyManager;
 	private readonly ILeaveTypeRepository _leaveTypeQueryRepository;
 	private readonly IAcademicYearRepository _academicYearRepository;

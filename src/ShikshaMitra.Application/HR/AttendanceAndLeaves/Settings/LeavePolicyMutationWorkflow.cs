@@ -25,6 +25,7 @@ public class LeavePolicyMutationWorkflow(
 			input.EffectiveFrom,
 			input.EffectiveTo,
 			LeavePolicyProjection.ParseStatus(input.Status),
+			input.IsDefault,
 			input.Rules.Select(LeavePolicyProjection.ToRuleInput),
 			input.Description);
 
@@ -49,6 +50,7 @@ public class LeavePolicyMutationWorkflow(
 			input.EffectiveFrom,
 			input.EffectiveTo,
 			LeavePolicyProjection.ParseStatus(input.Status),
+			input.IsDefault,
 			input.Rules.Select(LeavePolicyProjection.ToRuleInput),
 			input.Description);
 
@@ -62,9 +64,26 @@ public class LeavePolicyMutationWorkflow(
 	public async Task DeactivateAsync(Guid policyId)
 	{
 		var policy = await repository.GetAsync(policyId);
+		await leavePolicyManager.EnsureCanDeactivateAsync(policy);
 		policy.Deactivate();
 		await repository.UpdateAsync(policy, autoSave: true);
 		await ClearPolicyCachesAsync(policy.AcademicYearId);
+	}
+
+	public async Task<LeavePolicyDetailResponse> SetDefaultAsync(Guid policyId)
+	{
+		var policy = await leavePolicyRepository.GetWithRulesAsync(policyId);
+		if (policy == null)
+		{
+			throw new EntityNotFoundException(typeof(LeavePolicy), policyId);
+		}
+
+		await leavePolicyManager.SetDefaultAsync(policy);
+		await repository.UpdateAsync(policy, autoSave: true);
+		await ClearPolicyCachesAsync(policy.AcademicYearId);
+
+		policy = await leavePolicyRepository.GetWithRulesAsync(policyId) ?? policy;
+		return LeavePolicyProjection.ToDetail(policy);
 	}
 
 	public async Task<LeavePolicyDeleteResponse> DeleteLeavePolicyAsync(Guid policyId)

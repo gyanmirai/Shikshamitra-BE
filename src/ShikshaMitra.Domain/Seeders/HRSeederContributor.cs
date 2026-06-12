@@ -63,7 +63,7 @@ public partial class HRSeederContributor : BaseSeederContributor
 		IGroupRepository groupRepository,
 		IRepository<Holiday, Guid> holidayRepository,
 		IRepository<HolidayType, Guid> holidayTypeRepository,
-		IRepository<LeavePolicy, Guid> leavePolicyRepository,
+		ILeavePolicyRepository leavePolicyRepository,
 		LeavePolicyManager leavePolicyManager,
 		ILeaveTypeRepository leaveTypeQueryRepository,
 		IAcademicYearRepository academicYearRepository,

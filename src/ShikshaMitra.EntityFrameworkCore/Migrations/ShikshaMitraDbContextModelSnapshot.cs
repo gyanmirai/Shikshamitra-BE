@@ -5296,6 +5296,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<bool>("IsDefault")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -6928,6 +6933,225 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppEmployeeICardTemplates", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Address1")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Address2")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Address3")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("ApplicationNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int?>("BloodGroup")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("CasteType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<DateOnly?>("DateOfBirth")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("DepartmentAppliedFor")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("FamilyCaste")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("FinalizedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("FinalizedEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int?>("Gender")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InternalNotes")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("LinkLastIssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("MaritalStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MiddleName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("MobileNo")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("PhotoBlobName")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("PhotoContentType")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("PhotoFileName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<long?>("PhotoSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PinCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("PositionAppliedFor")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("QualificationSummary")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Religion")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ResumeBlobName")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("ResumeContentType")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ResumeFileName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<long?>("ResumeSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SecondaryMobileNo")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SkillsSummary")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StatusReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<DateTime>("TokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_EmployeeApplications_TokenHash");
+
+                    b.HasIndex("TenantId", "ApplicationNumber")
+                        .IsUnique()
+                        .HasDatabaseName("IX_EmployeeApplications_TenantId_ApplicationNumber");
+
+                    b.HasIndex("TenantId", "Email")
+                        .HasDatabaseName("IX_EmployeeApplications_TenantId_Email");
+
+                    b.HasIndex("TenantId", "Status")
+                        .HasDatabaseName("IX_EmployeeApplications_TenantId_Status");
+
+                    b.ToTable("AppEmployeeApplications", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollComponent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7214,14 +7438,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("PayrollMonthYear")
                         .HasMaxLength(7)
                         .HasColumnType("character varying(7)");
-
-                    b.Property<string>("OriginalFileBlobName")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("OriginalFileContentType")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("PreviewToken")
                         .HasMaxLength(64)
@@ -16916,6 +17132,49 @@ namespace ShikshaMitra.Migrations
                                 .HasForeignKey("EmployeeId");
                         });
 
+                    b.OwnsMany("ShikshaMitra.HR.Employees.WorkExperience", "WorkExperiences", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("Department")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Designation")
+                                .HasColumnType("text");
+
+                            b1.Property<DateOnly?>("FromDate")
+                                .HasColumnType("date");
+
+                            b1.Property<string>("OrganizationAddress")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OrganizationName")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("References")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Responsibilities")
+                                .HasColumnType("text");
+
+                            b1.Property<DateOnly?>("ToDate")
+                                .HasColumnType("date");
+
+                            b1.HasKey("EmployeeId", "__synthesizedOrdinal");
+
+                            b1.ToTable("AppEmployees");
+
+                            b1.ToJson("WorkExperiences");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeId");
+                        });
+
                     b.OwnsMany("ShikshaMitra.HR.Employees.EmployeeDocument", "Documents", b1 =>
                         {
                             b1.Property<Guid>("Id")
@@ -16957,49 +17216,6 @@ namespace ShikshaMitra.Migrations
                                 .HasDatabaseName("IX_EmployeeDocuments_EmployeeId_DocumentNameId");
 
                             b1.ToTable("AppEmployeeDocuments", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("EmployeeId");
-                        });
-
-                    b.OwnsMany("ShikshaMitra.HR.Employees.WorkExperience", "WorkExperiences", b1 =>
-                        {
-                            b1.Property<Guid>("EmployeeId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<int>("__synthesizedOrdinal")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("integer");
-
-                            b1.Property<string>("Department")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Designation")
-                                .HasColumnType("text");
-
-                            b1.Property<DateOnly?>("FromDate")
-                                .HasColumnType("date");
-
-                            b1.Property<string>("OrganizationAddress")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("OrganizationName")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("References")
-                                .HasColumnType("text");
-
-                            b1.Property<string>("Responsibilities")
-                                .HasColumnType("text");
-
-                            b1.Property<DateOnly?>("ToDate")
-                                .HasColumnType("date");
-
-                            b1.HasKey("EmployeeId", "__synthesizedOrdinal");
-
-                            b1.ToTable("AppEmployees");
-
-                            b1.ToJson("WorkExperiences");
 
                             b1.WithOwner()
                                 .HasForeignKey("EmployeeId");
@@ -17070,6 +17286,108 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("EducationMediumStage");
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplication", b =>
+                {
+                    b.OwnsOne("ShikshaMitra.Common.Country", "Country", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeApplicationId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("IsoCode")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("CountryIsoCode");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)")
+                                .HasColumnName("CountryName");
+
+                            b1.HasKey("EmployeeApplicationId");
+
+                            b1.ToTable("AppEmployeeApplications");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeApplicationId");
+                        });
+
+                    b.OwnsOne("ShikshaMitra.Common.State", "State", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeApplicationId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("IsoCode")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("StateIsoCode");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)")
+                                .HasColumnName("StateName");
+
+                            b1.HasKey("EmployeeApplicationId");
+
+                            b1.ToTable("AppEmployeeApplications");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeApplicationId");
+                        });
+
+                    b.OwnsMany("ShikshaMitra.HR.Employees.WorkExperience", "WorkExperiences", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeApplicationId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("Department")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Designation")
+                                .HasColumnType("text");
+
+                            b1.Property<DateOnly?>("FromDate")
+                                .HasColumnType("date");
+
+                            b1.Property<string>("OrganizationAddress")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("OrganizationName")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("References")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Responsibilities")
+                                .HasColumnType("text");
+
+                            b1.Property<DateOnly?>("ToDate")
+                                .HasColumnType("date");
+
+                            b1.HasKey("EmployeeApplicationId", "__synthesizedOrdinal");
+
+                            b1.ToTable("AppEmployeeApplications");
+
+                            b1.ToJson("WorkExperiences");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeApplicationId");
+                        });
+
+                    b.Navigation("Country");
+
+                    b.Navigation("State");
+
+                    b.Navigation("WorkExperiences");
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.Payroll.EmployeePayrollComponent", b =>

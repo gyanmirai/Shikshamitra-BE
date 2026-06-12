@@ -63,7 +63,16 @@ internal static class HrPolicyAssignmentProjection
 			LeavePolicy = resolved.LeavePolicy == null ? null : new EffectiveLeavePolicyDto
 			{
 				Id = resolved.LeavePolicy.Id,
-				Name = resolved.LeavePolicy.PolicyName
+				Name = resolved.LeavePolicy.PolicyName,
+				AllowedLeaveTypeIds = resolved.LeavePolicy.Rules
+					.Where(rule =>
+						rule.IsActive &&
+						rule.LeaveType != null &&
+						rule.LeaveType.IsActive &&
+						!rule.LeaveType.IsDeleted)
+					.Select(rule => rule.LeaveTypeId)
+					.Distinct()
+					.ToList()
 			},
 			AttendanceWorkCalendarPolicy = HrPolicyMapping.ToDto(resolved.AttendanceWorkCalendarPolicy),
 			PayrollWorkCalendarPolicy = HrPolicyMapping.ToDto(resolved.PayrollWorkCalendarPolicy),

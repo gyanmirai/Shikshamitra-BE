@@ -88,6 +88,7 @@ public class PersonalInfoPolicyOverrideRequest
 	public Guid AcademicYearId { get; set; }
 	public Guid AttendancePolicyId { get; set; }
 	public Guid PayrollPolicyId { get; set; }
+	public Guid LeavePolicyId { get; set; }
 	public DateTime EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public string? AssignmentReason { get; set; }

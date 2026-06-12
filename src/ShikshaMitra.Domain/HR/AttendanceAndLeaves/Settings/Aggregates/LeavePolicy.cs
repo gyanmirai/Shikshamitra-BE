@@ -31,6 +31,7 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTime EffectiveFrom { get; protected set; }
 	public DateTime? EffectiveTo { get; protected set; }
 	public bool IsActive { get; protected set; }
+	public bool IsDefault { get; protected set; }
 
 	public virtual AcademicYear? AcademicYear { get; protected set; }
 	public virtual ICollection<LeavePolicyRule> Rules { get; protected set; } = new List<LeavePolicyRule>();
@@ -47,6 +48,7 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateTime effectiveFrom,
 		DateTime? effectiveTo,
 		HrPolicyStatus status,
+		bool isDefault = false,
 		string? description = null) : base(id)
 	{
 		TenantId = tenantId;
@@ -56,6 +58,7 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Status = status;
 		Description = description;
 		IsActive = status == HrPolicyStatus.Active;
+		SetDefault(isDefault);
 	}
 
 	public void Update(
@@ -63,12 +66,14 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateTime effectiveFrom,
 		DateTime? effectiveTo,
 		HrPolicyStatus status,
+		bool isDefault,
 		string? description)
 	{
 		SetPolicyName(policyName);
 		SetEffectiveRange(effectiveFrom, effectiveTo);
 		Status = status;
 		IsActive = status == HrPolicyStatus.Active;
+		SetDefault(isDefault);
 		Description = description;
 	}
 
@@ -82,6 +87,17 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		Status = HrPolicyStatus.Archived;
 		IsActive = false;
+		IsDefault = false;
+	}
+
+	public void SetDefault(bool isDefault)
+	{
+		if (isDefault && Status != HrPolicyStatus.Active)
+		{
+			throw new BusinessException(HRErrorCodes.DefaultPolicyMustBeActive);
+		}
+
+		IsDefault = isDefault;
 	}
 
 	public void ReplaceRules(IEnumerable<LeavePolicyRule> rules)

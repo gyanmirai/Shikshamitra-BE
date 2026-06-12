@@ -18,8 +18,7 @@ public class EmployeeIdentityCreationWorkflow(
 	ILogger<EmployeeIdentityCreationWorkflow> logger,
 	IdentityUserManager userManager,
 	IIdentityUserRepository userRepository,
-	ILookupNormalizer lookupNormalizer,
-	EmployeeUsernameGenerator usernameGenerator) : ApplicationService, ITransientDependency
+	ILookupNormalizer lookupNormalizer) : ApplicationService, ITransientDependency
 {
 	public async Task<EmployeeIdentityCreationResult> CreateAsync(CreateEmployeeBasicInfoDto input)
 	{
@@ -35,11 +34,10 @@ public class EmployeeIdentityCreationWorkflow(
 				.WithData("email", input.Email!);
 		}
 
-		var username = await usernameGenerator.GenerateUniqueAsync(input.FirstName, input.LastName);
+		var username = input.Email!;
 		logger.LogInformation(
-			"Generated username '{Username}' for email: {Email}",
-			username,
-			input.Email);
+			"Using email as username '{Username}' for employee identity account",
+			username);
 
 		var password = BuildInitialPassword(username, input.MobileNo!);
 		var userId = guidGenerator.Create();

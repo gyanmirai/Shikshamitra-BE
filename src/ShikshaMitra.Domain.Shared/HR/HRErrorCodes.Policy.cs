@@ -18,6 +18,7 @@ public static partial class HRErrorCodes
 	public const string HrPolicyInvalidWorkCalendar = "ShikshaMitra:InvalidWorkCalendarPolicy";
 	public const string DefaultAttendancePolicyRequired = "ShikshaMitra:DefaultAttendancePolicyRequired";
 	public const string DefaultPayrollPolicyRequired = "ShikshaMitra:DefaultPayrollPolicyRequired";
+	public const string DefaultLeavePolicyRequired = "ShikshaMitra:DefaultLeavePolicyRequired";
 	public const string AcademicYearRequired = "ShikshaMitra:AcademicYearRequired";
 	public const string AcademicYearRequiredForPolicyResolution = "ShikshaMitra:AcademicYearRequiredForPolicyResolution";
 	public const string WorkCalendarPolicyRequired = "ShikshaMitra:WorkCalendarPolicyRequired";

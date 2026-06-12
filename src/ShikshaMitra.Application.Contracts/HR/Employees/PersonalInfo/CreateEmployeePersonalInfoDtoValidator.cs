@@ -78,6 +78,29 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 			.MaximumLength(10)
 			.Matches(@"^\d{6}$").When(x => !string.IsNullOrEmpty(x.Pincode))
 			.WithMessage("Pincode must be 6 digits.");
+
+		RuleFor(x => x.PolicyOverride!.AcademicYearId)
+			.NotEmpty()
+			.When(x => x.PolicyOverride != null);
+		RuleFor(x => x.PolicyOverride!.AttendancePolicyId)
+			.NotEmpty()
+			.When(x => x.PolicyOverride != null);
+		RuleFor(x => x.PolicyOverride!.PayrollPolicyId)
+			.NotEmpty()
+			.When(x => x.PolicyOverride != null);
+		RuleFor(x => x.PolicyOverride!.LeavePolicyId)
+			.NotEmpty()
+			.When(x => x.PolicyOverride != null);
+		RuleFor(x => x.PolicyOverride!.EffectiveFrom)
+			.NotEmpty()
+			.When(x => x.PolicyOverride != null);
+		RuleFor(x => x.PolicyOverride!.EffectiveTo)
+			.Must((dto, effectiveTo) =>
+				!effectiveTo.HasValue ||
+				dto.PolicyOverride == null ||
+				effectiveTo.Value.Date >= dto.PolicyOverride.EffectiveFrom.Date)
+			.WithMessage("Policy override effective-to must be on or after effective-from.")
+			.When(x => x.PolicyOverride != null);
 	}
 
 	private static int CalculateAge(DateOnly dob, DateOnly referenceDate)

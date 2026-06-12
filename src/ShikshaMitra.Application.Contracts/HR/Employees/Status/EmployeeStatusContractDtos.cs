@@ -32,3 +32,12 @@ public class EmployeeStatusUpdateResponse
 
 	public DateOnly? EffectiveDate { get; set; }
 }
+
+/// <summary>
+/// API contract: deactivation eligibility result for an employee.
+/// </summary>
+public class EmployeeStatusDeactivationCheckResponse
+{
+	public bool CanDeactivate { get; set; }
+	public int ActiveDirectReportCount { get; set; }
+}

@@ -33,7 +33,7 @@ public class CreateUpdateHrPolicyAssignmentDto
 	public string? TargetDisplayName { get; set; }
 	public Guid AttendancePolicyId { get; set; }
 	public Guid PayrollPolicyId { get; set; }
-	public Guid? LeavePolicyId { get; set; }
+	public Guid LeavePolicyId { get; set; }
 	public DateTime EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public bool IsActive { get; set; } = true;
@@ -49,7 +49,7 @@ public class UpsertEmployeePolicyOverrideDto
 	public Guid? AssignmentId { get; set; }
 	public Guid AttendancePolicyId { get; set; }
 	public Guid PayrollPolicyId { get; set; }
-	public Guid? LeavePolicyId { get; set; }
+	public Guid LeavePolicyId { get; set; }
 	public DateTime EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public string? AssignmentReason { get; set; }
@@ -108,6 +108,7 @@ public class EffectiveLeavePolicyDto
 {
 	public Guid Id { get; set; }
 	public string Name { get; set; } = string.Empty;
+	public List<Guid> AllowedLeaveTypeIds { get; set; } = [];
 }
 
 public class PolicyAssignmentPreviewRequestDto

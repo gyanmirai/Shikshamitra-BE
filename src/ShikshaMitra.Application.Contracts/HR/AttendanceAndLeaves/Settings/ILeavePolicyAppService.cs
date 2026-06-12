@@ -25,5 +25,6 @@ public interface ILeavePolicyAppService : ICrudAppService<
 	Task<LeavePolicyResponse> CreateLeavePolicyAsync(Guid academicYearId, LeavePolicyCreateRequest input);
 	Task<LeavePolicyDetailResponse> GetLeavePolicyByIdAsync(Guid policyId);
 	Task<LeavePolicyDetailResponse> UpdateLeavePolicyAsync(Guid policyId, LeavePolicyUpdateRequest input);
+	Task<LeavePolicyDetailResponse> SetDefaultAsync(Guid policyId);
 	Task<LeavePolicyDeleteResponse> DeleteLeavePolicyAsync(Guid policyId);
 }

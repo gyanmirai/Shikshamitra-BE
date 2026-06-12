@@ -162,6 +162,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "HR.Policies.PolicyImpact", new SubmoduleInfo(Policies_PolicyImpact.All, Policies_PolicyImpact.DisplayNames) },
 			{ "HR.Calendar", new SubmoduleInfo(Calendar.All, Calendar.DisplayNames) },
 			{ "HR.Employee.EmployeeList", new SubmoduleInfo(Employee_EmployeeList.All, Employee_EmployeeList.DisplayNames) },
+			{ "HR.Employee.EmployeeOnboarding", new SubmoduleInfo(Employee_EmployeeOnboarding.All, Employee_EmployeeOnboarding.DisplayNames) },
 			{ "HR.Employee.ICard", new SubmoduleInfo(Employee_ICard.All, Employee_ICard.DisplayNames) },
 			{ "HR.Employee.Setting.DocumentTypes", new SubmoduleInfo(Employee_SettingDocumentTypes.All, Employee_SettingDocumentTypes.DisplayNames) },
 			{ "HR.PayrollManagement", new SubmoduleInfo(PayrollManagement.All, PayrollManagement.DisplayNames) },

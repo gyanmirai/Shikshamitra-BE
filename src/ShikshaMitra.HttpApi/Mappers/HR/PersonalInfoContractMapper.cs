@@ -45,6 +45,7 @@ public static partial class PersonalInfoContractMapper
 				AcademicYearId = request.PolicyOverride.AcademicYearId,
 				AttendancePolicyId = request.PolicyOverride.AttendancePolicyId,
 				PayrollPolicyId = request.PolicyOverride.PayrollPolicyId,
+				LeavePolicyId = request.PolicyOverride.LeavePolicyId,
 				EffectiveFrom = request.PolicyOverride.EffectiveFrom,
 				EffectiveTo = request.PolicyOverride.EffectiveTo,
 				AssignmentReason = request.PolicyOverride.AssignmentReason,

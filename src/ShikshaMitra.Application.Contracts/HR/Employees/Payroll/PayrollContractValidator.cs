@@ -127,6 +127,7 @@ public class EmployeePayrollPolicyOverrideContractValidator : AbstractValidator<
 			.WithMessage("Policy override assignment id must not be empty when provided.");
 		RuleFor(x => x.PayrollPolicyId).NotEmpty();
 		RuleFor(x => x.AttendancePolicyId).NotEmpty();
+		RuleFor(x => x.LeavePolicyId).NotEmpty();
 		RuleFor(x => x.EffectiveFrom).NotEmpty();
 		RuleFor(x => x.EffectiveTo)
 			.Must((x, effectiveTo) => !effectiveTo.HasValue || effectiveTo.Value.Date >= x.EffectiveFrom.Date)

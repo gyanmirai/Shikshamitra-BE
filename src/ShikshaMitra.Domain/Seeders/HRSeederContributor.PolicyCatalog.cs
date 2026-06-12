@@ -96,6 +96,8 @@ public partial class HRSeederContributor
 				: null;
 		}
 
+		var defaultLeavePolicyAssigned = await _leavePolicyRepository.HasActiveDefaultAsync(academicYearId);
+
 		async Task SeedPolicyAsync(string policyName, string description, params Func<Task<LeavePolicyRuleInput?>>[] ruleFactories)
 		{
 			var rules = new List<LeavePolicyRuleInput>();
@@ -119,8 +121,10 @@ public partial class HRSeederContributor
 				DateTime.Today,
 				null,
 				HrPolicyStatus.Active,
+				!defaultLeavePolicyAssigned,
 				rules,
 				description);
+			defaultLeavePolicyAssigned = defaultLeavePolicyAssigned || leavePolicy.IsDefault;
 			await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
 		}
 

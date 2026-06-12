@@ -24,6 +24,22 @@ public class EmployeeStatusAppService(
 	IDistributedEventBus distributedEventBus)
 	: ApplicationService, IEmployeeStatusAppService
 {
+	public async Task<EmployeeStatusDeactivationCheckDto> GetDeactivationCheckAsync(Guid employeeId)
+	{
+		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
+
+		_ = await employeeRepository.GetAsync(employeeId)
+			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
+
+		var activeDirectReportCount = await GetActiveDirectReportCountAsync(employeeId);
+
+		return new EmployeeStatusDeactivationCheckDto
+		{
+			CanDeactivate = activeDirectReportCount == 0,
+			ActiveDirectReportCount = activeDirectReportCount
+		};
+	}
+
 	public async Task<EmployeeStatusResponseDto> ChangeStatusAsync(Guid employeeId, ChangeEmployeeStatusDto input)
 	{
 		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
@@ -112,11 +128,7 @@ public class EmployeeStatusAppService(
 
 	private async Task EnsureNoActiveDirectReportsAsync(Guid employeeId)
 	{
-		var employeeQuery = await employeeRepository.GetQueryableAsync();
-		var activeDirectReportCount = await AsyncExecuter.CountAsync(
-			employeeQuery.Where(e =>
-				e.ReportingManagerId == employeeId &&
-				e.EmployeeStatusType == EmployeeStatusType.Active));
+		var activeDirectReportCount = await GetActiveDirectReportCountAsync(employeeId);
 
 		if (activeDirectReportCount > 0)
 		{
@@ -124,5 +136,14 @@ public class EmployeeStatusAppService(
 				.WithData("EmployeeId", employeeId)
 				.WithData("ActiveDirectReportCount", activeDirectReportCount);
 		}
+	}
+
+	private async Task<int> GetActiveDirectReportCountAsync(Guid employeeId)
+	{
+		var employeeQuery = await employeeRepository.GetQueryableAsync();
+		return await AsyncExecuter.CountAsync(
+			employeeQuery.Where(e =>
+				e.ReportingManagerId == employeeId &&
+				e.EmployeeStatusType == EmployeeStatusType.Active));
 	}
 }

@@ -15,4 +15,5 @@ public class LeavePolicyDto : FullAuditedEntityDto<Guid>
 	public DateTime? EffectiveTo { get; set; }
 	public int RuleCount { get; set; }
 	public bool IsActive { get; set; }
+	public bool IsDefault { get; set; }
 }

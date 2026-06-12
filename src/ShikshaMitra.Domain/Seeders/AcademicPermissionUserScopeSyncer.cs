@@ -177,11 +177,17 @@ public class AcademicPermissionUserScopeSyncer(
 			}
 		}
 
-		var standards = (await standardRepository.GetListAsync()).ToDictionary(x => x.Id);
 		var standardPermissions = await standardPermissionRepository.GetListAsync();
 		logger.LogInformation(
 			"[AcademicPermissionUserScopeSyncer] Loaded standard permissions. Count={PermissionCount}",
 			standardPermissions.Count);
+		var divisionPermissions = await divisionPermissionRepository.GetListAsync();
+		logger.LogInformation(
+			"[AcademicPermissionUserScopeSyncer] Loaded division permissions. Count={PermissionCount}",
+			divisionPermissions.Count);
+		var standards = standardPermissions.Count == 0 && divisionPermissions.Count == 0
+			? new Dictionary<Guid, Standard>()
+			: (await standardRepository.GetListAsync()).ToDictionary(x => x.Id);
 		foreach (var permission in standardPermissions)
 		{
 			if (permission.UserId.HasValue &&
@@ -194,11 +200,9 @@ public class AcademicPermissionUserScopeSyncer(
 			}
 		}
 
-		var divisions = (await divisionRepository.GetListAsync()).ToDictionary(x => x.Id);
-		var divisionPermissions = await divisionPermissionRepository.GetListAsync();
-		logger.LogInformation(
-			"[AcademicPermissionUserScopeSyncer] Loaded division permissions. Count={PermissionCount}",
-			divisionPermissions.Count);
+		var divisions = divisionPermissions.Count == 0
+			? new Dictionary<Guid, Division>()
+			: (await divisionRepository.GetListAsync()).ToDictionary(x => x.Id);
 		foreach (var permission in divisionPermissions)
 		{
 			if (permission.UserId.HasValue &&

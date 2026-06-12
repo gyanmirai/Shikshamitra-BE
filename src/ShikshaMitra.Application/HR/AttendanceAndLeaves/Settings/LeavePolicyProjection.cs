@@ -15,6 +15,7 @@ public static class LeavePolicyProjection
 		EffectiveTo = policy.EffectiveTo,
 		RuleCount = policy.Rules.Count(rule => rule.IsActive),
 		Description = policy.Description,
+		IsDefault = policy.IsDefault,
 		Rules = policy.Rules.Select(ToRuleItem).ToList()
 	};
 
@@ -27,6 +28,7 @@ public static class LeavePolicyProjection
 		EffectiveTo = policy.EffectiveTo,
 		RuleCount = policy.Rules.Count(rule => rule.IsActive),
 		Description = policy.Description,
+		IsDefault = policy.IsDefault,
 		Rules = policy.Rules.Select(ToRuleItem).ToList()
 	};
 
@@ -42,6 +44,7 @@ public static class LeavePolicyProjection
 			EffectiveTo = item.EffectiveTo,
 			RuleCount = item.RuleCount,
 			Description = item.Description,
+			IsDefault = item.IsDefault,
 			Rules = item.Rules,
 			CreatedAt = policy.CreationTime
 		};

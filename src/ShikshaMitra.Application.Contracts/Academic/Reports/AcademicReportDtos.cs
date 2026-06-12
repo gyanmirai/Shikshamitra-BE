@@ -191,4 +191,5 @@ public static class AcademicReportTypes
     public const string ResultListWithSubjectGrade = "Result List With Subject Grade";
     public const string ResultListWithSubjectSmall = "Result List With Subject Small";
     public const string ResultListWithSubjectWithGrace = "Result List With Subject With Grace";
+    public const string ResultWithAllSubjectList = "Result With All Subject List";
 }

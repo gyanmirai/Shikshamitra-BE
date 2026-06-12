@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -13,4 +13,7 @@ public class AssignStudentFeeStructureDto
 	public Guid StandardFeeStructureId { get; set; }
 
 	public List<Guid> SelectedOptionalFeeHeadIds { get; set; } = new List<Guid>();
+
+	public List<StudentFeeHeadDetailDto> FeeHeadDetails { get; set; } = new();
 }
+

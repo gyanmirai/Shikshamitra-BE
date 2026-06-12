@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
@@ -221,5 +222,104 @@ public class StudentFeeAssignmentApi_Tests : ShikshaMitraApiTestBase
         body.FeeHeads.ShouldNotBeEmpty();
         body.FeeHeads.ShouldContain(h => h.FeeHeadId == feeHeadId);
         body.StandardFeeStructureId.ShouldBe(feeStructureId);
+    }
+
+    /// <summary>
+    /// Verifies that assigning a fee structure with customized optional fee heads generates
+    /// due fees matching the custom amounts, one-time months, and recurring ranges.
+    /// </summary>
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Assign_Fee_Structure_With_Custom_Optional_Fee_Heads()
+    {
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var mainFeeHeadId    = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var optionalRecId    = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        var optionalOneId    = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+
+        var metadataId = await GetOrCreateFeeStructureMetadataIdAsync();
+
+        // Create a fee structure with 1 regular recurring fee, 1 optional recurring, and 1 optional one-time
+        var request = new StandardFeeStructureSaveRequest
+        {
+            StandardId = Factory.SeededStandardId,
+            StandardFeeStructures = new StandardFeeStructureRequest
+            {
+                Name = $"Test Custom {Guid.NewGuid():N}"[..24],
+                FeeHeads = new List<FeeHeadAssignmentRequest>
+                {
+                    new() { FeeHeadId = mainFeeHeadId, Amount = 12000d, IsOneTime = false, IsOptional = false },
+                    new() { FeeHeadId = optionalRecId, Amount = 6000d, IsOneTime = false, IsOptional = true },
+                    new() { FeeHeadId = optionalOneId, Amount = 2000d, IsOneTime = true, IsOptional = true }
+                }
+            }
+        };
+
+        var response = await Client.PostAsJsonAsync(
+            $"{FeeStructuresUrl}?feeStructureMetadataId={metadataId}",
+            request, JsonOptions);
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<FeeStructureCreateResponse>(JsonOptions);
+        var feeStructureId = result!.Id;
+
+        // Perform flexible optional fee assignment
+        var assignResponse = await Client.PostAsJsonAsync(AssignUrl, new AssignStudentFeeStructureDto
+        {
+            StudentId = studentId,
+            StandardFeeStructureId = feeStructureId,
+            SelectedOptionalFeeHeadIds = new List<Guid> { optionalRecId, optionalOneId },
+            FeeHeadDetails = new List<StudentFeeHeadDetailDto>
+            {
+                new()
+                {
+                    FeeHeadId = optionalRecId,
+                    Amount = 1500d, // 1500 per month
+                    StartPayableMonth = MonthEnum.July,
+                    StartPayableYear = 2026,
+                    EndPayableMonth = MonthEnum.November,
+                    EndPayableYear = 2026
+                },
+                new()
+                {
+                    FeeHeadId = optionalOneId,
+                    Amount = 2500d, // Custom amount
+                    PayableMonth = MonthEnum.August,
+                    PayableYear = 2026
+                }
+            }
+        }, JsonOptions);
+
+        assignResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Fetch student's assigned fee structure and verify reconstructed values
+        var structureResponse = await Client.GetAsync($"{GetByStudentUrl}/{studentId}");
+        structureResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await structureResponse.Content.ReadFromJsonAsync<StudentFeeStructureResponseDto>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.FeeHeads.ShouldNotBeEmpty();
+
+        var recHead = body.FeeHeads.Find(h => h.FeeHeadId == optionalRecId);
+        recHead.ShouldNotBeNull();
+        recHead.SelectedAmount.ShouldBe(1500m);
+        recHead.StartPayableMonth.ShouldBe(MonthEnum.July);
+        recHead.StartPayableYear.ShouldBe(2026);
+        recHead.EndPayableMonth.ShouldBe(MonthEnum.November);
+        recHead.EndPayableYear.ShouldBe(2026);
+
+        var oneHead = body.FeeHeads.Find(h => h.FeeHeadId == optionalOneId);
+        oneHead.ShouldNotBeNull();
+        oneHead.SelectedAmount.ShouldBe(2500m);
+        oneHead.PayableMonth.ShouldBe(MonthEnum.August);
+        oneHead.PayableYear.ShouldBe(2026);
+
+        // Get collect form ledger and verify totals
+        var form = await GetAndReadAsync<FeeCollectFormDto>(
+            $"{CollectFormUrl}/{studentId}/collect-form?academicYearId={Factory.SeededAcademicYearId}");
+        
+        form.ShouldNotBeNull();
+        form.Ledger.ShouldNotBeNull();
+
+        // 12000 (regular) + 5 * 1500 (optional recurring) + 2500 (optional one-time) = 22000
+        form.Summary.TotalFee.ShouldBe(22000d);
     }
 }

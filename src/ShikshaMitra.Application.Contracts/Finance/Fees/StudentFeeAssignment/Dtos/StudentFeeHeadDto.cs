@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using ShikshaMitra.Finance.Fees.Collections;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
@@ -17,4 +18,14 @@ public class StudentFeeHeadDto
 	public bool IsOneTime { get; set; }
 
 	public bool IsSelected { get; set; }
+
+	// Reconstructed custom selection properties
+	public decimal? SelectedAmount { get; set; }
+	public MonthEnum? PayableMonth { get; set; }
+	public int? PayableYear { get; set; }
+	public MonthEnum? StartPayableMonth { get; set; }
+	public int? StartPayableYear { get; set; }
+	public MonthEnum? EndPayableMonth { get; set; }
+	public int? EndPayableYear { get; set; }
 }
+

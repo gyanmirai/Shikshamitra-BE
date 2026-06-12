@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -64,11 +64,24 @@ public class StudentFeeStructureAppService(
 		foreach (var detail in details.Where(d => feeStructure.FeeStructureDetails.All(x => x.Id != d.Id)))
 			feeStructure.AddDetail(detail);
 
+		var optionalDetails = input.FeeHeadDetails?.Select(fd => new CustomOptionalFeeHeadDetail
+		{
+			FeeHeadId = fd.FeeHeadId,
+			Amount = fd.Amount,
+			PayableMonth = fd.PayableMonth,
+			PayableYear = fd.PayableYear,
+			StartPayableMonth = fd.StartPayableMonth,
+			StartPayableYear = fd.StartPayableYear,
+			EndPayableMonth = fd.EndPayableMonth,
+			EndPayableYear = fd.EndPayableYear
+		}).ToList() ?? new List<CustomOptionalFeeHeadDetail>();
+
 		var dueFees = await dueFeeManager.GenerateForStudentAsync(
 			student.Id,
 			feeStructure,
 			academicYear,
-			input.SelectedOptionalFeeHeadIds);
+			input.SelectedOptionalFeeHeadIds,
+			optionalDetails);
 	
 		await dueFeeRepository.InsertManyAsync(dueFees, autoSave: false);
 
@@ -165,8 +178,12 @@ public class StudentFeeStructureAppService(
 
 		return feeHeadIds.Select(feeHeadId =>
 		{
-			var lines = dueFees.Where(d => d.FeeHeadId == feeHeadId).ToList();
+			var lines = dueFees.Where(d => d.FeeHeadId == feeHeadId).OrderBy(l => l.Year).ThenBy(l => l.Month).ToList();
 			feeHeadMap.TryGetValue(feeHeadId, out var feeHead);
+
+			var isOneTime = lines.All(l => l.IsOneTime);
+			var firstLine = lines.FirstOrDefault();
+			var lastLine = lines.LastOrDefault();
 
 			return new StudentFeeHeadDto
 			{
@@ -175,8 +192,17 @@ public class StudentFeeStructureAppService(
 				CategoryName = feeHead?.FeeCategory?.Name ?? string.Empty,
 				Amount = (decimal)lines.Sum(l => l.OriginalAmount),
 				IsOptional = false,
-				IsOneTime = lines.All(l => l.IsOneTime),
+				IsOneTime = isOneTime,
 				IsSelected = true,
+
+				// Reconstructed custom selection properties
+				SelectedAmount = firstLine != null ? (decimal)firstLine.OriginalAmount : 0m,
+				PayableMonth = isOneTime && firstLine != null ? firstLine.Month : null,
+				PayableYear = isOneTime && firstLine != null ? firstLine.Year : null,
+				StartPayableMonth = !isOneTime && firstLine != null ? firstLine.Month : null,
+				StartPayableYear = !isOneTime && firstLine != null ? firstLine.Year : null,
+				EndPayableMonth = !isOneTime && lastLine != null ? lastLine.Month : null,
+				EndPayableYear = !isOneTime && lastLine != null ? lastLine.Year : null,
 			};
 		}).ToList();
 	}

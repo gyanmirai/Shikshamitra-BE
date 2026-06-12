@@ -46,6 +46,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Finance.Fees.InvoiceReceipt", new SubmoduleInfo(Fees_InvoiceReceipt.All, Fees_InvoiceReceipt.DisplayNames) },
 			{ "Finance.Fees.Concession", new SubmoduleInfo(Fees_Concession.All, Fees_Concession.DisplayNames) },
 			{ "Finance.Fees.Adjustment", new SubmoduleInfo(Fees_Adjustment.All, Fees_Adjustment.DisplayNames) },
+			{ "Finance.Fees.StructureAssign", new SubmoduleInfo(Fees_StructureAssign.All, Fees_StructureAssign.DisplayNames) },
 
 			// Fees Settings submodules
 			{ "Finance.Settings.FeeCategory", new SubmoduleInfo(Fees_Settings_FeeCategory.All, Fees_Settings_FeeCategory.DisplayNames) },

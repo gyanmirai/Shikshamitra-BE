@@ -128,6 +128,25 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		public static class Fees_StructureAssign
+		{
+			private const string SubmoduleName = $"{ModuleName}.Fees.StructureAssign";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Fees.StructureAssign";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
 		public static class Fees_Settings_FeeCategory
 		{
 			private const string SubmoduleName = $"{ModuleName}.Settings.FeeCategory";

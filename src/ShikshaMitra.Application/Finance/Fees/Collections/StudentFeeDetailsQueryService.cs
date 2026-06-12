@@ -191,21 +191,28 @@ public class StudentFeeDetailsQueryService(
 
 		var metaQ = await feeRecordMetadataRepository.GetQueryableAsync();
 
+		var dueFeesQ = await dueFeeRepository.GetQueryableAsync();
+
+		var dueFeesForStudent = dueFeesQ
+			.Where(d => d.StudentId == studentId)
+			.ToList();
+
 		if (feeStructureAssignment != null)
 		{
 			var detailsQ = await feeStructureDetailRepository.GetQueryableAsync();
 			var feeHeadsQ = await feeHeadRepository.GetQueryableAsync();
 
 			var feeHeadDefs = (from detail in detailsQ
-							   join fh in feeHeadsQ on detail.FeeHeadId equals fh.Id
-							   where detail.FeeStructureId == feeStructureAssignment.FeeStructureStandardId
-							   select new
-							   {
-								   detail.FeeHeadId,
-								   FeeHeadName = fh.Name,
-								   Description = fh.Description ?? string.Empty,
-								   NetAmount = detail.Amount,
-							   }).ToList();
+                               join fh in feeHeadsQ on detail.FeeHeadId equals fh.Id
+                               where detail.FeeStructureId == feeStructureAssignment.FeeStructureStandardId
+                                     && dueFeesForStudent.Select(d => d.FeeHeadId).Contains(detail.FeeHeadId)
+                               select new
+                               {
+                                   detail.FeeHeadId,
+                                   FeeHeadName = fh.Name,
+                                   Description = fh.Description ?? string.Empty,
+                                   NetAmount = detail.Amount,
+                               }).ToList();
 
 			var feeCollQ  = await feeCollectionRecordRepository.GetQueryableAsync();
 
@@ -223,7 +230,7 @@ public class StudentFeeDetailsQueryService(
 		// ── Reconciliation amounts per fee head ───────────────────────────────
 		var reconByFeeHead = await GetInReconciliationByFeeHeadAsync(studentId);
 
-			feeHeadSummaries = feeHeadDefs.Select(def =>
+			dfeeHeadSummaries = feeHeadDefs.Select(def =>
 			{
 				var paid = paidPerHead.GetValueOrDefault(def.FeeHeadId, 0d);
 				var pending = Math.Max(0d, def.NetAmount - paid);
@@ -332,11 +339,11 @@ public class StudentFeeDetailsQueryService(
 			}).ToList();
 		}
 
-		var totalFee = feeHeadSummaries.Sum(fh => fh.Amount);
-		var totalPaid = feeHeadSummaries.Sum(fh => fh.PaidAmount);
-		var totalPending = feeHeadSummaries.Sum(fh => fh.PendingAmount ?? 0d);
+		var totalFee = dfeeHeadSummaries.Sum(fh => fh.Amount);
+		var totalPaid = dfeeHeadSummaries.Sum(fh => fh.PaidAmount);
+		var totalPending = dfeeHeadSummaries.Sum(fh => fh.PendingAmount ?? 0d);
 		var totalConcession = concessions?.Sum(c => c.Amount ?? 0d) ?? 0d;
-		var totalRecon = feeHeadSummaries.Sum(fh => fh.ReconciliationAmount ?? 0d);
+		var totalRecon = dfeeHeadSummaries.Sum(fh => fh.ReconciliationAmount ?? 0d);
 
 		return new StudentFeeDetailsDto
 		{
@@ -349,7 +356,7 @@ public class StudentFeeDetailsQueryService(
 				ConcessionAmount = totalConcession > 0d ? totalConcession : null,
 				ReconciliationAmount = totalRecon > 0d ? totalRecon : null,
 			},
-			FeeHeads = feeHeadSummaries,
+			FeeHeads = dfeeHeadSummaries,
 			Charges = chargeDtos,
 			Payments = payments,
 			Concessions = concessions,

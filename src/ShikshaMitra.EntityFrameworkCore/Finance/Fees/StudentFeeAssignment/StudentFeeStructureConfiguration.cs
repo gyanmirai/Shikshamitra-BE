@@ -8,7 +8,7 @@ public class StudentFeeStructureConfiguration : IEntityTypeConfiguration<Student
 {
 	public void Configure(EntityTypeBuilder<StudentFeeStructure> builder)
 	{
-		builder.ToTable("StudentFeeStructures", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_StudentFeeStructures", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		builder.HasIndex(x => x.StudentId);

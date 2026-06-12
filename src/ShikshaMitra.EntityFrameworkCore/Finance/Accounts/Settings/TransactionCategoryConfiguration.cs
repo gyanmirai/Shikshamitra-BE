@@ -9,7 +9,7 @@ public class TransactionCategoryConfiguration : IEntityTypeConfiguration<Transac
 {
 	public void Configure(EntityTypeBuilder<TransactionCategory> builder)
 	{
-		builder.ToTable("TransactionCategories", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_TransactionCategories", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		builder.OwnsMany(x => x.Tags, tag =>

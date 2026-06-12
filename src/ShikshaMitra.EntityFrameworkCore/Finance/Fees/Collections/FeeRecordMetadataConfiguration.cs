@@ -8,7 +8,7 @@ public class FeeRecordMetadataConfiguration : IEntityTypeConfiguration<FeeRecord
 {
     public void Configure(EntityTypeBuilder<FeeRecordMetadata> builder)
     {
-        builder.ToTable("FeeRecordMetadatas", ShikshaMitraConsts.DbSchema);
+        builder.ToTable("Finance_FeeRecordMetadatas", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.ReceiptNumber)

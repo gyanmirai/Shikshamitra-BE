@@ -8,7 +8,7 @@ public class ChargeCollectionRecordConfiguration : IEntityTypeConfiguration<Char
 {
     public void Configure(EntityTypeBuilder<ChargeCollectionRecord> builder)
     {
-        builder.ToTable("ChargeCollectionRecords", ShikshaMitraConsts.DbSchema);
+        builder.ToTable("Finance_ChargeCollectionRecords", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.HasIndex(x => x.FeeRecordMetadataId)

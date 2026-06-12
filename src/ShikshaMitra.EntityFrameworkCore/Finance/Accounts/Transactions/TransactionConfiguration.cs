@@ -10,7 +10,7 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
 {
 	public void Configure(EntityTypeBuilder<Transaction> builder)
 	{
-		builder.ToTable("Transactions", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_Transactions", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(500);

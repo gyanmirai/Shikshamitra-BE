@@ -9,7 +9,7 @@ public class StudentFeeRecordConfiguration : IEntityTypeConfiguration<StudentFee
 {
     public void Configure(EntityTypeBuilder<StudentFeeRecord> builder)
     {
-        builder.ToTable("StudentFeeRecords", ShikshaMitraConsts.DbSchema);
+        builder.ToTable("Finance_StudentFeeRecords", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.Remarks)

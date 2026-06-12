@@ -7,7 +7,7 @@ public class FeeStructureMetadataConfiguration : IEntityTypeConfiguration<FeeStr
 {
 	public void Configure(EntityTypeBuilder<FeeStructureMetadata> builder)
 	{
-		builder.ToTable("FeeStructureMetadatas", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_FeeStructureMetadatas", ShikshaMitraConsts.DbSchema);
 
 		builder.HasOne(x => x.AcademicYear).WithMany().HasForeignKey(x => x.AcademicYearId).OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne(x => x.AcademicBoard).WithMany().HasForeignKey(x => x.AcademicBoardId).OnDelete(DeleteBehavior.Restrict);

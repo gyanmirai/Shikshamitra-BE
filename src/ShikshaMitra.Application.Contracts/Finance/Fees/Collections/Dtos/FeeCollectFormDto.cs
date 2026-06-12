@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -51,11 +51,18 @@ public class FeeLedgerLineDto
     /// <summary>Original fee amount for this month.</summary>
     public double Total { get; set; }
 
-    /// <summary>Amount already paid against this obligation.</summary>
+    /// <summary>Amount already paid (cleared) against this obligation.</summary>
     public double Paid { get; set; }
 
     /// <summary>Outstanding amount (Total − Paid, clamped to zero).</summary>
     public double Due { get; set; }
+
+    /// <summary>
+    /// Amount of <see cref="Paid"/> that is currently held in reconciliation
+    /// (cheque/DD submitted but not yet cleared by the finance team).
+    /// A sub-set of <see cref="Paid"/> — not an additional amount on top of it.
+    /// </summary>
+    public double ReconciliationAmount { get; set; }
 
     public FeeCollectionStatus Status { get; set; }
 }

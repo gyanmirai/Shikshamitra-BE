@@ -1,4 +1,4 @@
-using ShikshaMitra.Domain.Finance.Fees.Settings;
+﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
@@ -31,6 +31,7 @@ public class StudentFeeDetailsQueryService(
 	IDueFeeRepository dueFeeRepository,
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository,
+	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
 	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
@@ -82,6 +83,9 @@ public class StudentFeeDetailsQueryService(
 			var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
 			var feeHeadNameMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
 
+			// ── Reconciliation amounts per DueFee ─────────────────────────────────
+			var reconByDueFee = await GetInReconciliationByDueFeeAsync(studentId);
+
 			var grouped = dueFees
 				.GroupBy(d => (d.Year, d.Month))
 				.OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month);
@@ -96,6 +100,7 @@ public class StudentFeeDetailsQueryService(
 					Total = d.OriginalAmount,
 					Paid = d.PaidAmount,
 					Due = d.OutstandingAmount,
+					ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
 					Status = d.OutstandingAmount <= 0d
 						? FeeCollectionStatus.Paid
 						: (d.PaidAmount > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
@@ -115,6 +120,7 @@ public class StudentFeeDetailsQueryService(
 				TotalFee = dueFees.Sum(d => d.OriginalAmount),
 				PaidFee = dueFees.Sum(d => d.PaidAmount),
 				PendingFee = dueFees.Sum(d => d.OutstandingAmount),
+				ReconciliationAmount = reconByDueFee.Values.Sum(),
 			};
 		}
 
@@ -178,7 +184,7 @@ public class StudentFeeDetailsQueryService(
 		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
 		var studentSummary = BuildStudentSummary(student);
 
-		var feeHeadSummaries = new List<FeeHeadSummaryDto>();
+		var dfeeHeadSummaries = new List<FeeHeadSummaryDto>();
 
 		var feeStructureAssignment = await studentFeeStructureRepository
 			.FirstOrDefaultAsync(x => x.StudentId == studentId);
@@ -214,10 +220,14 @@ public class StudentFeeDetailsQueryService(
 				.Select(g => new { FeeHeadId = g.Key, Paid = g.Sum(r => r.Amount) })
 				.ToDictionary(x => x.FeeHeadId, x => x.Paid);
 
+		// ── Reconciliation amounts per fee head ───────────────────────────────
+		var reconByFeeHead = await GetInReconciliationByFeeHeadAsync(studentId);
+
 			feeHeadSummaries = feeHeadDefs.Select(def =>
 			{
 				var paid = paidPerHead.GetValueOrDefault(def.FeeHeadId, 0d);
 				var pending = Math.Max(0d, def.NetAmount - paid);
+				var recon = reconByFeeHead.GetValueOrDefault(def.FeeHeadId, 0d);
 				return new FeeHeadSummaryDto
 				{
 					FeeHeadId = def.FeeHeadId,
@@ -226,6 +236,7 @@ public class StudentFeeDetailsQueryService(
 					PaidAmount = paid,
 					PendingAmount = pending,
 					Description = def.Description,
+					ReconciliationAmount = recon > 0d ? recon : null,
 					Status = pending <= 0d ? FeeCollectionStatus.Paid : (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 				};
 			}).ToList();
@@ -325,6 +336,7 @@ public class StudentFeeDetailsQueryService(
 		var totalPaid = feeHeadSummaries.Sum(fh => fh.PaidAmount);
 		var totalPending = feeHeadSummaries.Sum(fh => fh.PendingAmount ?? 0d);
 		var totalConcession = concessions?.Sum(c => c.Amount ?? 0d) ?? 0d;
+		var totalRecon = feeHeadSummaries.Sum(fh => fh.ReconciliationAmount ?? 0d);
 
 		return new StudentFeeDetailsDto
 		{
@@ -335,6 +347,7 @@ public class StudentFeeDetailsQueryService(
 				PaidFee = totalPaid,
 				PendingFee = totalPending,
 				ConcessionAmount = totalConcession > 0d ? totalConcession : null,
+				ReconciliationAmount = totalRecon > 0d ? totalRecon : null,
 			},
 			FeeHeads = feeHeadSummaries,
 			Charges = chargeDtos,
@@ -403,6 +416,51 @@ public class StudentFeeDetailsQueryService(
 	{
 		var parts = new[] { first, middle, last };
 		return string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+	}
+
+	// ── Reconciliation helpers ────────────────────────────────────────────────────
+
+	/// <summary>
+	/// Returns a map of DueFeeId → sum of amounts that are currently
+	/// <c>InReconciliation</c> (cheque/DD submitted but not yet cleared).
+	/// Reversed transactions are excluded.
+	/// </summary>
+	private async Task<Dictionary<Guid, double>> GetInReconciliationByDueFeeAsync(Guid studentId)
+	{
+		var metaQ    = await feeRecordMetadataRepository.GetQueryableAsync();
+		var allocQ   = await dueFeeAllocationRepository.GetQueryableAsync();
+
+		var reconMetaIds = metaQ
+			.Where(m => m.StudentId == studentId && m.Status == FeeCollectionStatus.InReconciliation)
+			.Select(m => m.Id);
+
+		return allocQ
+			.Where(a => reconMetaIds.Contains(a.FeeRecordMetadataId))
+			.GroupBy(a => a.DueFeeId)
+			.Select(g => new { DueFeeId = g.Key, Amount = g.Sum(a => a.Amount) })
+			.ToDictionary(x => x.DueFeeId, x => x.Amount);
+	}
+
+	/// <summary>
+	/// Returns a map of FeeHeadId → sum of amounts that are currently
+	/// <c>InReconciliation</c> (cheque/DD submitted but not yet cleared).
+	/// Derived via <c>FeeCollectionRecord</c> (which stores <c>FeeHeadId</c> directly).
+	/// Reversed transactions are excluded.
+	/// </summary>
+	private async Task<Dictionary<Guid, double>> GetInReconciliationByFeeHeadAsync(Guid studentId)
+	{
+		var metaQ   = await feeRecordMetadataRepository.GetQueryableAsync();
+		var collQ   = await feeCollectionRecordRepository.GetQueryableAsync();
+
+		var reconMetaIds = metaQ
+			.Where(m => m.StudentId == studentId && m.Status == FeeCollectionStatus.InReconciliation)
+			.Select(m => m.Id);
+
+		return collQ
+			.Where(r => r.StudentId == studentId && reconMetaIds.Contains(r.FeeRecordMetadataId))
+			.GroupBy(r => r.FeeHeadId)
+			.Select(g => new { FeeHeadId = g.Key, Amount = g.Sum(r => r.Amount) })
+			.ToDictionary(x => x.FeeHeadId, x => x.Amount);
 	}
 
 	private sealed class StudentSnapshot

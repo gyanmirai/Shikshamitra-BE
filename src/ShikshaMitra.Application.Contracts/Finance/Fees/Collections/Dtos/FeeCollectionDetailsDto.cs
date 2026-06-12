@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -42,6 +42,12 @@ public class FeeSummaryDto
     public double TotalFee { get; set; }
     public double PaidFee { get; set; }
     public double PendingFee { get; set; }
+
+    /// <summary>
+    /// Sum of all DueFee line allocations whose parent <c>FeeRecordMetadata</c> is currently
+    /// <c>InReconciliation</c> (cheque/DD submitted but not yet cleared).
+    /// </summary>
+    public double ReconciliationAmount { get; set; }
 }
 
 /// <summary>Breakdown of a single fee head including payment status.</summary>

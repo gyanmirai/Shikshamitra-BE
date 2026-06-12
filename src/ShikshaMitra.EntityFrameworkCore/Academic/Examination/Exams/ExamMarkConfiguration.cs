@@ -18,6 +18,7 @@ public class ExamMarkConfiguration : IEntityTypeConfiguration<ExamMark>
 		builder.Property(x => x.DivisionId).IsRequired();
 		builder.Property(x => x.MarksObtained).IsRequired(false);
 		builder.Property(x => x.IsAbsent).IsRequired();
+		builder.Property(x => x.AttendanceStatus).IsRequired().HasDefaultValue(ExamAttendanceStatus.Present);
 		builder.Property(x => x.Feedback).HasMaxLength(1000).IsRequired(false);
 		builder.Property(x => x.IsPublished).IsRequired().HasDefaultValue(false);
 

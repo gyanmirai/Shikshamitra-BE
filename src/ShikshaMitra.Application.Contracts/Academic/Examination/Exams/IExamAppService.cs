@@ -37,4 +37,17 @@ public interface IExamAppService : IApplicationService
     Task<UpdateStudentMarksResponseDto> UpdateStudentMarksAsync(Guid examId, Guid studentId, Guid subjectId, UpdateStudentMarksDto input);
 
     Task<PublishMarksResponseDto> PublishMarksAsync(Guid examId, Guid divisionId);
+
+    // Workflow endpoints
+    Task<MarksWorkflowActionResponseDto> SaveDraftAsync(Guid examId, MarksWorkflowActionInput input);
+
+    Task<MarksWorkflowActionResponseDto> SubmitMarksAsync(Guid examId, MarksWorkflowActionInput input);
+
+    Task<MarksWorkflowActionResponseDto> VerifyMarksAsync(Guid examId, MarksWorkflowActionInput input);
+
+    Task<MarksWorkflowActionResponseDto> PublishAndLockAsync(Guid examId, MarksWorkflowActionInput input);
+
+    Task<UpdateStudentAttendanceResponseDto> UpdateStudentAttendanceAsync(Guid examId, Guid studentId, Guid subjectId, UpdateStudentAttendanceDto input);
+
+    Task<GetExamMarksSummaryResponseDto> GetMarksSummaryAsync(GetExamMarksSummaryInput input);
 }

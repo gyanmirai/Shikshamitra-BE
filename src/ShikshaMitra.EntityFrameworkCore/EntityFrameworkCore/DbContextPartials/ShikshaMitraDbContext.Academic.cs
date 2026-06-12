@@ -3,6 +3,7 @@ using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Academic.Examination.Results;
 using ShikshaMitra.Academic.Examination.SeatAllocation;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Homework;
@@ -58,7 +59,13 @@ public partial class ShikshaMitraDbContext
     public DbSet<ExamSubject> ExamSubjects { get; set; }
     public DbSet<ExamSubjectDivision> ExamSubjectDivisions { get; set; }
     public DbSet<ExamMark> ExamMarks { get; set; }
+    public DbSet<ExamMarksWorkflowState> ExamMarksWorkflowStates { get; set; }
     public DbSet<ExamSeatAllocation> ExamSeatAllocations { get; set; }
+
+    // Result lifecycle
+    public DbSet<ExamResultHeader> ExamResultHeaders { get; set; }
+    public DbSet<ExamResultDetail> ExamResultDetails { get; set; }
+    public DbSet<ExamResultAuditLog> ExamResultAuditLogs { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Timetable (Settings)

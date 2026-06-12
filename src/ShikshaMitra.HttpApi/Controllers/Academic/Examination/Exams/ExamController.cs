@@ -116,4 +116,47 @@ public class ExamController(
     {
         return await examAppService.PublishMarksAsync(examId, divisionId);
     }
+
+    [HttpPost("{examId}/marks/draft")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+    public async Task<MarksWorkflowActionResponseDto> SaveDraftAsync(Guid examId, [FromQuery] MarksWorkflowActionInput input)
+    {
+        return await examAppService.SaveDraftAsync(examId, input);
+    }
+
+    [HttpPost("{examId}/marks/submit")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+    public async Task<MarksWorkflowActionResponseDto> SubmitMarksAsync(Guid examId, [FromQuery] MarksWorkflowActionInput input)
+    {
+        return await examAppService.SubmitMarksAsync(examId, input);
+    }
+
+    [HttpPost("{examId}/marks/verify")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+    public async Task<MarksWorkflowActionResponseDto> VerifyMarksAsync(Guid examId, [FromQuery] MarksWorkflowActionInput input)
+    {
+        return await examAppService.VerifyMarksAsync(examId, input);
+    }
+
+    [HttpPost("{examId}/marks/publish")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+    public async Task<MarksWorkflowActionResponseDto> PublishAndLockAsync(Guid examId, [FromQuery] MarksWorkflowActionInput input)
+    {
+        return await examAppService.PublishAndLockAsync(examId, input);
+    }
+
+    [HttpPatch("{examId}/students/{studentId}/attendance")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+    public async Task<UpdateStudentAttendanceResponseDto> UpdateStudentAttendanceAsync(
+        Guid examId, Guid studentId, [FromQuery] Guid subjectId, [FromBody] UpdateStudentAttendanceDto input)
+    {
+        return await examAppService.UpdateStudentAttendanceAsync(examId, studentId, subjectId, input);
+    }
+
+    [HttpGet("marks/summary")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
+    public async Task<GetExamMarksSummaryResponseDto> GetMarksSummaryAsync([FromQuery] GetExamMarksSummaryInput input)
+    {
+        return await examAppService.GetMarksSummaryAsync(input);
+    }
 }

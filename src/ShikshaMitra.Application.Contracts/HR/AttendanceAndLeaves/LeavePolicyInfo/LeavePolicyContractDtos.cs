@@ -21,6 +21,8 @@ public class LeavePolicyCreateRequest
 
 	public bool RequiresApproval { get; set; }
 
+	public bool IsDefault { get; set; }
+
 	public string? Description { get; set; }
 }
 
@@ -61,6 +63,8 @@ public class LeavePolicyResponse
 	[Required]
 	public bool RequiresApproval { get; set; }
 
+	public bool IsDefault { get; set; }
+
 	public string? Description { get; set; }
 
 	[Required]
@@ -92,6 +96,8 @@ public class LeavePolicyUpdatedResponse
 
 	[Required]
 	public bool RequiresApproval { get; set; }
+
+	public bool IsDefault { get; set; }
 
 	public string? Description { get; set; }
 

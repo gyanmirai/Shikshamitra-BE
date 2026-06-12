@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.HR.Policies;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 
@@ -86,6 +87,46 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 	{
 		var dbSet = await GetDbSetAsync();
 		return await IncludeRules(dbSet).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+	}
+
+	public async Task<bool> HasActiveDefaultAsync(
+		Guid academicYearId,
+		Guid? excludeId = null,
+		CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		var query = dbSet.Where(x =>
+			x.AcademicYearId == academicYearId &&
+			x.IsActive &&
+			x.Status == HrPolicyStatus.Active &&
+			x.IsDefault);
+
+		if (excludeId.HasValue)
+		{
+			query = query.Where(x => x.Id != excludeId.Value);
+		}
+
+		return await query.AnyAsync(cancellationToken);
+	}
+
+	public async Task<List<LeavePolicy>> GetActiveDefaultsAsync(
+		Guid academicYearId,
+		Guid? excludeId = null,
+		CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		var query = dbSet.Where(x =>
+			x.AcademicYearId == academicYearId &&
+			x.IsActive &&
+			x.Status == HrPolicyStatus.Active &&
+			x.IsDefault);
+
+		if (excludeId.HasValue)
+		{
+			query = query.Where(x => x.Id != excludeId.Value);
+		}
+
+		return await query.ToListAsync(cancellationToken);
 	}
 
 	public async Task<LeavePolicyRule?> GetRuleAsync(Guid leavePolicyId, Guid leaveTypeId, CancellationToken cancellationToken = default)

@@ -16,7 +16,6 @@ public class EmployeePersonalInfoUserAccountCreator(
 	IdentityUserManager userManager,
 	IIdentityUserRepository userRepository,
 	ILookupNormalizer lookupNormalizer,
-	EmployeeUsernameGenerator usernameGenerator,
 	IGuidGenerator guidGenerator,
 	ICurrentTenant currentTenant,
 	ILogger<EmployeePersonalInfoUserAccountCreator> logger) : ITransientDependency
@@ -30,10 +29,8 @@ public class EmployeePersonalInfoUserAccountCreator(
 			throw new BusinessException(HRErrorCodes.EmployeeEmailAlreadyExists);
 		}
 
-		var username = await usernameGenerator.GenerateUniqueAsync(input.FirstName, input.LastName);
-		var last4Digits = input.MobileNo[^4..];
-		var capitalizedUsername = char.ToUpper(username[0]) + username[1..];
-		var password = $"{capitalizedUsername}@{last4Digits}";
+		var username = input.Email!;
+		var password = BuildInitialPassword(username, input.MobileNo);
 
 		var user = new IdentityUser(guidGenerator.Create(), username, input.Email, currentTenant.Id);
 		user.Name = input.FirstName;
@@ -50,6 +47,13 @@ public class EmployeePersonalInfoUserAccountCreator(
 		}
 
 		return new EmployeePersonalInfoUserAccount(user, username, password);
+	}
+
+	private static string BuildInitialPassword(string username, string mobileNo)
+	{
+		var last4Digits = mobileNo[^4..];
+		var capitalizedUsername = char.ToUpper(username[0]) + username[1..];
+		return $"{capitalizedUsername}@{last4Digits}";
 	}
 
 	public async Task DeleteAfterEmployeeCreationFailureAsync(IdentityUser user, string email)

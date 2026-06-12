@@ -44,6 +44,7 @@ public class EmployeePayrollContractWorkflow(
 			AssignmentId = input.AssignmentId,
 			AttendancePolicyId = input.AttendancePolicyId,
 			PayrollPolicyId = input.PayrollPolicyId,
+			LeavePolicyId = input.LeavePolicyId,
 			EffectiveFrom = input.EffectiveFrom,
 			EffectiveTo = input.EffectiveTo,
 			AssignmentReason = input.AssignmentReason,

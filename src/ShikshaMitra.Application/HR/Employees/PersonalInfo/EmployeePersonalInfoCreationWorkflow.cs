@@ -34,6 +34,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 	ILogger<EmployeePersonalInfoCreationWorkflow> logger) : ITransientDependency
 {
 	private const int MaxEmployeeCodeInsertAttempts = 5;
+	private const string OnboardingDefaultPolicyConfirmationTokenMarker = "__employee_onboarding_default_policy_assignment__";
 
 	public async Task<EmployeePersonalInfoDto> CreateAsync(
 		CreateEmployeePersonalInfoDto input,
@@ -118,7 +119,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 				await organizationAssignmentSyncer.SyncAsync(employee.Id, input.OrganizationIds);
 				if (input.PolicyOverride != null)
 				{
-					await CreateDirectPolicyOverrideAsync(employee.Id, input.PolicyOverride);
+					await CreateDirectPolicyOverrideAsync(employee, input.PolicyOverride);
 				}
 
 				await uow.CompleteAsync();
@@ -138,19 +139,63 @@ public class EmployeePersonalInfoCreationWorkflow(
 		throw new InvalidOperationException("Employee creation retry loop exited unexpectedly.");
 	}
 
-	private async Task CreateDirectPolicyOverrideAsync(Guid employeeId, CreateEmployeePolicyOverrideDto input)
+	private async Task CreateDirectPolicyOverrideAsync(Employee employee, CreateEmployeePolicyOverrideDto input)
 	{
-		await policyAssignmentAppService.UpsertEmployeeOverrideAsync(new UpsertEmployeePolicyOverrideDto
+		var overrideInput = new UpsertEmployeePolicyOverrideDto
 		{
-			EmployeeId = employeeId,
+			EmployeeId = employee.Id,
 			AcademicYearId = input.AcademicYearId,
 			AttendancePolicyId = input.AttendancePolicyId,
 			PayrollPolicyId = input.PayrollPolicyId,
+			LeavePolicyId = input.LeavePolicyId,
 			EffectiveFrom = input.EffectiveFrom,
 			EffectiveTo = input.EffectiveTo,
 			AssignmentReason = input.AssignmentReason ?? "Employee creation override",
 			ConfirmationToken = input.ConfirmationToken
+		};
+
+		await EnsureOnboardingDefaultPolicyOverrideConfirmedAsync(employee, overrideInput);
+		await policyAssignmentAppService.UpsertEmployeeOverrideAsync(overrideInput);
+	}
+
+	private async Task EnsureOnboardingDefaultPolicyOverrideConfirmedAsync(
+		Employee employee,
+		UpsertEmployeePolicyOverrideDto input)
+	{
+		if (!string.Equals(
+			    input.ConfirmationToken,
+			    OnboardingDefaultPolicyConfirmationTokenMarker,
+			    StringComparison.Ordinal))
+		{
+			return;
+		}
+
+		var targetKey = HrPolicyAssignment.NormalizeTargetKey(
+			HrPolicyAssignmentTargetType.Employee,
+			employee.Id.ToString("D"));
+		var preview = await policyAssignmentAppService.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
+		{
+			Action = "create",
+			Assignment = new CreateUpdateHrPolicyAssignmentDto
+			{
+				AcademicYearId = input.AcademicYearId,
+				TargetType = HrPolicyMapping.MapAssignmentTargetType(HrPolicyAssignmentTargetType.Employee),
+				TargetKey = targetKey,
+				TargetDisplayName = employee.EmployeeName,
+				AttendancePolicyId = input.AttendancePolicyId,
+				PayrollPolicyId = input.PayrollPolicyId,
+				LeavePolicyId = input.LeavePolicyId,
+				EffectiveFrom = input.EffectiveFrom.Date,
+				EffectiveTo = input.EffectiveTo?.Date,
+				IsActive = true,
+				Priority = 100,
+				AssignmentReason = input.AssignmentReason
+			}
 		});
+
+		input.ConfirmationToken = preview.RequiresConfirmation
+			? preview.ConfirmationToken
+			: null;
 	}
 
 	private static bool IsEmployeeCodeUniqueConstraintViolation(Exception exception)

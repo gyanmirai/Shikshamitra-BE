@@ -11,9 +11,8 @@ namespace ShikshaMitra.TenantSettings.EducationBoards;
 internal static class EducationBoardScopeFilter
 {
     /// <summary>
-    /// Prunes a Board→Medium→Stage→Standard→Division tree to only include nodes
-    /// the given user scope context grants access to.
-    /// Returns the original list unmodified when the scope is admin.
+    /// Prunes a board, medium, stage, standard, and division tree to only include
+    /// nodes the given user scope context grants access to.
     /// </summary>
     internal static IReadOnlyList<EducationBoardDto> PruneTree(
         IReadOnlyList<EducationBoardDto> boards,
@@ -22,7 +21,7 @@ internal static class EducationBoardScopeFilter
         if (scope.IsAdmin)
             return boards;
 
-        // Tenant-wide wildcard (admin already handled above; this catches HasWildcardAcademicYear)
+        // Tenant-wide wildcard (admin already handled above; this catches HasWildcardAcademicYear).
         if (scope.HasTenantWideScope())
             return boards;
 
@@ -30,106 +29,178 @@ internal static class EducationBoardScopeFilter
 
         foreach (var board in boards)
         {
-            // Full board access = user can see ALL mediums (and lower) under this board
-            bool boardFullAccess =
+            var boardFullAccess =
                 scope.WildcardBoardAcademicYearIds.Contains(board.AcademicYearId)
                 || scope.WildcardMediumBoardIds.Contains(board.Id);
 
             if (boardFullAccess)
             {
-                result.Add(board);
+                result.Add(CloneBoard(board));
                 continue;
             }
 
-            // No early-exit visibility check here — a user with a standard-level assignment
-            // (boardId=null in their UserScopeAssignment) won't have BoardIds populated, but
-            // the board must still be traversed so we can find their accessible standards.
-            // Boards are kept only if at least one medium survives the pruning below.
-
-            // Prune mediums
+            // A child-level assignment can omit parent ids, so keep traversing
+            // and only retain boards where at least one medium survives.
             var filteredMediums = new List<EducationMediumDto>(board.EducationMediums?.Count ?? 0);
 
             foreach (var medium in board.EducationMediums ?? [])
             {
-                // Full medium access = user can see ALL stages (and lower) under this medium
-                bool mediumFullAccess = scope.WildcardMediumStageMediumIds.Contains(medium.Id);
+                var mediumFullAccess = scope.WildcardMediumStageMediumIds.Contains(medium.Id);
 
                 if (mediumFullAccess)
                 {
-                    filteredMediums.Add(medium);
+                    filteredMediums.Add(CloneMedium(medium));
                     continue;
                 }
 
-                // Prune stages
-                var filteredStages = new List<EducationMediumStageDto>(medium.EducationMediumStages?.Count ?? 0);
+                var filteredStages = new List<EducationMediumStageDto>(
+                    medium.EducationMediumStages?.Count ?? 0);
 
                 foreach (var stage in medium.EducationMediumStages ?? [])
                 {
-                    // Full stage access = user can see ALL standards (and lower) under this stage
-                    bool stageFullAccess = scope.WildcardStandardMediumStageIds.Contains(stage.Id);
+                    var stageFullAccess = scope.WildcardStandardMediumStageIds.Contains(stage.Id);
 
                     if (stageFullAccess)
                     {
-                        filteredStages.Add(stage);
+                        filteredStages.Add(CloneStage(stage));
                         continue;
                     }
 
-                    // Prune standards
                     var filteredStandards = new List<StandardDto>(stage.Standards?.Count ?? 0);
 
                     foreach (var standard in stage.Standards ?? [])
                     {
-                        // Full standard access = user can see ALL divisions under this standard
-                        bool standardFullAccess = scope.WildcardDivisionStandardIds.Contains(standard.Id);
-
-                        // A standard is visible if the user has explicit access to it, OR if the user
-                        // has a division-level assignment inside it (DivisionId set, StandardId left NULL).
-                        bool standardVisible = standardFullAccess
+                        var standardFullAccess = scope.WildcardDivisionStandardIds.Contains(standard.Id);
+                        var standardVisible =
+                            standardFullAccess
                             || scope.StandardIds.Contains(standard.Id)
-                            || (scope.DivisionIds.Count > 0 && (standard.Divisions?.Any(d => scope.DivisionIds.Contains(d.Id)) ?? false));
+                            || (scope.DivisionIds.Count > 0 &&
+                                (standard.Divisions?.Any(d => scope.DivisionIds.Contains(d.Id)) ?? false));
 
                         if (!standardVisible)
                             continue;
 
                         if (standardFullAccess)
                         {
-                            filteredStandards.Add(standard);
+                            filteredStandards.Add(CloneStandard(standard));
                             continue;
                         }
 
-                        // Prune divisions to only explicitly assigned ones
                         var filteredDivisions = standard.Divisions?
                             .Where(d => scope.DivisionIds.Contains(d.Id))
+                            .Select(CloneDivision)
                             .ToList() ?? [];
 
                         if (filteredDivisions.Count > 0)
                         {
-                            standard.Divisions = filteredDivisions;
-                            filteredStandards.Add(standard);
+                            filteredStandards.Add(CloneStandard(standard, filteredDivisions));
                         }
                     }
 
                     if (filteredStandards.Count > 0)
                     {
-                        stage.Standards = filteredStandards;
-                        filteredStages.Add(stage);
+                        filteredStages.Add(CloneStage(stage, filteredStandards));
                     }
                 }
 
                 if (filteredStages.Count > 0)
                 {
-                    medium.EducationMediumStages = filteredStages;
-                    filteredMediums.Add(medium);
+                    filteredMediums.Add(CloneMedium(medium, filteredStages));
                 }
             }
 
             if (filteredMediums.Count > 0)
             {
-                board.EducationMediums = filteredMediums;
-                result.Add(board);
+                result.Add(CloneBoard(board, filteredMediums));
             }
         }
 
         return result;
     }
+
+    private static EducationBoardDto CloneBoard(
+        EducationBoardDto board,
+        List<EducationMediumDto>? educationMediums = null) =>
+        new()
+        {
+            Id = board.Id,
+            Type = board.Type,
+            AcademicYearId = board.AcademicYearId,
+            EducationMediums = educationMediums
+                ?? board.EducationMediums?.Select(medium => CloneMedium(medium)).ToList()
+                ?? [],
+            CreationTime = board.CreationTime,
+            CreatorId = board.CreatorId,
+            LastModificationTime = board.LastModificationTime,
+            LastModifierId = board.LastModifierId
+        };
+
+    private static EducationMediumDto CloneMedium(
+        EducationMediumDto medium,
+        List<EducationMediumStageDto>? stages = null) =>
+        new()
+        {
+            Id = medium.Id,
+            Name = medium.Name,
+            EducationBoardId = medium.EducationBoardId,
+            EducationMediumStages = stages
+                ?? medium.EducationMediumStages?.Select(stage => CloneStage(stage)).ToList()
+                ?? [],
+            CreationTime = medium.CreationTime,
+            CreatorId = medium.CreatorId,
+            LastModificationTime = medium.LastModificationTime,
+            LastModifierId = medium.LastModifierId
+        };
+
+    private static EducationMediumStageDto CloneStage(
+        EducationMediumStageDto stage,
+        List<StandardDto>? standards = null) =>
+        new()
+        {
+            Id = stage.Id,
+            EducationMediumId = stage.EducationMediumId,
+            Name = stage.Name,
+            BannerPicture = stage.BannerPicture,
+            Standards = standards
+                ?? stage.Standards?.Select(standard => CloneStandard(standard)).ToList()
+                ?? [],
+            CreationTime = stage.CreationTime,
+            CreatorId = stage.CreatorId,
+            LastModificationTime = stage.LastModificationTime,
+            LastModifierId = stage.LastModifierId
+        };
+
+    private static StandardDto CloneStandard(
+        StandardDto standard,
+        List<DivisionDto>? divisions = null) =>
+        new()
+        {
+            Id = standard.Id,
+            Name = standard.Name,
+            AgeLowerLimit = standard.AgeLowerLimit,
+            Divisions = divisions
+                ?? standard.Divisions?.Select(division => CloneDivision(division)).ToList()
+                ?? [],
+            EducationMediumStageId = standard.EducationMediumStageId,
+            Shift = standard.Shift,
+            CreationTime = standard.CreationTime,
+            CreatorId = standard.CreatorId,
+            LastModificationTime = standard.LastModificationTime,
+            LastModifierId = standard.LastModifierId
+        };
+
+    private static DivisionDto CloneDivision(DivisionDto division) =>
+        new()
+        {
+            Id = division.Id,
+            Name = division.Name,
+            HeadCount = division.HeadCount,
+            Strength = division.Strength,
+            RoomNumber = division.RoomNumber,
+            StandardId = division.StandardId,
+            CreationTime = division.CreationTime,
+            CreatorId = division.CreatorId,
+            LastModificationTime = division.LastModificationTime,
+            LastModifierId = division.LastModifierId
+        };
 }

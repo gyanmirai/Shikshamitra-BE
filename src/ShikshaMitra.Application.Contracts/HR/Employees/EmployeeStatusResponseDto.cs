@@ -34,3 +34,12 @@ public class EmployeeStatusResponseDto
 	public DateOnly? EffectiveDate { get; set; }
 }
 
+/// <summary>
+/// Response DTO for employee deactivation eligibility checks.
+/// </summary>
+public class EmployeeStatusDeactivationCheckDto
+{
+	public bool CanDeactivate { get; set; }
+	public int ActiveDirectReportCount { get; set; }
+}
+

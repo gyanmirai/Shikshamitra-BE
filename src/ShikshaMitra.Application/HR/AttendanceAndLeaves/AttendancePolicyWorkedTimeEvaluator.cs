@@ -50,6 +50,16 @@ public class AttendancePolicyWorkedTimeEvaluator(
 			return new AttendanceWorkedTimeEvaluation(requestedStatus, []);
 		}
 
+		if (
+			requestedStatus == EmployeeAttendanceStatusType.FullDayLeave &&
+			hasTimeIn &&
+			hasTimeOut &&
+			timeIn!.Value.TimeOfDay == TimeSpan.Zero &&
+			timeOut!.Value.TimeOfDay == TimeSpan.Zero)
+		{
+			return new AttendanceWorkedTimeEvaluation(requestedStatus, []);
+		}
+
 		var policies = await policyResolver.ResolveAsync(
 			employee.Id,
 			attendanceDate.ToDateTime(TimeOnly.MinValue),

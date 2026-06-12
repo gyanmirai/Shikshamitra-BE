@@ -63,6 +63,50 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	}
 
 	[Fact]
+	public async Task CreateAsync_Should_Create_Login_Credentials_That_Match_Linked_User()
+	{
+		var input = await BuildCreateDtoAsync($"login.credentials.{Guid.NewGuid():N}@test.com");
+
+		var result = await _personalInfoAppService.CreateAsync(input);
+
+		result.UserId.ShouldNotBeNull();
+		var linkedUser = await _userRepository.GetAsync(result.UserId.Value);
+		linkedUser.UserName.ShouldBe(input.Email);
+		linkedUser.Email.ShouldBe(input.Email);
+		linkedUser.EmailConfirmed.ShouldBeTrue();
+
+		var generatedPassword = BuildInitialPassword(linkedUser.UserName!, input.MobileNo);
+		var canLoginWithGeneratedPassword = await _userManager.CheckPasswordAsync(linkedUser, generatedPassword);
+		canLoginWithGeneratedPassword.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Use_Email_Login_For_Duplicate_Employee_Names()
+	{
+		var firstInput = await BuildCreateDtoAsync($"login.duplicate.first.{Guid.NewGuid():N}@test.com");
+		firstInput.FirstName = "Collision";
+		firstInput.LastName = "Login";
+		firstInput.MobileNo = "9876543211";
+		await _personalInfoAppService.CreateAsync(firstInput);
+
+		var secondInput = await BuildCreateDtoAsync($"login.duplicate.second.{Guid.NewGuid():N}@test.com");
+		secondInput.FirstName = firstInput.FirstName;
+		secondInput.LastName = firstInput.LastName;
+		secondInput.MobileNo = "9876543212";
+
+		var result = await _personalInfoAppService.CreateAsync(secondInput);
+
+		result.UserId.ShouldNotBeNull();
+		var linkedUser = await _userRepository.GetAsync(result.UserId.Value);
+		linkedUser.UserName.ShouldBe(secondInput.Email);
+		linkedUser.Email.ShouldBe(secondInput.Email);
+
+		var generatedPassword = BuildInitialPassword(linkedUser.UserName!, secondInput.MobileNo);
+		var canLoginWithGeneratedPassword = await _userManager.CheckPasswordAsync(linkedUser, generatedPassword);
+		canLoginWithGeneratedPassword.ShouldBeTrue();
+	}
+
+	[Fact]
 	public async Task CreateWithProfilePictureAsync_Should_Create_Employee_With_Picture()
 	{
 		var input = await BuildCreateDtoAsync("pic.employee@test.com");
@@ -100,7 +144,8 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 
 		var result = await _personalInfoAppService.CreateAsync(input);
 
-		var user = await _userRepository.GetAsync(result.Id);
+		result.UserId.ShouldNotBeNull();
+		var user = await _userRepository.GetAsync(result.UserId.Value);
 		var role = await _roleRepository.GetAsync(input.RoleId);
 
 		(role.Name is not null).ShouldBeTrue();
@@ -290,6 +335,13 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			ShiftId = shiftId,
 			OrganizationIds = [organizationId]
 		};
+	}
+
+	private static string BuildInitialPassword(string username, string mobileNo)
+	{
+		var last4Digits = mobileNo[^4..];
+		var capitalizedUsername = char.ToUpper(username[0]) + username[1..];
+		return $"{capitalizedUsername}@{last4Digits}";
 	}
 
 	private async Task<Guid> EnsureOrganizationExistsAsync()

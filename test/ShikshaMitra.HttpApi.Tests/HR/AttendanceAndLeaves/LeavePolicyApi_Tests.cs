@@ -99,6 +99,34 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 		list.Items.ShouldContain(x => x.PolicyTitle == marker);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Set_Default_Leave_Policy_And_Clear_Previous_Default()
+	{
+		var firstLeaveType = await CreateLeaveTypeAsync();
+		var secondLeaveType = await CreateLeaveTypeAsync();
+		var first = await CreateLeavePolicyAsync(firstLeaveType.Id, $"Default-A-{Guid.NewGuid():N}");
+		var second = await CreateLeavePolicyAsync(secondLeaveType.Id, $"Default-B-{Guid.NewGuid():N}");
+
+		var firstDefaultResponse = await Client.PatchAsync($"{LeavePoliciesUrl}/{first.Id}/set-default", null);
+		firstDefaultResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var firstDefault = await firstDefaultResponse.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
+		firstDefault.ShouldNotBeNull();
+		firstDefault.IsDefault.ShouldBeTrue();
+
+		var secondDefaultResponse = await Client.PatchAsync($"{LeavePoliciesUrl}/{second.Id}/set-default", null);
+		secondDefaultResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var secondDefault = await secondDefaultResponse.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
+		secondDefault.ShouldNotBeNull();
+		secondDefault.IsDefault.ShouldBeTrue();
+
+		var firstDetailResponse = await Client.GetAsync($"{LeavePoliciesUrl}/{first.Id}");
+		firstDetailResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var firstDetail = await firstDetailResponse.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
+		firstDetail.ShouldNotBeNull();
+		firstDetail.IsDefault.ShouldBeFalse();
+	}
+
 	private async Task<LeaveTypeResponse> CreateLeaveTypeAsync()
 	{
 		var request = new LeaveTypeCreateRequest

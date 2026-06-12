@@ -49,6 +49,7 @@ public class LeavePolicyItem
 	public DateTime? EffectiveTo { get; set; }
 	public int RuleCount { get; set; }
 	public string? Description { get; set; }
+	public bool IsDefault { get; set; }
 	public List<LeavePolicyRuleItem> Rules { get; set; } = new();
 }
 
@@ -78,6 +79,7 @@ public class LeavePolicyCreateRequest
 	public DateTime EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public string? Description { get; set; }
+	public bool IsDefault { get; set; }
 	public List<LeavePolicyRuleRequest> Rules { get; set; } = new();
 }
 
@@ -97,6 +99,10 @@ public class LeavePolicyCreateRequestValidator : AbstractValidator<LeavePolicyCr
 			.NotEmpty()
 			.Matches("^(Draft|Active|Archived)$")
 			.WithMessage("Status must be Draft, Active, or Archived");
+
+		RuleFor(x => x)
+			.Must(x => !x.IsDefault || string.Equals(x.Status, "Active", StringComparison.OrdinalIgnoreCase))
+			.WithMessage("Default leave policy must be active.");
 
 		RuleFor(x => x.EffectiveFrom)
 			.NotEmpty();

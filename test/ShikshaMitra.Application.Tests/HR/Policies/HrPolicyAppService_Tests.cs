@@ -44,6 +44,9 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	private readonly IEmployeeStatusAppService _employeeStatus;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IRepository<WorkCalendarPolicy, Guid> _workCalendarPolicyRepository;
+	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
+	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
+	private readonly LeavePolicyManager _leavePolicyManager;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly AcademicYearManager _academicYearManager;
@@ -70,6 +73,9 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		_employeeStatus = GetRequiredService<IEmployeeStatusAppService>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_workCalendarPolicyRepository = GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
+		_leaveTypeRepository = GetRequiredService<IRepository<LeaveType, Guid>>();
+		_leavePolicyRepository = GetRequiredService<IRepository<LeavePolicy, Guid>>();
+		_leavePolicyManager = GetRequiredService<LeavePolicyManager>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
 		_academicYearRepository = GetRequiredService<IAcademicYearRepository>();
 		_academicYearManager = GetRequiredService<AcademicYearManager>();
@@ -2813,6 +2819,109 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
+	public async Task EffectivePolicyPreview_Should_Return_Default_Leave_Policy_Allowed_Leave_Types()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+
+		var preview = await _assignments.GetPreviewAsync(new PolicyAssignmentPreviewRequestDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			Date = new DateTime(2026, 5, 1),
+			EmployeeId = employee.Id
+		});
+
+		preview.LeavePolicy.ShouldNotBeNull();
+		preview.LeavePolicy.Id.ShouldBe(context.LeavePolicy.Id);
+		preview.LeavePolicy.AllowedLeaveTypeIds.ShouldContain(context.LeaveType.Id);
+	}
+
+	[Fact]
+	public async Task EffectivePolicyPreview_Should_Resolve_Legacy_Null_Leave_Assignment_Through_Default()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var assignmentRepository = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			context.AcademicYearId,
+			HrPolicyAssignmentTargetType.Employee,
+			employee.Id.ToString("D").ToLowerInvariant(),
+			employee.FullName,
+			context.AttendancePolicy.Id,
+			context.PayrollPolicy.Id,
+			null,
+			new DateTime(2026, 4, 1),
+			null,
+			true,
+			100,
+			"Legacy null leave policy assignment"), autoSave: true);
+
+		var preview = await _assignments.GetPreviewAsync(new PolicyAssignmentPreviewRequestDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			Date = new DateTime(2026, 5, 1),
+			EmployeeId = employee.Id
+		});
+
+		preview.Assignment.ShouldNotBeNull();
+		preview.Assignment.LeavePolicyId.ShouldBeNull();
+		preview.LeavePolicy.ShouldNotBeNull();
+		preview.LeavePolicy.Id.ShouldBe(context.LeavePolicy.Id);
+		preview.LeavePolicy.AllowedLeaveTypeIds.ShouldContain(context.LeaveType.Id);
+	}
+
+	[Fact]
+	public async Task EffectivePolicyPreview_Should_Reject_Duplicate_Default_Leave_Policies()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var duplicate = new LeavePolicy(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			context.AcademicYearId,
+			$"Duplicate Default Leave {Guid.NewGuid():N}",
+			new DateTime(2026, 4, 1),
+			new DateTime(2027, 3, 31),
+			HrPolicyStatus.Active,
+			true,
+			"Duplicate default for resolver regression");
+		duplicate.ReplaceRules([
+			new LeavePolicyRule(
+				_guidGenerator.Create(),
+				_currentTenant.Id,
+				duplicate.Id,
+				context.LeaveType.Id,
+				LeaveAccrualPolicyType.Monthly,
+				12,
+				LeavePaidType.Paid,
+				false,
+				null,
+				false,
+				null,
+				true,
+				0,
+				30,
+				true,
+				null,
+				false,
+				true)
+		]);
+		await _leavePolicyRepository.InsertAsync(duplicate, autoSave: true);
+
+		var ex = await CaptureBusinessExceptionAsync(() =>
+			_assignments.GetPreviewAsync(new PolicyAssignmentPreviewRequestDto
+			{
+				AcademicYearId = context.AcademicYearId,
+				Date = new DateTime(2026, 5, 1),
+				EmployeeId = employee.Id
+			}));
+
+		ex.Code.ShouldBe("ShikshaMitra:DefaultLeavePolicyRequired");
+	}
+
+	[Fact]
 	public async Task EffectivePolicyResolution_Should_Reject_Mismatched_WorkCalendar_AcademicYear()
 	{
 		var context = await CreatePolicyContextAsync();
@@ -3118,6 +3227,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				TargetDisplayName = employee.FullName,
 				AttendancePolicyId = context.AttendancePolicy.Id,
 				PayrollPolicyId = context.PayrollPolicy.Id,
+				LeavePolicyId = context.LeavePolicy.Id,
 				EffectiveFrom = new DateTime(2026, 5, 31),
 				EffectiveTo = null,
 				IsActive = true,
@@ -3170,6 +3280,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			AcademicYearId = context.AcademicYearId,
 			AttendancePolicyId = context.AttendancePolicy.Id,
 			PayrollPolicyId = replacementPayroll.Id,
+			LeavePolicyId = context.LeavePolicy.Id,
 			EffectiveFrom = new DateTime(2026, 5, 31),
 			AssignmentReason = "Employee payroll edit without assignment id"
 		};
@@ -3184,6 +3295,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				TargetDisplayName = employee.FullName,
 				AttendancePolicyId = input.AttendancePolicyId,
 				PayrollPolicyId = input.PayrollPolicyId,
+				LeavePolicyId = input.LeavePolicyId,
 				EffectiveFrom = input.EffectiveFrom,
 				EffectiveTo = input.EffectiveTo,
 				IsActive = true,
@@ -3452,6 +3564,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				TargetDisplayName = employee.FullName,
 				AttendancePolicyId = context.AttendancePolicy.Id,
 				PayrollPolicyId = context.PayrollPolicy.Id,
+				LeavePolicyId = context.LeavePolicy.Id,
 				EffectiveFrom = new DateTime(2026, 5, 1),
 				IsActive = false,
 				Priority = 100,
@@ -3559,6 +3672,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				TargetDisplayName = employee.FullName,
 				AttendancePolicyId = context.AttendancePolicy.Id,
 				PayrollPolicyId = context.PayrollPolicy.Id,
+				LeavePolicyId = context.LeavePolicy.Id,
 				EffectiveFrom = new DateTime(2026, 5, 1),
 				EffectiveTo = assignment.EffectiveTo,
 				IsActive = false,
@@ -3632,6 +3746,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				TargetDisplayName = employee.FullName,
 				AttendancePolicyId = previewed.AttendancePolicyId,
 				PayrollPolicyId = previewed.PayrollPolicyId,
+				LeavePolicyId = context.LeavePolicy.Id,
 				EffectiveFrom = new DateTime(2026, 5, 1),
 				EffectiveTo = previewed.EffectiveTo,
 				IsActive = false,
@@ -4045,6 +4160,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			AcademicYearId = context.AcademicYearId,
 			AttendancePolicyId = context.AttendancePolicy.Id,
 			PayrollPolicyId = currentPayroll.Id,
+			LeavePolicyId = context.LeavePolicy.Id,
 			EffectiveFrom = new DateTime(2026, 4, 1),
 			EffectiveTo = new DateTime(2026, 6, 30),
 			AssignmentReason = "Current payroll step override"
@@ -4057,6 +4173,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			TargetDisplayName = employee.FullName,
 			PayrollPolicyId = futurePayroll.Id,
 			AttendancePolicyId = context.AttendancePolicy.Id,
+			LeavePolicyId = context.LeavePolicy.Id,
 			EffectiveFrom = new DateTime(2026, 7, 1),
 			IsActive = true,
 			Priority = 100,
@@ -4131,6 +4248,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			EmployeeId = employee.Id,
 			AttendancePolicyId = context.AttendancePolicy.Id,
 			PayrollPolicyId = targetPayroll.Id,
+			LeavePolicyId = context.LeavePolicy.Id,
 			EffectiveFrom = new DateTime(2026, 5, 1),
 			AssignmentReason = "Unconfirmed update"
 		};
@@ -4742,8 +4860,41 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			ManualCorrectionAllowed = true,
 			HolidayWorkBehavior = attendanceHolidayWorkBehavior,
 		});
+		var leaveType = await _leaveTypeRepository.InsertAsync(new LeaveType(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			academicYearId,
+			$"Leave Type {Guid.NewGuid():N}",
+			"#1A73E8"), autoSave: true);
+		var leavePolicy = await _leavePolicyManager.CreateAsync(
+			academicYearId,
+			$"Leave Policy {Guid.NewGuid():N}",
+			new DateTime(2026, 4, 1),
+			new DateTime(2027, 3, 31),
+			HrPolicyStatus.Active,
+			true,
+			[
+				new LeavePolicyRuleInput(
+					leaveType.Id,
+					LeaveAccrualPolicyType.Monthly,
+					12,
+					LeavePaidType.Paid,
+					false,
+					null,
+					false,
+					null,
+					true,
+					0,
+					30,
+					true,
+					null,
+					false,
+					true)
+			],
+			"Default leave policy for policy resolution tests");
+		await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: true);
 
-		return new PolicyContext(academicYearId, calendar, payroll, attendance);
+		return new PolicyContext(academicYearId, calendar, payroll, attendance, leavePolicy, leaveType);
 	}
 
 	private static CreateUpdateWorkCalendarPolicyDto BuildWorkCalendarInput(
@@ -4798,6 +4949,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			TargetDisplayName = targetDisplayName ?? targetKey.Trim(),
 			PayrollPolicyId = context.PayrollPolicy.Id,
 			AttendancePolicyId = context.AttendancePolicy.Id,
+			LeavePolicyId = context.LeavePolicy.Id,
 			EffectiveFrom = effectiveFrom ?? new DateTime(2026, 4, 1),
 			EffectiveTo = effectiveTo,
 			IsActive = true,
@@ -4907,6 +5059,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			AcademicYearId = context.AcademicYearId,
 			AttendancePolicyId = context.AttendancePolicy.Id,
 			PayrollPolicyId = payrollPolicyId,
+			LeavePolicyId = context.LeavePolicy.Id,
 			EffectiveFrom = new DateTime(2026, 4, 1),
 			AssignmentReason = "Repeatable policy override regression"
 		});
@@ -4940,6 +5093,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				TargetDisplayName = assignment.TargetDisplayName,
 				AttendancePolicyId = assignment.AttendancePolicyId,
 				PayrollPolicyId = assignment.PayrollPolicyId,
+				LeavePolicyId = assignment.LeavePolicyId ?? await ResolveDefaultLeavePolicyIdAsync(assignment.AcademicYearId),
 				EffectiveFrom = assignment.EffectiveFrom,
 				EffectiveTo = assignment.EffectiveTo,
 				IsActive = false,
@@ -4989,6 +5143,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 					TargetDisplayName = assignment.TargetDisplayName,
 					AttendancePolicyId = assignment.AttendancePolicyId,
 					PayrollPolicyId = assignment.PayrollPolicyId,
+					LeavePolicyId = assignment.LeavePolicyId ?? await ResolveDefaultLeavePolicyIdAsync(assignment.AcademicYearId),
 					EffectiveFrom = input.EffectiveDate.Date,
 					EffectiveTo = assignment.EffectiveTo,
 					IsActive = false,
@@ -5010,6 +5165,11 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	{
 		var targetKey = input.EmployeeId.ToString("D").ToLowerInvariant();
 		var assignmentId = input.AssignmentId ?? await FindExistingEmployeeAssignmentIdAsync(input, targetKey);
+		if (input.LeavePolicyId == Guid.Empty)
+		{
+			input.LeavePolicyId = await ResolveDefaultLeavePolicyIdAsync(input.AcademicYearId);
+		}
+
 		var preview = await _assignments.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
 		{
 			Action = assignmentId.HasValue ? HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction : "create",
@@ -5021,6 +5181,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				TargetKey = targetKey,
 				AttendancePolicyId = input.AttendancePolicyId,
 				PayrollPolicyId = input.PayrollPolicyId,
+				LeavePolicyId = input.LeavePolicyId,
 				EffectiveFrom = input.EffectiveFrom,
 				EffectiveTo = input.EffectiveTo,
 				IsActive = true,
@@ -5034,6 +5195,21 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			input.ConfirmationToken = preview.ConfirmationToken;
 		}
 		return await _assignments.UpsertEmployeeOverrideAsync(input);
+	}
+
+	private async Task<Guid> ResolveDefaultLeavePolicyIdAsync(Guid academicYearId)
+	{
+		var defaults = (await _leavePolicyRepository.GetListAsync())
+			.Where(x =>
+				x.AcademicYearId == academicYearId &&
+				x.IsDefault &&
+				x.IsActive &&
+				x.Status == HrPolicyStatus.Active &&
+				!x.IsDeleted)
+			.ToList();
+
+		defaults.Count.ShouldBe(1);
+		return defaults.Single().Id;
 	}
 
 	private async Task<HrPolicyAssignmentDto?> FindActiveEmployeeAssignmentAsync(
@@ -5283,5 +5459,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		Guid AcademicYearId,
 		WorkCalendarPolicyDto WorkCalendar,
 		PayrollPolicyDto PayrollPolicy,
-		AttendancePolicyDto AttendancePolicy);
+		AttendancePolicyDto AttendancePolicy,
+		LeavePolicy LeavePolicy,
+		LeaveType LeaveType);
 }

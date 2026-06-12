@@ -31,6 +31,30 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		// Employee - Onboarding
+		public static class Employee_EmployeeOnboarding
+		{
+			private const string SubmoduleName = $"{ModuleName}.Employee.EmployeeOnboarding";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Employee.EmployeeOnboarding";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			public const string Finalize = $"{SubmoduleName}.Finalize";
+
+			public static readonly string[] All = { View, Add, Edit, Delete, Finalize };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
+				{ Finalize, $"{SubmoduleDisplayName}.Finalize" }
+			};
+		}
+
 		// Employee - ICard
 		public static class Employee_ICard
 		{

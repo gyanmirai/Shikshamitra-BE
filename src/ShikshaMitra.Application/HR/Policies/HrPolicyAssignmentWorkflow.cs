@@ -86,7 +86,7 @@ public class HrPolicyAssignmentWorkflow(
 			TargetDisplayName = entity.TargetDisplayName,
 			AttendancePolicyId = entity.AttendancePolicyId,
 			PayrollPolicyId = entity.PayrollPolicyId,
-			LeavePolicyId = entity.LeavePolicyId,
+			LeavePolicyId = entity.LeavePolicyId ?? Guid.Empty,
 			EffectiveFrom = entity.EffectiveFrom,
 			EffectiveTo = entity.EffectiveTo,
 			IsActive = false,

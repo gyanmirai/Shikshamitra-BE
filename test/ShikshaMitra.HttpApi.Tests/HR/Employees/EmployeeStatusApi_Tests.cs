@@ -285,6 +285,53 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Return_Deactivation_Check_For_Manager_With_Active_Direct_Reports()
+	{
+		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusCheckMgrBlock");
+		var reportId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusCheckReport");
+
+		(await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{reportId}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = managerId.ToString() },
+			JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var response = await Client.GetAsync($"{BaseUrl}/{managerId}/status-deactivation-check");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<EmployeeStatusDeactivationCheckResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.CanDeactivate.ShouldBeFalse();
+		body.ActiveDirectReportCount.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Return_Deactivation_Check_Allowed_When_Direct_Reports_Are_Not_Active()
+	{
+		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusCheckMgrAllow");
+		var reportId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusCheckInactiveReport");
+
+		(await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{reportId}/reporting-manager",
+			new ReportingManagerRequest { ReportingManagerId = managerId.ToString() },
+			JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		(await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{reportId}/status",
+			new EmployeeStatusUpdateRequest { EmployeeStatusType = 1, Remarks = "Inactive report", EffectiveDate = TestEffectiveDate },
+			JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var response = await Client.GetAsync($"{BaseUrl}/{managerId}/status-deactivation-check");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<EmployeeStatusDeactivationCheckResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.CanDeactivate.ShouldBeTrue();
+		body.ActiveDirectReportCount.ShouldBe(0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Block_Non_Active_Status_For_Manager_With_Active_Direct_Reports()
 	{
 		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrBlock");

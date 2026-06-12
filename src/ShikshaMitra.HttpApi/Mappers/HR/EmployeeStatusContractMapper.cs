@@ -26,4 +26,13 @@ public static class EmployeeStatusContractMapper
 			EffectiveDate = dto.EffectiveDate
 		};
 	}
+
+	public static EmployeeStatusDeactivationCheckResponse ToResponse(EmployeeStatusDeactivationCheckDto dto)
+	{
+		return new EmployeeStatusDeactivationCheckResponse
+		{
+			CanDeactivate = dto.CanDeactivate,
+			ActiveDirectReportCount = dto.ActiveDirectReportCount
+		};
+	}
 }

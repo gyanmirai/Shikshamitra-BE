@@ -90,6 +90,7 @@ public class CreateUpdateHrPolicyAssignmentDtoValidator : AbstractValidator<Crea
 		RuleFor(x => x.TargetDisplayName).MaximumLength(256);
 		RuleFor(x => x.AttendancePolicyId).NotEmpty();
 		RuleFor(x => x.PayrollPolicyId).NotEmpty();
+		RuleFor(x => x.LeavePolicyId).NotEmpty();
 		RuleFor(x => x.EffectiveFrom).Must(date => date != default).WithMessage("Effective from is required.");
 		RuleFor(x => x)
 			.Must(x => !x.EffectiveTo.HasValue || x.EffectiveTo.Value.Date >= x.EffectiveFrom.Date)
@@ -110,6 +111,7 @@ public class UpsertEmployeePolicyOverrideDtoValidator : AbstractValidator<Upsert
 			.WithMessage("Assignment id must not be empty when provided.");
 		RuleFor(x => x.AttendancePolicyId).NotEmpty();
 		RuleFor(x => x.PayrollPolicyId).NotEmpty();
+		RuleFor(x => x.LeavePolicyId).NotEmpty();
 		RuleFor(x => x.EffectiveFrom).Must(date => date != default).WithMessage("Effective from is required.");
 		RuleFor(x => x)
 			.Must(x => !x.EffectiveTo.HasValue || x.EffectiveTo.Value.Date >= x.EffectiveFrom.Date)

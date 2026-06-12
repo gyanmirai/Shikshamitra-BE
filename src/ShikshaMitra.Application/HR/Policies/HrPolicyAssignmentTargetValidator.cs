@@ -40,23 +40,20 @@ public class HrPolicyAssignmentTargetValidator(
 
 		HrPolicyMapping.EnsureActive(attendancePolicy.Status);
 		HrPolicyMapping.EnsureActive(payrollPolicy.Status);
-		if (input.LeavePolicyId.HasValue)
+		var leavePolicy = await leavePolicyRepository.FindWithoutDetailsAsync(input.LeavePolicyId);
+		if (leavePolicy == null)
 		{
-			var leavePolicy = await leavePolicyRepository.FindWithoutDetailsAsync(input.LeavePolicyId.Value);
-			if (leavePolicy == null)
-			{
-				throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
-			}
+			throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
+		}
 
-			if (leavePolicy.AcademicYearId != input.AcademicYearId)
-			{
-				throw new BusinessException(HRErrorCodes.HrPolicyAssignmentAcademicYearMismatch);
-			}
+		if (leavePolicy.AcademicYearId != input.AcademicYearId)
+		{
+			throw new BusinessException(HRErrorCodes.HrPolicyAssignmentAcademicYearMismatch);
+		}
 
-			if (leavePolicy.Status != HrPolicyStatus.Active || !leavePolicy.IsActive)
-			{
-				throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
-			}
+		if (leavePolicy.Status != HrPolicyStatus.Active || !leavePolicy.IsActive)
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
 		}
 
 		await EnsureActiveWorkCalendarAsync(attendancePolicy.WorkCalendarPolicyId, attendancePolicy.AcademicYearId);

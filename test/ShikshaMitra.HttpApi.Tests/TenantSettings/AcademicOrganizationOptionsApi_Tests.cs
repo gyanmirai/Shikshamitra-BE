@@ -81,6 +81,26 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Options_Should_Not_Return_Restricted_Boards_For_Board_Scoped_User()
+	{
+		var seeded = await SeedAcademicOrganizationsAsync();
+		var scopedUserId = Guid.NewGuid();
+		await EnsureUserHasBoardScopeAsync(scopedUserId, seeded.AcademicYearId, seeded.CbseBoardId);
+
+		var scopedClient = CreateClientAs(scopedUserId);
+		var response = await scopedClient.GetAsync($"{OptionsUrl}?academicYearId={seeded.AcademicYearId:D}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var payload = await response.Content.ReadFromJsonAsync<AcademicOrganizationOptionsResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize academic organization options.");
+
+		payload.Items.Select(x => x.Id).ShouldBe([seeded.CbseEnglishSecondaryStageId]);
+		payload.Items.Select(x => x.BoardName).ShouldBe(["CBSE"]);
+		payload.Items.Select(x => x.Label).ShouldNotContain("GSEB - Gujarati - Primary");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Options_Should_Require_AcademicYearId()
 	{
 		var response = await Client.GetAsync(OptionsUrl);
@@ -145,6 +165,8 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 
 			return new SeededAcademicOrganizations(
 				academicYear.Id,
+				gseb.Id,
+				cbse.Id,
 				primary.Id,
 				secondary.Id,
 				otherYearStage.Id);
@@ -176,8 +198,36 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
+	private async Task EnsureUserHasBoardScopeAsync(Guid userId, Guid academicYearId, Guid boardId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var scopeRepository = scope.ServiceProvider.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		var userScopeService = scope.ServiceProvider.GetRequiredService<IUserScopeService>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await scopeRepository.InsertAsync(
+				new UserScopeAssignment(
+					Guid.NewGuid(),
+					tenantId,
+					userId: userId,
+					academicYearId: academicYearId,
+					educationBoardId: boardId,
+					description: "API regression test academic organization board scope"),
+				autoSave: false);
+			await userScopeService.InvalidateUserScopeCacheAsync(userId);
+			await uow.CompleteAsync();
+		}
+	}
+
 	private sealed record SeededAcademicOrganizations(
 		Guid AcademicYearId,
+		Guid GsebBoardId,
+		Guid CbseBoardId,
 		Guid GsebGujaratiPrimaryStageId,
 		Guid CbseEnglishSecondaryStageId,
 		Guid OtherYearStageId);

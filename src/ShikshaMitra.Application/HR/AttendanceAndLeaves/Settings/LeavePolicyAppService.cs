@@ -1,6 +1,8 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -9,6 +11,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
 [RemoteService(false)]
+[Authorize]
 public class LeavePolicyAppService(
 	IRepository<LeavePolicy, Guid> repository,
 	LeavePolicyReadService readService,
@@ -31,15 +34,23 @@ public class LeavePolicyAppService(
 		throw new BusinessException(HRErrorCodes.LeavePolicyUpdateMethodNotSupported);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.Archive)]
 	public override Task DeleteAsync(Guid id) =>
 		mutationWorkflow.DeactivateAsync(id);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.View)]
+	public override Task<LeavePolicyDto> GetAsync(Guid id) =>
+		base.GetAsync(id);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.View)]
 	public override Task<PagedResultDto<LeavePolicyDto>> GetListAsync(PagedAndSortedResultRequestDto input) =>
 		readService.GetListAsync(input);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.View)]
 	public Task<PagedResultDto<LeavePolicyDto>> GetAllActiveAsync(PagedResultRequestDto input) =>
 		readService.GetAllActiveAsync(input);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.View)]
 	public Task<LeavePolicyListResponse> GetListByAcademicYearIdAsync(
 		Guid academicYearId,
 		int page,
@@ -48,15 +59,23 @@ public class LeavePolicyAppService(
 		CancellationToken cancellationToken = default) =>
 		readService.GetListByAcademicYearIdAsync(academicYearId, page, pageSize, search, cancellationToken);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.Create)]
 	public Task<LeavePolicyResponse> CreateLeavePolicyAsync(Guid academicYearId, LeavePolicyCreateRequest input) =>
 		mutationWorkflow.CreateLeavePolicyAsync(academicYearId, input);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.View)]
 	public Task<LeavePolicyDetailResponse> GetLeavePolicyByIdAsync(Guid policyId) =>
 		readService.GetLeavePolicyByIdAsync(policyId);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.Edit)]
 	public Task<LeavePolicyDetailResponse> UpdateLeavePolicyAsync(Guid policyId, LeavePolicyUpdateRequest input) =>
 		mutationWorkflow.UpdateLeavePolicyAsync(policyId, input);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.SetDefault)]
+	public Task<LeavePolicyDetailResponse> SetDefaultAsync(Guid policyId) =>
+		mutationWorkflow.SetDefaultAsync(policyId);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.Archive)]
 	public Task<LeavePolicyDeleteResponse> DeleteLeavePolicyAsync(Guid policyId) =>
 		mutationWorkflow.DeleteLeavePolicyAsync(policyId);
 }

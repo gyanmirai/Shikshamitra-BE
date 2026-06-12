@@ -32,6 +32,10 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 			.IsRequired()
 			.HasDefaultValue(true);
 
+		builder.Property(x => x.IsDefault)
+			.IsRequired()
+			.HasDefaultValue(false);
+
 		builder.HasOne(x => x.AcademicYear)
 			.WithMany()
 			.HasForeignKey(x => x.AcademicYearId)
@@ -51,5 +55,6 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Status })
 			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_Status");
+
 	}
 }

@@ -8,6 +8,7 @@ using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.HolidayTypes;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.ICards;
+using ShikshaMitra.HR.Employees.Onboarding;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.AttendanceImports;
 using ShikshaMitra.HR.Payroll.RunPayroll;
@@ -25,6 +26,7 @@ namespace ShikshaMitra.EntityFrameworkCore;
 public partial class ShikshaMitraDbContext
 {
     DbSet<Employee> Employees { get; set; }
+    public DbSet<EmployeeApplication> EmployeeApplications { get; set; }
     DbSet<EmployeeAdditionalDetails> EmployeeAdditionalDetails { get; set; }
     DbSet<EmployeeFamilyMember> EmployeeFamilyMembers { get; set; }
     public DbSet<EmployeeOrganizationAssignment> EmployeeOrganizationAssignments { get; set; }

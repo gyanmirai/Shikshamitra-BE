@@ -107,19 +107,51 @@ public class HrEndpointContractSnapshotGuard_Tests
 			new PolicyPermissionExpectation("HrPolicyVersionAppService.cs", "CompareAsync", "View"),
 			new PolicyPermissionExpectation("HrPolicyVersionAppService.cs", "GetRestorePreviewAsync", "PreviewImpact"),
 			new PolicyPermissionExpectation("HrPolicyVersionAppService.cs", "RestoreDraftAsync", "Clone"),
-			new PolicyPermissionExpectation("PolicyHolidayImpactAppService.cs", "GetPreviewAsync", "PreviewImpact")
+			new PolicyPermissionExpectation("PolicyHolidayImpactAppService.cs", "GetPreviewAsync", "PreviewImpact"),
+			new PolicyPermissionExpectation("AttendanceAndLeaves/Settings/LeavePolicyAppService.cs", "GetListAsync", "View", "LeaveManagement_SettingLeavePolicy"),
+			new PolicyPermissionExpectation("AttendanceAndLeaves/Settings/LeavePolicyAppService.cs", "GetAsync", "View", "LeaveManagement_SettingLeavePolicy"),
+			new PolicyPermissionExpectation("AttendanceAndLeaves/Settings/LeavePolicyAppService.cs", "CreateLeavePolicyAsync", "Create", "LeaveManagement_SettingLeavePolicy"),
+			new PolicyPermissionExpectation("AttendanceAndLeaves/Settings/LeavePolicyAppService.cs", "UpdateLeavePolicyAsync", "Edit", "LeaveManagement_SettingLeavePolicy"),
+			new PolicyPermissionExpectation("AttendanceAndLeaves/Settings/LeavePolicyAppService.cs", "DeleteLeavePolicyAsync", "Archive", "LeaveManagement_SettingLeavePolicy"),
+			new PolicyPermissionExpectation("AttendanceAndLeaves/Settings/LeavePolicyAppService.cs", "SetDefaultAsync", "SetDefault", "LeaveManagement_SettingLeavePolicy")
 		};
+		var applicationHrRoot = Path.Combine(repoRoot, "src", "ShikshaMitra.Application", "HR");
 		var policyRoot = Path.Combine(repoRoot, "src", "ShikshaMitra.Application", "HR", "Policies");
 		var violations = expectations
 			.Where(expectation =>
 			{
-				var text = File.ReadAllText(Path.Combine(policyRoot, expectation.FileName));
-				return !HasPermissionAttributeForMethod(text, expectation.MethodName, expectation.Permission);
+				var servicePath = expectation.FileName.Contains('/')
+					? Path.Combine(applicationHrRoot, expectation.FileName.Replace('/', Path.DirectorySeparatorChar))
+					: Path.Combine(policyRoot, expectation.FileName);
+				var text = File.ReadAllText(servicePath);
+				return !HasPermissionAttributeForMethod(
+					text,
+					expectation.MethodName,
+					expectation.PermissionRoot,
+					expectation.Permission);
 			})
-			.Select(expectation => $"{expectation.FileName}.{expectation.MethodName} must require HR.Policies.{expectation.Permission}")
+			.Select(expectation => $"{expectation.FileName}.{expectation.MethodName} must require HR.{expectation.PermissionRoot}.{expectation.Permission}")
 			.ToList();
 
 		violations.ShouldBeEmpty();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Default_Leave_Policy_Migration_Should_Use_Null_Safe_Tenant_Index()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var migrationPath = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.EntityFrameworkCore",
+			"Migrations",
+			"20260611173000_AddDefaultLeavePolicyAssignment.cs");
+		var text = File.ReadAllText(migrationPath);
+
+		text.ShouldContain("CREATE UNIQUE INDEX \"IX_EmployeeLeavePolicies_TenantId_AcademicYearId_Default\"");
+		text.ShouldContain("COALESCE(\"TenantId\", '00000000-0000-0000-0000-000000000000'::uuid)");
+		text.ShouldContain("WHERE \"IsDefault\" = true");
 	}
 
 	private static List<string> BuildEndpointInventory(string controllersRoot)
@@ -212,11 +244,15 @@ public class HrEndpointContractSnapshotGuard_Tests
 		throw new InvalidOperationException("Could not read a balanced controller action parameter list.");
 	}
 
-	private static bool HasPermissionAttributeForMethod(string text, string methodName, string permission)
+	private static bool HasPermissionAttributeForMethod(
+		string text,
+		string methodName,
+		string permissionRoot,
+		string permission)
 	{
 		var methodMatch = Regex.Match(
 			text,
-			$@"^\s*public\s+(?:async\s+)?Task[^\r\n]*\s+{methodName}\s*\(",
+			$@"^\s*public\s+(?:(?:override|virtual|async)\s+)*Task[^\r\n]*\s+{methodName}\s*\(",
 			RegexOptions.CultureInvariant | RegexOptions.Multiline);
 		if (!methodMatch.Success)
 		{
@@ -229,7 +265,7 @@ public class HrEndpointContractSnapshotGuard_Tests
 		var searchStart = Math.Max(previousPublicMethodIndex, previousClassAuthorizeIndex);
 		var methodPreamble = precedingText[searchStart..];
 		return methodPreamble.Contains(
-			$"[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.{permission})]",
+			$"[Authorize(ShikshaMitraSubmodulePermissions.HR.{permissionRoot}.{permission})]",
 			StringComparison.Ordinal);
 	}
 
@@ -264,5 +300,9 @@ public class HrEndpointContractSnapshotGuard_Tests
 		throw new InvalidOperationException("Could not find repository root from test execution directory.");
 	}
 
-	private sealed record PolicyPermissionExpectation(string FileName, string MethodName, string Permission);
+	private sealed record PolicyPermissionExpectation(
+		string FileName,
+		string MethodName,
+		string Permission,
+		string PermissionRoot = "Policies");
 }

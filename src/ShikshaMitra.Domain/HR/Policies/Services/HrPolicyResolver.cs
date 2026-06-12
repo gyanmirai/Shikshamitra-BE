@@ -192,11 +192,19 @@ public class HrPolicyResolver(
 			academicYearId,
 			includeInactive: false,
 			cancellationToken: cancellationToken);
-		return policies
-			.Where(x => x.Status == HrPolicyStatus.Active && x.IsActive)
+		var defaults = policies
+			.Where(x => x.Status == HrPolicyStatus.Active && x.IsActive && x.IsDefault)
 			.OrderBy(x => x.PolicyName)
 			.ThenBy(x => x.Id)
-			.FirstOrDefault();
+			.ToList();
+
+		if (defaults.Count != 1)
+		{
+			throw new BusinessException(HRErrorCodes.DefaultLeavePolicyRequired)
+				.WithData("defaultCount", defaults.Count);
+		}
+
+		return defaults[0];
 	}
 
 	private static void EnsurePolicyUsable(Guid policyAcademicYearId, HrPolicyStatus status, Guid academicYearId, string inactiveErrorCode)
@@ -229,7 +237,7 @@ public class HrPolicyResolver(
 	{
 		if (policy == null)
 		{
-			return;
+			throw new BusinessException(HRErrorCodes.DefaultLeavePolicyRequired);
 		}
 
 		if (policy.AcademicYearId != academicYearId)

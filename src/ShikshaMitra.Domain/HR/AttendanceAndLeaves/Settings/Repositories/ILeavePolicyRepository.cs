@@ -29,6 +29,10 @@ public interface ILeavePolicyRepository : IRepository<LeavePolicy, Guid>
 
 	Task<LeavePolicy?> FindWithoutDetailsAsync(Guid id, CancellationToken cancellationToken = default);
 
+	Task<bool> HasActiveDefaultAsync(Guid academicYearId, Guid? excludeId = null, CancellationToken cancellationToken = default);
+
+	Task<List<LeavePolicy>> GetActiveDefaultsAsync(Guid academicYearId, Guid? excludeId = null, CancellationToken cancellationToken = default);
+
 	Task<LeavePolicy?> GetWithRulesAsync(Guid id, CancellationToken cancellationToken = default);
 
 	Task<LeavePolicyRule?> GetRuleAsync(Guid leavePolicyId, Guid leaveTypeId, CancellationToken cancellationToken = default);

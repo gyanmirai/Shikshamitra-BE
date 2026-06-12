@@ -84,7 +84,7 @@ public class HrPolicyEmployeeOverrideDisabler(
 			TargetDisplayName = assignment.TargetDisplayName,
 			AttendancePolicyId = assignment.AttendancePolicyId,
 			PayrollPolicyId = assignment.PayrollPolicyId,
-			LeavePolicyId = assignment.LeavePolicyId,
+			LeavePolicyId = assignment.LeavePolicyId ?? Guid.Empty,
 			EffectiveFrom = input.EffectiveDate.Date,
 			EffectiveTo = assignment.EffectiveTo,
 			IsActive = false,

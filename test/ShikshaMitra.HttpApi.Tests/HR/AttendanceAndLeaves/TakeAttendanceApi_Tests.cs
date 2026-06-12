@@ -555,6 +555,45 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task SaveDay_Should_Accept_Absent_With_Zero_Times_For_Manual_With_Time_Policy()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateTime(2026, 4, 9);
+		var attendanceDateOnly = DateOnly.FromDateTime(attendanceDate);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"ManualAbsentZeroTime{Guid.NewGuid():N}",
+			dateOfJoining: attendanceDate.AddDays(-10));
+		await AssignCaptureModePolicyAsync(employee.Id, attendanceDateOnly, AttendanceCaptureMode.ManualWithTime);
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDateOnly.ToString("yyyy-MM-dd"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "ABSENT",
+					InTime = "00:00:00",
+					OutTime = "00:00:00"
+				}
+			]
+		}, JsonOptions);
+		var responseBody = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, responseBody);
+
+		var attendance = await GetAttendanceAsync(employee.Id, attendanceDateOnly);
+		attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.FullDayLeave);
+		attendance.TimeIn.ShouldNotBeNull();
+		attendance.TimeOut.ShouldNotBeNull();
+		attendance.TimeIn.Value.TimeOfDay.ShouldBe(TimeSpan.Zero);
+		attendance.TimeOut.Value.TimeOfDay.ShouldBe(TimeSpan.Zero);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task SaveDay_Should_Normalize_DateTime_Punches_To_Selected_Attendance_Date()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
@@ -835,7 +874,10 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
 		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
 		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var leaveTypeRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
+		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var guidGenerator = scope.ServiceProvider.GetRequiredService<IGuidGenerator>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
 		using (currentTenant.Change(tenantId))
@@ -854,6 +896,14 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				x.AcademicYearId == academicYear.Id &&
 				x.IsDefault &&
 				x.Status == HrPolicyStatus.Active);
+			var leavePolicyId = await EnsureActiveDefaultLeavePolicyAsync(
+				tenantId,
+				academicYear.Id,
+				academicYear.StartDate,
+				academicYear.EndDate,
+				leaveTypeRepository,
+				leavePolicyRepository,
+				guidGenerator);
 			var policy = new AttendancePolicy(
 				Guid.NewGuid(),
 				tenantId,
@@ -890,7 +940,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				null,
 				policy.Id,
 				defaultPayroll.Id,
-				null,
+				leavePolicyId,
 				targetDate.Date,
 				null,
 				true,
@@ -910,7 +960,10 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
 		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
 		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var leaveTypeRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
+		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var guidGenerator = scope.ServiceProvider.GetRequiredService<IGuidGenerator>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
 		using (currentTenant.Change(tenantId))
@@ -929,6 +982,14 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				x.AcademicYearId == academicYear.Id &&
 				x.IsDefault &&
 				x.Status == HrPolicyStatus.Active);
+			var leavePolicyId = await EnsureActiveDefaultLeavePolicyAsync(
+				tenantId,
+				academicYear.Id,
+				academicYear.StartDate,
+				academicYear.EndDate,
+				leaveTypeRepository,
+				leavePolicyRepository,
+				guidGenerator);
 			var policy = new AttendancePolicy(
 				Guid.NewGuid(),
 				tenantId,
@@ -965,7 +1026,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				null,
 				policy.Id,
 				defaultPayroll.Id,
-				null,
+				leavePolicyId,
 				targetDate.Date,
 				null,
 				true,
@@ -974,6 +1035,67 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			await uow.CompleteAsync();
 			return (policy.Id, academicYear.Id);
 		}
+	}
+
+	private static async Task<Guid> EnsureActiveDefaultLeavePolicyAsync(
+		Guid tenantId,
+		Guid academicYearId,
+		DateTime effectiveFrom,
+		DateTime effectiveTo,
+		IRepository<LeaveType, Guid> leaveTypeRepository,
+		IRepository<LeavePolicy, Guid> leavePolicyRepository,
+		IGuidGenerator guidGenerator)
+	{
+		var leavePolicyQuery = await leavePolicyRepository.GetQueryableAsync();
+		var existing = leavePolicyQuery.FirstOrDefault(x =>
+			x.AcademicYearId == academicYearId &&
+			x.IsActive &&
+			x.IsDefault &&
+			x.Status == HrPolicyStatus.Active);
+		if (existing != null)
+		{
+			return existing.Id;
+		}
+
+		var suffix = Guid.NewGuid().ToString("N")[..12];
+		var leaveType = new LeaveType(
+			guidGenerator.Create(),
+			tenantId,
+			academicYearId,
+			$"AP {suffix}",
+			"#2196F3");
+		await leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
+
+		var leavePolicy = new LeavePolicy(
+			guidGenerator.Create(),
+			tenantId,
+			academicYearId,
+			$"AP Policy {suffix}",
+			effectiveFrom,
+			effectiveTo,
+			HrPolicyStatus.Active,
+			isDefault: true);
+		var leavePolicyRule = new LeavePolicyRule(
+			guidGenerator.Create(),
+			tenantId,
+			leavePolicy.Id,
+			leaveType.Id,
+			LeaveAccrualPolicyType.Yearly,
+			12,
+			LeavePaidType.Paid,
+			carryForward: false,
+			carryForwardLimit: null,
+			encashable: false,
+			encashmentTiming: null,
+			requiresApproval: true,
+			minNoticeDays: 0,
+			maxDaysPerRequest: 30,
+			allowHalfDay: true,
+			attachmentRequiredAfterDays: null,
+			allowNegativeBalance: false);
+		leavePolicy.ReplaceRules([leavePolicyRule]);
+		await leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
+		return leavePolicy.Id;
 	}
 
 	private async Task<Guid> InsertShiftAsync(

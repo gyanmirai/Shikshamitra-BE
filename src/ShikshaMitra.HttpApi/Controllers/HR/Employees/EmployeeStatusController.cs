@@ -21,6 +21,20 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 public class EmployeeStatusController(IEmployeeStatusAppService employeeStatusAppService) : AbpControllerBase
 {
 	/// <summary>
+	/// Check whether an employee can be moved to a non-active status.
+	/// </summary>
+	[HttpGet("{employeeId}/status-deactivation-check")]
+	[ProducesResponseType(typeof(EmployeeStatusDeactivationCheckResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<EmployeeStatusDeactivationCheckResponse> GetDeactivationCheckAsync(
+		[FromRoute, Required] Guid employeeId)
+	{
+		var result = await employeeStatusAppService.GetDeactivationCheckAsync(employeeId);
+		return EmployeeStatusContractMapper.ToResponse(result);
+	}
+
+	/// <summary>
 	/// Change employee status. Idempotent: same status returns 200 without persisting or publishing an event.
 	/// </summary>
 	[HttpPut("{employeeId}/status")]

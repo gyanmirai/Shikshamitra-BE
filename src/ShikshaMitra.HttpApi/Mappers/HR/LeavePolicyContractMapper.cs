@@ -23,6 +23,7 @@ public static class LeavePolicyContractMapper
 			CarryForward = request.CarryForward,
 			Encashable = request.EncashmentAllowed,
 			RequiresApproval = request.RequiresApproval,
+			IsDefault = request.IsDefault,
 			Description = request.Description
 		};
 	}
@@ -41,6 +42,7 @@ public static class LeavePolicyContractMapper
 			CarryForward = request.CarryForward,
 			Encashable = request.EncashmentAllowed,
 			RequiresApproval = request.RequiresApproval,
+			IsDefault = request.IsDefault,
 			Description = request.Description
 		};
 	}
@@ -60,6 +62,7 @@ public static class LeavePolicyContractMapper
 			CarryForward = false,
 			EncashmentAllowed = false,
 			RequiresApproval = false,
+			IsDefault = dto.IsDefault,
 			Description = dto.Description,
 			CreatedAt = dto.CreationTime
 		};
@@ -80,6 +83,7 @@ public static class LeavePolicyContractMapper
 			CarryForward = false,
 			EncashmentAllowed = false,
 			RequiresApproval = false,
+			IsDefault = dto.IsDefault,
 			Description = dto.Description,
 			UpdatedAt = dto.LastModificationTime ?? dto.CreationTime
 		};

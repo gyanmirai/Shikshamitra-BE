@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Collections;
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -15,7 +15,6 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     public double Amount { get; private set; }
     public bool IsOneTime { get; private set; }
     public bool IsOptional { get; private set; }
-	public bool IsRefundable { get; private set; }
 
 	public MonthEnum? PayableMonth { get; private set; }
 	public int? PayableYear { get; private set; }
@@ -32,7 +31,6 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
         double amount,
         bool isOneTime,
         bool isOptional,
-		bool isRefundable,
 		MonthEnum? payableMonth,
 		int? payableYear) : base(id)
     {
@@ -42,7 +40,6 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
         Amount = amount;
         IsOneTime = isOneTime;
         IsOptional = isOptional;
-		IsRefundable = isRefundable;
 		PayableMonth = isOneTime ? payableMonth : null;
 		PayableYear = isOneTime ? payableYear : null;
     }

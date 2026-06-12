@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -77,7 +77,6 @@ public class FeeStructureApi_Tests : ShikshaMitraApiTestBase
                         Amount       = 12_000d,
                         IsOneTime    = false, // Recurring fee
                         IsOptional   = false,
-                        IsRefundable = true,
                         PayableMonth = MonthEnum.April, // Attempt to set PayableMonth
                         PayableYear  = 2026            // Attempt to set PayableYear
                     },
@@ -130,7 +129,6 @@ public class FeeStructureApi_Tests : ShikshaMitraApiTestBase
                         Amount       = 3_000d,
                         IsOneTime    = true, // One-time fee
                         IsOptional   = false,
-                        IsRefundable = true,
                         PayableMonth = MonthEnum.June,
                         PayableYear  = 2026
                     },

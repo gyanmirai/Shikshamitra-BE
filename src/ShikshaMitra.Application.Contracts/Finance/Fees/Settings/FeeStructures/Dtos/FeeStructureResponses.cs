@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.Collections;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
@@ -57,7 +57,6 @@ public class FeeHeadAssignmentResponse
     public double Amount { get; set; }
     public bool IsOneTime { get; set; }
     public bool IsOptional { get; set; }
-	public bool IsRefundable { get; set; }
 	public MonthEnum? PayableMonth { get; set; }
 	public int? PayableYear { get; set; }
 }

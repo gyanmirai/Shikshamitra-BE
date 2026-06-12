@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -93,22 +93,7 @@ public class FeeRefundAppService(
                 AcademicYearId = academicYearId,
             };
 
-		var student = await studentRepository.GetAsync(studentId);
-
 		var feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
-
-		if (student.FeeStructureId.HasValue)
-		{
-			var refundableFeeHeadIds = (await feeStructureDetailRepository.GetListAsync(
-					fsd => fsd.FeeStructureId == student.FeeStructureId.Value
-						   && feeHeadIds.Contains(fsd.FeeHeadId)
-						   && fsd.IsRefundable))
-				.Select(fsd => fsd.FeeHeadId)
-				.ToHashSet();
-
-			dueFees = dueFees.Where(df => refundableFeeHeadIds.Contains(df.FeeHeadId)).ToList();
-			feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
-		}
         var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
         var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
 

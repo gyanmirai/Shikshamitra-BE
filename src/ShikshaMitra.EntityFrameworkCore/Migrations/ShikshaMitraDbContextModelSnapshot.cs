@@ -4679,9 +4679,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<bool>("IsOptional")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsRefundable")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("LastModificationTime");
@@ -7438,14 +7435,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("PayrollMonthYear")
                         .HasMaxLength(7)
                         .HasColumnType("character varying(7)");
-
-                    b.Property<string>("OriginalFileBlobName")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("OriginalFileContentType")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("PreviewToken")
                         .HasMaxLength(64)

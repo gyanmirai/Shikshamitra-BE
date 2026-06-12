@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
@@ -55,7 +55,6 @@ public class FeeStructureAppService(
                     feeHead.Amount,
                     feeHead.IsOneTime,
                     feeHead.IsOptional,
-					feeHead.IsRefundable,
 					feeHead.PayableMonth,
 					feeHead.PayableYear
 				));
@@ -90,7 +89,6 @@ public class FeeStructureAppService(
                     feeHead.Amount,
                     feeHead.IsOneTime,
                     feeHead.IsOptional,
-					feeHead.IsRefundable,
 					feeHead.PayableMonth,
 					feeHead.PayableYear
 				));
@@ -142,7 +140,6 @@ public class FeeStructureAppService(
                     Amount = d.Amount,
                     IsOneTime = d.IsOneTime,
                     IsOptional = d.IsOptional,
-					IsRefundable = d.IsRefundable,
 					PayableMonth = d.IsOneTime ? d.PayableMonth : null,
 					PayableYear = d.IsOneTime ? d.PayableYear : null
 				}).ToList()

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -118,7 +118,6 @@ public class FeeAssignmentRepairSeederContributor : BaseSeederContributor
 					amount,
 					isOneTime,
 					isOptional: false,
-					isRefundable: true,
 					payableMonth: isOneTime ? lines[0].Month : null,
 					payableYear: isOneTime ? lines[0].Year : null), autoSave: false);
 

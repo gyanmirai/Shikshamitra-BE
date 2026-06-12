@@ -84,7 +84,6 @@ public class StudentFeeAssignmentApi_Tests : ShikshaMitraApiTestBase
                         Amount       = 12_000d,
                         IsOneTime    = false,
                         IsOptional   = false,
-                        IsRefundable = true,
                     },
                 ],
             },

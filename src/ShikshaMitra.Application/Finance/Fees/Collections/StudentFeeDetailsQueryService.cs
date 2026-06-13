@@ -245,12 +245,15 @@ public class StudentFeeDetailsQueryService(
 		var detailsQ  = await feeStructureDetailRepository.GetQueryableAsync();
 		var feeHeadsQ = await feeHeadRepository.GetQueryableAsync();
 
-		var feeHeadIds = dueFees.Select(d => d.FeeHeadId).ToList();
+		var dueFeeHeadIds = dueFees
+			.Select(d => d.FeeHeadId)
+			.Distinct()
+			.ToList();
 
 		var feeHeadDefs = (from detail in detailsQ
 						   join fh in feeHeadsQ on detail.FeeHeadId equals fh.Id
 						   where detail.FeeStructureId == assignment.FeeStructureStandardId
-								 && feeHeadIds.Contains(detail.FeeHeadId)
+								 && dueFeeHeadIds.Contains(detail.FeeHeadId)
 						   select new
 						   {
 							   detail.FeeHeadId,

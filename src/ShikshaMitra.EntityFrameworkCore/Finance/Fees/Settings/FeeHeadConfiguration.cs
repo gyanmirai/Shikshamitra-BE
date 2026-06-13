@@ -9,7 +9,7 @@ public class FeeHeadConfiguration : IEntityTypeConfiguration<FeeHead>
 {
 	public void Configure(EntityTypeBuilder<FeeHead> builder)
 	{
-		builder.ToTable("FeeHeads", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_FeeHeads", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		// add navigation for fee category

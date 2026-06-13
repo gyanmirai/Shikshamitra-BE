@@ -8,7 +8,7 @@ public class FeeCollectionRecordConfiguration : IEntityTypeConfiguration<FeeColl
 {
     public void Configure(EntityTypeBuilder<FeeCollectionRecord> builder)
     {
-        builder.ToTable("FeeCollectionRecords", ShikshaMitraConsts.DbSchema);
+        builder.ToTable("Finance_FeeCollectionRecords", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.HasIndex(x => x.FeeRecordMetadataId)

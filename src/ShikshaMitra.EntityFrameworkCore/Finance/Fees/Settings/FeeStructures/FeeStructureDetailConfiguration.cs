@@ -8,7 +8,7 @@ public class FeeStructureDetailConfiguration : IEntityTypeConfiguration<FeeStruc
 {
 	public void Configure(EntityTypeBuilder<FeeStructureDetail> builder)
 	{
-		builder.ToTable("FeeStructureDetails", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_FeeStructureDetails", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		// add navigation for fee head

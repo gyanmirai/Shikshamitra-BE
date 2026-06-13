@@ -8,7 +8,7 @@ public class ChargeConfiguration : IEntityTypeConfiguration<Charge>
 {
 	public void Configure(EntityTypeBuilder<Charge> builder)
 	{
-		builder.ToTable("Charges", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_Charges", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		// Configure properties

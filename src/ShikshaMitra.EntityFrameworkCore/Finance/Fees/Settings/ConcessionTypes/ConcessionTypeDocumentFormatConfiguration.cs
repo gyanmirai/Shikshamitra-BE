@@ -8,7 +8,7 @@ public class ConcessionTypeDocumentFormatConfiguration : IEntityTypeConfiguratio
 {
 	public void Configure(EntityTypeBuilder<ConcessionTypeDocumentFormat> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ConcessionTypeDocumentFormats", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_ConcessionTypeDocumentFormats", ShikshaMitraConsts.DbSchema);
 
 		builder.ConfigureByConvention();
 	}

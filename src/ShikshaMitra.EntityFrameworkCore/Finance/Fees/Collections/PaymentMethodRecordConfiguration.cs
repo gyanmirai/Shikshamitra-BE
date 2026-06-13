@@ -17,7 +17,7 @@ public class PaymentMethodRecordConfiguration : IEntityTypeConfiguration<Payment
 
     public void Configure(EntityTypeBuilder<PaymentMethodRecord> builder)
     {
-        builder.ToTable("PaymentMethodRecords", ShikshaMitraConsts.DbSchema);
+        builder.ToTable("Finance_PaymentMethodRecords", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.Amount)

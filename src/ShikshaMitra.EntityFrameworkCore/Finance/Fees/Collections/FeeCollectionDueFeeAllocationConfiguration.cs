@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -10,7 +10,7 @@ public class FeeCollectionDueFeeAllocationConfiguration
 {
     public void Configure(EntityTypeBuilder<FeeCollectionDueFeeAllocation> builder)
     {
-        builder.ToTable("FeeCollectionDueFeeAllocations", ShikshaMitraConsts.DbSchema);
+        builder.ToTable("Finance_FeeCollectionDueFeeAllocations", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.Amount)

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -9,7 +9,7 @@ public class ConcessionDueFeeAllocationConfiguration : IEntityTypeConfiguration<
 {
 	public void Configure(EntityTypeBuilder<ConcessionDueFeeAllocation> builder)
 	{
-		builder.ToTable("AppConcessionDueFeeAllocations");
+		builder.ToTable("Finance_ConcessionDueFeeAllocations");
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.ConcessionAmount).HasColumnType("decimal(18,2)");

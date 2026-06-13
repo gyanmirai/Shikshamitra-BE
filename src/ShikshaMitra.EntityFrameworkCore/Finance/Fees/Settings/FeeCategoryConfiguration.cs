@@ -9,7 +9,7 @@ public class FeeCategoryConfiguration : IEntityTypeConfiguration<FeeCategory>
 {
 	public void Configure(EntityTypeBuilder<FeeCategory> builder)
 	{
-		builder.ToTable("FeeCategories", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_FeeCategories", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 	}
 }

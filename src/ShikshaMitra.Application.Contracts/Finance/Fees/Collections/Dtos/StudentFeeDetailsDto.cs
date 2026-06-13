@@ -35,6 +35,18 @@ public class FeeOverviewDto
     public double PaidFee { get; set; }
     public double PendingFee { get; set; }
     public double? ConcessionAmount { get; set; }
+
+    /// <summary>
+    /// Sum of outstanding amounts for fee periods that have already passed the current
+    /// month. Null when the student has no overdue obligations.
+    /// </summary>
+    public double? OverdueFee { get; set; }
+
+    /// <summary>
+    /// Sum of all fee-head allocations whose parent <c>FeeRecordMetadata</c> is currently
+    /// <c>InReconciliation</c> (cheque/DD submitted but not yet cleared). Zero when none pending.
+    /// </summary>
+    public double? ReconciliationAmount { get; set; }
 }
 
 /// <summary>Per-fee-head payment breakdown.</summary>
@@ -47,6 +59,12 @@ public class FeeHeadSummaryDto
     public double? PendingAmount { get; set; }
     public string Description { get; set; } = string.Empty;
     public FeeCollectionStatus Status { get; set; }
+
+    /// <summary>
+    /// Amount for this fee head whose payment is currently <c>InReconciliation</c>
+    /// (cheque/DD submitted but not yet cleared). Null or zero when none pending.
+    /// </summary>
+    public double? ReconciliationAmount { get; set; }
 }
 
 /// <summary>Per-charge payment breakdown (matches top-level <c>charges</c> array).</summary>

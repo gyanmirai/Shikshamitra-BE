@@ -300,7 +300,7 @@ public class FeeCollectionSummaryQueryService(
 				TotalCharges = r.TotalCharges ?? 0d,
 				PendingCharges = r.PendingCharges ?? 0d,
 				IsFeeStructureAssigned = r.IsFeeStructureAssigned,
-				Status = (outstanding ?? 0d) <= 0d
+				Status = ((outstanding ?? 0d) <= 0d && r.PendingCharges <= 0d)
 					? FeeCollectionStatus.Paid
 					: (overdue ?? 0d) > 0d
 						? FeeCollectionStatus.Overdue

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Finance.Fees.Receipts;
 
@@ -8,7 +8,7 @@ public class ReceiptNumberSequenceConfiguration : IEntityTypeConfiguration<Recei
 {
 	public void Configure(EntityTypeBuilder<ReceiptNumberSequence> builder)
 	{
-		builder.ToTable("FinanceReceiptNumberSequences");
+		builder.ToTable("Finance_FinanceReceiptNumberSequences");
 
 		builder.HasKey(s => s.Id);
 

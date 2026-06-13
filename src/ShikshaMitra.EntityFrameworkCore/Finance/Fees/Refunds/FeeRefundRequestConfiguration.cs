@@ -8,7 +8,7 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
 {
     public void Configure(EntityTypeBuilder<FeeRefundRequest> builder)
     {
-        builder.ToTable("FeeRefundRequests", ShikshaMitraConsts.DbSchema);
+        builder.ToTable("Finance_FeeRefundRequests", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.VoucherNumber).HasMaxLength(50).IsRequired();

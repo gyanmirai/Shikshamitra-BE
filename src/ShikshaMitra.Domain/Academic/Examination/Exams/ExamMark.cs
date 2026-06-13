@@ -13,6 +13,7 @@ public class ExamMark : FullAuditedEntity<Guid>, IMultiTenant
     public Guid DivisionId { get; private set; }
     public double? MarksObtained { get; private set; }
     public bool IsAbsent { get; private set; }
+    public ExamAttendanceStatus AttendanceStatus { get; private set; }
     public string? Feedback { get; private set; }
     public bool IsPublished { get; private set; }
 
@@ -44,6 +45,17 @@ public class ExamMark : FullAuditedEntity<Guid>, IMultiTenant
         MarksObtained = marksObtained;
         IsAbsent = isAbsent;
         Feedback = feedback;
+    }
+
+    public void UpdateAttendance(ExamAttendanceStatus attendanceStatus)
+    {
+        AttendanceStatus = attendanceStatus;
+        IsAbsent = attendanceStatus != ExamAttendanceStatus.Present;
+        if (attendanceStatus != ExamAttendanceStatus.Present)
+        {
+            MarksObtained = null;
+            Feedback = null;
+        }
     }
 
     public void Publish()

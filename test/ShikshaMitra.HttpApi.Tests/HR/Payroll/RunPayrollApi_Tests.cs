@@ -9,16 +9,19 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.HR.Payroll.RunPayroll;
+using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
@@ -373,6 +376,118 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		item.PresentDays.ShouldBeGreaterThanOrEqualTo(1);
 		item.PayableDays.ShouldBeGreaterThan(0);
 		item.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_And_Payslip_Should_Include_Overtime_Earning()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		const string month = "2026-06";
+		var attendanceDate = new DateOnly(2026, 6, 10);
+		var shiftStart = new TimeOnly(7, 0);
+		var shiftEnd = new TimeOnly(17, 30);
+		const decimal monthlyGross = 25000m;
+		var policySnapshot = await ConfigureDefaultAttendancePolicyOvertimeAsync(new DateTime(2026, 6, 1));
+		await EnsureActiveDefaultLeavePolicyAsync(new DateTime(2026, 6, 1));
+
+		try
+		{
+			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+				Client,
+				$"PayrollOvertime{Guid.NewGuid():N}",
+				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+			var shiftId = await InsertShiftAsync(
+				$"Payroll overtime shift {Guid.NewGuid():N}",
+				shiftStart,
+				shiftEnd);
+
+			await AssignEmployeeShiftAsync(employee.Id, shiftId);
+			await AssignSalaryStructureAsync(
+				employee.Id,
+				"PayrollOvertime",
+				earningAmount: monthlyGross,
+				deductionAmount: 0m,
+				useMasterComponents: false);
+
+			var attendanceResponse = await Client.PostAsJsonAsync(
+				"/api/hr/attendance/take-attendance/day/save",
+				new TakeAttendanceSaveInput
+				{
+					AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+					Entries =
+					[
+						new TakeAttendanceSaveEntryDto
+						{
+							EmployeeId = employee.Id,
+							StatusWire = "PRESENT",
+							InTime = "07:00",
+							OutTime = "19:00",
+							Remarks = "Payroll overtime regression"
+						}
+					]
+				},
+				JsonOptions);
+			var attendanceBody = await attendanceResponse.Content.ReadAsStringAsync();
+			attendanceResponse.StatusCode.ShouldBe(HttpStatusCode.OK, attendanceBody);
+
+			var preview = await GetPayrollPreviewAsync(month, forceRefresh: true);
+			var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
+			var expectedOvertime = CalculateExpectedOvertime(
+				monthlyGross,
+				(decimal)item.BasisDays,
+				shiftStart,
+				shiftEnd,
+				overtimeMinutes: 90m,
+				multiplier: 2m);
+			var expectedRegularGross = Math.Round(
+				monthlyGross / (decimal)item.BasisDays,
+				2,
+				MidpointRounding.AwayFromZero);
+			var expectedGross = expectedRegularGross + expectedOvertime;
+			var overtimeLine = item.EarningComponents.Single(x => x.Name == "Overtime Pay");
+
+			item.PresentDays.ShouldBeGreaterThanOrEqualTo(1);
+			item.PayableDays.ShouldBeGreaterThan(0);
+			overtimeLine.Amount.ShouldBe((double)expectedOvertime);
+			overtimeLine.Description.ShouldContain("90");
+			item.GrossSalary.ShouldBe((double)expectedGross);
+			item.NetPay.ShouldBe((double)expectedGross);
+
+			var reviewResponse = await Client.PostAsJsonAsync(
+				ReviewUrl,
+				new PayrollRunReviewRequest
+				{
+					Month = month,
+					EmployeeIds = new List<Guid> { employee.Id }
+				},
+				JsonOptions);
+			var reviewBody = await reviewResponse.Content.ReadAsStringAsync();
+			reviewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, reviewBody);
+			await MarkPayrollSnapshotReviewedAsync(employee.Id, month);
+
+			var lockResponse = await Client.PostAsJsonAsync(
+				BaseUrl,
+				new RunPayrollRequest
+				{
+					Month = month,
+					EmployeeIds = new List<Guid> { employee.Id }
+				},
+				JsonOptions);
+			var lockBody = await lockResponse.Content.ReadAsStringAsync();
+			lockResponse.StatusCode.ShouldBe(HttpStatusCode.OK, lockBody);
+
+			var salarySlip = await GetSalarySlipResponseAsync(employee.Id, "JUNE-2026");
+			salarySlip.Earnings.ShouldContain(x => x.Name == "Overtime Pay" && x.Amount == (double)expectedOvertime);
+			salarySlip.TotalEarning.ShouldBe((double)expectedGross);
+			salarySlip.NetSalary.ShouldBe((double)expectedGross);
+			salarySlip.NetPay.ShouldBe((double)expectedGross);
+		}
+		finally
+		{
+			await RestoreAttendancePolicyOvertimeAsync(policySnapshot);
+		}
 	}
 
 	[Fact]
@@ -889,6 +1004,17 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		return preview;
 	}
 
+	private async Task<SalarySlipResponse> GetSalarySlipResponseAsync(Guid employeeId, string monthYear)
+	{
+		var response = await Client.GetAsync(
+			$"/api/payroll/salary-slips?monthYear={Uri.EscapeDataString(monthYear)}&employeeId={employeeId}");
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+		var salarySlip = await response.Content.ReadFromJsonAsync<SalarySlipResponse>(JsonOptions);
+		salarySlip.ShouldNotBeNull();
+		return salarySlip;
+	}
+
 	private async Task MarkPayrollSnapshotReviewedAsync(Guid employeeId, string monthYear)
 	{
 		using var scope = Factory.Services.CreateScope();
@@ -1040,6 +1166,216 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var body = await response.Content.ReadAsStringAsync();
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+	}
+
+	private async Task<AttendancePolicyOvertimeSnapshot> ConfigureDefaultAttendancePolicyOvertimeAsync(DateTime monthDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x =>
+				x.StartDate <= monthDate.Date &&
+				x.EndDate >= monthDate.Date);
+			var policyQuery = await attendancePolicyRepository.GetQueryableAsync();
+			var policy = policyQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			var snapshot = new AttendancePolicyOvertimeSnapshot(
+				policy.Id,
+				policy.OvertimeEnabled,
+				policy.OvertimeRate,
+				policy.MinOvertimeMinutes);
+
+			policy.Update(
+				policy.WorkCalendarPolicyId,
+				policy.Name,
+				policy.Status,
+				policy.IsDefault,
+				policy.CaptureMode,
+				policy.FullDayThresholdPercentage,
+				policy.HalfDayThresholdPercentage,
+				policy.AbsentThresholdPercentage,
+				policy.MissingPunchBehavior,
+				policy.ManualCorrectionAllowed,
+				policy.GraceTime,
+				policy.MaxLateAllowedPerMonth,
+				policy.PenaltyType,
+				policy.PenaltyCountThreshold,
+				policy.EarlyExitEnabled,
+				policy.EarlyExitGraceTime,
+				overtimeEnabled: true,
+				overtimeRate: AttendanceOvertimeRate.TwoX,
+				minOvertimeMinutes: 30,
+				holidayWorkBehavior: policy.HolidayWorkBehavior,
+				sandwichRuleEnabled: policy.SandwichRuleEnabled,
+				payrollPreviewEnabled: policy.PayrollPreviewEnabled);
+			await attendancePolicyRepository.UpdateAsync(policy, autoSave: false);
+			await uow.CompleteAsync();
+			return snapshot;
+		}
+	}
+
+	private async Task<Guid> EnsureActiveDefaultLeavePolicyAsync(DateTime monthDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var leaveTypeRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
+		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x =>
+				x.StartDate <= monthDate.Date &&
+				x.EndDate >= monthDate.Date);
+			var policyQuery = await leavePolicyRepository.GetQueryableAsync();
+			var existing = policyQuery.FirstOrDefault(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsActive &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			if (existing != null)
+			{
+				return existing.Id;
+			}
+
+			var suffix = Guid.NewGuid().ToString("N")[..12];
+			var leaveType = new LeaveType(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				$"OT {suffix}",
+				"#2196F3");
+			await leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
+
+			var leavePolicy = new LeavePolicy(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				$"OT Policy {suffix}",
+				academicYear.StartDate,
+				academicYear.EndDate,
+				HrPolicyStatus.Active,
+				isDefault: true);
+			var leavePolicyRule = new LeavePolicyRule(
+				Guid.NewGuid(),
+				tenantId,
+				leavePolicy.Id,
+				leaveType.Id,
+				LeaveAccrualPolicyType.Yearly,
+				12,
+				LeavePaidType.Paid,
+				carryForward: false,
+				carryForwardLimit: null,
+				encashable: false,
+				encashmentTiming: null,
+				requiresApproval: true,
+				minNoticeDays: 0,
+				maxDaysPerRequest: 30,
+				allowHalfDay: true,
+				attachmentRequiredAfterDays: null,
+				allowNegativeBalance: false);
+			leavePolicy.ReplaceRules([leavePolicyRule]);
+			await leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
+			await uow.CompleteAsync();
+			return leavePolicy.Id;
+		}
+	}
+
+	private async Task RestoreAttendancePolicyOvertimeAsync(AttendancePolicyOvertimeSnapshot snapshot)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var policy = await attendancePolicyRepository.GetAsync(snapshot.PolicyId);
+			policy.Update(
+				policy.WorkCalendarPolicyId,
+				policy.Name,
+				policy.Status,
+				policy.IsDefault,
+				policy.CaptureMode,
+				policy.FullDayThresholdPercentage,
+				policy.HalfDayThresholdPercentage,
+				policy.AbsentThresholdPercentage,
+				policy.MissingPunchBehavior,
+				policy.ManualCorrectionAllowed,
+				policy.GraceTime,
+				policy.MaxLateAllowedPerMonth,
+				policy.PenaltyType,
+				policy.PenaltyCountThreshold,
+				policy.EarlyExitEnabled,
+				policy.EarlyExitGraceTime,
+				snapshot.OvertimeEnabled,
+				snapshot.OvertimeRate,
+				snapshot.MinOvertimeMinutes,
+				policy.HolidayWorkBehavior,
+				policy.SandwichRuleEnabled,
+				policy.PayrollPreviewEnabled);
+			await attendancePolicyRepository.UpdateAsync(policy, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<Guid> InsertShiftAsync(
+		string shiftName,
+		TimeOnly startTime,
+		TimeOnly endTime)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var shiftRepository = scope.ServiceProvider.GetRequiredService<IRepository<ShiftManagement, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var shift = await shiftRepository.InsertAsync(new ShiftManagement
+			{
+				ShiftName = shiftName,
+				StartTime = startTime,
+				EndTime = endTime
+			}, autoSave: false);
+			await uow.CompleteAsync();
+			return shift.Id;
+		}
+	}
+
+	private async Task AssignEmployeeShiftAsync(Guid employeeId, Guid shiftId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var employeeRepository = scope.ServiceProvider.GetRequiredService<IRepository<Employee, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var employee = await employeeRepository.GetAsync(employeeId);
+			employee.ShiftId = shiftId;
+			await employeeRepository.UpdateAsync(employee, autoSave: false);
+			await uow.CompleteAsync();
+		}
 	}
 
 	private async Task SeedAttendanceOnDateAsync(Guid employeeId, DateOnly attendanceDate)
@@ -1345,4 +1681,26 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			await uow.CompleteAsync();
 		}
 	}
+
+	private static decimal CalculateExpectedOvertime(
+		decimal monthlyGrossSalary,
+		decimal basisDays,
+		TimeOnly shiftStart,
+		TimeOnly shiftEnd,
+		decimal overtimeMinutes,
+		decimal multiplier)
+	{
+		var shiftHours = (decimal)(shiftEnd.ToTimeSpan() - shiftStart.ToTimeSpan()).TotalHours;
+		var overtimeHours = overtimeMinutes / 60m;
+		return Math.Round(
+			monthlyGrossSalary / basisDays / shiftHours * overtimeHours * multiplier,
+			2,
+			MidpointRounding.AwayFromZero);
+	}
+
+	private sealed record AttendancePolicyOvertimeSnapshot(
+		Guid PolicyId,
+		bool OvertimeEnabled,
+		AttendanceOvertimeRate? OvertimeRate,
+		int? MinOvertimeMinutes);
 }

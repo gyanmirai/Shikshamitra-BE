@@ -14,6 +14,7 @@ public class EmployeeApplicationConfiguration : IEntityTypeConfiguration<Employe
 
 		builder.Property(x => x.ApplicationNumber).IsRequired().HasMaxLength(40);
 		builder.Property(x => x.TokenHash).IsRequired().HasMaxLength(128);
+		builder.Property(x => x.EncryptedToken).HasMaxLength(1024);
 		builder.Property(x => x.FirstName).HasMaxLength(256);
 		builder.Property(x => x.MiddleName).HasMaxLength(256);
 		builder.Property(x => x.LastName).HasMaxLength(256);

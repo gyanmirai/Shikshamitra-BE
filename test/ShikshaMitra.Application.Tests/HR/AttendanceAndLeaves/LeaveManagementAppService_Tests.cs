@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.Common;
 using Shouldly;
 using Volo.Abp;
 using Xunit;
@@ -59,6 +60,42 @@ public class LeaveManagementAppService_Tests
 		leave.LeavePolicyId.ShouldBe(leavePolicyId);
 		leave.LeavePolicyRuleId.ShouldBe(leavePolicyRuleId);
 		leave.LeaveTypeId.ShouldBe(leaveTypeId);
+	}
+
+	[Fact]
+	public void Submitter_Lookup_Should_Tolerate_Duplicate_Employees_For_Same_User()
+	{
+		var userId = Guid.NewGuid();
+		var createdAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+		var rows = new[]
+		{
+			new LeaveSubmitterEmployeeRow(
+				userId,
+				"Inactive Recent",
+				"EMP-INACTIVE",
+				EmployeeStatusType.Inactive,
+				createdAt,
+				createdAt.AddDays(3)),
+			new LeaveSubmitterEmployeeRow(
+				userId,
+				"Active Older",
+				"EMP-OLD",
+				EmployeeStatusType.Active,
+				createdAt,
+				createdAt.AddDays(1)),
+			new LeaveSubmitterEmployeeRow(
+				userId,
+				"Active Recent",
+				"EMP-NEW",
+				EmployeeStatusType.Active,
+				createdAt,
+				createdAt.AddDays(2))
+		};
+		var lookup = LeaveSubmitterResolver.BuildEmployeeByUserIdLookup(rows);
+
+		lookup[userId].Name.ShouldBe("Active Recent");
+		lookup[userId].EmployeeCode.ShouldBe("EMP-NEW");
 	}
 
 	private static EmployeeLeave CreatePendingLeave() =>

@@ -43,6 +43,12 @@ public class SalarySlipWorkflow(
 				normalizedMonthYear);
 			var hadExistingSalarySlip = existingSalarySlip != null;
 
+			if (existingSalarySlip?.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
+			{
+				var existingEmployee = await employeeRepository.GetAsync(existingSalarySlip.EmployeeId, includeDetails: false);
+				return await salarySlipDtoMapper.ToDtoAsync(existingSalarySlip, existingEmployee);
+			}
+
 			if (existingSalarySlip != null &&
 			    draftFreshnessService.ShouldKeepExistingDraft(existingSalarySlip, hadExistingSalarySlip))
 			{

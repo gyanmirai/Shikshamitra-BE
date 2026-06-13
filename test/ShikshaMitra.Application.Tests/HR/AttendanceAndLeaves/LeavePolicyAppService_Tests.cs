@@ -81,6 +81,30 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 	}
 
 	[Fact]
+	public async Task Should_List_Leave_Policies_With_Max_Page_Size()
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		var leaveType = await CreateLeaveTypeAsync($"LT-{Guid.NewGuid():N}");
+		var marker = $"MaxPagePolicy-{Guid.NewGuid():N}";
+
+		await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = marker,
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = [Rule(leaveType.Id, leaveCount: 10)]
+		});
+
+		var list = await _leavePolicyAppService.GetListByAcademicYearIdAsync(
+			academicYearId,
+			page: 1,
+			pageSize: 500,
+			search: marker);
+
+		list.PageSize.ShouldBe(500);
+		list.Items.ShouldContain(x => x.PolicyTitle == marker);
+	}
+
+	[Fact]
 	public async Task Should_Hide_Policy_When_Linked_Leave_Type_Is_Deleted()
 	{
 		var academicYearId = await GetAcademicYearIdAsync();

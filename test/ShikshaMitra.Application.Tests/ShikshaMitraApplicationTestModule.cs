@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,9 +9,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.Employees.Onboarding;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
@@ -74,6 +77,41 @@ internal sealed class FakeEmployeeLeaveRepository(
     }
 }
 
+public sealed record SentEmployeeOnboardingInvitation(Guid ApplicationId, string? Email, string PublicPath);
+
+public sealed class FakeEmployeeOnboardingInvitationEmailService : IEmployeeOnboardingInvitationEmailService
+{
+    private readonly ConcurrentQueue<SentEmployeeOnboardingInvitation> _sent = new();
+
+    public bool FailNextSend { get; set; }
+    public IReadOnlyCollection<SentEmployeeOnboardingInvitation> Sent => _sent.ToList();
+
+    public Task<EmployeeOnboardingInvitationEmailResult> SendInvitationAsync(
+        EmployeeApplication application,
+        string publicPath)
+    {
+        _sent.Enqueue(new(application.Id, application.Email, publicPath));
+
+        if (FailNextSend)
+        {
+            FailNextSend = false;
+            return Task.FromResult(new EmployeeOnboardingInvitationEmailResult(
+                false,
+                "Invite was created, but email could not be sent."));
+        }
+
+        return Task.FromResult(new EmployeeOnboardingInvitationEmailResult(true, "Invite email sent."));
+    }
+
+    public void Reset()
+    {
+        FailNextSend = false;
+        while (_sent.TryDequeue(out _))
+        {
+        }
+    }
+}
+
 [DependsOn(
     typeof(ShikshaMitraApplicationModule),
     typeof(ShikshaMitraDomainTestModule),
@@ -109,6 +147,9 @@ public class ShikshaMitraApplicationTestModule : AbpModule
         // so that application tests using SQLite don't fail on PostgreSQL-only SQL syntax.
         context.Services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
         context.Services.AddTransient<IEmployeeLeaveRepository, FakeEmployeeLeaveRepository>();
+        context.Services.AddSingleton<FakeEmployeeOnboardingInvitationEmailService>();
+        context.Services.Replace(ServiceDescriptor.Singleton<IEmployeeOnboardingInvitationEmailService>(sp =>
+            sp.GetRequiredService<FakeEmployeeOnboardingInvitationEmailService>()));
     }
 
     public override void OnApplicationShutdown(ApplicationShutdownContext context)

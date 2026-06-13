@@ -100,6 +100,24 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_List_Leave_Policies_With_Max_Page_Size()
+	{
+		var leaveType = await CreateLeaveTypeAsync();
+		var marker = $"Policy-{Guid.NewGuid():N}";
+
+		await CreateLeavePolicyAsync(leaveType.Id, marker);
+
+		var response = await Client.GetAsync($"{LeavePoliciesUrl}?academicYearId={AcademicYearId}&page=1&pageSize=500&search={marker}");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var list = await response.Content.ReadFromJsonAsync<LeavePolicyListResponse>(JsonOptions);
+		list.ShouldNotBeNull();
+		list.PageSize.ShouldBe(500);
+		list.Items.ShouldContain(x => x.PolicyTitle == marker);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Set_Default_Leave_Policy_And_Clear_Previous_Default()
 	{

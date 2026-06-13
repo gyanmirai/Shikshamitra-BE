@@ -952,6 +952,73 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppEmployeeApplications",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ApplicationNumber = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    FirstName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    MiddleName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    LastName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    MobileNo = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    SecondaryMobileNo = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    PositionAppliedFor = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    DepartmentAppliedFor = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    DateOfBirth = table.Column<DateOnly>(type: "date", nullable: true),
+                    Gender = table.Column<int>(type: "integer", nullable: true),
+                    Religion = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    CasteType = table.Column<int>(type: "integer", nullable: true),
+                    FamilyCaste = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    MaritalStatus = table.Column<int>(type: "integer", nullable: true),
+                    BloodGroup = table.Column<int>(type: "integer", nullable: true),
+                    QualificationSummary = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    SkillsSummary = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    Address1 = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    Address2 = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    Address3 = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    CountryName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    CountryIsoCode = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: true),
+                    StateName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    StateIsoCode = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: true),
+                    City = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    PinCode = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    TokenHash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    EncryptedToken = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
+                    TokenExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LinkLastIssuedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    SubmittedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    FinalizedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    FinalizedEmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ResumeBlobName = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    ResumeFileName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    ResumeContentType = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    ResumeSize = table.Column<long>(type: "bigint", nullable: true),
+                    PhotoBlobName = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    PhotoFileName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    PhotoContentType = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    PhotoSize = table.Column<long>(type: "bigint", nullable: true),
+                    StatusReason = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
+                    InternalNotes = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
+                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    WorkExperiences = table.Column<string>(type: "jsonb", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppEmployeeApplications", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppEmployeeICardTemplates",
                 columns: table => new
                 {
@@ -1947,6 +2014,29 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "AppStudentDocumentAccessAudits",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    DocumentId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DocumentTypeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Action = table.Column<int>(type: "integer", nullable: false),
+                    ActorUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EventTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    ContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    Size = table.Column<long>(type: "bigint", nullable: true),
+                    Sha256Hash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    ReasonCode = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppStudentDocumentAccessAudits", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AppStudentElectiveSelections",
                 columns: table => new
                 {
@@ -2604,6 +2694,8 @@ namespace ShikshaMitra.Migrations
                     PreviewToken = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     PreviewTokenExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     ConfirmedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    OriginalFileBlobName = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    OriginalFileContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     ErrorsSummary = table.Column<string>(type: "jsonb", nullable: false),
                     WarningsSummary = table.Column<string>(type: "jsonb", nullable: false),
                     RunSource = table.Column<int>(type: "integer", nullable: false),
@@ -3867,6 +3959,7 @@ namespace ShikshaMitra.Migrations
                     EffectiveFrom = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     EffectiveTo = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    IsDefault = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     ExtraProperties = table.Column<string>(type: "text", nullable: false),
                     ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -5982,6 +6075,7 @@ namespace ShikshaMitra.Migrations
                     Status = table.Column<int>(type: "integer", nullable: false),
                     AdmissionApprovalStatus = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     AdmissionApprovalRemarks = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    PhotoBlobName = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
                     FeeStructureId = table.Column<Guid>(type: "uuid", nullable: true),
                     CommunicationDetailId = table.Column<Guid>(type: "uuid", nullable: true),
                     MedicalRecordId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -6279,6 +6373,13 @@ namespace ShikshaMitra.Migrations
                     FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     ContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     Size = table.Column<long>(type: "bigint", nullable: false),
+                    Sha256Hash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    StorageStatus = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
+                    UploadedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ValidatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    DownloadCount = table.Column<int>(type: "integer", nullable: false),
+                    LastDownloadedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsSensitive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
                     LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -6298,6 +6399,51 @@ namespace ShikshaMitra.Migrations
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_AppStudentDocuments_AppStudents_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "AppStudents",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AppStudentIdentityCompliances",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AadhaarEncrypted = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
+                    AadhaarHash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    AadhaarLast4 = table.Column<string>(type: "character varying(4)", maxLength: 4, nullable: true),
+                    AadhaarName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    AadhaarVerificationStatus = table.Column<int>(type: "integer", nullable: false),
+                    ApaarId = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    ApaarConsentStatus = table.Column<int>(type: "integer", nullable: false),
+                    ApaarConsentDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ApaarVerificationStatus = table.Column<int>(type: "integer", nullable: false),
+                    PenNumber = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    UdiseStudentCode = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    UdiseSyncStatus = table.Column<int>(type: "integer", nullable: false),
+                    UdiseLastExportedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    RteStatus = table.Column<bool>(type: "boolean", nullable: false),
+                    ScholarshipStatus = table.Column<int>(type: "integer", nullable: false),
+                    ScholarshipSchemeName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    ScholarshipApplicationNo = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    CasteCertificateNo = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    CasteCertificateVerifiedStatus = table.Column<int>(type: "integer", nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AppStudentIdentityCompliances", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AppStudentIdentityCompliances_AppStudents_StudentId",
                         column: x => x.StudentId,
                         principalTable: "AppStudents",
                         principalColumn: "Id",
@@ -7121,6 +7267,28 @@ namespace ShikshaMitra.Migrations
                 column: "TenantId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_EmployeeApplications_TenantId_ApplicationNumber",
+                table: "AppEmployeeApplications",
+                columns: new[] { "TenantId", "ApplicationNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmployeeApplications_TenantId_Email",
+                table: "AppEmployeeApplications",
+                columns: new[] { "TenantId", "Email" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmployeeApplications_TenantId_Status",
+                table: "AppEmployeeApplications",
+                columns: new[] { "TenantId", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmployeeApplications_TokenHash",
+                table: "AppEmployeeApplications",
+                column: "TokenHash",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppEmployeeAttendances_EducationMediumStageId",
                 table: "AppEmployeeAttendances",
                 column: "EducationMediumStageId");
@@ -7771,6 +7939,21 @@ namespace ShikshaMitra.Migrations
                 column: "StudentId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AppStudentDocumentAccessAudits_TenantId_Action_EventTime",
+                table: "AppStudentDocumentAccessAudits",
+                columns: new[] { "TenantId", "Action", "EventTime" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentDocumentAccessAudits_TenantId_DocumentId_EventTime",
+                table: "AppStudentDocumentAccessAudits",
+                columns: new[] { "TenantId", "DocumentId", "EventTime" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentDocumentAccessAudits_TenantId_StudentId_EventTime",
+                table: "AppStudentDocumentAccessAudits",
+                columns: new[] { "TenantId", "StudentId", "EventTime" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AppStudentDocuments_DocumentTypeId",
                 table: "AppStudentDocuments",
                 column: "DocumentTypeId");
@@ -7784,6 +7967,11 @@ namespace ShikshaMitra.Migrations
                 name: "IX_AppStudentDocuments_StudentId_DocumentTypeId",
                 table: "AppStudentDocuments",
                 columns: new[] { "StudentId", "DocumentTypeId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentDocuments_StudentId_DocumentTypeId_Sha256Hash",
+                table: "AppStudentDocuments",
+                columns: new[] { "StudentId", "DocumentTypeId", "Sha256Hash" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppStudentElectiveSelections_StudentId_ElectiveGroupId",
@@ -7829,6 +8017,32 @@ namespace ShikshaMitra.Migrations
                 name: "IX_StudentSubmissions_StudentId",
                 table: "AppStudentHomeworkAssignmentSubmissions",
                 column: "StudentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentIdentityCompliances_StudentId",
+                table: "AppStudentIdentityCompliances",
+                column: "StudentId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentIdentityCompliances_TenantId_AadhaarHash",
+                table: "AppStudentIdentityCompliances",
+                columns: new[] { "TenantId", "AadhaarHash" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentIdentityCompliances_TenantId_ApaarId",
+                table: "AppStudentIdentityCompliances",
+                columns: new[] { "TenantId", "ApaarId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentIdentityCompliances_TenantId_PenNumber",
+                table: "AppStudentIdentityCompliances",
+                columns: new[] { "TenantId", "PenNumber" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AppStudentIdentityCompliances_TenantId_UdiseSyncStatus",
+                table: "AppStudentIdentityCompliances",
+                columns: new[] { "TenantId", "UdiseSyncStatus" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppStudentLeaves_IsDeleted",
@@ -8752,6 +8966,9 @@ namespace ShikshaMitra.Migrations
                 name: "AppEmployeeAdditionalDetails");
 
             migrationBuilder.DropTable(
+                name: "AppEmployeeApplications");
+
+            migrationBuilder.DropTable(
                 name: "AppEmployeeAttendances");
 
             migrationBuilder.DropTable(
@@ -8911,6 +9128,9 @@ namespace ShikshaMitra.Migrations
                 name: "AppStudentContactDetails");
 
             migrationBuilder.DropTable(
+                name: "AppStudentDocumentAccessAudits");
+
+            migrationBuilder.DropTable(
                 name: "AppStudentDocuments");
 
             migrationBuilder.DropTable(
@@ -8918,6 +9138,9 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppStudentHomeworkAssignmentSubmissions");
+
+            migrationBuilder.DropTable(
+                name: "AppStudentIdentityCompliances");
 
             migrationBuilder.DropTable(
                 name: "AppStudentLeaves");

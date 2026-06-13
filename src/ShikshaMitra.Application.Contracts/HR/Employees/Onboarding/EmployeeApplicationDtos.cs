@@ -19,8 +19,9 @@ public class CreateEmployeeApplicationInviteDto
 	public string? MiddleName { get; set; }
 	public string? LastName { get; set; }
 
+	[Required]
 	[EmailAddress]
-	public string? Email { get; set; }
+	public string Email { get; set; } = string.Empty;
 
 	public string? MobileNo { get; set; }
 	public string? PositionAppliedFor { get; set; }
@@ -39,6 +40,8 @@ public class EmployeeApplicationInviteDto
 	public string Token { get; set; } = string.Empty;
 	public string PublicPath { get; set; } = string.Empty;
 	public DateTime TokenExpiresAt { get; set; }
+	public bool EmailDeliverySucceeded { get; set; }
+	public string? EmailDeliveryMessage { get; set; }
 }
 
 public class EmployeeApplicationListItemDto : EntityDto<Guid>
@@ -65,6 +68,7 @@ public class EmployeeApplicationDto : EmployeeApplicationListItemDto
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public string? LastName { get; set; }
+	public string? PublicPath { get; set; }
 	public string? SecondaryMobileNo { get; set; }
 	public DateTime? DateOfBirth { get; set; }
 	public int? Gender { get; set; }

@@ -44,7 +44,7 @@ public class LeavePolicyCacheService(
 	public Task ClearActiveAsync()
 	{
 		var cacheKeysToRemove = new List<string>();
-		int[] commonPageSizes = { 10, 25, 50, 100 };
+		int[] commonPageSizes = { 10, 25, 50, 100, 500 };
 		const int maxPages = 10;
 
 		foreach (var pageSize in commonPageSizes)
@@ -61,7 +61,7 @@ public class LeavePolicyCacheService(
 	public Task ClearContractAsync(Guid academicYearId)
 	{
 		var cacheKeysToRemove = new List<string>();
-		int[] commonPageSizes = { 10, 25, 50, 100 };
+		int[] commonPageSizes = { 10, 25, 50, 100, 500 };
 		const int maxPages = 10;
 
 		foreach (var pageSize in commonPageSizes)

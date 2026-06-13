@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees.PersonalInfo;
@@ -19,6 +20,7 @@ using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Security.Encryption;
 
 namespace ShikshaMitra.HR.Employees.Onboarding;
 
@@ -32,7 +34,9 @@ public class EmployeeApplicationAppService(
 	HrPolicyResolver policyResolver,
 	IAcademicYearRepository academicYearRepository,
 	IBlobContainer blobContainer,
-	IDataFilter dataFilter)
+	IDataFilter dataFilter,
+	IStringEncryptionService stringEncryptionService,
+	IEmployeeOnboardingInvitationEmailService invitationEmailService)
 	: ApplicationService, IEmployeeApplicationAppService
 {
 	private const int TokenExpiryDays = 30;
@@ -80,11 +84,13 @@ public class EmployeeApplicationAppService(
 	{
 		var token = CreateRawToken();
 		var now = Clock.Now;
+		var publicPath = CreatePublicPath(token);
 		var application = new EmployeeApplication(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			CreateApplicationNumber(now),
 			HashToken(token),
+			stringEncryptionService.Encrypt(token),
 			now.AddDays(TokenExpiryDays),
 			now,
 			input.FirstName,
@@ -96,7 +102,8 @@ public class EmployeeApplicationAppService(
 			input.DepartmentAppliedFor);
 
 		application = await applicationRepository.InsertAsync(application, autoSave: true);
-		return CreateInviteResponse(application, token);
+		var emailResult = await invitationEmailService.SendInvitationAsync(application, publicPath);
+		return CreateInviteResponse(application, token, emailResult);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.View)]
@@ -120,9 +127,11 @@ public class EmployeeApplicationAppService(
 		var application = await GetApplicationAsync(id);
 		var token = CreateRawToken();
 		var now = Clock.Now;
-		application.SetToken(HashToken(token), now.AddDays(TokenExpiryDays), now);
+		var publicPath = CreatePublicPath(token);
+		application.SetToken(HashToken(token), stringEncryptionService.Encrypt(token), now.AddDays(TokenExpiryDays), now);
 		application = await applicationRepository.UpdateAsync(application, autoSave: true);
-		return CreateInviteResponse(application, token);
+		var emailResult = await invitationEmailService.SendInvitationAsync(application, publicPath);
+		return CreateInviteResponse(application, token, emailResult);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.Finalize)]
@@ -169,7 +178,7 @@ public class EmployeeApplicationAppService(
 
 		return new EmployeeApplicationFinalizeResultDto
 		{
-			Application = MapToDto(application),
+			Application = MapToDto(application, includePublicPath: true),
 			Employee = employee
 		};
 	}
@@ -277,7 +286,7 @@ public class EmployeeApplicationAppService(
 				photoMetadata);
 
 			application = await applicationRepository.UpdateAsync(application, autoSave: true);
-			return MapToDto(application);
+			return MapToDto(application, includePublicPath: false);
 		}
 	}
 
@@ -413,16 +422,23 @@ public class EmployeeApplicationAppService(
 		return sanitized;
 	}
 
-	private EmployeeApplicationInviteDto CreateInviteResponse(EmployeeApplication application, string token)
+	private EmployeeApplicationInviteDto CreateInviteResponse(
+		EmployeeApplication application,
+		string token,
+		EmployeeOnboardingInvitationEmailResult emailResult)
 	{
 		return new EmployeeApplicationInviteDto
 		{
-			Application = MapToDto(application),
+			Application = MapToDto(application, includePublicPath: true),
 			Token = token,
-			PublicPath = $"/employee-application/{token}",
-			TokenExpiresAt = application.TokenExpiresAt
+			PublicPath = CreatePublicPath(token),
+			TokenExpiresAt = application.TokenExpiresAt,
+			EmailDeliverySucceeded = emailResult.Succeeded,
+			EmailDeliveryMessage = emailResult.Message
 		};
 	}
+
+	private static string CreatePublicPath(string token) => $"/employee-application/{token}";
 
 	private static string CreateRawToken()
 	{
@@ -463,7 +479,7 @@ public class EmployeeApplicationAppService(
 			CreationTime = application.CreationTime
 		};
 
-	private static EmployeeApplicationDto MapToDto(EmployeeApplication application)
+	private EmployeeApplicationDto MapToDto(EmployeeApplication application, bool includePublicPath = true)
 	{
 		return new EmployeeApplicationDto
 		{
@@ -474,6 +490,7 @@ public class EmployeeApplicationAppService(
 			FirstName = application.FirstName,
 			MiddleName = application.MiddleName,
 			LastName = application.LastName,
+			PublicPath = includePublicPath ? CreatePublicPathFromStoredToken(application) : null,
 			Email = application.Email,
 			MobileNo = application.MobileNo,
 			SecondaryMobileNo = application.SecondaryMobileNo,
@@ -513,6 +530,28 @@ public class EmployeeApplicationAppService(
 			InternalNotes = application.InternalNotes,
 			CreationTime = application.CreationTime
 		};
+	}
+
+	private string? CreatePublicPathFromStoredToken(EmployeeApplication application)
+	{
+		if (string.IsNullOrWhiteSpace(application.EncryptedToken))
+		{
+			return null;
+		}
+
+		try
+		{
+			var token = stringEncryptionService.Decrypt(application.EncryptedToken);
+			return string.IsNullOrWhiteSpace(token) ? null : CreatePublicPath(token);
+		}
+		catch (Exception ex)
+		{
+			Logger.LogWarning(
+				ex,
+				"Employee application {ApplicationId} has an encrypted invite token that could not be decrypted.",
+				application.Id);
+			return null;
+		}
 	}
 
 	private static PublicEmployeeApplicationDto MapToPublicDto(EmployeeApplication application, DateTime now)

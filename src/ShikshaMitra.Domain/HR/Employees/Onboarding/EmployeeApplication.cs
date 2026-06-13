@@ -45,6 +45,7 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public List<WorkExperience> WorkExperiences { get; private set; } = [];
 
 	public string TokenHash { get; private set; } = string.Empty;
+	public string? EncryptedToken { get; private set; }
 	public DateTime TokenExpiresAt { get; private set; }
 	public DateTime LinkLastIssuedAt { get; private set; }
 	public DateTime? SubmittedAt { get; private set; }
@@ -72,6 +73,7 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		string applicationNumber,
 		string tokenHash,
+		string? encryptedToken,
 		DateTime tokenExpiresAt,
 		DateTime issuedAt,
 		string? firstName,
@@ -86,17 +88,18 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ApplicationNumber = Check.NotNullOrWhiteSpace(applicationNumber, nameof(applicationNumber));
 		Status = EmployeeApplicationStatus.InvitationSent;
 		SetCandidateIdentity(firstName, middleName, lastName, email, mobileNo, null, positionAppliedFor, departmentAppliedFor);
-		SetToken(tokenHash, tokenExpiresAt, issuedAt);
+		SetToken(tokenHash, encryptedToken, tokenExpiresAt, issuedAt);
 	}
 
 	public string FullName => string.Join(" ", new[] { FirstName, MiddleName, LastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
 	public bool HasResume => !string.IsNullOrWhiteSpace(ResumeBlobName);
 	public bool HasPhoto => !string.IsNullOrWhiteSpace(PhotoBlobName);
 
-	public void SetToken(string tokenHash, DateTime tokenExpiresAt, DateTime issuedAt)
+	public void SetToken(string tokenHash, string? encryptedToken, DateTime tokenExpiresAt, DateTime issuedAt)
 	{
 		EnsureNotFinalized();
 		TokenHash = Check.NotNullOrWhiteSpace(tokenHash, nameof(tokenHash));
+		EncryptedToken = string.IsNullOrWhiteSpace(encryptedToken) ? null : encryptedToken;
 		TokenExpiresAt = tokenExpiresAt;
 		LinkLastIssuedAt = issuedAt;
 		SubmittedAt = null;

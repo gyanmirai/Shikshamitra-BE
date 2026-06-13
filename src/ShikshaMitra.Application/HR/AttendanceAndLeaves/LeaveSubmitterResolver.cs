@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -54,15 +55,14 @@ public class LeaveSubmitterResolver(
 		var employees = await asyncExecuter.ToListAsync(
 			(await employeeRepository.GetQueryableAsync())
 				.Where(x => x.UserId.HasValue && creatorIds.Contains(x.UserId.Value))
-				.Select(x => new
-				{
-					UserId = x.UserId!.Value,
-					Name = x.EmployeeNameWithFather,
-					x.EmployeeCode
-				}));
-		var employeeByUserId = employees.ToDictionary(
-			x => x.UserId,
-			x => (Name: x.Name, EmployeeCode: (string?)x.EmployeeCode));
+				.Select(x => new LeaveSubmitterEmployeeRow(
+					x.UserId!.Value,
+					x.EmployeeNameWithFather,
+					x.EmployeeCode,
+					x.EmployeeStatusType,
+					x.CreationTime,
+					x.LastModificationTime)));
+		var employeeByUserId = BuildEmployeeByUserIdLookup(employees);
 
 		var users = await identityUserRepository.GetListAsync(x => creatorIds.Contains(x.Id));
 		var userDisplayById = users.ToDictionary(
@@ -90,4 +90,29 @@ public class LeaveSubmitterResolver(
 
 		return result;
 	}
+
+	internal static Dictionary<Guid, (string Name, string? EmployeeCode)> BuildEmployeeByUserIdLookup(
+		IReadOnlyCollection<LeaveSubmitterEmployeeRow> employees)
+	{
+		return employees
+			.GroupBy(x => x.UserId)
+			.ToDictionary(
+				g => g.Key,
+				g =>
+				{
+					var employee = g
+						.OrderByDescending(x => (x.EmployeeStatusType ?? EmployeeStatusType.Active) == EmployeeStatusType.Active)
+						.ThenByDescending(x => x.LastModificationTime ?? x.CreationTime)
+						.First();
+					return (Name: employee.Name, EmployeeCode: (string?)employee.EmployeeCode);
+				});
+	}
 }
+
+internal sealed record LeaveSubmitterEmployeeRow(
+	Guid UserId,
+	string Name,
+	string? EmployeeCode,
+	EmployeeStatusType? EmployeeStatusType,
+	DateTime CreationTime,
+	DateTime? LastModificationTime);

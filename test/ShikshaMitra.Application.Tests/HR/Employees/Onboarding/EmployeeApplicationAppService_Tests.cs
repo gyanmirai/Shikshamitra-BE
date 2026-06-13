@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -11,11 +13,13 @@ using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.Employees.Onboarding;
@@ -23,6 +27,8 @@ namespace ShikshaMitra.HR.Employees.Onboarding;
 public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private readonly IEmployeeApplicationAppService _applications;
+	private readonly IRepository<EmployeeApplication, Guid> _applicationRepository;
+	private readonly FakeEmployeeOnboardingInvitationEmailService _emailService;
 	private readonly IRepository<HrPolicyAssignment, Guid> _assignmentRepository;
 	private readonly IWorkCalendarPolicyAppService _workCalendars;
 	private readonly IPayrollPolicyAppService _payrollPolicies;
@@ -41,6 +47,8 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	public EmployeeApplicationAppService_Tests()
 	{
 		_applications = GetRequiredService<IEmployeeApplicationAppService>();
+		_applicationRepository = GetRequiredService<IRepository<EmployeeApplication, Guid>>();
+		_emailService = GetRequiredService<FakeEmployeeOnboardingInvitationEmailService>();
 		_assignmentRepository = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
 		_workCalendars = GetRequiredService<IWorkCalendarPolicyAppService>();
 		_payrollPolicies = GetRequiredService<IPayrollPolicyAppService>();
@@ -55,6 +63,150 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_unitOfWorkManager = GetRequiredService<IUnitOfWorkManager>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Store_Copyable_Token_And_Send_Email()
+	{
+		_emailService.Reset();
+
+		var invite = await CreateInviteAsync($"onboarding.invite.{Guid.NewGuid():N}@test.com");
+
+		invite.Token.ShouldNotBeNullOrWhiteSpace();
+		invite.PublicPath.ShouldBe($"/employee-application/{invite.Token}");
+		invite.Application.PublicPath.ShouldBe(invite.PublicPath);
+		invite.EmailDeliverySucceeded.ShouldBeTrue();
+		invite.EmailDeliveryMessage.ShouldBe("Invite email sent.");
+
+		var sent = _emailService.Sent.Single();
+		sent.ApplicationId.ShouldBe(invite.Application.Id);
+		sent.Email.ShouldBe(invite.Application.Email);
+		sent.PublicPath.ShouldBe(invite.PublicPath);
+
+		var persisted = await _applicationRepository.GetAsync(invite.Application.Id);
+		persisted.EncryptedToken.ShouldNotBeNullOrWhiteSpace();
+		persisted.TokenHash.ShouldNotBe(invite.Token);
+
+		var detail = await _applications.GetAsync(invite.Application.Id);
+		detail.PublicPath.ShouldBe(invite.PublicPath);
+
+		var publicApplication = await _applications.GetPublicAsync(invite.Token);
+		publicApplication.Id.ShouldBe(invite.Application.Id);
+		publicApplication.CanSubmit.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Create_Invite_When_Email_Send_Fails()
+	{
+		_emailService.Reset();
+		_emailService.FailNextSend = true;
+
+		var invite = await CreateInviteAsync($"onboarding.emailfail.{Guid.NewGuid():N}@test.com");
+
+		invite.EmailDeliverySucceeded.ShouldBeFalse();
+		invite.EmailDeliveryMessage.ShouldBe("Invite was created, but email could not be sent.");
+		invite.PublicPath.ShouldBe($"/employee-application/{invite.Token}");
+		_emailService.Sent.Single().ApplicationId.ShouldBe(invite.Application.Id);
+
+		var persisted = await _applicationRepository.GetAsync(invite.Application.Id);
+		persisted.EncryptedToken.ShouldNotBeNullOrWhiteSpace();
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Require_Email()
+	{
+		await Should.ThrowAsync<AbpValidationException>(() =>
+			_applications.CreateAsync(new CreateEmployeeApplicationInviteDto
+			{
+				FirstName = "Missing",
+				LastName = "Email",
+				MobileNo = "9876500999",
+				PositionAppliedFor = "Teacher"
+			}));
+	}
+
+	[Fact]
+	public async Task GetAsync_Should_Not_Return_PublicPath_For_Legacy_Invite_Without_Encrypted_Token()
+	{
+		_emailService.Reset();
+		var now = DateTime.UtcNow;
+		var legacy = new EmployeeApplication(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			($"EA-LEGACY-{Guid.NewGuid():N}")[..40],
+			HashTokenForTest(Guid.NewGuid().ToString("N")),
+			null,
+			now.AddDays(30),
+			now,
+			"Legacy",
+			null,
+			"Invite",
+			$"legacy.invite.{Guid.NewGuid():N}@test.com",
+			"9876500888",
+			"Teacher",
+			"Primary");
+		legacy = await _applicationRepository.InsertAsync(legacy, autoSave: true);
+
+		var detail = await _applications.GetAsync(legacy.Id);
+		detail.PublicPath.ShouldBeNull();
+
+		var regenerated = await _applications.RegenerateLinkAsync(legacy.Id);
+		regenerated.PublicPath.ShouldBe($"/employee-application/{regenerated.Token}");
+		regenerated.Application.PublicPath.ShouldBe(regenerated.PublicPath);
+		_emailService.Sent.Single().ApplicationId.ShouldBe(legacy.Id);
+
+		var regeneratedDetail = await _applications.GetAsync(legacy.Id);
+		regeneratedDetail.PublicPath.ShouldBe(regenerated.PublicPath);
+	}
+
+	[Fact]
+	public async Task GetAsync_Should_Not_Fail_When_Stored_Encrypted_Token_Cannot_Be_Decrypted()
+	{
+		_emailService.Reset();
+		var now = DateTime.UtcNow;
+		var token = Guid.NewGuid().ToString("N");
+		var application = new EmployeeApplication(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			($"EA-BADTOKEN-{Guid.NewGuid():N}")[..40],
+			HashTokenForTest(token),
+			"not-an-encrypted-token",
+			now.AddDays(30),
+			now,
+			"Bad",
+			null,
+			"Token",
+			$"bad.token.{Guid.NewGuid():N}@test.com",
+			"9876500777",
+			"Teacher",
+			"Primary");
+		application = await _applicationRepository.InsertAsync(application, autoSave: true);
+
+		var detail = await _applications.GetAsync(application.Id);
+
+		detail.PublicPath.ShouldBeNull();
+		var publicApplication = await _applications.GetPublicAsync(token);
+		publicApplication.Id.ShouldBe(application.Id);
+	}
+
+	[Fact]
+	public async Task RegenerateLinkAsync_Should_Store_New_Copyable_Token_And_Invalidate_Old_Token()
+	{
+		_emailService.Reset();
+		var invite = await CreateInviteAsync($"onboarding.regen.{Guid.NewGuid():N}@test.com");
+		var oldToken = invite.Token;
+
+		var regenerated = await _applications.RegenerateLinkAsync(invite.Application.Id);
+
+		regenerated.Token.ShouldNotBe(oldToken);
+		regenerated.PublicPath.ShouldBe($"/employee-application/{regenerated.Token}");
+		regenerated.Application.PublicPath.ShouldBe(regenerated.PublicPath);
+		regenerated.EmailDeliverySucceeded.ShouldBeTrue();
+		_emailService.Sent.Count.ShouldBe(2);
+
+		await Should.ThrowAsync<BusinessException>(() => _applications.GetPublicAsync(oldToken));
+		var publicApplication = await _applications.GetPublicAsync(regenerated.Token);
+		publicApplication.Id.ShouldBe(invite.Application.Id);
 	}
 
 	[Fact]
@@ -267,4 +419,21 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			0x00, 0x00, 0x49, 0x45, 0x44, 0xAE, 0x42, 0x60,
 			0x82
 		];
+
+	private async Task<EmployeeApplicationInviteDto> CreateInviteAsync(string email) =>
+		await _applications.CreateAsync(new CreateEmployeeApplicationInviteDto
+		{
+			FirstName = "Onboard",
+			LastName = "Invite",
+			Email = email,
+			MobileNo = "9876500001",
+			PositionAppliedFor = "Teacher",
+			DepartmentAppliedFor = "Primary"
+		});
+
+	private static string HashTokenForTest(string token)
+	{
+		var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token.Trim()));
+		return Convert.ToHexString(hash).ToLowerInvariant();
+	}
 }

@@ -7,7 +7,10 @@ using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
-public class AttendanceCaptureModeLookupResolver(HrPolicyResolver policyResolver) : ITransientDependency
+public class AttendanceCaptureModeLookupResolver(
+	HrPolicyResolver policyResolver,
+	AttendanceCaptureModeReadLookupReader readLookupReader)
+	: ITransientDependency
 {
 	public async Task<Dictionary<Guid, AttendanceCaptureMode>> ResolveForDateAsync(
 		IEnumerable<Guid> employeeIds,
@@ -22,6 +25,12 @@ public class AttendanceCaptureModeLookupResolver(HrPolicyResolver policyResolver
 
 		return lookup;
 	}
+
+	public Task<Dictionary<Guid, AttendanceCaptureMode>> ResolveForDateOrDefaultAsync(
+		IEnumerable<Guid> employeeIds,
+		DateOnly date,
+		AttendanceCaptureMode fallback = AttendanceCaptureMode.Integrated) =>
+		readLookupReader.ResolveForDateAsync(employeeIds, date, fallback);
 
 	public async Task<Dictionary<(Guid EmployeeId, DateOnly Date), AttendanceCaptureMode>> ResolveForDatesAsync(
 		IEnumerable<Guid> employeeIds,
@@ -42,6 +51,12 @@ public class AttendanceCaptureModeLookupResolver(HrPolicyResolver policyResolver
 
 		return lookup;
 	}
+
+	public Task<Dictionary<(Guid EmployeeId, DateOnly Date), AttendanceCaptureMode>> ResolveForDatesOrDefaultAsync(
+		IEnumerable<Guid> employeeIds,
+		IEnumerable<DateOnly> dates,
+		AttendanceCaptureMode fallback = AttendanceCaptureMode.Integrated) =>
+		readLookupReader.ResolveForDatesAsync(employeeIds, dates, fallback);
 
 	public async Task<Dictionary<(Guid EmployeeId, DateOnly Date), AttendanceCaptureMode>> ResolveForPairsAsync(
 		IEnumerable<(Guid EmployeeId, DateOnly Date)> employeeDates)

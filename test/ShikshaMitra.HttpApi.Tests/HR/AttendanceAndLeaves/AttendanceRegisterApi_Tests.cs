@@ -372,6 +372,40 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Grouped_Register_Should_Fallback_When_Employee_Policy_Assignment_Is_Broken()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var marker = $"RegBrokenPolicy{Guid.NewGuid():N}";
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
+		var healthyEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"{marker}Healthy",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+		var brokenEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"{marker}Broken",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+		await SeedAttendanceAsync(healthyEmployee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
+		await SeedAttendanceAsync(brokenEmployee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
+		await AssignBrokenEmployeePolicyAsync(brokenEmployee.Id, attendanceDate);
+
+		var response = await Client.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
+		var brokenDay = payload.Items.Single(x => x.EmployeeId == brokenEmployee.Id).Days.Single();
+
+		payload.TotalCount.ShouldBe(2);
+		brokenDay.Status.ShouldBe(AttendanceRegisterStatus.Present);
+		brokenDay.CaptureMode.ShouldBe("integrated");
+		payload.Items.Single(x => x.EmployeeId == healthyEmployee.Id).Days.Single().Status.ShouldBe(AttendanceRegisterStatus.Present);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Adjust_Should_Create_Attendance_For_Unlocked_NotMarked_Row()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
@@ -757,6 +791,41 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 				true,
 				priority: 100,
 				assignmentReason: "Capture mode regression test"), autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task AssignBrokenEmployeePolicyAsync(Guid employeeId, DateOnly effectiveDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var targetDate = effectiveDate.ToDateTime(TimeOnly.MinValue);
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x => x.StartDate <= targetDate && x.EndDate >= targetDate);
+
+			await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+				Guid.NewGuid(),
+				tenantId,
+				academicYear.Id,
+				HrPolicyAssignmentTargetType.Employee,
+				employeeId.ToString("D"),
+				null,
+				Guid.NewGuid(),
+				Guid.NewGuid(),
+				null,
+				targetDate.Date,
+				null,
+				true,
+				priority: 500,
+				assignmentReason: "Broken assignment regression test"), autoSave: false);
 			await uow.CompleteAsync();
 		}
 	}

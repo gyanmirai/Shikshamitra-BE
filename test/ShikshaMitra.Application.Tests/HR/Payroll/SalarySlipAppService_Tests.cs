@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.PersonalInfo;
@@ -41,6 +42,8 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	private readonly IPayrollPolicyAppService _payrollPolicies;
 	private readonly IAttendancePolicyAppService _attendancePolicies;
 	private readonly IHrPolicyAssignmentAppService _assignments;
+	private readonly ILeaveTypeAppService _leaveTypeAppService;
+	private readonly ILeavePolicyAppService _leavePolicyAppService;
 	private readonly SalarySlipAccessService _salarySlipAccessService;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
 	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
@@ -69,6 +72,8 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		_payrollPolicies = GetRequiredService<IPayrollPolicyAppService>();
 		_attendancePolicies = GetRequiredService<IAttendancePolicyAppService>();
 		_assignments = GetRequiredService<IHrPolicyAssignmentAppService>();
+		_leaveTypeAppService = GetRequiredService<ILeaveTypeAppService>();
+		_leavePolicyAppService = GetRequiredService<ILeavePolicyAppService>();
 		_salarySlipAccessService = GetRequiredService<SalarySlipAccessService>();
 		_attendanceRepository = GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
 		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
@@ -264,6 +269,33 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		refreshedSlip.PayrollBasisDays.ShouldBe(snapshot.BasisDays);
 		refreshedSlip.PayableDays.ShouldBe(snapshot.PayableDays);
 		refreshedSlip.NetSalary.ShouldBe(snapshot.NetPay);
+	}
+
+	[Fact]
+	public async Task GetSalarySlipAsync_Should_Return_Finalized_Current_Slip_Without_Regenerating_From_Snapshot()
+	{
+		var monthYear = CurrentPayrollMonth();
+		var context = await CreatePayrollPolicyContextAsync(PayrollYear(monthYear));
+		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear));
+		await SeedAttendanceScopeAsync(employee.Id, context.OrganizationId, monthYear);
+		await SaveSalaryComponentsAsync(employee.Id);
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.WorkingDaysPayroll.Id);
+		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
+
+		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
+		var draft = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
+		{
+			EmployeeId = employee.Id,
+			MonthYear = monthYear
+		});
+		var finalized = await _salarySlipAppService.FinalizeAsync(draft.Id);
+		finalized.Status.ShouldBe(SalarySlipStatus.Finalized);
+
+		var fetched = await _salarySlipAppService.GetSalarySlipAsync(employee.Id, monthYear);
+
+		fetched.Id.ShouldBe(finalized.Id);
+		fetched.Status.ShouldBe(SalarySlipStatus.Finalized);
+		fetched.NetSalary.ShouldBe(finalized.NetSalary);
 	}
 
 	[Fact]
@@ -504,8 +536,39 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			HolidayWorkBehavior = "paid",
 			PayrollPreviewEnabled = true
 		});
+		var leaveType = await _leaveTypeAppService.CreateLeaveTypeAsync(academicYearId, new LeaveTypeCreateRequest
+		{
+			Name = $"SL Leave Type {Guid.NewGuid():N}",
+			Color = "#1A73E8"
+		});
+		var leavePolicy = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = $"SL Leave Policy {Guid.NewGuid():N}",
+			Status = "Active",
+			EffectiveFrom = new DateTime(year, 1, 1),
+			EffectiveTo = new DateTime(year, 12, 31),
+			IsDefault = true,
+			Rules =
+			[
+				new LeavePolicyRuleRequest
+				{
+					LeaveTypeId = leaveType.Id,
+					AccrualPolicyType = "Monthly",
+					LeaveCount = 12,
+					PaidType = "Paid",
+					CarryForward = false,
+					EncashmentAllowed = false,
+					RequiresApproval = true,
+					MinNoticeDays = 0,
+					MaxDaysPerRequest = 30,
+					AllowHalfDay = true,
+					AllowNegativeBalance = false,
+					IsActive = true
+				}
+			]
+		});
 
-		return new PayrollPolicyContext(year, academicYearId, organizationId, workingDays, totalMonth, attendance);
+		return new PayrollPolicyContext(year, academicYearId, organizationId, workingDays, totalMonth, attendance, leavePolicy.Id);
 	}
 
 	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(
@@ -663,6 +726,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			AssignmentId = assignmentId,
 			AttendancePolicyId = context.AttendancePolicy.Id,
 			PayrollPolicyId = payrollPolicyId,
+			LeavePolicyId = context.LeavePolicyId,
 			EffectiveFrom = effectiveFrom,
 			AssignmentReason = reason
 		};
@@ -678,6 +742,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 				TargetKey = targetKey,
 				AttendancePolicyId = context.AttendancePolicy.Id,
 				PayrollPolicyId = payrollPolicyId,
+				LeavePolicyId = context.LeavePolicyId,
 				EffectiveFrom = effectiveFrom,
 				IsActive = true,
 				Priority = 100,
@@ -906,5 +971,6 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		Guid OrganizationId,
 		PayrollPolicyDto WorkingDaysPayroll,
 		PayrollPolicyDto TotalMonthPayroll,
-		AttendancePolicyDto AttendancePolicy);
+		AttendancePolicyDto AttendancePolicy,
+		Guid LeavePolicyId);
 }

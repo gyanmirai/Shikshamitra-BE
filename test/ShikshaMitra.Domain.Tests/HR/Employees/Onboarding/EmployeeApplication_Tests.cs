@@ -81,6 +81,7 @@ public class EmployeeApplication_Tests
 			Guid.NewGuid(),
 			"EA-20260612100000-ABC123",
 			"token-hash",
+			null,
 			issuedAt.AddDays(30),
 			issuedAt,
 			"Riya",

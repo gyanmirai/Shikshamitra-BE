@@ -15,8 +15,9 @@ public class ReconciliationListItemDto
 {
     public Guid Id { get; set; }
 
-    /// <summary>Provisional receipt number (KFE-*).</summary>
-    public string ReceiptNumber { get; set; } = string.Empty;
+	/// <summary>Provisional receipt number (KFE-*).</summary>
+	public Guid? ProvisionalReceiptId { get; set; }
+	public string ReceiptNumber { get; set; } = string.Empty;
 
     // ── Student ──────────────────────────────────────────────────────────
     public Guid StudentId { get; set; }
@@ -45,8 +46,10 @@ public class ReconciliationListItemDto
 
     public FeeReceiptVerificationStatus VerificationStatus { get; set; }
 
-    /// <summary>Final receipt number (FIN-*) once approved. Null while pending.</summary>
-    public string? FinalReceiptNumber { get; set; }
+	public Guid? FinalReceiptId { get; set; }
+
+	/// <summary>Final receipt number (FIN-*) once approved. Null while pending.</summary>
+	public string? FinalReceiptNumber { get; set; }
 
     // ── Dates ─────────────────────────────────────────────────────────────
     public DateOnly ReceiptDate { get; set; }

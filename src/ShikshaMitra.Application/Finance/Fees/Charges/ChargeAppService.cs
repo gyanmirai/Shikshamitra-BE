@@ -288,6 +288,13 @@ public class ChargeAppService(
 	public async Task<ApprovalResponse> ApproveAsync(Guid chargeId, ApproveChargeRequest input)
 	{
 		var request = await GetChargeRequestOrThrowAsync(chargeId);
+
+		if (CurrentUser.Id == request.RequestorId && !IsPrivilegedUser())
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeApproverCannotBeRequestor)
+				.WithData("Message", "The approver must differ from the charge requestor");
+		}
+
 		var (processed, remaining) = await chargeRequestManager.ApproveLinesAsync(
 			request, input.StudentIds, currentUser.Id!.Value, input.ApprovalNotes);
 
@@ -576,4 +583,7 @@ public class ChargeAppService(
 			// Updates allowed when some lines approved — audience sync handles restrictions
 		}
 	}
+
+	private bool IsPrivilegedUser() => CurrentUser.IsInRole("admin")
+		|| CurrentUser.IsInRole("Finance Officer");
 }

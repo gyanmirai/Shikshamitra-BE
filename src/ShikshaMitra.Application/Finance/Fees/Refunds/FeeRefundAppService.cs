@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -176,7 +176,12 @@ public class FeeRefundAppService(
 
         using var uow = unitOfWorkManager.Begin(isTransactional: true);
 
-        var userId = currentUser.GetId();
+		if (CurrentUser.Id == request.CreatorId && !IsPrivilegedUser())
+		{
+			throw new BusinessException("Creator cannot approve/reject their own request.");
+		}
+
+		var userId = currentUser.GetId();
 
         switch (input.Status)
         {
@@ -252,7 +257,9 @@ public class FeeRefundAppService(
             StudentName      = fullName,
             StudentGrNo      = student?.GrNo,
             StudentRollNo    = student?.RollNo,
-            ClassName        = student?.Standard?.Name,
+			StandardId		 = student?.StandardId,
+			DivisionId		 = student?.DivisionId,
+			StandardName     = student?.Standard?.Name,
             DivisionName     = student?.Division?.Name,
             StudentContactNo = student?.ContactDetail?.PrimaryContactNo,
             BoardId          = student?.AcademicBoardId,
@@ -325,4 +332,7 @@ public class FeeRefundAppService(
         dto.TotalPaidAmount = grouped.Sum(fh => fh.TotalPaid);
         dto.TotalRefundedAmount = grouped.Sum(fh => fh.TotalRefunded);
     }
+
+	private bool IsPrivilegedUser() => CurrentUser.IsInRole("admin")
+		|| CurrentUser.IsInRole("Finance Officer");
 }

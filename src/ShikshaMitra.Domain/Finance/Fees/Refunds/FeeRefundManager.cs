@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
 using Volo.Abp;
-using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.MultiTenancy;
 
@@ -18,7 +17,7 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund;
 public class FeeRefundManager(
     IFeeRefundRepository feeRefundRepository,
     IDueFeeRepository dueFeeRepository,
-    ICurrentTenant currentTenant
+	ICurrentTenant currentTenant
 ) : DomainService
 {
     /// <summary>
@@ -86,7 +85,7 @@ public class FeeRefundManager(
 	/// </summary>
 	public async Task ApproveAsync(FeeRefundRequest request, Guid approverUserId, string? notes = null)
     {
-        if (request.Status == FeeRefundStatus.Approved)
+		if (request.Status == FeeRefundStatus.Approved)
             throw new BusinessException(FeeRefundErrorCodes.RefundAlreadyProcessed)
                 .WithData("VoucherNumber", request.VoucherNumber);
 

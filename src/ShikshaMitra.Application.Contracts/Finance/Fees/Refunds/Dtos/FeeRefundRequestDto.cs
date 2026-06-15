@@ -11,8 +11,10 @@ public class FeeRefundRequestDto
     public Guid StudentId { get; set; }
 
     public Guid AcademicYearId { get; set; }
+	public Guid? StandardId { get; set; }
+	public Guid? DivisionId { get; set; }
 
-    public FeeRefundStatus Status { get; set; }
+	public FeeRefundStatus Status { get; set; }
 
     public string VoucherNumber { get; set; } = default!;
 
@@ -56,7 +58,7 @@ public class FeeRefundRequestDto
     public int? StudentRollNo { get; set; }
 
     /// <summary>Standard / class name (e.g. "Class 5", "Nursery").</summary>
-    public string? ClassName { get; set; }
+    public string? StandardName { get; set; }
 
     /// <summary>Division name (e.g. "A").</summary>
     public string? DivisionName { get; set; }

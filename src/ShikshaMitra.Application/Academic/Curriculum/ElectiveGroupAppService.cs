@@ -219,6 +219,10 @@ public class ElectiveGroupAppService(
 		{
 			throw;
 		}
+		catch (BusinessException)
+		{
+			throw;
+		}
 		catch (Exception ex)
 		{
 			logger.LogError(

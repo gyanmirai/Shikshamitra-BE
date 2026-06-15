@@ -64,6 +64,11 @@ public class FeeCollectionSummaryItemDto
 	public double PendingCharges { get; set; }
 
 	/// <summary>
+	/// Sum of all concession amounts assigned to the student for the requested academic year.
+	/// </summary>
+	public double TotalConcessionAmount { get; set; }
+
+	/// <summary>
 	/// Flag indicating whether any fee structure is assigned to the student for the requested academic year.
 	/// </summary>
 	public bool IsFeeStructureAssigned { get; set; } = false;

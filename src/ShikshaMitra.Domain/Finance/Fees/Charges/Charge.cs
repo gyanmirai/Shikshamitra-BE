@@ -142,12 +142,6 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("Message", "Only pending charges can be approved");
 		}
 
-		if (approvedBy == RequestorId)
-		{
-			throw new BusinessException(FinanceChargeErrorCodes.ChargeApproverCannotBeRequestor)
-				.WithData("Message", "The approver must differ from the charge requestor");
-		}
-
 		Status = ChargeStatus.Approved;
 		ApprovedBy = approvedBy;
 		ApprovedOn = DateTime.UtcNow;

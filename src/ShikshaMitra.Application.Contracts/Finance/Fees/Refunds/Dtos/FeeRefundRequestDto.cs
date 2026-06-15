@@ -11,14 +11,23 @@ public class FeeRefundRequestDto
     public Guid StudentId { get; set; }
 
     public Guid AcademicYearId { get; set; }
+	public Guid? StandardId { get; set; }
+	public Guid? DivisionId { get; set; }
 
-    public FeeRefundStatus Status { get; set; }
+	public FeeRefundStatus Status { get; set; }
 
     public string VoucherNumber { get; set; } = default!;
 
     public double TotalAmount { get; set; }
 
     public string? RefundMethod { get; set; }
+
+    /// <summary>
+    /// Method-specific disbursement details returned as a flat key/value map,
+    /// mirroring the <c>paymentDetails</c> object the frontend sent on creation.
+    /// Keys depend on the <see cref="RefundMethod"/> (e.g., "chequeNumber", "upiId").
+    /// </summary>
+    public Dictionary<string, object?>? PaymentDetails { get; set; }
 
     public string? Reason { get; set; }
 
@@ -56,7 +65,7 @@ public class FeeRefundRequestDto
     public int? StudentRollNo { get; set; }
 
     /// <summary>Standard / class name (e.g. "Class 5", "Nursery").</summary>
-    public string? ClassName { get; set; }
+    public string? StandardName { get; set; }
 
     /// <summary>Division name (e.g. "A").</summary>
     public string? DivisionName { get; set; }

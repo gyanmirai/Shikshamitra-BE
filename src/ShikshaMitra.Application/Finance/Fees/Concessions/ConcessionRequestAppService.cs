@@ -283,6 +283,11 @@ public class ConcessionRequestAppService(
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		var dueFees = await dueFeeRepository.GetListAsync(df => df.StudentId == request.StudentId);
 
+		if (CurrentUser.Id == request.CreatorId && !IsPrivilegedUser())
+		{
+			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
+		}
+
 		var approvals = input.FeeHeadApprovals?.Select(a => new FeeHeadApprovalInput(
 			a.FeeHeadId,
 			a.ApprovedConcessionAmount,
@@ -486,4 +491,7 @@ public class ConcessionRequestAppService(
 		return string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
 			.Where(s => !string.IsNullOrWhiteSpace(s)));
 	}
+
+	private bool IsPrivilegedUser() => CurrentUser.IsInRole("admin")
+		|| CurrentUser.IsInRole("Finance Officer");
 }

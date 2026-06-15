@@ -4619,6 +4619,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("RefundPaymentDetails")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("RefundPaymentDetails");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -13,7 +14,8 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 [Authorize]
 [RemoteService(false)]
 public class FeeCategoryAppService(
-	IRepository<FeeCategory, Guid> feeCategoryRepository
+	IRepository<FeeCategory, Guid> feeCategoryRepository,
+	IRepository<FeeHead, Guid> feeHeadRepository
 ) : ApplicationService, IFeeCategoryAppService
 {
     public async Task<MessageResponse> CreateAsync(Guid academicYearId, FeeCategoryCreateRequest input)
@@ -69,7 +71,22 @@ public class FeeCategoryAppService(
             Description = x.Description,
             CreatedAt = x.CreationTime,
             UpdatedAt = x.LastModificationTime
-        }).ToList();
+		}).ToList();
+
+		var headQuery = await feeHeadRepository.GetQueryableAsync();
+		var itemIds = dtos.Select(x => x.Id).ToList();
+		var usedCategoryIds = new HashSet<Guid>(
+			await feeHeadRepository.AsyncExecuter.ToListAsync(
+				headQuery.Where(x => itemIds.Contains(x.FeeCategoryId))
+						 .Select(x => x.FeeCategoryId)
+						 .Distinct()
+			)
+		);
+
+		foreach (var d in dtos)
+		{
+			d.IsUsedInDownstream = usedCategoryIds.Contains(d.Id);
+		}
 
         return new FeeCategoryListResponse
         {
@@ -85,8 +102,6 @@ public class FeeCategoryAppService(
     {
 		var feeCategory = await feeCategoryRepository.GetAsync(feeCategoryId);
 
-        feeCategory.Update(input.Name, input.Description);
-
 		// validation to ensure no duplicate fee category name exists for the same academic year
 		var existingCategory = await feeCategoryRepository.FirstOrDefaultAsync(x => x.AcademicYearId == feeCategory.AcademicYearId && x.Name == input.Name && x.Id != feeCategoryId);
 
@@ -94,6 +109,8 @@ public class FeeCategoryAppService(
 		{
 			throw new BusinessException("A fee category with the same name already exists for this academic year.");
 		}
+
+		feeCategory.Update(input.Name, input.Description);
 
 		await feeCategoryRepository.UpdateAsync(feeCategory);
 

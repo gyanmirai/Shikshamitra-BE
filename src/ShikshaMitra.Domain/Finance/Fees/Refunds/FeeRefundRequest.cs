@@ -27,8 +27,15 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>Sum of all <see cref="FeeRefundLine.Amount"/> values.</summary>
     public double TotalAmount { get; private set; }
 
-    /// <summary>Payment method chosen for the refund disbursement.</summary>
+    /// <summary>Payment method chosen for the refund disbursement (e.g., "Cash", "Cheque", "UPI").</summary>
     public string? RefundMethod { get; private set; }
+
+    /// <summary>
+    /// Structured, method-specific disbursement details (cheque number, beneficiary account, UPI ID, etc.).
+    /// Null only when <see cref="RefundMethod"/> is Cash or not yet set.
+    /// Persisted as a <c>jsonb</c> column via a polymorphic value converter.
+    /// </summary>
+    public RefundPaymentDetails? RefundPaymentDetails { get; private set; }
 
     /// <summary>Optional school-provided reason / taxonomy for the refund.</summary>
     public string? Reason { get; private set; }
@@ -57,20 +64,66 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         string voucherNumber,
         double totalAmount,
         string? refundMethod,
+        RefundPaymentDetails? refundPaymentDetails,
         string? reason)
         : base(id)
     {
-        TenantId = tenantId;
-        StudentId = studentId;
-        AcademicYearId = academicYearId;
-        VoucherNumber = voucherNumber;
-        TotalAmount = totalAmount;
-        RefundMethod = refundMethod;
-        Reason = reason;
-        Status = FeeRefundStatus.Pending;
+        TenantId             = tenantId;
+        StudentId            = studentId;
+        AcademicYearId       = academicYearId;
+        VoucherNumber        = voucherNumber;
+        TotalAmount          = totalAmount;
+        RefundMethod         = refundMethod;
+        RefundPaymentDetails = refundPaymentDetails;
+        Reason               = reason;
+        Status               = FeeRefundStatus.Pending;
+    }
+
+    /// <summary>
+    /// Updates the payment details on a <see cref="FeeRefundStatus.Pending"/> request.
+    /// Only allowed before the request is reviewed or processed.
+    /// </summary>
+    internal void UpdatePaymentDetails(string? refundMethod, RefundPaymentDetails? refundPaymentDetails)
+    {
+        if (Status != FeeRefundStatus.Pending)
+            throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition)
+                .WithData("CurrentStatus", Status)
+                .WithData("Reason", "Payment details can only be updated on Pending requests.");
+
+        RefundMethod         = refundMethod;
+        RefundPaymentDetails = refundPaymentDetails;
     }
 
     internal void AddLine(FeeRefundLine line) => _lines.Add(line);
+
+    /// <summary>
+    /// Replaces all existing refund lines with <paramref name="newLines"/>.
+    /// Only allowed while the request is in <see cref="FeeRefundStatus.Pending"/>.
+    /// </summary>
+    internal void ReplaceLines(List<FeeRefundLine> newLines, double newTotalAmount)
+    {
+        if (Status != FeeRefundStatus.Pending)
+            throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition)
+                .WithData("CurrentStatus", Status)
+                .WithData("Reason", "Lines can only be replaced on Pending requests.");
+
+        _lines.Clear();
+        foreach (var line in newLines)
+            _lines.Add(line);
+
+        TotalAmount = newTotalAmount;
+    }
+
+    /// <summary>Updates the optional reason field. Allowed only on Pending requests.</summary>
+    internal void UpdateReason(string? reason)
+    {
+        if (Status != FeeRefundStatus.Pending)
+            throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition)
+                .WithData("CurrentStatus", Status)
+                .WithData("Reason", "Reason can only be updated on Pending requests.");
+
+        Reason = reason;
+    }
 
     // ── Status transition methods ─────────────────────────────────────────────
 

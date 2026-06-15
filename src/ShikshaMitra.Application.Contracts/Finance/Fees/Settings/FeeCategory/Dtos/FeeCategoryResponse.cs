@@ -10,4 +10,5 @@ public class FeeCategoryResponse : EntityDto<Guid>
     public string Description { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+	public bool IsUsedInDownstream { get; set; } = false;
 }

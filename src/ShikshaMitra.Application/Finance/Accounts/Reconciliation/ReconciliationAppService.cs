@@ -207,7 +207,8 @@ public class ReconciliationAppService(
         return new ReconciliationListItemDto
         {
             Id                         = row.ReceiptId,
-            ReceiptNumber              = row.ReceiptNumber,
+			ProvisionalReceiptId	   = row.ReceiptId,
+			ReceiptNumber              = row.ReceiptNumber,
             StudentId                  = row.StudentId,
             StudentName                = row.StudentName,
             GrNumber                   = row.GrNumber,
@@ -227,7 +228,8 @@ public class ReconciliationAppService(
             FinalReceiptNumber         = row.LinkedFinalReceiptNumber,
             ReceiptDate                = row.ReceiptDate,
             Remarks                    = row.Remarks,
-        };
+			FinalReceiptId			   = row.LinkedFinalReceiptId,
+		};
     }
 
     private static Dictionary<string, string?> ParseInstrumentDetails(string? json)

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Identity;
 using Volo.Abp.ObjectExtending;
 using Volo.Abp.TenantManagement;
@@ -188,6 +188,25 @@ public static class ShikshaMitraModuleExtensionConfigurator
 			new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
 			"PrincipleSign"
 		);
+
+		#endregion
+
+		#region Role Extra Properties
+
+		ObjectExtensionManager.Instance.Modules()
+			.ConfigureIdentity(identity =>
+			{
+				identity.ConfigureRole(role =>
+				{
+					role.AddOrUpdateProperty<string>(
+						"Color",
+						property =>
+						{
+							property.Attributes.Add(new StringLengthAttribute(32));
+						}
+					);
+				});
+			});
 
 		#endregion
 	}

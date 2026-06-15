@@ -13,4 +13,5 @@ public class FeeHeadResponse : EntityDto<Guid>
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+	public bool IsUsedInDownstream { get; set; } = false;
 }

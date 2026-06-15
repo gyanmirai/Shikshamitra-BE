@@ -80,6 +80,72 @@ public class FeeRefundManager(
         return await feeRefundRepository.InsertAsync(request, autoSave: false);
     }
 
+    /// <summary>
+    /// Validates and applies an in-place update to a <see cref="FeeRefundStatus.Pending"/> refund request.
+    /// Replaces all lines, recomputes the total, and updates payment details and reason.
+    /// </summary>
+    /// <remarks>
+    /// Refundable-balance validation re-excludes amounts already held by this same request,
+    /// so the requester can freely adjust amounts without being blocked by their own prior reservation.
+    /// </remarks>
+    public async Task UpdateAsync(
+        FeeRefundRequest request,
+        List<(Guid DueFeeId, double Amount)> lines,
+        string? refundMethod,
+        RefundPaymentDetails? refundPaymentDetails,
+        string? reason)
+    {
+        if (request.Status != FeeRefundStatus.Pending)
+            throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund)
+                .WithData("VoucherNumber", request.VoucherNumber)
+                .WithData("CurrentStatus", request.Status);
+
+        if (lines == null || lines.Count == 0)
+            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+
+        var dueFeeIds = lines.Select(l => l.DueFeeId).ToList();
+        var dueFees = await dueFeeRepository.GetListAsync(df => dueFeeIds.Contains(df.Id));
+
+        if (dueFees.Count != dueFeeIds.Count)
+            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound)
+                .WithData("Missing", dueFeeIds.Except(dueFees.Select(df => df.Id)).ToList());
+
+        // Build a map of amounts already held by this request so we don't double-count them
+        // when re-validating the refundable balance.
+        var existingLineAmounts = request.Lines
+            .ToDictionary(l => l.DueFeeId, l => l.Amount);
+
+        var dueFeeMap = dueFees.ToDictionary(df => df.Id);
+        foreach (var (dueFeeId, amount) in lines)
+        {
+            var dueFee = dueFeeMap[dueFeeId];
+
+            // Available = stored RefundableBalance + amount already reserved by this request
+            var alreadyReserved = existingLineAmounts.TryGetValue(dueFeeId, out var prev) ? prev : 0d;
+            var available = dueFee.RefundableBalance + alreadyReserved;
+
+            if (amount > available)
+                throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance)
+                    .WithData("DueFeeId", dueFeeId)
+                    .WithData("Requested", amount)
+                    .WithData("Available", available);
+        }
+
+        var totalAmount = lines.Sum(l => l.Amount);
+
+        var newLines = lines
+            .Select(l => new FeeRefundLine(
+                id: GuidGenerator.Create(),
+                feeRefundRequestId: request.Id,
+                dueFeeId: l.DueFeeId,
+                amount: l.Amount))
+            .ToList();
+
+        request.ReplaceLines(newLines, totalAmount);
+        request.UpdatePaymentDetails(refundMethod, refundPaymentDetails);
+        request.UpdateReason(reason);
+    }
+
 	/// <summary>
 	/// Approves a refund request and applies <see cref="DueFee.ApplyRefund"/>
 	/// to each referenced DueFee row inside the caller's transaction.

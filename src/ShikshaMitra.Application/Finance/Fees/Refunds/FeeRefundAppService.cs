@@ -170,6 +170,63 @@ public class FeeRefundAppService(
     }
 
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add)]
+    public async Task<FeeRefundRequestDto> UpdateAsync(Guid id, UpdateFeeRefundRequestDto input)
+    {
+        var request = await feeRefundRepository.FindWithLinesAsync(id)
+            ?? throw new BusinessException(FeeRefundErrorCodes.RefundNotFound)
+                .WithData("Id", id);
+
+        if (request.Status != FeeRefundStatus.Pending)
+            throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund)
+                .WithData("VoucherNumber", request.VoucherNumber)
+                .WithData("CurrentStatus", request.Status);
+
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+
+        using var uow = unitOfWorkManager.Begin(isTransactional: true);
+
+        var lines = input.Lines
+            .Select(l => (l.DueFeeId, l.Amount))
+            .ToList();
+
+        var refundPaymentDetails = FeeRefundManager.MapRefundPaymentDetails(
+            input.RefundMethod,
+            input.PaymentDetails);
+
+        await feeRefundManager.UpdateAsync(
+            request:              request,
+            lines:                lines,
+            refundMethod:         input.RefundMethod,
+            refundPaymentDetails: refundPaymentDetails,
+            reason:               input.Reason);
+
+        await feeRefundRepository.UpdateAsync(request, autoSave: false);
+        await uow.CompleteAsync();
+
+        var studentMap = await BuildStudentMapAsync([request.StudentId]);
+        return MapToDto(request, studentMap);
+    }
+
+
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Delete)]
+    public async Task DeleteAsync(Guid id)
+    {
+        var request = await feeRefundRepository.FindAsync(id)
+            ?? throw new BusinessException(FeeRefundErrorCodes.RefundNotFound)
+                .WithData("Id", id);
+
+        if (request.Status != FeeRefundStatus.Pending)
+            throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund)
+                .WithData("VoucherNumber", request.VoucherNumber)
+                .WithData("CurrentStatus", request.Status);
+
+        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+
+        await feeRefundRepository.DeleteAsync(request, autoSave: true);
+    }
+
+
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve)]
     public async Task<FeeRefundRequestDto> UpdateStatusAsync(Guid id, UpdateFeeRefundStatusDto input)
     {

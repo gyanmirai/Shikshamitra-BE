@@ -96,6 +96,35 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     internal void AddLine(FeeRefundLine line) => _lines.Add(line);
 
+    /// <summary>
+    /// Replaces all existing refund lines with <paramref name="newLines"/>.
+    /// Only allowed while the request is in <see cref="FeeRefundStatus.Pending"/>.
+    /// </summary>
+    internal void ReplaceLines(List<FeeRefundLine> newLines, double newTotalAmount)
+    {
+        if (Status != FeeRefundStatus.Pending)
+            throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition)
+                .WithData("CurrentStatus", Status)
+                .WithData("Reason", "Lines can only be replaced on Pending requests.");
+
+        _lines.Clear();
+        foreach (var line in newLines)
+            _lines.Add(line);
+
+        TotalAmount = newTotalAmount;
+    }
+
+    /// <summary>Updates the optional reason field. Allowed only on Pending requests.</summary>
+    internal void UpdateReason(string? reason)
+    {
+        if (Status != FeeRefundStatus.Pending)
+            throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition)
+                .WithData("CurrentStatus", Status)
+                .WithData("Reason", "Reason can only be updated on Pending requests.");
+
+        Reason = reason;
+    }
+
     // ── Status transition methods ─────────────────────────────────────────────
 
     /// <summary>Move to Under Review (from Pending only).</summary>

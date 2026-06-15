@@ -46,6 +46,23 @@ public class FeeRefundController(
         return CreatedAtAction(nameof(GetAsync), new { id = result.Id }, result);
     }
 
+    [HttpPut("{id:guid}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add)]
+    [ProducesResponseType(typeof(FeeRefundRequestDto), StatusCodes.Status200OK)]
+    public Task<FeeRefundRequestDto> UpdateAsync(
+        [FromRoute] Guid id,
+        [FromBody] UpdateFeeRefundRequestDto input)
+        => feeRefundAppService.UpdateAsync(id, input);
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Delete)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteAsync([FromRoute] Guid id)
+    {
+        await feeRefundAppService.DeleteAsync(id);
+        return NoContent();
+    }
+
     [HttpPatch("{id:guid}/status")]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve)]
     [ProducesResponseType(typeof(FeeRefundRequestDto), StatusCodes.Status200OK)]

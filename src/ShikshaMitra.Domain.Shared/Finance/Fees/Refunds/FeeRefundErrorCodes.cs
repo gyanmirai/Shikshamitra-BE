@@ -12,4 +12,7 @@ public static class FeeRefundErrorCodes
     public const string AcademicYearNotFound       = Prefix + "010006";
     public const string RefundLineNotFound         = Prefix + "010007";
     public const string RefundAlreadyProcessed     = Prefix + "010008";
+
+    /// <summary>Thrown when an update or delete is attempted on a non-Pending refund request.</summary>
+    public const string CannotModifyNonPendingRefund = Prefix + "010009";
 }

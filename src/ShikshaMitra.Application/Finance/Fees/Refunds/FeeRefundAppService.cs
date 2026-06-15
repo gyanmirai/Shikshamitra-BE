@@ -151,11 +151,16 @@ public class FeeRefundAppService(
             .Select(l => (l.DueFeeId, l.Amount))
             .ToList();
 
+        var refundPaymentDetails = FeeRefundManager.MapRefundPaymentDetails(
+            input.RefundMethod,
+            input.PaymentDetails);
+
         var request = await feeRefundManager.CreateAsync(
             studentId: input.StudentId,
             academicYearId: input.AcademicYearId,
             lines: lines,
             refundMethod: input.RefundMethod,
+            refundPaymentDetails: refundPaymentDetails,
             reason: input.Reason);
 
         await uow.CompleteAsync();
@@ -240,6 +245,7 @@ public class FeeRefundAppService(
             VoucherNumber     = r.VoucherNumber,
             TotalAmount       = r.TotalAmount,
             RefundMethod      = r.RefundMethod,
+            PaymentDetails    = MapRefundPaymentDetailsToDict(r.RefundPaymentDetails),
             Reason            = r.Reason,
             ApproverNotes     = r.ApproverNotes,
             ProcessedByUserId = r.ProcessedByUserId,
@@ -266,6 +272,70 @@ public class FeeRefundAppService(
             BoardName        = student?.AcademicBoard?.Type.ToString(),
             EducationMediumId = student?.AcademicMediumId,
             EducationMediumName = student?.AcademicMedium?.Name,
+        };
+    }
+
+    /// <summary>
+    /// Projects a <see cref="RefundPaymentDetails"/> domain object back to the same flat
+    /// key/value shape the frontend originally sent, so the edit form can be pre-populated.
+    /// </summary>
+    private static Dictionary<string, object?>? MapRefundPaymentDetailsToDict(
+        RefundPaymentDetails? details)
+    {
+        if (details is null) return null;
+
+        return details switch
+        {
+            CashRefundDetails cash => new Dictionary<string, object?>
+            {
+                ["refundDate"] = cash.RefundDate.ToString("yyyy-MM-dd"),
+                ["receivedBy"] = cash.ReceivedBy,
+                ["remarks"]    = cash.Remarks,
+            },
+
+            ChequeRefundDetails cheque => new Dictionary<string, object?>
+            {
+                ["refundDate"]         = cheque.ChequeIssueDate.ToString("yyyy-MM-dd"),
+                ["chequeNumber"]       = cheque.ChequeNumber,
+                ["payeeName"]          = cheque.PayeeName,
+                ["sourceBankAccount"]  = cheque.SourceBankAccount,
+                ["remarks"]            = cheque.Remarks,
+            },
+
+            DemandDraftRefundDetails dd => new Dictionary<string, object?>
+            {
+                ["issueDate"]          = dd.IssueDate.ToString("yyyy-MM-dd"),
+                ["ddNumber"]           = dd.DdNumber,
+                ["bankName"]           = dd.BankName,
+                ["branchName"]         = dd.BranchName,
+                ["payeeName"]          = dd.PayeeName,
+                ["sourceBankAccount"]  = dd.SourceBankAccount,
+                ["remarks"]            = dd.Remarks,
+            },
+
+            BankTransferRefundDetails bt => new Dictionary<string, object?>
+            {
+                ["refundDate"]               = bt.TransferDate.ToString("yyyy-MM-dd"),
+                ["transactionId"]            = bt.TransactionId,
+                ["sourceBankAccount"]        = bt.SourceBankAccount,
+                ["beneficiaryName"]          = bt.BeneficiaryName,
+                ["beneficiaryBankName"]      = bt.BeneficiaryBankName,
+                ["beneficiaryAccountNumber"] = bt.BeneficiaryAccountNumber,
+                ["ifscCode"]                 = bt.IfscCode,
+                ["remarks"]                  = bt.Remarks,
+            },
+
+            UpiRefundDetails upi => new Dictionary<string, object?>
+            {
+                ["refundDate"]        = upi.RefundDate.ToString("yyyy-MM-dd"),
+                ["transactionId"]     = upi.TransactionId,
+                ["sourceBankAccount"] = upi.SourceBankAccount,
+                ["beneficiaryName"]   = upi.BeneficiaryName,
+                ["upiId"]             = upi.UpiId,
+                ["remarks"]           = upi.Remarks,
+            },
+
+            _ => null,
         };
     }
 

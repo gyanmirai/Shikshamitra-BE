@@ -22,6 +22,13 @@ public class FeeRefundRequestDto
 
     public string? RefundMethod { get; set; }
 
+    /// <summary>
+    /// Method-specific disbursement details returned as a flat key/value map,
+    /// mirroring the <c>paymentDetails</c> object the frontend sent on creation.
+    /// Keys depend on the <see cref="RefundMethod"/> (e.g., "chequeNumber", "upiId").
+    /// </summary>
+    public Dictionary<string, object?>? PaymentDetails { get; set; }
+
     public string? Reason { get; set; }
 
     public string? ApproverNotes { get; set; }

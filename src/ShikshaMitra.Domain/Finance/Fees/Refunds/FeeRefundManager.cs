@@ -29,6 +29,7 @@ public class FeeRefundManager(
         Guid academicYearId,
         List<(Guid DueFeeId, double Amount)> lines,
         string? refundMethod,
+        RefundPaymentDetails? refundPaymentDetails,
         string? reason)
     {
         if (lines == null || lines.Count == 0)
@@ -64,6 +65,7 @@ public class FeeRefundManager(
             voucherNumber: voucherNumber,
             totalAmount: totalAmount,
             refundMethod: refundMethod,
+            refundPaymentDetails: refundPaymentDetails,
             reason: reason);
 
         foreach (var (dueFeeId, amount) in lines)
@@ -115,5 +117,78 @@ public class FeeRefundManager(
         var year = DateTime.UtcNow.Year;
         var count = await feeRefundRepository.GetCountAsync();
         return $"REF-{year}-{count + 1:D6}";
+    }
+
+    // ── Payment details factory ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Maps the raw details dictionary from the API request into the appropriate
+    /// strongly-typed <see cref="RefundPaymentDetails"/> value object.
+    /// Returns <c>null</c> for Cash — the only required field (received-by) is
+    /// captured separately; pass it explicitly via the <paramref name="details"/> dict.
+    /// </summary>
+    /// <param name="refundMethod">The string method key sent by the frontend (e.g., "Cash", "Cheque").</param>
+    /// <param name="details">Flat key/value dictionary matching the frontend <c>paymentDetails</c> object.</param>
+    public static RefundPaymentDetails? MapRefundPaymentDetails(
+        string? refundMethod,
+        Dictionary<string, object?>? details)
+    {
+        if (string.IsNullOrWhiteSpace(refundMethod))
+            return null;
+
+        details ??= [];
+
+        string Get(string key) =>
+            details.TryGetValue(key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
+
+        string? GetOpt(string key) =>
+            details.TryGetValue(key, out var v) ? v?.ToString() : null;
+
+        DateOnly ParseDate(string key) =>
+            DateOnly.TryParse(Get(key), out var d) ? d : DateOnly.FromDateTime(DateTime.UtcNow);
+
+        return refundMethod switch
+        {
+            "Cash" => new CashRefundDetails(
+                refundDate: ParseDate("refundDate"),
+                receivedBy: Get("receivedBy"),
+                remarks:    GetOpt("remarks")),
+
+            "Cheque" => new ChequeRefundDetails(
+                chequeIssueDate:   ParseDate("refundDate"),
+                chequeNumber:      Get("chequeNumber"),
+                payeeName:         Get("payeeName"),
+                sourceBankAccount: Get("sourceBankAccount"),
+                remarks:           GetOpt("remarks")),
+
+            "Demand Draft (DD)" => new DemandDraftRefundDetails(
+                issueDate:         ParseDate("issueDate"),
+                ddNumber:          Get("ddNumber"),
+                bankName:          Get("bankName"),
+                branchName:        Get("branchName"),
+                payeeName:         Get("payeeName"),
+                sourceBankAccount: Get("sourceBankAccount"),
+                remarks:           GetOpt("remarks")),
+
+            "Bank Transfer (NEFT/RTGS/IMPS)" => new BankTransferRefundDetails(
+                transferDate:             ParseDate("refundDate"),
+                sourceBankAccount:        Get("sourceBankAccount"),
+                beneficiaryName:          Get("beneficiaryName"),
+                beneficiaryBankName:      Get("beneficiaryBankName"),
+                beneficiaryAccountNumber: Get("beneficiaryAccountNumber"),
+                ifscCode:                 Get("ifscCode"),
+                transactionId:            GetOpt("transactionId"),
+                remarks:                  GetOpt("remarks")),
+
+            "UPI" => new UpiRefundDetails(
+                refundDate:        ParseDate("refundDate"),
+                sourceBankAccount: Get("sourceBankAccount"),
+                beneficiaryName:   Get("beneficiaryName"),
+                upiId:             Get("upiId"),
+                transactionId:     GetOpt("transactionId"),
+                remarks:           GetOpt("remarks")),
+
+            _ => null,
+        };
     }
 }

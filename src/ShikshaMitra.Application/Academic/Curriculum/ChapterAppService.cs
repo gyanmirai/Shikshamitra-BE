@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Common;
 using System;
 using System.Collections.Generic;
@@ -17,26 +17,40 @@ public class ChapterAppService(
 	IGuidGenerator guidGenerator
 ) : ApplicationService, IChapterAppService
 {
-	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, CreateChapterDto createChapterDto)
+	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, List<CreateChapterDto> input)
 	{
 		var assignedSubject = (await assignedSubjectRepository.GetListAsync(
-				a => a.StandardId == standardId && a.SubjectId == subjectId
+				a => a.StandardId == standardId && a.SubjectId == subjectId,
+				includeDetails: true
 			)).FirstOrDefault()
 			?? throw new BusinessException("Academic:Chapter:001", "Subject not assigned to this class");
 
-		assignedSubject.AddChapter(
-			guidGenerator.Create(),
-			createChapterDto.ChapterNo,
-			createChapterDto.ChapterName,
-			createChapterDto.StartDate,
-			createChapterDto.EndDate,
-			createChapterDto.Documents ?? [],
-			createChapterDto.Description
-		);
+		if (input.Select(x => x.ChapterNo).Distinct().Count() != input.Count)
+		{
+			throw new BusinessException("Academic:Chapter:005", "Duplicate chapter numbers are not allowed.");
+		}
+
+		foreach (var createChapterDto in input)
+		{
+			if (assignedSubject.Chapters.Any(c => c.ChapterNumber == createChapterDto.ChapterNo))
+			{
+				throw new BusinessException("Academic:Chapter:004", $"Chapter number {createChapterDto.ChapterNo} already exists.");
+			}
+
+			assignedSubject.AddChapter(
+				guidGenerator.Create(),
+				createChapterDto.ChapterNo,
+				createChapterDto.ChapterName,
+				createChapterDto.StartDate,
+				createChapterDto.EndDate,
+				createChapterDto.Documents ?? [],
+				createChapterDto.Description
+			);
+		}
 
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
-		return new ApiSuccessResponseDto { Message = "Chapter created successfully." };
+		return new ApiSuccessResponseDto { Message = "Chapters created successfully." };
 	}
 
 	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId)

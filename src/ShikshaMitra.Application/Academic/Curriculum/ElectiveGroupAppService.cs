@@ -184,7 +184,9 @@ public class ElectiveGroupAppService(
 	}
 
 	/// <summary>
-	/// Delete an elective group
+	/// Delete an elective group and cascade-clean all dependent records:
+	/// Subject Allocation (ElectiveGroupId nulled), StudentElectiveSelections (deleted),
+	/// TimetableSlots (ElectiveGroupId nulled).
 	/// </summary>
 	public async Task DeleteAsync(Guid academicMediumId, Guid id)
 	{
@@ -198,10 +200,10 @@ public class ElectiveGroupAppService(
 				throw new EntityNotFoundException(typeof(ElectiveGroup), id);
 			}
 
-			await ElectiveGroupRepository.DeleteAsync(id);
+			await ElectiveGroupManager.DeleteWithCascadeAsync(id);
 
 			logger.LogInformation(
-				"Deleted elective group {Id} from medium {MediumId}",
+				"Deleted elective group {Id} from medium {MediumId} with cascade cleanup",
 				id,
 				academicMediumId
 			);

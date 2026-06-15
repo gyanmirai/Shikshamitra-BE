@@ -28,7 +28,9 @@ public class SubjectAppService(
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkAssignmentRepository,
 	IRepository<AssignmentEntity, Guid> assignmentRepository,
 	ILogger<SubjectAppService> logger,
-	AcademicOrganizationScopeAccessService scopeAccessService
+	AcademicOrganizationScopeAccessService scopeAccessService,
+	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
+	ElectiveGroupManager electiveGroupManager
 ) : ApplicationService, ISubjectAppService
 {
 	public async Task<SubjectDto> GetAsync(Guid id)
@@ -149,6 +151,15 @@ public class SubjectAppService(
 		try
 		{
 			var subject = await subjectRepository.GetAsync(id);
+
+			// Issue 1: auto-delete any elective group that would have 0 subjects after this deletion
+			var allGroups = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
+			var orphanedGroupIds = allGroups
+				.Where(eg => eg.Subjects.Count == 1 && eg.Subjects.Any(s => s.SubjectId == id))
+				.Select(eg => eg.Id)
+				.ToList();
+			foreach (var groupId in orphanedGroupIds)
+				await electiveGroupManager.DeleteWithCascadeAsync(groupId);
 
 			// Cascade: subject allocations (AppStandardSubjectAssignments)
 			var allocations = await assignedSubjectRepository.GetListAsync(a => a.SubjectId == id);

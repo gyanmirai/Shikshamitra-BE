@@ -72,5 +72,10 @@ public class TimetableSlot : Entity<Guid>
             Subjects.Add(subject);
         }
     }
+
+    public void ClearElectiveGroup()
+    {
+        ElectiveGroupId = null;
+    }
     #endregion
 }

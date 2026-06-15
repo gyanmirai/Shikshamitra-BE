@@ -161,40 +161,42 @@ public class SubjectAppService(
 					.WithData("message", $"Cannot delete '{subject.Name}' because it is the only subject in elective group '{blockingGroup.Name}'. Please delete the elective group first.");
 			}
 
-			// Cascade: subject allocations (AppStandardSubjectAssignments)
-			var allocations = await assignedSubjectRepository.GetListAsync(a => a.SubjectId == id);
-			foreach (var allocation in allocations)
-				await assignedSubjectRepository.DeleteAsync(allocation);
+			// Block deletion if the subject is in use anywhere
+			var usageParts = new System.Collections.Generic.List<string>();
 
-			// Cascade: weekly lecture-slot subjects (AppWeeklyLectureSlotSubjects)
-			var weeklySlots = await weeklyLectureSlotSubjectRepository.GetListAsync(w => w.SubjectId == id);
-			foreach (var slot in weeklySlots)
-				await weeklyLectureSlotSubjectRepository.DeleteAsync(slot);
+			var allocationCount = await assignedSubjectRepository.CountAsync(a => a.SubjectId == id);
+			if (allocationCount > 0)
+				usageParts.Add($"{allocationCount} class allocation(s)");
 
-			// Cascade: timetable-slot subjects (AppTimetableSlotSubjects — no soft delete)
-			var timetableSlots = await timetableSlotSubjectRepository.GetListAsync(t => t.SubjectId == id);
-			foreach (var slot in timetableSlots)
-				await timetableSlotSubjectRepository.DeleteAsync(slot, autoSave: true);
+			var weeklySlotCount = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.SubjectId == id);
+			if (weeklySlotCount > 0)
+				usageParts.Add($"{weeklySlotCount} weekly lecture slot(s)");
 
-			// Cascade: exam results/marks (AppExamMarks) — must come before exam subjects
-			var examMarks = await examMarkRepository.GetListAsync(m => m.SubjectId == id);
-			foreach (var mark in examMarks)
-				await examMarkRepository.DeleteAsync(mark);
+			var timetableSlotCount = await timetableSlotSubjectRepository.CountAsync(t => t.SubjectId == id);
+			if (timetableSlotCount > 0)
+				usageParts.Add($"{timetableSlotCount} timetable slot(s)");
 
-			// Cascade: exam subjects (AppExamSubjects — no soft delete; ExamSubjectDivisions cascade at DB level)
-			var examSubjects = await examSubjectRepository.GetListAsync(e => e.SubjectId == id);
-			foreach (var es in examSubjects)
-				await examSubjectRepository.DeleteAsync(es, autoSave: true);
+			var examSubjectCount = await examSubjectRepository.CountAsync(e => e.SubjectId == id);
+			if (examSubjectCount > 0)
+				usageParts.Add($"{examSubjectCount} exam(s)");
 
-			// Cascade: homeworks (AppHomeworkAssignments)
-			var homeworks = await homeworkAssignmentRepository.GetListAsync(h => h.SubjectId == id);
-			foreach (var hw in homeworks)
-				await homeworkAssignmentRepository.DeleteAsync(hw);
+			var examMarkCount = await examMarkRepository.CountAsync(m => m.SubjectId == id);
+			if (examMarkCount > 0)
+				usageParts.Add($"{examMarkCount} exam result(s)");
 
-			// Cascade: assignments (AppAssignments)
-			var assignments = await assignmentRepository.GetListAsync(a => a.SubjectId == id);
-			foreach (var asgn in assignments)
-				await assignmentRepository.DeleteAsync(asgn);
+			var homeworkCount = await homeworkAssignmentRepository.CountAsync(h => h.SubjectId == id);
+			if (homeworkCount > 0)
+				usageParts.Add($"{homeworkCount} homework(s)");
+
+			var assignmentCount = await assignmentRepository.CountAsync(a => a.SubjectId == id);
+			if (assignmentCount > 0)
+				usageParts.Add($"{assignmentCount} assignment(s)");
+
+			if (usageParts.Count > 0)
+			{
+				throw new BusinessException(CurriculumErrorCodes.SubjectIsInUse)
+					.WithData("message", $"Cannot delete '{subject.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+			}
 
 			await subjectRepository.DeleteAsync(subject);
 		}

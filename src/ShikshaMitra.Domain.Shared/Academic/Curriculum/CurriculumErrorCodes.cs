@@ -14,6 +14,7 @@ public static class CurriculumErrorCodes
     public const string DuplicateSubjectColor = "Academic:Curriculum:010003";
     public const string SubjectNotFound = "Academic:Curriculum:010004";
     public const string SubjectIsLastInElectiveGroup = "Academic:Curriculum:010005";
+    public const string SubjectIsInUse = "Academic:Curriculum:010006";
 
     // ── Subject Assignment: 02xxxx ───────────────────────────────
 

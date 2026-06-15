@@ -182,6 +182,7 @@ internal static class EducationBoardScopeFilter
                 ?? standard.Divisions?.Select(division => CloneDivision(division)).ToList()
                 ?? [],
             EducationMediumStageId = standard.EducationMediumStageId,
+            ShiftId = standard.ShiftId,
             Shift = standard.Shift,
             CreationTime = standard.CreationTime,
             CreatorId = standard.CreatorId,
@@ -197,6 +198,7 @@ internal static class EducationBoardScopeFilter
             HeadCount = division.HeadCount,
             Strength = division.Strength,
             RoomNumber = division.RoomNumber,
+            RoomId = division.RoomId,
             StandardId = division.StandardId,
             CreationTime = division.CreationTime,
             CreatorId = division.CreatorId,

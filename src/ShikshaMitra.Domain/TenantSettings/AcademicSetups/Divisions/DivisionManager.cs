@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Extensions;
+using ShikshaMitra.Extensions;
 using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -17,7 +17,8 @@ public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenera
 	public async Task<Division> CreateAsync(
 		Guid standardId,
 		string name,
-		int strength)
+		int strength,
+		string roomNumber = "B101")
 	{
 		// Validate the name is unique within the same Standard.
 		await ValidateDivisionAsync(name, standardId);
@@ -28,18 +29,19 @@ public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenera
 			name,
 			standardId,
 			strength,
-			"101"
+			roomNumber
 		);
 	}
 
 	public async Task<Division> UpdateAsync(
 		Division division,
 		string newName,
-		int newStrength)
+		int newStrength,
+		string roomNumber = null)
 	{
 		Check.NotNull(division, nameof(division));
 
-		if (division.Name == newName && division.Strength == newStrength)
+		if (division.Name == newName && division.Strength == newStrength && (roomNumber == null || division.RoomNumber == roomNumber))
 		{
 			return division;
 		}
@@ -53,6 +55,10 @@ public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenera
 
 		division.SetName(newName);
 		division.SetStrength(newStrength);
+		if (roomNumber != null)
+		{
+			division.RoomNumber = roomNumber;
+		}
 
 		return division;
 	}

@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
@@ -14,5 +14,6 @@ public class StandardDto : AuditedEntityDto<Guid>
 	public List<DivisionDto> Divisions { get; set; }
 
 	public Guid EducationMediumStageId { get; set; }
+	public Guid? ShiftId { get; set; }
 	public ShiftManagementDto Shift { get; set; } = new ShiftManagementDto();
 }

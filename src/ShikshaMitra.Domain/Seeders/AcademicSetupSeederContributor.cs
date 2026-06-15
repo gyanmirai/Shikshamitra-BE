@@ -160,7 +160,7 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 									divisionSpec.Name,
 									standard.Id,
 									divisionSpec.Strength,
-									roomNumber: "101");
+									roomNumber: "B101");
 								divisionsByKey[(standard.Id, divisionSpec.Name)] = division;
 								divisionsToInsert.Add(division);
 							}

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using System;
@@ -7,13 +7,17 @@ using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
+using Volo.Abp.Domain.Repositories;
+
 namespace ShikshaMitra.TenantSettings.EducationBoards;
 
 [Authorize]
 public class EducationBoardAppService(
 	IEducationBoardRepository educationBoardRepository,
 	EducationBoardManager educationBoardManager,
-	AcademicOrganizationScopeAccessService scopeAccessService) : CrudAppService<
+	AcademicOrganizationScopeAccessService scopeAccessService,
+	IRepository<Room, Guid> roomRepository) : CrudAppService<
 	EducationBoard,
 	EducationBoardDto,
 	Guid,
@@ -62,6 +66,14 @@ public class EducationBoardAppService(
 				}
 			}
 		}
+
+		var allDivisions = result.Items
+			.SelectMany(b => b.EducationMediums ?? [])
+			.SelectMany(m => m.EducationMediumStages ?? [])
+			.SelectMany(s => s.Standards ?? [])
+			.SelectMany(s => s.Divisions ?? []);
+
+		await scopeAccessService.ResolveRoomIdsAsync(allDivisions);
 
 		var prunedItems = await scopeAccessService.PruneBoardTreeAsync(result.Items);
 		result.Items = prunedItems.ToList();

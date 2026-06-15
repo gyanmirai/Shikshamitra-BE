@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -27,18 +27,24 @@ public class DivisionAppService(
 		Division division = await divisionManager.CreateAsync(
 			input.StandardId,
 			input.Name,
-			input.Strength
+			input.Strength,
+			input.RoomNumber
 		);
 
 		await divisionRepository.InsertAsync(division);
-		return ObjectMapper.Map<Division, DivisionDto>(division);
+		var dto = ObjectMapper.Map<Division, DivisionDto>(division);
+		await scopeAccessService.ResolveRoomIdsAsync(new[] { dto });
+		return dto;
 	}
 
 	public override async Task<DivisionDto> UpdateAsync(Guid id, CreateUpdateDivisionDto input)
 	{
 		Division division = await divisionRepository.GetAsync(id);
-		await divisionManager.UpdateAsync(division, input.Name, input.Strength);
-		return ObjectMapper.Map<Division, DivisionDto>(division);
+		await divisionManager.UpdateAsync(division, input.Name, input.Strength, input.RoomNumber);
+		await divisionRepository.UpdateAsync(division);
+		var dto = ObjectMapper.Map<Division, DivisionDto>(division);
+		await scopeAccessService.ResolveRoomIdsAsync(new[] { dto });
+		return dto;
 	}
 
 	public override async Task<PagedResultDto<DivisionDto>> GetListAsync(
@@ -47,6 +53,7 @@ public class DivisionAppService(
 		var result = await base.GetListAsync(input);
 
 		result.Items = (await scopeAccessService.FilterDivisionsAsync(result.Items)).ToList();
+		await scopeAccessService.ResolveRoomIdsAsync(result.Items);
 		result.TotalCount = result.Items.Count;
 
 		return result;

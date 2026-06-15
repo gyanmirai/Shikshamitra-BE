@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Data;
 using Volo.Abp.Guids;
@@ -16,6 +16,25 @@ public class RolesSeederContributor : BaseSeederContributor
 	private const string HodRoleName = "HOD";
 
 	private readonly IIdentityRoleRepository _roleRepository;
+
+	private static readonly Dictionary<string, string> DefaultRoleColors = new()
+	{
+		{ "admin", "#d32f2f" },
+		{ "super-admin", "#d32f2f" },
+		{ "Director", "#9c27b0" },
+		{ "Principal", "#7b1fa2" },
+		{ "Teacher", "#1976d2" },
+		{ "Clerk", "#388e3c" },
+		{ "Student", "#0097a7" },
+		{ "Parent", "#5d4037" },
+		{ "HOD", "#f57c00" },
+		{ "Vice Principal", "#7b1fa2" },
+		{ "Administrative Manager", "#388e3c" },
+		{ "HR Manager", "#c2185b" },
+		{ "Finance Officer", "#5d4037" },
+		{ "IT Administrator", "#00796b" },
+		{ "Office Assistant", "#388e3c" }
+	};
 
 	public RolesSeederContributor(
 		ICurrentTenant currentTenant,
@@ -61,7 +80,17 @@ public class RolesSeederContributor : BaseSeederContributor
 			var existingRole = await _roleRepository.FindByNormalizedNameAsync(role.NormalizedName);
 			if (existingRole != null)
 			{
+				if (string.IsNullOrEmpty(existingRole.GetProperty<string>("Color")) && DefaultRoleColors.TryGetValue(existingRole.Name, out var col))
+				{
+					existingRole.SetProperty("Color", col);
+					await _roleRepository.UpdateAsync(existingRole);
+				}
 				continue;
+			}
+
+			if (DefaultRoleColors.TryGetValue(role.Name, out var color))
+			{
+				role.SetProperty("Color", color);
 			}
 
 			await _roleRepository.InsertAsync(role);

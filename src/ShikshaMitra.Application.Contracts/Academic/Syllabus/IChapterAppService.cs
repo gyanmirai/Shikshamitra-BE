@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
 using ShikshaMitra.Academic.Curriculum;
@@ -8,7 +8,7 @@ namespace ShikshaMitra.Academic.Syllabus;
 
 public interface IChapterAppService
 {
-	Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, CreateChapterDto input);
+	Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, List<CreateChapterDto> input);
 	Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId);
 	Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto input);
 	Task DeleteAsync(Guid id);

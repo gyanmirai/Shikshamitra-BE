@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
@@ -147,6 +147,8 @@ public class AcademicSetupsConfiguration
 		builder.Navigation(x => x.EducationMediumStage).AutoInclude();
 
 		builder.Navigation(x => x.Divisions).AutoInclude();
+
+		builder.HasOne(x => x.Shift).WithMany().HasForeignKey(x => x.ShiftId);
 
 		builder.Navigation(x => x.Shift).AutoInclude();
 	}

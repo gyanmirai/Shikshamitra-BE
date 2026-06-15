@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -41,7 +41,8 @@ public class TenantSettingsMapperProfile : Profile
         CreateMap<CreateUpdateStandardDto, Standard>();
 
 		// Mapping for Division
-		CreateMap<Division, DivisionDto>();
+		CreateMap<Division, DivisionDto>()
+			.ForMember(dest => dest.RoomId, opt => opt.MapFrom(src => src.RoomNumber));
         CreateMap<CreateUpdateDivisionDto, Division>();
 
 		#endregion

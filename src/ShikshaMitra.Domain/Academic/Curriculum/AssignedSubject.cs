@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.Academic.Curriculum.Settings;
@@ -153,6 +153,17 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			Teachers.Remove(currentPrimary);
 		}
 		Teachers.Add(new AssignedSubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Primary, TenantId));
+	}
+
+	public void RemovePrimaryTeacher()
+	{
+		var currentPrimary = Teachers.FirstOrDefault(t =>
+			t.TeacherType == SubjectTeacherType.Primary
+		);
+		if (currentPrimary != null)
+		{
+			Teachers.Remove(currentPrimary);
+		}
 	}
 
 	public void SetSecondaryTeachers(IEnumerable<Guid> teacherIds)

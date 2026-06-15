@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -418,6 +418,10 @@ public class SubjectAssignmentAppService(
 				if (inputSubject.PrimaryTeacherId.HasValue)
 				{
 					existingSubject.SetPrimaryTeacher(inputSubject.PrimaryTeacherId.Value);
+				}
+				else
+				{
+					existingSubject.RemovePrimaryTeacher();
 				}
 				if (inputSubject.SecondaryTeacherIds != null)
 				{

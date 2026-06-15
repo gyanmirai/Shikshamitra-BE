@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Volo.Abp.Identity;
 using Volo.Abp.ObjectExtending;
 using Volo.Abp.Threading;
@@ -39,6 +39,15 @@ public static class ShikshaMitraEfCoreEntityExtensionMappings
                  * See the documentation for more:
                  * https://docs.abp.io/en/abp/latest/Customizing-Application-Modules-Extending-Entities
                  */
+
+            ObjectExtensionManager.Instance
+                .MapEfCoreProperty<IdentityRole, string>(
+                    "Color",
+                    (entityBuilder, propertyBuilder) =>
+                    {
+                        propertyBuilder.HasMaxLength(32);
+                    }
+                );
         });
     }
 }

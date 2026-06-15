@@ -73,9 +73,5 @@ public class TimetableSlot : Entity<Guid>
         }
     }
 
-    public void ClearElectiveGroup()
-    {
-        ElectiveGroupId = null;
-    }
     #endregion
 }

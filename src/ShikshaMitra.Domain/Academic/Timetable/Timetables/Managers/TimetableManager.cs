@@ -32,7 +32,8 @@ public class TimetableManager(ITimetableRepository timetableRepository) : Domain
 
             if (conflictingSlots.Any())
             {
-                throw new BusinessException(TimetableErrorCodes.TeacherConflict);
+                throw new BusinessException(TimetableErrorCodes.TeacherConflict)
+                    .WithData("message", "One or more selected teachers are already assigned to another class during this time slot.");
             }
         }
     }
@@ -60,7 +61,8 @@ public class TimetableManager(ITimetableRepository timetableRepository) : Domain
 
             if (conflictingSlots.Any())
             {
-                throw new BusinessException(TimetableErrorCodes.RoomConflict);
+                throw new BusinessException(TimetableErrorCodes.RoomConflict)
+                    .WithData("message", "One or more selected rooms are already assigned to another class during this time slot.");
             }
         }
     }

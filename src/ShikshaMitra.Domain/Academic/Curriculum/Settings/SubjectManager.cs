@@ -34,7 +34,8 @@ public class SubjectManager(
 			if (existingByName != null)
 			{
 				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectName)
-					.WithData("Name", name);
+					.WithData("Name", name)
+					.WithData("message", $"A subject with name '{name}' already exists. Please choose a different name.");
 			}
 
 			// Check for duplicate color within the same education medium
@@ -44,7 +45,8 @@ public class SubjectManager(
 			{
 				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectColor)
 					.WithData("Color", color)
-					.WithData("ExistingSubjectName", existingByColor.Name);
+					.WithData("ExistingSubjectName", existingByColor.Name)
+					.WithData("message", $"The color '{color}' is already used by subject '{existingByColor.Name}'. Please choose a different color.");
 			}
 
 			return new Subject(
@@ -86,7 +88,8 @@ public class SubjectManager(
 			if (duplicateName != null)
 			{
 				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectName)
-					.WithData("Name", name);
+					.WithData("Name", name)
+					.WithData("message", $"A subject with name '{name}' already exists. Please choose a different name.");
 			}
 
 			// Check for duplicate color (excluding current subject)
@@ -96,7 +99,8 @@ public class SubjectManager(
 			{
 				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectColor)
 					.WithData("Color", color)
-					.WithData("ExistingSubjectName", duplicateColor.Name);
+					.WithData("ExistingSubjectName", duplicateColor.Name)
+					.WithData("message", $"The color '{color}' is already used by subject '{duplicateColor.Name}'. Please choose a different color.");
 			}
 
 			existingSubject.SetName(name);

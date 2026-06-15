@@ -3,16 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
-using ShikshaMitra.Academic.Curriculum;
-using ShikshaMitra.Academic.Timetable.Timetables;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
 
 namespace ShikshaMitra.Academic.Curriculum.Settings;
-
-// AssignedSubject, StudentElectiveSelection are in ShikshaMitra.Academic.Curriculum (parent namespace, auto-visible)
 
 /// <summary>
 /// Domain service for managing elective group business logic
@@ -22,25 +18,16 @@ public class ElectiveGroupManager : DomainService
 	private readonly IRepository<ElectiveGroup, Guid> ElectiveGroupRepository;
 	private readonly IReadOnlyRepository<Subject, Guid> subjectRepository;
 	private readonly IGuidGenerator guidGenerator;
-	private readonly IRepository<AssignedSubject, Guid> assignedSubjectRepository;
-	private readonly IRepository<StudentElectiveSelection, Guid> studentElectiveSelectionRepository;
-	private readonly IRepository<TimetableSlot, Guid> timetableSlotRepository;
 
 	public ElectiveGroupManager(
 		IRepository<ElectiveGroup, Guid> ElectiveGroupRepository,
 		IReadOnlyRepository<Subject, Guid> subjectRepository,
-		IGuidGenerator guidGenerator,
-		IRepository<AssignedSubject, Guid> assignedSubjectRepository,
-		IRepository<StudentElectiveSelection, Guid> studentElectiveSelectionRepository,
-		IRepository<TimetableSlot, Guid> timetableSlotRepository
+		IGuidGenerator guidGenerator
 	)
 	{
 		this.ElectiveGroupRepository = ElectiveGroupRepository;
 		this.subjectRepository = subjectRepository;
 		this.guidGenerator = guidGenerator;
-		this.assignedSubjectRepository = assignedSubjectRepository;
-		this.studentElectiveSelectionRepository = studentElectiveSelectionRepository;
-		this.timetableSlotRepository = timetableSlotRepository;
 	}
 
 	/// <summary>
@@ -144,7 +131,8 @@ public class ElectiveGroupManager : DomainService
 		{
 			throw new BusinessException("ShikshaMitra:ElectiveGroup:DuplicateName")
 				.WithData("Name", name)
-				.WithData("EducationMediumId", educationMediumId);
+				.WithData("EducationMediumId", educationMediumId)
+				.WithData("message", $"An elective group with name '{name}' already exists. Please choose a different name.");
 		}
 	}
 
@@ -157,7 +145,8 @@ public class ElectiveGroupManager : DomainService
 		{
 			throw new BusinessException("ShikshaMitra:ElectiveGroup:InsufficientSubjects")
 				.WithData("MinimumRequired", ElectiveGroupConsts.MinSubjectsRequired)
-				.WithData("Provided", subjectIds?.Count() ?? 0);
+				.WithData("Provided", subjectIds?.Count() ?? 0)
+				.WithData("message", $"An elective group requires at least {ElectiveGroupConsts.MinSubjectsRequired} subjects. Please add more subjects.");
 		}
 	}
 
@@ -205,37 +194,4 @@ public class ElectiveGroupManager : DomainService
 		}
 	}
 
-	/// <summary>
-	/// Deletes an elective group and cascades the cleanup to all dependent records:
-	/// - Nullifies ElectiveGroupId on AssignedSubject (Subject Allocation) records
-	/// - Deletes StudentElectiveSelection records
-	/// - Nullifies ElectiveGroupId on TimetableSlot records
-	/// </summary>
-	public async Task DeleteWithCascadeAsync(Guid id)
-	{
-		// 1. Null out ElectiveGroupId on all AssignedSubject (Subject Allocation) records
-		var assignedSubjects = await assignedSubjectRepository.GetListAsync(a => a.ElectiveGroupId == id);
-		foreach (var assigned in assignedSubjects)
-		{
-			assigned.ElectiveGroupId = null;
-			assigned.SubjectType = SubjectType.Core;
-			await assignedSubjectRepository.UpdateAsync(assigned);
-		}
-
-		// 2. Delete StudentElectiveSelection records
-		var selections = await studentElectiveSelectionRepository.GetListAsync(s => s.ElectiveGroupId == id);
-		foreach (var sel in selections)
-			await studentElectiveSelectionRepository.DeleteAsync(sel);
-
-		// 3. Nullify ElectiveGroupId on TimetableSlot records
-		var timetableSlots = await timetableSlotRepository.GetListAsync(s => s.ElectiveGroupId == id);
-		foreach (var slot in timetableSlots)
-		{
-			slot.ClearElectiveGroup();
-			await timetableSlotRepository.UpdateAsync(slot);
-		}
-
-		// 4. Delete the group itself (EF cascade removes ElectiveGroupComponent rows)
-		await ElectiveGroupRepository.DeleteAsync(id, autoSave: true);
-	}
 }

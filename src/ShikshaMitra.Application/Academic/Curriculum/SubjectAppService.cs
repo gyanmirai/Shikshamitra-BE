@@ -28,7 +28,8 @@ public class SubjectAppService(
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkAssignmentRepository,
 	IRepository<AssignmentEntity, Guid> assignmentRepository,
 	ILogger<SubjectAppService> logger,
-	AcademicOrganizationScopeAccessService scopeAccessService
+	AcademicOrganizationScopeAccessService scopeAccessService,
+	IRepository<ElectiveGroup, Guid> electiveGroupRepository
 ) : ApplicationService, ISubjectAppService
 {
 	public async Task<SubjectDto> GetAsync(Guid id)
@@ -149,6 +150,16 @@ public class SubjectAppService(
 		try
 		{
 			var subject = await subjectRepository.GetAsync(id);
+
+			// Block deletion if this subject is the last one in an elective group
+			var allGroups = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
+			var blockingGroup = allGroups
+				.FirstOrDefault(eg => eg.Subjects.Count == 1 && eg.Subjects.Any(s => s.SubjectId == id));
+			if (blockingGroup != null)
+			{
+				throw new BusinessException(CurriculumErrorCodes.SubjectIsLastInElectiveGroup)
+					.WithData("message", $"Cannot delete '{subject.Name}' because it is the only subject in elective group '{blockingGroup.Name}'. Please delete the elective group first.");
+			}
 
 			// Cascade: subject allocations (AppStandardSubjectAssignments)
 			var allocations = await assignedSubjectRepository.GetListAsync(a => a.SubjectId == id);

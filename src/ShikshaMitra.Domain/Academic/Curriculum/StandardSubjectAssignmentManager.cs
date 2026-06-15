@@ -35,7 +35,8 @@ public class StandardSubjectAssignmentManager(
 		if (alreadyExists)
 			throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectAssignment)
 				.WithData("StandardId", standardId)
-				.WithData("SubjectId", subjectId);
+				.WithData("SubjectId", subjectId)
+				.WithData("message", "This subject is already assigned to this class. Duplicate assignments are not allowed.");
 
 		return new AssignedSubject(
 			id: guidGenerator.Create(),
@@ -77,7 +78,8 @@ public class StandardSubjectAssignmentManager(
 		if (duplicates.Any())
 		{
 			throw new BusinessException("SubjectAssignment:DuplicateSubjectCode")
-				.WithData("DuplicateCodes", string.Join(", ", duplicates));
+				.WithData("DuplicateCodes", string.Join(", ", duplicates))
+				.WithData("message", $"Subject code(s) '{string.Join(", ", duplicates)}' are already in use for this class. Please use unique subject codes.");
 		}
 	}
 

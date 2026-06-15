@@ -93,17 +93,20 @@ public class StudentSubmissionManager : DomainService
 		{
 			throw new BusinessException("ShikshaMitra.Homework:InvalidMarks")
 				.WithData("Marks", marks)
-				.WithData("TotalMarks", totalMarks);
+				.WithData("TotalMarks", totalMarks)
+				.WithData("message", $"Marks ({marks}) cannot exceed total marks ({totalMarks}).");
 		}
 
 		if (marks.HasValue && marks.Value < 0)
 		{
-			throw new BusinessException("ShikshaMitra.Homework:NegativeMarks");
+			throw new BusinessException("ShikshaMitra.Homework:NegativeMarks")
+				.WithData("message", "Marks cannot be negative.");
 		}
 
 		if (totalMarks.HasValue && totalMarks.Value < 0)
 		{
-			throw new BusinessException("ShikshaMitra.Homework:NegativeTotalMarks");
+			throw new BusinessException("ShikshaMitra.Homework:NegativeTotalMarks")
+				.WithData("message", "Total marks cannot be negative.");
 		}
 	}
 }

@@ -709,7 +709,8 @@ public class ExamAppService(
 			{
 				throw new BusinessException(ExamErrorCodes.DuplicateSubjectSchedule)
 					.WithData("SubjectId", subjectId)
-					.WithData("ExamDate", incomingStart.Date.ToString("yyyy-MM-dd"));
+					.WithData("ExamDate", incomingStart.Date.ToString("yyyy-MM-dd"))
+					.WithData("message", $"This subject already has an exam scheduled on {incomingStart.Date:dd MMM yyyy}. Please choose a different date.");
 			}
 
 			// General overlap: a different subject in the same class+division occupies this time slot
@@ -717,7 +718,8 @@ public class ExamAppService(
 			throw new BusinessException(ExamErrorCodes.ScheduleOverlap)
 				.WithData("ExamDate", incomingStart.Date.ToString("yyyy-MM-dd"))
 				.WithData("StartTime", conflictingSubject.StartTime!.Value.ToString("HH:mm"))
-				.WithData("EndTime", conflictingSubject.EndTime!.Value.ToString("HH:mm"));
+				.WithData("EndTime", conflictingSubject.EndTime!.Value.ToString("HH:mm"))
+				.WithData("message", $"Another exam is already scheduled on {incomingStart.Date:dd MMM yyyy} between {conflictingSubject.StartTime!.Value:HH:mm} and {conflictingSubject.EndTime!.Value:HH:mm}. Please choose a different time.");
 		}
 	}
 	// ─── Workflow helpers ──────────────────────────────────────────────────────

@@ -72,5 +72,6 @@ public class TimetableSlot : Entity<Guid>
             Subjects.Add(subject);
         }
     }
+
     #endregion
 }

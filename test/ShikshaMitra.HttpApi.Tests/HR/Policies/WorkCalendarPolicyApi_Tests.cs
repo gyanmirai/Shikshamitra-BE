@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -138,6 +139,93 @@ public class WorkCalendarPolicyApi_Tests : ShikshaMitraApiTestBase
 		range.FromDate?.Date.ShouldBe(fromDate);
 		range.ToDate?.Date.ShouldBe(toDate);
 		range.DayCount.ShouldBe(5);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Work_Calendar_Should_Accept_Holiday_Through_Academic_Year_End()
+	{
+		var academicYear = await GetAcademicYearDateRangeAsync(Factory.SeededAcademicYearId);
+		var fromDate = academicYear.EndDate.AddDays(-1).Date;
+		var toDate = academicYear.EndDate.Date;
+		var request = new CreateUpdateWorkCalendarPolicyDto
+		{
+			AcademicYearId = Factory.SeededAcademicYearId,
+			Name = $"Year End Calendar {Guid.NewGuid():N}",
+			Status = "draft",
+			EffectiveFrom = academicYear.StartDate,
+			EffectiveTo = academicYear.EndDate,
+			WeeklyOffPattern = "sunday",
+			CustomWeeklyOffs = [0],
+			HolidaySyncMode = "snapshot",
+			Holidays =
+			[
+				new WorkCalendarHolidayDto
+				{
+					AcademicYearId = Factory.SeededAcademicYearId,
+					Date = fromDate,
+					FromDate = fromDate,
+					ToDate = toDate,
+					HolidayName = "Year End Break",
+					Source = "manual",
+					IsIncluded = true
+				}
+			]
+		};
+
+		var createResponse = await Client.PostAsJsonAsync(BaseUrl, request, JsonOptions);
+
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var created = await createResponse.Content.ReadFromJsonAsync<WorkCalendarPolicyDto>(JsonOptions);
+		created.ShouldNotBeNull();
+		created!.Holidays.Single().ToDate?.Date.ShouldBe(toDate);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Work_Calendar_Should_Return_Specific_Detail_For_Holiday_Outside_Academic_Year()
+	{
+		var academicYear = await GetAcademicYearDateRangeAsync(Factory.SeededAcademicYearId);
+		var fromDate = academicYear.EndDate.Date;
+		var toDate = academicYear.EndDate.AddDays(1).Date;
+		var request = new CreateUpdateWorkCalendarPolicyDto
+		{
+			AcademicYearId = Factory.SeededAcademicYearId,
+			Name = $"Outside Year Calendar {Guid.NewGuid():N}",
+			Status = "draft",
+			EffectiveFrom = academicYear.StartDate,
+			EffectiveTo = academicYear.EndDate,
+			WeeklyOffPattern = "sunday",
+			CustomWeeklyOffs = [0],
+			HolidaySyncMode = "snapshot",
+			Holidays =
+			[
+				new WorkCalendarHolidayDto
+				{
+					AcademicYearId = Factory.SeededAcademicYearId,
+					Date = fromDate,
+					FromDate = fromDate,
+					ToDate = toDate,
+					HolidayName = "Overflow Break",
+					Source = "manual",
+					IsIncluded = false
+				}
+			]
+		};
+
+		var createResponse = await Client.PostAsJsonAsync(BaseUrl, request, JsonOptions);
+
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var raw = await createResponse.Content.ReadAsStringAsync();
+		using var document = JsonDocument.Parse(raw);
+		document.RootElement.GetProperty("errorCode").GetString()
+			.ShouldBe(HRErrorCodes.WorkCalendarHolidayOutsideAcademicYear);
+		var detail = document.RootElement.GetProperty("detail").GetString();
+		detail.ShouldNotBeNullOrWhiteSpace();
+		detail.ShouldContain("Overflow Break");
+		detail.ShouldContain(fromDate.ToString("yyyy-MM-dd"));
+		detail.ShouldContain(toDate.ToString("yyyy-MM-dd"));
+		detail.ShouldNotBe("One or more business rules were violated.");
 	}
 
 	private async Task<(Guid PayrollPolicyId, Guid VersionId)> SeedPayrollVersionWithReferencingAssignmentAsync()

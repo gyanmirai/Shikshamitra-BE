@@ -40,13 +40,16 @@ public class AcademicYear : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	internal AcademicYear SetDates(DateTime startDate, DateTime endDate)
 	{
-		if (endDate <= startDate)
+		var normalizedStartDate = AcademicYearBusinessDate.Normalize(startDate);
+		var normalizedEndDate = AcademicYearBusinessDate.Normalize(endDate);
+
+		if (normalizedEndDate <= normalizedStartDate)
 		{
 			throw new InvalidAcademicYearDatesException(startDate, endDate);
 		}
 
-		StartDate = startDate;
-		EndDate = endDate;
+		StartDate = normalizedStartDate;
+		EndDate = normalizedEndDate;
 		return this;
 	}
 }

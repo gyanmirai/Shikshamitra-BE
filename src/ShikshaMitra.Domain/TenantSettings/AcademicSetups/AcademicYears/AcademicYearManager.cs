@@ -32,6 +32,8 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository,
 		DateTime endDate)
 	{
 		Check.NotNullOrWhiteSpace(name, nameof(name));
+		var normalizedStartDate = AcademicYearBusinessDate.Normalize(startDate);
+		var normalizedEndDate = AcademicYearBusinessDate.Normalize(endDate);
 
 		// Validate the academic year details.
 		await ValidateAcademicYearAsync(name);
@@ -41,8 +43,8 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository,
 			id: guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			name: name,
-			startDate: startDate,
-			endDate: endDate);
+			startDate: normalizedStartDate,
+			endDate: normalizedEndDate);
 	}
 
 	/// <summary>
@@ -61,6 +63,8 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository,
 	{
 		Check.NotNull(academicYear, nameof(academicYear));
 		Check.NotNullOrWhiteSpace(newName, nameof(newName));
+		var normalizedStartDate = AcademicYearBusinessDate.Normalize(startDate);
+		var normalizedEndDate = AcademicYearBusinessDate.Normalize(endDate);
 
 		// Validate the academic year details.
 		await ValidateAcademicYearAsync(newName, academicYear.Name);
@@ -72,9 +76,9 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository,
 		}
 
 		// Change the dates if they are different from the current ones.
-		if (academicYear.StartDate != startDate || academicYear.EndDate != endDate)
+		if (academicYear.StartDate != normalizedStartDate || academicYear.EndDate != normalizedEndDate)
 		{
-			academicYear.SetDates(startDate, endDate);
+			academicYear.SetDates(normalizedStartDate, normalizedEndDate);
 		}
 
 		return academicYear;

@@ -51,6 +51,7 @@
     "ShikshaMitra:00002": "The number should be greater than 0",
     "ShikshaMitra:00004": "An employee cannot report to themselves.",
     "ShikshaMitra:00005": "Circular reporting relationship detected. The proposed manager already reports to this employee directly or indirectly.",
+    "ShikshaMitra:WorkCalendarHolidayOutsideAcademicYear": "Holiday '{holidayName}' ({fromDate} to {toDate}) must be inside academic year '{academicYear}' ({academicYearStart} to {academicYearEnd}).",
     "ShikshaMitra.TenantSettings:00001": "{entityName} with the name '{name}' already exists.",
     "SM:EntranceExamSlot:001": "Start time must be before end time. Provided start date: {startDate}, end date: {endDate}.",
     "SM:EntranceExamSlot:002": "Student limit must be greater than zero. Provided value: {studentLimit}.",

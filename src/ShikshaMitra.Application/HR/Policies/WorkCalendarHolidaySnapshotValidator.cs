@@ -104,9 +104,12 @@ internal static class WorkCalendarHolidaySnapshotValidator
 		{
 			throw new BusinessException(HRErrorCodes.WorkCalendarHolidayOutsideAcademicYear)
 				.WithData("field", nameof(row.FromDate))
+				.WithData("holidayName", row.HolidayName)
 				.WithData("fromDate", fromDate.ToString("yyyy-MM-dd"))
 				.WithData("toDate", toDate.ToString("yyyy-MM-dd"))
-				.WithData("academicYear", academicYear.Name);
+				.WithData("academicYear", academicYear.Name)
+				.WithData("academicYearStart", AcademicYearBusinessDate.Format(academicYear.StartDate))
+				.WithData("academicYearEnd", AcademicYearBusinessDate.Format(academicYear.EndDate));
 		}
 	}
 }

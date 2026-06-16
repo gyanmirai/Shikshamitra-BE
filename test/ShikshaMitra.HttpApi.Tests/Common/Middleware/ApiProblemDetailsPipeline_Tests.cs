@@ -256,6 +256,42 @@ public class ApiProblemDetailsPipeline_Tests
 		detail.ShouldNotBe(ApiProblemDetailsMapper.GetDefaultDetail(StatusCodes.Status400BadRequest));
 	}
 
+	[Fact]
+	public async Task Middleware_Should_Resolve_WorkCalendarHolidayOutsideAcademicYear_Detail_From_Localization()
+	{
+		var resolver = CreateResolver(new Dictionary<string, string>
+		{
+			[HRErrorCodes.WorkCalendarHolidayOutsideAcademicYear] =
+				"Holiday '{holidayName}' ({fromDate} to {toDate}) must be inside academic year '{academicYear}' ({academicYearStart} to {academicYearEnd})."
+		});
+		var middleware = new ApiProblemDetailsMiddleware(
+			_ => throw new BusinessException(
+					HRErrorCodes.WorkCalendarHolidayOutsideAcademicYear,
+					GenericInternalDetail)
+				.WithData("holidayName", "Summer Vacation")
+				.WithData("fromDate", "2027-04-30")
+				.WithData("toDate", "2027-05-31")
+				.WithData("academicYear", "2026-2027")
+				.WithData("academicYearStart", "2026-06-01")
+				.WithData("academicYearEnd", "2027-05-31"),
+			NullLogger<ApiProblemDetailsMiddleware>.Instance,
+			resolver);
+
+		var context = new DefaultHttpContext();
+		context.Request.Path = "/api/test";
+		context.Response.Body = new MemoryStream();
+
+		await middleware.InvokeAsync(context);
+
+		context.Response.StatusCode.ShouldBe(StatusCodes.Status400BadRequest);
+		context.Response.Body.Position = 0;
+		using var document = await JsonDocument.ParseAsync(context.Response.Body);
+		document.RootElement.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.WorkCalendarHolidayOutsideAcademicYear);
+		var detail = document.RootElement.GetProperty("detail").GetString();
+		detail.ShouldBe("Holiday 'Summer Vacation' (2027-04-30 to 2027-05-31) must be inside academic year '2026-2027' (2026-06-01 to 2027-05-31).");
+		detail.ShouldNotBe(ApiProblemDetailsMapper.GetDefaultDetail(StatusCodes.Status400BadRequest));
+	}
+
 	private static ApiProblemDetailsErrorDetailResolver CreateResolver(IDictionary<string, string> values)
 	{
 		return new ApiProblemDetailsErrorDetailResolver(new FakeStringLocalizer(values));

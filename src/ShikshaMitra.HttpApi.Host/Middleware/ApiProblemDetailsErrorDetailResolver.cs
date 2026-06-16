@@ -16,8 +16,9 @@ public class ApiProblemDetailsErrorDetailResolver : IApiProblemDetailsErrorDetai
 		.GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
 		.Where(field => field is { IsLiteral: true, IsInitOnly: false } && field.FieldType == typeof(string))
 		.Select(field => new { Name = field.Name, Value = field.GetRawConstantValue() as string })
-		.Where(item => !string.IsNullOrWhiteSpace(item.Value) && item.Value!.StartsWith("HR:", StringComparison.OrdinalIgnoreCase))
-		.ToDictionary(item => item.Value!, item => item.Name, StringComparer.OrdinalIgnoreCase);
+		.Where(item => !string.IsNullOrWhiteSpace(item.Value))
+		.GroupBy(item => item.Value!, StringComparer.OrdinalIgnoreCase)
+		.ToDictionary(group => group.Key, group => group.First().Name, StringComparer.OrdinalIgnoreCase);
 
 	private readonly IStringLocalizer<ShikshaMitraResource> _localizer;
 

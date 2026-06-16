@@ -199,7 +199,7 @@ public static class ShikshaMitraModuleExtensionConfigurator
 				identity.ConfigureRole(role =>
 				{
 					role.AddOrUpdateProperty<string>(
-						"Color",
+						"color",
 						property =>
 						{
 							property.Attributes.Add(new StringLengthAttribute(32));

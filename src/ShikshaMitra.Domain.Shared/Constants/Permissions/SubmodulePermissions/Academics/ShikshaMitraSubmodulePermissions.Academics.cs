@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Constants.Permissions;
 
@@ -123,6 +123,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Academics.Examination.QuizManagement", new SubmoduleInfo(Examination_QuizManagement.All, Examination_QuizManagement.DisplayNames) },
 			{ "Academics.Examination.Reports", new SubmoduleInfo(Examination_Reports.All, Examination_Reports.DisplayNames) },
 			{ "Academics.Examination.ResultCreation", new SubmoduleInfo(Examination_ResultCreation.All, Examination_ResultCreation.DisplayNames) },
+			{ "Academics.Examination.Result", new SubmoduleInfo(Examination_Result.All, Examination_Result.DisplayNames) },
 			{ "Academics.Examination.Settings.GradeScaling", new SubmoduleInfo(Examination_SettingsGradeScaling.All, Examination_SettingsGradeScaling.DisplayNames) },
 			{ "Academics.Examination.Settings.ExamTypes", new SubmoduleInfo(Examination_SettingsExamTypes.All, Examination_SettingsExamTypes.DisplayNames) },
 

@@ -1,4 +1,4 @@
-﻿{
+{
   "Culture": "en",
   "Texts": {
     "Menu:Home": "Home",
@@ -59,6 +59,22 @@
     "SM:EntranceExamSlot:005": "Cannot reduce student limit to {studentLimit} as there are already {enrolledCount} students enrolled in this slot.",
     "SM:EntranceExamSlot:006": "Cannot delete this entrance exam slot as there are {enrolledCount} students currently enrolled.",
     "SM:EntranceExamSlot:007": "The specified academic year (ID: {academicYearId}) does not exist in the system.",
+    "Permission:Academics.Examination.Result": "Result Management",
+    "Permission:Academics.Examination.Result.View": "View Examination Results",
+    "Permission:Academics.Examination.Result.Add": "Add Examination Results",
+    "Permission:Academics.Examination.Result.Delete": "Delete Examination Results",
+    "Permission:InstituteSetup.BuildingManagement": "Building Management",
+    "Permission:InstituteSetup.BuildingManagement.View": "View Buildings",
+    "Permission:InstituteSetup.BuildingManagement.Add": "Add Buildings",
+    "Permission:InstituteSetup.BuildingManagement.Delete": "Delete Buildings",
+    "Permission:InstituteSetup.RoomTypeManagement": "Room Type Management",
+    "Permission:InstituteSetup.RoomTypeManagement.View": "View Room Types",
+    "Permission:InstituteSetup.RoomTypeManagement.Add": "Add Room Types",
+    "Permission:InstituteSetup.RoomTypeManagement.Delete": "Delete Room Types",
+    "Permission:InstituteSetup.RoomManagement.Room": "Room Management",
+    "Permission:InstituteSetup.RoomManagement.Room.View": "View Rooms",
+    "Permission:InstituteSetup.RoomManagement.Room.Add": "Add Rooms",
+    "Permission:InstituteSetup.RoomManagement.Room.Delete": "Delete Rooms",
     "Permission:Student": "Student Management",
     "Permission:Student.IndividualStudentProfile": "Individual Student Profile",
     "Permission:Student.IndividualStudentProfile.Create": "Create Student Profile",

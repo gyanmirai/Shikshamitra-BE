@@ -42,10 +42,11 @@ public static class ShikshaMitraEfCoreEntityExtensionMappings
 
             ObjectExtensionManager.Instance
                 .MapEfCoreProperty<IdentityRole, string>(
-                    "Color",
+                    "color",
                     (entityBuilder, propertyBuilder) =>
                     {
                         propertyBuilder.HasMaxLength(32);
+                        propertyBuilder.HasColumnName("Color");
                     }
                 );
         });

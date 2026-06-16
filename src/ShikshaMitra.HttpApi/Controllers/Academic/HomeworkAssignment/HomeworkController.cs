@@ -40,6 +40,16 @@ public class HomeworkController : AbpControllerBase
     )
     {
         var blobName = await UploadAttachmentAsync(attachment, "homework");
+        
+        if (blobName == null && Request.Form.TryGetValue("attachment", out var attachmentStr))
+        {
+            var strVal = attachmentStr.ToString();
+            if (!string.IsNullOrWhiteSpace(strVal))
+            {
+                blobName = strVal;
+            }
+        }
+
         var result = await _service.CreateAsync(academicMediumId, input, blobName);
         return StatusCode(201, result);
     }
@@ -90,6 +100,17 @@ public class HomeworkController : AbpControllerBase
     )
     {
         var blobName = await UploadAttachmentAsync(attachment, "homework");
+        
+        if (blobName == null && Request.Form.TryGetValue("attachment", out var attachmentStr))
+        {
+            var strVal = attachmentStr.ToString();
+            // If empty string is passed, it means we want to clear the attachment. 
+            // So we assign it. In AppService, if attachmentBlobName is empty it will be saved as empty (or we can pass string.Empty).
+            // Wait, the AppService does: "attachmentBlobName ?? homework.DocumentUrl".
+            // If attachmentBlobName is empty string, it will override DocumentUrl with empty string, which is correct for deletion.
+            blobName = strVal;
+        }
+
         return await _service.UpdateAsync(homeworkId, input, blobName);
     }
 

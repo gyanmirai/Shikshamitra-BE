@@ -40,6 +40,16 @@ public class AssignmentController : AbpControllerBase
     )
     {
         var blobName = await UploadAttachmentAsync(attachment);
+
+        if (blobName == null && Request.Form.TryGetValue("attachment", out var attachmentStr))
+        {
+            var strVal = attachmentStr.ToString();
+            if (!string.IsNullOrWhiteSpace(strVal))
+            {
+                blobName = strVal;
+            }
+        }
+
         var result = await _service.CreateAsync(academicMediumId, input, blobName);
         return StatusCode(201, result);
     }
@@ -90,6 +100,13 @@ public class AssignmentController : AbpControllerBase
     )
     {
         var blobName = await UploadAttachmentAsync(attachment);
+
+        if (blobName == null && Request.Form.TryGetValue("attachment", out var attachmentStr))
+        {
+            var strVal = attachmentStr.ToString();
+            blobName = strVal;
+        }
+
         return await _service.UpdateAsync(assignmentId, input, blobName);
     }
 

@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Academic.Syllabus;
@@ -12,4 +13,5 @@ public class ChapterDto : AuditedEntityDto<Guid>
 	public DateTimeOffset ChapterStartTime { get; set; }
 	public DateTimeOffset ChapterEndTime { get; set; }
 	public string? Description { get; set; }
+	public List<string> Documents { get; set; } = new();
 }

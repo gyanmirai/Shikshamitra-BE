@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -38,16 +38,7 @@ public class SubjectManager(
 					.WithData("message", $"A subject with name '{name}' already exists. Please choose a different name.");
 			}
 
-			// Check for duplicate color within the same education medium
-			var existingByColor = await subjectRepository.FindAsync(s =>
-				s.Color == color && s.EducationMediumId == educationMediumId);
-			if (existingByColor != null)
-			{
-				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectColor)
-					.WithData("Color", color)
-					.WithData("ExistingSubjectName", existingByColor.Name)
-					.WithData("message", $"The color '{color}' is already used by subject '{existingByColor.Name}'. Please choose a different color.");
-			}
+
 
 			return new Subject(
 				guidGenerator.Create(),
@@ -92,16 +83,7 @@ public class SubjectManager(
 					.WithData("message", $"A subject with name '{name}' already exists. Please choose a different name.");
 			}
 
-			// Check for duplicate color (excluding current subject)
-			var duplicateColor = await subjectRepository.FindAsync(s =>
-				s.Color == color && s.EducationMediumId == existingSubject.EducationMediumId && s.Id != id);
-			if (duplicateColor != null)
-			{
-				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectColor)
-					.WithData("Color", color)
-					.WithData("ExistingSubjectName", duplicateColor.Name)
-					.WithData("message", $"The color '{color}' is already used by subject '{duplicateColor.Name}'. Please choose a different color.");
-			}
+
 
 			existingSubject.SetName(name);
 			existingSubject.SetColor(color);

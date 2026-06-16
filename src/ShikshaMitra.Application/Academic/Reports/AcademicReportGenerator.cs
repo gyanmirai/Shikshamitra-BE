@@ -447,7 +447,7 @@ public class AcademicReportGenerator(
                     { "SubjectName", s.Subject?.Name ?? "—" },
                     { "ChapterNumber", chapter.ChapterNumber.ToString() },
                     { "ChapterName", chapter.ChapterName },
-                    { "Description", chapter.Description ?? string.Empty },
+                    { "Description", System.Text.RegularExpressions.Regex.Replace(chapter.Description ?? string.Empty, "<.*?>", string.Empty) },
                     { "LearningObjectives", string.Empty },
                     { "TotalTopics", string.Empty }
                 });

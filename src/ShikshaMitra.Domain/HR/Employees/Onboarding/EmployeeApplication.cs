@@ -42,6 +42,9 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? City { get; private set; }
 	public string? PinCode { get; private set; }
 
+	public EmployeeApplicationPersonalInfoSnapshot? PersonalInfo { get; private set; }
+	public EmployeeApplicationFamilyInfoSnapshot? FamilyInfo { get; private set; }
+	public EmployeeApplicationAdditionalInfoSnapshot? AdditionalInfo { get; private set; }
 	public List<WorkExperience> WorkExperiences { get; private set; } = [];
 
 	public string TokenHash { get; private set; } = string.Empty;
@@ -111,62 +114,45 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Submit(
 		DateTime submittedAt,
-		string firstName,
-		string? middleName,
-		string lastName,
-		string email,
-		string mobileNo,
-		string? secondaryMobileNo,
-		string? positionAppliedFor,
-		string? departmentAppliedFor,
-		DateOnly? dateOfBirth,
-		int? gender,
-		string? religion,
-		int? casteType,
-		string? familyCaste,
-		int? maritalStatus,
-		int? bloodGroup,
-		string? qualificationSummary,
-		string? skillsSummary,
-		string? address1,
-		string? address2,
-		string? address3,
-		Country? country,
-		State? state,
-		string? city,
-		string? pinCode,
+		EmployeeApplicationPersonalInfoSnapshot personalInfo,
+		EmployeeApplicationFamilyInfoSnapshot? familyInfo,
+		EmployeeApplicationAdditionalInfoSnapshot? additionalInfo,
 		List<WorkExperience> workExperiences,
 		EmployeeApplicationUploadMetadata? resume,
 		EmployeeApplicationUploadMetadata? photo)
 	{
 		EnsureCanSubmit(submittedAt);
 
-		SetCandidateIdentity(
-			firstName,
-			middleName,
-			lastName,
-			email,
-			mobileNo,
-			secondaryMobileNo,
-			positionAppliedFor,
-			departmentAppliedFor);
+		PersonalInfo = Clone(personalInfo);
+		FamilyInfo = Clone(familyInfo);
+		AdditionalInfo = Clone(additionalInfo);
 
-		DateOfBirth = dateOfBirth;
-		Gender = gender;
-		Religion = religion;
-		CasteType = casteType;
-		FamilyCaste = familyCaste;
-		MaritalStatus = maritalStatus;
-		BloodGroup = bloodGroup;
-		QualificationSummary = qualificationSummary;
-		SkillsSummary = skillsSummary;
-		Address1 = address1;
-		Address2 = address2;
-		Address3 = address3;
-		Country = Clone(country);
-		State = Clone(state);
-		City = city;
-		PinCode = pinCode;
+		SetCandidateIdentity(
+			personalInfo.FirstName,
+			personalInfo.MiddleName,
+			personalInfo.LastName,
+			personalInfo.Email,
+			personalInfo.MobileNo,
+			personalInfo.SecondaryMobileNo,
+			personalInfo.Designation,
+			personalInfo.Department);
+
+		DateOfBirth = personalInfo.DateOfBirth;
+		Gender = personalInfo.Gender;
+		Religion = personalInfo.Religion;
+		CasteType = personalInfo.CasteType;
+		FamilyCaste = personalInfo.FamilyCaste;
+		MaritalStatus = personalInfo.MaritalStatus;
+		BloodGroup = personalInfo.BloodGroup;
+		QualificationSummary = personalInfo.Qualification;
+		SkillsSummary = null;
+		Address1 = personalInfo.Address1;
+		Address2 = personalInfo.Address2;
+		Address3 = personalInfo.Address3;
+		Country = MapToCountry(personalInfo.Country);
+		State = MapToState(personalInfo.State);
+		City = personalInfo.City;
+		PinCode = personalInfo.Pincode;
 		WorkExperiences = workExperiences ?? [];
 
 		if (resume != null)
@@ -347,6 +333,273 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private static Country? Clone(Country? country) =>
 		country == null ? null : new Country(country.Name, country.IsoCode);
+
+	private static EmployeeApplicationPersonalInfoSnapshot Clone(EmployeeApplicationPersonalInfoSnapshot value) =>
+		new(
+			value.FirstName,
+			value.MiddleName,
+			value.ShortName,
+			value.LastName,
+			value.Email,
+			value.MobileNo,
+			value.SecondaryMobileNo,
+			value.DateOfBirth,
+			value.Gender,
+			value.Religion,
+			value.CasteType,
+			value.FamilyCaste,
+			value.MaritalStatus,
+			value.BloodGroup,
+			value.IsTeaching,
+			value.Department,
+			value.Designation,
+			value.Qualification,
+			value.IdentificationMark1,
+			value.Address1,
+			value.Address2,
+			value.Address3,
+			Clone(value.Country),
+			Clone(value.State),
+			value.City,
+			value.Pincode);
+
+	private static EmployeeApplicationFamilyInfoSnapshot? Clone(EmployeeApplicationFamilyInfoSnapshot? value) =>
+		value == null
+			? null
+			: new EmployeeApplicationFamilyInfoSnapshot(
+				Clone(value.FatherDetails),
+				Clone(value.MotherDetails),
+				Clone(value.SpouseDetails));
+
+	private static EmployeeApplicationFamilyMemberSnapshot? Clone(EmployeeApplicationFamilyMemberSnapshot? value) =>
+		value == null
+			? null
+			: new EmployeeApplicationFamilyMemberSnapshot(
+				value.Name,
+				value.Occupation,
+				value.MobileNo,
+				value.Address1,
+				value.Address2,
+				value.Address3,
+				Clone(value.Country),
+				Clone(value.State),
+				value.City,
+				value.Pincode);
+
+	private static EmployeeApplicationAdditionalInfoSnapshot? Clone(EmployeeApplicationAdditionalInfoSnapshot? value) =>
+		value == null
+			? null
+			: new EmployeeApplicationAdditionalInfoSnapshot(
+				value.PersonWithDisability,
+				value.SecondLanguage,
+				value.IsLibraryMember,
+				value.IsTransportMember);
+
+	private static EmployeeApplicationLocationSnapshot? Clone(EmployeeApplicationLocationSnapshot? value) =>
+		value == null ? null : new EmployeeApplicationLocationSnapshot(value.Name, value.IsoCode);
+
+	private static Country? MapToCountry(EmployeeApplicationLocationSnapshot? value) =>
+		value == null || string.IsNullOrWhiteSpace(value.Name)
+			? null
+			: new Country(value.Name, value.IsoCode);
+
+	private static State? MapToState(EmployeeApplicationLocationSnapshot? value) =>
+		value == null || string.IsNullOrWhiteSpace(value.Name)
+			? null
+			: new State(value.Name, value.IsoCode);
+}
+
+public class EmployeeApplicationPersonalInfoSnapshot
+{
+	public string FirstName { get; private set; } = string.Empty;
+	public string? MiddleName { get; private set; }
+	public string? ShortName { get; private set; }
+	public string LastName { get; private set; } = string.Empty;
+	public string Email { get; private set; } = string.Empty;
+	public string MobileNo { get; private set; } = string.Empty;
+	public string? SecondaryMobileNo { get; private set; }
+	public DateOnly? DateOfBirth { get; private set; }
+	public int? Gender { get; private set; }
+	public string? Religion { get; private set; }
+	public int? CasteType { get; private set; }
+	public string? FamilyCaste { get; private set; }
+	public int? MaritalStatus { get; private set; }
+	public int? BloodGroup { get; private set; }
+	public bool IsTeaching { get; private set; } = true;
+	public string? Department { get; private set; }
+	public string? Designation { get; private set; }
+	public string? Qualification { get; private set; }
+	public string? IdentificationMark1 { get; private set; }
+	public string? Address1 { get; private set; }
+	public string? Address2 { get; private set; }
+	public string? Address3 { get; private set; }
+	public EmployeeApplicationLocationSnapshot? Country { get; private set; }
+	public EmployeeApplicationLocationSnapshot? State { get; private set; }
+	public string? City { get; private set; }
+	public string? Pincode { get; private set; }
+
+	private EmployeeApplicationPersonalInfoSnapshot()
+	{
+	}
+
+	public EmployeeApplicationPersonalInfoSnapshot(
+		string firstName,
+		string? middleName,
+		string? shortName,
+		string lastName,
+		string email,
+		string mobileNo,
+		string? secondaryMobileNo,
+		DateOnly? dateOfBirth,
+		int? gender,
+		string? religion,
+		int? casteType,
+		string? familyCaste,
+		int? maritalStatus,
+		int? bloodGroup,
+		bool isTeaching,
+		string? department,
+		string? designation,
+		string? qualification,
+		string? identificationMark1,
+		string? address1,
+		string? address2,
+		string? address3,
+		EmployeeApplicationLocationSnapshot? country,
+		EmployeeApplicationLocationSnapshot? state,
+		string? city,
+		string? pincode)
+	{
+		FirstName = firstName.Trim();
+		MiddleName = middleName?.Trim();
+		ShortName = shortName?.Trim();
+		LastName = lastName.Trim();
+		Email = email.Trim();
+		MobileNo = mobileNo.Trim();
+		SecondaryMobileNo = secondaryMobileNo?.Trim();
+		DateOfBirth = dateOfBirth;
+		Gender = gender;
+		Religion = religion?.Trim();
+		CasteType = casteType;
+		FamilyCaste = familyCaste?.Trim();
+		MaritalStatus = maritalStatus;
+		BloodGroup = bloodGroup;
+		IsTeaching = isTeaching;
+		Department = department?.Trim();
+		Designation = designation?.Trim();
+		Qualification = qualification?.Trim();
+		IdentificationMark1 = identificationMark1?.Trim();
+		Address1 = address1?.Trim();
+		Address2 = address2?.Trim();
+		Address3 = address3?.Trim();
+		Country = country;
+		State = state;
+		City = city?.Trim();
+		Pincode = pincode?.Trim();
+	}
+}
+
+public class EmployeeApplicationFamilyInfoSnapshot
+{
+	public EmployeeApplicationFamilyMemberSnapshot? FatherDetails { get; private set; }
+	public EmployeeApplicationFamilyMemberSnapshot? MotherDetails { get; private set; }
+	public EmployeeApplicationFamilyMemberSnapshot? SpouseDetails { get; private set; }
+
+	private EmployeeApplicationFamilyInfoSnapshot()
+	{
+	}
+
+	public EmployeeApplicationFamilyInfoSnapshot(
+		EmployeeApplicationFamilyMemberSnapshot? fatherDetails,
+		EmployeeApplicationFamilyMemberSnapshot? motherDetails,
+		EmployeeApplicationFamilyMemberSnapshot? spouseDetails)
+	{
+		FatherDetails = fatherDetails;
+		MotherDetails = motherDetails;
+		SpouseDetails = spouseDetails;
+	}
+}
+
+public class EmployeeApplicationFamilyMemberSnapshot
+{
+	public string? Name { get; private set; }
+	public string? Occupation { get; private set; }
+	public string? MobileNo { get; private set; }
+	public string? Address1 { get; private set; }
+	public string? Address2 { get; private set; }
+	public string? Address3 { get; private set; }
+	public EmployeeApplicationLocationSnapshot? Country { get; private set; }
+	public EmployeeApplicationLocationSnapshot? State { get; private set; }
+	public string? City { get; private set; }
+	public string? Pincode { get; private set; }
+
+	private EmployeeApplicationFamilyMemberSnapshot()
+	{
+	}
+
+	public EmployeeApplicationFamilyMemberSnapshot(
+		string? name,
+		string? occupation,
+		string? mobileNo,
+		string? address1,
+		string? address2,
+		string? address3,
+		EmployeeApplicationLocationSnapshot? country,
+		EmployeeApplicationLocationSnapshot? state,
+		string? city,
+		string? pincode)
+	{
+		Name = name?.Trim();
+		Occupation = occupation?.Trim();
+		MobileNo = mobileNo?.Trim();
+		Address1 = address1?.Trim();
+		Address2 = address2?.Trim();
+		Address3 = address3?.Trim();
+		Country = country;
+		State = state;
+		City = city?.Trim();
+		Pincode = pincode?.Trim();
+	}
+}
+
+public class EmployeeApplicationAdditionalInfoSnapshot
+{
+	public bool PersonWithDisability { get; private set; }
+	public string? SecondLanguage { get; private set; }
+	public bool IsLibraryMember { get; private set; }
+	public bool IsTransportMember { get; private set; }
+
+	private EmployeeApplicationAdditionalInfoSnapshot()
+	{
+	}
+
+	public EmployeeApplicationAdditionalInfoSnapshot(
+		bool personWithDisability,
+		string? secondLanguage,
+		bool isLibraryMember,
+		bool isTransportMember)
+	{
+		PersonWithDisability = personWithDisability;
+		SecondLanguage = secondLanguage?.Trim();
+		IsLibraryMember = isLibraryMember;
+		IsTransportMember = isTransportMember;
+	}
+}
+
+public class EmployeeApplicationLocationSnapshot
+{
+	public string Name { get; private set; } = string.Empty;
+	public string IsoCode { get; private set; } = string.Empty;
+
+	private EmployeeApplicationLocationSnapshot()
+	{
+	}
+
+	public EmployeeApplicationLocationSnapshot(string name, string isoCode)
+	{
+		Name = name.Trim();
+		IsoCode = isoCode.Trim();
+	}
 }
 
 public class EmployeeApplicationUploadMetadata

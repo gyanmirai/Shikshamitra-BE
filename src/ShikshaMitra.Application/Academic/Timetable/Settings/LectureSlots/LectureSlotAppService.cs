@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -18,7 +19,8 @@ namespace ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 public class LectureSlotAppService(
     ILectureSlotConfigRepository lectureSlotConfigRepository,
     ITimetableRepository timetableRepository,
-    IRepository<Standard, Guid> standardRepository
+    IRepository<Standard, Guid> standardRepository,
+    IRepository<Room, Guid> roomRepository
 ) : ApplicationService, ILectureSlotAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.View)]
@@ -54,6 +56,7 @@ public class LectureSlotAppService(
             .ToList();
 
         var standardsDict = allStandards.ToDictionary(s => s.Id, s => s.Name);
+        var roomNames = await LoadRoomNamesAsync(pagedConfigs);
 
         var items = pagedConfigs.Select(config => new LectureSlotListDto
         {
@@ -74,6 +77,8 @@ public class LectureSlotAppService(
                             StartTime = ts.StartTime,
                             EndTime = ts.EndTime,
                             SlotType = ts.SlotType,
+                            RoomId = ts.RoomId,
+                            RoomName = ts.RoomId.HasValue ? roomNames.GetValueOrDefault(ts.RoomId.Value) : null,
                             BreakType = ts.BreakType
                         }).ToList()
                 }).ToList()
@@ -87,8 +92,9 @@ public class LectureSlotAppService(
     {
         var config = await lectureSlotConfigRepository.GetAsync(id);
         var standard = await standardRepository.GetAsync(config.StandardId);
+        var roomNames = await LoadRoomNamesAsync([config]);
 
-        return MapToDto(config, standard.Name);
+        return MapToDto(config, standard.Name, roomNames);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
@@ -99,6 +105,8 @@ public class LectureSlotAppService(
         {
             throw new BusinessException(TimetableErrorCodes.LectureSlotConfigAlreadyExists);
         }
+
+        await EnsureRoomsExistAsync(input.SlotConfigurations);
 
         var config = new LectureSlotConfig(
             GuidGenerator.Create(),
@@ -112,7 +120,8 @@ public class LectureSlotAppService(
         await lectureSlotConfigRepository.InsertAsync(config);
 
         var standard = await standardRepository.GetAsync(config.StandardId);
-        return MapToDto(config, standard.Name);
+        var roomNames = await LoadRoomNamesAsync([config]);
+        return MapToDto(config, standard.Name, roomNames);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
@@ -128,6 +137,8 @@ public class LectureSlotAppService(
                 .WithData("StandardId", config.StandardId);
         }
 
+        await EnsureRoomsExistAsync(input.SlotConfigurations);
+
         config.SetSchoolHours(input.SchoolHours);
         config.SetPreviousStandardId(input.PreviousStandardId);
         config.ClearSlotGroups();
@@ -136,7 +147,8 @@ public class LectureSlotAppService(
         await lectureSlotConfigRepository.UpdateAsync(config);
 
         var standard = await standardRepository.GetAsync(config.StandardId);
-        return MapToDto(config, standard.Name);
+        var roomNames = await LoadRoomNamesAsync([config]);
+        return MapToDto(config, standard.Name, roomNames);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
@@ -171,7 +183,8 @@ public class LectureSlotAppService(
                             timeSlot.StartTime,
                             timeSlot.EndTime,
                             timeSlot.SlotType,
-                            timeSlot.BreakType));
+                            timeSlot.BreakType,
+                            timeSlot.RoomId));
                     }
 
                     existing.AddSlotGroup(newGroup);
@@ -205,7 +218,8 @@ public class LectureSlotAppService(
                             timeSlot.StartTime,
                             timeSlot.EndTime,
                             timeSlot.SlotType,
-                            timeSlot.BreakType));
+                            timeSlot.BreakType,
+                            timeSlot.RoomId));
                     }
 
                     clone.AddSlotGroup(newGroup);
@@ -235,14 +249,62 @@ public class LectureSlotAppService(
                     ts.StartTime,
                     ts.EndTime,
                     ts.SlotType,
-                    ts.BreakType));
+                    ts.BreakType,
+                    ts.RoomId));
             }
 
             config.AddSlotGroup(group);
         }
     }
 
-    private static LectureSlotDto MapToDto(LectureSlotConfig config, string standardName) => new()
+    private async Task EnsureRoomsExistAsync(List<SlotConfigurationDto> configurations)
+    {
+        var roomIds = configurations
+            .SelectMany(config => config.TimeSlots)
+            .Select(timeSlot => timeSlot.RoomId)
+            .Where(roomId => roomId.HasValue)
+            .Select(roomId => roomId!.Value)
+            .Distinct()
+            .ToList();
+
+        if (roomIds.Count == 0)
+        {
+            return;
+        }
+
+        var rooms = await AsyncExecuter.ToListAsync(
+            (await roomRepository.GetQueryableAsync()).Where(room => roomIds.Contains(room.Id)));
+        var foundRoomIds = rooms.Select(room => room.Id).ToHashSet();
+        var missingRoomIds = roomIds.Where(roomId => !foundRoomIds.Contains(roomId)).ToList();
+        if (missingRoomIds.Count != 0)
+        {
+            throw new BusinessException(TimetableErrorCodes.LectureSlotRoomNotFound)
+                .WithData("RoomIds", string.Join(", ", missingRoomIds));
+        }
+    }
+
+    private async Task<Dictionary<Guid, string>> LoadRoomNamesAsync(IEnumerable<LectureSlotConfig> configs)
+    {
+        var roomIds = configs
+            .SelectMany(config => config.SlotGroups)
+            .SelectMany(group => group.TimeSlots)
+            .Select(timeSlot => timeSlot.RoomId)
+            .Where(roomId => roomId.HasValue)
+            .Select(roomId => roomId!.Value)
+            .Distinct()
+            .ToList();
+
+        if (roomIds.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        var rooms = await AsyncExecuter.ToListAsync(
+            (await roomRepository.GetQueryableAsync()).Where(room => roomIds.Contains(room.Id)));
+        return rooms.ToDictionary(room => room.Id, room => room.RoomName);
+    }
+
+    private static LectureSlotDto MapToDto(LectureSlotConfig config, string standardName, IReadOnlyDictionary<Guid, string> roomNames) => new()
     {
         Id = config.Id,
         StandardId = config.StandardId,
@@ -264,6 +326,8 @@ public class LectureSlotAppService(
                         StartTime = ts.StartTime,
                         EndTime = ts.EndTime,
                         SlotType = ts.SlotType,
+                        RoomId = ts.RoomId,
+                        RoomName = ts.RoomId.HasValue ? roomNames.GetValueOrDefault(ts.RoomId.Value) : null,
                         BreakType = ts.BreakType
                     }).ToList()
             }).ToList()

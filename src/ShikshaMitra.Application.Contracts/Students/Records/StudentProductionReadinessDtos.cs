@@ -57,6 +57,12 @@ public class StudentAttendanceDashboardSummaryDto
 	public List<StudentAttendanceClassSummaryDto> Classes { get; set; } = [];
 }
 
+public class GetStudentAttendanceDashboardSummaryInput
+{
+	public DateTime? StartDate { get; set; }
+	public DateTime? EndDate { get; set; }
+}
+
 public class StudentAttendanceClassSummaryDto
 {
 	public Guid? StandardId { get; set; }

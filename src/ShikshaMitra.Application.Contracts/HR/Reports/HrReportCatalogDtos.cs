@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 
 namespace ShikshaMitra.HR.Reports;
 
@@ -52,4 +53,11 @@ public class HrReportOptionDto
 {
 	public string Id { get; set; } = string.Empty;
 	public string Label { get; set; } = string.Empty;
+}
+
+public class HrReportRecipientDto
+{
+	public Guid Id { get; set; }
+	public string DisplayName { get; set; } = string.Empty;
+	public string? Email { get; set; }
 }

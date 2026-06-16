@@ -225,15 +225,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		});
 		var submitted = await _applications.SubmitPublicAsync(
 			invite.Token,
-			new PublicEmployeeApplicationSubmitDto
-			{
-				FirstName = "Onboard",
-				LastName = "Default",
-				Email = $"onboarding.submitted.{Guid.NewGuid():N}@test.com",
-				MobileNo = "9876500002",
-				PositionAppliedFor = "Teacher",
-				DepartmentAppliedFor = "Primary"
-			},
+			BuildSubmitDto($"onboarding.submitted.{Guid.NewGuid():N}@test.com"),
 			new EmployeeApplicationFileInput
 			{
 				FileName = "resume.pdf",
@@ -268,6 +260,38 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			x.EffectiveFrom == new DateTime(2026, 4, 1));
 	}
 
+	[Fact]
+	public async Task SubmitPublicAsync_Should_Validate_Reported_Bad_Payload_Before_Persistence()
+	{
+		var invite = await CreateInviteAsync($"onboarding.invalid.{Guid.NewGuid():N}@test.com");
+
+		var input = BuildSubmitDto($"onboarding.invalid.submit.{Guid.NewGuid():N}@test.com");
+		input.PersonalInfo.MobileNo = "20938740982304";
+		input.PersonalInfo.DateOfBirth = new DateTime(2026, 6, 13);
+		input.PersonalInfo.State = new EmployeeApplicationLocationInfo
+		{
+			Name = "guyjuart",
+			IsoCode = "32423"
+		};
+
+		var validationResults = PublicEmployeeApplicationSubmitValidation.Validate(input, new DateTime(2026, 6, 13));
+		validationResults.ShouldContain(x => HasValidationMember(x, "personalInfo.mobileNo"));
+		validationResults.ShouldContain(x => HasValidationMember(x, "personalInfo.dateOfBirth"));
+		validationResults.ShouldContain(x => HasValidationMember(x, "personalInfo.state.isoCode"));
+
+		var exception = await Should.ThrowAsync<AbpValidationException>(() =>
+			_applications.SubmitPublicAsync(invite.Token, input, null, null));
+		exception.ValidationErrors.ShouldNotBeEmpty();
+
+		var application = await _applicationRepository.GetAsync(invite.Application.Id);
+		application.SubmittedAt.ShouldBeNull();
+		application.Status.ShouldBe(EmployeeApplicationStatus.InvitationSent);
+	}
+
+	private static bool HasValidationMember(System.ComponentModel.DataAnnotations.ValidationResult validationResult, string memberName) =>
+		validationResult.MemberNames.Any(member =>
+			member.EndsWith(memberName, StringComparison.OrdinalIgnoreCase));
+
 	private async Task<CreateEmployeePersonalInfoDto> BuildPersonalInfoAsync()
 	{
 		return new CreateEmployeePersonalInfoDto
@@ -287,6 +311,43 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			OrganizationIds = [await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider)]
 		};
 	}
+
+	private static PublicEmployeeApplicationSubmitDto BuildSubmitDto(string email) =>
+		new()
+		{
+			PersonalInfo = new EmployeeApplicationPersonalInfoDto
+			{
+				FirstName = "Onboard",
+				LastName = "Default",
+				Email = email,
+				MobileNo = "9876500002",
+				SecondaryMobileNo = "8765400002",
+				DateOfBirth = new DateTime(1990, 5, 15),
+				Gender = 2,
+				Religion = "Hindu",
+				CasteType = 0,
+				FamilyCaste = "General",
+				MaritalStatus = 0,
+				IsTeaching = true,
+				Department = "Primary",
+				Designation = "Teacher",
+				Qualification = "B.Ed",
+				Address1 = "12 School Road",
+				Address2 = "Near Park",
+				Country = new EmployeeApplicationLocationInfo
+				{
+					Name = "India",
+					IsoCode = "IN"
+				},
+				State = new EmployeeApplicationLocationInfo
+				{
+					Name = "Gujarat",
+					IsoCode = "GJ"
+				},
+				City = "Ahmedabad",
+				Pincode = "380001"
+			}
+		};
 
 	private async Task CreateDefaultPoliciesAsync()
 	{

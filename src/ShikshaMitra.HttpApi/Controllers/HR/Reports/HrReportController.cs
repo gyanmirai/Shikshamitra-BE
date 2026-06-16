@@ -30,6 +30,16 @@ public class HrReportController(IHrReportAppService reportAppService) : AbpContr
 		return reportAppService.GetOptionsAsync();
 	}
 
+	[HttpGet("recipients")]
+	[ProducesResponseType(typeof(List<HrReportRecipientDto>), StatusCodes.Status200OK)]
+	public Task<List<HrReportRecipientDto>> GetRecipientsAsync(
+		[FromQuery] string? filter = null,
+		[FromQuery] int maxResultCount = 20,
+		[FromQuery] string? ids = null)
+	{
+		return reportAppService.GetRecipientsAsync(filter, maxResultCount, ids);
+	}
+
 	[HttpGet("templates")]
 	[ProducesResponseType(typeof(HrReportTemplateListDto), StatusCodes.Status200OK)]
 	public Task<HrReportTemplateListDto> GetTemplatesAsync()

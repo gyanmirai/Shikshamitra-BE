@@ -65,7 +65,10 @@ public class HrPolicyAffectedEmployeeResolver(
 			.Select(group => group.First())
 			.ToList();
 
-		return new AffectedEmployeePreview(matchedEmployees.Count, matchedEmployees.Take(25).ToList());
+		return new AffectedEmployeePreview(
+			matchedEmployees.Count,
+			matchedEmployees.Take(25).ToList(),
+			matchedEmployees.Select(x => x.Id).ToList());
 	}
 
 	private async Task<AffectedEmployeePreview> BuildEmployeePreviewFromIdsAsync(
@@ -78,9 +81,9 @@ public class HrPolicyAffectedEmployeeResolver(
 		}
 
 		var query = employeeQuery.Where(employee => employeeIds.Contains(employee.Id));
-		var count = await asyncExecuter.CountAsync(query);
+		var resolvedEmployeeIds = await asyncExecuter.ToListAsync(query.Select(employee => employee.Id));
 		var sample = await asyncExecuter.ToListAsync(query.Take(25));
-		return new AffectedEmployeePreview(count, sample);
+		return new AffectedEmployeePreview(resolvedEmployeeIds.Count, sample, resolvedEmployeeIds);
 	}
 
 	private static IQueryable<Employee> ActiveEmployeeQuery(IQueryable<Employee> query) =>

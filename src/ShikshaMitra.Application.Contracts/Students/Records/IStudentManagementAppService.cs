@@ -17,8 +17,11 @@ public interface IStudentManagementAppService : IApplicationService
 
 	Task StoreGrNumbers(List<UpdateStudentGrNumberDto> updateStudentGrNumberDto);
 	Task<List<GrProjectionDto>> GetGrProjections(Guid divisionId);
-	Task<List<RollNumberProjectionDto>> GetRollNumberProjections(Guid divisionId, ArrangementTypeEnum arrangementType, ArrangementByEnum arrangementBy);
-	Task StoreRollNumbers(Guid divisionId, List<UpdateStudentRollNumberDto> updateStudentRollNumberDto, ArrangementTypeEnum? arrangementType, ArrangementByEnum? arrangementBy);
+	Task<List<AcademicTermDto>> GetAcademicTermsAsync(Guid academicYearId);
+	Task<AcademicTermDto> CreateAcademicTermAsync(CreateAcademicTermDto input);
+	Task<AcademicTermDto> SetCurrentAcademicTermAsync(Guid academicTermId);
+	Task<List<RollNumberProjectionDto>> GetRollNumberProjections(Guid divisionId, Guid? academicTermId, ArrangementTypeEnum arrangementType, ArrangementByEnum arrangementBy);
+	Task<RollNumberSaveResultDto> StoreRollNumbers(Guid divisionId, Guid? academicTermId, List<UpdateStudentRollNumberDto> updateStudentRollNumberDto, ArrangementTypeEnum? arrangementType, ArrangementByEnum? arrangementBy);
 	Task ChangeDivision(List<ChangeStudentDivisionDto> changeStudentDivisionDto);
 
 }

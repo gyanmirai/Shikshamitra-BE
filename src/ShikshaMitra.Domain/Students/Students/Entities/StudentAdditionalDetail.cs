@@ -50,6 +50,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public bool? IsBPLStudent { get; private set; }
 	public string? BPLCardNo { get; private set; }
 	public bool? HaveDisability { get; private set; }
+	public string? DisabilityDetails { get; private set; }
 	public string? SecondLanguage { get; private set; }
 	public string? EmergencyContactNo { get; private set; }
 	public string? EmergencyRelationName { get; private set; }
@@ -171,6 +172,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		string? bplCardNo,
 		string? secondLanguage,
 		bool haveDisability,
+		string? disabilityDetails,
 		string? emergencyRelativeName,
 		string? emergencyRelation,
 		string? emergencyContactNo,
@@ -184,6 +186,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		BPLCardNo = bplCardNo;
 		SecondLanguage = secondLanguage;
 		HaveDisability = haveDisability;
+		DisabilityDetails = haveDisability ? disabilityDetails : null;
 		EmergencyRelationName = emergencyRelativeName;
 		EmergencyRelationType = emergencyRelation;
 		EmergencyContactNo = emergencyContactNo;
@@ -194,6 +197,18 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		IsTransportMember = isTransportMember;
 
 		AdvanceRegistrationState(StudentRegistrationStateEnum.AdditionalDetails);
+	}
+
+	public void UpdateDisabilityInfo(bool haveDisability, string? disabilityDetails)
+	{
+		HaveDisability = haveDisability;
+		DisabilityDetails = haveDisability ? disabilityDetails : null;
+	}
+
+	public void UpdatePreviousSchoolSummary(string? previousSchool, string? lastClassPassed)
+	{
+		PreviousSchool = previousSchool;
+		LastClassPassed = lastClassPassed;
 	}
 
 	public void AdvanceRegistrationState(StudentRegistrationStateEnum newState)

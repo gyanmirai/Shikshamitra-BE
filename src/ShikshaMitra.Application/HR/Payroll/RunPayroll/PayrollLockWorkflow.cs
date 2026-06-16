@@ -71,7 +71,7 @@ public class PayrollLockWorkflow(
 			month,
 			academicYearId,
 			targetEmployeeIds,
-			preserveReviewedSnapshots: false);
+			preserveReviewedSnapshots: true);
 
 		var snapshotByEmployee = (await snapshotStore.GetByMonthAsync(internalMonthYear))
 			.ToDictionary(x => x.EmployeeId, x => x);
@@ -128,7 +128,7 @@ public class PayrollLockWorkflow(
 			month,
 			academicYearId,
 			targetEmployeeIds,
-			preserveReviewedSnapshots: false);
+			preserveReviewedSnapshots: true);
 
 		var snapshotByEmployee = (await snapshotStore.GetByMonthAsync(internalMonthYear))
 			.ToDictionary(x => x.EmployeeId, x => x);

@@ -1,6 +1,7 @@
 ﻿using ShikshaMitra.TenantSettings.EducationMediums;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -28,9 +29,12 @@ public class HouseSettingsAppService(
 				academicMediumId,
 				nameof(CreateHouseSettingsAsync));
 
+			var normalizedName = NormalizeHouseName(createHouseSettingsDto.Name);
+			await EnsureHouseNameIsUniqueAsync(academicMediumId, normalizedName);
+
 			var houseSetting = new HouseSettings(
 				guidGenerator.Create(),
-				createHouseSettingsDto.Name,
+				createHouseSettingsDto.Name.Trim(),
 				createHouseSettingsDto.Color,
 				academicMediumId,
 				createHouseSettingsDto.LogoUrl,
@@ -39,11 +43,15 @@ public class HouseSettingsAppService(
 
 			await houseSettingsRepository.InsertAsync(houseSetting, autoSave: true);
 		}
-		catch (EntityNotFoundException ex)
+		catch (EntityNotFoundException)
 		{
 			throw;
 		}
-		catch (Exception ex)
+		catch (BusinessException)
+		{
+			throw;
+		}
+		catch (Exception)
 		{
 			throw new UserFriendlyException("An error occurred while creating house settings.");
 		}
@@ -59,11 +67,15 @@ public class HouseSettingsAppService(
 				nameof(GetHouseSettingsAsync));
 			return ObjectMapper.Map<HouseSettings, HouseSettingsDto>(houseSetting);
 		}
-		catch (EntityNotFoundException ex)
+		catch (EntityNotFoundException)
 		{
 			throw;
 		}
-		catch (Exception ex)
+		catch (BusinessException)
+		{
+			throw;
+		}
+		catch (Exception)
 		{
 			throw new UserFriendlyException("An error occurred while retrieving house settings.");
 		}
@@ -81,11 +93,15 @@ public class HouseSettingsAppService(
 			var houseSettings = await houseSettingsRepository.GetListAsync(h => h.AcademicMediumId == academicMediumId);
 			return ObjectMapper.Map<List<HouseSettings>, List<HouseSettingsDto>>(houseSettings);
 		}
-		catch (EntityNotFoundException ex)
+		catch (EntityNotFoundException)
 		{
 			throw;
 		}
-		catch (Exception ex)
+		catch (BusinessException)
+		{
+			throw;
+		}
+		catch (Exception)
 		{
 			throw new UserFriendlyException("An error occurred while retrieving house settings.");
 		}
@@ -100,8 +116,11 @@ public class HouseSettingsAppService(
 				houseSetting.AcademicMediumId,
 				nameof(UpdateHouseSettingsAsync));
 
+			var normalizedName = NormalizeHouseName(updateHouseSettingsDto.Name);
+			await EnsureHouseNameIsUniqueAsync(houseSetting.AcademicMediumId, normalizedName, houseSettingsId);
+
 			houseSetting.UpdateDetails(
-				updateHouseSettingsDto.Name,
+				updateHouseSettingsDto.Name.Trim(),
 				updateHouseSettingsDto.Color,
 				updateHouseSettingsDto.LogoUrl,
 				updateHouseSettingsDto.Description
@@ -110,11 +129,15 @@ public class HouseSettingsAppService(
 			await houseSettingsRepository.UpdateAsync(houseSetting, autoSave: true);
 			return ObjectMapper.Map<HouseSettings, HouseSettingsDto>(houseSetting);
 		}
-		catch (EntityNotFoundException ex)
+		catch (EntityNotFoundException)
 		{
 			throw;
 		}
-		catch (Exception ex)
+		catch (BusinessException)
+		{
+			throw;
+		}
+		catch (Exception)
 		{
 			throw new UserFriendlyException("An error occurred while updating house settings.");
 		}
@@ -131,13 +154,38 @@ public class HouseSettingsAppService(
 				nameof(DeleteHouseSettingsAsync));
 			await houseSettingsRepository.DeleteAsync(houseSetting, autoSave: true);
 		}
-		catch (EntityNotFoundException ex)
+		catch (EntityNotFoundException)
 		{
 			throw;
 		}
-		catch (Exception ex)
+		catch (BusinessException)
+		{
+			throw;
+		}
+		catch (Exception)
 		{
 			throw new UserFriendlyException("An error occurred while deleting house settings.");
 		}
 	}
+
+	private async Task EnsureHouseNameIsUniqueAsync(
+		Guid academicMediumId,
+		string normalizedName,
+		Guid? excludingHouseSettingsId = null)
+	{
+		var houseSettings = await houseSettingsRepository.GetListAsync(h =>
+			h.AcademicMediumId == academicMediumId &&
+			(!excludingHouseSettingsId.HasValue || h.Id != excludingHouseSettingsId.Value));
+
+		if (houseSettings.Any(h => NormalizeHouseName(h.Name) == normalizedName))
+		{
+			throw new BusinessException(StudentErrorCodes.HouseSettingsAlreadyExists)
+				.WithData("Name", normalizedName)
+				.WithData("AcademicMediumId", academicMediumId);
+		}
+	}
+
+	private static string NormalizeHouseName(string name)
+		=> string.Join(" ", name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries))
+			.ToUpperInvariant();
 }

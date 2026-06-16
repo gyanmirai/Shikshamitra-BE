@@ -14,7 +14,8 @@ public class HrReportAppService(
 	HrReportGenerator reportGenerator,
 	HrReportTemplateService templateService,
 	HrReportExportService exportService,
-	HrReportScheduleService scheduleService) : ApplicationService, IHrReportAppService
+	HrReportScheduleService scheduleService,
+	HrReportRecipientLookupService recipientLookupService) : ApplicationService, IHrReportAppService
 {
 	public Task<HrReportSourcesDto> GetSourcesAsync() =>
 		reportGenerator.GetSourcesAsync();
@@ -24,6 +25,9 @@ public class HrReportAppService(
 		var userId = CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.ReportUserRequired);
 		return await reportGenerator.GetOptionsAsync(userId, CurrentTenant.Id);
 	}
+
+	public Task<List<HrReportRecipientDto>> GetRecipientsAsync(string? filter = null, int maxResultCount = 20, string? ids = null) =>
+		recipientLookupService.GetRecipientsAsync(filter, maxResultCount, ids);
 
 	public Task<HrReportTemplateListDto> GetTemplatesAsync() =>
 		templateService.GetTemplatesAsync();

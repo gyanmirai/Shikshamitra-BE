@@ -10,6 +10,10 @@ public class HrReportRequestDto
 
 	public string? DataSource { get; set; }
 	public string Format { get; set; } = HrReportFormat.Excel;
+	public Guid? TemplateId { get; set; }
+	public string? TemplateName { get; set; }
+	public Guid? ParentJobId { get; set; }
+	public string? SourceAction { get; set; }
 	public int Page { get; set; } = 1;
 	public int PageSize { get; set; } = 50;
 	public List<string>? Columns { get; set; }

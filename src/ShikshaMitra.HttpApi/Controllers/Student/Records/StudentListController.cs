@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp.Application.Dtos;
@@ -20,6 +21,7 @@ public class StudentListController(
 	private const long MaxPhotoUploadBytes = 5 * 1024 * 1024;
 
 	[HttpGet("{divisionId}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<PagedResultDto<StudentDto>> GetStudentsByDivision(
 		Guid divisionId,
 		[FromQuery] int skipCount = 0,
@@ -30,18 +32,22 @@ public class StudentListController(
 	}
 
 	[HttpGet("/api/students/records/dashboard-summary")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<StudentDashboardSummaryDto> GetDashboardSummary()
 	{
 		return await studentListAppService.GetDashboardSummaryAsync();
 	}
 
 	[HttpGet("/api/students/records/attendance-dashboard-summary")]
-	public async Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummary()
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
+	public async Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummary(
+		[FromQuery] GetStudentAttendanceDashboardSummaryInput input)
 	{
-		return await studentListAppService.GetAttendanceDashboardSummaryAsync();
+		return await studentListAppService.GetAttendanceDashboardSummaryAsync(input);
 	}
 
 	[HttpPost("/api/students/records/{studentId}/photo")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add)]
 	[Consumes("multipart/form-data")]
 	public async Task<StudentPhotoUploadResultDto> UploadPhoto(
 		Guid studentId,
@@ -68,6 +74,7 @@ public class StudentListController(
 	}
 
 	[HttpGet("/api/students/records/{studentId}/photo")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<IActionResult> GetPhoto(Guid studentId)
 	{
 		var photo = await studentListAppService.GetPhotoAsync(studentId);
@@ -80,18 +87,21 @@ public class StudentListController(
 	}
 
 	[HttpPut("{studentId}/status")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add)]
 	public async Task ChangeStudentStatus(Guid studentId, [FromBody] ChangeStudentStatusDto input)
 	{
 		await studentListAppService.ChangeStudentStatusAsync(studentId, input);
 	}
 
 	[HttpGet("{studentId}/status/history")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<List<StudentStatusHistoryDto>> GetStatusHistory(Guid studentId)
 	{
 		return await studentListAppService.GetStatusHistoryAsync(studentId);
 	}
 
 	[HttpGet("by-scope")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<List<StudentLookupDto>> GetStudentsByScope([FromQuery] GetStudentsByScopeRequest input)
 	{
 		return await studentListAppService.GetStudentsByScopeAsync(input);

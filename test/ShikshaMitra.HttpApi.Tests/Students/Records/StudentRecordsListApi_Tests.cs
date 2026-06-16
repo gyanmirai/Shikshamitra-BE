@@ -1,17 +1,31 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Reflection;
+using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Common.Responses;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.Enrollment;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -25,6 +39,133 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     private const string BaseUrl = "/api/students/records/list";
 
     public StudentRecordsListApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_Forbidden_When_Student_List_Permission_Is_Missing()
+    {
+        using var client = CreatePermissionClient();
+
+        var response = await client.GetAsync(
+            $"{BaseUrl}/{Factory.SeededDivisionId}?skipCount=0&maxResultCount=1");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Require_Student_Management_View_For_Management_Reads()
+    {
+        using var listOnlyClient = CreatePermissionClient(
+            ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
+
+        var forbiddenResponse = await listOnlyClient.GetAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/gr-projections");
+        forbiddenResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        using var managementClient = CreatePermissionClient(
+            ShikshaMitraSubmodulePermissions.Students.Records_StudentManagement.View);
+
+        var allowedResponse = await managementClient.GetAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/gr-projections");
+        allowedResponse.StatusCode.ShouldNotBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Require_Student_Management_Add_For_Bulk_Upload()
+    {
+        using var viewOnlyClient = CreatePermissionClient(
+            ShikshaMitraSubmodulePermissions.Students.Records_StudentManagement.View);
+        using var content = BuildBulkStudentUpload("students.csv", "FormNumber,FirstName\nFORM-IGNORED,Ignored\n");
+
+        var response = await viewOnlyClient.PostAsync("/api/students/bulk-upload", content);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Create_Direct_Registration_From_Bulk_Upload_Csv()
+    {
+        var context = await ResolveSeededDivisionContextAsync();
+        var firstName = TestDataHelper.UniqueName("BulkStudent");
+        using var content = BuildBulkStudentUpload(
+            "students.csv",
+            BuildBulkStudentUploadCsv(context, firstName, Factory.SeededDivisionId));
+
+        var response = await Client.PostAsync("/api/students/bulk-upload", content);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<Result<StudentBulkUploadResultDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.ImportedCount.ShouldBe(1);
+        body.Data.FailedCount.ShouldBe(0);
+        var studentId = body.Data.StudentIds.Single();
+
+        var detailsResponse = await Client.GetAsync(
+            $"/api/student/enrollment/registrations/{studentId}/general-details");
+        detailsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await detailsResponse.Content.ReadAsStringAsync());
+        var details = await detailsResponse.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
+        details.ShouldNotBeNull();
+        details.Data.ShouldNotBeNull();
+        details.Data.FirstName.ShouldBe(firstName);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Create_Direct_Registration_From_Bulk_Upload_Csv_With_Utf8_Bom()
+    {
+        var context = await ResolveSeededDivisionContextAsync();
+        var firstName = TestDataHelper.UniqueName("BulkStudentBom");
+        using var content = BuildBulkStudentUpload(
+            "students.csv",
+            "\uFEFF" + BuildBulkStudentUploadCsv(context, firstName, Factory.SeededDivisionId));
+
+        var response = await Client.PostAsync("/api/students/bulk-upload", content);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<Result<StudentBulkUploadResultDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.ImportedCount.ShouldBe(1);
+        body.Data.FailedCount.ShouldBe(0);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public void Should_Keep_Bulk_Upload_App_Service_Non_Remote_And_Permission_Guarded()
+    {
+        var serviceType = typeof(StudentBulkUploadAppService);
+
+        var remoteService = serviceType
+            .GetCustomAttributes(inherit: true)
+            .SingleOrDefault(attribute => attribute.GetType().Name == "RemoteServiceAttribute");
+        remoteService.ShouldNotBeNull();
+        remoteService
+            .GetType()
+            .GetProperty("IsEnabled")!
+            .GetValue(remoteService)
+            .ShouldBe(false);
+
+        var authorize = serviceType
+            .GetCustomAttributes<AuthorizeAttribute>()
+            .SingleOrDefault(attribute =>
+                attribute.Policy == ShikshaMitraSubmodulePermissions.Students.Records_StudentManagement.Add);
+        authorize.ShouldNotBeNull();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Reject_Non_Csv_Bulk_Upload()
+    {
+        using var content = BuildBulkStudentUpload("students.xlsx", "not,csv\n");
+
+        var response = await Client.PostAsync("/api/students/bulk-upload", content);
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+    }
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
@@ -77,6 +218,239 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         attendance.Classes.ShouldContain(item => item.StandardId == Factory.SeededStandardId);
         attendance.Classes.ShouldContain(item =>
             item.Divisions.Any(division => division.DivisionId == Factory.SeededDivisionId));
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Show_Upcoming_Birthday_For_Student_Outside_Recent_Activity_Window()
+    {
+        var nextBirthday = DateTimeOffset.UtcNow.Date.AddDays(1);
+        var birthday = new DateTimeOffset(
+            nextBirthday.Year - 10,
+            nextBirthday.Month,
+            nextBirthday.Day,
+            0,
+            0,
+            0,
+            TimeSpan.Zero);
+        var olderStudent = await CreateDirectRegistrationWithBirthdayAsync("BirthdayOlder", birthday);
+        await MoveRegistrationToEnrolledAsync(olderStudent.StudentId);
+        await SetStudentCreationTimeAsync(olderStudent.StudentId, DateTime.UtcNow.AddDays(-90));
+
+        var nonMatchingBirthday = birthday.AddDays(-14);
+        for (var index = 0; index < 31; index++)
+        {
+            var newerStudent = await CreateDirectRegistrationWithBirthdayAsync(
+                $"BirthdayWindow{index:00}",
+                nonMatchingBirthday);
+            await MoveRegistrationToEnrolledAsync(newerStudent.StudentId);
+        }
+
+        var response = await Client.GetAsync("/api/students/records/dashboard-summary");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var dashboard = await response.Content.ReadFromJsonAsync<StudentDashboardSummaryDto>(JsonOptions);
+        dashboard.ShouldNotBeNull();
+        dashboard.UpcomingBirthdays.ShouldContain(student => student.Name.Contains(olderStudent.FirstName));
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Calculate_Attendance_Dashboard_Percentage_From_Marked_Attendance()
+    {
+        var context = await ResolveSeededDivisionContextAsync();
+        var contextStudentA = await CreateDirectRegistrationForDivisionAsync(
+            context,
+            "RecordsAttendanceA",
+            Factory.SeededDivisionId);
+        var contextStudentB = await CreateDirectRegistrationForDivisionAsync(
+            context,
+            "RecordsAttendanceB",
+            Factory.SeededDivisionId);
+        await MoveRegistrationToEnrolledAsync(contextStudentA.StudentId);
+        await MoveRegistrationToEnrolledAsync(contextStudentB.StudentId);
+        var attendanceDate = DateTime.Today.AddDays(-3);
+
+        var markResponse = await Client.PostAsJsonAsync(
+            "/api/students/attendance/mark",
+            new MarkAttendanceInput
+            {
+                AcademicYearId = Factory.SeededAcademicYearId,
+                StandardId = context.StandardId,
+                DivisionId = Factory.SeededDivisionId,
+                Date = attendanceDate,
+                Entries =
+                {
+                    new AttendanceEntryDto
+                    {
+                        StudentId = contextStudentA.StudentId,
+                        Status = AttendanceStatus.Present,
+                        Remarks = "Dashboard percentage present"
+                    },
+                    new AttendanceEntryDto
+                    {
+                        StudentId = contextStudentB.StudentId,
+                        Status = AttendanceStatus.Absent,
+                        Remarks = "Dashboard percentage absent"
+                    }
+                }
+            },
+            JsonOptions);
+        markResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await markResponse.Content.ReadAsStringAsync());
+
+        var response = await Client.GetAsync(
+            $"/api/students/records/attendance-dashboard-summary?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var dashboard = await response.Content.ReadFromJsonAsync<StudentAttendanceDashboardSummaryDto>(JsonOptions);
+        dashboard.ShouldNotBeNull();
+        var expectedSchoolPercentage = await CalculateExpectedSchoolAttendancePercentageAsync(
+            attendanceDate,
+            attendanceDate);
+        var expectedDivisionPercentage = await CalculateExpectedDivisionAttendancePercentageAsync(
+            Factory.SeededDivisionId,
+            attendanceDate,
+            attendanceDate);
+
+        expectedSchoolPercentage.ShouldBeGreaterThan(0);
+        dashboard.SchoolAttendancePercentage.ShouldBe(expectedSchoolPercentage);
+        var divisionSummary = dashboard.Classes
+            .Single(item => item.StandardId == context.StandardId)
+            .Divisions
+            .Single(item => item.DivisionId == Factory.SeededDivisionId);
+        divisionSummary.Percentage.ShouldBe(expectedDivisionPercentage);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Filter_Attendance_Dashboard_Summary_By_Date_Range()
+    {
+        var context = await ResolveSeededDivisionContextAsync();
+        var studentA = await CreateDirectRegistrationForDivisionAsync(
+            context,
+            "RecordsRangeA",
+            Factory.SeededDivisionId);
+        var studentB = await CreateDirectRegistrationForDivisionAsync(
+            context,
+            "RecordsRangeB",
+            Factory.SeededDivisionId);
+        await MoveRegistrationToEnrolledAsync(studentA.StudentId);
+        await MoveRegistrationToEnrolledAsync(studentB.StudentId);
+        var includedDate = DateTime.Today.AddDays(-37);
+        var excludedDate = includedDate.AddDays(-1);
+
+        var includedResponse = await Client.PostAsJsonAsync(
+            "/api/students/attendance/mark",
+            new MarkAttendanceInput
+            {
+                AcademicYearId = Factory.SeededAcademicYearId,
+                StandardId = context.StandardId,
+                DivisionId = Factory.SeededDivisionId,
+                Date = includedDate,
+                Entries =
+                {
+                    new AttendanceEntryDto
+                    {
+                        StudentId = studentA.StudentId,
+                        Status = AttendanceStatus.Present,
+                        Remarks = "Range included present"
+                    },
+                    new AttendanceEntryDto
+                    {
+                        StudentId = studentB.StudentId,
+                        Status = AttendanceStatus.Absent,
+                        Remarks = "Range included absent"
+                    }
+                }
+            },
+            JsonOptions);
+        includedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await includedResponse.Content.ReadAsStringAsync());
+
+        var excludedResponse = await Client.PostAsJsonAsync(
+            "/api/students/attendance/mark",
+            new MarkAttendanceInput
+            {
+                AcademicYearId = Factory.SeededAcademicYearId,
+                StandardId = context.StandardId,
+                DivisionId = Factory.SeededDivisionId,
+                Date = excludedDate,
+                Entries =
+                {
+                    new AttendanceEntryDto
+                    {
+                        StudentId = studentA.StudentId,
+                        Status = AttendanceStatus.Absent,
+                        Remarks = "Range excluded absent"
+                    }
+                }
+            },
+            JsonOptions);
+        excludedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await excludedResponse.Content.ReadAsStringAsync());
+
+        var response = await Client.GetAsync(
+            $"/api/students/records/attendance-dashboard-summary?startDate={includedDate:yyyy-MM-dd}&endDate={includedDate:yyyy-MM-dd}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var dashboard = await response.Content.ReadFromJsonAsync<StudentAttendanceDashboardSummaryDto>(JsonOptions);
+        dashboard.ShouldNotBeNull();
+        dashboard.SchoolAttendancePercentage.ShouldBe(50);
+        var divisionSummary = dashboard.Classes
+            .Single(item => item.StandardId == context.StandardId)
+            .Divisions
+            .Single(item => item.DivisionId == Factory.SeededDivisionId);
+        divisionSummary.Percentage.ShouldBe(50);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Keep_Moved_Student_Attendance_Division_In_Dashboard_Summary()
+    {
+        var context = await ResolveSeededDivisionContextAsync();
+        var originalDivisionId = await CreateDivisionAsync(context.StandardId, "DashOriginal");
+        var currentDivisionId = await CreateDivisionAsync(context.StandardId, "DashCurrent");
+        var student = await CreateDirectRegistrationForDivisionAsync(
+            context,
+            "RecordsMovedDash",
+            originalDivisionId);
+        await MoveRegistrationToEnrolledAsync(student.StudentId, originalDivisionId);
+        var attendanceDate = DateTime.Today.AddDays(-180);
+
+        var markResponse = await Client.PostAsJsonAsync(
+            "/api/students/attendance/mark",
+            new MarkAttendanceInput
+            {
+                AcademicYearId = Factory.SeededAcademicYearId,
+                StandardId = context.StandardId,
+                DivisionId = originalDivisionId,
+                Date = attendanceDate,
+                Entries =
+                {
+                    new AttendanceEntryDto
+                    {
+                        StudentId = student.StudentId,
+                        Status = AttendanceStatus.Present,
+                        Remarks = "Moved student original division"
+                    }
+                }
+            },
+            JsonOptions);
+        markResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await markResponse.Content.ReadAsStringAsync());
+
+        await MoveStudentToDivisionAsync(student.StudentId, currentDivisionId);
+
+        var response = await Client.GetAsync(
+            $"/api/students/records/attendance-dashboard-summary?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var dashboard = await response.Content.ReadFromJsonAsync<StudentAttendanceDashboardSummaryDto>(JsonOptions);
+        dashboard.ShouldNotBeNull();
+        dashboard.SchoolAttendancePercentage.ShouldBe(100);
+        var classSummary = dashboard.Classes.Single(item => item.StandardId == context.StandardId);
+        classSummary.Percentage.ShouldBe(100);
+        classSummary.Divisions.ShouldContain(division =>
+            division.DivisionId == originalDivisionId && division.Percentage == 100);
+        classSummary.Divisions.ShouldContain(division =>
+            division.DivisionId == currentDivisionId && division.Percentage == 0);
     }
 
     [Fact]
@@ -135,16 +509,32 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         Guid standardId;
         Guid divisionId;
 
-        using (var scope = Factory.Services.CreateScope())
-        {
-            var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
-            var student = await studentRepository.GetAsync(studentDetails.StudentId);
-            academicYearId = student.AcademicYearId!.Value;
-            boardId = student.AcademicBoardId!.Value;
-            educationMediumId = student.AcademicMediumId;
-            standardId = student.StandardId!.Value;
-            divisionId = student.DivisionId!.Value;
-        }
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+			var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+			var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+			using var tenantScope = currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId));
+			using var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+			var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+			var student = query
+				.Where(s => s.Id == studentDetails.StudentId)
+				.Select(s => new
+				{
+					s.AcademicYearId,
+					s.AcademicBoardId,
+					s.AcademicMediumId,
+					s.StandardId,
+					s.DivisionId
+				})
+				.Single();
+			academicYearId = student.AcademicYearId!.Value;
+			boardId = student.AcademicBoardId!.Value;
+			educationMediumId = student.AcademicMediumId;
+			standardId = student.StandardId!.Value;
+			divisionId = student.DivisionId!.Value;
+			await uow.CompleteAsync();
+		}
 
         var url = $"/api/students/records/list/by-scope?academicYearId={academicYearId}&boardId={boardId}&educationMediumId={educationMediumId}&classIds={standardId}&divisionIds={divisionId}";
         var response = await Client.GetAsync(url);
@@ -157,7 +547,147 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         students.Any(s => s.StudentId == studentDetails.StudentId).ShouldBeTrue();
     }
 
-    private async Task MoveRegistrationToEnrolledAsync(Guid studentId)
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Return_Roll_Number_Save_Summary()
+    {
+        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollSummaryA");
+        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollSummaryB");
+        await MoveRegistrationToEnrolledAsync(first.StudentId);
+        await MoveRegistrationToEnrolledAsync(second.StudentId);
+        var firstRollNo = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 100000;
+        var secondRollNo = firstRollNo + 1;
+
+        var response = await Client.PostAsJsonAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers",
+            new List<UpdateStudentRollNumberDto>
+            {
+                new() { StudentId = first.StudentId, RollNo = firstRollNo },
+                new() { StudentId = second.StudentId, RollNo = secondRollNo },
+            },
+            JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content
+            .ReadFromJsonAsync<Result<RollNumberSaveResultDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.TotalRequested.ShouldBe(2);
+        body.Data.AppliedCount.ShouldBe(2);
+        body.Data.ConflictCount.ShouldBe(0);
+        body.Data.Results.Select(x => x.StudentId).ShouldBe(new[] { first.StudentId, second.StudentId }, ignoreOrder: true);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Reject_Duplicate_Roll_Number_Batch_Without_Partial_Save()
+    {
+        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollDupA");
+        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollDupB");
+        await MoveRegistrationToEnrolledAsync(first.StudentId);
+        await MoveRegistrationToEnrolledAsync(second.StudentId);
+        var duplicateRollNo = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 200000;
+
+        var response = await Client.PostAsJsonAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers",
+            new List<UpdateStudentRollNumberDto>
+            {
+                new() { StudentId = first.StudentId, RollNo = duplicateRollNo },
+                new() { StudentId = second.StudentId, RollNo = duplicateRollNo },
+            },
+            JsonOptions);
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        var rollNumbers = await GetRollNumbersAsync(first.StudentId, second.StudentId);
+        rollNumbers[first.StudentId].ShouldBeNull();
+        rollNumbers[second.StudentId].ShouldBeNull();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Assign_Different_Roll_Numbers_By_Academic_Term()
+    {
+        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollSemA");
+        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollSemB");
+        await MoveRegistrationToEnrolledAsync(first.StudentId);
+        await MoveRegistrationToEnrolledAsync(second.StudentId);
+        var sequenceBase = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 300000;
+        var currentTerm = await CreateAcademicTermAsync("Semester Current", sequenceBase, isCurrent: true);
+        var nextTerm = await CreateAcademicTermAsync("Semester Next", sequenceBase + 1, isCurrent: false);
+
+        var currentResponse = await Client.PostAsJsonAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={currentTerm.Id}",
+            new List<UpdateStudentRollNumberDto>
+            {
+                new() { StudentId = first.StudentId, RollNo = 11 },
+                new() { StudentId = second.StudentId, RollNo = 12 },
+            },
+            JsonOptions);
+        currentResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var nextResponse = await Client.PostAsJsonAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={nextTerm.Id}",
+            new List<UpdateStudentRollNumberDto>
+            {
+                new() { StudentId = first.StudentId, RollNo = 31 },
+                new() { StudentId = second.StudentId, RollNo = 32 },
+            },
+            JsonOptions);
+        nextResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var currentProjection = await GetRollProjectionsAsync(currentTerm.Id);
+        var nextProjection = await GetRollProjectionsAsync(nextTerm.Id);
+
+        currentProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldBe(11);
+        nextProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldBe(31);
+        currentProjection.Single(item => item.StudentId == first.StudentId).AcademicTermId.ShouldBe(currentTerm.Id);
+        nextProjection.Single(item => item.StudentId == first.StudentId).AcademicTermId.ShouldBe(nextTerm.Id);
+
+        var rollNumbers = await GetRollNumbersAsync(first.StudentId, second.StudentId);
+        rollNumbers[first.StudentId].ShouldBe(11);
+        rollNumbers[second.StudentId].ShouldBe(12);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Reject_Duplicate_Roll_Number_Per_Term_Without_Touching_Other_Terms()
+    {
+        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollTermDupA");
+        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollTermDupB");
+        await MoveRegistrationToEnrolledAsync(first.StudentId);
+        await MoveRegistrationToEnrolledAsync(second.StudentId);
+        var sequenceBase = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 400000;
+        var firstTerm = await CreateAcademicTermAsync("Duplicate Guard A", sequenceBase, isCurrent: true);
+        var secondTerm = await CreateAcademicTermAsync("Duplicate Guard B", sequenceBase + 1, isCurrent: false);
+
+        var okResponse = await Client.PostAsJsonAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={firstTerm.Id}",
+            new List<UpdateStudentRollNumberDto>
+            {
+                new() { StudentId = first.StudentId, RollNo = 41 },
+                new() { StudentId = second.StudentId, RollNo = 42 },
+            },
+            JsonOptions);
+        okResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var duplicateResponse = await Client.PostAsJsonAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={secondTerm.Id}",
+            new List<UpdateStudentRollNumberDto>
+            {
+                new() { StudentId = first.StudentId, RollNo = 51 },
+                new() { StudentId = second.StudentId, RollNo = 51 },
+            },
+            JsonOptions);
+
+        duplicateResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        var firstTermProjection = await GetRollProjectionsAsync(firstTerm.Id);
+        var secondTermProjection = await GetRollProjectionsAsync(secondTerm.Id);
+
+        firstTermProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldBe(41);
+        secondTermProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldNotBe(51);
+    }
+
+    private async Task MoveRegistrationToEnrolledAsync(Guid studentId, Guid? divisionId = null)
     {
         using var scope = Factory.Services.CreateScope();
         var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -171,12 +701,291 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
 			var student = await studentRepository.GetInquiryForUpdateAsync(studentId)
 			              ?? throw new InvalidOperationException($"Student not found: {studentId}");
 			student.MoveToAdmission();
-			student.AssignDivision(Factory.SeededDivisionId);
+			student.AssignDivision(divisionId ?? Factory.SeededDivisionId);
 			student.ApproveAdmission();
 
             await studentRepository.UpdateAsync(student);
             await uow.CompleteAsync();
         }
+    }
+
+    private async Task MoveStudentToDivisionAsync(Guid studentId, Guid divisionId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var student = await studentRepository.GetInquiryForUpdateAsync(studentId)
+			              ?? throw new InvalidOperationException($"Student not found: {studentId}");
+			student.AssignDivision(divisionId);
+
+            await studentRepository.UpdateAsync(student);
+            await uow.CompleteAsync();
+        }
+    }
+
+    private async Task<Guid> CreateDivisionAsync(Guid standardId, string namePrefix)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var divisionManager = scope.ServiceProvider.GetRequiredService<DivisionManager>();
+        var divisionRepository = scope.ServiceProvider.GetRequiredService<IDivisionRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+            var division = await divisionManager.CreateAsync(
+                standardId,
+                $"{namePrefix}-{Guid.NewGuid():N}",
+                60);
+            await divisionRepository.InsertAsync(division, autoSave: false);
+            await uow.CompleteAsync();
+            return division.Id;
+        }
+    }
+
+    private async Task<StudentGeneralDetailsDto> CreateDirectRegistrationWithBirthdayAsync(
+        string suffix,
+        DateTimeOffset dateOfBirth)
+    {
+        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto(suffix);
+        dto.DateOfBirth = dateOfBirth;
+
+        var response = await Client.PostAsJsonAsync(
+            "/api/student/enrollment/registrations/general-details",
+            dto,
+            JsonOptions);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        return body.Data;
+    }
+
+    private async Task<StudentGeneralDetailsDto> CreateDirectRegistrationForDivisionAsync(
+        SeededDivisionContext context,
+        string suffix,
+        Guid divisionId)
+    {
+        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto(suffix);
+        dto.AcademicMediumId = context.AcademicMediumId;
+        dto.StandardId = context.StandardId;
+        dto.DivisionId = divisionId;
+
+        var response = await Client.PostAsJsonAsync(
+            "/api/student/enrollment/registrations/general-details",
+            dto,
+            JsonOptions);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        return body.Data;
+    }
+
+    private async Task<SeededDivisionContext> ResolveSeededDivisionContextAsync()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var divisionRepository = scope.ServiceProvider.GetRequiredService<IDivisionRepository>();
+        var standardRepository = scope.ServiceProvider.GetRequiredService<IStandardRepository>();
+        var mediumStageRepository = scope.ServiceProvider.GetRequiredService<IEducationMediumStageRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var division = await divisionRepository.GetAsync(Factory.SeededDivisionId);
+            var standard = await standardRepository.GetAsync(division.StandardId);
+            var mediumStage = await mediumStageRepository.GetAsync(standard.EducationMediumStageId);
+            await uow.CompleteAsync();
+
+            return new SeededDivisionContext(division.StandardId, mediumStage.EducationMediumId);
+        }
+    }
+
+    private async Task SetStudentCreationTimeAsync(Guid studentId, DateTime creationTime)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var student = await studentRepository.GetInquiryForUpdateAsync(studentId)
+                          ?? throw new InvalidOperationException($"Student not found: {studentId}");
+            typeof(Student)
+                .GetProperty(nameof(Student.CreationTime))!
+                .SetValue(student, creationTime);
+
+            await studentRepository.UpdateAsync(student);
+            await uow.CompleteAsync();
+        }
+    }
+
+    private async Task<Dictionary<Guid, int?>> GetRollNumbersAsync(params Guid[] studentIds)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var ids = studentIds.ToList();
+			var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+			var result = query
+				.Where(student => ids.Contains(student.Id))
+				.ToDictionary(student => student.Id, student => student.RollNo);
+			await uow.CompleteAsync();
+            return result;
+        }
+    }
+
+    private async Task<AcademicTermDto> CreateAcademicTermAsync(string prefix, int sequence, bool isCurrent)
+    {
+        var response = await Client.PostAsJsonAsync(
+            "/api/students/records/academic-terms",
+            new CreateAcademicTermDto
+            {
+                AcademicYearId = Factory.SeededAcademicYearId,
+                Name = $"{prefix} {Guid.NewGuid():N}",
+                Sequence = sequence,
+                IsCurrent = isCurrent
+            },
+            JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<Result<AcademicTermDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        return body.Data;
+    }
+
+    private async Task<List<RollNumberProjectionDto>> GetRollProjectionsAsync(Guid academicTermId)
+    {
+        var response = await Client.GetAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-number-projections?academicTermId={academicTermId}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<Result<List<RollNumberProjectionDto>>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        return body.Data;
+    }
+
+    private async Task<decimal> CalculateExpectedSchoolAttendancePercentageAsync(
+        DateTime startDate,
+        DateTime endDate)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var attendanceEntryRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendanceEntry, Guid>>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var enrolledStudentIds = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
+                .Where(student => student.Status == StudentLifeCycleStatusEnum.Enrolled)
+                .Select(student => student.Id)
+                .ToList();
+            var statuses = (await attendanceEntryRepository.GetQueryableAsync())
+                .Where(entry => enrolledStudentIds.Contains(entry.StudentId))
+                .Where(entry => entry.AttendanceDay.Date >= startDate.Date && entry.AttendanceDay.Date <= endDate.Date)
+                .Where(entry => entry.Status == AttendanceStatus.Present || entry.Status == AttendanceStatus.Absent)
+                .Select(entry => entry.Status)
+                .ToList();
+            await uow.CompleteAsync();
+
+            return CalculateAttendancePercentage(statuses);
+        }
+    }
+
+    private async Task<decimal> CalculateExpectedDivisionAttendancePercentageAsync(
+        Guid divisionId,
+        DateTime startDate,
+        DateTime endDate)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var attendanceEntryRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendanceEntry, Guid>>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var enrolledStudentIds = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
+                .Where(student => student.Status == StudentLifeCycleStatusEnum.Enrolled)
+                .Select(student => student.Id)
+                .ToList();
+            var statuses = (await attendanceEntryRepository.GetQueryableAsync())
+                .Where(entry => enrolledStudentIds.Contains(entry.StudentId))
+                .Where(entry => entry.AttendanceDay.DivisionId == divisionId)
+                .Where(entry => entry.AttendanceDay.Date >= startDate.Date && entry.AttendanceDay.Date <= endDate.Date)
+                .Where(entry => entry.Status == AttendanceStatus.Present || entry.Status == AttendanceStatus.Absent)
+                .Select(entry => entry.Status)
+                .ToList();
+            await uow.CompleteAsync();
+
+            return CalculateAttendancePercentage(statuses);
+        }
+    }
+
+    private HttpClient CreatePermissionClient(params string[] permissions)
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Add(
+            AlwaysGrantPermissionChecker.TestPermissionsHeader,
+            permissions.Length == 0 ? "__none__" : string.Join(",", permissions));
+        return client;
+    }
+
+    private static decimal CalculateAttendancePercentage(IReadOnlyCollection<AttendanceStatus> statuses)
+    {
+        if (statuses.Count == 0)
+        {
+            return 0;
+        }
+
+        return Math.Round(statuses.Count(status => status == AttendanceStatus.Present) * 100m / statuses.Count, 2);
+    }
+
+    private sealed record SeededDivisionContext(Guid StandardId, Guid AcademicMediumId);
+
+    private static string BuildBulkStudentUploadCsv(
+        SeededDivisionContext context,
+        string firstName,
+        Guid divisionId) =>
+        string.Join(
+            Environment.NewLine,
+            "FormNumber,FirstName,LastName,DateOfBirth,Gender,ParentContactNumber,StateName,StateIsoCode,City,CountryName,CountryIsoCode,FamilyCast,EducationMediumId,StandardId,DivisionId",
+            $"{StudentEnrollmentTestHelper.UniqueFormNumber()},{firstName},Student,15-05-2010,Female,{TestDataHelper.UniquePhone()},Gujarat,GJ,Ahmedabad,India,IN,General,{context.AcademicMediumId},{context.StandardId},{divisionId}");
+
+    private static MultipartFormDataContent BuildBulkStudentUpload(string fileName, string csv)
+    {
+        var content = new MultipartFormDataContent();
+        var file = new ByteArrayContent(Encoding.UTF8.GetBytes(csv));
+        file.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+        content.Add(file, "files", fileName);
+        return content;
     }
 
     private static MultipartFormDataContent BuildPhotoUpload(string fileName, byte[] bytes)

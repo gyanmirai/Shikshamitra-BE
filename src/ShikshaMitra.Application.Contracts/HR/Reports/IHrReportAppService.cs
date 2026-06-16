@@ -9,6 +9,7 @@ public interface IHrReportAppService : IApplicationService
 {
 	Task<HrReportSourcesDto> GetSourcesAsync();
 	Task<HrReportOptionsDto> GetOptionsAsync();
+	Task<List<HrReportRecipientDto>> GetRecipientsAsync(string? filter = null, int maxResultCount = 20, string? ids = null);
 	Task<HrReportTemplateListDto> GetTemplatesAsync();
 	Task<HrReportTemplateDto> CreateTemplateAsync(HrReportTemplateRequestDto input);
 	Task<HrReportTemplateDto> UpdateTemplateAsync(Guid id, HrReportTemplateRequestDto input);

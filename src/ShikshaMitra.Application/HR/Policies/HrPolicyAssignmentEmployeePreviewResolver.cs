@@ -34,9 +34,7 @@ public class HrPolicyAssignmentEmployeePreviewResolver(
 			_ => employeeQuery.Where(_ => false)
 		};
 
-		var count = await asyncExecuter.CountAsync(query);
-		var employees = await asyncExecuter.ToListAsync(query.Take(25));
-		return new AffectedEmployeePreview(count, employees);
+		return await BuildEmployeePreviewFromQueryAsync(query);
 	}
 
 	private async Task<AffectedEmployeePreview> ResolveGroupEmployeesAsync(
@@ -93,14 +91,19 @@ public class HrPolicyAssignmentEmployeePreviewResolver(
 			.Where(x => employeeIds.Contains(x.Id))
 			.ToList();
 
-		return new AffectedEmployeePreview(affected.Count, affected.Take(25).ToList());
+		return new AffectedEmployeePreview(affected.Count, affected.Take(25).ToList(), affected.Select(x => x.Id).ToList());
 	}
 
 	private async Task<AffectedEmployeePreview> BuildEmployeePreviewFromQueryAsync(IQueryable<Employee> query)
 	{
-		var count = await asyncExecuter.CountAsync(query);
-		var employees = await asyncExecuter.ToListAsync(query.Take(25));
-		return new AffectedEmployeePreview(count, employees);
+		var employeeIds = await asyncExecuter.ToListAsync(query.Select(employee => employee.Id));
+		if (employeeIds.Count == 0)
+		{
+			return AffectedEmployeePreview.Empty;
+		}
+
+		var sample = await asyncExecuter.ToListAsync(query.Take(25));
+		return new AffectedEmployeePreview(employeeIds.Count, sample, employeeIds);
 	}
 
 	private static IQueryable<Employee> ActiveEmployeeQuery(IQueryable<Employee> query) =>

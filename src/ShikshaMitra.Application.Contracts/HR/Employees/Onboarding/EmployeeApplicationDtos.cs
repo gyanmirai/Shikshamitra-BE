@@ -86,6 +86,9 @@ public class EmployeeApplicationDto : EmployeeApplicationListItemDto
 	public EmployeeApplicationLocationInfo? State { get; set; }
 	public string? City { get; set; }
 	public string? PinCode { get; set; }
+	public EmployeeApplicationPersonalInfoDto? PersonalInfo { get; set; }
+	public EmployeeApplicationFamilyInfoDto? FamilyInfo { get; set; }
+	public EmployeeApplicationAdditionalInfoDto? AdditionalInfo { get; set; }
 	public List<EmployeeApplicationWorkExperienceDto> WorkExperiences { get; set; } = [];
 	public string? ResumeFileName { get; set; }
 	public string? ResumeContentType { get; set; }
@@ -119,9 +122,20 @@ public class PublicEmployeeApplicationDto
 public class PublicEmployeeApplicationSubmitDto
 {
 	[Required]
+	public EmployeeApplicationPersonalInfoDto PersonalInfo { get; set; } = new();
+
+	public EmployeeApplicationFamilyInfoDto? FamilyInfo { get; set; }
+	public EmployeeApplicationAdditionalInfoDto? AdditionalInfo { get; set; }
+	public List<EmployeeApplicationWorkExperienceDto> WorkExperiences { get; set; } = [];
+}
+
+public class EmployeeApplicationPersonalInfoDto
+{
+	[Required]
 	public string FirstName { get; set; } = string.Empty;
 
 	public string? MiddleName { get; set; }
+	public string? ShortName { get; set; }
 
 	[Required]
 	public string LastName { get; set; } = string.Empty;
@@ -134,8 +148,6 @@ public class PublicEmployeeApplicationSubmitDto
 	public string MobileNo { get; set; } = string.Empty;
 
 	public string? SecondaryMobileNo { get; set; }
-	public string? PositionAppliedFor { get; set; }
-	public string? DepartmentAppliedFor { get; set; }
 	public DateTime? DateOfBirth { get; set; }
 	public int? Gender { get; set; }
 	public string? Religion { get; set; }
@@ -143,16 +155,18 @@ public class PublicEmployeeApplicationSubmitDto
 	public string? FamilyCaste { get; set; }
 	public int? MaritalStatus { get; set; }
 	public int? BloodGroup { get; set; }
-	public string? QualificationSummary { get; set; }
-	public string? SkillsSummary { get; set; }
+	public bool IsTeaching { get; set; } = true;
+	public string? Department { get; set; }
+	public string? Designation { get; set; }
+	public string? Qualification { get; set; }
+	public string? IdentificationMark1 { get; set; }
 	public string? Address1 { get; set; }
 	public string? Address2 { get; set; }
 	public string? Address3 { get; set; }
 	public EmployeeApplicationLocationInfo? Country { get; set; }
 	public EmployeeApplicationLocationInfo? State { get; set; }
 	public string? City { get; set; }
-	public string? PinCode { get; set; }
-	public List<EmployeeApplicationWorkExperienceDto> WorkExperiences { get; set; } = [];
+	public string? Pincode { get; set; }
 }
 
 public class FinalizeEmployeeApplicationDto
@@ -160,6 +174,8 @@ public class FinalizeEmployeeApplicationDto
 	[Required]
 	public CreateEmployeePersonalInfoDto PersonalInfo { get; set; } = new();
 
+	public EmployeeApplicationFamilyInfoDto? FamilyInfo { get; set; }
+	public EmployeeApplicationAdditionalInfoDto? AdditionalInfo { get; set; }
 	public List<EmployeeApplicationWorkExperienceDto> WorkExperiences { get; set; } = [];
 	public bool UseSubmittedPhoto { get; set; } = true;
 	public bool AttachResumeAsDocument { get; set; } = true;
@@ -190,6 +206,35 @@ public class EmployeeApplicationLocationInfo
 {
 	public string Name { get; set; } = string.Empty;
 	public string IsoCode { get; set; } = string.Empty;
+}
+
+public class EmployeeApplicationFamilyInfoDto
+{
+	public EmployeeApplicationFamilyMemberDto? FatherDetails { get; set; }
+	public EmployeeApplicationFamilyMemberDto? MotherDetails { get; set; }
+	public EmployeeApplicationFamilyMemberDto? SpouseDetails { get; set; }
+}
+
+public class EmployeeApplicationFamilyMemberDto
+{
+	public string? Name { get; set; }
+	public string? Occupation { get; set; }
+	public string? MobileNo { get; set; }
+	public string? Address1 { get; set; }
+	public string? Address2 { get; set; }
+	public string? Address3 { get; set; }
+	public EmployeeApplicationLocationInfo? Country { get; set; }
+	public EmployeeApplicationLocationInfo? State { get; set; }
+	public string? City { get; set; }
+	public string? Pincode { get; set; }
+}
+
+public class EmployeeApplicationAdditionalInfoDto
+{
+	public bool PersonWithDisability { get; set; }
+	public string? SecondLanguage { get; set; }
+	public bool IsLibraryMember { get; set; }
+	public bool IsTransportMember { get; set; }
 }
 
 public class EmployeeApplicationWorkExperienceDto

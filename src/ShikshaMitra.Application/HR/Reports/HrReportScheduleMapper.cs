@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text.Json;
 
 namespace ShikshaMitra.HR.Reports;
@@ -46,7 +47,7 @@ internal static class HrReportScheduleMapper
 		Frequency = schedule.Frequency,
 		DeliveryMode = schedule.DeliveryMode,
 		Status = schedule.Status,
-		RecipientUserIds = [.. schedule.GetRecipientUserIds()],
+		RecipientUserIds = [.. schedule.GetRecipientUserIds().Where(userId => userId != schedule.OwnerUserId)],
 		Definition = DeserializeDefinition(schedule),
 		NextRunAt = schedule.NextRunAt,
 		LastRunAt = schedule.LastRunAt,

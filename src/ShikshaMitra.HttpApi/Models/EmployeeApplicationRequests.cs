@@ -24,6 +24,8 @@ public class EmployeeApplicationFinalizeRequest
 	[Required]
 	public PersonalInfoRequest PersonalInfo { get; set; } = new();
 
+	public EmployeeApplicationFamilyInfoDto? FamilyInfo { get; set; }
+	public EmployeeApplicationAdditionalInfoDto? AdditionalInfo { get; set; }
 	public List<EmployeeApplicationWorkExperienceDto> WorkExperiences { get; set; } = [];
 	public bool UseSubmittedPhoto { get; set; } = true;
 	public bool AttachResumeAsDocument { get; set; } = true;

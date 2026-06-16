@@ -38,6 +38,11 @@ public class StudentPreviousSchoolDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? LastClassAttended { get; private set; }
 
 	/// <summary>
+	/// Previous school's index number
+	/// </summary>
+	public string? SchoolIndexNumber { get; private set; }
+
+	/// <summary>
 	/// Transfer Certificate (TC) number
 	/// </summary>
 	public string? TCNumber { get; private set; }
@@ -89,6 +94,7 @@ public class StudentPreviousSchoolDetail : FullAuditedEntity<Guid>, IMultiTenant
 		string? board,
 		string? medium,
 		string? lastClassAttended,
+		string? schoolIndexNumber,
 		string? tcNumber,
 		DateTimeOffset? dateOfLeaving,
 		decimal? percentageObtained,
@@ -101,6 +107,7 @@ public class StudentPreviousSchoolDetail : FullAuditedEntity<Guid>, IMultiTenant
 		Board = board;
 		Medium = medium;
 		LastClassAttended = lastClassAttended;
+		SchoolIndexNumber = schoolIndexNumber;
 		TCNumber = tcNumber;
 		DateOfLeaving = dateOfLeaving;
 		PercentageObtained = percentageObtained;

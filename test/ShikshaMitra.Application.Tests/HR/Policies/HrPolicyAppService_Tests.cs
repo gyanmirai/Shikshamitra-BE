@@ -3112,6 +3112,177 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		effective.ResolutionSteps.Single(x => x.AssignmentId == laterAssignmentId).SkipReason.ShouldBe("winner");
 	}
 
+	[Fact]
+	public async Task EffectivePolicyResolution_Should_Use_Employee_Override_Over_Group_Assignment()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var group = await CreateRoleGroupAsync(context.AcademicYearId, employee.RoleId, "Employee Override Winner Role");
+		var groupPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Group Candidate Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "total-month-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+		var employeePayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Employee Override Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "manual-days",
+			ManualDays = 22,
+			SaturdayWorkPolicy = "full-day"
+		});
+		var groupAssignment = BuildAssignment(
+			context,
+			"group",
+			group.Id.ToString("D"),
+			group.Name,
+			effectiveFrom: new DateTime(2026, 4, 1));
+		groupAssignment.PayrollPolicyId = groupPayroll.Id;
+		groupAssignment.Priority = 1000;
+		var createdGroupAssignment = await CreateAssignmentWithImpactTokenAsync(groupAssignment);
+		var employeeAssignment = await UpsertEmployeeOverrideWithImpactTokenAsync(new UpsertEmployeePolicyOverrideDto
+		{
+			EmployeeId = employee.Id,
+			AcademicYearId = context.AcademicYearId,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			PayrollPolicyId = employeePayroll.Id,
+			LeavePolicyId = context.LeavePolicy.Id,
+			EffectiveFrom = new DateTime(2026, 5, 1),
+			AssignmentReason = "Employee override should beat matching group"
+		});
+
+		var effective = await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 5, 15));
+
+		effective.PolicySource.ShouldBe("employee");
+		effective.MatchedAssignmentId.ShouldBe(employeeAssignment.Id);
+		effective.MatchedTargetType.ShouldBe("employee");
+		effective.PayrollPolicy.Id.ShouldBe(employeePayroll.Id);
+		effective.ResolutionSteps.Single(x => x.AssignmentId == employeeAssignment.Id).SkipReason.ShouldBe("winner");
+		effective.ResolutionSteps.Single(x => x.AssignmentId == createdGroupAssignment.Id).SkipReason.ShouldBe("lower_specificity");
+	}
+
+	[Fact]
+	public async Task EffectivePolicyResolution_Should_Fall_Back_To_Group_Assignment_After_Employee_Override_Expires()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var group = await CreateRoleGroupAsync(context.AcademicYearId, employee.RoleId, "Expired Override Fallback Role");
+		var groupPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Expired Override Group Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "total-month-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+		var overridePayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Expiring Employee Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "manual-days",
+			ManualDays = 21,
+			SaturdayWorkPolicy = "full-day"
+		});
+		var groupAssignment = BuildAssignment(
+			context,
+			"group",
+			group.Id.ToString("D"),
+			group.Name,
+			effectiveFrom: new DateTime(2026, 4, 1));
+		groupAssignment.PayrollPolicyId = groupPayroll.Id;
+		var createdGroupAssignment = await CreateAssignmentWithImpactTokenAsync(groupAssignment);
+		var employeeAssignment = await UpsertEmployeeOverrideWithImpactTokenAsync(new UpsertEmployeePolicyOverrideDto
+		{
+			EmployeeId = employee.Id,
+			AcademicYearId = context.AcademicYearId,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			PayrollPolicyId = overridePayroll.Id,
+			LeavePolicyId = context.LeavePolicy.Id,
+			EffectiveFrom = new DateTime(2026, 5, 1),
+			EffectiveTo = new DateTime(2026, 5, 31),
+			AssignmentReason = "Temporary employee override"
+		});
+
+		var inOverrideWindow = await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 5, 15));
+		var afterOverrideExpiry = await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 6, 1));
+
+		inOverrideWindow.PolicySource.ShouldBe("employee");
+		inOverrideWindow.MatchedAssignmentId.ShouldBe(employeeAssignment.Id);
+		inOverrideWindow.PayrollPolicy.Id.ShouldBe(overridePayroll.Id);
+		afterOverrideExpiry.PolicySource.ShouldBe("group");
+		afterOverrideExpiry.MatchedAssignmentId.ShouldBe(createdGroupAssignment.Id);
+		afterOverrideExpiry.PayrollPolicy.Id.ShouldBe(groupPayroll.Id);
+	}
+
+	[Fact]
+	public async Task EffectivePolicyResolution_Should_Use_Higher_Priority_Group_Assignment()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var lowerGroup = await CreateRoleGroupAsync(context.AcademicYearId, employee.RoleId, "Lower Priority Role");
+		var higherGroup = await CreateRoleGroupAsync(context.AcademicYearId, employee.RoleId, "Higher Priority Role");
+		var lowerPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Lower Priority Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "total-month-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+		var higherPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Higher Priority Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "manual-days",
+			ManualDays = 23,
+			SaturdayWorkPolicy = "full-day"
+		});
+		var lowerAssignment = BuildAssignment(
+			context,
+			"group",
+			lowerGroup.Id.ToString("D"),
+			lowerGroup.Name,
+			effectiveFrom: new DateTime(2026, 4, 1));
+		lowerAssignment.PayrollPolicyId = lowerPayroll.Id;
+		lowerAssignment.Priority = 25;
+		var createdLowerAssignment = await CreateAssignmentWithImpactTokenAsync(lowerAssignment);
+		var higherAssignment = BuildAssignment(
+			context,
+			"group",
+			higherGroup.Id.ToString("D"),
+			higherGroup.Name,
+			effectiveFrom: new DateTime(2026, 4, 1));
+		higherAssignment.PayrollPolicyId = higherPayroll.Id;
+		higherAssignment.Priority = 250;
+		var createdHigherAssignment = await CreateAssignmentWithImpactTokenAsync(higherAssignment);
+
+		var effective = await _assignments.GetEffectivePoliciesAsync(employee.Id, new DateTime(2026, 5, 1));
+
+		effective.PolicySource.ShouldBe("group");
+		effective.MatchedAssignmentId.ShouldBe(createdHigherAssignment.Id);
+		effective.PayrollPolicy.Id.ShouldBe(higherPayroll.Id);
+		effective.ResolutionSteps.Single(x => x.AssignmentId == createdHigherAssignment.Id).SkipReason.ShouldBe("winner");
+		effective.ResolutionSteps.Single(x => x.AssignmentId == createdLowerAssignment.Id).SkipReason.ShouldBe("lower_priority");
+	}
+
 	[Theory]
 	[InlineData("employee", "6d2f1f76-7dfa-49ed-9baf-378913cd94e1")]
 	[InlineData("group", "bf68f1bb-f0e6-44a4-ab83-b79ad85eeb87")]
@@ -3195,6 +3366,51 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
+	public async Task EmployeeOverride_Upsert_Should_Accept_Upsert_Preview_Token_For_New_Override()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var input = new UpsertEmployeePolicyOverrideDto
+		{
+			EmployeeId = employee.Id,
+			AcademicYearId = context.AcademicYearId,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			PayrollPolicyId = context.PayrollPolicy.Id,
+			LeavePolicyId = context.LeavePolicy.Id,
+			EffectiveFrom = new DateTime(2026, 5, 1),
+			AssignmentReason = "New employee override with upsert preview token"
+		};
+		var preview = await _assignments.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
+		{
+			Action = HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction,
+			Assignment = new CreateUpdateHrPolicyAssignmentDto
+			{
+				AcademicYearId = input.AcademicYearId,
+				TargetType = "employee",
+				TargetKey = employee.Id.ToString("D"),
+				TargetDisplayName = employee.FullName,
+				AttendancePolicyId = input.AttendancePolicyId,
+				PayrollPolicyId = input.PayrollPolicyId,
+				LeavePolicyId = input.LeavePolicyId,
+				EffectiveFrom = input.EffectiveFrom,
+				EffectiveTo = input.EffectiveTo,
+				IsActive = true,
+				Priority = 100,
+				AssignmentReason = input.AssignmentReason
+			}
+		});
+		preview.RequiresConfirmation.ShouldBeTrue();
+		preview.ConfirmationToken.ShouldNotBeNullOrWhiteSpace();
+		input.ConfirmationToken = preview.ConfirmationToken;
+
+		var result = await _assignments.UpsertEmployeeOverrideAsync(input);
+
+		result.TargetKey.ShouldBe(employee.Id.ToString("D").ToLowerInvariant());
+		result.PayrollPolicyId.ShouldBe(context.PayrollPolicy.Id);
+		result.EffectiveFrom.ShouldBe(new DateTime(2026, 5, 1));
+	}
+
+	[Fact]
 	public async Task EmployeeOverride_Preview_Should_Resolve_Existing_Assignment_When_Id_Is_Missing()
 	{
 		var context = await CreatePolicyContextAsync();
@@ -3241,6 +3457,235 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		preview.BlockingWarnings.ShouldNotContain(x => x.Code == HRErrorCodes.HrPolicyAssignmentOverlap);
 		preview.RequiresConfirmation.ShouldBeTrue();
 		preview.ConfirmationToken.ShouldNotBeNullOrWhiteSpace();
+	}
+
+	[Fact]
+	public async Task GroupAssignment_Preview_Should_Block_When_Effective_Range_Overlaps_Locked_Payroll()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var group = await CreateRoleGroupAsync(context.AcademicYearId, employee.RoleId, "Locked Month Group Override");
+		var replacementPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Locked Month Group Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "total-month-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+		var snapshotRepository = GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
+		await snapshotRepository.InsertAsync(new PayrollRunItemSnapshot(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			"2026-05",
+			employee.Id)
+		{
+			PayrollPolicyId = context.PayrollPolicy.Id,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			IsLocked = true
+		}, autoSave: true);
+		var assignment = BuildAssignment(
+			context,
+			"group",
+			group.Id.ToString("D"),
+			group.Name,
+			effectiveFrom: new DateTime(2026, 5, 15));
+		assignment.PayrollPolicyId = replacementPayroll.Id;
+
+		var preview = await _assignments.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
+		{
+			Action = "create",
+			Assignment = assignment
+		});
+
+		preview.AffectedEmployeeCount.ShouldBe(1);
+		preview.LockedPayrollMonths.Select(x => x.Label).ShouldContain("2026-05");
+		preview.BlockingWarnings.ShouldContain(x => x.Code == HRErrorCodes.LockedPayrollImpact);
+		preview.RequiresConfirmation.ShouldBeFalse();
+		preview.ConfirmationToken.ShouldBeNull();
+		var ex = await Should.ThrowAsync<BusinessException>(() => _assignments.CreateAsync(assignment));
+		ex.Code.ShouldBe(HRErrorCodes.HrPolicyImpactBlocking);
+	}
+
+	[Fact]
+	public async Task GroupAssignment_Update_Should_Block_When_Effective_Range_Overlaps_LockedPayroll()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var group = await CreateRoleGroupAsync(context.AcademicYearId, employee.RoleId, "Locked Update Group Override");
+		var existingAssignment = BuildAssignment(
+			context,
+			"group",
+			group.Id.ToString("D"),
+			group.Name,
+			effectiveFrom: new DateTime(2026, 4, 1));
+		var createdAssignment = await CreateAssignmentWithImpactTokenAsync(existingAssignment);
+		var replacementPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Locked Update Replacement Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "manual-days",
+			ManualDays = 24,
+			SaturdayWorkPolicy = "full-day"
+		});
+		var snapshotRepository = GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
+		await snapshotRepository.InsertAsync(new PayrollRunItemSnapshot(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			"2026-05",
+			employee.Id)
+		{
+			PayrollPolicyId = context.PayrollPolicy.Id,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			IsLocked = true
+		}, autoSave: true);
+		var update = BuildAssignment(
+			context,
+			"group",
+			group.Id.ToString("D"),
+			group.Name,
+			effectiveFrom: new DateTime(2026, 5, 15));
+		update.PayrollPolicyId = replacementPayroll.Id;
+		update.AssignmentReason = "Locked month group assignment update regression";
+
+		var preview = await _assignments.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
+		{
+			Action = "update",
+			AssignmentId = createdAssignment.Id,
+			Assignment = update
+		});
+
+		preview.AffectedEmployeeCount.ShouldBe(1);
+		preview.LockedPayrollMonths.Select(x => x.Label).ShouldContain("2026-05");
+		preview.BlockingWarnings.ShouldContain(x => x.Code == HRErrorCodes.LockedPayrollImpact);
+		preview.RequiresConfirmation.ShouldBeFalse();
+		preview.ConfirmationToken.ShouldBeNull();
+		var ex = await Should.ThrowAsync<BusinessException>(() => _assignments.UpdateAsync(createdAssignment.Id, update));
+		ex.Code.ShouldBe(HRErrorCodes.HrPolicyImpactBlocking);
+		(await _assignments.GetAsync(createdAssignment.Id)).PayrollPolicyId.ShouldBe(context.PayrollPolicy.Id);
+	}
+
+	[Fact]
+	public async Task GroupAssignment_Update_Should_Allow_LeavePolicy_Only_Repair_When_LockedPayrollExists()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var group = await CreateRoleGroupAsync(context.AcademicYearId, employee.RoleId, "Locked Leave Repair Group");
+		var assignmentRepository = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var existingAssignment = await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			context.AcademicYearId,
+			HrPolicyAssignmentTargetType.Group,
+			group.Id.ToString("D").ToLowerInvariant(),
+			group.Name,
+			context.AttendancePolicy.Id,
+			context.PayrollPolicy.Id,
+			null,
+			new DateTime(2026, 4, 1),
+			null,
+			true,
+			10,
+			"Legacy seeded group assignment without leave policy"), autoSave: true);
+		var snapshotRepository = GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
+		await snapshotRepository.InsertAsync(new PayrollRunItemSnapshot(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			"2026-05",
+			employee.Id)
+		{
+			PayrollPolicyId = context.PayrollPolicy.Id,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			IsLocked = true
+		}, autoSave: true);
+		var update = BuildAssignment(
+			context,
+			"group",
+			group.Id.ToString("D"),
+			group.Name,
+			effectiveFrom: new DateTime(2026, 4, 1));
+		update.Priority = existingAssignment.Priority;
+		update.AssignmentReason = existingAssignment.AssignmentReason;
+
+		var preview = await _assignments.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
+		{
+			Action = "update",
+			AssignmentId = existingAssignment.Id,
+			Assignment = update
+		});
+
+		preview.AffectedEmployeeCount.ShouldBe(1);
+		preview.LockedPayrollMonths.ShouldBeEmpty();
+		preview.BlockingWarnings.ShouldNotContain(x => x.Code == HRErrorCodes.LockedPayrollImpact);
+		preview.RequiresConfirmation.ShouldBeTrue();
+		preview.ConfirmationToken.ShouldNotBeNullOrWhiteSpace();
+		update.ConfirmationToken = preview.ConfirmationToken;
+		var repaired = await _assignments.UpdateAsync(existingAssignment.Id, update);
+		repaired.LeavePolicyId.ShouldBe(context.LeavePolicy.Id);
+		repaired.PayrollPolicyId.ShouldBe(context.PayrollPolicy.Id);
+		repaired.AttendancePolicyId.ShouldBe(context.AttendancePolicy.Id);
+	}
+
+	[Fact]
+	public async Task EmployeeOverride_Preview_Should_Block_When_Effective_Range_Overlaps_Locked_Payroll()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var replacementPayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Locked Month Override Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "total-month-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+		var snapshotRepository = GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
+		await snapshotRepository.InsertAsync(new PayrollRunItemSnapshot(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			"2026-05",
+			employee.Id)
+		{
+			PayrollPolicyId = context.PayrollPolicy.Id,
+			AttendancePolicyId = context.AttendancePolicy.Id,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			IsLocked = true
+		}, autoSave: true);
+
+		var preview = await _assignments.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
+		{
+			Action = HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction,
+			Assignment = new CreateUpdateHrPolicyAssignmentDto
+			{
+				AcademicYearId = context.AcademicYearId,
+				TargetType = "employee",
+				TargetKey = employee.Id.ToString("D"),
+				TargetDisplayName = employee.FullName,
+				AttendancePolicyId = context.AttendancePolicy.Id,
+				PayrollPolicyId = replacementPayroll.Id,
+				LeavePolicyId = context.LeavePolicy.Id,
+				EffectiveFrom = new DateTime(2026, 5, 15),
+				EffectiveTo = null,
+				IsActive = true,
+				Priority = 100,
+				AssignmentReason = "Locked month employee override regression"
+			}
+		});
+
+		preview.LockedPayrollMonths.Select(x => x.Label).ShouldContain("2026-05");
+		preview.BlockingWarnings.ShouldContain(x => x.Code == HRErrorCodes.LockedPayrollImpact);
+		preview.RequiresConfirmation.ShouldBeFalse();
+		preview.ConfirmationToken.ShouldBeNull();
 	}
 
 	[Fact]
@@ -5172,7 +5617,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
 		var preview = await _assignments.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
 		{
-			Action = assignmentId.HasValue ? HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction : "create",
+			Action = HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction,
 			AssignmentId = assignmentId,
 			Assignment = new CreateUpdateHrPolicyAssignmentDto
 			{

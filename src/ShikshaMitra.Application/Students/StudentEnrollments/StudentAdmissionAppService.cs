@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Admissions;
 using ShikshaMitra.Students.Enrollments.Admissions;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.TenantSettings.Divisions;
 using System;
 using System.Collections.Generic;
@@ -20,6 +21,8 @@ using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.Students.StudentEnrollments.Managers;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.Library.Members;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 
 namespace ShikshaMitra.Students.StudentEnrollments;
 
@@ -29,14 +32,15 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 [Authorize]
 [RemoteService(false)]
 public class StudentAdmissionAppService(
-	IRepository<Student, Guid> studentRepository,
+	IStudentRepository studentRepository,
 	IRepository<Division, Guid> divisionRepository,
 	IdentityUserManager userManager,
 	IGuidGenerator guidGenerator,
 	IStudentEmailService studentEmailService,
 	AdmissionManager admissionManager,
 	IUserScopeAccessService userScopeAccessService,
-	StudentScopeAccessService studentScopeAccessService) : ApplicationService, IStudentAdmissionAppService
+	StudentScopeAccessService studentScopeAccessService,
+	ILibraryMemberAppService libraryMemberAppService) : ApplicationService, IStudentAdmissionAppService
 {
 	/// <summary>
 	/// Gets a paginated list of students in admission stage with filters
@@ -44,7 +48,7 @@ public class StudentAdmissionAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.View)]
 	public async Task<PagedResultDto<StudentDto>> GetListAsync(GetStudentAdmissionsInput input)
 	{
-		var query = await studentRepository.GetQueryableAsync();
+		var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
 
 		if (input.ApprovalStatus == StudentEnrollmentApprovalState.Approved)
 		{
@@ -101,16 +105,86 @@ public class StudentAdmissionAppService(
 		// Get total count
 		var totalCount = await studentRepository.AsyncExecuter.CountAsync(query);
 
-		// Apply sorting and paging
-		query = query.OrderByDescending(s => s.CreationTime)
+		var registrationProgressDenominator = Math.Max(1, Enum.GetValues<StudentRegistrationStateEnum>().Length - 1);
+
+		// Apply sorting, paging, and a direct projection to avoid materializing the full student aggregate graph.
+		var pageQuery = query.OrderByDescending(s => s.CreationTime)
 			.PageBy(input.SkipCount, input.MaxResultCount);
 
-		// Execute query and project to DTO
-		var students = await AsyncExecuter.ToListAsync(
-			query
-		);
+		var studentDtos = await AsyncExecuter.ToListAsync(pageQuery.Select(s => new StudentDto
+		{
+			StudentId = s.Id,
+			InquiryNo = s.AdditionalDetail != null ? s.AdditionalDetail.InquiryNo : string.Empty,
+			FormNo = s.AdditionalDetail != null ? s.AdditionalDetail.RegistrationFormNo : null,
+			StudentName = ((s.FirstName ?? string.Empty) + " " + (s.MiddleName ?? string.Empty) + " " + (s.LastName ?? string.Empty)).Trim(),
+			FirstName = s.FirstName,
+			MiddleName = s.MiddleName,
+			LastName = s.LastName,
+			AcademicYearId = s.AcademicYearId,
+			AcademicYearName = s.AcademicYear != null ? s.AcademicYear.Name : null,
+			AcademicBoardId = s.AcademicBoardId,
+			AcademicBoardName = s.AcademicBoard == null
+				? null
+				: s.AcademicBoard.Type == EducationBoardType.CBSE
+					? "CBSE"
+					: "GSEB",
+			AcademicMediumId = s.AcademicMediumId,
+			AcademicMediumName = s.AcademicMedium != null ? s.AcademicMedium.Name : null,
+			StandardId = s.StandardId ?? Guid.Empty,
+			Standard = s.Standard != null ? s.Standard.Name : string.Empty,
+			DivisionId = s.DivisionId,
+			Division = s.Division != null ? s.Division.Name : null,
+			DateOfBirth = s.AdditionalDetail != null ? s.AdditionalDetail.DateOfBirth : null,
+			DateOfInquiry = s.AdditionalDetail != null ? s.AdditionalDetail.DateOfInquiry : null,
+			Gender = s.AdditionalDetail != null ? s.AdditionalDetail.Gender : null,
+			RollNo = s.RollNo,
+			GrNo = s.GrNo,
+			Category = s.AdditionalDetail != null ? s.AdditionalDetail.Category : Category.General,
+			IsLibraryMember = s.AdditionalDetail != null && s.AdditionalDetail.IsLibraryMember == true,
+			IsTransportMember = s.AdditionalDetail != null && s.AdditionalDetail.IsTransportMember == true,
+			Address1 = s.ContactDetail != null ? s.ContactDetail.Address1 : null,
+			Address2 = s.ContactDetail != null ? s.ContactDetail.Address2 : null,
+			Address3 = s.ContactDetail != null ? s.ContactDetail.Address3 : null,
+			City = s.ContactDetail != null ? s.ContactDetail.City : null,
+			State = s.ContactDetail != null ? s.ContactDetail.State : null,
+			Country = s.ContactDetail != null ? s.ContactDetail.Country : null,
+			PinCode = s.ContactDetail != null ? s.ContactDetail.Pincode : null,
+			PrimaryContactNo = s.ContactDetail != null ? s.ContactDetail.PrimaryContactNo : null,
+			SecondaryContactNo = s.ContactDetail != null ? s.ContactDetail.SecondaryContactNo : null,
+			Email = s.ContactDetail != null ? s.ContactDetail.Email : null,
+			PreviousSchool = s.AdditionalDetail != null ? s.AdditionalDetail.PreviousSchool : null,
+			InquiryPreferenceId = s.AdditionalDetail != null ? s.AdditionalDetail.InquiryPreferenceId : null,
+			InquiryPreference = s.AdditionalDetail != null && s.AdditionalDetail.InquiryPreference != null
+				? s.AdditionalDetail.InquiryPreference.PreferenceName
+				: null,
+			NextReminderDate = s.Notes
+				.OrderByDescending(note => note.CreationTime)
+				.Select(note => note.NextReminderDate)
+				.FirstOrDefault(),
+			InquiryStatus = s.Notes
+				.OrderByDescending(note => note.CreationTime)
+				.Select(note => note.Status)
+				.FirstOrDefault(),
+			Progress = s.AdditionalDetail != null
+				? ((double)(int)s.AdditionalDetail.StudentRegistrationState / registrationProgressDenominator) * 100
+				: 0,
+			IsFeeStructureAssigned = s.FeeStructureId.HasValue,
+			HasPhoto = !string.IsNullOrWhiteSpace(s.PhotoBlobName),
+			PhotoUrl = s.PhotoBlobName
+		}));
 
-		var studentDtos = ObjectMapper.Map<List<Student>, List<StudentDto>>(students);
+		foreach (var dto in studentDtos)
+		{
+			dto.Address = string.Join(", ", new[]
+			{
+				dto.Address1,
+				dto.Address2,
+				dto.Address3,
+				dto.City,
+				dto.State?.Name,
+				dto.Country?.Name
+			}.Where(x => !string.IsNullOrWhiteSpace(x)));
+		}
 
 		return new PagedResultDto<StudentDto>(totalCount, studentDtos);
 	}
@@ -156,9 +230,8 @@ public class StudentAdmissionAppService(
 
 			try
 			{
-				// Get student with contact details for account creation and email
-				var queryable = await studentRepository.WithDetailsAsync(x => x.ContactDetail, x => x.FamilyDetail);
-				var student = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(x => x.Id == item.StudentId));
+				// Load only the aggregate sections needed for approval/account creation.
+				var student = await studentRepository.GetInquiryForUpdateAsync(item.StudentId);
 
 				if (student == null)
 				{
@@ -178,6 +251,8 @@ public class StudentAdmissionAppService(
 
 					// Create single parent account
 					await CreateParentAccountAsync(student);
+
+					await SyncAdmissionMembershipsAsync(student);
 
 					itemResult.NewStatus = StudentEnrollmentApprovalState.Approved.ToString();
 					itemResult.Message = "Admission approved successfully. Student and parent accounts created and welcome emails sent.";
@@ -226,6 +301,21 @@ public class StudentAdmissionAppService(
 		}
 
 		return result;
+	}
+
+	private async Task SyncAdmissionMembershipsAsync(Student student)
+	{
+		if (student.AdditionalDetail?.IsLibraryMember == true)
+		{
+			await libraryMemberAppService.HandleLibraryMemberAsync(student.Id, isActive: true);
+		}
+
+		if (student.AdditionalDetail?.IsTransportMember == true)
+		{
+			Logger.LogInformation(
+				"Transport membership flag preserved for student {StudentId}; transport membership workflow is not available yet.",
+				student.Id);
+		}
 	}
 
 	private async Task CreateStudentUserAndSendEmailAsync(Student student)

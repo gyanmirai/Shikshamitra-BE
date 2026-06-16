@@ -1994,6 +1994,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("LectureSlotGroupId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("SlotType")
                         .HasColumnType("integer");
 
@@ -2003,6 +2006,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("LectureSlotGroupId");
+
+                    b.HasIndex("RoomId");
 
                     b.ToTable("AppLectureSlotTimeSlots", (string)null);
                 });
@@ -11637,6 +11642,86 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppSeedExecutionMarkers", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.AcademicTerm", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicYearId");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "IsCurrent");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("AppAcademicTerms", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>
                 {
                     b.Property<Guid>("Id")
@@ -12511,6 +12596,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
+
+                    b.Property<string>("DisabilityDetails")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("EmergencyContactNo")
                         .HasColumnType("text");
@@ -13604,6 +13693,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("SchoolIndexNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("SchoolName")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
@@ -13619,6 +13712,85 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("StudentPreviousSchoolDetails", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentRollNumberAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicTermId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid>("DivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int?>("RollNo")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicTermId");
+
+                    b.HasIndex("DivisionId");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("TenantId", "AcademicTermId", "StudentId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "AcademicTermId", "DivisionId", "RollNo");
+
+                    b.ToTable("AppStudentRollNumberAssignments", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentStatusHistory", b =>
@@ -16654,6 +16826,11 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("LectureSlotGroupId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots.WeeklyLectureSlotSubject", b =>
@@ -17387,7 +17564,453 @@ namespace ShikshaMitra.Migrations
                                 .HasForeignKey("EmployeeApplicationId");
                         });
 
+                    b.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationAdditionalInfoSnapshot", "AdditionalInfo", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeApplicationId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<bool>("IsLibraryMember")
+                                .HasColumnType("boolean");
+
+                            b1.Property<bool>("IsTransportMember")
+                                .HasColumnType("boolean");
+
+                            b1.Property<bool>("PersonWithDisability")
+                                .HasColumnType("boolean");
+
+                            b1.Property<string>("SecondLanguage")
+                                .HasColumnType("text");
+
+                            b1.HasKey("EmployeeApplicationId");
+
+                            b1.ToTable("AppEmployeeApplications");
+
+                            b1.ToJson("AdditionalInfo");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeApplicationId");
+                        });
+
+                    b.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationFamilyInfoSnapshot", "FamilyInfo", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeApplicationId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("EmployeeApplicationId");
+
+                            b1.ToTable("AppEmployeeApplications");
+
+                            b1.ToJson("FamilyInfo");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeApplicationId");
+
+                            b1.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationFamilyMemberSnapshot", "FatherDetails", b2 =>
+                                {
+                                    b2.Property<Guid>("EmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("Address1")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Address2")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Address3")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("City")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("MobileNo")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Name")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Occupation")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Pincode")
+                                        .HasColumnType("text");
+
+                                    b2.HasKey("EmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                    b2.ToTable("AppEmployeeApplications");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("EmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                    b2.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationLocationSnapshot", "Country", b3 =>
+                                        {
+                                            b3.Property<Guid>("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId")
+                                                .HasColumnType("uuid")
+                                                .HasColumnName("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFami~");
+
+                                            b3.Property<string>("IsoCode")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.Property<string>("Name")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.HasKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                            b3.ToTable("AppEmployeeApplications");
+
+                                            b3.WithOwner()
+                                                .HasForeignKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+                                        });
+
+                                    b2.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationLocationSnapshot", "State", b3 =>
+                                        {
+                                            b3.Property<Guid>("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId")
+                                                .HasColumnType("uuid")
+                                                .HasColumnName("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFami~");
+
+                                            b3.Property<string>("IsoCode")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.Property<string>("Name")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.HasKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                            b3.ToTable("AppEmployeeApplications");
+
+                                            b3.WithOwner()
+                                                .HasForeignKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+                                        });
+
+                                    b2.Navigation("Country");
+
+                                    b2.Navigation("State");
+                                });
+
+                            b1.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationFamilyMemberSnapshot", "MotherDetails", b2 =>
+                                {
+                                    b2.Property<Guid>("EmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("Address1")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Address2")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Address3")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("City")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("MobileNo")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Name")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Occupation")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Pincode")
+                                        .HasColumnType("text");
+
+                                    b2.HasKey("EmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                    b2.ToTable("AppEmployeeApplications");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("EmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                    b2.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationLocationSnapshot", "Country", b3 =>
+                                        {
+                                            b3.Property<Guid>("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId")
+                                                .HasColumnType("uuid")
+                                                .HasColumnName("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFami~");
+
+                                            b3.Property<string>("IsoCode")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.Property<string>("Name")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.HasKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                            b3.ToTable("AppEmployeeApplications");
+
+                                            b3.WithOwner()
+                                                .HasForeignKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+                                        });
+
+                                    b2.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationLocationSnapshot", "State", b3 =>
+                                        {
+                                            b3.Property<Guid>("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId")
+                                                .HasColumnType("uuid")
+                                                .HasColumnName("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFami~");
+
+                                            b3.Property<string>("IsoCode")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.Property<string>("Name")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.HasKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                            b3.ToTable("AppEmployeeApplications");
+
+                                            b3.WithOwner()
+                                                .HasForeignKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+                                        });
+
+                                    b2.Navigation("Country");
+
+                                    b2.Navigation("State");
+                                });
+
+                            b1.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationFamilyMemberSnapshot", "SpouseDetails", b2 =>
+                                {
+                                    b2.Property<Guid>("EmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("Address1")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Address2")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Address3")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("City")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("MobileNo")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Name")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Occupation")
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Pincode")
+                                        .HasColumnType("text");
+
+                                    b2.HasKey("EmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                    b2.ToTable("AppEmployeeApplications");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("EmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                    b2.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationLocationSnapshot", "Country", b3 =>
+                                        {
+                                            b3.Property<Guid>("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId")
+                                                .HasColumnType("uuid")
+                                                .HasColumnName("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFami~");
+
+                                            b3.Property<string>("IsoCode")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.Property<string>("Name")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.HasKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                            b3.ToTable("AppEmployeeApplications");
+
+                                            b3.WithOwner()
+                                                .HasForeignKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+                                        });
+
+                                    b2.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationLocationSnapshot", "State", b3 =>
+                                        {
+                                            b3.Property<Guid>("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId")
+                                                .HasColumnType("uuid")
+                                                .HasColumnName("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFami~");
+
+                                            b3.Property<string>("IsoCode")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.Property<string>("Name")
+                                                .IsRequired()
+                                                .HasColumnType("text");
+
+                                            b3.HasKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+
+                                            b3.ToTable("AppEmployeeApplications");
+
+                                            b3.WithOwner()
+                                                .HasForeignKey("EmployeeApplicationFamilyMemberSnapshotEmployeeApplicationFamilyInfoSnapshotEmployeeApplicationId");
+                                        });
+
+                                    b2.Navigation("Country");
+
+                                    b2.Navigation("State");
+                                });
+
+                            b1.Navigation("FatherDetails");
+
+                            b1.Navigation("MotherDetails");
+
+                            b1.Navigation("SpouseDetails");
+                        });
+
+                    b.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationPersonalInfoSnapshot", "PersonalInfo", b1 =>
+                        {
+                            b1.Property<Guid>("EmployeeApplicationId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Address1")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address2")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Address3")
+                                .HasColumnType("text");
+
+                            b1.Property<int?>("BloodGroup")
+                                .HasColumnType("integer");
+
+                            b1.Property<int?>("CasteType")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("City")
+                                .HasColumnType("text");
+
+                            b1.Property<DateOnly?>("DateOfBirth")
+                                .HasColumnType("date");
+
+                            b1.Property<string>("Department")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Designation")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Email")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<string>("FamilyCaste")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("FirstName")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<int?>("Gender")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("IdentificationMark1")
+                                .HasColumnType("text");
+
+                            b1.Property<bool>("IsTeaching")
+                                .HasColumnType("boolean");
+
+                            b1.Property<string>("LastName")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<int?>("MaritalStatus")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("MiddleName")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("MobileNo")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Pincode")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Qualification")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Religion")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("SecondaryMobileNo")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("ShortName")
+                                .HasColumnType("text");
+
+                            b1.HasKey("EmployeeApplicationId");
+
+                            b1.ToTable("AppEmployeeApplications");
+
+                            b1.ToJson("PersonalInfo");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EmployeeApplicationId");
+
+                            b1.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationLocationSnapshot", "Country", b2 =>
+                                {
+                                    b2.Property<Guid>("EmployeeApplicationPersonalInfoSnapshotEmployeeApplicationId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("IsoCode")
+                                        .IsRequired()
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Name")
+                                        .IsRequired()
+                                        .HasColumnType("text");
+
+                                    b2.HasKey("EmployeeApplicationPersonalInfoSnapshotEmployeeApplicationId");
+
+                                    b2.ToTable("AppEmployeeApplications");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("EmployeeApplicationPersonalInfoSnapshotEmployeeApplicationId");
+                                });
+
+                            b1.OwnsOne("ShikshaMitra.HR.Employees.Onboarding.EmployeeApplicationLocationSnapshot", "State", b2 =>
+                                {
+                                    b2.Property<Guid>("EmployeeApplicationPersonalInfoSnapshotEmployeeApplicationId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<string>("IsoCode")
+                                        .IsRequired()
+                                        .HasColumnType("text");
+
+                                    b2.Property<string>("Name")
+                                        .IsRequired()
+                                        .HasColumnType("text");
+
+                                    b2.HasKey("EmployeeApplicationPersonalInfoSnapshotEmployeeApplicationId");
+
+                                    b2.ToTable("AppEmployeeApplications");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("EmployeeApplicationPersonalInfoSnapshotEmployeeApplicationId");
+                                });
+
+                            b1.Navigation("Country");
+
+                            b1.Navigation("State");
+                        });
+
+                    b.Navigation("AdditionalInfo");
+
                     b.Navigation("Country");
+
+                    b.Navigation("FamilyInfo");
+
+                    b.Navigation("PersonalInfo");
 
                     b.Navigation("State");
 
@@ -17481,6 +18104,15 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
 
                     b.Navigation("Section");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.AcademicTerm", b =>
+                {
+                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
+                        .WithMany()
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceEntry", b =>
@@ -18767,6 +19399,27 @@ namespace ShikshaMitra.Migrations
                 {
                     b.HasOne("ShikshaMitra.Students.Student", null)
                         .WithMany("Notes")
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentRollNumberAssignment", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.AcademicTerm", null)
+                        .WithMany()
+                        .HasForeignKey("AcademicTermId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.TenantSettings.Divisions.Division", null)
+                        .WithMany()
+                        .HasForeignKey("DivisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Students.Student", null)
+                        .WithMany()
                         .HasForeignKey("StudentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

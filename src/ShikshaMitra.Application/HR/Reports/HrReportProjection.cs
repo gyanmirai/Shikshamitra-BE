@@ -32,12 +32,18 @@ internal static class HrReportProjection
 	public static HrReportExportJobDto ToJobDto(HrReportExportJob job, DateTime now)
 	{
 		var format = NormalizeFormat(job.Format);
+		var request = DeserializeRequest(job);
 		return new HrReportExportJobDto
 		{
 			Id = job.Id,
 			ReportType = job.ReportType,
 			Format = format,
 			Status = job.Status,
+			RequestSnapshot = request,
+			ParentJobId = request.ParentJobId,
+			SourceAction = string.IsNullOrWhiteSpace(request.SourceAction) ? "manualExport" : request.SourceAction,
+			TemplateId = request.TemplateId,
+			TemplateName = request.TemplateName,
 			FileName = job.Status == HrReportExportStatus.Completed ? BuildFileName(job.ReportType, format) : null,
 			ErrorMessage = job.ErrorMessage,
 			ProgressPercent = job.ProgressPercent,
@@ -51,6 +57,32 @@ internal static class HrReportProjection
 			StartedAt = job.StartedAt,
 			CompletedAt = job.CompletedAt,
 			ExpiresAt = job.ExpiresAt
+		};
+	}
+
+	private static HrReportRequestDto DeserializeRequest(HrReportExportJob job)
+	{
+		try
+		{
+			var request = JsonSerializer.Deserialize<HrReportRequestDto>(job.RequestJson, new JsonSerializerOptions
+			{
+				PropertyNameCaseInsensitive = true
+			});
+
+			if (request != null)
+			{
+				return request;
+			}
+		}
+		catch (JsonException)
+		{
+			// Legacy rows can contain malformed snapshots; the export list should still render.
+		}
+
+		return new HrReportRequestDto
+		{
+			ReportType = job.ReportType,
+			Format = job.Format
 		};
 	}
 

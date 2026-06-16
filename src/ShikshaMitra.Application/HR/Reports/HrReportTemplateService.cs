@@ -15,6 +15,7 @@ namespace ShikshaMitra.HR.Reports;
 public class HrReportTemplateService(
 	IRepository<HrReportTemplate, Guid> templateRepository,
 	IGuidGenerator guidGenerator,
+	HrReportRequestValidationService requestValidationService,
 	HrAuditWriter auditWriter) : ApplicationService, ITransientDependency
 {
 	public async Task<HrReportTemplateListDto> GetTemplatesAsync()
@@ -130,7 +131,7 @@ public class HrReportTemplateService(
 			summary,
 			context: context);
 
-	private static void ValidateTemplateDefinition(HrReportTemplateRequestDto input)
+	private void ValidateTemplateDefinition(HrReportTemplateRequestDto input)
 	{
 		input.Definition.DataSource = string.IsNullOrWhiteSpace(input.Definition.DataSource)
 			? input.DataSource
@@ -138,5 +139,6 @@ public class HrReportTemplateService(
 		input.Definition.ReportType = string.IsNullOrWhiteSpace(input.Definition.ReportType)
 			? input.Name
 			: input.Definition.ReportType;
+		requestValidationService.Validate(input.Definition);
 	}
 }

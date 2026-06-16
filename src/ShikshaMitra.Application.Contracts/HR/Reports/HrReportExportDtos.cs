@@ -16,6 +16,11 @@ public class HrReportExportJobDto
 	public string ReportType { get; set; } = string.Empty;
 	public string Format { get; set; } = string.Empty;
 	public string Status { get; set; } = string.Empty;
+	public HrReportRequestDto? RequestSnapshot { get; set; }
+	public Guid? ParentJobId { get; set; }
+	public string? SourceAction { get; set; }
+	public Guid? TemplateId { get; set; }
+	public string? TemplateName { get; set; }
 	public string? FileName { get; set; }
 	public string? ErrorMessage { get; set; }
 	public int ProgressPercent { get; set; }

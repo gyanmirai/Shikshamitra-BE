@@ -74,6 +74,8 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.Category, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.Category != Category.General
 				? src.AdditionalDetail.Category
 				: Category.General))
+			.ForMember(dest => dest.IsLibraryMember, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.IsLibraryMember == true))
+			.ForMember(dest => dest.IsTransportMember, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.IsTransportMember == true))
 			.ForMember(dest => dest.Address1, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address1 : null))
 			.ForMember(dest => dest.Address2, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address2 : null))
 			.ForMember(dest => dest.Address3, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Address3 : null))

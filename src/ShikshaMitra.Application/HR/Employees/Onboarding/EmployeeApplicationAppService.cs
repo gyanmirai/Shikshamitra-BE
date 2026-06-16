@@ -21,6 +21,7 @@ using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Encryption;
+using Volo.Abp.Validation;
 
 namespace ShikshaMitra.HR.Employees.Onboarding;
 
@@ -28,6 +29,7 @@ namespace ShikshaMitra.HR.Employees.Onboarding;
 public class EmployeeApplicationAppService(
 	IRepository<EmployeeApplication, Guid> applicationRepository,
 	IEmployeeRepository employeeRepository,
+	IEmployeeAdditionalDetailsRepository additionalDetailsRepository,
 	EmployeeManager employeeManager,
 	EmployeeDocumentManager employeeDocumentManager,
 	EmployeePersonalInfoCreationWorkflow personalInfoCreationWorkflow,
@@ -168,6 +170,9 @@ public class EmployeeApplicationAppService(
 			await employeeRepository.UpdateAsync(updatedEmployee, autoSave: true);
 		}
 
+		await ApplyFamilyInfoAsync(employee.Id, input.FamilyInfo ?? MapToFamilyInfoDto(application.FamilyInfo));
+		await ApplyAdditionalInfoAsync(employee.Id, input.AdditionalInfo ?? MapToAdditionalInfoDto(application.AdditionalInfo));
+
 		if (input.AttachResumeAsDocument)
 		{
 			await AttachResumeAsync(employee.Id, application);
@@ -251,37 +256,23 @@ public class EmployeeApplicationAppService(
 		{
 			var now = Clock.Now;
 			application.EnsureCanSubmit(now);
+			ValidatePublicSubmitInput(input, now);
+			ValidateUploadInputs(resume, photo);
+
+			var personalInfo = MapToPersonalInfoSnapshot(input.PersonalInfo);
+			var familyInfo = MapToFamilyInfoSnapshot(input.FamilyInfo);
+			var additionalInfo = MapToAdditionalInfoSnapshot(input.AdditionalInfo);
+			var workExperiences = input.WorkExperiences.Select(MapToWorkExperience).ToList();
 
 			var resumeMetadata = await SaveResumeAsync(application.Id, resume);
 			var photoMetadata = await SavePhotoAsync(application.Id, photo);
 
 			application.Submit(
 				now,
-				input.FirstName,
-				input.MiddleName,
-				input.LastName,
-				input.Email,
-				input.MobileNo,
-				input.SecondaryMobileNo,
-				input.PositionAppliedFor,
-				input.DepartmentAppliedFor,
-				input.DateOfBirth.HasValue ? DateOnly.FromDateTime(input.DateOfBirth.Value) : null,
-				input.Gender,
-				input.Religion,
-				input.CasteType,
-				input.FamilyCaste,
-				input.MaritalStatus,
-				input.BloodGroup,
-				input.QualificationSummary,
-				input.SkillsSummary,
-				input.Address1,
-				input.Address2,
-				input.Address3,
-				MapToCountry(input.Country),
-				MapToState(input.State),
-				input.City,
-				input.PinCode,
-				input.WorkExperiences.Select(MapToWorkExperience).ToList(),
+				personalInfo,
+				familyInfo,
+				additionalInfo,
+				workExperiences,
 				resumeMetadata,
 				photoMetadata);
 
@@ -289,6 +280,209 @@ public class EmployeeApplicationAppService(
 			return MapToDto(application, includePublicPath: false);
 		}
 	}
+
+	private static void ValidatePublicSubmitInput(PublicEmployeeApplicationSubmitDto input, DateTime now)
+	{
+		var validationResults = PublicEmployeeApplicationSubmitValidation.Validate(input, now);
+		if (validationResults.Count > 0)
+		{
+			throw new AbpValidationException("Employee application validation failed.", validationResults.ToList());
+		}
+	}
+
+	private static void ValidateUploadInputs(
+		EmployeeApplicationFileInput? resume,
+		EmployeeApplicationFileInput? photo)
+	{
+		if (resume != null && resume.Content.Length > 0)
+		{
+			var fileName = EnsureSafeFileName(resume.FileName);
+			var extension = Path.GetExtension(fileName).ToLowerInvariant();
+			if (!ResumeExtensions.Contains(extension))
+			{
+				throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidUpload)
+					.WithData("allowedExtensions", string.Join(", ", ResumeExtensions));
+			}
+
+			FileValidationService.ValidateDocumentUpload(fileName, resume.Content, resume.Size);
+		}
+
+		if (photo != null && photo.Content.Length > 0)
+		{
+			var fileName = EnsureSafeFileName(photo.FileName);
+			FileValidationService.ValidateProfilePictureUpload(fileName, photo.Content);
+		}
+	}
+
+	private static EmployeeApplicationPersonalInfoSnapshot MapToPersonalInfoSnapshot(
+		EmployeeApplicationPersonalInfoDto input) =>
+		new(
+			input.FirstName,
+			input.MiddleName,
+			input.ShortName,
+			input.LastName,
+			input.Email,
+			input.MobileNo,
+			input.SecondaryMobileNo,
+			input.DateOfBirth.HasValue ? DateOnly.FromDateTime(input.DateOfBirth.Value) : null,
+			input.Gender,
+			input.Religion,
+			input.CasteType,
+			input.FamilyCaste,
+			input.MaritalStatus,
+			input.BloodGroup,
+			input.IsTeaching,
+			input.Department,
+			input.Designation,
+			input.Qualification,
+			input.IdentificationMark1,
+			input.Address1,
+			input.Address2,
+			input.Address3,
+			MapToLocationSnapshot(input.Country),
+			MapToLocationSnapshot(input.State),
+			input.City,
+			input.Pincode);
+
+	private static EmployeeApplicationFamilyInfoSnapshot? MapToFamilyInfoSnapshot(
+		EmployeeApplicationFamilyInfoDto? input)
+	{
+		if (input == null)
+		{
+			return null;
+		}
+
+		var father = MapToFamilyMemberSnapshot(input.FatherDetails);
+		var mother = MapToFamilyMemberSnapshot(input.MotherDetails);
+		var spouse = MapToFamilyMemberSnapshot(input.SpouseDetails);
+		return father == null && mother == null && spouse == null
+			? null
+			: new EmployeeApplicationFamilyInfoSnapshot(father, mother, spouse);
+	}
+
+	private static EmployeeApplicationFamilyMemberSnapshot? MapToFamilyMemberSnapshot(
+		EmployeeApplicationFamilyMemberDto? input) =>
+		input == null || IsEmptyFamilyMember(input)
+			? null
+			: new EmployeeApplicationFamilyMemberSnapshot(
+				input.Name,
+				input.Occupation,
+				input.MobileNo,
+				input.Address1,
+				input.Address2,
+				input.Address3,
+				MapToLocationSnapshot(input.Country),
+				MapToLocationSnapshot(input.State),
+				input.City,
+				input.Pincode);
+
+	private static EmployeeApplicationAdditionalInfoSnapshot? MapToAdditionalInfoSnapshot(
+		EmployeeApplicationAdditionalInfoDto? input) =>
+		input == null || !HasAdditionalInfo(input)
+			? null
+			: new EmployeeApplicationAdditionalInfoSnapshot(
+				input.PersonWithDisability,
+				input.SecondLanguage,
+				input.IsLibraryMember,
+				input.IsTransportMember);
+
+	private static EmployeeApplicationLocationSnapshot? MapToLocationSnapshot(
+		EmployeeApplicationLocationInfo? input) =>
+		input == null || string.IsNullOrWhiteSpace(input.Name)
+			? null
+			: new EmployeeApplicationLocationSnapshot(input.Name, input.IsoCode);
+
+	private async Task ApplyFamilyInfoAsync(Guid employeeId, EmployeeApplicationFamilyInfoDto? familyInfo)
+	{
+		if (!HasFamilyInfo(familyInfo))
+		{
+			return;
+		}
+
+		await employeeManager.UpdateFamilyInfoByEmployeeIdAsync(
+			employeeId,
+			MapToContactDetails(familyInfo?.FatherDetails),
+			MapToContactDetails(familyInfo?.MotherDetails),
+			MapToContactDetails(familyInfo?.SpouseDetails));
+	}
+
+	private async Task ApplyAdditionalInfoAsync(Guid employeeId, EmployeeApplicationAdditionalInfoDto? additionalInfo)
+	{
+		if (!HasAdditionalInfo(additionalInfo))
+		{
+			return;
+		}
+
+		var existingDetails = await additionalDetailsRepository.GetByEmployeeIdAsync(employeeId);
+		if (existingDetails == null)
+		{
+			await additionalDetailsRepository.InsertAsync(new EmployeeAdditionalDetails(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				employeeId,
+				bplCardNo: null,
+				personWithDisability: additionalInfo!.PersonWithDisability,
+				secondLanguage: additionalInfo.SecondLanguage,
+				libraryMember: additionalInfo.IsLibraryMember,
+				transportMember: additionalInfo.IsTransportMember));
+			return;
+		}
+
+		existingDetails.Update(
+			bplCardNo: existingDetails.BplCardNo,
+			personWithDisability: additionalInfo!.PersonWithDisability,
+			secondLanguage: additionalInfo.SecondLanguage,
+			libraryMember: additionalInfo.IsLibraryMember,
+			transportMember: additionalInfo.IsTransportMember);
+		await additionalDetailsRepository.UpdateAsync(existingDetails);
+	}
+
+	private static ContactDetails? MapToContactDetails(EmployeeApplicationFamilyMemberDto? input) =>
+		input == null || IsEmptyFamilyMember(input)
+			? null
+			: new ContactDetails(
+				name: input.Name,
+				occupation: input.Occupation,
+				contactNo: input.MobileNo,
+				address1: input.Address1,
+				address2: input.Address2,
+				address3: input.Address3,
+				city: input.City,
+				stateName: input.State?.Name,
+				stateIsoCode: input.State?.IsoCode,
+				countryName: input.Country?.Name,
+				countryIsoCode: input.Country?.IsoCode,
+				pinCode: input.Pincode);
+
+	private static bool HasFamilyInfo(EmployeeApplicationFamilyInfoDto? input) =>
+		input != null &&
+		(!IsEmptyFamilyMember(input.FatherDetails) ||
+		 !IsEmptyFamilyMember(input.MotherDetails) ||
+		 !IsEmptyFamilyMember(input.SpouseDetails));
+
+	private static bool HasAdditionalInfo(EmployeeApplicationAdditionalInfoDto? input) =>
+		input != null &&
+		(input.PersonWithDisability ||
+		 input.IsLibraryMember ||
+		 input.IsTransportMember ||
+		 !string.IsNullOrWhiteSpace(input.SecondLanguage));
+
+	private static bool IsEmptyFamilyMember(EmployeeApplicationFamilyMemberDto? input) =>
+		input == null ||
+		(string.IsNullOrWhiteSpace(input.Name) &&
+		 string.IsNullOrWhiteSpace(input.Occupation) &&
+		 string.IsNullOrWhiteSpace(input.MobileNo) &&
+		 string.IsNullOrWhiteSpace(input.Address1) &&
+		 string.IsNullOrWhiteSpace(input.Address2) &&
+		 string.IsNullOrWhiteSpace(input.Address3) &&
+		 string.IsNullOrWhiteSpace(input.City) &&
+		 string.IsNullOrWhiteSpace(input.Pincode) &&
+		 IsEmptyLocation(input.Country) &&
+		 IsEmptyLocation(input.State));
+
+	private static bool IsEmptyLocation(EmployeeApplicationLocationInfo? input) =>
+		input == null ||
+		(string.IsNullOrWhiteSpace(input.Name) && string.IsNullOrWhiteSpace(input.IsoCode));
 
 	private async Task<EmployeeApplication> GetApplicationAsync(Guid id)
 	{
@@ -512,6 +706,9 @@ public class EmployeeApplicationAppService(
 			State = MapToLocation(application.State),
 			City = application.City,
 			PinCode = application.PinCode,
+			PersonalInfo = MapToPersonalInfoDto(application.PersonalInfo),
+			FamilyInfo = MapToFamilyInfoDto(application.FamilyInfo),
+			AdditionalInfo = MapToAdditionalInfoDto(application.AdditionalInfo),
 			WorkExperiences = application.WorkExperiences.Select(MapToWorkExperienceDto).ToList(),
 			TokenExpiresAt = application.TokenExpiresAt,
 			LinkLastIssuedAt = application.LinkLastIssuedAt,
@@ -625,6 +822,84 @@ public class EmployeeApplicationAppService(
 	private static EmployeeApplicationLocationInfo? MapToLocation(State? value) =>
 		value == null ? null : new EmployeeApplicationLocationInfo { Name = value.Name, IsoCode = value.IsoCode };
 
+	private static EmployeeApplicationLocationInfo? MapToLocation(EmployeeApplicationLocationSnapshot? value) =>
+		value == null ? null : new EmployeeApplicationLocationInfo { Name = value.Name, IsoCode = value.IsoCode };
+
+	private static EmployeeApplicationPersonalInfoDto? MapToPersonalInfoDto(
+		EmployeeApplicationPersonalInfoSnapshot? value) =>
+		value == null
+			? null
+			: new EmployeeApplicationPersonalInfoDto
+			{
+				FirstName = value.FirstName,
+				MiddleName = value.MiddleName,
+				ShortName = value.ShortName,
+				LastName = value.LastName,
+				Email = value.Email,
+				MobileNo = value.MobileNo,
+				SecondaryMobileNo = value.SecondaryMobileNo,
+				DateOfBirth = value.DateOfBirth?.ToDateTime(TimeOnly.MinValue),
+				Gender = value.Gender,
+				Religion = value.Religion,
+				CasteType = value.CasteType,
+				FamilyCaste = value.FamilyCaste,
+				MaritalStatus = value.MaritalStatus,
+				BloodGroup = value.BloodGroup,
+				IsTeaching = value.IsTeaching,
+				Department = value.Department,
+				Designation = value.Designation,
+				Qualification = value.Qualification,
+				IdentificationMark1 = value.IdentificationMark1,
+				Address1 = value.Address1,
+				Address2 = value.Address2,
+				Address3 = value.Address3,
+				Country = MapToLocation(value.Country),
+				State = MapToLocation(value.State),
+				City = value.City,
+				Pincode = value.Pincode
+			};
+
+	private static EmployeeApplicationFamilyInfoDto? MapToFamilyInfoDto(
+		EmployeeApplicationFamilyInfoSnapshot? value) =>
+		value == null
+			? null
+			: new EmployeeApplicationFamilyInfoDto
+			{
+				FatherDetails = MapToFamilyMemberDto(value.FatherDetails),
+				MotherDetails = MapToFamilyMemberDto(value.MotherDetails),
+				SpouseDetails = MapToFamilyMemberDto(value.SpouseDetails)
+			};
+
+	private static EmployeeApplicationFamilyMemberDto? MapToFamilyMemberDto(
+		EmployeeApplicationFamilyMemberSnapshot? value) =>
+		value == null
+			? null
+			: new EmployeeApplicationFamilyMemberDto
+			{
+				Name = value.Name,
+				Occupation = value.Occupation,
+				MobileNo = value.MobileNo,
+				Address1 = value.Address1,
+				Address2 = value.Address2,
+				Address3 = value.Address3,
+				Country = MapToLocation(value.Country),
+				State = MapToLocation(value.State),
+				City = value.City,
+				Pincode = value.Pincode
+			};
+
+	private static EmployeeApplicationAdditionalInfoDto? MapToAdditionalInfoDto(
+		EmployeeApplicationAdditionalInfoSnapshot? value) =>
+		value == null
+			? null
+			: new EmployeeApplicationAdditionalInfoDto
+			{
+				PersonWithDisability = value.PersonWithDisability,
+				SecondLanguage = value.SecondLanguage,
+				IsLibraryMember = value.IsLibraryMember,
+				IsTransportMember = value.IsTransportMember
+			};
+
 	private static Country? MapToCountry(EmployeeApplicationLocationInfo? value) =>
 		value == null || string.IsNullOrWhiteSpace(value.Name)
 			? null
@@ -637,12 +912,15 @@ public class EmployeeApplicationAppService(
 
 	private static EmployeeApplicationWorkExperienceDto MapToWorkExperienceDto(WorkExperience experience)
 	{
+		var (city, state, country) = ParseWorkExperienceAddress(experience.OrganizationAddress);
 		return new EmployeeApplicationWorkExperienceDto
 		{
 			MediumStageName = experience.OrganizationName,
 			Designation = experience.Designation,
 			Department = experience.Department,
-			City = ExtractAddressPart(experience.OrganizationAddress, 0),
+			City = city,
+			State = state,
+			Country = country,
 			StartDate = experience.FromDate?.ToDateTime(TimeOnly.MinValue),
 			EndDate = experience.ToDate?.ToDateTime(TimeOnly.MinValue)
 		};
@@ -671,25 +949,59 @@ public class EmployeeApplicationAppService(
 
 		if (!string.IsNullOrWhiteSpace(input.State?.Name))
 		{
-			parts.Add(input.State.Name);
+			parts.Add(FormatLocation(input.State));
 		}
 
 		if (!string.IsNullOrWhiteSpace(input.Country?.Name))
 		{
-			parts.Add(input.Country.Name);
+			parts.Add(FormatLocation(input.Country));
 		}
 
 		return parts.Count == 0 ? null : string.Join(", ", parts);
 	}
 
-	private static string? ExtractAddressPart(string? address, int index)
+	private static string FormatLocation(EmployeeApplicationLocationInfo location) =>
+		string.IsNullOrWhiteSpace(location.IsoCode)
+			? location.Name
+			: $"{location.Name} ({location.IsoCode})";
+
+	private static (string? city, EmployeeApplicationLocationInfo? state, EmployeeApplicationLocationInfo? country)
+		ParseWorkExperienceAddress(string? address)
 	{
 		if (string.IsNullOrWhiteSpace(address))
+		{
+			return (null, null, null);
+		}
+
+		var parts = address.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+		var city = parts.Length > 0 ? parts[0] : null;
+		var state = parts.Length > 1 ? ParseLocationPart(parts[1]) : null;
+		var country = parts.Length > 2 ? ParseLocationPart(parts[2]) : null;
+		return (city, state, country);
+	}
+
+	private static EmployeeApplicationLocationInfo? ParseLocationPart(string? part)
+	{
+		if (string.IsNullOrWhiteSpace(part))
 		{
 			return null;
 		}
 
-		var parts = address.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-		return parts.Length > index ? parts[index] : null;
+		var openParen = part.LastIndexOf('(');
+		var closeParen = part.LastIndexOf(')');
+		if (openParen > 0 && closeParen > openParen)
+		{
+			return new EmployeeApplicationLocationInfo
+			{
+				Name = part[..openParen].Trim(),
+				IsoCode = part[(openParen + 1)..closeParen].Trim()
+			};
+		}
+
+		return new EmployeeApplicationLocationInfo
+		{
+			Name = part.Trim(),
+			IsoCode = string.Empty
+		};
 	}
 }

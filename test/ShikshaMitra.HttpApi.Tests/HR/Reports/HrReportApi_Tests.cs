@@ -27,7 +27,9 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.PermissionManagement;
 using Volo.Abp.Uow;
 using Xunit;
 
@@ -65,6 +67,196 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		preview.PageSize.ShouldBeLessThanOrEqualTo(10);
 		preview.Rows.Count.ShouldBeLessThanOrEqualTo(preview.PageSize);
 		preview.Columns.Select(x => x.Id).ShouldBe(["employeeCode", "employeeName", "department"]);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Preview_Should_Treat_Legacy_In_Filter_Value_As_Single_Value()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var baselineResponse = await Client.PostAsJsonAsync($"{BaseUrl}/preview", new HrReportRequestDto
+		{
+			ReportType = HrReportTypes.EmployeeList,
+			DataSource = HrReportDataSources.Employee,
+			Columns = ["employeeCode", "employeeName"],
+			Page = 1,
+			PageSize = 10,
+			Filters = new HrReportFilterDto()
+		}, JsonOptions);
+		baselineResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var baseline = await baselineResponse.Content.ReadFromJsonAsync<HrReportPreviewDto>(JsonOptions);
+		baseline.ShouldNotBeNull();
+		baseline.Rows.ShouldNotBeEmpty();
+		var employeeCode = baseline.Rows[0]["employeeCode"];
+		employeeCode.ShouldNotBeNullOrWhiteSpace();
+
+		var filteredResponse = await Client.PostAsJsonAsync($"{BaseUrl}/preview", new HrReportRequestDto
+		{
+			ReportType = HrReportTypes.EmployeeList,
+			DataSource = HrReportDataSources.Employee,
+			Columns = ["employeeCode", "employeeName"],
+			Page = 1,
+			PageSize = 10,
+			Filters = new HrReportFilterDto
+			{
+				Conditions =
+				[
+					new HrReportFilterConditionDto
+					{
+						Field = "employeeCode",
+						Operator = HrReportFilterOperator.In,
+						Value = $" {employeeCode} "
+					}
+				]
+			}
+		}, JsonOptions);
+
+		filteredResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var filtered = await filteredResponse.Content.ReadFromJsonAsync<HrReportPreviewDto>(JsonOptions);
+		filtered.ShouldNotBeNull();
+		filtered.Rows.ShouldNotBeEmpty();
+		filtered.Rows.Select(row => row["employeeCode"]).Distinct().ShouldBe([employeeCode]);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Preview_Should_Reject_Unknown_Report_Field_References()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/preview", new HrReportRequestDto
+		{
+			ReportType = "Invalid Employee Report",
+			DataSource = HrReportDataSources.Employee,
+			Columns = ["employeeCode", "notAReportField"],
+			Sorts = [new HrReportSortDto { Field = "notAReportField", Direction = "asc" }],
+			Filters = new HrReportFilterDto
+			{
+				Conditions = [
+					new HrReportFilterConditionDto
+					{
+						Field = "notAReportField",
+						Operator = HrReportFilterOperator.Contains,
+						Value = "EMP"
+					}
+				]
+			}
+		}, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Report_Request_Save_Paths_Should_Reject_Invalid_Enum_Values()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var previewResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/preview",
+			CreateInvalidEnumReportRequest(),
+			JsonOptions);
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+		var chartTypeResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/preview",
+			CreateInvalidChartTypeReportRequest(),
+			JsonOptions);
+		chartTypeResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+		var chartValueFieldResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/preview",
+			CreateInvalidChartValueFieldReportRequest(),
+			JsonOptions);
+		chartValueFieldResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+		var exportResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/exports",
+			CreateInvalidEnumReportRequest(),
+			JsonOptions);
+		exportResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+		var templateResponse = await Client.PostAsJsonAsync($"{BaseUrl}/templates", new HrReportTemplateRequestDto
+		{
+			Name = "Invalid Enum Template",
+			Category = "Payroll",
+			DataSource = HrReportDataSources.Payroll,
+			Visibility = HrReportTemplateVisibility.Private,
+			Definition = CreateInvalidEnumReportRequest()
+		}, JsonOptions);
+		templateResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+		var scheduleResponse = await Client.PostAsJsonAsync($"{BaseUrl}/schedules", new HrReportScheduleRequestDto
+		{
+			Name = "Invalid Enum Schedule",
+			Frequency = HrReportScheduleFrequency.Monthly,
+			DeliveryMode = HrReportDeliveryMode.InApp,
+			Definition = CreateInvalidEnumReportRequest()
+		}, JsonOptions);
+		scheduleResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Report_Request_Save_Paths_Should_Canonicalize_Mixed_Case_Enum_Values()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var previewResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/preview",
+			CreateMixedCasePayrollReportRequest(),
+			JsonOptions);
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var preview = await previewResponse.Content.ReadFromJsonAsync<HrReportPreviewDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview.Columns.Select(x => x.Id).ShouldContain("sum_grossSalary");
+		preview.Chart.ShouldNotBeNull();
+		preview.Chart.Type.ShouldBe(HrReportChartType.Bar);
+		preview.NormalizedFilters.Conditions.ShouldNotBeNull();
+		preview.NormalizedFilters.Conditions[0].Operator.ShouldBe(HrReportFilterOperator.In);
+
+		var kpiResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/preview",
+			new HrReportRequestDto
+			{
+				ReportType = "Mixed Case KPI Report",
+				DataSource = HrReportDataSources.Employee,
+				Chart = new HrReportChartDefinitionDto
+				{
+					Type = "KPI"
+				},
+				Filters = new HrReportFilterDto()
+			},
+			JsonOptions);
+		kpiResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var kpiPreview = await kpiResponse.Content.ReadFromJsonAsync<HrReportPreviewDto>(JsonOptions);
+		kpiPreview.ShouldNotBeNull();
+		kpiPreview.Chart.ShouldNotBeNull();
+		kpiPreview.Chart.Type.ShouldBe(HrReportChartType.Kpi);
+
+		var exportResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/exports",
+			CreateMixedCasePayrollReportRequest(),
+			JsonOptions);
+		exportResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+		var created = await exportResponse.Content.ReadFromJsonAsync<HrReportExportCreateResponseDto>(JsonOptions);
+		created.ShouldNotBeNull();
+
+		var jobResponse = await Client.GetAsync($"{BaseUrl}/exports/{created.JobId}");
+		jobResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var job = await jobResponse.Content.ReadFromJsonAsync<HrReportExportJobDto>(JsonOptions);
+		job.ShouldNotBeNull();
+		job.RequestSnapshot.ShouldNotBeNull();
+		job.RequestSnapshot.Sorts.ShouldNotBeNull();
+		job.RequestSnapshot.Sorts[0].Direction.ShouldBe("desc");
+		job.RequestSnapshot.Summaries.ShouldNotBeNull();
+		job.RequestSnapshot.Summaries[0].Function.ShouldBe(HrReportSummaryFunction.Sum);
+		job.RequestSnapshot.Chart.ShouldNotBeNull();
+		job.RequestSnapshot.Chart.Type.ShouldBe(HrReportChartType.Bar);
+		job.RequestSnapshot.Chart.Function.ShouldBe(HrReportSummaryFunction.Average);
+		job.RequestSnapshot.Filters.Conditions.ShouldNotBeNull();
+		job.RequestSnapshot.Filters.Conditions[0].Operator.ShouldBe(HrReportFilterOperator.In);
 	}
 
 	[Fact]
@@ -620,7 +812,7 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Preview_Should_Warn_When_Advanced_Request_Uses_Unsupported_Source_Capabilities()
+	public async Task Preview_Should_Reject_Unsupported_Source_Capabilities()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
@@ -642,13 +834,7 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 			Filters = new HrReportFilterDto()
 		}, JsonOptions);
 
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-		var preview = await response.Content.ReadFromJsonAsync<HrReportPreviewDto>(JsonOptions);
-		preview.ShouldNotBeNull();
-		preview.QueryWarnings.ShouldContain(x => x.Contains("not supported for grouping", StringComparison.OrdinalIgnoreCase));
-		preview.QueryWarnings.ShouldContain(x => x.Contains("not supported for summaries", StringComparison.OrdinalIgnoreCase));
-		preview.QueryWarnings.ShouldContain(x => x.Contains("not supported for charts", StringComparison.OrdinalIgnoreCase));
-		preview.QueryWarnings.ShouldContain(x => x.Contains("after source projection", StringComparison.OrdinalIgnoreCase));
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}
 
 	[Fact]
@@ -703,6 +889,10 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 			ReportType = HrReportTypes.EmployeeList,
 			DataSource = HrReportDataSources.Employee,
 			Format = HrReportFormat.Excel,
+			TemplateId = Guid.NewGuid(),
+			TemplateName = "Employee Template",
+			SourceAction = "scheduleRun",
+			ParentJobId = Guid.NewGuid(),
 			Filters = new HrReportFilterDto()
 		};
 
@@ -718,6 +908,54 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		var job = await jobResponse.Content.ReadFromJsonAsync<HrReportExportJobDto>(JsonOptions);
 		job.ShouldNotBeNull();
 		job.Id.ShouldBe(createResult.JobId);
+		job.RequestSnapshot.ShouldNotBeNull();
+		job.RequestSnapshot.DataSource.ShouldBe(HrReportDataSources.Employee);
+		job.TemplateName.ShouldBe("Employee Template");
+		job.SourceAction.ShouldBe("manualExport");
+		job.ParentJobId.ShouldBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Export_Details_Should_Tolerate_Malformed_Legacy_Request_Snapshot()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var jobId = Guid.NewGuid();
+
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+			var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+			var exportRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrReportExportJob, Guid>>();
+			var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+			using (currentTenant.Change(tenantId))
+			using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+			{
+				await exportRepository.InsertAsync(
+					new HrReportExportJob(
+						jobId,
+						tenantId,
+						Guid.Parse(TestAuthHandler.TestUserId),
+						"Legacy Corrupt Snapshot",
+						HrReportFormat.Excel,
+						"{}",
+						"{ malformed-json",
+						DateTime.UtcNow.AddDays(7)),
+					autoSave: false);
+				await uow.CompleteAsync();
+			}
+		}
+
+		var response = await Client.GetAsync($"{BaseUrl}/exports/{jobId}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var job = await response.Content.ReadFromJsonAsync<HrReportExportJobDto>(JsonOptions);
+		job.ShouldNotBeNull();
+		job.RequestSnapshot.ShouldNotBeNull();
+		job.RequestSnapshot.ReportType.ShouldBe("Legacy Corrupt Snapshot");
+		job.RequestSnapshot.Format.ShouldBe(HrReportFormat.Excel);
+		job.SourceAction.ShouldBe("manualExport");
 	}
 
 	[Fact]
@@ -761,6 +999,59 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		var downloadResponse = await Client.GetAsync($"{BaseUrl}/exports/{createResult.JobId}/download");
 		downloadResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		downloadResponse.Content.Headers.ContentType?.MediaType.ShouldBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+		var bytes = await downloadResponse.Content.ReadAsByteArrayAsync();
+		bytes.Length.ShouldBeGreaterThan(0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Shared_Completed_Export_Should_Download_For_View_Recipient()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = Guid.NewGuid().ToString("N")[..8];
+		var recipientUserId = Guid.NewGuid();
+		await SeedReportRecipientLookupUserAsync(recipientUserId, $"report-download-recipient-{marker}", grantReportView: true);
+
+		var request = new HrReportRequestDto
+		{
+			ReportType = HrReportTypes.EmployeeList,
+			DataSource = HrReportDataSources.Employee,
+			Format = HrReportFormat.Excel,
+			Columns = ["employeeCode", "employeeName"],
+			Filters = new HrReportFilterDto()
+		};
+		var createResponse = await Client.PostAsJsonAsync($"{BaseUrl}/exports", request, JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+		var createResult = await createResponse.Content.ReadFromJsonAsync<HrReportExportCreateResponseDto>(JsonOptions);
+		createResult.ShouldNotBeNull();
+
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var job = scope.ServiceProvider.GetRequiredService<HrReportExportBackgroundJob>();
+			await job.ExecuteAsync(new HrReportExportJobArgs
+			{
+				JobId = createResult.JobId,
+				TenantId = Guid.Parse(TestAuthHandler.TestTenantId),
+				UserId = Guid.Parse(TestAuthHandler.TestUserId),
+				Request = request
+			});
+		}
+
+		var shareResponse = await Client.PostAsJsonAsync($"{BaseUrl}/exports/{createResult.JobId}/share", new HrReportShareExportRequestDto
+		{
+			UserIds = [recipientUserId]
+		}, JsonOptions);
+		shareResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		using var recipientClient = CreateReportViewClient(recipientUserId);
+		var recipientExportsResponse = await recipientClient.GetAsync($"{BaseUrl}/exports");
+		recipientExportsResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var recipientExports = await recipientExportsResponse.Content.ReadFromJsonAsync<List<HrReportExportJobDto>>(JsonOptions);
+		recipientExports.ShouldNotBeNull();
+		recipientExports.Select(x => x.Id).ShouldContain(createResult.JobId);
+
+		var downloadResponse = await recipientClient.GetAsync($"{BaseUrl}/exports/{createResult.JobId}/download");
+		downloadResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var bytes = await downloadResponse.Content.ReadAsByteArrayAsync();
 		bytes.Length.ShouldBeGreaterThan(0);
 	}
@@ -826,6 +1117,159 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		retry.ShouldNotBeNull();
 		retry.JobId.ShouldBe(created.JobId);
 		retry.Status.ShouldBe(HrReportExportStatus.Queued);
+
+		var retriedJobResponse = await Client.GetAsync($"{BaseUrl}/exports/{created.JobId}");
+		retriedJobResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var retriedJob = await retriedJobResponse.Content.ReadFromJsonAsync<HrReportExportJobDto>(JsonOptions);
+		retriedJob.ShouldNotBeNull();
+		retriedJob.SourceAction.ShouldBe("retry");
+		retriedJob.ParentJobId.ShouldBe(created.JobId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Export_Actions_Should_Reject_Invalid_Status_Transitions()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var ownerUserId = Guid.Parse(TestAuthHandler.TestUserId);
+		var marker = Guid.NewGuid().ToString("N")[..8];
+
+		foreach (var status in new[] { HrReportExportStatus.Completed, HrReportExportStatus.Queued, HrReportExportStatus.Running })
+		{
+			var jobId = await SeedExportJobAsync(ownerUserId, status, $"retry-invalid-{status}-{marker}");
+			var response = await Client.PostAsync($"{BaseUrl}/exports/{jobId}/retry", null);
+			response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+			await AssertProblemContainsAsync(response, "status", status);
+		}
+
+		foreach (var status in new[] { HrReportExportStatus.Failed, HrReportExportStatus.Cancelled })
+		{
+			var jobId = await SeedExportJobAsync(ownerUserId, status, $"retry-valid-{status}-{marker}");
+			var response = await Client.PostAsync($"{BaseUrl}/exports/{jobId}/retry", null);
+			response.StatusCode.ShouldBe(HttpStatusCode.OK);
+			var result = await response.Content.ReadFromJsonAsync<HrReportExportCreateResponseDto>(JsonOptions);
+			result.ShouldNotBeNull();
+			result.JobId.ShouldBe(jobId);
+			result.Status.ShouldBe(HrReportExportStatus.Queued);
+		}
+
+		foreach (var status in new[] { HrReportExportStatus.Failed, HrReportExportStatus.Cancelled, HrReportExportStatus.Queued, HrReportExportStatus.Running })
+		{
+			var jobId = await SeedExportJobAsync(ownerUserId, status, $"regenerate-invalid-{status}-{marker}");
+			var response = await Client.PostAsync($"{BaseUrl}/exports/{jobId}/regenerate", null);
+			response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+			await AssertProblemContainsAsync(response, "status", status);
+		}
+
+		var completedJobId = await SeedExportJobAsync(
+			ownerUserId,
+			HrReportExportStatus.Completed,
+			$"regenerate-not-expired-{marker}",
+			DateTime.UtcNow.AddDays(7));
+		var nonExpiredResponse = await Client.PostAsync($"{BaseUrl}/exports/{completedJobId}/regenerate", null);
+		nonExpiredResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		await AssertProblemContainsAsync(nonExpiredResponse, "status", HrReportExportStatus.Completed);
+
+		var expiredJobId = await SeedExportJobAsync(
+			ownerUserId,
+			HrReportExportStatus.Completed,
+			$"regenerate-expired-{marker}",
+			DateTime.UtcNow.AddDays(-1));
+		var regenerateResponse = await Client.PostAsync($"{BaseUrl}/exports/{expiredJobId}/regenerate", null);
+		regenerateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var regenerateResult = await regenerateResponse.Content.ReadFromJsonAsync<HrReportExportCreateResponseDto>(JsonOptions);
+		regenerateResult.ShouldNotBeNull();
+		regenerateResult.JobId.ShouldNotBe(expiredJobId);
+		regenerateResult.Status.ShouldBe(HrReportExportStatus.Queued);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Cancelled_Running_Export_Should_Not_Be_Marked_Completed_By_Worker()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var ownerUserId = Guid.Parse(TestAuthHandler.TestUserId);
+		var request = CreateBasicEmployeeExportRequest("Cancelled Running Export");
+		var jobId = await SeedExportJobAsync(
+			ownerUserId,
+			HrReportExportStatus.Running,
+			Guid.NewGuid().ToString("N")[..8],
+			request: request);
+
+		var cancelResponse = await Client.PostAsync($"{BaseUrl}/exports/{jobId}/cancel", null);
+		cancelResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var job = scope.ServiceProvider.GetRequiredService<HrReportExportBackgroundJob>();
+			await job.ExecuteAsync(new HrReportExportJobArgs
+			{
+				JobId = jobId,
+				TenantId = Guid.Parse(TestAuthHandler.TestTenantId),
+				UserId = ownerUserId,
+				Request = request
+			});
+		}
+
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+			var exportRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrReportExportJob, Guid>>();
+			using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+			{
+				var job = await exportRepository.GetAsync(jobId);
+				job.Status.ShouldBe(HrReportExportStatus.Cancelled);
+				job.BlobName.ShouldBeNull();
+				job.RowCount.ShouldBeNull();
+				job.FileSizeBytes.ShouldBeNull();
+			}
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Export_Worker_Should_Mark_Failed_When_Generation_Fails()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var ownerUserId = Guid.Parse(TestAuthHandler.TestUserId);
+		var request = new HrReportRequestDto
+		{
+			ReportType = "Invalid Worker Export",
+			DataSource = HrReportDataSources.Employee,
+			Format = HrReportFormat.Excel,
+			Columns = ["notAReportField"],
+			Filters = new HrReportFilterDto()
+		};
+		var jobId = await SeedExportJobAsync(
+			ownerUserId,
+			HrReportExportStatus.Queued,
+			Guid.NewGuid().ToString("N")[..8],
+			request: request);
+
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var job = scope.ServiceProvider.GetRequiredService<HrReportExportBackgroundJob>();
+			await job.ExecuteAsync(new HrReportExportJobArgs
+			{
+				JobId = jobId,
+				TenantId = Guid.Parse(TestAuthHandler.TestTenantId),
+				UserId = ownerUserId,
+				Request = request
+			});
+		}
+
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+			var exportRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrReportExportJob, Guid>>();
+			using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+			{
+				var job = await exportRepository.GetAsync(jobId);
+				job.Status.ShouldBe(HrReportExportStatus.Failed);
+				job.ErrorMessage.ShouldNotBeNullOrWhiteSpace();
+				job.BlobName.ShouldBeNull();
+			}
+		}
 	}
 
 	[Fact]
@@ -844,6 +1288,8 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 				ReportType = HrReportTypes.EmployeeList,
 				DataSource = HrReportDataSources.Employee,
 				Columns = ["employeeCode", "employeeName"],
+				SourceAction = "regenerate",
+				ParentJobId = Guid.NewGuid(),
 				Filters = new HrReportFilterDto()
 			}
 		}, JsonOptions);
@@ -852,7 +1298,7 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		var schedule = await createResponse.Content.ReadFromJsonAsync<HrReportScheduleDto>(JsonOptions);
 		schedule.ShouldNotBeNull();
 		schedule.Status.ShouldBe(HrReportScheduleStatus.Active);
-		schedule.RecipientUserIds.ShouldNotBeEmpty();
+		schedule.RecipientUserIds.ShouldBeEmpty();
 
 		var pauseResponse = await Client.PostAsync($"{BaseUrl}/schedules/{schedule.Id}/pause", null);
 		pauseResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -865,6 +1311,7 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		var resumed = await resumeResponse.Content.ReadFromJsonAsync<HrReportScheduleDto>(JsonOptions);
 		resumed.ShouldNotBeNull();
 		resumed.Status.ShouldBe(HrReportScheduleStatus.Active);
+		var nextRunBeforeManualRun = resumed.NextRunAt;
 
 		var runResponse = await Client.PostAsync($"{BaseUrl}/schedules/{schedule.Id}/run-now", null);
 		runResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -872,6 +1319,27 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		run.ShouldNotBeNull();
 		run.ScheduleId.ShouldBe(schedule.Id);
 		run.JobId.ShouldNotBe(default);
+		run.NextRunAt.ShouldBe(nextRunBeforeManualRun);
+
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+			var scheduleRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrReportSchedule, Guid>>();
+			using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+			{
+				var persistedSchedule = await scheduleRepository.GetAsync(schedule.Id);
+				persistedSchedule.GetRecipientUserIds().ShouldContain(Guid.Parse(TestAuthHandler.TestUserId));
+				persistedSchedule.LastRunAt.ShouldNotBeNull();
+				persistedSchedule.NextRunAt.ShouldBe(nextRunBeforeManualRun);
+			}
+		}
+
+		var scheduledExportResponse = await Client.GetAsync($"{BaseUrl}/exports/{run.JobId}");
+		scheduledExportResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var scheduledExport = await scheduledExportResponse.Content.ReadFromJsonAsync<HrReportExportJobDto>(JsonOptions);
+		scheduledExport.ShouldNotBeNull();
+		scheduledExport.SourceAction.ShouldBe("scheduleRun");
+		scheduledExport.ParentJobId.ShouldBeNull();
 
 		var deleteResponse = await Client.DeleteAsync($"{BaseUrl}/schedules/{schedule.Id}");
 		deleteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
@@ -934,6 +1402,169 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Shared_Scheduled_Exports_Should_Appear_In_Recipient_Exports_List()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = Guid.NewGuid().ToString("N")[..8];
+		var recipientUserId = Guid.NewGuid();
+		var unrelatedUserId = Guid.NewGuid();
+		await SeedReportRecipientLookupUserAsync(recipientUserId, $"report-export-recipient-{marker}", grantReportView: true);
+		await SeedReportRecipientLookupUserAsync(unrelatedUserId, $"report-export-unrelated-{marker}", grantReportView: true);
+		await SeedOwnedExportJobsAsync(recipientUserId, 55, marker);
+
+		var createResponse = await Client.PostAsJsonAsync($"{BaseUrl}/schedules", new HrReportScheduleRequestDto
+		{
+			Name = $"Shared Employee Directory {marker}",
+			Frequency = HrReportScheduleFrequency.Monthly,
+			DeliveryMode = HrReportDeliveryMode.InApp,
+			RecipientUserIds = [recipientUserId],
+			Definition = new HrReportRequestDto
+			{
+				ReportType = HrReportTypes.EmployeeList,
+				DataSource = HrReportDataSources.Employee,
+				Columns = ["employeeCode", "employeeName"],
+				SourceAction = "regenerate",
+				ParentJobId = Guid.NewGuid(),
+				Filters = new HrReportFilterDto()
+			}
+		}, JsonOptions);
+
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+		var schedule = await createResponse.Content.ReadFromJsonAsync<HrReportScheduleDto>(JsonOptions);
+		schedule.ShouldNotBeNull();
+		schedule.RecipientUserIds.ShouldBe([recipientUserId]);
+
+		var runResponse = await Client.PostAsync($"{BaseUrl}/schedules/{schedule.Id}/run-now", null);
+		runResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var run = await runResponse.Content.ReadFromJsonAsync<HrReportScheduleRunResponseDto>(JsonOptions);
+		run.ShouldNotBeNull();
+
+		await SeedUnrelatedExportJobsAsync(205, marker);
+
+		using var recipientClient = CreateReportViewClient(recipientUserId);
+		var recipientExportsResponse = await recipientClient.GetAsync($"{BaseUrl}/exports");
+		recipientExportsResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var recipientExports = await recipientExportsResponse.Content.ReadFromJsonAsync<List<HrReportExportJobDto>>(JsonOptions);
+		recipientExports.ShouldNotBeNull();
+		recipientExports.Select(x => x.Id).ShouldContain(run.JobId);
+		recipientExports.Count.ShouldBeLessThanOrEqualTo(50);
+
+		using var unrelatedClient = CreateReportViewClient(unrelatedUserId);
+		var unrelatedExportsResponse = await unrelatedClient.GetAsync($"{BaseUrl}/exports");
+		unrelatedExportsResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var unrelatedExports = await unrelatedExportsResponse.Content.ReadFromJsonAsync<List<HrReportExportJobDto>>(JsonOptions);
+		unrelatedExports.ShouldNotBeNull();
+		unrelatedExports.Select(x => x.Id).ShouldNotContain(run.JobId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Shared_Export_Fallback_Should_Exact_Filter_Before_Taking_Recent_Jobs()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = Guid.NewGuid().ToString("N")[..8];
+		var recipientUserId = Guid.NewGuid();
+		await SeedReportRecipientLookupUserAsync(recipientUserId, $"report-export-fallback-recipient-{marker}", grantReportView: true);
+		var sharedJobId = await SeedSharedCompletedExportJobAsync(
+			Guid.Parse(TestAuthHandler.TestUserId),
+			recipientUserId,
+			marker,
+			DateTime.UtcNow.AddDays(7),
+			DateTime.UtcNow.AddHours(-2));
+
+		await SeedFalsePositiveSharedCandidateExportJobsAsync(recipientUserId, 505, marker);
+
+		using var recipientClient = CreateReportViewClient(recipientUserId);
+		var response = await recipientClient.GetAsync($"{BaseUrl}/exports");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var exports = await response.Content.ReadFromJsonAsync<List<HrReportExportJobDto>>(JsonOptions);
+		exports.ShouldNotBeNull();
+		exports.Select(x => x.Id).ShouldContain(sharedJobId);
+		exports.Count.ShouldBeLessThanOrEqualTo(50);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Shared_Export_Recipients_Should_Not_Mutate_Owner_Jobs()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = Guid.NewGuid().ToString("N")[..8];
+		var recipientUserId = Guid.NewGuid();
+		await SeedReportRecipientLookupUserAsync(recipientUserId, $"report-export-mutation-recipient-{marker}", grantReportView: true);
+
+		var createResponse = await Client.PostAsJsonAsync($"{BaseUrl}/schedules", new HrReportScheduleRequestDto
+		{
+			Name = $"Shared Mutation Guard {marker}",
+			Frequency = HrReportScheduleFrequency.Monthly,
+			DeliveryMode = HrReportDeliveryMode.InApp,
+			RecipientUserIds = [recipientUserId],
+			Definition = new HrReportRequestDto
+			{
+				ReportType = HrReportTypes.EmployeeList,
+				DataSource = HrReportDataSources.Employee,
+				Columns = ["employeeCode", "employeeName"],
+				SourceAction = "regenerate",
+				ParentJobId = Guid.NewGuid(),
+				Filters = new HrReportFilterDto()
+			}
+		}, JsonOptions);
+
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+		var schedule = await createResponse.Content.ReadFromJsonAsync<HrReportScheduleDto>(JsonOptions);
+		schedule.ShouldNotBeNull();
+
+		var runResponse = await Client.PostAsync($"{BaseUrl}/schedules/{schedule.Id}/run-now", null);
+		runResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var run = await runResponse.Content.ReadFromJsonAsync<HrReportScheduleRunResponseDto>(JsonOptions);
+		run.ShouldNotBeNull();
+
+		using var recipientClient = CreateReportClient(
+			recipientUserId,
+			ShikshaMitraSubmodulePermissions.HR.Reports.View,
+			ShikshaMitraSubmodulePermissions.HR.Reports.Export,
+			ShikshaMitraSubmodulePermissions.HR.Reports.Share);
+
+		var recipientExportsResponse = await recipientClient.GetAsync($"{BaseUrl}/exports");
+		recipientExportsResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var recipientExports = await recipientExportsResponse.Content.ReadFromJsonAsync<List<HrReportExportJobDto>>(JsonOptions);
+		recipientExports.ShouldNotBeNull();
+		recipientExports.Select(x => x.Id).ShouldContain(run.JobId);
+
+		var cancelResponse = await recipientClient.PostAsync($"{BaseUrl}/exports/{run.JobId}/cancel", null);
+		cancelResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		var retryResponse = await recipientClient.PostAsync($"{BaseUrl}/exports/{run.JobId}/retry", null);
+		retryResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		var shareResponse = await recipientClient.PostAsJsonAsync($"{BaseUrl}/exports/{run.JobId}/share", new HrReportShareExportRequestDto
+		{
+			UserIds = [Guid.NewGuid()]
+		}, JsonOptions);
+		shareResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		var expiredSharedJobId = await SeedSharedCompletedExportJobAsync(
+			Guid.Parse(TestAuthHandler.TestUserId),
+			recipientUserId,
+			marker,
+			DateTime.UtcNow.AddDays(-1));
+		var regenerateResponse = await recipientClient.PostAsync($"{BaseUrl}/exports/{expiredSharedJobId}/regenerate", null);
+		regenerateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var regenerated = await regenerateResponse.Content.ReadFromJsonAsync<HrReportExportCreateResponseDto>(JsonOptions);
+		regenerated.ShouldNotBeNull();
+		regenerated.JobId.ShouldNotBe(expiredSharedJobId);
+
+		var regeneratedJobResponse = await recipientClient.GetAsync($"{BaseUrl}/exports/{regenerated.JobId}");
+		regeneratedJobResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var regeneratedJob = await regeneratedJobResponse.Content.ReadFromJsonAsync<HrReportExportJobDto>(JsonOptions);
+		regeneratedJob.ShouldNotBeNull();
+		regeneratedJob.RequestedByUserId.ShouldBe(recipientUserId);
+		regeneratedJob.ParentJobId.ShouldBe(expiredSharedJobId);
+		regeneratedJob.SourceAction.ShouldBe("regenerate");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Schedules_Should_Reject_Recipients_Without_Report_View_Access()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
@@ -953,6 +1584,205 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		}, JsonOptions);
 
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Share_Export_Should_Reject_Empty_And_Non_View_Recipients()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = Guid.NewGuid().ToString("N")[..8];
+		var blockedUserId = Guid.NewGuid();
+		await SeedReportRecipientLookupUserAsync(blockedUserId, $"report-share-blocked-{marker}", grantReportView: false);
+
+		var createResponse = await Client.PostAsJsonAsync($"{BaseUrl}/exports", new HrReportRequestDto
+		{
+			ReportType = HrReportTypes.EmployeeList,
+			DataSource = HrReportDataSources.Employee,
+			Format = HrReportFormat.Excel,
+			Filters = new HrReportFilterDto()
+		}, JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+		var created = await createResponse.Content.ReadFromJsonAsync<HrReportExportCreateResponseDto>(JsonOptions);
+		created.ShouldNotBeNull();
+
+		var emptyResponse = await Client.PostAsJsonAsync($"{BaseUrl}/exports/{created.JobId}/share", new HrReportShareExportRequestDto
+		{
+			UserIds = []
+		}, JsonOptions);
+		emptyResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+
+		var blockedResponse = await Client.PostAsJsonAsync($"{BaseUrl}/exports/{created.JobId}/share", new HrReportShareExportRequestDto
+		{
+			UserIds = [blockedUserId]
+		}, JsonOptions);
+		blockedResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Share_Export_Should_Add_Recipients_Without_Removing_Existing_Recipients()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = Guid.NewGuid().ToString("N")[..8];
+		var firstRecipientId = Guid.NewGuid();
+		var secondRecipientId = Guid.NewGuid();
+		await SeedReportRecipientLookupUserAsync(firstRecipientId, $"report-share-first-{marker}", grantReportView: true);
+		await SeedReportRecipientLookupUserAsync(secondRecipientId, $"report-share-second-{marker}", grantReportView: true);
+
+		var createResponse = await Client.PostAsJsonAsync($"{BaseUrl}/exports", CreateBasicEmployeeExportRequest("Additive Share Export"), JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+		var created = await createResponse.Content.ReadFromJsonAsync<HrReportExportCreateResponseDto>(JsonOptions);
+		created.ShouldNotBeNull();
+
+		var firstShareResponse = await Client.PostAsJsonAsync($"{BaseUrl}/exports/{created.JobId}/share", new HrReportShareExportRequestDto
+		{
+			UserIds = [firstRecipientId]
+		}, JsonOptions);
+		firstShareResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var secondShareResponse = await Client.PostAsJsonAsync($"{BaseUrl}/exports/{created.JobId}/share", new HrReportShareExportRequestDto
+		{
+			UserIds = [secondRecipientId]
+		}, JsonOptions);
+		secondShareResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var sharedJob = await secondShareResponse.Content.ReadFromJsonAsync<HrReportExportJobDto>(JsonOptions);
+		sharedJob.ShouldNotBeNull();
+		sharedJob.SharedUserIds.ShouldContain(firstRecipientId);
+		sharedJob.SharedUserIds.ShouldContain(secondRecipientId);
+		sharedJob.SharedUserIds.ShouldNotContain(Guid.Parse(TestAuthHandler.TestUserId));
+
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+			var exportRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrReportExportJob, Guid>>();
+			using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+			{
+				var persisted = await exportRepository.GetAsync(created.JobId);
+				persisted.GetSharedUserIds().ShouldContain(firstRecipientId);
+				persisted.GetSharedUserIds().ShouldContain(secondRecipientId);
+			}
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Share_Export_Should_Reject_When_Only_Owner_Is_Selected()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var createResponse = await Client.PostAsJsonAsync($"{BaseUrl}/exports", CreateBasicEmployeeExportRequest("Owner Only Share Export"), JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+		var created = await createResponse.Content.ReadFromJsonAsync<HrReportExportCreateResponseDto>(JsonOptions);
+		created.ShouldNotBeNull();
+
+		var ownerOnlyResponse = await Client.PostAsJsonAsync($"{BaseUrl}/exports/{created.JobId}/share", new HrReportShareExportRequestDto
+		{
+			UserIds = [Guid.Parse(TestAuthHandler.TestUserId)]
+		}, JsonOptions);
+		ownerOnlyResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Recipients_Should_Return_Only_Users_With_Report_View_Access()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = Guid.NewGuid().ToString("N")[..8];
+		var allowedUserId = Guid.NewGuid();
+		var blockedUserId = Guid.NewGuid();
+		await SeedReportRecipientLookupUserAsync(allowedUserId, $"report-recipient-allowed-{marker}", grantReportView: true);
+		await SeedReportRecipientLookupUserAsync(blockedUserId, $"report-recipient-blocked-{marker}", grantReportView: false);
+
+		var response = await Client.GetAsync($"{BaseUrl}/recipients?filter={marker}&maxResultCount=20");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var recipients = await response.Content.ReadFromJsonAsync<List<HrReportRecipientDto>>(JsonOptions);
+		recipients.ShouldNotBeNull();
+		recipients.Select(x => x.Id).ShouldContain(allowedUserId);
+		recipients.Select(x => x.Id).ShouldNotContain(blockedUserId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Recipients_Should_Resolve_Explicit_Ids_Outside_Filter_And_Keep_View_Permission()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = Guid.NewGuid().ToString("N")[..8];
+		var allowedUserId = Guid.NewGuid();
+		var blockedUserId = Guid.NewGuid();
+		await SeedReportRecipientLookupUserAsync(allowedUserId, $"report-recipient-id-allowed-{marker}", grantReportView: true);
+		await SeedReportRecipientLookupUserAsync(blockedUserId, $"report-recipient-id-blocked-{marker}", grantReportView: false);
+
+		var response = await Client.GetAsync($"{BaseUrl}/recipients?filter=no-match-{marker}&maxResultCount=1&ids={allowedUserId},{blockedUserId}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var recipients = await response.Content.ReadFromJsonAsync<List<HrReportRecipientDto>>(JsonOptions);
+		recipients.ShouldNotBeNull();
+		recipients.Select(x => x.Id).ShouldContain(allowedUserId);
+		recipients.Select(x => x.Id).ShouldNotContain(blockedUserId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Recipients_Should_Not_Lose_Eligible_Users_After_Ineligible_Search_Matches()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = Guid.NewGuid().ToString("N")[..8];
+		var allowedUserId = Guid.NewGuid();
+
+		for (var index = 0; index < 205; index++)
+		{
+			await SeedReportRecipientLookupUserAsync(
+				Guid.NewGuid(),
+				$"report-recipient-scale-a{index:000}-{marker}",
+				grantReportView: false);
+		}
+
+		await SeedReportRecipientLookupUserAsync(
+			allowedUserId,
+			$"report-recipient-scale-z-{marker}",
+			grantReportView: true);
+
+		var response = await Client.GetAsync($"{BaseUrl}/recipients?filter={marker}&maxResultCount=20");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var recipients = await response.Content.ReadFromJsonAsync<List<HrReportRecipientDto>>(JsonOptions);
+		recipients.ShouldNotBeNull();
+		recipients.Select(x => x.Id).ShouldContain(allowedUserId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Schedule_Permission_Should_Delete_Schedules_But_View_Only_Should_Not()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		using var scheduleClient = CreateClientWithPermissions(
+			ShikshaMitraSubmodulePermissions.HR.Reports.View,
+			ShikshaMitraSubmodulePermissions.HR.Reports.Schedule);
+
+		var scheduleResponse = await scheduleClient.PostAsJsonAsync($"{BaseUrl}/schedules", new HrReportScheduleRequestDto
+		{
+			Name = "Schedule Permission Delete",
+			Frequency = HrReportScheduleFrequency.Monthly,
+			DeliveryMode = HrReportDeliveryMode.InApp,
+			Definition = new HrReportRequestDto
+			{
+				ReportType = HrReportTypes.EmployeeList,
+				DataSource = HrReportDataSources.Employee,
+				Filters = new HrReportFilterDto()
+			}
+		}, JsonOptions);
+		scheduleResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+		var schedule = await scheduleResponse.Content.ReadFromJsonAsync<HrReportScheduleDto>(JsonOptions);
+		schedule.ShouldNotBeNull();
+
+		using var viewOnlyClient = CreateClientWithPermissions(ShikshaMitraSubmodulePermissions.HR.Reports.View);
+		var forbiddenDelete = await viewOnlyClient.DeleteAsync($"{BaseUrl}/schedules/{schedule.Id}");
+		forbiddenDelete.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		var allowedDelete = await scheduleClient.DeleteAsync($"{BaseUrl}/schedules/{schedule.Id}");
+		allowedDelete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}
 
 	[Fact]
@@ -1013,6 +1843,379 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		}, JsonOptions);
 		scheduleResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
+
+	private async Task SeedReportRecipientLookupUserAsync(Guid userId, string userName, bool grantReportView)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var userRepository = scope.ServiceProvider.GetRequiredService<IRepository<IdentityUser, Guid>>();
+		var permissionGrantRepository = scope.ServiceProvider.GetRequiredService<IRepository<PermissionGrant, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var permissionName = ShikshaMitraSubmodulePermissions.HR.Reports.View;
+		var providerKey = userId.ToString("D");
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var existingUsers = await userRepository.GetListAsync(x => x.Id == userId);
+			if (existingUsers.Count == 0)
+			{
+				await userRepository.InsertAsync(
+					new IdentityUser(userId, userName, $"{userName}@test.local", tenantId),
+					autoSave: false);
+			}
+
+			if (grantReportView)
+			{
+				var existingGrants = await permissionGrantRepository.GetListAsync(x =>
+					x.Name == permissionName &&
+					x.ProviderName == "U" &&
+					x.ProviderKey == providerKey);
+				if (existingGrants.Count == 0)
+				{
+					await permissionGrantRepository.InsertAsync(
+						new PermissionGrant(
+							Guid.NewGuid(),
+							permissionName,
+							"U",
+							providerKey,
+							tenantId),
+						autoSave: false);
+				}
+			}
+
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task SeedOwnedExportJobsAsync(Guid ownerUserId, int count, string marker)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var exportRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrReportExportJob, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var filtersJson = JsonSerializer.Serialize(new HrReportFilterDto(), JsonOptions);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			for (var index = 0; index < count; index++)
+			{
+				var request = new HrReportRequestDto
+				{
+					ReportType = $"Owned Export {marker} {index:000}",
+					DataSource = HrReportDataSources.Employee,
+					Format = HrReportFormat.Excel,
+					Filters = new HrReportFilterDto()
+				};
+				await exportRepository.InsertAsync(
+					new HrReportExportJob(
+						Guid.NewGuid(),
+						tenantId,
+						ownerUserId,
+						request.ReportType,
+						HrReportFormat.Excel,
+						filtersJson,
+						JsonSerializer.Serialize(request, JsonOptions),
+						DateTime.UtcNow.AddDays(7)),
+					autoSave: false);
+			}
+
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<Guid> SeedSharedCompletedExportJobAsync(
+		Guid ownerUserId,
+		Guid recipientUserId,
+		string marker,
+		DateTime expiresAt,
+		DateTime? creationTime = null)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var exportRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrReportExportJob, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var request = new HrReportRequestDto
+		{
+			ReportType = $"Expired Shared Export {marker}",
+			DataSource = HrReportDataSources.Employee,
+			Format = HrReportFormat.Excel,
+			Columns = ["employeeCode", "employeeName"],
+			Filters = new HrReportFilterDto()
+		};
+		var filtersJson = JsonSerializer.Serialize(request.Filters, JsonOptions);
+		var job = new HrReportExportJob(
+			Guid.NewGuid(),
+			tenantId,
+			ownerUserId,
+			request.ReportType,
+			HrReportFormat.Excel,
+			filtersJson,
+			JsonSerializer.Serialize(request, JsonOptions),
+			expiresAt);
+		job.MarkCompleted($"hr-report-exports/test/{marker}.xlsx", DateTime.UtcNow.AddDays(-2), 1, 128);
+		job.ShareWith([recipientUserId]);
+		if (creationTime.HasValue)
+		{
+			job.CreationTime = creationTime.Value;
+		}
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await exportRepository.InsertAsync(job, autoSave: false);
+			await uow.CompleteAsync();
+		}
+
+		return job.Id;
+	}
+
+	private async Task SeedFalsePositiveSharedCandidateExportJobsAsync(Guid recipientUserId, int count, string marker)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var exportRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrReportExportJob, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var filtersJson = JsonSerializer.Serialize(new HrReportFilterDto(), JsonOptions);
+		var newestCreationTime = DateTime.UtcNow;
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			for (var index = 0; index < count; index++)
+			{
+				var request = new HrReportRequestDto
+				{
+					ReportType = $"False Shared Candidate {marker} {index:000}",
+					DataSource = HrReportDataSources.Employee,
+					Format = HrReportFormat.Excel,
+					Filters = new HrReportFilterDto()
+				};
+				var job = new HrReportExportJob(
+					Guid.NewGuid(),
+					tenantId,
+					Guid.NewGuid(),
+					request.ReportType,
+					HrReportFormat.Excel,
+					filtersJson,
+					JsonSerializer.Serialize(request, JsonOptions),
+					DateTime.UtcNow.AddDays(7));
+				job.CreationTime = newestCreationTime.AddMinutes(index);
+				SetSharedUserIdsJson(job, $"[\"{recipientUserId:D}\", \"not-a-valid-guid\"");
+				await exportRepository.InsertAsync(job, autoSave: false);
+			}
+
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task SeedUnrelatedExportJobsAsync(int count, string marker)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var exportRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrReportExportJob, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var filtersJson = JsonSerializer.Serialize(new HrReportFilterDto(), JsonOptions);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			for (var index = 0; index < count; index++)
+			{
+				var request = new HrReportRequestDto
+				{
+					ReportType = $"Unrelated Export {marker} {index:000}",
+					DataSource = HrReportDataSources.Employee,
+					Format = HrReportFormat.Excel,
+					Filters = new HrReportFilterDto()
+				};
+				await exportRepository.InsertAsync(
+					new HrReportExportJob(
+						Guid.NewGuid(),
+						tenantId,
+						Guid.NewGuid(),
+						request.ReportType,
+						HrReportFormat.Excel,
+						filtersJson,
+						JsonSerializer.Serialize(request, JsonOptions),
+						DateTime.UtcNow.AddDays(7)),
+					autoSave: false);
+			}
+
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<Guid> SeedExportJobAsync(
+		Guid ownerUserId,
+		string status,
+		string marker,
+		DateTime? expiresAt = null,
+		HrReportRequestDto? request = null)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var exportRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrReportExportJob, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		request ??= CreateBasicEmployeeExportRequest($"Seeded Export {marker} {status}");
+		var job = new HrReportExportJob(
+			Guid.NewGuid(),
+			tenantId,
+			ownerUserId,
+			request.ReportType,
+			string.Equals(request.Format, HrReportFormat.Pdf, StringComparison.OrdinalIgnoreCase)
+				? HrReportFormat.Pdf
+				: HrReportFormat.Excel,
+			JsonSerializer.Serialize(request.Filters ?? new HrReportFilterDto(), JsonOptions),
+			JsonSerializer.Serialize(request, JsonOptions),
+			expiresAt ?? DateTime.UtcNow.AddDays(7));
+
+		switch (status)
+		{
+			case HrReportExportStatus.Running:
+				job.MarkRunning(DateTime.UtcNow.AddMinutes(-5));
+				break;
+			case HrReportExportStatus.Completed:
+				job.MarkCompleted($"hr-report-exports/test/{marker}.xlsx", DateTime.UtcNow.AddMinutes(-4), 1, 128);
+				break;
+			case HrReportExportStatus.Failed:
+				job.MarkFailed("Seeded export failure", DateTime.UtcNow.AddMinutes(-4));
+				break;
+			case HrReportExportStatus.Cancelled:
+				job.MarkCancelled(DateTime.UtcNow.AddMinutes(-4));
+				break;
+		}
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await exportRepository.InsertAsync(job, autoSave: false);
+			await uow.CompleteAsync();
+		}
+
+		return job.Id;
+	}
+
+	private static HrReportRequestDto CreateBasicEmployeeExportRequest(string reportType) => new()
+	{
+		ReportType = reportType,
+		DataSource = HrReportDataSources.Employee,
+		Format = HrReportFormat.Excel,
+		Columns = ["employeeCode", "employeeName"],
+		Filters = new HrReportFilterDto()
+	};
+
+	private static void SetSharedUserIdsJson(HrReportExportJob job, string sharedUserIdsJson)
+	{
+		var property = typeof(HrReportExportJob).GetProperty(nameof(HrReportExportJob.SharedUserIdsJson));
+		property.ShouldNotBeNull();
+		var setter = property.GetSetMethod(nonPublic: true);
+		setter.ShouldNotBeNull();
+		setter.Invoke(job, new object?[] { sharedUserIdsJson });
+	}
+
+	private static HrReportRequestDto CreateMixedCasePayrollReportRequest() => new()
+	{
+		ReportType = "Mixed Case Payroll Report",
+		DataSource = HrReportDataSources.Payroll,
+		Format = HrReportFormat.Excel,
+		Columns = ["department", "rowCount", "sum_grossSalary"],
+		Groups = ["department"],
+		Sorts = [new HrReportSortDto { Field = "sum_grossSalary", Direction = "DESC" }],
+		Summaries = [new HrReportSummaryDto { Field = "grossSalary", Function = "SUM" }],
+		Chart = new HrReportChartDefinitionDto
+		{
+			Type = "BAR",
+			CategoryField = "department",
+			ValueField = "grossSalary",
+			Function = "AVG"
+		},
+		Filters = new HrReportFilterDto
+		{
+			Conditions =
+			[
+				new HrReportFilterConditionDto
+				{
+					Field = "department",
+					Operator = "IN",
+					Values = ["Academics", "Administration"]
+				}
+			]
+		}
+	};
+
+	private static async Task AssertProblemContainsAsync(HttpResponseMessage response, string key, string value)
+	{
+		var body = await response.Content.ReadAsStringAsync();
+		body.ShouldContain(key);
+		body.ShouldContain(value);
+	}
+
+	private static HrReportRequestDto CreateInvalidEnumReportRequest() => new()
+	{
+		ReportType = "Invalid Payroll Enum Report",
+		DataSource = HrReportDataSources.Payroll,
+		Columns = ["employeeCode", "grossSalary"],
+		Sorts = [new HrReportSortDto { Field = "employeeCode", Direction = "sideways" }],
+		Summaries = [new HrReportSummaryDto { Field = "grossSalary", Function = "median" }],
+		Chart = new HrReportChartDefinitionDto
+		{
+			Type = HrReportChartType.Bar,
+			CategoryField = "department",
+			ValueField = "grossSalary",
+			Function = "median"
+		},
+		Filters = new HrReportFilterDto
+		{
+			Conditions =
+			[
+				new HrReportFilterConditionDto
+				{
+					Field = "department",
+					Operator = "near",
+					Value = "Academics"
+				}
+			]
+		}
+	};
+
+	private static HrReportRequestDto CreateInvalidChartTypeReportRequest() => new()
+	{
+		ReportType = "Invalid Chart Type Report",
+		DataSource = HrReportDataSources.Employee,
+		Columns = ["employeeCode", "department"],
+		Groups = ["department"],
+		Chart = new HrReportChartDefinitionDto
+		{
+			Type = "radar",
+			CategoryField = "department",
+			Function = HrReportSummaryFunction.Count
+		},
+		Filters = new HrReportFilterDto()
+	};
+
+	private static HrReportRequestDto CreateInvalidChartValueFieldReportRequest() => new()
+	{
+		ReportType = "Invalid Chart Value Field Report",
+		DataSource = HrReportDataSources.Employee,
+		Columns = ["employeeCode", "department"],
+		Groups = ["department"],
+		Chart = new HrReportChartDefinitionDto
+		{
+			Type = HrReportChartType.Bar,
+			CategoryField = "department",
+			ValueField = "notAReportField",
+			Function = HrReportSummaryFunction.Count
+		},
+		Filters = new HrReportFilterDto()
+	};
 
 	private async Task<PersonalInfoResponse> CreateEmployeeInStageAsync(string firstNameSuffix, Guid stageId)
 	{
@@ -1411,7 +2614,12 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 
 	private HttpClient CreateReportViewClient(Guid userId)
 	{
-		var client = CreateClientWithPermissions(ShikshaMitraSubmodulePermissions.HR.Reports.View);
+		return CreateReportClient(userId, ShikshaMitraSubmodulePermissions.HR.Reports.View);
+	}
+
+	private HttpClient CreateReportClient(Guid userId, params string[] permissions)
+	{
+		var client = CreateClientWithPermissions(permissions);
 		client.DefaultRequestHeaders.Remove(TestAuthHandler.TestUserIdHeader);
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, userId.ToString("D"));
 		return client;

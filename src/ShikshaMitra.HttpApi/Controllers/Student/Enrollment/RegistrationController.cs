@@ -96,9 +96,10 @@ public class RegistrationController(
 	[HttpGet("search")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Default)]
 	public async Task<Result<List<StudentSearchResultDto>>> SearchStudentsByNameAsync(
-		[FromQuery] string searchTerm)
+		[FromQuery] string searchTerm,
+		[FromQuery] int maxResultCount = 20)
 	{
-		var result = await registrationAppService.SearchStudentsByNameAsync(searchTerm);
+		var result = await registrationAppService.SearchStudentsByNameAsync(searchTerm, maxResultCount);
 		return Result.Success(result);
 	}
 }

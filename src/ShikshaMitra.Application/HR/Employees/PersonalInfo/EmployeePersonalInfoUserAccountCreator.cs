@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
@@ -58,7 +59,20 @@ public class EmployeePersonalInfoUserAccountCreator(
 
 	public async Task DeleteAfterEmployeeCreationFailureAsync(IdentityUser user, string email)
 	{
-		var deleteResult = await userManager.DeleteAsync(user);
+		IdentityResult deleteResult;
+		try
+		{
+			deleteResult = await userManager.DeleteAsync(user);
+		}
+		catch (Exception ex)
+		{
+			logger.LogWarning(
+				ex,
+				"Employee creation failed and cleanup user delete also threw for {Email}.",
+				email);
+			return;
+		}
+
 		if (deleteResult.Succeeded)
 		{
 			return;

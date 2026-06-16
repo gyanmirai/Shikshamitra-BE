@@ -10,6 +10,8 @@ using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.EntityFrameworkCore.HR.Calendar.Events;
+using ShikshaMitra.EntityFrameworkCore.HR.Reports;
+using ShikshaMitra.HR.Reports;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Students;
@@ -106,6 +108,7 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<ChargeRequest, EfCoreChargeRequestRepository>();
             options.AddRepository<ConcessionRequest, EfCoreConcessionRequestRepository>();
             options.AddRepository<StaffAttendanceDayLock, EfCoreStaffAttendanceDayLockRepository>();
+            options.AddRepository<HrReportExportJob, EfCoreHrReportExportJobRepository>();
             options.AddRepository<DueFee, EfCoreDueFeeRepository>();
             options.AddRepository<FeeRefundRequest, EfCoreFeeRefundRepository>();
             options.AddRepository<FeeAdjustmentRequest, EfCoreFeeAdjustmentRepository>();

@@ -60,6 +60,12 @@ public class PersonalInfoRequest
 
 	public string? Department { get; set; }
 
+	public string? Designation { get; set; }
+
+	public string? Qualification { get; set; }
+
+	public string? IdentificationMark1 { get; set; }
+
 	public Guid RoleId { get; set; }
 
 	public Guid ShiftId { get; set; }

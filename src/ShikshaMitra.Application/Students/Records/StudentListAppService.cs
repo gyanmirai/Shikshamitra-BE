@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.StudentRecords;
@@ -20,8 +21,12 @@ namespace ShikshaMitra.Students.Records;
 [RemoteService(false)]
 public class StudentListAppService(
 	IStudentRepository studentRepository,
+	IRepository<AttendanceEntry, Guid> attendanceEntryRepository,
+	IAttendanceDayRepository attendanceDayRepository,
 	IRepository<StudentDocument, Guid> studentDocumentRepository,
 	IRepository<DocumentTypeEntity, Guid> documentTypeRepository,
+	IRepository<global::ShikshaMitra.TenantSettings.Standards.Standard, Guid> standardRepository,
+	IRepository<global::ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository,
 	IBlobContainer blobContainer,
 	IUserScopeAccessService userScopeAccessService,
 	StudentScopeAccessService studentScopeAccessService
@@ -83,8 +88,7 @@ public class StudentListAppService(
 
 	public async Task<StudentPhotoUploadResultDto> UploadPhotoAsync(Guid studentId, UploadStudentPhotoDto input)
 	{
-		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, nameof(UploadPhotoAsync));
+		var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(UploadPhotoAsync));
 
 		FileValidationService.ValidateProfilePictureUpload(input.FileName, input.Content);
 
@@ -108,8 +112,7 @@ public class StudentListAppService(
 
 	public async Task<StudentPhotoDownloadDto?> GetPhotoAsync(Guid studentId)
 	{
-		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, nameof(GetPhotoAsync));
+		var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(GetPhotoAsync));
 
 		if (string.IsNullOrWhiteSpace(student.PhotoBlobName))
 		{
@@ -137,10 +140,10 @@ public class StudentListAppService(
 		var female = await AsyncExecuter.CountAsync(query.Where(s =>
 			s.AdditionalDetail != null && s.AdditionalDetail.Gender == GenderEnum.Female));
 
-		var rows = await AsyncExecuter.ToListAsync(
+		var recentRows = await AsyncExecuter.ToListAsync(
 			query
 				.OrderByDescending(s => s.CreationTime)
-				.Take(30)
+				.Take(5)
 				.Select(s => new
 				{
 					s.FirstName,
@@ -153,12 +156,25 @@ public class StudentListAppService(
 				}));
 
 		var now = Clock.Now;
+		var birthdayRows = await AsyncExecuter.ToListAsync(
+			query
+				.Where(s => s.AdditionalDetail != null && s.AdditionalDetail.DateOfBirth.HasValue)
+				.Select(s => new
+				{
+					s.FirstName,
+					s.MiddleName,
+					s.LastName,
+					Standard = s.Standard != null ? s.Standard.Name : string.Empty,
+					Division = s.Division != null ? s.Division.Name : string.Empty,
+					DateOfBirth = s.AdditionalDetail!.DateOfBirth
+				}));
+
 		return new StudentDashboardSummaryDto
 		{
 			TotalStudents = total,
 			MaleStudents = male,
 			FemaleStudents = female,
-			RecentActivities = rows.Take(5).Select(s => new StudentDashboardActivityDto
+			RecentActivities = recentRows.Select(s => new StudentDashboardActivityDto
 			{
 				Title = BuildStudentName(s.FirstName, s.MiddleName, s.LastName),
 				Subtitle = BuildClassName(s.Standard, s.Division),
@@ -166,19 +182,23 @@ public class StudentListAppService(
 				Date = s.CreationTime.ToString("dd MMM yyyy"),
 				TimeAgo = "Recent"
 			}).ToList(),
-			TodaysBirthdays = rows
+			TodaysBirthdays = birthdayRows
 				.Where(s => s.DateOfBirth.HasValue && s.DateOfBirth.Value.Month == now.Month && s.DateOfBirth.Value.Day == now.Day)
-				.Select(s => MapBirthday(s.FirstName, s.MiddleName, s.LastName, s.DateOfBirth, s.Standard, s.Division, null))
+				.Select(s => MapBirthday(s.FirstName, s.MiddleName, s.LastName, s.DateOfBirth, s.Standard, s.Division, null, now))
+				.Take(30)
 				.ToList(),
-			UpcomingBirthdays = rows
+			UpcomingBirthdays = birthdayRows
 				.Where(s => s.DateOfBirth.HasValue && IsUpcomingBirthday(s.DateOfBirth.Value, now))
-				.Select(s => MapBirthday(s.FirstName, s.MiddleName, s.LastName, s.DateOfBirth, s.Standard, s.Division, s.DateOfBirth!.Value.ToString("dd MMM")))
+				.OrderBy(s => GetNextBirthday(s.DateOfBirth!.Value, now))
+				.Select(s => MapBirthday(s.FirstName, s.MiddleName, s.LastName, s.DateOfBirth, s.Standard, s.Division, s.DateOfBirth!.Value.ToString("dd MMM"), now))
+				.Take(30)
 				.ToList()
 		};
 	}
 
-	public async Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummaryAsync()
+	public async Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummaryAsync(GetStudentAttendanceDashboardSummaryInput input)
 	{
+		var (startDate, endDate) = ResolveAttendanceDateRange(input.StartDate, input.EndDate);
 		var query = await GetScopedEnrolledStudentsQueryAsync();
 		var rows = await AsyncExecuter.ToListAsync(query.Select(s => new
 		{
@@ -187,26 +207,101 @@ public class StudentListAppService(
 			s.DivisionId,
 			Division = s.Division != null ? s.Division.Name : "Unassigned"
 		}));
+		var attendanceRows = new List<StudentAttendanceSummaryRow>();
+		if (rows.Count > 0)
+		{
+			var scopedAttendanceDays = await studentScopeAccessService.ApplyCurrentUserAttendanceDayScopeAsync(
+				await attendanceDayRepository.GetQueryableAsync());
+			var attendanceEntries = await attendanceEntryRepository.GetQueryableAsync();
+			var projectedAttendanceRows = await AsyncExecuter.ToListAsync(
+				from entry in attendanceEntries
+				join day in scopedAttendanceDays on entry.AttendanceDayId equals day.Id
+				join student in query on entry.StudentId equals student.Id
+				where day.Date >= startDate
+				      && day.Date <= endDate
+				      && (entry.Status == AttendanceStatus.Present || entry.Status == AttendanceStatus.Absent)
+				select new
+				{
+					entry.Status,
+					StandardId = (Guid?)day.StandardId,
+					DivisionId = (Guid?)day.DivisionId
+				});
+			attendanceRows = projectedAttendanceRows
+				.Select(x => new StudentAttendanceSummaryRow(x.Status, x.StandardId, x.DivisionId))
+				.ToList();
+		}
+
+		var groupRows = rows
+			.Select(s => new StudentAttendanceGroupRow(s.StandardId, s.DivisionId))
+			.Concat(attendanceRows.Select(s => new StudentAttendanceGroupRow(s.StandardId, s.DivisionId)))
+			.Distinct()
+			.ToList();
+		var standardIds = groupRows
+			.Where(x => x.StandardId.HasValue)
+			.Select(x => x.StandardId!.Value)
+			.Distinct()
+			.ToList();
+		var divisionIds = groupRows
+			.Where(x => x.DivisionId.HasValue)
+			.Select(x => x.DivisionId!.Value)
+			.Distinct()
+			.ToList();
+		var standardNames = rows
+			.Where(x => x.StandardId.HasValue)
+			.GroupBy(x => x.StandardId!.Value)
+			.ToDictionary(x => x.Key, x => x.First().Standard);
+		var divisionNames = rows
+			.Where(x => x.DivisionId.HasValue)
+			.GroupBy(x => x.DivisionId!.Value)
+			.ToDictionary(x => x.Key, x => x.First().Division);
+
+		if (standardIds.Count > 0)
+		{
+			var standards = await AsyncExecuter.ToListAsync(
+				(await standardRepository.GetQueryableAsync())
+					.Where(x => standardIds.Contains(x.Id))
+					.Select(x => new { x.Id, x.Name }));
+			foreach (var standard in standards)
+			{
+				standardNames[standard.Id] = standard.Name;
+			}
+		}
+
+		if (divisionIds.Count > 0)
+		{
+			var divisions = await AsyncExecuter.ToListAsync(
+				(await divisionRepository.GetQueryableAsync())
+					.Where(x => divisionIds.Contains(x.Id))
+					.Select(x => new { x.Id, x.Name }));
+			foreach (var division in divisions)
+			{
+				divisionNames[division.Id] = division.Name;
+			}
+		}
 
 		return new StudentAttendanceDashboardSummaryDto
 		{
-			SchoolAttendancePercentage = 0,
-			Classes = rows
-				.GroupBy(s => new { s.StandardId, s.Standard })
-				.OrderBy(g => g.Key.Standard)
+			SchoolAttendancePercentage = CalculateAttendancePercentage(attendanceRows.Select(x => x.Status)),
+			Classes = groupRows
+				.GroupBy(s => s.StandardId)
+				.OrderBy(g => GetStandardName(g.Key, standardNames))
 				.Select(g => new StudentAttendanceClassSummaryDto
 				{
-					StandardId = g.Key.StandardId,
-					Name = g.Key.Standard,
-					Percentage = 0,
+					StandardId = g.Key,
+					Name = GetStandardName(g.Key, standardNames),
+					Percentage = CalculateAttendancePercentage(attendanceRows
+						.Where(x => x.StandardId == g.Key)
+						.Select(x => x.Status)),
 					Divisions = g
-						.GroupBy(x => new { x.DivisionId, x.Division })
-						.OrderBy(d => d.Key.Division)
+						.GroupBy(x => x.DivisionId)
+						.OrderBy(d => GetDivisionName(d.Key, divisionNames))
 						.Select(d => new StudentAttendanceDivisionSummaryDto
 						{
-							DivisionId = d.Key.DivisionId,
-							Name = d.Key.Division,
-							Percentage = 0
+							DivisionId = d.Key,
+							Name = GetDivisionName(d.Key, divisionNames),
+							Percentage = CalculateAttendancePercentage(attendanceRows
+								.Where(x => x.StandardId == g.Key && x.DivisionId == d.Key)
+								.Select(x => x.Status))
 						})
 						.ToList()
 				})
@@ -381,15 +476,61 @@ public class StudentListAppService(
 	private static string BuildClassName(string standard, string division) =>
 		string.IsNullOrWhiteSpace(division) ? standard : $"{standard} - {division}";
 
+	private static string GetStandardName(Guid? standardId, IReadOnlyDictionary<Guid, string> standardNames)
+	{
+		return standardId.HasValue && standardNames.TryGetValue(standardId.Value, out var name)
+			? name
+			: "Unassigned";
+	}
+
+	private static string GetDivisionName(Guid? divisionId, IReadOnlyDictionary<Guid, string> divisionNames)
+	{
+		return divisionId.HasValue && divisionNames.TryGetValue(divisionId.Value, out var name)
+			? name
+			: "Unassigned";
+	}
+
 	private static bool IsUpcomingBirthday(DateTimeOffset dateOfBirth, DateTime now)
 	{
-		var birthday = new DateTime(now.Year, dateOfBirth.Month, dateOfBirth.Day);
-		if (birthday < now.Date)
-		{
-			birthday = birthday.AddYears(1);
-		}
+		var birthday = GetNextBirthday(dateOfBirth, now);
 
 		return birthday > now.Date && birthday <= now.Date.AddDays(30);
+	}
+
+	private static DateTime GetNextBirthday(DateTimeOffset dateOfBirth, DateTime now)
+	{
+		var birthday = new DateTime(now.Year, dateOfBirth.Month, dateOfBirth.Day);
+		return birthday < now.Date ? birthday.AddYears(1) : birthday;
+	}
+
+	private static decimal CalculateAttendancePercentage(IEnumerable<AttendanceStatus> statuses)
+	{
+		var marked = statuses.Count(status => status is AttendanceStatus.Present or AttendanceStatus.Absent);
+		if (marked == 0)
+		{
+			return 0;
+		}
+
+		var present = statuses.Count(status => status == AttendanceStatus.Present);
+		return Math.Round(present * 100m / marked, 2);
+	}
+
+	private (DateTime StartDate, DateTime EndDate) ResolveAttendanceDateRange(DateTime? startDate, DateTime? endDate)
+	{
+		var now = Clock.Now.Date;
+		var defaultStart = new DateTime(now.Year, now.Month, 1);
+		var defaultEnd = defaultStart.AddMonths(1).AddDays(-1);
+		var start = (startDate ?? defaultStart).Date;
+		var end = (endDate ?? defaultEnd).Date;
+
+		if (start > end)
+		{
+			throw new BusinessException("StudentAttendance:InvalidDateRange")
+				.WithData("StartDate", start)
+				.WithData("EndDate", end);
+		}
+
+		return (start, end);
 	}
 
 	private static StudentBirthdayDto MapBirthday(
@@ -399,13 +540,17 @@ public class StudentListAppService(
 		DateTimeOffset? dateOfBirth,
 		string standard,
 		string division,
-		string? dateLabel)
+		string? dateLabel,
+		DateTime now)
 	{
-		var today = DateTimeOffset.UtcNow;
-		var age = dateOfBirth.HasValue ? today.Year - dateOfBirth.Value.Year : 0;
-		if (dateOfBirth.HasValue && dateOfBirth.Value.Date > today.AddYears(-age).Date)
+		var age = dateOfBirth.HasValue ? now.Year - dateOfBirth.Value.Year : 0;
+		if (dateOfBirth.HasValue)
 		{
-			age--;
+			var birthdayThisYear = new DateTime(now.Year, dateOfBirth.Value.Month, dateOfBirth.Value.Day);
+			if (birthdayThisYear > now.Date)
+			{
+				age--;
+			}
 		}
 
 		return new StudentBirthdayDto
@@ -416,4 +561,13 @@ public class StudentListAppService(
 			DateLabel = dateLabel
 		};
 	}
+
+	private sealed record StudentAttendanceSummaryRow(
+		AttendanceStatus Status,
+		Guid? StandardId,
+		Guid? DivisionId);
+
+	private sealed record StudentAttendanceGroupRow(
+		Guid? StandardId,
+		Guid? DivisionId);
 }

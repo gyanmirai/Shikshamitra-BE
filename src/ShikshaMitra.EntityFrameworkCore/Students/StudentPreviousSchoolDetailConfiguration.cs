@@ -19,6 +19,7 @@ public class StudentPreviousSchoolDetailConfiguration : IEntityTypeConfiguration
 		builder.Property(x => x.Board).HasMaxLength(100);
 		builder.Property(x => x.Medium).HasMaxLength(100);
 		builder.Property(x => x.LastClassAttended).HasMaxLength(100);
+		builder.Property(x => x.SchoolIndexNumber).HasMaxLength(50);
 		builder.Property(x => x.TCNumber).HasMaxLength(50);
 		builder.Property(x => x.PercentageObtained).HasPrecision(5, 2);
 		builder.Property(x => x.AcademicYear).HasMaxLength(20);

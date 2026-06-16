@@ -40,6 +40,8 @@ public partial class ShikshaMitraDbContext
     public DbSet<HouseSettings> HouseSettings { get; set; }
     public DbSet<StudentManagementSettings> StudentManagementSettings { get; set; }
     public DbSet<StudentStatusHistory> StudentStatusHistories { get; set; }
+    public DbSet<AcademicTerm> AcademicTerms { get; set; }
+    public DbSet<StudentRollNumberAssignment> StudentRollNumberAssignments { get; set; }
 
     // ───────────────────────────────────────────────
     // Students — Attendance

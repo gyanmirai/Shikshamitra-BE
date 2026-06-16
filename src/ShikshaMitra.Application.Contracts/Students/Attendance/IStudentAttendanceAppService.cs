@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Students.Attendance;
@@ -13,6 +14,12 @@ public interface IStudentAttendanceAppService : IApplicationService
 	/// Permission: Students.Attendance.MarkAttendance.View
 	/// </summary>
 	Task<StudentAttendanceListDto> GetStudentsForDateAsync(GetStudentsForAttendanceInput input);
+
+	/// <summary>
+	/// Gets paged attendance history for a student and date range.
+	/// Permission: Students.Attendance.MarkAttendance.View
+	/// </summary>
+	Task<PagedResultDto<StudentAttendanceHistoryDto>> GetAttendanceHistoryAsync(GetStudentAttendanceHistoryInput input);
 
 	/// <summary>
 	/// Marks or updates attendance for students

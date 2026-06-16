@@ -34,6 +34,11 @@ public class UpdateAdditionalDetailsDto
 	public bool HaveDisability { get; set; }
 
 	/// <summary>
+	/// Disability details when applicable
+	/// </summary>
+	public string? DisabilityDetails { get; set; }
+
+	/// <summary>
 	/// Emergency contact person relative name
 	/// </summary>
 	public string? EmergencyRelativeName { get; set; }

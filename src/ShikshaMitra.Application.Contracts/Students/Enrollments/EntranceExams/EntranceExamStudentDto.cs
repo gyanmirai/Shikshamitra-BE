@@ -9,6 +9,7 @@ namespace ShikshaMitra.Students.Enrollments.EntranceExams;
 public class EntranceExamStudentDto
 {
 	public Guid StudentId { get; set; }
+	public string? FormNo { get; set; }
     public string StudentName { get; set; }
 	public string EducationBoard { get; set; }
 	public string EducationMedium { get; set; }

@@ -95,7 +95,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			RoleId = EmployeeTestHelper.DefaultRoleId,
 			ShiftId = EmployeeTestHelper.DefaultShiftId,
 			OrganizationIds = [EmployeeTestHelper.DefaultMediumStageId],
-			Email = TestDataHelper.UniqueEmail("upd"),
+			Email = created.Email,
 			PanNo = TestDataHelper.UniquePan(),
 			AdharNo = TestDataHelper.UniqueAdhar(),
 			Gender = 2,
@@ -107,8 +107,30 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		var body = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.LastName.ShouldBe("UpdatedDoe");
+		body.Email.ShouldBe(created.Email);
 		body.PanNo.ShouldBe(updateRequest.PanNo);
 		body.AdharNo.ShouldBe(updateRequest.AdharNo);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Personal_Info_Email_Change()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "RejectEmailChange");
+		var originalEmail = created.Email;
+		originalEmail.ShouldNotBeNull();
+		var updateRequest = EmployeeTestHelper.BuildPersonalInfoRequest("RejectEmailChangeUpdate");
+		var requestedEmail = TestDataHelper.UniqueEmail("upd-email-change");
+		updateRequest.Email = requestedEmail;
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}/personal-info", updateRequest, JsonOptions);
+
+		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		var responseBody = await response.Content.ReadAsStringAsync();
+		responseBody.ShouldContain(HRErrorCodes.EmployeeEmailCannotBeChanged);
+		responseBody.ShouldContain("Employee email cannot be changed after employee creation.");
+		responseBody.ShouldNotContain(originalEmail);
+		responseBody.ShouldNotContain(requestedEmail);
 	}
 
 	[Fact]
@@ -118,6 +140,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "UpdateEditOnly");
 		using var client = CreatePermissionClient(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit);
 		var updateRequest = EmployeeTestHelper.BuildPersonalInfoRequest("EditOnly");
+		updateRequest.Email = created.Email;
 
 		var response = await client.PutAsJsonAsync($"{BaseUrl}/{created.Id}/personal-info", updateRequest, JsonOptions);
 
@@ -329,6 +352,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "RoundTrip");
 
 		var updateRequest = EmployeeTestHelper.BuildFullPersonalInfoRequest("RTUpdate");
+		updateRequest.Email = created.Email;
 		var response = await Client.PutAsJsonAsync(
 			$"{BaseUrl}/{created.Id}/personal-info", updateRequest, JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);

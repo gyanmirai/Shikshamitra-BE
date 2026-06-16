@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR;
@@ -35,6 +37,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 {
 	private const int MaxEmployeeCodeInsertAttempts = 5;
 	private const string OnboardingDefaultPolicyConfirmationTokenMarker = "__employee_onboarding_default_policy_assignment__";
+	private static readonly ConcurrentDictionary<string, SemaphoreSlim> CreationLocks = new();
 
 	public async Task<EmployeePersonalInfoDto> CreateAsync(
 		CreateEmployeePersonalInfoDto input,
@@ -48,17 +51,26 @@ public class EmployeePersonalInfoCreationWorkflow(
 		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo);
 		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
 
-		var userAccount = await userAccountCreator.CreateAsync(input);
-
 		Employee employee;
+		EmployeePersonalInfoUserAccount? userAccount = null;
+		var creationLock = CreationLocks.GetOrAdd(BuildCreationLockKey(), _ => new SemaphoreSlim(1, 1));
+		await creationLock.WaitAsync();
 		try
 		{
+			userAccount = await userAccountCreator.CreateAsync(input);
 			employee = await CreateAndInsertEmployeeWithRetryAsync(userAccount.User.Id, input);
 		}
 		catch
 		{
-			await userAccountCreator.DeleteAfterEmployeeCreationFailureAsync(userAccount.User, contact.Email);
+			if (userAccount != null)
+			{
+				await userAccountCreator.DeleteAfterEmployeeCreationFailureAsync(userAccount.User, contact.Email);
+			}
 			throw;
+		}
+		finally
+		{
+			creationLock.Release();
 		}
 
 		if (profilePictureContent != null && !string.IsNullOrWhiteSpace(profilePictureFileName))
@@ -85,6 +97,12 @@ public class EmployeePersonalInfoCreationWorkflow(
 		await emailService.SendWelcomeEmailAsync(input.Email, fullName, userAccount.Username, userAccount.Password);
 
 		return await personalInfoProjection.ToPersonalInfoDtoAsync(await employeeRepository.GetAsync(employee.Id));
+	}
+
+	private string BuildCreationLockKey()
+	{
+		var tenantKey = currentTenant.Id?.ToString("N") ?? "host";
+		return tenantKey;
 	}
 
 	private async Task<Employee> CreateAndInsertEmployeeWithRetryAsync(
@@ -175,7 +193,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 			employee.Id.ToString("D"));
 		var preview = await policyAssignmentAppService.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
 		{
-			Action = "create",
+			Action = HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction,
 			Assignment = new CreateUpdateHrPolicyAssignmentDto
 			{
 				AcademicYearId = input.AcademicYearId,

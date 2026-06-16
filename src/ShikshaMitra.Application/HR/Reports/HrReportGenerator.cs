@@ -14,6 +14,7 @@ public class HrReportGenerator(
 	IUserScopeService userScopeService,
 	HrReportEmployeeQueryService employeeQueryService,
 	HrReportRowSourceReader rowSourceReader,
+	HrReportRequestValidationService requestValidationService,
 	ICurrentTenant currentTenant,
 	IAsyncQueryableExecuter asyncExecuter) : ITransientDependency
 {
@@ -33,6 +34,7 @@ public class HrReportGenerator(
 		Guid? tenantId,
 		bool exportAllRows)
 	{
+		requestValidationService.Validate(input);
 		HrReportRequestProcessor.Normalize(input, exportAllRows);
 		using (currentTenant.Change(tenantId))
 		{

@@ -10,6 +10,8 @@ public class StudentAdditionalDetailConfiguration : IEntityTypeConfiguration<Stu
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
 
+		builder.Property(x => x.DisabilityDetails).HasMaxLength(500);
+
 		// add navigation properties for inquiry preference
 		builder.HasOne(x => x.InquiryPreference)
 			.WithMany()

@@ -41,6 +41,35 @@ public class EmployeeApplicationConfiguration : IEntityTypeConfiguration<Employe
 		builder.Property(x => x.StatusReason).HasMaxLength(1024);
 		builder.Property(x => x.InternalNotes).HasMaxLength(2048);
 
+		builder.OwnsOne(x => x.PersonalInfo, personal =>
+		{
+			personal.ToJson();
+			personal.OwnsOne(x => x.Country);
+			personal.OwnsOne(x => x.State);
+		});
+
+		builder.OwnsOne(x => x.FamilyInfo, family =>
+		{
+			family.ToJson();
+			family.OwnsOne(x => x.FatherDetails, member =>
+			{
+				member.OwnsOne(x => x.Country);
+				member.OwnsOne(x => x.State);
+			});
+			family.OwnsOne(x => x.MotherDetails, member =>
+			{
+				member.OwnsOne(x => x.Country);
+				member.OwnsOne(x => x.State);
+			});
+			family.OwnsOne(x => x.SpouseDetails, member =>
+			{
+				member.OwnsOne(x => x.Country);
+				member.OwnsOne(x => x.State);
+			});
+		});
+
+		builder.OwnsOne(x => x.AdditionalInfo, additional => additional.ToJson());
+
 		builder.OwnsMany(x => x.WorkExperiences, ew => ew.ToJson());
 
 		builder.OwnsOne(x => x.Country, cb =>

@@ -66,4 +66,14 @@ public class UpdateMedicalRecordsDto
 	/// Current medications
 	/// </summary>
 	public string? CurrentMedications { get; set; }
+
+	/// <summary>
+	/// Indicates if student is a person with disability
+	/// </summary>
+	public bool HaveDisability { get; set; }
+
+	/// <summary>
+	/// Disability details when applicable
+	/// </summary>
+	public string? DisabilityDetails { get; set; }
 }

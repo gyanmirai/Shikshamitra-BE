@@ -112,6 +112,9 @@ public class ProfessionalManagementController : AbpControllerBase
 	[HttpGet("reviews/{id}/observations")]
 	public Task<List<ClassroomObservationDto>> GetObservationsAsync(Guid id) => _appService.GetObservationsAsync(id);
 
+	[HttpGet("reviews/{id}/evidence")]
+	public Task<List<PerformanceEvidenceDto>> GetEvidenceAsync(Guid id) => _appService.GetEvidenceAsync(id);
+
 	[HttpPost("reviews/{id}/evidence")]
 	public Task<PerformanceEvidenceDto> AddEvidenceAsync(Guid id, [FromBody] PerformanceEvidenceRequest input) => _appService.AddEvidenceAsync(id, input);
 

@@ -13,7 +13,7 @@ public interface IStudentListAppService : IApplicationService
 	Task<StudentPhotoUploadResultDto> UploadPhotoAsync(Guid studentId, UploadStudentPhotoDto input);
 	Task<StudentPhotoDownloadDto?> GetPhotoAsync(Guid studentId);
 	Task<StudentDashboardSummaryDto> GetDashboardSummaryAsync();
-	Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummaryAsync();
+	Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummaryAsync(GetStudentAttendanceDashboardSummaryInput input);
 
 	/// <summary>
 	/// Changes the operational status of an enrolled student and records an

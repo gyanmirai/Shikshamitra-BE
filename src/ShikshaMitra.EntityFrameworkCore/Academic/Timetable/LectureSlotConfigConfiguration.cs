@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Academic.Timetable;
@@ -56,5 +57,12 @@ public class LectureSlotTimeSlotConfiguration : IEntityTypeConfiguration<Lecture
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
+
+        builder.HasOne<Room>()
+            .WithMany()
+            .HasForeignKey(x => x.RoomId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => x.RoomId);
     }
 }

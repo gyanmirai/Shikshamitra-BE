@@ -2,6 +2,7 @@ using ShikshaMitra.Students.Attendance;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Students.Attendance;
 
@@ -57,4 +58,21 @@ public class StudentAttendanceListDto
 	public int AbsentCount { get; set; }
 	public int PendingCount { get; set; }
 	public List<StudentAttendanceDto> Students { get; set; } = new();
+}
+
+public class GetStudentAttendanceHistoryInput : PagedAndSortedResultRequestDto
+{
+	[Required]
+	public Guid StudentId { get; set; }
+
+	public DateTime? StartDate { get; set; }
+	public DateTime? EndDate { get; set; }
+}
+
+public class StudentAttendanceHistoryDto
+{
+	public Guid AttendanceDayId { get; set; }
+	public DateTime Date { get; set; }
+	public AttendanceStatus Status { get; set; }
+	public string? Remarks { get; set; }
 }

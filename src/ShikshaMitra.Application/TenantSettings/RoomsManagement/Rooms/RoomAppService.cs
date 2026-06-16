@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -28,11 +28,11 @@ public class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoomListDto
 		_roomTypeRepository = roomTypeRepository;
 
 		// Set permission policies for CRUD operations
-		GetPolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomsManagement.View;
-		GetListPolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomsManagement.View;
-		CreatePolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomsManagement.Add;
-		UpdatePolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomsManagement.Edit;
-		DeletePolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomsManagement.Delete;
+		GetPolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomManagement.View;
+		GetListPolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomManagement.View;
+		CreatePolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomManagement.Add;
+		UpdatePolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomManagement.Add;
+		DeletePolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomManagement.Delete;
 	}
 
 	private async Task ValidateFloorBelongsToBuildingAsync(Guid floorId, Guid buildingId)

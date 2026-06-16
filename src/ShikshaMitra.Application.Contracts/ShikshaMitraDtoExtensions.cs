@@ -13,9 +13,9 @@ public static class ShikshaMitraDtoExtensions
         OneTimeRunner.Run(() =>
         {
             ObjectExtensionManager.Instance
-                .AddOrUpdateProperty<IdentityRoleDto, string>("Color")
-                .AddOrUpdateProperty<IdentityRoleCreateDto, string>("Color")
-                .AddOrUpdateProperty<IdentityRoleUpdateDto, string>("Color");
+                .AddOrUpdateProperty<IdentityRoleDto, string>("color")
+                .AddOrUpdateProperty<IdentityRoleCreateDto, string>("color")
+                .AddOrUpdateProperty<IdentityRoleUpdateDto, string>("color");
         });
     }
 }

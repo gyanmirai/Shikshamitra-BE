@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Constants.Permissions;
 
@@ -152,6 +152,24 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Generate, $"{SubmoduleDisplayName}.Generate" },
 				{ Publish, $"{SubmoduleDisplayName}.Publish" },
 				{ Freeze, $"{SubmoduleDisplayName}.Freeze" }
+			};
+		}
+
+		public static class Examination_Result
+		{
+			private const string SubmoduleName = $"{ModuleName}.Examination.Result";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Examination.Result";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 	}

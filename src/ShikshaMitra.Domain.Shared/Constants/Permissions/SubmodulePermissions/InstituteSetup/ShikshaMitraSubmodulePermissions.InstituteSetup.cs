@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Constants.Permissions;
 
@@ -120,12 +120,69 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		public static class BuildingManagement
+		{
+			private const string SubmoduleName = "ShikshaMitra.Module.InstituteSetup.BuildingManagement";
+			private const string SubmoduleDisplayName = "Permission:InstituteSetup.BuildingManagement";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
+		public static class RoomTypeManagement
+		{
+			private const string SubmoduleName = "ShikshaMitra.Module.InstituteSetup.RoomTypeManagement";
+			private const string SubmoduleDisplayName = "Permission:InstituteSetup.RoomTypeManagement";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
+		public static class RoomManagement
+		{
+			private const string SubmoduleName = "ShikshaMitra.Module.InstituteSetup.RoomManagement.Room";
+			private const string SubmoduleDisplayName = "Permission:InstituteSetup.RoomManagement.Room";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
 		public static readonly Dictionary<string, SubmoduleInfo> Submodules = new()
 		{
 			{ "InstituteSetup.BasicInformation", new SubmoduleInfo(BasicInformation.All, BasicInformation.DisplayNames) },
 			{ "InstituteSetup.AcademicSetup", new SubmoduleInfo(AcademicSetup.All, AcademicSetup.DisplayNames) },
 			{ "InstituteSetup.ShiftManagement", new SubmoduleInfo(ShiftManagement.All, ShiftManagement.DisplayNames) },
-			{ "InstituteSetup.RoomsManagement", new SubmoduleInfo(RoomsManagement.All, RoomsManagement.DisplayNames) }
+			{ "InstituteSetup.RoomsManagement", new SubmoduleInfo(RoomsManagement.All, RoomsManagement.DisplayNames) },
+			{ "InstituteSetup.BuildingManagement", new SubmoduleInfo(BuildingManagement.All, BuildingManagement.DisplayNames) },
+			{ "InstituteSetup.RoomTypeManagement", new SubmoduleInfo(RoomTypeManagement.All, RoomTypeManagement.DisplayNames) },
+			{ "InstituteSetup.RoomManagement", new SubmoduleInfo(RoomManagement.All, RoomManagement.DisplayNames) }
 		};
 	}
 }

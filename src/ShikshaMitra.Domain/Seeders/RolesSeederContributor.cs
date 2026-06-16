@@ -80,9 +80,9 @@ public class RolesSeederContributor : BaseSeederContributor
 			var existingRole = await _roleRepository.FindByNormalizedNameAsync(role.NormalizedName);
 			if (existingRole != null)
 			{
-				if (string.IsNullOrEmpty(existingRole.GetProperty<string>("Color")) && DefaultRoleColors.TryGetValue(existingRole.Name, out var col))
+				if (string.IsNullOrEmpty(existingRole.GetProperty<string>("color")) && DefaultRoleColors.TryGetValue(existingRole.Name, out var col))
 				{
-					existingRole.SetProperty("Color", col);
+					existingRole.SetProperty("color", col);
 					await _roleRepository.UpdateAsync(existingRole);
 				}
 				continue;
@@ -90,7 +90,7 @@ public class RolesSeederContributor : BaseSeederContributor
 
 			if (DefaultRoleColors.TryGetValue(role.Name, out var color))
 			{
-				role.SetProperty("Color", color);
+				role.SetProperty("color", color);
 			}
 
 			await _roleRepository.InsertAsync(role);

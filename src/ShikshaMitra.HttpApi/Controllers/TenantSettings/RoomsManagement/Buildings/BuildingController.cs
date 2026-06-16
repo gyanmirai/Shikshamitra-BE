@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using System.Threading.Tasks;
 using Volo.Abp.AspNetCore.Mvc;
@@ -15,6 +16,7 @@ namespace ShikshaMitra.Controllers.TenantSettings.RoomsManagement.Buildings;
 public class BuildingController(IBuildingAppService buildingAppService) : AbpController
 {
 	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.InstituteSetup.BuildingManagement.View)]
 	[ProducesResponseType(typeof(List<BuildingDto>), (int)HttpStatusCode.OK)]
 	public async Task<List<BuildingDto>> GetAllAsync()
 	{
@@ -22,6 +24,7 @@ public class BuildingController(IBuildingAppService buildingAppService) : AbpCon
 	}
 
 	[HttpGet("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.InstituteSetup.BuildingManagement.View)]
 	[ProducesResponseType(typeof(BuildingDto), (int)HttpStatusCode.OK)]
 	[ProducesResponseType((int)HttpStatusCode.NotFound)]
 	public async Task<BuildingDto> GetAsync(Guid id)
@@ -30,6 +33,7 @@ public class BuildingController(IBuildingAppService buildingAppService) : AbpCon
 	}
 
 	[HttpPost]
+	[Authorize(ShikshaMitraSubmodulePermissions.InstituteSetup.BuildingManagement.Add)]
 	[ProducesResponseType(typeof(BuildingDto), (int)HttpStatusCode.Created)]
 	[ProducesResponseType((int)HttpStatusCode.BadRequest)]
 	public async Task<ActionResult<BuildingDto>> CreateAsync([FromBody] CreateBuildingDto input)
@@ -39,6 +43,7 @@ public class BuildingController(IBuildingAppService buildingAppService) : AbpCon
 	}
 
 	[HttpPut("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.InstituteSetup.BuildingManagement.Add)]
 	[ProducesResponseType(typeof(BuildingDto), (int)HttpStatusCode.OK)]
 	[ProducesResponseType((int)HttpStatusCode.NotFound)]
 	public async Task<BuildingDto> UpdateAsync(Guid id, [FromBody] UpdateBuildingDto input)
@@ -47,6 +52,7 @@ public class BuildingController(IBuildingAppService buildingAppService) : AbpCon
 	}
 
 	[HttpDelete("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.InstituteSetup.BuildingManagement.Delete)]
 	[ProducesResponseType((int)HttpStatusCode.NoContent)]
 	[ProducesResponseType((int)HttpStatusCode.NotFound)]
 	public async Task<IActionResult> DeleteAsync(Guid id)

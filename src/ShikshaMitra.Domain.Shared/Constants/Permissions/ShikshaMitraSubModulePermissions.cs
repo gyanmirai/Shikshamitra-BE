@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Constants.Permissions;
 
@@ -173,7 +173,7 @@ public static class ShikshaMitraSubModulePermissions
 	public const string BasicInformation = $"{ShikshaMitraModulePermissions.InstituteSetup}.BasicInformation";
 	public const string AcademicSetup = $"{ShikshaMitraModulePermissions.InstituteSetup}.AcademicSetup";
 	public const string ShiftManagement = $"{ShikshaMitraModulePermissions.InstituteSetup}.ShiftManagement";
-	public const string RoomsManagement = $"{ShikshaMitraModulePermissions.InstituteSetup}.RoomsManagement";
+	public const string RoomManagement = $"{ShikshaMitraModulePermissions.InstituteSetup}.RoomManagement";
 
 	public static readonly string[] All =
 	{
@@ -319,7 +319,7 @@ public static class ShikshaMitraSubModulePermissions
 		BasicInformation,
 		AcademicSetup,
 		ShiftManagement,
-		RoomsManagement
+		RoomManagement
 	};
 
 	private const string DisplayNamePrefix = "Permission:SubModule";
@@ -495,6 +495,6 @@ public static class ShikshaMitraSubModulePermissions
 		{ BasicInformation, $"{DisplayNamePrefix}.BasicInformation" },
 		{ AcademicSetup, $"{DisplayNamePrefix}.AcademicSetup" },
 		{ ShiftManagement, $"{DisplayNamePrefix}.ShiftManagement" },
-		{ RoomsManagement, $"{DisplayNamePrefix}.RoomsManagement" }
+		{ RoomManagement, $"{DisplayNamePrefix}.RoomManagement" }
 	};
 }

@@ -4,12 +4,14 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
 using Volo.Abp.TenantManagement;
+using Volo.Abp.Data;
 using Xunit;
 
 namespace ShikshaMitra.TenantSettings;
@@ -207,6 +209,35 @@ public class TenantAuthorizationApi_Tests : ShikshaMitraApiTestBase
 		var response = await client.GetAsync($"/api/permission-management/permissions?providerName=U&providerKey={Guid.NewGuid()}");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Create_Role_With_Color_Http_Api()
+	{
+		using var client = CreateClient(
+			tenantId: TestTenantId.ToString(),
+			permissions: string.Join(",", IdentityPermissions.Roles.Default, IdentityPermissions.Roles.Create));
+
+		var payload = new Dictionary<string, object?>
+		{
+			["Name"] = "ApiTestRoleWithColor",
+			["IsDefault"] = true,
+			["IsPublic"] = true,
+			["ExtraProperties"] = new Dictionary<string, object?>
+			{
+				["color"] = "#abcdef"
+			}
+		};
+
+		var response = await client.PostAsJsonAsync("/api/identity/roles", payload, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+		var createdRoleDto = await response.Content.ReadFromJsonAsync<IdentityRoleDto>(JsonOptions);
+		createdRoleDto.ShouldNotBeNull();
+		
+		var color = createdRoleDto.ExtraProperties.GetOrDefault("color")?.ToString();
+		color.ShouldBe("#abcdef");
 	}
 
 	private HttpClient CreateClient(string tenantId, string permissions, string roles = "admin", string? userId = null)

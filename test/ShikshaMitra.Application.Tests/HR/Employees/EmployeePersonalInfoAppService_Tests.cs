@@ -158,14 +158,13 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	{
 		var created = await _personalInfoAppService.CreateAsync(
 			await BuildCreateDtoAsync($"basic.update.{Guid.NewGuid():N}@test.com"));
-		var updatedEmail = $"basic.updated.{Guid.NewGuid():N}@test.com";
 
 		var result = await _personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
 		{
 			FirstName = created.FirstName,
 			LastName = created.LastName,
 			MobileNo = created.MobileNo,
-			Email = updatedEmail,
+			Email = created.Email,
 			PanNo = created.PanNo,
 			AdharNo = created.AdharNo,
 			DateOfBirth = created.DateOfBirth,
@@ -177,10 +176,40 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			OrganizationIds = created.OrganizationIds
 		});
 
-		result.Email.ShouldBe(updatedEmail);
+		result.Email.ShouldBe(created.Email);
 		result.PanNo.ShouldBe(created.PanNo);
 		result.AdharNo.ShouldBe(created.AdharNo);
 		result.EmployeeStatusType.ShouldBe(EmployeeStatusType.Active);
+	}
+
+	[Fact]
+	public async Task UpdateAsync_Should_Reject_Email_Change()
+	{
+		var created = await _personalInfoAppService.CreateAsync(
+			await BuildCreateDtoAsync($"email.immutable.{Guid.NewGuid():N}@test.com"));
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
+			{
+				FirstName = created.FirstName,
+				LastName = created.LastName,
+				MobileNo = created.MobileNo,
+				Email = $"changed.{Guid.NewGuid():N}@test.com",
+				PanNo = created.PanNo,
+				AdharNo = created.AdharNo,
+				DateOfBirth = created.DateOfBirth,
+				GenderType = created.GenderType,
+				DateOfJoining = created.DateOfJoining,
+				EmployeeStatusType = EmployeeStatusType.Active,
+				RoleId = created.RoleId,
+				ShiftId = created.ShiftId,
+				OrganizationIds = created.OrganizationIds
+			}));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeEmailCannotBeChanged);
+		exception.Data["field"].ShouldBe(nameof(UpdateEmployeePersonalInfoDto.Email));
+		exception.Data.Contains("existingEmail").ShouldBeFalse();
+		exception.Data.Contains("requestedEmail").ShouldBeFalse();
 	}
 
 	[Fact]
@@ -196,7 +225,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			FirstName = created.FirstName,
 			LastName = created.LastName,
 			MobileNo = created.MobileNo,
-			Email = $"identity.updated.{Guid.NewGuid():N}@test.com",
+			Email = created.Email,
 			PanNo = panNo,
 			AdharNo = adharNo,
 			DateOfBirth = created.DateOfBirth,
@@ -264,7 +293,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 				FirstName = created.FirstName,
 				LastName = created.LastName,
 				MobileNo = created.MobileNo,
-				Email = $"missing.shift.updated.{Guid.NewGuid():N}@test.com",
+				Email = created.Email,
 				PanNo = created.PanNo,
 				AdharNo = created.AdharNo,
 				DateOfBirth = created.DateOfBirth,
@@ -296,7 +325,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			FirstName = "Updated",
 			LastName = created.LastName,
 			MobileNo = created.MobileNo,
-			Email = $"inactive.updated.{Guid.NewGuid():N}@test.com",
+			Email = created.Email,
 			PanNo = created.PanNo,
 			AdharNo = created.AdharNo,
 			DateOfBirth = created.DateOfBirth,

@@ -14,6 +14,7 @@ public static partial class HRErrorCodes
 	public const string ReportExportNotReady = "HR:Reports:050004";
 	public const string ReportAccessDenied = "HR:Reports:050005";
 	public const string ReportTemplateFieldRequired = "HR:Reports:050006";
+	public const string ReportRequestInvalid = "HR:Reports:050007";
 	public const string ProfessionalReviewCycleInvalidPeriod = "HR:ProfessionalManagement:060001";
 	public const string ProfessionalReviewAlreadySubmitted = "HR:ProfessionalManagement:060002";
 	public const string PerformanceTemplateWeightsInvalid = "HR:ProfessionalManagement:060003";

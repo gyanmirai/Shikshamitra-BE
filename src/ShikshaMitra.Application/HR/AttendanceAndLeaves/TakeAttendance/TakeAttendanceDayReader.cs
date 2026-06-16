@@ -109,7 +109,7 @@ public class TakeAttendanceDayReader(
 		var attByEmp = attRows.GroupBy(a => a.EmployeeId).ToDictionary(g => g.Key, g => g.First());
 		var shiftIds = employees.Where(e => e.ShiftId.HasValue).Select(e => e.ShiftId!.Value).Distinct().ToList();
 		var shifts = await LoadShiftLookupAsync(shiftIds);
-		var captureModeByEmployee = await captureModeLookupResolver.ResolveForDateAsync(ids, dateOnly);
+		var captureModeByEmployee = await captureModeLookupResolver.ResolveForDateOrDefaultAsync(ids, dateOnly);
 
 		var items = TakeAttendanceDayProjection.BuildRows(employees, attByEmp, approvedLeaveByEmployee, shifts, captureModeByEmployee, date, holiday, holidayReason);
 		var summary = TakeAttendanceDayProjection.BuildSummary(attForSummary, approvedLeaveByEmployee, scopedEmployeeIds.Count);

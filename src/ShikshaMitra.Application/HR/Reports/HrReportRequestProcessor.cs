@@ -56,11 +56,26 @@ public static class HrReportRequestProcessor
 		return condition.Operator switch
 		{
 			HrReportFilterOperator.Contains => value.Contains(expected, StringComparison.OrdinalIgnoreCase),
-			HrReportFilterOperator.In => (condition.Values ?? []).Contains(value, StringComparer.OrdinalIgnoreCase),
+			HrReportFilterOperator.In => GetConditionValues(condition).Contains(value, StringComparer.OrdinalIgnoreCase),
 			HrReportFilterOperator.GreaterThanOrEqual => Compare(value, expected) >= 0,
 			HrReportFilterOperator.LessThanOrEqual => Compare(value, expected) <= 0,
 			_ => string.Equals(value, expected, StringComparison.OrdinalIgnoreCase)
 		};
+	}
+
+	private static List<string> GetConditionValues(HrReportFilterConditionDto condition)
+	{
+		var values = (condition.Values ?? [])
+			.Where(x => !string.IsNullOrWhiteSpace(x))
+			.Select(x => x.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+		if (values.Count == 0 && !string.IsNullOrWhiteSpace(condition.Value))
+		{
+			values.Add(condition.Value.Trim());
+		}
+
+		return values;
 	}
 
 	private static int Compare(string left, string right)

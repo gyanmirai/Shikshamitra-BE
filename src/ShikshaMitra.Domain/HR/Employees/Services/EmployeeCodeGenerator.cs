@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Identity;
 
@@ -22,7 +24,8 @@ namespace ShikshaMitra.HR.Employees;
 /// concurrent-creation race conditions.
 /// </summary>
 public class EmployeeCodeGenerator(
-	IEmployeeRepository employeeRepository
+	IEmployeeRepository employeeRepository,
+	IDataFilter dataFilter
 ) : DomainService
 {
 	private static readonly ConcurrentDictionary<string, int> SequenceByScope = new();
@@ -35,12 +38,12 @@ public class EmployeeCodeGenerator(
 		var year = dateOfJoining.Year;
 		var tenantId = CurrentTenant.Id ?? Guid.Empty;
 		string roleCode = GetRoleCode(role);
-		var existingCount = await GetCountForRoleAndYearAsync(year, roleCode);
+		var existingMaxSequence = await GetMaxSequenceForRoleAndYearAsync(year, roleCode);
 		var scopeKey = $"{tenantId:N}:{year}:{roleCode}";
 		var nextSequence = SequenceByScope.AddOrUpdate(
 			scopeKey,
-			_ => existingCount + 1,
-			(_, currentSequence) => Math.Max(currentSequence + 1, existingCount + 1));
+			_ => existingMaxSequence + 1,
+			(_, currentSequence) => Math.Max(currentSequence + 1, existingMaxSequence + 1));
 
 		string yearCode = (year % 100).ToString("D2");
 		string uniqueHash = GenerateUniqueHashFromSequence(nextSequence);
@@ -48,15 +51,21 @@ public class EmployeeCodeGenerator(
 		return $"{roleCode}{yearCode}{uniqueHash}";
 	}
 
-	private async Task<int> GetCountForRoleAndYearAsync(int year, string roleCode)
+	private async Task<int> GetMaxSequenceForRoleAndYearAsync(int year, string roleCode)
 	{
-		var queryable = await employeeRepository.GetQueryableAsync();
 		var yearCode = (year % 100).ToString("D2");
 		var codePrefix = $"{roleCode}{yearCode}";
+		using var _ = dataFilter.Disable<ISoftDelete>();
+		var queryable = await employeeRepository.GetQueryableAsync();
+		var existingCodes = await AsyncExecuter.ToListAsync(
+			queryable
+				.Where(e => e.EmployeeCode.StartsWith(codePrefix))
+				.Select(e => e.EmployeeCode));
 
-		return await AsyncExecuter.CountAsync(
-			queryable.Where(e => e.EmployeeCode.StartsWith(codePrefix))
-		);
+		return existingCodes
+			.Select(code => TryParseSequence(code, codePrefix))
+			.DefaultIfEmpty(0)
+			.Max();
 	}
 
 	private static string GenerateUniqueHashFromSequence(int sequence)
@@ -80,6 +89,37 @@ public class EmployeeCodeGenerator(
 		} while (value > 0);
 
 		return result;
+	}
+
+	private static int TryParseSequence(string? employeeCode, string codePrefix)
+	{
+		if (
+			string.IsNullOrWhiteSpace(employeeCode) ||
+			employeeCode.Length < codePrefix.Length + 4 ||
+			!employeeCode.StartsWith(codePrefix, StringComparison.OrdinalIgnoreCase))
+		{
+			return 0;
+		}
+
+		var suffix = employeeCode[^4..].ToUpperInvariant();
+		var value = 0;
+		foreach (var character in suffix)
+		{
+			var digit = character switch
+			{
+				>= '0' and <= '9' => character - '0',
+				>= 'A' and <= 'Z' => character - 'A' + 10,
+				_ => -1
+			};
+			if (digit < 0)
+			{
+				return 0;
+			}
+
+			value = value * 36 + digit;
+		}
+
+		return value;
 	}
 
 	/// <summary>

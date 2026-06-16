@@ -17,6 +17,9 @@ public partial class ProfessionalManagementAppService
 	public Task<List<ClassroomObservationDto>> GetObservationsAsync(Guid id) =>
 		AuthorizedAsync(() => _authorization.EnsureCanViewReviewAsync(id), () => _contributionWorkflow.GetObservationsAsync(id));
 
+	public Task<List<PerformanceEvidenceDto>> GetEvidenceAsync(Guid id) =>
+		AuthorizedAsync(() => _authorization.EnsureCanViewReviewAsync(id), () => _reviewReader.GetEvidenceAsync(id));
+
 	public Task<PerformanceEvidenceDto> AddEvidenceAsync(Guid id, PerformanceEvidenceRequest input) =>
 		AuthorizedAsync(() => _authorization.EnsureCanUploadEvidenceAsync(id), () => _contributionWorkflow.AddEvidenceAsync(id, input));
 

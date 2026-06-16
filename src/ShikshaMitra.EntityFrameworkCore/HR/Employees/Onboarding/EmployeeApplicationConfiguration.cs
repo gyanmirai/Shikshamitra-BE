@@ -14,6 +14,7 @@ public class EmployeeApplicationConfiguration : IEntityTypeConfiguration<Employe
 
 		builder.Property(x => x.ApplicationNumber).IsRequired().HasMaxLength(40);
 		builder.Property(x => x.TokenHash).IsRequired().HasMaxLength(128);
+		builder.Property(x => x.EncryptedToken).HasMaxLength(1024);
 		builder.Property(x => x.FirstName).HasMaxLength(256);
 		builder.Property(x => x.MiddleName).HasMaxLength(256);
 		builder.Property(x => x.LastName).HasMaxLength(256);
@@ -39,6 +40,35 @@ public class EmployeeApplicationConfiguration : IEntityTypeConfiguration<Employe
 		builder.Property(x => x.PhotoContentType).HasMaxLength(128);
 		builder.Property(x => x.StatusReason).HasMaxLength(1024);
 		builder.Property(x => x.InternalNotes).HasMaxLength(2048);
+
+		builder.OwnsOne(x => x.PersonalInfo, personal =>
+		{
+			personal.ToJson();
+			personal.OwnsOne(x => x.Country);
+			personal.OwnsOne(x => x.State);
+		});
+
+		builder.OwnsOne(x => x.FamilyInfo, family =>
+		{
+			family.ToJson();
+			family.OwnsOne(x => x.FatherDetails, member =>
+			{
+				member.OwnsOne(x => x.Country);
+				member.OwnsOne(x => x.State);
+			});
+			family.OwnsOne(x => x.MotherDetails, member =>
+			{
+				member.OwnsOne(x => x.Country);
+				member.OwnsOne(x => x.State);
+			});
+			family.OwnsOne(x => x.SpouseDetails, member =>
+			{
+				member.OwnsOne(x => x.Country);
+				member.OwnsOne(x => x.State);
+			});
+		});
+
+		builder.OwnsOne(x => x.AdditionalInfo, additional => additional.ToJson());
 
 		builder.OwnsMany(x => x.WorkExperiences, ew => ew.ToJson());
 

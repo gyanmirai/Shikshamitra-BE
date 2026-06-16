@@ -61,6 +61,37 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_My_Leave_Request_List_With_PageSize_100()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"MyLeaveList{Guid.NewGuid():N}");
+		employee.UserId.ShouldNotBeNull();
+		var (policy, leaveType) = await CreateLeavePolicyFixtureAsync("MyLeaveList");
+		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		var leaveDate = FirstNonSunday(startDate);
+		var leaveId = await SeedPendingLeaveRequestAsync(
+			employee.Id,
+			policy.Id,
+			policy.Rules[0].Id,
+			leaveType.Id,
+			leaveDate,
+			"My leave list regression request");
+		using var employeeClient = CreateClientAs(employee.UserId.Value);
+
+		var response = await employeeClient.GetAsync(
+			$"{BaseUrl}/my?academicYearId={AcademicYearId}&page=1&pageSize=100");
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
+		var payload = JsonSerializer.Deserialize<LeaveManagementListResponse>(rawPayload, JsonOptions);
+		payload.ShouldNotBeNull();
+		payload.CurrentPage.ShouldBe(1);
+		payload.PageSize.ShouldBe(100);
+		payload.Items.ShouldContain(x => x.Id == leaveId);
+		payload.Items.ShouldAllBe(x => x.EmployeeId == employee.Id);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task List_Response_Should_Have_TotalCount_And_Items_When_Ok()
 	{
 		var monthYear = Uri.EscapeDataString(new DateTime(DateTime.UtcNow.Year, 6, 1).ToString("O"));

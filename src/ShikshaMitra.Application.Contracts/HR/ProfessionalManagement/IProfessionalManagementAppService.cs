@@ -35,6 +35,7 @@ public interface IProfessionalManagementAppService : IApplicationService
 	Task<ProfessionalReviewListResponse> GetEmployeeReviewHistoryAsync(Guid employeeId);
 	Task<ClassroomObservationDto> AddObservationAsync(Guid id, ClassroomObservationRequest input);
 	Task<List<ClassroomObservationDto>> GetObservationsAsync(Guid id);
+	Task<List<PerformanceEvidenceDto>> GetEvidenceAsync(Guid id);
 	Task<PerformanceEvidenceDto> AddEvidenceAsync(Guid id, PerformanceEvidenceRequest input);
 	Task DeleteEvidenceAsync(Guid id);
 	Task<PerformanceFeedbackDto> AddFeedbackAsync(Guid id, PerformanceFeedbackRequest input);

@@ -119,6 +119,7 @@ public class StudentEnrollmentEntranceExamAppService(
 		var results = rows.Select(x => new EntranceExamStudentDto
 		{
 			StudentId = x.Student.Id,
+			FormNo = x.AdditionalDetail.RegistrationFormNo,
 			StudentName = BuildStudentName(x.Student.FirstName, x.Student.MiddleName, x.Student.LastName),
 			EducationBoard = x.EducationBoard.Type.ToString(),
 			EducationMedium = x.EducationMedium.Name,

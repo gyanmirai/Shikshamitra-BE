@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.PersonalInfo;
@@ -41,6 +42,8 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	private readonly IPayrollPolicyAppService _payrollPolicies;
 	private readonly IAttendancePolicyAppService _attendancePolicies;
 	private readonly IHrPolicyAssignmentAppService _assignments;
+	private readonly ILeaveTypeAppService _leaveTypeAppService;
+	private readonly ILeavePolicyAppService _leavePolicyAppService;
 	private readonly SalarySlipAccessService _salarySlipAccessService;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
 	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
@@ -69,6 +72,8 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		_payrollPolicies = GetRequiredService<IPayrollPolicyAppService>();
 		_attendancePolicies = GetRequiredService<IAttendancePolicyAppService>();
 		_assignments = GetRequiredService<IHrPolicyAssignmentAppService>();
+		_leaveTypeAppService = GetRequiredService<ILeaveTypeAppService>();
+		_leavePolicyAppService = GetRequiredService<ILeavePolicyAppService>();
 		_salarySlipAccessService = GetRequiredService<SalarySlipAccessService>();
 		_attendanceRepository = GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
 		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
@@ -264,6 +269,108 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		refreshedSlip.PayrollBasisDays.ShouldBe(snapshot.BasisDays);
 		refreshedSlip.PayableDays.ShouldBe(snapshot.PayableDays);
 		refreshedSlip.NetSalary.ShouldBe(snapshot.NetPay);
+	}
+
+	[Fact]
+	public async Task LockedPayroll_Should_Preserve_Snapshot_And_SalarySlip_After_Salary_Structure_Change()
+	{
+		const string monthYear = "2026-01";
+		var context = await CreatePayrollPolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		await SeedAttendanceScopeAsync(employee.Id, context.OrganizationId, monthYear);
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.TotalMonthPayroll.Id);
+		var originalBasic = await CreateEarningComponentAsync($"Locked Basic {Guid.NewGuid():N}", 31000m);
+		var originalDeduction = await CreateDeductionComponentAsync($"Locked Deduction {Guid.NewGuid():N}", 1500m);
+		await SaveSalaryComponentsAsync(employee.Id, [originalBasic], [originalDeduction]);
+		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
+
+		var snapshot = await GetPayrollSnapshotAsync(employee.Id, monthYear);
+		snapshot.ShouldNotBeNull();
+		snapshot.MarkLocked();
+		await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: true);
+		var lockedGross = snapshot.GrossSalary;
+		var lockedDeduction = snapshot.TotalDeduction;
+		var lockedNet = snapshot.NetPay;
+		var lockedBasisDays = snapshot.BasisDays;
+		var lockedPayableDays = snapshot.PayableDays;
+		var lockedProrationFactor = snapshot.ProrationFactor;
+		var lockedEarningsJson = snapshot.EarningComponentsJson;
+		var lockedDeductionsJson = snapshot.DeductionComponentsJson;
+
+		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
+		var originalSlip = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
+		{
+			EmployeeId = employee.Id,
+			MonthYear = monthYear
+		});
+		originalSlip.TotalEarning.ShouldBe(lockedGross);
+		originalSlip.TotalDeduction.ShouldBe(lockedDeduction);
+		originalSlip.NetSalary.ShouldBe(lockedNet);
+
+		var changedBasic = await CreateEarningComponentAsync($"Changed Locked Basic {Guid.NewGuid():N}", 45000m);
+		var changedDeduction = await CreateDeductionComponentAsync($"Changed Locked Deduction {Guid.NewGuid():N}", 2500m);
+		await SaveSalaryComponentsAsync(employee.Id, [changedBasic], [changedDeduction]);
+		var refreshedPreview = await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput
+		{
+			Month = monthYear,
+			Page = 0,
+			PageSize = 50,
+			ForceRefresh = true
+		});
+		var refreshedRow = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
+		var refreshedSnapshot = await GetPayrollSnapshotAsync(employee.Id, monthYear);
+		var refreshedSlip = await _salarySlipAppService.GetSalarySlipAsync(employee.Id, monthYear);
+
+		refreshedRow.IsLocked.ShouldBeTrue();
+		refreshedRow.GrossSalary.ShouldBe((double) lockedGross);
+		refreshedRow.TotalDeduction.ShouldBe((double) lockedDeduction);
+		refreshedRow.NetPay.ShouldBe((double) lockedNet);
+		refreshedSnapshot.IsLocked.ShouldBeTrue();
+		refreshedSnapshot.GrossSalary.ShouldBe(lockedGross);
+		refreshedSnapshot.TotalDeduction.ShouldBe(lockedDeduction);
+		refreshedSnapshot.NetPay.ShouldBe(lockedNet);
+		refreshedSnapshot.BasisDays.ShouldBe(lockedBasisDays);
+		refreshedSnapshot.PayableDays.ShouldBe(lockedPayableDays);
+		refreshedSnapshot.ProrationFactor.ShouldBe(lockedProrationFactor);
+		refreshedSnapshot.EarningComponentsJson.ShouldBe(lockedEarningsJson);
+		refreshedSnapshot.DeductionComponentsJson.ShouldBe(lockedDeductionsJson);
+		refreshedSlip.TotalEarning.ShouldBe(originalSlip.TotalEarning);
+		refreshedSlip.TotalDeduction.ShouldBe(originalSlip.TotalDeduction);
+		refreshedSlip.NetSalary.ShouldBe(originalSlip.NetSalary);
+		refreshedSlip.PayrollBasisDays.ShouldBe(originalSlip.PayrollBasisDays);
+		refreshedSlip.PayableDays.ShouldBe(originalSlip.PayableDays);
+		refreshedSlip.ProrationFactor.ShouldBe(originalSlip.ProrationFactor);
+		refreshedSlip.Earnings.ShouldContain(x => x.Name == originalBasic.Name && x.Amount == originalSlip.Earnings.Single(y => y.Name == originalBasic.Name).Amount);
+		refreshedSlip.Deductions.ShouldContain(x => x.Name == originalDeduction.Name && x.Amount == originalSlip.Deductions.Single(y => y.Name == originalDeduction.Name).Amount);
+		refreshedSlip.Earnings.ShouldNotContain(x => x.Name == changedBasic.Name);
+		refreshedSlip.Deductions.ShouldNotContain(x => x.Name == changedDeduction.Name);
+	}
+
+	[Fact]
+	public async Task GetSalarySlipAsync_Should_Return_Finalized_Current_Slip_Without_Regenerating_From_Snapshot()
+	{
+		var monthYear = CurrentPayrollMonth();
+		var context = await CreatePayrollPolicyContextAsync(PayrollYear(monthYear));
+		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear));
+		await SeedAttendanceScopeAsync(employee.Id, context.OrganizationId, monthYear);
+		await SaveSalaryComponentsAsync(employee.Id);
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.WorkingDaysPayroll.Id);
+		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
+
+		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
+		var draft = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
+		{
+			EmployeeId = employee.Id,
+			MonthYear = monthYear
+		});
+		var finalized = await _salarySlipAppService.FinalizeAsync(draft.Id);
+		finalized.Status.ShouldBe(SalarySlipStatus.Finalized);
+
+		var fetched = await _salarySlipAppService.GetSalarySlipAsync(employee.Id, monthYear);
+
+		fetched.Id.ShouldBe(finalized.Id);
+		fetched.Status.ShouldBe(SalarySlipStatus.Finalized);
+		fetched.NetSalary.ShouldBe(finalized.NetSalary);
 	}
 
 	[Fact]
@@ -504,8 +611,39 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			HolidayWorkBehavior = "paid",
 			PayrollPreviewEnabled = true
 		});
+		var leaveType = await _leaveTypeAppService.CreateLeaveTypeAsync(academicYearId, new LeaveTypeCreateRequest
+		{
+			Name = $"SL Leave Type {Guid.NewGuid():N}",
+			Color = "#1A73E8"
+		});
+		var leavePolicy = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = $"SL Leave Policy {Guid.NewGuid():N}",
+			Status = "Active",
+			EffectiveFrom = new DateTime(year, 1, 1),
+			EffectiveTo = new DateTime(year, 12, 31),
+			IsDefault = true,
+			Rules =
+			[
+				new LeavePolicyRuleRequest
+				{
+					LeaveTypeId = leaveType.Id,
+					AccrualPolicyType = "Monthly",
+					LeaveCount = 12,
+					PaidType = "Paid",
+					CarryForward = false,
+					EncashmentAllowed = false,
+					RequiresApproval = true,
+					MinNoticeDays = 0,
+					MaxDaysPerRequest = 30,
+					AllowHalfDay = true,
+					AllowNegativeBalance = false,
+					IsActive = true
+				}
+			]
+		});
 
-		return new PayrollPolicyContext(year, academicYearId, organizationId, workingDays, totalMonth, attendance);
+		return new PayrollPolicyContext(year, academicYearId, organizationId, workingDays, totalMonth, attendance, leavePolicy.Id);
 	}
 
 	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(
@@ -663,13 +801,14 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			AssignmentId = assignmentId,
 			AttendancePolicyId = context.AttendancePolicy.Id,
 			PayrollPolicyId = payrollPolicyId,
+			LeavePolicyId = context.LeavePolicyId,
 			EffectiveFrom = effectiveFrom,
 			AssignmentReason = reason
 		};
 
 		var preview = await _assignments.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
 		{
-			Action = assignmentId.HasValue ? HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction : "create",
+			Action = HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction,
 			AssignmentId = assignmentId,
 			Assignment = new CreateUpdateHrPolicyAssignmentDto
 			{
@@ -678,6 +817,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 				TargetKey = targetKey,
 				AttendancePolicyId = context.AttendancePolicy.Id,
 				PayrollPolicyId = payrollPolicyId,
+				LeavePolicyId = context.LeavePolicyId,
 				EffectiveFrom = effectiveFrom,
 				IsActive = true,
 				Priority = 100,
@@ -906,5 +1046,6 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		Guid OrganizationId,
 		PayrollPolicyDto WorkingDaysPayroll,
 		PayrollPolicyDto TotalMonthPayroll,
-		AttendancePolicyDto AttendancePolicy);
+		AttendancePolicyDto AttendancePolicy,
+		Guid LeavePolicyId);
 }

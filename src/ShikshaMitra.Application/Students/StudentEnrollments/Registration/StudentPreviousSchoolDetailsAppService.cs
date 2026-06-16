@@ -27,10 +27,13 @@ public class StudentPreviousSchoolDetailsAppService(
             StudentId = student.Id,
             Status = student.Status,
             SchoolName = previousSchoolDetail?.SchoolName,
+            PreviousSchool = student.AdditionalDetail?.PreviousSchool,
             SchoolAddress = previousSchoolDetail?.SchoolAddress,
             Board = previousSchoolDetail?.Board,
             Medium = previousSchoolDetail?.Medium,
             LastClassAttended = previousSchoolDetail?.LastClassAttended,
+            LastClassPassed = student.AdditionalDetail?.LastClassPassed,
+            SchoolIndexNumber = previousSchoolDetail?.SchoolIndexNumber,
             TCNumber = previousSchoolDetail?.TCNumber,
             DateOfLeaving = previousSchoolDetail?.DateOfLeaving,
             PercentageObtained = previousSchoolDetail?.PercentageObtained,
@@ -61,6 +64,7 @@ public class StudentPreviousSchoolDetailsAppService(
             input.Board,
             input.Medium,
             input.LastClassAttended,
+            input.SchoolIndexNumber,
             input.TCNumber,
             input.DateOfLeaving,
             input.PercentageObtained,
@@ -70,6 +74,7 @@ public class StudentPreviousSchoolDetailsAppService(
         );
 
         student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.PrevSchoolDetails);
+        student.AdditionalDetail?.UpdatePreviousSchoolSummary(input.PreviousSchool, input.LastClassPassed);
 
         await UnitOfWorkManager.Current!.SaveChangesAsync();
 

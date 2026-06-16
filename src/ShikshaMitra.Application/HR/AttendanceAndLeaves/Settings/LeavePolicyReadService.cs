@@ -19,6 +19,8 @@ public class LeavePolicyReadService(
 	LeavePolicyCacheService cacheService)
 	: ApplicationService, ITransientDependency
 {
+	private const int MaxContractPageSize = 500;
+
 	public async Task<PagedResultDto<LeavePolicyDto>> GetListAsync(PagedAndSortedResultRequestDto input)
 	{
 		var queryable = await repository.GetQueryableAsync();
@@ -66,7 +68,7 @@ public class LeavePolicyReadService(
 	{
 		Check.NotNull(academicYearId, nameof(academicYearId));
 		Check.Range(page, nameof(page), 1, int.MaxValue);
-		Check.Range(pageSize, nameof(pageSize), 1, 100);
+		Check.Range(pageSize, nameof(pageSize), 1, MaxContractPageSize);
 
 		var cacheKey = cacheService.GetContractCacheKey(academicYearId, page, pageSize, search);
 		var cached = await cacheService.GetContractAsync(cacheKey, cancellationToken);

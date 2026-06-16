@@ -16,6 +16,11 @@ public class StudentPreviousSchoolDetailsDto
 	public string? SchoolName { get; set; }
 
 	/// <summary>
+	/// FE registration summary field stored on student additional details
+	/// </summary>
+	public string? PreviousSchool { get; set; }
+
+	/// <summary>
 	/// School address
 	/// </summary>
 	public string? SchoolAddress { get; set; }
@@ -34,6 +39,16 @@ public class StudentPreviousSchoolDetailsDto
 	/// Last class/standard attended
 	/// </summary>
 	public string? LastClassAttended { get; set; }
+
+	/// <summary>
+	/// FE registration summary field stored on student additional details
+	/// </summary>
+	public string? LastClassPassed { get; set; }
+
+	/// <summary>
+	/// Previous school's index number
+	/// </summary>
+	public string? SchoolIndexNumber { get; set; }
 
 	/// <summary>
 	/// Transfer Certificate (TC) number

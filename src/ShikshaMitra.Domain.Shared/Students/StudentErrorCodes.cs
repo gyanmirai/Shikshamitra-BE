@@ -78,4 +78,8 @@ public static class StudentErrorCodes
     public const string ReportExportFailed                   = "ST:Records:050001";
     public const string HouseSettingsNotFound                = "ST:Records:050002";
     public const string CertificateTypeNotFound              = "ST:Records:050003";
+    public const string HouseSettingsAlreadyExists           = "ST:Records:050004";
+    public const string DuplicateRollNumber                  = "ST:Records:050005";
+    public const string RollNumberBatchInvalid               = "ST:Records:050006";
+    public const string AcademicTermAlreadyExists            = "ST:Records:050007";
 }

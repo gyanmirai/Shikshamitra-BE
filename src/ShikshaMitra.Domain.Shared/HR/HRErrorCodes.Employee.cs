@@ -35,6 +35,7 @@ public static partial class HRErrorCodes
 	public const string EmployeeAdharAlreadyExists = "HR:Employee:010031";
 	public const string ReportingManagerHasActiveReports = "HR:Employee:010032";
 	public const string EmployeeStatusEffectiveDateRequired = "HR:Employee:010033";
+	public const string EmployeeEmailCannotBeChanged = "HR:Employee:010034";
 	public const string ReportingManagerMustBeActive = "ShikshaMitra:ReportingManagerMustBeActive";
 	public const string EmployeeDocumentNotFound = "HR:Employee:010101";
 	public const string EmployeeDocumentConfigurationNotFound = "HR:Employee:010102";

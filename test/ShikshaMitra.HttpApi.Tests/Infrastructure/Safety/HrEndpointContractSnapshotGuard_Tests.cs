@@ -149,9 +149,97 @@ public class HrEndpointContractSnapshotGuard_Tests
 			"20260611173000_AddDefaultLeavePolicyAssignment.cs");
 		var text = File.ReadAllText(migrationPath);
 
-		text.ShouldContain("CREATE UNIQUE INDEX \"IX_EmployeeLeavePolicies_TenantId_AcademicYearId_Default\"");
+		text.ShouldContain("ADD COLUMN IF NOT EXISTS \"IsDefault\"");
+		text.ShouldContain("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_EmployeeLeavePolicies_TenantId_AcademicYearId_Default\"");
 		text.ShouldContain("COALESCE(\"TenantId\", '00000000-0000-0000-0000-000000000000'::uuid)");
 		text.ShouldContain("WHERE \"IsDefault\" = true");
+		text.ShouldContain("[Migration(\"20260611173000_AddDefaultLeavePolicyAssignment\")]");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Attendance_Import_Metadata_Migration_Should_Be_Idempotent()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var migrationPath = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.EntityFrameworkCore",
+			"Migrations",
+			"20260611120000_AddAttendanceImportOriginalFileMetadata.cs");
+		var text = File.ReadAllText(migrationPath);
+
+		text.ShouldContain("ADD COLUMN IF NOT EXISTS \"OriginalFileBlobName\"");
+		text.ShouldContain("ADD COLUMN IF NOT EXISTS \"OriginalFileContentType\"");
+		text.ShouldContain("DROP COLUMN IF EXISTS \"OriginalFileBlobName\"");
+		text.ShouldContain("DROP COLUMN IF EXISTS \"OriginalFileContentType\"");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Leave_Policy_Backfill_Migration_Should_Be_Discoverable_And_Idempotent()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var migrationPath = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.EntityFrameworkCore",
+			"Migrations",
+			"20260612120500_BackfillAcademicYearLeavePolicies.cs");
+		var text = File.ReadAllText(migrationPath);
+
+		text.ShouldContain("[Migration(\"20260612120500_BackfillAcademicYearLeavePolicies\")]");
+		text.ShouldContain("NOT EXISTS");
+		text.ShouldContain("\"AppAcademicYears\"");
+		text.ShouldContain("Teaching Staff Leave Policy");
+		text.ShouldContain("\"IsDefault\"");
+		text.ShouldContain("md5('leave-policy:");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Leave_Policy_Seeder_Should_Use_Academic_Year_Scoped_Guards()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var seederPath = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.Domain",
+			"Seeders",
+			"HRSeederContributor.PolicyCatalog.cs");
+		var text = File.ReadAllText(seederPath);
+
+		text.ShouldContain("SeedLeaveTypesAndPoliciesAsync(academicYear.Id)");
+		text.ShouldContain("_leaveTypeRepository.AnyAsync(x => x.AcademicYearId == academicYearId && x.Type == type)");
+		text.ShouldContain("_leavePolicyRepository.AnyAsync(x => x.AcademicYearId == academicYearId)");
+		text.ShouldNotContain("if (await _leaveTypeRepository.AnyAsync())");
+		text.ShouldNotContain("if (await _leavePolicyRepository.AnyAsync())");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Hand_Written_Ef_Migrations_Should_Be_Discoverable()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var migrationsRoot = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.EntityFrameworkCore",
+			"Migrations");
+		var migrationFiles = new[]
+		{
+			"20260611120000_AddAttendanceImportOriginalFileMetadata.cs",
+			"20260611173000_AddDefaultLeavePolicyAssignment.cs",
+			"20260612120500_BackfillAcademicYearLeavePolicies.cs"
+		};
+
+		foreach (var migrationFile in migrationFiles)
+		{
+			var migrationId = Path.GetFileNameWithoutExtension(migrationFile);
+			var text = File.ReadAllText(Path.Combine(migrationsRoot, migrationFile));
+			text.ShouldContain("[DbContext(typeof(ShikshaMitraDbContext))]");
+			text.ShouldContain($"[Migration(\"{migrationId}\")]");
+		}
 	}
 
 	private static List<string> BuildEndpointInventory(string controllersRoot)
@@ -292,6 +380,12 @@ public class HrEndpointContractSnapshotGuard_Tests
 			if (File.Exists(Path.Combine(current.FullName, "ShikshaMitra.sln")))
 			{
 				return current.FullName;
+			}
+
+			var backendRoot = Path.Combine(current.FullName, "Shikshamitra-BE");
+			if (File.Exists(Path.Combine(backendRoot, "ShikshaMitra.sln")))
+			{
+				return backendRoot;
 			}
 
 			current = current.Parent;

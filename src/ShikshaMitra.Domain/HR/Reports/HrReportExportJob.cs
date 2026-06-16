@@ -95,6 +95,12 @@ public class HrReportExportJob : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ExpiresAt = expiresAt;
 	}
 
+	public void UpdateRequest(string filterJson, string requestJson)
+	{
+		FilterJson = filterJson;
+		RequestJson = requestJson;
+	}
+
 	public void ShareWith(IReadOnlyCollection<Guid> userIds)
 	{
 		SharedUserIdsJson = JsonSerializer.Serialize(userIds);

@@ -54,6 +54,7 @@ public class EmployeePersonalInfoAppService(
 	public async Task<EmployeePersonalInfoDto> UpdateAsync(Guid id, UpdateEmployeePersonalInfoDto input)
 	{
 		var existingEmployee = await employeeRepository.GetAsync(id);
+		EnsureEmailUnchanged(existingEmployee.Email, input.Email);
 		input.PanNo = EmployeeIdentityUniquenessChecker.NormalizePan(input.PanNo);
 		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo, id);
 		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
@@ -74,7 +75,7 @@ public class EmployeePersonalInfoAppService(
 			bloodGroup: input.BloodGroup,
 			mobileNo: input.MobileNo,
 			secondaryMobileNo: input.SecondaryMobileNo,
-			email: input.Email,
+			email: existingEmployee.Email,
 			panNo: input.PanNo,
 			adharNo: input.AdharNo,
 			address1: input.Address1,
@@ -98,6 +99,17 @@ public class EmployeePersonalInfoAppService(
 		await organizationAssignmentSyncer.SyncAsync(employee.Id, input.OrganizationIds);
 
 		return await personalInfoProjection.ToPersonalInfoDtoAsync(await employeeRepository.GetAsync(employee.Id));
+	}
+
+	private static void EnsureEmailUnchanged(string? existingEmail, string? requestedEmail)
+	{
+		if (string.Equals(existingEmail?.Trim(), requestedEmail?.Trim(), StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+
+		throw new BusinessException(HRErrorCodes.EmployeeEmailCannotBeChanged)
+			.WithData("field", nameof(UpdateEmployeePersonalInfoDto.Email));
 	}
 
 	public async Task<EmployeeDto> GetByUserIdAsync(Guid userId)

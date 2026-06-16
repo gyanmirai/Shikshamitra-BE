@@ -20,6 +20,7 @@ internal static class LeaveManagementProjection
 			SubmittedByName = submitter.Name,
 			SubmittedByEmployeeCode = submitter.EmployeeCode,
 			LeaveType = leave.LeaveType?.Type ?? "Unknown",
+			LeaveTypeMasterId = leave.LeaveTypeId,
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
 			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),

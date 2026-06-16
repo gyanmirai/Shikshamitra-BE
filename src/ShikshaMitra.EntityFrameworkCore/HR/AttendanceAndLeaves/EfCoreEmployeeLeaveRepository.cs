@@ -102,6 +102,60 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		return leaves.Sum(GetApprovedUnits);
 	}
 
+	public async Task<IReadOnlyDictionary<Guid, LeaveRuleBalanceUnits>> GetBalanceUnitsByRuleAsync(
+		Guid employeeId,
+		IReadOnlyCollection<Guid> leavePolicyRuleIds,
+		CancellationToken cancellationToken = default)
+	{
+		if (leavePolicyRuleIds.Count == 0)
+		{
+			return new Dictionary<Guid, LeaveRuleBalanceUnits>();
+		}
+
+		var ruleIds = leavePolicyRuleIds.ToList();
+		var dbSet = await GetDbSetAsync();
+		var leaves = await dbSet
+			.IgnoreAutoIncludes()
+			.AsNoTracking()
+			.Where(x =>
+				x.EmployeeId == employeeId &&
+				ruleIds.Contains(x.LeavePolicyRuleId) &&
+				!x.IsDeleted &&
+				(x.Status == EmployeeLeaveStatusType.Approved ||
+				 x.Status == EmployeeLeaveStatusType.Pending))
+			.Select(x => new
+			{
+				x.LeavePolicyRuleId,
+				x.Status,
+				x.ApprovedLeaveUnits,
+				x.StartDate,
+				x.EndDate,
+				x.HalfDay
+			})
+			.ToListAsync(cancellationToken);
+
+		return leaves
+			.GroupBy(x => x.LeavePolicyRuleId)
+			.ToDictionary(
+				group => group.Key,
+				group => new LeaveRuleBalanceUnits(
+					group.Key,
+					group
+						.Where(x => x.Status == EmployeeLeaveStatusType.Approved)
+						.Sum(x => x.ApprovedLeaveUnits > 0
+							? x.ApprovedLeaveUnits
+							: LeaveDurationCalculator.CountLeaveUnits(
+								x.StartDate.DateTime,
+								x.EndDate.DateTime,
+								x.HalfDay)),
+					group
+						.Where(x => x.Status == EmployeeLeaveStatusType.Pending)
+						.Sum(x => LeaveDurationCalculator.CountLeaveUnits(
+							x.StartDate.DateTime,
+							x.EndDate.DateTime,
+							x.HalfDay))));
+	}
+
 	public async Task<List<PayrollApprovedLeaveRow>> GetApprovedPayrollLeaveRowsAsync(
 		IReadOnlyCollection<Guid> employeeIds,
 		DateTimeOffset rangeStart,

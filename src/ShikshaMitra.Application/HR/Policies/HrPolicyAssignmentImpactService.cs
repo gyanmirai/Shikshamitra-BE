@@ -16,6 +16,7 @@ public class HrPolicyAssignmentImpactService(
 	HrPolicyAssignmentEmployeePreviewResolver employeePreviewResolver,
 	HrPolicyEffectiveAssignmentConflictBuilder effectiveConflictBuilder,
 	HrPolicyAssignmentReferenceWarningService referenceWarningService,
+	HrPolicyPayrollRiskReader payrollRiskReader,
 	HrPolicyAssignmentOverlapChecker overlapChecker,
 	HrPolicyEmployeeOverrideImpactCounter employeeOverrideImpactCounter,
 	IRepository<HrPolicyAssignment, Guid> assignmentRepository,
@@ -55,6 +56,17 @@ public class HrPolicyAssignmentImpactService(
 		preview.AffectedEmployees = affectedEmployees.Sample
 			.Select(HrPolicyAssignmentProjection.MapAffectedEmployee)
 			.ToList();
+		if (await AssignmentChangeCanAffectPayrollAsync(
+			    action,
+			    assignmentId,
+			    targetType,
+			    targetKey,
+			    assignment,
+			    isDelete))
+		{
+			await AddAssignmentPayrollRiskAsync(preview, affectedEmployees, assignment);
+		}
+		HrPolicyImpactWarningBuilder.AddLockedPayrollWarning(preview);
 		if (!isDelete && referencesAreUsable)
 		{
 			preview.EffectiveAssignmentConflicts = await effectiveConflictBuilder.BuildAsync(
@@ -213,4 +225,55 @@ public class HrPolicyAssignmentImpactService(
 			return AffectedEmployeePreview.Empty;
 		}
 	}
+
+	private async Task AddAssignmentPayrollRiskAsync(
+		HrPolicyImpactPreviewDto preview,
+		AffectedEmployeePreview affectedEmployees,
+		CreateUpdateHrPolicyAssignmentDto assignment)
+	{
+		if (affectedEmployees.EmployeeIds.Count == 0)
+		{
+			return;
+		}
+
+		await payrollRiskReader.FillAssignmentPayrollRiskAsync(
+			preview,
+			affectedEmployees.EmployeeIds,
+			assignment.EffectiveFrom,
+			assignment.EffectiveTo);
+	}
+
+	private async Task<bool> AssignmentChangeCanAffectPayrollAsync(
+		string action,
+		Guid? assignmentId,
+		HrPolicyAssignmentTargetType targetType,
+		string targetKey,
+		CreateUpdateHrPolicyAssignmentDto assignment,
+		bool isDelete)
+	{
+		if (isDelete || !assignmentId.HasValue || !IsExistingAssignmentUpdate(action))
+		{
+			return true;
+		}
+
+		var existing = await assignmentRepository.FindAsync(assignmentId.Value);
+		if (existing == null)
+		{
+			return true;
+		}
+
+		return existing.AcademicYearId != assignment.AcademicYearId ||
+		       existing.TargetType != targetType ||
+		       !string.Equals(existing.TargetKey, targetKey, StringComparison.OrdinalIgnoreCase) ||
+		       existing.AttendancePolicyId != assignment.AttendancePolicyId ||
+		       existing.PayrollPolicyId != assignment.PayrollPolicyId ||
+		       existing.EffectiveFrom.Date != assignment.EffectiveFrom.Date ||
+		       existing.EffectiveTo?.Date != assignment.EffectiveTo?.Date ||
+		       existing.IsActive != assignment.IsActive ||
+		       existing.Priority != assignment.Priority;
+	}
+
+	private static bool IsExistingAssignmentUpdate(string action) =>
+		string.Equals(action, "update", StringComparison.OrdinalIgnoreCase) ||
+		string.Equals(action, EmployeeOverrideUpsertAction, StringComparison.OrdinalIgnoreCase);
 }

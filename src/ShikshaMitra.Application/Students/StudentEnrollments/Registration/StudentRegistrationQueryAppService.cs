@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -95,15 +96,28 @@ public class StudentRegistrationQueryAppService(
         return new PagedResultDto<StudentDto>(totalCount, resultList);
     }
 
-    public async Task<List<StudentSearchResultDto>> SearchStudentsByNameAsync(string searchTerm)
+    public async Task<List<StudentSearchResultDto>> SearchStudentsByNameAsync(string searchTerm, int maxResultCount = 20)
     {
         var normalizedSearchTerm = (searchTerm ?? string.Empty).Trim().ToLower();
+        if (normalizedSearchTerm.Length < 2)
+        {
+            return new List<StudentSearchResultDto>();
+        }
+
+        var resultLimit = Math.Clamp(maxResultCount, 1, 50);
+        var eligibleStatuses = new[]
+        {
+            StudentLifeCycleStatusEnum.Registration,
+            StudentLifeCycleStatusEnum.EntranceExam,
+            StudentLifeCycleStatusEnum.Admission,
+            StudentLifeCycleStatusEnum.Enrolled
+        };
 
         var queryable = await studentRepository.GetQueryableAsync();
 
         var query = queryable
             .Where(s => s.TenantId == CurrentTenant.Id
-                && s.Status == StudentLifeCycleStatusEnum.Admission
+                && eligibleStatuses.Contains(s.Status)
                 && (
                     (s.FirstName != null && s.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
                     (s.MiddleName != null && s.MiddleName.ToLower().Contains(normalizedSearchTerm)) ||
@@ -111,7 +125,27 @@ public class StudentRegistrationQueryAppService(
                 ));
         query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
-        var students = await AsyncExecuter.ToListAsync(query);
+        var students = await AsyncExecuter.ToListAsync(
+            query
+                .OrderBy(s => s.FirstName)
+                .ThenBy(s => s.MiddleName)
+                .ThenBy(s => s.LastName)
+                .ThenBy(s => s.Id)
+                .Take(resultLimit)
+                .Select(s => new
+                {
+                    s.Id,
+                    s.FirstName,
+                    s.MiddleName,
+                    s.LastName,
+                    s.GrNo,
+                    s.Status,
+                    FormNo = s.AdditionalDetail != null ? s.AdditionalDetail.RegistrationFormNo : null,
+                    AcademicBoard = s.AcademicBoard != null ? s.AcademicBoard.Type : (EducationBoardType?)null,
+                    EducationMedium = s.AcademicMedium != null ? s.AcademicMedium.Name : null,
+                    Standard = s.Standard != null ? s.Standard.Name : null,
+                    Division = s.Division != null ? s.Division.Name : null
+                }));
 
         if (students.Count == 0)
         {
@@ -122,8 +156,33 @@ public class StudentRegistrationQueryAppService(
             .Select(s => new StudentSearchResultDto
             {
                 Id = s.Id,
-                Student = $"{s.FirstName} {s.MiddleName} {s.LastName} [{s.AcademicMedium.EducationBoard.Type.ToString()}] ({s.Standard?.Name} - {s.Division?.Name})".Trim()
+                StudentName = BuildStudentName(s.FirstName, s.MiddleName, s.LastName),
+                FormNo = s.FormNo,
+                GrNo = s.GrNo,
+                AcademicBoard = s.AcademicBoard?.ToString(),
+                EducationMedium = s.EducationMedium,
+                Standard = s.Standard,
+                Division = s.Division,
+                Status = s.Status
+            })
+            .Select(s =>
+            {
+                s.Student = FormatStudentSearchLabel(s);
+                return s;
             })
             .ToList();
+    }
+
+    private static string BuildStudentName(string? firstName, string? middleName, string? lastName)
+        => string.Join(" ", new[] { firstName, middleName, lastName }
+            .Where(part => !string.IsNullOrWhiteSpace(part)));
+
+    private static string FormatStudentSearchLabel(StudentSearchResultDto student)
+    {
+        var classText = string.Join(" - ", new[] { student.Standard, student.Division }
+            .Where(part => !string.IsNullOrWhiteSpace(part)));
+        var boardText = string.IsNullOrWhiteSpace(student.AcademicBoard) ? string.Empty : $" [{student.AcademicBoard}]";
+        var classSuffix = string.IsNullOrWhiteSpace(classText) ? string.Empty : $" ({classText})";
+        return $"{student.StudentName}{boardText}{classSuffix}".Trim();
     }
 }

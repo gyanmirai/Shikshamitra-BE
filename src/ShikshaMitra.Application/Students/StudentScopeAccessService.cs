@@ -69,6 +69,59 @@ public class StudentScopeAccessService(
 			(s.AcademicBoardId.HasValue && scope.BoardIds.Contains(s.AcademicBoardId.Value)));
 	}
 
+	public async Task<IQueryable<AttendanceDay>> ApplyCurrentUserAttendanceDayScopeAsync(IQueryable<AttendanceDay> query)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+
+		if (scope.IsAdmin)
+		{
+			return query;
+		}
+
+		if (!scope.HasAnyAccess)
+		{
+			return query.Where(_ => false);
+		}
+
+		var standards = await standardRepository.GetQueryableAsync();
+		var mediumStages = await educationMediumStageRepository.GetQueryableAsync();
+		var mediums = await educationMediumRepository.GetQueryableAsync();
+		var boards = await educationBoardRepository.GetQueryableAsync();
+
+		var scopedQuery =
+			from day in query
+			join standard in standards on day.StandardId equals standard.Id
+			join stage in mediumStages on standard.EducationMediumStageId equals stage.Id
+			join medium in mediums on stage.EducationMediumId equals medium.Id
+			join board in boards on medium.EducationBoardId equals board.Id
+			where scope.HasWildcardAcademicYear ||
+			      scope.WildcardBoardAcademicYearIds.Contains(day.AcademicYearId) ||
+			      scope.DivisionIds.Contains(day.DivisionId) ||
+			      (scope.HasWildcardDivision && scope.WildcardDivisionStandardIds.Contains(day.StandardId)) ||
+			      scope.StandardIds.Contains(day.StandardId) ||
+			      (scope.HasWildcardStandard && scope.WildcardStandardMediumStageIds.Contains(stage.Id)) ||
+			      scope.MediumStageIds.Contains(stage.Id) ||
+			      (scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(medium.Id)) ||
+			      scope.MediumIds.Contains(medium.Id) ||
+			      (scope.HasWildcardMedium && scope.WildcardMediumBoardIds.Contains(board.Id)) ||
+			      scope.BoardIds.Contains(board.Id)
+			select day;
+
+		if (scope.HasWildcardAcademicYear)
+		{
+			return scopedQuery;
+		}
+
+		var academicYearIds = scope.AcademicYearIds
+			.Concat(scope.WildcardBoardAcademicYearIds)
+			.Distinct()
+			.ToList();
+
+		return academicYearIds.Count > 0
+			? scopedQuery.Where(day => academicYearIds.Contains(day.AcademicYearId))
+			: scopedQuery.Where(_ => false);
+	}
+
 	public async Task EnsureCanAccessStudentAsync(Student student, string operation)
 	{
 		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, operation: operation);

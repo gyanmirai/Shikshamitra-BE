@@ -19,6 +19,7 @@ public class HrReportScheduleService(
 	IDataFilter<IMultiTenant> multiTenantFilter,
 	IGuidGenerator guidGenerator,
 	HrReportScheduleRecipientValidator recipientValidator,
+	HrReportRequestValidationService requestValidationService,
 	HrReportScheduleRunner scheduleRunner,
 	HrAuditWriter auditWriter) : ApplicationService, ITransientDependency
 {
@@ -41,6 +42,7 @@ public class HrReportScheduleService(
 	public async Task<HrReportScheduleDto> CreateScheduleAsync(HrReportScheduleRequestDto input)
 	{
 		var userId = GetRequiredUserId();
+		requestValidationService.Validate(input.Definition);
 		var nextRunAt = input.FirstRunAt ?? HrReportScheduleMapper.ComputeNextRun(input.Frequency, Clock.Now);
 		var schedule = new HrReportSchedule(
 			guidGenerator.Create(),
@@ -62,6 +64,7 @@ public class HrReportScheduleService(
 	public async Task<HrReportScheduleDto> UpdateScheduleAsync(Guid id, HrReportScheduleRequestDto input)
 	{
 		var schedule = await GetOwnedScheduleAsync(id);
+		requestValidationService.Validate(input.Definition);
 		var nextRunAt = input.FirstRunAt ?? schedule.NextRunAt;
 		schedule.Update(
 			input.Name,
@@ -97,7 +100,7 @@ public class HrReportScheduleService(
 	public async Task<HrReportScheduleRunResponseDto> RunScheduleNowAsync(Guid id)
 	{
 		var schedule = await GetOwnedScheduleAsync(id);
-		var export = await scheduleRunner.RunScheduleAsync(schedule, "schedule_run_now");
+		var export = await scheduleRunner.RunScheduleAsync(schedule, "schedule_run_now", advanceNextRun: false);
 		return new HrReportScheduleRunResponseDto
 		{
 			ScheduleId = schedule.Id,
@@ -125,7 +128,7 @@ public class HrReportScheduleService(
 		{
 			using (CurrentTenant.Change(schedule.TenantId))
 			{
-				await scheduleRunner.RunScheduleAsync(schedule, "schedule_auto_run");
+				await scheduleRunner.RunScheduleAsync(schedule, "schedule_auto_run", advanceNextRun: true);
 				processed++;
 			}
 		}

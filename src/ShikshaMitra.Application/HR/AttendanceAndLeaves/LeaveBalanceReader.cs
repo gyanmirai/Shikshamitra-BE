@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using ShikshaMitra.HR.Policies;
@@ -36,15 +37,19 @@ public class LeaveBalanceReader(
 		var policy = resolved.LeavePolicy
 			?? throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
 
-		var items = new List<LeaveBalanceItemDto>();
-		foreach (var rule in policy.Rules)
-		{
-			if (!rule.IsActive || rule.LeaveType == null || !rule.LeaveType.IsActive)
-			{
-				continue;
-			}
+		var activeRules = policy.Rules
+			.Where(rule => rule.IsActive && rule.LeaveType != null && rule.LeaveType.IsActive)
+			.ToList();
+		var unitsByRule = await employeeLeaveRepository.GetBalanceUnitsByRuleAsync(
+			targetId.Value,
+			activeRules.Select(rule => rule.Id).ToList());
 
-			var used = await employeeLeaveRepository.GetApprovedLeaveDaysByRuleAsync(targetId.Value, rule.Id);
+		var items = new List<LeaveBalanceItemDto>();
+		foreach (var rule in activeRules)
+		{
+			unitsByRule.TryGetValue(rule.Id, out var units);
+			var used = units?.ApprovedDays ?? 0;
+			var pending = units?.PendingDays ?? 0;
 			var remaining = rule.AllowNegativeBalance ? decimal.MaxValue : Math.Max(0, rule.LeaveCount - used);
 
 			items.Add(new LeaveBalanceItemDto
@@ -56,7 +61,9 @@ public class LeaveBalanceReader(
 				LeaveTypeName = rule.LeaveType.Type,
 				EntitledDays = rule.LeaveCount,
 				UsedDays = used,
-				RemainingDays = remaining
+				PendingDays = pending,
+				RemainingDays = remaining,
+				AllowNegativeBalance = rule.AllowNegativeBalance
 			});
 		}
 

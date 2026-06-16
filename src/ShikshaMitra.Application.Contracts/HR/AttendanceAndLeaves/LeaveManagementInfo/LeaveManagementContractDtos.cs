@@ -21,6 +21,7 @@ public class LeaveManagementItemResponse
 	public string? SubmittedByEmployeeCode { get; set; }
 	[Required]
 	public string LeaveType { get; set; } = string.Empty;
+	public Guid? LeaveTypeMasterId { get; set; }
 	[Required]
 	public DateTime StartDate { get; set; }
 	[Required]

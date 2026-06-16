@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -60,6 +61,44 @@ public class RegistrationGeneralDetailsApi_Tests : ShikshaMitraApiTestBase
         body.ShouldNotBeNull();
         body.Data.ShouldNotBeNull();
         body.Data.StudentId.ShouldBe(studentId);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Search_Registration_Students_For_Sibling_Selection()
+    {
+        var registration = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(
+            Client,
+            "SiblingSearch");
+
+        var response = await Client.GetAsync(
+            $"{BaseUrl}/search?searchTerm={Uri.EscapeDataString(registration.FirstName)}&maxResultCount=5");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content
+            .ReadFromJsonAsync<Result<List<StudentSearchResultDto>>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.Count.ShouldBeLessThanOrEqualTo(5);
+        body.Data.ShouldContain(item =>
+            item.Id == registration.StudentId &&
+            item.FormNo == registration.FormNo &&
+            item.Status == StudentLifeCycleStatusEnum.Registration &&
+            item.StudentName.Contains(registration.FirstName));
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Return_Empty_Sibling_Search_For_One_Character_Query()
+    {
+        var response = await Client.GetAsync($"{BaseUrl}/search?searchTerm=A");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content
+            .ReadFromJsonAsync<Result<List<StudentSearchResultDto>>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.ShouldBeEmpty();
     }
 
     [Fact]

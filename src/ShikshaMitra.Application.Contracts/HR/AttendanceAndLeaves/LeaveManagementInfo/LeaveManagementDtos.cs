@@ -70,7 +70,9 @@ public class LeaveBalanceItemDto
 	public string LeaveTypeName { get; set; } = string.Empty;
 	public int EntitledDays { get; set; }
 	public decimal UsedDays { get; set; }
+	public decimal PendingDays { get; set; }
 	public decimal RemainingDays { get; set; }
+	public bool AllowNegativeBalance { get; set; }
 }
 
 public class LeaveManagementDto
@@ -83,6 +85,7 @@ public class LeaveManagementDto
 	public string SubmittedByName { get; set; } = string.Empty;
 	public string? SubmittedByEmployeeCode { get; set; }
 	public string LeaveType { get; set; } = string.Empty;
+	public Guid LeaveTypeMasterId { get; set; }
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
 	public decimal TotalDays { get; set; }

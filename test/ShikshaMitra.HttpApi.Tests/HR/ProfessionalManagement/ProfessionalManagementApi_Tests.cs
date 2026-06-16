@@ -3,8 +3,13 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.HR.ProfessionalManagement;
@@ -130,6 +135,26 @@ public class ProfessionalManagementApi_Tests : ShikshaMitraApiTestBase
 		body.Items.SelectMany(x => x.Sections).SelectMany(x => x.Criteria).ShouldContain(x => x.EvidenceRequired);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Review_Evidence_For_Workspace()
+	{
+		var (assignmentId, criterionId) = await SeedReviewEvidenceAsync();
+
+		var response = await Client.GetAsync($"{BaseUrl}/reviews/{assignmentId}/evidence");
+		var raw = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, raw);
+		var rows = await response.Content.ReadFromJsonAsync<PerformanceEvidenceDto[]>(JsonOptions);
+		rows.ShouldNotBeNull();
+		var evidence = rows.Single(x => x.Title == "Lesson plan evidence API");
+		evidence.ReviewAssignmentId.ShouldBe(assignmentId);
+		evidence.CriterionId.ShouldBe(criterionId);
+		evidence.FileName.ShouldBe("lesson-plan.pdf");
+		evidence.Url.ShouldBe("https://example.test/lesson-plan");
+		evidence.Notes.ShouldBe("Evidence seeded for API regression.");
+	}
+
 	private async Task<PerformanceTemplateDto> CreateTemplateAsync(string name)
 	{
 		var response = await Client.PostAsJsonAsync(BaseUrl + "/templates", BuildTemplateRequest(name), JsonOptions);
@@ -183,4 +208,88 @@ public class ProfessionalManagementApi_Tests : ShikshaMitraApiTestBase
 			}
 		]
 	};
+
+	private async Task<(Guid AssignmentId, Guid CriterionId)> SeedReviewEvidenceAsync()
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var templateRepository = scope.ServiceProvider.GetRequiredService<IRepository<PerformanceTemplate, Guid>>();
+		var sectionRepository = scope.ServiceProvider.GetRequiredService<IRepository<PerformanceTemplateSection, Guid>>();
+		var criterionRepository = scope.ServiceProvider.GetRequiredService<IRepository<PerformanceTemplateCriterion, Guid>>();
+		var cycleRepository = scope.ServiceProvider.GetRequiredService<IRepository<ProfessionalReviewCycle, Guid>>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<PerformanceReviewAssignment, Guid>>();
+		var evidenceRepository = scope.ServiceProvider.GetRequiredService<IRepository<PerformanceEvidence, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var template = new PerformanceTemplate(
+				Guid.NewGuid(),
+				tenantId,
+				$"CBSE API Evidence Template {Guid.NewGuid():N}",
+				PerformanceStaffCategory.Teacher,
+				null,
+				boardType: PerformanceBoardType.CBSE);
+			await templateRepository.InsertAsync(template, autoSave: false);
+
+			var section = new PerformanceTemplateSection(
+				Guid.NewGuid(),
+				tenantId,
+				template.Id,
+				"Curriculum and assessment",
+				100,
+				1,
+				null,
+				PerformanceSqaaDomain.CurriculumPedagogyAssessment);
+			await sectionRepository.InsertAsync(section, autoSave: false);
+
+			var criterion = new PerformanceTemplateCriterion(
+				Guid.NewGuid(),
+				tenantId,
+				template.Id,
+				section.Id,
+				"Lesson plan evidence",
+				null,
+				100,
+				true,
+				1,
+				null,
+				PerformanceSqaaDomain.CurriculumPedagogyAssessment);
+			await criterionRepository.InsertAsync(criterion, autoSave: false);
+
+			var cycle = new ProfessionalReviewCycle(
+				Guid.NewGuid(),
+				tenantId,
+				"API Evidence Cycle",
+				new DateTime(2026, 1, 1),
+				new DateTime(2026, 12, 31),
+				ProfessionalReviewCycleStatus.InProgress);
+			await cycleRepository.InsertAsync(cycle, autoSave: false);
+
+			var assignment = new PerformanceReviewAssignment(
+				Guid.NewGuid(),
+				tenantId,
+				cycle.Id,
+				template.Id,
+				Guid.NewGuid());
+			await assignmentRepository.InsertAsync(assignment, autoSave: false);
+
+			await evidenceRepository.InsertAsync(
+				new PerformanceEvidence(
+					Guid.NewGuid(),
+					tenantId,
+					assignment.Id,
+					criterion.Id,
+					"Lesson plan evidence API",
+					"lesson-plan.pdf",
+					"https://example.test/lesson-plan",
+					"Evidence seeded for API regression."),
+				autoSave: false);
+
+			await uow.CompleteAsync();
+			return (assignment.Id, criterion.Id);
+		}
+	}
 }

@@ -27,5 +27,7 @@ public class TimeSlotDetailDto
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
     public SlotType SlotType { get; set; }
+    public Guid? RoomId { get; set; }
+    public string? RoomName { get; set; }
     public BreakType? BreakType { get; set; }
 }

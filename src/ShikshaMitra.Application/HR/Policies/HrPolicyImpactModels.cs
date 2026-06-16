@@ -16,7 +16,7 @@ internal sealed record WorkCalendarPolicyReferences(
 	public int AttendancePolicyCount => AttendancePolicyIds.Count;
 }
 
-internal sealed record AffectedEmployeePreview(int Count, List<Employee> Sample)
+internal sealed record AffectedEmployeePreview(int Count, List<Employee> Sample, List<Guid> EmployeeIds)
 {
-	public static AffectedEmployeePreview Empty { get; } = new(0, []);
+	public static AffectedEmployeePreview Empty { get; } = new(0, [], []);
 }

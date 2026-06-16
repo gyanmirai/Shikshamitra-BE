@@ -10,6 +10,7 @@ public class LectureSlotTimeSlot : Entity<Guid>
     public TimeOnly StartTime { get; private set; }
     public TimeOnly EndTime { get; private set; }
     public SlotType SlotType { get; private set; }
+    public Guid? RoomId { get; private set; }
     public BreakType? BreakType { get; private set; }
     #endregion
 
@@ -25,13 +26,15 @@ public class LectureSlotTimeSlot : Entity<Guid>
         TimeOnly startTime,
         TimeOnly endTime,
         SlotType slotType,
-        BreakType? breakType = null)
+        BreakType? breakType = null,
+        Guid? roomId = null)
         : base(id)
     {
         LectureSlotGroupId = lectureSlotGroupId;
         StartTime = startTime;
         EndTime = endTime;
         SlotType = slotType;
+        RoomId = roomId;
         BreakType = breakType;
     }
     #endregion

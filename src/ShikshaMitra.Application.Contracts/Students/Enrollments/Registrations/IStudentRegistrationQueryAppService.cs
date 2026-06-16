@@ -25,5 +25,5 @@ public interface IStudentRegistrationQueryAppService : IApplicationService
         int maxResultCount = 10,
         string? searchTerm = null);
 
-    Task<List<StudentSearchResultDto>> SearchStudentsByNameAsync(string searchTerm);
+    Task<List<StudentSearchResultDto>> SearchStudentsByNameAsync(string searchTerm, int maxResultCount = 20);
 }

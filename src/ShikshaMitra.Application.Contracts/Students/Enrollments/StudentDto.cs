@@ -34,6 +34,8 @@ public class StudentDto : EntityDto
 	public int? RollNo { get; set; }
 	public int? GrNo { get; set; }
 	public Category Category { get; set; } = Category.General;
+	public bool IsLibraryMember { get; set; }
+	public bool IsTransportMember { get; set; }
 
 	public string? Address { get; set; }
 	public string? Address1 { get; set; }

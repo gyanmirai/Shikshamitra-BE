@@ -28,6 +28,11 @@ public record ApprovedAttendanceLeaveRow(
 	DateTimeOffset StartDate,
 	DateTimeOffset EndDate);
 
+public record LeaveRuleBalanceUnits(
+	Guid LeavePolicyRuleId,
+	decimal ApprovedDays,
+	decimal PendingDays);
+
 public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 {
 	Task<EmployeeLeave?> FindWithoutDetailsAsync(Guid id, CancellationToken cancellationToken = default);
@@ -59,6 +64,11 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 	Task<decimal> GetApprovedLeaveDaysByRuleAsync(
 		Guid employeeId,
 		Guid leavePolicyRuleId);
+
+	Task<IReadOnlyDictionary<Guid, LeaveRuleBalanceUnits>> GetBalanceUnitsByRuleAsync(
+		Guid employeeId,
+		IReadOnlyCollection<Guid> leavePolicyRuleIds,
+		CancellationToken cancellationToken = default);
 
 	Task<List<PayrollApprovedLeaveRow>> GetApprovedPayrollLeaveRowsAsync(
 		IReadOnlyCollection<Guid> employeeIds,

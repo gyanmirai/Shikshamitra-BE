@@ -96,7 +96,7 @@ internal static class HrReportEmployeeQueryFilters
 
 		if (condition.Operator == HrReportFilterOperator.In)
 		{
-			var values = (condition.Values ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+			var values = GetConditionValues(condition);
 			return values.Count == 0 ? query : query.Where(BuildStringIn(selector, values));
 		}
 
@@ -106,13 +106,28 @@ internal static class HrReportEmployeeQueryFilters
 	private static IQueryable<Employee> ApplyEnumCondition<TEnum>(IQueryable<Employee> query, Expression<Func<Employee, TEnum?>> selector, HrReportFilterConditionDto condition)
 		where TEnum : struct, Enum
 	{
-		var values = condition.Operator == HrReportFilterOperator.In ? condition.Values ?? [] : [condition.Value ?? string.Empty];
+		var values = condition.Operator == HrReportFilterOperator.In ? GetConditionValues(condition) : [condition.Value ?? string.Empty];
 		var parsed = values
 			.Select(value => Enum.TryParse<TEnum>(value, true, out var result) ? result : (TEnum?)null)
 			.Where(value => value.HasValue)
 			.Select(value => value!.Value)
 			.ToList();
 		return parsed.Count == 0 ? query : query.Where(BuildNullableEnumIn(selector, parsed));
+	}
+
+	private static List<string> GetConditionValues(HrReportFilterConditionDto condition)
+	{
+		var values = (condition.Values ?? [])
+			.Where(x => !string.IsNullOrWhiteSpace(x))
+			.Select(x => x.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+		if (values.Count == 0 && !string.IsNullOrWhiteSpace(condition.Value))
+		{
+			values.Add(condition.Value.Trim());
+		}
+
+		return values;
 	}
 
 	private static IQueryable<Employee> ApplyDateOnlyCondition(IQueryable<Employee> query, Expression<Func<Employee, DateOnly?>> selector, HrReportFilterConditionDto condition)

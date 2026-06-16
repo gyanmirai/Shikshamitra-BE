@@ -70,6 +70,9 @@ public class PersonalInfoRequestValidator : AbstractValidator<PersonalInfoReques
 		RuleFor(x => x.Address1).MaximumLength(512);
 		RuleFor(x => x.Address2).MaximumLength(512);
 		RuleFor(x => x.Address3).MaximumLength(512);
+		RuleFor(x => x.Designation).MaximumLength(256);
+		RuleFor(x => x.Qualification).MaximumLength(512);
+		RuleFor(x => x.IdentificationMark1).MaximumLength(256);
 		RuleFor(x => x.City).MaximumLength(128);
 
 		RuleFor(x => x.PinCode)

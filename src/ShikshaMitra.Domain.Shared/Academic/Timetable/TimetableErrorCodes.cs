@@ -8,6 +8,7 @@ public static class TimetableErrorCodes
     public const string LectureSlotConfigNotFound = "Academic:Timetable:020002";
     public const string LectureSlotAlreadyAssigned = "Academic:Timetable:020003";
     public const string LectureSlotConfigHasTimetable = "Academic:Timetable:020004";
+    public const string LectureSlotRoomNotFound = "Academic:Timetable:020005";
     public const string TimetableNotFound = "Academic:Timetable:030001";
     public const string TimetableAlreadyExists = "Academic:Timetable:030002";
     public const string TeacherConflict = "Academic:Timetable:030003";

@@ -81,6 +81,40 @@ public class StudentLeaveApi_Tests : ShikshaMitraApiTestBase
         approvedList.Items.Single(l => l.Id == created.Id).Status.ShouldBe(StudentLeaveStatusEnum.Approved);
     }
 
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Page_And_Sort_Student_Leave_List_Server_Side()
+    {
+        var context = await ResolveSeededDivisionContextAsync();
+        var student = await CreateEnrolledStudentAsync(context, "LeavePaging");
+        var leaveType = await CreateLeaveTypeAsync();
+        var earlierDate = DateTimeOffset.UtcNow.Date.AddDays(4);
+        var laterDate = earlierDate.AddDays(5);
+        var earlier = await CreateLeaveAsync(student.StudentId, leaveType.Id, earlierDate, "Earlier server sorted leave");
+        var later = await CreateLeaveAsync(student.StudentId, leaveType.Id, laterDate, "Later server sorted leave");
+
+        var ascendingFirstPage = await GetLeaveListAsync(
+            student.StudentId,
+            sorting: "formattedLeaveDate ASC",
+            skipCount: 0,
+            maxResultCount: 1);
+        var ascendingSecondPage = await GetLeaveListAsync(
+            student.StudentId,
+            sorting: "formattedLeaveDate ASC",
+            skipCount: 1,
+            maxResultCount: 1);
+        var descendingFirstPage = await GetLeaveListAsync(
+            student.StudentId,
+            sorting: "formattedLeaveDate DESC",
+            skipCount: 0,
+            maxResultCount: 1);
+
+        ascendingFirstPage.TotalCount.ShouldBe(2);
+        ascendingFirstPage.Items.Single().Id.ShouldBe(earlier.Id);
+        ascendingSecondPage.Items.Single().Id.ShouldBe(later.Id);
+        descendingFirstPage.Items.Single().Id.ShouldBe(later.Id);
+    }
+
     private async Task<StudentLeaveTypeDto> CreateLeaveTypeAsync()
     {
         var response = await Client.PostAsJsonAsync(
@@ -108,6 +142,44 @@ public class StudentLeaveApi_Tests : ShikshaMitraApiTestBase
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         return await response.Content.ReadFromJsonAsync<PagedResultDto<StudentLeaveDto>>(JsonOptions)
                ?? throw new InvalidOperationException("Null leave list response");
+    }
+
+    private async Task<PagedResultDto<StudentLeaveDto>> GetLeaveListAsync(
+        Guid studentId,
+        string sorting,
+        int skipCount,
+        int maxResultCount)
+    {
+        var response = await Client.GetAsync(
+            $"{LeaveBaseUrl}?studentId={studentId}&sorting={Uri.EscapeDataString(sorting)}&skipCount={skipCount}&maxResultCount={maxResultCount}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return await response.Content.ReadFromJsonAsync<PagedResultDto<StudentLeaveDto>>(JsonOptions)
+               ?? throw new InvalidOperationException("Null leave list response");
+    }
+
+    private async Task<StudentLeaveDto> CreateLeaveAsync(
+        Guid studentId,
+        Guid leaveTypeId,
+        DateTimeOffset leaveDate,
+        string description)
+    {
+        var response = await Client.PostAsJsonAsync(
+            LeaveBaseUrl,
+            new CreateStudentLeaveDto
+            {
+                StudentId = studentId,
+                StudentLeaveTypeId = leaveTypeId,
+                IsHalfDay = false,
+                LeaveDate = leaveDate,
+                EndDate = leaveDate,
+                Description = description
+            },
+            JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return await response.Content.ReadFromJsonAsync<StudentLeaveDto>(JsonOptions)
+               ?? throw new InvalidOperationException("Null leave create response");
     }
 
     private async Task<StudentGeneralDetailsDto> CreateEnrolledStudentAsync(

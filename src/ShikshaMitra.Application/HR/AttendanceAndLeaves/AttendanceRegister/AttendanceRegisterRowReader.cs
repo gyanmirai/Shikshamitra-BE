@@ -138,7 +138,7 @@ public class AttendanceRegisterRowReader(
 		var dates = Enumerable.Range(0, endDate.DayNumber - startDate.DayNumber + 1)
 			.Select(offset => startDate.AddDays(offset))
 			.ToList();
-		var captureModeLookup = await captureModeLookupResolver.ResolveForDatesAsync(employeeIds, dates);
+		var captureModeLookup = await captureModeLookupResolver.ResolveForDatesOrDefaultAsync(employeeIds, dates);
 
 		return rowProjectionBuilder.Build(
 			input,

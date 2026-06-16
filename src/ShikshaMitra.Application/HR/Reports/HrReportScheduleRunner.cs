@@ -13,17 +13,26 @@ public class HrReportScheduleRunner(
 	HrReportScheduleDeliveryService deliveryService,
 	HrAuditWriter auditWriter) : ApplicationService, ITransientDependency
 {
-	public async Task<HrReportExportCreateResponseDto> RunScheduleAsync(HrReportSchedule schedule, string auditAction)
+	public async Task<HrReportExportCreateResponseDto> RunScheduleAsync(
+		HrReportSchedule schedule,
+		string auditAction,
+		bool advanceNextRun)
 	{
 		var request = HrReportScheduleMapper.DeserializeDefinition(schedule);
 		request.Format = string.IsNullOrWhiteSpace(request.Format) ? HrReportFormat.Excel : request.Format;
+		request.SourceAction = "scheduleRun";
+		request.ParentJobId = null;
+		request.TemplateId ??= schedule.TemplateId;
 		var recipients = schedule.GetRecipientUserIds();
 		var export = await exportService.CreateExportForUserAsync(
 			request,
 			schedule.OwnerUserId,
 			schedule.TenantId,
-			recipients);
-		var nextRunAt = HrReportScheduleMapper.ComputeNextRun(schedule.Frequency, Clock.Now);
+			recipients,
+			sourceAction: "scheduleRun");
+		var nextRunAt = advanceNextRun
+			? HrReportScheduleMapper.ComputeNextRun(schedule.Frequency, Clock.Now)
+			: schedule.NextRunAt;
 		schedule.MarkRun(Clock.Now, nextRunAt);
 		await scheduleRepository.UpdateAsync(schedule, autoSave: true);
 		await auditWriter.WriteAsync(

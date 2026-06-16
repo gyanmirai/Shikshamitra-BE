@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Dynamic.Core;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +33,7 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 		string? sorting = null,
 		int maxResultCount = int.MaxValue,
 		int skipCount = 0,
+		IReadOnlyCollection<Guid>? studentIds = null,
 		Guid? tenantId = null,
 		CancellationToken cancellationToken = default)
 	{
@@ -48,6 +48,7 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 			status,
 			startDate,
 			endDate,
+			studentIds,
 			tenantId);
 
 		return await ApplySortingAndPagingAsync(
@@ -68,6 +69,7 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 		StudentLeaveStatusEnum? status = null,
 		DateTimeOffset? startDate = null,
 		DateTimeOffset? endDate = null,
+		IReadOnlyCollection<Guid>? studentIds = null,
 		Guid? tenantId = null,
 		CancellationToken cancellationToken = default)
 	{
@@ -82,6 +84,7 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 			status,
 			startDate,
 			endDate,
+			studentIds,
 			tenantId);
 
 		return await query.LongCountAsync(GetCancellationToken(cancellationToken));
@@ -119,6 +122,7 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 		string? sorting = null,
 		int maxResultCount = int.MaxValue,
 		int skipCount = 0,
+		IReadOnlyCollection<Guid>? studentIds = null,
 		Guid? tenantId = null,
 		CancellationToken cancellationToken = default)
 	{
@@ -133,6 +137,7 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 			status,
 			startDate,
 			endDate,
+			studentIds,
 			tenantId);
 
 		query = query
@@ -160,29 +165,64 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 		int skipCount,
 		CancellationToken cancellationToken)
 	{
-		var effectiveSorting = sorting ?? nameof(StudentLeave.LeaveDate) + " DESC";
+		var dbContext = await GetDbContextAsync();
+		var isSqlite = dbContext.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
 
-		if (IsLeaveDateSorting(effectiveSorting))
+		if (isSqlite)
 		{
-			var leaves = await query.ToListAsync(GetCancellationToken(cancellationToken));
-			var orderedLeaves = effectiveSorting.Contains("ASC", StringComparison.OrdinalIgnoreCase)
-				? leaves.OrderBy(l => l.LeaveDate).ThenBy(l => l.Id)
-				: leaves.OrderByDescending(l => l.LeaveDate).ThenBy(l => l.Id);
-
-			return orderedLeaves
-				.Skip(skipCount)
-				.Take(maxResultCount)
-				.ToList();
+			return await ApplySqliteSortingAndPagingAsync(query, sorting, maxResultCount, skipCount, cancellationToken);
 		}
 
-		return await query
-			.OrderBy(effectiveSorting)
-			.PageBy(skipCount, maxResultCount)
+		return await ApplySorting(query, sorting)
+			.Skip(skipCount)
+			.Take(maxResultCount)
 			.ToListAsync(GetCancellationToken(cancellationToken));
 	}
 
-	private static bool IsLeaveDateSorting(string sorting) =>
-		sorting.TrimStart().StartsWith(nameof(StudentLeave.LeaveDate), StringComparison.OrdinalIgnoreCase);
+	private async Task<List<StudentLeave>> ApplySqliteSortingAndPagingAsync(
+		IQueryable<StudentLeave> query,
+		string? sorting,
+		int maxResultCount,
+		int skipCount,
+		CancellationToken cancellationToken)
+	{
+		var rows = await query
+			.Select(l => new StudentLeavePageKey(
+				l.Id,
+				l.LeaveDate,
+				l.EndDate,
+				l.TotalDays,
+				l.Status,
+				l.Remarks,
+				l.Student != null ? l.Student.FirstName : null,
+				l.Student != null ? l.Student.LastName : null,
+				l.Student != null && l.Student.AcademicMedium != null ? l.Student.AcademicMedium.Name : null,
+				l.Student != null && l.Student.Standard != null ? l.Student.Standard.Name : null,
+				l.Student != null && l.Student.Division != null ? l.Student.Division.Name : null,
+				l.StudentLeaveType != null ? l.StudentLeaveType.LeaveTypeName : null))
+			.ToListAsync(GetCancellationToken(cancellationToken));
+
+		var pageIds = ApplyInMemorySorting(rows, sorting)
+			.Skip(skipCount)
+			.Take(maxResultCount)
+			.Select(l => l.Id)
+			.ToList();
+
+		if (pageIds.Count == 0)
+		{
+			return [];
+		}
+
+		var leaves = await query
+			.Where(l => pageIds.Contains(l.Id))
+			.ToListAsync(GetCancellationToken(cancellationToken));
+		var leavesById = leaves.ToDictionary(l => l.Id);
+
+		return pageIds
+			.Where(leavesById.ContainsKey)
+			.Select(id => leavesById[id])
+			.ToList();
+	}
 
 	private IQueryable<StudentLeave> ApplyFilter(
 		IQueryable<StudentLeave> query,
@@ -195,12 +235,20 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 		StudentLeaveStatusEnum? status = null,
 		DateTimeOffset? startDate = null,
 		DateTimeOffset? endDate = null,
+		IReadOnlyCollection<Guid>? studentIds = null,
 		Guid? tenantId = null)
 	{
 		// Apply tenant filter
 		if (tenantId.HasValue)
 		{
 			query = query.Where(x => x.TenantId == tenantId);
+		}
+
+		if (studentIds != null)
+		{
+			query = studentIds.Count == 0
+				? query.Where(x => false)
+				: query.Where(x => studentIds.Contains(x.StudentId));
 		}
 
 		// Apply text search filter (search in description, remarks, rejection reason)
@@ -256,4 +304,150 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 
 		return query;
 	}
+
+	private static IOrderedQueryable<StudentLeave> ApplySorting(IQueryable<StudentLeave> query, string? sorting)
+	{
+		var (field, descending) = ParseSorting(sorting);
+
+		return field switch
+		{
+			"studentname" => descending
+				? query
+					.OrderByDescending(l => l.Student != null ? l.Student.FirstName : null)
+					.ThenByDescending(l => l.Student != null ? l.Student.LastName : null)
+					.ThenByDescending(l => l.LeaveDate)
+					.ThenBy(l => l.Id)
+				: query
+					.OrderBy(l => l.Student != null ? l.Student.FirstName : null)
+					.ThenBy(l => l.Student != null ? l.Student.LastName : null)
+					.ThenBy(l => l.LeaveDate)
+					.ThenBy(l => l.Id),
+			"organizationname" => descending
+				? query
+					.OrderByDescending(l => l.Student != null && l.Student.AcademicMedium != null ? l.Student.AcademicMedium.Name : null)
+					.ThenByDescending(l => l.LeaveDate)
+					.ThenBy(l => l.Id)
+				: query
+					.OrderBy(l => l.Student != null && l.Student.AcademicMedium != null ? l.Student.AcademicMedium.Name : null)
+					.ThenBy(l => l.LeaveDate)
+					.ThenBy(l => l.Id),
+			"classname" => descending
+				? query
+					.OrderByDescending(l => l.Student != null && l.Student.Standard != null ? l.Student.Standard.Name : null)
+					.ThenByDescending(l => l.LeaveDate)
+					.ThenBy(l => l.Id)
+				: query
+					.OrderBy(l => l.Student != null && l.Student.Standard != null ? l.Student.Standard.Name : null)
+					.ThenBy(l => l.LeaveDate)
+					.ThenBy(l => l.Id),
+			"divisionname" => descending
+				? query
+					.OrderByDescending(l => l.Student != null && l.Student.Division != null ? l.Student.Division.Name : null)
+					.ThenByDescending(l => l.LeaveDate)
+					.ThenBy(l => l.Id)
+				: query
+					.OrderBy(l => l.Student != null && l.Student.Division != null ? l.Student.Division.Name : null)
+					.ThenBy(l => l.LeaveDate)
+					.ThenBy(l => l.Id),
+			"leavetypename" => descending
+				? query
+					.OrderByDescending(l => l.StudentLeaveType != null ? l.StudentLeaveType.LeaveTypeName : null)
+					.ThenByDescending(l => l.LeaveDate)
+					.ThenBy(l => l.Id)
+				: query
+					.OrderBy(l => l.StudentLeaveType != null ? l.StudentLeaveType.LeaveTypeName : null)
+					.ThenBy(l => l.LeaveDate)
+					.ThenBy(l => l.Id),
+			"formattedenddate" or "enddate" => descending
+				? query.OrderByDescending(l => l.EndDate ?? l.LeaveDate).ThenBy(l => l.Id)
+				: query.OrderBy(l => l.EndDate ?? l.LeaveDate).ThenBy(l => l.Id),
+			"totaldays" => descending
+				? query.OrderByDescending(l => l.TotalDays).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: query.OrderBy(l => l.TotalDays).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"status" => descending
+				? query.OrderByDescending(l => l.Status).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: query.OrderBy(l => l.Status).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"remarks" => descending
+				? query.OrderByDescending(l => l.Remarks).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: query.OrderBy(l => l.Remarks).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"formattedleavedate" or "leavedate" => descending
+				? query.OrderByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: query.OrderBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			_ => descending
+				? query.OrderByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: query.OrderBy(l => l.LeaveDate).ThenBy(l => l.Id)
+		};
+	}
+
+	private static IOrderedEnumerable<StudentLeavePageKey> ApplyInMemorySorting(
+		IEnumerable<StudentLeavePageKey> rows,
+		string? sorting)
+	{
+		var (field, descending) = ParseSorting(sorting);
+
+		return field switch
+		{
+			"studentname" => descending
+				? rows.OrderByDescending(l => l.StudentFirstName).ThenByDescending(l => l.StudentLastName).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.StudentFirstName).ThenBy(l => l.StudentLastName).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"organizationname" => descending
+				? rows.OrderByDescending(l => l.OrganizationName).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.OrganizationName).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"classname" => descending
+				? rows.OrderByDescending(l => l.ClassName).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.ClassName).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"divisionname" => descending
+				? rows.OrderByDescending(l => l.DivisionName).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.DivisionName).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"leavetypename" => descending
+				? rows.OrderByDescending(l => l.LeaveTypeName).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.LeaveTypeName).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"formattedenddate" or "enddate" => descending
+				? rows.OrderByDescending(l => l.EndDate ?? l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.EndDate ?? l.LeaveDate).ThenBy(l => l.Id),
+			"totaldays" => descending
+				? rows.OrderByDescending(l => l.TotalDays).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.TotalDays).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"status" => descending
+				? rows.OrderByDescending(l => l.Status).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.Status).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"remarks" => descending
+				? rows.OrderByDescending(l => l.Remarks).ThenByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.Remarks).ThenBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			"formattedleavedate" or "leavedate" => descending
+				? rows.OrderByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.LeaveDate).ThenBy(l => l.Id),
+			_ => descending
+				? rows.OrderByDescending(l => l.LeaveDate).ThenBy(l => l.Id)
+				: rows.OrderBy(l => l.LeaveDate).ThenBy(l => l.Id)
+		};
+	}
+
+	private static (string Field, bool Descending) ParseSorting(string? sorting)
+	{
+		var token = (sorting ?? string.Empty)
+			.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+			.FirstOrDefault();
+		var parts = token?
+			.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+			?? [];
+		var field = parts.FirstOrDefault()?.ToLowerInvariant();
+		var descending = parts.Length < 2 || parts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
+
+		return (field ?? "leavedate", descending);
+	}
+
+	private sealed record StudentLeavePageKey(
+		Guid Id,
+		DateTimeOffset LeaveDate,
+		DateTimeOffset? EndDate,
+		decimal TotalDays,
+		StudentLeaveStatusEnum Status,
+		string? Remarks,
+		string? StudentFirstName,
+		string? StudentLastName,
+		string? OrganizationName,
+		string? ClassName,
+		string? DivisionName,
+		string? LeaveTypeName);
 }

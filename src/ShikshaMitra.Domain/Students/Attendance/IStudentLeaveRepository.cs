@@ -27,6 +27,7 @@ public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 		string? sorting = null,
 		int maxResultCount = int.MaxValue,
 		int skipCount = 0,
+		IReadOnlyCollection<Guid>? studentIds = null,
 		Guid? tenantId = null,
 		CancellationToken cancellationToken = default);
 
@@ -43,6 +44,7 @@ public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 		StudentLeaveStatusEnum? status = null,
 		DateTimeOffset? startDate = null,
 		DateTimeOffset? endDate = null,
+		IReadOnlyCollection<Guid>? studentIds = null,
 		Guid? tenantId = null,
 		CancellationToken cancellationToken = default);
 
@@ -69,6 +71,7 @@ public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 		string? sorting = null,
 		int maxResultCount = int.MaxValue,
 		int skipCount = 0,
+		IReadOnlyCollection<Guid>? studentIds = null,
 		Guid? tenantId = null,
 		CancellationToken cancellationToken = default);
 }

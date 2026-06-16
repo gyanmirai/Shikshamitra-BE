@@ -23,88 +23,36 @@ public class StudentLeaveAppService(
 	{
 		var scopedStudents = await studentScopeAccessService.ApplyCurrentUserScopeAsync(
 			await studentRepository.GetQueryableWithoutAutoIncludesAsync());
-		var scopedStudentIds = scopedStudents.Select(s => s.Id);
+		var scopedStudentIds = await AsyncExecuter.ToListAsync(scopedStudents.Select(s => s.Id));
 
-		var query = (await studentLeaveRepository.GetQueryableAsync())
-			.Where(l => scopedStudentIds.Contains(l.StudentId));
+		var totalCount = await studentLeaveRepository.GetCountAsync(
+			input.FilterText,
+			input.StudentId,
+			input.EducationMediumId,
+			input.StandardId,
+			input.DivisionId,
+			input.StudentLeaveTypeId,
+			input.Status,
+			input.StartDate,
+			input.EndDate,
+			scopedStudentIds,
+			CurrentTenant.Id);
 
-		if (CurrentTenant.Id.HasValue)
-		{
-			query = query.Where(l => l.TenantId == CurrentTenant.Id);
-		}
-
-		if (!string.IsNullOrWhiteSpace(input.FilterText))
-		{
-			query = query.Where(l =>
-				(l.Description != null && l.Description.Contains(input.FilterText)) ||
-				(l.Remarks != null && l.Remarks.Contains(input.FilterText)) ||
-				(l.RejectionReason != null && l.RejectionReason.Contains(input.FilterText)));
-		}
-
-		if (input.StudentId.HasValue)
-		{
-			query = query.Where(l => l.StudentId == input.StudentId.Value);
-		}
-
-		if (input.EducationMediumId.HasValue)
-		{
-			query = query.Where(l => l.EducationMediumId == input.EducationMediumId.Value);
-		}
-
-		if (input.StandardId.HasValue)
-		{
-			query = query.Where(l => l.StandardId == input.StandardId.Value);
-		}
-
-		if (input.DivisionId.HasValue)
-		{
-			query = query.Where(l => l.DivisionId == input.DivisionId.Value);
-		}
-
-		if (input.StudentLeaveTypeId.HasValue)
-		{
-			query = query.Where(l => l.StudentLeaveTypeId == input.StudentLeaveTypeId.Value);
-		}
-
-		if (input.Status.HasValue)
-		{
-			query = query.Where(l => l.Status == input.Status.Value);
-		}
-
-		if (input.StartDate.HasValue)
-		{
-			query = query.Where(l => l.LeaveDate >= input.StartDate.Value);
-		}
-
-		if (input.EndDate.HasValue)
-		{
-			query = query.Where(l => l.EndDate == null || l.EndDate <= input.EndDate.Value);
-		}
-
-		var totalCount = await AsyncExecuter.CountAsync(query);
-		var leaveKeys = await AsyncExecuter.ToListAsync(
-			query.Select(l => new
-			{
-				l.Id,
-				l.LeaveDate
-			}));
-
-		var leaveIds = leaveKeys
-			.OrderByDescending(l => l.LeaveDate)
-			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount)
-			.Select(l => l.Id)
-			.ToList();
-
-		var leaves = new List<StudentLeave>();
-		foreach (var leaveId in leaveIds)
-		{
-			var leave = await studentLeaveRepository.GetWithDetailsAsync(leaveId);
-			if (leave != null)
-			{
-				leaves.Add(leave);
-			}
-		}
+		var leaves = await studentLeaveRepository.GetListWithDetailsAsync(
+			input.FilterText,
+			input.StudentId,
+			input.EducationMediumId,
+			input.StandardId,
+			input.DivisionId,
+			input.StudentLeaveTypeId,
+			input.Status,
+			input.StartDate,
+			input.EndDate,
+			input.Sorting,
+			input.MaxResultCount,
+			input.SkipCount,
+			scopedStudentIds,
+			CurrentTenant.Id);
 
 		var leaveDtos = leaves.Select(leave => MapToDto(leave)).ToList();
 
@@ -315,4 +263,5 @@ public class StudentLeaveAppService(
 		LastModificationTime = leave.LastModificationTime,
 		LastModifierId = leave.LastModifierId
 	};
+
 }

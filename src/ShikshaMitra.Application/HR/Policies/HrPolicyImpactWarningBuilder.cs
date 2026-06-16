@@ -61,15 +61,7 @@ internal static class HrPolicyImpactWarningBuilder
 
 	public static void AddWarnings(HrPolicyImpactPreviewDto preview)
 	{
-		if (preview.LockedPayrollMonths.Count > 0)
-		{
-			preview.Warnings.Add(new HrPolicyImpactWarningDto
-			{
-				Severity = "blocking",
-				Code = HRErrorCodes.LockedPayrollImpact,
-				Message = "This change affects locked payroll months. Review recalculation and audit requirements before saving."
-			});
-		}
+		AddLockedPayrollWarning(preview);
 		if (preview.AffectedEmployeeCount > 0)
 		{
 			preview.Warnings.Add(new HrPolicyImpactWarningDto
@@ -79,6 +71,21 @@ internal static class HrPolicyImpactWarningBuilder
 				Message = $"{preview.AffectedEmployeeCount} employees may be affected."
 			});
 		}
+	}
+
+	public static void AddLockedPayrollWarning(HrPolicyImpactPreviewDto preview)
+	{
+		if (preview.LockedPayrollMonths.Count == 0)
+		{
+			return;
+		}
+
+		preview.Warnings.Add(new HrPolicyImpactWarningDto
+		{
+			Severity = "blocking",
+			Code = HRErrorCodes.LockedPayrollImpact,
+			Message = "This change affects locked payroll months. Review recalculation and audit requirements before saving."
+		});
 	}
 
 	public static void AddDefaultReplacementWarning(HrPolicyImpactPreviewDto preview, string existingDefaultName)

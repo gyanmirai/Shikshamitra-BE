@@ -5,6 +5,7 @@ using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace ShikshaMitra.Seeders;
@@ -13,24 +14,22 @@ public partial class HRSeederContributor
 {
 	private async Task SeedLeaveTypesAndPoliciesAsync()
 	{
-		// Check if already seeded
-		if (await _leaveTypeRepository.AnyAsync())
-			return;
-
-		var currentYear = _clock.Now.Year;
-		var academicYear = await _academicYearRepository
-			.FirstOrDefaultAsync(y => y.Name.StartsWith(currentYear.ToString()))
-			?? await _academicYearRepository.FirstOrDefaultAsync();
-
-		if (academicYear == null)
+		var academicYears = (await _academicYearRepository.GetListAsync())
+			.OrderBy(x => x.StartDate)
+			.ToList();
+		if (academicYears.Count == 0)
 		{
-			// Skip seeding if no academic year is available.
 			return;
 		}
 
-		var academicYearId = academicYear.Id;
+		foreach (var academicYear in academicYears)
+		{
+			await SeedLeaveTypesAndPoliciesAsync(academicYear.Id);
+		}
+	}
 
-		// Seed leave types
+	private async Task SeedLeaveTypesAndPoliciesAsync(Guid academicYearId)
+	{
 		var leaveTypes = new[]
 		{
 			("Casual Leave", "#4CAF50", (string?)null),
@@ -44,20 +43,22 @@ public partial class HRSeederContributor
 
 		foreach (var (type, color, description) in leaveTypes)
 		{
+			if (await _leaveTypeRepository.AnyAsync(x => x.AcademicYearId == academicYearId && x.Type == type))
+			{
+				continue;
+			}
+
 			var leaveType = await _leaveTypeManager.CreateAsync(academicYearId, type, color, description);
 			await _leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
 		}
 
 		await CurrentUnitOfWork.SaveChangesAsync();
-
-		// Seed leave policies
 		await SeedLeavePoliciesAsync(academicYearId);
 	}
 
 	private async Task SeedLeavePoliciesAsync(Guid academicYearId)
 	{
-		// Check if already seeded
-		if (await _leavePolicyRepository.AnyAsync())
+		if (await _leavePolicyRepository.AnyAsync(x => x.AcademicYearId == academicYearId))
 			return;
 
 		// Get the leave type IDs by name
@@ -124,8 +125,14 @@ public partial class HRSeederContributor
 				!defaultLeavePolicyAssigned,
 				rules,
 				description);
+			if (defaultLeavePolicyAssigned && leavePolicy.IsDefault)
+			{
+				leavePolicy.SetDefault(false);
+			}
+
 			defaultLeavePolicyAssigned = defaultLeavePolicyAssigned || leavePolicy.IsDefault;
 			await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
+			await CurrentUnitOfWork.SaveChangesAsync();
 		}
 
 		await SeedPolicyAsync(

@@ -17,6 +17,7 @@ public class TimeSlotDto
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
     public SlotType SlotType { get; set; }
+    public Guid? RoomId { get; set; }
     [JsonConverter(typeof(NullableEnumConverter<BreakType>))]
     public BreakType? BreakType { get; set; }
 }

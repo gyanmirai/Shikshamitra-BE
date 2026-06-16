@@ -2,13 +2,17 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Common.Responses;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Students.Enrollment;
 using ShikshaMitra.Students.Enrollments.Admissions;
 using ShikshaMitra.Students.Enrollments.EntranceExams;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.Students.Enrollments;
@@ -62,6 +66,28 @@ public class EntranceExamApi_Tests : ShikshaMitraApiTestBase
             .ReadFromJsonAsync<Result<PagedResultDto<EntranceExamStudentDto>>>(JsonOptions);
         body.ShouldNotBeNull();
         body.Data.ShouldNotBeNull();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Return_FormNo_In_Entrance_Exam_List()
+    {
+        var registration = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(
+            Client,
+            "ExamFormNo");
+        await MoveRegistrationToEntranceExamAsync(registration.StudentId);
+
+        var response = await Client.GetAsync(
+            $"{BaseUrl}?searchTerm={Uri.EscapeDataString(registration.FirstName)}&maxResultCount=20");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content
+            .ReadFromJsonAsync<Result<PagedResultDto<EntranceExamStudentDto>>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.Items.ShouldContain(item =>
+            item.StudentId == registration.StudentId &&
+            item.FormNo == registration.FormNo);
     }
 
     #endregion
@@ -204,4 +230,28 @@ public class EntranceExamApi_Tests : ShikshaMitraApiTestBase
     }
 
     #endregion
+
+    private async Task MoveRegistrationToEntranceExamAsync(Guid studentId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var student = await studentRepository.GetInquiryForUpdateAsync(studentId)
+                          ?? throw new InvalidOperationException($"Student not found: {studentId}");
+            student.ScheduleEntranceExam(
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow.AddDays(1),
+                DateTimeOffset.UtcNow.AddDays(1).AddHours(1),
+                101);
+
+            await studentRepository.UpdateAsync(student);
+            await uow.CompleteAsync();
+        }
+    }
 }

@@ -40,7 +40,10 @@ public class HrPolicyEmployeeOverrideWorkflow(
 				payload.EffectiveTo,
 				null,
 				payload.IsActive);
-			await assignmentImpactService.EnsureAssignmentImpactConfirmedAsync("create", null, payload);
+			await assignmentImpactService.EnsureAssignmentImpactConfirmedAsync(
+				HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction,
+				null,
+				payload);
 			return await CreateAsync(payload, targetType, targetKey);
 		}
 

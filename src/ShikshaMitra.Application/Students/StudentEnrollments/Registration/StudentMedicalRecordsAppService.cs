@@ -37,7 +37,9 @@ public class StudentMedicalRecordsAppService(
             ImmunizationRemarks = medicalRecord?.ImmunizationRemarks,
             BloodGroup = medicalRecord?.BloodGroup,
             ChronicConditions = medicalRecord?.ChronicConditions,
-            CurrentMedications = medicalRecord?.CurrentMedications
+            CurrentMedications = medicalRecord?.CurrentMedications,
+            HaveDisability = student.AdditionalDetail?.HaveDisability ?? false,
+            DisabilityDetails = student.AdditionalDetail?.DisabilityDetails
         };
     }
 
@@ -72,6 +74,7 @@ public class StudentMedicalRecordsAppService(
         );
 
         student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.MedicalRecords);
+        student.AdditionalDetail?.UpdateDisabilityInfo(input.HaveDisability, input.DisabilityDetails);
 
         await UnitOfWorkManager.Current!.SaveChangesAsync();
 

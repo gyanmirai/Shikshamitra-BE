@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
@@ -21,6 +22,7 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 {
 	private readonly IStudentRepository _studentRepository;
 	private readonly IAttendanceDayRepository _attendanceDayRepository;
+	private readonly IAttendanceEntryRepository _attendanceEntryRepository;
 	private readonly AttendanceManager _attendanceManager;
 	private readonly IRepository<TenantSettings.AcademicYears.AcademicYear, Guid> _academicYearRepository;
 	private readonly IRepository<TenantSettings.Standards.Standard, Guid> _standardRepository;
@@ -41,6 +43,7 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 	{
 		_studentRepository = studentRepository;
 		_attendanceDayRepository = attendanceDayRepository;
+		_attendanceEntryRepository = attendanceEntryRepository;
 		_attendanceManager = attendanceManager;
 		_academicYearRepository = academicYearRepository;
 		_standardRepository = standardRepository;
@@ -112,6 +115,41 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 			PendingCount = pendingCount,
 			Students = studentDtos
 		};
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.View)]
+	public async Task<PagedResultDto<StudentAttendanceHistoryDto>> GetAttendanceHistoryAsync(GetStudentAttendanceHistoryInput input)
+	{
+		await _studentScopeAccessService.GetStudentAsync(input.StudentId, nameof(GetAttendanceHistoryAsync));
+		var (startDate, endDate) = ResolveDateRange(input.StartDate, input.EndDate);
+
+		var scopedAttendanceDays = await _studentScopeAccessService.ApplyCurrentUserAttendanceDayScopeAsync(
+			await _attendanceDayRepository.GetQueryableAsync());
+		var attendanceEntries = await _attendanceEntryRepository.GetQueryableAsync();
+		var query =
+			from entry in attendanceEntries
+			join day in scopedAttendanceDays on entry.AttendanceDayId equals day.Id
+			where entry.StudentId == input.StudentId
+			      && day.Date >= startDate
+			      && day.Date <= endDate
+			select entry;
+
+		var totalCount = await AsyncExecuter.CountAsync(query);
+		query = ApplyHistorySorting(query, input.Sorting);
+
+		var rows = await AsyncExecuter.ToListAsync(
+			query
+				.Skip(input.SkipCount)
+				.Take(input.MaxResultCount)
+				.Select(e => new StudentAttendanceHistoryDto
+				{
+					AttendanceDayId = e.AttendanceDayId,
+					Date = e.AttendanceDay.Date,
+					Status = e.Status,
+					Remarks = e.Remarks
+				}));
+
+		return new PagedResultDto<StudentAttendanceHistoryDto>(totalCount, rows);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add)]
@@ -273,4 +311,50 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 	}
 
 	#endregion
+
+	private (DateTime StartDate, DateTime EndDate) ResolveDateRange(DateTime? startDate, DateTime? endDate)
+	{
+		var now = Clock.Now.Date;
+		var defaultStart = new DateTime(now.Year, now.Month, 1);
+		var defaultEnd = defaultStart.AddMonths(1).AddDays(-1);
+		var start = (startDate ?? defaultStart).Date;
+		var end = (endDate ?? defaultEnd).Date;
+
+		if (start > end)
+		{
+			throw new BusinessException("StudentAttendance:InvalidDateRange")
+				.WithData("StartDate", start)
+				.WithData("EndDate", end);
+		}
+
+		return (start, end);
+	}
+
+	private static IOrderedQueryable<AttendanceEntry> ApplyHistorySorting(
+		IQueryable<AttendanceEntry> query,
+		string? sorting)
+	{
+		var token = (sorting ?? string.Empty)
+			.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+			.FirstOrDefault();
+		var parts = token?
+			.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+			?? [];
+		var field = parts.FirstOrDefault()?.ToLowerInvariant();
+		var descending = parts.Length < 2 || parts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
+
+		return field switch
+		{
+			"status" => descending
+				? query.OrderByDescending(e => e.Status).ThenByDescending(e => e.AttendanceDay.Date).ThenBy(e => e.Id)
+				: query.OrderBy(e => e.Status).ThenBy(e => e.AttendanceDay.Date).ThenBy(e => e.Id),
+			"remarks" => descending
+				? query.OrderByDescending(e => e.Remarks).ThenByDescending(e => e.AttendanceDay.Date).ThenBy(e => e.Id)
+				: query.OrderBy(e => e.Remarks).ThenBy(e => e.AttendanceDay.Date).ThenBy(e => e.Id),
+			"date" => descending
+				? query.OrderByDescending(e => e.AttendanceDay.Date).ThenBy(e => e.Id)
+				: query.OrderBy(e => e.AttendanceDay.Date).ThenBy(e => e.Id),
+			_ => query.OrderByDescending(e => e.AttendanceDay.Date).ThenBy(e => e.Id)
+		};
+	}
 }

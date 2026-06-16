@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -82,6 +83,8 @@ public class EmployeeApplicationController(IEmployeeApplicationAppService appSer
 		return await appService.FinalizeAsync(id, new FinalizeEmployeeApplicationDto
 		{
 			PersonalInfo = PersonalInfoContractMapper.ToCreateDto(request.PersonalInfo),
+			FamilyInfo = request.FamilyInfo,
+			AdditionalInfo = request.AdditionalInfo,
 			WorkExperiences = request.WorkExperiences,
 			UseSubmittedPhoto = request.UseSubmittedPhoto,
 			AttachResumeAsDocument = request.AttachResumeAsDocument
@@ -184,10 +187,10 @@ public class PublicEmployeeApplicationController(IEmployeeApplicationAppService 
 
 	private static void ValidateSubmitRequest(PublicEmployeeApplicationSubmitDto input)
 	{
-		var validationResults = new List<ValidationResult>();
-		if (!Validator.TryValidateObject(input, new ValidationContext(input), validationResults, true))
+		var validationResults = PublicEmployeeApplicationSubmitValidation.Validate(input, DateTime.UtcNow);
+		if (validationResults.Count > 0)
 		{
-			throw new AbpValidationException("Employee application validation failed.", validationResults);
+			throw new AbpValidationException("Employee application validation failed.", validationResults.ToList());
 		}
 	}
 

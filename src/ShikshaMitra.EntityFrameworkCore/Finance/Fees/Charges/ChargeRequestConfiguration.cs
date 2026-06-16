@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -8,7 +8,7 @@ public class ChargeRequestConfiguration : IEntityTypeConfiguration<ChargeRequest
 {
 	public void Configure(EntityTypeBuilder<ChargeRequest> builder)
 	{
-		builder.ToTable("ChargeRequests", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_ChargeRequests", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.ChargeName)

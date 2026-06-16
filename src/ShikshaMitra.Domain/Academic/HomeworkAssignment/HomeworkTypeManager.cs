@@ -57,7 +57,8 @@ public class HomeworkTypeManager : DomainService
 		if (existing != null && !existing.IsDeleted)
 		{
 			throw new BusinessException(HomeworkAssignmentErrorCodes.DuplicateHomeworkType)
-				.WithData("Name", name);
+				.WithData("Name", name)
+				.WithData("message", $"A homework type with name '{name}' already exists. Please choose a different name.");
 		}
 
 		if (existing != null && existing.IsDeleted)
@@ -125,7 +126,8 @@ public class HomeworkTypeManager : DomainService
 		if (existing != null && existing.Id != excludeId)
 		{
 			throw new BusinessException(HomeworkAssignmentErrorCodes.DuplicateHomeworkType)
-				.WithData("Name", name);
+				.WithData("Name", name)
+				.WithData("message", $"A homework type with name '{name}' already exists. Please choose a different name.");
 		}
 	}
 

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -9,7 +9,7 @@ public class ConcessionFeeHeadMappingConfiguration : IEntityTypeConfiguration<Co
 {
 	public void Configure(EntityTypeBuilder<ConcessionFeeHeadMapping> builder)
 	{
-		builder.ToTable("AppConcessionFeeHeadMappings");
+		builder.ToTable("Finance_ConcessionFeeHeadMappings");
 		builder.ConfigureByConvention();
 
 		builder.HasIndex(x => x.ConcessionRequestId)

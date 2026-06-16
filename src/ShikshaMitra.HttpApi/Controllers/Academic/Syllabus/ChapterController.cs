@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Syllabus;
@@ -20,7 +20,7 @@ public class ChapterController(IChapterAppService chapterAppService) : AbpContro
 	public Task<ApiSuccessResponseDto> CreateAsync(
 		[FromQuery] Guid standardId,
 		[FromQuery] Guid subjectId,
-		[FromBody] CreateChapterDto input)
+		[FromBody] List<CreateChapterDto> input)
 	{
 		return chapterAppService.CreateAsync(standardId, subjectId, input);
 	}

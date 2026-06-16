@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -64,16 +64,130 @@ public class StudentFeeStructureAppService(
 		foreach (var detail in details.Where(d => feeStructure.FeeStructureDetails.All(x => x.Id != d.Id)))
 			feeStructure.AddDetail(detail);
 
+		var optionalDetails = input.FeeHeadDetails?.Select(fd => new CustomOptionalFeeHeadDetail
+		{
+			FeeHeadId = fd.FeeHeadId,
+			Amount = fd.Amount,
+			PayableMonth = fd.PayableMonth,
+			PayableYear = fd.PayableYear,
+			StartPayableMonth = fd.StartPayableMonth,
+			StartPayableYear = fd.StartPayableYear,
+			EndPayableMonth = fd.EndPayableMonth,
+			EndPayableYear = fd.EndPayableYear
+		}).ToList() ?? new List<CustomOptionalFeeHeadDetail>();
+
 		var dueFees = await dueFeeManager.GenerateForStudentAsync(
 			student.Id,
 			feeStructure,
 			academicYear,
-			input.SelectedOptionalFeeHeadIds);
+			input.SelectedOptionalFeeHeadIds,
+			optionalDetails);
 	
 		await dueFeeRepository.InsertManyAsync(dueFees, autoSave: false);
 
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}
+
+	public async Task<BulkAssignStudentFeeStructureResultDto> BulkAssignAsync(BulkAssignStudentFeeStructureDto input)
+	{
+		var feeStructure = await feeStructureRepository.GetAsync(input.StandardFeeStructureId)
+			?? throw new BusinessException("Fee structure with given id does not exist.");
+
+		var details = await feeStructureDetailRepository.GetListAsync(d => d.FeeStructureId == feeStructure.Id);
+		foreach (var detail in details.Where(d => feeStructure.FeeStructureDetails.All(x => x.Id != d.Id)))
+			feeStructure.AddDetail(detail);
+
+		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
+		var academicYear = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
+
+		var optionalDetails = input.FeeHeadDetails?.Select(fd => new CustomOptionalFeeHeadDetail
+		{
+			FeeHeadId = fd.FeeHeadId,
+			Amount = fd.Amount,
+			PayableMonth = fd.PayableMonth,
+			PayableYear = fd.PayableYear,
+			StartPayableMonth = fd.StartPayableMonth,
+			StartPayableYear = fd.StartPayableYear,
+			EndPayableMonth = fd.EndPayableMonth,
+			EndPayableYear = fd.EndPayableYear
+		}).ToList() ?? new List<CustomOptionalFeeHeadDetail>();
+
+		var result = new BulkAssignStudentFeeStructureResultDto();
+
+		foreach (var studentId in input.StudentIds)
+		{
+			try
+			{
+				var student = await studentRepository.GetAsync(studentId);
+				if (student == null)
+				{
+					result.Results.Add(new BulkAssignStudentFeeStructureResultItemDto
+					{
+						StudentId = studentId,
+						Success = false,
+						ErrorMessage = "Student not found."
+					});
+					result.SkippedCount++;
+					continue;
+				}
+
+				await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
+
+				if (student.FeeStructureId != null)
+				{
+					result.Results.Add(new BulkAssignStudentFeeStructureResultItemDto
+					{
+						StudentId = studentId,
+						Success = false,
+						ErrorMessage = "Fee structure already assigned."
+					});
+					result.SkippedCount++;
+					continue;
+				}
+
+				student.AssignFeeStructure(input.StandardFeeStructureId);
+
+				await studentFeeStructureRepository.InsertAsync(
+					new StudentFeeStructure(
+						id: GuidGenerator.Create(),
+						tenantId: CurrentTenant.Id,
+						studentId: student.Id,
+						feeStructureStandardId: feeStructure.Id),
+					autoSave: false);
+
+				var dueFees = await dueFeeManager.GenerateForStudentAsync(
+					student.Id,
+					feeStructure,
+					academicYear,
+					input.SelectedOptionalFeeHeadIds,
+					optionalDetails);
+
+				await dueFeeRepository.InsertManyAsync(dueFees, autoSave: false);
+
+				result.Results.Add(new BulkAssignStudentFeeStructureResultItemDto
+				{
+					StudentId = studentId,
+					Success = true
+				});
+				result.SuccessCount++;
+			}
+			catch (Exception ex)
+			{
+				result.Results.Add(new BulkAssignStudentFeeStructureResultItemDto
+				{
+					StudentId = studentId,
+					Success = false,
+					ErrorMessage = ex.Message
+				});
+				result.SkippedCount++;
+			}
+		}
+
+		await CurrentUnitOfWork.SaveChangesAsync();
+
+		return result;
+	}
+
 
 	public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)
 	{
@@ -165,8 +279,12 @@ public class StudentFeeStructureAppService(
 
 		return feeHeadIds.Select(feeHeadId =>
 		{
-			var lines = dueFees.Where(d => d.FeeHeadId == feeHeadId).ToList();
+			var lines = dueFees.Where(d => d.FeeHeadId == feeHeadId).OrderBy(l => l.Year).ThenBy(l => l.Month).ToList();
 			feeHeadMap.TryGetValue(feeHeadId, out var feeHead);
+
+			var isOneTime = lines.All(l => l.IsOneTime);
+			var firstLine = lines.FirstOrDefault();
+			var lastLine = lines.LastOrDefault();
 
 			return new StudentFeeHeadDto
 			{
@@ -175,8 +293,17 @@ public class StudentFeeStructureAppService(
 				CategoryName = feeHead?.FeeCategory?.Name ?? string.Empty,
 				Amount = (decimal)lines.Sum(l => l.OriginalAmount),
 				IsOptional = false,
-				IsOneTime = lines.All(l => l.IsOneTime),
+				IsOneTime = isOneTime,
 				IsSelected = true,
+
+				// Reconstructed custom selection properties
+				SelectedAmount = firstLine != null ? (decimal)firstLine.OriginalAmount : 0m,
+				PayableMonth = isOneTime && firstLine != null ? firstLine.Month : null,
+				PayableYear = isOneTime && firstLine != null ? firstLine.Year : null,
+				StartPayableMonth = !isOneTime && firstLine != null ? firstLine.Month : null,
+				StartPayableYear = !isOneTime && firstLine != null ? firstLine.Year : null,
+				EndPayableMonth = !isOneTime && lastLine != null ? lastLine.Month : null,
+				EndPayableYear = !isOneTime && lastLine != null ? lastLine.Year : null,
 			};
 		}).ToList();
 	}

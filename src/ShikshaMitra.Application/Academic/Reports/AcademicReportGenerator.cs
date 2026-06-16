@@ -6,6 +6,7 @@ using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Academic.Timetable;
@@ -39,7 +40,8 @@ public class AcademicReportGenerator(
     IRepository<Student, Guid> studentRepository,
     IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
     IRepository<StudentSubmissionEntity, Guid> submissionRepository,
-    IRepository<AssignmentEntity, Guid> assignmentRepository) : ITransientDependency
+    IRepository<AssignmentEntity, Guid> assignmentRepository,
+    IRepository<GradingScale, Guid> gradingScaleRepository) : ITransientDependency
 {
     public Task<AcademicReportOptionsDto> GetOptionsAsync(Guid userId, Guid? tenantId)
     {
@@ -199,6 +201,8 @@ public class AcademicReportGenerator(
             case AcademicReportTypes.SubjectwiseMarksReport:
                 return await BuildSubjectwiseMarksReportAsync(request, payload, exportAllRows);
             case AcademicReportTypes.DetailedResultSheet:
+                return await BuildDetailedResultSheetAsync(request, payload, exportAllRows);
+            case AcademicReportTypes.ResultWithAllSubjectList:
                 return await BuildDetailedResultSheetAsync(request, payload, exportAllRows);
             case AcademicReportTypes.ExamSummaryReport:
                 return await BuildExamSummaryReportAsync(request, payload, exportAllRows);
@@ -396,7 +400,7 @@ public class AcademicReportGenerator(
             var total = s.Chapters.Count;
             var covered = s.Chapters.Count(c => progressMap.TryGetValue(c.Id, out var p) && p.Progress == 100);
             var remaining = total - covered;
-            var coveragePct = total == 0 ? 0 : Math.Round((double) covered / total * 100, 2);
+            var coveragePct = total == 0 ? 0 : Math.Round((double)covered / total * 100, 2);
             return new Dictionary<string, string?>
             {
                 { "SubjectName", s.Subject?.Name ?? "—" },
@@ -492,7 +496,7 @@ public class AcademicReportGenerator(
 
                 var delayDays = string.Empty;
                 if (actualEnd.HasValue && actualEnd.Value > chapter.ChapterEndTime.DateTime)
-                    delayDays = ((int) (actualEnd.Value - chapter.ChapterEndTime.DateTime).TotalDays).ToString();
+                    delayDays = ((int)(actualEnd.Value - chapter.ChapterEndTime.DateTime).TotalDays).ToString();
 
                 var status = prog.Progress == 100 ? "Completed"
                     : prog.Progress > 0 ? "In Progress"
@@ -602,7 +606,7 @@ public class AcademicReportGenerator(
             var total = s.Chapters.Count;
             var completed = s.Chapters.Count(c => progressMap.TryGetValue(c.Id, out var p) && p.Progress == 100);
             var remaining = total - completed;
-            var completionPct = total == 0 ? 0 : Math.Round((double) completed / total * 100, 2);
+            var completionPct = total == 0 ? 0 : Math.Round((double)completed / total * 100, 2);
             return new Dictionary<string, string?>
             {
                 { "ClassName", s.Standard?.Name ?? "—" },
@@ -705,7 +709,7 @@ public class AcademicReportGenerator(
             timetableQuery = timetableQuery.Where(t => request.Filters.DivisionIds.Contains(t.DivisionId));
 
         var timetableIds = await asyncExecuter.ToListAsync(timetableQuery.Select(t => t.Id));
-        var timetables = await timetableRepository.WithDetailsAsync(t => t.Slots);
+        var timetables = await timetableRepository.WithDetailsAsync();
         var timetableList = await asyncExecuter.ToListAsync(timetables.Where(t => timetableIds.Contains(t.Id)));
 
         var rows = new List<Dictionary<string, string?>>();
@@ -772,7 +776,7 @@ public class AcademicReportGenerator(
 
         var timetableQuery = await timetableRepository.GetQueryableAsync();
         var timetableIds = await asyncExecuter.ToListAsync(timetableQuery.Select(t => t.Id));
-        var timetables = await timetableRepository.WithDetailsAsync(t => t.Slots);
+        var timetables = await timetableRepository.WithDetailsAsync();
         var timetableList = await asyncExecuter.ToListAsync(timetables.Where(t => timetableIds.Contains(t.Id)));
 
         var rows = new List<Dictionary<string, string?>>();
@@ -832,7 +836,7 @@ public class AcademicReportGenerator(
 
         var timetableQuery = await timetableRepository.GetQueryableAsync();
         var timetableIds = await asyncExecuter.ToListAsync(timetableQuery.Select(t => t.Id));
-        var timetables = await timetableRepository.WithDetailsAsync(t => t.Slots);
+        var timetables = await timetableRepository.WithDetailsAsync();
         var timetableList = await asyncExecuter.ToListAsync(timetables.Where(t => timetableIds.Contains(t.Id)));
 
         // Count total Period slots across all timetables
@@ -897,7 +901,7 @@ public class AcademicReportGenerator(
         if (request.Filters.DivisionIds?.Any() == true)
             timetableQuery = timetableQuery.Where(t => request.Filters.DivisionIds.Contains(t.DivisionId));
         var timetableIds = await asyncExecuter.ToListAsync(timetableQuery.Select(t => t.Id));
-        var timetables = await timetableRepository.WithDetailsAsync(t => t.Slots);
+        var timetables = await timetableRepository.WithDetailsAsync();
         var timetableList = await asyncExecuter.ToListAsync(timetables.Where(t => timetableIds.Contains(t.Id)));
 
         // Group per (timetable, subject) → count periods, collect distinct teachers
@@ -975,7 +979,7 @@ public class AcademicReportGenerator(
             timetableQuery = timetableQuery.Where(t => request.Filters.DivisionIds.Contains(t.DivisionId));
 
         var timetableIds = await asyncExecuter.ToListAsync(timetableQuery.Select(t => t.Id));
-        var timetables = await timetableRepository.WithDetailsAsync(t => t.Slots);
+        var timetables = await timetableRepository.WithDetailsAsync();
         var timetableList = await asyncExecuter.ToListAsync(timetables.Where(t => timetableIds.Contains(t.Id)));
 
         var rows = new List<Dictionary<string, string?>>();
@@ -1104,7 +1108,7 @@ public class AcademicReportGenerator(
             .ToDictionary(
                 g => g.Key,
                 g => (
-                    Progress: (int) Math.Round(g.Average(p => p.Progress)),
+                    Progress: (int)Math.Round(g.Average(p => p.Progress)),
                     StartDate: g.Where(p => p.StartDate.HasValue).Select(p => p.StartDate).Min(),
                     CompletionDate: g.Where(p => p.CompletionDate.HasValue).Select(p => p.CompletionDate).Max()
                 ));
@@ -1205,7 +1209,7 @@ public class AcademicReportGenerator(
             return pct >= 80 ? "A" : pct >= 60 ? "B" : pct >= 40 ? "C" : pct >= 30 ? "D" : "F";
         }
 
-        var genderGroups = new[] { (GenderEnum?) GenderEnum.Male, (GenderEnum?) GenderEnum.Female, null };
+        var genderGroups = new[] { (GenderEnum?)GenderEnum.Male, (GenderEnum?)GenderEnum.Female, null };
         var rows = new List<Dictionary<string, string?>>();
 
         foreach (var gender in genderGroups)
@@ -1233,7 +1237,7 @@ public class AcademicReportGenerator(
             var highest = presentStudents.Any() ? presentStudents.Max(s => s.TotalObtained) : 0;
             var lowest = presentStudents.Any() ? presentStudents.Min(s => s.TotalObtained) : 0;
             var passCount = list.Count(s => s.Passed);
-            var passPct = count > 0 ? Math.Round((double) passCount / count * 100, 2) : 0;
+            var passPct = count > 0 ? Math.Round((double)passCount / count * 100, 2) : 0;
 
             var gradeA = presentStudents.Count(s => GetGradeLabel(s.TotalObtained, totalMaxMarks) == "A");
             var gradeB = presentStudents.Count(s => GetGradeLabel(s.TotalObtained, totalMaxMarks) == "B");
@@ -1371,7 +1375,7 @@ public class AcademicReportGenerator(
             var highest = presentList.Any() ? presentList.Max(s => s.TotalObtained) : 0;
             var lowest = presentList.Any() ? presentList.Min(s => s.TotalObtained) : 0;
             var avg = presentList.Any() ? Math.Round(presentList.Average(s => s.TotalObtained), 2) : 0;
-            var passPct = total > 0 ? Math.Round((double) passed / total * 100, 2) : 0;
+            var passPct = total > 0 ? Math.Round((double)passed / total * 100, 2) : 0;
             var className = standards.GetValueOrDefault(group.Key.StandardId ?? Guid.Empty, "—");
             var divisionName = divisions.GetValueOrDefault(group.Key.DivisionId, "—");
 
@@ -1402,12 +1406,20 @@ public class AcademicReportGenerator(
 
     // ─── Shared exam data helpers ─────────────────────────────────────────────
 
-    private static string ComputeGrade(double obtained, double total)
+    private static string ComputeGrade(double obtained, double total, IReadOnlyCollection<GradeRange>? gradeRanges = null)
     {
         if (total <= 0) return "—";
-        var pct = obtained / total * 100;
-        return pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 70 ? "B+" : pct >= 60 ? "B"
-             : pct >= 50 ? "C+" : pct >= 40 ? "C" : pct >= 33 ? "D" : "F";
+        if (gradeRanges?.Any() == true)
+        {
+            var pct = obtained / total * 100;
+            var match = gradeRanges
+                .OrderByDescending(r => r.MinMarks)
+                .FirstOrDefault(r => pct >= r.MinMarks && pct <= r.MaxMarks);
+            if (match != null) return match.Grade;
+        }
+        var p = obtained / total * 100;
+        return p >= 90 ? "A+" : p >= 80 ? "A" : p >= 70 ? "B+" : p >= 60 ? "B"
+             : p >= 50 ? "C+" : p >= 40 ? "C" : p >= 33 ? "D" : "F";
     }
 
     private static string BuildStudentName(Student s)
@@ -1423,7 +1435,8 @@ public class AcademicReportGenerator(
         double TotalPassMarks,
         List<ExamMark> Marks,
         Dictionary<Guid, Student> StudentMap,
-        Dictionary<Guid, string> SubjectNames);
+        Dictionary<Guid, string> SubjectNames,
+        IReadOnlyCollection<GradeRange>? DefaultGradeRanges);
 
     private async Task<ExamReportData?> LoadExamReportDataAsync(Guid examId, AcademicReportFilterDto filters)
     {
@@ -1462,7 +1475,17 @@ public class AcademicReportGenerator(
         var subjectList = await asyncExecuter.ToListAsync(subjectQuery.Where(s => subjectIds.Contains(s.Id)));
         var subjectNames = subjectList.ToDictionary(s => s.Id, s => s.Name);
 
-        return new ExamReportData(examSubjects, totalMaxMarks, totalPassMarks, marks, studentMap, subjectNames);
+        // Load default grading scale from first subject that has one
+        var defaultScaleId = examSubjects.FirstOrDefault(s => s.GradeScalingId.HasValue)?.GradeScalingId;
+        IReadOnlyCollection<GradeRange>? defaultGradeRanges = null;
+        if (defaultScaleId.HasValue)
+        {
+            var scaleQuery = await gradingScaleRepository.WithDetailsAsync(s => s.GradeRanges);
+            var scale = await asyncExecuter.FirstOrDefaultAsync(scaleQuery.Where(s => s.Id == defaultScaleId.Value));
+            defaultGradeRanges = scale?.GradeRanges?.ToList()?.AsReadOnly();
+        }
+
+        return new ExamReportData(examSubjects, totalMaxMarks, totalPassMarks, marks, studentMap, subjectNames, defaultGradeRanges);
     }
 
     // ─── Standard Result Lists ────────────────────────────────────────────────
@@ -1496,7 +1519,7 @@ public class AcademicReportGenerator(
                 var isAbsent = g.All(m => m.IsAbsent);
                 var obtained = g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
                 var pct = data.TotalMaxMarks > 0 ? Math.Round(obtained / data.TotalMaxMarks * 100, 2) : 0;
-                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks);
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks, data.DefaultGradeRanges);
                 var status = isAbsent ? "Absent" : obtained >= data.TotalPassMarks ? "Pass" : "Fail";
                 return new Dictionary<string, string?>
                 {
@@ -1546,7 +1569,7 @@ public class AcademicReportGenerator(
                 var isAbsent = g.All(m => m.IsAbsent);
                 var obtained = g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
                 var pct = data.TotalMaxMarks > 0 ? Math.Round(obtained / data.TotalMaxMarks * 100, 2) : 0;
-                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks);
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks, data.DefaultGradeRanges);
                 return (student, pct, grade);
             })
             .OrderByDescending(x => x.pct)
@@ -1603,7 +1626,7 @@ public class AcademicReportGenerator(
                 var isAbsent = g.All(m => m.IsAbsent);
                 var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
                 var pct = data.TotalMaxMarks > 0 ? Math.Round(obtained / data.TotalMaxMarks * 100, 2) : 0;
-                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks);
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks, data.DefaultGradeRanges);
                 return (student, obtained, pct, grade, isAbsent);
             })
             .Where(x => !x.isAbsent && x.obtained >= min && x.obtained <= max)
@@ -1665,7 +1688,7 @@ public class AcademicReportGenerator(
                 var maxForSubject = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
                 var studentTotal = studentTotals.GetValueOrDefault(m.StudentId, 0);
                 var obtained = m.IsAbsent ? 0 : (m.MarksObtained ?? 0);
-                var grade = m.IsAbsent ? "—" : ComputeGrade(obtained, maxForSubject);
+                var grade = m.IsAbsent ? "—" : ComputeGrade(obtained, maxForSubject, data.DefaultGradeRanges);
                 return new Dictionary<string, string?>
                 {
                     { "StudentName", BuildStudentName(student) },
@@ -1790,7 +1813,7 @@ public class AcademicReportGenerator(
         var highest = presentList.Any() ? presentList.Max() : 0;
         var lowest = presentList.Any() ? presentList.Min() : 0;
         var avg = presentList.Any() ? Math.Round(presentList.Average(), 2) : 0;
-        var passPct = total > 0 ? Math.Round((double) passed / total * 100, 2) : 0;
+        var passPct = total > 0 ? Math.Round((double)passed / total * 100, 2) : 0;
 
         var rows = new List<Dictionary<string, string?>>
         {
@@ -1859,8 +1882,8 @@ public class AcademicReportGenerator(
                 var avg = Math.Round(marksList.Average(), 2);
                 var passed = marksList.Count(v => v >= passMarks);
                 var failed = count - passed;
-                var passPct = count > 0 ? Math.Round((double) passed / count * 100, 2) : 0;
-                var failPct = count > 0 ? Math.Round((double) failed / count * 100, 2) : 0;
+                var passPct = count > 0 ? Math.Round((double)passed / count * 100, 2) : 0;
+                var failPct = count > 0 ? Math.Round((double)failed / count * 100, 2) : 0;
                 return new Dictionary<string, string?>
                 {
                     { "Subject", subjectName },
@@ -1930,7 +1953,7 @@ public class AcademicReportGenerator(
                 var highest = marksList.Max();
                 var lowest = marksList.Min();
                 var passed = marksList.Count(v => v >= passMarks);
-                var passPct = count > 0 ? Math.Round((double) passed / count * 100, 2) : 0;
+                var passPct = count > 0 ? Math.Round((double)passed / count * 100, 2) : 0;
                 return new Dictionary<string, string?>
                 {
                     { "ClassName", className },
@@ -1992,7 +2015,7 @@ public class AcademicReportGenerator(
             {
                 var group = marksWithGrade.Where(x => x.grade == g).ToList();
                 if (group.Count == 0) return null;
-                var pct = Math.Round((double) group.Count / total * 100, 2);
+                var pct = Math.Round((double)group.Count / total * 100, 2);
                 var maxMarks = group.First().maxMarks;
                 return new Dictionary<string, string?>
                 {
@@ -2108,8 +2131,8 @@ public class AcademicReportGenerator(
                 var total = marksList.Count;
                 var passed = marksList.Count(m => (m.MarksObtained ?? 0) >= passMarks);
                 var failed = total - passed;
-                var passPct = total > 0 ? Math.Round((double) passed / total * 100, 2) : 0;
-                var failPct = total > 0 ? Math.Round((double) failed / total * 100, 2) : 0;
+                var passPct = total > 0 ? Math.Round((double)passed / total * 100, 2) : 0;
+                var failPct = total > 0 ? Math.Round((double)failed / total * 100, 2) : 0;
                 return new Dictionary<string, string?>
                 {
                     { "Subject", subjectName },
@@ -2968,7 +2991,7 @@ public class AcademicReportGenerator(
                 var group = studentTotals.Where(x => x.grade == g).ToList();
                 var count = group.Count;
                 if (count == 0) return null;
-                var pct = total > 0 ? Math.Round((double) count / total * 100, 2) : 0;
+                var pct = total > 0 ? Math.Round((double)count / total * 100, 2) : 0;
                 var present = group.Where(x => !x.isAbsent).ToList();
                 var highest = present.Any() ? present.Max(x => x.obtained) : 0;
                 var lowest = present.Any() ? present.Min(x => x.obtained) : 0;
@@ -3026,8 +3049,8 @@ public class AcademicReportGenerator(
         var appeared = total - absent;
         var passed = studentTotals.Count(s => s.passed);
         var failed = appeared - passed;
-        var passPct = total > 0 ? Math.Round((double) passed / total * 100, 2) : 0;
-        var failPct = total > 0 ? Math.Round((double) failed / total * 100, 2) : 0;
+        var passPct = total > 0 ? Math.Round((double)passed / total * 100, 2) : 0;
+        var failPct = total > 0 ? Math.Round((double)failed / total * 100, 2) : 0;
 
         var rows = new List<Dictionary<string, string?>>
         {
@@ -3089,7 +3112,7 @@ public class AcademicReportGenerator(
                 var group = ranked.Where(x => x.grade == g).ToList();
                 var count = group.Count;
                 if (count == 0) return null;
-                var pct = total > 0 ? Math.Round((double) count / total * 100, 2) : 0;
+                var pct = total > 0 ? Math.Round((double)count / total * 100, 2) : 0;
                 var minRank = group.Min(x => x.rank);
                 var maxRank = group.Max(x => x.rank);
                 var rankRange = minRank == maxRank ? minRank.ToString() : $"{minRank}–{maxRank}";
@@ -3310,7 +3333,7 @@ public class AcademicReportGenerator(
                 var submitted = subs.Count(s => s.Status is SubmissionStatus.Submitted
                     or SubmissionStatus.Late or SubmissionStatus.Reviewed
                     or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
-                var rate = total > 0 ? Math.Round((double) submitted / total * 100, 2) : 0;
+                var rate = total > 0 ? Math.Round((double)submitted / total * 100, 2) : 0;
 
                 rows.Add(new Dictionary<string, string?>
                 {
@@ -3389,7 +3412,7 @@ public class AcademicReportGenerator(
                     var submitted = hwSubs.Count(s => s.Status is SubmissionStatus.Submitted
                         or SubmissionStatus.Late or SubmissionStatus.Reviewed
                         or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
-                    return total > 0 ? (double) submitted / total * 100 : 0;
+                    return total > 0 ? (double)submitted / total * 100 : 0;
                 }).ToList();
 
                 var avgRate = rates.Any() ? Math.Round(rates.Average(), 2) : 0;
@@ -3397,7 +3420,7 @@ public class AcademicReportGenerator(
                 var totalSubmitted = subs.Count(s => s.Status is SubmissionStatus.Submitted
                     or SubmissionStatus.Late or SubmissionStatus.Reviewed
                     or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
-                var completionRate = totalAssigned > 0 ? Math.Round((double) totalSubmitted / totalAssigned * 100, 2) : 0;
+                var completionRate = totalAssigned > 0 ? Math.Round((double)totalSubmitted / totalAssigned * 100, 2) : 0;
 
                 return new Dictionary<string, string?>
                 {
@@ -3470,7 +3493,7 @@ public class AcademicReportGenerator(
                 var submitted = subs.Count(s => s.Status is SubmissionStatus.Submitted
                     or SubmissionStatus.Late or SubmissionStatus.Reviewed
                     or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
-                var rate = total > 0 ? Math.Round((double) submitted / (total * hwIds.Count) * 100, 2) : 0;
+                var rate = total > 0 ? Math.Round((double)submitted / (total * hwIds.Count) * 100, 2) : 0;
 
                 return new Dictionary<string, string?>
                 {
@@ -3545,7 +3568,7 @@ public class AcademicReportGenerator(
                     && s.DueDate.Date >= today);
                 var overdue = g.Count(s => (s.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft)
                     && s.DueDate.Date < today);
-                var completionPct = total > 0 ? Math.Round((double) submitted / total * 100, 2) : 0;
+                var completionPct = total > 0 ? Math.Round((double)submitted / total * 100, 2) : 0;
 
                 return new Dictionary<string, string?>
                 {
@@ -3605,7 +3628,7 @@ public class AcademicReportGenerator(
                     or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
                 var pending = assignedStudents - submitted;
                 var completionPct = assignedStudents > 0
-                    ? Math.Round((double) submitted / assignedStudents * 100, 2) : 0;
+                    ? Math.Round((double)submitted / assignedStudents * 100, 2) : 0;
 
                 return new Dictionary<string, string?>
                 {
@@ -4211,8 +4234,8 @@ public class AcademicReportGenerator(
             {
                 var a = aMap[s.AssignmentId!.Value];
                 var subjectName = subjects.GetValueOrDefault(a.SubjectId, "—");
-                var obtained = (double) (s.Marks ?? 0);
-                var total = (double) (s.TotalMarks ?? a.TotalMarks);
+                var obtained = (double)(s.Marks ?? 0);
+                var total = (double)(s.TotalMarks ?? a.TotalMarks);
                 var pct = total > 0 ? Math.Round(obtained / total * 100, 2) : 0;
                 var grade = ComputeGrade(obtained, total);
                 return new Dictionary<string, string?>
@@ -4437,8 +4460,8 @@ public class AcademicReportGenerator(
             .Select(s =>
             {
                 var a = aMap[s.AssignmentId!.Value];
-                var obtained = (double) (s.Marks ?? 0);
-                var total = (double) (s.TotalMarks ?? a.TotalMarks);
+                var obtained = (double)(s.Marks ?? 0);
+                var total = (double)(s.TotalMarks ?? a.TotalMarks);
                 return (s.StudentId, AssignmentTitle: a.Title, AssignmentId: a.Id, obtained, total,
                     grade: ComputeGrade(obtained, total));
             })
@@ -4454,7 +4477,7 @@ public class AcademicReportGenerator(
                 var gradeGroup = aGroup.Where(x => x.grade == grade).ToList();
                 if (!gradeGroup.Any()) continue;
                 var pct = totalInAssignment > 0
-                    ? Math.Round((double) gradeGroup.Count / totalInAssignment * 100, 2) : 0;
+                    ? Math.Round((double)gradeGroup.Count / totalInAssignment * 100, 2) : 0;
                 rows.Add(new Dictionary<string, string?>
                 {
                     { "Grade", grade },
@@ -4515,8 +4538,8 @@ public class AcademicReportGenerator(
                         .Where(s => s.Marks.HasValue)
                         .Select(s => new
                         {
-                            obtained = (double) (s.Marks ?? 0),
-                            total = (double) (s.TotalMarks ?? a.TotalMarks)
+                            obtained = (double)(s.Marks ?? 0),
+                            total = (double)(s.TotalMarks ?? a.TotalMarks)
                         }))
                     .ToList();
 
@@ -4527,7 +4550,7 @@ public class AcademicReportGenerator(
                     or SubmissionStatus.Late or SubmissionStatus.Reviewed
                     or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
                 var completionRate = allSubs.Count > 0
-                    ? Math.Round((double) submitted / allSubs.Count * 100, 2) : 0;
+                    ? Math.Round((double)submitted / allSubs.Count * 100, 2) : 0;
 
                 var avgScore = gradedSubs.Any()
                     ? Math.Round(gradedSubs.Average(x => x.total > 0 ? x.obtained / x.total * 100 : 0), 2) : 0;
@@ -4623,7 +4646,7 @@ public class AcademicReportGenerator(
                     var submitted = divSubs.Count(s => s.Status is SubmissionStatus.Submitted
                         or SubmissionStatus.Late or SubmissionStatus.Reviewed
                         or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
-                    return divSubs.Count > 0 ? (double) submitted / divSubs.Count * 100 : 0;
+                    return divSubs.Count > 0 ? (double)submitted / divSubs.Count * 100 : 0;
                 }).ToList();
                 var avgCompletion = rates.Any() ? Math.Round(rates.Average(), 2) : 0;
 
@@ -4701,7 +4724,7 @@ public class AcademicReportGenerator(
                 var aList = g.Select(x => x.a).Distinct().ToList();
                 var aIds = aList.Select(a => a.Id).ToHashSet();
 
-                var totalMarks = aList.Sum(a => (double) a.TotalMarks);
+                var totalMarks = aList.Sum(a => (double)a.TotalMarks);
                 var avgPerMonth = Math.Round(aList.Count / spanMonths, 2);
 
                 var allSubs = aList.SelectMany(a =>
@@ -4711,7 +4734,7 @@ public class AcademicReportGenerator(
                     or SubmissionStatus.Late or SubmissionStatus.Reviewed
                     or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
                 var submissionRate = allSubs.Count > 0
-                    ? Math.Round((double) submitted / allSubs.Count * 100, 2) : 0;
+                    ? Math.Round((double)submitted / allSubs.Count * 100, 2) : 0;
 
                 return new Dictionary<string, string?>
                 {
@@ -4791,7 +4814,7 @@ public class AcademicReportGenerator(
 
                 var total = evaluated.Count + pending;
                 var completionPct = total > 0
-                    ? Math.Round((double) evaluated.Count / total * 100, 2) : 0;
+                    ? Math.Round((double)evaluated.Count / total * 100, 2) : 0;
 
                 return new Dictionary<string, string?>
                 {
@@ -4875,7 +4898,7 @@ public class AcademicReportGenerator(
                 var hwSubmitted = hwSubs.Count(s => s.Status is SubmissionStatus.Submitted
                     or SubmissionStatus.Late or SubmissionStatus.Reviewed
                     or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
-                var hwAvg = hwSubs.Count > 0 ? Math.Round((double) hwSubmitted / hwSubs.Count * 100, 2) : 0;
+                var hwAvg = hwSubs.Count > 0 ? Math.Round((double)hwSubmitted / hwSubs.Count * 100, 2) : 0;
 
                 // Assignment average (marks %) for this student+subject
                 var aSubs = aSubmissions.Where(s => s.StudentId == studentId
@@ -4885,8 +4908,8 @@ public class AcademicReportGenerator(
                 var aScores = aSubs.Select(s =>
                 {
                     var aEntity = assignments.FirstOrDefault(a => a.Id == s.AssignmentId);
-                    var total = (double) (s.TotalMarks ?? aEntity?.TotalMarks ?? 0);
-                    return total > 0 ? (double) s.Marks!.Value / total * 100 : 0;
+                    var total = (double)(s.TotalMarks ?? aEntity?.TotalMarks ?? 0);
+                    return total > 0 ? (double)s.Marks!.Value / total * 100 : 0;
                 }).ToList();
                 var aAvg = aScores.Any() ? Math.Round(aScores.Average(), 2) : 0;
 
@@ -4906,8 +4929,8 @@ public class AcademicReportGenerator(
                         var scores = list.Select(s =>
                         {
                             var aEntity = assignments.FirstOrDefault(a => a.Id == s.AssignmentId);
-                            var total = (double) (s.TotalMarks ?? aEntity?.TotalMarks ?? 0);
-                            return total > 0 ? (double) s.Marks!.Value / total * 100 : 0;
+                            var total = (double)(s.TotalMarks ?? aEntity?.TotalMarks ?? 0);
+                            return total > 0 ? (double)s.Marks!.Value / total * 100 : 0;
                         }).ToList();
                         return scores.Any() ? Math.Round(scores.Average(), 2) : 0;
                     }
@@ -5003,7 +5026,7 @@ public class AcademicReportGenerator(
                     or SubmissionStatus.Late or SubmissionStatus.Reviewed
                     or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
                 var hwCompletion = hwSubs.Count > 0
-                    ? Math.Round((double) hwSubmitted / hwSubs.Count * 100, 2) : 0;
+                    ? Math.Round((double)hwSubmitted / hwSubs.Count * 100, 2) : 0;
 
                 // Assignment submission
                 var aSubs = divAIds.SelectMany(id => aSubmissionsByA.GetValueOrDefault(id, new())
@@ -5012,7 +5035,7 @@ public class AcademicReportGenerator(
                     or SubmissionStatus.Late or SubmissionStatus.Reviewed
                     or SubmissionStatus.Excused or SubmissionStatus.NeedsReview);
                 var aSubmission = aSubs.Count > 0
-                    ? Math.Round((double) aSubmitted / aSubs.Count * 100, 2) : 0;
+                    ? Math.Round((double)aSubmitted / aSubs.Count * 100, 2) : 0;
 
                 // Average marks (assignment marks %)
                 var markedSubs = aSubs.Where(s => s.Marks.HasValue).ToList();
@@ -5020,8 +5043,8 @@ public class AcademicReportGenerator(
                     ? Math.Round(markedSubs.Select(s =>
                     {
                         var a = assignments.FirstOrDefault(a => a.Id == s.AssignmentId);
-                        var total = (double) (s.TotalMarks ?? a?.TotalMarks ?? 0);
-                        return total > 0 ? (double) s.Marks!.Value / total * 100 : 0;
+                        var total = (double)(s.TotalMarks ?? a?.TotalMarks ?? 0);
+                        return total > 0 ? (double)s.Marks!.Value / total * 100 : 0;
                     }).Average(), 2)
                     : 0;
 

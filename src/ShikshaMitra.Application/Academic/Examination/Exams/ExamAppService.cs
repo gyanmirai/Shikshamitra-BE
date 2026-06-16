@@ -37,6 +37,7 @@ public class ExamAppService(
 	IRepository<Student, Guid> studentRepository,
 	IRepository<GradingScale, Guid> gradingScaleRepository,
 	IRepository<ExamSubjectDivision, Guid> examSubjectDivisionRepository,
+	IRepository<ExamMarksWorkflowState, Guid> examMarksWorkflowStateRepository,
 	ExamManager examManager) : ApplicationService, IExamAppService
 {
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
@@ -504,15 +505,29 @@ public class ExamAppService(
 				RollNo = student.RollNo?.ToString(),
 				ObtainedMarks = mark?.MarksObtained,
 				TotalMarks = examSubject.TotalMarks,
+				PassingMarks = examSubject.PassingMarks,
 				Grade = assigned ? GetGrade(mark!.MarksObtained, examSubject.TotalMarks ?? 0) : null,
 				Feedback = mark?.Feedback,
-				Status = assigned ? 1 : 0
+				Status = assigned ? 1 : 0,
+				AttendanceStatus = mark != null ? (int) mark.AttendanceStatus : (int) ExamAttendanceStatus.Present
 			};
 		}).ToList();
+
+		// Fetch workflow state for this exam/subject/division
+		var workflowState = (await examMarksWorkflowStateRepository.GetListAsync(
+			w => w.ExamId == input.ExamId && w.SubjectId == input.SubjectId && w.DivisionId == input.DivisionId))
+			.FirstOrDefault();
+
+		var workflowStatus = workflowState?.Status ?? ExamMarksWorkflowStatus.Draft;
 
 		return new GetExamMarksResponseDto
 		{
 			ExamId = exam.Id,
+			WorkflowStatus = (int) workflowStatus,
+			IsDraft = workflowStatus == ExamMarksWorkflowStatus.Draft,
+			IsSubmitted = workflowStatus == ExamMarksWorkflowStatus.Submitted,
+			IsVerified = workflowStatus == ExamMarksWorkflowStatus.Verified,
+			IsPublished = workflowStatus == ExamMarksWorkflowStatus.Published,
 			IsMarksPublish = isPublished,
 			CurrentPage = input.Page,
 			PageSize = input.PageSize,
@@ -541,6 +556,13 @@ public class ExamAppService(
 		if (existing?.IsPublished == true)
 			throw new BusinessException("Academic:Exam:MarksAlreadyPublished", "Cannot update marks as they have already been published");
 
+		var attendanceStatus = (ExamAttendanceStatus) input.AttendanceStatus;
+		var isPresent = attendanceStatus == ExamAttendanceStatus.Present;
+
+		// Validate: marks required only when student is Present
+		if (isPresent && input.Marks == null)
+			throw new UserFriendlyException("Obtained marks are required for present students.");
+
 		// Grading
 		var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
 		var gradeRanges = (await AsyncExecuter.ToListAsync(gradingScales))
@@ -557,7 +579,11 @@ public class ExamAppService(
 
 		if (existing != null)
 		{
-			existing.Update(input.Marks, isAbsent: false, input.Feedback);
+			// Always update attendance first
+			existing.UpdateAttendance(attendanceStatus);
+			// Then overlay marks/feedback for present students
+			if (isPresent)
+				existing.Update(input.Marks!.Value, isAbsent: false, input.Feedback);
 			await examMarkRepository.UpdateAsync(existing, autoSave: true);
 		}
 		else
@@ -568,22 +594,24 @@ public class ExamAppService(
 				studentId,
 				subjectId,
 				student.DivisionId!.Value,
-				input.Marks,
-				isAbsent: false,
-				input.Feedback,
+				marksObtained: isPresent ? input.Marks : null,
+				isAbsent: !isPresent,
+				feedback: isPresent ? input.Feedback : null,
 				CurrentTenant.Id);
+			mark.UpdateAttendance(attendanceStatus);
 			await examMarkRepository.InsertAsync(mark, autoSave: true);
 		}
 
-		var grade = GetGrade(input.Marks, examSubject.TotalMarks ?? input.TotalMarks);
+		var grade = isPresent ? GetGrade(input.Marks!.Value, examSubject.TotalMarks ?? input.TotalMarks) : null;
 
 		return new UpdateStudentMarksResponseDto
 		{
-			Message = "Marks updated successfully",
-			Marks = input.Marks,
+			Message = isPresent ? "Marks saved successfully." : "Attendance saved successfully.",
+			Marks = isPresent ? input.Marks : null,
 			TotalMarks = examSubject.TotalMarks ?? input.TotalMarks,
 			Grade = grade,
-			Feedback = input.Feedback
+			Feedback = isPresent ? input.Feedback : null,
+			AttendanceStatus = input.AttendanceStatus
 		};
 	}
 
@@ -681,7 +709,8 @@ public class ExamAppService(
 			{
 				throw new BusinessException(ExamErrorCodes.DuplicateSubjectSchedule)
 					.WithData("SubjectId", subjectId)
-					.WithData("ExamDate", incomingStart.Date.ToString("yyyy-MM-dd"));
+					.WithData("ExamDate", incomingStart.Date.ToString("yyyy-MM-dd"))
+					.WithData("message", $"This subject already has an exam scheduled on {incomingStart.Date:dd MMM yyyy}. Please choose a different date.");
 			}
 
 			// General overlap: a different subject in the same class+division occupies this time slot
@@ -689,7 +718,237 @@ public class ExamAppService(
 			throw new BusinessException(ExamErrorCodes.ScheduleOverlap)
 				.WithData("ExamDate", incomingStart.Date.ToString("yyyy-MM-dd"))
 				.WithData("StartTime", conflictingSubject.StartTime!.Value.ToString("HH:mm"))
-				.WithData("EndTime", conflictingSubject.EndTime!.Value.ToString("HH:mm"));
+				.WithData("EndTime", conflictingSubject.EndTime!.Value.ToString("HH:mm"))
+				.WithData("message", $"Another exam is already scheduled on {incomingStart.Date:dd MMM yyyy} between {conflictingSubject.StartTime!.Value:HH:mm} and {conflictingSubject.EndTime!.Value:HH:mm}. Please choose a different time.");
 		}
+	}
+	// ─── Workflow helpers ──────────────────────────────────────────────────────
+
+	private async Task<ExamMarksWorkflowState> GetOrCreateWorkflowStateAsync(Guid examId, Guid subjectId, Guid divisionId)
+	{
+		var existing = (await examMarksWorkflowStateRepository.GetListAsync(
+			w => w.ExamId == examId && w.SubjectId == subjectId && w.DivisionId == divisionId))
+			.FirstOrDefault();
+
+		if (existing != null) return existing;
+
+		var state = new ExamMarksWorkflowState(GuidGenerator.Create(), examId, subjectId, divisionId, CurrentTenant.Id);
+		await examMarksWorkflowStateRepository.InsertAsync(state, autoSave: true);
+		return state;
+	}
+
+	private static MarksWorkflowActionResponseDto BuildWorkflowResponse(string message, Guid examId, MarksWorkflowActionInput input, ExamMarksWorkflowStatus status)
+	{
+		return new MarksWorkflowActionResponseDto
+		{
+			Message = message,
+			ExamId = examId,
+			DivisionId = input.DivisionId,
+			SubjectId = input.SubjectId,
+			WorkflowStatus = (int) status,
+			UpdatedAt = DateTime.UtcNow
+		};
+	}
+
+	// ─── 1. Save Draft ─────────────────────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	public async Task<MarksWorkflowActionResponseDto> SaveDraftAsync(Guid examId, MarksWorkflowActionInput input)
+	{
+		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
+
+		if (state.Status == ExamMarksWorkflowStatus.Published)
+			throw new UserFriendlyException("Marks are published/locked and cannot be edited.");
+
+		// Draft keeps the status at Draft (0); if already beyond Draft, do not regress.
+		if (state.Status == ExamMarksWorkflowStatus.Draft)
+			await examMarksWorkflowStateRepository.UpdateAsync(state, autoSave: true);
+
+		return BuildWorkflowResponse("Draft saved successfully.", examId, input, state.Status);
+	}
+
+	// ─── 2. Submit Marks ───────────────────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	public async Task<MarksWorkflowActionResponseDto> SubmitMarksAsync(Guid examId, MarksWorkflowActionInput input)
+	{
+		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
+
+		if (state.Status != ExamMarksWorkflowStatus.Draft)
+			throw new UserFriendlyException("Marks can only be submitted from Draft status.");
+
+		// Validate: all enrolled students must have marks (status = Assigned)
+		var enrolledStudents = await studentRepository.GetListAsync(s =>
+			s.DivisionId == input.DivisionId
+			&& s.Status == StudentLifeCycleStatusEnum.Enrolled
+			&& s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved
+			&& !s.IsDeleted);
+
+		var enteredMarks = await examMarkRepository.GetListAsync(m =>
+			m.ExamId == examId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId);
+
+		var enteredStudentIds = new HashSet<Guid>(enteredMarks.Select(m => m.StudentId));
+		var allEntered = enrolledStudents.All(s => enteredStudentIds.Contains(s.Id));
+
+		if (!allEntered)
+			throw new UserFriendlyException("All students must have marks entered before submission.");
+
+		state.TransitionTo(ExamMarksWorkflowStatus.Submitted);
+		await examMarksWorkflowStateRepository.UpdateAsync(state, autoSave: true);
+
+		return BuildWorkflowResponse("Marks submitted for verification.", examId, input, ExamMarksWorkflowStatus.Submitted);
+	}
+
+	// ─── 3. Verify Marks ───────────────────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	public async Task<MarksWorkflowActionResponseDto> VerifyMarksAsync(Guid examId, MarksWorkflowActionInput input)
+	{
+		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
+
+		if (state.Status != ExamMarksWorkflowStatus.Submitted)
+			throw new UserFriendlyException("Marks can only be verified from Submitted status.");
+
+		state.TransitionTo(ExamMarksWorkflowStatus.Verified);
+		await examMarksWorkflowStateRepository.UpdateAsync(state, autoSave: true);
+
+		return BuildWorkflowResponse("Marks verified successfully.", examId, input, ExamMarksWorkflowStatus.Verified);
+	}
+
+	// ─── 4. Publish and Lock Marks ─────────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	public async Task<MarksWorkflowActionResponseDto> PublishAndLockAsync(Guid examId, MarksWorkflowActionInput input)
+	{
+		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
+
+		if (state.Status != ExamMarksWorkflowStatus.Verified)
+			throw new UserFriendlyException("Marks can only be published from Verified status.");
+
+		// Publish all marks for this exam/subject/division
+		var marks = await examMarkRepository.GetListAsync(m =>
+			m.ExamId == examId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId);
+
+		if (marks.Count == 0)
+			throw new UserFriendlyException("No marks found to publish.");
+
+		foreach (var mark in marks)
+			mark.Publish();
+
+		await examMarkRepository.UpdateManyAsync(marks, autoSave: true);
+
+		state.TransitionTo(ExamMarksWorkflowStatus.Published);
+		await examMarksWorkflowStateRepository.UpdateAsync(state, autoSave: true);
+
+		return BuildWorkflowResponse("Marks published and locked successfully.", examId, input, ExamMarksWorkflowStatus.Published);
+	}
+
+	// ─── 6. Update Student Attendance ──────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	public async Task<UpdateStudentAttendanceResponseDto> UpdateStudentAttendanceAsync(
+		Guid examId, Guid studentId, Guid subjectId, UpdateStudentAttendanceDto input)
+	{
+		var student = await studentRepository.GetAsync(studentId);
+
+		var divisionId = student.DivisionId
+			?? throw new UserFriendlyException("Student is not assigned to a division.");
+
+		// Check for locked state
+		var state = (await examMarksWorkflowStateRepository.GetListAsync(
+			w => w.ExamId == examId && w.SubjectId == subjectId && w.DivisionId == divisionId))
+			.FirstOrDefault();
+
+		if (state?.Status == ExamMarksWorkflowStatus.Published)
+			throw new UserFriendlyException("Attendance cannot be changed when marks are published/locked.");
+
+		var attendanceStatus = (ExamAttendanceStatus) input.AttendanceStatus;
+
+		var existing = (await examMarkRepository.GetListAsync(m =>
+			m.ExamId == examId && m.StudentId == studentId && m.SubjectId == subjectId))
+			.FirstOrDefault();
+
+		if (existing != null)
+		{
+			existing.UpdateAttendance(attendanceStatus);
+			await examMarkRepository.UpdateAsync(existing, autoSave: true);
+		}
+		else
+		{
+			var mark = new ExamMark(
+				GuidGenerator.Create(),
+				examId,
+				studentId,
+				subjectId,
+				divisionId,
+				marksObtained: null,
+				isAbsent: attendanceStatus != ExamAttendanceStatus.Present,
+				feedback: null,
+				CurrentTenant.Id);
+			mark.UpdateAttendance(attendanceStatus);
+			await examMarkRepository.InsertAsync(mark, autoSave: true);
+		}
+
+		return new UpdateStudentAttendanceResponseDto
+		{
+			Message = "Attendance updated successfully.",
+			ExamId = examId,
+			StudentId = studentId,
+			SubjectId = subjectId,
+			AttendanceStatus = input.AttendanceStatus
+		};
+	}
+
+	// ─── 7. Get Marks Summary ──────────────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
+	public async Task<GetExamMarksSummaryResponseDto> GetMarksSummaryAsync(GetExamMarksSummaryInput input)
+	{
+		var exam = await examRepository.GetAsync(input.ExamId, includeDetails: true);
+
+		var examSubject = exam.ExamSubjects.FirstOrDefault(s => s.SubjectId == input.SubjectId)
+			?? throw new UserFriendlyException("Subject not found in this exam.");
+
+		var subjectList = await subjectRepository.GetListAsync(s => s.Id == input.SubjectId);
+		var subject = subjectList.FirstOrDefault();
+
+		var divisionList = await divisionRepository.GetListAsync(d => d.Id == input.DivisionId);
+		var division = divisionList.FirstOrDefault();
+
+		var standardList = await standardRepository.GetListAsync(s => s.Id == exam.StandardId);
+		var standard = standardList.FirstOrDefault();
+
+		var enrolledStudents = await studentRepository.GetListAsync(s =>
+			s.DivisionId == input.DivisionId
+			&& s.Status == StudentLifeCycleStatusEnum.Enrolled
+			&& s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved
+			&& !s.IsDeleted);
+
+		var existingMarks = await examMarkRepository.GetListAsync(m =>
+			m.ExamId == input.ExamId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId);
+
+		var marksEntered = existingMarks.Count(m => m.MarksObtained.HasValue);
+		var totalStudents = enrolledStudents.Count;
+		var pending = totalStudents - marksEntered;
+
+		var workflowState = (await examMarksWorkflowStateRepository.GetListAsync(
+			w => w.ExamId == input.ExamId && w.SubjectId == input.SubjectId && w.DivisionId == input.DivisionId))
+			.FirstOrDefault();
+
+		return new GetExamMarksSummaryResponseDto
+		{
+			ExamId = exam.Id,
+			ExamName = exam.ExamName,
+			SubjectName = subject?.Name ?? string.Empty,
+			ClassName = standard?.Name ?? string.Empty,
+			DivisionName = division?.Name ?? string.Empty,
+			MaxMarks = examSubject.TotalMarks ?? 0,
+			PassingMarks = examSubject.PassingMarks ?? 0,
+			ExamDate = examSubject.ExamDate,
+			TotalStudents = totalStudents,
+			MarksEntered = marksEntered,
+			Pending = pending < 0 ? 0 : pending,
+			WorkflowStatus = workflowState != null ? (int) workflowState.Status : (int) ExamMarksWorkflowStatus.Draft
+		};
 	}
 }

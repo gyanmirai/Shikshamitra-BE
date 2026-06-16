@@ -51,7 +51,7 @@ public class FeeAdjustmentAppService(
         await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
 
         var dueFees = await dueFeeRepository.GetListAsync(
-            df => df.StudentId == studentId && df.PaidAmount > 0);
+            df => df.StudentId == studentId && df.OutstandingAmount > 0);
 
         var pendingSource = await feeAdjustmentRepository.GetPendingSourceAmountsByDueFeeAsync(studentId);
 

@@ -5,6 +5,8 @@ using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -35,6 +37,7 @@ public class FeeCollectionSummaryQueryService(
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
 	IRepository<Charge, Guid> chargeRepository,
+	IRepository<ConcessionRequest, Guid> concessionRequestRepository,
 	FinanceScopeAccessService financeScopeAccessService,
 	IClock clock
 ) : ApplicationService, ITransientDependency
@@ -140,15 +143,32 @@ public class FeeCollectionSummaryQueryService(
 			input.AcademicYearId,
 			cancellationToken);
 
+		// 4. Get approved concessions per student (if needed in future)
+
+		var concessionRequestQ = await concessionRequestRepository.GetQueryableAsync();
+		var concessionAggs = await AsyncExecuter.ToListAsync(
+			concessionRequestQ
+				.Where(cr => studentIds.Contains(cr.StudentId) && cr.Status == ConcessionRequestStatus.Approved)
+				.GroupBy(cr => cr.StudentId)
+				.Select(g => new
+				{
+					StudentId = g.Key,
+					TotalApprovedConcession = g.SelectMany(cr => cr.ConcessionDueFeeAllocations)
+													.Sum(a => (double?) a.ConcessionAmount) ?? 0d
+				}),
+			cancellationToken);
+
 		// 4. Join in memory
 		var feeDict    = feeAggs.ToDictionary(fa => fa.StudentId);
 		var overdueDict = overdueAggs.ToDictionary(ov => ov.StudentId);
+		var concessionAggsDict = concessionAggs.ToDictionary(ca => ca.StudentId);
 
 		return students.Select(s =>
 		{
 			feeDict.TryGetValue(s.Id, out var fa);
 			overdueDict.TryGetValue(s.Id, out var ov);
 			chargeAggDict.TryGetValue(s.Id, out var ca);
+			concessionAggsDict.TryGetValue(s.Id, out var coa);
 			return new FeeCollectionRawRow
 			{
 				StudentId       = s.Id,
@@ -167,6 +187,7 @@ public class FeeCollectionSummaryQueryService(
 				OverdueFees     = ov.Overdue,
 				TotalCharges    = ca.TotalCharges,
 				PendingCharges  = ca.PendingCharges,
+				TotalConcessionAmount = coa?.TotalApprovedConcession ?? 0d,
 				IsFeeStructureAssigned = s.FeeStructureId != null,
 			};
 		}).ToList();
@@ -299,8 +320,9 @@ public class FeeCollectionSummaryQueryService(
 				OverdueFees = overdue ?? 0d,
 				TotalCharges = r.TotalCharges ?? 0d,
 				PendingCharges = r.PendingCharges ?? 0d,
+				TotalConcessionAmount = r.TotalConcessionAmount ?? 0d,
 				IsFeeStructureAssigned = r.IsFeeStructureAssigned,
-				Status = (outstanding ?? 0d) <= 0d
+				Status = ((outstanding ?? 0d) <= 0d && r.PendingCharges <= 0d)
 					? FeeCollectionStatus.Paid
 					: (overdue ?? 0d) > 0d
 						? FeeCollectionStatus.Overdue
@@ -479,6 +501,7 @@ public class FeeCollectionSummaryQueryService(
 		public double?  OverdueFees     { get; init; }
 		public double?  TotalCharges    { get; init; }
 		public double?  PendingCharges  { get; init; }
+		public double? TotalConcessionAmount { get; set; }
 		public bool IsFeeStructureAssigned { get; set; } = false;
 	}
 

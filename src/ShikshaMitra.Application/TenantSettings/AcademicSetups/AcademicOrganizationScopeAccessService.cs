@@ -15,15 +15,50 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
+
 namespace ShikshaMitra.TenantSettings.EducationBoards;
 
 [RemoteService(false)]
 public class AcademicOrganizationScopeAccessService(
 	IUserScopeAccessService userScopeAccessService,
 	IRepository<Standard, Guid> standardRepository,
-	IRepository<EducationMediumStage, Guid> stageRepository)
+	IRepository<EducationMediumStage, Guid> stageRepository,
+	IRepository<Room, Guid> roomRepository)
 	: ApplicationService, ITransientDependency
 {
+	public async Task ResolveRoomIdsAsync(IEnumerable<DivisionDto> divisions)
+	{
+		var divisionsList = divisions.ToList();
+		var nonGuidDivisions = divisionsList
+			.Where(d => !string.IsNullOrEmpty(d.RoomId) && !Guid.TryParse(d.RoomId, out _))
+			.ToList();
+
+		if (nonGuidDivisions.Count == 0)
+		{
+			return;
+		}
+
+		var rooms = await roomRepository.GetListAsync();
+		var roomsByName = rooms.ToDictionary(r => r.RoomName, r => r.Id, StringComparer.OrdinalIgnoreCase);
+
+		foreach (var division in nonGuidDivisions)
+		{
+			var searchRoomId = division.RoomId == "101" ? "B101" : division.RoomId;
+			if (roomsByName.TryGetValue(searchRoomId, out var roomId))
+			{
+				division.RoomId = roomId.ToString();
+			}
+			else
+			{
+				var matched = rooms.FirstOrDefault(r => r.RoomName.EndsWith(searchRoomId, StringComparison.OrdinalIgnoreCase));
+				if (matched != null)
+				{
+					division.RoomId = matched.Id.ToString();
+				}
+			}
+		}
+	}
 	public async Task<IReadOnlyList<EducationBoardDto>> PruneBoardTreeAsync(
 		IReadOnlyList<EducationBoardDto> boards)
 	{

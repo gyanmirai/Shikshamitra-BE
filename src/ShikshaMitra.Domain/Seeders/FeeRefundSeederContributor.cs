@@ -332,14 +332,15 @@ public class FeeRefundSeederContributor : BaseSeederContributor
         string? reason,
         string? refundMethod)
         => new(
-            id:             GuidGenerator.Create(),
-            tenantId:       CurrentTenant.Id,
-            studentId:      studentId,
-            academicYearId: academicYearId,
-            voucherNumber:  voucherNumber,
-            totalAmount:    0d,   // updated by AddLine / not enforced by domain for seeded data
-            refundMethod:   refundMethod,
-            reason:         reason);
+            id:                   GuidGenerator.Create(),
+            tenantId:             CurrentTenant.Id,
+            studentId:            studentId,
+            academicYearId:       academicYearId,
+            voucherNumber:        voucherNumber,
+            totalAmount:          0d,   // updated by AddLine / not enforced by domain for seeded data
+            refundMethod:         refundMethod,
+            refundPaymentDetails: null,
+            reason:               reason);
 
     private FeeRefundLine MakeLine(Guid requestId, DueFee dueFee, double amount)
         => new(

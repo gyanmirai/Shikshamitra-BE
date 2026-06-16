@@ -13,8 +13,14 @@ public static class CurriculumErrorCodes
     public const string DuplicateSubjectName = "Academic:Curriculum:010002";
     public const string DuplicateSubjectColor = "Academic:Curriculum:010003";
     public const string SubjectNotFound = "Academic:Curriculum:010004";
+    public const string SubjectIsLastInElectiveGroup = "Academic:Curriculum:010005";
+    public const string SubjectIsInUse = "Academic:Curriculum:010006";
 
     // ── Subject Assignment: 02xxxx ───────────────────────────────
 
     public const string DuplicateSubjectAssignment = "Academic:Curriculum:020001";
+
+    // ── Elective Group: 03xxxx ───────────────────────────────────
+
+    public const string ElectiveGroupHasActiveAllocations = "Academic:Curriculum:030001";
 }

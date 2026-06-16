@@ -11,7 +11,7 @@ internal static class FeeStructureMappingExtensions
     internal static FeeStructureDetailsResponse ToDetailsResponse(
         this FeeStructureMetadata metadata,
         int totalClasses = 0,
-        int totalFeeHeads = 0) =>
+        int configuredClasses = 0) =>
         new()
         {
             Id = metadata.Id,
@@ -25,17 +25,6 @@ internal static class FeeStructureMappingExtensions
             ReceiptBookId = metadata.ReceiptBookId ?? Guid.Empty,
             ReceiptBookName = metadata.ReceiptBook?.Name,
             TotalClasses = totalClasses,
-            TotalFeeHeads = totalFeeHeads,
+            ConfiguredClasses = configuredClasses
         };
-
-    internal static List<FeeStructureDetailsResponse> ToDetailsResponseList(
-        this IEnumerable<FeeStructureMetadata> items,
-        Dictionary<Guid, (int TotalClasses, int TotalFeeHeads)> counts = null) =>
-        items.Select(x =>
-        {
-            var c = counts != null && counts.TryGetValue(x.Id, out var found)
-                ? found
-                : (TotalClasses: 0, TotalFeeHeads: 0);
-            return x.ToDetailsResponse(c.TotalClasses, c.TotalFeeHeads);
-        }).ToList();
 }

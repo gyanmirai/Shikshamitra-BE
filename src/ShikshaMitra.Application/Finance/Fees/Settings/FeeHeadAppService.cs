@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -91,6 +92,22 @@ public class FeeHeadAppService(
             UpdatedAt = x.LastModificationTime
         }).ToList();
 
+		var structureQuery = await feeStructureRepository.GetQueryableAsync();
+		var itemIds = dtos.Select(x => x.Id).ToList();
+		var usedFeeHeadIds = new HashSet<Guid>(
+			await feeStructureRepository.AsyncExecuter.ToListAsync(
+				structureQuery.SelectMany(fs => fs.FeeStructureDetails)
+							  .Where(fsd => itemIds.Contains(fsd.FeeHeadId))
+							  .Select(fsd => fsd.FeeHeadId)
+							  .Distinct()
+			)
+		);
+
+		foreach (var item in dtos)
+		{
+			item.IsUsedInDownstream = usedFeeHeadIds.Contains(item.Id);
+		}
+
         return new FeeHeadListResponse
         {
             TotalCount = totalCount,
@@ -103,9 +120,7 @@ public class FeeHeadAppService(
 
     public async Task<MessageResponse> UpdateAsync(Guid feeHeadId, FeeHeadUpdateRequest input)
     {
-        var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
-
-        feeHead.Update(input.FeeCategoryId, input.Name, input.Description);
+		var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
 
 		// validation to ensure no duplicate fee head name exists under the same fee category for the same academic year
 		var existingFeeHead = await feeHeadRepository.FirstOrDefaultAsync(x =>
@@ -119,6 +134,8 @@ public class FeeHeadAppService(
 		{
 			throw new BusinessException("A fee head with the same name already exists under this fee category for the selected academic year.");
 		}
+
+		feeHead.Update(input.FeeCategoryId, input.Name, input.Description);
 
 		await feeHeadRepository.UpdateAsync(feeHead);
 

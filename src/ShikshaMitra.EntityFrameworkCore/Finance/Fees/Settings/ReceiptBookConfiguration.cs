@@ -8,7 +8,7 @@ public class ReceiptBookConfiguration : IEntityTypeConfiguration<ReceiptBook>
 {
 	public void Configure(EntityTypeBuilder<ReceiptBook> builder)
 	{
-		builder.ToTable("ReceiptBooks");
+		builder.ToTable("Finance_ReceiptBooks");
 
 		builder.HasOne(r => r.EducationBoard)
 			.WithMany()

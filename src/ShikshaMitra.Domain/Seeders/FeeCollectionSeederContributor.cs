@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -485,7 +485,6 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 amount: monthlyAmount,
                 isOneTime: false,
                 isOptional: false,
-                isRefundable: true,
                 payableMonth: null,
                 payableYear: null));
 
@@ -498,7 +497,6 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 amount:          DevFeeAmount,
                 isOneTime:       true,
                 isOptional:      false,
-                isRefundable:    false,
                 payableMonth:    monthRange[0].Month,
                 payableYear:     monthRange[0].Year));
 
@@ -538,7 +536,6 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
             amount: monthlyAmount,
             isOneTime: false,
             isOptional: false,
-            isRefundable: true,
             payableMonth: null,
             payableYear: null), autoSave: false);
 
@@ -550,7 +547,6 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
             amount: DevFeeAmount,
             isOneTime: true,
             isOptional: false,
-            isRefundable: false,
             payableMonth: monthRange[0].Month,
             payableYear: monthRange[0].Year), autoSave: false);
     }

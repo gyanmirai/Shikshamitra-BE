@@ -134,5 +134,25 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
+
+		public static class Examination_ResultCreation
+		{
+			private const string SubmoduleName = $"{ModuleName}.Examination.ResultCreation";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Examination.ResultCreation";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Generate = $"{SubmoduleName}.Generate";
+			public const string Publish = $"{SubmoduleName}.Publish";
+			public const string Freeze = $"{SubmoduleName}.Freeze";
+
+			public static readonly string[] All = { View, Generate, Publish, Freeze };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Generate, $"{SubmoduleDisplayName}.Generate" },
+				{ Publish, $"{SubmoduleDisplayName}.Publish" },
+				{ Freeze, $"{SubmoduleDisplayName}.Freeze" }
+			};
+		}
 	}
 }

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Finance.Fees.Receipts;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -9,7 +9,7 @@ public class FeePaymentReceiptConfiguration : IEntityTypeConfiguration<FeePaymen
 {
     public void Configure(EntityTypeBuilder<FeePaymentReceipt> builder)
     {
-        builder.ToTable("FeePaymentReceipts", ShikshaMitraConsts.DbSchema);
+        builder.ToTable("Finance_FeePaymentReceipts", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.ReceiptNumber)

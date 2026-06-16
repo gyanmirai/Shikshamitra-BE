@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
@@ -21,9 +21,17 @@ public class StudentFeeStructureController(
 		await studentFeeStructureAppService.AssignAsync(input);
 	}
 
+	[HttpPost("assign-bulk")]
+	public async Task<BulkAssignStudentFeeStructureResultDto> BulkAssignAsync(
+		[FromBody] BulkAssignStudentFeeStructureDto input)
+	{
+		return await studentFeeStructureAppService.BulkAssignAsync(input);
+	}
+
 	[HttpGet("student/{studentId}")]
 	public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)
 	{
 		return await studentFeeStructureAppService.GetByStudentIdAsync(studentId);
 	}
 }
+

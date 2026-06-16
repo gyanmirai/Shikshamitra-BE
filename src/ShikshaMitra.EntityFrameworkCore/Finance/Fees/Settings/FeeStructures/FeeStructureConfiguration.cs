@@ -8,7 +8,7 @@ public class FeeStructureConfiguration : IEntityTypeConfiguration<FeeStructure>
 {
 	public void Configure(EntityTypeBuilder<FeeStructure> builder)
 	{
-		builder.ToTable("FeeStructures", ShikshaMitraConsts.DbSchema);
+		builder.ToTable("Finance_FeeStructures", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		// FeeStructureDetail is a child entity of FeeStructure aggregate root.

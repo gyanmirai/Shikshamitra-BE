@@ -18,6 +18,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 public class ElectiveGroupAppService(
 	IRepository<ElectiveGroup, Guid> ElectiveGroupRepository,
 	ElectiveGroupManager ElectiveGroupManager,
+	IRepository<AssignedSubject, Guid> assignedSubjectRepository,
 	ILogger<ElectiveGroupAppService> logger
 ) : ApplicationService, IElectiveGroupAppService
 {
@@ -184,7 +185,7 @@ public class ElectiveGroupAppService(
 	}
 
 	/// <summary>
-	/// Delete an elective group
+	/// Delete an elective group. Blocked if the group is still in use by Subject Allocation.
 	/// </summary>
 	public async Task DeleteAsync(Guid academicMediumId, Guid id)
 	{
@@ -198,6 +199,14 @@ public class ElectiveGroupAppService(
 				throw new EntityNotFoundException(typeof(ElectiveGroup), id);
 			}
 
+			// Block deletion if the group is still referenced in Subject Allocation
+			var hasAllocations = (await assignedSubjectRepository.GetListAsync(a => a.ElectiveGroupId == id)).Count > 0;
+			if (hasAllocations)
+			{
+				throw new BusinessException(CurriculumErrorCodes.ElectiveGroupHasActiveAllocations)
+					.WithData("message", $"Cannot delete elective group '{electiveGroup.Name}' because it is assigned to subjects in Subject Allocation. Please remove those allocations first.");
+			}
+
 			await ElectiveGroupRepository.DeleteAsync(id);
 
 			logger.LogInformation(
@@ -207,6 +216,10 @@ public class ElectiveGroupAppService(
 			);
 		}
 		catch (EntityNotFoundException)
+		{
+			throw;
+		}
+		catch (BusinessException)
 		{
 			throw;
 		}

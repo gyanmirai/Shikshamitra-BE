@@ -131,7 +131,8 @@ public class ElectiveGroupManager : DomainService
 		{
 			throw new BusinessException("ShikshaMitra:ElectiveGroup:DuplicateName")
 				.WithData("Name", name)
-				.WithData("EducationMediumId", educationMediumId);
+				.WithData("EducationMediumId", educationMediumId)
+				.WithData("message", $"An elective group with name '{name}' already exists. Please choose a different name.");
 		}
 	}
 
@@ -144,7 +145,8 @@ public class ElectiveGroupManager : DomainService
 		{
 			throw new BusinessException("ShikshaMitra:ElectiveGroup:InsufficientSubjects")
 				.WithData("MinimumRequired", ElectiveGroupConsts.MinSubjectsRequired)
-				.WithData("Provided", subjectIds?.Count() ?? 0);
+				.WithData("Provided", subjectIds?.Count() ?? 0)
+				.WithData("message", $"An elective group requires at least {ElectiveGroupConsts.MinSubjectsRequired} subjects. Please add more subjects.");
 		}
 	}
 
@@ -191,4 +193,5 @@ public class ElectiveGroupManager : DomainService
 				);
 		}
 	}
+
 }

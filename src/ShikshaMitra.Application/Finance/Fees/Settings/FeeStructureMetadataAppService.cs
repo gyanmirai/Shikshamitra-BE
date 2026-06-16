@@ -58,16 +58,17 @@ public class FeeStructureMetadataAppService(
 			(await feeStructureRepository.WithDetailsAsync(x => x.FeeStructureDetails))
 				.Where(x => metadataIds.Contains(x.FeeStructureMetadataId)));
 
-		var counts = feeStructures
-			.GroupBy(x => x.FeeStructureMetadataId)
-			.ToDictionary(
-				g => g.Key,
-				g => (
-					TotalClasses: g.Select(x => x.StandardId).Distinct().Count(),
-					TotalFeeHeads: g.SelectMany(x => x.FeeStructureDetails).Select(d => d.FeeHeadId).Distinct().Count()
-				));
+		var responseItems = new List<FeeStructureDetailsResponse>();
 
-		var responseItems = items.ToDetailsResponseList(counts);
+		// I want to calculate total classes and configured classes for each metadata
+		foreach (var metadata in items)
+		{
+			var structuresForMetadata = feeStructures.Where(x => x.FeeStructureMetadataId == metadata.Id).ToList();
+			var totalClasses = metadata.AcademicMedium.EducationMediumStages.Sum(x => x.Standards.Count);
+			var configuredClasses = structuresForMetadata.Where(x => x.FeeStructureDetails.Any()).Select(x => x.StandardId).Distinct().Count();
+
+			responseItems.Add(metadata.ToDetailsResponse(totalClasses, configuredClasses));
+		}
 
 		return new FeeStructureMetadataListResponse
 		{

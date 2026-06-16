@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -17,7 +17,8 @@ public class DueFeeManager(IDueFeeRepository dueFeeRepository) : DomainService
 		Guid studentId,
 		FeeStructure feeStructure,
 		AcademicYear academicYear,
-		IReadOnlyList<Guid> selectedOptionalFeeHeadIds)
+		IReadOnlyList<Guid> selectedOptionalFeeHeadIds,
+		IReadOnlyList<CustomOptionalFeeHeadDetail> optionalFeeHeadDetails = null)
 	{
 		// ── Guard: idempotency ────────────────────────────────────────────────
 		var alreadyExists = await dueFeeRepository.ExistsForStudentAsync(studentId);
@@ -37,29 +38,100 @@ public class DueFeeManager(IDueFeeRepository dueFeeRepository) : DomainService
 			if (detail.IsOptional && !selectedOptionalFeeHeadIds.Contains(detail.FeeHeadId))
 				continue;
 
+			var customDetail = detail.IsOptional
+				? optionalFeeHeadDetails?.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
+				: null;
+
 			if (detail.IsOneTime)
 			{
 				// One-time fee: use PayableMonth/Year from the fee structure detail when
 				// explicitly configured; fall back to the first month of the academic year.
-				var (month, year) = detail.PayableMonth.HasValue && detail.PayableYear.HasValue
-					? (detail.PayableMonth.Value, detail.PayableYear.Value)
-					: monthRange[0];
+				MonthEnum month;
+				int year;
+				double amount;
 
-				dueFees.Add(CreateDueFee(studentId, detail, month, year, detail.Amount));
+				if (customDetail != null)
+				{
+					month = customDetail.PayableMonth ?? (detail.PayableMonth.HasValue ? detail.PayableMonth.Value : monthRange[0].Month);
+					year = customDetail.PayableYear ?? (detail.PayableYear.HasValue ? detail.PayableYear.Value : monthRange[0].Year);
+					amount = customDetail.Amount;
+
+					// Validate that selected month-year is within academic year monthRange
+					if (!monthRange.Any(m => m.Month == month && m.Year == year))
+					{
+						throw new BusinessException("Finance:OutofAcademicYearRange", $"Selected payable month '{month}-{year}' is outside the academic year range.")
+							.WithData("Month", month.ToString())
+							.WithData("Year", year);
+					}
+				}
+				else
+				{
+					(month, year) = detail.PayableMonth.HasValue && detail.PayableYear.HasValue
+						? (detail.PayableMonth.Value, detail.PayableYear.Value)
+						: monthRange[0];
+					amount = detail.Amount;
+				}
+
+				dueFees.Add(CreateDueFee(studentId, detail, month, year, amount));
 			}
 			else
 			{
-				// Recurring fee: one DueFee per month in the academic year — PayableMonth/Year
-				// on the detail is intentionally ignored for recurring fees.
-				var months = monthRange.ToList();
-				var count = months.Count;
-				var floorAmount = Math.Floor(detail.Amount / count);
-				var remainder = (int)(detail.Amount - floorAmount * count);
-
-				for (int i = 0; i < count; i++)
+				// Recurring fee
+				if (customDetail != null && customDetail.StartPayableMonth.HasValue && customDetail.StartPayableYear.HasValue && customDetail.EndPayableMonth.HasValue && customDetail.EndPayableYear.HasValue)
 				{
-					var feeAmount = i < remainder ? floorAmount + 1 : floorAmount;
-					dueFees.Add(CreateDueFee(studentId, detail, months[i].Month, months[i].Year, feeAmount));
+					var startMonth = customDetail.StartPayableMonth.Value;
+					var startYear = customDetail.StartPayableYear.Value;
+					var endMonth = customDetail.EndPayableMonth.Value;
+					var endYear = customDetail.EndPayableYear.Value;
+
+					// Validate selected start and end months are within academic year monthRange
+					if (!monthRange.Any(m => m.Month == startMonth && m.Year == startYear))
+					{
+						throw new BusinessException("Finance:OutofAcademicYearRange", $"Selected start month '{startMonth}-{startYear}' is outside the academic year range.")
+							.WithData("Month", startMonth.ToString())
+							.WithData("Year", startYear);
+					}
+
+					if (!monthRange.Any(m => m.Month == endMonth && m.Year == endYear))
+					{
+						throw new BusinessException("Finance:OutofAcademicYearRange", $"Selected end month '{endMonth}-{endYear}' is outside the academic year range.")
+							.WithData("Month", endMonth.ToString())
+							.WithData("Year", endYear);
+					}
+
+					var startDate = new DateTime(startYear, (int)startMonth + 1, 1);
+					var endDate = new DateTime(endYear, (int)endMonth + 1, 1);
+
+					if (startDate > endDate)
+					{
+						throw new BusinessException("Finance:InvalidDateRange", "Start month cannot be after end month.");
+					}
+
+					// Filter the range of months
+					var customMonths = monthRange.Where(m => {
+						var mDate = new DateTime(m.Year, (int)m.Month + 1, 1);
+						return mDate >= startDate && mDate <= endDate;
+					}).ToList();
+
+					foreach (var m in customMonths)
+					{
+						dueFees.Add(CreateDueFee(studentId, detail, m.Month, m.Year, customDetail.Amount));
+					}
+				}
+				else
+				{
+					// Standard logic: one DueFee per month in the academic year — PayableMonth/Year
+					// on the detail is intentionally ignored for recurring fees.
+					var months = monthRange.ToList();
+					var count = months.Count;
+					var floorAmount = Math.Floor(detail.Amount / count);
+					var remainder = (int)(detail.Amount - floorAmount * count);
+
+					for (int i = 0; i < count; i++)
+					{
+						var feeAmount = i < remainder ? floorAmount + 1 : floorAmount;
+						dueFees.Add(CreateDueFee(studentId, detail, months[i].Month, months[i].Year, feeAmount));
+					}
 				}
 			}
 		}

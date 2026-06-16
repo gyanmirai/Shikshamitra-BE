@@ -23,7 +23,7 @@ public class FeeStructureDetailsResponse : EntityDto<Guid>
     public Guid? ReceiptBookId { get; set; }
     public string? ReceiptBookName { get; set; }
     public int TotalClasses { get; set; }
-    public int TotalFeeHeads { get; set; }
+    public int ConfiguredClasses { get; set; }
 }
 
 public class FeeStructureMetadataListResponse
@@ -57,7 +57,6 @@ public class FeeHeadAssignmentResponse
     public double Amount { get; set; }
     public bool IsOneTime { get; set; }
     public bool IsOptional { get; set; }
-	public bool IsRefundable { get; set; }
 	public MonthEnum? PayableMonth { get; set; }
 	public int? PayableYear { get; set; }
 }

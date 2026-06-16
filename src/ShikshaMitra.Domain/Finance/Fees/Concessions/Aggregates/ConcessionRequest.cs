@@ -128,11 +128,6 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		EnsurePending();
 
-		if (approverId == CreatorId)
-		{
-			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
-		}
-
 		Status = ConcessionRequestStatus.Approved;
 		ApproverMessage = message;
 		this.SetProperty(ApprovedByProperty, approverId);

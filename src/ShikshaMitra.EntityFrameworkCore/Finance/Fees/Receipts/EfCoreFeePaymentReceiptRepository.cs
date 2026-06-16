@@ -102,6 +102,7 @@ public class EfCoreFeePaymentReceiptRepository(
                 Medium                     = m != null ? m.Name : string.Empty,
                 Class                      = st != null ? st.Name : string.Empty,
                 Division                   = d != null ? d.Name : string.Empty,
+				
             }
         ).ToListAsync(cancellationToken);
 

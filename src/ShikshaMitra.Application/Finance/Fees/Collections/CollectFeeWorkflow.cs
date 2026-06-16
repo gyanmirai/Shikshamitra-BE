@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
@@ -53,7 +53,8 @@ public class CollectFeeWorkflow(
 			dueFeeContext.DueFeeMap,
 			input.ChargePayments,
 			chargeContext.PendingChargeMap,
-			paymentMethods);
+			paymentMethods,
+			input.PaymentConfirmed ?? true);
 
 		var dueFeeBeforeSnapshots = BuildDueFeeBeforeSnapshots(input.DueFeePayments, dueFeeContext.DueFeeMap);
 
@@ -128,7 +129,7 @@ public class CollectFeeWorkflow(
 			});
 			paymentChangedFields.Add(new FinanceAuditChangedFieldDto
 			{
-				Field = $"dueFee_{dfp.DueFeeId}_pending",
+				Field = $"{feeHeadName} {df.Month.ToString()} - {df.Year}",
 				OldValue = pendingBefore.ToString("F2"),
 				NewValue = pendingAfter.ToString("F2")
 			});
@@ -404,7 +405,8 @@ public class CollectFeeWorkflow(
 		IReadOnlyDictionary<Guid, DueFee> dueFeeMap,
 		IReadOnlyList<ChargePaymentDto> chargePayments,
 		IReadOnlyDictionary<Guid, double> pendingChargeMap,
-		IReadOnlyList<PaymentMethodEnum> paymentMethods)
+		IReadOnlyList<PaymentMethodEnum> paymentMethods,
+		bool isBankReceiptConfirmed = true)
 	{
 		var isAnyPartial = false;
 		foreach (var dfp in dueFeePayments)
@@ -430,7 +432,7 @@ public class CollectFeeWorkflow(
 			}
 		}
 
-		return FeeReceiptPaymentPolicy.RequiresVerification(paymentMethods)
+		return FeeReceiptPaymentPolicy.RequiresVerification(paymentMethods) || !isBankReceiptConfirmed
 			? FeeCollectionStatus.InReconciliation
 			: (isAnyPartial ? FeeCollectionStatus.Partial : FeeCollectionStatus.Paid);
 	}

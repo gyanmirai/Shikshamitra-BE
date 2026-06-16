@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -9,7 +9,7 @@ public class ConcessionRequestDocumentConfiguration : IEntityTypeConfiguration<C
 {
 	public void Configure(EntityTypeBuilder<ConcessionRequestDocument> builder)
 	{
-		builder.ToTable("AppConcessionRequestDocuments");
+		builder.ToTable("Finance_ConcessionRequestDocuments");
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.Url).HasMaxLength(2048).IsRequired();

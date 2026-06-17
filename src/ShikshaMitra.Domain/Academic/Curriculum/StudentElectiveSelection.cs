@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -37,6 +37,11 @@ public class StudentElectiveSelection : FullAuditedEntity<Guid>, IMultiTenant
 	/// </summary>
 	public string? StudentPreference { get; private set; }
 
+	/// <summary>
+	/// Flag indicating whether the elective assignment is locked and cannot be modified.
+	/// </summary>
+	public bool IsLocked { get; private set; }
+
 	private StudentElectiveSelection()
 	{
 		// Required for EF Core
@@ -58,6 +63,7 @@ public class StudentElectiveSelection : FullAuditedEntity<Guid>, IMultiTenant
 		SelectedSubjectId = Check.NotDefaultOrNull<Guid>(selectedSubjectId, nameof(selectedSubjectId));
 		AcademicMediumId = Check.NotDefaultOrNull<Guid>(academicMediumId, nameof(academicMediumId));
 		StudentPreference = studentPreference;
+		IsLocked = false;
 	}
 
 	public void UpdateSelection(Guid selectedSubjectId)
@@ -68,5 +74,10 @@ public class StudentElectiveSelection : FullAuditedEntity<Guid>, IMultiTenant
 	public void UpdatePreference(string? preference)
 	{
 		StudentPreference = preference;
+	}
+
+	public void LockSelection()
+	{
+		IsLocked = true;
 	}
 }

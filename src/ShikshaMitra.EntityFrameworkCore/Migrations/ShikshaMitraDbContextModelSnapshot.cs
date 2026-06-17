@@ -542,6 +542,11 @@ namespace ShikshaMitra.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
 
+                    b.Property<bool>("IsLocked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("LastModificationTime");

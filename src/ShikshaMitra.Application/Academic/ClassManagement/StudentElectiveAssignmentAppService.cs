@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -85,6 +85,7 @@ public class StudentElectiveAssignmentAppService(
 		var result = new PaginatedStudentElectiveResponseDto
 		{
 			TotalRecords = students.Count,
+			IsLocked = selections.Any() && selections.All(s => s.IsLocked),
 			Records = students.Select(student =>
 			{
 				var selection = selections.FirstOrDefault(s => s.StudentId == student.Id);
@@ -158,6 +159,11 @@ public class StudentElectiveAssignmentAppService(
 					s.ElectiveGroupId == input.ElectiveGroupId
 				);
 
+				if (existingSelections.Any(s => s.IsLocked))
+				{
+					throw new UserFriendlyException("Elective assignments are locked and cannot be modified.");
+				}
+
 				var selectionsToUpdate = new List<StudentElectiveSelection>();
 				var selectionsToInsert = new List<StudentElectiveSelection>();
 
@@ -221,6 +227,86 @@ public class StudentElectiveAssignmentAppService(
 			logger.LogError(ex, "Failed to save student elective assignments");
 			throw new UserFriendlyException(
 				"Failed to save student elective assignments. Please try again later."
+			);
+		}
+	}
+
+	public async Task<ApiSuccessResponseDto> LockStudentElectiveAssignmentsAsync(
+		LockStudentElectiveAssignmentsDto input
+	)
+	{
+		logger.LogInformation(
+			"Locking student elective assignments for medium={MediumId}, class={ClassId}, division={DivisionId}, group={GroupId}",
+			input.AcademicMediumId, input.ClassId, input.DivisionId, input.ElectiveGroupId
+		);
+
+		try
+		{
+			// Get students in the specified class and division
+			var studentsQuery = await studentRepository.GetQueryableAsync();
+			var students = await AsyncExecuter.ToListAsync(
+				studentsQuery.Where(s =>
+					s.AcademicMediumId == input.AcademicMediumId &&
+					s.StandardId == input.ClassId &&
+					s.DivisionId == input.DivisionId
+				)
+			);
+
+			if (!students.Any())
+			{
+				throw new UserFriendlyException("No students found in the specified class and division.");
+			}
+
+			var studentIds = students.Select(s => s.Id).ToList();
+
+			// Get existing selections
+			var selections = await selectionRepository.GetListAsync(s =>
+				studentIds.Contains(s.StudentId) &&
+				s.ElectiveGroupId == input.ElectiveGroupId
+			);
+
+			// Verify that every student has a saved selection
+			var selectionStudentIds = selections.Select(s => s.StudentId).ToHashSet();
+			var studentsWithoutSelection = students.Where(s => !selectionStudentIds.Contains(s.Id)).ToList();
+
+			if (studentsWithoutSelection.Any())
+			{
+				throw new UserFriendlyException("All students must have an elective subject assigned and saved before locking.");
+			}
+
+			// If already locked, just return success
+			if (selections.All(s => s.IsLocked))
+			{
+				return new ApiSuccessResponseDto
+				{
+					Success = true,
+					Message = "Student elective assignments are already locked."
+				};
+			}
+
+			// Lock all selections
+			foreach (var selection in selections)
+			{
+				selection.LockSelection();
+			}
+
+			await selectionRepository.UpdateManyAsync(selections);
+
+			return new ApiSuccessResponseDto
+			{
+				Success = true,
+				Message = "Student elective assignments locked successfully."
+			};
+		}
+		catch (UserFriendlyException)
+		{
+			throw;
+		}
+		catch (Exception ex)
+		{
+			logger.LogError(ex, "Failed to lock student elective assignments");
+			throw new UserFriendlyException(
+				"Failed to lock student elective assignments. Please try again later."
 			);
 		}
 	}

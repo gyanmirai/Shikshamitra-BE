@@ -40,7 +40,7 @@ public class WorkCalendarPolicyAppService(
 		return await reader.GetHolidayImportPreviewAsync(academicYearId);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.Create)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.Add)]
 	public async Task<WorkCalendarPolicyDto> CreateAsync(CreateUpdateWorkCalendarPolicyDto input)
 	{
 		return await workflow.CreateAsync(input);

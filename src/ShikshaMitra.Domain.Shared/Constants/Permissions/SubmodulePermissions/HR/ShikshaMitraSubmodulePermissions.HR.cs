@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Constants.Permissions;
 
@@ -102,6 +102,8 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleDisplayName = $"{DisplayName}.Policies";
 
 			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			[System.Obsolete("Use Add instead")]
 			public const string Create = $"{SubmoduleName}.Create";
 			public const string Edit = $"{SubmoduleName}.Edit";
 			public const string Archive = $"{SubmoduleName}.Archive";
@@ -113,13 +115,14 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			public static readonly string[] All =
 			{
-				View, Create, Edit, Archive, SetDefault, Assign, Clone, PreviewImpact, ViewAudit
+				View, Add, Create, Edit, Archive, SetDefault, Assign, Clone, PreviewImpact, ViewAudit
 			};
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Create, $"{SubmoduleDisplayName}.Create" },
 				{ Edit, $"{SubmoduleDisplayName}.Edit" },
 				{ Archive, $"{SubmoduleDisplayName}.Archive" },
@@ -182,10 +185,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "HR.AttendanceAndLeave.BiometricAttendance", new SubmoduleInfo(AttendanceAndLeave_BiometricAttendance.All, AttendanceAndLeave_BiometricAttendance.DisplayNames) },
 			{ "HR.AttendanceAndLeave.AttendanceTracking", new SubmoduleInfo(AttendanceAndLeave_AttendanceTracking.All, AttendanceAndLeave_AttendanceTracking.DisplayNames) },
 			{ "HR.AttendanceAndLeave.Evaluations", new SubmoduleInfo(AttendanceAndLeave_Evaluations.All, AttendanceAndLeave_Evaluations.DisplayNames) },
+			{ "HR.AttendanceAndLeave.Setting.ShiftManagement", new SubmoduleInfo(AttendanceAndLeave_Setting_ShiftManagement.All, AttendanceAndLeave_Setting_ShiftManagement.DisplayNames) },
 			{ "HR.LeaveManagement.LeaveCenter", new SubmoduleInfo(LeaveManagement_LeaveCenter.All, LeaveManagement_LeaveCenter.DisplayNames) },
 			{ "HR.LeaveManagement.Setting.LeavePolicy", new SubmoduleInfo(LeaveManagement_SettingLeavePolicy.All, LeaveManagement_SettingLeavePolicy.DisplayNames) },
 			{ "HR.ProfessionalManagement", new SubmoduleInfo(ProfessionalManagement.All, ProfessionalManagement.DisplayNames) },
 			{ "HR.PerformanceManagement", new SubmoduleInfo(PerformanceManagement.All, PerformanceManagement.DisplayNames) },
+			{ "HR.PerformanceManagement.Overview", new SubmoduleInfo(PerformanceManagement_Overview.All, PerformanceManagement_Overview.DisplayNames) },
+			{ "HR.PerformanceManagement.Outcomes", new SubmoduleInfo(PerformanceManagement_Outcomes.All, PerformanceManagement_Outcomes.DisplayNames) },
+			{ "HR.PerformanceManagement.Reports", new SubmoduleInfo(PerformanceManagement_Reports.All, PerformanceManagement_Reports.DisplayNames) },
+			{ "HR.PerformanceManagement.Settings.Setup", new SubmoduleInfo(PerformanceManagement_Settings_Setup.All, PerformanceManagement_Settings_Setup.DisplayNames) },
+			{ "HR.PerformanceManagement.ReviewEmployees", new SubmoduleInfo(PerformanceManagement_ReviewEmployees.All, PerformanceManagement_ReviewEmployees.DisplayNames) },
+			{ "HR.PerformanceManagement.ManageCycles", new SubmoduleInfo(PerformanceManagement_ManageCycles.All, PerformanceManagement_ManageCycles.DisplayNames) },
 			{ "HR.Reports", new SubmoduleInfo(Reports.All, Reports.DisplayNames) },
 			{ "HR.Notification", new SubmoduleInfo(Notification.All, Notification.DisplayNames) }
 		};

@@ -4,6 +4,8 @@ using QuestPDF.Infrastructure;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
 
@@ -65,7 +67,8 @@ public class AcademicPdfService : ITransientDependency
             });
             row.ConstantItem(180).AlignRight().AlignMiddle().Column(right =>
             {
-                right.Item().AlignRight().Text($"Generated: {DateTime.Now:dd MMM yyyy, hh:mm tt}")
+                var istTime = DateTime.UtcNow.AddMinutes(330);
+                right.Item().AlignRight().Text($"Generated: {istTime:dd MMM yyyy, hh:mm tt} IST")
                     .FontSize(7.5f).FontColor("#BFDBFE");
                 right.Item().AlignRight().Text($"Records: {report.TotalCount}")
                     .FontSize(7.5f).FontColor("#BFDBFE");
@@ -111,6 +114,19 @@ public class AcademicPdfService : ITransientDependency
                 foreach (var col in report.Columns)
                 {
                     var value = row.TryGetValue(col.Id, out var v) ? v ?? string.Empty : string.Empty;
+                    
+                    if (!string.IsNullOrEmpty(value))
+                    {
+                        if (value.Contains("<") && value.Contains(">"))
+                        {
+                            value = Regex.Replace(value, "<[^>]*>", string.Empty);
+                        }
+                        if (value.Contains("&"))
+                        {
+                            value = WebUtility.HtmlDecode(value);
+                        }
+                    }
+
                     table.Cell()
                         .Background(bg)
                         .BorderBottom(0.5f).BorderColor(BorderColor)
@@ -127,7 +143,8 @@ public class AcademicPdfService : ITransientDependency
     {
         container.Row(row =>
         {
-            row.RelativeItem().AlignLeft().Text($"Date: {DateTime.Now:dd MMM yyyy}")
+            var istTime = DateTime.UtcNow.AddMinutes(330);
+            row.RelativeItem().AlignLeft().Text($"Date: {istTime:dd MMM yyyy}")
                 .FontSize(7).FontColor(Colors.Grey.Medium);
             row.RelativeItem().AlignRight().Text(text =>
             {

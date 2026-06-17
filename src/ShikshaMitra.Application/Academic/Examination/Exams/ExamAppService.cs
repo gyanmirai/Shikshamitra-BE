@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -428,7 +428,7 @@ public class ExamAppService(
 			CreatedBy = x.exam.CreatorId,
 			CreatorName = x.exam.CreatorId.HasValue ? creatorNameById.GetValueOrDefault(x.exam.CreatorId.Value) : null,
 			Status = x.exam.Status,
-			Divisions = x.exam.ExamDivisions.Select(d => divisionDict.GetValueOrDefault(d.DivisionId) ?? string.Empty).ToList()
+			Divisions = x.exam.ExamDivisions.Select(d => divisionDict.GetValueOrDefault(d.DivisionId) ?? string.Empty).OrderBy(name => name).ToList()
 		}).ToList();
 
 		return new ExamListResultDto

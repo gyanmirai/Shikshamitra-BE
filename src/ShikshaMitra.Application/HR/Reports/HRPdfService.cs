@@ -5,6 +5,8 @@ using ShikshaMitra.Common.PDF;
 using ShikshaMitra.Common.PDF.Elements;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
 using IElement = ShikshaMitra.Common.PDF.Elements.IElement;
@@ -29,12 +31,26 @@ public class HRPdfService(IPdfService pdfService) : ITransientDependency
 
 		var rows = report.Rows.Take(500).Select(row => (IElement)new RowElement
 		{
-			Elements = report.Columns.Select(column => (IElement)new TextElement
-			{
-				Text = row.TryGetValue(column.Id, out var value) ? value ?? string.Empty : string.Empty,
-				Padding = 4,
-				PaddingUnit = Unit.Point
-			}).ToList(),
+			Elements = report.Columns.Select(column => {
+                var value = row.TryGetValue(column.Id, out var v) ? v ?? string.Empty : string.Empty;
+                if (!string.IsNullOrEmpty(value))
+                {
+                    if (value.Contains("<") && value.Contains(">"))
+                    {
+                        value = Regex.Replace(value, "<[^>]*>", string.Empty);
+                    }
+                    if (value.Contains("&"))
+                    {
+                        value = WebUtility.HtmlDecode(value);
+                    }
+                }
+                return (IElement)new TextElement
+                {
+                    Text = value,
+                    Padding = 4,
+                    PaddingUnit = Unit.Point
+                };
+            }).ToList(),
 			Spacing = 8
 		});
 

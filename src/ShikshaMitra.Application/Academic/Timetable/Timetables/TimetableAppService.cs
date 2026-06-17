@@ -365,7 +365,7 @@ public class TimetableAppService(
         var standard = await standardRepository.GetAsync(standardId);
         var divisionQueryable = await divisionRepository.GetQueryableAsync();
         var divisions = await AsyncExecuter.ToListAsync(
-            divisionQueryable.Where(d => d.StandardId == standardId));
+            divisionQueryable.Where(d => d.StandardId == standardId).OrderBy(d => d.Name));
 
         if (!string.IsNullOrWhiteSpace(input.Search))
         {

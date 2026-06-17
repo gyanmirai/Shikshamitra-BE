@@ -19,8 +19,8 @@ public class WorkCalendarHoliday_Tests
 			Guid.NewGuid(),
 			Guid.NewGuid(),
 			Guid.NewGuid(),
-			date,
-			date,
+			DateOnly.FromDateTime(date),
+			DateOnly.FromDateTime(date),
 			"May Day",
 			WorkCalendarHolidaySource.Manual,
 			null,
@@ -29,9 +29,7 @@ public class WorkCalendarHoliday_Tests
 
 		var result = holiday.ToCalendarHoliday(Guid.NewGuid());
 
-		result.StartDate.Offset.ShouldBe(TimeSpan.Zero);
-		result.EndDate.Offset.ShouldBe(TimeSpan.Zero);
-		result.StartDate.Date.ShouldBe(new DateTime(2026, 5, 1));
-		result.EndDate.Date.ShouldBe(new DateTime(2026, 5, 1));
+		result.StartDate.ShouldBe(new DateOnly(2026, 5, 1));
+		result.EndDate.ShouldBe(new DateOnly(2026, 5, 1));
 	}
 }

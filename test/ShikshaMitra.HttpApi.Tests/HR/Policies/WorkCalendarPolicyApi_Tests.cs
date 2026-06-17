@@ -98,7 +98,7 @@ public class WorkCalendarPolicyApi_Tests : ShikshaMitraApiTestBase
 	public async Task Work_Calendar_Should_Persist_Manual_Holiday_Range()
 	{
 		var academicYear = await GetAcademicYearDateRangeAsync(Factory.SeededAcademicYearId);
-		var fromDate = academicYear.StartDate.AddMonths(1).Date;
+		var fromDate = DateOnly.FromDateTime(academicYear.StartDate.AddMonths(1).Date);
 		var toDate = fromDate.AddDays(4);
 		var request = new CreateUpdateWorkCalendarPolicyDto
 		{
@@ -135,8 +135,8 @@ public class WorkCalendarPolicyApi_Tests : ShikshaMitraApiTestBase
 		holidaysResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var holidays = await holidaysResponse.Content.ReadFromJsonAsync<List<WorkCalendarHolidayDto>>(JsonOptions);
 		var range = holidays.ShouldNotBeNull().ShouldHaveSingleItem();
-		range.FromDate?.Date.ShouldBe(fromDate);
-		range.ToDate?.Date.ShouldBe(toDate);
+		range.FromDate.ShouldBe(fromDate);
+		range.ToDate.ShouldBe(toDate);
 		range.DayCount.ShouldBe(5);
 	}
 

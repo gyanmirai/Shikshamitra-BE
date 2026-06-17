@@ -102,6 +102,39 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 		return leaves.Sum(GetApprovedUnits);
 	}
 
+	public async Task<decimal> GetApprovedLeaveDaysByPolicyAndPaidTypeAsync(
+		Guid employeeId,
+		Guid leavePolicyId,
+		LeavePaidType paidType,
+		CancellationToken cancellationToken = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		var leaves = await dbSet
+			.IgnoreAutoIncludes()
+			.AsNoTracking()
+			.Where(x =>
+				x.EmployeeId == employeeId &&
+				x.LeavePolicyId == leavePolicyId &&
+				x.PaidType == paidType &&
+				x.Status == EmployeeLeaveStatusType.Approved &&
+				!x.IsDeleted)
+			.Select(x => new
+			{
+				x.ApprovedLeaveUnits,
+				x.StartDate,
+				x.EndDate,
+				x.HalfDay
+			})
+			.ToListAsync(cancellationToken);
+
+		return leaves.Sum(x => x.ApprovedLeaveUnits > 0
+			? x.ApprovedLeaveUnits
+			: LeaveDurationCalculator.CountLeaveUnits(
+				x.StartDate.DateTime,
+				x.EndDate.DateTime,
+				x.HalfDay));
+	}
+
 	public async Task<IReadOnlyDictionary<Guid, LeaveRuleBalanceUnits>> GetBalanceUnitsByRuleAsync(
 		Guid employeeId,
 		IReadOnlyCollection<Guid> leavePolicyRuleIds,
@@ -153,7 +186,85 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 						.Sum(x => LeaveDurationCalculator.CountLeaveUnits(
 							x.StartDate.DateTime,
 							x.EndDate.DateTime,
+					x.HalfDay))));
+	}
+
+	public async Task<IReadOnlyDictionary<LeavePaidType, LeavePaidTypeBalanceUnits>> GetBalanceUnitsByPolicyAndPaidTypeAsync(
+		Guid employeeId,
+		Guid leavePolicyId,
+		IReadOnlyCollection<LeavePaidType> paidTypes,
+		CancellationToken cancellationToken = default)
+	{
+		if (paidTypes.Count == 0)
+		{
+			return new Dictionary<LeavePaidType, LeavePaidTypeBalanceUnits>();
+		}
+
+		var typeIds = paidTypes.ToList();
+		var dbSet = await GetDbSetAsync();
+		var leaves = await dbSet
+			.IgnoreAutoIncludes()
+			.AsNoTracking()
+			.Where(x =>
+				x.EmployeeId == employeeId &&
+				x.LeavePolicyId == leavePolicyId &&
+				typeIds.Contains(x.PaidType) &&
+				!x.IsDeleted &&
+				(x.Status == EmployeeLeaveStatusType.Approved ||
+				 x.Status == EmployeeLeaveStatusType.Pending))
+			.Select(x => new
+			{
+				x.PaidType,
+				x.Status,
+				x.ApprovedLeaveUnits,
+				x.StartDate,
+				x.EndDate,
+				x.HalfDay
+			})
+			.ToListAsync(cancellationToken);
+
+		return leaves
+			.GroupBy(x => x.PaidType)
+			.ToDictionary(
+				group => group.Key,
+				group => new LeavePaidTypeBalanceUnits(
+					group.Key,
+					group
+						.Where(x => x.Status == EmployeeLeaveStatusType.Approved)
+						.Sum(x => x.ApprovedLeaveUnits > 0
+							? x.ApprovedLeaveUnits
+							: LeaveDurationCalculator.CountLeaveUnits(
+								x.StartDate.DateTime,
+								x.EndDate.DateTime,
+								x.HalfDay)),
+					group
+						.Where(x => x.Status == EmployeeLeaveStatusType.Pending)
+						.Sum(x => LeaveDurationCalculator.CountLeaveUnits(
+							x.StartDate.DateTime,
+							x.EndDate.DateTime,
 							x.HalfDay))));
+	}
+
+	public async Task<IReadOnlySet<Guid>> GetReferencedRuleIdsAsync(
+		IReadOnlyCollection<Guid> leavePolicyRuleIds,
+		CancellationToken cancellationToken = default)
+	{
+		if (leavePolicyRuleIds.Count == 0)
+		{
+			return new HashSet<Guid>();
+		}
+
+		var ruleIds = leavePolicyRuleIds.ToList();
+		var dbSet = await GetDbSetAsync();
+		var referenced = await dbSet
+			.IgnoreAutoIncludes()
+			.AsNoTracking()
+			.Where(x => ruleIds.Contains(x.LeavePolicyRuleId) && !x.IsDeleted)
+			.Select(x => x.LeavePolicyRuleId)
+			.Distinct()
+			.ToListAsync(cancellationToken);
+
+		return referenced.ToHashSet();
 	}
 
 	public async Task<List<PayrollApprovedLeaveRow>> GetApprovedPayrollLeaveRowsAsync(

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -14,7 +15,7 @@ public class PolicyHolidayImpactItemBuilder : ITransientDependency
 		AttendancePolicy attendancePolicy)
 	{
 		var payrollOverrides = payrollPolicy.GetHolidayOverrides()
-			.GroupBy(x => (x.Date.Date, x.CalendarHolidayId))
+			.GroupBy(x => (DateOnly.FromDateTime(x.Date.Date), x.CalendarHolidayId))
 			.ToDictionary(x => x.Key, x => x.First());
 		var attendanceImpact = MapAttendanceImpact(attendancePolicy.HolidayWorkBehavior);
 		var holidayWorkBehavior = MapHolidayWorkBehavior(attendancePolicy.HolidayWorkBehavior);
@@ -24,16 +25,16 @@ public class PolicyHolidayImpactItemBuilder : ITransientDependency
 
 		return holidays.Select(holiday =>
 		{
-			var date = holiday.FromDate.Date;
+			var date = holiday.FromDate;
 			payrollOverrides.TryGetValue((date, holiday.CalendarHolidayId), out var payrollOverride);
 			var isPaid = payrollOverride?.IncludedInPayroll ?? true;
 			var payrollImpact = isPaid ? "paid" : "unpaid";
 			return new PolicyHolidayImpactItemDto
 			{
-				Date = date,
-				FromDate = holiday.FromDate,
-				ToDate = holiday.ToDate,
-				DayCount = (holiday.ToDate.Date - holiday.FromDate.Date).Days + 1,
+				Date = date.ToDateTime(TimeOnly.MinValue),
+				FromDate = holiday.FromDate.ToDateTime(TimeOnly.MinValue),
+				ToDate = holiday.ToDate.ToDateTime(TimeOnly.MinValue),
+				DayCount = holiday.ToDate.DayNumber - holiday.FromDate.DayNumber + 1,
 				CalendarHolidayId = holiday.CalendarHolidayId ?? holiday.Id,
 				HolidayName = holiday.HolidayName,
 				WorkCalendarPolicyId = workCalendarPolicy.Id,

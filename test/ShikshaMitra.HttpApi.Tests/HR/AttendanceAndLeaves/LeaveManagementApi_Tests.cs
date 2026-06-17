@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -28,7 +29,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string BaseUrl = "/api/leave-management";
-	private const string LeaveTypesUrl = "/api/hr-leave-types";
 	private const string LeavePoliciesUrl = "/api/leave-policies";
 	private static readonly Guid TestAcademicYearId = Guid.Parse("00000000-0000-0000-0000-000000000030");
 	private static int _publicIdSeed = 900000;
@@ -65,14 +65,15 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"MyLeaveList{Guid.NewGuid():N}");
 		employee.UserId.ShouldNotBeNull();
-		var (policy, leaveType) = await CreateLeavePolicyFixtureAsync("MyLeaveList");
+		var policy = await CreateLeavePolicyFixtureAsync("MyLeaveList");
+		var paidRule = policy.Rules.Single(rule => rule.PaidType == "Paid");
 		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		var leaveDate = FirstNonSunday(startDate);
 		var leaveId = await SeedPendingLeaveRequestAsync(
 			employee.Id,
 			policy.Id,
-			policy.Rules[0].Id,
-			leaveType.Id,
+			paidRule.Id,
+			LeavePaidType.Paid,
 			leaveDate,
 			"My leave list regression request");
 		using var employeeClient = CreateClientAs(employee.UserId.Value);
@@ -207,7 +208,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
 		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
-		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeavePolicyNotFound);
+		rawPayload.ToLowerInvariant().ShouldContain("paidtype");
 	}
 
 	[Fact]
@@ -245,14 +246,15 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	public async Task Admin_Should_Create_Employee_Leave_And_Approve_It()
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"AdminApproveLeave{Guid.NewGuid():N}");
-		var (policy, leaveType) = await CreateLeavePolicyFixtureAsync("AdminApprove");
+		var policy = await CreateLeavePolicyFixtureAsync("AdminApprove");
+		var paidRule = policy.Rules.Single(rule => rule.PaidType == "Paid");
 		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		var leaveDate = FirstNonSunday(startDate);
 		var created = await SeedPendingLeaveRequestAsync(
 			employee.Id,
 			policy.Id,
-			policy.Rules[0].Id,
-			leaveType.Id,
+			paidRule.Id,
+			LeavePaidType.Paid,
 			leaveDate,
 			"Admin created leave for approval");
 
@@ -272,8 +274,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var detail = await detailResponse.Content.ReadFromJsonAsync<LeaveRequestDetailsResponse>(JsonOptions);
 		detail.ShouldNotBeNull();
 		detail.Status.ShouldBe("APPROVED");
-		detail.LeaveTypeMasterId.ShouldBe(leaveType.Id);
-		detail.LeaveType.ShouldBe(leaveType.Name);
+		detail.PaidType.ShouldBe("Paid");
 	}
 
 	[Fact]
@@ -281,7 +282,8 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	public async Task Admin_Should_Create_Employee_Leave_And_Reject_It()
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"AdminRejectLeave{Guid.NewGuid():N}");
-		var (policy, leaveType) = await CreateLeavePolicyFixtureAsync("AdminReject");
+		var policy = await CreateLeavePolicyFixtureAsync("AdminReject");
+		var paidRule = policy.Rules.Single(rule => rule.PaidType == "Paid");
 		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		var leaveDate = FirstNonSunday(startDate).AddDays(1);
 		if (leaveDate.DayOfWeek == DayOfWeek.Sunday)
@@ -291,8 +293,8 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var created = await SeedPendingLeaveRequestAsync(
 			employee.Id,
 			policy.Id,
-			policy.Rules[0].Id,
-			leaveType.Id,
+			paidRule.Id,
+			LeavePaidType.Paid,
 			leaveDate,
 			"Admin created leave for rejection");
 
@@ -466,22 +468,8 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	private async Task<(LeavePolicyResponse Policy, LeaveTypeResponse LeaveType)> CreateLeavePolicyFixtureAsync(string marker)
+	private async Task<LeavePolicyResponse> CreateLeavePolicyFixtureAsync(string marker)
 	{
-		var leaveTypeRequest = new LeaveTypeCreateRequest
-		{
-			Name = $"{marker}-Type-{Guid.NewGuid():N}",
-			Color = "#1A73E8",
-			Description = "Leave type for leave management workflow tests"
-		};
-		var leaveTypeResponse = await Client.PostAsJsonAsync(
-			$"{LeaveTypesUrl}?academicYearId={AcademicYearId}",
-			leaveTypeRequest,
-			JsonOptions);
-		leaveTypeResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
-		var leaveType = await leaveTypeResponse.Content.ReadFromJsonAsync<LeaveTypeResponse>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to create leave type.");
-
 		var policyRequest = new LeavePolicyCreateRequest
 		{
 			PolicyTitle = $"{marker}-Policy-{Guid.NewGuid():N}",
@@ -492,13 +480,24 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 			[
 				new LeavePolicyRuleRequest
 				{
-					LeaveTypeId = leaveType.Id,
+					PaidType = "Paid",
+					EntitlementMode = "Limited",
 					AccrualPolicyType = "Yearly",
 					LeaveCount = 12,
-					PaidType = "Paid",
 					CarryForward = false,
 					EncashmentAllowed = false,
 					RequiresApproval = true
+				},
+				new LeavePolicyRuleRequest
+				{
+					PaidType = "Unpaid",
+					EntitlementMode = "Unlimited",
+					AccrualPolicyType = "Yearly",
+					LeaveCount = null,
+					CarryForward = false,
+					EncashmentAllowed = false,
+					RequiresApproval = true,
+					AllowNegativeBalance = true
 				}
 			]
 		};
@@ -510,14 +509,14 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var policy = await policyResponse.Content.ReadFromJsonAsync<LeavePolicyResponse>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create leave policy.");
 
-		return (policy, leaveType);
+		return policy;
 	}
 
 	private async Task<Guid> SeedPendingLeaveRequestAsync(
 		Guid employeeId,
 		Guid leavePolicyId,
 		Guid leavePolicyRuleId,
-		Guid leaveTypeId,
+		LeavePaidType paidType,
 		DateTime leaveDate,
 		string reason)
 	{
@@ -534,7 +533,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 				employeeId,
 				leavePolicyId,
 				leavePolicyRuleId,
-				leaveTypeId,
+				paidType,
 				new DateTimeOffset(leaveDate.Date),
 				new DateTimeOffset(leaveDate.Date),
 				reason);

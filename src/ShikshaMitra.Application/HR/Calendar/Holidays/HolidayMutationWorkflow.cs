@@ -36,7 +36,7 @@ public class HolidayMutationWorkflow(
 
 		await holidayRepository.InsertAsync(holiday);
 		var holidayDto = ObjectMapper.Map<Holiday, HolidayDto>(holiday);
-		holidayDto.Status = (int)holiday.GetStatus(CurrentInstant());
+		holidayDto.Status = (int)holiday.GetStatus(CurrentBusinessDate());
 		await holidayReadService.PopulateHolidayTypeAsync(holidayDto);
 		return holidayDto;
 	}
@@ -58,7 +58,7 @@ public class HolidayMutationWorkflow(
 
 		await holidayRepository.UpdateAsync(holiday);
 		var holidayDto = ObjectMapper.Map<Holiday, HolidayDto>(holiday);
-		holidayDto.Status = (int)holiday.GetStatus(CurrentInstant());
+		holidayDto.Status = (int)holiday.GetStatus(CurrentBusinessDate());
 		await holidayReadService.PopulateHolidayTypeAsync(holidayDto);
 		return holidayDto;
 	}
@@ -73,6 +73,6 @@ public class HolidayMutationWorkflow(
 		}
 	}
 
-	private DateTimeOffset CurrentInstant() =>
-		new(Clock.Now.ToUniversalTime(), TimeSpan.Zero);
+	private DateOnly CurrentBusinessDate() =>
+		DateOnly.FromDateTime(Clock.Now);
 }

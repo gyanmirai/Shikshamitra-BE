@@ -57,10 +57,9 @@ public partial class HRSeederContributor
 				x => x.AcademicYearId == academicYear.Id,
 				includeDetails: true))
 			.FirstOrDefault(x => x.PolicyName.Contains("Teaching", StringComparison.OrdinalIgnoreCase));
-		var casual = leavePolicy?.Rules.FirstOrDefault(x => x.LeaveType?.Type.Contains("Casual", StringComparison.OrdinalIgnoreCase) == true);
-		var sick = leavePolicy?.Rules.FirstOrDefault(x => x.LeaveType?.Type.Contains("Sick", StringComparison.OrdinalIgnoreCase) == true);
-		var lossOfPay = leavePolicy?.Rules.FirstOrDefault(x => x.LeaveType?.Type.Contains("Loss", StringComparison.OrdinalIgnoreCase) == true);
-		if (leavePolicy == null || casual == null || sick == null)
+		var paid = leavePolicy?.Rules.FirstOrDefault(x => x.PaidType == LeavePaidType.Paid && x.IsActive);
+		var unpaid = leavePolicy?.Rules.FirstOrDefault(x => x.PaidType == LeavePaidType.Unpaid && x.IsActive);
+		if (leavePolicy == null || paid == null || unpaid == null)
 		{
 			return;
 		}
@@ -70,10 +69,10 @@ public partial class HRSeederContributor
 		var insertedCount = 0;
 		var scenarios = new List<LeaveSeedScenario>
 		{
-			new("HR seed approved sick leave", EmployeeLeaveStatusType.Approved, leavePolicy, sick, 2),
-			new("HR seed pending casual leave", EmployeeLeaveStatusType.Pending, leavePolicy, casual, 5),
-			new("HR seed rejected casual leave", EmployeeLeaveStatusType.Rejected, leavePolicy, casual, 8, "Seeded rejection scenario."),
-			new("HR seed approved loss of pay leave", EmployeeLeaveStatusType.Approved, leavePolicy, lossOfPay ?? casual, 11)
+			new("HR seed approved paid leave - sick reason", EmployeeLeaveStatusType.Approved, leavePolicy, paid, 2),
+			new("HR seed pending paid leave - family reason", EmployeeLeaveStatusType.Pending, leavePolicy, paid, 5),
+			new("HR seed rejected paid leave - personal reason", EmployeeLeaveStatusType.Rejected, leavePolicy, paid, 8, "Seeded rejection scenario."),
+			new("HR seed approved unpaid leave - emergency reason", EmployeeLeaveStatusType.Approved, leavePolicy, unpaid, 11)
 		};
 
 		for (var i = 0; i < candidates.Count && i < scenarios.Count; i++)
@@ -92,7 +91,7 @@ public partial class HRSeederContributor
 				employeeId,
 				scenario.Policy.Id,
 				scenario.Rule.Id,
-				scenario.Rule.LeaveTypeId,
+				scenario.Rule.PaidType,
 				new DateTimeOffset(leaveDate, TimeSpan.FromHours(5.5)),
 				new DateTimeOffset(leaveDate, TimeSpan.FromHours(5.5)),
 				scenario.Description);

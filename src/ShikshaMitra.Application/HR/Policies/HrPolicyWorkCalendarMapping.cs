@@ -75,7 +75,7 @@ internal static partial class HrPolicyMapping
 		Date = entity.Date,
 		FromDate = entity.FromDate,
 		ToDate = entity.ToDate,
-		DayCount = (entity.ToDate.Date - entity.FromDate.Date).Days + 1,
+		DayCount = entity.ToDate.DayNumber - entity.FromDate.DayNumber + 1,
 		HolidayName = entity.HolidayName,
 		Source = MapWorkCalendarHolidaySource(entity.Source),
 		CalendarHolidayId = entity.CalendarHolidayId,

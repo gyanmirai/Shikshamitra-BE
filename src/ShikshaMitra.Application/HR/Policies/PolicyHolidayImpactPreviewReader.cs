@@ -43,11 +43,13 @@ public class PolicyHolidayImpactPreviewReader(
 
 		var (rangeStart, rangeEnd) = ResolveHolidayRange(fromDate, toDate, month);
 		var finalizedHolidays = await holidayReader.GetAsync(academicYearId, workCalendarPolicy);
+		var rangeStartDate = rangeStart.HasValue ? DateOnly.FromDateTime(rangeStart.Value) : (DateOnly?)null;
+		var rangeEndDate = rangeEnd.HasValue ? DateOnly.FromDateTime(rangeEnd.Value) : (DateOnly?)null;
 		var holidays = finalizedHolidays
 			.Where(x => x.IsIncluded)
 			.Where(x =>
-				(!rangeStart.HasValue || x.ToDate.Date >= rangeStart.Value) &&
-				(!rangeEnd.HasValue || x.FromDate.Date <= rangeEnd.Value))
+				(!rangeStartDate.HasValue || x.ToDate >= rangeStartDate.Value) &&
+				(!rangeEndDate.HasValue || x.FromDate <= rangeEndDate.Value))
 			.OrderBy(x => x.FromDate)
 			.ToList();
 

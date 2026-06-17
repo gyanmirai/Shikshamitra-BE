@@ -167,13 +167,13 @@ public partial class HRSeederContributor
 	{
 		foreach (var holiday in centralHolidays)
 		{
-			var fromDate = holiday.StartDate.Date;
-			var toDate = holiday.EndDate.Date < fromDate ? fromDate : holiday.EndDate.Date;
+			var fromDate = holiday.StartDate;
+			var toDateOnly = holiday.EndDate < holiday.StartDate ? holiday.StartDate : holiday.EndDate;
 			var existing = await _workCalendarHolidayRepository.FirstOrDefaultAsync(x =>
 				x.WorkCalendarPolicyId == policy.Id &&
 				x.CalendarHolidayId == holiday.Id &&
 				x.FromDate == fromDate &&
-				x.ToDate == toDate);
+				x.ToDate == toDateOnly);
 			if (existing != null)
 			{
 				continue;
@@ -185,7 +185,7 @@ public partial class HRSeederContributor
 				policy.AcademicYearId,
 				policy.Id,
 				fromDate,
-				toDate,
+				toDateOnly,
 				holiday.HolidayName,
 				WorkCalendarHolidaySource.CentralCalendar,
 				holiday.Id,

@@ -40,8 +40,6 @@ public partial class HRSeederContributor
 	private const string SeedPerformanceManagementDemoDataConfigKey = "ShikshaMitra:Seeders:HR:SeedPerformanceManagementDemoData";
 	private const string TempPassword = "Temp@123";
 
-	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
-	private readonly LeaveTypeManager _leaveTypeManager;
 	private readonly IRepository<EarningComponent, Guid> _earningComponentRepository;
 	private readonly EarningComponentManager _earningComponentManager;
 	private readonly IRepository<DeductionComponent, Guid> _deductionComponentRepository;
@@ -58,7 +56,6 @@ public partial class HRSeederContributor
 	private readonly IRepository<HolidayType, Guid> _holidayTypeRepository;
 	private readonly ILeavePolicyRepository _leavePolicyRepository;
 	private readonly LeavePolicyManager _leavePolicyManager;
-	private readonly ILeaveTypeRepository _leaveTypeQueryRepository;
 	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;

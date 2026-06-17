@@ -71,8 +71,8 @@ public class PayrollCalendarResolver : DomainService
 		Guid? academicYearId,
 		CancellationToken cancellationToken)
 	{
-		var startDate = new DateTimeOffset(firstDay);
-		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
+		var startDate = DateOnly.FromDateTime(firstDay);
+		var endDate = DateOnly.FromDateTime(lastDay);
 		var holidayQuery = await _holidayRepository.GetQueryableAsync();
 
 		if (academicYearId.HasValue)

@@ -1,5 +1,6 @@
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using System;
 
 namespace ShikshaMitra.HR.Dashboard;
@@ -26,7 +27,7 @@ internal sealed record LeaveDashboardRow(
 	Guid Id,
 	int PublicId,
 	Guid EmployeeId,
-	Guid LeavePolicyId,
+	LeavePaidType PaidType,
 	DateTimeOffset StartDate,
 	DateTimeOffset EndDate,
 	bool HalfDay,
@@ -34,7 +35,7 @@ internal sealed record LeaveDashboardRow(
 	DateTime CreationTime);
 
 internal sealed record LeaveTypeCountRow(
-	Guid LeavePolicyId,
+	LeavePaidType PaidType,
 	int Count);
 
 internal sealed record InactiveReportingManagerIssue(

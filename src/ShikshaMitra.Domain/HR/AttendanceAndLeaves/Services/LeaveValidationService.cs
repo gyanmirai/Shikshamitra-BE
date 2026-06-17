@@ -45,7 +45,7 @@ public class LeaveValidationService : DomainService
 
 	public async Task<LeaveRequestPolicyResolution> ValidateLeaveRequestAsync(
 		Guid employeeId,
-		Guid leaveTypeId,
+		LeavePaidType paidType,
 		DateTime startDate,
 		DateTime endDate,
 		bool halfDay = false,
@@ -92,8 +92,8 @@ public class LeaveValidationService : DomainService
 			throw new BusinessException(HRErrorCodes.LeavePolicyInactive);
 		}
 
-		var rule = leavePolicy.FindActiveRule(leaveTypeId);
-		if (rule == null || rule.LeaveType == null || !rule.LeaveType.IsActive)
+		var rule = leavePolicy.FindActiveRule(paidType);
+		if (rule == null)
 		{
 			throw new BusinessException(HRErrorCodes.LeavePolicyRuleNotFound);
 		}
@@ -149,8 +149,17 @@ public class LeaveValidationService : DomainService
 			return 0;
 		}
 
-		var approvedDays = await _employeeLeaveRepository.GetApprovedLeaveDaysByRuleAsync(employeeId, rule.Id);
-		return rule.AllowNegativeBalance ? decimal.MaxValue : Math.Max(0, rule.LeaveCount - approvedDays);
+		var approvedDays = await _employeeLeaveRepository.GetApprovedLeaveDaysByPolicyAndPaidTypeAsync(
+			employeeId,
+			rule.LeavePolicyId,
+			rule.PaidType);
+
+		if (rule.IsUnlimited || rule.AllowNegativeBalance)
+		{
+			return decimal.MaxValue;
+		}
+
+		return Math.Max(0, (rule.LeaveCount ?? 0) - approvedDays);
 	}
 
 	private static void EnsureRuleAllowsRequest(
@@ -179,13 +188,16 @@ public class LeaveValidationService : DomainService
 
 	private async Task EnsureSufficientLeaveBalanceAsync(Guid employeeId, LeavePolicyRule rule, decimal requestedUnits)
 	{
-		if (rule.AllowNegativeBalance)
+		if (rule.IsUnlimited || rule.AllowNegativeBalance)
 		{
 			return;
 		}
 
-		var approvedDaysForRule = await _employeeLeaveRepository.GetApprovedLeaveDaysByRuleAsync(employeeId, rule.Id);
-		var remainingBalance = rule.LeaveCount - approvedDaysForRule;
+		var approvedDaysForRule = await _employeeLeaveRepository.GetApprovedLeaveDaysByPolicyAndPaidTypeAsync(
+			employeeId,
+			rule.LeavePolicyId,
+			rule.PaidType);
+		var remainingBalance = (rule.LeaveCount ?? 0) - approvedDaysForRule;
 		if (requestedUnits > remainingBalance)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveInsufficientBalance);

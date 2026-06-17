@@ -41,7 +41,6 @@ public partial class ShikshaMitraDbContext
     public DbSet<EmployeeLeave> EmployeeLeaves { get; set; }
     DbSet<AutomatedNotificationsSettings> AutomatedNotificationsSettings { get; set; }
     DbSet<NotificationInfo> NotificationInfos { get; set; }
-    public DbSet<LeaveType> EmployeeLeaveTypes { get; set; }
     public DbSet<LeavePolicy> EmployeeLeavePolicies { get; set; }
     public DbSet<LeavePolicyRule> EmployeeLeavePolicyRules { get; set; }
 

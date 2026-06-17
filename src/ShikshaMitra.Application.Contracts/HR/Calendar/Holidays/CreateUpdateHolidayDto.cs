@@ -27,12 +27,12 @@ public class CreateUpdateHolidayDto
     /// <summary>
     /// Start date of the holiday, required
     /// </summary>
-    public DateTimeOffset StartDate { get; set; }
+    public DateOnly StartDate { get; set; }
 
     /// <summary>
     /// End date of the holiday (must be >= StartDate), required
     /// </summary>
-    public DateTimeOffset EndDate { get; set; }
+    public DateOnly EndDate { get; set; }
 
     /// <summary>
     /// Optional description (0-500 characters)

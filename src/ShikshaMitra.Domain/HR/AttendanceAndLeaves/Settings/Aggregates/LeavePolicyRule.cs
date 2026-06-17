@@ -9,9 +9,9 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; protected set; }
 	public Guid LeavePolicyId { get; protected set; }
-	public Guid LeaveTypeId { get; protected set; }
 	public LeaveAccrualPolicyType AccrualPolicyType { get; protected set; }
-	public int LeaveCount { get; protected set; }
+	public LeaveEntitlementMode EntitlementMode { get; protected set; }
+	public int? LeaveCount { get; protected set; }
 	public LeavePaidType PaidType { get; protected set; }
 	public bool CarryForward { get; protected set; }
 	public int? CarryForwardLimit { get; protected set; }
@@ -26,7 +26,8 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 	public bool IsActive { get; protected set; }
 
 	public virtual LeavePolicy? LeavePolicy { get; protected set; }
-	public virtual LeaveType? LeaveType { get; protected set; }
+
+	public bool IsUnlimited => EntitlementMode == LeaveEntitlementMode.Unlimited;
 
 	protected LeavePolicyRule()
 	{
@@ -36,10 +37,10 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		Guid leavePolicyId,
-		Guid leaveTypeId,
-		LeaveAccrualPolicyType accrualPolicyType,
-		int leaveCount,
 		LeavePaidType paidType,
+		LeaveEntitlementMode entitlementMode,
+		LeaveAccrualPolicyType accrualPolicyType,
+		int? leaveCount,
 		bool carryForward,
 		int? carryForwardLimit,
 		bool encashable,
@@ -54,10 +55,9 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		LeavePolicyId = leavePolicyId;
-		LeaveTypeId = leaveTypeId;
-		AccrualPolicyType = accrualPolicyType;
-		SetLeaveCount(leaveCount, allowNegativeBalance);
 		PaidType = paidType;
+		AccrualPolicyType = accrualPolicyType;
+		SetEntitlement(entitlementMode, leaveCount, allowNegativeBalance);
 		SetCarryForward(carryForward, carryForwardLimit);
 		SetEncashment(encashable, encashmentTiming);
 		RequiresApproval = requiresApproval;
@@ -67,9 +67,10 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 	}
 
 	public void Update(
-		LeaveAccrualPolicyType accrualPolicyType,
-		int leaveCount,
 		LeavePaidType paidType,
+		LeaveEntitlementMode entitlementMode,
+		LeaveAccrualPolicyType accrualPolicyType,
+		int? leaveCount,
 		bool carryForward,
 		int? carryForwardLimit,
 		bool encashable,
@@ -82,9 +83,9 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 		bool allowNegativeBalance,
 		bool isActive)
 	{
-		AccrualPolicyType = accrualPolicyType;
-		SetLeaveCount(leaveCount, allowNegativeBalance);
 		PaidType = paidType;
+		AccrualPolicyType = accrualPolicyType;
+		SetEntitlement(entitlementMode, leaveCount, allowNegativeBalance);
 		SetCarryForward(carryForward, carryForwardLimit);
 		SetEncashment(encashable, encashmentTiming);
 		RequiresApproval = requiresApproval;
@@ -93,25 +94,89 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 		IsActive = isActive;
 	}
 
-	private void SetLeaveCount(int leaveCount, bool allowNegativeBalance)
+	public void ApplyFrom(LeavePolicyRule source) =>
+		Update(
+			source.PaidType,
+			source.EntitlementMode,
+			source.AccrualPolicyType,
+			source.LeaveCount,
+			source.CarryForward,
+			source.CarryForwardLimit,
+			source.Encashable,
+			source.EncashmentTiming,
+			source.RequiresApproval,
+			source.MinNoticeDays,
+			source.MaxDaysPerRequest,
+			source.AllowHalfDay,
+			source.AttachmentRequiredAfterDays,
+			source.AllowNegativeBalance,
+			source.IsActive);
+
+	public bool HasSameConfigurationAs(LeavePolicyRule other) =>
+		PaidType == other.PaidType &&
+		EntitlementMode == other.EntitlementMode &&
+		AccrualPolicyType == other.AccrualPolicyType &&
+		LeaveCount == other.LeaveCount &&
+		CarryForward == other.CarryForward &&
+		CarryForwardLimit == other.CarryForwardLimit &&
+		Encashable == other.Encashable &&
+		EncashmentTiming == other.EncashmentTiming &&
+		RequiresApproval == other.RequiresApproval &&
+		MinNoticeDays == other.MinNoticeDays &&
+		MaxDaysPerRequest == other.MaxDaysPerRequest &&
+		AllowHalfDay == other.AllowHalfDay &&
+		AttachmentRequiredAfterDays == other.AttachmentRequiredAfterDays &&
+		AllowNegativeBalance == other.AllowNegativeBalance &&
+		IsActive == other.IsActive;
+
+	public void Deactivate() => IsActive = false;
+
+	private void SetEntitlement(
+		LeaveEntitlementMode entitlementMode,
+		int? leaveCount,
+		bool allowNegativeBalance)
 	{
+		if (PaidType == LeavePaidType.Paid && entitlementMode == LeaveEntitlementMode.Unlimited)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveEntitlementRequired)
+				.WithData("message", "Paid leave must have a limited entitlement.");
+		}
+
+		if (PaidType == LeavePaidType.Unpaid && entitlementMode == LeaveEntitlementMode.Unlimited)
+		{
+			EntitlementMode = entitlementMode;
+			LeaveCount = null;
+			return;
+		}
+
+		if (!leaveCount.HasValue)
+		{
+			throw new BusinessException(HRErrorCodes.LeaveEntitlementRequired);
+		}
+
 		if (!allowNegativeBalance &&
-		    (leaveCount < LeavePolicyConsts.MinLeaveCount || leaveCount > LeavePolicyConsts.MaxLeaveCount))
+		    (leaveCount.Value < LeavePolicyConsts.MinLeaveCount || leaveCount.Value > LeavePolicyConsts.MaxLeaveCount))
 		{
 			throw new BusinessException(HRErrorCodes.LeaveInvalidCount)
 				.WithData("message", $"Leave count must be between {LeavePolicyConsts.MinLeaveCount} and {LeavePolicyConsts.MaxLeaveCount}");
 		}
 
-		if (allowNegativeBalance && leaveCount < 0)
+		if (allowNegativeBalance && leaveCount.Value < 0)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveInvalidCount);
 		}
 
-		LeaveCount = leaveCount;
+		EntitlementMode = LeaveEntitlementMode.Limited;
+		LeaveCount = leaveCount.Value;
 	}
 
 	private void SetCarryForward(bool carryForward, int? carryForwardLimit)
 	{
+		if (PaidType == LeavePaidType.Unpaid && (carryForward || carryForwardLimit.HasValue))
+		{
+			throw new BusinessException(HRErrorCodes.LeaveUnpaidPaidOnlyControlsNotAllowed);
+		}
+
 		if (carryForwardLimit.HasValue && carryForwardLimit.Value < 0)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveInvalidCount);
@@ -123,6 +188,11 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 
 	private void SetEncashment(bool encashable, LeaveEncashmentTiming? encashmentTiming)
 	{
+		if (PaidType == LeavePaidType.Unpaid && (encashable || encashmentTiming.HasValue))
+		{
+			throw new BusinessException(HRErrorCodes.LeaveUnpaidPaidOnlyControlsNotAllowed);
+		}
+
 		if (encashable && !encashmentTiming.HasValue)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveEncashmentTimingRequired);

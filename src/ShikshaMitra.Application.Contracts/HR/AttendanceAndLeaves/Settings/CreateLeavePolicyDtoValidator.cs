@@ -11,11 +11,6 @@ public class CreateLeavePolicyDtoValidator : AbstractValidator<CreateLeavePolicy
 			.MinimumLength(1)
 			.MaximumLength(LeavePolicyConsts.MaxPolicyNameLength);
 
-		RuleFor(x => x.LeaveType)
-			.NotEmpty()
-			.MinimumLength(1)
-			.MaximumLength(LeavePolicyConsts.MaxLeaveTypeLength);
-
 		RuleFor(x => x.MaximumDaysPerYear)
 			.InclusiveBetween(LeavePolicyConsts.MinLeaveCount, LeavePolicyConsts.MaxLeaveCount);
 

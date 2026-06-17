@@ -27,8 +27,8 @@ public partial class HRSeederContributor
 			!academicYearId.HasValue || x.AcademicYearId == academicYearId.Value);
 		var ranges = holidays
 			.Select(x => new SeedHolidayDateRange(
-				DateOnly.FromDateTime(x.StartDate.Date),
-				DateOnly.FromDateTime(x.EndDate.Date)))
+				x.StartDate,
+				x.EndDate))
 			.Where(x => x.EndDate >= windowStart && x.StartDate <= windowEnd)
 			.ToList();
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
@@ -38,31 +39,35 @@ public class LeaveBalanceReader(
 			?? throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
 
 		var activeRules = policy.Rules
-			.Where(rule => rule.IsActive && rule.LeaveType != null && rule.LeaveType.IsActive)
+			.Where(rule => rule.IsActive)
 			.ToList();
-		var unitsByRule = await employeeLeaveRepository.GetBalanceUnitsByRuleAsync(
+		var unitsByPaidType = await employeeLeaveRepository.GetBalanceUnitsByPolicyAndPaidTypeAsync(
 			targetId.Value,
-			activeRules.Select(rule => rule.Id).ToList());
+			policy.Id,
+			activeRules.Select(rule => rule.PaidType).ToList());
 
 		var items = new List<LeaveBalanceItemDto>();
 		foreach (var rule in activeRules)
 		{
-			unitsByRule.TryGetValue(rule.Id, out var units);
+			unitsByPaidType.TryGetValue(rule.PaidType, out var units);
 			var used = units?.ApprovedDays ?? 0;
 			var pending = units?.PendingDays ?? 0;
-			var remaining = rule.AllowNegativeBalance ? decimal.MaxValue : Math.Max(0, rule.LeaveCount - used);
+			var remaining = rule.IsUnlimited || rule.AllowNegativeBalance
+				? null
+				: (decimal?)Math.Max(0, (rule.LeaveCount ?? 0) - used);
 
 			items.Add(new LeaveBalanceItemDto
 			{
 				LeavePolicyId = policy.Id,
 				LeavePolicyRuleId = rule.Id,
 				PolicyName = policy.PolicyName,
-				LeaveTypeMasterId = rule.LeaveTypeId,
-				LeaveTypeName = rule.LeaveType.Type,
+				PaidType = LeavePolicyProjection.ToPaidType(rule.PaidType),
+				EntitlementMode = LeavePolicyProjection.ToEntitlementMode(rule.EntitlementMode),
 				EntitledDays = rule.LeaveCount,
 				UsedDays = used,
 				PendingDays = pending,
 				RemainingDays = remaining,
+				IsUnlimited = rule.IsUnlimited,
 				AllowNegativeBalance = rule.AllowNegativeBalance
 			});
 		}

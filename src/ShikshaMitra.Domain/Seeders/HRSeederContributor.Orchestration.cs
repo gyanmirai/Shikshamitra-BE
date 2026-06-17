@@ -34,7 +34,7 @@ public partial class HRSeederContributor
 		await SeedShiftManagementAsync();
 		_logger.LogInformation("[HRSeeder] Phase 2 complete (shift management)");
 
-		await SeedLeaveTypesAndPoliciesAsync();
+		await SeedLeavePoliciesAsync();
 		_logger.LogInformation("[HRSeeder] Phase 3 complete (leave types/policies)");
 	}
 

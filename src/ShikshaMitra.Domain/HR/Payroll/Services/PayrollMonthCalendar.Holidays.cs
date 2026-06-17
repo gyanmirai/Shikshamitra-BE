@@ -20,24 +20,22 @@ public static partial class PayrollMonthCalendar
 		IReadOnlyList<Holiday> holidays,
 		IReadOnlyList<PayrollHolidayOverride> holidayOverrides)
 	{
-		var firstDay = new DateTime(year, month, 1);
-		var lastDay = new DateTime(year, month, DateTime.DaysInMonth(year, month));
-		var startDate = new DateTimeOffset(firstDay);
-		var endDate = new DateTimeOffset(lastDay.AddDays(1).AddTicks(-1));
+		var firstDay = new DateOnly(year, month, 1);
+		var lastDay = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
 		var resolved = new Dictionary<(DateOnly Date, Guid? CalendarHolidayId), PayrollResolvedHolidayDay>();
 
 		foreach (var holiday in holidays)
 		{
-			if (holiday.StartDate > endDate || holiday.EndDate < startDate)
+			if (holiday.StartDate > lastDay || holiday.EndDate < firstDay)
 			{
 				continue;
 			}
 
-			var hStart = holiday.StartDate.Date > firstDay ? holiday.StartDate.Date : firstDay;
-			var hEnd = holiday.EndDate.Date < lastDay ? holiday.EndDate.Date : lastDay;
+			var hStart = holiday.StartDate > firstDay ? holiday.StartDate : firstDay;
+			var hEnd = holiday.EndDate < lastDay ? holiday.EndDate : lastDay;
 			for (var date = hStart; date <= hEnd; date = date.AddDays(1))
 			{
-				var key = (DateOnly.FromDateTime(date), (Guid?)holiday.Id);
+				var key = (date, (Guid?)holiday.Id);
 				resolved[key] = new PayrollResolvedHolidayDay(
 					key.Item1,
 					holiday.Id,

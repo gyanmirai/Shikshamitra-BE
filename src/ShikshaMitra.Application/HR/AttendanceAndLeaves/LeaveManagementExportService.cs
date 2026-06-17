@@ -58,6 +58,6 @@ public class LeaveManagementExportService(
 			Status = input.Status,
 			EmployeeId = input.EmployeeId,
 			LeavePolicyId = input.LeavePolicyId,
-			LeaveTypeMasterId = input.LeaveTypeMasterId
+			PaidType = input.PaidType
 		};
 }

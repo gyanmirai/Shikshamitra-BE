@@ -63,10 +63,6 @@ public class PersonalInfoRequestValidator : AbstractValidator<PersonalInfoReques
 		RuleFor(x => x.RoleId).NotEmpty();
 		RuleFor(x => x.ShiftId).NotEmpty();
 
-		RuleFor(x => x.OrganizationIds)
-			.NotNull()
-			.NotEmpty();
-
 		RuleFor(x => x.Address1).MaximumLength(512);
 		RuleFor(x => x.Address2).MaximumLength(512);
 		RuleFor(x => x.Address3).MaximumLength(512);

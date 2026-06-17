@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Entities;
@@ -45,7 +46,6 @@ public class LeaveManagementReader(
 			x => x.Employee!,
 			x => x.LeavePolicy!,
 			x => x.LeavePolicyRule!,
-			x => x.LeaveType!,
 			x => x.LeavePolicy!.AcademicYear!);
 
 		var leave = await asyncExecuter.FirstOrDefaultAsync(
@@ -93,7 +93,7 @@ public class LeaveManagementReader(
 			input.AcademicYearId,
 			input.Status,
 			input.LeavePolicyId,
-			input.LeaveTypeMasterId);
+			ParsePaidType(input.PaidType));
 
 		var (totalCount, pageIds) = await employeeLeaveRepository.GetPagedIdsForCalendarAsync(
 			rangeStartOffset,
@@ -109,8 +109,7 @@ public class LeaveManagementReader(
 			x => x.Employee!,
 			x => x.LeavePolicy!,
 			x => x.LeavePolicy!.AcademicYear!,
-			x => x.LeavePolicyRule!,
-			x => x.LeaveType!);
+			x => x.LeavePolicyRule!);
 
 		var leaves = await asyncExecuter.ToListAsync(
 			detailQuery.Where(x => pageIds.Contains(x.Id)));
@@ -148,7 +147,7 @@ public class LeaveManagementReader(
 			input.AcademicYearId,
 			input.Status,
 			input.LeavePolicyId,
-			input.LeaveTypeMasterId);
+			ParsePaidType(input.PaidType));
 
 		var (totalCount, pageIds) = await employeeLeaveRepository.GetPagedIdsForManagementListAsync(
 			range.Start,
@@ -164,8 +163,7 @@ public class LeaveManagementReader(
 			x => x.Employee!,
 			x => x.LeavePolicy!,
 			x => x.LeavePolicy!.AcademicYear!,
-			x => x.LeavePolicyRule!,
-			x => x.LeaveType!);
+			x => x.LeavePolicyRule!);
 
 		var leaveRequests = await asyncExecuter.ToListAsync(
 			detailQuery.Where(x => pageIds.Contains(x.Id)));
@@ -198,5 +196,15 @@ public class LeaveManagementReader(
 			: ("System", (string?)null);
 
 		return LeaveManagementProjection.ToDetailsDto(leave, submitter);
+	}
+
+	private static LeavePaidType? ParsePaidType(string? paidType)
+	{
+		if (string.IsNullOrWhiteSpace(paidType))
+		{
+			return null;
+		}
+
+		return LeavePolicyProjection.ParsePaidType(paidType);
 	}
 }

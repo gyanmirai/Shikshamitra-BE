@@ -131,7 +131,6 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
-		var organizationId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		return new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Test",
@@ -145,8 +144,7 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = employeeStatusType,
 			RoleId = roleId,
-			ShiftId = shiftId,
-			OrganizationIds = [organizationId]
+			ShiftId = shiftId
 		};
 	}
 

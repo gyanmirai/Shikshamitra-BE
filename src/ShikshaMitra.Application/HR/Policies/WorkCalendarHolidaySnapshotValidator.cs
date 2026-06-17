@@ -39,15 +39,15 @@ internal static class WorkCalendarHolidaySnapshotValidator
 			for (var priorIndex = index - 1; priorIndex >= 0; priorIndex--)
 			{
 				var prior = includedRows[priorIndex];
-				if (prior.ToDate.Date < current.FromDate.Date)
+				if (prior.ToDate < current.FromDate)
 				{
 					break;
 				}
 
 				if (RangesOverlap(prior.FromDate, prior.ToDate, current.FromDate, current.ToDate))
 				{
-					var overlapFrom = prior.FromDate.Date > current.FromDate.Date ? prior.FromDate.Date : current.FromDate.Date;
-					var overlapTo = prior.ToDate.Date < current.ToDate.Date ? prior.ToDate.Date : current.ToDate.Date;
+					var overlapFrom = prior.FromDate > current.FromDate ? prior.FromDate : current.FromDate;
+					var overlapTo = prior.ToDate < current.ToDate ? prior.ToDate : current.ToDate;
 					throw new BusinessException(HRErrorCodes.WorkCalendarHolidayOverlap)
 						.WithData("field", nameof(WorkCalendarHolidayDto.FromDate))
 						.WithData("holidayName", current.Row.HolidayName)
@@ -59,8 +59,8 @@ internal static class WorkCalendarHolidaySnapshotValidator
 		}
 	}
 
-	private static bool RangesOverlap(DateTime leftFrom, DateTime leftTo, DateTime rightFrom, DateTime rightTo) =>
-		leftFrom.Date <= rightTo.Date && rightFrom.Date <= leftTo.Date;
+	private static bool RangesOverlap(DateOnly leftFrom, DateOnly leftTo, DateOnly rightFrom, DateOnly rightTo) =>
+		leftFrom <= rightTo && rightFrom <= leftTo;
 
 	private static void ValidateHolidayRow(WorkCalendarHolidayDto row, AcademicYear academicYear)
 	{
@@ -78,7 +78,7 @@ internal static class WorkCalendarHolidaySnapshotValidator
 				.WithData("field", nameof(row.ToDate));
 		}
 
-		if (toDate.Date < fromDate.Date)
+		if (toDate < fromDate)
 		{
 			throw new BusinessException(HRErrorCodes.WorkCalendarHolidayInvalidRange)
 				.WithData("field", nameof(row.ToDate))
@@ -100,7 +100,9 @@ internal static class WorkCalendarHolidaySnapshotValidator
 				.WithData("date", fromDate.ToString("yyyy-MM-dd"));
 		}
 
-		if (fromDate.Date < academicYear.StartDate.Date || toDate.Date > academicYear.EndDate.Date)
+		var academicYearStart = DateOnly.FromDateTime(academicYear.StartDate);
+		var academicYearEnd = DateOnly.FromDateTime(academicYear.EndDate);
+		if (fromDate < academicYearStart || toDate > academicYearEnd)
 		{
 			throw new BusinessException(HRErrorCodes.WorkCalendarHolidayOutsideAcademicYear)
 				.WithData("field", nameof(row.FromDate))

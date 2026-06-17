@@ -31,12 +31,12 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>
     /// Start date of the holiday
     /// </summary>
-    public DateTimeOffset StartDate { get; private set; }
+    public DateOnly StartDate { get; private set; }
 
     /// <summary>
     /// End date of the holiday (inclusive)
     /// </summary>
-    public DateTimeOffset EndDate { get; private set; }
+    public DateOnly EndDate { get; private set; }
 
     /// <summary>
     /// Optional description of the holiday
@@ -55,9 +55,14 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public HolidayStatus GetStatus(DateTimeOffset now)
     {
-        if (now < StartDate)
+        return GetStatus(DateOnly.FromDateTime(now.DateTime));
+    }
+
+    public HolidayStatus GetStatus(DateOnly today)
+    {
+        if (today < StartDate)
             return HolidayStatus.Upcoming;
-        if (now > EndDate)
+        if (today > EndDate)
             return HolidayStatus.Completed;
         return HolidayStatus.Ongoing;
     }
@@ -70,8 +75,8 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Guid academicYearId,
         string holidayName,
         Guid holidayTypeId,
-        DateTimeOffset startDate,
-        DateTimeOffset endDate,
+        DateOnly startDate,
+        DateOnly endDate,
         string? description = null,
         List<Guid>? audienceIds = null,
         string? attachments = null) : base(id)
@@ -97,8 +102,8 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Guid academicYearId,
         string holidayName,
         Guid holidayTypeId,
-        DateTimeOffset startDate,
-        DateTimeOffset endDate,
+        DateOnly startDate,
+        DateOnly endDate,
         string? description = null,
         List<Guid>? audienceIds = null,
         string? attachments = null)
@@ -112,8 +117,8 @@ public class Holiday : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public void Update(
         string? holidayName = null,
         Guid? holidayTypeId = null,
-        DateTimeOffset? startDate = null,
-        DateTimeOffset? endDate = null,
+        DateOnly? startDate = null,
+        DateOnly? endDate = null,
         string? description = null,
         List<Guid>? audienceIds = null,
         string? attachments = null)

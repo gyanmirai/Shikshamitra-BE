@@ -83,9 +83,9 @@ public class CalendarItemDetailsService(
 		{
 			Id = holiday.Id,
 			CalendarItemType = CalendarItemType.Holiday,
-			Status = (int)holiday.GetStatus(CurrentInstant()),
+			Status = (int)holiday.GetStatus(CurrentBusinessDate()),
 			Title = holiday.HolidayName,
-			Date = holiday.StartDate,
+			Date = ToDateTimeOffset(holiday.StartDate),
 			Time = null,
 			AudienceCount = await CountAudienceMembersAsync(holiday.AudienceIds),
 			HolidayType = holidayType != null ? new HolidayTypeDto
@@ -121,4 +121,10 @@ public class CalendarItemDetailsService(
 
 	private DateTimeOffset CurrentInstant() =>
 		new(Clock.Now.ToUniversalTime(), TimeSpan.Zero);
+
+	private DateOnly CurrentBusinessDate() =>
+		DateOnly.FromDateTime(Clock.Now);
+
+	private static DateTimeOffset ToDateTimeOffset(DateOnly date) =>
+		new(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
 }

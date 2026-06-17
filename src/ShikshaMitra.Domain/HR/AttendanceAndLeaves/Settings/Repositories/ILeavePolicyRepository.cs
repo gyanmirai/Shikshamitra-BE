@@ -35,5 +35,5 @@ public interface ILeavePolicyRepository : IRepository<LeavePolicy, Guid>
 
 	Task<LeavePolicy?> GetWithRulesAsync(Guid id, CancellationToken cancellationToken = default);
 
-	Task<LeavePolicyRule?> GetRuleAsync(Guid leavePolicyId, Guid leaveTypeId, CancellationToken cancellationToken = default);
+	Task<LeavePolicyRule?> GetRuleAsync(Guid leavePolicyId, LeavePaidType paidType, CancellationToken cancellationToken = default);
 }

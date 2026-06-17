@@ -11,11 +11,6 @@ public class UpdateLeavePolicyDto
 	public string PolicyName { get; set; } = string.Empty;
 
 	/// <summary>
-	/// Associated leave type
-	/// </summary>
-	public string LeaveType { get; set; } = string.Empty;
-
-	/// <summary>
 	/// Maximum days allowed per year (1-365)
 	/// </summary>
 	public int MaximumDaysPerYear { get; set; }

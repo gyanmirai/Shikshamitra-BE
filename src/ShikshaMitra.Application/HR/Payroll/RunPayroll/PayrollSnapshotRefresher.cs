@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -16,6 +17,7 @@ using Volo.Abp.DependencyInjection;
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class PayrollSnapshotRefresher(
+	IEmployeeRepository employeeRepository,
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
 	IEmployeePayrollComponentRepository payrollComponentRepository,
 	ISalarySlipRepository salarySlipRepository,
@@ -37,15 +39,51 @@ public class PayrollSnapshotRefresher(
 		int month,
 		Guid? academicYearId,
 		IReadOnlyCollection<Guid> employeeIds,
-		bool preserveReviewedSnapshots)
+		bool preserveReviewedSnapshots,
+		bool enforceUserScope = true)
 	{
-		var scopedEmployees = await scopedEmployeeResolver.ResolveScopedEmployeesByIdsAsync(
-			year,
-			month,
-			employeeIds,
-			includeUnknownStageEmployees: false);
+		var scopedEmployees = enforceUserScope
+			? await scopedEmployeeResolver.ResolveScopedEmployeesByIdsAsync(
+				year,
+				month,
+				employeeIds,
+				includeUnknownStageEmployees: false)
+			: await ResolvePayrollEmployeesByIdsAsync(year, month, employeeIds);
 
 		await RefreshAsync(internalMonthYear, year, month, academicYearId, scopedEmployees, preserveReviewedSnapshots);
+	}
+
+	private async Task<List<Employee>> ResolvePayrollEmployeesByIdsAsync(
+		int year,
+		int month,
+		IReadOnlyCollection<Guid> employeeIds)
+	{
+		var requestedSet = employeeIds.Distinct().ToHashSet();
+		if (requestedSet.Count == 0)
+		{
+			return [];
+		}
+
+		var monthStart = DateOnly.FromDateTime(new DateTime(year, month, 1));
+		var monthEnd = PayrollRunRules.GetPayrollMonthEndDate(year, month);
+		var joinedEndExclusive = monthEnd.ToDateTime(TimeOnly.MinValue).AddDays(1);
+		var candidates = await employeeRepository.GetListAsync(employee =>
+			requestedSet.Contains(employee.Id) &&
+			((employee.DateOfJoining.HasValue && employee.DateOfJoining.Value <= monthEnd) ||
+			 (!employee.DateOfJoining.HasValue && employee.CreationTime < joinedEndExclusive)) &&
+			((!employee.EmployeeStatusType.HasValue) ||
+			 employee.EmployeeStatusType == EmployeeStatusType.Active ||
+			 (employee.EmployeeStatusType != EmployeeStatusType.Active &&
+			  ((employee.StatusEffectiveDate.HasValue &&
+			    employee.StatusEffectiveDate.Value >= monthStart) ||
+			   (!employee.StatusEffectiveDate.HasValue &&
+			    employee.StatusLastChangedAt.HasValue)))));
+
+		return candidates
+			.Where(employee => EmployeeLifecycleEligibility.IsEligibleForPayrollMonth(employee, monthStart, monthEnd))
+			.OrderBy(employee => employee.EmployeeName)
+			.ThenBy(employee => employee.EmployeeCode)
+			.ToList();
 	}
 	public async Task RefreshAsync(
 		string internalMonthYear,

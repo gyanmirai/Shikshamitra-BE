@@ -13,6 +13,9 @@ public class PayrollAdjustmentDto
 	public bool IsEarning { get; set; }
 	public string Reason { get; set; } = string.Empty;
 	public string? Description { get; set; }
+	public string? SourceType { get; set; }
+	public Guid? SourceId { get; set; }
+	public bool IsSystemGenerated { get; set; }
 	public DateTime? CreationTime { get; set; }
 	public Guid? CreatorId { get; set; }
 }

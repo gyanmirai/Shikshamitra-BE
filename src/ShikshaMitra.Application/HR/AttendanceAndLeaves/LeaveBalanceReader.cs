@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.AttendanceAndLeaves.YearEndSettlements;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -19,6 +20,7 @@ public class LeaveBalanceReader(
 	IAcademicYearRepository academicYearRepository,
 	LeaveActorAccessService leaveActorAccessService,
 	HrPolicyResolver hrPolicyResolver,
+	LeaveCarryForwardBalanceReader carryForwardBalanceReader,
 	IClock clock)
 	: ITransientDependency
 {
@@ -50,6 +52,10 @@ public class LeaveBalanceReader(
 			targetId.Value,
 			policy.Id,
 			activeRules.Select(rule => rule.PaidType).ToList());
+		var carryInByRule = await carryForwardBalanceReader.GetCarryInByRuleAsync(
+			targetId.Value,
+			academicYearId,
+			activeRules.Select(rule => rule.Id).ToList());
 
 		var items = new List<LeaveBalanceItemDto>();
 		foreach (var rule in activeRules)
@@ -57,6 +63,7 @@ public class LeaveBalanceReader(
 			unitsByPaidType.TryGetValue(rule.PaidType, out var units);
 			var used = units?.ApprovedDays ?? 0;
 			var pending = units?.PendingDays ?? 0;
+			carryInByRule.TryGetValue(rule.Id, out var carryIn);
 			var accrued = LeaveAccrualCalculator.CalculateAccruedDays(
 				policy,
 				rule,
@@ -66,7 +73,7 @@ public class LeaveBalanceReader(
 				clock.Now.Date);
 			var remaining = rule.IsUnlimited
 				? null
-				: (decimal?)((accrued ?? 0m) - used);
+				: (decimal?)((accrued ?? 0m) + carryIn - used);
 
 			items.Add(new LeaveBalanceItemDto
 			{
@@ -77,6 +84,7 @@ public class LeaveBalanceReader(
 				EntitlementMode = LeavePolicyProjection.ToEntitlementMode(rule.EntitlementMode),
 				EntitledDays = rule.LeaveCount,
 				AccruedDays = accrued,
+				CarryForwardDays = carryIn,
 				UsedDays = used,
 				PendingDays = pending,
 				RemainingDays = remaining,

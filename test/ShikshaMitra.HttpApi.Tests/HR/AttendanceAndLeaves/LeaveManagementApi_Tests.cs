@@ -61,6 +61,41 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Year_End_Settlement_Endpoints_Should_Return_Run_Contract()
+	{
+		var previewResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/year-end-settlements/preview",
+			new { AcademicYearId },
+			JsonOptions);
+		var previewPayload = await previewResponse.Content.ReadAsStringAsync();
+
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, previewPayload);
+		var preview = JsonSerializer.Deserialize<JsonElement>(previewPayload, JsonOptions);
+		preview.TryGetProperty("id", out var idProperty).ShouldBeTrue(previewPayload);
+		preview.TryGetProperty("status", out _).ShouldBeTrue(previewPayload);
+		preview.TryGetProperty("items", out var itemsProperty).ShouldBeTrue(previewPayload);
+		itemsProperty.ValueKind.ShouldBe(JsonValueKind.Array);
+
+		var runId = idProperty.GetGuid();
+		var listResponse = await Client.GetAsync($"{BaseUrl}/year-end-settlements?academicYearId={AcademicYearId}");
+		var listPayload = await listResponse.Content.ReadAsStringAsync();
+		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK, listPayload);
+		var list = JsonSerializer.Deserialize<JsonElement>(listPayload, JsonOptions);
+		list.ValueKind.ShouldBe(JsonValueKind.Array);
+		list.EnumerateArray().ShouldContain(x => x.GetProperty("id").GetGuid() == runId);
+
+		var detailResponse = await Client.GetAsync($"{BaseUrl}/year-end-settlements/{runId}");
+		var detailPayload = await detailResponse.Content.ReadAsStringAsync();
+		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK, detailPayload);
+		var detail = JsonSerializer.Deserialize<JsonElement>(detailPayload, JsonOptions);
+		detail.GetProperty("id").GetGuid().ShouldBe(runId);
+		detail.TryGetProperty("totalCarriedDays", out _).ShouldBeTrue(detailPayload);
+		detail.TryGetProperty("totalEncashedDays", out _).ShouldBeTrue(detailPayload);
+		detail.TryGetProperty("totalEncashmentAmount", out _).ShouldBeTrue(detailPayload);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Get_My_Leave_Request_List_With_PageSize_100()
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"MyLeaveList{Guid.NewGuid():N}");

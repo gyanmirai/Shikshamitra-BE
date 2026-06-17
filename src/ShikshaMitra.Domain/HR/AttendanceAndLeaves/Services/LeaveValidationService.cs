@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.AttendanceAndLeaves.YearEndSettlements;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -22,6 +24,7 @@ public class LeaveValidationService : DomainService
 	private readonly LeaveReportingChainService _reportingChainService;
 	private readonly LeaveWorkCalendarUnitService _leaveWorkCalendarUnitService;
 	private readonly HrPolicyResolver _hrPolicyResolver;
+	private readonly LeaveCarryForwardBalanceReader _carryForwardBalanceReader;
 
 	public LeaveValidationService(
 		IEmployeeLeaveRepository employeeLeaveRepository,
@@ -31,7 +34,8 @@ public class LeaveValidationService : DomainService
 		IAcademicYearRepository academicYearRepository,
 		LeaveReportingChainService reportingChainService,
 		LeaveWorkCalendarUnitService leaveWorkCalendarUnitService,
-		HrPolicyResolver hrPolicyResolver)
+		HrPolicyResolver hrPolicyResolver,
+		LeaveCarryForwardBalanceReader carryForwardBalanceReader)
 	{
 		_employeeLeaveRepository = employeeLeaveRepository;
 		_employeeRepository = employeeRepository;
@@ -41,6 +45,7 @@ public class LeaveValidationService : DomainService
 		_reportingChainService = reportingChainService;
 		_leaveWorkCalendarUnitService = leaveWorkCalendarUnitService;
 		_hrPolicyResolver = hrPolicyResolver;
+		_carryForwardBalanceReader = carryForwardBalanceReader;
 	}
 
 	public async Task EnsureActorMayChangeLeaveStatusAsync(
@@ -200,8 +205,9 @@ public class LeaveValidationService : DomainService
 			academicYear.EndDate,
 			employee.DateOfJoining,
 			Clock.Now.Date);
+		var carryIn = await GetCarryInAsync(employeeId, policy.AcademicYearId, rule.Id);
 
-		return (accrued ?? 0m) - approvedDays;
+		return (accrued ?? 0m) + carryIn - approvedDays;
 	}
 
 	private static void EnsureRuleAllowsRequest(
@@ -253,11 +259,21 @@ public class LeaveValidationService : DomainService
 			academicYear.EndDate,
 			employee.DateOfJoining,
 			evaluationDate);
-		var remainingBalance = (accrued ?? 0m) - approvedDaysForRule;
+		var carryIn = await GetCarryInAsync(employeeId, policy.AcademicYearId, rule.Id);
+		var remainingBalance = (accrued ?? 0m) + carryIn - approvedDaysForRule;
 		if (requestedUnits > remainingBalance)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveInsufficientBalance);
 		}
+	}
+
+	private async Task<decimal> GetCarryInAsync(Guid employeeId, Guid academicYearId, Guid ruleId)
+	{
+		var carryInByRule = await _carryForwardBalanceReader.GetCarryInByRuleAsync(
+			employeeId,
+			academicYearId,
+			new[] { ruleId });
+		return carryInByRule.GetValueOrDefault(ruleId);
 	}
 
 	private static void EnsureValidHalfDayRange(DateTime startDate, DateTime endDate, bool halfDay)

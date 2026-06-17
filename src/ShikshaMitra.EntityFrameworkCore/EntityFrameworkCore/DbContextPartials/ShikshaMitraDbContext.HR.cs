@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Communication.AnnouncementTypes;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.AttendanceAndLeaves.YearEndSettlements;
 using ShikshaMitra.HR.Calendar.Events;
 using ShikshaMitra.HR.Calendar.EventTypes;
 using ShikshaMitra.HR.Calendar.Holidays;
@@ -43,6 +44,8 @@ public partial class ShikshaMitraDbContext
     DbSet<NotificationInfo> NotificationInfos { get; set; }
     public DbSet<LeavePolicy> EmployeeLeavePolicies { get; set; }
     public DbSet<LeavePolicyRule> EmployeeLeavePolicyRules { get; set; }
+    public DbSet<LeaveYearEndSettlementRun> LeaveYearEndSettlementRuns { get; set; }
+    public DbSet<LeaveYearEndSettlementItem> LeaveYearEndSettlementItems { get; set; }
 
     DbSet<PayElement> PayElements { get; set; }
     DbSet<ProvidentFund> ProvidentFunds { get; set; }

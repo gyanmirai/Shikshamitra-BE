@@ -18,9 +18,15 @@ public class PayrollAdjustmentConfiguration : IEntityTypeConfiguration<PayrollAd
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(128);
 		builder.Property(x => x.Reason).IsRequired().HasMaxLength(512);
 		builder.Property(x => x.Description).HasMaxLength(1024);
+		builder.Property(x => x.SourceType).HasMaxLength(64);
+		builder.Property(x => x.IsSystemGenerated).IsRequired().HasDefaultValue(false);
 		builder.Property(x => x.Amount).HasPrecision(18, 2);
 
 		builder.HasIndex(x => new { x.TenantId, x.MonthYear, x.EmployeeId })
 			.HasDatabaseName("IX_HR_PayrollAdjustments_Tenant_Month_Employee");
+
+		builder.HasIndex(x => new { x.TenantId, x.SourceType, x.SourceId })
+			.IsUnique()
+			.HasDatabaseName("IX_HR_PayrollAdjustments_Tenant_Source");
 	}
 }

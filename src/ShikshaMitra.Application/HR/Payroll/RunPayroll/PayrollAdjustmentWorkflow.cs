@@ -47,6 +47,7 @@ public class PayrollAdjustmentWorkflow(
 		string internalMonthYear)
 	{
 		var adjustment = await adjustmentReader.GetOrThrowAsync(id);
+		EnsureUserEditable(adjustment);
 		if (adjustment.MonthYear != internalMonthYear || adjustment.EmployeeId != request.EmployeeId)
 		{
 			throw new BusinessException(HRErrorCodes.PayrollAdjustmentNotFound);
@@ -68,9 +69,54 @@ public class PayrollAdjustmentWorkflow(
 	public async Task<PayrollAdjustment> DeleteAsync(Guid id)
 	{
 		var adjustment = await adjustmentReader.GetOrThrowAsync(id);
+		EnsureUserEditable(adjustment);
 		await EnsureCanModifyExistingAsync(adjustment.MonthYear, adjustment.MonthYear, adjustment.EmployeeId);
 		await payrollAdjustmentRepository.DeleteAsync(adjustment, autoSave: true);
 		return adjustment;
+	}
+
+	public async Task<PayrollAdjustmentDto> UpsertSystemGeneratedAsync(
+		string internalMonthYear,
+		Guid employeeId,
+		string name,
+		decimal amount,
+		bool isEarning,
+		string reason,
+		string? description,
+		string sourceType,
+		Guid sourceId)
+	{
+		await EnsureSystemPostingMonthUnlockedAsync(internalMonthYear, employeeId);
+
+		var query = await payrollAdjustmentRepository.GetQueryableAsync();
+		var existing = await asyncExecuter.FirstOrDefaultAsync(query.Where(x =>
+			x.SourceType == sourceType &&
+			x.SourceId == sourceId));
+
+		if (existing == null)
+		{
+			existing = new PayrollAdjustment(
+				guidGenerator.Create(),
+				currentTenant.Id,
+				internalMonthYear,
+				employeeId,
+				name,
+				amount,
+				isEarning,
+				reason,
+				description,
+				sourceType,
+				sourceId,
+				isSystemGenerated: true);
+			await payrollAdjustmentRepository.InsertAsync(existing, autoSave: true);
+			return PayrollRunProjection.ToAdjustmentDto(existing);
+		}
+
+		existing.UpdatePostingScope(internalMonthYear, employeeId);
+		existing.SetSource(sourceType, sourceId, isSystemGenerated: true);
+		existing.Update(name, amount, isEarning, reason, description);
+		await payrollAdjustmentRepository.UpdateAsync(existing, autoSave: true);
+		return PayrollRunProjection.ToAdjustmentDto(existing);
 	}
 
 	private async Task EnsureCanCreateAsync(string internalMonthYear, string requestMonth, Guid employeeId)
@@ -104,6 +150,28 @@ public class PayrollAdjustmentWorkflow(
 		return await asyncExecuter.FirstOrDefaultAsync(query.Where(x =>
 			x.MonthYear == internalMonthYear &&
 			x.EmployeeId == employeeId));
+	}
+
+	private async Task EnsureSystemPostingMonthUnlockedAsync(string internalMonthYear, Guid employeeId)
+	{
+		var snapshot = await GetSnapshotAsync(internalMonthYear, employeeId);
+		if (snapshot?.IsLocked == true)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollAlreadyLocked)
+				.WithData("month", internalMonthYear)
+				.WithData("employeeId", employeeId);
+		}
+	}
+
+	private static void EnsureUserEditable(PayrollAdjustment adjustment)
+	{
+		if (adjustment.IsSystemGenerated)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollAdjustmentSystemGeneratedReadOnly)
+				.WithData("adjustmentId", adjustment.Id)
+				.WithData("sourceType", adjustment.SourceType ?? string.Empty)
+				.WithData("sourceId", adjustment.SourceId?.ToString() ?? string.Empty);
+		}
 	}
 
 	private static void ThrowCannotChange(string requestMonth, Guid employeeId, PayrollRunItemSnapshot? snapshot)

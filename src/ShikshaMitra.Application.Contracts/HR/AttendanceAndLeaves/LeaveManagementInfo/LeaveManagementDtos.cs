@@ -70,6 +70,7 @@ public class LeaveBalanceItemDto
 	public string EntitlementMode { get; set; } = "Limited";
 	public int? EntitledDays { get; set; }
 	public decimal? AccruedDays { get; set; }
+	public decimal CarryForwardDays { get; set; }
 	public decimal UsedDays { get; set; }
 	public decimal PendingDays { get; set; }
 	public decimal? RemainingDays { get; set; }

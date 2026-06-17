@@ -12,15 +12,9 @@ All controllers are `[Authorize]`.
 
 ## Endpoint Overview
 
-### Leave Types (`/api/hr-leave-types`)
+### Leave Types
 
-| Method | Route | Description |
-|---|---|---|
-| GET | `/api/hr-leave-types` | List leave types by academic year, with pagination + search |
-| GET | `/api/hr-leave-types/{id}` | Get leave type by id |
-| POST | `/api/hr-leave-types?academicYearId={id}` | Create leave type |
-| PUT | `/api/hr-leave-types/{id}` | Update leave type |
-| DELETE | `/api/hr-leave-types/{id}` | Soft-delete leave type |
+Leave Type settings are removed from the target public HR API. Leave policies expose Paid and Unpaid rule buckets directly.
 
 ### Leave Policies (`/api/leave-policies`)
 
@@ -63,11 +57,11 @@ All controllers are `[Authorize]`.
 
 | Method | Route | Description |
 |---|---|---|
-| GET | `/api/leave-management` | Paginated leave requests for an academic year. Optional `month-year`: when set, results are limited to that calendar month (clipped to the year); when omitted, the full academic year date span is used. Optional `status`, `leavePolicyId`, `leaveTypeMasterId`, `search` |
+| GET | `/api/leave-management` | Paginated leave requests for an academic year. Optional `month-year`: when set, results are limited to that calendar month (clipped to the year); when omitted, the full academic year date span is used. Optional `status`, `leavePolicyId`, `paidType`, `search` |
 | GET | `/api/leave-management/balances` | Per active policy: entitled, used (approved business days YTD), remaining (`employeeId` optional; defaults to caller’s employee; respects employee access rules) |
 | GET | `/api/leave-management/calendar` | Requests overlapping `rangeStart`–`rangeEnd` for calendar UI (optional filters). Use ISO-8601 date-time with offset (example: `2026-04-01T00:00:00-07:00`). |
 | GET | `/api/leave-management/export` | Excel export using the same date scope and filters as the list (`month-year` optional; full academic year when omitted) |
-| POST | `/api/leave-management?academicYearId=` | Multipart create: `leavePolicyId` (preferred), `startDate`, `endDate`, `reason`, optional `employeeId` (manager/HR on-behalf), optional attachment |
+| POST | `/api/leave-management?academicYearId=` | Multipart create: `paidType` (`Paid|Unpaid`), `startDate`, `endDate`, `reason`, optional `employeeId` (manager/HR on-behalf), optional attachment |
 | GET | `/api/leave-management/{id}` | Detail (includes `publicId`, `leavePolicyId`) |
 | PATCH | `/api/leave-management/{id}/approve` | Approve |
 | PATCH | `/api/leave-management/{id}/reject` | Reject |
@@ -79,34 +73,6 @@ Leave durations and balances use **business days** (weekends excluded) per PRD.
 
 ---
 
-## Leave Types Contract
-
-### GET `/api/hr-leave-types`
-Query:
-- `academicYearId` (Guid, required)
-- `page` (int, default `1`)
-- `pageSize` (int, default `10`)
-- `search` (string, optional)
-
-Response `200`: `LeaveTypeListResponse`
-
-### POST `/api/hr-leave-types`
-Query:
-- `academicYearId` (Guid, required)
-Body:
-- `name` (required)
-- `description` (optional)
-- `color` (hex string, required)
-
-Response `201`: `LeaveTypeResponse`
-
-### DELETE `/api/hr-leave-types/{id}`
-Behavior:
-- Soft delete (`IsActive=false`), contract response remains:
-`{ id, message }`
-
----
-
 ## Leave Policies Contract
 
 ### POST `/api/leave-policies`
@@ -115,21 +81,32 @@ Query:
 
 Body:
 - `policyTitle` (string, required)
-- `leaveType` (Guid, required)
-- `accrualPolicyType` (`Monthly|Yearly`, required)
-- `leaveCount` (int, required)
-- `paidType` (`Paid|Unpaid`, required)
-- `carryForward` (bool, required)
-- `encashmentAllowed` (bool, required)
-- `encashmentTiming` (`next_payroll|end_of_year`, required if `encashmentAllowed=true`)
-- `requiresApproval` (bool, required)
+- `status` (`Draft|Active|Archived`, required)
+- `effectiveFrom` (date, required)
+- `effectiveTo` (date, optional)
+- `isDefault` (bool, required)
 - `description` (string, optional)
+- `rules` (array, exactly two active buckets in target model)
+  - `paidType` (`Paid|Unpaid`, required; one of each)
+  - `entitlementMode` (`Limited|Unlimited`, required; `Unlimited` applies to Unpaid only)
+  - `leaveCount` (number, required when `entitlementMode=Limited`)
+  - `accrualPolicyType` (`Monthly|Yearly`, required)
+  - `carryForward` (bool, required)
+  - `carryForwardLimit` (number, optional)
+  - `encashmentAllowed` (bool, required)
+  - `encashmentTiming` (`next_payroll|end_of_year`, required if `encashmentAllowed=true`)
+  - `requiresApproval` (bool, required)
+  - `minNoticeDays` (number, required)
+  - `maxDaysPerRequest` (number, required)
+  - `allowHalfDay` (bool, required)
+  - `attachmentRequiredAfterDays` (number, optional)
+  - `allowNegativeBalance` (bool, required)
 
 Response `201`: `LeavePolicyResponse`
 
 ### GET `/api/leave-policies/{id}`
 Response `200`: `LeavePolicyDetailResponse`
-- includes nested `leaveType: { id, name }`
+- includes nested Paid/Unpaid rule summaries
 
 ### GET `/api/leave-policies`
 Query:

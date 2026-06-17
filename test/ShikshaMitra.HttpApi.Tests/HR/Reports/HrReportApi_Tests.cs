@@ -24,6 +24,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -2220,7 +2221,6 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 	private async Task<PersonalInfoResponse> CreateEmployeeInStageAsync(string firstNameSuffix, Guid stageId)
 	{
 		var personalInfo = EmployeeTestHelper.BuildPersonalInfoRequest(firstNameSuffix);
-		personalInfo.OrganizationIds = [stageId];
 		personalInfo.Department = firstNameSuffix;
 		var jsonData = JsonSerializer.Serialize(personalInfo, JsonOptions);
 
@@ -2237,8 +2237,59 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 				response.StatusCode);
 		}
 
-		return await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions)
+		var employee = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create report test employee");
+		if (!employee.UserId.HasValue)
+		{
+			throw new InvalidOperationException("Report test employee was created without a user id");
+		}
+
+		await AssignEmployeeStageAcademicPermissionAsync(employee.UserId.Value, stageId);
+		return employee;
+	}
+
+	private async Task AssignEmployeeStageAcademicPermissionAsync(Guid userId, Guid stageId)
+	{
+		var academicYearId = await ResolveAcademicYearIdForStageAsync(stageId);
+		var response = await Client.PostAsJsonAsync(
+			"/api/app/user-scope/bulk-assign",
+			new
+			{
+				userIds = new[] { userId },
+				academicYearIds = new[] { academicYearId },
+				educationMediumStageIds = new[] { stageId },
+				description = "HTTP API report test employee academic permission"
+			},
+			JsonOptions);
+		if (!response.IsSuccessStatusCode)
+		{
+			var payload = await response.Content.ReadAsStringAsync();
+			throw new HttpRequestException(
+				$"Employee report academic permission failed with {(int)response.StatusCode} {response.StatusCode}: {payload}",
+				null,
+				response.StatusCode);
+		}
+	}
+
+	private async Task<Guid> ResolveAcademicYearIdForStageAsync(Guid stageId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var stageRepository = scope.ServiceProvider.GetRequiredService<IRepository<EducationMediumStage, Guid>>();
+		var mediumRepository = scope.ServiceProvider.GetRequiredService<IRepository<EducationMedium, Guid>>();
+		var boardRepository = scope.ServiceProvider.GetRequiredService<IRepository<EducationBoard, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var stage = await stageRepository.GetAsync(stageId);
+			var medium = await mediumRepository.GetAsync(stage.EducationMediumId);
+			var board = await boardRepository.GetAsync(medium.EducationBoardId);
+			await uow.CompleteAsync();
+			return board.AcademicYearId;
+		}
 	}
 
 	private async Task SeedEmployeePolicyAssignmentsAsync(params (Guid EmployeeId, string TargetDisplayName)[] assignments)
@@ -2303,13 +2354,13 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 					inScopeEmployee.Id,
 					leavePolicy.PolicyId,
 					leavePolicy.RuleId,
-					leavePolicy.LeaveTypeId,
+					leavePolicy.PaidType,
 					"Scoped in-scope report leave");
 				await SeedReportLeaveAsync(
 					outOfScopeEmployee.Id,
 					leavePolicy.PolicyId,
 					leavePolicy.RuleId,
-					leavePolicy.LeaveTypeId,
+					leavePolicy.PaidType,
 					"Scoped out-of-scope report leave");
 				break;
 			case HrReportDataSources.Payroll:
@@ -2385,7 +2436,7 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		Guid employeeId,
 		Guid leavePolicyId,
 		Guid leavePolicyRuleId,
-		Guid leaveTypeId,
+		LeavePaidType paidType,
 		string reason)
 	{
 		using var scope = Factory.Services.CreateScope();
@@ -2404,7 +2455,7 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 				employeeId,
 				leavePolicyId,
 				leavePolicyRuleId,
-				leaveTypeId,
+				paidType,
 				new DateTimeOffset(leaveDate),
 				new DateTimeOffset(leaveDate),
 				reason);
@@ -2416,13 +2467,12 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	private async Task<(Guid PolicyId, Guid RuleId, Guid LeaveTypeId)> GetSeededLeavePolicyAsync()
+	private async Task<(Guid PolicyId, Guid RuleId, LeavePaidType PaidType)> GetSeededLeavePolicyAsync()
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
-		var leaveTypeRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
 		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		var leavePolicyRuleRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicyRule, Guid>>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
@@ -2435,18 +2485,12 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 			{
 				var policyId = policies.First().Id;
 				var rules = await leavePolicyRuleRepository.GetListAsync(x => x.LeavePolicyId == policyId && x.IsActive);
-				var rule = rules.First();
-				return (policyId, rule.Id, rule.LeaveTypeId);
+				var rule = rules.First(x => x.PaidType == LeavePaidType.Paid);
+				return (policyId, rule.Id, rule.PaidType);
 			}
 
 			var academicYears = await academicYearRepository.GetListAsync();
 			var academicYearId = academicYears.First().Id;
-			var leaveType = new LeaveType(
-				Guid.NewGuid(),
-				tenantId,
-				academicYearId,
-				$"Report Scope Leave Type {Guid.NewGuid():N}"[..40],
-				"#1A73E8");
 			var policy = new LeavePolicy(
 				Guid.NewGuid(),
 				tenantId,
@@ -2459,10 +2503,10 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 				Guid.NewGuid(),
 				tenantId,
 				policy.Id,
-				leaveType.Id,
+				LeavePaidType.Paid,
+				LeaveEntitlementMode.Limited,
 				LeaveAccrualPolicyType.Yearly,
 				12,
-				LeavePaidType.Paid,
 				carryForward: false,
 				carryForwardLimit: null,
 				encashable: false,
@@ -2473,11 +2517,28 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 				allowHalfDay: true,
 				attachmentRequiredAfterDays: null,
 				allowNegativeBalance: false);
-			policy.ReplaceRules([policyRule]);
-			await leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
+			var unpaidRule = new LeavePolicyRule(
+				Guid.NewGuid(),
+				tenantId,
+				policy.Id,
+				LeavePaidType.Unpaid,
+				LeaveEntitlementMode.Unlimited,
+				LeaveAccrualPolicyType.Yearly,
+				null,
+				carryForward: false,
+				carryForwardLimit: null,
+				encashable: false,
+				encashmentTiming: null,
+				requiresApproval: true,
+				minNoticeDays: 0,
+				maxDaysPerRequest: 30,
+				allowHalfDay: true,
+				attachmentRequiredAfterDays: null,
+				allowNegativeBalance: true);
+			policy.ReplaceRules([policyRule, unpaidRule]);
 			await leavePolicyRepository.InsertAsync(policy, autoSave: false);
 			await uow.CompleteAsync();
-			return (policy.Id, policyRule.Id, leaveType.Id);
+			return (policy.Id, policyRule.Id, policyRule.PaidType);
 		}
 	}
 

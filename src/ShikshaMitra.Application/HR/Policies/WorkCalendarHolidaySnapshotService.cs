@@ -58,15 +58,15 @@ public class WorkCalendarHolidaySnapshotService(
 		var rows = new List<WorkCalendarHolidayDto>();
 		foreach (var holiday in holidays.OrderBy(x => x.StartDate).ThenBy(x => x.HolidayName))
 		{
-			var fromDate = holiday.StartDate.Date;
-			var toDate = holiday.EndDate.Date < fromDate ? fromDate : holiday.EndDate.Date;
+			var fromDate = holiday.StartDate;
+			var toDateOnly = holiday.EndDate < holiday.StartDate ? holiday.StartDate : holiday.EndDate;
 			rows.Add(new WorkCalendarHolidayDto
 			{
 				AcademicYearId = academicYearId,
 				Date = fromDate,
 				FromDate = fromDate,
-				ToDate = toDate,
-				DayCount = (toDate - fromDate).Days + 1,
+				ToDate = toDateOnly,
+				DayCount = toDateOnly.DayNumber - fromDate.DayNumber + 1,
 				HolidayName = holiday.HolidayName,
 				Source = "central_calendar",
 				CalendarHolidayId = holiday.Id,

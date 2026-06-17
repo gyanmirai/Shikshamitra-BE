@@ -24,7 +24,6 @@ public class EmployeePersonalInfoCreationWorkflow(
 	IEmployeeEmailService emailService,
 	IDistributedEventBus distributedEventBus,
 	IHrPolicyAssignmentAppService policyAssignmentAppService,
-	EmployeeOrganizationAssignmentSyncer organizationAssignmentSyncer,
 	EmployeeIdentityUniquenessChecker identityUniquenessChecker,
 	EmployeePersonalInfoUserAccountCreator userAccountCreator,
 	EmployeePersonalInfoProjection personalInfoProjection,
@@ -134,7 +133,6 @@ public class EmployeePersonalInfoCreationWorkflow(
 					shiftId: input.ShiftId);
 
 				employee = await employeeRepository.InsertAsync(employee, autoSave: true);
-				await organizationAssignmentSyncer.SyncAsync(employee.Id, input.OrganizationIds);
 				if (input.PolicyOverride != null)
 				{
 					await CreateDirectPolicyOverrideAsync(employee, input.PolicyOverride);

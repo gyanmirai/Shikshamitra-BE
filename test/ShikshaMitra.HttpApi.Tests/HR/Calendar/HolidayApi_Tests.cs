@@ -36,8 +36,8 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 			AcademicYearId = academicYearId,
 			HolidayName = TestDataHelper.UniqueName("Diwali"),
 			HolidayTypeId = holidayType.Id,
-			StartDate = DateTimeOffset.UtcNow.AddDays(30),
-			EndDate = DateTimeOffset.UtcNow.AddDays(31),
+			StartDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(30),
+			EndDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(31),
 			Description = "Festival of lights",
 			AudienceIds = new List<Guid>(),
 		};
@@ -91,8 +91,8 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 			AcademicYearId = created.AcademicYearId,
 			HolidayName = TestDataHelper.UniqueName("UpdatedHol"),
 			HolidayTypeId = newHolidayType.Id,
-			StartDate = DateTimeOffset.UtcNow.AddDays(40),
-			EndDate = DateTimeOffset.UtcNow.AddDays(42),
+			StartDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(40),
+			EndDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(42),
 			Description = string.Empty,
 			Attachments = string.Empty,
 			AudienceIds = new List<Guid>(),
@@ -145,12 +145,12 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 	{
 		var future = await CreateHolidayAsync(
 			"ByStatusHol",
-			DateTimeOffset.UtcNow.AddDays(10),
-			DateTimeOffset.UtcNow.AddDays(11));
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(10),
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(11));
 		var past = await CreateHolidayAsync(
 			"ByStatusPastHol",
-			DateTimeOffset.UtcNow.AddDays(-10),
-			DateTimeOffset.UtcNow.AddDays(-9));
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-10),
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-9));
 
 		var response = await Client.GetAsync($"{BaseUrl}/by-status/0?SkipCount=0&MaxResultCount=50");
 
@@ -168,12 +168,12 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 	{
 		var future = await CreateHolidayAsync(
 			"FutureStatusHol",
-			DateTimeOffset.UtcNow.AddDays(10),
-			DateTimeOffset.UtcNow.AddDays(11));
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(10),
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(11));
 		var past = await CreateHolidayAsync(
 			"PastStatusHol",
-			DateTimeOffset.UtcNow.AddDays(-10),
-			DateTimeOffset.UtcNow.AddDays(-9));
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-10),
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-9));
 
 		var response = await Client.GetAsync(
 			$"{BaseUrl}?AcademicYearId={Factory.SeededAcademicYearId}&Status=0&SkipCount=0&MaxResultCount=50");
@@ -201,8 +201,8 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 
 	private async Task<HolidayDto> CreateHolidayAsync(
 		string suffix,
-		DateTimeOffset? startDate = null,
-		DateTimeOffset? endDate = null)
+		DateOnly? startDate = null,
+		DateOnly? endDate = null)
 	{
 		var holidayType = await CalendarTestHelper.CreateHolidayTypeAsync(Client, suffix);
 		var academicYearId = Factory.SeededAcademicYearId;
@@ -212,8 +212,8 @@ public class HolidayApi_Tests : ShikshaMitraApiTestBase
 			AcademicYearId = academicYearId,
 			HolidayName = TestDataHelper.UniqueName(suffix),
 			HolidayTypeId = holidayType.Id,
-			StartDate = startDate ?? DateTimeOffset.UtcNow.AddDays(30),
-			EndDate = endDate ?? DateTimeOffset.UtcNow.AddDays(31),
+			StartDate = startDate ?? DateOnly.FromDateTime(DateTime.UtcNow).AddDays(30),
+			EndDate = endDate ?? DateOnly.FromDateTime(DateTime.UtcNow).AddDays(31),
 			Description = "Original holiday description",
 			Attachments = "holiday-a.pdf",
 			AudienceIds = new List<Guid>(),

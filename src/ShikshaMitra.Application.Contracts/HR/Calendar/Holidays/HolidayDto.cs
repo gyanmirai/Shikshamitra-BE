@@ -29,8 +29,8 @@ public class HolidayDto : AuditedEntityDto<Guid>
     /// </summary>
     public HolidayTypeDto? HolidayType { get; set; }
 
-    public DateTimeOffset StartDate { get; set; }
-    public DateTimeOffset EndDate { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
     public string? Description { get; set; }
     public List<Guid> AudienceIds { get; set; } = new();
     public string? Attachments { get; set; }

@@ -1,6 +1,5 @@
 using ShikshaMitra.Common;
 using System;
-using System.Collections.Generic;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
@@ -78,8 +77,6 @@ public class UpdateEmployeePersonalInfoDto
 	public string? Pincode { get; set; }
 
 	public Guid? ShiftId { get; set; }
-
-	public List<Guid> OrganizationIds { get; set; } = [];
 
 	#endregion
 

@@ -132,7 +132,6 @@ public class ShiftManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	private async Task CreateEmployeeAsync(Guid shiftId)
 	{
 		var roleId = await EnsureRoleExistsAsync();
-		var organizationId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		var uniq = Guid.NewGuid().ToString("N")[..8];
 
 		await _personalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
@@ -148,8 +147,7 @@ public class ShiftManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
-			ShiftId = shiftId,
-			OrganizationIds = [organizationId]
+			ShiftId = shiftId
 		});
 	}
 

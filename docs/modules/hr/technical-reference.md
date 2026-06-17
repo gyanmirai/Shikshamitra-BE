@@ -16,7 +16,7 @@ The HR module manages the full employee lifecycle within a multi-tenant educatio
 | Subdomain | Namespace | Purpose |
 |---|---|---|
 | **Employees** | `ShikshaMitra.HR.Employees` | Employee aggregate, family, documents, profile, bank details, work experience, additional details, payroll details, code generation, caching |
-| **AttendanceAndLeaves** | `ShikshaMitra.HR.AttendanceAndLeaves` | Daily attendance records, leave requests, leave approval workflow, leave policies, leave types, custom attendance rules, automated notifications |
+| **AttendanceAndLeaves** | `ShikshaMitra.HR.AttendanceAndLeaves` | Daily attendance records, leave requests, leave approval workflow, Paid/Unpaid leave policies, custom attendance rules, automated notifications |
 | **Payroll** | `ShikshaMitra.HR.Payroll` | Payroll structures, salary slips, day calculation settings, earning/deduction components, provident fund rules, attendance import |
 | **Calendar** | `ShikshaMitra.HR.Calendar` | Events, holidays, event types, holiday types, calendar view aggregation |
 | ~~**EventAndHolidays**~~ | ~~`ShikshaMitra.HR.EventAndHolidays`~~ | **Current — removed.** The flat `EventAndHoliday` aggregate duplicated `HR/Calendar/`. Consolidated into `Calendar`. Code and DB table to be deleted after data migration completes. |
@@ -150,14 +150,13 @@ All controllers delegate to focused service interfaces. Contract mappers live in
 | Entity | Base | Key Fields |
 |---|---|---|
 | `EmployeeAttendance` | `FullAuditedEntity<Guid>` | `EmployeeId`, `AttendanceDate` (DateOnly), `TimeIn`/`TimeOut` (DateTimeOffset?), `StatusType`, `EducationMediumStageId` (denormalized for scope filtering) |
-| `EmployeeLeave` | `FullAuditedAggregateRoot<Guid>` | `PublicId` (auto-increment), `EmployeeId`, `LeaveTypeId` → `LeavePolicy`, `HalfDay`, `StartDate`/`EndDate`, `Status`, `Description`, `RejectionReason`, `Attachment` |
+| `EmployeeLeave` | `FullAuditedAggregateRoot<Guid>` | `PublicId` (auto-increment), `EmployeeId`, `LeavePolicyId`, paid type (`Paid`/`Unpaid`), `HalfDay`, `StartDate`/`EndDate`, `Status`, `Description`, `RejectionReason`, `Attachment` |
 
 ### 3.2 Settings Entities
 
 | Entity | Purpose |
 |---|---|
-| `LeaveType` | Leave type master (Casual, Sick, etc.) |
-| `LeavePolicy` | Leave policy rules: accrual, max balance, carry-forward, probation rules |
+| `LeavePolicy` | Assignable leave policy with exactly Paid and Unpaid rule buckets: entitlement, accrual, approval, carry-forward, encashment, half-day, max-per-request, negative-balance, and unlimited-unpaid settings |
 | `CustomAttendanceRule` | Tenant-specific attendance rules |
 | `AutomatedNotificationsSettings` | Notification triggers for attendance/leave events |
 
@@ -167,8 +166,7 @@ All controllers delegate to focused service interfaces. Contract mappers live in
 |---|---|
 | `EmployeeLeaveManager` | Leave request creation, approval/rejection workflow |
 | `LeaveValidationService` | Cross-field leave validation (overlap, balance, policy compliance) |
-| `LeaveTypeManager` | Leave type CRUD with tenant isolation |
-| `LeavePolicyManager` | Policy CRUD, accrual rule management |
+| `LeavePolicyManager` | Policy CRUD and Paid/Unpaid rule management |
 
 ### 3.4 Enums
 

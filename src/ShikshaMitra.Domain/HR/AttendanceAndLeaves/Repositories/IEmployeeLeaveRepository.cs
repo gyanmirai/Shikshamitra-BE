@@ -11,7 +11,7 @@ public record LeaveManagementListFilters(
 	Guid AcademicYearId,
 	EmployeeLeaveStatusType? Status,
 	Guid? LeavePolicyId,
-	Guid? LeaveTypeMasterId);
+	LeavePaidType? PaidType);
 
 public record PayrollApprovedLeaveRow(
 	Guid EmployeeId,
@@ -30,6 +30,11 @@ public record ApprovedAttendanceLeaveRow(
 
 public record LeaveRuleBalanceUnits(
 	Guid LeavePolicyRuleId,
+	decimal ApprovedDays,
+	decimal PendingDays);
+
+public record LeavePaidTypeBalanceUnits(
+	LeavePaidType PaidType,
 	decimal ApprovedDays,
 	decimal PendingDays);
 
@@ -65,8 +70,24 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 		Guid employeeId,
 		Guid leavePolicyRuleId);
 
+	Task<decimal> GetApprovedLeaveDaysByPolicyAndPaidTypeAsync(
+		Guid employeeId,
+		Guid leavePolicyId,
+		LeavePaidType paidType,
+		CancellationToken cancellationToken = default);
+
 	Task<IReadOnlyDictionary<Guid, LeaveRuleBalanceUnits>> GetBalanceUnitsByRuleAsync(
 		Guid employeeId,
+		IReadOnlyCollection<Guid> leavePolicyRuleIds,
+		CancellationToken cancellationToken = default);
+
+	Task<IReadOnlyDictionary<LeavePaidType, LeavePaidTypeBalanceUnits>> GetBalanceUnitsByPolicyAndPaidTypeAsync(
+		Guid employeeId,
+		Guid leavePolicyId,
+		IReadOnlyCollection<LeavePaidType> paidTypes,
+		CancellationToken cancellationToken = default);
+
+	Task<IReadOnlySet<Guid>> GetReferencedRuleIdsAsync(
 		IReadOnlyCollection<Guid> leavePolicyRuleIds,
 		CancellationToken cancellationToken = default);
 

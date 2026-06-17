@@ -173,7 +173,6 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
-		var organizationId = await EnsureOrganizationExistsAsync();
 		var dto = new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Wx",
@@ -187,18 +186,12 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
-			ShiftId = shiftId,
-			OrganizationIds = [organizationId]
+			ShiftId = shiftId
 		};
 
 		var created = await _personalInfoAppService.CreateAsync(dto);
 		created.ShouldNotBeNull();
 		return created!.Id;
-	}
-
-	private async Task<Guid> EnsureOrganizationExistsAsync()
-	{
-		return await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 	}
 
 	private async Task<Guid> EnsureRoleExistsAsync()

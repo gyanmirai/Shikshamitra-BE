@@ -26,11 +26,11 @@ public static class WorkCalendarPolicyChangeDetector
 			HolidaysEqual(existingHolidays, input.Holidays);
 	}
 
-	public static DateTime ResolveHolidayFromDate(WorkCalendarHolidayDto row) =>
-		(row.FromDate ?? row.Date).Date;
+	public static DateOnly ResolveHolidayFromDate(WorkCalendarHolidayDto row) =>
+		row.FromDate ?? row.Date;
 
-	public static DateTime ResolveHolidayToDate(WorkCalendarHolidayDto row) =>
-		(row.ToDate ?? row.FromDate ?? row.Date).Date;
+	public static DateOnly ResolveHolidayToDate(WorkCalendarHolidayDto row) =>
+		row.ToDate ?? row.FromDate ?? row.Date;
 
 	private static IReadOnlyList<int> NormalizeWeeklyOffs(IReadOnlyList<int>? values) =>
 		values?.Distinct().OrderBy(x => x).ToList() ?? [];
@@ -78,8 +78,8 @@ public static class WorkCalendarPolicyChangeDetector
 
 	private sealed record NormalizedHolidayRow(
 		Guid AcademicYearId,
-		DateTime FromDate,
-		DateTime ToDate,
+		DateOnly FromDate,
+		DateOnly ToDate,
 		string HolidayName,
 		string Source,
 		Guid? CalendarHolidayId,

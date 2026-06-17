@@ -42,10 +42,10 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	private readonly IPayrollPolicyAppService _payrollPolicies;
 	private readonly IAttendancePolicyAppService _attendancePolicies;
 	private readonly IHrPolicyAssignmentAppService _assignments;
-	private readonly ILeaveTypeAppService _leaveTypeAppService;
 	private readonly ILeavePolicyAppService _leavePolicyAppService;
 	private readonly SalarySlipAccessService _salarySlipAccessService;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
+	private readonly IRepository<EmployeeOrganizationAssignment, Guid> _employeeOrganizationAssignmentRepository;
 	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
 	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
@@ -72,10 +72,10 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		_payrollPolicies = GetRequiredService<IPayrollPolicyAppService>();
 		_attendancePolicies = GetRequiredService<IAttendancePolicyAppService>();
 		_assignments = GetRequiredService<IHrPolicyAssignmentAppService>();
-		_leaveTypeAppService = GetRequiredService<ILeaveTypeAppService>();
 		_leavePolicyAppService = GetRequiredService<ILeavePolicyAppService>();
 		_salarySlipAccessService = GetRequiredService<SalarySlipAccessService>();
 		_attendanceRepository = GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		_employeeOrganizationAssignmentRepository = GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
 		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		_payrollRunItemSnapshotRepository = GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
@@ -611,11 +611,6 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			HolidayWorkBehavior = "paid",
 			PayrollPreviewEnabled = true
 		});
-		var leaveType = await _leaveTypeAppService.CreateLeaveTypeAsync(academicYearId, new LeaveTypeCreateRequest
-		{
-			Name = $"SL Leave Type {Guid.NewGuid():N}",
-			Color = "#1A73E8"
-		});
 		var leavePolicy = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
 		{
 			PolicyTitle = $"SL Leave Policy {Guid.NewGuid():N}",
@@ -627,10 +622,10 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			[
 				new LeavePolicyRuleRequest
 				{
-					LeaveTypeId = leaveType.Id,
+					PaidType = "Paid",
+					EntitlementMode = "Limited",
 					AccrualPolicyType = "Monthly",
 					LeaveCount = 12,
-					PaidType = "Paid",
 					CarryForward = false,
 					EncashmentAllowed = false,
 					RequiresApproval = true,
@@ -638,6 +633,21 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 					MaxDaysPerRequest = 30,
 					AllowHalfDay = true,
 					AllowNegativeBalance = false,
+					IsActive = true
+				},
+				new LeavePolicyRuleRequest
+				{
+					PaidType = "Unpaid",
+					EntitlementMode = "Unlimited",
+					AccrualPolicyType = "Yearly",
+					LeaveCount = null,
+					CarryForward = false,
+					EncashmentAllowed = false,
+					RequiresApproval = true,
+					MinNoticeDays = 0,
+					MaxDaysPerRequest = 30,
+					AllowHalfDay = true,
+					AllowNegativeBalance = true,
 					IsActive = true
 				}
 			]
@@ -655,7 +665,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		var resolvedShiftId = shiftId ?? await EnsureShiftExistsAsync();
 		var resolvedOrganizationId = organizationId
 			?? await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
-		return await _employeePersonalInfo.CreateAsync(new CreateEmployeePersonalInfoDto
+		var employee = await _employeePersonalInfo.CreateAsync(new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Payslip",
 			LastName = "Policy",
@@ -668,9 +678,16 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			DateOfJoining = dateOfJoining ?? DateOnly.FromDateTime(new DateTime(2026, 1, 1)),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
-			ShiftId = resolvedShiftId,
-			OrganizationIds = [resolvedOrganizationId]
+			ShiftId = resolvedShiftId
 		});
+		await _employeeOrganizationAssignmentRepository.InsertAsync(
+			new EmployeeOrganizationAssignment(
+				_guidGenerator.Create(),
+				_currentTenant.Id,
+				employee.Id,
+				resolvedOrganizationId),
+			autoSave: true);
+		return employee;
 	}
 
 	private async Task SeedAttendanceScopeAsync(

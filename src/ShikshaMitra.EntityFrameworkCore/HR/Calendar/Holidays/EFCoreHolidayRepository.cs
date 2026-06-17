@@ -51,7 +51,7 @@ public class EFCoreHolidayRepository : EfCoreRepository<ShikshaMitraDbContext, H
     /// <summary>
     /// Get holidays within a date range
     /// </summary>
-    public async Task<List<Holiday>> GetByDateRangeAsync(DateTimeOffset startDate, DateTimeOffset endDate, bool includeDetails = false)
+    public async Task<List<Holiday>> GetByDateRangeAsync(DateOnly startDate, DateOnly endDate, bool includeDetails = false)
     {
         var query = (await GetQueryableAsync())
             .Where(x => x.StartDate >= startDate && x.EndDate <= endDate);

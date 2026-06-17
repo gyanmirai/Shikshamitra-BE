@@ -874,7 +874,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
 		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
 		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
-		var leaveTypeRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
 		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
 		var guidGenerator = scope.ServiceProvider.GetRequiredService<IGuidGenerator>();
@@ -901,7 +900,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				academicYear.Id,
 				academicYear.StartDate,
 				academicYear.EndDate,
-				leaveTypeRepository,
 				leavePolicyRepository,
 				guidGenerator);
 			var policy = new AttendancePolicy(
@@ -960,7 +958,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
 		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
 		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
-		var leaveTypeRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
 		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
 		var guidGenerator = scope.ServiceProvider.GetRequiredService<IGuidGenerator>();
@@ -987,7 +984,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				academicYear.Id,
 				academicYear.StartDate,
 				academicYear.EndDate,
-				leaveTypeRepository,
 				leavePolicyRepository,
 				guidGenerator);
 			var policy = new AttendancePolicy(
@@ -1042,7 +1038,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		Guid academicYearId,
 		DateTime effectiveFrom,
 		DateTime effectiveTo,
-		IRepository<LeaveType, Guid> leaveTypeRepository,
 		IRepository<LeavePolicy, Guid> leavePolicyRepository,
 		IGuidGenerator guidGenerator)
 	{
@@ -1058,14 +1053,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		}
 
 		var suffix = Guid.NewGuid().ToString("N")[..12];
-		var leaveType = new LeaveType(
-			guidGenerator.Create(),
-			tenantId,
-			academicYearId,
-			$"AP {suffix}",
-			"#2196F3");
-		await leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
-
 		var leavePolicy = new LeavePolicy(
 			guidGenerator.Create(),
 			tenantId,
@@ -1079,10 +1066,10 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			guidGenerator.Create(),
 			tenantId,
 			leavePolicy.Id,
-			leaveType.Id,
+			LeavePaidType.Paid,
+			LeaveEntitlementMode.Limited,
 			LeaveAccrualPolicyType.Yearly,
 			12,
-			LeavePaidType.Paid,
 			carryForward: false,
 			carryForwardLimit: null,
 			encashable: false,
@@ -1093,7 +1080,25 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			allowHalfDay: true,
 			attachmentRequiredAfterDays: null,
 			allowNegativeBalance: false);
-		leavePolicy.ReplaceRules([leavePolicyRule]);
+		var unpaidRule = new LeavePolicyRule(
+			guidGenerator.Create(),
+			tenantId,
+			leavePolicy.Id,
+			LeavePaidType.Unpaid,
+			LeaveEntitlementMode.Unlimited,
+			LeaveAccrualPolicyType.Yearly,
+			null,
+			carryForward: false,
+			carryForwardLimit: null,
+			encashable: false,
+			encashmentTiming: null,
+			requiresApproval: true,
+			minNoticeDays: 0,
+			maxDaysPerRequest: 30,
+			allowHalfDay: true,
+			attachmentRequiredAfterDays: null,
+			allowNegativeBalance: true);
+		leavePolicy.ReplaceRules([leavePolicyRule, unpaidRule]);
 		await leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
 		return leavePolicy.Id;
 	}
@@ -1153,7 +1158,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 		var guidGenerator = scope.ServiceProvider.GetRequiredService<IGuidGenerator>();
 		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
-		var leaveTypeRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
 		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		var leaveRepository = scope.ServiceProvider.GetRequiredService<IEmployeeLeaveRepository>();
 		var leaveManager = scope.ServiceProvider.GetRequiredService<EmployeeLeaveManager>();
@@ -1166,14 +1170,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
 			var academicYear = academicYearQuery.Single(x => x.StartDate <= startDateTime && x.EndDate >= startDateTime);
 			var suffix = Guid.NewGuid().ToString("N")[..12];
-			var leaveType = new LeaveType(
-				guidGenerator.Create(),
-				tenantId,
-				academicYear.Id,
-				$"AL {suffix}",
-				"#2196F3");
-			await leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
-
 			var leavePolicy = new LeavePolicy(
 				guidGenerator.Create(),
 				tenantId,
@@ -1186,10 +1182,10 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				guidGenerator.Create(),
 				tenantId,
 				leavePolicy.Id,
-				leaveType.Id,
+				LeavePaidType.Paid,
+				LeaveEntitlementMode.Limited,
 				LeaveAccrualPolicyType.Yearly,
 				12,
-				LeavePaidType.Paid,
 				carryForward: false,
 				carryForwardLimit: null,
 				encashable: false,
@@ -1200,7 +1196,25 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				allowHalfDay: true,
 				attachmentRequiredAfterDays: null,
 				allowNegativeBalance: false);
-			leavePolicy.ReplaceRules([leavePolicyRule]);
+			var unpaidRule = new LeavePolicyRule(
+				guidGenerator.Create(),
+				tenantId,
+				leavePolicy.Id,
+				LeavePaidType.Unpaid,
+				LeaveEntitlementMode.Unlimited,
+				LeaveAccrualPolicyType.Yearly,
+				null,
+				carryForward: false,
+				carryForwardLimit: null,
+				encashable: false,
+				encashmentTiming: null,
+				requiresApproval: true,
+				minNoticeDays: 0,
+				maxDaysPerRequest: 30,
+				allowHalfDay: true,
+				attachmentRequiredAfterDays: null,
+				allowNegativeBalance: true);
+			leavePolicy.ReplaceRules([leavePolicyRule, unpaidRule]);
 			await leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
 
 			var start = new DateTimeOffset(startDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
@@ -1211,7 +1225,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				employeeId,
 				leavePolicy.Id,
 				leavePolicyRule.Id,
-				leaveType.Id,
+				LeavePaidType.Paid,
 				start,
 				end,
 				"Attendance approved leave overlay test",

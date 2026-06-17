@@ -28,6 +28,7 @@ public class CalendarViewReadService(
 	public async Task<PagedResultDto<CalendarViewItemDto>> GetViewAsync(GetCalendarViewRequestDto input)
 	{
 		var now = CurrentInstant();
+		var today = CurrentBusinessDate();
 		var visibility = await visibilityService.ResolveAsync(input.AcademicYearId);
 		var eventTypeDict = (await AsyncExecuter.ToListAsync(await eventTypeRepository.GetQueryableAsync()))
 			.ToDictionary(et => et.Id);
@@ -35,7 +36,7 @@ public class CalendarViewReadService(
 			.ToDictionary(ht => ht.Id);
 
 		var events = await GetVisibleEventsAsync(input, visibility);
-		var holidays = await GetVisibleHolidaysAsync(input, visibility);
+		var holidays = await GetVisibleHolidaysAsync(input, visibility, today);
 		var allItems = events
 			.Select(e => new CalendarViewItemDto
 			{
@@ -63,9 +64,9 @@ public class CalendarViewReadService(
 				TypeName = holidayType?.Name ?? string.Empty,
 				Description = h.Description,
 				AudienceCount = h.AudienceIds.Count,
-				Status = (int)h.GetStatus(now),
-				StartDate = h.StartDate,
-				EndDate = h.EndDate
+				Status = (int)h.GetStatus(today),
+				StartDate = ToDateTimeOffset(h.StartDate),
+				EndDate = ToDateTimeOffset(h.EndDate)
 			}))
 			.ToList();
 
@@ -109,9 +110,9 @@ public class CalendarViewReadService(
 
 	private async Task<List<Holiday>> GetVisibleHolidaysAsync(
 		GetCalendarViewRequestDto input,
-		CalendarVisibilityContext visibility)
+		CalendarVisibilityContext visibility,
+		DateOnly today)
 	{
-		var now = CurrentInstant();
 		var holidayQuery = await holidayRepository.GetQueryableAsync();
 		holidayQuery = holidayQuery.Where(h => h.AcademicYearId == input.AcademicYearId);
 
@@ -129,7 +130,7 @@ public class CalendarViewReadService(
 		var holidays = await AsyncExecuter.ToListAsync(holidayQuery);
 		if (statuses.Count > 0)
 		{
-			holidays = holidays.Where(h => statuses.Contains((int)h.GetStatus(now))).ToList();
+			holidays = holidays.Where(h => statuses.Contains((int)h.GetStatus(today))).ToList();
 		}
 
 		return CalendarViewVisibilityService.Apply(holidays, visibility, h => h.AudienceIds);
@@ -164,4 +165,10 @@ public class CalendarViewReadService(
 
 	private DateTimeOffset CurrentInstant() =>
 		new(Clock.Now.ToUniversalTime(), TimeSpan.Zero);
+
+	private DateOnly CurrentBusinessDate() =>
+		DateOnly.FromDateTime(Clock.Now);
+
+	private static DateTimeOffset ToDateTimeOffset(DateOnly date) =>
+		new(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
 }

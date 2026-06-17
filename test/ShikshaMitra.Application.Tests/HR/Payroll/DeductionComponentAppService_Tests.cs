@@ -1637,7 +1637,6 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
     {
         var roleId = await EnsureRoleExistsAsync();
         var shiftId = await EnsureShiftExistsAsync();
-        var organizationId = await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
         var unique = Guid.NewGuid().ToString("N")[..6];
 
         return await _employeePersonalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
@@ -1653,8 +1652,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             DateOfJoining = new DateOnly(2024, 1, 1),
             EmployeeStatusType = EmployeeStatusType.Active,
             RoleId = roleId,
-            ShiftId = shiftId,
-            OrganizationIds = [organizationId]
+            ShiftId = shiftId
         });
     }
 

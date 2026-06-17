@@ -21,7 +21,6 @@ public class EmployeePersonalInfoAppService(
 	IEmployeeFamilyMemberRepository familyMemberRepository,
 	EmployeeManager employeeManager,
 	EmployeePersonalInfoCreationWorkflow creationWorkflow,
-	EmployeeOrganizationAssignmentSyncer organizationAssignmentSyncer,
 	EmployeeIdentityUniquenessChecker identityUniquenessChecker,
 	EmployeePersonalInfoProjection personalInfoProjection,
 	ShiftReferenceValidator shiftReferenceValidator
@@ -96,7 +95,6 @@ public class EmployeePersonalInfoAppService(
 		);
 
 		employee = await employeeRepository.UpdateAsync(employee);
-		await organizationAssignmentSyncer.SyncAsync(employee.Id, input.OrganizationIds);
 
 		return await personalInfoProjection.ToPersonalInfoDtoAsync(await employeeRepository.GetAsync(employee.Id));
 	}

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using ShikshaMitra.Infrastructure.Traits;
@@ -15,8 +16,8 @@ namespace ShikshaMitra.Infrastructure.Safety;
 [TestModule(TestTraits.Modules.HR)]
 public class HrEndpointContractSnapshotGuard_Tests
 {
-	private const int ExpectedEndpointCount = 281;
-	private const string ExpectedSnapshotHash = "008fab21563b538436d379e4f4899c252626a47a539ee198a27f9ad4ae767bb0";
+	private const int ExpectedEndpointCount = 293;
+	private const string ExpectedSnapshotHash = "849053b22fd413bac55b14d562f0e7bad51658c361dab77f5cb5d2c312fb87fa";
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -198,7 +199,7 @@ public class HrEndpointContractSnapshotGuard_Tests
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public void Leave_Policy_Seeder_Should_Use_Academic_Year_Scoped_Guards()
+	public void Leave_Policy_Seeder_Should_Not_Seed_HR_Leave_Types()
 	{
 		var repoRoot = FindRepositoryRoot();
 		var seederPath = Path.Combine(
@@ -209,10 +210,12 @@ public class HrEndpointContractSnapshotGuard_Tests
 			"HRSeederContributor.PolicyCatalog.cs");
 		var text = File.ReadAllText(seederPath);
 
-		text.ShouldContain("SeedLeaveTypesAndPoliciesAsync(academicYear.Id)");
-		text.ShouldContain("_leaveTypeRepository.AnyAsync(x => x.AcademicYearId == academicYearId && x.Type == type)");
+		text.ShouldContain("SeedLeavePoliciesAsync()");
 		text.ShouldContain("_leavePolicyRepository.AnyAsync(x => x.AcademicYearId == academicYearId)");
-		text.ShouldNotContain("if (await _leaveTypeRepository.AnyAsync())");
+		text.ShouldContain("LeavePaidType.Paid");
+		text.ShouldContain("LeavePaidType.Unpaid");
+		text.ShouldNotContain("LeaveType");
+		text.ShouldNotContain("_leaveTypeRepository");
 		text.ShouldNotContain("if (await _leavePolicyRepository.AnyAsync())");
 	}
 
@@ -372,8 +375,37 @@ public class HrEndpointContractSnapshotGuard_Tests
 			@"\[Http(?<verb>Get|Post|Put|Delete|Patch)(?:\(""(?<route>[^""]*)""\))?",
 			RegexOptions.CultureInvariant);
 
-	private static string FindRepositoryRoot()
+	private static string FindRepositoryRoot([CallerFilePath] string sourceFilePath = "")
 	{
+		var currentDirectory = new DirectoryInfo(Directory.GetCurrentDirectory());
+		if (File.Exists(Path.Combine(currentDirectory.FullName, "ShikshaMitra.sln")))
+		{
+			return currentDirectory.FullName;
+		}
+
+		var backendRootFromCurrentDirectory = Path.Combine(currentDirectory.FullName, "Shikshamitra-BE");
+		if (File.Exists(Path.Combine(backendRootFromCurrentDirectory, "ShikshaMitra.sln")))
+		{
+			return backendRootFromCurrentDirectory;
+		}
+
+		var sourceDirectory = new FileInfo(sourceFilePath).Directory;
+		while (sourceDirectory is not null)
+		{
+			if (File.Exists(Path.Combine(sourceDirectory.FullName, "ShikshaMitra.sln")))
+			{
+				return sourceDirectory.FullName;
+			}
+
+			var backendRootFromSourceDirectory = Path.Combine(sourceDirectory.FullName, "Shikshamitra-BE");
+			if (File.Exists(Path.Combine(backendRootFromSourceDirectory, "ShikshaMitra.sln")))
+			{
+				return backendRootFromSourceDirectory;
+			}
+
+			sourceDirectory = sourceDirectory.Parent;
+		}
+
 		var current = new DirectoryInfo(AppContext.BaseDirectory);
 		while (current is not null)
 		{

@@ -11,9 +11,9 @@ public class WorkCalendarHoliday : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; protected set; }
 	public Guid AcademicYearId { get; protected set; }
 	public Guid WorkCalendarPolicyId { get; protected set; }
-	public DateTime Date { get; protected set; }
-	public DateTime FromDate { get; protected set; }
-	public DateTime ToDate { get; protected set; }
+	public DateOnly Date { get; protected set; }
+	public DateOnly FromDate { get; protected set; }
+	public DateOnly ToDate { get; protected set; }
 	public string HolidayName { get; protected set; } = string.Empty;
 	public WorkCalendarHolidaySource Source { get; protected set; }
 	public Guid? CalendarHolidayId { get; protected set; }
@@ -29,8 +29,8 @@ public class WorkCalendarHoliday : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		Guid academicYearId,
 		Guid workCalendarPolicyId,
-		DateTime date,
-		DateTime? toDate,
+		DateOnly date,
+		DateOnly? toDate,
 		string holidayName,
 		WorkCalendarHolidaySource source,
 		Guid? calendarHolidayId,
@@ -44,8 +44,8 @@ public class WorkCalendarHoliday : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void Update(
 		Guid academicYearId,
 		Guid workCalendarPolicyId,
-		DateTime date,
-		DateTime? toDate,
+		DateOnly date,
+		DateOnly? toDate,
 		string holidayName,
 		WorkCalendarHolidaySource source,
 		Guid? calendarHolidayId,
@@ -69,9 +69,9 @@ public class WorkCalendarHoliday : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		AcademicYearId = academicYearId;
 		WorkCalendarPolicyId = workCalendarPolicyId;
-		Date = date.Date;
-		FromDate = date.Date;
-		ToDate = (toDate ?? date).Date;
+		Date = date;
+		FromDate = date;
+		ToDate = toDate ?? date;
 		if (ToDate < FromDate)
 		{
 			throw new BusinessException(HRErrorCodes.WorkCalendarHolidayInvalidRange);
@@ -86,8 +86,6 @@ public class WorkCalendarHoliday : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Holiday ToCalendarHoliday(Guid? tenantId)
 	{
 		var id = CalendarHolidayId ?? Id;
-		var fromDate = new DateTimeOffset(FromDate.Year, FromDate.Month, FromDate.Day, 0, 0, 0, TimeSpan.Zero);
-		var toDate = new DateTimeOffset(ToDate.Year, ToDate.Month, ToDate.Day, 0, 0, 0, TimeSpan.Zero);
-		return new Holiday(id, tenantId, AcademicYearId, HolidayName, Guid.Empty, fromDate, toDate, Notes);
+		return new Holiday(id, tenantId, AcademicYearId, HolidayName, Guid.Empty, FromDate, ToDate, Notes);
 	}
 }

@@ -94,7 +94,6 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			IsTeaching = false,
 			RoleId = EmployeeTestHelper.DefaultRoleId,
 			ShiftId = EmployeeTestHelper.DefaultShiftId,
-			OrganizationIds = [EmployeeTestHelper.DefaultMediumStageId],
 			Email = created.Email,
 			PanNo = TestDataHelper.UniquePan(),
 			AdharNo = TestDataHelper.UniqueAdhar(),
@@ -187,6 +186,47 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 	#endregion
 
 	#region Tier 1 — Important
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Create_Employee_Without_Organization_Assignment()
+	{
+		var request = EmployeeTestHelper.BuildPersonalInfoRequest("NoOrgCreate");
+		var jsonData = JsonSerializer.Serialize(request, JsonOptions);
+		jsonData.ShouldNotContain("OrganizationIds");
+		jsonData.ShouldNotContain("organizationIds");
+
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(jsonData), "data");
+
+		var response = await Client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var body = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Id.ShouldNotBe(Guid.Empty);
+		body.OrganizationIds.ShouldBeEmpty();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Update_Personal_Info_Without_Organization_Assignment()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "NoOrgUpdate");
+		var updateRequest = EmployeeTestHelper.BuildPersonalInfoRequest("NoOrgUpdateRequest");
+		updateRequest.Email = created.Email;
+		var updatePayload = JsonSerializer.Serialize(updateRequest, JsonOptions);
+		updatePayload.ShouldNotContain("OrganizationIds");
+		updatePayload.ShouldNotContain("organizationIds");
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}/personal-info", updateRequest, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var body = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Id.ShouldBe(created.Id);
+		body.OrganizationIds.ShouldContain(EmployeeTestHelper.DefaultMediumStageId);
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]

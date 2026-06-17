@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using EmployeeLeaveStatusType = ShikshaMitra.HR.AttendanceAndLeaves.EmployeeLeaveStatusType;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
@@ -15,7 +16,7 @@ public class LeaveManagementGetListInput
 	public EmployeeLeaveStatusType? Status { get; set; }
 	public Guid? EmployeeId { get; set; }
 	public Guid? LeavePolicyId { get; set; }
-	public Guid? LeaveTypeMasterId { get; set; }
+	public string? PaidType { get; set; }
 }
 
 public class LeaveManagementCalendarInput
@@ -28,7 +29,7 @@ public class LeaveManagementCalendarInput
 	public int PageSize { get; set; } = 100;
 	public EmployeeLeaveStatusType? Status { get; set; }
 	public Guid? LeavePolicyId { get; set; }
-	public Guid? LeaveTypeMasterId { get; set; }
+	public string? PaidType { get; set; }
 }
 
 public class LeaveManagementCalendarResultDto
@@ -45,8 +46,7 @@ public class LeaveManagementCalendarItemDto
 	public Guid? MediumStageId { get; set; }
 	public string EmployeeName { get; set; } = string.Empty;
 	public string EmployeeCode { get; set; } = string.Empty;
-	public string LeaveTypeName { get; set; } = string.Empty;
-	public string? LeaveTypeColor { get; set; }
+	public string PaidType { get; set; } = string.Empty;
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
 	public decimal TotalDays { get; set; }
@@ -66,12 +66,13 @@ public class LeaveBalanceItemDto
 	public Guid LeavePolicyId { get; set; }
 	public Guid LeavePolicyRuleId { get; set; }
 	public string PolicyName { get; set; } = string.Empty;
-	public Guid LeaveTypeMasterId { get; set; }
-	public string LeaveTypeName { get; set; } = string.Empty;
-	public int EntitledDays { get; set; }
+	public string PaidType { get; set; } = string.Empty;
+	public string EntitlementMode { get; set; } = "Limited";
+	public int? EntitledDays { get; set; }
 	public decimal UsedDays { get; set; }
 	public decimal PendingDays { get; set; }
-	public decimal RemainingDays { get; set; }
+	public decimal? RemainingDays { get; set; }
+	public bool IsUnlimited { get; set; }
 	public bool AllowNegativeBalance { get; set; }
 }
 
@@ -84,8 +85,7 @@ public class LeaveManagementDto
 	public string EmployeeIdentifier { get; set; } = string.Empty;
 	public string SubmittedByName { get; set; } = string.Empty;
 	public string? SubmittedByEmployeeCode { get; set; }
-	public string LeaveType { get; set; } = string.Empty;
-	public Guid LeaveTypeMasterId { get; set; }
+	public string PaidType { get; set; } = string.Empty;
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
 	public decimal TotalDays { get; set; }
@@ -115,8 +115,7 @@ public class LeaveRequestDetailsDto
 	public string SubmittedByName { get; set; } = string.Empty;
 	public string? SubmittedByEmployeeCode { get; set; }
 	public Guid LeavePolicyId { get; set; }
-	public Guid LeaveTypeMasterId { get; set; }
-	public string LeaveType { get; set; } = string.Empty;
+	public string PaidType { get; set; } = string.Empty;
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
 	public decimal TotalDays { get; set; }
@@ -131,7 +130,7 @@ public class LeaveRequestDetailsDto
 public class LeaveRequestCreateDto
 {
 	public Guid? ForEmployeeId { get; set; }
-	public Guid LeaveTypeId { get; set; }
+	public string PaidType { get; set; } = nameof(LeavePaidType.Paid);
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
 	public bool HalfDay { get; set; }

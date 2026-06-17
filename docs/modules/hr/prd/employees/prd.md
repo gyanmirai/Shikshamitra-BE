@@ -18,19 +18,21 @@ Manages the full employee lifecycle within a multi-tenant school: onboarding, pr
 
 ### 1. Employee Creation (Personal Info)
 
-1. Admin submits personal info (name, DOB, contact, role, shift, address).
+1. Admin submits personal info (name, DOB, contact, role, shift, address). Organization/stage scope is not captured in Personal Information.
 2. System validates via `CreateEmployeePersonalInfoDtoValidator` (FirstName required, mobile format `^[6-9]\d{9}$`, age >= 18 at DOJ, DOJ <= 1 year in future).
 3. System generates a unique username from `{firstInitial}{lastName}` with sequence suffix for uniqueness.
 4. System creates an `IdentityUser` with a default password inside a transactional UoW.
 5. `EmployeeManager.CreateEmployeeAsync` validates the user and role exist, generates an employee code via `EmployeeCodeGenerator`, and creates the Employee aggregate (Employee.Id = User.Id).
 6. System publishes `EmployeeCreatedEto` (distributed event).
 7. Returns the created employee with code.
+8. Organization fields in employee responses are read-only compatibility data derived from Academic Permission, not from the personal-info request.
 
 ### 2. Employee Update (Personal Info)
 
 1. Admin submits updated personal info for an existing employee.
 2. If `RoleId` changed, system removes the user from the old role and assigns the new one. Failures produce `RoleRemovalFailed` / `RoleAssignmentFailed`.
 3. Domain validates DOB < today (`DobInFuture`) and DOJ > DOB (`DojBeforeDob`).
+4. Personal-info updates do not create, replace, or delete employee organization assignments.
 
 ### 3. Family Info
 
@@ -107,6 +109,7 @@ Manages the full employee lifecycle within a multi-tenant school: onboarding, pr
 - IFSC code (India): `^[A-Z]{4}0[A-Z0-9]{6}$`.
 - Multi-tenancy: all data is tenant-isolated.
 - Cache: employee data is cached (15-min TTL); PUT operations auto-invalidate.
+- Employee organization/stage scope is assigned through Academic Permission (`/app/user-scope/bulk-assign`). Current personal-info create/update request contracts do not include `OrganizationIds`; any legacy/extra payload field must not create, replace, or delete employee organization assignments. Response-side `OrganizationIds`, `Organizations`, and `OrganizationNames` remain derived display fields.
 
 ---
 

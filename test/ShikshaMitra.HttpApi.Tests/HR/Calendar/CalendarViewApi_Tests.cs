@@ -77,12 +77,12 @@ public class CalendarViewApi_Tests : ShikshaMitraApiTestBase
 		var activeEvent = await CreateEventAsync("CalViewActiveStatus");
 		var futureHoliday = await CreateHolidayAsync(
 			"CalViewFutureStatus",
-			DateTimeOffset.UtcNow.AddDays(14),
-			DateTimeOffset.UtcNow.AddDays(15));
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(14),
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(15));
 		var completedHoliday = await CreateHolidayAsync(
 			"CalViewCompletedStatus",
-			DateTimeOffset.UtcNow.AddDays(-14),
-			DateTimeOffset.UtcNow.AddDays(-13));
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-14),
+			DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-13));
 
 		var response = await Client.GetAsync(
 			$"{BaseUrl}/view?academicYearId={academicYearId}&Statuses=0&Statuses=2&SkipCount=0&MaxResultCount=100");
@@ -167,8 +167,8 @@ public class CalendarViewApi_Tests : ShikshaMitraApiTestBase
 
 	private async Task<HolidayDto> CreateHolidayAsync(
 		string suffix,
-		DateTimeOffset startDate,
-		DateTimeOffset endDate)
+		DateOnly startDate,
+		DateOnly endDate)
 	{
 		var holidayType = await CalendarTestHelper.CreateHolidayTypeAsync(Client, suffix);
 		var academicYearId = Factory.SeededAcademicYearId;

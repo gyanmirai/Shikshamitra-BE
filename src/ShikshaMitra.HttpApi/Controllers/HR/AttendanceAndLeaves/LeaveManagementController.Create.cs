@@ -13,14 +13,14 @@ namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 public partial class LeaveManagementController
 {
 	/// <summary>
-	/// Create leave request (multipart: leaveTypeId, dates, reason, optional employeeId for on-behalf, optional attachment).
+	/// Create leave request (multipart: paidType, dates, reason, optional employeeId for on-behalf, optional attachment).
 	/// </summary>
 	[HttpPost]
 	[Consumes("multipart/form-data")]
 	[ProducesResponseType(typeof(LeaveRequestCreatedResponse), StatusCodes.Status201Created)]
 	public virtual async Task<ActionResult<LeaveRequestCreatedResponse>> CreateAsync(
 		[FromQuery, Required] Guid academicYearId,
-		[FromForm] Guid? leaveTypeId,
+		[FromForm] string? paidType,
 		[FromForm] Guid? forEmployeeId,
 		[FromForm] Guid? employeeId,
 		[FromForm, Required] DateTime startDate,
@@ -29,14 +29,14 @@ public partial class LeaveManagementController
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
 		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
-		if (!leaveTypeId.HasValue || leaveTypeId.Value == Guid.Empty)
+		if (string.IsNullOrWhiteSpace(paidType))
 		{
-			throw new BusinessException(HRErrorCodes.LeaveTypeNotFound);
+			throw new BusinessException(HRErrorCodes.LeavePolicyRuleNotFound);
 		}
 
 		var createDto = new LeaveRequestCreateDto
 		{
-			LeaveTypeId = leaveTypeId.Value,
+			PaidType = paidType,
 			ForEmployeeId = forEmployeeId ?? employeeId,
 			StartDate = startDate,
 			EndDate = endDate,
@@ -58,21 +58,21 @@ public partial class LeaveManagementController
 	[ProducesResponseType(typeof(LeaveRequestCreatedResponse), StatusCodes.Status201Created)]
 	public virtual async Task<ActionResult<LeaveRequestCreatedResponse>> CreateMyAsync(
 		[FromQuery, Required] Guid academicYearId,
-		[FromForm] Guid? leaveTypeId,
+		[FromForm] string? paidType,
 		[FromForm, Required] DateTime startDate,
 		[FromForm, Required] DateTime endDate,
 		[FromForm] bool halfDay,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
 		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
-		if (!leaveTypeId.HasValue || leaveTypeId.Value == Guid.Empty)
+		if (string.IsNullOrWhiteSpace(paidType))
 		{
-			throw new BusinessException(HRErrorCodes.LeaveTypeNotFound);
+			throw new BusinessException(HRErrorCodes.LeavePolicyRuleNotFound);
 		}
 
 		var createDto = new LeaveRequestCreateDto
 		{
-			LeaveTypeId = leaveTypeId.Value,
+			PaidType = paidType,
 			StartDate = startDate,
 			EndDate = endDate,
 			HalfDay = halfDay,

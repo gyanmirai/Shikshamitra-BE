@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -27,6 +29,10 @@ public class UserScopeAppService_BulkAssign_Tests
 
     private readonly IUserScopeAppService _userScopeAppService;
     private readonly IdentityUserManager _userManager;
+    private readonly IdentityRoleManager _roleManager;
+    private readonly EmployeeManager _employeeManager;
+    private readonly IEmployeeRepository _employeeRepository;
+    private readonly IRepository<EmployeeOrganizationAssignment, Guid> _employeeOrganizationAssignmentRepository;
     private readonly AcademicYearManager _academicYearManager;
     private readonly EducationBoardManager _boardManager;
     private readonly EducationMediumManager _mediumManager;
@@ -46,6 +52,10 @@ public class UserScopeAppService_BulkAssign_Tests
     {
         _userScopeAppService = GetRequiredService<IUserScopeAppService>();
         _userManager = GetRequiredService<IdentityUserManager>();
+        _roleManager = GetRequiredService<IdentityRoleManager>();
+        _employeeManager = GetRequiredService<EmployeeManager>();
+        _employeeRepository = GetRequiredService<IEmployeeRepository>();
+        _employeeOrganizationAssignmentRepository = GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
         _academicYearManager = GetRequiredService<AcademicYearManager>();
         _boardManager = GetRequiredService<EducationBoardManager>();
         _mediumManager = GetRequiredService<EducationMediumManager>();
@@ -156,6 +166,49 @@ public class UserScopeAppService_BulkAssign_Tests
     }
 
     [Fact]
+    public async Task BulkAssignAsync_Should_Sync_Employee_Organization_Assignments_From_Academic_Permission()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var user = await CreateUserAsync();
+            var employee = await CreateEmployeeForUserAsync(user.Id);
+            var hierarchy = await CreateAcademicHierarchyAsync();
+
+            await WithUnitOfWorkAsync(() => _userScopeAppService.BulkAssignAsync(new BulkScopeAssignmentDto
+            {
+                UserIds = [user.Id],
+                AcademicYearIds = [hierarchy.AcademicYearId],
+                EducationMediumStageIds = [hierarchy.StageId]
+            }));
+
+            var employeeAssignments = await GetEmployeeOrganizationAssignmentsAsync(employee.Id);
+            employeeAssignments.Select(x => x.EducationMediumStageId).ShouldBe([hierarchy.StageId]);
+        }
+    }
+
+    [Fact]
+    public async Task BulkAssignAsync_Should_Replace_Employee_Organization_Assignments_Only_For_Target_Academic_Year()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var user = await CreateUserAsync();
+            var employee = await CreateEmployeeForUserAsync(user.Id);
+            var yearA = await CreateAcademicHierarchyAsync();
+            var yearAReplacementStageId = await CreateStageAsync(yearA.MediumId);
+            var yearB = await CreateAcademicHierarchyAsync();
+
+            await BulkAssignStageAsync(user.Id, yearA.AcademicYearId, yearA.StageId);
+            await BulkAssignStageAsync(user.Id, yearB.AcademicYearId, yearB.StageId);
+            await BulkAssignStageAsync(user.Id, yearA.AcademicYearId, yearAReplacementStageId);
+
+            var employeeAssignments = await GetEmployeeOrganizationAssignmentsAsync(employee.Id);
+            employeeAssignments.ShouldContain(x => x.EducationMediumStageId == yearAReplacementStageId);
+            employeeAssignments.ShouldContain(x => x.EducationMediumStageId == yearB.StageId);
+            employeeAssignments.ShouldNotContain(x => x.EducationMediumStageId == yearA.StageId);
+        }
+    }
+
+    [Fact]
     public async Task BulkAssignAsync_Should_Reject_Missing_Academic_Year()
     {
         using (_currentTenant.Change(TestTenantId))
@@ -248,6 +301,45 @@ public class UserScopeAppService_BulkAssign_Tests
         });
     }
 
+    private async Task<Guid> CreateRoleAsync()
+    {
+        return await WithUnitOfWorkAsync(async () =>
+        {
+            var suffix = Guid.NewGuid().ToString("N")[..8];
+            var role = new IdentityRole(Guid.NewGuid(), $"scope-employee-role-{suffix}", TestTenantId);
+            var result = await _roleManager.CreateAsync(role);
+            result.Succeeded.ShouldBeTrue(string.Join(", ", result.Errors.Select(x => x.Description)));
+            return role.Id;
+        });
+    }
+
+    private async Task<Employee> CreateEmployeeForUserAsync(Guid userId)
+    {
+        var roleId = await CreateRoleAsync();
+
+        return await WithUnitOfWorkAsync(async () =>
+        {
+            var suffix = Guid.NewGuid().ToString("N")[..8];
+            var employee = await _employeeManager.CreateEmployeeAsync(
+                userId,
+                roleId,
+                $"Scope{suffix}",
+                "Employee",
+                null,
+                $"SE{suffix[..4]}",
+                EmployeeStatusType.Active,
+                DateOnly.FromDateTime(new DateTime(1992, 3, 10)),
+                mobileNo: UniqueEmployeeMobileNo(),
+                email: $"scope.employee.{suffix}@test.local",
+                panNo: UniqueEmployeePan(),
+                adharNo: UniqueEmployeeAdhar(),
+                dateOfJoining: DateOnly.FromDateTime(new DateTime(2026, 4, 1)),
+                employeeGroup: EmployeeGroupType.Teaching);
+
+            return await _employeeRepository.InsertAsync(employee, autoSave: true);
+        });
+    }
+
     private async Task<AcademicYearBoards> CreateAcademicYearWithBoardsAsync()
     {
         return await WithUnitOfWorkAsync(async () =>
@@ -309,6 +401,19 @@ public class UserScopeAppService_BulkAssign_Tests
         });
     }
 
+    private async Task<Guid> CreateStageAsync(Guid mediumId)
+    {
+        return await WithUnitOfWorkAsync(async () =>
+        {
+            var suffix = Guid.NewGuid().ToString("N")[..8];
+            var stage = await _stageRepository.InsertAsync(
+                await _stageManager.CreateAsync(mediumId, $"Replacement {suffix}"),
+                autoSave: true);
+
+            return stage.Id;
+        });
+    }
+
     private async Task BulkAssignAcademicYearAsync(Guid userId, Guid academicYearId)
     {
         await WithUnitOfWorkAsync(() => _userScopeAppService.BulkAssignAsync(new BulkScopeAssignmentDto
@@ -328,10 +433,44 @@ public class UserScopeAppService_BulkAssign_Tests
         }));
     }
 
+    private async Task BulkAssignStageAsync(Guid userId, Guid academicYearId, Guid stageId)
+    {
+        await WithUnitOfWorkAsync(() => _userScopeAppService.BulkAssignAsync(new BulkScopeAssignmentDto
+        {
+            UserIds = [userId],
+            AcademicYearIds = [academicYearId],
+            EducationMediumStageIds = [stageId]
+        }));
+    }
+
     private async Task<List<UserScopeAssignment>> GetUserAssignmentsAsync(Guid userId)
     {
         return await WithUnitOfWorkAsync(() =>
             _scopeRepository.GetListAsync(x => x.UserId == userId && x.IsActive && !x.IsDeleted));
+    }
+
+    private async Task<List<EmployeeOrganizationAssignment>> GetEmployeeOrganizationAssignmentsAsync(Guid employeeId)
+    {
+        return await WithUnitOfWorkAsync(() =>
+            _employeeOrganizationAssignmentRepository.GetListAsync(x => x.EmployeeId == employeeId && !x.IsDeleted));
+    }
+
+    private static string UniqueEmployeeMobileNo()
+    {
+        var number = BitConverter.ToUInt32(Guid.NewGuid().ToByteArray(), 0) % 1_000_000_000;
+        return $"9{number:D9}";
+    }
+
+    private static string UniqueEmployeePan()
+    {
+        var number = BitConverter.ToUInt32(Guid.NewGuid().ToByteArray(), 0) % 10_000;
+        return $"ABCDE{number:D4}F";
+    }
+
+    private static string UniqueEmployeeAdhar()
+    {
+        var number = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray(), 0) % 100_000_000_000;
+        return $"8{number:D11}";
     }
 
     private sealed record AcademicYearBoards(Guid AcademicYearId, Guid CbseBoardId, Guid GsebBoardId);

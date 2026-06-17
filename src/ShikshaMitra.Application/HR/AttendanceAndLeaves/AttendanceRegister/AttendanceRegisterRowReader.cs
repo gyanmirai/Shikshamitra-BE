@@ -37,11 +37,52 @@ public class AttendanceRegisterRowReader(
 		DateOnly endDate,
 		UserScopeContext scope)
 	{
+		var employees = await LoadFilteredEmployeesAsync(input, startDate, endDate, scope, input.AcademicYearId);
+		if (employees.Count == 0 && ShouldRetryExplicitEmployeeWithoutAcademicYear(input))
+		{
+			employees = await LoadFilteredEmployeesAsync(input, startDate, endDate, scope, academicYearId: null);
+		}
+
+		if (employees.Count == 0)
+		{
+			return employees;
+		}
+
+		var employeeIds = employees.Select(x => x.EmployeeId).ToList();
+		var stageLookup = await hrEmployeeScopeQueryService.BuildEmployeeStageLookupAsync(
+			employeeIds,
+			input.AcademicYearId);
+
+		foreach (var employee in employees)
+		{
+			var stages = stageLookup.TryGetValue(employee.EmployeeId, out var assignedStages)
+				? assignedStages
+				: [];
+			if (input.EducationMediumStageId.HasValue)
+			{
+				stages = stages
+					.Where(x => x == input.EducationMediumStageId.Value)
+					.ToList();
+			}
+			employee.AssignedStageIds = stages;
+			employee.EducationMediumStageId = await hrEmployeeScopeQueryService.ResolveDisplayStageAsync(stages, scope, input.EducationMediumStageId);
+		}
+
+		return employees;
+	}
+
+	private async Task<List<EmployeeProjection>> LoadFilteredEmployeesAsync(
+		GetAttendanceRegisterInput input,
+		DateOnly startDate,
+		DateOnly endDate,
+		UserScopeContext scope,
+		Guid? academicYearId)
+	{
 		var employeeQuery = await hrEmployeeScopeQueryService.BuildScopedEmployeeQueryAsync(
 			scope,
 			new HrEmployeeScopeOptions
 			{
-				AcademicYearId = input.AcademicYearId,
+				AcademicYearId = academicYearId,
 				EducationMediumStageId = input.EducationMediumStageId,
 				ActiveOnOrAfter = startDate,
 				JoinedOnOrBefore = endDate,
@@ -87,28 +128,13 @@ public class AttendanceRegisterRowReader(
 			StatusLastChangedAt = x.StatusLastChangedAt,
 			StatusEffectiveDate = x.StatusEffectiveDate
 		}));
-
-		if (employees.Count == 0)
-		{
-			return employees;
-		}
-
-		var employeeIds = employees.Select(x => x.EmployeeId).ToList();
-		var stageLookup = await hrEmployeeScopeQueryService.BuildEmployeeStageLookupAsync(
-			employeeIds,
-			input.AcademicYearId);
-
-		foreach (var employee in employees)
-		{
-			var stages = stageLookup.TryGetValue(employee.EmployeeId, out var assignedStages)
-				? assignedStages
-				: [];
-			employee.AssignedStageIds = stages;
-			employee.EducationMediumStageId = await hrEmployeeScopeQueryService.ResolveDisplayStageAsync(stages, scope, input.EducationMediumStageId);
-		}
-
 		return employees;
 	}
+
+	private static bool ShouldRetryExplicitEmployeeWithoutAcademicYear(GetAttendanceRegisterInput input) =>
+		input.EmployeeId.HasValue &&
+		input.AcademicYearId.HasValue &&
+		!input.EducationMediumStageId.HasValue;
 
 	private async Task<List<RegisterProjection>> BuildEmployeeDrivenRowsAsync(
 		GetAttendanceRegisterInput input,

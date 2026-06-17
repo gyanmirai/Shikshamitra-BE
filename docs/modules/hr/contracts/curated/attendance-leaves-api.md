@@ -2,8 +2,8 @@
 module: hr
 domain: attendance-leaves
 status: canonical
-source: ../raw/attendance-leaves-api.raw.2026-04-13.md
-updated_on: 2026-05-20
+source: ../../prd/attendance-leaves/api-contract.md
+updated_on: 2026-06-16
 owner: backend-team
 ---
 
@@ -13,7 +13,7 @@ owner: backend-team
 Attendance tracking and leave workflow APIs.
 
 ## Endpoint(s)
-See [attendance-leaves raw contract](../raw/attendance-leaves-api.raw.2026-04-13.md).
+See [attendance-leaves PRD API contract](../../prd/attendance-leaves/api-contract.md).
 
 New module-driven attendance policy endpoints:
 
@@ -58,10 +58,10 @@ Follow [attendance-leaves PRD](../../prd/attendance-leaves/prd.md).
 - `__tenant: <tenant-id>`
 
 ## Path/query/body contract
-Canonical schema details are sourced from [attendance-leaves raw contract](../raw/attendance-leaves-api.raw.2026-04-13.md).
+Canonical schema details are sourced from [attendance-leaves PRD API contract](../../prd/attendance-leaves/api-contract.md). The target leave model removes Leave Type settings and uses Paid/Unpaid rule buckets inside leave policies.
 
 ## Response contract (success + errors)
-Use PRD and raw contract response/error definitions.
+Use PRD and API contract response/error definitions.
 
 ## Business rules / invariants
 Source of truth: [attendance-leaves PRD](../../prd/attendance-leaves/prd.md).
@@ -71,11 +71,12 @@ No additional module-level note.
 
 ## Examples (minimal, copy-ready)
 ```http
-POST /api/hr-leave-types?academicYearId={academicYearId}
+POST /api/leave-policies?academicYearId={academicYearId}
 Authorization: Bearer <token>
 ```
 
 ## Change log
+- 2026-06-16: Target leave model simplified to Paid/Unpaid policy rule buckets; Leave Type settings removed from the public HR leave configuration surface.
 - 2026-05-20: Added HR policy evaluation batch endpoints and clarified that evaluation creates policy-specific runs.
 - 2026-04-13: Breaking migration to `academicYearId`-scoped leave settings; leave type route changed to `/api/hr-leave-types`; added leave policy GET-by-id and attendance configuration upsert endpoint.
 - 2026-03-27: Created canonical curated wrapper from raw contract export.

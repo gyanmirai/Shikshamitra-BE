@@ -8,9 +8,11 @@ public class LeaveRequestCreateDtoValidator : AbstractValidator<LeaveRequestCrea
 	public LeaveRequestCreateDtoValidator()
 	{
 		RuleFor(x => x.PaidType)
-			.NotEmpty()
-			.Matches("^(Paid|Unpaid)$")
-			.WithMessage("Paid type is required.");
+			.Must(value =>
+				string.IsNullOrWhiteSpace(value) ||
+				string.Equals(value, "Paid", StringComparison.Ordinal) ||
+				string.Equals(value, "Unpaid", StringComparison.Ordinal))
+			.WithMessage("Paid type must be Paid or Unpaid.");
 		RuleFor(x => x.StartDate).NotEmpty().WithMessage("Start date is required.");
 		RuleFor(x => x.EndDate).NotEmpty().WithMessage("End date is required.");
 

@@ -21,10 +21,17 @@ public class LeaveActorAccessService(
 	private static readonly IReadOnlyDictionary<string, string[]> SeededLoginEmployeeEmailAliases =
 		new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
 		{
-			["principal-gseb"] = ["principal1@ddvs.com", "rajesh.kumar@school.edu", "hiren.vadher@ddvs.com"],
-			["teacher-gseb"] = ["teacher1@ddvs.com", "vikram.singh@school.edu", "sweta.badgujar@ddvs.com"],
-			["clerk-office"] = ["clerk1@ddvs.com", "clerk@school.edu", "raj.baku@ddvs.com"],
-			["finance-officer"] = ["finance1@ddvs.com", "suresh.patil@school.edu", "punam.badgujar@ddvs.com"]
+			["admin-ddvs"] = ["admin-ddvs@ddvs.com", "admin1@gmail.com", "ddvs@gmail.com"],
+			["admin-ops"] = ["admin-ops@ddvs.com", "admin2@ddvs.com"],
+			["principal-demo-gseb"] = ["principal-demo-gseb@ddvs.com", "principal@school.com"],
+			["principal-gseb"] = ["principal-gseb@ddvs.com", "principal1@ddvs.com", "rajesh.kumar@school.edu", "hiren.vadher@ddvs.com"],
+			["principal-cbse"] = ["principal-cbse@ddvs.com", "principle1@ddvs.com"],
+			["teacher-demo-1"] = ["teacher-demo-1@ddvs.com", "teacher1@school.com"],
+			["teacher-demo-2"] = ["teacher-demo-2@ddvs.com", "teacher2@school.com"],
+			["teacher-gseb"] = ["teacher-gseb@ddvs.com", "teacher1@ddvs.com", "vikram.singh@school.edu", "sweta.badgujar@ddvs.com"],
+			["hr-manager"] = ["hr-manager@ddvs.com", "hr@school.com"],
+			["clerk-office"] = ["clerk-office@ddvs.com", "clerk1@ddvs.com", "clerk@school.edu", "raj.baku@ddvs.com"],
+			["finance-officer"] = ["finance-officer@ddvs.com", "finance1@ddvs.com", "suresh.patil@school.edu", "punam.badgujar@ddvs.com"]
 		};
 
 	public async Task<LeaveActorContext> ResolveContextAsync()

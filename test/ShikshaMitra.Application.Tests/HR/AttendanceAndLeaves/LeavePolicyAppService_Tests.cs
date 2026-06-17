@@ -39,20 +39,32 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 			Description = "Standard policy",
 			Rules =
 			[
-				Rule(leaveCount: 12, accrualPolicyType: "Monthly", carryForward: true, encashmentAllowed: true, encashmentTiming: "end_of_year"),
+				Rule(leaveCount: 12, accrualPolicyType: "Monthly", carryForward: true, carryForwardLimit: 6, encashmentAllowed: true, encashmentTiming: "end_of_year"),
 				Rule(paidType: "Unpaid", entitlementMode: "Unlimited", leaveCount: null, allowNegativeBalance: true)
 			]
 		});
 
 		created.Id.ShouldNotBe(Guid.Empty);
 		created.RuleCount.ShouldBe(2);
-		created.Rules.ShouldContain(rule => rule.PaidType == "Paid" && rule.LeaveCount == 12 && rule.EntitlementMode == "Limited");
+		created.Rules.ShouldContain(rule =>
+			rule.PaidType == "Paid" &&
+			rule.LeaveCount == 12 &&
+			rule.EntitlementMode == "Limited" &&
+			rule.CarryForward &&
+			rule.CarryForwardLimit == 6 &&
+			rule.EncashmentAllowed &&
+			rule.EncashmentTiming == "end_of_year");
 		created.Rules.ShouldContain(rule => rule.PaidType == "Unpaid" && rule.LeaveCount == null && rule.IsUnlimited);
 
 		var detail = await _leavePolicyAppService.GetLeavePolicyByIdAsync(created.Id);
 		detail.Id.ShouldBe(created.Id);
 		detail.Rules.Count.ShouldBe(2);
-		detail.Rules.ShouldContain(rule => rule.PaidType == "Paid");
+		detail.Rules.ShouldContain(rule =>
+			rule.PaidType == "Paid" &&
+			rule.CarryForward &&
+			rule.CarryForwardLimit == 6 &&
+			rule.EncashmentAllowed &&
+			rule.EncashmentTiming == "end_of_year");
 		detail.Rules.ShouldContain(rule => rule.PaidType == "Unpaid" && rule.EntitlementMode == "Unlimited");
 	}
 
@@ -203,6 +215,7 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		string accrualPolicyType = "Yearly",
 		int? leaveCount = 10,
 		bool carryForward = false,
+		int? carryForwardLimit = null,
 		bool encashmentAllowed = false,
 		string? encashmentTiming = null,
 		bool allowNegativeBalance = false) =>
@@ -213,6 +226,7 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 			AccrualPolicyType = accrualPolicyType,
 			LeaveCount = leaveCount,
 			CarryForward = carryForward,
+			CarryForwardLimit = carryForwardLimit,
 			EncashmentAllowed = encashmentAllowed,
 			EncashmentTiming = encashmentTiming,
 			RequiresApproval = true,

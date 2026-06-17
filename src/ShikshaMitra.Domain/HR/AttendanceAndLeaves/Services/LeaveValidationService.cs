@@ -3,7 +3,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
@@ -13,20 +15,29 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class LeaveValidationService : DomainService
 {
 	private readonly IEmployeeLeaveRepository _employeeLeaveRepository;
+	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IRepository<LeavePolicyRule, Guid> _leavePolicyRuleRepository;
+	private readonly ILeavePolicyRepository _leavePolicyRepository;
+	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly LeaveReportingChainService _reportingChainService;
 	private readonly LeaveWorkCalendarUnitService _leaveWorkCalendarUnitService;
 	private readonly HrPolicyResolver _hrPolicyResolver;
 
 	public LeaveValidationService(
 		IEmployeeLeaveRepository employeeLeaveRepository,
+		IEmployeeRepository employeeRepository,
 		IRepository<LeavePolicyRule, Guid> leavePolicyRuleRepository,
+		ILeavePolicyRepository leavePolicyRepository,
+		IAcademicYearRepository academicYearRepository,
 		LeaveReportingChainService reportingChainService,
 		LeaveWorkCalendarUnitService leaveWorkCalendarUnitService,
 		HrPolicyResolver hrPolicyResolver)
 	{
 		_employeeLeaveRepository = employeeLeaveRepository;
+		_employeeRepository = employeeRepository;
 		_leavePolicyRuleRepository = leavePolicyRuleRepository;
+		_leavePolicyRepository = leavePolicyRepository;
+		_academicYearRepository = academicYearRepository;
 		_reportingChainService = reportingChainService;
 		_leaveWorkCalendarUnitService = leaveWorkCalendarUnitService;
 		_hrPolicyResolver = hrPolicyResolver;
@@ -110,7 +121,7 @@ public class LeaveValidationService : DomainService
 		}
 
 		EnsureRuleAllowsRequest(rule, requestedUnits, halfDay, hasAttachment);
-		await EnsureSufficientLeaveBalanceAsync(employeeId, rule, requestedUnits);
+		await EnsureSufficientLeaveBalanceAsync(employeeId, leavePolicy, rule, requestedUnits, startDate);
 
 		var daysDifference = (startDate.Date - today).Days;
 		if (enforceEmployeeTimingRules && daysDifference < rule.MinNoticeDays)
@@ -129,9 +140,24 @@ public class LeaveValidationService : DomainService
 		bool halfDay = false)
 	{
 		var rule = await _leavePolicyRuleRepository.GetAsync(leavePolicyRuleId);
+		var policy = await _leavePolicyRepository.GetWithRulesAsync(rule.LeavePolicyId)
+			?? throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
 		EnsureValidHalfDayRange(startDate, endDate, halfDay);
 		var requestedUnits = LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, halfDay);
-		await EnsureSufficientLeaveBalanceAsync(employeeId, rule, requestedUnits);
+		await EnsureSufficientLeaveBalanceAsync(employeeId, policy, rule, requestedUnits, startDate);
+	}
+
+	public async Task EnsureSufficientLeaveBalanceAsync(
+		Guid employeeId,
+		LeavePolicy policy,
+		LeavePolicyRule rule,
+		DateTime startDate,
+		DateTime endDate,
+		bool halfDay = false)
+	{
+		EnsureValidHalfDayRange(startDate, endDate, halfDay);
+		var requestedUnits = LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, halfDay);
+		await EnsureSufficientLeaveBalanceAsync(employeeId, policy, rule, requestedUnits, startDate);
 	}
 
 	public decimal CalculateBusinessDays(DateTime startDate, DateTime endDate)
@@ -154,12 +180,28 @@ public class LeaveValidationService : DomainService
 			rule.LeavePolicyId,
 			rule.PaidType);
 
-		if (rule.IsUnlimited || rule.AllowNegativeBalance)
+		if (rule.IsUnlimited)
 		{
 			return decimal.MaxValue;
 		}
 
-		return Math.Max(0, (rule.LeaveCount ?? 0) - approvedDays);
+		var policy = await _leavePolicyRepository.GetWithRulesAsync(rule.LeavePolicyId);
+		if (policy == null)
+		{
+			return 0;
+		}
+
+		var academicYear = await _academicYearRepository.GetAsync(policy.AcademicYearId);
+		var employee = await _employeeRepository.GetAsync(employeeId);
+		var accrued = LeaveAccrualCalculator.CalculateAccruedDays(
+			policy,
+			rule,
+			academicYear.StartDate,
+			academicYear.EndDate,
+			employee.DateOfJoining,
+			Clock.Now.Date);
+
+		return (accrued ?? 0m) - approvedDays;
 	}
 
 	private static void EnsureRuleAllowsRequest(
@@ -186,7 +228,12 @@ public class LeaveValidationService : DomainService
 		}
 	}
 
-	private async Task EnsureSufficientLeaveBalanceAsync(Guid employeeId, LeavePolicyRule rule, decimal requestedUnits)
+	public async Task EnsureSufficientLeaveBalanceAsync(
+		Guid employeeId,
+		LeavePolicy policy,
+		LeavePolicyRule rule,
+		decimal requestedUnits,
+		DateTime evaluationDate)
 	{
 		if (rule.IsUnlimited || rule.AllowNegativeBalance)
 		{
@@ -197,7 +244,16 @@ public class LeaveValidationService : DomainService
 			employeeId,
 			rule.LeavePolicyId,
 			rule.PaidType);
-		var remainingBalance = (rule.LeaveCount ?? 0) - approvedDaysForRule;
+		var academicYear = await _academicYearRepository.GetAsync(policy.AcademicYearId);
+		var employee = await _employeeRepository.GetAsync(employeeId);
+		var accrued = LeaveAccrualCalculator.CalculateAccruedDays(
+			policy,
+			rule,
+			academicYear.StartDate,
+			academicYear.EndDate,
+			employee.DateOfJoining,
+			evaluationDate);
+		var remainingBalance = (accrued ?? 0m) - approvedDaysForRule;
 		if (requestedUnits > remainingBalance)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveInsufficientBalance);

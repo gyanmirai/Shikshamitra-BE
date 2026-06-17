@@ -108,7 +108,22 @@ public class EffectiveLeavePolicyDto
 {
 	public Guid Id { get; set; }
 	public string Name { get; set; } = string.Empty;
-	public List<Guid> AllowedLeaveTypeIds { get; set; } = [];
+	public List<EffectiveLeavePolicyRuleDto> Rules { get; set; } = [];
+	public List<string> AllowedPaidTypes { get; set; } = [];
+}
+
+public class EffectiveLeavePolicyRuleDto
+{
+	public Guid RuleId { get; set; }
+	public string PaidType { get; set; } = string.Empty;
+	public string EntitlementMode { get; set; } = "Limited";
+	public int? LeaveCount { get; set; }
+	public bool IsUnlimited { get; set; }
+	public bool RequiresApproval { get; set; }
+	public int MaxDaysPerRequest { get; set; }
+	public bool AllowHalfDay { get; set; }
+	public int? AttachmentRequiredAfterDays { get; set; }
+	public bool AllowNegativeBalance { get; set; }
 }
 
 public class PolicyAssignmentPreviewRequestDto

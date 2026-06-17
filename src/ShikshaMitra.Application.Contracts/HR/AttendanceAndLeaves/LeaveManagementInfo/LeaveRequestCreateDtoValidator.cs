@@ -7,9 +7,10 @@ public class LeaveRequestCreateDtoValidator : AbstractValidator<LeaveRequestCrea
 {
 	public LeaveRequestCreateDtoValidator()
 	{
-		RuleFor(x => x.LeaveTypeId)
+		RuleFor(x => x.PaidType)
 			.NotEmpty()
-			.WithMessage("Leave type is required.");
+			.Matches("^(Paid|Unpaid)$")
+			.WithMessage("Paid type is required.");
 		RuleFor(x => x.StartDate).NotEmpty().WithMessage("Start date is required.");
 		RuleFor(x => x.EndDate).NotEmpty().WithMessage("End date is required.");
 

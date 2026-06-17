@@ -33,7 +33,6 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	private readonly IWorkCalendarPolicyAppService _workCalendars;
 	private readonly IPayrollPolicyAppService _payrollPolicies;
 	private readonly IAttendancePolicyAppService _attendancePolicies;
-	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
 	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
 	private readonly LeavePolicyManager _leavePolicyManager;
 	private readonly IAcademicYearRepository _academicYearRepository;
@@ -53,7 +52,6 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		_workCalendars = GetRequiredService<IWorkCalendarPolicyAppService>();
 		_payrollPolicies = GetRequiredService<IPayrollPolicyAppService>();
 		_attendancePolicies = GetRequiredService<IAttendancePolicyAppService>();
-		_leaveTypeRepository = GetRequiredService<IRepository<LeaveType, Guid>>();
 		_leavePolicyRepository = GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		_leavePolicyManager = GetRequiredService<LeavePolicyManager>();
 		_academicYearRepository = GetRequiredService<IAcademicYearRepository>();
@@ -307,8 +305,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			DateOfJoining = new DateOnly(2026, 4, 1),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = await EnsureRoleExistsAsync(),
-			ShiftId = await EnsureShiftExistsAsync(),
-			OrganizationIds = [await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider)]
+			ShiftId = await EnsureShiftExistsAsync()
 		};
 	}
 
@@ -387,12 +384,6 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			ManualCorrectionAllowed = true,
 			HolidayWorkBehavior = "paid"
 		});
-		var leaveType = await _leaveTypeRepository.InsertAsync(new LeaveType(
-			_guidGenerator.Create(),
-			_currentTenant.Id,
-			academicYearId,
-			$"Onboarding Leave Type {Guid.NewGuid():N}",
-			"#1A73E8"), autoSave: true);
 		var leavePolicy = await _leavePolicyManager.CreateAsync(
 			academicYearId,
 			$"Onboarding Leave Policy {Guid.NewGuid():N}",
@@ -402,10 +393,10 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			true,
 			[
 				new LeavePolicyRuleInput(
-					leaveType.Id,
+					LeavePaidType.Paid,
+					LeaveEntitlementMode.Limited,
 					LeaveAccrualPolicyType.Monthly,
 					12,
-					LeavePaidType.Paid,
 					false,
 					null,
 					false,
@@ -416,6 +407,22 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 					true,
 					null,
 					false,
+					true),
+				new LeavePolicyRuleInput(
+					LeavePaidType.Unpaid,
+					LeaveEntitlementMode.Unlimited,
+					LeaveAccrualPolicyType.Yearly,
+					null,
+					false,
+					null,
+					false,
+					null,
+					true,
+					0,
+					30,
+					true,
+					null,
+					true,
 					true)
 			],
 			"Default leave policy for onboarding finalization tests");

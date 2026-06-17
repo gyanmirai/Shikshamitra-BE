@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.Permissions;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -37,6 +38,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
     private readonly IRepository<Standard, Guid> _standardRepository;
     private readonly IRepository<Division, Guid> _divisionRepository;
     private readonly UserScopeAssignmentManager _assignmentManager;
+    private readonly EmployeeOrganizationAssignmentSyncer _employeeOrganizationAssignmentSyncer;
 
     public UserScopeAppService(
         IUserScopeAssignmentRepository scopeRepository,
@@ -50,7 +52,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
         IRepository<Standard, Guid> standardRepository,
         IRepository<Division, Guid> divisionRepository,
-        UserScopeAssignmentManager assignmentManager)
+        UserScopeAssignmentManager assignmentManager,
+        EmployeeOrganizationAssignmentSyncer employeeOrganizationAssignmentSyncer)
     {
         _scopeRepository = scopeRepository;
         _userScopeService = userScopeService;
@@ -64,6 +67,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         _standardRepository = standardRepository;
         _divisionRepository = divisionRepository;
         _assignmentManager = assignmentManager;
+        _employeeOrganizationAssignmentSyncer = employeeOrganizationAssignmentSyncer;
     }
 
     [Authorize(ShikshaMitraPermissions.UserScope.Assign)]
@@ -248,6 +252,11 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
                 // Save all changes at once - this will fail if any constraint is violated
                 // Both deletions and insertions are in the same transaction
+                await CurrentUnitOfWork.SaveChangesAsync();
+
+                await _employeeOrganizationAssignmentSyncer.SyncFromAcademicPermissionsAsync(
+                    distinctUserIds,
+                    targetAcademicYearIds);
                 await CurrentUnitOfWork.SaveChangesAsync();
 
                 // Invalidate cache for all affected users (only after successful save) - OPTIMIZED: Parallel

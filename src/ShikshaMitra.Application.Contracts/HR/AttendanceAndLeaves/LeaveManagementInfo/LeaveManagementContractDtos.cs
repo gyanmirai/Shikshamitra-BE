@@ -20,8 +20,7 @@ public class LeaveManagementItemResponse
 	public string SubmittedByName { get; set; } = string.Empty;
 	public string? SubmittedByEmployeeCode { get; set; }
 	[Required]
-	public string LeaveType { get; set; } = string.Empty;
-	public Guid? LeaveTypeMasterId { get; set; }
+	public string PaidType { get; set; } = string.Empty;
 	[Required]
 	public DateTime StartDate { get; set; }
 	[Required]
@@ -85,9 +84,7 @@ public class LeaveRequestDetailsResponse
 	[Required]
 	public Guid LeavePolicyId { get; set; }
 	[Required]
-	public Guid LeaveTypeMasterId { get; set; }
-	[Required]
-	public string LeaveType { get; set; } = string.Empty;
+	public string PaidType { get; set; } = string.Empty;
 	[Required]
 	public DateTime StartDate { get; set; }
 	[Required]

@@ -104,21 +104,70 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		Check.NotNull(rules, nameof(rules));
 		var nextRules = rules.ToList();
-		var duplicate = nextRules
-			.Where(rule => rule.IsActive)
-			.GroupBy(rule => rule.LeaveTypeId)
-			.FirstOrDefault(group => group.Count() > 1);
-		if (duplicate != null)
-		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyDuplicateLeaveTypeRule)
-				.WithData("leaveTypeId", duplicate.Key);
-		}
+		EnsureRequiredActiveRules(nextRules);
 
 		Rules = nextRules;
 	}
 
-	public LeavePolicyRule? FindActiveRule(Guid leaveTypeId) =>
-		Rules.FirstOrDefault(rule => rule.LeaveTypeId == leaveTypeId && rule.IsActive);
+	public void SyncRules(IEnumerable<LeavePolicyRule> rules, IReadOnlySet<Guid> referencedRuleIds)
+	{
+		Check.NotNull(rules, nameof(rules));
+		var nextRules = rules.ToList();
+		EnsureRequiredActiveRules(nextRules);
+
+		var nextPaidTypes = nextRules.Select(rule => rule.PaidType).ToHashSet();
+		foreach (var existing in Rules.Where(rule => rule.IsActive && !nextPaidTypes.Contains(rule.PaidType)))
+		{
+			existing.Deactivate();
+		}
+
+		foreach (var nextRule in nextRules)
+		{
+			var existing = Rules
+				.Where(rule => rule.PaidType == nextRule.PaidType)
+				.OrderByDescending(rule => rule.IsActive)
+				.FirstOrDefault(rule => rule.IsActive || !referencedRuleIds.Contains(rule.Id));
+
+			if (existing == null)
+			{
+				Rules.Add(nextRule);
+				continue;
+			}
+
+			if (referencedRuleIds.Contains(existing.Id) && !existing.HasSameConfigurationAs(nextRule))
+			{
+				existing.Deactivate();
+				Rules.Add(nextRule);
+				continue;
+			}
+
+			existing.ApplyFrom(nextRule);
+		}
+	}
+
+	public LeavePolicyRule? FindActiveRule(LeavePaidType paidType) =>
+		Rules.FirstOrDefault(rule => rule.PaidType == paidType && rule.IsActive);
+
+	private static void EnsureRequiredActiveRules(IEnumerable<LeavePolicyRule> rules)
+	{
+		var activeRules = rules.Where(rule => rule.IsActive).ToList();
+		var duplicate = activeRules
+			.Where(rule => rule.IsActive)
+			.GroupBy(rule => rule.PaidType)
+			.FirstOrDefault(group => group.Count() > 1);
+		if (duplicate != null)
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyDuplicatePaidTypeRule)
+				.WithData("paidType", duplicate.Key);
+		}
+
+		if (activeRules.Count != 2 ||
+		    activeRules.All(rule => rule.PaidType != LeavePaidType.Paid) ||
+		    activeRules.All(rule => rule.PaidType != LeavePaidType.Unpaid))
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyPaidUnpaidRulesRequired);
+		}
+	}
 
 	private void SetPolicyName(string policyName)
 	{

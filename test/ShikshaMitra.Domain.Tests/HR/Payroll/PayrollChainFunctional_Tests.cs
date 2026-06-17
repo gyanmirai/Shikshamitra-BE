@@ -452,8 +452,8 @@ public class PayrollChainFunctional_Tests
 			Guid.NewGuid(),
 			"Payroll Holiday",
 			Guid.NewGuid(),
-			new DateTimeOffset(date.Date, TimeSpan.Zero),
-			new DateTimeOffset((toDate ?? date).Date, TimeSpan.Zero));
+			DateOnly.FromDateTime(date.Date),
+			DateOnly.FromDateTime((toDate ?? date).Date));
 
 	private static List<EmployeePayrollComponent> BuildSalaryComponents()
 	{

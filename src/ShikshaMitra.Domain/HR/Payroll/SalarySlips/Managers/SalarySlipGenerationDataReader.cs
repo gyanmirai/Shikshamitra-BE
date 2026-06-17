@@ -53,8 +53,8 @@ public class SalarySlipGenerationDataReader(
 		int month,
 		CancellationToken cancellationToken)
 	{
-		var start = new DateTime(year, month, 1);
-		var end = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+		var start = new DateOnly(year, month, 1);
+		var end = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
 		var query = await workCalendarHolidayRepository.GetQueryableAsync();
 		var rows = await AsyncExecuter.ToListAsync(query.Where(x =>
 			x.WorkCalendarPolicyId == workCalendarPolicyId &&

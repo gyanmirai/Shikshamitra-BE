@@ -22,7 +22,7 @@ public partial class LeaveManagementController
 		[FromQuery, Range(1, 500)] int pageSize = 10,
 		[FromQuery] string? status = null,
 		[FromQuery] Guid? leavePolicyId = null,
-		[FromQuery] Guid? leaveTypeMasterId = null,
+		[FromQuery] string? paidType = null,
 		[FromQuery] Guid? employeeId = null)
 	{
 		var input = new LeaveManagementGetListInput
@@ -35,7 +35,7 @@ public partial class LeaveManagementController
 			Status = ParseStatus(status),
 			EmployeeId = employeeId,
 			LeavePolicyId = leavePolicyId,
-			LeaveTypeMasterId = leaveTypeMasterId
+			PaidType = paidType
 		};
 		var result = await _leaveManagementAppService.GetListAsync(input);
 		return LeaveManagementContractMapper.ToListResponse(result, page, pageSize);
@@ -54,7 +54,7 @@ public partial class LeaveManagementController
 		[FromQuery, Range(1, 500)] int pageSize = 10,
 		[FromQuery] string? status = null,
 		[FromQuery] Guid? leavePolicyId = null,
-		[FromQuery] Guid? leaveTypeMasterId = null)
+		[FromQuery] string? paidType = null)
 	{
 		var input = new LeaveManagementGetListInput
 		{
@@ -65,7 +65,7 @@ public partial class LeaveManagementController
 			PageSize = pageSize,
 			Status = ParseStatus(status),
 			LeavePolicyId = leavePolicyId,
-			LeaveTypeMasterId = leaveTypeMasterId
+			PaidType = paidType
 		};
 		var result = await _leaveManagementAppService.GetMyListAsync(input);
 		return LeaveManagementContractMapper.ToListResponse(result, page, pageSize);
@@ -108,7 +108,7 @@ public partial class LeaveManagementController
 		[FromQuery, Range(1, 500)] int pageSize = 100,
 		[FromQuery] string? status = null,
 		[FromQuery] Guid? leavePolicyId = null,
-		[FromQuery] Guid? leaveTypeMasterId = null)
+		[FromQuery] string? paidType = null)
 	{
 		var input = new LeaveManagementCalendarInput
 		{
@@ -120,7 +120,7 @@ public partial class LeaveManagementController
 			PageSize = pageSize,
 			Status = ParseStatus(status),
 			LeavePolicyId = leavePolicyId,
-			LeaveTypeMasterId = leaveTypeMasterId
+			PaidType = paidType
 		};
 		return await _leaveManagementAppService.GetCalendarAsync(input);
 	}
@@ -135,7 +135,7 @@ public partial class LeaveManagementController
 		[FromQuery] string? search = null,
 		[FromQuery] string? status = null,
 		[FromQuery] Guid? leavePolicyId = null,
-		[FromQuery] Guid? leaveTypeMasterId = null)
+		[FromQuery] string? paidType = null)
 	{
 		var input = new LeaveManagementGetListInput
 		{
@@ -146,7 +146,7 @@ public partial class LeaveManagementController
 			PageSize = 1000,
 			Status = ParseStatus(status),
 			LeavePolicyId = leavePolicyId,
-			LeaveTypeMasterId = leaveTypeMasterId
+			PaidType = paidType
 		};
 		var bytes = await _leaveManagementAppService.ExportToExcelAsync(input);
 		return new FileContentResult(bytes, ExcelContentType) { FileDownloadName = "leave-requests.xlsx" };

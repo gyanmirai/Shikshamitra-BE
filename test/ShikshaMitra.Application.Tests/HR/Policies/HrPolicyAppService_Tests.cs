@@ -44,7 +44,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	private readonly IEmployeeStatusAppService _employeeStatus;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IRepository<WorkCalendarPolicy, Guid> _workCalendarPolicyRepository;
-	private readonly IRepository<LeaveType, Guid> _leaveTypeRepository;
 	private readonly IRepository<LeavePolicy, Guid> _leavePolicyRepository;
 	private readonly LeavePolicyManager _leavePolicyManager;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
@@ -73,7 +72,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		_employeeStatus = GetRequiredService<IEmployeeStatusAppService>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_workCalendarPolicyRepository = GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
-		_leaveTypeRepository = GetRequiredService<IRepository<LeaveType, Guid>>();
 		_leavePolicyRepository = GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		_leavePolicyManager = GetRequiredService<LeavePolicyManager>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
@@ -207,6 +205,24 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		input.CustomWeeklyOffs = [];
 
 		await Should.ThrowAsync<AbpValidationException>(() => _workCalendars.CreateAsync(input));
+	}
+
+	[Fact]
+	public async Task Holiday_Import_Preview_Should_Copy_Central_Holiday_Dates_Without_Shift()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var centralHolidayDate = new DateTime(2026, 8, 15);
+		var holiday = await CreateHolidayAsync(academicYearId, "Central Import", centralHolidayDate);
+
+		var result = await _workCalendars.GetHolidayImportPreviewAsync(academicYearId);
+
+		var row = result.Single(x => x.CalendarHolidayId == holiday.Id);
+		var expectedDate = DateOnly.FromDateTime(centralHolidayDate);
+		row.Date.ShouldBe(expectedDate);
+		row.FromDate.ShouldBe(expectedDate);
+		row.ToDate.ShouldBe(expectedDate);
+		row.DayCount.ShouldBe(1);
+		row.Source.ShouldBe("central_calendar");
 	}
 
 	[Fact]
@@ -2819,7 +2835,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
-	public async Task EffectivePolicyPreview_Should_Return_Default_Leave_Policy_Allowed_Leave_Types()
+	public async Task EffectivePolicyPreview_Should_Return_Default_Leave_Policy_Paid_Types()
 	{
 		var context = await CreatePolicyContextAsync();
 		var employee = await CreateEmployeeAsync();
@@ -2833,7 +2849,10 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
 		preview.LeavePolicy.ShouldNotBeNull();
 		preview.LeavePolicy.Id.ShouldBe(context.LeavePolicy.Id);
-		preview.LeavePolicy.AllowedLeaveTypeIds.ShouldContain(context.LeaveType.Id);
+		preview.LeavePolicy.AllowedPaidTypes.ShouldContain("Paid");
+		preview.LeavePolicy.AllowedPaidTypes.ShouldContain("Unpaid");
+		preview.LeavePolicy.Rules.ShouldContain(rule => rule.PaidType == "Paid");
+		preview.LeavePolicy.Rules.ShouldContain(rule => rule.PaidType == "Unpaid");
 	}
 
 	[Fact]
@@ -2869,7 +2888,8 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		preview.Assignment.LeavePolicyId.ShouldBeNull();
 		preview.LeavePolicy.ShouldNotBeNull();
 		preview.LeavePolicy.Id.ShouldBe(context.LeavePolicy.Id);
-		preview.LeavePolicy.AllowedLeaveTypeIds.ShouldContain(context.LeaveType.Id);
+		preview.LeavePolicy.AllowedPaidTypes.ShouldContain("Paid");
+		preview.LeavePolicy.AllowedPaidTypes.ShouldContain("Unpaid");
 	}
 
 	[Fact]
@@ -2892,10 +2912,10 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				_guidGenerator.Create(),
 				_currentTenant.Id,
 				duplicate.Id,
-				context.LeaveType.Id,
+				LeavePaidType.Paid,
+				LeaveEntitlementMode.Limited,
 				LeaveAccrualPolicyType.Monthly,
 				12,
-				LeavePaidType.Paid,
 				false,
 				null,
 				false,
@@ -2906,6 +2926,25 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				true,
 				null,
 				false,
+				true),
+			new LeavePolicyRule(
+				_guidGenerator.Create(),
+				_currentTenant.Id,
+				duplicate.Id,
+				LeavePaidType.Unpaid,
+				LeaveEntitlementMode.Unlimited,
+				LeaveAccrualPolicyType.Yearly,
+				null,
+				false,
+				null,
+				false,
+				null,
+				true,
+				0,
+				30,
+				true,
+				null,
+				true,
 				true)
 		]);
 		await _leavePolicyRepository.InsertAsync(duplicate, autoSave: true);
@@ -5305,12 +5344,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			ManualCorrectionAllowed = true,
 			HolidayWorkBehavior = attendanceHolidayWorkBehavior,
 		});
-		var leaveType = await _leaveTypeRepository.InsertAsync(new LeaveType(
-			_guidGenerator.Create(),
-			_currentTenant.Id,
-			academicYearId,
-			$"Leave Type {Guid.NewGuid():N}",
-			"#1A73E8"), autoSave: true);
 		var leavePolicy = await _leavePolicyManager.CreateAsync(
 			academicYearId,
 			$"Leave Policy {Guid.NewGuid():N}",
@@ -5320,10 +5353,10 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			true,
 			[
 				new LeavePolicyRuleInput(
-					leaveType.Id,
+					LeavePaidType.Paid,
+					LeaveEntitlementMode.Limited,
 					LeaveAccrualPolicyType.Monthly,
 					12,
-					LeavePaidType.Paid,
 					false,
 					null,
 					false,
@@ -5334,12 +5367,28 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 					true,
 					null,
 					false,
+					true),
+				new LeavePolicyRuleInput(
+					LeavePaidType.Unpaid,
+					LeaveEntitlementMode.Unlimited,
+					LeaveAccrualPolicyType.Yearly,
+					null,
+					false,
+					null,
+					false,
+					null,
+					true,
+					0,
+					30,
+					true,
+					null,
+					true,
 					true)
 			],
 			"Default leave policy for policy resolution tests");
 		await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: true);
 
-		return new PolicyContext(academicYearId, calendar, payroll, attendance, leavePolicy, leaveType);
+		return new PolicyContext(academicYearId, calendar, payroll, attendance, leavePolicy);
 	}
 
 	private static CreateUpdateWorkCalendarPolicyDto BuildWorkCalendarInput(
@@ -5369,9 +5418,9 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		return new WorkCalendarHolidayDto
 		{
 			AcademicYearId = academicYearId,
-			Date = fromDate,
-			FromDate = fromDate,
-			ToDate = resolvedToDate,
+			Date = DateOnly.FromDateTime(fromDate),
+			FromDate = DateOnly.FromDateTime(fromDate),
+			ToDate = DateOnly.FromDateTime(resolvedToDate),
 			DayCount = (resolvedToDate.Date - fromDate.Date).Days + 1,
 			HolidayName = name,
 			Source = source,
@@ -5469,7 +5518,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	{
 		var resolvedRoleId = roleId ?? await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
-		var organizationId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		return await _employeePersonalInfo.CreateAsync(new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Policy",
@@ -5483,8 +5531,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			DateOfJoining = DateOnly.FromDateTime(new DateTime(2026, 4, 1)),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = resolvedRoleId,
-			ShiftId = shiftId,
-			OrganizationIds = [organizationId]
+			ShiftId = shiftId
 		});
 	}
 
@@ -5894,8 +5941,8 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			academicYearId,
 			$"{name}-{Guid.NewGuid():N}",
 			holidayType.Id,
-			new DateTimeOffset(date, TimeSpan.Zero),
-			new DateTimeOffset(date, TimeSpan.Zero));
+			DateOnly.FromDateTime(date),
+			DateOnly.FromDateTime(date));
 		await _holidayRepository.InsertAsync(holiday, autoSave: true);
 		return holiday;
 	}
@@ -5905,6 +5952,5 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		WorkCalendarPolicyDto WorkCalendar,
 		PayrollPolicyDto PayrollPolicy,
 		AttendancePolicyDto AttendancePolicy,
-		LeavePolicy LeavePolicy,
-		LeaveType LeaveType);
+		LeavePolicy LeavePolicy);
 }

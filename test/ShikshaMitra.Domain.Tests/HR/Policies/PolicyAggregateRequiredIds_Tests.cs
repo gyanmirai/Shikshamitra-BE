@@ -274,7 +274,7 @@ public class PolicyAggregateRequiredIds_Tests
 			Guid.NewGuid(),
 			academicYearId ?? Guid.NewGuid(),
 			workCalendarPolicyId ?? Guid.NewGuid(),
-			new DateTime(2026, 5, 1),
+			new DateOnly(2026, 5, 1),
 			null,
 			"May Day",
 			WorkCalendarHolidaySource.Manual,

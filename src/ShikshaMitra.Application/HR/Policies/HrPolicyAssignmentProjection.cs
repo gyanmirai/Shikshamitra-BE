@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees;
 
 namespace ShikshaMitra.HR.Policies;
@@ -64,13 +65,26 @@ internal static class HrPolicyAssignmentProjection
 			{
 				Id = resolved.LeavePolicy.Id,
 				Name = resolved.LeavePolicy.PolicyName,
-				AllowedLeaveTypeIds = resolved.LeavePolicy.Rules
-					.Where(rule =>
-						rule.IsActive &&
-						rule.LeaveType != null &&
-						rule.LeaveType.IsActive &&
-						!rule.LeaveType.IsDeleted)
-					.Select(rule => rule.LeaveTypeId)
+				Rules = resolved.LeavePolicy.Rules
+					.Where(rule => rule.IsActive)
+					.OrderBy(rule => rule.PaidType)
+					.Select(rule => new EffectiveLeavePolicyRuleDto
+					{
+						RuleId = rule.Id,
+						PaidType = LeavePolicyProjection.ToPaidType(rule.PaidType),
+						EntitlementMode = LeavePolicyProjection.ToEntitlementMode(rule.EntitlementMode),
+						LeaveCount = rule.LeaveCount,
+						IsUnlimited = rule.IsUnlimited,
+						RequiresApproval = rule.RequiresApproval,
+						MaxDaysPerRequest = rule.MaxDaysPerRequest,
+						AllowHalfDay = rule.AllowHalfDay,
+						AttachmentRequiredAfterDays = rule.AttachmentRequiredAfterDays,
+						AllowNegativeBalance = rule.AllowNegativeBalance
+					})
+					.ToList(),
+				AllowedPaidTypes = resolved.LeavePolicy.Rules
+					.Where(rule => rule.IsActive)
+					.Select(rule => LeavePolicyProjection.ToPaidType(rule.PaidType))
 					.Distinct()
 					.ToList()
 			},

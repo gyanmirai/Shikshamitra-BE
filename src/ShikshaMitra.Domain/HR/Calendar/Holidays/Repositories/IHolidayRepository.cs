@@ -25,7 +25,7 @@ public interface IHolidayRepository : IRepository<Holiday, Guid>
     /// <summary>
     /// Get holidays within a date range
     /// </summary>
-    Task<List<Holiday>> GetByDateRangeAsync(DateTimeOffset startDate, DateTimeOffset endDate, bool includeDetails = false);
+    Task<List<Holiday>> GetByDateRangeAsync(DateOnly startDate, DateOnly endDate, bool includeDetails = false);
 
     /// <summary>
     /// Check if a holiday with the given name exists

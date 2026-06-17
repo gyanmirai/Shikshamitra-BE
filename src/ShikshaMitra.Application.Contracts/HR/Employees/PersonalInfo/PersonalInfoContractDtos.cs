@@ -70,8 +70,6 @@ public class PersonalInfoRequest
 
 	public Guid ShiftId { get; set; }
 
-	public List<Guid> OrganizationIds { get; set; } = [];
-
 	public string? Address1 { get; set; }
 
 	public string? Address2 { get; set; }
@@ -122,6 +120,8 @@ public class PersonalInfoResponse : PersonalInfoRequest
 	/// Use GET /api/employees/{id}/profile-picture to download.
 	/// </summary>
 	public bool HasProfilePicture { get; set; }
+
+	public List<Guid> OrganizationIds { get; set; } = [];
 
 	public List<EmployeeOrganizationDto> Organizations { get; set; } = [];
 

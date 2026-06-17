@@ -11,14 +11,14 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 public class LeavePolicyManager : DomainService
 {
 	private readonly ILeavePolicyRepository _leavePolicyRepository;
-	private readonly ILeaveTypeRepository _leaveTypeRepository;
+	private readonly IEmployeeLeaveRepository _employeeLeaveRepository;
 
 	public LeavePolicyManager(
 		ILeavePolicyRepository leavePolicyRepository,
-		ILeaveTypeRepository leaveTypeRepository)
+		IEmployeeLeaveRepository employeeLeaveRepository)
 	{
 		_leavePolicyRepository = leavePolicyRepository;
-		_leaveTypeRepository = leaveTypeRepository;
+		_employeeLeaveRepository = employeeLeaveRepository;
 	}
 
 	public async Task<LeavePolicy> CreateAsync(
@@ -50,7 +50,7 @@ public class LeavePolicyManager : DomainService
 			description
 		);
 
-		policy.ReplaceRules(await BuildRulesAsync(policy.Id, academicYearId, rules));
+		policy.ReplaceRules(await BuildRulesAsync(policy.Id, rules));
 		return policy;
 	}
 
@@ -82,7 +82,11 @@ public class LeavePolicyManager : DomainService
 			status,
 			isDefault,
 			description);
-		leavePolicy.ReplaceRules(await BuildRulesAsync(leavePolicy.Id, leavePolicy.AcademicYearId, rules));
+		var referencedRuleIds = await _employeeLeaveRepository.GetReferencedRuleIdsAsync(
+			leavePolicy.Rules.Select(rule => rule.Id).ToList());
+		leavePolicy.SyncRules(
+			await BuildRulesAsync(leavePolicy.Id, rules),
+			referencedRuleIds);
 	}
 
 	public async Task EnsureCanDeactivateAsync(LeavePolicy leavePolicy)
@@ -158,37 +162,37 @@ public class LeavePolicyManager : DomainService
 
 	private async Task<List<LeavePolicyRule>> BuildRulesAsync(
 		Guid leavePolicyId,
-		Guid academicYearId,
 		IEnumerable<LeavePolicyRuleInput> rules)
 	{
 		var materialized = rules.ToList();
-		if (materialized.Count == 0)
+		if (materialized.Count(rule => rule.IsActive) != 2 ||
+		    materialized.All(rule => !rule.IsActive || rule.PaidType != LeavePaidType.Paid) ||
+		    materialized.All(rule => !rule.IsActive || rule.PaidType != LeavePaidType.Unpaid))
 		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyRuleNotFound);
+			throw new BusinessException(HRErrorCodes.LeavePolicyPaidUnpaidRulesRequired);
 		}
 
 		var duplicate = materialized
 			.Where(rule => rule.IsActive)
-			.GroupBy(rule => rule.LeaveTypeId)
+			.GroupBy(rule => rule.PaidType)
 			.FirstOrDefault(group => group.Count() > 1);
 		if (duplicate != null)
 		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyDuplicateLeaveTypeRule)
-				.WithData("leaveTypeId", duplicate.Key);
+			throw new BusinessException(HRErrorCodes.LeavePolicyDuplicatePaidTypeRule)
+				.WithData("paidType", duplicate.Key);
 		}
 
 		var result = new List<LeavePolicyRule>();
 		foreach (var input in materialized)
 		{
-			await ValidateLeaveTypeExistsAsync(input.LeaveTypeId, academicYearId);
 			result.Add(new LeavePolicyRule(
 				GuidGenerator.Create(),
 				CurrentTenant.Id,
 				leavePolicyId,
-				input.LeaveTypeId,
+				input.PaidType,
+				input.EntitlementMode,
 				input.AccrualPolicyType,
 				input.LeaveCount,
-				input.PaidType,
 				input.CarryForward,
 				input.CarryForwardLimit,
 				input.Encashable,
@@ -204,37 +208,13 @@ public class LeavePolicyManager : DomainService
 
 		return result;
 	}
-
-	private async Task ValidateLeaveTypeExistsAsync(Guid leaveTypeId, Guid academicYearId)
-	{
-		var existingLeaveType = await _leaveTypeRepository.GetAsync(leaveTypeId);
-
-		if (existingLeaveType == null)
-		{
-			throw new BusinessException(HRErrorCodes.LeaveTypeNotFound)
-				.WithData("leaveTypeId", leaveTypeId);
-		}
-
-		if (!existingLeaveType.IsActive)
-		{
-			throw new BusinessException(HRErrorCodes.LeaveTypeInactive)
-				.WithData("leaveTypeId", leaveTypeId);
-		}
-
-		if (existingLeaveType.AcademicYearId != academicYearId)
-		{
-			throw new BusinessException(HRErrorCodes.LeaveTypeAcademicYearMismatch)
-				.WithData("leaveTypeId", leaveTypeId)
-				.WithData("academicYearId", academicYearId);
-		}
-	}
 }
 
 public sealed record LeavePolicyRuleInput(
-	Guid LeaveTypeId,
-	LeaveAccrualPolicyType AccrualPolicyType,
-	int LeaveCount,
 	LeavePaidType PaidType,
+	LeaveEntitlementMode EntitlementMode,
+	LeaveAccrualPolicyType AccrualPolicyType,
+	int? LeaveCount,
 	bool CarryForward,
 	int? CarryForwardLimit,
 	bool Encashable,

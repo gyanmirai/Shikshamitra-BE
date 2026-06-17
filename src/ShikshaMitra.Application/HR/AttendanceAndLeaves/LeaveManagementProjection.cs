@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
@@ -19,8 +20,7 @@ internal static class LeaveManagementProjection
 			EmployeeIdentifier = leave.Employee?.EmployeeCode ?? "Unknown",
 			SubmittedByName = submitter.Name,
 			SubmittedByEmployeeCode = submitter.EmployeeCode,
-			LeaveType = leave.LeaveType?.Type ?? "Unknown",
-			LeaveTypeMasterId = leave.LeaveTypeId,
+			PaidType = ToPaidType(leave.PaidType),
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
 			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
@@ -51,8 +51,7 @@ internal static class LeaveManagementProjection
 			EmployeeId = leave.EmployeeId,
 			EmployeeName = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
 			EmployeeCode = leave.Employee?.EmployeeCode ?? "Unknown",
-			LeaveTypeName = leave.LeaveType?.Type ?? "Unknown",
-			LeaveTypeColor = leave.LeaveType?.Color,
+			PaidType = ToPaidType(leave.PaidType),
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
 			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
@@ -78,8 +77,7 @@ internal static class LeaveManagementProjection
 			SubmittedByName = submitter.Name,
 			SubmittedByEmployeeCode = submitter.EmployeeCode,
 			LeavePolicyId = leave.LeavePolicyId,
-			LeaveTypeMasterId = leave.LeaveTypeId,
-			LeaveType = leave.LeaveType?.Type ?? "Unknown",
+			PaidType = ToPaidType(leave.PaidType),
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
 			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
@@ -102,4 +100,7 @@ internal static class LeaveManagementProjection
 				: 0m;
 
 	private static string ToApiStatus(EmployeeLeaveStatusType status) => status.ToString().ToUpperInvariant();
+
+	private static string ToPaidType(LeavePaidType paidType) =>
+		paidType == LeavePaidType.Paid ? "Paid" : "Unpaid";
 }

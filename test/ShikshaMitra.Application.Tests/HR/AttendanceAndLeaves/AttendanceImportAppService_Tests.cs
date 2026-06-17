@@ -21,7 +21,12 @@ using ShikshaMitra.HR.Payroll.AttendanceImports;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using Shouldly;
 using Xunit;
 
@@ -32,6 +37,7 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	private readonly IAttendanceImportAppService _attendanceImportAppService;
 	private readonly IEmployeePersonalInfoAppService _employeePersonalInfoAppService;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
+	private readonly IRepository<EmployeeOrganizationAssignment, Guid> _employeeOrganizationAssignmentRepository;
 	private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
@@ -39,6 +45,12 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	private readonly IRepository<WorkCalendarPolicy, Guid> _workCalendarPolicyRepository;
 	private readonly IRepository<PayrollPolicy, Guid> _payrollPolicyRepository;
 	private readonly IRepository<AttendancePolicy, Guid> _attendancePolicyRepository;
+	private readonly IEducationBoardRepository _educationBoardRepository;
+	private readonly IEducationMediumRepository _educationMediumRepository;
+	private readonly IEducationMediumStageRepository _educationMediumStageRepository;
+	private readonly EducationBoardManager _educationBoardManager;
+	private readonly EducationMediumManager _educationMediumManager;
+	private readonly EducationMediumStageManager _educationMediumStageManager;
 	private readonly IGuidGenerator _guidGenerator;
 	private readonly ICurrentTenant _currentTenant;
 
@@ -47,6 +59,7 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		_attendanceImportAppService = GetRequiredService<IAttendanceImportAppService>();
 		_employeePersonalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
+		_employeeOrganizationAssignmentRepository = GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
 		_employeeAttendanceRepository = GetRequiredService<IEmployeeAttendanceRepository>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
@@ -54,6 +67,12 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		_workCalendarPolicyRepository = GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
 		_payrollPolicyRepository = GetRequiredService<IRepository<PayrollPolicy, Guid>>();
 		_attendancePolicyRepository = GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		_educationBoardRepository = GetRequiredService<IEducationBoardRepository>();
+		_educationMediumRepository = GetRequiredService<IEducationMediumRepository>();
+		_educationMediumStageRepository = GetRequiredService<IEducationMediumStageRepository>();
+		_educationBoardManager = GetRequiredService<EducationBoardManager>();
+		_educationMediumManager = GetRequiredService<EducationMediumManager>();
+		_educationMediumStageManager = GetRequiredService<EducationMediumStageManager>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 	}
@@ -832,10 +851,11 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = shiftIdOverride ?? await EnsureShiftExistsAsync();
-		var organizationId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+		var academicYear = await EnsurePolicyBaselineAsync();
+		var organizationId = await EnsurePolicyBaselineStageAsync(academicYear.Id);
 		var unique = Guid.NewGuid().ToString("N")[..6];
 
-		return await _employeePersonalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
+		var employee = await _employeePersonalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
 		{
 			FirstName = $"Emp{suffix}{unique}",
 			LastName = "Import",
@@ -848,9 +868,52 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 			DateOfJoining = new DateOnly(2024, 1, 1),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
-			ShiftId = shiftId,
-			OrganizationIds = [organizationId]
+			ShiftId = shiftId
 		});
+		await _employeeOrganizationAssignmentRepository.InsertAsync(
+			new EmployeeOrganizationAssignment(Guid.NewGuid(), _currentTenant.Id, employee.Id, organizationId),
+			autoSave: true);
+		return employee;
+	}
+
+	private async Task<Guid> EnsurePolicyBaselineStageAsync(Guid academicYearId)
+	{
+		var boards = await _educationBoardRepository.GetListAsync(x => x.AcademicYearId == academicYearId);
+		foreach (var existingBoard in boards)
+		{
+			var existingMedium = (await _educationMediumRepository.GetListAsync(x => x.EducationBoardId == existingBoard.Id))
+				.FirstOrDefault();
+			if (existingMedium == null)
+			{
+				continue;
+			}
+
+			var existingStage = (await _educationMediumStageRepository.GetListAsync(x => x.EducationMediumId == existingMedium.Id))
+				.FirstOrDefault();
+			if (existingStage != null)
+			{
+				return existingStage.Id;
+			}
+		}
+
+		var board = boards.FirstOrDefault();
+		if (board == null)
+		{
+			board = await _educationBoardManager.CreateAsync(academicYearId, EducationBoardType.CBSE);
+			await _educationBoardRepository.InsertAsync(board, autoSave: true);
+		}
+
+		var medium = (await _educationMediumRepository.GetListAsync(x => x.EducationBoardId == board.Id))
+			.FirstOrDefault();
+		if (medium == null)
+		{
+			medium = await _educationMediumManager.CreateAsync(board.Id, $"ImportMedium-{Guid.NewGuid():N}"[..24]);
+			await _educationMediumRepository.InsertAsync(medium, autoSave: true);
+		}
+
+		var stage = await _educationMediumStageManager.CreateAsync(medium.Id, $"ImportStage-{Guid.NewGuid():N}"[..23]);
+		await _educationMediumStageRepository.InsertAsync(stage, autoSave: true);
+		return stage.Id;
 	}
 
 	private async Task<Guid> EnsureRoleExistsAsync()

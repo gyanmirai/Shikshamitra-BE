@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -14,7 +16,6 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 [TestModule(TestTraits.Modules.HR)]
 public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 {
-	private const string LeaveTypesUrl = "/api/hr-leave-types";
 	private const string LeavePoliciesUrl = "/api/leave-policies";
 
 	public LeavePolicyApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
@@ -25,8 +26,7 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Create_And_Get_Leave_Policy_By_Id()
 	{
-		var leaveType = await CreateLeaveTypeAsync();
-		var created = await CreateLeavePolicyAsync(leaveType.Id);
+		var created = await CreateLeavePolicyAsync();
 
 		var response = await Client.GetAsync($"{LeavePoliciesUrl}/{created.Id}");
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -34,16 +34,18 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 		var detail = await response.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
 		detail.ShouldNotBeNull();
 		detail.Id.ShouldBe(created.Id);
-		detail.Rules.ShouldHaveSingleItem();
-		detail.Rules[0].LeaveType.Id.ShouldBe(leaveType.Id);
+		detail.Rules.Count.ShouldBe(2);
+		detail.Rules.ShouldContain(rule => rule.PaidType == "Paid" && rule.LeaveCount == 12);
+		detail.Rules.ShouldContain(rule => rule.PaidType == "Unpaid" && rule.EntitlementMode == "Unlimited" && rule.IsUnlimited);
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Update_Accrual_Policy_Type()
 	{
-		var leaveType = await CreateLeaveTypeAsync();
-		var created = await CreateLeavePolicyAsync(leaveType.Id);
+		var created = await CreateLeavePolicyAsync();
+		var paidRule = created.Rules.Single(rule => rule.PaidType == "Paid");
+		var unpaidRule = created.Rules.Single(rule => rule.PaidType == "Unpaid");
 
 		var response = await Client.PutAsJsonAsync($"{LeavePoliciesUrl}/{created.Id}", new LeavePolicyUpdateRequest
 		{
@@ -54,42 +56,43 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 			Description = created.Description,
 			Rules =
 			[
-				new LeavePolicyRuleRequest
-				{
-					LeaveTypeId = leaveType.Id,
-					AccrualPolicyType = "Yearly",
-					LeaveCount = created.Rules[0].LeaveCount,
-					PaidType = created.Rules[0].PaidType,
-					CarryForward = created.Rules[0].CarryForward,
-					EncashmentAllowed = created.Rules[0].EncashmentAllowed,
-					EncashmentTiming = created.Rules[0].EncashmentTiming,
-					RequiresApproval = created.Rules[0].RequiresApproval
-				}
+				Rule(
+					paidType: paidRule.PaidType,
+					entitlementMode: paidRule.EntitlementMode,
+					accrualPolicyType: "Yearly",
+					leaveCount: paidRule.LeaveCount,
+					carryForward: paidRule.CarryForward,
+					encashmentAllowed: paidRule.EncashmentAllowed,
+					encashmentTiming: paidRule.EncashmentTiming,
+					allowNegativeBalance: paidRule.AllowNegativeBalance),
+				Rule(
+					paidType: unpaidRule.PaidType,
+					entitlementMode: unpaidRule.EntitlementMode,
+					leaveCount: unpaidRule.LeaveCount,
+					allowNegativeBalance: unpaidRule.AllowNegativeBalance)
 			]
 		}, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var updated = await response.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
 		updated.ShouldNotBeNull();
-		updated.Rules.ShouldHaveSingleItem();
-		updated.Rules[0].AccrualPolicyType.ShouldBe("Yearly");
+		updated.Rules.Count.ShouldBe(2);
+		updated.Rules.Single(rule => rule.PaidType == "Paid").AccrualPolicyType.ShouldBe("Yearly");
 
 		var detailResponse = await Client.GetAsync($"{LeavePoliciesUrl}/{created.Id}");
 		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var detail = await detailResponse.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
 		detail.ShouldNotBeNull();
-		detail.Rules.ShouldHaveSingleItem();
-		detail.Rules[0].AccrualPolicyType.ShouldBe("Yearly");
+		detail.Rules.Single(rule => rule.PaidType == "Paid").AccrualPolicyType.ShouldBe("Yearly");
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Filter_Leave_Policies_By_Search()
 	{
-		var leaveType = await CreateLeaveTypeAsync();
 		var marker = $"Policy-{Guid.NewGuid():N}";
 
-		await CreateLeavePolicyAsync(leaveType.Id, marker);
+		await CreateLeavePolicyAsync(marker);
 
 		var response = await Client.GetAsync($"{LeavePoliciesUrl}?academicYearId={AcademicYearId}&page=1&pageSize=10&search={marker}");
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -103,10 +106,9 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_List_Leave_Policies_With_Max_Page_Size()
 	{
-		var leaveType = await CreateLeaveTypeAsync();
 		var marker = $"Policy-{Guid.NewGuid():N}";
 
-		await CreateLeavePolicyAsync(leaveType.Id, marker);
+		await CreateLeavePolicyAsync(marker);
 
 		var response = await Client.GetAsync($"{LeavePoliciesUrl}?academicYearId={AcademicYearId}&page=1&pageSize=500&search={marker}");
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -121,10 +123,8 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Set_Default_Leave_Policy_And_Clear_Previous_Default()
 	{
-		var firstLeaveType = await CreateLeaveTypeAsync();
-		var secondLeaveType = await CreateLeaveTypeAsync();
-		var first = await CreateLeavePolicyAsync(firstLeaveType.Id, $"Default-A-{Guid.NewGuid():N}");
-		var second = await CreateLeavePolicyAsync(secondLeaveType.Id, $"Default-B-{Guid.NewGuid():N}");
+		var first = await CreateLeavePolicyAsync($"Default-A-{Guid.NewGuid():N}");
+		var second = await CreateLeavePolicyAsync($"Default-B-{Guid.NewGuid():N}");
 
 		var firstDefaultResponse = await Client.PatchAsync($"{LeavePoliciesUrl}/{first.Id}/set-default", null);
 		firstDefaultResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -145,22 +145,7 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 		firstDetail.IsDefault.ShouldBeFalse();
 	}
 
-	private async Task<LeaveTypeResponse> CreateLeaveTypeAsync()
-	{
-		var request = new LeaveTypeCreateRequest
-		{
-			Name = $"LT-{Guid.NewGuid():N}",
-			Color = "#1A73E8"
-		};
-
-		var response = await Client.PostAsJsonAsync($"{LeaveTypesUrl}?academicYearId={AcademicYearId}", request, JsonOptions);
-		response.StatusCode.ShouldBe(HttpStatusCode.Created);
-
-		return await response.Content.ReadFromJsonAsync<LeaveTypeResponse>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to create leave type.");
-	}
-
-	private async Task<LeavePolicyResponse> CreateLeavePolicyAsync(Guid leaveTypeId, string? policyTitle = null)
+	private async Task<LeavePolicyResponse> CreateLeavePolicyAsync(string? policyTitle = null)
 	{
 		var request = new LeavePolicyCreateRequest
 		{
@@ -168,20 +153,7 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 			Status = "Active",
 			EffectiveFrom = DateTime.UtcNow.Date,
 			Description = "Policy for API testing",
-			Rules =
-			[
-				new LeavePolicyRuleRequest
-				{
-					LeaveTypeId = leaveTypeId,
-					AccrualPolicyType = "Monthly",
-					LeaveCount = 12,
-					PaidType = "Paid",
-					CarryForward = true,
-					EncashmentAllowed = true,
-					EncashmentTiming = "next_payroll",
-					RequiresApproval = true
-				}
-			]
+			Rules = DefaultRules()
 		};
 
 		var response = await Client.PostAsJsonAsync($"{LeavePoliciesUrl}?academicYearId={AcademicYearId}", request, JsonOptions);
@@ -190,6 +162,50 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 		return await response.Content.ReadFromJsonAsync<LeavePolicyResponse>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create leave policy.");
 	}
+
+	private static List<LeavePolicyRuleRequest> DefaultRules() =>
+	[
+		Rule(
+			leaveCount: 12,
+			accrualPolicyType: "Monthly",
+			carryForward: true,
+			carryForwardLimit: 6,
+			encashmentAllowed: true,
+			encashmentTiming: "next_payroll"),
+		Rule(
+			paidType: "Unpaid",
+			entitlementMode: "Unlimited",
+			leaveCount: null,
+			allowNegativeBalance: true)
+	];
+
+	private static LeavePolicyRuleRequest Rule(
+		string paidType = "Paid",
+		string entitlementMode = "Limited",
+		string accrualPolicyType = "Yearly",
+		int? leaveCount = 10,
+		bool carryForward = false,
+		int? carryForwardLimit = null,
+		bool encashmentAllowed = false,
+		string? encashmentTiming = null,
+		bool allowNegativeBalance = false) =>
+		new()
+		{
+			PaidType = paidType,
+			EntitlementMode = entitlementMode,
+			AccrualPolicyType = accrualPolicyType,
+			LeaveCount = leaveCount,
+			CarryForward = carryForward,
+			CarryForwardLimit = carryForwardLimit,
+			EncashmentAllowed = encashmentAllowed,
+			EncashmentTiming = encashmentTiming,
+			RequiresApproval = true,
+			MinNoticeDays = 0,
+			MaxDaysPerRequest = 30,
+			AllowHalfDay = true,
+			AllowNegativeBalance = allowNegativeBalance,
+			IsActive = true
+		};
 
 	private Guid AcademicYearId => Factory.SeededAcademicYearId;
 }

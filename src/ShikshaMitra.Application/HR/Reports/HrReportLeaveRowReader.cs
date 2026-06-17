@@ -1,4 +1,5 @@
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
@@ -33,7 +34,7 @@ public class HrReportLeaveRowReader(
 				EmployeeName = employee.EmployeeName,
 				FirstName = employee.FirstName,
 				LastName = employee.LastName,
-				LeaveType = leave.LeavePolicy != null ? leave.LeavePolicy.PolicyName : leave.LeavePolicyId.ToString(),
+				LeaveType = leave.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid",
 				StartDateOnly = leave.StartDateOnly,
 				EndDateOnly = leave.EndDateOnly,
 				Status = leave.Status,
@@ -61,7 +62,7 @@ public class HrReportLeaveRowReader(
 				EmployeeName = employee.EmployeeName,
 				FirstName = employee.FirstName,
 				LastName = employee.LastName,
-				LeaveType = leave.LeavePolicy != null ? leave.LeavePolicy.PolicyName : leave.LeavePolicyId.ToString(),
+				LeaveType = leave.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid",
 				StartDateOnly = leave.StartDateOnly,
 				EndDateOnly = leave.EndDateOnly,
 				Status = leave.Status,
@@ -92,7 +93,7 @@ public class HrReportLeaveRowReader(
 			select new
 			{
 				employee.EmployeeCode,
-				LeaveType = leave.LeavePolicy != null ? leave.LeavePolicy.PolicyName : leave.LeavePolicyId.ToString(),
+				LeaveType = leave.PaidType == LeavePaidType.Paid ? "Paid" : "Unpaid",
 				Status = leave.Status,
 				leave.ApprovedLeaveUnits
 			};

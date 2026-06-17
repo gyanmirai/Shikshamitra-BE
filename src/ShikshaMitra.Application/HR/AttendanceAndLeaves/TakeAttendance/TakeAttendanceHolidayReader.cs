@@ -16,13 +16,11 @@ public class TakeAttendanceHolidayReader(
 {
 	public async Task<Holiday?> FindHolidayAsync(DateOnly date)
 	{
-		var dayStart = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-		var dayEnd = new DateTimeOffset(date.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero);
 		var query = await holidayRepository.GetQueryableAsync();
 
 		var holidays = await AsyncExecuter.ToListAsync(query);
 		return holidays
-			.Where(x => x.StartDate <= dayEnd && x.EndDate >= dayStart)
+			.Where(x => x.StartDate <= date && x.EndDate >= date)
 			.OrderBy(x => x.StartDate)
 			.FirstOrDefault();
 	}

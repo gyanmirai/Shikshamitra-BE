@@ -12,15 +12,14 @@ namespace ShikshaMitra.Smoke.HR;
 public class HRLeavesSmokeTests : ShikshaMitraSmokeTestBase
 {
 	[SmokeFact]
-	public async Task Smoke_Leave_Types_List_Should_Return_200()
+	public async Task Smoke_HR_Leave_Types_List_Should_Not_Exist()
 	{
 		await AuthenticateAsync();
 
-		var academicYearId = Guid.NewGuid();
 		var response = await Client.GetAsync(
-			$"/api/hr-leave-types?academicYearId={academicYearId}&page=1&pageSize=5");
+			"/api/hr-leave-types?page=1&pageSize=5");
 
-		response.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.InternalServerError);
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	[SmokeFact]

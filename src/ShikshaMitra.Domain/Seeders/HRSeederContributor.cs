@@ -47,8 +47,6 @@ public partial class HRSeederContributor : BaseSeederContributor
 		ICurrentTenant currentTenant,
 		IGuidGenerator guidGenerator,
 		IUnitOfWork unitOfWork,
-		IRepository<LeaveType, Guid> leaveTypeRepository,
-		LeaveTypeManager leaveTypeManager,
 		IRepository<EarningComponent, Guid> earningComponentRepository,
 		EarningComponentManager earningComponentManager,
 		IRepository<DeductionComponent, Guid> deductionComponentRepository,
@@ -65,7 +63,6 @@ public partial class HRSeederContributor : BaseSeederContributor
 		IRepository<HolidayType, Guid> holidayTypeRepository,
 		ILeavePolicyRepository leavePolicyRepository,
 		LeavePolicyManager leavePolicyManager,
-		ILeaveTypeRepository leaveTypeQueryRepository,
 		IAcademicYearRepository academicYearRepository,
 		IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 			IRepository<ShiftManagement, Guid> shiftRepository,
@@ -106,8 +103,6 @@ public partial class HRSeederContributor : BaseSeederContributor
 			IClock clock)
 			: base(currentTenant, guidGenerator, unitOfWork)
 	{
-		_leaveTypeRepository = leaveTypeRepository;
-		_leaveTypeManager = leaveTypeManager;
 		_earningComponentRepository = earningComponentRepository;
 		_earningComponentManager = earningComponentManager;
 		_deductionComponentRepository = deductionComponentRepository;
@@ -124,7 +119,6 @@ public partial class HRSeederContributor : BaseSeederContributor
 		_holidayTypeRepository = holidayTypeRepository;
 		_leavePolicyRepository = leavePolicyRepository;
 		_leavePolicyManager = leavePolicyManager;
-		_leaveTypeQueryRepository = leaveTypeQueryRepository;
 		_academicYearRepository = academicYearRepository;
 		_educationMediumStageRepository = educationMediumStageRepository;
 		_shiftRepository = shiftRepository;

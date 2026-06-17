@@ -5,7 +5,6 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.TenantSettings;
-using ShikshaMitra.TenantSettings.EducationBoards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
@@ -23,7 +22,6 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly IdentityUserManager _userManager;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
-	private readonly IRepository<EducationMediumStage, Guid> _mediumStageRepository;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
 
@@ -35,7 +33,6 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		_userRepository = GetRequiredService<IIdentityUserRepository>();
 		_userManager = GetRequiredService<IdentityUserManager>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
-		_mediumStageRepository = GetRequiredService<IRepository<EducationMediumStage, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 	}
@@ -172,8 +169,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			DateOfJoining = created.DateOfJoining,
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = created.RoleId,
-			ShiftId = created.ShiftId,
-			OrganizationIds = created.OrganizationIds
+			ShiftId = created.ShiftId
 		});
 
 		result.Email.ShouldBe(created.Email);
@@ -202,8 +198,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 				DateOfJoining = created.DateOfJoining,
 				EmployeeStatusType = EmployeeStatusType.Active,
 				RoleId = created.RoleId,
-				ShiftId = created.ShiftId,
-				OrganizationIds = created.OrganizationIds
+				ShiftId = created.ShiftId
 			}));
 
 		exception.Code.ShouldBe(HRErrorCodes.EmployeeEmailCannotBeChanged);
@@ -233,8 +228,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			DateOfJoining = created.DateOfJoining,
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = created.RoleId,
-			ShiftId = created.ShiftId,
-			OrganizationIds = created.OrganizationIds
+			ShiftId = created.ShiftId
 		});
 
 		result.PanNo.ShouldBe(panNo);
@@ -301,8 +295,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 				DateOfJoining = created.DateOfJoining,
 				EmployeeStatusType = EmployeeStatusType.Active,
 				RoleId = created.RoleId,
-				ShiftId = Guid.NewGuid(),
-				OrganizationIds = created.OrganizationIds
+				ShiftId = Guid.NewGuid()
 			}));
 
 		exception.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationShiftRequired);
@@ -333,8 +326,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			DateOfJoining = created.DateOfJoining,
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = created.RoleId,
-			ShiftId = created.ShiftId,
-			OrganizationIds = created.OrganizationIds
+			ShiftId = created.ShiftId
 		});
 
 		result.FirstName.ShouldBe("Updated");
@@ -347,7 +339,6 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	{
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
-		var organizationId = await EnsureOrganizationExistsAsync();
 		return new CreateEmployeePersonalInfoDto
 		{
 			FirstName = "Test",
@@ -361,8 +352,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
 			RoleId = roleId,
-			ShiftId = shiftId,
-			OrganizationIds = [organizationId]
+			ShiftId = shiftId
 		};
 	}
 
@@ -371,11 +361,6 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		var last4Digits = mobileNo[^4..];
 		var capitalizedUsername = char.ToUpper(username[0]) + username[1..];
 		return $"{capitalizedUsername}@{last4Digits}";
-	}
-
-	private async Task<Guid> EnsureOrganizationExistsAsync()
-	{
-		return await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 	}
 
 	private async Task<Guid> EnsureRoleExistsAsync()

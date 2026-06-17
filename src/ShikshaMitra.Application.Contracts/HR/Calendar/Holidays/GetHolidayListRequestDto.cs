@@ -33,10 +33,10 @@ public class GetHolidayListRequestDto : PagedAndSortedResultRequestDto
     /// <summary>
     /// Filter holidays starting on or after this date
     /// </summary>
-    public DateTimeOffset? FromDate { get; set; }
+    public DateOnly? FromDate { get; set; }
 
     /// <summary>
     /// Filter holidays ending on or before this date
     /// </summary>
-    public DateTimeOffset? ToDate { get; set; }
+    public DateOnly? ToDate { get; set; }
 }

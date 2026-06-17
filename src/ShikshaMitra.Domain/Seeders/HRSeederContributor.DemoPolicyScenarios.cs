@@ -66,7 +66,7 @@ public partial class HRSeederContributor
 		if (firstHoliday != null)
 		{
 			operationsOverrides.Add(new PayrollHolidayOverride(
-				firstHoliday.StartDate.Date,
+				firstHoliday.StartDate.ToDateTime(TimeOnly.MinValue),
 				firstHoliday.HolidayName,
 				IncludedInPayroll: true,
 				firstHoliday.Id));
@@ -75,7 +75,7 @@ public partial class HRSeederContributor
 		if (secondHoliday != null)
 		{
 			operationsOverrides.Add(new PayrollHolidayOverride(
-				secondHoliday.StartDate.Date,
+				secondHoliday.StartDate.ToDateTime(TimeOnly.MinValue),
 				secondHoliday.HolidayName,
 				IncludedInPayroll: false,
 				secondHoliday.Id));
@@ -186,8 +186,8 @@ public partial class HRSeederContributor
 				academicYear.Id,
 				template.Name,
 				type.Id,
-				new DateTimeOffset(DateTime.SpecifyKind(template.StartDate.Date, DateTimeKind.Unspecified), TimeSpan.Zero),
-				new DateTimeOffset(DateTime.SpecifyKind(template.EndDate.Date, DateTimeKind.Unspecified), TimeSpan.Zero),
+				DateOnly.FromDateTime(template.StartDate),
+				DateOnly.FromDateTime(template.EndDate),
 				template.Description);
 			await _holidayRepository.InsertAsync(holiday, autoSave: false);
 			holidays.Add(holiday);

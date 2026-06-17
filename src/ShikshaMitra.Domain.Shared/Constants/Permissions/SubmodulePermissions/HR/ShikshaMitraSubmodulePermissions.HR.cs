@@ -183,7 +183,6 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "HR.AttendanceAndLeave.AttendanceTracking", new SubmoduleInfo(AttendanceAndLeave_AttendanceTracking.All, AttendanceAndLeave_AttendanceTracking.DisplayNames) },
 			{ "HR.AttendanceAndLeave.Evaluations", new SubmoduleInfo(AttendanceAndLeave_Evaluations.All, AttendanceAndLeave_Evaluations.DisplayNames) },
 			{ "HR.LeaveManagement.LeaveCenter", new SubmoduleInfo(LeaveManagement_LeaveCenter.All, LeaveManagement_LeaveCenter.DisplayNames) },
-			{ "HR.LeaveManagement.Setting.LeaveType", new SubmoduleInfo(LeaveManagement_SettingLeaveType.All, LeaveManagement_SettingLeaveType.DisplayNames) },
 			{ "HR.LeaveManagement.Setting.LeavePolicy", new SubmoduleInfo(LeaveManagement_SettingLeavePolicy.All, LeaveManagement_SettingLeavePolicy.DisplayNames) },
 			{ "HR.ProfessionalManagement", new SubmoduleInfo(ProfessionalManagement.All, ProfessionalManagement.DisplayNames) },
 			{ "HR.PerformanceManagement", new SubmoduleInfo(PerformanceManagement.All, PerformanceManagement.DisplayNames) },

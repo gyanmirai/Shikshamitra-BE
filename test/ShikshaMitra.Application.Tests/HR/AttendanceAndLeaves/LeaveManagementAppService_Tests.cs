@@ -1,5 +1,6 @@
 using System;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Shouldly;
 using Volo.Abp;
 using Xunit;
@@ -39,11 +40,10 @@ public class LeaveManagementAppService_Tests
 	}
 
 	[Fact]
-	public void Create_Should_Snapshot_Policy_Rule_And_Leave_Type()
+	public void Create_Should_Snapshot_Policy_Rule_And_Paid_Type()
 	{
 		var leavePolicyId = Guid.NewGuid();
 		var leavePolicyRuleId = Guid.NewGuid();
-		var leaveTypeId = Guid.NewGuid();
 
 		var leave = EmployeeLeave.Create(
 			Guid.NewGuid(),
@@ -51,7 +51,7 @@ public class LeaveManagementAppService_Tests
 			Guid.NewGuid(),
 			leavePolicyId,
 			leavePolicyRuleId,
-			leaveTypeId,
+			LeavePaidType.Paid,
 			DateTimeOffset.UtcNow.AddDays(5),
 			DateTimeOffset.UtcNow.AddDays(6),
 			"test",
@@ -59,7 +59,7 @@ public class LeaveManagementAppService_Tests
 
 		leave.LeavePolicyId.ShouldBe(leavePolicyId);
 		leave.LeavePolicyRuleId.ShouldBe(leavePolicyRuleId);
-		leave.LeaveTypeId.ShouldBe(leaveTypeId);
+		leave.PaidType.ShouldBe(LeavePaidType.Paid);
 	}
 
 	[Fact]
@@ -105,7 +105,7 @@ public class LeaveManagementAppService_Tests
 			Guid.NewGuid(),
 			Guid.NewGuid(),
 			Guid.NewGuid(),
-			Guid.NewGuid(),
+			LeavePaidType.Paid,
 			DateTimeOffset.UtcNow.AddDays(5),
 			DateTimeOffset.UtcNow.AddDays(6),
 			"test",

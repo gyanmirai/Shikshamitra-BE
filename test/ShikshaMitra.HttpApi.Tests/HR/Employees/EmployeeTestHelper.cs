@@ -22,6 +22,7 @@ public static class EmployeeTestHelper
 
 	public static Guid DefaultRoleId { get; set; }
 	public static Guid DefaultShiftId { get; set; }
+	public static Guid DefaultAcademicYearId { get; set; }
 	public static Guid DefaultMediumStageId { get; set; }
 
 	/// <summary>
@@ -55,8 +56,10 @@ public static class EmployeeTestHelper
 				response.StatusCode);
 		}
 
-		return await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions)
+		var employee = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create test employee");
+		await AssignDefaultAcademicPermissionAsync(client, employee);
+		return employee;
 	}
 
 	/// <summary>
@@ -88,8 +91,10 @@ public static class EmployeeTestHelper
 				response.StatusCode);
 		}
 
-		return await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions)
+		var employee = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create test employee with picture");
+		await AssignDefaultAcademicPermissionAsync(client, employee);
+		return employee;
 	}
 
 	/// <summary>
@@ -137,7 +142,6 @@ public static class EmployeeTestHelper
 			IsTeaching = true,
 			RoleId = DefaultRoleId,
 			ShiftId = DefaultShiftId,
-			OrganizationIds = new List<Guid> { DefaultMediumStageId },
 			Email = TestDataHelper.UniqueEmail("emp"),
 			PanNo = TestDataHelper.UniquePan(),
 			AdharNo = TestDataHelper.UniqueAdhar(),
@@ -170,7 +174,6 @@ public static class EmployeeTestHelper
 			Department = "Science",
 			RoleId = DefaultRoleId,
 			ShiftId = DefaultShiftId,
-			OrganizationIds = new List<Guid> { DefaultMediumStageId },
 			Address1 = "123 Test Street",
 			Address2 = "Block A",
 			Address3 = "Near Park",
@@ -191,5 +194,35 @@ public static class EmployeeTestHelper
 			0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
 			0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xD9
 		];
+	}
+
+	private static async Task AssignDefaultAcademicPermissionAsync(HttpClient client, PersonalInfoResponse employee)
+	{
+		if (!employee.UserId.HasValue ||
+			DefaultAcademicYearId == Guid.Empty ||
+			DefaultMediumStageId == Guid.Empty)
+		{
+			return;
+		}
+
+		var response = await client.PostAsJsonAsync(
+			"/api/app/user-scope/bulk-assign",
+			new
+			{
+				userIds = new[] { employee.UserId.Value },
+				academicYearIds = new[] { DefaultAcademicYearId },
+				educationMediumStageIds = new[] { DefaultMediumStageId },
+				description = "HTTP API test default employee academic permission"
+			},
+			JsonOptions);
+
+		if (!response.IsSuccessStatusCode)
+		{
+			var payload = await response.Content.ReadAsStringAsync();
+			throw new HttpRequestException(
+				$"Employee default academic permission failed with {(int)response.StatusCode} {response.StatusCode}: {payload}",
+				null,
+				response.StatusCode);
+		}
 	}
 }

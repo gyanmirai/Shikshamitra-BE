@@ -69,9 +69,6 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 
 		// Document Types - Manual mapping used due to enum list conversion
 
-		// Employee Leave Management
-		CreateMap<LeaveType, LeaveTypeDto>();
-
 		CreateMap<LeavePolicy, LeavePolicyDto>()
 			.ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()))
 			.ForMember(dest => dest.RuleCount, opt => opt.MapFrom(src => src.Rules.Count));

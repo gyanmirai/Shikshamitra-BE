@@ -43,19 +43,17 @@ public class AttendanceRegisterLookupReader(
 
 		var start = dateList.First();
 		var end = dateList.Last();
-		var startInstant = new DateTimeOffset(start.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-		var endInstant = new DateTimeOffset(end.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero);
 		var query = await holidayRepository.GetQueryableAsync();
 		var holidays = (await asyncExecuter.ToListAsync(query))
-			.Where(x => x.StartDate <= endInstant && x.EndDate >= startInstant)
+			.Where(x => x.StartDate <= end && x.EndDate >= start)
 			.ToList();
 		var lookup = new Dictionary<DateOnly, HolidayInfo>();
 		var requestedDates = dateList.ToHashSet();
 
 		foreach (var holiday in holidays.OrderBy(x => x.StartDate))
 		{
-			var holidayStart = DateOnly.FromDateTime(holiday.StartDate.Date);
-			var holidayEnd = DateOnly.FromDateTime(holiday.EndDate.Date);
+			var holidayStart = holiday.StartDate;
+			var holidayEnd = holiday.EndDate;
 			for (var date = holidayStart; date <= holidayEnd; date = date.AddDays(1))
 			{
 				if (requestedDates.Contains(date) && !lookup.ContainsKey(date))

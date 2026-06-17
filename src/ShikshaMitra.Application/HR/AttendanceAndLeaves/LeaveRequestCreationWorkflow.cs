@@ -38,11 +38,11 @@ public class LeaveRequestCreationWorkflow(
 
 		var actorContext = await leaveActorAccessService.ResolveContextAsync();
 
-		var leaveTypeId = input.LeaveTypeId;
-		if (leaveTypeId == Guid.Empty)
+		if (string.IsNullOrWhiteSpace(input.PaidType))
 		{
-			throw new BusinessException(HRErrorCodes.LeaveTypeNotFound);
+			throw new BusinessException(HRErrorCodes.LeavePolicyRuleNotFound);
 		}
+		var paidType = LeavePolicyProjection.ParsePaidType(input.PaidType);
 
 		var targetEmployeeId = input.ForEmployeeId
 			?? actorContext.ActorEmployeeId
@@ -66,7 +66,7 @@ public class LeaveRequestCreationWorkflow(
 
 		var resolved = await leaveValidationService.ValidateLeaveRequestAsync(
 			targetEmployee.Id,
-			leaveTypeId,
+			paidType,
 			input.StartDate,
 			input.EndDate,
 			input.HalfDay,
@@ -78,7 +78,7 @@ public class LeaveRequestCreationWorkflow(
 			targetEmployee.Id,
 			resolved.LeavePolicy.Id,
 			resolved.Rule.Id,
-			resolved.Rule.LeaveTypeId,
+			resolved.Rule.PaidType,
 			new DateTimeOffset(input.StartDate),
 			new DateTimeOffset(input.EndDate),
 			input.Reason,

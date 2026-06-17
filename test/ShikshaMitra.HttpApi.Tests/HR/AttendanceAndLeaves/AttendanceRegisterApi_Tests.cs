@@ -544,37 +544,49 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Grouped_Register_Should_Include_New_Employee_After_Academic_Permission_Is_Saved()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var marker = $"RegAcademicPermission{Guid.NewGuid():N}";
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			marker,
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		var response = await Client.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&academicYearId={Factory.SeededAcademicYearId:D}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
+		var day = payload.Items.Single(x => x.EmployeeId == employee.Id).Days.Single();
+
+		payload.TotalCount.ShouldBe(1);
+		payload.Summary.StaffCount.ShouldBe(1);
+		payload.Summary.NotMarked.ShouldBe(1);
+		day.Status.ShouldBe(AttendanceRegisterStatus.NotMarked);
+		day.EducationMediumStageId.ShouldBe(EmployeeTestHelper.DefaultMediumStageId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Grouped_Register_Should_Show_Take_Attendance_Data_When_AcademicYear_Filter_Is_Selected()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var marker = $"RegTakenYear{Guid.NewGuid():N}";
-		var attendanceDate = DateTime.UtcNow.AddDays(-1);
-		var attendanceDateText = attendanceDate.ToString("dd-MM-yyyy");
-		var startEnd = attendanceDate.ToString("yyyy-MM-dd");
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
 			marker,
-			dateOfJoining: attendanceDate.AddDays(-10));
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 
-		var saveResponse = await Client.PostAsJsonAsync($"{TakeAttendanceUrl}/day/save", new TakeAttendanceSaveInput
-		{
-			AttendanceDate = attendanceDateText,
-			Entries =
-			[
-				new TakeAttendanceSaveEntryDto
-				{
-					EmployeeId = employee.Id,
-					StatusWire = "PRESENT",
-					InTime = "09:00:00",
-					OutTime = "17:00:00"
-				}
-			]
-		}, JsonOptions);
-		saveResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		await SeedAttendanceAsync(employee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
 
 		var response = await Client.GetAsync(
-			$"{RegisterUrl}/grouped?startDate={startEnd}&endDate={startEnd}&academicYearId={Factory.SeededAcademicYearId:D}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&academicYearId={Factory.SeededAcademicYearId:D}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
 		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
@@ -633,6 +645,39 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		stageDay.IsMarked.ShouldBeTrue();
 		stageDay.AttendanceId.ShouldNotBeNull();
 		stageDay.EducationMediumStageId.ShouldBe(seeded.CurrentYearStageId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Grouped_Register_Should_Show_Selected_Employee_When_AcademicYear_Assignment_Is_Missing()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var seeded = await SeedRegisterAcademicOrganizationsAsync();
+		var marker = $"RegYearMissing{Guid.NewGuid():N}";
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			marker,
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+
+		await AssignEmployeeToStageAsync(employee.Id, seeded.OtherYearStageId);
+		await SeedAttendanceAsync(employee.Id, attendanceDate, seeded.OtherYearStageId);
+
+		var response = await Client.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&academicYearId={seeded.AcademicYearId:D}&employeeId={employee.Id:D}&skipCount=0&maxResultCount=50");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
+		var day = payload.Items.Single(x => x.EmployeeId == employee.Id).Days.Single();
+
+		payload.TotalCount.ShouldBe(1);
+		day.Status.ShouldBe(AttendanceRegisterStatus.Present);
+		day.IsMarked.ShouldBeTrue();
+		day.AttendanceId.ShouldNotBeNull();
+		payload.Summary.Present.ShouldBe(1);
+		payload.Summary.NotMarked.ShouldBe(0);
 	}
 
 	[Fact]

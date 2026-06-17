@@ -1230,7 +1230,6 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
-		var leaveTypeRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeaveType, Guid>>();
 		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
@@ -1253,14 +1252,6 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			}
 
 			var suffix = Guid.NewGuid().ToString("N")[..12];
-			var leaveType = new LeaveType(
-				Guid.NewGuid(),
-				tenantId,
-				academicYear.Id,
-				$"OT {suffix}",
-				"#2196F3");
-			await leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
-
 			var leavePolicy = new LeavePolicy(
 				Guid.NewGuid(),
 				tenantId,
@@ -1274,10 +1265,10 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				Guid.NewGuid(),
 				tenantId,
 				leavePolicy.Id,
-				leaveType.Id,
+				LeavePaidType.Paid,
+				LeaveEntitlementMode.Limited,
 				LeaveAccrualPolicyType.Yearly,
 				12,
-				LeavePaidType.Paid,
 				carryForward: false,
 				carryForwardLimit: null,
 				encashable: false,
@@ -1288,7 +1279,25 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				allowHalfDay: true,
 				attachmentRequiredAfterDays: null,
 				allowNegativeBalance: false);
-			leavePolicy.ReplaceRules([leavePolicyRule]);
+			var unpaidRule = new LeavePolicyRule(
+				Guid.NewGuid(),
+				tenantId,
+				leavePolicy.Id,
+				LeavePaidType.Unpaid,
+				LeaveEntitlementMode.Unlimited,
+				LeaveAccrualPolicyType.Yearly,
+				null,
+				carryForward: false,
+				carryForwardLimit: null,
+				encashable: false,
+				encashmentTiming: null,
+				requiresApproval: true,
+				minNoticeDays: 0,
+				maxDaysPerRequest: 30,
+				allowHalfDay: true,
+				attachmentRequiredAfterDays: null,
+				allowNegativeBalance: true);
+			leavePolicy.ReplaceRules([leavePolicyRule, unpaidRule]);
 			await leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
 			await uow.CompleteAsync();
 			return leavePolicy.Id;

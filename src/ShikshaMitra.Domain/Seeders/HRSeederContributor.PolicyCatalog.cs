@@ -12,7 +12,7 @@ namespace ShikshaMitra.Seeders;
 
 public partial class HRSeederContributor
 {
-	private async Task SeedLeaveTypesAndPoliciesAsync()
+	private async Task SeedLeavePoliciesAsync()
 	{
 		var academicYears = (await _academicYearRepository.GetListAsync())
 			.OrderBy(x => x.StartDate)
@@ -24,36 +24,8 @@ public partial class HRSeederContributor
 
 		foreach (var academicYear in academicYears)
 		{
-			await SeedLeaveTypesAndPoliciesAsync(academicYear.Id);
+			await SeedLeavePoliciesAsync(academicYear.Id);
 		}
-	}
-
-	private async Task SeedLeaveTypesAndPoliciesAsync(Guid academicYearId)
-	{
-		var leaveTypes = new[]
-		{
-			("Casual Leave", "#4CAF50", (string?)null),
-			("Sick Leave", "#FF9800", (string?)null),
-			("Earned Leave", "#2196F3", (string?)null),
-			("Maternity Leave", "#E91E63", (string?)null),
-			("Paternity Leave", "#9C27B0", (string?)null),
-			("Compensatory Off", "#00BCD4", (string?)null),
-			("Loss of Pay", "#F44336", (string?)null)
-		};
-
-		foreach (var (type, color, description) in leaveTypes)
-		{
-			if (await _leaveTypeRepository.AnyAsync(x => x.AcademicYearId == academicYearId && x.Type == type))
-			{
-				continue;
-			}
-
-			var leaveType = await _leaveTypeManager.CreateAsync(academicYearId, type, color, description);
-			await _leaveTypeRepository.InsertAsync(leaveType, autoSave: false);
-		}
-
-		await CurrentUnitOfWork.SaveChangesAsync();
-		await SeedLeavePoliciesAsync(academicYearId);
 	}
 
 	private async Task SeedLeavePoliciesAsync(Guid academicYearId)
@@ -61,61 +33,35 @@ public partial class HRSeederContributor
 		if (await _leavePolicyRepository.AnyAsync(x => x.AcademicYearId == academicYearId))
 			return;
 
-		// Get the leave type IDs by name
-		async Task<Guid?> GetLeaveTypeIdAsync(string typeName)
-		{
-			var leaveType = await _leaveTypeQueryRepository.FindByTypeAsync(academicYearId, typeName);
-			return leaveType?.Id;
-		}
-
-		async Task<LeavePolicyRuleInput?> RuleAsync(
-			string leaveTypeName,
-			int count,
+		static LeavePolicyRuleInput Rule(
 			LeavePaidType paidType,
+			int? count,
+			LeaveEntitlementMode entitlementMode = LeaveEntitlementMode.Limited,
 			bool carryForward = false,
+			int? carryForwardLimit = null,
 			bool encashable = false,
 			bool allowNegative = false)
-		{
-			var leaveTypeId = await GetLeaveTypeIdAsync(leaveTypeName);
-			return leaveTypeId.HasValue
-				? new LeavePolicyRuleInput(
-					leaveTypeId.Value,
-					LeaveAccrualPolicyType.Yearly,
-					count,
-					paidType,
-					carryForward,
-					carryForward ? count * 3 : null,
-					encashable,
-					encashable ? LeaveEncashmentTiming.EndOfYear : null,
-					true,
-					2,
-					30,
-					true,
-					null,
-					allowNegative,
-					true)
-				: null;
-		}
+			=> new(
+				paidType,
+				entitlementMode,
+				LeaveAccrualPolicyType.Yearly,
+				count,
+				carryForward,
+				carryForward ? carryForwardLimit : null,
+				encashable,
+				encashable ? LeaveEncashmentTiming.EndOfYear : null,
+				true,
+				2,
+				30,
+				true,
+				null,
+				allowNegative,
+				true);
 
 		var defaultLeavePolicyAssigned = await _leavePolicyRepository.HasActiveDefaultAsync(academicYearId);
 
-		async Task SeedPolicyAsync(string policyName, string description, params Func<Task<LeavePolicyRuleInput?>>[] ruleFactories)
+		async Task SeedPolicyAsync(string policyName, string description, params LeavePolicyRuleInput[] rules)
 		{
-			var rules = new List<LeavePolicyRuleInput>();
-			foreach (var ruleFactory in ruleFactories)
-			{
-				var rule = await ruleFactory();
-				if (rule != null)
-				{
-					rules.Add(rule);
-				}
-			}
-
-			if (rules.Count == 0)
-			{
-				return;
-			}
-
 			var leavePolicy = await _leavePolicyManager.CreateAsync(
 				academicYearId,
 				policyName,
@@ -137,26 +83,21 @@ public partial class HRSeederContributor
 
 		await SeedPolicyAsync(
 			"Teaching Staff Leave Policy",
-			"Teaching staff yearly leave entitlements.",
-			() => RuleAsync("Casual Leave", 12, LeavePaidType.Paid),
-			() => RuleAsync("Sick Leave", 10, LeavePaidType.Paid),
-			() => RuleAsync("Earned Leave", 15, LeavePaidType.Paid, carryForward: true, encashable: true),
-			() => RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
+			"Teaching staff yearly paid and unpaid leave entitlements.",
+			Rule(LeavePaidType.Paid, 24, carryForward: true, carryForwardLimit: 12, encashable: true),
+			Rule(LeavePaidType.Unpaid, null, LeaveEntitlementMode.Unlimited, allowNegative: true));
 
 		await SeedPolicyAsync(
 			"Admin Staff Leave Policy",
-			"Admin staff yearly leave entitlements.",
-			() => RuleAsync("Casual Leave", 10, LeavePaidType.Paid),
-			() => RuleAsync("Sick Leave", 8, LeavePaidType.Paid),
-			() => RuleAsync("Earned Leave", 12, LeavePaidType.Paid, carryForward: true),
-			() => RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
+			"Admin staff yearly paid and unpaid leave entitlements.",
+			Rule(LeavePaidType.Paid, 20, carryForward: true, carryForwardLimit: 10),
+			Rule(LeavePaidType.Unpaid, null, LeaveEntitlementMode.Unlimited, allowNegative: true));
 
 		await SeedPolicyAsync(
 			"Contract Staff Leave Policy",
-			"Contract staff yearly leave entitlements.",
-			() => RuleAsync("Casual Leave", 6, LeavePaidType.Paid),
-			() => RuleAsync("Sick Leave", 6, LeavePaidType.Paid),
-			() => RuleAsync("Loss of Pay", 365, LeavePaidType.Unpaid, allowNegative: true));
+			"Contract staff yearly paid and unpaid leave entitlements.",
+			Rule(LeavePaidType.Paid, 12),
+			Rule(LeavePaidType.Unpaid, null, LeaveEntitlementMode.Unlimited, allowNegative: true));
 
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}

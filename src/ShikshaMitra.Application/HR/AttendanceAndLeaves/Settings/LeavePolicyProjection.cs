@@ -53,19 +53,15 @@ public static class LeavePolicyProjection
 	public static LeavePolicyRuleItem ToRuleItem(LeavePolicyRule rule) => new()
 	{
 		Id = rule.Id,
-		LeaveType = new LeaveTypeReference
-		{
-			Id = rule.LeaveTypeId,
-			Name = rule.LeaveType?.Type ?? string.Empty,
-			Color = rule.LeaveType?.Color
-		},
+		PaidType = ToPaidType(rule.PaidType),
+		EntitlementMode = ToEntitlementMode(rule.EntitlementMode),
 		AccrualPolicyType = ToAccrualPolicyType(rule.AccrualPolicyType),
 		LeaveCount = rule.LeaveCount,
+		IsUnlimited = rule.IsUnlimited,
 		CarryForward = rule.CarryForward,
 		CarryForwardLimit = rule.CarryForwardLimit,
 		EncashmentAllowed = rule.Encashable,
 		EncashmentTiming = ToEncashmentTiming(rule.EncashmentTiming),
-		PaidType = ToPaidType(rule.PaidType),
 		RequiresApproval = rule.RequiresApproval,
 		MinNoticeDays = rule.MinNoticeDays,
 		MaxDaysPerRequest = rule.MaxDaysPerRequest,
@@ -76,10 +72,10 @@ public static class LeavePolicyProjection
 	};
 
 	public static LeavePolicyRuleInput ToRuleInput(LeavePolicyRuleRequest request) => new(
-		request.LeaveTypeId,
+		ParsePaidType(request.PaidType),
+		ParseEntitlementMode(request.EntitlementMode),
 		ParseAccrualPolicyType(request.AccrualPolicyType),
 		request.LeaveCount,
-		ParsePaidType(request.PaidType),
 		request.CarryForward,
 		request.CarryForwardLimit,
 		request.EncashmentAllowed,
@@ -105,6 +101,14 @@ public static class LeavePolicyProjection
 			: LeavePaidType.Unpaid;
 
 	public static string ToPaidType(LeavePaidType paidType) => paidType == LeavePaidType.Paid ? "Paid" : "Unpaid";
+
+	public static LeaveEntitlementMode ParseEntitlementMode(string value) =>
+		string.Equals(value, "Unlimited", StringComparison.OrdinalIgnoreCase)
+			? LeaveEntitlementMode.Unlimited
+			: LeaveEntitlementMode.Limited;
+
+	public static string ToEntitlementMode(LeaveEntitlementMode value) =>
+		value == LeaveEntitlementMode.Unlimited ? "Unlimited" : "Limited";
 
 	public static LeaveAccrualPolicyType ParseAccrualPolicyType(string value) =>
 		string.Equals(value, "Yearly", StringComparison.OrdinalIgnoreCase)

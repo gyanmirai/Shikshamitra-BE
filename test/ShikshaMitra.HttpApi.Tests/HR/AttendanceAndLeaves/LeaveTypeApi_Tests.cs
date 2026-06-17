@@ -1,8 +1,6 @@
-using System;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
-using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
@@ -22,66 +20,12 @@ public class LeaveTypeApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Create_And_Get_Leave_Type()
+	public async Task Hr_Leave_Type_Endpoint_Should_Not_Exist()
 	{
-		var created = await CreateLeaveTypeAsync();
+		var getResponse = await Client.GetAsync($"{BaseUrl}?page=1&pageSize=10");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-		var getResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}");
-		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-		var body = await getResponse.Content.ReadFromJsonAsync<LeaveTypeResponse>(JsonOptions);
-		body.ShouldNotBeNull();
-		body.Id.ShouldBe(created.Id);
+		var postResponse = await Client.PostAsJsonAsync(BaseUrl, new { name = "Sick", color = "#28A745" }, JsonOptions);
+		postResponse.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Filter_Leave_Type_List_By_Search()
-	{
-		var marker = $"Leave-{Guid.NewGuid():N}";
-		await CreateLeaveTypeAsync(marker);
-
-		var response = await Client.GetAsync($"{BaseUrl}?academicYearId={AcademicYearId}&page=1&pageSize=10&search={marker}");
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-		var list = await response.Content.ReadFromJsonAsync<LeaveTypeListResponse>(JsonOptions);
-		list.ShouldNotBeNull();
-		list.Items.ShouldContain(x => x.Name == marker);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Archived_Leave_Type_Should_Not_Appear_In_Active_List()
-	{
-		var marker = $"Archive-{Guid.NewGuid():N}";
-		var created = await CreateLeaveTypeAsync(marker);
-
-		var deleteResponse = await Client.DeleteAsync($"{BaseUrl}/{created.Id}");
-		deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-		var response = await Client.GetAsync($"{BaseUrl}?academicYearId={AcademicYearId}&page=1&pageSize=100&search={marker}");
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-		var list = await response.Content.ReadFromJsonAsync<LeaveTypeListResponse>(JsonOptions);
-		list.ShouldNotBeNull();
-		list.Items.ShouldNotContain(x => x.Id == created.Id);
-	}
-
-	private async Task<LeaveTypeResponse> CreateLeaveTypeAsync(string? name = null)
-	{
-		var request = new LeaveTypeCreateRequest
-		{
-			Name = name ?? $"Sick-{Guid.NewGuid():N}",
-			Color = "#28A745",
-			Description = "Sick leave"
-		};
-
-		var response = await Client.PostAsJsonAsync($"{BaseUrl}?academicYearId={AcademicYearId}", request, JsonOptions);
-		response.StatusCode.ShouldBe(HttpStatusCode.Created);
-
-		return await response.Content.ReadFromJsonAsync<LeaveTypeResponse>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to create leave type.");
-	}
-
-	private Guid AcademicYearId => Factory.SeededAcademicYearId;
 }

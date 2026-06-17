@@ -52,7 +52,7 @@ public class LeaveManagementAppService(
 		var selfRequest = new LeaveRequestCreateDto
 		{
 			ForEmployeeId = actorEmployeeId,
-			LeaveTypeId = input.LeaveTypeId,
+			PaidType = input.PaidType,
 			StartDate = input.StartDate,
 			EndDate = input.EndDate,
 			HalfDay = input.HalfDay,

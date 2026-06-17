@@ -41,9 +41,9 @@ public class WorkCalendarHolidayDto
 	public Guid? Id { get; set; }
 	public Guid? WorkCalendarPolicyId { get; set; }
 	public Guid AcademicYearId { get; set; }
-	public DateTime Date { get; set; }
-	public DateTime? FromDate { get; set; }
-	public DateTime? ToDate { get; set; }
+	public DateOnly Date { get; set; }
+	public DateOnly? FromDate { get; set; }
+	public DateOnly? ToDate { get; set; }
 	public int DayCount { get; set; } = 1;
 	public string HolidayName { get; set; } = string.Empty;
 	public string Source { get; set; } = "central_calendar";

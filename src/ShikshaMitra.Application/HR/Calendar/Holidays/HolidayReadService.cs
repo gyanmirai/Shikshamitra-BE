@@ -23,13 +23,13 @@ public class HolidayReadService(
 	public async Task<PagedResultDto<HolidayDto>> GetListAsync(GetHolidayListRequestDto input)
 	{
 		var search = input.Search;
-		var now = CurrentInstant();
+		var today = CurrentBusinessDate();
 		var query = (await holidayRepository.GetQueryableAsync())
 			.WhereIf(!search.IsNullOrWhiteSpace(), x => x.HolidayName.Contains(search!))
 			.WhereIf(input.AcademicYearId.HasValue, x => x.AcademicYearId == input.AcademicYearId)
 			.WhereIf(input.TypeId.HasValue, x => x.HolidayTypeId == input.TypeId)
-			.WhereIf(input.FromDate.HasValue, x => x.StartDate >= input.FromDate)
-			.WhereIf(input.ToDate.HasValue, x => x.EndDate <= input.ToDate);
+			.WhereIf(input.FromDate.HasValue, x => x.StartDate >= input.FromDate!.Value)
+			.WhereIf(input.ToDate.HasValue, x => x.EndDate <= input.ToDate!.Value);
 
 		List<Holiday> items;
 		int totalCount;
@@ -38,11 +38,11 @@ public class HolidayReadService(
 			var filtered = await AsyncExecuter.ToListAsync(query);
 			if (input.Status.HasValue)
 			{
-				filtered = filtered.Where(x => (int)x.GetStatus(now) == input.Status.Value).ToList();
+				filtered = filtered.Where(x => (int)x.GetStatus(today) == input.Status.Value).ToList();
 			}
 
 			totalCount = filtered.Count;
-			items = ApplySorting(filtered, input.Sorting, now)
+			items = ApplySorting(filtered, input.Sorting, today)
 				.Skip(input.SkipCount)
 				.Take(input.MaxResultCount)
 				.ToList();
@@ -57,7 +57,7 @@ public class HolidayReadService(
 		}
 
 		var holidayDtos = ObjectMapper.Map<List<Holiday>, List<HolidayDto>>(items);
-		ApplyStatuses(items, holidayDtos, now);
+		ApplyStatuses(items, holidayDtos, today);
 		await PopulateHolidayTypesAsync(holidayDtos);
 
 		return new PagedResultDto<HolidayDto>(totalCount, holidayDtos);
@@ -78,7 +78,7 @@ public class HolidayReadService(
 	{
 		var entity = await holidayRepository.GetAsync(id);
 		var holidayDto = ObjectMapper.Map<Holiday, HolidayDto>(entity);
-		holidayDto.Status = (int)entity.GetStatus(CurrentInstant());
+		holidayDto.Status = (int)entity.GetStatus(CurrentBusinessDate());
 		await PopulateHolidayTypeAsync(holidayDto);
 		return holidayDto;
 	}
@@ -132,27 +132,27 @@ public class HolidayReadService(
 	private static IOrderedEnumerable<Holiday> ApplySorting(
 		IEnumerable<Holiday> holidays,
 		string? sorting,
-		DateTimeOffset now)
+		DateOnly today)
 	{
 		var sortingProperty = sorting ?? nameof(Holiday.HolidayName);
 		return sortingProperty switch
 		{
 			"startDate" => holidays.OrderBy(x => x.StartDate),
 			"endDate" => holidays.OrderBy(x => x.EndDate),
-			"status" => holidays.OrderBy(x => x.GetStatus(now)),
+			"status" => holidays.OrderBy(x => x.GetStatus(today)),
 			_ => holidays.OrderBy(x => x.HolidayName)
 		};
 	}
 
-	private void ApplyStatuses(IReadOnlyList<Holiday> holidays, IReadOnlyList<HolidayDto> holidayDtos, DateTimeOffset? now = null)
+	private void ApplyStatuses(IReadOnlyList<Holiday> holidays, IReadOnlyList<HolidayDto> holidayDtos, DateOnly? today = null)
 	{
-		var effectiveNow = now ?? CurrentInstant();
+		var effectiveToday = today ?? CurrentBusinessDate();
 		for (var i = 0; i < holidays.Count && i < holidayDtos.Count; i++)
 		{
-			holidayDtos[i].Status = (int)holidays[i].GetStatus(effectiveNow);
+			holidayDtos[i].Status = (int)holidays[i].GetStatus(effectiveToday);
 		}
 	}
 
-	private DateTimeOffset CurrentInstant() =>
-		new(Clock.Now.ToUniversalTime(), TimeSpan.Zero);
+	private DateOnly CurrentBusinessDate() =>
+		DateOnly.FromDateTime(Clock.Now);
 }

@@ -42,7 +42,7 @@ public class AttendancePolicyAppService(
 	public async Task<AttendancePolicyDto> GetAsync(Guid id) =>
 		HrPolicyMapping.ToDto(await repository.GetAsync(id));
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.Create)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.Add)]
 	public Task<AttendancePolicyDto> CreateAsync(CreateUpdateAttendancePolicyDto input) =>
 		mutationService.CreateAsync(input);
 

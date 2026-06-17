@@ -35,6 +35,7 @@ public static class ShikshaMitraSubModulePermissions
 	public const string Chapters = $"{ShikshaMitraModulePermissions.ClassManagement}.Chapters";
 	public const string TeacherAssignment = $"{ShikshaMitraModulePermissions.ClassManagement}.TeacherAssignment";
 	public const string ClassTeacherAssignment = $"{ShikshaMitraModulePermissions.ClassManagement}.ClassTeacherAssignment";
+	public const string ClassManagementReports = $"{ShikshaMitraModulePermissions.ClassManagement}.Reports";
 	public const string ClassManagementNotification = $"{ShikshaMitraModulePermissions.ClassManagement}.Notification";
 
 	// HR module submodules
@@ -51,6 +52,7 @@ public static class ShikshaMitraSubModulePermissions
 	public const string HRPoliciesPolicyImpact = $"{ShikshaMitraModulePermissions.HR}.Policies.PolicyImpact";
 	public const string AttendanceManagement = $"{ShikshaMitraModulePermissions.HR}.AttendanceManagement";
 	public const string AttendanceManagementSettings = $"{ShikshaMitraModulePermissions.HR}.AttendanceManagement.Settings";
+	public const string LeaveManagement = $"{ShikshaMitraModulePermissions.HR}.LeaveManagement";
 	public const string ProfessionalManagement = $"{ShikshaMitraModulePermissions.HR}.ProfessionalManagement";
 	public const string HRReports = $"{ShikshaMitraModulePermissions.HR}.Reports";
 	public const string HRNotification = $"{ShikshaMitraModulePermissions.HR}.Notification";
@@ -203,6 +205,7 @@ public static class ShikshaMitraSubModulePermissions
 		Chapters,
 		TeacherAssignment,
 		ClassTeacherAssignment,
+		ClassManagementReports,
 		ClassManagementNotification,
 		HRDashboard,
 		EmployeeRecords,
@@ -217,6 +220,7 @@ public static class ShikshaMitraSubModulePermissions
 		HRPoliciesPolicyImpact,
 		AttendanceManagement,
 		AttendanceManagementSettings,
+		LeaveManagement,
 		ProfessionalManagement,
 		HRReports,
 		HRNotification,
@@ -357,6 +361,7 @@ public static class ShikshaMitraSubModulePermissions
 		{ Chapters, $"{DisplayNamePrefix}.Chapters" },
 		{ TeacherAssignment, $"{DisplayNamePrefix}.TeacherAssignment" },
 		{ ClassTeacherAssignment, $"{DisplayNamePrefix}.ClassTeacherAssignment" },
+		{ ClassManagementReports, $"{DisplayNamePrefix}.ClassManagementReports" },
 		{ ClassManagementNotification, $"{DisplayNamePrefix}.ClassManagementNotification" },
 
 		// HR module submodules
@@ -373,6 +378,7 @@ public static class ShikshaMitraSubModulePermissions
 		{ HRPoliciesPolicyImpact, $"{DisplayNamePrefix}.HRPoliciesPolicyImpact" },
 		{ AttendanceManagement, $"{DisplayNamePrefix}.AttendanceManagement" },
 		{ AttendanceManagementSettings, $"{DisplayNamePrefix}.AttendanceManagementSettings" },
+		{ LeaveManagement, $"{DisplayNamePrefix}.LeaveManagement" },
 		{ ProfessionalManagement, $"{DisplayNamePrefix}.ProfessionalManagement" },
 		{ HRReports, $"{DisplayNamePrefix}.HRReports" },
 		{ HRNotification, $"{DisplayNamePrefix}.HRNotification" },

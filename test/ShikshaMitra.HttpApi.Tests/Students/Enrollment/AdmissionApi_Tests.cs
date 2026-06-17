@@ -7,15 +7,19 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Library.Members;
 using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Students.Admissions;
 using ShikshaMitra.Students.Enrollment;
 using ShikshaMitra.Students.Enrollments.Admissions;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -189,6 +193,110 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
         (await HasLibraryMemberAsync(registration.StudentId)).ShouldBeTrue();
     }
 
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Approve_Admission_With_Student_Email_Without_Generic_Processing_Error()
+    {
+        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto("AdmissionEmail");
+        dto.Email = TestDataHelper.UniqueEmail("student-admission");
+        var createResponse = await Client.PostAsJsonAsync(
+            "/api/student/enrollment/registrations/general-details",
+            dto,
+            JsonOptions);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+        var createBody = await createResponse.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
+        createBody.ShouldNotBeNull();
+        createBody.Data.ShouldNotBeNull();
+
+        await MoveRegistrationToAdmissionWithMembershipFlagsAsync(createBody.Data.StudentId);
+
+        var approveResponse = await Client.PostAsJsonAsync(
+            $"{BaseUrl}/status",
+            new BatchAdmissionStatusChangeRequestDto
+            {
+                Items =
+                [
+                    new AdmissionStatusChangeItemDto
+                    {
+                        StudentId = createBody.Data.StudentId,
+                        Action = StudentEnrollmentApprovalState.Approved
+                    }
+                ]
+            },
+            JsonOptions);
+
+        approveResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await approveResponse.Content.ReadAsStringAsync());
+        var result = await approveResponse.Content.ReadFromJsonAsync<BatchAdmissionStatusChangeResultDto>(JsonOptions);
+        result.ShouldNotBeNull();
+        result.Succeeded.ShouldBe(1);
+        result.Failed.ShouldBe(0);
+        var item = result.Results.Single();
+        item.Success.ShouldBeTrue();
+        (item.Message ?? string.Empty).ShouldNotContain("unexpected error");
+        item.NewStatus.ShouldBe(StudentEnrollmentApprovalState.Approved.ToString());
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Add_Parent_Role_To_Existing_Parent_User_On_Approval()
+    {
+        var parentEmail = TestDataHelper.UniqueEmail("existing-parent");
+        await CreateIdentityUserWithoutRoleAsync($"existing-parent-{Guid.NewGuid():N}", parentEmail);
+        (await IsUserInRoleByEmailAsync(parentEmail, "Parent")).ShouldBeFalse();
+
+        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto("ExistingParent");
+        dto.Email = TestDataHelper.UniqueEmail("student-existing-parent");
+        var createResponse = await Client.PostAsJsonAsync(
+            "/api/student/enrollment/registrations/general-details",
+            dto,
+            JsonOptions);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+        var createBody = await createResponse.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
+        createBody.ShouldNotBeNull();
+        createBody.Data.ShouldNotBeNull();
+
+        var familyResponse = await Client.PutAsJsonAsync(
+            $"/api/student/enrollment/registrations/{createBody.Data.StudentId}/family-details",
+            new UpdateFamilyInfoDto
+            {
+                FatherDetails = new ParentGuardianDto
+                {
+                    FullName = "Existing Parent",
+                    Email = parentEmail,
+                    ContactNo = TestDataHelper.UniquePhone()
+                }
+            },
+            JsonOptions);
+        familyResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await familyResponse.Content.ReadAsStringAsync());
+
+        await MoveRegistrationToAdmissionWithMembershipFlagsAsync(createBody.Data.StudentId);
+
+        var approveResponse = await Client.PostAsJsonAsync(
+            $"{BaseUrl}/status",
+            new BatchAdmissionStatusChangeRequestDto
+            {
+                Items =
+                [
+                    new AdmissionStatusChangeItemDto
+                    {
+                        StudentId = createBody.Data.StudentId,
+                        Action = StudentEnrollmentApprovalState.Approved
+                    }
+                ]
+            },
+            JsonOptions);
+
+        approveResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await approveResponse.Content.ReadAsStringAsync());
+        var result = await approveResponse.Content.ReadFromJsonAsync<BatchAdmissionStatusChangeResultDto>(JsonOptions);
+        result.ShouldNotBeNull();
+        result.Succeeded.ShouldBe(1);
+        result.Failed.ShouldBe(0);
+        var item = result.Results.Single();
+        item.Success.ShouldBeTrue();
+        (item.Message ?? string.Empty).ShouldNotContain("unexpected error");
+        (await IsUserInRoleByEmailAsync(parentEmail, "Parent")).ShouldBeTrue();
+    }
+
     #endregion
 
     #region Tier 2 — Extended
@@ -300,6 +408,44 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
             var exists = query.Any(member => member.StudentId == studentId && member.IsActive);
             await uow.CompleteAsync();
             return exists;
+        }
+    }
+
+    private async Task CreateIdentityUserWithoutRoleAsync(string userName, string email)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var userManager = scope.ServiceProvider.GetRequiredService<IdentityUserManager>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var user = new IdentityUser(Guid.NewGuid(), userName, email, tenantId);
+            user.SetEmailConfirmed(true);
+            var result = await userManager.CreateAsync(user, "Test@1234");
+            result.Succeeded.ShouldBeTrue(string.Join(", ", result.Errors.Select(error => error.Description)));
+            await uow.CompleteAsync();
+        }
+    }
+
+    private async Task<bool> IsUserInRoleByEmailAsync(string email, string roleName)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var userManager = scope.ServiceProvider.GetRequiredService<IdentityUserManager>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var user = await userManager.FindByEmailAsync(email);
+            user.ShouldNotBeNull();
+            var inRole = await userManager.IsInRoleAsync(user, roleName);
+            await uow.CompleteAsync();
+            return inRole;
         }
     }
 }

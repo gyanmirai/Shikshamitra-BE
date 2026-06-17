@@ -338,6 +338,7 @@ public class StudentAdmissionAppService(
 		if (existingUser != null)
 		{
 			Logger.LogInformation("User account for {Email} already exists. Skipping creation.", email);
+			await TryAddUserToRoleAsync(existingUser, "Student", "student", student.Id);
 			return;
 		}
 
@@ -362,12 +363,10 @@ public class StudentAdmissionAppService(
 		var result = await userManager.CreateAsync(user, password);
 		if (result.Succeeded)
 		{
-			// Assign Student role
-			await userManager.AddToRoleAsync(user, "Student");
+			await TryAddUserToRoleAsync(user, "Student", "student", student.Id);
 
-			// Send Admission Approved Email
 			var studentFullName = $"{student.FirstName} {student.LastName}".Trim();
-			await studentEmailService.SendAdmissionApprovalEmailAsync(email, studentFullName, username, password);
+			await TrySendAdmissionApprovalEmailAsync(email, studentFullName, username, password, student.Id);
 
 			Logger.LogInformation("Successfully created user account and sent admission email for student {StudentId}", student.Id);
 		}
@@ -442,6 +441,7 @@ public class StudentAdmissionAppService(
 			if (existingUser != null)
 			{
 				Logger.LogInformation("Parent account for {Email} already exists. Skipping creation.", email);
+				await TryAddUserToRoleAsync(existingUser, "Parent", "parent", student.Id);
 				return;
 			}
 
@@ -472,17 +472,15 @@ public class StudentAdmissionAppService(
 			var result = await userManager.CreateAsync(user, password);
 			if (result.Succeeded)
 			{
-				// Assign Parent role
-				await userManager.AddToRoleAsync(user, "Parent");
+				await TryAddUserToRoleAsync(user, "Parent", "parent", student.Id);
 
-				// Send welcome email
 				var studentFullName = $"{student.FirstName} {student.LastName}".Trim();
-				await studentEmailService.SendAdmissionApprovalEmailAsync(
+				await TrySendAdmissionApprovalEmailAsync(
 					email,
 					$"{fullName} ({parentType} of {studentFullName})",
 					username,
-					password
-				);
+					password,
+					student.Id);
 
 				Logger.LogInformation("Successfully created parent account ({ParentType}) for student {StudentId}", parentType, student.Id);
 			}
@@ -496,6 +494,58 @@ public class StudentAdmissionAppService(
 		{
 			// Log but don't fail the student admission if parent account creation fails
 			Logger.LogWarning(ex, "Error creating parent account for student {StudentId}", student.Id);
+		}
+	}
+
+	private async Task TryAddUserToRoleAsync(IdentityUser user, string roleName, string accountType, Guid studentId)
+	{
+		try
+		{
+			if (await userManager.IsInRoleAsync(user, roleName))
+			{
+				return;
+			}
+
+			var result = await userManager.AddToRoleAsync(user, roleName);
+			if (!result.Succeeded)
+			{
+				Logger.LogWarning(
+					"Could not assign {RoleName} role to {AccountType} account for student {StudentId}. Errors: {Errors}",
+					roleName,
+					accountType,
+					studentId,
+					string.Join(", ", result.Errors.Select(error => error.Description)));
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.LogWarning(
+				ex,
+				"Could not assign {RoleName} role to {AccountType} account for student {StudentId}. Admission approval will continue.",
+				roleName,
+				accountType,
+				studentId);
+		}
+	}
+
+	private async Task TrySendAdmissionApprovalEmailAsync(
+		string email,
+		string displayName,
+		string username,
+		string password,
+		Guid studentId)
+	{
+		try
+		{
+			await studentEmailService.SendAdmissionApprovalEmailAsync(email, displayName, username, password);
+		}
+		catch (Exception ex)
+		{
+			Logger.LogWarning(
+				ex,
+				"Could not send admission approval email to {Email} for student {StudentId}. Admission approval will continue.",
+				email,
+				studentId);
 		}
 	}
 }

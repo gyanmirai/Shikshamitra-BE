@@ -111,6 +111,39 @@ public class RegistrationFamilyDetailsApi_Tests : ShikshaMitraApiTestBase
         body.Data.MotherDetails.FullName.ShouldBe("Sunita TestMother");
     }
 
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Update_Family_Details_With_Aadhaar_And_Nested_Addresses()
+    {
+        var studentId = await StudentEnrollmentTestHelper
+            .CreateRegisteredStudentAndGetIdAsync(Client, "FamFull");
+
+        var dto = new UpdateFamilyInfoDto
+        {
+            FatherDetails = BuildParent("Ramesh Patel", "111122223333", "Father Org"),
+            MotherDetails = BuildParent("Sunita Patel", "444455556666", "Mother Org"),
+            GuardianDetails = BuildParent("Kiran Patel", "777788889999", "Guardian Org"),
+        };
+
+        var response = await Client.PutAsJsonAsync(
+            $"{BaseUrl}/{studentId}/family-details", dto, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content
+            .ReadFromJsonAsync<Result<StudentFamilyInfoDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.FatherDetails.ShouldNotBeNull();
+        body.Data.MotherDetails.ShouldNotBeNull();
+        body.Data.GuardianDetails.ShouldNotBeNull();
+        body.Data.FatherDetails.AadharNo.ShouldBe("111122223333");
+        body.Data.MotherDetails.AadharNo.ShouldBe("444455556666");
+        body.Data.GuardianDetails.AadharNo.ShouldBe("777788889999");
+        body.Data.MotherDetails.Organization.ShouldBe("Mother Org");
+        body.Data.GuardianDetails.OfficeAddress.ShouldNotBeNull();
+        body.Data.GuardianDetails.OfficeAddress.City.ShouldBe("Ahmedabad");
+    }
+
     #endregion
 
     #region Tier 1 — Important
@@ -315,4 +348,34 @@ public class RegistrationFamilyDetailsApi_Tests : ShikshaMitraApiTestBase
     }
 
     #endregion
+
+    private static ParentGuardianDto BuildParent(string fullName, string aadhaarNo, string organization) =>
+        new()
+        {
+            FullName = fullName,
+            DateOfBirth = new DateTimeOffset(1980, 1, 15, 0, 0, 0, TimeSpan.Zero),
+            Occupation = "Service",
+            Email = TestDataHelper.UniqueEmail("parent"),
+            ContactNo = TestDataHelper.UniquePhone(),
+            OfficeNo = TestDataHelper.UniquePhone(),
+            Qualification = "Graduate",
+            YearOfPassing = "2001",
+            Designation = "Manager",
+            Organization = organization,
+            AadharNo = aadhaarNo,
+            OfficeAddress = BuildAddress("Office"),
+            LocalAddress = BuildAddress("Local"),
+        };
+
+    private static AddressDto BuildAddress(string prefix) =>
+        new()
+        {
+            Address1 = $"{prefix} Address 1",
+            Address2 = $"{prefix} Address 2",
+            Address3 = $"{prefix} Address 3",
+            City = "Ahmedabad",
+            State = new Common.State("Gujarat", "GJ"),
+            Country = new Common.Country("India", "IN"),
+            Pincode = "380001",
+        };
 }

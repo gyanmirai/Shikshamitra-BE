@@ -134,6 +134,125 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     }
 
     [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Reject_Duplicate_Gr_Numbers_Before_Save()
+    {
+        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrDupA");
+        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrDupB");
+        var grBase = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 700000;
+
+        var okResponse = await Client.PostAsJsonAsync(
+            "/api/students/records/gr-numbers",
+            new List<UpdateStudentGrNumberDto>
+            {
+                new() { StudentId = first.StudentId, GrNo = grBase },
+                new() { StudentId = second.StudentId, GrNo = grBase + 1 },
+            },
+            JsonOptions);
+        okResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await okResponse.Content.ReadAsStringAsync());
+
+        var duplicateBatchResponse = await Client.PostAsJsonAsync(
+            "/api/students/records/gr-numbers",
+            new List<UpdateStudentGrNumberDto>
+            {
+                new() { StudentId = first.StudentId, GrNo = grBase + 2 },
+                new() { StudentId = second.StudentId, GrNo = grBase + 2 },
+            },
+            JsonOptions);
+        duplicateBatchResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        var duplicateBatchContent = await duplicateBatchResponse.Content.ReadAsStringAsync();
+        duplicateBatchContent.ShouldContain(StudentErrorCodes.DuplicateGrNo);
+        duplicateBatchContent.ShouldContain($"GR Number {grBase + 2} is already assigned to another student.");
+        var afterDuplicateBatch = await GetGrNumbersAsync(first.StudentId, second.StudentId);
+        afterDuplicateBatch[first.StudentId].ShouldBe(grBase);
+        afterDuplicateBatch[second.StudentId].ShouldBe(grBase + 1);
+
+        var existingConflictResponse = await Client.PostAsJsonAsync(
+            "/api/students/records/gr-numbers",
+            new List<UpdateStudentGrNumberDto>
+            {
+                new() { StudentId = first.StudentId, GrNo = grBase + 1 },
+            },
+            JsonOptions);
+        existingConflictResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        var existingConflictContent = await existingConflictResponse.Content.ReadAsStringAsync();
+        existingConflictContent.ShouldContain(StudentErrorCodes.DuplicateGrNo);
+        existingConflictContent.ShouldContain($"GR Number {grBase + 1} is already assigned to another student.");
+        var afterExistingConflict = await GetGrNumbersAsync(first.StudentId, second.StudentId);
+        afterExistingConflict[first.StudentId].ShouldBe(grBase);
+        afterExistingConflict[second.StudentId].ShouldBe(grBase + 1);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Reject_Gr_Number_Transfer_From_Student_In_Same_Batch()
+    {
+        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrTransferA");
+        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrTransferB");
+        var grBase = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 800000;
+
+        var initialResponse = await Client.PostAsJsonAsync(
+            "/api/students/records/gr-numbers",
+            new List<UpdateStudentGrNumberDto>
+            {
+                new() { StudentId = first.StudentId, GrNo = grBase },
+                new() { StudentId = second.StudentId, GrNo = grBase + 1 },
+            },
+            JsonOptions);
+        initialResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await initialResponse.Content.ReadAsStringAsync());
+
+        var transferResponse = await Client.PostAsJsonAsync(
+            "/api/students/records/gr-numbers",
+            new List<UpdateStudentGrNumberDto>
+            {
+                new() { StudentId = first.StudentId, GrNo = grBase + 1 },
+                new() { StudentId = second.StudentId, GrNo = grBase + 2 },
+            },
+            JsonOptions);
+
+        transferResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        var transferContent = await transferResponse.Content.ReadAsStringAsync();
+        transferContent.ShouldContain(StudentErrorCodes.DuplicateGrNo);
+        transferContent.ShouldContain($"GR Number {grBase + 1} is already assigned to another student.");
+        var grNumbers = await GetGrNumbersAsync(first.StudentId, second.StudentId);
+        grNumbers[first.StudentId].ShouldBe(grBase);
+        grNumbers[second.StudentId].ShouldBe(grBase + 1);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Allow_Student_To_Keep_Own_Gr_Number_In_Batch()
+    {
+        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrKeepA");
+        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrKeepB");
+        var grBase = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 900000;
+
+        var initialResponse = await Client.PostAsJsonAsync(
+            "/api/students/records/gr-numbers",
+            new List<UpdateStudentGrNumberDto>
+            {
+                new() { StudentId = first.StudentId, GrNo = grBase },
+                new() { StudentId = second.StudentId, GrNo = grBase + 1 },
+            },
+            JsonOptions);
+        initialResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await initialResponse.Content.ReadAsStringAsync());
+
+        var retainResponse = await Client.PostAsJsonAsync(
+            "/api/students/records/gr-numbers",
+            new List<UpdateStudentGrNumberDto>
+            {
+                new() { StudentId = first.StudentId, GrNo = grBase },
+                new() { StudentId = second.StudentId, GrNo = grBase + 2 },
+            },
+            JsonOptions);
+
+        retainResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await retainResponse.Content.ReadAsStringAsync());
+        var grNumbers = await GetGrNumbersAsync(first.StudentId, second.StudentId);
+        grNumbers[first.StudentId].ShouldBe(grBase);
+        grNumbers[second.StudentId].ShouldBe(grBase + 2);
+    }
+
+    [Fact]
     [TestTier(TestTraits.Tiers.Important)]
     public void Should_Keep_Bulk_Upload_App_Service_Non_Remote_And_Permission_Guarded()
     {
@@ -850,6 +969,27 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
 			var result = query
 				.Where(student => ids.Contains(student.Id))
 				.ToDictionary(student => student.Id, student => student.RollNo);
+			await uow.CompleteAsync();
+            return result;
+        }
+    }
+
+    private async Task<Dictionary<Guid, int?>> GetGrNumbersAsync(params Guid[] studentIds)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var ids = studentIds.ToList();
+			var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+			var result = query
+				.Where(student => ids.Contains(student.Id))
+				.ToDictionary(student => student.Id, student => student.GrNo);
 			await uow.CompleteAsync();
             return result;
         }

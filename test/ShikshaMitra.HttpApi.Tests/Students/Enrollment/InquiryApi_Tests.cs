@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -10,8 +11,10 @@ using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Enrollment;
+using ShikshaMitra.Students.Enrollments.Notes;
 using ShikshaMitra.Students.Enrollments.Inquiries;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
@@ -213,6 +216,80 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
         body.ShouldNotBeNull();
         body.Data.ShouldNotBeNull();
         body.Data.PreviousSchool.ShouldBe("DPS School");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Extended)]
+    public async Task Should_Return_Computed_Inquiry_List_And_Detail_Fields()
+    {
+        var preferenceName = $"Walk-in {Guid.NewGuid():N}";
+        var preferenceResponse = await Client.PostAsJsonAsync(
+            $"/api/student-enrollment/{Factory.SeededAcademicYearId}/settings/inquiry-preferences",
+            new CreateUpdateInquiryPreferenceDto { PreferenceName = preferenceName },
+            JsonOptions);
+        preferenceResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await preferenceResponse.Content.ReadAsStringAsync());
+        var preference = await preferenceResponse.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        preference.ShouldNotBeNull();
+
+        var dto = StudentEnrollmentTestHelper.BuildInquiryDto("InqProjection");
+        dto.DateOfBirth = new DateTimeOffset(2015, 6, 16, 0, 0, 0, TimeSpan.Zero);
+        dto.Address1 = "12 Sunrise Street";
+        dto.Address2 = "Near City Library";
+        dto.Address3 = "Block C";
+        dto.City = "Ahmedabad";
+        dto.PinCode = "380015";
+        dto.InquiryPreferenceId = preference.Id;
+
+        var createResponse = await Client.PostAsJsonAsync($"{BaseUrl}/inquiries", dto, JsonOptions);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+
+        var listResponse = await Client.GetAsync(
+            $"{BaseUrl}/{StudentEnrollmentTestHelper.DefaultAcademicMediumId}/inquiries?maxResultCount=20&searchTerm={Uri.EscapeDataString(dto.FirstName)}");
+        listResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await listResponse.Content.ReadAsStringAsync());
+        var listResult = await listResponse.Content
+            .ReadFromJsonAsync<Common.Responses.Result<PagedResultDto<StudentDto>>>(JsonOptions);
+        listResult.ShouldNotBeNull();
+        listResult.Data.ShouldNotBeNull();
+        var listItem = listResult.Data.Items.Single(item => item.FirstName == dto.FirstName);
+
+        var reminderDate = DateTimeOffset.UtcNow.AddDays(3);
+        var noteResponse = await Client.PostAsJsonAsync(
+            $"{BaseUrl}/{listItem.StudentId}/notes",
+            new CreateUpdateStudentNoteDto
+            {
+                Note = "Projection regression follow-up",
+                NextReminderDate = reminderDate,
+                Status = NoteStatusEnum.Interested,
+            },
+            JsonOptions);
+        noteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent, await noteResponse.Content.ReadAsStringAsync());
+
+        var getResponse = await Client.GetAsync($"{BaseUrl}/inquiries/{listItem.StudentId}");
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await getResponse.Content.ReadAsStringAsync());
+        var detail = await getResponse.Content
+            .ReadFromJsonAsync<Common.Responses.Result<StudentDto>>(JsonOptions);
+        detail.ShouldNotBeNull();
+        detail.Data.ShouldNotBeNull();
+        detail.Data.Age.ShouldNotBeNullOrWhiteSpace();
+        detail.Data.Address.ShouldNotBeNull();
+        detail.Data.Address!.ShouldContain("12 Sunrise Street");
+        detail.Data.Address.ShouldContain("Near City Library");
+        detail.Data.InquiryPreferenceId.ShouldBe(preference.Id);
+        detail.Data.InquiryPreference.ShouldBe(preferenceName);
+        detail.Data.InquiryStatus.ShouldBe(NoteStatusEnum.Interested);
+        detail.Data.NextReminderDate.ShouldNotBeNull();
+        detail.Data.NextReminderDate!.Value.Date.ShouldBe(reminderDate.Date);
+
+        var refreshedListResponse = await Client.GetAsync(
+            $"{BaseUrl}/{StudentEnrollmentTestHelper.DefaultAcademicMediumId}/inquiries?maxResultCount=20&searchTerm={Uri.EscapeDataString(dto.FirstName)}");
+        var refreshedList = await refreshedListResponse.Content
+            .ReadFromJsonAsync<Common.Responses.Result<PagedResultDto<StudentDto>>>(JsonOptions);
+        var refreshedItem = refreshedList!.Data!.Items.Single(item => item.StudentId == listItem.StudentId);
+        refreshedItem.Age.ShouldNotBeNullOrWhiteSpace();
+        refreshedItem.Address.ShouldNotBeNull();
+        refreshedItem.Address!.ShouldContain("Block C");
+        refreshedItem.InquiryPreference.ShouldBe(preferenceName);
+        refreshedItem.NextReminderDate.ShouldNotBeNull();
     }
 
     [Fact]

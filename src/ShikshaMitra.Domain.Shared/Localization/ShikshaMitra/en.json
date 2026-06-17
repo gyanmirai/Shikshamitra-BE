@@ -59,6 +59,7 @@
     "SM:EntranceExamSlot:005": "Cannot reduce student limit to {studentLimit} as there are already {enrolledCount} students enrolled in this slot.",
     "SM:EntranceExamSlot:006": "Cannot delete this entrance exam slot as there are {enrolledCount} students currently enrolled.",
     "SM:EntranceExamSlot:007": "The specified academic year (ID: {academicYearId}) does not exist in the system.",
+    "ST:Student:010002": "GR Number {GrNumbers} is already assigned to another student.",
     "Permission:Academics.Examination.Result": "Result Management",
     "Permission:Academics.Examination.Result.View": "View Examination Results",
     "Permission:Academics.Examination.Result.Add": "Add Examination Results",

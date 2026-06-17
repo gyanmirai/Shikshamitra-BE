@@ -110,6 +110,7 @@ public class StudentInquiryAppService(
 
 		var dto = await AsyncExecuter.FirstOrDefaultAsync(
 			ProjectToStudentDto(lightweightQuery.Where(s => s.Id == studentId)));
+		PopulateComputedInquiryFields(dto);
 
 		return dto ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
 	}
@@ -153,6 +154,10 @@ public class StudentInquiryAppService(
 			.OrderByDescending(x => x.CreationTime)
 			.Skip(skipCount)
 			.Take(maxResultCount)));
+		foreach (var item in resultList)
+		{
+			PopulateComputedInquiryFields(item);
+		}
 
 		return new PagedResultDto<StudentDto>(totalCount, resultList);
 	}
@@ -217,6 +222,7 @@ public class StudentInquiryAppService(
 		await studentRepository.UpdateAsync(student, autoSave: true);
 		var dtoQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
 		var dto = await AsyncExecuter.FirstOrDefaultAsync(ProjectToStudentDto(dtoQuery.Where(s => s.Id == studentId)));
+		PopulateComputedInquiryFields(dto);
 		return dto ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
 	}
 
@@ -272,7 +278,62 @@ public class StudentInquiryAppService(
 			Email = x.ContactDetail != null ? x.ContactDetail.Email : null,
 			PreviousSchool = x.AdditionalDetail != null ? x.AdditionalDetail.PreviousSchool : null,
 			InquiryPreferenceId = x.AdditionalDetail != null ? x.AdditionalDetail.InquiryPreferenceId : null,
+			InquiryPreference = x.AdditionalDetail != null && x.AdditionalDetail.InquiryPreference != null
+				? x.AdditionalDetail.InquiryPreference.PreferenceName
+				: null,
+			NextReminderDate = x.Notes
+				.OrderByDescending(note => note.CreationTime)
+				.Select(note => (DateTimeOffset?)note.NextReminderDate)
+				.FirstOrDefault(),
+			InquiryStatus = x.Notes
+				.OrderByDescending(note => note.CreationTime)
+				.Select(note => (NoteStatusEnum?)note.Status)
+				.FirstOrDefault() ?? NoteStatusEnum.Pending,
 			IsFeeStructureAssigned = x.FeeStructureId.HasValue
 		});
+	}
+
+	private static void PopulateComputedInquiryFields(StudentDto? dto)
+	{
+		if (dto == null)
+		{
+			return;
+		}
+
+		dto.Age = CalculateAge(dto.DateOfBirth);
+		dto.Address = BuildAddress(dto);
+	}
+
+	private static string? BuildAddress(StudentDto dto)
+	{
+		var parts = new[]
+		{
+			dto.Address1,
+			dto.Address2,
+			dto.Address3,
+			dto.City,
+			dto.State?.Name,
+			dto.Country?.Name
+		}.Where(part => !string.IsNullOrWhiteSpace(part));
+
+		var address = string.Join(", ", parts);
+		return string.IsNullOrWhiteSpace(address) ? null : address;
+	}
+
+	private static string? CalculateAge(DateTimeOffset? dateOfBirth)
+	{
+		if (!dateOfBirth.HasValue)
+		{
+			return null;
+		}
+
+		var today = DateTimeOffset.UtcNow;
+		var age = today.Year - dateOfBirth.Value.Year;
+		if (dateOfBirth.Value.Date > today.AddYears(-age).Date)
+		{
+			age--;
+		}
+
+		return age >= 0 ? $"{age} years" : null;
 	}
 }

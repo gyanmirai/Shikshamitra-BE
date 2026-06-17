@@ -188,14 +188,102 @@ public class StudentManagementAppService(
 
 	public async Task StoreGrNumbers(List<UpdateStudentGrNumberDto> updateStudentGrNumberDto)
 	{
+		if (updateStudentGrNumberDto == null || updateStudentGrNumberDto.Count == 0)
+		{
+			throw new BusinessException(StudentErrorCodes.RollNumberBatchInvalid)
+				.WithData("Reason", "At least one student GR number is required.");
+		}
+
+		var duplicateStudentIds = updateStudentGrNumberDto
+			.GroupBy(x => x.StudentId)
+			.Where(g => g.Count() > 1)
+			.Select(g => g.Key)
+			.ToList();
+		if (duplicateStudentIds.Count != 0)
+		{
+			throw new BusinessException(StudentErrorCodes.RollNumberBatchInvalid)
+				.WithData("Reason", "Duplicate student entries are not allowed.")
+				.WithData("StudentIds", string.Join(", ", duplicateStudentIds));
+		}
+
+		var duplicateGrNumbers = updateStudentGrNumberDto
+			.Where(x => x.GrNo.HasValue)
+			.GroupBy(x => x.GrNo!.Value)
+			.Where(g => g.Count() > 1)
+			.Select(g => g.Key)
+			.OrderBy(x => x)
+			.ToList();
+		if (duplicateGrNumbers.Count != 0)
+		{
+			var message = $"GR Number {string.Join(", ", duplicateGrNumbers)} is already assigned to another student.";
+			throw new BusinessException(StudentErrorCodes.DuplicateGrNo, message)
+				.WithData("GrNumbers", string.Join(", ", duplicateGrNumbers));
+		}
+
+		var invalidGrNumbers = updateStudentGrNumberDto
+			.Where(x => x.GrNo.HasValue && x.GrNo.Value <= 0)
+			.Select(x => x.GrNo!.Value)
+			.Distinct()
+			.OrderBy(x => x)
+			.ToList();
+		if (invalidGrNumbers.Count != 0)
+		{
+			throw new BusinessException(StudentErrorCodes.RollNumberBatchInvalid)
+				.WithData("Reason", "GR numbers must be greater than zero.")
+				.WithData("GrNumbers", string.Join(", ", invalidGrNumbers));
+		}
+
+		var requestedStudentIds = updateStudentGrNumberDto.Select(x => x.StudentId).ToList();
+		var studentQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var query = studentQuery.Where(s => requestedStudentIds.Contains(s.Id));
+		query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
+		var students = await AsyncExecuter.ToListAsync(query);
+		if (students.Count != requestedStudentIds.Count)
+		{
+			throw new BusinessException(StudentErrorCodes.RollNumberBatchInvalid)
+				.WithData("Reason", "One or more students were not found or are outside the current user scope.");
+		}
+
+		var requestedGrNumbers = updateStudentGrNumberDto
+			.Where(x => x.GrNo.HasValue)
+			.Select(x => x.GrNo!.Value)
+			.ToList();
+		if (requestedGrNumbers.Count != 0)
+		{
+			var requestedStudentByGrNo = updateStudentGrNumberDto
+				.Where(x => x.GrNo.HasValue)
+				.ToDictionary(x => x.GrNo!.Value, x => x.StudentId);
+			var existingAssignments = await AsyncExecuter.ToListAsync(
+				studentQuery
+					.Where(s => s.GrNo.HasValue && requestedGrNumbers.Contains(s.GrNo.Value))
+					.Select(s => new { s.Id, GrNo = s.GrNo!.Value }));
+			var conflictingGrNumbers = existingAssignments
+				.Where(existing =>
+					requestedStudentByGrNo.TryGetValue(existing.GrNo, out var requestedStudentId) &&
+					requestedStudentId != existing.Id)
+				.Select(existing => existing.GrNo)
+				.Distinct()
+				.OrderBy(x => x)
+				.ToList();
+			if (conflictingGrNumbers.Count != 0)
+			{
+				var message = $"GR Number {string.Join(", ", conflictingGrNumbers)} is already assigned to another student.";
+				throw new BusinessException(StudentErrorCodes.DuplicateGrNo, message)
+					.WithData("GrNumbers", string.Join(", ", conflictingGrNumbers));
+			}
+		}
+
+		var studentsById = students.ToDictionary(s => s.Id);
 		foreach (var studentGrNumberDto in updateStudentGrNumberDto)
 		{
-			var student = await studentRepository.GetAsync(studentGrNumberDto.StudentId, includeDetails: true);
+			var student = studentsById[studentGrNumberDto.StudentId];
 			await EnsureCanAccessStudentAsync(student, nameof(StoreGrNumbers));
 
 			student.AssignGrNo(studentGrNumberDto.GrNo);
-			await studentRepository.UpdateAsync(student);
+			await studentRepository.UpdateAsync(student, autoSave: false);
 		}
+
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
 	}
 
 	public async Task<List<GrProjectionDto>> GetGrProjections(Guid divisionId)

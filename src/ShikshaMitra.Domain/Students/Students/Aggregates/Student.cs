@@ -344,6 +344,22 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 		LastName = lastName;
 	}
 
+	public void UpdateAcademicPlacement(
+		Guid educationYearId,
+		Guid educationBoardId,
+		Guid academicMediumId,
+		Guid educationMediumStageId,
+		Guid? standardId,
+		Guid? divisionId)
+	{
+		AcademicYearId = educationYearId;
+		AcademicBoardId = educationBoardId;
+		AcademicMediumId = academicMediumId;
+		AcademicMediumStageId = educationMediumStageId;
+		StandardId = standardId;
+		DivisionId = divisionId;
+	}
+
 	public void ChangeStatus(StudentLifeCycleStatusEnum status)
 	{
 		Status = status;

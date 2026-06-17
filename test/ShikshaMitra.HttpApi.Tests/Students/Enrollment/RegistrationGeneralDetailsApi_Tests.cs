@@ -1,14 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Students.Enrollment;
 using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using Shouldly;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.Students.Enrollments;
@@ -44,6 +54,69 @@ public class RegistrationGeneralDetailsApi_Tests : ShikshaMitraApiTestBase
         body.Data.ShouldNotBeNull();
         body.Data.StudentId.ShouldNotBe(Guid.Empty);
         body.Data.FirstName.ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Create_Direct_Registration_With_Matching_Division()
+    {
+        var context = await ResolveDefaultDivisionContextAsync();
+        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto("RegDivOk");
+        dto.AcademicMediumId = context.AcademicMediumId;
+        dto.StandardId = context.StandardId;
+        dto.DivisionId = context.DivisionId;
+
+        var response = await Client.PostAsJsonAsync($"{BaseUrl}/general-details", dto, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content
+            .ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.StudentId.ShouldNotBe(Guid.Empty);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Reject_Direct_Registration_When_Division_Does_Not_Belong_To_Standard()
+    {
+        var context = await ResolveDefaultDivisionContextAsync();
+        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto("RegDivMismatch");
+        dto.AcademicMediumId = context.AcademicMediumId;
+        dto.StandardId = await ResolveAlternateStandardInSameMediumAsync(
+            context.StandardId,
+            context.AcademicMediumId);
+        dto.DivisionId = context.DivisionId;
+
+        var response = await Client.PostAsJsonAsync($"{BaseUrl}/general-details", dto, JsonOptions);
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        var content = await response.Content.ReadAsStringAsync();
+        content.ShouldContain(StudentRegistrationErrorCodes.StandardNotFound);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task StudentSwagger_Should_Keep_Create_Placement_Required_And_Update_Placement_Optional()
+    {
+        var response = await Client.GetAsync("/swagger/v1-students/swagger.json");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var schemas = document.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas");
+        var createSchema = FindSchema(schemas, "CreateDirectRegistrationDto");
+        var updateSchema = FindSchema(schemas, "UpdateGeneralInfoDto");
+
+        var createRequired = GetRequiredProperties(createSchema);
+        createRequired.ShouldContain("academicMediumId");
+        createRequired.ShouldContain("standardId");
+
+        var updateRequired = GetRequiredProperties(updateSchema);
+        updateRequired.ShouldNotContain("academicMediumId");
+        updateRequired.ShouldNotContain("standardId");
+        updateRequired.ShouldNotContain("divisionId");
     }
 
     [Fact]
@@ -135,6 +208,46 @@ public class RegistrationGeneralDetailsApi_Tests : ShikshaMitraApiTestBase
         body.Data.ShouldNotBeNull();
         body.Data.FirstName.ShouldBe("UpdatedFirst");
         body.Data.LastName.ShouldBe("UpdatedLast");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Update_Class_When_General_Details_Standard_Changes()
+    {
+        var studentId = await StudentEnrollmentTestHelper
+            .CreateRegisteredStudentAndGetIdAsync(Client, "RegStdUpd");
+
+        var existing = (await (await Client.GetAsync($"{BaseUrl}/{studentId}/general-details"))
+            .Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions))!.Data!;
+        var alternateStandardId = await ResolveAlternateStandardInSameMediumAsync(
+            StudentEnrollmentTestHelper.DefaultStandardId,
+            StudentEnrollmentTestHelper.DefaultAcademicMediumId);
+
+        var updateDto = new UpdateGeneralInfoDto
+        {
+            FormNumber = existing.FormNo,
+            FirstName = "ClassUpdated",
+            LastName = "Student",
+            DateOfBirth = DateTimeOffset.UtcNow.AddYears(-10),
+            Gender = GenderEnum.Female,
+            PrimaryContactNo = TestDataHelper.UniquePhone(),
+            FamilyCast = "General",
+            City = "Surat",
+            State = new Common.State("Gujarat", "GJ"),
+            Country = new Common.Country("India", "IN"),
+            AcademicMediumId = StudentEnrollmentTestHelper.DefaultAcademicMediumId,
+            StandardId = alternateStandardId,
+        };
+
+        var response = await Client.PutAsJsonAsync(
+            $"{BaseUrl}/{studentId}/general-details", updateDto, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        (await ReadStandardIdAsync(response)).ShouldBe(alternateStandardId);
+
+        var getResponse = await Client.GetAsync($"{BaseUrl}/{studentId}/general-details");
+        getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ReadStandardIdAsync(getResponse)).ShouldBe(alternateStandardId);
     }
 
     #endregion
@@ -314,4 +427,114 @@ public class RegistrationGeneralDetailsApi_Tests : ShikshaMitraApiTestBase
     }
 
     #endregion
+
+    private async Task<Guid> ResolveAlternateStandardInSameMediumAsync(
+        Guid currentStandardId,
+        Guid academicMediumId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var standardRepository = scope.ServiceProvider.GetRequiredService<IStandardRepository>();
+        var mediumStageRepository = scope.ServiceProvider.GetRequiredService<IEducationMediumStageRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var standards = await standardRepository.GetQueryableAsync();
+            var stages = await mediumStageRepository.GetQueryableAsync();
+            var alternate = standards
+                .Join(
+                    stages,
+                    standard => standard.EducationMediumStageId,
+                    stage => stage.Id,
+                    (standard, stage) => new { standard.Id, stage.EducationMediumId })
+                .Where(item => item.Id != currentStandardId && item.EducationMediumId == academicMediumId)
+                .OrderBy(item => item.Id)
+                .FirstOrDefault();
+
+            alternate.ShouldNotBeNull("At least two standards in the seeded academic medium are required for this regression.");
+            await uow.CompleteAsync();
+            return alternate.Id;
+        }
+    }
+
+    private async Task<SeededDivisionContext> ResolveDefaultDivisionContextAsync()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var divisionRepository = scope.ServiceProvider.GetRequiredService<IDivisionRepository>();
+        var standardRepository = scope.ServiceProvider.GetRequiredService<IStandardRepository>();
+        var mediumStageRepository = scope.ServiceProvider.GetRequiredService<IEducationMediumStageRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var division = await divisionRepository.GetAsync(StudentEnrollmentTestHelper.DefaultDivisionId);
+            var standard = await standardRepository.GetAsync(division.StandardId);
+            var mediumStage = await mediumStageRepository.GetAsync(standard.EducationMediumStageId);
+            await uow.CompleteAsync();
+            return new SeededDivisionContext(division.StandardId, mediumStage.EducationMediumId, division.Id);
+        }
+    }
+
+    private static async Task<Guid> ReadStandardIdAsync(HttpResponseMessage response)
+    {
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var standardId = document.RootElement
+            .GetProperty("data")
+            .GetProperty("standardId")
+            .GetGuid();
+        return standardId;
+    }
+
+    private static JsonElement FindSchema(JsonElement schemas, string schemaName)
+    {
+        foreach (var schema in schemas.EnumerateObject())
+        {
+            if (schema.Name == schemaName || schema.Name.EndsWith($".{schemaName}", StringComparison.Ordinal))
+            {
+                return schema.Value;
+            }
+        }
+
+        throw new InvalidOperationException($"Swagger schema '{schemaName}' was not found.");
+    }
+
+    private static HashSet<string> GetRequiredProperties(JsonElement schema)
+    {
+        var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddRequiredProperties(schema, required);
+        return required;
+    }
+
+    private static void AddRequiredProperties(JsonElement schema, HashSet<string> required)
+    {
+        if (schema.TryGetProperty("required", out var requiredElement) &&
+            requiredElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var property in requiredElement.EnumerateArray())
+            {
+                var propertyName = property.GetString();
+                if (!string.IsNullOrWhiteSpace(propertyName))
+                {
+                    required.Add(propertyName);
+                }
+            }
+        }
+
+        if (schema.TryGetProperty("allOf", out var allOfElement) &&
+            allOfElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in allOfElement.EnumerateArray())
+            {
+                AddRequiredProperties(item, required);
+            }
+        }
+    }
+
+    private sealed record SeededDivisionContext(Guid StandardId, Guid AcademicMediumId, Guid DivisionId);
 }

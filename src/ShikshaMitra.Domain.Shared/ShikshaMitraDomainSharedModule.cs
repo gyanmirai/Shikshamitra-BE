@@ -56,6 +56,7 @@ public class ShikshaMitraDomainSharedModule : AbpModule
         {
             options.MapCodeNamespace("ShikshaMitra", typeof(ShikshaMitraResource));
             options.MapCodeNamespace("ShikshaMitra.TenantSettings", typeof(ShikshaMitraResource));
+            options.MapCodeNamespace("ST", typeof(ShikshaMitraResource));
             options.MapCodeNamespace("HR", typeof(ShikshaMitraResource));
             options.MapCodeNamespace("Academic", typeof(ShikshaMitraResource));
         });

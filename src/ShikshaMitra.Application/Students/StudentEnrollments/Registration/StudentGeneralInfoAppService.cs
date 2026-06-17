@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using ShikshaMitra.Students.Compliance;
 using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
@@ -12,6 +13,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 public class StudentGeneralInfoAppService(
 	IStudentRepository studentRepository,
 	IRepository<Standard, Guid> standardRepository,
+	IRepository<Division, Guid> divisionRepository,
 	EntityValidationService validationService,
 	StudentScopeAccessService studentScopeAccessService,
 	StudentIdentityComplianceAppService identityComplianceAppService
@@ -37,6 +39,9 @@ public class StudentGeneralInfoAppService(
 			studentId,
 			nameof(UpdateGeneralInfoAsync),
 			StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo);
+
+		await UpdateAcademicPlacementAsync(student, input);
+
 		await studentScopeAccessService.EnsureCanUseInquiryPreferenceAsync(
 			input.InquiryPreferenceId,
 			student.AcademicYearId ?? throw new BusinessException(StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo),
@@ -92,23 +97,38 @@ public class StudentGeneralInfoAppService(
 
 	public async Task<StudentGeneralDetailsDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto createRegistrationDto)
 	{
-		await validationService.ValidateAcademicMediumExistsAsync(createRegistrationDto.AcademicMediumId);
-		await validationService.ValidateStandardExistsAsync(createRegistrationDto.StandardId);
+		var academicMediumId = createRegistrationDto.AcademicMediumId;
+		if (academicMediumId == Guid.Empty)
+		{
+			throw new BusinessException(StudentRegistrationErrorCodes.AcademicMediumNotFound, "Academic medium is required");
+		}
+
+		var standardId = createRegistrationDto.StandardId;
+		if (standardId == Guid.Empty)
+		{
+			throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard is required");
+		}
+
+		await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
+		await validationService.ValidateStandardExistsAsync(standardId);
 
 		var studentId = GuidGenerator.Create();
 
-		var standard = await standardRepository.GetAsync(createRegistrationDto.StandardId, includeDetails: true)
+		var standard = await standardRepository.GetAsync(standardId, includeDetails: true)
 			?? throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard not found");
 
-		if (standard.EducationMediumStage.EducationMedium.Id != createRegistrationDto.AcademicMediumId)
+		if (standard.EducationMediumStage.EducationMedium.Id != academicMediumId)
 		{
 			throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard does not belong to the specified Academic Medium");
 		}
 
-		await studentScopeAccessService.EnsureCanAccessStandardAsync(createRegistrationDto.StandardId, nameof(CreateDirectRegistrationAsync));
+		await studentScopeAccessService.EnsureCanAccessStandardAsync(standardId, nameof(CreateDirectRegistrationAsync));
 		if (createRegistrationDto.DivisionId.HasValue)
 		{
-			await studentScopeAccessService.EnsureCanAccessDivisionAsync(createRegistrationDto.DivisionId.Value, nameof(CreateDirectRegistrationAsync));
+			await EnsureDivisionMatchesStandardAsync(
+				createRegistrationDto.DivisionId.Value,
+				standardId,
+				nameof(CreateDirectRegistrationAsync));
 		}
 
 		await studentScopeAccessService.EnsureCanUseInquiryPreferenceAsync(
@@ -124,9 +144,9 @@ public class StudentGeneralInfoAppService(
 			lastName: createRegistrationDto.LastName,
 			educationYearId: standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
 			educationBoardId: standard.EducationMediumStage.EducationMedium.EducationBoardId,
-			educationMediumId: createRegistrationDto.AcademicMediumId,
+			educationMediumId: academicMediumId,
 			educationMediumStageId: standard.EducationMediumStageId,
-			standardId: createRegistrationDto.StandardId,
+			standardId: standardId,
 			divisionId: createRegistrationDto.DivisionId,
 			dateOfBirth: createRegistrationDto.DateOfBirth,
 			gender: createRegistrationDto.Gender,
@@ -178,6 +198,65 @@ public class StudentGeneralInfoAppService(
 		ApplyComplianceMask(result, compliance);
 	}
 
+	private async Task UpdateAcademicPlacementAsync(Student student, UpdateGeneralInfoDto input)
+	{
+		if (!input.AcademicMediumId.HasValue &&
+		    !input.StandardId.HasValue &&
+		    !input.DivisionId.HasValue)
+		{
+			return;
+		}
+
+		var academicMediumId = input.AcademicMediumId ?? student.AcademicMediumId;
+		var standardId = input.StandardId ?? student.StandardId
+			?? throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard is required");
+
+		await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
+		await validationService.ValidateStandardExistsAsync(standardId);
+
+		var standard = await standardRepository.GetAsync(standardId, includeDetails: true)
+			?? throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard not found");
+
+		if (standard.EducationMediumStage.EducationMedium.Id != academicMediumId)
+		{
+			throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard does not belong to the specified Academic Medium");
+		}
+
+		await studentScopeAccessService.EnsureCanAccessStandardAsync(standardId, nameof(UpdateGeneralInfoAsync));
+
+		Guid? divisionId = input.DivisionId;
+		if (divisionId.HasValue)
+		{
+			await EnsureDivisionMatchesStandardAsync(
+				divisionId.Value,
+				standardId,
+				nameof(UpdateGeneralInfoAsync));
+		}
+		else if (student.StandardId == standardId)
+		{
+			divisionId = student.DivisionId;
+		}
+
+		student.UpdateAcademicPlacement(
+			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			standard.EducationMediumStage.EducationMedium.EducationBoardId,
+			academicMediumId,
+			standard.EducationMediumStageId,
+			standardId,
+			divisionId);
+	}
+
+	private async Task EnsureDivisionMatchesStandardAsync(Guid divisionId, Guid standardId, string operation)
+	{
+		var division = await divisionRepository.GetAsync(divisionId);
+		if (division.StandardId != standardId)
+		{
+			throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Division does not belong to the selected Standard");
+		}
+
+		await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, operation);
+	}
+
 	private static void ApplyComplianceMask(StudentGeneralDetailsDto result, StudentIdentityComplianceDto compliance)
 	{
 		result.AdharNo = compliance.AadhaarMasked;
@@ -193,19 +272,7 @@ public class StudentGeneralInfoAppService(
 		result.ScholarshipStatus = compliance.ScholarshipStatus;
 	}
 
-	private Task<StudentIdentityComplianceDto> UpsertComplianceAsync(Guid studentId, UpdateGeneralInfoDto input) =>
-		identityComplianceAppService.UpsertFromRegistrationAsync(studentId, new UpdateStudentIdentityComplianceDto
-		{
-			AadhaarNo = input.AadharNo,
-			AadhaarName = BuildStudentName(input.FirstName, input.MiddleName, input.LastName),
-			AadhaarVerificationStatus = string.IsNullOrWhiteSpace(input.AadharNo) ? IdentityVerificationStatus.NotProvided : IdentityVerificationStatus.Pending,
-			ApaarId = input.ApparId,
-			ApaarVerificationStatus = string.IsNullOrWhiteSpace(input.ApparId) ? IdentityVerificationStatus.NotProvided : IdentityVerificationStatus.Pending,
-			PenNumber = input.PennNo,
-			UdiseSyncStatus = UdiseSyncStatus.NotReady
-		});
-
-	private Task<StudentIdentityComplianceDto> UpsertComplianceAsync(Guid studentId, CreateDirectRegistrationDto input) =>
+	private Task<StudentIdentityComplianceDto> UpsertComplianceAsync(Guid studentId, RegistrationGeneralInfoBaseDto input) =>
 		identityComplianceAppService.UpsertFromRegistrationAsync(studentId, new UpdateStudentIdentityComplianceDto
 		{
 			AadhaarNo = input.AadharNo,

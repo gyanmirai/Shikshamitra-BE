@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 namespace ShikshaMitra.Academic.ClassManagement.StudentElectiveAssignment;
@@ -15,5 +15,9 @@ public interface IStudentElectiveAssignmentAppService
 
 	Task<ApiSuccessResponseDto> SaveStudentElectiveAssignmentsAsync(
 		SaveStudentElectiveAssignmentsDto input
+	);
+
+	Task<ApiSuccessResponseDto> LockStudentElectiveAssignmentsAsync(
+		LockStudentElectiveAssignmentsDto input
 	);
 }

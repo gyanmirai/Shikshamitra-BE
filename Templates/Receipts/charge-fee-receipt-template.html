@@ -1,0 +1,168 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+.wrap{font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#fff;border:1px solid #ccc;font-size:13px;color:#111;}
+.top{padding:14px 18px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #ddd;}
+.logo-row{display:flex;align-items:center;gap:12px;}
+.logo-box{width:44px;height:44px;border-radius:50%;border:2px solid #111;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#111;flex-shrink:0;}
+.school-name{font-size:16px;font-weight:700;color:#111;}
+.school-sub{font-size:11px;color:#555;margin-top:2px;line-height:1.6;}
+.rec-top{text-align:right;}
+.rec-label{font-size:9px;letter-spacing:0.1em;color:#555;text-transform:uppercase;}
+.rec-num{font-size:14px;font-weight:700;color:#111;margin:2px 0;}
+.cash-badge{background:#111;color:#fff;font-size:10px;font-weight:700;padding:2px 10px;display:inline-block;letter-spacing:0.08em;margin-bottom:4px;}
+.rec-ay{font-size:10px;color:#555;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #ddd;}
+.panel{padding:14px 18px;}
+.panel+.panel{border-left:1px solid #ddd;}
+.sec-title{font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.avatar{width:38px;height:38px;border-radius:50%;background:#111;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
+.student-name{font-size:15px;font-weight:700;color:#111;}
+.student-id{font-size:11px;color:#555;margin-bottom:10px;}
+.info-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid #eee;font-size:12px;}
+.info-row:last-child{border-bottom:none;}
+.lbl{color:#777;}
+.val{font-weight:500;color:#111;text-align:right;}
+.pay-bar{background:#111;color:#fff;padding:8px 12px;display:flex;align-items:center;gap:8px;border-radius:3px;margin-bottom:12px;}
+.pay-bar-title{font-size:13px;font-weight:700;}
+.pay-bar-sub{font-size:10px;opacity:0.75;}
+.charges-sec{padding:14px 18px;border-bottom:1px solid #ddd;}
+.charges-label{font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:10px;}
+.ctable{width:100%;border-collapse:collapse;table-layout:fixed;}
+.ctable thead tr{background:#f2f2f2;}
+.ctable th{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#555;padding:7px 10px;text-align:left;border-bottom:1px solid #ddd;}
+.ctable th:nth-child(3){text-align:center;}
+.ctable th:last-child{text-align:right;}
+.ctable td{padding:8px 10px;font-size:12.5px;border-bottom:0.5px solid #eee;color:#111;vertical-align:middle;}
+.ctable td:nth-child(3){text-align:center;}
+.ctable td:last-child{text-align:right;font-weight:500;}
+.ctable tbody tr:last-child td{border-bottom:none;}
+.typ-pill{font-size:10px;font-weight:600;padding:2px 8px;border-radius:3px;display:inline-block;}
+.tp-fine{background:#fcebeb;color:#791f1f;}
+.tp-misc{background:#faeeda;color:#633806;}
+.tp-dep{background:#eaf3de;color:#27500a;}
+.st-paid{font-size:10px;font-weight:600;padding:2px 8px;border-radius:3px;background:#eaf3de;color:#27500a;}
+.total-bar{padding:12px 18px;display:flex;justify-content:flex-end;border-bottom:1px solid #ddd;background:#fafafa;}
+.total-lbl{font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#555;}
+.total-amt{font-size:20px;font-weight:700;color:#111;}
+.words-bar{padding:8px 18px;border-bottom:1px solid #ddd;font-size:12px;color:#333;}
+.words-lbl{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#777;margin-right:8px;}
+.footer-row{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #ddd;}
+.stamp-box{padding:20px 18px;display:flex;flex-direction:column;align-items:center;gap:10px;border-right:1px solid #ddd;}
+.stamp-circle{width:72px;height:72px;border-radius:50%;border:1.5px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa;text-align:center;line-height:1.4;}
+.sig-box{padding:20px 18px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;}
+.sig-line{width:140px;border-bottom:1.5px solid #333;margin-bottom:4px;}
+.sig-name{font-size:12px;font-weight:700;color:#111;}
+.sig-sub{font-size:10px;color:#555;}
+.sec-lbl{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#777;margin-bottom:auto;}
+.footer-note{padding:8px 18px;font-size:10px;color:#999;text-align:center;line-height:1.6;}
+</style>
+
+<div class="wrap">
+  <h2 class="sr-only">{{SchoolName}} — Charges receipt {{ReceiptNumber}}</h2>
+
+  <div class="top">
+    <div class="logo-row">
+      <div class="logo-box">DPS</div>
+      <div>
+        <div class="school-name">{{SchoolName}}</div>
+        <div class="school-sub">{{SchoolDetails}}<br>{{SchoolAddress}} &nbsp;·&nbsp; {{SchoolContactNumber}} &nbsp;·&nbsp; {{SchoolEmail}}</div>
+      </div>
+    </div>
+    <div class="rec-top">
+      <div class="rec-label">Charges Receipt</div>
+      <div class="rec-num">{{ReceiptNumber}}</div>
+      <div><span class="cash-badge">{{PaymentType}}</span></div>
+      <div class="rec-ay">AY {{AcademicYear}}</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="sec-title"><i class="ti ti-user" aria-hidden="true" style="font-size:13px;"></i> Student</div>
+      <!--<div class="avatar">{{StudentInitials}}</div>-->
+      <div class="student-name">{{StudentName}}</div>
+      <div class="student-id">GR-{{StudentGRNumber}}</div>
+      <div class="info-row"><span class="lbl">Class</span><span class="val">{{StandardName}} — {{DivisionName}}</span></div>
+      <div class="info-row"><span class="lbl">Roll no.</span><span class="val">{{StudentRollNumber}}</span></div>
+      <div class="info-row"><span class="lbl">Category</span><span class="val">{{StudentCategory}}</span></div>
+      <div class="info-row"><span class="lbl">Parent</span><span class="val">{{StudentParentName}}</span></div>
+      <div class="info-row"><span class="lbl">Contact</span><span class="val">{{StudentContactNumber}}</span></div>
+    </div>
+    <div class="panel">
+      <div class="sec-title"><i class="ti ti-credit-card" aria-hidden="true" style="font-size:13px;"></i> Payment</div>
+      <div class="pay-bar">
+        <i class="ti ti-cash" aria-hidden="true" style="font-size:18px;"></i>
+        <div>
+          <div class="pay-bar-title">{{PaymentType}} Payment</div>
+          <div class="pay-bar-sub">{{PaymentReference}}</div>
+        </div>
+      </div>
+      <div class="info-row"><span class="lbl">Date</span><span class="val">{{ReceiptDate}}</span></div>
+      <div class="info-row"><span class="lbl">Time</span><span class="val">{{ReceiptTime}}</span></div>
+      <div class="info-row"><span class="lbl">Amount Tendered</span><span class="val">₹{{AmountTendered}}</span></div>
+      <div class="info-row"><span class="lbl">Change Returned</span><span class="val">₹{{ChangeReturned}}</span></div>
+      <div class="info-row"><span class="lbl">Counter</span><span class="val">{{CounterName}}</span></div>
+      <div class="info-row"><span class="lbl">Collected by</span><span class="val">{{CollectedBy}}</span></div>
+    </div>
+  </div>
+
+  <div class="charges-sec">
+    <div class="charges-label">Charges — AY {{AcademicYear}}</div>
+    <table class="ctable">
+      <colgroup>
+        <col style="width:22%">
+        <col style="width:44%">
+        <col style="width:14%">
+        <col style="width:20%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Charge type</th>
+          <th>Title / description</th>
+          <th>Status</th>
+          <th>Amount (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each Charges}}
+        <tr>
+          <td><span class="typ-pill {{this.ChargeTypeClass}}">{{this.ChargeTypeName}}</span></td>
+          <td>{{this.Description}}</td>
+          <td><span class="st-paid">{{this.Status}}</span></td>
+          <td>₹{{this.Amount}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="total-bar">
+    <div style="text-align:right;">
+      <div class="total-lbl">Total Paid</div>
+      <div class="total-amt">₹{{TotalAmount}}</div>
+    </div>
+  </div>
+
+  <div class="words-bar">
+    <span class="words-lbl">In Words</span>
+    <em>{{TotalAmountInWords}}</em>
+  </div>
+
+  <div class="footer-row">
+    <div class="stamp-box">
+      <div class="sec-lbl">School Stamp</div>
+      <div class="stamp-circle">Stamp<br>here</div>
+    </div>
+    <div class="sig-box">
+      <div class="sec-lbl">Accountant Signature</div>
+      <div class="sig-line"></div>
+      <div class="sig-name">{{AccountantName}}</div>
+      <div class="sig-sub">{{CounterName}}</div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    Computer generated receipt &nbsp;·&nbsp; No physical signature required &nbsp;·&nbsp; Fees non-refundable per school policy &nbsp;·&nbsp; Late payment ₹25/day
+  </div>
+</div>

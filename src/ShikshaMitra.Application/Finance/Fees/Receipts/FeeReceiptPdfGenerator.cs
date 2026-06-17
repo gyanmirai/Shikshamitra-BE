@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -10,6 +10,7 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
@@ -34,6 +35,9 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
     private readonly IReadOnlyRepository<FeeHead, Guid> feeHeadRepository;
     private readonly IReadOnlyRepository<Standard, Guid> standardRepository;
     private readonly IReadOnlyRepository<Division, Guid> divisionRepository;
+    private readonly IReadOnlyRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository;
+    private readonly IReadOnlyRepository<Charge, Guid> chargeRepository;
+    private readonly IReadOnlyRepository<ChargeCategory, Guid> chargeCategoryRepository;
 
     public FeeReceiptPdfGenerator(
         IReadOnlyRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
@@ -41,7 +45,10 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
         IReadOnlyRepository<DueFee, Guid> dueFeeRepository,
         IReadOnlyRepository<FeeHead, Guid> feeHeadRepository,
         IReadOnlyRepository<Standard, Guid> standardRepository,
-        IReadOnlyRepository<Division, Guid> divisionRepository)
+        IReadOnlyRepository<Division, Guid> divisionRepository,
+        IReadOnlyRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+        IReadOnlyRepository<Charge, Guid> chargeRepository,
+        IReadOnlyRepository<ChargeCategory, Guid> chargeCategoryRepository)
     {
         this.paymentMethodRecordRepository = paymentMethodRecordRepository;
         this.feeCollectionDueFeeAllocationRepository = feeCollectionDueFeeAllocationRepository;
@@ -49,6 +56,9 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
         this.feeHeadRepository = feeHeadRepository;
         this.standardRepository = standardRepository;
         this.divisionRepository = divisionRepository;
+        this.chargeCollectionRecordRepository = chargeCollectionRecordRepository;
+        this.chargeRepository = chargeRepository;
+        this.chargeCategoryRepository = chargeCategoryRepository;
     }
 
     public async Task<byte[]> GenerateAsync(
@@ -62,8 +72,8 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
         var bytes = receipt.ReceiptKind switch
         {
             FeeReceiptKind.FinalFee => await GenerateFinalFeeReceipt(receipt, student, academicYear, cancellationToken),
-            FeeReceiptKind.ProvisionalFee => GenerateProvisionalFeeReceipt(receipt, student, academicYear),
-            FeeReceiptKind.ProvisionalCharge => GenerateProvisionalChargeReceipt(receipt, student, academicYear),
+            FeeReceiptKind.ProvisionalFee => await GenerateProvisionalFeeReceipt(receipt, student, academicYear, cancellationToken),
+            FeeReceiptKind.ProvisionalCharge => await GenerateProvisionalChargeReceipt(receipt, student, academicYear, cancellationToken),
             _ => await GenerateFinalFeeReceipt(receipt, student, academicYear, cancellationToken),
         };
 
@@ -89,7 +99,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
         {
             container.Page(page =>
             {
-                page.Size(PageSizes.A5.Landscape());
+                page.Size(PageSizes.A4.Portrait());
                 page.Margin(20, Unit.Point);
                 page.PageColor(Colors.White);
                 page.DefaultTextStyle(t => t.FontSize(10));
@@ -103,11 +113,19 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
 
     // ProvisionalFee template
 
-    private static byte[] GenerateProvisionalFeeReceipt(
+    private async Task<byte[]> GenerateProvisionalFeeReceipt(
         FeePaymentReceipt receipt,
         Student? student,
-        AcademicYear? academicYear)
+        AcademicYear? academicYear,
+        CancellationToken cancellationToken)
     {
+        var template = LoadProvisionalFeeReceiptTemplate();
+        var model = await BuildFinalTemplateModelAsync(receipt, student, academicYear, cancellationToken);
+        var renderedTemplate = RenderFinalFeeReceiptTemplate(template, model);
+
+        if (string.IsNullOrWhiteSpace(renderedTemplate))
+            throw new InvalidOperationException("Provisional fee receipt template rendering returned empty content.");
+
         return Document.Create(container =>
         {
             container.Page(page =>
@@ -120,7 +138,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                 page.Header().Element(c => BuildHeader(c, "PROVISIONAL RECEIPT (KACHI)", receipt, Colors.Orange.Medium));
                 page.Content().Column(col =>
                 {
-                    col.Item().Element(c => BuildContent(c, receipt, student, academicYear, isFinal: false));
+                    col.Item().Element(c => BuildFinalTemplateDrivenContent(c, model));
                     col.Item().PaddingTop(5).Text(
                         "* This is a provisional receipt subject to realisation of the instrument. " +
                         "A final receipt will be issued upon bank clearance.")
@@ -133,11 +151,19 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
 
     // ProvisionalCharge template
 
-    private static byte[] GenerateProvisionalChargeReceipt(
+    private async Task<byte[]> GenerateProvisionalChargeReceipt(
         FeePaymentReceipt receipt,
         Student? student,
-        AcademicYear? academicYear)
+        AcademicYear? academicYear,
+        CancellationToken cancellationToken)
     {
+        var template = LoadChargeFeeReceiptTemplate();
+        var model = await BuildChargeTemplateModelAsync(receipt, student, academicYear, cancellationToken);
+        var renderedTemplate = RenderChargeFeeReceiptTemplate(template, model);
+
+        if (string.IsNullOrWhiteSpace(renderedTemplate))
+            throw new InvalidOperationException("Charge receipt template rendering returned empty content.");
+
         return Document.Create(container =>
         {
             container.Page(page =>
@@ -148,7 +174,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                 page.DefaultTextStyle(t => t.FontSize(10));
 
                 page.Header().Element(c => BuildHeader(c, "CHARGE RECEIPT (KACHI)", receipt, Colors.Blue.Medium));
-                page.Content().Element(c => BuildContent(c, receipt, student, academicYear, isFinal: false, isCharge: true));
+                page.Content().Element(c => BuildChargeTemplateDrivenContent(c, model));
                 page.Footer().Element(BuildFooter);
             });
         }).GeneratePdf();
@@ -346,21 +372,11 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
             ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")
             : "-";
 
-        var standardName = "-";
-        if (student?.StandardId is Guid standardId)
-        {
-            var standard = await standardRepository.FindAsync(standardId, cancellationToken: cancellationToken);
-            standardName = standard?.Name ?? "-";
-        }
+        var standardName = student?.Standard?.Name ?? "-";
 
-        var divisionName = "-";
-        if (student?.DivisionId is Guid divisionId)
-        {
-            var division = await divisionRepository.FindAsync(divisionId, cancellationToken: cancellationToken);
-            divisionName = division?.Name ?? "-";
-        }
+		var divisionName = student?.Division?.Name ?? "-";
 
-        var parentName = student?.FamilyDetail?.FatherDetails?.FullName
+		var parentName = student?.FamilyDetail?.FatherDetails?.FullName
             ?? student?.FamilyDetail?.MotherDetails?.FullName
             ?? student?.FamilyDetail?.GuardianDetails?.FullName
             ?? "-";
@@ -476,7 +492,10 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
         };
 
         foreach (var replacement in replacements)
+        {
+            rendered = rendered.Replace($"/{{{{{replacement.Key}}}}}", replacement.Value, StringComparison.Ordinal);
             rendered = rendered.Replace($"{{{{{replacement.Key}}}}}", replacement.Value, StringComparison.Ordinal);
+        }
 
         // Replace any remaining unresolved placeholders with default values
         rendered = System.Text.RegularExpressions.Regex.Replace(
@@ -693,4 +712,344 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
         string StatusClass,
         int MonthOrder,
         int YearOrder);
+
+    private static string LoadProvisionalFeeReceiptTemplate()
+    {
+        var baseDirectory = AppContext.BaseDirectory;
+        var candidatePaths = new[]
+        {
+            Path.Combine(baseDirectory, "Templates", "Receipts", "provisional-fee-receipt-template.html"),
+            Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "Templates", "Receipts", "provisional-fee-receipt-template.html"))
+        };
+
+        foreach (var path in candidatePaths)
+        {
+            if (File.Exists(path))
+            {
+                var content = File.ReadAllText(path);
+                if (!string.IsNullOrWhiteSpace(content))
+                {
+                    return content;
+                }
+            }
+        }
+
+        throw new FileNotFoundException(
+            "Provisional fee receipt template not found at Templates/Receipts/provisional-fee-receipt-template.html. " +
+            $"Base directory: {baseDirectory}");
+    }
+
+    private static string LoadChargeFeeReceiptTemplate()
+    {
+        var baseDirectory = AppContext.BaseDirectory;
+        var candidatePaths = new[]
+        {
+            Path.Combine(baseDirectory, "Templates", "Receipts", "charge-fee-receipt-template.html"),
+            Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "..", "Templates", "Receipts", "charge-fee-receipt-template.html"))
+        };
+
+        foreach (var path in candidatePaths)
+        {
+            if (File.Exists(path))
+            {
+                var content = File.ReadAllText(path);
+                if (!string.IsNullOrWhiteSpace(content))
+                {
+                    return content;
+                }
+            }
+        }
+
+        throw new FileNotFoundException(
+            "Charge fee receipt template not found at Templates/Receipts/charge-fee-receipt-template.html. " +
+            $"Base directory: {baseDirectory}");
+    }
+
+    private async Task<ChargeTemplateModel> BuildChargeTemplateModelAsync(
+        FeePaymentReceipt receipt,
+        Student? student,
+        AcademicYear? academicYear,
+        CancellationToken cancellationToken)
+    {
+        var studentName = student != null
+            ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")
+            : "-";
+
+        var standardName = student?.Standard?.Name ?? "-";
+        var divisionName = student?.Division?.Name ?? "-";
+
+        var parentName = student?.FamilyDetail?.FatherDetails?.FullName
+            ?? student?.FamilyDetail?.MotherDetails?.FullName
+            ?? student?.FamilyDetail?.GuardianDetails?.FullName
+            ?? "-";
+
+        var parentContact = student?.FamilyDetail?.FatherDetails?.ContactNo
+            ?? student?.FamilyDetail?.MotherDetails?.ContactNo
+            ?? student?.FamilyDetail?.GuardianDetails?.ContactNo
+            ?? student?.ContactDetail?.PrimaryContactNo
+            ?? "-";
+
+        var paymentRecord = (await paymentMethodRecordRepository.GetListAsync(
+            p => p.FeeRecordMetadataId == receipt.FeeCollectionTransactionId,
+            cancellationToken: cancellationToken)).OrderBy(p => p.CreationTime).FirstOrDefault();
+
+        var paymentType = paymentRecord != null
+            ? ToReadablePaymentMethod(paymentRecord.PaymentMethod)
+            : "Cash";
+        var paymentReference = BuildPaymentReference(paymentRecord);
+
+        var chargeRecords = await chargeCollectionRecordRepository.GetListAsync(
+            c => c.FeeRecordMetadataId == receipt.FeeCollectionTransactionId,
+            cancellationToken: cancellationToken);
+
+        var chargeIds = chargeRecords.Select(cr => cr.ChargeId).Distinct().ToList();
+        var charges = chargeIds.Count == 0
+            ? new List<Charge>()
+            : await chargeRepository.GetListAsync(c => chargeIds.Contains(c.Id), cancellationToken: cancellationToken);
+        var chargeMap = charges.ToDictionary(c => c.Id);
+
+        var categoryIds = charges.Select(c => c.ChargeCategoryId).Distinct().ToList();
+        var categories = categoryIds.Count == 0
+            ? new List<ChargeCategory>()
+            : await chargeCategoryRepository.GetListAsync(cc => categoryIds.Contains(cc.Id), cancellationToken: cancellationToken);
+        var categoryMap = categories.ToDictionary(cc => cc.Id);
+
+        var chargeLines = new List<ChargeTemplateLineModel>();
+        foreach (var cr in chargeRecords)
+        {
+            if (chargeMap.TryGetValue(cr.ChargeId, out var charge))
+            {
+                categoryMap.TryGetValue(charge.ChargeCategoryId, out var cat);
+                var categoryName = cat?.Name ?? "Miscellaneous";
+
+                var typeClass = "tp-misc";
+                if (categoryName.Contains("Fine", StringComparison.OrdinalIgnoreCase))
+                    typeClass = "tp-fine";
+                else if (categoryName.Contains("Deposit", StringComparison.OrdinalIgnoreCase))
+                    typeClass = "tp-dep";
+
+                chargeLines.Add(new ChargeTemplateLineModel(
+                    typeClass,
+                    categoryName,
+                    charge.ChargeName,
+                    "Paid",
+                    cr.Amount));
+            }
+            else
+            {
+                chargeLines.Add(new ChargeTemplateLineModel(
+                    "tp-misc",
+                    "Charge",
+                    "Applied Charge",
+                    "Paid",
+                    cr.Amount));
+            }
+        }
+
+        var totalAmount = receipt.TotalPaidAmount;
+
+        var receiptDateStr = receipt.ReceiptDate.ToString("dd MMM yyyy");
+
+        return new ChargeTemplateModel(
+            SchoolName: "ShikshaMitra School",
+            SchoolDetails: "Fee Management System",
+            SchoolAddress: "-",
+            SchoolContactNumber: "-",
+            SchoolEmail: "-",
+            ReceiptNumber: receipt.ReceiptNumber,
+            PaymentType: paymentType,
+            AcademicYear: academicYear?.Name ?? "-",
+            StudentName: studentName,
+            StudentGRNumber: student?.GrNo?.ToString() ?? "-",
+            StandardName: standardName,
+            DivisionName: divisionName,
+            StudentRollNumber: student?.RollNo?.ToString() ?? "-",
+            StudentCategory: student?.AdditionalDetail?.Category.ToString() ?? "General",
+            StudentParentName: parentName,
+            StudentContactNumber: parentContact,
+            PaymentReference: paymentReference,
+            ReceiptDate: receiptDateStr,
+            ReceiptTime: "receiptTimeStr",
+            AmountTendered: totalAmount.ToString("N2"),
+            ChangeReturned: "0.00",
+            CounterName: "Fee Counter — 01",
+            CollectedBy: "Accountant",
+            Charges: chargeLines,
+            TotalAmount: totalAmount,
+            TotalAmountInWords: FormatIndianCurrencyWords(totalAmount),
+            AccountantName: "Authorised Signatory");
+    }
+
+    private static void BuildChargeTemplateDrivenContent(IContainer container, ChargeTemplateModel model)
+    {
+        container.PaddingTop(8).Column(col =>
+        {
+            col.Item().Table(table =>
+            {
+                table.ColumnsDefinition(cols =>
+                {
+                    cols.RelativeColumn(1);
+                    cols.RelativeColumn(1);
+                });
+
+                table.Cell().Border(1).Padding(8).Column(left =>
+                {
+                    left.Item().Text("Student").Bold().FontSize(11);
+                    left.Item().PaddingTop(4).Text($"Name: {model.StudentName}");
+                    left.Item().Text($"GR: {model.StudentGRNumber}");
+                    left.Item().Text($"Class: {model.StandardName} - {model.DivisionName}");
+                    left.Item().Text($"Roll No: {model.StudentRollNumber}");
+                    left.Item().Text($"Category: {model.StudentCategory}");
+                    left.Item().Text($"Parent: {model.StudentParentName}");
+                    left.Item().Text($"Contact: {model.StudentContactNumber}");
+                });
+
+                table.Cell().Border(1).Padding(8).Column(right =>
+                {
+                    right.Item().Text("Payment").Bold().FontSize(11);
+                    right.Item().PaddingTop(4).Text($"Mode: {model.PaymentType}");
+                    right.Item().Text($"Reference: {model.PaymentReference}");
+                    right.Item().Text($"Academic Year: {model.AcademicYear}");
+                    right.Item().Text($"Date: {model.ReceiptDate} {model.ReceiptTime}");
+                });
+            });
+
+            col.Item().PaddingTop(10).Text($"Charges Details - AY {model.AcademicYear}").Bold();
+
+            col.Item().PaddingTop(6).Table(table =>
+            {
+                table.ColumnsDefinition(cols =>
+                {
+                    cols.RelativeColumn(1); // Type
+                    cols.RelativeColumn(2); // Description
+                    cols.RelativeColumn(1); // Status
+                    cols.RelativeColumn(1); // Amount
+                });
+
+                table.Header(header =>
+                {
+                    header.Cell().Background(Colors.Grey.Lighten3).Padding(4).Text("Type").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten3).Padding(4).Text("Description").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten3).Padding(4).Text("Status").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten3).Padding(4).AlignRight().Text("Amount").SemiBold();
+                });
+
+                foreach (var charge in model.Charges)
+                {
+                    table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(4).Text(charge.ChargeTypeName);
+                    table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(4).Text(charge.Description);
+                    table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(4).Text(charge.Status);
+                    table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(4)
+                        .AlignRight().Text($"\u20B9 {charge.Amount:N2}");
+                }
+            });
+
+            col.Item().PaddingTop(10).Background(Colors.Grey.Lighten3).Padding(8).AlignRight().Text($"Total Paid: \u20B9 {model.TotalAmount:N2}").Bold();
+            col.Item().PaddingTop(4).Text($"In words: {model.TotalAmountInWords}").Italic().FontColor(Colors.Grey.Darken1);
+        });
+    }
+
+    private static string RenderChargeFeeReceiptTemplate(string template, ChargeTemplateModel model)
+    {
+        var rendered = template;
+
+        rendered = ReplaceEachBlock(rendered, "Charges", BuildChargesHtml(model.Charges));
+
+        var replacements = new Dictionary<string, string>
+        {
+            ["SchoolName"] = model.SchoolName,
+            ["SchoolDetails"] = model.SchoolDetails,
+            ["SchoolAddress"] = model.SchoolAddress,
+            ["SchoolContactNumber"] = model.SchoolContactNumber,
+            ["SchoolEmail"] = model.SchoolEmail,
+            ["ReceiptNumber"] = model.ReceiptNumber,
+            ["PaymentType"] = model.PaymentType,
+            ["AcademicYear"] = model.AcademicYear,
+            ["StudentName"] = model.StudentName,
+            ["StudentGRNumber"] = model.StudentGRNumber,
+            ["StandardName"] = model.StandardName,
+            ["DivisionName"] = model.DivisionName,
+            ["StudentRollNumber"] = model.StudentRollNumber,
+            ["StudentCategory"] = model.StudentCategory,
+            ["StudentParentName"] = model.StudentParentName,
+            ["StudentContactNumber"] = model.StudentContactNumber,
+            ["PaymentReference"] = model.PaymentReference,
+            ["ReceiptDate"] = model.ReceiptDate,
+            ["ReceiptTime"] = model.ReceiptTime,
+            ["AmountTendered"] = model.AmountTendered,
+            ["ChangeReturned"] = model.ChangeReturned,
+            ["CounterName"] = model.CounterName,
+            ["CollectedBy"] = model.CollectedBy,
+            ["TotalAmount"] = model.TotalAmount.ToString("N2"),
+            ["TotalAmountInWords"] = model.TotalAmountInWords,
+            ["AccountantName"] = model.AccountantName
+        };
+
+        foreach (var replacement in replacements)
+        {
+            rendered = rendered.Replace($"/{{{{{replacement.Key}}}}}", replacement.Value, StringComparison.Ordinal);
+            rendered = rendered.Replace($"{{{{{replacement.Key}}}}}", replacement.Value, StringComparison.Ordinal);
+        }
+
+        // Replace any remaining unresolved placeholders with default values
+        rendered = System.Text.RegularExpressions.Regex.Replace(
+            rendered,
+            @"\{\{[#/]?[^}]+\}\}",
+            m => "N/A");
+
+        return rendered;
+    }
+
+    private static string BuildChargesHtml(IReadOnlyList<ChargeTemplateLineModel> charges)
+    {
+        var sb = new StringBuilder();
+
+        foreach (var charge in charges)
+        {
+            sb.Append("<tr>");
+            sb.Append("<td><span class=\"typ-pill ").Append(charge.ChargeTypeClass).Append("\">").Append(charge.ChargeTypeName).Append("</span></td>");
+            sb.Append("<td>").Append(charge.Description).Append("</td>");
+            sb.Append("<td><span class=\"st-paid\">").Append(charge.Status).Append("</span></td>");
+            sb.Append("<td>\u20B9").Append(charge.Amount.ToString("N2", CultureInfo.InvariantCulture)).Append("</td>");
+            sb.Append("</tr>");
+        }
+
+        return sb.ToString();
+    }
+
+    private sealed record ChargeTemplateModel(
+        string SchoolName,
+        string SchoolDetails,
+        string SchoolAddress,
+        string SchoolContactNumber,
+        string SchoolEmail,
+        string ReceiptNumber,
+        string PaymentType,
+        string AcademicYear,
+        string StudentName,
+        string StudentGRNumber,
+        string StandardName,
+        string DivisionName,
+        string StudentRollNumber,
+        string StudentCategory,
+        string StudentParentName,
+        string StudentContactNumber,
+        string PaymentReference,
+        string ReceiptDate,
+        string ReceiptTime,
+        string AmountTendered,
+        string ChangeReturned,
+        string CounterName,
+        string CollectedBy,
+        IReadOnlyList<ChargeTemplateLineModel> Charges,
+        double TotalAmount,
+        string TotalAmountInWords,
+        string AccountantName);
+
+    private sealed record ChargeTemplateLineModel(
+        string ChargeTypeClass,
+        string ChargeTypeName,
+        string Description,
+        string Status,
+        double Amount);
 }

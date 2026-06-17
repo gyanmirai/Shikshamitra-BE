@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="..\..\common.props" />
 
@@ -62,6 +62,8 @@
 
   <ItemGroup>
     <None Include="..\..\Templates\Receipts\fee-receipt-template.html" Link="Templates\Receipts\fee-receipt-template.html" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\Templates\Receipts\provisional-fee-receipt-template.html" Link="Templates\Receipts\provisional-fee-receipt-template.html" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\Templates\Receipts\charge-fee-receipt-template.html" Link="Templates\Receipts\charge-fee-receipt-template.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

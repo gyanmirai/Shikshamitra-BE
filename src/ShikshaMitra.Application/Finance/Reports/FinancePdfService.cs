@@ -27,7 +27,10 @@ public class FinancePdfService : ITransientDependency
                     header.Column(col =>
                     {
                         col.Item().Text(data.ReportType).FontSize(20).SemiBold().FontColor(Colors.Blue.Darken2);
-                        col.Item().Text($"Generated on {DateTime.Now:dd MMM yyyy HH:mm}").FontSize(10).FontColor(Colors.Grey.Medium);
+                        
+                        var istTime = DateTime.UtcNow.AddMinutes(330);
+                        col.Item().Text($"Generated on {istTime:dd MMM yyyy HH:mm} IST").FontSize(10).FontColor(Colors.Grey.Medium);
+                        
                         col.Spacing(5);
                     });
                 });

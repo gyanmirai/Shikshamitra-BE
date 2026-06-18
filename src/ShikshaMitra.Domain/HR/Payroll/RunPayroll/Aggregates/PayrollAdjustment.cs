@@ -15,6 +15,9 @@ public class PayrollAdjustment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public bool IsEarning { get; private set; }
 	public string Reason { get; private set; } = string.Empty;
 	public string? Description { get; private set; }
+	public string? SourceType { get; private set; }
+	public Guid? SourceId { get; private set; }
+	public bool IsSystemGenerated { get; private set; }
 
 	private PayrollAdjustment()
 	{
@@ -29,11 +32,15 @@ public class PayrollAdjustment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		decimal amount,
 		bool isEarning,
 		string reason,
-		string? description = null) : base(id)
+		string? description = null,
+		string? sourceType = null,
+		Guid? sourceId = null,
+		bool isSystemGenerated = false) : base(id)
 	{
 		TenantId = tenantId;
 		MonthYear = monthYear;
 		EmployeeId = employeeId;
+		SetSource(sourceType, sourceId, isSystemGenerated);
 		Update(name, amount, isEarning, reason, description);
 	}
 
@@ -64,5 +71,23 @@ public class PayrollAdjustment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		IsEarning = isEarning;
 		Reason = reason.Trim();
 		Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+	}
+
+	public void UpdatePostingScope(string monthYear, Guid employeeId)
+	{
+		if (string.IsNullOrWhiteSpace(monthYear))
+		{
+			throw new BusinessException(HRErrorCodes.MonthYearRequired);
+		}
+
+		MonthYear = monthYear.Trim();
+		EmployeeId = employeeId;
+	}
+
+	public void SetSource(string? sourceType, Guid? sourceId, bool isSystemGenerated)
+	{
+		SourceType = string.IsNullOrWhiteSpace(sourceType) ? null : sourceType.Trim();
+		SourceId = sourceId;
+		IsSystemGenerated = isSystemGenerated;
 	}
 }

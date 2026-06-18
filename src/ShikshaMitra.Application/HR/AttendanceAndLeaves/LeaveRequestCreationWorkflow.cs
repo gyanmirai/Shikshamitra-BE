@@ -38,12 +38,6 @@ public class LeaveRequestCreationWorkflow(
 
 		var actorContext = await leaveActorAccessService.ResolveContextAsync();
 
-		if (string.IsNullOrWhiteSpace(input.PaidType))
-		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyRuleNotFound);
-		}
-		var paidType = LeavePolicyProjection.ParsePaidType(input.PaidType);
-
 		var targetEmployeeId = input.ForEmployeeId
 			?? actorContext.ActorEmployeeId
 			?? throw new BusinessException(HRErrorCodes.LeaveTargetEmployeeRequired);
@@ -61,6 +55,13 @@ public class LeaveRequestCreationWorkflow(
 		{
 			throw new BusinessException(HRErrorCodes.LeaveTargetEmployeeInactive);
 		}
+
+		if (string.IsNullOrWhiteSpace(input.PaidType))
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyRuleNotFound)
+				.WithData("paidType", "paidType is required.");
+		}
+		var paidType = LeavePolicyProjection.ParsePaidType(input.PaidType!);
 
 		var attachmentBytes = await LeaveAttachmentProcessor.ExtractAttachmentBytesAsync(attachment);
 

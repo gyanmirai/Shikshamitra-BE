@@ -55,7 +55,10 @@ public class PayrollSnapshotAdjustmentInvalidationReader(
 			adjustment.Amount,
 			adjustment.IsEarning,
 			adjustment.Reason,
-			adjustment.Description);
+			adjustment.Description,
+			adjustment.SourceType,
+			adjustment.SourceId,
+			adjustment.IsSystemGenerated);
 
 	private static PayrollAdjustmentFingerprint ToAdjustmentFingerprint(PayrollAdjustmentDto adjustment) =>
 		new(
@@ -66,7 +69,10 @@ public class PayrollSnapshotAdjustmentInvalidationReader(
 			(decimal)adjustment.Amount,
 			adjustment.IsEarning,
 			adjustment.Reason,
-			adjustment.Description);
+			adjustment.Description,
+			adjustment.SourceType,
+			adjustment.SourceId,
+			adjustment.IsSystemGenerated);
 
 	private readonly record struct PayrollAdjustmentFingerprint(
 		Guid Id,
@@ -76,5 +82,8 @@ public class PayrollSnapshotAdjustmentInvalidationReader(
 		decimal Amount,
 		bool IsEarning,
 		string Reason,
-		string? Description);
+		string? Description,
+		string? SourceType,
+		Guid? SourceId,
+		bool IsSystemGenerated);
 }

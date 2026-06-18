@@ -21,6 +21,7 @@ public class PayrollLockWorkflow(
 	PayrollScopedEmployeeResolver scopedEmployeeResolver,
 	PayrollRunSnapshotStore snapshotStore,
 	PayrollSnapshotRefresher snapshotRefresher,
+	PayrollSnapshotInvalidationChecker snapshotInvalidationChecker,
 	PayrollSnapshotLockProvider snapshotLockProvider,
 	PayrollLockBatchProcessor batchProcessor,
 	PayrollAcademicYearScopeResolver academicYearScopeResolver,
@@ -64,6 +65,23 @@ public class PayrollLockWorkflow(
 			request.EmployeeIds,
 			request.Month);
 		var targetEmployeeIds = targetEmployees.Select(e => e.Id).ToList();
+		var targetEmployeeIdSet = targetEmployeeIds.ToHashSet();
+		var existingSnapshots = await snapshotStore.GetByMonthAsync(internalMonthYear);
+		var targetSnapshots = existingSnapshots
+			.Where(x => targetEmployeeIdSet.Contains(x.EmployeeId))
+			.ToList();
+		if (await snapshotInvalidationChecker.HasInvalidationsAsync(
+			    internalMonthYear,
+			    year,
+			    month,
+			    academicYearId,
+			    targetEmployeeIdSet,
+			    targetSnapshots))
+		{
+			throw new BusinessException(HRErrorCodes.PayrollReviewRequiredBeforeLock)
+				.WithData("month", request.Month)
+				.WithData("employeeIds", targetEmployeeIds);
+		}
 
 		await snapshotRefresher.RefreshForEmployeeIdsAsync(
 			internalMonthYear,

@@ -177,6 +177,9 @@ internal static class PayrollRunProjection
 			IsEarning = adjustment.IsEarning,
 			Reason = adjustment.Reason,
 			Description = adjustment.Description,
+			SourceType = adjustment.SourceType,
+			SourceId = adjustment.SourceId,
+			IsSystemGenerated = adjustment.IsSystemGenerated,
 			CreationTime = adjustment.CreationTime,
 			CreatorId = adjustment.CreatorId
 		};

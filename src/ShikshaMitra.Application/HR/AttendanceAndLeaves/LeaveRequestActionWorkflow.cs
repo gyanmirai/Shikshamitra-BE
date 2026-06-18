@@ -45,22 +45,23 @@ public class LeaveRequestActionWorkflow(
 				actorContext.ActorEmployeeId!.Value);
 		}
 
-		await leaveValidationService.EnsureSufficientLeaveBalanceAsync(
+		var approvedLeaveUnits = await leaveWorkCalendarUnitService.CalculateUnitsAsync(
 			leave.EmployeeId,
-			leave.LeavePolicyRuleId,
 			leave.StartDate.DateTime,
 			leave.EndDate.DateTime,
-			leave.HalfDay);
+			leave.HalfDay,
+			leavePolicy.AcademicYearId);
+		await leaveValidationService.EnsureSufficientLeaveBalanceAsync(
+			leave.EmployeeId,
+			leavePolicy,
+			leaveRule,
+			approvedLeaveUnits,
+			leave.StartDate.DateTime);
 
 		await employeeLeaveManager.ApproveAsync(
 			leave,
 			leaveRule.PaidType,
-			await leaveWorkCalendarUnitService.CalculateUnitsAsync(
-				leave.EmployeeId,
-				leave.StartDate.DateTime,
-				leave.EndDate.DateTime,
-				leave.HalfDay,
-				leavePolicy.AcademicYearId));
+			approvedLeaveUnits);
 		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { leave.EmployeeId });
 
 		return new LeaveActionResultDto

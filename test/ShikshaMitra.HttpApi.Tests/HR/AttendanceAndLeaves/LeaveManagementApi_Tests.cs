@@ -61,6 +61,41 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Year_End_Settlement_Endpoints_Should_Return_Run_Contract()
+	{
+		var previewResponse = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/year-end-settlements/preview",
+			new { AcademicYearId },
+			JsonOptions);
+		var previewPayload = await previewResponse.Content.ReadAsStringAsync();
+
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, previewPayload);
+		var preview = JsonSerializer.Deserialize<JsonElement>(previewPayload, JsonOptions);
+		preview.TryGetProperty("id", out var idProperty).ShouldBeTrue(previewPayload);
+		preview.TryGetProperty("status", out _).ShouldBeTrue(previewPayload);
+		preview.TryGetProperty("items", out var itemsProperty).ShouldBeTrue(previewPayload);
+		itemsProperty.ValueKind.ShouldBe(JsonValueKind.Array);
+
+		var runId = idProperty.GetGuid();
+		var listResponse = await Client.GetAsync($"{BaseUrl}/year-end-settlements?academicYearId={AcademicYearId}");
+		var listPayload = await listResponse.Content.ReadAsStringAsync();
+		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK, listPayload);
+		var list = JsonSerializer.Deserialize<JsonElement>(listPayload, JsonOptions);
+		list.ValueKind.ShouldBe(JsonValueKind.Array);
+		list.EnumerateArray().ShouldContain(x => x.GetProperty("id").GetGuid() == runId);
+
+		var detailResponse = await Client.GetAsync($"{BaseUrl}/year-end-settlements/{runId}");
+		var detailPayload = await detailResponse.Content.ReadAsStringAsync();
+		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK, detailPayload);
+		var detail = JsonSerializer.Deserialize<JsonElement>(detailPayload, JsonOptions);
+		detail.GetProperty("id").GetGuid().ShouldBe(runId);
+		detail.TryGetProperty("totalCarriedDays", out _).ShouldBeTrue(detailPayload);
+		detail.TryGetProperty("totalEncashedDays", out _).ShouldBeTrue(detailPayload);
+		detail.TryGetProperty("totalEncashmentAmount", out _).ShouldBeTrue(detailPayload);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Get_My_Leave_Request_List_With_PageSize_100()
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"MyLeaveList{Guid.NewGuid():N}");
@@ -213,6 +248,28 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Create_When_PaidType_Is_Missing()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "MissingPaidTypeLeave");
+		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+
+		using var form = new MultipartFormDataContent();
+		form.Add(new StringContent(employee.Id.ToString()), "forEmployeeId");
+		form.Add(new StringContent(startDate.ToString("yyyy-MM-dd")), "startDate");
+		form.Add(new StringContent(startDate.AddDays(1).ToString("yyyy-MM-dd")), "endDate");
+		form.Add(new StringContent("Missing paid type request"), "reason");
+
+		var response = await Client.PostAsync($"{BaseUrl}?academicYearId={AcademicYearId}", form);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
+		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
+		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeavePolicyRuleNotFound);
+		rawPayload.ToLowerInvariant().ShouldContain("paidtype");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Reject_Create_For_Inactive_Employee()
 	{
 		var inactiveEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "InactiveLeave");
@@ -249,7 +306,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var policy = await CreateLeavePolicyFixtureAsync("AdminApprove");
 		var paidRule = policy.Rules.Single(rule => rule.PaidType == "Paid");
 		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
-		var leaveDate = FirstNonSunday(startDate);
+		var leaveDate = FirstNonSunday(DateTime.UtcNow.Date < startDate ? startDate : DateTime.UtcNow.Date);
 		var created = await SeedPendingLeaveRequestAsync(
 			employee.Id,
 			policy.Id,
@@ -470,11 +527,12 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 	private async Task<LeavePolicyResponse> CreateLeavePolicyFixtureAsync(string marker)
 	{
+		var (academicYearStart, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		var policyRequest = new LeavePolicyCreateRequest
 		{
 			PolicyTitle = $"{marker}-Policy-{Guid.NewGuid():N}",
 			Status = "Active",
-			EffectiveFrom = DateTime.UtcNow.Date,
+			EffectiveFrom = academicYearStart,
 			Description = "Leave policy for leave management workflow tests",
 			Rules =
 			[

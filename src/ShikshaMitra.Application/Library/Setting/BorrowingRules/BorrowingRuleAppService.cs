@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Library;
 using ShikshaMitra.Library.Setting.BorrowingRules.Dtos;
 using ShikshaMitra.Library.Shared;
 using Volo.Abp;
@@ -10,11 +13,12 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Library.Setting.BorrowingRules;
 
+[Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_BorrowingRules.View)]
 [RemoteService(false)]
 public class BorrowingRuleAppService(IRepository<BorrowingRule, Guid> _repository)
 	: ApplicationService, IBorrowingRuleAppService
 {
-	private static readonly string[] RoleNames = { "Student", "Teacher" };
+	private static readonly string[] RoleNames = { "Student", "Staff" };
 
 	public async Task<PaginatedResponse<BorrowingRuleDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
 	{
@@ -49,8 +53,11 @@ public class BorrowingRuleAppService(IRepository<BorrowingRule, Guid> _repositor
 		};
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_BorrowingRules.Add)]
 	public async Task<GenericUpdatedResponse> UpdateRulesAsync(Guid academicYearId, BorrowingRulesUpdateRequest input)
 	{
+		ValidateRules(input);
+
 		var query = await _repository.GetQueryableAsync();
 		var existing = await AsyncExecuter.ToListAsync(
 			query.Where(x => x.AcademicYearId == academicYearId)
@@ -84,5 +91,32 @@ public class BorrowingRuleAppService(IRepository<BorrowingRule, Guid> _repositor
 			Id = academicYearId.ToString(),
 			Message = "Borrowing rules updated successfully."
 		};
+	}
+
+	private static void ValidateRules(BorrowingRulesUpdateRequest input)
+	{
+		var duplicateRole = input.Rules.GroupBy(x => x.Role).FirstOrDefault(x => x.Count() > 1);
+		if (duplicateRole != null)
+		{
+			throw LibraryException(LibraryErrorCodes.BorrowingRuleInvalid, $"Duplicate borrowing rule for role '{duplicateRole.Key}'.");
+		}
+
+		foreach (var rule in input.Rules)
+		{
+			if (rule.Role is < 0 or > 1)
+			{
+				throw LibraryException(LibraryErrorCodes.BorrowingRuleInvalid, "Borrowing rule role must be Student or Staff.");
+			}
+
+			if (rule.MaxBooksAtTime < 0 || rule.ReservationLimit < 0)
+			{
+				throw LibraryException(LibraryErrorCodes.BorrowingRuleInvalid, "Borrowing limits cannot be negative.");
+			}
+		}
+	}
+
+	private static BusinessException LibraryException(string code, string message)
+	{
+		return new BusinessException(code: code, message: message);
 	}
 }

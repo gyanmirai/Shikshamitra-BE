@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using ShikshaMitra.Library.Books;
 
 namespace ShikshaMitra.Library.IssueReturn;
 
@@ -19,6 +20,8 @@ public class ReturnBookRequest
     public decimal? Amount { get; set; }
 
     public DateTime? FineDueDate { get; set; }
+
+    public BookCopyStatus? CopyStatus { get; set; }
 
     public string? Remarks { get; set; }
 }

@@ -11,6 +11,7 @@ using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Library.Books;
 using ShikshaMitra.OpenIddict;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
@@ -136,6 +137,7 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 		TenantStep<Seeders.DemoAcademicAndInstituteSeederContributor>(serviceProvider, "DemoAcademicAndInstituteSeeder", "DemoAcademicAndInstituteSeeder:v2", 150, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.HRSeederContributor>(serviceProvider, "HRSeeder", "HRSeeder:v4", 160, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.StudentSeederContributor>(serviceProvider, "StudentSeeder", "StudentSeeder:v1", 170, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<Student>(serviceProvider)),
+		TenantStep<Seeders.LibrarySeederContributor>(serviceProvider, "LibrarySeeder", "LibrarySeeder:v1", 175, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<Book>(serviceProvider)),
 		TenantStep<Seeders.FeeRefundSeederContributor>(serviceProvider, "FeeRefundSeeder", "FeeRefundSeeder:v1", 180, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<FeeRefundRequest>(serviceProvider)),
 		TenantStep<Seeders.FeeAssignmentRepairSeederContributor>(serviceProvider, "FeeAssignmentRepairSeeder", "FeeAssignmentRepairSeeder:v2", 185, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.FeeCollectionSeederContributor>(serviceProvider, "FeeCollectionSeeder", "FeeCollectionSeeder:v2", 190, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<FeeRecordMetadata>(serviceProvider)),

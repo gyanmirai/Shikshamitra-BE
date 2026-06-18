@@ -26,6 +26,7 @@ public class BookIssueController : AbpController
     }
 
     [HttpPost("returns")]
+    [HttpPost("return")]
     public async Task<IActionResult> ReturnAsync([FromBody] ReturnBookRequest input)
     {
         var result = await _bookIssueAppService.ReturnAsync(input);
@@ -39,6 +40,7 @@ public class BookIssueController : AbpController
     }
 
     [HttpGet("issue-returns")]
+    [HttpGet("issue-return")]
     public Task<PaginatedResponse<IssueReturnItemDto>> GetIssueReturnListAsync(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
@@ -47,8 +49,22 @@ public class BookIssueController : AbpController
     }
 
     [HttpGet("return-book/search")]
+    [HttpGet("returns/search")]
     public Task<ReturnBookSearchDto> SearchReturnBookAsync([FromQuery] string accessionNo)
     {
         return _bookIssueAppService.SearchReturnBookAsync(accessionNo);
+    }
+
+    [HttpGet("return/{accessionNo}")]
+    public Task<ReturnBookSearchDto> SearchReturnBookByRouteAsync(string accessionNo)
+    {
+        return _bookIssueAppService.SearchReturnBookAsync(accessionNo);
+    }
+
+    [HttpGet("issuedBook/accession/{accessionNo}/member")]
+    public async Task<LibraryMemberDto> GetIssuedBookMemberByAccessionAsync(string accessionNo)
+    {
+        var result = await _bookIssueAppService.SearchReturnBookAsync(accessionNo);
+        return await _bookIssueAppService.GetMemberAsync(result.MemberDetails.Id);
     }
 }

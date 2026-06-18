@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Library.Members;
+using ShikshaMitra.Library.Notifications;
 using ShikshaMitra.Library.Setting.BorrowingRules;
 using ShikshaMitra.Library.Setting.ChargeCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
@@ -45,4 +46,10 @@ public partial class ShikshaMitraDbContext
     // Library — Members
     // ───────────────────────────────────────────────
     public DbSet<LibraryMember> LibraryMembers { get; set; }
+
+    // ───────────────────────────────────────────────
+    // Library — Notifications
+    // ───────────────────────────────────────────────
+    public DbSet<LibraryNotificationSetting> LibraryNotificationSettings { get; set; }
+    public DbSet<LibraryNotificationHistory> LibraryNotificationHistories { get; set; }
 }

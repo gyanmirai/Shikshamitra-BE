@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Library.Books;
 using ShikshaMitra.Library.IssueReturn;
@@ -14,7 +15,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
-using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
@@ -22,7 +22,7 @@ using Volo.Abp.Guids;
 
 namespace ShikshaMitra.Library.Members;
 
-[Authorize]
+[Authorize(ShikshaMitraSubmodulePermissions.Library.LibraryMembers.View)]
 [RemoteService(false)]
 public class LibraryMemberAppService(
 IRepository<LibraryMember, Guid> libraryMemberRepository,
@@ -41,6 +41,7 @@ LibraryMemberManager libraryMemberManager,
 IGuidGenerator guidGenerator
 ) : ApplicationService, ILibraryMemberAppService
 {
+  [Authorize(ShikshaMitraSubmodulePermissions.Library.LibraryMembers.Update)]
   public async Task CreateLibraryMember(Guid studentId, bool isActive = true)
   {
     var student = await GetStudentForLibraryMemberAsync(studentId);
@@ -58,6 +59,7 @@ IGuidGenerator guidGenerator
     await libraryMemberRepository.InsertAsync(libraryMember);
   }
 
+  [Authorize(ShikshaMitraSubmodulePermissions.Library.LibraryMembers.Update)]
   public async Task HandleLibraryMemberAsync(Guid studentId, bool isActive = true)
   {
     await GetStudentForLibraryMemberAsync(studentId);
@@ -82,7 +84,7 @@ IGuidGenerator guidGenerator
     return student ?? throw new EntityNotFoundException($"Student with id: {studentId} not found");
   }
 
-  public async Task<PagedResultDto<LibraryMemberDto>> GetListAsync(GetLibraryMembersInput input)
+  public async Task<PaginatedResponse<LibraryMemberDto>> GetListAsync(GetLibraryMembersInput input)
   {
     var studentQueryable = await studentRepository.GetQueryableAsync();
     var employeeQueryable = await employeeRepository.GetQueryableAsync();
@@ -240,7 +242,17 @@ IGuidGenerator guidGenerator
       }
     }
 
-    return new PagedResultDto<LibraryMemberDto>(totalCount, items);
+    var pageSize = input.MaxResultCount <= 0 ? 10 : input.MaxResultCount;
+    var currentPage = (input.SkipCount / pageSize) + 1;
+
+    return new PaginatedResponse<LibraryMemberDto>
+    {
+      TotalCount = totalCount,
+      CurrentPage = currentPage,
+      PageSize = pageSize,
+      TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
+      Items = items
+    };
   }
 
   private async Task<LibraryMemberStatisticsDto> GetStatisticsAsync(Guid memberId)

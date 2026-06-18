@@ -9,7 +9,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Library.Setting;
 
 [Area("Library")]
-[Route("api/borrowing-rules")]
+[Route("api/library/borrowing-rules")]
 public class BorrowingRuleController : AbpController
 {
 	private readonly IBorrowingRuleAppService _service;

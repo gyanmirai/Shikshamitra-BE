@@ -53,8 +53,7 @@ public class LibrarySectionController : AbpController
 		return _service.UpdateAsync(id, academicYearId, input);
 	}
 
-	// Contract specifies DELETE at library/sections/{sectionId}
-	[HttpDelete("/library/sections/{sectionId}")]
+	[HttpDelete("{sectionId}")]
 	public async Task<IActionResult> DeleteAsync(string sectionId, [FromQuery] Guid academicYearId)
 	{
 		if (!Guid.TryParse(sectionId, out var id))

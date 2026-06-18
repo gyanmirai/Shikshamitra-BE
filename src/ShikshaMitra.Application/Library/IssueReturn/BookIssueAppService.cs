@@ -2,9 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Library;
 using ShikshaMitra.Library.Books;
+using ShikshaMitra.Library.Setting.BorrowingRules;
+using ShikshaMitra.Library.Setting.ChargeCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
+using ShikshaMitra.Library.Notifications;
 using ShikshaMitra.Library.Shared;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -17,462 +24,606 @@ namespace ShikshaMitra.Library.IssueReturn;
 
 [RemoteService(false)]
 public class BookIssueAppService(
-    IRepository<BookIssue, Guid> _issueRepository,
-    IRepository<BookCopy, Guid> _bookCopyRepository,
-    IRepository<Book, Guid> _bookRepository,
-    IRepository<BookCategory, Guid> _categoryRepository,
-    IRepository<BookReservation, Guid> _reservationRepository,
-    IRepository<Student, Guid> _studentRepository,
-    IRepository<Employee, Guid> _employeeRepository,
-    IRepository<Standard, Guid> _standardRepository,
-    IRepository<Division, Guid> _divisionRepository,
-    IRepository<Members.LibraryMember, Guid> _libraryMemberRepository)
-    : ApplicationService, IBookIssueAppService
+	IRepository<BookIssue, Guid> issueRepository,
+	IRepository<BookCopy, Guid> bookCopyRepository,
+	IRepository<Book, Guid> bookRepository,
+	IRepository<BookCategory, Guid> categoryRepository,
+	IRepository<BookReservation, Guid> reservationRepository,
+	IRepository<LibraryCharge, Guid> libraryChargeRepository,
+	IRepository<LibraryChargeCategory, Guid> chargeCategoryRepository,
+	IRepository<BorrowingRule, Guid> borrowingRuleRepository,
+	IRepository<Student, Guid> studentRepository,
+	IRepository<Employee, Guid> employeeRepository,
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<Division, Guid> divisionRepository,
+	IRepository<Members.LibraryMember, Guid> libraryMemberRepository,
+	LibraryNotificationReminderService notificationReminderService)
+	: ApplicationService, IBookIssueAppService
 {
-    public async Task<GenericCreatedResponse> IssueAsync(IssueBookRequest input)
-    {
-        // Find the book copy by accession number
-        var copyQuery = await _bookCopyRepository.GetQueryableAsync();
-        var copy = await AsyncExecuter.FirstOrDefaultAsync(
-            copyQuery.Where(c => c.AccessionNumber == input.AccessionNo));
+	private const int DefaultStudentBorrowingLimit = 3;
+	private const int DefaultStaffBorrowingLimit = 5;
+	private const int DefaultStudentReservationLimit = 2;
+	private const int DefaultStaffReservationLimit = 3;
 
-        if (copy == null)
-            throw new UserFriendlyException($"Book copy with accession number '{input.AccessionNo}' not found.", code: "404");
+	[Authorize(ShikshaMitraSubmodulePermissions.Library.IssueReturn.Issue)]
+	public async Task<GenericCreatedResponse> IssueAsync(IssueBookRequest input)
+	{
+		EnsureIssueDates(input.IssueDate, input.DueDate);
 
-        if (copy.Status != BookCopyStatus.Available && copy.Status != BookCopyStatus.Reserved)
-            throw new UserFriendlyException($"Book copy '{input.AccessionNo}' is not available for issue. Current status: {copy.Status}.", code: "400");
+		var copy = await FindCopyByAccessionAsync(input.AccessionNo);
+		if (copy == null)
+		{
+			throw LibraryException(LibraryErrorCodes.CopyNotFound, $"Book copy with accession number '{input.AccessionNo}' was not found.");
+		}
 
-        // Determine member role (try student first, then employee)
-        int memberRole = await ResolveMemberRoleAsync(input.MemberId);
+		if (copy.Status != BookCopyStatus.Available && copy.Status != BookCopyStatus.Reserved)
+		{
+			throw LibraryException(LibraryErrorCodes.CopyNotAvailable, $"Book copy '{input.AccessionNo}' is not available for issue. Current status: {copy.Status}.");
+		}
 
-        // Create the issue record
-        var issue = new BookIssue(
-            GuidGenerator.Create(),
-            copy.Id,
-            copy.AccessionNumber,
-            input.MemberId,
-            memberRole,
-            input.IssueDate,
-            input.DueDate,
-            CurrentTenant.Id
-        );
+		var book = await bookRepository.GetAsync(copy.BookId);
+		var memberRole = await ResolveActiveMemberRoleAsync(input.MemberId);
+		var rule = await GetBorrowingRuleAsync(book.AcademicYearId, memberRole);
 
-        await _issueRepository.InsertAsync(issue, autoSave: true);
+		var issueQuery = await issueRepository.GetQueryableAsync();
+		var duplicateIssue = await AsyncExecuter.AnyAsync(issueQuery.Where(i =>
+			i.AccessionNumber == copy.AccessionNumber &&
+			i.Status == BookIssueStatus.Issued));
 
-        // Update book copy status to Issued
-        copy.Status = BookCopyStatus.Issued;
-        await _bookCopyRepository.UpdateAsync(copy, autoSave: true);
+		if (duplicateIssue)
+		{
+			throw LibraryException(LibraryErrorCodes.DuplicateActiveIssue, "This copy already has an active issue.");
+		}
 
-        return new GenericCreatedResponse
-        {
-            Id = issue.Id.ToString(),
-            Message = "Book issued successfully."
-        };
-    }
+		var activeIssuesForMember = await AsyncExecuter.CountAsync(
+			issueQuery.Where(i => i.MemberId == input.MemberId && i.Status == BookIssueStatus.Issued));
 
-    public async Task<GenericCreatedResponse> ReturnAsync(ReturnBookRequest input)
-    {
-        // Find the active issue for this accession + member
-        var issueQuery = await _issueRepository.GetQueryableAsync();
-        var issue = await AsyncExecuter.FirstOrDefaultAsync(
-            issueQuery.Where(i =>
-                i.AccessionNumber == input.AccessionNo &&
-                i.MemberId == input.MemberId &&
-                i.Status == BookIssueStatus.Issued));
+		if (activeIssuesForMember >= rule.MaxBooksAtTime)
+		{
+			throw LibraryException(LibraryErrorCodes.BorrowingLimitExceeded, "Member has reached the maximum active issue limit.");
+		}
 
-        if (issue == null)
-            throw new UserFriendlyException($"No active issue found for accession '{input.AccessionNo}' and the specified member.", code: "404");
+		var reservationToConsume = await ResolveReservationForIssueAsync(book.Id, input.MemberId, copy.Status);
 
-        // Update issue with return info
-        issue.ReturnDate = input.ReturnDate;
-        issue.Status = BookIssueStatus.Returned;
-        issue.ChargeCategoryId = input.ChargeCategoryId;
-        issue.Amount = input.Amount;
-        issue.FineDueDate = input.FineDueDate;
-        issue.Remarks = input.Remarks;
+		var issue = new BookIssue(
+			GuidGenerator.Create(),
+			copy.Id,
+			copy.AccessionNumber,
+			input.MemberId,
+			memberRole,
+			input.IssueDate,
+			input.DueDate,
+			CurrentTenant.Id);
 
-        await _issueRepository.UpdateAsync(issue, autoSave: true);
+		await issueRepository.InsertAsync(issue, autoSave: true);
 
-        // Update book copy status back to Available
-        var copyQuery = await _bookCopyRepository.GetQueryableAsync();
-        var copy = await AsyncExecuter.FirstOrDefaultAsync(
-            copyQuery.Where(c => c.AccessionNumber == input.AccessionNo));
+		copy.Status = BookCopyStatus.Issued;
+		await bookCopyRepository.UpdateAsync(copy, autoSave: true);
 
-        if (copy != null)
-        {
-            copy.Status = BookCopyStatus.Available;
-            await _bookCopyRepository.UpdateAsync(copy, autoSave: true);
-        }
+		if (reservationToConsume != null)
+		{
+			await reservationRepository.DeleteAsync(reservationToConsume, autoSave: true);
+		}
 
-        return new GenericCreatedResponse
-        {
-            Id = issue.Id.ToString(),
-            Message = "Book returned successfully."
-        };
-    }
+		await notificationReminderService.SendIssueConfirmationAsync(issue, book, copy);
 
-    public async Task<AccessionBookDto> GetByAccessionAsync(string accessionNo)
-    {
-        var copyQuery = await _bookCopyRepository.GetQueryableAsync();
-        var copy = await AsyncExecuter.FirstOrDefaultAsync(
-            copyQuery.Where(c => c.AccessionNumber == accessionNo));
+		return new GenericCreatedResponse
+		{
+			Id = issue.Id.ToString(),
+			Message = "Book issued successfully."
+		};
+	}
 
-        if (copy == null)
-            throw new UserFriendlyException($"Book copy with accession number '{accessionNo}' not found.", code: "404");
+	[Authorize(ShikshaMitraSubmodulePermissions.Library.IssueReturn.Return)]
+	public async Task<GenericCreatedResponse> ReturnAsync(ReturnBookRequest input)
+	{
+		var normalizedAccession = NormalizeAccession(input.AccessionNo);
+		var issueQuery = await issueRepository.GetQueryableAsync();
+		var issue = await AsyncExecuter.FirstOrDefaultAsync(issueQuery.Where(i =>
+			i.AccessionNumber == normalizedAccession &&
+			i.MemberId == input.MemberId &&
+			i.Status == BookIssueStatus.Issued));
 
-        var book = await _bookRepository.GetAsync(copy.BookId);
-        var category = await _categoryRepository.FindAsync(book.CategoryId);
+		if (issue == null)
+		{
+			throw LibraryException(LibraryErrorCodes.ActiveIssueNotFound, $"No active issue found for accession '{input.AccessionNo}' and the specified member.");
+		}
 
-        return new AccessionBookDto
-        {
-            BookId = book.Id,
-            Title = book.Title,
-            AccessionNo = copy.AccessionNumber,
-            Author = book.Author,
-            Isbn = book.Isbn,
-            Publisher = book.Publisher,
-            Edition = book.Edition,
-            AddedOn = book.CreationTime,
-            Language = book.Language.ToString(),
-            Category = category?.Name ?? string.Empty,
-            Pages = book.Pages
-        };
-    }
+		if (input.ReturnDate.Date < issue.IssueDate.Date)
+		{
+			throw LibraryException(LibraryErrorCodes.InvalidReturnDate, "Return date cannot be before issue date.");
+		}
 
-    public async Task<LibraryMemberDto> GetMemberAsync(Guid memberId)
-    {
-        // Try student first
-        var student = await _studentRepository.FindAsync(memberId);
-        if (student != null)
-        {
-            return await BuildStudentMemberDtoAsync(student);
-        }
+		var finalCopyStatus = input.CopyStatus ?? BookCopyStatus.Available;
+		if (finalCopyStatus == BookCopyStatus.Issued || finalCopyStatus == BookCopyStatus.Reserved)
+		{
+			throw LibraryException(LibraryErrorCodes.InvalidCopyStatusTransition, "Return workflow can only set a copy to available, damaged, lost, under repair, or discarded.");
+		}
 
-        // Try employee
-        var employee = await _employeeRepository.FindAsync(memberId);
-        if (employee != null)
-        {
-            return await BuildEmployeeMemberDtoAsync(employee);
-        }
+		issue.ReturnDate = input.ReturnDate;
+		issue.Status = BookIssueStatus.Returned;
+		issue.ChargeCategoryId = input.ChargeCategoryId;
+		issue.Amount = input.Amount;
+		issue.FineDueDate = input.FineDueDate;
+		issue.Remarks = input.Remarks;
 
-        throw new UserFriendlyException($"Member with id '{memberId}' not found.", code: "404");
-    }
+		await issueRepository.UpdateAsync(issue, autoSave: true);
 
-    public async Task<PaginatedResponse<IssueReturnItemDto>> GetIssueReturnListAsync(int page = 1, int pageSize = 20)
-    {
-        var query = await _issueRepository.GetQueryableAsync();
-        var totalCount = await AsyncExecuter.CountAsync(query);
-        var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
+		var copy = await FindCopyByAccessionAsync(input.AccessionNo);
+		if (copy != null)
+		{
+			copy.Status = finalCopyStatus;
+			copy.Remarks = input.Remarks;
+			await bookCopyRepository.UpdateAsync(copy, autoSave: true);
+		}
 
-        var issues = await AsyncExecuter.ToListAsync(
-            query
-                .OrderByDescending(x => x.CreationTime)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize));
+		if (input.Amount.HasValue && input.Amount.Value > 0)
+		{
+			await CreateReturnChargeAsync(issue, input);
+		}
 
-        // Batch-resolve member & book info
-        var memberIds = issues.Select(i => i.MemberId).Distinct().ToList();
-        var accessionNos = issues.Select(i => i.AccessionNumber).Distinct().ToList();
+		Book? returnedBook = null;
+		if (copy != null)
+		{
+			returnedBook = await bookRepository.FindAsync(copy.BookId);
+		}
+		await notificationReminderService.SendReturnNotificationsAsync(issue, returnedBook, copy);
 
-        // Load book copies for accession numbers
-        var copyQuery = await _bookCopyRepository.GetQueryableAsync();
-        var copies = await AsyncExecuter.ToListAsync(
-            copyQuery.Where(c => accessionNos.Contains(c.AccessionNumber)));
-        var bookIds = copies.Select(c => c.BookId).Distinct().ToList();
+		return new GenericCreatedResponse
+		{
+			Id = issue.Id.ToString(),
+			Message = "Book returned successfully."
+		};
+	}
 
-        // Load books
-        var bookQuery = await _bookRepository.GetQueryableAsync();
-        var books = await AsyncExecuter.ToListAsync(
-            bookQuery.Where(b => bookIds.Contains(b.Id)));
-        var bookLookup = books.ToDictionary(b => b.Id);
+	[Authorize(ShikshaMitraSubmodulePermissions.Library.IssueReturn.View)]
+	public async Task<AccessionBookDto> GetByAccessionAsync(string accessionNo)
+	{
+		var copy = await FindCopyByAccessionAsync(accessionNo);
+		if (copy == null)
+		{
+			throw LibraryException(LibraryErrorCodes.CopyNotFound, $"Book copy with accession number '{accessionNo}' was not found.");
+		}
 
-        // Book copy -> book mapping
-        var copyBookLookup = copies.ToDictionary(c => c.AccessionNumber, c => c.BookId);
+		var book = await bookRepository.GetAsync(copy.BookId);
+		var category = await categoryRepository.FindAsync(book.CategoryId);
 
-        // Load categories
-        var catIds = books.Select(b => b.CategoryId).Distinct().ToList();
-        var catQuery = await _categoryRepository.GetQueryableAsync();
-        var categories = await AsyncExecuter.ToListAsync(
-            catQuery.Where(c => catIds.Contains(c.Id)));
-        var catLookup = categories.ToDictionary(c => c.Id, c => c.Name);
+		return new AccessionBookDto
+		{
+			BookId = book.Id,
+			Title = book.Title,
+			AccessionNo = copy.AccessionNumber,
+			Author = book.Author,
+			Isbn = book.Isbn,
+			Publisher = book.Publisher,
+			Edition = book.Edition,
+			AddedOn = book.CreationTime,
+			Language = book.Language.ToString(),
+			Category = category?.Name ?? string.Empty,
+			Pages = book.Pages
+		};
+	}
 
-        // Load students
-        var studentQuery = await _studentRepository.GetQueryableAsync();
-        var students = await AsyncExecuter.ToListAsync(
-            studentQuery.Where(s => memberIds.Contains(s.Id)));
-        var studentLookup = students.ToDictionary(s => s.Id);
+	[Authorize(ShikshaMitraSubmodulePermissions.Library.LibraryMembers.View)]
+	public async Task<LibraryMemberDto> GetMemberAsync(Guid memberId)
+	{
+		var student = await studentRepository.FindAsync(memberId);
+		if (student != null)
+		{
+			return await BuildStudentMemberDtoAsync(student);
+		}
 
-        // Load employees
-        var empQuery = await _employeeRepository.GetQueryableAsync();
-        var employees = await AsyncExecuter.ToListAsync(
-            empQuery.Where(e => memberIds.Contains(e.Id)));
-        var empLookup = employees.ToDictionary(e => e.Id);
+		var employee = await employeeRepository.FindAsync(memberId);
+		if (employee != null)
+		{
+			return await BuildEmployeeMemberDtoAsync(employee);
+		}
 
-        // Resolve standard/division for students
-        var standardIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
-        var divisionIds = students.Where(s => s.DivisionId.HasValue).Select(s => s.DivisionId!.Value).Distinct().ToList();
+		throw LibraryException(LibraryErrorCodes.MemberNotFound, $"Member with id '{memberId}' was not found.");
+	}
 
-        var stdQuery = await _standardRepository.GetQueryableAsync();
-        var standards = await AsyncExecuter.ToListAsync(
-            stdQuery.Where(s => standardIds.Contains(s.Id)));
-        var stdLookup = standards.ToDictionary(s => s.Id, s => s.Name);
+	[Authorize(ShikshaMitraSubmodulePermissions.Library.IssueReturn.View)]
+	public async Task<PaginatedResponse<IssueReturnItemDto>> GetIssueReturnListAsync(int page = 1, int pageSize = 20)
+	{
+		page = Math.Max(page, 1);
+		pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var divQuery = await _divisionRepository.GetQueryableAsync();
-        var divisions = await AsyncExecuter.ToListAsync(
-            divQuery.Where(d => divisionIds.Contains(d.Id)));
-        var divLookup = divisions.ToDictionary(d => d.Id, d => d.Name);
+		var query = await issueRepository.GetQueryableAsync();
+		var totalCount = await AsyncExecuter.CountAsync(query);
+		var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-        var items = issues.Select(issue =>
-        {
-            var dto = new IssueReturnItemDto
-            {
-                TransactionId = issue.Id,
-                MemberId = issue.MemberId,
-                Role = issue.MemberRole,
-                AccessionNo = issue.AccessionNumber,
-                IssueDate = issue.IssueDate,
-                DueDate = issue.DueDate,
-                ReturnDate = issue.ReturnDate,
-                Status = (int) issue.Status
-            };
+		var issues = await AsyncExecuter.ToListAsync(
+			query
+				.OrderByDescending(x => x.CreationTime)
+				.Skip((page - 1) * pageSize)
+				.Take(pageSize));
 
-            // Resolve book info
-            if (copyBookLookup.TryGetValue(issue.AccessionNumber, out var bookId) &&
-                bookLookup.TryGetValue(bookId, out var book))
-            {
-                dto.BookTitle = book.Title;
-                dto.BookCategory = catLookup.GetValueOrDefault(book.CategoryId);
-            }
+		var memberIds = issues.Select(i => i.MemberId).Distinct().ToList();
+		var accessionNos = issues.Select(i => i.AccessionNumber).Distinct().ToList();
 
-            // Resolve member info
-            if (studentLookup.TryGetValue(issue.MemberId, out var student))
-            {
-                dto.MemberName = $"{student.FirstName} {student.LastName}".Trim();
-                dto.RollNo = student.RollNo?.ToString();
-                dto.GrNo = student.GrNo?.ToString();
-                dto.StandardName = student.StandardId.HasValue
-                    ? stdLookup.GetValueOrDefault(student.StandardId.Value)
-                    : null;
-                dto.DivisionName = student.DivisionId.HasValue
-                    ? divLookup.GetValueOrDefault(student.DivisionId.Value)
-                    : null;
-            }
-            else if (empLookup.TryGetValue(issue.MemberId, out var emp))
-            {
-                dto.MemberName = $"{emp.FirstName} {emp.LastName}".Trim();
-                dto.ContactNo = emp.MobileNo;
-            }
+		var copyQuery = await bookCopyRepository.GetQueryableAsync();
+		var copies = await AsyncExecuter.ToListAsync(copyQuery.Where(c => accessionNos.Contains(c.AccessionNumber)));
+		var bookIds = copies.Select(c => c.BookId).Distinct().ToList();
 
-            return dto;
-        }).ToList();
+		var bookQuery = await bookRepository.GetQueryableAsync();
+		var books = await AsyncExecuter.ToListAsync(bookQuery.Where(b => bookIds.Contains(b.Id)));
+		var bookLookup = books.ToDictionary(b => b.Id);
+		var copyBookLookup = copies.ToDictionary(c => c.AccessionNumber, c => c.BookId);
 
-        return new PaginatedResponse<IssueReturnItemDto>
-        {
-            TotalCount = totalCount,
-            CurrentPage = page,
-            PageSize = pageSize,
-            TotalPages = totalPages,
-            Items = items
-        };
-    }
+		var catIds = books.Select(b => b.CategoryId).Distinct().ToList();
+		var catQuery = await categoryRepository.GetQueryableAsync();
+		var categories = await AsyncExecuter.ToListAsync(catQuery.Where(c => catIds.Contains(c.Id)));
+		var catLookup = categories.ToDictionary(c => c.Id, c => c.Name);
 
-    public async Task<ReturnBookSearchDto> SearchReturnBookAsync(string accessionNo)
-    {
-        // Find book copy by accession number
-        var copyQuery = await _bookCopyRepository.GetQueryableAsync();
-        var copy = await AsyncExecuter.FirstOrDefaultAsync(
-            copyQuery.Where(c => c.AccessionNumber == accessionNo));
+		var studentQuery = await studentRepository.GetQueryableAsync();
+		var students = await AsyncExecuter.ToListAsync(studentQuery.Where(s => memberIds.Contains(s.Id)));
+		var studentLookup = students.ToDictionary(s => s.Id);
 
-        if (copy == null)
-            throw new UserFriendlyException($"Book copy with accession number '{accessionNo}' not found.", code: "404");
+		var empQuery = await employeeRepository.GetQueryableAsync();
+		var employees = await AsyncExecuter.ToListAsync(empQuery.Where(e => memberIds.Contains(e.Id)));
+		var empLookup = employees.ToDictionary(e => e.Id);
 
-        // Find active issue for this copy
-        var issueQuery = await _issueRepository.GetQueryableAsync();
-        var issue = await AsyncExecuter.FirstOrDefaultAsync(
-            issueQuery.Where(i =>
-                i.AccessionNumber == accessionNo &&
-                i.Status == BookIssueStatus.Issued));
+		var standardIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
+		var divisionIds = students.Where(s => s.DivisionId.HasValue).Select(s => s.DivisionId!.Value).Distinct().ToList();
 
-        if (issue == null)
-            throw new UserFriendlyException($"No active issue found for accession number '{accessionNo}'.", code: "404");
+		var stdQuery = await standardRepository.GetQueryableAsync();
+		var standards = await AsyncExecuter.ToListAsync(stdQuery.Where(s => standardIds.Contains(s.Id)));
+		var stdLookup = standards.ToDictionary(s => s.Id, s => s.Name);
 
-        // Resolve book details
-        var book = await _bookRepository.GetAsync(copy.BookId);
-        var category = await _categoryRepository.FindAsync(book.CategoryId);
+		var divQuery = await divisionRepository.GetQueryableAsync();
+		var divisions = await AsyncExecuter.ToListAsync(divQuery.Where(d => divisionIds.Contains(d.Id)));
+		var divLookup = divisions.ToDictionary(d => d.Id, d => d.Name);
+		var today = DateTime.UtcNow.Date;
 
-        var bookDetails = new ReturnBookSearchBookDto
-        {
-            Id = book.Id,
-            AccessionNo = copy.AccessionNumber,
-            BookTitle = book.Title,
-            Author = book.Author,
-            Isbn = book.Isbn,
-            Publisher = book.Publisher,
-            AddedOn = book.CreationTime,
-            Language = (int) book.Language,
-            Edition = book.Edition,
-            Category = category?.Name ?? string.Empty,
-            Pages = book.Pages,
-            CoverImage = book.CoverImage
-        };
+		var items = issues.Select(issue =>
+		{
+			var dto = new IssueReturnItemDto
+			{
+				TransactionId = issue.Id,
+				MemberId = issue.MemberId,
+				Role = issue.MemberRole,
+				AccessionNo = issue.AccessionNumber,
+				IssueDate = issue.IssueDate,
+				DueDate = issue.DueDate,
+				ReturnDate = issue.ReturnDate,
+				Status = issue.Status == BookIssueStatus.Issued && issue.DueDate.Date < today
+					? (int)BookIssueStatus.Overdue
+					: (int)issue.Status
+			};
 
-        // Resolve member details
-        var memberDetails = new ReturnBookSearchMemberDto
-        {
-            Id = issue.MemberId
-        };
+			if (copyBookLookup.TryGetValue(issue.AccessionNumber, out var bookId) &&
+				bookLookup.TryGetValue(bookId, out var book))
+			{
+				dto.BookTitle = book.Title;
+				dto.BookCategory = catLookup.GetValueOrDefault(book.CategoryId);
+			}
 
-        if (issue.MemberRole == 0) // Student
-        {
-            var student = await _studentRepository.FindAsync(issue.MemberId);
-            if (student != null)
-            {
-                memberDetails.MemberName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim();
-                memberDetails.Avatar = student.AdditionalDetail?.ProfilePictureUrl;
-                memberDetails.Email = student.ContactDetail?.Email;
-                memberDetails.Role = "Student";
-                memberDetails.RollNo = student.RollNo?.ToString();
-                memberDetails.GrNo = student.GrNo?.ToString();
-                memberDetails.Phone = student.ContactDetail?.PrimaryContactNo;
-                memberDetails.JoinDate = student.CreationTime;
+			if (studentLookup.TryGetValue(issue.MemberId, out var student))
+			{
+				dto.MemberName = $"{student.FirstName} {student.LastName}".Trim();
+				dto.RollNo = student.RollNo?.ToString();
+				dto.GrNo = student.GrNo?.ToString();
+				dto.StandardName = student.StandardId.HasValue ? stdLookup.GetValueOrDefault(student.StandardId.Value) : null;
+				dto.DivisionName = student.DivisionId.HasValue ? divLookup.GetValueOrDefault(student.DivisionId.Value) : null;
+			}
+			else if (empLookup.TryGetValue(issue.MemberId, out var emp))
+			{
+				dto.MemberName = $"{emp.FirstName} {emp.LastName}".Trim();
+				dto.ContactNo = emp.MobileNo;
+			}
 
-                string? standardName = null, divisionName = null;
-                if (student.StandardId.HasValue)
-                {
-                    var std = await _standardRepository.FindAsync(student.StandardId.Value);
-                    standardName = std?.Name;
-                }
-                if (student.DivisionId.HasValue)
-                {
-                    var div = await _divisionRepository.FindAsync(student.DivisionId.Value);
-                    divisionName = div?.Name;
-                }
-                memberDetails.ClassDivision = standardName != null && divisionName != null
-                    ? $"{standardName}-{divisionName}"
-                    : standardName ?? divisionName;
-            }
-        }
-        else // Employee
-        {
-            var employee = await _employeeRepository.FindAsync(issue.MemberId);
-            if (employee != null)
-            {
-                memberDetails.MemberName = $"{employee.FirstName} {employee.LastName}".Trim();
-                memberDetails.Avatar = employee.ProfilePictureBlobName;
-                memberDetails.Email = employee.Email;
-                memberDetails.Role = "Employee";
-                memberDetails.Phone = employee.MobileNo;
-                memberDetails.JoinDate = employee.CreationTime;
-            }
-        }
+			return dto;
+		}).ToList();
 
-        return new ReturnBookSearchDto
-        {
-            BookDetails = bookDetails,
-            MemberDetails = memberDetails
-        };
-    }
+		return new PaginatedResponse<IssueReturnItemDto>
+		{
+			TotalCount = totalCount,
+			CurrentPage = page,
+			PageSize = pageSize,
+			TotalPages = totalPages,
+			Items = items
+		};
+	}
 
-    private async Task<int> ResolveMemberRoleAsync(Guid memberId)
-    {
-        var student = await _studentRepository.FindAsync(memberId);
-        if (student != null) return 0; // Student
+	[Authorize(ShikshaMitraSubmodulePermissions.Library.IssueReturn.View)]
+	public async Task<ReturnBookSearchDto> SearchReturnBookAsync(string accessionNo)
+	{
+		var copy = await FindCopyByAccessionAsync(accessionNo);
+		if (copy == null)
+		{
+			throw LibraryException(LibraryErrorCodes.CopyNotFound, $"Book copy with accession number '{accessionNo}' was not found.");
+		}
 
-        var employee = await _employeeRepository.FindAsync(memberId);
-        if (employee != null) return 1; // Employee/Teacher
+		var issueQuery = await issueRepository.GetQueryableAsync();
+		var issue = await AsyncExecuter.FirstOrDefaultAsync(issueQuery.Where(i =>
+			i.AccessionNumber == copy.AccessionNumber &&
+			i.Status == BookIssueStatus.Issued));
 
-        throw new UserFriendlyException($"Member with id '{memberId}' not found as student or employee.", code: "404");
-    }
+		if (issue == null)
+		{
+			throw LibraryException(LibraryErrorCodes.ActiveIssueNotFound, $"No active issue found for accession number '{accessionNo}'.");
+		}
 
-    private async Task<LibraryMemberDto> BuildStudentMemberDtoAsync(Student student)
-    {
-        string? standardName = null;
-        string? divisionName = null;
+		var book = await bookRepository.GetAsync(copy.BookId);
+		var category = await categoryRepository.FindAsync(book.CategoryId);
 
-        if (student.StandardId.HasValue)
-        {
-            var std = await _standardRepository.FindAsync(student.StandardId.Value);
-            standardName = std?.Name;
-        }
+		var memberDetails = await BuildReturnMemberDetailsAsync(issue);
 
-        if (student.DivisionId.HasValue)
-        {
-            var div = await _divisionRepository.FindAsync(student.DivisionId.Value);
-            divisionName = div?.Name;
-        }
+		return new ReturnBookSearchDto
+		{
+			BookDetails = new ReturnBookSearchBookDto
+			{
+				Id = book.Id,
+				AccessionNo = copy.AccessionNumber,
+				BookTitle = book.Title,
+				Author = book.Author,
+				Isbn = book.Isbn,
+				Publisher = book.Publisher,
+				AddedOn = book.CreationTime,
+				Language = (int)book.Language,
+				Edition = book.Edition,
+				Category = category?.Name ?? string.Empty,
+				Pages = book.Pages,
+				CoverImage = book.CoverImage
+			},
+			MemberDetails = memberDetails
+		};
+	}
 
-        var classDivision = standardName != null && divisionName != null
-            ? $"{standardName}-{divisionName}"
-            : standardName ?? divisionName;
+	private async Task<BookReservation?> ResolveReservationForIssueAsync(Guid bookId, Guid memberId, BookCopyStatus copyStatus)
+	{
+		var reservationQuery = await reservationRepository.GetQueryableAsync();
+		var today = DateTime.UtcNow.Date;
+		var activeReservations = await AsyncExecuter.ToListAsync(
+			reservationQuery
+				.Where(r => r.BookId == bookId && r.ReserveDueDate.Date >= today)
+				.OrderBy(r => r.RequestedDate));
 
-        // Count statistics
-        var issueQuery = await _issueRepository.GetQueryableAsync();
-        var currentIssue = await AsyncExecuter.CountAsync(
-            issueQuery.Where(i => i.MemberId == student.Id && i.Status == BookIssueStatus.Issued));
-        var overdue = await AsyncExecuter.CountAsync(
-            issueQuery.Where(i => i.MemberId == student.Id && i.Status == BookIssueStatus.Issued && i.DueDate < DateTime.UtcNow));
+		var reservationForMember = activeReservations.FirstOrDefault(r => r.MemberId == memberId);
 
-        var resQuery = await _reservationRepository.GetQueryableAsync();
-        var reserved = await AsyncExecuter.CountAsync(
-            resQuery.Where(r => r.MemberId == student.Id));
+		if (copyStatus == BookCopyStatus.Reserved && reservationForMember == null)
+		{
+			throw LibraryException(LibraryErrorCodes.ReservationNotFound, "Reserved copies can only be issued to the member with an active reservation.");
+		}
 
-        var libMember = await _libraryMemberRepository.FindAsync(x => x.StudentId == student.Id);
+		if (copyStatus == BookCopyStatus.Available && activeReservations.Count > 0 && reservationForMember == null)
+		{
+			throw LibraryException(LibraryErrorCodes.ReservationNotFound, "This book has an active reservation for another member.");
+		}
 
-        return new LibraryMemberDto
-        {
-            Id = student.Id,
-            MemberName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
-            MemberIdentifier = libMember?.MemberIdentifier,
-            Avatar = student.AdditionalDetail?.ProfilePictureUrl,
-            Email = student.ContactDetail?.Email,
-            Role = "Student",
-            ClassDivision = classDivision,
-            RollNo = student.RollNo?.ToString(),
-            GrNo = student.GrNo?.ToString(),
-            ContactNo = student.ContactDetail?.PrimaryContactNo,
-            Phone = student.ContactDetail?.PrimaryContactNo,
-            JoinDate = student.CreationTime,
-            Statistics = new LibraryMemberStatisticsDto
-            {
-                CurrentIssue = currentIssue,
-                ReservedBooks = reserved,
-                OverdueReturnBooks = overdue
-            }
-        };
-    }
+		return reservationForMember;
+	}
 
-    private async Task<LibraryMemberDto> BuildEmployeeMemberDtoAsync(Employee employee)
-    {
-        var issueQuery = await _issueRepository.GetQueryableAsync();
-        var currentIssue = await AsyncExecuter.CountAsync(
-            issueQuery.Where(i => i.MemberId == employee.Id && i.Status == BookIssueStatus.Issued));
-        var overdue = await AsyncExecuter.CountAsync(
-            issueQuery.Where(i => i.MemberId == employee.Id && i.Status == BookIssueStatus.Issued && i.DueDate < DateTime.UtcNow));
+	private async Task CreateReturnChargeAsync(BookIssue issue, ReturnBookRequest input)
+	{
+		if (!input.ChargeCategoryId.HasValue || input.ChargeCategoryId.Value == Guid.Empty)
+		{
+			throw LibraryException(LibraryErrorCodes.InvalidCharge, "Charge category is required when a return charge amount is provided.");
+		}
 
-        var resQuery = await _reservationRepository.GetQueryableAsync();
-        var reserved = await AsyncExecuter.CountAsync(
-            resQuery.Where(r => r.MemberId == employee.Id));
+		var category = await chargeCategoryRepository.FindAsync(input.ChargeCategoryId.Value);
+		if (category == null)
+		{
+			throw LibraryException(LibraryErrorCodes.ChargeCategoryNotFound, "Charge category was not found.");
+		}
 
-        return new LibraryMemberDto
-        {
-            Id = employee.Id,
-            MemberName = $"{employee.FirstName} {employee.LastName}".Trim(),
-            MemberIdentifier = employee.EmployeeCode,
-            Avatar = employee.ProfilePictureBlobName,
-            Email = employee.Email,
-            Role = "Employee",
-            ClassDivision = null,
-            RollNo = null,
-            GrNo = null,
-            ContactNo = employee.MobileNo,
-            Phone = employee.MobileNo,
-            JoinDate = employee.CreationTime,
-            Statistics = new LibraryMemberStatisticsDto
-            {
-                CurrentIssue = currentIssue,
-                ReservedBooks = reserved,
-                OverdueReturnBooks = overdue
-            }
-        };
-    }
+		var charge = new LibraryCharge(
+			GuidGenerator.Create(),
+			issue.MemberId,
+			issue.MemberRole,
+			input.ChargeCategoryId.Value,
+			issue.Id,
+			input.Amount!.Value,
+			input.ReturnDate,
+			input.FineDueDate ?? input.ReturnDate.AddDays(7),
+			CurrentTenant.Id)
+		{
+			Remarks = input.Remarks
+		};
+
+		await libraryChargeRepository.InsertAsync(charge, autoSave: true);
+	}
+
+	private async Task<BookCopy?> FindCopyByAccessionAsync(string accessionNo)
+	{
+		var normalizedAccession = NormalizeAccession(accessionNo);
+		var copyQuery = await bookCopyRepository.GetQueryableAsync();
+		return await AsyncExecuter.FirstOrDefaultAsync(copyQuery.Where(c => c.AccessionNumber == normalizedAccession));
+	}
+
+	private async Task<int> ResolveActiveMemberRoleAsync(Guid memberId)
+	{
+		var student = await studentRepository.FindAsync(memberId);
+		if (student != null)
+		{
+			var libraryMember = await libraryMemberRepository.FindAsync(x => x.StudentId == student.Id);
+			if (student.AdditionalDetail?.IsLibraryMember == true && libraryMember?.IsActive != false)
+			{
+				return 0;
+			}
+
+			throw LibraryException(LibraryErrorCodes.MemberInactive, "Student is not an active library member.");
+		}
+
+		var employee = await employeeRepository.FindAsync(memberId);
+		if (employee != null)
+		{
+			if (employee.AdditionalDetails?.LibraryMember == true)
+			{
+				return 1;
+			}
+
+			throw LibraryException(LibraryErrorCodes.MemberInactive, "Staff member is not an active library member.");
+		}
+
+		throw LibraryException(LibraryErrorCodes.MemberNotFound, $"Member with id '{memberId}' was not found as student or employee.");
+	}
+
+	private async Task<(int MaxBooksAtTime, int ReservationLimit)> GetBorrowingRuleAsync(Guid? academicYearId, int memberRole)
+	{
+		if (!academicYearId.HasValue)
+		{
+			return memberRole == 0
+				? (DefaultStudentBorrowingLimit, DefaultStudentReservationLimit)
+				: (DefaultStaffBorrowingLimit, DefaultStaffReservationLimit);
+		}
+
+		var query = await borrowingRuleRepository.GetQueryableAsync();
+		var rule = await AsyncExecuter.FirstOrDefaultAsync(
+			query.Where(x => x.AcademicYearId == academicYearId.Value && x.Role == memberRole));
+
+		if (rule == null)
+		{
+			return memberRole == 0
+				? (DefaultStudentBorrowingLimit, DefaultStudentReservationLimit)
+				: (DefaultStaffBorrowingLimit, DefaultStaffReservationLimit);
+		}
+
+		return (rule.MaxBooksAtTime, rule.ReservationLimit);
+	}
+
+	private async Task<LibraryMemberDto> BuildStudentMemberDtoAsync(Student student)
+	{
+		var classDivision = await ResolveStudentClassDivisionAsync(student);
+
+		var issueQuery = await issueRepository.GetQueryableAsync();
+		var currentIssue = await AsyncExecuter.CountAsync(issueQuery.Where(i => i.MemberId == student.Id && i.Status == BookIssueStatus.Issued));
+		var overdue = await AsyncExecuter.CountAsync(issueQuery.Where(i => i.MemberId == student.Id && i.Status == BookIssueStatus.Issued && i.DueDate < DateTime.UtcNow));
+
+		var resQuery = await reservationRepository.GetQueryableAsync();
+		var reserved = await AsyncExecuter.CountAsync(resQuery.Where(r => r.MemberId == student.Id));
+
+		var libMember = await libraryMemberRepository.FindAsync(x => x.StudentId == student.Id);
+
+		return new LibraryMemberDto
+		{
+			Id = student.Id,
+			MemberName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
+			MemberIdentifier = libMember?.MemberIdentifier,
+			Avatar = student.AdditionalDetail?.ProfilePictureUrl,
+			Email = student.ContactDetail?.Email,
+			Role = "Student",
+			ClassDivision = classDivision,
+			RollNo = student.RollNo?.ToString(),
+			GrNo = student.GrNo?.ToString(),
+			ContactNo = student.ContactDetail?.PrimaryContactNo,
+			Phone = student.ContactDetail?.PrimaryContactNo,
+			JoinDate = student.CreationTime,
+			Statistics = new LibraryMemberStatisticsDto
+			{
+				CurrentIssue = currentIssue,
+				ReservedBooks = reserved,
+				OverdueReturnBooks = overdue
+			}
+		};
+	}
+
+	private async Task<LibraryMemberDto> BuildEmployeeMemberDtoAsync(Employee employee)
+	{
+		var issueQuery = await issueRepository.GetQueryableAsync();
+		var currentIssue = await AsyncExecuter.CountAsync(issueQuery.Where(i => i.MemberId == employee.Id && i.Status == BookIssueStatus.Issued));
+		var overdue = await AsyncExecuter.CountAsync(issueQuery.Where(i => i.MemberId == employee.Id && i.Status == BookIssueStatus.Issued && i.DueDate < DateTime.UtcNow));
+
+		var resQuery = await reservationRepository.GetQueryableAsync();
+		var reserved = await AsyncExecuter.CountAsync(resQuery.Where(r => r.MemberId == employee.Id));
+
+		return new LibraryMemberDto
+		{
+			Id = employee.Id,
+			MemberName = $"{employee.FirstName} {employee.LastName}".Trim(),
+			MemberIdentifier = employee.EmployeeCode,
+			Avatar = employee.ProfilePictureBlobName,
+			Email = employee.Email,
+			Role = employee.EmployeeGroup == EmployeeGroupType.Teaching ? "Teacher" : "Staff",
+			ClassDivision = null,
+			RollNo = null,
+			GrNo = null,
+			ContactNo = employee.MobileNo,
+			Phone = employee.MobileNo,
+			JoinDate = employee.CreationTime,
+			Statistics = new LibraryMemberStatisticsDto
+			{
+				CurrentIssue = currentIssue,
+				ReservedBooks = reserved,
+				OverdueReturnBooks = overdue
+			}
+		};
+	}
+
+	private async Task<ReturnBookSearchMemberDto> BuildReturnMemberDetailsAsync(BookIssue issue)
+	{
+		var memberDetails = new ReturnBookSearchMemberDto { Id = issue.MemberId };
+
+		if (issue.MemberRole == 0)
+		{
+			var student = await studentRepository.FindAsync(issue.MemberId);
+			if (student != null)
+			{
+				memberDetails.MemberName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim();
+				memberDetails.Avatar = student.AdditionalDetail?.ProfilePictureUrl;
+				memberDetails.Email = student.ContactDetail?.Email;
+				memberDetails.Role = "Student";
+				memberDetails.RollNo = student.RollNo?.ToString();
+				memberDetails.GrNo = student.GrNo?.ToString();
+				memberDetails.Phone = student.ContactDetail?.PrimaryContactNo;
+				memberDetails.JoinDate = student.CreationTime;
+				memberDetails.ClassDivision = await ResolveStudentClassDivisionAsync(student);
+			}
+		}
+		else
+		{
+			var employee = await employeeRepository.FindAsync(issue.MemberId);
+			if (employee != null)
+			{
+				memberDetails.MemberName = $"{employee.FirstName} {employee.LastName}".Trim();
+				memberDetails.Avatar = employee.ProfilePictureBlobName;
+				memberDetails.Email = employee.Email;
+				memberDetails.Role = employee.EmployeeGroup == EmployeeGroupType.Teaching ? "Teacher" : "Staff";
+				memberDetails.Phone = employee.MobileNo;
+				memberDetails.JoinDate = employee.CreationTime;
+			}
+		}
+
+		return memberDetails;
+	}
+
+	private async Task<string?> ResolveStudentClassDivisionAsync(Student student)
+	{
+		string? standardName = null;
+		string? divisionName = null;
+
+		if (student.StandardId.HasValue)
+		{
+			var std = await standardRepository.FindAsync(student.StandardId.Value);
+			standardName = std?.Name;
+		}
+
+		if (student.DivisionId.HasValue)
+		{
+			var div = await divisionRepository.FindAsync(student.DivisionId.Value);
+			divisionName = div?.Name;
+		}
+
+		return standardName != null && divisionName != null
+			? $"{standardName}-{divisionName}"
+			: standardName ?? divisionName;
+	}
+
+	private static void EnsureIssueDates(DateTime issueDate, DateTime dueDate)
+	{
+		if (issueDate == default || dueDate == default || dueDate.Date < issueDate.Date)
+		{
+			throw LibraryException(LibraryErrorCodes.InvalidIssueDateRange, "Due date must be on or after issue date.");
+		}
+	}
+
+	private static string NormalizeAccession(string accessionNumber)
+	{
+		return (accessionNumber ?? string.Empty).Trim();
+	}
+
+	private static BusinessException LibraryException(string code, string message)
+	{
+		return new BusinessException(code: code, message: message);
+	}
 }

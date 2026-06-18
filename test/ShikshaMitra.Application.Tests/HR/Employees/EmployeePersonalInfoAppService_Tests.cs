@@ -18,6 +18,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 {
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IEmployeeStatusAppService _employeeStatusAppService;
+	private readonly EmployeePersonalInfoProjection _personalInfoProjection;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly IdentityUserManager _userManager;
@@ -29,6 +30,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	{
 		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_employeeStatusAppService = GetRequiredService<IEmployeeStatusAppService>();
+		_personalInfoProjection = GetRequiredService<EmployeePersonalInfoProjection>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_userRepository = GetRequiredService<IIdentityUserRepository>();
 		_userManager = GetRequiredService<IdentityUserManager>();
@@ -53,10 +55,82 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		result.EmployeeCode.ShouldNotBeNullOrEmpty();
 		result.UserId.ShouldNotBeNull();
 		result.UserId.Value.ShouldNotBe(Guid.Empty);
+		result.ShiftId.ShouldBe(input.ShiftId);
+		result.Shift.ShouldNotBeNull();
+		result.Shift!.Id.ShouldBe(input.ShiftId!.Value);
 
 		var linkedUser = await _userRepository.FindAsync(result.UserId.Value);
 		linkedUser.ShouldNotBeNull();
 		linkedUser!.Email.ShouldBe(input.Email);
+	}
+
+	[Fact]
+	public async Task GetAsync_Should_Return_Selected_Shift_Details()
+	{
+		var input = await BuildCreateDtoAsync($"shift.read.{Guid.NewGuid():N}@test.com");
+		var created = await _personalInfoAppService.CreateAsync(input);
+
+		var result = await _personalInfoAppService.GetAsync(created.Id);
+
+		result.ShiftId.ShouldBe(input.ShiftId);
+		result.Shift.ShouldNotBeNull();
+		result.Shift!.Id.ShouldBe(input.ShiftId!.Value);
+		result.Shift.ShiftName.ShouldNotBeNullOrWhiteSpace();
+	}
+
+	[Fact]
+	public async Task Projection_Should_Resolve_Shift_When_Navigation_Is_Not_Loaded()
+	{
+		var roleId = await EnsureRoleExistsAsync();
+		var shiftId = await EnsureShiftExistsAsync();
+		var employee = new Employee(
+			Guid.NewGuid(),
+			_currentTenant.Id,
+			null,
+			$"DET-{Guid.NewGuid():N}"[..12],
+			new EmployeeBasicInfo(
+				ProfilePictureBlobName: null,
+				LastName: "Employee",
+				FirstName: "Detached",
+				MiddleName: null,
+				ShortName: null,
+				EmployeeStatusType: EmployeeStatusType.Active,
+				DateOfBirth: DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
+				FamilyCast: null,
+				CastType: null,
+				GenderType: GenderType.Male,
+				Religion: null,
+				MaritalStatus: null,
+				BloodGroup: null,
+				MobileNo: "9876543210",
+				SecondaryMobileNo: null,
+				Email: $"detached.shift.{Guid.NewGuid():N}@test.com",
+				PanNo: UniquePan(),
+				AdharNo: UniqueAdhar(),
+				Address1: null,
+				Address2: null,
+				Address3: null,
+				Department: null,
+				Designation: null,
+				DateOfJoining: DateOnly.FromDateTime(DateTime.UtcNow.Date),
+				EmployeeGroup: null,
+				Qualification: null,
+				RoleId: roleId,
+				IdentificationMark1: null,
+				City: null,
+				State: null,
+				Country: null,
+				PinCode: null,
+				ShiftId: shiftId),
+			bankDetails: null,
+			workExperiences: []);
+
+		var result = await _personalInfoProjection.ToPersonalInfoDtoAsync(employee);
+
+		result.ShiftId.ShouldBe(shiftId);
+		result.Shift.ShouldNotBeNull();
+		result.Shift!.Id.ShouldBe(shiftId);
+		result.Shift.ShiftName.ShouldNotBeNullOrWhiteSpace();
 	}
 
 	[Fact]

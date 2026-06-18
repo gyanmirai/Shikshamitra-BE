@@ -77,6 +77,10 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		var body = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.Id.ShouldBe(created.Id);
+		body.ShiftId.ShouldBe(created.ShiftId);
+		body.Shift.ShouldNotBeNull();
+		body.Shift!.Id.ShouldBe(created.ShiftId);
+		body.Shift.Name.ShouldNotBeNullOrWhiteSpace();
 	}
 
 	[Fact]

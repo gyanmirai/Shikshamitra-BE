@@ -39,31 +39,25 @@ public partial class HRSeederContributor
 {
 	private async Task<List<Guid>> SeedSampleEmployeePayrollAndAttendanceAsync(List<Guid> activeEmployeeIds)
 	{
-		var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync()).FirstOrDefault();
-		if (educationMediumStage == null)
-		{
-			return new List<Guid>();
-		}
-
-		if (!await _earningComponentRepository.AnyAsync() || !await _deductionComponentRepository.AnyAsync())
-		{
-			return new List<Guid>();
-		}
-
 		var payrollEmployeeIds = await ResolvePayrollStructureEmployeeIdsAsync(activeEmployeeIds);
 		var attendanceEmployeeIds = await ResolveActivePayrollEmployeeIdsAsync(activeEmployeeIds);
-		if (payrollEmployeeIds.Count == 0)
+
+		if (payrollEmployeeIds.Count > 0)
+		{
+			var pfRuleId = await ResolveSeedProvidentFundRuleIdAsync();
+			foreach (var employeeId in payrollEmployeeIds)
+			{
+				await SeedSamplePayrollForEmployeeIfNeededAsync(employeeId, pfRuleId);
+			}
+		}
+
+		if (attendanceEmployeeIds.Count == 0)
 		{
 			return attendanceEmployeeIds;
 		}
 
-		var pfRuleId = await ResolveSeedProvidentFundRuleIdAsync();
-		foreach (var employeeId in payrollEmployeeIds)
-		{
-			await SeedSamplePayrollForEmployeeIfNeededAsync(employeeId, pfRuleId);
-		}
-
-		if (attendanceEmployeeIds.Count == 0)
+		var educationMediumStage = (await _educationMediumStageRepository.GetQueryableAsync()).FirstOrDefault();
+		if (educationMediumStage == null)
 		{
 			return attendanceEmployeeIds;
 		}
@@ -86,9 +80,10 @@ public partial class HRSeederContributor
 		var employeeIds = activeEmployeeIds
 			.Distinct()
 			.ToList();
-		var seedEmails = BuildSuratSeedEmployeeProfiles().Keys.ToList();
+		var seedEmails = BuildSuratSeedEmployeeProfiles().Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var employeeQuery = await _employeeRepository.GetQueryableAsync();
 		var seededProfileEmployeeIds = employeeQuery
+			.AsEnumerable()
 			.Where(e => e.Email != null && seedEmails.Contains(e.Email))
 			.Select(e => e.Id)
 			.ToList();

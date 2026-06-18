@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using NpgsqlTypes;
 using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using System;
 using System.Collections.Generic;
@@ -98,14 +99,15 @@ public class EfCoreEmployeeAttendanceRepository(
 		CancellationToken cancellationToken)
 	{
 		var values = new List<string>(attendances.Count);
-		var parameters = new List<NpgsqlParameter>(attendances.Count * 10);
+		var parameters = new List<NpgsqlParameter>(attendances.Count * 11);
 
 		for (var i = 0; i < attendances.Count; i++)
 		{
 			var attendance = attendances[i];
 			var id = attendance.Id == Guid.Empty ? guidGenerator.Create() : attendance.Id;
+			var source = attendance.Source;
 			values.Add(
-				$"(@p{i}_id, @p{i}_tenant_id, @p{i}_employee_id, @p{i}_attendance_date, @p{i}_time_in, @p{i}_time_out, @p{i}_status_type, @p{i}_education_medium_stage_id, @p{i}_remarks, @p{i}_creation_time, NULL, FALSE)");
+				$"(@p{i}_id, @p{i}_tenant_id, @p{i}_employee_id, @p{i}_attendance_date, @p{i}_time_in, @p{i}_time_out, @p{i}_status_type, @p{i}_source, @p{i}_education_medium_stage_id, @p{i}_remarks, @p{i}_creation_time, NULL, FALSE)");
 
 			parameters.Add(new NpgsqlParameter<Guid>($"p{i}_id", id));
 			parameters.Add(new NpgsqlParameter<Guid?>($"p{i}_tenant_id", attendance.TenantId));
@@ -123,6 +125,7 @@ public class EfCoreEmployeeAttendanceRepository(
 				NpgsqlDbType = NpgsqlDbType.TimestampTz
 			});
 			parameters.Add(new NpgsqlParameter<string>($"p{i}_status_type", attendance.StatusType.ToString()));
+			parameters.Add(new NpgsqlParameter<int>($"p{i}_source", (int)source));
 			parameters.Add(new NpgsqlParameter<Guid?>($"p{i}_education_medium_stage_id", attendance.EducationMediumStageId));
 			parameters.Add(new NpgsqlParameter<string?>($"p{i}_remarks", attendance.Remarks));
 			parameters.Add(new NpgsqlParameter<DateTime>($"p{i}_creation_time", now)
@@ -133,7 +136,7 @@ public class EfCoreEmployeeAttendanceRepository(
 
 		var sql = $"""
 			INSERT INTO "AppEmployeeAttendances"
-				("Id", "TenantId", "EmployeeId", "AttendanceDate", "TimeIn", "TimeOut", "StatusType", "EducationMediumStageId", "Remarks", "CreationTime", "CreatorId", "IsDeleted")
+				("Id", "TenantId", "EmployeeId", "AttendanceDate", "TimeIn", "TimeOut", "StatusType", "Source", "EducationMediumStageId", "Remarks", "CreationTime", "CreatorId", "IsDeleted")
 			VALUES
 				{string.Join(",\n\t", values)}
 			ON CONFLICT ("TenantId", "EmployeeId", "AttendanceDate") DO NOTHING

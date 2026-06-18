@@ -13,6 +13,11 @@ namespace ShikshaMitra.Seeders;
 
 public partial class HRSeederContributor
 {
+	private static readonly Lazy<IReadOnlySet<string>> SeededDemoEmployeeEmails = new(
+		() => BuildSuratSeedEmployeeProfiles()
+			.Keys
+			.ToHashSet(StringComparer.OrdinalIgnoreCase));
+
 	private async Task<HashSet<DateOnly>> BuildSeedHolidayDateSetAsync(
 		DateOnly windowStart,
 		DateOnly windowEnd,
@@ -189,7 +194,11 @@ public partial class HRSeederContributor
 		return addedCount;
 	}
 
+	internal static bool IsSeededDemoEmployeeEmail(string? email) =>
+		!string.IsNullOrWhiteSpace(email) &&
+		SeededDemoEmployeeEmails.Value.Contains(email);
+
 	private static bool IsSeededDemoEmployee(Employee employee) =>
-		employee.Email?.EndsWith("@ddvs.com", StringComparison.OrdinalIgnoreCase) == true;
+		IsSeededDemoEmployeeEmail(employee.Email);
 
 }

@@ -2,6 +2,7 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -23,6 +24,10 @@ public partial class HRSeederContributor
 		var existingComponentsById = existingComponents
 			.Where(x => x.ComponentId.HasValue)
 			.GroupBy(x => (x.ComponentId!.Value, x.IsEarning))
+			.ToDictionary(x => x.Key, x => x.First());
+		var existingComponentsByName = existingComponents
+			.Where(x => !string.IsNullOrWhiteSpace(x.Name) && !x.IsTemp)
+			.GroupBy(x => (NormalizeSeedPayrollComponentName(x.Name), x.IsEarning))
 			.ToDictionary(x => x.Key, x => x.First());
 		var seededSalary = BuildSeededSalary(employee);
 		var financialData = BuildSeedEmployeeFinancialData(employee);
@@ -87,7 +92,13 @@ public partial class HRSeederContributor
 		{
 			var amount = seededSalary.GetEarningAmount(master.Name);
 			var isFixed = master.CalculationType == CalculationType.Amount;
-			if (existingComponentsById.TryGetValue((master.Id, true), out var existing))
+			var existing = FindExistingSeedPayrollComponent(
+				existingComponentsById,
+				existingComponentsByName,
+				master.Id,
+				master.Name,
+				isEarning: true);
+			if (existing != null)
 			{
 				if (amount <= 0m)
 				{
@@ -98,6 +109,7 @@ public partial class HRSeederContributor
 
 				if (forceRepairSeededDemoPayroll || existing.UsesMasterValue || existing.Amount == master.Amount)
 				{
+					existing.ComponentId = master.Id;
 					existing.UpdateComponent(
 						master.Name,
 						master.Description,
@@ -111,6 +123,16 @@ public partial class HRSeederContributor
 						usesMasterValue: false);
 					await _employeePayrollComponentRepository.UpdateAsync(existing, autoSave: false);
 					hasPendingChanges = true;
+				}
+
+				if (forceRepairSeededDemoPayroll)
+				{
+					hasPendingChanges |= await DeleteDuplicateSeedPayrollRowsAsync(
+						existingComponents,
+						existing.Id,
+						master.Id,
+						master.Name,
+						isEarning: true);
 				}
 
 				continue;
@@ -145,7 +167,13 @@ public partial class HRSeederContributor
 		{
 			var amount = seededSalary.GetDeductionAmount(master.Name);
 			var isFixed = master.CalculationType == CalculationType.Amount;
-			if (existingComponentsById.TryGetValue((master.Id, false), out var existing))
+			var existing = FindExistingSeedPayrollComponent(
+				existingComponentsById,
+				existingComponentsByName,
+				master.Id,
+				master.Name,
+				isEarning: false);
+			if (existing != null)
 			{
 				if (amount <= 0m)
 				{
@@ -156,6 +184,7 @@ public partial class HRSeederContributor
 
 				if (forceRepairSeededDemoPayroll || existing.UsesMasterValue || existing.Amount == master.Amount)
 				{
+					existing.ComponentId = master.Id;
 					existing.UpdateComponent(
 						master.Name,
 						master.Description,
@@ -169,6 +198,16 @@ public partial class HRSeederContributor
 						usesMasterValue: false);
 					await _employeePayrollComponentRepository.UpdateAsync(existing, autoSave: false);
 					hasPendingChanges = true;
+				}
+
+				if (forceRepairSeededDemoPayroll)
+				{
+					hasPendingChanges |= await DeleteDuplicateSeedPayrollRowsAsync(
+						existingComponents,
+						existing.Id,
+						master.Id,
+						master.Name,
+						isEarning: false);
 				}
 
 				continue;
@@ -205,4 +244,51 @@ public partial class HRSeederContributor
 			await CurrentUnitOfWork.SaveChangesAsync();
 		}
 	}
+
+	internal static EmployeePayrollComponent? FindExistingSeedPayrollComponent(
+		IReadOnlyDictionary<(Guid ComponentId, bool IsEarning), EmployeePayrollComponent> existingComponentsById,
+		IReadOnlyDictionary<(string Name, bool IsEarning), EmployeePayrollComponent> existingComponentsByName,
+		Guid componentId,
+		string componentName,
+		bool isEarning)
+	{
+		if (existingComponentsById.TryGetValue((componentId, isEarning), out var byId))
+		{
+			return byId;
+		}
+
+		return existingComponentsByName.TryGetValue(
+			(NormalizeSeedPayrollComponentName(componentName), isEarning),
+			out var byName)
+			? byName
+			: null;
+	}
+
+	private async Task<bool> DeleteDuplicateSeedPayrollRowsAsync(
+		IEnumerable<EmployeePayrollComponent> existingComponents,
+		Guid keepId,
+		Guid componentId,
+		string componentName,
+		bool isEarning)
+	{
+		var normalizedName = NormalizeSeedPayrollComponentName(componentName);
+		var duplicates = existingComponents
+			.Where(x =>
+				x.Id != keepId &&
+				x.IsEarning == isEarning &&
+				!x.IsTemp &&
+				((x.ComponentId.HasValue && x.ComponentId.Value == componentId) ||
+				 NormalizeSeedPayrollComponentName(x.Name) == normalizedName))
+			.ToList();
+
+		foreach (var duplicate in duplicates)
+		{
+			await _employeePayrollComponentRepository.DeleteAsync(duplicate, autoSave: false);
+		}
+
+		return duplicates.Count > 0;
+	}
+
+	private static string NormalizeSeedPayrollComponentName(string? name) =>
+		(name ?? string.Empty).Trim().ToUpperInvariant();
 }

@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Configuration;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Seeders;
+using ShikshaMitra.TenantSettings;
 using Shouldly;
 using Xunit;
 
@@ -84,6 +87,14 @@ public class HRSeederContributor_Tests
 	}
 
 	[Fact]
+	public void Seeded_Demo_Employee_Match_Should_Not_Treat_All_Ddvs_Emails_As_Seeded()
+	{
+		HRSeederContributor.IsSeededDemoEmployeeEmail("akshay.patel@ddvs.com").ShouldBeTrue();
+		HRSeederContributor.IsSeededDemoEmployeeEmail("new.staff@ddvs.com").ShouldBeFalse();
+		HRSeederContributor.IsSeededDemoEmployeeEmail("akshay.patel@example.com").ShouldBeFalse();
+	}
+
+	[Fact]
 	public void Seeded_Employee_Financial_Data_Should_Be_Complete_And_Demo_Safe()
 	{
 		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
@@ -108,6 +119,112 @@ public class HRSeederContributor_Tests
 			bankDetails.AccountNumber.ShouldBe(financialData.AccountNumber);
 			bankDetails.IfscCode.ShouldBe(financialData.IfscCode);
 		}
+	}
+
+	[Fact]
+	public void Seed_Payroll_Component_Catalog_Should_Cover_Seeded_Salary_Profile()
+	{
+		var earningComponents = HRSeederContributor.BuildSeedEarningComponentSpecs();
+		var deductionComponents = HRSeederContributor.BuildSeedDeductionComponentSpecs();
+
+		earningComponents.Select(x => x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(earningComponents.Count);
+		deductionComponents.Select(x => x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(deductionComponents.Count);
+		earningComponents.ShouldAllBe(x => x.CalculationType == CalculationType.Amount && x.Amount.HasValue && x.Amount.Value > 0m);
+		deductionComponents.ShouldAllBe(x => x.CalculationType == CalculationType.Amount && x.Amount.HasValue && x.Amount.Value > 0m);
+
+		foreach (var name in new[]
+		         {
+			         "Basic Salary",
+			         "House Rent Allowance (HRA)",
+			         "Dearness Allowance (DA)",
+			         "Transport Allowance",
+			         "Medical Allowance",
+			         "Special Allowance",
+			         "Performance Bonus",
+			         "Incentive"
+		         })
+		{
+			earningComponents.ShouldContain(x => x.Name == name);
+		}
+
+		foreach (var name in new[]
+		         {
+			         "Provident Fund (PF)",
+			         "Professional Tax",
+			         "Income Tax (TDS)",
+			         "Employee State Insurance (ESI)",
+			         "Loan Repayment",
+			         "Advance Salary Deduction",
+			         "Loss of Pay (LOP)"
+		         })
+		{
+			deductionComponents.ShouldContain(x => x.Name == name);
+		}
+	}
+
+	[Fact]
+	public void Seed_Payroll_Component_Match_Should_ReUse_Legacy_Name_Matched_Rows()
+	{
+		var masterId = Guid.NewGuid();
+		var legacyRow = new EmployeePayrollComponent(
+			Guid.NewGuid(),
+			Guid.NewGuid(),
+			"basic salary",
+			null,
+			"Legacy seeded row without master id",
+			30000m,
+			isFixed: true,
+			isTemp: false,
+			applicableMonth: null,
+			SalaryComponentType.Fixed,
+			dependOn: null,
+			isEarning: true,
+			usesMasterValue: false);
+		var existingById = new Dictionary<(Guid ComponentId, bool IsEarning), EmployeePayrollComponent>();
+		var existingByName = new Dictionary<(string Name, bool IsEarning), EmployeePayrollComponent>
+		{
+			[("BASIC SALARY", true)] = legacyRow
+		};
+
+		var match = HRSeederContributor.FindExistingSeedPayrollComponent(
+			existingById,
+			existingByName,
+			masterId,
+			"Basic Salary",
+			isEarning: true);
+
+		match.ShouldBe(legacyRow);
+	}
+
+	[Fact]
+	public void Seed_Shift_Catalog_Should_Include_Default_Full_Day_Shift()
+	{
+		var shifts = HRSeederContributor.BuildSeedShiftSpecs();
+
+		shifts.Select(x => x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(shifts.Count);
+		var fullDayShift = shifts.Single(x => x.Name == "Full Day Shift");
+		fullDayShift.StartTime.ShouldBe(new TimeOnly(7, 0));
+		fullDayShift.EndTime.ShouldBe(new TimeOnly(17, 30));
+	}
+
+	[Fact]
+	public void Seed_Default_Shift_Should_Prefer_Full_Day_And_Fall_Back_For_Legacy_Catalogs()
+	{
+		var morningShiftId = Guid.NewGuid();
+		var fullDayShiftId = Guid.NewGuid();
+
+		HRSeederContributor.ResolveSeedDefaultShiftId(
+			[
+				BuildShift(morningShiftId, "Morning Shift"),
+				BuildShift(fullDayShiftId, "Full Day Shift")
+			])
+			.ShouldBe(fullDayShiftId);
+
+		HRSeederContributor.ResolveSeedDefaultShiftId(
+			[
+				BuildShift(morningShiftId, "Legacy Demo Shift")
+			])
+			.ShouldBe(morningShiftId);
 	}
 
 	[Fact]
@@ -251,5 +368,19 @@ public class HRSeederContributor_Tests
 		holidays.ShouldContain(new DateOnly(2026, 5, 3));
 		holidays.ShouldNotContain(new DateOnly(2026, 4, 30));
 		holidays.ShouldNotContain(new DateOnly(2026, 6, 1));
+	}
+
+	private static ShiftManagement BuildShift(Guid id, string name)
+	{
+		var shift = new ShiftManagement
+		{
+			ShiftName = name,
+			StartTime = new TimeOnly(7, 0),
+			EndTime = new TimeOnly(17, 30)
+		};
+		var idProperty = typeof(ShiftManagement).GetProperty(nameof(ShiftManagement.Id))
+			?? throw new InvalidOperationException("ShiftManagement.Id property was not found.");
+		idProperty.SetValue(shift, id);
+		return shift;
 	}
 }

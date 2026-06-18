@@ -37,21 +37,35 @@ namespace ShikshaMitra.Seeders;
 
 public partial class HRSeederContributor
 {
+	private const string SeedDefaultShiftName = "Full Day Shift";
+
 	private async Task SeedShiftManagementAsync()
 	{
-		// Check if already seeded
-		if (await _shiftRepository.AnyAsync())
-			return;
+		var existingShifts = await _shiftRepository.GetListAsync();
+		var existingByName = existingShifts
+			.Where(shift => !string.IsNullOrWhiteSpace(shift.ShiftName))
+			.GroupBy(shift => shift.ShiftName, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+		var changed = false;
 
-		var shifts = new[]
+		foreach (var shift in BuildSeedShiftSpecs())
 		{
-						new { Name = "Morning Shift", StartTime = new TimeOnly(7, 0), EndTime = new TimeOnly(12, 30) },
-						new { Name = "Afternoon Shift", StartTime = new TimeOnly(12, 30), EndTime = new TimeOnly(17, 30) },
-						new { Name = "Full Day Shift", StartTime = new TimeOnly(7, 0), EndTime = new TimeOnly(17, 30) }
-					};
+			if (existingByName.TryGetValue(shift.Name, out var existingShift))
+			{
+				if (!string.Equals(existingShift.ShiftName, shift.Name, StringComparison.Ordinal) ||
+				    existingShift.StartTime != shift.StartTime ||
+				    existingShift.EndTime != shift.EndTime)
+				{
+					existingShift.ShiftName = shift.Name;
+					existingShift.StartTime = shift.StartTime;
+					existingShift.EndTime = shift.EndTime;
+					await _shiftRepository.UpdateAsync(existingShift, autoSave: false);
+					changed = true;
+				}
 
-		foreach (var shift in shifts)
-		{
+				continue;
+			}
+
 			var id = GuidGenerator.Create();
 			var shiftEntity = new ShiftManagement
 			{
@@ -64,9 +78,29 @@ public partial class HRSeederContributor
 				?? throw new InvalidOperationException("ShiftManagement.Id property was not found.");
 			idProperty.SetValue(shiftEntity, id);
 			await _shiftRepository.InsertAsync(shiftEntity, autoSave: false);
+			changed = true;
 		}
 
-		await CurrentUnitOfWork.SaveChangesAsync();
+		if (changed)
+		{
+			await CurrentUnitOfWork.SaveChangesAsync();
+		}
 	}
 
+	internal static IReadOnlyList<SeedShiftSpec> BuildSeedShiftSpecs() =>
+	[
+		new("Morning Shift", new TimeOnly(7, 0), new TimeOnly(12, 30)),
+		new("Afternoon Shift", new TimeOnly(12, 30), new TimeOnly(17, 30)),
+		new(SeedDefaultShiftName, new TimeOnly(7, 0), new TimeOnly(17, 30))
+	];
+
+	internal static Guid? ResolveSeedDefaultShiftId(IEnumerable<ShiftManagement> shifts)
+	{
+		var shiftList = shifts.ToList();
+		return shiftList
+			.FirstOrDefault(shift => string.Equals(shift.ShiftName, SeedDefaultShiftName, StringComparison.OrdinalIgnoreCase))
+			?.Id ?? shiftList.FirstOrDefault()?.Id;
+	}
+
+	internal sealed record SeedShiftSpec(string Name, TimeOnly StartTime, TimeOnly EndTime);
 }

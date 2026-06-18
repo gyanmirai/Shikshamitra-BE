@@ -38,6 +38,15 @@ public static partial class PersonalInfoContractMapper
 			IdentificationMark1 = dto.IdentificationMark1,
 			RoleId = dto.RoleId,
 			ShiftId = dto.ShiftId ?? Guid.Empty,
+			Shift = dto.Shift == null
+				? null
+				: new ShiftInfo
+				{
+					Id = dto.Shift.Id,
+					Name = dto.Shift.ShiftName,
+					StartTime = dto.Shift.StartTime.ToString("HH:mm:ss"),
+					EndTime = dto.Shift.EndTime.ToString("HH:mm:ss")
+				},
 			OrganizationIds = dto.OrganizationIds,
 			Organizations = dto.Organizations,
 			OrganizationNames = dto.OrganizationNames,

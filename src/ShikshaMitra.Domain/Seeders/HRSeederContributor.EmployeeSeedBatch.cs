@@ -26,10 +26,7 @@ public partial class HRSeederContributor
 	{
 		var profiles = BuildSuratSeedEmployeeProfiles().Values.ToList();
 		var profileEmails = profiles.Select(p => p.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
-		var fullDayShiftId = (await _shiftRepository.GetQueryableAsync())
-			.Where(s => s.ShiftName == "Full Day Shift")
-			.Select(s => (Guid?)s.Id)
-			.FirstOrDefault();
+		var fullDayShiftId = ResolveSeedDefaultShiftId(await _shiftRepository.GetListAsync());
 		var existingEmployees = (await _employeeRepository.GetListAsync())
 			.Where(x => x.Email != null && profileEmails.Contains(x.Email))
 			.ToList();
@@ -55,7 +52,7 @@ public partial class HRSeederContributor
 			var role = rolesByName[NormalizeRoleName(profile.RoleName)];
 			if (employeesByEmail.TryGetValue(profile.Email, out var existingEmployee))
 			{
-				UpdateSeedEmployee(existingEmployee, profile, role.Id, fullDayShiftId);
+				UpdateSeedEmployee(existingEmployee, profile, role.Id, fullDayShiftId, userId);
 				employeesToUpdate.Add(existingEmployee);
 				continue;
 			}

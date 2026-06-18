@@ -45,12 +45,18 @@ public partial class HRSeederContributor
 			.Where(IsSeededDemoEmployee)
 			.ToDictionary(e => e.Email ?? string.Empty, StringComparer.OrdinalIgnoreCase);
 
-		await LinkSeededEmployeeToLoginAsync(seededEmployees, "hiren.vadher@ddvs.com", "principal-gseb@ddvs.com");
-		await LinkSeededEmployeeToLoginAsync(seededEmployees, "sweta.badgujar@ddvs.com", "teacher-gseb@ddvs.com");
-		await LinkSeededEmployeeToLoginAsync(seededEmployees, "punam.badgujar@ddvs.com", "finance-officer@ddvs.com");
-		await LinkSeededEmployeeToLoginAsync(seededEmployees, "raj.baku@ddvs.com", "clerk-office@ddvs.com");
-
-		await AssignSeededReportingManagerAsync(seededEmployees, "jignesh.jinjala@ddvs.com", "hiren.vadher@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "admin-ops@ddvs.com", "admin-ddvs@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "principal-demo-gseb@ddvs.com", "admin-ddvs@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "principal-gseb@ddvs.com", "admin-ddvs@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "principal-cbse@ddvs.com", "admin-ddvs@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "hr-manager@ddvs.com", "admin-ops@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "finance-officer@ddvs.com", "admin-ops@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "clerk-office@ddvs.com", "hr-manager@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "teacher-demo-1@ddvs.com", "principal-demo-gseb@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "teacher-demo-2@ddvs.com", "principal-demo-gseb@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "teacher-gseb@ddvs.com", "principal-gseb@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "hiren.vadher@ddvs.com", "principal-gseb@ddvs.com");
+		await AssignSeededReportingManagerAsync(seededEmployees, "jignesh.jinjala@ddvs.com", "principal-gseb@ddvs.com");
 		await AssignSeededReportingManagerAsync(seededEmployees, "akshay.patel@ddvs.com", "jignesh.jinjala@ddvs.com");
 		await AssignSeededReportingManagerAsync(seededEmployees, "parth.ghusar@ddvs.com", "jignesh.jinjala@ddvs.com");
 		await AssignSeededReportingManagerAsync(seededEmployees, "sweta.badgujar@ddvs.com", "akshay.patel@ddvs.com");
@@ -67,25 +73,6 @@ public partial class HRSeederContributor
 		await AssignSeededReportingManagerAsync(seededEmployees, "raj.baku@ddvs.com", "mayur.solanki@ddvs.com");
 
 		await CurrentUnitOfWork.SaveChangesAsync();
-	}
-
-	private async Task LinkSeededEmployeeToLoginAsync(
-		IReadOnlyDictionary<string, Employee> seededEmployees,
-		string employeeEmail,
-		string loginEmail)
-	{
-		if (!seededEmployees.TryGetValue(employeeEmail, out var employee))
-		{
-			return;
-		}
-
-		var user = await _userRepository.FindByNormalizedEmailAsync(_lookupNormalizer.NormalizeEmail(loginEmail));
-		if (user == null || employee.UserId == user.Id)
-		{
-			return;
-		}
-
-		employee.UpdateUserId(user.Id);
 	}
 
 	private async Task AssignSeededReportingManagerAsync(

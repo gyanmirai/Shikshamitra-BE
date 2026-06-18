@@ -55,8 +55,7 @@ public partial class HRSeederContributor
 		var seedEmails = profilesByEmail.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var rolesByName = await GetSeedRolesByNameAsync();
 		var shifts = await _shiftRepository.GetListAsync();
-		var fullDayShiftId = shifts.FirstOrDefault(s => s.ShiftName == "Full Day Shift")?.Id
-		                     ?? shifts.FirstOrDefault()?.Id;
+		var fullDayShiftId = ResolveSeedDefaultShiftId(shifts);
 		var documentSettings = await TimeHrPhaseAsync(
 			"Phase 5a document settings",
 			EnsureHrDocumentSettingsAsync);

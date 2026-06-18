@@ -104,30 +104,44 @@ public partial class HRSeederContributor
 
 	private async Task SeedEarningComponentsAsync()
 	{
-		// Check if already seeded
-		if (await _earningComponentRepository.AnyAsync())
-			return;
-
-		// Positive template amounts: employee payroll resolution rejects <= 0 when line amount is omitted (see EmployeePayrollAppService).
-		var earningComponents = new[]
-		{
-			new { Name = "Basic Salary", Description = "Base salary component", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)30_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 1 },
-			new { Name = "House Rent Allowance (HRA)", Description = "Housing allowance - typically 40% of Basic", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)12_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.Basic, VisibleInPayslip = true, DisplayOrder = 2 },
-			new { Name = "Dearness Allowance (DA)", Description = "Cost of living adjustment", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)6_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.Basic, VisibleInPayslip = true, DisplayOrder = 3 },
-			new { Name = "Transport Allowance", Description = "Conveyance allowance", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)1600m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 4 },
-			new { Name = "Medical Allowance", Description = "Medical reimbursement", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)1250m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 5 },
-			new { Name = "Special Allowance", Description = "Additional allowance", ComponentType = EarningComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)9_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 6 },
-			new { Name = "Performance Bonus", Description = "Variable performance-based bonus", ComponentType = EarningComponentType.Variable, CalcType = CalculationType.Amount, Amount = (decimal?)5_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 7 },
-			new { Name = "Incentive", Description = "One-time incentive payment", ComponentType = EarningComponentType.Variable, CalcType = CalculationType.Amount, Amount = (decimal?)3_000m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 8 }
-		};
+		var earningComponents = BuildSeedEarningComponentSpecs();
+		var existingComponents = await _earningComponentRepository.GetListAsync();
+		var existingByName = existingComponents
+			.GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+		var hasPendingChanges = false;
 
 		foreach (var component in earningComponents)
 		{
-			var earningComponent = await _earningComponentManager.CreateAsync(
+			if (existingByName.TryGetValue(component.Name, out var existingComponent))
+			{
+				await _earningComponentManager.UpdateAsync(
+					existingComponent,
+					component.Name,
+					component.Description,
+					component.ComponentType,
+					component.CalculationType,
+					component.Amount,
+					component.Percentage,
+					null,
+					component.DependOn,
+					component.VisibleInPayslip,
+					component.DisplayOrder);
+				if (!existingComponent.IsActive)
+				{
+					existingComponent.Activate();
+				}
+
+				await _earningComponentRepository.UpdateAsync(existingComponent, autoSave: false);
+				hasPendingChanges = true;
+				continue;
+			}
+
+			var newComponent = await _earningComponentManager.CreateAsync(
 				component.Name,
 				component.Description,
 				component.ComponentType,
-				component.CalcType,
+				component.CalculationType,
 				component.Amount,
 				component.Percentage,
 				null,
@@ -135,36 +149,56 @@ public partial class HRSeederContributor
 				component.VisibleInPayslip,
 				component.DisplayOrder
 			);
-			await _earningComponentRepository.InsertAsync(earningComponent, autoSave: false);
+			await _earningComponentRepository.InsertAsync(newComponent, autoSave: false);
+			hasPendingChanges = true;
 		}
 
-		await CurrentUnitOfWork.SaveChangesAsync();
+		if (hasPendingChanges)
+		{
+			await CurrentUnitOfWork.SaveChangesAsync();
+		}
 	}
 
 	private async Task SeedDeductionComponentsAsync()
 	{
-		// Check if already seeded
-		if (await _deductionComponentRepository.AnyAsync())
-			return;
-
-		var deductionComponents = new[]
-		{
-			new { Name = "Provident Fund (PF)", Description = "Employee PF contribution - 12% of Basic", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)12m, Percentage = (decimal?)null, DependOn = ComponentDependency.Basic, VisibleInPayslip = true, DisplayOrder = 1 },
-			new { Name = "Professional Tax", Description = "State professional tax", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)200m, Percentage = (decimal?)null, DependOn = ComponentDependency.Gross, VisibleInPayslip = true, DisplayOrder = 2 },
-			new { Name = "Income Tax (TDS)", Description = "Tax Deducted at Source", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)2_500m, Percentage = (decimal?)null, DependOn = ComponentDependency.Gross, VisibleInPayslip = true, DisplayOrder = 3 },
-			new { Name = "Employee State Insurance (ESI)", Description = "ESI contribution - 0.75% of Gross", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)0.75m, Percentage = (decimal?)null, DependOn = ComponentDependency.Gross, VisibleInPayslip = true, DisplayOrder = 4 },
-			new { Name = "Loan Repayment", Description = "Employee loan deduction", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)1_500m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 5 },
-			new { Name = "Advance Salary Deduction", Description = "Salary advance recovery", ComponentType = DeductionComponentType.Variable, CalcType = CalculationType.Amount, Amount = (decimal?)500m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 6 },
-			new { Name = "Loss of Pay (LOP)", Description = "Deduction for unauthorized absence", ComponentType = DeductionComponentType.Fixed, CalcType = CalculationType.Amount, Amount = (decimal?)100m, Percentage = (decimal?)null, DependOn = ComponentDependency.None, VisibleInPayslip = true, DisplayOrder = 7 }
-		};
+		var deductionComponents = BuildSeedDeductionComponentSpecs();
+		var existingComponents = await _deductionComponentRepository.GetListAsync();
+		var existingByName = existingComponents
+			.GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+		var hasPendingChanges = false;
 
 		foreach (var component in deductionComponents)
 		{
-			var deductionComponent = await _deductionComponentManager.CreateAsync(
+			if (existingByName.TryGetValue(component.Name, out var existingComponent))
+			{
+				await _deductionComponentManager.UpdateAsync(
+					existingComponent,
+					component.Name,
+					component.Description,
+					component.ComponentType,
+					component.CalculationType,
+					component.Amount,
+					component.Percentage,
+					null,
+					component.DependOn,
+					component.VisibleInPayslip,
+					component.DisplayOrder);
+				if (!existingComponent.IsActive)
+				{
+					existingComponent.Activate();
+				}
+
+				await _deductionComponentRepository.UpdateAsync(existingComponent, autoSave: false);
+				hasPendingChanges = true;
+				continue;
+			}
+
+			var newComponent = await _deductionComponentManager.CreateAsync(
 				component.Name,
 				component.Description,
 				component.ComponentType,
-				component.CalcType,
+				component.CalculationType,
 				component.Amount,
 				component.Percentage,
 				null,
@@ -172,9 +206,59 @@ public partial class HRSeederContributor
 				component.VisibleInPayslip,
 				component.DisplayOrder
 			);
-			await _deductionComponentRepository.InsertAsync(deductionComponent, autoSave: false);
+			await _deductionComponentRepository.InsertAsync(newComponent, autoSave: false);
+			hasPendingChanges = true;
 		}
 
-		await CurrentUnitOfWork.SaveChangesAsync();
+		if (hasPendingChanges)
+		{
+			await CurrentUnitOfWork.SaveChangesAsync();
+		}
 	}
+
+	internal static IReadOnlyList<SeedEarningComponentSpec> BuildSeedEarningComponentSpecs() =>
+	[
+		// Positive template amounts: employee payroll resolution rejects <= 0 when line amount is omitted (see EmployeePayrollAppService).
+		new("Basic Salary", "Base salary component", EarningComponentType.Fixed, CalculationType.Amount, 30_000m, null, ComponentDependency.None, true, 1),
+		new("House Rent Allowance (HRA)", "Housing allowance - typically 40% of Basic", EarningComponentType.Fixed, CalculationType.Amount, 12_000m, null, ComponentDependency.Basic, true, 2),
+		new("Dearness Allowance (DA)", "Cost of living adjustment", EarningComponentType.Fixed, CalculationType.Amount, 6_000m, null, ComponentDependency.Basic, true, 3),
+		new("Transport Allowance", "Conveyance allowance", EarningComponentType.Fixed, CalculationType.Amount, 1600m, null, ComponentDependency.None, true, 4),
+		new("Medical Allowance", "Medical reimbursement", EarningComponentType.Fixed, CalculationType.Amount, 1250m, null, ComponentDependency.None, true, 5),
+		new("Special Allowance", "Additional allowance", EarningComponentType.Fixed, CalculationType.Amount, 9_000m, null, ComponentDependency.None, true, 6),
+		new("Performance Bonus", "Variable performance-based bonus", EarningComponentType.Variable, CalculationType.Amount, 5_000m, null, ComponentDependency.None, true, 7),
+		new("Incentive", "One-time incentive payment", EarningComponentType.Variable, CalculationType.Amount, 3_000m, null, ComponentDependency.None, true, 8)
+	];
+
+	internal static IReadOnlyList<SeedDeductionComponentSpec> BuildSeedDeductionComponentSpecs() =>
+	[
+		new("Provident Fund (PF)", "Employee PF contribution - 12% of Basic", DeductionComponentType.Fixed, CalculationType.Amount, 12m, null, ComponentDependency.Basic, true, 1),
+		new("Professional Tax", "State professional tax", DeductionComponentType.Fixed, CalculationType.Amount, 200m, null, ComponentDependency.Gross, true, 2),
+		new("Income Tax (TDS)", "Tax Deducted at Source", DeductionComponentType.Fixed, CalculationType.Amount, 2_500m, null, ComponentDependency.Gross, true, 3),
+		new("Employee State Insurance (ESI)", "ESI contribution - 0.75% of Gross", DeductionComponentType.Fixed, CalculationType.Amount, 0.75m, null, ComponentDependency.Gross, true, 4),
+		new("Loan Repayment", "Employee loan deduction", DeductionComponentType.Fixed, CalculationType.Amount, 1_500m, null, ComponentDependency.None, true, 5),
+		new("Advance Salary Deduction", "Salary advance recovery", DeductionComponentType.Variable, CalculationType.Amount, 500m, null, ComponentDependency.None, true, 6),
+		new("Loss of Pay (LOP)", "Deduction for unauthorized absence", DeductionComponentType.Fixed, CalculationType.Amount, 100m, null, ComponentDependency.None, true, 7)
+	];
+
+	internal sealed record SeedEarningComponentSpec(
+		string Name,
+		string Description,
+		EarningComponentType ComponentType,
+		CalculationType CalculationType,
+		decimal? Amount,
+		decimal? Percentage,
+		ComponentDependency DependOn,
+		bool VisibleInPayslip,
+		int DisplayOrder);
+
+	internal sealed record SeedDeductionComponentSpec(
+		string Name,
+		string Description,
+		DeductionComponentType ComponentType,
+		CalculationType CalculationType,
+		decimal? Amount,
+		decimal? Percentage,
+		ComponentDependency DependOn,
+		bool VisibleInPayslip,
+		int DisplayOrder);
 }

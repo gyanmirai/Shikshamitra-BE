@@ -92,13 +92,23 @@ public partial class HRSeederContributor
 			userId: userId,
 			employeeCode: employeeCode,
 			basicInfo: BuildSeedEmployeeBasicInfo(profile, roleId, shiftId),
-			bankDetails: new BankDetails(null, null, null, null, null),
+			bankDetails: BuildSeedEmployeeBankDetails(profile),
 			workExperiences: BuildWorkExperiences(profile));
 	}
 
-	private static void UpdateSeedEmployee(Employee employee, SuratSeedEmployeeProfile profile, Guid roleId, Guid? shiftId)
+	private static void UpdateSeedEmployee(
+		Employee employee,
+		SuratSeedEmployeeProfile profile,
+		Guid roleId,
+		Guid? shiftId,
+		Guid? userId = null)
 	{
 		employee.UpdateBasicInfo(BuildSeedEmployeeBasicInfo(profile, roleId, shiftId, employee.ProfilePictureBlobName, employee.EmployeeStatusType));
+		employee.UpdateBankDetails(BuildSeedEmployeeBankDetails(profile));
+		if (userId.HasValue && employee.UserId != userId)
+		{
+			employee.UpdateUserId(userId.Value);
+		}
 	}
 
 	private static EmployeeBasicInfo BuildSeedEmployeeBasicInfo(

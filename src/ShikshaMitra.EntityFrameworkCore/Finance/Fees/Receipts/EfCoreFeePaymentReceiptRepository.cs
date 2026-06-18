@@ -169,8 +169,8 @@ public class EfCoreFeePaymentReceiptRepository(
         // One grouped query: join receipts to payment method records, group by method + status
         var receiptQ = db.Set<FeePaymentReceipt>()
             .Where(r => r.AcademicYearId == academicYearId
-                     && r.ReceiptKind == FeeReceiptKind.ProvisionalFee
-                     && r.ReceiptScope == FeeReceiptScope.Fee);
+                     && (r.ReceiptKind == FeeReceiptKind.ProvisionalFee
+                         || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge));
 
         // User scope — only count receipts for students accessible to the caller
         if (scopedStudentIdsQuery != null)
@@ -207,8 +207,8 @@ public class EfCoreFeePaymentReceiptRepository(
     {
         var query = db.Set<FeePaymentReceipt>()
             .Where(r => r.AcademicYearId == filter.AcademicYearId
-                     && r.ReceiptKind == FeeReceiptKind.ProvisionalFee
-                     && r.ReceiptScope == FeeReceiptScope.Fee);
+                     && (r.ReceiptKind == FeeReceiptKind.ProvisionalFee
+                         || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge));
 
         if (filter.Month.HasValue)
             query = query.Where(r => r.ReceiptDate.Month == filter.Month.Value);

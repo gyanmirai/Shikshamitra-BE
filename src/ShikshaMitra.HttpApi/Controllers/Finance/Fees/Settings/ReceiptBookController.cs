@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +10,7 @@ using ShikshaMitra.Finance.Fees.Settings;
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Settings;
 
 [RemoteService]
-[Area("Finance")]
+[Area("finance")]
 [Route("api/receipt-books")]
 [Authorize]
 public class ReceiptBookController : AbpController

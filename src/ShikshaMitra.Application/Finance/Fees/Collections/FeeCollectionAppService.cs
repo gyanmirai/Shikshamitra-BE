@@ -10,7 +10,6 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Finance.Fees.Collections;
 
-[Authorize(ShikshaMitraSubModulePermissions.FeeCollection)]
 [RemoteService(false)]
 public class FeeCollectionAppService(
 	FeeCollectionSummaryQueryService feeCollectionSummaryQueryService,
@@ -18,11 +17,13 @@ public class FeeCollectionAppService(
 	CollectFeeWorkflow collectFeeWorkflow
 ) : ApplicationService, IFeeCollectionAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View)]
 	public Task<PagedResultDto<FeeCollectionSummaryItemDto>> GetSummaryAsync(
 		GetFeeCollectionSummaryInput input,
 		CancellationToken cancellationToken = default)
 		=> feeCollectionSummaryQueryService.GetSummaryAsync(input, cancellationToken);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View)]
 	public Task<byte[]> ExportAsync(
 		FeeCollectionExportRequestDto input,
 		CancellationToken cancellationToken = default)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Accounts.Settings;
@@ -8,7 +8,7 @@ using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Accounts.Settings;
 
-[Area("Finance")]
+[Area("finance")]
 [Route("api/bank-accounts")]
 public class BankAccountController : AbpController
 {

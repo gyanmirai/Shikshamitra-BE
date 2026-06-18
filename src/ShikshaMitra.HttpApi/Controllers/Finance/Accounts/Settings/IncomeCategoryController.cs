@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
 using ShikshaMitra.Finance.Accounts.Transactions;
@@ -8,7 +8,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Accounts.Settings;
 
 [RemoteService]
-[Area("Finance")]
+[Area("finance")]
 [Route("api/income-categories")]
 public class IncomeCategoryController(ITransactionCategoryAppService incomeCategoryAppService) : AbpController
 {

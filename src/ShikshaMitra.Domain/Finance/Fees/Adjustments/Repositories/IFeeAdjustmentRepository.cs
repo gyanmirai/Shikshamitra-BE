@@ -53,5 +53,9 @@ public interface IFeeAdjustmentRepository : IRepository<FeeAdjustmentRequest, Gu
         Guid? divisionId,
         CancellationToken cancellationToken = default);
 
-    Task<int> GetCountForVoucherAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Atomically increments and returns the next sequence value for adjustment voucher numbers
+    /// for the given tenant and year. Uses an upsert strategy to be concurrent-safe.
+    /// </summary>
+    Task<long> IncrementAndGetVoucherSequenceAsync(int year, CancellationToken cancellationToken = default);
 }

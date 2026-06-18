@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Settings.ChargeCategories;
@@ -7,7 +7,7 @@ using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Settings;
 
-[Area("Finance")]
+[Area("finance")]
 [Route("api/charge-categories")]
 public class ChargeCategoryController(
 	IChargeCategoryAppService chargeCategoryAppService

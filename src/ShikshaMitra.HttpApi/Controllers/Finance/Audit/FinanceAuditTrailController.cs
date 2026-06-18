@@ -9,7 +9,7 @@ using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Finance.Audit;
 
-[Area("app")]
+[Area("finance")]
 [RemoteService(Name = "Default")]
 [Authorize]
 [Route("api/finance")]

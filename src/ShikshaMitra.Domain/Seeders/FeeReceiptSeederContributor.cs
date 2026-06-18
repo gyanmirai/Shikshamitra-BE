@@ -434,16 +434,9 @@ public class FeeReceiptSeederContributor : BaseSeederContributor
             return existingId;
         }
 
-        var metadata = new FeeRecordMetadata(GuidGenerator.Create())
-        {
-            TenantId       = CurrentTenant.Id,
-            StudentId      = studentId,
-            AcademicYearId = academicYearId,
-            TotalPaidFee   = totalPaid,
-            ReceiptNumber  = seedKey,
-            Status         = FeeCollectionStatus.Paid,
-            Remarks        = "Seed transaction for receipt seeder",
-        };
+        var metadata = new FeeRecordMetadata(
+            GuidGenerator.Create(), CurrentTenant.Id, studentId, academicYearId,
+            totalPaid, seedKey, FeeCollectionStatus.Paid, "Seed transaction for receipt seeder");
         await _feeRecordMetadataRepository.InsertAsync(metadata, autoSave: true);
 
         // Add to cache so subsequent calls within this run don't re-query.

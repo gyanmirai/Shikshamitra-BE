@@ -99,6 +99,214 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 		targetTimeSlot.RoomName.ShouldBe(room.RoomName);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Allow_Update_When_Timetable_Exists_But_Has_No_Active_Assignments()
+	{
+		var standardIds = await GetAvailableStandardIdsAsync(1, skip: 30);
+		var standardId = standardIds[0];
+		var room = await GetSeededRoomAsync();
+
+		// Create
+		var createResponse = await Client.PostAsJsonAsync(
+			BaseUrl,
+			BuildCreateDto(standardId, room.Id),
+			JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var config = await createResponse.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
+		config.ShouldNotBeNull();
+
+		// Create a timetable for this standard with no active assignments
+		await CreateTimetableForStandardAsync(standardId, hasActiveAssignments: false);
+
+		// Try updating - should succeed
+		var updateDto = new UpdateLectureSlotDto
+		{
+			StandardId = standardId,
+			SchoolHours = "08:00-14:30", // changed time slightly
+			SlotConfigurations =
+			[
+				new SlotConfigurationDto
+				{
+					TotalSlots = 1,
+					WeekRange = [1, 5],
+					TimeSlots =
+					[
+						new TimeSlotDto
+						{
+							StartTime = new TimeOnly(8, 0),
+							EndTime = new TimeOnly(8, 45),
+							SlotType = SlotType.Period,
+							RoomId = room.Id
+						}
+					]
+				}
+			]
+		};
+
+		var updateResponse = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{config.Id}",
+			updateDto,
+			JsonOptions);
+
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Block_Update_When_Active_Assignment_Is_Modified()
+	{
+		var standardIds = await GetAvailableStandardIdsAsync(1, skip: 40);
+		var standardId = standardIds[0];
+		var room = await GetSeededRoomAsync();
+
+		// Create
+		var createResponse = await Client.PostAsJsonAsync(
+			BaseUrl,
+			BuildCreateDto(standardId, room.Id),
+			JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var config = await createResponse.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
+		config.ShouldNotBeNull();
+
+		// Create a timetable for this standard with an active assignment on Monday 8:00-8:45
+		var subjectId = Guid.NewGuid();
+		await CreateTimetableForStandardAsync(standardId, hasActiveAssignments: true, subjectId: subjectId);
+
+		// Try updating with a different start time - should fail
+		var updateDto = new UpdateLectureSlotDto
+		{
+			StandardId = standardId,
+			SchoolHours = "08:15-14:30",
+			SlotConfigurations =
+			[
+				new SlotConfigurationDto
+				{
+					TotalSlots = 1,
+					WeekRange = [1, 5],
+					TimeSlots =
+					[
+						new TimeSlotDto
+						{
+							StartTime = new TimeOnly(8, 15), // changed from 8:00 to 8:15, so modified active slot
+							EndTime = new TimeOnly(9, 0),
+							SlotType = SlotType.Period,
+							RoomId = room.Id
+						}
+					]
+				}
+			]
+		};
+
+		var updateResponse = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{config.Id}",
+			updateDto,
+			JsonOptions);
+
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Allow_Update_When_Active_Assignment_Is_Not_Modified()
+	{
+		var standardIds = await GetAvailableStandardIdsAsync(1, skip: 50);
+		var standardId = standardIds[0];
+		var room = await GetSeededRoomAsync();
+
+		// Create
+		var createResponse = await Client.PostAsJsonAsync(
+			BaseUrl,
+			BuildCreateDto(standardId, room.Id),
+			JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var config = await createResponse.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
+		config.ShouldNotBeNull();
+
+		// Create a timetable for this standard with an active assignment on Monday 8:00-8:45
+		var subjectId = Guid.NewGuid();
+		await CreateTimetableForStandardAsync(standardId, hasActiveAssignments: true, subjectId: subjectId);
+
+		// Try updating with same active slot but adding a new slot - should succeed
+		var updateDto = new UpdateLectureSlotDto
+		{
+			StandardId = standardId,
+			SchoolHours = "08:00-14:30",
+			SlotConfigurations =
+			[
+				new SlotConfigurationDto
+				{
+					TotalSlots = 2,
+					WeekRange = [1, 5],
+					TimeSlots =
+					[
+						new TimeSlotDto
+						{
+							StartTime = new TimeOnly(8, 0), // Kept active slot same
+							EndTime = new TimeOnly(8, 45),
+							SlotType = SlotType.Period,
+							RoomId = room.Id
+						},
+						new TimeSlotDto
+						{
+							StartTime = new TimeOnly(8, 45), // New slot
+							EndTime = new TimeOnly(9, 30),
+							SlotType = SlotType.Period,
+							RoomId = room.Id
+						}
+					]
+				}
+			]
+		};
+
+		var updateResponse = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{config.Id}",
+			updateDto,
+			JsonOptions);
+
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	private async Task CreateTimetableForStandardAsync(Guid standardId, bool hasActiveAssignments, Guid? subjectId = null)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider.GetRequiredService<IRepository<Timetables.Timetable, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var timetable = new Timetables.Timetable(Guid.NewGuid(), tenantId, standardId, Guid.NewGuid());
+			
+			// Add a slot matching the default config (Monday to Friday, sequence 1, 8:00 to 8:45)
+			var slot = new Timetables.TimetableSlot(
+				Guid.NewGuid(),
+				timetable.Id,
+				TimetableDayOfWeek.Monday,
+				1,
+				new TimeOnly(8, 0),
+				new TimeOnly(8, 45),
+				SlotType.Period
+			);
+
+			if (hasActiveAssignments && subjectId.HasValue)
+			{
+				slot.AddSubject(new Timetables.TimetableSlotSubject(
+					Guid.NewGuid(),
+					slot.Id,
+					subjectId.Value
+				));
+			}
+
+			timetable.AddSlot(slot);
+
+			await repository.InsertAsync(timetable);
+			await uow.CompleteAsync();
+		}
+	}
+
 	private static CreateLectureSlotDto BuildCreateDto(Guid standardId, Guid roomId) => new()
 	{
 		StandardId = standardId,

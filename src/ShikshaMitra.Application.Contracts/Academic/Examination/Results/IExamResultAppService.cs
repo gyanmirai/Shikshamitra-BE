@@ -40,4 +40,9 @@ public interface IExamResultAppService : IApplicationService
     /// Fetches the current result header for an Exam + Division, or null if not yet generated.
     /// </summary>
     Task<ResultHeaderDto?> GetHeaderAsync(Guid examId, Guid divisionId);
+
+    /// <summary>
+    /// Fetches all values for viewing a student result.
+    /// </summary>
+    Task<StudentResultViewDto> GetStudentResultDetailsAsync(Guid examId, Guid studentId);
 }

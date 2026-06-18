@@ -159,7 +159,8 @@ public class AcademicReportAppService(
             CreationTime = job.CreationTime,
             StartedAt = job.StartedAt,
             CompletedAt = job.CompletedAt,
-            ExpiresAt = job.ExpiresAt
+            ExpiresAt = job.ExpiresAt,
+            RequestJson = job.RequestJson
         };
     }
 }

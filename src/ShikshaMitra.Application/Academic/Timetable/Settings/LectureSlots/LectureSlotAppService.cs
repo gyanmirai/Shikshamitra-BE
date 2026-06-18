@@ -129,13 +129,7 @@ public class LectureSlotAppService(
     {
         var config = await lectureSlotConfigRepository.GetAsync(id);
 
-        // Block update if a timetable has already been created for this standard
-        var existingTimetables = await timetableRepository.GetByStandardIdAsync(config.StandardId);
-        if (existingTimetables.Count > 0)
-        {
-            throw new BusinessException(TimetableErrorCodes.LectureSlotConfigHasTimetable)
-                .WithData("StandardId", config.StandardId);
-        }
+        await ValidateActiveAssignmentsNotModifiedAsync(config.StandardId, input.SlotConfigurations);
 
         await EnsureRoomsExistAsync(input.SlotConfigurations);
 
@@ -158,6 +152,8 @@ public class LectureSlotAppService(
 
         foreach (var standardId in input.SelectedStandardIds)
         {
+            await ValidateActiveAssignmentsCompatibleWithSourceAsync(standardId, source);
+
             var existing = await lectureSlotConfigRepository.FindByStandardIdAsync(standardId);
             if (existing is not null)
             {
@@ -226,6 +222,97 @@ public class LectureSlotAppService(
                 }
 
                 await lectureSlotConfigRepository.InsertAsync(clone);
+            }
+        }
+    }
+
+    private async Task ValidateActiveAssignmentsNotModifiedAsync(Guid standardId, List<SlotConfigurationDto> newConfigurations)
+    {
+        var existingTimetables = await timetableRepository.GetByStandardIdAsync(standardId);
+        if (existingTimetables.Count == 0)
+        {
+            return;
+        }
+
+        var activeSlots = existingTimetables
+            .SelectMany(t => t.Slots)
+            .Where(s => s.Subjects.Count > 0)
+            .Select(s => new { s.Day, s.StartTime, s.EndTime, s.SlotType })
+            .Distinct()
+            .ToList();
+
+        if (activeSlots.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var activeSlot in activeSlots)
+        {
+            var dayValue = (int)activeSlot.Day;
+            var matchingGroup = newConfigurations.FirstOrDefault(g =>
+                g.WeekRange.Count >= 2 &&
+                g.WeekRange[0] <= dayValue && dayValue <= g.WeekRange[1]);
+
+            if (matchingGroup == null)
+            {
+                throw new BusinessException(TimetableErrorCodes.LectureSlotConfigHasTimetable)
+                    .WithData("StandardId", standardId);
+            }
+
+            var matchingSlot = matchingGroup.TimeSlots.FirstOrDefault(ts =>
+                ts.StartTime == activeSlot.StartTime &&
+                ts.EndTime == activeSlot.EndTime &&
+                ts.SlotType == activeSlot.SlotType);
+
+            if (matchingSlot == null)
+            {
+                throw new BusinessException(TimetableErrorCodes.LectureSlotConfigHasTimetable)
+                    .WithData("StandardId", standardId);
+            }
+        }
+    }
+
+    private async Task ValidateActiveAssignmentsCompatibleWithSourceAsync(Guid standardId, LectureSlotConfig sourceConfig)
+    {
+        var existingTimetables = await timetableRepository.GetByStandardIdAsync(standardId);
+        if (existingTimetables.Count == 0)
+        {
+            return;
+        }
+
+        var activeSlots = existingTimetables
+            .SelectMany(t => t.Slots)
+            .Where(s => s.Subjects.Count > 0)
+            .Select(s => new { s.Day, s.StartTime, s.EndTime, s.SlotType })
+            .Distinct()
+            .ToList();
+
+        if (activeSlots.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var activeSlot in activeSlots)
+        {
+            var dayValue = (int)activeSlot.Day;
+            var matchingGroup = sourceConfig.SlotGroups.FirstOrDefault(g =>
+                g.WeekRangeStart <= dayValue && dayValue <= g.WeekRangeEnd);
+
+            if (matchingGroup == null)
+            {
+                throw new BusinessException(TimetableErrorCodes.LectureSlotConfigHasTimetable)
+                    .WithData("StandardId", standardId);
+            }
+
+            var matchingSlot = matchingGroup.TimeSlots.FirstOrDefault(ts =>
+                ts.StartTime == activeSlot.StartTime &&
+                ts.EndTime == activeSlot.EndTime &&
+                ts.SlotType == activeSlot.SlotType);
+
+            if (matchingSlot == null)
+            {
+                throw new BusinessException(TimetableErrorCodes.LectureSlotConfigHasTimetable)
+                    .WithData("StandardId", standardId);
             }
         }
     }

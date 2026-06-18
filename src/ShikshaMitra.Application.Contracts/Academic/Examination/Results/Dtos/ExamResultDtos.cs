@@ -89,3 +89,34 @@ public class ReadinessCheckDto
     public bool Passed { get; set; }
     public string? Hint { get; set; }
 }
+
+public class StudentResultViewDto
+{
+    public Guid StudentId { get; set; }
+    public string StudentName { get; set; } = string.Empty;
+    public string GrNo { get; set; } = string.Empty;
+    public string RollNo { get; set; } = string.Empty;
+    public string DateOfBirth { get; set; } = string.Empty;
+    public string ClassName { get; set; } = string.Empty;
+    public string DivisionName { get; set; } = string.Empty;
+    public string ExamName { get; set; } = string.Empty;
+
+    public string Grade { get; set; } = string.Empty;
+    public int Rank { get; set; }
+    public int TotalStudentsInClass { get; set; }
+    public string TotalMarks { get; set; } = string.Empty;
+    public string ObtainedMarks { get; set; } = string.Empty;
+    public string AttendancePercentage { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+
+    public List<StudentSubjectMarkDto> Subjects { get; set; } = new();
+}
+
+public class StudentSubjectMarkDto
+{
+    public string SubjectName { get; set; } = string.Empty;
+    public string MaxMarks { get; set; } = string.Empty;
+    public string MarksObtained { get; set; } = string.Empty;
+    public string Grade { get; set; } = string.Empty;
+    public string Remarks { get; set; } = string.Empty;
+}

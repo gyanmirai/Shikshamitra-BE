@@ -395,9 +395,35 @@ public class ExamAppService(
 
 		var query = baseQuery.Where(x => x.exam.Status == input.Status);
 
+		if (input.StandardId.HasValue)
+		{
+			query = query.Where(x => x.exam.StandardId == input.StandardId.Value);
+		}
+
+		if (input.DivisionId.HasValue)
+		{
+			query = query.Where(x => x.exam.ExamDivisions.Any(d => d.DivisionId == input.DivisionId.Value));
+		}
+
 		if (input.SubjectId.HasValue)
 		{
 			query = query.Where(x => x.exam.ExamSubjects.Any(s => s.SubjectId == input.SubjectId.Value));
+		}
+
+		if (input.GradeEntryPublishedOnly == true && input.DivisionId.HasValue)
+		{
+			var workflowQuery = await examMarksWorkflowStateRepository.GetQueryableAsync();
+			query = query.Where(x => 
+				x.exam.ExamSubjects.Any() &&
+				x.exam.ExamSubjects.All(s => 
+					workflowQuery.Any(w => 
+						w.ExamId == x.exam.Id && 
+						w.SubjectId == s.SubjectId && 
+						w.DivisionId == input.DivisionId.Value && 
+						w.Status == ExamMarksWorkflowStatus.Published
+					)
+				)
+			);
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
@@ -931,9 +957,17 @@ public class ExamAppService(
 		var totalStudents = enrolledStudents.Count;
 		var pending = totalStudents - marksEntered;
 
-		var workflowState = (await examMarksWorkflowStateRepository.GetListAsync(
-			w => w.ExamId == input.ExamId && w.SubjectId == input.SubjectId && w.DivisionId == input.DivisionId))
-			.FirstOrDefault();
+		var allWorkflowStates = await examMarksWorkflowStateRepository.GetListAsync(
+			w => w.ExamId == input.ExamId && w.DivisionId == input.DivisionId);
+
+		var publishedSubjectIds = allWorkflowStates
+			.Where(w => w.Status == ExamMarksWorkflowStatus.Published)
+			.Select(w => w.SubjectId)
+			.ToHashSet();
+
+		var pendingPublishedCount = exam.ExamSubjects.Count(s => !publishedSubjectIds.Contains(s.SubjectId));
+
+		var workflowState = allWorkflowStates.FirstOrDefault(w => w.SubjectId == input.SubjectId);
 
 		return new GetExamMarksSummaryResponseDto
 		{
@@ -948,7 +982,8 @@ public class ExamAppService(
 			TotalStudents = totalStudents,
 			MarksEntered = marksEntered,
 			Pending = pending < 0 ? 0 : pending,
-			WorkflowStatus = workflowState != null ? (int) workflowState.Status : (int) ExamMarksWorkflowStatus.Draft
+			WorkflowStatus = workflowState != null ? (int) workflowState.Status : (int) ExamMarksWorkflowStatus.Draft,
+			PendingPublishedCount = pendingPublishedCount
 		};
 	}
 }

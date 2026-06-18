@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -56,6 +56,14 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 			.OnDelete(DeleteBehavior.Cascade);
 
 		// set navigation properties to be loaded together with the main entity for EducationBoard, Medium, Division, AcademicYear
+		builder.HasOne(x => x.AcademicYear)
+			.WithMany()
+			.HasForeignKey(x => x.AcademicYearId)
+			.OnDelete(DeleteBehavior.Restrict)
+			.IsRequired(false);
+
+		builder.Navigation(x => x.AcademicYear).AutoInclude();
+
 		builder.HasOne(x => x.AcademicBoard)
 			.WithMany()
 			.HasForeignKey(x => x.AcademicBoardId)

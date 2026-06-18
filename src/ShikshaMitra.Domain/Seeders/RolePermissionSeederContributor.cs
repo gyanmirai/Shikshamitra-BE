@@ -80,12 +80,15 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 	{
 		var tenantAdminPermissions = TenantAdminPermissions();
 		var applicationPermissions = AllApplicationPermissions();
+		var leaveSelfServicePermissions = LeaveSelfServicePermissions();
 		var academicStaffPermissions = ModulePermissions(
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.Students,
 			ShikshaMitraModulePermissions.Academics,
 			ShikshaMitraModulePermissions.ClassManagement,
-			ShikshaMitraModulePermissions.Calendar);
+			ShikshaMitraModulePermissions.Calendar)
+			.Concat(leaveSelfServicePermissions)
+			.ToArray();
 		var officeStaffPermissions = ModulePermissions(
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.Students,
@@ -96,7 +99,9 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		var financeStaffPermissions = ModulePermissions(
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.Students,
-			ShikshaMitraModulePermissions.Finance);
+			ShikshaMitraModulePermissions.Finance)
+			.Concat(leaveSelfServicePermissions)
+			.ToArray();
 		var hrStaffPermissions = ModulePermissions(
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.HR,
@@ -128,6 +133,16 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			["Parent"] = studentFamilyPermissions
 		};
 	}
+
+	private static string[] LeaveSelfServicePermissions() =>
+	[
+		ShikshaMitraModulePermissions.HR,
+		ShikshaMitraSubModulePermissions.LeaveManagement,
+		ShikshaMitraSubmodulePermissions.HR.Default,
+		ShikshaMitraSubmodulePermissions.HR.LeaveManagement_LeaveCenter.View,
+		ShikshaMitraSubmodulePermissions.HR.LeaveManagement_LeaveCenter.Add,
+		ShikshaMitraSubmodulePermissions.HR.LeaveManagement_LeaveCenter.Delete
+	];
 
 	private static string[] ModulePermissions(params string[] modulePermissions)
 	{

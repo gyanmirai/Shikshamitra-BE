@@ -55,7 +55,7 @@ public partial class HRSeederContributor
 			var role = rolesByName[NormalizeRoleName(profile.RoleName)];
 			if (employeesByEmail.TryGetValue(profile.Email, out var existingEmployee))
 			{
-				UpdateSeedEmployee(existingEmployee, profile, role.Id, fullDayShiftId);
+				UpdateSeedEmployee(existingEmployee, profile, role.Id, fullDayShiftId, userId);
 				employeesToUpdate.Add(existingEmployee);
 				continue;
 			}

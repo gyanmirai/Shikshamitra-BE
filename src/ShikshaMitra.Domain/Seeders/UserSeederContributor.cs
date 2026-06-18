@@ -38,16 +38,7 @@ public class UserSeederContributor : BaseSeederContributor
 	public override async Task SeedAsync(DataSeedContext context)
 	{
 		var tenantId = CurrentTenant.Id;
-
-		var users = new List<BaselineUserSpec>
-		{
-			new("admin-ddvs", "admin-ddvs@ddvs.com", "Admin", "DDVS", "admin", ["admin1"], ["admin1@gmail.com", "ddvs@gmail.com"]),
-			new("admin-ops", "admin-ops@ddvs.com", "Admin", "Operations", "admin", ["admin2"], ["admin2@ddvs.com"]),
-			new("teacher-demo-1", "teacher-demo-1@ddvs.com", "Teacher", "Demo 1", "Teacher", ["teacher1"], ["teacher1@school.com"]),
-			new("teacher-demo-2", "teacher-demo-2@ddvs.com", "Teacher", "Demo 2", "Teacher", ["teacher2"], ["teacher2@school.com"]),
-			new("principal-demo-gseb", "principal-demo-gseb@ddvs.com", "Principal", "Demo GSEB", "Principal", ["principal"], ["principal@school.com"]),
-			new("hr-manager", "hr-manager@ddvs.com", "HR", "Manager", "HR Manager", ["hr"], ["hr@school.com"])
-		};
+		var users = BuildUserSpecs();
 
 		foreach (var userInfo in users)
 		{
@@ -82,6 +73,22 @@ public class UserSeederContributor : BaseSeederContributor
 
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}
+
+	internal static IReadOnlyList<string> BuildSeededLoginEmails() =>
+		BuildUserSpecs()
+			.Select(x => x.Email)
+			.ToList();
+
+	private static IReadOnlyList<BaselineUserSpec> BuildUserSpecs() =>
+		new List<BaselineUserSpec>
+		{
+			new("admin-ddvs", "admin-ddvs@ddvs.com", "Admin", "DDVS", "admin", ["admin1"], ["admin1@gmail.com", "ddvs@gmail.com"]),
+			new("admin-ops", "admin-ops@ddvs.com", "Admin", "Operations", "admin", ["admin2"], ["admin2@ddvs.com"]),
+			new("teacher-demo-1", "teacher-demo-1@ddvs.com", "Teacher", "Demo 1", "Teacher", ["teacher1"], ["teacher1@school.com"]),
+			new("teacher-demo-2", "teacher-demo-2@ddvs.com", "Teacher", "Demo 2", "Teacher", ["teacher2"], ["teacher2@school.com"]),
+			new("principal-demo-gseb", "principal-demo-gseb@ddvs.com", "Principal", "Demo GSEB", "Principal", ["principal"], ["principal@school.com"]),
+			new("hr-manager", "hr-manager@ddvs.com", "HR", "Manager", "HR Manager", ["hr"], ["hr@school.com"])
+		};
 
 	private async Task<IdentityUser?> FindExistingUserAsync(BaselineUserSpec userInfo)
 	{

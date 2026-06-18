@@ -38,6 +38,79 @@ public class HRSeederContributor_Tests
 	}
 
 	[Fact]
+	public void Surat_Demo_Profiles_Should_Include_Cbse_Principal_Login_Profile()
+	{
+		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
+
+		profiles.ContainsKey("principal-cbse@ddvs.com").ShouldBeTrue();
+		profiles["principal-cbse@ddvs.com"].RoleName.ShouldBe("Principal");
+	}
+
+	[Fact]
+	public void Seeded_Login_Emails_Should_Have_Employee_Profiles()
+	{
+		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
+		var loginEmails = UserSeederContributor.BuildSeededLoginEmails()
+			.Concat(TestLoginSeederContributor.BuildSeededLoginEmails())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+
+		loginEmails.ShouldAllBe(email => profiles.ContainsKey(email));
+	}
+
+	[Fact]
+	public void Test_Login_Employee_Aliases_Should_Prioritize_Login_Email()
+	{
+		var aliasEmailsByLoginEmail = TestLoginSeederContributor.BuildSeededLoginEmployeeAliasEmailsByEmail();
+
+		foreach (var (loginEmail, aliasEmails) in aliasEmailsByLoginEmail)
+		{
+			aliasEmails.Count.ShouldBeGreaterThan(0);
+			aliasEmails[0].ShouldBe(loginEmail);
+			aliasEmails.Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(aliasEmails.Count);
+		}
+	}
+
+	[Fact]
+	public void Seeded_Login_Employee_Profiles_Should_Be_Protected_From_Inactive_Distribution()
+	{
+		var protectedEmails = HRSeederContributor.BuildSeededLoginEmployeeEmails();
+		var loginEmails = UserSeederContributor.BuildSeededLoginEmails()
+			.Concat(TestLoginSeederContributor.BuildSeededLoginEmails())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+
+		loginEmails.ShouldAllBe(email => protectedEmails.Contains(email));
+	}
+
+	[Fact]
+	public void Seeded_Employee_Financial_Data_Should_Be_Complete_And_Demo_Safe()
+	{
+		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
+
+		foreach (var profile in profiles.Values)
+		{
+			var financialData = HRSeederContributor.BuildSeedEmployeeFinancialData(profile, "EMP001");
+			var bankDetails = HRSeederContributor.BuildSeedEmployeeBankDetails(profile);
+
+			financialData.BankName.ShouldNotBeNullOrWhiteSpace();
+			financialData.BranchName.ShouldNotBeNullOrWhiteSpace();
+			financialData.AccountHolderName.ShouldBe($"{profile.FirstName} {profile.LastName}");
+			financialData.AccountNumber.ShouldNotBe("12345678");
+			financialData.AccountNumber.Length.ShouldBeGreaterThanOrEqualTo(10);
+			financialData.IfscCode.Length.ShouldBe(11);
+			financialData.EpfNumber.ShouldStartWith("GJ/SRT/");
+			financialData.UanNumber.Length.ShouldBe(12);
+			financialData.PunchId.ShouldBe("DDVS-EMP001");
+			financialData.TotalWorkingHourPerMonth.ShouldBeGreaterThan(0m);
+			bankDetails.BankName.ShouldBe(financialData.BankName);
+			bankDetails.AccountHolderName.ShouldBe(financialData.AccountHolderName);
+			bankDetails.AccountNumber.ShouldBe(financialData.AccountNumber);
+			bankDetails.IfscCode.ShouldBe(financialData.IfscCode);
+		}
+	}
+
+	[Fact]
 	public void Surat_Demo_Profiles_Should_Have_Work_Experience()
 	{
 		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();

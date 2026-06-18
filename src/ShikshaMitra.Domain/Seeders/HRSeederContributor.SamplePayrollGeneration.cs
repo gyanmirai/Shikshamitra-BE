@@ -9,7 +9,7 @@ namespace ShikshaMitra.Seeders;
 
 public partial class HRSeederContributor
 {
-	private async Task SeedSamplePayrollForEmployeeIfNeededAsync(Guid employeeId)
+	private async Task SeedSamplePayrollForEmployeeIfNeededAsync(Guid employeeId, string? pfRuleId)
 	{
 		var hasPendingChanges = false;
 		var employee = await _employeeRepository.FindAsync(employeeId);
@@ -25,23 +25,52 @@ public partial class HRSeederContributor
 			.GroupBy(x => (x.ComponentId!.Value, x.IsEarning))
 			.ToDictionary(x => x.Key, x => x.First());
 		var seededSalary = BuildSeededSalary(employee);
+		var financialData = BuildSeedEmployeeFinancialData(employee);
 
 		var payrollDetails = await _employeePayrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 		if (payrollDetails == null)
 		{
 			var details = new EmployeePayrollDetails(GuidGenerator.Create(), employeeId);
 			details.UpdateDetails(
-				bankName: "State Bank of India",
-				branchName: "Mumbai Main",
-				accountHolderName: "Demo Account Holder",
-				accountNumber: "12345678",
-				ifscCode: "SBIN0001234",
-				pfRule: null,
-				epfNumber: null,
-				uanNumber: null,
-				punchId: null,
-				totalWorkingHourPerMonth: 160m);
+				bankName: financialData.BankName,
+				branchName: financialData.BranchName,
+				accountHolderName: financialData.AccountHolderName,
+				accountNumber: financialData.AccountNumber,
+				ifscCode: financialData.IfscCode,
+				pfRule: pfRuleId,
+				epfNumber: financialData.EpfNumber,
+				uanNumber: financialData.UanNumber,
+				punchId: financialData.PunchId,
+				totalWorkingHourPerMonth: financialData.TotalWorkingHourPerMonth);
 			await _employeePayrollDetailsRepository.InsertAsync(details, autoSave: false);
+			hasPendingChanges = true;
+		}
+		else if (forceRepairSeededDemoPayroll && ShouldRepairSeedPayrollDetails(
+			         financialData,
+			         pfRuleId,
+			         payrollDetails.BankName,
+			         payrollDetails.BranchName,
+			         payrollDetails.AccountHolderName,
+			         payrollDetails.AccountNumber,
+			         payrollDetails.IfscCode,
+			         payrollDetails.PfRule,
+			         payrollDetails.EpfNumber,
+			         payrollDetails.UanNumber,
+			         payrollDetails.PunchId,
+			         payrollDetails.TotalWorkingHourPerMonth))
+		{
+			payrollDetails.UpdateDetails(
+				bankName: financialData.BankName,
+				branchName: financialData.BranchName,
+				accountHolderName: financialData.AccountHolderName,
+				accountNumber: financialData.AccountNumber,
+				ifscCode: financialData.IfscCode,
+				pfRule: pfRuleId,
+				epfNumber: financialData.EpfNumber,
+				uanNumber: financialData.UanNumber,
+				punchId: financialData.PunchId,
+				totalWorkingHourPerMonth: financialData.TotalWorkingHourPerMonth);
+			await _employeePayrollDetailsRepository.UpdateAsync(payrollDetails, autoSave: false);
 			hasPendingChanges = true;
 		}
 

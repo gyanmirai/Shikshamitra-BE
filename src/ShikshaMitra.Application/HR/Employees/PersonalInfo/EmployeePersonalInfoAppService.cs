@@ -54,8 +54,13 @@ public class EmployeePersonalInfoAppService(
 	{
 		var existingEmployee = await employeeRepository.GetAsync(id);
 		EnsureEmailUnchanged(existingEmployee.Email, input.Email);
-		input.PanNo = EmployeeIdentityUniquenessChecker.NormalizePan(input.PanNo);
-		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo, id);
+		var effectivePanNo = string.IsNullOrWhiteSpace(input.PanNo)
+			? existingEmployee.PanNo
+			: EmployeeIdentityUniquenessChecker.NormalizePan(input.PanNo);
+		var effectiveAdharNo = string.IsNullOrWhiteSpace(input.AdharNo)
+			? existingEmployee.AdharNo
+			: input.AdharNo.Trim();
+		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(effectivePanNo, effectiveAdharNo, id);
 		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
 
 		var employee = await employeeManager.UpdateEmployeeAsync(
@@ -75,8 +80,8 @@ public class EmployeePersonalInfoAppService(
 			mobileNo: input.MobileNo,
 			secondaryMobileNo: input.SecondaryMobileNo,
 			email: existingEmployee.Email,
-			panNo: input.PanNo,
-			adharNo: input.AdharNo,
+			panNo: effectivePanNo,
+			adharNo: effectiveAdharNo,
 			address1: input.Address1,
 			address2: input.Address2,
 			address3: input.Address3,

@@ -492,6 +492,114 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_And_Payslip_Should_Include_Late_Arrival_Salary_Deduction()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		const string month = "2026-06";
+		var attendanceDate = new DateOnly(2026, 6, 11);
+		var shiftStart = new TimeOnly(9, 0);
+		var shiftEnd = new TimeOnly(17, 0);
+		const decimal monthlyGross = 30000m;
+		var policySnapshot = await ConfigureDefaultAttendancePolicyLateArrivalSalaryDeductionAsync(new DateTime(2026, 6, 1));
+		await EnsureActiveDefaultLeavePolicyAsync(new DateTime(2026, 6, 1));
+
+		try
+		{
+			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+				Client,
+				$"PayrollLateSalaryDeduction{Guid.NewGuid():N}",
+				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+			var shiftId = await InsertShiftAsync(
+				$"Payroll late deduction shift {Guid.NewGuid():N}",
+				shiftStart,
+				shiftEnd);
+
+			await AssignEmployeeShiftAsync(employee.Id, shiftId);
+			await AssignSalaryStructureAsync(
+				employee.Id,
+				"PayrollLateDeduction",
+				earningAmount: monthlyGross,
+				deductionAmount: 0m,
+				useMasterComponents: false);
+
+			var attendanceResponse = await Client.PostAsJsonAsync(
+				"/api/hr/attendance/take-attendance/day/save",
+				new TakeAttendanceSaveInput
+				{
+					AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+					Entries =
+					[
+						new TakeAttendanceSaveEntryDto
+						{
+							EmployeeId = employee.Id,
+							StatusWire = "PRESENT",
+							InTime = "09:30",
+							OutTime = "17:00",
+							Remarks = "Payroll late arrival salary deduction regression"
+						}
+					]
+				},
+				JsonOptions);
+			var attendanceBody = await attendanceResponse.Content.ReadAsStringAsync();
+			attendanceResponse.StatusCode.ShouldBe(HttpStatusCode.OK, attendanceBody);
+
+			var preview = await GetPayrollPreviewAsync(month, forceRefresh: true);
+			var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
+			var expectedDeduction = CalculateExpectedLateArrivalDeduction(
+				monthlyGross,
+				(decimal)item.BasisDays,
+				penaltyOccurrences: 1);
+			var expectedRegularGross = Math.Round(
+				monthlyGross / (decimal)item.BasisDays,
+				2,
+				MidpointRounding.AwayFromZero);
+			var deductionLine = item.DeductionComponents.Single(x => x.Name == "Late Arrival Salary Deduction");
+
+			item.PresentDays.ShouldBeGreaterThanOrEqualTo(1);
+			deductionLine.Amount.ShouldBe((double)expectedDeduction);
+			deductionLine.Description.ShouldContain("1 qualifying late arrival");
+			item.TotalDeduction.ShouldBe((double)expectedDeduction);
+			item.GrossSalary.ShouldBe((double)expectedRegularGross);
+			item.NetPay.ShouldBe((double)(expectedRegularGross - expectedDeduction));
+
+			var reviewResponse = await Client.PostAsJsonAsync(
+				ReviewUrl,
+				new PayrollRunReviewRequest
+				{
+					Month = month,
+					EmployeeIds = new List<Guid> { employee.Id }
+				},
+				JsonOptions);
+			var reviewBody = await reviewResponse.Content.ReadAsStringAsync();
+			reviewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, reviewBody);
+			await MarkPayrollSnapshotReviewedAsync(employee.Id, month);
+
+			var lockResponse = await Client.PostAsJsonAsync(
+				BaseUrl,
+				new RunPayrollRequest
+				{
+					Month = month,
+					EmployeeIds = new List<Guid> { employee.Id }
+				},
+				JsonOptions);
+			var lockBody = await lockResponse.Content.ReadAsStringAsync();
+			lockResponse.StatusCode.ShouldBe(HttpStatusCode.OK, lockBody);
+
+			var salarySlip = await GetSalarySlipResponseAsync(employee.Id, "JUNE-2026");
+			salarySlip.Deductions.ShouldContain(x => x.Name == "Late Arrival Salary Deduction" && x.Amount == (double)expectedDeduction);
+			salarySlip.TotalDeduction.ShouldBe((double)expectedDeduction);
+			salarySlip.TotalEarning.ShouldBe((double)expectedRegularGross);
+			salarySlip.NetSalary.ShouldBe((double)(expectedRegularGross - expectedDeduction));
+		}
+		finally
+		{
+			await RestoreAttendancePolicyLateArrivalAsync(policySnapshot);
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Refresh_Unlocked_Snapshot_After_Policy_Day_Calculation_Changes()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
@@ -1344,6 +1452,103 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
+	private async Task<AttendancePolicyLateArrivalSnapshot> ConfigureDefaultAttendancePolicyLateArrivalSalaryDeductionAsync(DateTime monthDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x =>
+				x.StartDate <= monthDate.Date &&
+				x.EndDate >= monthDate.Date);
+			var policyQuery = await attendancePolicyRepository.GetQueryableAsync();
+			var policy = policyQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.IsDefault &&
+				x.Status == HrPolicyStatus.Active);
+			var snapshot = new AttendancePolicyLateArrivalSnapshot(
+				policy.Id,
+				policy.GraceTime,
+				policy.MaxLateAllowedPerMonth,
+				policy.PenaltyType,
+				policy.PenaltyCountThreshold);
+
+			policy.Update(
+				policy.WorkCalendarPolicyId,
+				policy.Name,
+				policy.Status,
+				policy.IsDefault,
+				policy.CaptureMode,
+				policy.FullDayThresholdPercentage,
+				policy.HalfDayThresholdPercentage,
+				policy.AbsentThresholdPercentage,
+				policy.MissingPunchBehavior,
+				policy.ManualCorrectionAllowed,
+				0,
+				0,
+				AttendancePenaltyType.SalaryDeduction,
+				1,
+				policy.EarlyExitEnabled,
+				policy.EarlyExitGraceTime,
+				policy.OvertimeEnabled,
+				policy.OvertimeRate,
+				policy.MinOvertimeMinutes,
+				policy.HolidayWorkBehavior,
+				policy.SandwichRuleEnabled,
+				policy.PayrollPreviewEnabled);
+			await attendancePolicyRepository.UpdateAsync(policy, autoSave: false);
+			await uow.CompleteAsync();
+			return snapshot;
+		}
+	}
+
+	private async Task RestoreAttendancePolicyLateArrivalAsync(AttendancePolicyLateArrivalSnapshot snapshot)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var policy = await attendancePolicyRepository.GetAsync(snapshot.PolicyId);
+			policy.Update(
+				policy.WorkCalendarPolicyId,
+				policy.Name,
+				policy.Status,
+				policy.IsDefault,
+				policy.CaptureMode,
+				policy.FullDayThresholdPercentage,
+				policy.HalfDayThresholdPercentage,
+				policy.AbsentThresholdPercentage,
+				policy.MissingPunchBehavior,
+				policy.ManualCorrectionAllowed,
+				snapshot.GraceTime,
+				snapshot.MaxLateAllowedPerMonth,
+				snapshot.PenaltyType,
+				snapshot.PenaltyCountThreshold,
+				policy.EarlyExitEnabled,
+				policy.EarlyExitGraceTime,
+				policy.OvertimeEnabled,
+				policy.OvertimeRate,
+				policy.MinOvertimeMinutes,
+				policy.HolidayWorkBehavior,
+				policy.SandwichRuleEnabled,
+				policy.PayrollPreviewEnabled);
+			await attendancePolicyRepository.UpdateAsync(policy, autoSave: false);
+			await uow.CompleteAsync();
+		}
+	}
+
 	private async Task<Guid> InsertShiftAsync(
 		string shiftName,
 		TimeOnly startTime,
@@ -1707,9 +1912,25 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			MidpointRounding.AwayFromZero);
 	}
 
+	private static decimal CalculateExpectedLateArrivalDeduction(
+		decimal monthlyGrossSalary,
+		decimal basisDays,
+		int penaltyOccurrences) =>
+		Math.Round(
+			monthlyGrossSalary / basisDays * 0.5m * penaltyOccurrences,
+			2,
+			MidpointRounding.AwayFromZero);
+
 	private sealed record AttendancePolicyOvertimeSnapshot(
 		Guid PolicyId,
 		bool OvertimeEnabled,
 		AttendanceOvertimeRate? OvertimeRate,
 		int? MinOvertimeMinutes);
+
+	private sealed record AttendancePolicyLateArrivalSnapshot(
+		Guid PolicyId,
+		int GraceTime,
+		int MaxLateAllowedPerMonth,
+		AttendancePenaltyType PenaltyType,
+		int PenaltyCountThreshold);
 }

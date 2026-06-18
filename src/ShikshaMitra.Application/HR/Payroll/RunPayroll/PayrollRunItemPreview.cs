@@ -45,6 +45,21 @@ internal sealed record PayrollRunItemPreview(
 		var allComponents = components
 			.Concat(adjustments.Select(PayrollRunProjection.ToPayrollComponent))
 			.ToList();
+		var lateArrivalDeductionComponent = LateArrivalSalaryDeductionComponentBuilder.Build(
+			components.FirstOrDefault()?.EmployeeId ?? Guid.Empty,
+			attendanceRecords,
+			components,
+			basis,
+			year,
+			month,
+			shift,
+			attendancePolicy,
+			employmentStartDate);
+		if (lateArrivalDeductionComponent != null)
+		{
+			allComponents.Add(lateArrivalDeductionComponent);
+		}
+
 		var overtimeComponent = BuildOvertimeComponent(
 			attendanceRecords,
 			allComponents,

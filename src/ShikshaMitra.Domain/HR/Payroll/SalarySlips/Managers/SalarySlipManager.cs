@@ -132,6 +132,21 @@ public partial class SalarySlipManager : DomainService
 		var allComponents = components
 			.Concat(adjustments.Select(SalarySlipAdjustmentComponentMapper.ToPayrollComponent))
 			.ToList();
+		var lateArrivalDeductionComponent = LateArrivalSalaryDeductionComponentBuilder.Build(
+			employeeId,
+			attendance,
+			components,
+			basis,
+			year,
+			month,
+			employee.Shift,
+			resolvedPolicies.AttendancePolicy,
+			SalarySlipGenerationRules.GetEffectiveEmploymentStartDate(employee));
+		if (lateArrivalDeductionComponent != null)
+		{
+			allComponents.Add(lateArrivalDeductionComponent);
+		}
+
 		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
 			attendance,
 			basis,

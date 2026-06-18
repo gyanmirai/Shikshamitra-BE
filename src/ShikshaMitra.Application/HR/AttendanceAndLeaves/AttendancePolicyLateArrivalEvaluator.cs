@@ -39,9 +39,7 @@ public class AttendancePolicyLateArrivalEvaluator(
 			policy.GraceTime,
 			currentMonthPunchContext,
 			cancellationToken) + 1;
-		var effectiveTrigger = Math.Max(
-			policy.MaxLateAllowedPerMonth + 1,
-			policy.PenaltyCountThreshold > 0 ? policy.PenaltyCountThreshold : 1);
+		var effectiveTrigger = AttendancePolicyLateArrivalPenaltyRules.GetEffectiveTrigger(policy);
 
 		var penaltyStatus = policy.PenaltyType switch
 		{
@@ -130,14 +128,12 @@ public class AttendancePolicyLateArrivalEvaluator(
 			.ToHashSet();
 		var persistedLateCount = rows.Count(x =>
 			!currentBatchDates.Contains(x.AttendanceDate) &&
-			IsLateArrival(x.TimeIn!.Value, shift, graceTime));
-		var currentBatchLateCount = currentBatchPunches.Count(x => IsLateArrival(x.TimeIn, shift, graceTime));
+			AttendancePolicyLateArrivalPenaltyRules.IsLateArrival(x.TimeIn!.Value, shift, graceTime));
+		var currentBatchLateCount = currentBatchPunches.Count(x =>
+			AttendancePolicyLateArrivalPenaltyRules.IsLateArrival(x.TimeIn, shift, graceTime));
 
 		return persistedLateCount + currentBatchLateCount;
 	}
-
-	private static bool IsLateArrival(DateTimeOffset timeIn, ShiftManagement shift, int graceTime) =>
-		(timeIn.TimeOfDay - shift.StartTime.ToTimeSpan()).TotalMinutes > graceTime;
 
 	private static int GetStatusSeverity(EmployeeAttendanceStatusType status) => status switch
 	{

@@ -43,10 +43,12 @@ public class UpdateEmployeePersonalInfoDtoValidator : AbstractValidator<UpdateEm
 			.MaximumLength(256)
 			.EmailAddress();
 
-		RuleFor(x => x.PanNo).NotEmpty().WithMessage("PAN number is required.")
-			.Matches(@"^[A-Z]{5}[0-9]{4}[A-Z]$").WithMessage("PAN must be in format AAAAA9999A.");
-		RuleFor(x => x.AdharNo).NotEmpty().WithMessage("Aadhaar number is required.")
-			.Matches(@"^\d{12}$").WithMessage("Aadhaar number must be 12 digits.");
+		RuleFor(x => x.PanNo)
+			.Matches(@"^[A-Z]{5}[0-9]{4}[A-Z]$").WithMessage("PAN must be in format AAAAA9999A.")
+			.When(x => !string.IsNullOrWhiteSpace(x.PanNo));
+		RuleFor(x => x.AdharNo)
+			.Matches(@"^\d{12}$").WithMessage("Aadhaar number must be 12 digits.")
+			.When(x => !string.IsNullOrWhiteSpace(x.AdharNo));
 
 		RuleFor(x => x.Department).MaximumLength(256);
 		RuleFor(x => x.Designation).MaximumLength(256);

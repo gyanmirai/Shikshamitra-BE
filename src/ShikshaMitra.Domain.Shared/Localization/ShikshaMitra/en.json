@@ -60,6 +60,8 @@
     "SM:EntranceExamSlot:006": "Cannot delete this entrance exam slot as there are {enrolledCount} students currently enrolled.",
     "SM:EntranceExamSlot:007": "The specified academic year (ID: {academicYearId}) does not exist in the system.",
     "ST:Student:010002": "GR Number {GrNumbers} is already assigned to another student.",
+    "ST:Records:050004": "House {Name} already exists for the selected academic medium.",
+    "ST:Records:050006": "{Reason}",
     "StudentDashboard:InvalidKey": "Student dashboard key is not supported.",
     "StudentDashboard:ScopeChanged": "Student dashboard scope changed before the refresh could finish.",
     "Permission:Academics.Examination.Result": "Result Management",

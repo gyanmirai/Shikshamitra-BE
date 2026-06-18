@@ -228,6 +228,52 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Normalize_Temporary_Component_ApplicableMonth_To_First_Of_Month()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalNormMonth");
+		var earningApplicableMonth = new DateTime(2026, 4, 15, 18, 30, 0, DateTimeKind.Utc);
+		var deductionApplicableMonth = new DateTime(2026, 4, 30, 23, 45, 0, DateTimeKind.Utc);
+
+		var updateDto = new UpdateSalaryStructureDto
+		{
+			EarningComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					Name = "April temporary earning",
+					Amount = 1500m,
+					IsFixed = false,
+					IsTemp = true,
+					ApplicableMonth = earningApplicableMonth,
+				}
+			},
+			DeductionComponents = new List<SalaryComponentDto>
+			{
+				new()
+				{
+					Name = "April temporary deduction",
+					Amount = 250m,
+					IsFixed = false,
+					IsTemp = true,
+					ApplicableMonth = deductionApplicableMonth,
+				}
+			}
+		};
+
+		var putResponse = await Client.PutAsJsonAsync(Url(empId), updateDto, JsonOptions);
+		putResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await putResponse.Content.ReadAsStringAsync());
+
+		var getResponse = await Client.GetAsync(Url(empId));
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var payload = await getResponse.Content.ReadFromJsonAsync<SalaryStructureResponseDto>(JsonOptions);
+
+		payload.ShouldNotBeNull();
+		payload.EarningComponents.Single().ApplicableMonth.ShouldBe(new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc));
+		payload.DeductionComponents.Single().ApplicableMonth.ShouldBe(new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc));
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_ReSubmit_Temporary_Component_When_ComponentId_Is_Row_Id()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalTempRowId");

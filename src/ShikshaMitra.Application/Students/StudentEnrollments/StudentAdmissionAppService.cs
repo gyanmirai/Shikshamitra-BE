@@ -244,7 +244,11 @@ public class StudentAdmissionAppService(
 				// Apply action
 				if (item.Action == StudentEnrollmentApprovalState.Approved)
 				{
-					student.ApproveAdmission();
+					if (student.Status != StudentLifeCycleStatusEnum.Enrolled ||
+					    student.AdmissionApprovalStatus != StudentEnrollmentApprovalState.Approved)
+					{
+						student.ApproveAdmission();
+					}
 
 					// Create user account and send welcome email ONLY on approval
 					await CreateStudentUserAndSendEmailAsync(student);

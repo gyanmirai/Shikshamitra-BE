@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Guids;
@@ -37,7 +38,7 @@ public class SalaryStructureComponentFactory(IGuidGenerator guidGenerator) : ITr
 			amount,
 			earning.IsFixed,
 			earning.IsTemp,
-			earning.ApplicableMonth ?? existingComponent?.ApplicableMonth,
+			PayrollApplicableMonthNormalizer.Normalize(earning.ApplicableMonth ?? existingComponent?.ApplicableMonth),
 			componentType,
 			dependOn,
 			isEarning: true,
@@ -72,7 +73,7 @@ public class SalaryStructureComponentFactory(IGuidGenerator guidGenerator) : ITr
 			amount,
 			deduction.IsFixed,
 			deduction.IsTemp,
-			deduction.ApplicableMonth ?? existingComponent?.ApplicableMonth,
+			PayrollApplicableMonthNormalizer.Normalize(deduction.ApplicableMonth ?? existingComponent?.ApplicableMonth),
 			componentType,
 			dependOn,
 			isEarning: false,

@@ -253,6 +253,33 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	}
 
 	[Fact]
+	public async Task UpdateAsync_Should_Preserve_Pan_And_Adhar_When_Not_Supplied()
+	{
+		var created = await _personalInfoAppService.CreateAsync(
+			await BuildCreateDtoAsync($"identity.omitted.{Guid.NewGuid():N}@test.com"));
+
+		var result = await _personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
+		{
+			FirstName = "Identity",
+			LastName = created.LastName,
+			MobileNo = created.MobileNo,
+			Email = created.Email,
+			PanNo = null,
+			AdharNo = null,
+			DateOfBirth = created.DateOfBirth,
+			GenderType = created.GenderType,
+			DateOfJoining = created.DateOfJoining,
+			EmployeeStatusType = EmployeeStatusType.Active,
+			RoleId = created.RoleId,
+			ShiftId = created.ShiftId
+		});
+
+		result.FirstName.ShouldBe("Identity");
+		result.PanNo.ShouldBe(created.PanNo);
+		result.AdharNo.ShouldBe(created.AdharNo);
+	}
+
+	[Fact]
 	public async Task UpdateAsync_Should_Reject_Email_Change()
 	{
 		var created = await _personalInfoAppService.CreateAsync(

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Guids;
@@ -103,7 +104,7 @@ public class EmployeePayrollContractWriter(
 			amount,
 			isFixed,
 			isTemp: line.IsTemp ?? resolved.ExistingPayrollComponent?.IsTemp ?? master is null,
-			applicableMonth: line.ApplicableMonth ?? resolved.ExistingPayrollComponent?.ApplicableMonth,
+			applicableMonth: PayrollApplicableMonthNormalizer.Normalize(line.ApplicableMonth ?? resolved.ExistingPayrollComponent?.ApplicableMonth),
 			master is null
 				? resolved.ExistingPayrollComponent?.ComponentType ?? SalaryComponentType.Fixed
 				: master.CalculationType == CalculationType.Amount
@@ -137,7 +138,7 @@ public class EmployeePayrollContractWriter(
 			amount,
 			isFixed,
 			isTemp: line.IsTemp ?? resolved.ExistingPayrollComponent?.IsTemp ?? master is null,
-			applicableMonth: line.ApplicableMonth ?? resolved.ExistingPayrollComponent?.ApplicableMonth,
+			applicableMonth: PayrollApplicableMonthNormalizer.Normalize(line.ApplicableMonth ?? resolved.ExistingPayrollComponent?.ApplicableMonth),
 			master is null
 				? resolved.ExistingPayrollComponent?.ComponentType ?? SalaryComponentType.Fixed
 				: master.CalculationType == CalculationType.Amount

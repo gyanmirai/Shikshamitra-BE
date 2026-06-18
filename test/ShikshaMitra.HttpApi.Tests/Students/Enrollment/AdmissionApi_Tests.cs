@@ -234,6 +234,31 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
         item.Success.ShouldBeTrue();
         (item.Message ?? string.Empty).ShouldNotContain("unexpected error");
         item.NewStatus.ShouldBe(StudentEnrollmentApprovalState.Approved.ToString());
+
+        var secondApproveResponse = await Client.PostAsJsonAsync(
+            $"{BaseUrl}/status",
+            new BatchAdmissionStatusChangeRequestDto
+            {
+                Items =
+                [
+                    new AdmissionStatusChangeItemDto
+                    {
+                        StudentId = createBody.Data.StudentId,
+                        Action = StudentEnrollmentApprovalState.Approved
+                    }
+                ]
+            },
+            JsonOptions);
+
+        secondApproveResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await secondApproveResponse.Content.ReadAsStringAsync());
+        var secondResult = await secondApproveResponse.Content.ReadFromJsonAsync<BatchAdmissionStatusChangeResultDto>(JsonOptions);
+        secondResult.ShouldNotBeNull();
+        secondResult.Succeeded.ShouldBe(1);
+        secondResult.Failed.ShouldBe(0);
+        var secondItem = secondResult.Results.Single();
+        secondItem.Success.ShouldBeTrue();
+        (secondItem.Message ?? string.Empty).ShouldNotContain("unexpected error");
+        secondItem.NewStatus.ShouldBe(StudentEnrollmentApprovalState.Approved.ToString());
     }
 
     [Fact]

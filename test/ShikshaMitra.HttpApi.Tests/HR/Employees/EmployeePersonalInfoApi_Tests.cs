@@ -117,6 +117,36 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Update_Personal_Info_When_Pan_And_Adhar_Are_Omitted()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "UpdateIdentityOmitted");
+		var updateRequest = new
+		{
+			firstName = TestDataHelper.UniqueName("IdentityOmitted"),
+			lastName = created.LastName,
+			mobileNo = TestDataHelper.UniquePhone(),
+			doj = created.Doj,
+			isTeaching = created.IsTeaching,
+			roleId = created.RoleId,
+			shiftId = created.ShiftId,
+			email = created.Email,
+			gender = created.Gender
+		};
+		var updatePayload = JsonSerializer.Serialize(updateRequest, JsonOptions);
+		updatePayload.ShouldNotContain("panNo");
+		updatePayload.ShouldNotContain("adharNo");
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}/personal-info", updateRequest, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var body = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.PanNo.ShouldBe(created.PanNo);
+		body.AdharNo.ShouldBe(created.AdharNo);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Reject_Personal_Info_Email_Change()
 	{
 		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "RejectEmailChange");

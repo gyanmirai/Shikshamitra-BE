@@ -1,12 +1,10 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using ShikshaMitra.HttpApi.Models;
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
-using Volo.Abp;
 
 namespace ShikshaMitra.Controllers.HR.AttendanceAndLeaves;
 
@@ -29,11 +27,6 @@ public partial class LeaveManagementController
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
 		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
-		if (string.IsNullOrWhiteSpace(paidType))
-		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyRuleNotFound);
-		}
-
 		var createDto = new LeaveRequestCreateDto
 		{
 			PaidType = paidType,
@@ -65,11 +58,6 @@ public partial class LeaveManagementController
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
 		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
 	{
-		if (string.IsNullOrWhiteSpace(paidType))
-		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyRuleNotFound);
-		}
-
 		var createDto = new LeaveRequestCreateDto
 		{
 			PaidType = paidType,

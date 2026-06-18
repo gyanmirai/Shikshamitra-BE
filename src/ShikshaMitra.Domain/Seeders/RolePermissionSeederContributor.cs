@@ -209,6 +209,7 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		yield return "ShikshaMitra.Group";
 		yield return "ShikshaMitra.Group.List";
 		yield return "ShikshaMitra.Group.View";
+		yield return "ShikshaMitra.Group.Add";
 		yield return "ShikshaMitra.Group.Create";
 		yield return "ShikshaMitra.Group.Edit";
 		yield return "ShikshaMitra.Group.Delete";
@@ -227,19 +228,60 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		yield return "AbpPermissionManagement.Permissions.Manage";
 		yield return TenantManagementPermissions.Tenants.Update;
 		yield return IdentityPermissions.Users.Default;
+		yield return "AbpIdentity.Users.Add";
+		yield return "AbpIdentity.Users.Create";
+		yield return "AbpIdentity.Users.View";
 		yield return IdentityPermissions.Users.ManagePermissions;
 		yield return IdentityPermissions.Roles.Default;
+		yield return "AbpIdentity.Roles.Add";
+		yield return "AbpIdentity.Roles.Create";
+		yield return "AbpIdentity.Roles.View";
 		yield return IdentityPermissions.Roles.ManagePermissions;
+
+		// New Attendance & Leave Submodule Permissions
+		yield return "HR.AttendanceAndLeave.Dashboard.Add";
+		yield return "HR.AttendanceAndLeave.Dashboard.Delete";
+		yield return "HR.AttendanceAndLeave.AttendanceTracking.Delete";
+		yield return "HR.AttendanceAndLeave.Setting.ShiftManagement.View";
+		yield return "HR.AttendanceAndLeave.Setting.ShiftManagement.Add";
+		yield return "HR.AttendanceAndLeave.Setting.ShiftManagement.Delete";
+
+		// New Performance Management Submodule Permissions
+		yield return "HR.PerformanceManagement.Overview.View";
+		yield return "HR.PerformanceManagement.Overview.Add";
+		yield return "HR.PerformanceManagement.Overview.Delete";
+		yield return "HR.PerformanceManagement.Outcomes.View";
+		yield return "HR.PerformanceManagement.Outcomes.Add";
+		yield return "HR.PerformanceManagement.Outcomes.Delete";
+		yield return "HR.PerformanceManagement.Reports.View";
+		yield return "HR.PerformanceManagement.Reports.Add";
+		yield return "HR.PerformanceManagement.Reports.Delete";
+		yield return "HR.PerformanceManagement.Settings.Setup.View";
+		yield return "HR.PerformanceManagement.Settings.Setup.Add";
+		yield return "HR.PerformanceManagement.Settings.Setup.Delete";
+		yield return "HR.PerformanceManagement.ReviewEmployees.View";
+		yield return "HR.PerformanceManagement.ReviewEmployees.Add";
+		yield return "HR.PerformanceManagement.ReviewEmployees.Delete";
+		yield return "HR.PerformanceManagement.ManageCycles.View";
+		yield return "HR.PerformanceManagement.ManageCycles.Add";
+		yield return "HR.PerformanceManagement.ManageCycles.Delete";
+
+		// Module Visibility Permission
+		yield return "ShikshaMitra.Module.HR.PerformanceManagement.Settings";
 	}
 
 	private static IEnumerable<string> HrStaffPlatformPermissions()
 	{
 		yield return IdentityPermissions.Roles.Default;
+		yield return "AbpIdentity.Roles.Add";
+		yield return "AbpIdentity.Roles.Create";
+		yield return "AbpIdentity.Roles.View";
 	}
 
 	private static IEnumerable<string> HostPlatformPermissions()
 	{
 		yield return TenantManagementPermissions.Tenants.Create;
+		yield return "AbpTenantManagement.Tenants.Add";
 		yield return TenantManagementPermissions.Tenants.Delete;
 		yield return TenantManagementPermissions.Tenants.ManageConnectionStrings;
 	}

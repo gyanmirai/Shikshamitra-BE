@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Security.Permissions;
+namespace ShikshaMitra.Security.Permissions;
 
 public static class ShikshaMitraPermissions
 {
@@ -25,6 +25,8 @@ public static class ShikshaMitraPermissions
 		public const string Default = GroupName + ".Group";
 		public const string List = Default + ".List";
 		public const string View = Default + ".View";
+		public const string Add = Default + ".Add";
+		[System.Obsolete("Use Add instead")]
 		public const string Create = Default + ".Create";
 		public const string Edit = Default + ".Edit";
 		public const string Delete = Default + ".Delete";

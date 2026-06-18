@@ -22,7 +22,7 @@ public class PayrollPolicyAppService(
 	public Task<PayrollPolicyDto> GetAsync(Guid id) =>
 		reader.GetAsync(id);
 
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.Create)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.Add)]
 	public Task<PayrollPolicyDto> CreateAsync(CreateUpdatePayrollPolicyDto input) =>
 		workflow.CreateAsync(input);
 

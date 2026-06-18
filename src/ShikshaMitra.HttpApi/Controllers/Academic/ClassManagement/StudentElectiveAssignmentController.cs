@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -73,6 +73,20 @@ public class StudentElectiveAssignmentController(
 	)
 	{
 		var result = await appService.SaveStudentElectiveAssignmentsAsync(input);
+		return Ok(result);
+	}
+
+	[HttpPost("lock")]
+	[Authorize(ShikshaMitraSubmodulePermissions.ClassManagement.StudentElectiveAssignment.Add)]
+	[ProducesResponseType(typeof(ApiSuccessResponseDto), 200)]
+	[ProducesResponseType(400)]
+	[ProducesResponseType(401)]
+	[ProducesResponseType(403)]
+	public async Task<IActionResult> LockStudentElectiveAssignmentsAsync(
+		[FromBody] LockStudentElectiveAssignmentsDto input
+	)
+	{
+		var result = await appService.LockStudentElectiveAssignmentsAsync(input);
 		return Ok(result);
 	}
 }

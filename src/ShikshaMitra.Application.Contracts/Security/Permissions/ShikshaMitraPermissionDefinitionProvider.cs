@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Localization;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.Localization;
@@ -20,6 +20,37 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 		// Define Module Visibility Permissions (these go in JWT)
 		DefineModulePermissions(group);
 		DefineSubmodulePermissions(group);
+
+		DefineAbpIdentityCustomPermissions(context);
+	}
+
+	private void DefineAbpIdentityCustomPermissions(IPermissionDefinitionContext context)
+	{
+		var usersPermission = context.GetPermissionOrNull("AbpIdentity.Users");
+		if (usersPermission != null)
+		{
+			if (context.GetPermissionOrNull("AbpIdentity.Users.Add") == null)
+			{
+				usersPermission.AddChild("AbpIdentity.Users.Add", L("Permission:Users.Add"));
+			}
+			if (context.GetPermissionOrNull("AbpIdentity.Users.View") == null)
+			{
+				usersPermission.AddChild("AbpIdentity.Users.View", L("Permission:Users.View"));
+			}
+		}
+
+		var rolesPermission = context.GetPermissionOrNull("AbpIdentity.Roles");
+		if (rolesPermission != null)
+		{
+			if (context.GetPermissionOrNull("AbpIdentity.Roles.Add") == null)
+			{
+				rolesPermission.AddChild("AbpIdentity.Roles.Add", L("Permission:Roles.Add"));
+			}
+			if (context.GetPermissionOrNull("AbpIdentity.Roles.View") == null)
+			{
+				rolesPermission.AddChild("AbpIdentity.Roles.View", L("Permission:Roles.View"));
+			}
+		}
 	}
 
 	private static void DefineModulePermissions(PermissionGroupDefinition group)
@@ -93,6 +124,11 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 		groupPermission.AddChild(
 			ShikshaMitraPermissions.Group.View,
 			displayName: L("Permission:Group.View")
+		);
+
+		groupPermission.AddChild(
+			ShikshaMitraPermissions.Group.Add,
+			displayName: L("Permission:Group.Add")
 		);
 
 		groupPermission.AddChild(

@@ -17,6 +17,7 @@ public class StudentElectiveSelectionConfiguration : IEntityTypeConfiguration<St
 		builder.Property(x => x.SelectedSubjectId).IsRequired();
 		builder.Property(x => x.AcademicMediumId).IsRequired();
 		builder.Property(x => x.StudentPreference).HasMaxLength(512);
+		builder.Property(x => x.IsLocked).IsRequired().HasDefaultValue(false);
 
 		builder.HasIndex(x => new { x.StudentId, x.ElectiveGroupId }).IsUnique();
 	}

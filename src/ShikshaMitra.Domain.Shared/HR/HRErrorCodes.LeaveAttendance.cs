@@ -46,6 +46,9 @@ public static partial class HRErrorCodes
 	public const string LeavePolicyPaidUnpaidRulesRequired = "ShikshaMitra:LeavePolicyPaidUnpaidRulesRequired";
 	public const string LeaveUnpaidPaidOnlyControlsNotAllowed = "ShikshaMitra:LeaveUnpaidPaidOnlyControlsNotAllowed";
 	public const string LeaveEntitlementRequired = "ShikshaMitra:LeaveEntitlementRequired";
+	public const string LeaveYearEndSettlementNotFound = "HR:Leave:020041";
+	public const string LeaveYearEndSettlementAlreadyFinalized = "HR:Leave:020042";
+	public const string LeaveYearEndSettlementFinalizeBlocked = "HR:Leave:020043";
 	public const string AttendanceInvalidDateFormat = "HR:Attendance:020301";
 	public const string AttendanceEndDateBeforeStartDate = "HR:Attendance:020302";
 	public const string AttendanceDateRangeTooLarge = "HR:Attendance:020303";

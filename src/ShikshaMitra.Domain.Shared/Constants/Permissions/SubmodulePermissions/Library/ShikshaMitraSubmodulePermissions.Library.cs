@@ -37,6 +37,15 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 		public static readonly Dictionary<string, SubmoduleInfo> Submodules = new()
 		{
+			{ "Library.Dashboard", new SubmoduleInfo(Dashboard.All, Dashboard.DisplayNames) },
+			{ "Library.AllBooks", new SubmoduleInfo(AllBooks.All, AllBooks.DisplayNames) },
+			{ "Library.IssueReturn", new SubmoduleInfo(IssueReturn.All, IssueReturn.DisplayNames) },
+			{ "Library.LibraryMembers", new SubmoduleInfo(LibraryMembers.All, LibraryMembers.DisplayNames) },
+			{ "Library.Charges", new SubmoduleInfo(Charges.All, Charges.DisplayNames) },
+			{ "Library.Reports", new SubmoduleInfo(Reports.All, Reports.DisplayNames) },
+			{ "Library.Notification", new SubmoduleInfo(Notification.All, Notification.DisplayNames) },
+			{ "Library.Settings", new SubmoduleInfo(Settings.All, Settings.DisplayNames) },
+
 			// Settings submodules
 			{ "Library.Settings.BookCategories", new SubmoduleInfo(Settings_BookCategories.All, Settings_BookCategories.DisplayNames) },
 			{ "Library.Settings.ChargesCategories", new SubmoduleInfo(Settings_ChargesCategories.All, Settings_ChargesCategories.DisplayNames) },

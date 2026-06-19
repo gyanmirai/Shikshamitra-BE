@@ -12,7 +12,11 @@ public interface IBookAppService : IApplicationService
     Task<GenericCreatedResponse> CreateAsync(Guid? academicYearId, CreateBookRequest input);
     Task<GenericUpdatedResponse> UpdateAsync(Guid bookId, UpdateBookRequest input);
     Task DeleteAsync(Guid bookId);
+    Task<PaginatedResponse<BookCopyDto>> GetCopiesAsync(Guid bookId, int page = 1, int pageSize = 20);
+    Task<LibraryCopyLabelBatchDto> GetCopyLabelsAsync(Guid bookId);
     Task<GenericUpdatedResponse> PutCopiesAsync(Guid bookId, PutBookCopiesRequest input);
     Task<GenericUpdatedResponse> UpdateCopyStatusAsync(Guid bookId, string accessionNumber, UpdateBookCopyStatusRequest input);
+    Task<PaginatedResponse<BookReservationDto>> GetReservationsAsync(Guid bookId, int page = 1, int pageSize = 20);
     Task<GenericCreatedResponse> ReserveAsync(Guid bookId, CreateBookReservationRequest input);
+    Task DeleteReservationAsync(Guid bookId, Guid reservationId);
 }

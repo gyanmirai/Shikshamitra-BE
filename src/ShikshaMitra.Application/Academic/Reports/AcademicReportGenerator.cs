@@ -1429,6 +1429,22 @@ public class AcademicReportGenerator(
         return string.Join(" ", parts).Trim();
     }
 
+    private static string GetRemarksFromGrade(string grade)
+    {
+        return grade switch
+        {
+            "A+" => "Excellent",
+            "A" => "Very Good",
+            "B+" => "Good",
+            "B" => "Satisfactory",
+            "C+" => "Fair",
+            "C" => "Satisfactory",
+            "D" => "Needs Improvement",
+            "F" => "Unsatisfactory",
+            _ => "—"
+        };
+    }
+
     private record ExamReportData(
         List<ExamSubject> ExamSubjects,
         double TotalMaxMarks,
@@ -1743,10 +1759,25 @@ public class AcademicReportGenerator(
             .OrderBy(s => s.RollNo)
             .Select(student =>
             {
+                var addressParts = new[] { student.ContactDetail?.Address1, student.ContactDetail?.Address2, student.ContactDetail?.City, student.ContactDetail?.Pincode }
+                    .Where(p => !string.IsNullOrWhiteSpace(p));
+                var address = addressParts.Any() ? string.Join(", ", addressParts) : "—";
+
                 var row = new Dictionary<string, string?>
                 {
+                    { "StudentId", student.Id.ToString() },
                     { "RollNo", student.RollNo?.ToString() ?? "—" },
-                    { "StudentName", BuildStudentName(student) }
+                    { "StudentName", BuildStudentName(student) },
+                    { "GrNo", student.GrNo?.ToString() ?? "—" },
+                    { "AdmissionNo", student.GrNo?.ToString() ?? "—" },
+                    { "FatherName", student.FamilyDetail?.FatherDetails?.FullName ?? "—" },
+                    { "MotherName", student.FamilyDetail?.MotherDetails?.FullName ?? "—" },
+                    { "DateOfBirth", student.AdditionalDetail?.DateOfBirth?.ToString("dd MMM yyyy") ?? "—" },
+                    { "ContactNo", student.ContactDetail?.PrimaryContactNo ?? "—" },
+                    { "Email", student.ContactDetail?.Email ?? "—" },
+                    { "Address", address },
+                    { "Session", student.AcademicYear?.Name ?? "—" },
+                    { "TotalMaxMarks", data.TotalMaxMarks.ToString("F2") }
                 };
 
                 double total = 0;
@@ -1757,6 +1788,22 @@ public class AcademicReportGenerator(
                     if (mark is { IsAbsent: false })
                         total += mark.MarksObtained ?? 0;
                     row[$"subj_{subjectId}"] = val;
+
+                    var examSubject = data.ExamSubjects.FirstOrDefault(es => es.SubjectId == subjectId);
+                    var maxMarks = examSubject?.TotalMarks ?? 100;
+                    row[$"subj_{subjectId}_Max"] = maxMarks.ToString("F2");
+
+                    if (mark is { IsAbsent: false } && mark.MarksObtained.HasValue)
+                    {
+                        var subjectGrade = ComputeGrade(mark.MarksObtained.Value, maxMarks);
+                        row[$"subj_{subjectId}_Grade"] = subjectGrade;
+                        row[$"subj_{subjectId}_Remarks"] = GetRemarksFromGrade(subjectGrade);
+                    }
+                    else
+                    {
+                        row[$"subj_{subjectId}_Grade"] = "—";
+                        row[$"subj_{subjectId}_Remarks"] = mark is { IsAbsent: true } ? "Absent" : "—";
+                    }
                 }
 
                 var pct = data.TotalMaxMarks > 0 ? Math.Round(total / data.TotalMaxMarks * 100, 2) : 0;

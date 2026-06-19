@@ -8,7 +8,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Library.Setting.GeneralSetting;
 
 [Area("Library")]
-[Route("api/book-categories")]
+[Route("api/library/book-categories")]
 public class BookCategoryController : AbpController
 {
 	private readonly IBookCategoryAppService _bookCategoryAppService;

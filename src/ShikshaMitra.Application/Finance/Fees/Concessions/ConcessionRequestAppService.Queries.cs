@@ -1,0 +1,196 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ShikshaMitra.Common;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Common;
+using ShikshaMitra.Finance.Fees.Concessions.Dtos;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
+using ShikshaMitra.Students;
+using Volo.Abp.Application.Dtos;
+using Volo.Abp;
+
+namespace ShikshaMitra.Finance.Fees.Concessions;
+
+public partial class ConcessionRequestAppService
+{
+	public async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> GetAsync(Guid id)
+	{
+		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+		return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(await MapDetailAsync(request));
+	}
+
+	public async Task<ConcessionApplicationsDto> GetApplicationsAsync(GetConcessionApplicationsInput input)
+	{
+		FinanceClassDivisionFilterValidator.Validate(input);
+
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		var pageSize = Math.Min(input.MaxResultCount, 100);
+		var skip     = input.SkipCount;
+		var status   = input.Status.HasValue ? (ConcessionRequestStatus)input.Status.Value : (ConcessionRequestStatus?)null;
+
+		var counts = await concessionRequestRepository.GetStatusCountsAsync(
+			input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId,
+			scopedStudentIdsQuery: scopedStudentIds);
+		var items  = await concessionRequestRepository.GetListForApplicationsAsync(
+			input.BoardId, input.EducationMediumId, status, input.StandardId, input.DivisionId, skip, pageSize,
+			scopedStudentIdsQuery: scopedStudentIds);
+		var total  = await concessionRequestRepository.CountForApplicationsAsync(
+			input.BoardId, input.EducationMediumId, status, input.StandardId, input.DivisionId,
+			scopedStudentIdsQuery: scopedStudentIds);
+
+		var studentIds  = items.Select(i => i.StudentId).Distinct().ToList();
+		var students    = await studentRepository.GetListAsync(s => studentIds.Contains(s.Id));
+		var studentMap  = students.ToDictionary(s => s.Id);
+
+		var typeIds     = items.Select(i => i.ConcessionTypeId).Distinct().ToList();
+		var types       = await concessionTypeRepository.GetListAsync(t => typeIds.Contains(t.Id));
+		var typeMap     = types.ToDictionary(t => t.Id, t => t.Name);
+
+		var standardIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
+		var divisionIds = students.Where(s => s.DivisionId.HasValue).Select(s => s.DivisionId!.Value).Distinct().ToList();
+		var standards   = standardIds.Count > 0 ? await standardRepository.GetListAsync(s => standardIds.Contains(s.Id)) : [];
+		var divisions   = divisionIds.Count > 0 ? await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id)) : [];
+		var standardMap = standards.ToDictionary(s => s.Id, s => s.Name);
+		var divisionMap = divisions.ToDictionary(d => d.Id, d => d.Name);
+
+		return new ConcessionApplicationsDto
+		{
+			PendingCount   = counts.GetValueOrDefault(ConcessionRequestStatus.Pending),
+			ApprovedCount  = counts.GetValueOrDefault(ConcessionRequestStatus.Approved),
+			RejectedCount  = counts.GetValueOrDefault(ConcessionRequestStatus.Rejected),
+			CancelledCount = counts.GetValueOrDefault(ConcessionRequestStatus.Cancelled),
+			TotalCount     = total,
+			CurrentPage    = input.SkipCount / pageSize + 1,
+			PageSize       = pageSize,
+			TotalPages     = (int)Math.Ceiling(total / (double)pageSize),
+			Items = items.Select(r =>
+			{
+				studentMap.TryGetValue(r.StudentId, out var student);
+				typeMap.TryGetValue(r.ConcessionTypeId, out var typeName);
+				return new ConcessionApplicationItemDto
+				{
+					Id = r.Id, StudentId = r.StudentId,
+					StudentName        = FormatStudentName(student),
+					GrNumber           = student?.GrNo?.ToString() ?? string.Empty,
+					RollNo             = student?.RollNo?.ToString() ?? string.Empty,
+					StandardName       = student?.StandardId is Guid sid && standardMap.TryGetValue(sid, out var sn) ? sn : string.Empty,
+					DivisionName       = student?.DivisionId is Guid did && divisionMap.TryGetValue(did, out var dn) ? dn : string.Empty,
+					ConcessionTypeName = typeName ?? string.Empty,
+					ConcessionAmount   = r.GetTotalRequestedConcession(),
+					Status             = r.Status,
+					StatusName         = r.Status.ToString(),
+					CreatedAt          = r.CreationTime,
+				};
+			}).ToList(),
+		};
+	}
+
+	public async Task<StudentConcessionRequestsDto> GetStudentRequestsAsync(
+		Guid studentId, PagedResultRequestDto input)
+	{
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
+
+		var queryable = await concessionRequestRepository.GetQueryableAsync();
+		var all = await AsyncExecuter.ToListAsync(
+			queryable.Where(x => x.StudentId == studentId).OrderByDescending(x => x.CreationTime));
+
+		var pageSize = Math.Min(input.MaxResultCount, 100);
+		var skip     = input.SkipCount;
+		var page     = all.Skip(skip).Take(pageSize).ToList();
+
+		var student  = await studentRepository.GetAsync(studentId) ?? throw new BusinessException("Student not found.");
+		var standard = student?.Standard?.Name;
+		var division = student?.Division?.Name;
+
+		var typeIds  = page.Select(r => r.ConcessionTypeId).Distinct().ToList();
+		var types    = typeIds.Count > 0
+			? await concessionTypeRepository.GetListAsync(t => typeIds.Contains(t.Id))
+			: new List<ConcessionType>();
+		var typeMap  = types.ToDictionary(t => t.Id);
+
+		var feeHeadIds = page.SelectMany(r => r.ConcessionFeeHeadMappings.Select(m => m.FeeHeadId)).Distinct().ToList();
+		var feeHeads   = feeHeadIds.Count > 0
+			? await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id))
+			: new List<FeeHead>();
+		var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
+
+		var items = page.Select(r =>
+		{
+			typeMap.TryGetValue(r.ConcessionTypeId, out var type);
+			return MapStudentItem(r, type, feeHeadMap);
+		}).ToList();
+
+		return new StudentConcessionRequestsDto
+		{
+			StudentDetails = new StudentBasicDetailDto
+			{
+				StudentId    = student.Id,
+				Name         = FormatStudentName(student),
+				RollNo       = student.RollNo?.ToString() ?? string.Empty,
+				GrNumber     = student.GrNo?.ToString() ?? string.Empty,
+				StandardName = standard ?? string.Empty,
+				DivisionName = division ?? string.Empty,
+			},
+			ConcessionBasicDetail = new ConcessionBasicDetailDto
+			{
+				TotalApplications    = all.Count,
+				PendingApplications  = all.Count(x => x.Status == ConcessionRequestStatus.Pending),
+				ApprovedApplications = all.Count(x => x.Status == ConcessionRequestStatus.Approved),
+				RejectedApplications = all.Count(x => x.Status == ConcessionRequestStatus.Rejected),
+			},
+			TotalCount  = all.Count,
+			CurrentPage = skip / pageSize + 1,
+			PageSize    = pageSize,
+			TotalPages  = (int)Math.Ceiling(all.Count / (double)pageSize),
+			Items       = items,
+		};
+	}
+
+	public async Task<ConcessionApprovalContextDto> GetApprovalContextAsync(Guid id)
+	{
+		var request    = await concessionRequestRepository.GetWithDetailsAsync(id);
+		var dueFees    = await dueFeeRepository.GetListAsync(df => df.StudentId == request.StudentId);
+		var feeHeadIds = request.ConcessionFeeHeadMappings.Select(m => m.FeeHeadId).ToList();
+		var feeHeads   = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
+		var feeHeadNameMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
+
+		var groups = request.ConcessionFeeHeadMappings.Select(m =>
+		{
+			var lines = dueFees
+				.Where(df => df.FeeHeadId == m.FeeHeadId)
+				.OrderBy(df => df.Year).ThenBy(df => df.Month)
+				.Select(df => new DueFeeApprovalLineDto
+				{
+					DueFeeId = df.Id, FeeHeadId = df.FeeHeadId,
+					Month = (int)df.Month, Year = df.Year,
+					MonthLabel = df.Month.ToString(),
+					OriginalAmount    = (decimal)df.OriginalAmount,
+					PaidAmount        = (decimal)df.PaidAmount,
+					OutstandingAmount = (decimal)df.OutstandingAmount,
+					Status            = df.Status.ToString(),
+					IsSelectable      = df.OutstandingAmount > 0,
+					MaxConcessionAmount = (decimal)df.OutstandingAmount,
+				}).ToList();
+
+			return new FeeHeadApprovalGroupDto
+			{
+				FeeHeadId = m.FeeHeadId,
+				FeeHeadName = feeHeadNameMap.GetValueOrDefault(m.FeeHeadId, string.Empty),
+				RequestedConcessionAmount = m.FeeHeadConcessionAmount,
+				DueFeeLines = lines,
+			};
+		}).ToList();
+
+		return new ConcessionApprovalContextDto
+		{
+			ConcessionRequestId = request.Id,
+			StudentId           = request.StudentId,
+			TotalRequestedConcessionAmount = request.GetTotalRequestedConcession(),
+			FeeHeadGroups = groups,
+		};
+	}
+}

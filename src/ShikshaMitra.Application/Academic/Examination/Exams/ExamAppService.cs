@@ -395,9 +395,35 @@ public class ExamAppService(
 
 		var query = baseQuery.Where(x => x.exam.Status == input.Status);
 
+		if (input.StandardId.HasValue)
+		{
+			query = query.Where(x => x.exam.StandardId == input.StandardId.Value);
+		}
+
+		if (input.DivisionId.HasValue)
+		{
+			query = query.Where(x => x.exam.ExamDivisions.Any(d => d.DivisionId == input.DivisionId.Value));
+		}
+
 		if (input.SubjectId.HasValue)
 		{
 			query = query.Where(x => x.exam.ExamSubjects.Any(s => s.SubjectId == input.SubjectId.Value));
+		}
+
+		if (input.GradeEntryPublishedOnly == true && input.DivisionId.HasValue)
+		{
+			var workflowQuery = await examMarksWorkflowStateRepository.GetQueryableAsync();
+			query = query.Where(x => 
+				x.exam.ExamSubjects.Any() &&
+				x.exam.ExamSubjects.All(s => 
+					workflowQuery.Any(w => 
+						w.ExamId == x.exam.Id && 
+						w.SubjectId == s.SubjectId && 
+						w.DivisionId == input.DivisionId.Value && 
+						w.Status == ExamMarksWorkflowStatus.Published
+					)
+				)
+			);
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
@@ -479,18 +505,34 @@ public class ExamAppService(
 
 		var isPublished = existingMarks.Any() && existingMarks.All(m => m.IsPublished);
 
-		// Grading scales
-		var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
-		var gradeRanges = (await AsyncExecuter.ToListAsync(gradingScales))
-			.SelectMany(gs => gs.GradeRanges)
-			.OrderByDescending(gr => gr.MinMarks)
-			.ToList();
+		// Fetch the specific grading scale configured for this subject
+		ICollection<GradeRange> gradeRanges = new List<GradeRange>();
+		double scaleTotal = 100.0;
+		if (examSubject.GradeScalingId.HasValue)
+		{
+			var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
+			var customScale = gradingScales.FirstOrDefault(gs => gs.Id == examSubject.GradeScalingId.Value);
+			if (customScale != null)
+			{
+				gradeRanges = customScale.GradeRanges.OrderByDescending(gr => gr.MinMarks).ToList();
+				if (double.TryParse(customScale.TotalMarks, out var parsedTotal))
+				{
+					scaleTotal = parsedTotal;
+				}
+			}
+		}
 
 		string? GetGrade(double? marks, double totalMarks)
 		{
 			if (marks == null || totalMarks == 0) return null;
+			if (gradeRanges.Any())
+			{
+				var scaled = (marks.Value / totalMarks) * scaleTotal;
+				return gradeRanges.FirstOrDefault(gr => scaled >= gr.MinMarks && scaled <= gr.MaxMarks)?.Grade;
+			}
 			var pct = (marks.Value / totalMarks) * 100;
-			return gradeRanges.FirstOrDefault(gr => pct >= gr.MinMarks && pct <= gr.MaxMarks)?.Grade;
+			return pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 70 ? "B+" : pct >= 60 ? "B"
+				 : pct >= 50 ? "C+" : pct >= 40 ? "C" : pct >= 33 ? "D" : "F";
 		}
 
 		var items = pagedStudents.Select(student =>
@@ -509,7 +551,8 @@ public class ExamAppService(
 				Grade = assigned ? GetGrade(mark!.MarksObtained, examSubject.TotalMarks ?? 0) : null,
 				Feedback = mark?.Feedback,
 				Status = assigned ? 1 : 0,
-				AttendanceStatus = mark != null ? (int) mark.AttendanceStatus : (int) ExamAttendanceStatus.Present
+				AttendanceStatus = mark != null ? (int) mark.AttendanceStatus : (int) ExamAttendanceStatus.Present,
+				GradeScalingId = examSubject.GradeScalingId
 			};
 		}).ToList();
 
@@ -563,18 +606,34 @@ public class ExamAppService(
 		if (isPresent && input.Marks == null)
 			throw new UserFriendlyException("Obtained marks are required for present students.");
 
-		// Grading
-		var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
-		var gradeRanges = (await AsyncExecuter.ToListAsync(gradingScales))
-			.SelectMany(gs => gs.GradeRanges)
-			.OrderByDescending(gr => gr.MinMarks)
-			.ToList();
+		// Fetch the specific grading scale configured for this subject
+		ICollection<GradeRange> gradeRanges = new List<GradeRange>();
+		double scaleTotal = 100.0;
+		if (examSubject.GradeScalingId.HasValue)
+		{
+			var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
+			var customScale = gradingScales.FirstOrDefault(gs => gs.Id == examSubject.GradeScalingId.Value);
+			if (customScale != null)
+			{
+				gradeRanges = customScale.GradeRanges.OrderByDescending(gr => gr.MinMarks).ToList();
+				if (double.TryParse(customScale.TotalMarks, out var parsedTotal))
+				{
+					scaleTotal = parsedTotal;
+				}
+			}
+		}
 
 		string? GetGrade(double marks, double totalMarks)
 		{
 			if (totalMarks == 0) return null;
+			if (gradeRanges.Any())
+			{
+				var scaled = (marks / totalMarks) * scaleTotal;
+				return gradeRanges.FirstOrDefault(gr => scaled >= gr.MinMarks && scaled <= gr.MaxMarks)?.Grade;
+			}
 			var pct = (marks / totalMarks) * 100;
-			return gradeRanges.FirstOrDefault(gr => pct >= gr.MinMarks && pct <= gr.MaxMarks)?.Grade;
+			return pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 70 ? "B+" : pct >= 60 ? "B"
+				 : pct >= 50 ? "C+" : pct >= 40 ? "C" : pct >= 33 ? "D" : "F";
 		}
 
 		if (existing != null)
@@ -611,7 +670,8 @@ public class ExamAppService(
 			TotalMarks = examSubject.TotalMarks ?? input.TotalMarks,
 			Grade = grade,
 			Feedback = isPresent ? input.Feedback : null,
-			AttendanceStatus = input.AttendanceStatus
+			AttendanceStatus = input.AttendanceStatus,
+			GradeScalingId = examSubject.GradeScalingId
 		};
 	}
 
@@ -931,9 +991,17 @@ public class ExamAppService(
 		var totalStudents = enrolledStudents.Count;
 		var pending = totalStudents - marksEntered;
 
-		var workflowState = (await examMarksWorkflowStateRepository.GetListAsync(
-			w => w.ExamId == input.ExamId && w.SubjectId == input.SubjectId && w.DivisionId == input.DivisionId))
-			.FirstOrDefault();
+		var allWorkflowStates = await examMarksWorkflowStateRepository.GetListAsync(
+			w => w.ExamId == input.ExamId && w.DivisionId == input.DivisionId);
+
+		var publishedSubjectIds = allWorkflowStates
+			.Where(w => w.Status == ExamMarksWorkflowStatus.Published)
+			.Select(w => w.SubjectId)
+			.ToHashSet();
+
+		var pendingPublishedCount = exam.ExamSubjects.Count(s => !publishedSubjectIds.Contains(s.SubjectId));
+
+		var workflowState = allWorkflowStates.FirstOrDefault(w => w.SubjectId == input.SubjectId);
 
 		return new GetExamMarksSummaryResponseDto
 		{
@@ -948,7 +1016,8 @@ public class ExamAppService(
 			TotalStudents = totalStudents,
 			MarksEntered = marksEntered,
 			Pending = pending < 0 ? 0 : pending,
-			WorkflowStatus = workflowState != null ? (int) workflowState.Status : (int) ExamMarksWorkflowStatus.Draft
+			WorkflowStatus = workflowState != null ? (int) workflowState.Status : (int) ExamMarksWorkflowStatus.Draft,
+			PendingPublishedCount = pendingPublishedCount
 		};
 	}
 }

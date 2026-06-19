@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Library.Books;
@@ -37,6 +38,8 @@ public class CreateBookRequest
     public int NumberOfCopies { get; set; }
 
     public string? CoverImage { get; set; }
+
+    public List<BookCopyItem> Copies { get; set; } = new();
 }
 
 public class UpdateBookRequest
@@ -73,4 +76,6 @@ public class UpdateBookRequest
     public int NumberOfCopies { get; set; }
 
     public string? CoverImage { get; set; }
+
+    public List<BookCopyItem> Copies { get; set; } = new();
 }

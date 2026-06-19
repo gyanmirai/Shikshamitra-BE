@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Accounts.Reconciliation;
@@ -11,7 +11,7 @@ using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Accounts.Reconciliation;
 
-[Area("app")]
+[Area("finance")]
 [RemoteService(Name = "Default")]
 [Route("api/v1/finance/reconciliations")]
 [Authorize]

@@ -70,6 +70,8 @@ public class PersonalInfoRequest
 
 	public Guid ShiftId { get; set; }
 
+	public ShiftInfo? Shift { get; set; }
+
 	public string? Address1 { get; set; }
 
 	public string? Address2 { get; set; }

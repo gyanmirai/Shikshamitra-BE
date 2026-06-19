@@ -59,14 +59,18 @@ public partial class HRSeederContributor
 			return new List<Guid>();
 		}
 
+		var protectedLoginEmails = BuildSeededLoginEmployeeEmails();
+		var inactiveCandidates = employees
+			.Where(e => e.Email == null || !protectedLoginEmails.Contains(e.Email))
+			.ToList();
 		var inactiveCount = employees.Count <= 1
 			? 0
 			: (int)Math.Round(
 				employees.Count * ((100m - ActiveEmployeeSeedPercentage) / 100m),
 				MidpointRounding.AwayFromZero);
-		inactiveCount = Math.Clamp(inactiveCount, 0, employees.Count - 1);
+		inactiveCount = Math.Clamp(inactiveCount, 0, inactiveCandidates.Count);
 
-		var inactiveEmployeeIds = employees
+		var inactiveEmployeeIds = inactiveCandidates
 			.OrderBy(e => StableSeedHash($"{CurrentTenant.Id:N}:{e.EmployeeCode}:{e.Email}:{e.Id:N}"))
 			.Take(inactiveCount)
 			.Select(e => e.Id)
@@ -109,4 +113,9 @@ public partial class HRSeederContributor
 
 		return activeEmployeeIds;
 	}
+
+	internal static IReadOnlySet<string> BuildSeededLoginEmployeeEmails() =>
+		UserSeederContributor.BuildSeededLoginEmails()
+			.Concat(TestLoginSeederContributor.BuildSeededLoginEmails())
+			.ToHashSet(StringComparer.OrdinalIgnoreCase);
 }

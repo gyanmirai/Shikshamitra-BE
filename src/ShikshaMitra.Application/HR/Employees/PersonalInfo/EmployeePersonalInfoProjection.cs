@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.ObjectMapping;
 
@@ -11,11 +13,13 @@ namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
 public class EmployeePersonalInfoProjection(
 	EmployeeOrganizationScopeResolver organizationScopeResolver,
+	IRepository<ShiftManagement, Guid> shiftRepository,
 	IObjectMapper objectMapper) : ITransientDependency
 {
 	public async Task<EmployeePersonalInfoDto> ToPersonalInfoDtoAsync(Employee employee)
 	{
 		var dto = ToPersonalInfoDto(employee);
+		await PopulateShiftAsync(dto, employee);
 		await PopulateScopedOrganizationsAsync(dto, employee.UserId);
 		return dto;
 	}
@@ -51,6 +55,17 @@ public class EmployeePersonalInfoProjection(
 			.Distinct()
 			.OrderBy(x => x)
 			.ToList();
+	}
+
+	private async Task PopulateShiftAsync(EmployeePersonalInfoDto dto, Employee employee)
+	{
+		if (dto.Shift != null || !employee.ShiftId.HasValue)
+		{
+			return;
+		}
+
+		var shift = await shiftRepository.FindAsync(employee.ShiftId.Value);
+		dto.Shift = ToShiftDto(shift);
 	}
 
 	public void PopulateFamilyDetails(EmployeeDto dto, IReadOnlyCollection<EmployeeFamilyMember> familyMembers)
@@ -101,11 +116,22 @@ public class EmployeePersonalInfoProjection(
 			City = employee.City,
 			Pincode = employee.PinCode,
 			ShiftId = employee.ShiftId,
-			Shift = null,
+			Shift = ToShiftDto(employee.Shift),
 			OrganizationIds = [],
 			Organizations = [],
 			OrganizationNames = []
 		};
+
+	private static ShiftManagementDto? ToShiftDto(ShiftManagement? shift) =>
+		shift == null
+			? null
+			: new ShiftManagementDto
+			{
+				Id = shift.Id,
+				ShiftName = shift.ShiftName,
+				StartTime = shift.StartTime,
+				EndTime = shift.EndTime
+			};
 
 	private static ContactDetailsDto? ToContactDetailsDto(EmployeeFamilyMember? member)
 	{

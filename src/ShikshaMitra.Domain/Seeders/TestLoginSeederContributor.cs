@@ -63,7 +63,30 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			return;
 		}
 
-		var credentialSpecs = new List<TestLoginSpec>
+		var credentialSpecs = BuildCredentialSpecs();
+
+		foreach (var spec in credentialSpecs)
+		{
+			await EnsureUserWithTempPasswordAsync(spec);
+		}
+
+		await CurrentUnitOfWork.SaveChangesAsync();
+	}
+
+	internal static IReadOnlyList<string> BuildSeededLoginEmails() =>
+		BuildCredentialSpecs()
+			.Select(x => x.Email)
+			.ToList();
+
+	internal static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildSeededLoginEmployeeAliasEmailsByEmail() =>
+		BuildCredentialSpecs()
+			.ToDictionary(
+				x => x.Email,
+				x => x.EmployeeAliasEmails,
+				StringComparer.OrdinalIgnoreCase);
+
+	private static IReadOnlyList<TestLoginSpec> BuildCredentialSpecs() =>
+		new List<TestLoginSpec>
 		{
 			new("admin-ddvs", "admin-ddvs@ddvs.com", "Admin", "DDVS", "admin", ["admin1@gmail.com", "ddvs@gmail.com"], ["admin1"]),
 			new("admin-ops", "admin-ops@ddvs.com", "Admin", "Operations", "admin", ["admin2@ddvs.com"], ["admin2"]),
@@ -73,14 +96,6 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			new("clerk-office", "clerk-office@ddvs.com", "Clerk", "Office", "Clerk", ["clerk1@ddvs.com", "clerk@school.edu", "raj.baku@ddvs.com"], ["clerk1"]),
 			new("finance-officer", "finance-officer@ddvs.com", "Finance", "Officer", "Finance Officer", ["finance1@ddvs.com", "suresh.patil@school.edu", "punam.badgujar@ddvs.com"], ["finance1"])
 		};
-
-		foreach (var spec in credentialSpecs)
-		{
-			await EnsureUserWithTempPasswordAsync(spec);
-		}
-
-		await CurrentUnitOfWork.SaveChangesAsync();
-	}
 
 	private bool IsEnabled(DataSeedContext context)
 	{
@@ -213,9 +228,17 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		}
 
 		_employeeAliasCache ??= await _employeeRepository.GetListAsync();
-		var employee = _employeeAliasCache.FirstOrDefault(x =>
-			!string.IsNullOrWhiteSpace(x.Email) &&
-			aliasEmails.Contains(x.Email, StringComparer.OrdinalIgnoreCase));
+		Employee? employee = null;
+		foreach (var aliasEmail in aliasEmails)
+		{
+			employee = _employeeAliasCache.FirstOrDefault(x =>
+				!string.IsNullOrWhiteSpace(x.Email) &&
+				string.Equals(x.Email, aliasEmail, StringComparison.OrdinalIgnoreCase));
+			if (employee != null)
+			{
+				break;
+			}
+		}
 
 		if (employee == null)
 		{
@@ -356,6 +379,11 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		IReadOnlyList<string> AliasEmails,
 		IReadOnlyList<string> AliasUserNames)
 	{
-		public IReadOnlyList<string> EmployeeAliasEmails => AliasEmails;
+		public IReadOnlyList<string> EmployeeAliasEmails =>
+			new[] { Email }
+				.Concat(AliasEmails)
+				.Where(x => !string.IsNullOrWhiteSpace(x))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToList();
 	}
 }

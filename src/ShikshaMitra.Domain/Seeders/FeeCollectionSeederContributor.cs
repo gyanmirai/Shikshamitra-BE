@@ -662,15 +662,9 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
     {
         var status = received >= amount ? FeeCollectionStatus.Paid : FeeCollectionStatus.Pending;
 
-        var metadata = new FeeRecordMetadata(GuidGenerator.Create())
-        {
-            TenantId        = CurrentTenant.Id,
-            StudentId       = studentId,
-            AcademicYearId  = academicYearId,
-            TotalPaidFee    = received,
-            ReceiptNumber   = receiptNumber,
-            Status          = status,
-        };
+        var metadata = new FeeRecordMetadata(
+            GuidGenerator.Create(), CurrentTenant.Id, studentId, academicYearId,
+            received, receiptNumber, status);
         await _feeRecordMetadataRepository.InsertAsync(metadata, autoSave: false);
 
         var collectionRecord = new FeeCollectionRecord(GuidGenerator.Create())

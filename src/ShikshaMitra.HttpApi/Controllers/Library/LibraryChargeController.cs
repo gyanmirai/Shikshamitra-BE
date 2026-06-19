@@ -19,6 +19,7 @@ public class LibraryChargeController : AbpController
     }
 
     [HttpPost]
+    [HttpPost("create")]
     public async Task<IActionResult> CreateAsync([FromBody] CreateChargeRequest input)
     {
         var result = await _chargeAppService.CreateAsync(input);
@@ -34,6 +35,7 @@ public class LibraryChargeController : AbpController
     }
 
     [HttpGet("{id:guid}")]
+    [HttpGet("details/{id:guid}")]
     public Task<ChargeDetailDto> GetAsync(Guid id)
     {
         return _chargeAppService.GetAsync(id);

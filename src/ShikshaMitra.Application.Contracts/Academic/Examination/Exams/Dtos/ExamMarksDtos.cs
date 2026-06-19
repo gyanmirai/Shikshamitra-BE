@@ -72,6 +72,8 @@ public class StudentExamMarksItemDto
 
     /// <summary>0 = Present | 1 = Absent | 2 = MedicalLeave | 3 = Exempted</summary>
     public int AttendanceStatus { get; set; }
+
+    public Guid? GradeScalingId { get; set; }
 }
 
 // ─── PATCH /api/academics/exams/{examId}/students/{studentId}/marks ───
@@ -104,6 +106,7 @@ public class UpdateStudentMarksResponseDto
     public string? Feedback { get; set; }
     /// <summary>0 = Present | 1 = Absent | 2 = MedicalLeave | 3 = Exempted</summary>
     public int AttendanceStatus { get; set; }
+    public Guid? GradeScalingId { get; set; }
 }
 
 // ─── PATCH /api/academics/exams/{examId}/publish-marks ───

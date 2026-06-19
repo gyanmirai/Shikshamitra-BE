@@ -5,7 +5,6 @@ using ShikshaMitra.Library.Shared;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp;
-using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Library.Members;
@@ -18,7 +17,7 @@ public class LibraryMembersController(
     IBookIssueAppService bookIssueAppService) : AbpController
 {
     [HttpGet]
-    public async Task<PagedResultDto<LibraryMemberDto>> GetListAsync([FromQuery] GetLibraryMembersInput input)
+    public async Task<PaginatedResponse<LibraryMemberDto>> GetListAsync([FromQuery] GetLibraryMembersInput input)
     {
         return await libraryMemberAppService.GetListAsync(input);
     }
@@ -30,6 +29,7 @@ public class LibraryMembersController(
     }
 
     [HttpGet("{memberId:guid}/borrowed-books")]
+    [HttpGet("{memberId:guid}/borrowed")]
     public Task<PaginatedResponse<MemberBorrowedBookDto>> GetBorrowedBooksAsync(
         Guid memberId,
         [FromQuery] int page = 1,
@@ -39,6 +39,7 @@ public class LibraryMembersController(
     }
 
     [HttpGet("{memberId:guid}/reserved-books")]
+    [HttpGet("{memberId:guid}/reserved")]
     public Task<PaginatedResponse<MemberReservedBookDto>> GetReservedBooksAsync(
         Guid memberId,
         [FromQuery] int page = 1,

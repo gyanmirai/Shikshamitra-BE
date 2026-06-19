@@ -78,4 +78,14 @@ public class ExamResultController(
         if (result is null) return NotFound();
         return Ok(result);
     }
+
+    /// <summary>
+    /// Returns the details for viewing a specific student's result.
+    /// </summary>
+    [HttpGet("student-details")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.View)]
+    public async Task<StudentResultViewDto> GetStudentResultDetailsAsync([FromQuery] Guid examId, [FromQuery] Guid studentId)
+    {
+        return await examResultAppService.GetStudentResultDetailsAsync(examId, studentId);
+    }
 }

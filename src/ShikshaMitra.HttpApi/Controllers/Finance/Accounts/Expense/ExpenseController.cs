@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Accounts.Transactions;
@@ -9,7 +9,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Accounts.Expense;
 
 [RemoteService]
-[Area("Finance")]
+[Area("finance")]
 [Route("api/expenses")]
 [Authorize]
 public class ExpenseController(ITransactionAppService _transactionAppService) : AbpController

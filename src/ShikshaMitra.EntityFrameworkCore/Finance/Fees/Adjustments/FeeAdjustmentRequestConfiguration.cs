@@ -13,7 +13,6 @@ public class FeeAdjustmentRequestConfiguration : IEntityTypeConfiguration<FeeAdj
         builder.ConfigureByConvention();
 
         builder.Property(x => x.Reason).HasMaxLength(1000).IsRequired();
-        builder.Property(x => x.Remarks).HasMaxLength(2000);
         builder.Property(x => x.VoucherNumber).HasMaxLength(50).IsRequired();
         builder.Property(x => x.RejectionReason).HasMaxLength(2000);
         builder.Property(x => x.ApproverNotes).HasMaxLength(2000);

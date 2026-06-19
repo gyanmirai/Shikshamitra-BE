@@ -12,8 +12,9 @@ public class CreateHomeworkDto
     [Required]
     public Guid SubjectId { get; set; }
 
-    [Required]
-    public Guid ChapterId { get; set; }
+    public Guid? ChapterId { get; set; }
+
+    public List<Guid>? ChapterIds { get; set; }
 
     [Required]
     [StringLength(200, MinimumLength = 3)]

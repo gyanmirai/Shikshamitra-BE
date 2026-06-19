@@ -65,6 +65,21 @@ public class BookController : AbpController
         return Ok(result);
     }
 
+    [HttpGet("{bookId:guid}/copies")]
+    public Task<PaginatedResponse<BookCopyDto>> GetCopiesAsync(
+        Guid bookId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        return _bookAppService.GetCopiesAsync(bookId, page, pageSize);
+    }
+
+    [HttpGet("{bookId:guid}/copy-labels")]
+    public Task<LibraryCopyLabelBatchDto> GetCopyLabelsAsync(Guid bookId)
+    {
+        return _bookAppService.GetCopyLabelsAsync(bookId);
+    }
+
     [HttpPut("{bookId:guid}/copies/{accessionNumber}/status")]
     public async Task<IActionResult> UpdateCopyStatusAsync(Guid bookId, string accessionNumber, [FromBody] UpdateBookCopyStatusRequest input)
     {
@@ -77,5 +92,21 @@ public class BookController : AbpController
     {
         var result = await _bookAppService.ReserveAsync(bookId, input);
         return StatusCode(201, result);
+    }
+
+    [HttpGet("{bookId:guid}/reservations")]
+    public Task<PaginatedResponse<BookReservationDto>> GetReservationsAsync(
+        Guid bookId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        return _bookAppService.GetReservationsAsync(bookId, page, pageSize);
+    }
+
+    [HttpDelete("{bookId:guid}/reservations/{reservationId:guid}")]
+    public async Task<IActionResult> DeleteReservationAsync(Guid bookId, Guid reservationId)
+    {
+        await _bookAppService.DeleteReservationAsync(bookId, reservationId);
+        return NoContent();
     }
 }

@@ -78,6 +78,7 @@ public class AcademicReportExportJobDto
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public DateTime ExpiresAt { get; set; }
+    public string? RequestJson { get; set; }
 }
 
 public class AcademicReportOptionsDto

@@ -129,4 +129,6 @@ public class GetExamMarksSummaryResponseDto
     /// 0 = Draft | 1 = Submitted | 2 = Verified | 3 = Approved | 4 = Published | 5 = Locked
     /// </summary>
     public int WorkflowStatus { get; set; }
+
+    public int PendingPublishedCount { get; set; }
 }

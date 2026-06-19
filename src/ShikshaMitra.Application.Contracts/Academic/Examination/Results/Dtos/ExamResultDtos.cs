@@ -119,4 +119,5 @@ public class StudentSubjectMarkDto
     public string MarksObtained { get; set; } = string.Empty;
     public string Grade { get; set; } = string.Empty;
     public string Remarks { get; set; } = string.Empty;
+    public bool IsPassed { get; set; }
 }

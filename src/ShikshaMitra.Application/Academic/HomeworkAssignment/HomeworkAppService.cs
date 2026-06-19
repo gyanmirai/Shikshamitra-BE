@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -71,8 +71,20 @@ public class HomeworkAppService(
             educationMediumId: academicMediumId
         );
 
-        // Store single chapterId in the entity's ChapterId field
-        homework.ChapterId = input.ChapterId;
+        // Store chapter IDs in JSON and single chapterId for backward compatibility
+        if (input.ChapterIds != null && input.ChapterIds.Any())
+        {
+            homework.ChapterIdsJson = System.Text.Json.JsonSerializer.Serialize(input.ChapterIds);
+            homework.ChapterId = input.ChapterIds.First();
+        }
+        else
+        {
+            homework.ChapterId = input.ChapterId;
+            if (input.ChapterId.HasValue && input.ChapterId.Value != Guid.Empty)
+            {
+                homework.ChapterIdsJson = System.Text.Json.JsonSerializer.Serialize(new List<Guid> { input.ChapterId.Value });
+            }
+        }
         homework.DocumentUrl = attachmentBlobName;
 
         foreach (var div in input.DivisionSchedules)
@@ -144,8 +156,24 @@ public class HomeworkAppService(
         // Batch-load related entities to avoid N+1
         var standardIds = items.Select(h => h.StandardId).Distinct().ToList();
         var subjectIds = items.Select(h => h.SubjectId).Distinct().ToList();
-        var chapterIds = items.Where(h => h.ChapterId.HasValue)
-            .Select(h => h.ChapterId!.Value).Distinct().ToList();
+        var chapterIds = new List<Guid>();
+        foreach (var h in items)
+        {
+            if (!string.IsNullOrWhiteSpace(h.ChapterIdsJson))
+            {
+                try
+                {
+                    var ids = System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(h.ChapterIdsJson);
+                    if (ids != null) chapterIds.AddRange(ids);
+                }
+                catch { /* ignore invalid json */ }
+            }
+            else if (h.ChapterId.HasValue)
+            {
+                chapterIds.Add(h.ChapterId.Value);
+            }
+        }
+        chapterIds = chapterIds.Distinct().ToList();
         var homeworkTypeIds = items.Where(h => h.HomeworkTypeId.HasValue)
             .Select(h => h.HomeworkTypeId!.Value).Distinct().ToList();
         var divisionIds = items.SelectMany(h => h.DivisionSchedules.Select(s => s.DivisionId))
@@ -256,8 +284,25 @@ public class HomeworkAppService(
         // Keep existing blob if no new one provided
         var resolvedBlob = attachmentBlobName ?? homework.DocumentUrl;
 
-        homework.UpdateBasicInfo(input.Title, input.Description);
-        homework.ChapterId = input.ChapterId;
+        string? chapterIdsJson = null;
+        Guid? firstChapterId = null;
+
+        if (input.ChapterIds != null && input.ChapterIds.Any())
+        {
+            chapterIdsJson = System.Text.Json.JsonSerializer.Serialize(input.ChapterIds);
+            firstChapterId = input.ChapterIds.First();
+        }
+        else
+        {
+            firstChapterId = input.ChapterId;
+            if (input.ChapterId.HasValue && input.ChapterId.Value != Guid.Empty)
+            {
+                chapterIdsJson = System.Text.Json.JsonSerializer.Serialize(new List<Guid> { input.ChapterId.Value });
+            }
+        }
+
+        homework.UpdateBasicInfo(input.Title, input.Description, chapterIdsJson, homework.AttachmentsJson);
+        homework.ChapterId = firstChapterId;
         homework.SubjectId = input.SubjectId;
         homework.StandardId = input.StandardId;
         homework.HomeworkTypeId = input.HomeworkTypeId;
@@ -310,11 +355,18 @@ public class HomeworkAppService(
         HomeworkStatusUpdateDto input
     )
     {
-        var homework = await homeworkRepository.FindAsync(homeworkId)
+        var q = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
+        var homework = await asyncExecuter.FirstOrDefaultAsync(q.Where(h => h.Id == homeworkId))
             ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
 
         var previousStatus = homework.Status;
-        homework.ChangeStatus((HomeworkStatus) input.Status);
+        var newStatus = (HomeworkStatus)input.Status;
+        homework.ChangeStatus(newStatus);
+
+        if (newStatus == HomeworkStatus.Published)
+        {
+            homework.PublishAll();
+        }
 
         await homeworkRepository.UpdateAsync(homework, autoSave: true);
 
@@ -344,6 +396,8 @@ public class HomeworkAppService(
         var standardName = string.Empty;
         var subjectName = string.Empty;
         string? chapterName = null;
+        var chapterIds = new List<Guid>();
+        var chapterNames = new List<string>();
         var hwTypeName = string.Empty;
         var divisionLookup = new Dictionary<Guid, string>();
         var createdBy = string.Empty;
@@ -362,10 +416,33 @@ public class HomeworkAppService(
         }
         subjectName = subject?.Name ?? string.Empty;
 
-        if (h.ChapterId.HasValue)
+        if (!string.IsNullOrWhiteSpace(h.ChapterIdsJson))
         {
-            var chapter = await chapterRepository.FindAsync(h.ChapterId.Value);
-            chapterName = chapter?.ChapterName;
+            try
+            {
+                var ids = System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(h.ChapterIdsJson);
+                if (ids != null) chapterIds.AddRange(ids);
+            }
+            catch { }
+        }
+
+        if (chapterIds.Count == 0 && h.ChapterId.HasValue)
+        {
+            chapterIds.Add(h.ChapterId.Value);
+        }
+
+        if (chapterIds.Any())
+        {
+            var chapters = await chapterRepository.GetListAsync(c => chapterIds.Contains(c.Id));
+            var chapterMap = chapters.ToDictionary(c => c.Id, c => c.ChapterName);
+            foreach (var id in chapterIds)
+            {
+                if (chapterMap.TryGetValue(id, out var name))
+                {
+                    chapterNames.Add(name);
+                }
+            }
+            chapterName = string.Join(", ", chapterNames);
         }
 
         if (h.HomeworkTypeId.HasValue)
@@ -394,7 +471,7 @@ public class HomeworkAppService(
         }
 
         return BuildHomeworkDto(h, academicMediumId, standardName, subjectName, chapterName,
-            hwTypeName, divisionLookup, createdBy, updatedBy);
+            chapterIds, chapterNames, hwTypeName, divisionLookup, createdBy, updatedBy);
     }
 
     private static HomeworkDto MapToHomeworkDto(
@@ -410,9 +487,28 @@ public class HomeworkAppService(
     {
         var standardName = standardLookup.GetValueOrDefault(h.StandardId, string.Empty);
         var subjectName = subjectLookup.GetValueOrDefault(h.SubjectId, string.Empty);
-        string? chapterName = h.ChapterId.HasValue
-            ? chapterLookup.GetValueOrDefault(h.ChapterId.Value)
-            : null;
+        
+        var chapterIds = new List<Guid>();
+        if (!string.IsNullOrWhiteSpace(h.ChapterIdsJson))
+        {
+            try
+            {
+                chapterIds = System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(h.ChapterIdsJson) ?? new List<Guid>();
+            }
+            catch { }
+        }
+        if (chapterIds.Count == 0 && h.ChapterId.HasValue)
+        {
+            chapterIds.Add(h.ChapterId.Value);
+        }
+
+        var chapterNames = chapterIds
+            .Select(id => chapterLookup.GetValueOrDefault(id))
+            .Where(name => name != null)
+            .ToList()!;
+
+        string? chapterName = chapterNames.Any() ? string.Join(", ", chapterNames) : null;
+
         var hwTypeName = h.HomeworkTypeId.HasValue
             ? hwTypeLookup.GetValueOrDefault(h.HomeworkTypeId.Value, string.Empty)
             : string.Empty;
@@ -424,7 +520,7 @@ public class HomeworkAppService(
             : string.Empty;
 
         return BuildHomeworkDto(h, academicMediumId, standardName, subjectName, chapterName,
-            hwTypeName, divisionLookup, createdBy, updatedBy);
+            chapterIds, chapterNames, hwTypeName, divisionLookup, createdBy, updatedBy);
     }
 
     private static HomeworkDto BuildHomeworkDto(
@@ -433,6 +529,8 @@ public class HomeworkAppService(
         string standardName,
         string subjectName,
         string? chapterName,
+        List<Guid> chapterIds,
+        List<string> chapterNames,
         string hwTypeName,
         Dictionary<Guid, string> divisionLookup,
         string createdBy,
@@ -447,6 +545,8 @@ public class HomeworkAppService(
         SubjectName = subjectName,
         ChapterId = h.ChapterId == Guid.Empty ? null : h.ChapterId,
         ChapterName = chapterName,
+        ChapterIds = chapterIds,
+        ChapterNames = chapterNames,
         Title = h.Title,
         HomeworkTypeId = h.HomeworkTypeId ?? Guid.Empty,
         HomeworkTypeName = hwTypeName,

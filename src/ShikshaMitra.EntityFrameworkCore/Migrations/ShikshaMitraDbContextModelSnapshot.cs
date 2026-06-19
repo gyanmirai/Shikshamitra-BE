@@ -3910,9 +3910,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("AdjustmentType")
-                        .HasColumnType("integer");
-
                     b.Property<double>("AppliedAmount")
                         .HasColumnType("double precision");
 
@@ -3995,10 +3992,6 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<double>("RemainingAmount")
                         .HasColumnType("double precision");
-
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
 
                     b.Property<double>("RequestedAmount")
                         .HasColumnType("double precision");

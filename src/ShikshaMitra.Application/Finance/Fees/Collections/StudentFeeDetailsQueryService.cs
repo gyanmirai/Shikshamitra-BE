@@ -1,4 +1,4 @@
-using ShikshaMitra.Domain.Finance.Fees.Settings;
+﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Cache;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -80,6 +80,13 @@ public partial class StudentFeeDetailsQueryService(
 			var grouped = dueFees.GroupBy(d => (d.Year, d.Month))
 				.OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month);
 
+				// TODO
+			//var concessions = await concessionRequestRepository.GetListAsync(c => c.StudentId == studentId
+			//	&& c.Status == ConcessionRequestStatus.Approved);
+
+			//// due fee wise create total concession amount map
+
+
 			foreach (var group in grouped)
 			{
 				var lines = group.Select(d => new FeeLedgerLineDto
@@ -87,6 +94,7 @@ public partial class StudentFeeDetailsQueryService(
 					DueFeeId = d.Id, FeeHeadId = d.FeeHeadId,
 					FeeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty),
 					Total = d.OriginalAmount, Paid = d.PaidAmount, Due = d.OutstandingAmount,
+					//ConcessionAmount = concessions.Where(c => c.DueFeeId == d.Id).Sum(c => c.Amount),
 					ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
 					Status = d.OutstandingAmount <= 0d ? FeeCollectionStatus.Paid
 						: (d.PaidAmount > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),

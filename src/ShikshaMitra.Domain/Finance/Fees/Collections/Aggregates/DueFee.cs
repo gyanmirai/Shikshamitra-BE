@@ -105,7 +105,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Credit available to fund adjustments from this line (overpayment / paid credit not yet allocated).
 	/// </summary>
-	public double AdjustableBalance => Math.Max(0d, PaidAmount - RefundedAmount - AdjustmentCreditAmount);
+	public double AdjustableBalance => Math.Max(0d, OutstandingAmount);
 
 	/// <summary>
 	/// Reverses a payment allocation against this obligation line (called when

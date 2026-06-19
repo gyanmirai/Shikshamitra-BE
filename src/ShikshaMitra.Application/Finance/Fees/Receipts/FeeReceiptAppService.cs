@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -48,7 +48,7 @@ public partial class FeeReceiptAppService(
             AcademicYearId        = input.AcademicYearId,
             BoardId               = input.BoardId,
             EducationMediumId     = input.EducationMediumId,
-            Month                 = input.Month,
+            Month                 = input.Month+1,
             ReceiptKind           = input.ReceiptKind,
             Search                = input.Search,
             StandardId            = input.StandardId,

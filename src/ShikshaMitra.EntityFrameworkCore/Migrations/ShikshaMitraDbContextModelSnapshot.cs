@@ -3512,6 +3512,9 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("AcademicYearId", "Status")
                         .HasDatabaseName("IX_Charges_AcademicYearId_Status");
 
+                    b.HasIndex("CreatorId", "Status")
+                        .HasDatabaseName("IX_Charges_CreatorId_Status");
+
                     b.ToTable("Finance_Charges", (string)null);
                 });
 
@@ -5142,7 +5145,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("StudentId");
+                    b.HasIndex("StudentId")
+                        .HasDatabaseName("IX_StudentFeeStructures_StudentId");
 
                     b.ToTable("Finance_StudentFeeStructures", (string)null);
                 });
@@ -17814,7 +17818,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasIndex("FeeRefundRequestId");
 
-                            b1.ToTable("FeeRefundLines", (string)null);
+                            b1.ToTable("Finance_FeeRefundLines", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("FeeRefundRequestId");
@@ -18928,7 +18932,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", "AcademicYear")
                         .WithMany()
-                        .HasForeignKey("AcademicYearId");
+                        .HasForeignKey("AcademicYearId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ShikshaMitra.Students.StudentBankDetail", "BankDetail")
                         .WithMany()

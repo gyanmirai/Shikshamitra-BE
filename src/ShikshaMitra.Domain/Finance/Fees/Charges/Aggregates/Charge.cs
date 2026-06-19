@@ -167,12 +167,6 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("Message", "Rejection reason must be at least 10 characters");
 		}
 
-		if (rejectedBy == RequestorId)
-		{
-			throw new BusinessException(FinanceChargeErrorCodes.ChargeApproverCannotBeRequestor)
-				.WithData("Message", "The rejector must differ from the charge requestor");
-		}
-
 		Status = ChargeStatus.Rejected;
 		ApprovedBy = rejectedBy;
 		ApprovedOn = DateTime.UtcNow;

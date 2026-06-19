@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -137,6 +137,10 @@ public partial class ConcessionRequestAppService
 	public async Task<ConcessionRejectionResponseDto> RejectAsync(Guid id, RejectConcessionRequestDto input)
 	{
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
+
+		if (currentUser.Id == request.CreatorId && !IsPrivilegedUser())
+			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
+
 		request.Reject(currentUser.Id!.Value, input.Message);
 		await concessionRequestRepository.UpdateAsync(request, autoSave: true);
 

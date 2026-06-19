@@ -36,8 +36,5 @@ public class ChargeRequestConfiguration : IEntityTypeConfiguration<ChargeRequest
 
 		builder.HasIndex(x => new { x.AcademicYearId, x.BoardId, x.EducationMediumId })
 			.HasDatabaseName("IX_ChargeRequests_AcademicYear_Board_Medium");
-
-		builder.HasIndex(x => new { x.Status, x.AcademicYearId })
-			.HasDatabaseName("IX_ChargeRequests_Status_AcademicYearId");
 	}
 }

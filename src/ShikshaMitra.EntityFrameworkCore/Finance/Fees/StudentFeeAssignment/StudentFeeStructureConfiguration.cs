@@ -13,8 +13,5 @@ public class StudentFeeStructureConfiguration : IEntityTypeConfiguration<Student
 
 		builder.HasIndex(x => x.StudentId)
 			.HasDatabaseName("IX_StudentFeeStructures_StudentId");
-
-		builder.HasIndex(x => new { x.StudentId, x.AcademicYearId })
-			.HasDatabaseName("IX_StudentFeeStructures_StudentId_AcademicYearId");
 	}
 }

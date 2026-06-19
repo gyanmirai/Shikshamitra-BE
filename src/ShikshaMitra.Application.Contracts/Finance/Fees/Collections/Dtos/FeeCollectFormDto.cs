@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -64,7 +64,9 @@ public class FeeLedgerLineDto
     /// </summary>
     public double ReconciliationAmount { get; set; }
 
-    public FeeCollectionStatus Status { get; set; }
+	public double ConcessionAmount { get; set; }
+
+	public FeeCollectionStatus Status { get; set; }
 }
 
 /// <summary>Query parameters for the collect-form endpoint.</summary>

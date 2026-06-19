@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Audit;
@@ -151,6 +151,11 @@ public partial class ChargeAppService
 	public async Task<RejectionResponse> RejectAsync(Guid chargeId, RejectChargeRequest input)
 	{
 		var request = await GetChargeRequestOrThrowAsync(chargeId);
+
+		if (CurrentUser.Id == request.RequestorId && !IsPrivilegedUser())
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeApproverCannotBeRequestor)
+				.WithData("Message", "The approver must differ from the charge requestor");
+
 		var (processed, remaining) = await chargeRequestManager.RejectLinesAsync(
 			request, input.StudentIds, currentUser.Id!.Value, input.RejectionReason);
 

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Events;
 using ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
@@ -45,8 +45,6 @@ public partial class FeeRefundAppService
 
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 
-		using var uow = unitOfWorkManager.Begin(isTransactional: true);
-
 		await feeRefundManager.UpdateAsync(
 			request: request,
 			lines: input.Lines.Select(l => (l.DueFeeId, l.Amount)).ToList(),
@@ -55,7 +53,6 @@ public partial class FeeRefundAppService
 			reason: input.Reason);
 
 		await feeRefundRepository.UpdateAsync(request, autoSave: false);
-		await uow.CompleteAsync();
 
 		var studentMap = await BuildStudentMapAsync([request.StudentId]);
 		return MapToDto(request, studentMap);

@@ -71,12 +71,12 @@ public partial class ConcessionRequestAppService
                 Amount = m.UserSpecifiedConcessionAmountValue, DiscountAmount = m.FeeHeadConcessionAmount,
                 NetAmount = m.PostConcessionFeeHeadAmount,
             }).ToList(),
-            SubmittedDocuments = request.ConcessionRequestDocuments.Select(d => new ConcessionSubmittedDocumentDto
+            RequiredDocuments = type?.ConcessionTypeDocuments.Select(d => new ConcessionDocumentRequirementDto
             {
-                DocumentId = d.DocumentId,
-                DocumentName = type?.ConcessionTypeDocuments.FirstOrDefault(ct => ct.Id == d.DocumentId)?.DocumentName ?? string.Empty,
-                Url = d.Url, Status = d.Status,
-            }).ToList(),
+                DocumentId = d.Id, DocumentName = d.DocumentName,
+                IsUploaded = request.ConcessionRequestDocuments.Any(rd => rd.DocumentId == d.Id),
+                Url = request.ConcessionRequestDocuments.FirstOrDefault(rd => rd.DocumentId == d.Id)?.Url
+            }).ToList() ?? [],
             CreatedAt = request.CreationTime, UpdatedAt = request.LastModificationTime,
             Message = request.ApproverMessage ?? request.RejectionReason,
             ApprovedAt = request.GetApprovedOn(),

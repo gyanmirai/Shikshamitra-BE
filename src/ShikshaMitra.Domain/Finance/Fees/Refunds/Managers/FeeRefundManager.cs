@@ -135,7 +135,7 @@ public class FeeRefundManager(
 
         var newLines = lines
             .Select(l => new FeeRefundLine(
-                id: GuidGenerator.Create(),
+                id: request.Lines.FirstOrDefault(existing => existing.DueFeeId == l.DueFeeId)?.Id ?? GuidGenerator.Create(),
                 feeRefundRequestId: request.Id,
                 dueFeeId: l.DueFeeId,
                 amount: l.Amount))

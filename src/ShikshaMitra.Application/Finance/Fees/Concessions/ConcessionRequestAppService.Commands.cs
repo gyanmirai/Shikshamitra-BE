@@ -69,6 +69,20 @@ public partial class ConcessionRequestAppService
 		if (currentUser.Id == request.CreatorId && !IsPrivilegedUser())
 			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
 
+		// validate that if documents specified in the concession type are not uploaded, then the request cannot be approved
+		var type = await concessionTypeRepository.GetAsync(request.ConcessionTypeId);
+		if (type != null)
+		{
+			var requiredDocuments = type.ConcessionTypeDocuments;
+			foreach (var doc in requiredDocuments)
+			{
+				if (!request.ConcessionRequestDocuments.Any(d => d.DocumentId == doc.Id))
+				{
+					throw new BusinessException(FinanceConcessionErrorCodes.MissingRequiredDocuments);
+				}
+			}
+		}
+
 		var approvals = input.FeeHeadApprovals?.Select(a => new FeeHeadApprovalInput(
 			a.FeeHeadId, a.ApprovedConcessionAmount,
 			a.DueFeeAllocations.Select(d => new DueFeeAllocationInput(d.DueFeeId, d.ConcessionAmount)).ToList()

@@ -23,9 +23,7 @@ public class FeeAdjustmentManager(
     public async Task<FeeAdjustmentRequest> CreateAsync(
         Guid academicYearId,
         Guid studentId,
-        FeeAdjustmentType adjustmentType,
         string reason,
-        string? remarks,
         IReadOnlyList<(Guid DueFeeId, double Amount)> sourceLines)
     {
         if (sourceLines == null || sourceLines.Count == 0)
@@ -94,9 +92,7 @@ public class FeeAdjustmentManager(
             student.AcademicMediumId,
             student.StandardId.Value,
             student.DivisionId.Value,
-            adjustmentType,
             reason,
-            remarks,
             voucherNumber,
             requestedAmount);
 
@@ -125,7 +121,6 @@ public class FeeAdjustmentManager(
         IReadOnlyList<(Guid DueFeeId, double Amount)> targetLines)
     {
         request.EnsureCanApply();
-        request.EnsureApproverNotCreator(approverId);
 
         if (targetLines == null || targetLines.Count == 0)
         {

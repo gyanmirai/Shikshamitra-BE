@@ -66,6 +66,9 @@ public class FeeLedgerLineDto
 
 	public double ConcessionAmount { get; set; }
 
+    public double RefundAmount { get; set; }
+    public string? RefundDescription { get; set; }
+
 	public FeeCollectionStatus Status { get; set; }
 }
 

@@ -63,6 +63,21 @@ public class ReceiptNumberSequence : AggregateRoot<Guid>
 			NextValue = 1,
 		};
 
+	/// <summary>
+	/// Creates a new sequence row with an arbitrary raw kind value. Use this for
+	/// non-receipt sequences (e.g. adjustment vouchers) that share this table but
+	/// must not collide with <see cref="FeeReceiptKind"/> values.
+	/// </summary>
+	public static ReceiptNumberSequence NewWithStoredKind(Guid id, Guid? tenantId, int year, int storedKind) =>
+		new()
+		{
+			Id = id,
+			StoredTenantId = tenantId ?? HostTenantSentinel,
+			Year = year,
+			StoredKind = storedKind,
+			NextValue = 1,
+		};
+
 	/// <summary>Increments the sequence value.</summary>
 	public void Increment()
 	{

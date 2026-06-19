@@ -132,8 +132,6 @@ public partial class FeeAdjustmentAppService
                     RollNo = student?.RollNo?.ToString() ?? string.Empty,
                     StandardName = student?.StandardId is Guid sid && standardMap.TryGetValue(sid, out var sn) ? sn : string.Empty,
                     DivisionName = student?.DivisionId is Guid did && divisionMap.TryGetValue(did, out var dn) ? dn : string.Empty,
-                    AdjustmentType = r.AdjustmentType,
-                    AdjustmentTypeName = FormatAdjustmentType(r.AdjustmentType),
                     RequestedAmount = r.RequestedAmount, AppliedAmount = r.AppliedAmount,
                     RemainingAmount = r.RemainingAmount, Status = r.Status,
                     StatusName = FormatStatus(r.Status),

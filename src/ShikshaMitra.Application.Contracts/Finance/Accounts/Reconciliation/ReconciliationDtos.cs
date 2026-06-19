@@ -51,6 +51,8 @@ public class ReconciliationListItemDto
 	/// <summary>Final receipt number (FIN-*) once approved. Null while pending.</summary>
 	public string? FinalReceiptNumber { get; set; }
 
+    public Guid? ChargeReceiptId { get; set; }
+
     // ── Dates ─────────────────────────────────────────────────────────────
     public DateOnly ReceiptDate { get; set; }
 

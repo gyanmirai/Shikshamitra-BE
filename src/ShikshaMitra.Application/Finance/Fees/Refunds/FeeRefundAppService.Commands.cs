@@ -36,7 +36,7 @@ public partial class FeeRefundAppService
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add)]
 	public async Task<FeeRefundRequestDto> UpdateAsync(Guid id, UpdateFeeRefundRequestDto input)
 	{
-		var request = await feeRefundRepository.FindWithLinesAsync(id)
+		var request = await feeRefundRepository.GetAsync(id, includeDetails: true)
 			?? throw new BusinessException(FeeRefundErrorCodes.RefundNotFound).WithData("Id", id);
 
 		if (request.Status != FeeRefundStatus.Pending)
@@ -45,6 +45,8 @@ public partial class FeeRefundAppService
 
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 
+		using var uow = unitOfWorkManager.Begin(isTransactional: true);
+
 		await feeRefundManager.UpdateAsync(
 			request: request,
 			lines: input.Lines.Select(l => (l.DueFeeId, l.Amount)).ToList(),
@@ -52,7 +54,7 @@ public partial class FeeRefundAppService
 			refundPaymentDetails: FeeRefundManager.MapRefundPaymentDetails(input.RefundMethod, input.PaymentDetails),
 			reason: input.Reason);
 
-		await feeRefundRepository.UpdateAsync(request, autoSave: false);
+		await uow.CompleteAsync();
 
 		var studentMap = await BuildStudentMapAsync([request.StudentId]);
 		return MapToDto(request, studentMap);

@@ -10,6 +10,7 @@ using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Students;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp;
 
 namespace ShikshaMitra.Finance.Fees.Concessions;
 
@@ -101,9 +102,9 @@ public partial class ConcessionRequestAppService
 		var skip     = input.SkipCount;
 		var page     = all.Skip(skip).Take(pageSize).ToList();
 
-		var student  = await studentRepository.GetAsync(studentId);
-		var standard = student.StandardId.HasValue ? await standardRepository.FindAsync(student.StandardId.Value) : null;
-		var division = student.DivisionId.HasValue ? await divisionRepository.FindAsync(student.DivisionId.Value) : null;
+		var student  = await studentRepository.GetAsync(studentId) ?? throw new BusinessException("Student not found.");
+		var standard = student?.Standard?.Name;
+		var division = student?.Division?.Name;
 
 		var typeIds  = page.Select(r => r.ConcessionTypeId).Distinct().ToList();
 		var types    = typeIds.Count > 0
@@ -131,8 +132,8 @@ public partial class ConcessionRequestAppService
 				Name         = FormatStudentName(student),
 				RollNo       = student.RollNo?.ToString() ?? string.Empty,
 				GrNumber     = student.GrNo?.ToString() ?? string.Empty,
-				StandardName = standard?.Name ?? string.Empty,
-				DivisionName = division?.Name ?? string.Empty,
+				StandardName = standard ?? string.Empty,
+				DivisionName = division ?? string.Empty,
 			},
 			ConcessionBasicDetail = new ConcessionBasicDetailDto
 			{

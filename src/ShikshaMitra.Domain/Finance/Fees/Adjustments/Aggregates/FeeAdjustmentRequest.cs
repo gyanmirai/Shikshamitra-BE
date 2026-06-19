@@ -18,9 +18,7 @@ public class FeeAdjustmentRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid EducationMediumId { get; private set; }
     public Guid StandardId { get; private set; }
     public Guid DivisionId { get; private set; }
-    public FeeAdjustmentType AdjustmentType { get; private set; }
     public string Reason { get; private set; } = string.Empty;
-    public string? Remarks { get; private set; }
     public string VoucherNumber { get; private set; } = string.Empty;
     public double RequestedAmount { get; private set; }
     public double AppliedAmount { get; private set; }
@@ -47,9 +45,7 @@ public class FeeAdjustmentRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Guid educationMediumId,
         Guid standardId,
         Guid divisionId,
-        FeeAdjustmentType adjustmentType,
         string reason,
-        string? remarks,
         string voucherNumber,
         double requestedAmount)
         : base(id)
@@ -61,9 +57,7 @@ public class FeeAdjustmentRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         EducationMediumId = educationMediumId;
         StandardId = standardId;
         DivisionId = divisionId;
-        AdjustmentType = adjustmentType;
         Reason = reason;
-        Remarks = remarks;
         VoucherNumber = voucherNumber;
         RequestedAmount = requestedAmount;
         AppliedAmount = 0;
@@ -130,7 +124,6 @@ public class FeeAdjustmentRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         IEnumerable<(Guid DueFeeId, Guid FeeHeadId, MonthEnum Month, int Year, double Amount)> allocations)
     {
         EnsureCanApply();
-        EnsureApproverNotCreator(approverId);
 
         var allocationList = allocations.ToList();
         if (allocationList.Count == 0)

@@ -139,25 +139,12 @@ public class EfCoreFeeAdjustmentRepository(
 
                 if (sequence == null)
                 {
-                    sequence = ReceiptNumberSequence.New(Guid.NewGuid(), currentTenant.Id, year, kind: null);
-                    // Overwrite the stored kind with the adjustment voucher sentinel
-                    // by creating a raw instance — ReceiptNumberSequence.New sets Kind=null (StoredKind=-1)
-                    // so we need a different approach: use reflection-free workaround via direct SQL.
-                    // Instead: create via raw upsert so we control StoredKind=AdjustmentVoucherKind.
-                    await dbContext.Database.ExecuteSqlRawAsync(
-                        @"INSERT INTO ""Finance_FinanceReceiptNumberSequences"" (""Id"", ""TenantId"", ""Year"", ""Kind"", ""NextValue"")
-                          VALUES ({0}, {1}, {2}, {3}, 2)
-                          ON CONFLICT (""TenantId"", ""Year"", ""Kind"") DO NOTHING",
-                        Guid.NewGuid(), storedTenantId, year, AdjustmentVoucherKind);
-
-                    sequence = await sequences.FirstOrDefaultAsync(
-                        s => s.StoredTenantId == storedTenantId &&
-                             s.Year == year &&
-                             s.StoredKind == AdjustmentVoucherKind,
-                        cancellationToken);
+                    sequence = ReceiptNumberSequence.NewWithStoredKind(
+                        Guid.NewGuid(), currentTenant.Id, year, AdjustmentVoucherKind);
+                    await sequences.AddAsync(sequence, cancellationToken);
                 }
 
-                var returnValue = sequence!.NextValue;
+                var returnValue = sequence.NextValue;
                 sequence.Increment();
                 await dbContext.SaveChangesAsync(cancellationToken);
                 return returnValue;

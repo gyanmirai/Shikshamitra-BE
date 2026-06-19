@@ -22,15 +22,9 @@ public class CreateFeeAdjustmentDto
     public Guid StudentId { get; set; }
 
     [Required]
-    public FeeAdjustmentType AdjustmentType { get; set; }
-
-    [Required]
     [MinLength(5)]
     [MaxLength(1000)]
     public string Reason { get; set; } = string.Empty;
-
-    [MaxLength(2000)]
-    public string? Remarks { get; set; }
 
     [Required]
     [MinLength(1)]
@@ -107,10 +101,8 @@ public class FeeAdjustmentDetailDto
     public Guid AcademicYearId { get; set; }
     public Guid BoardId { get; set; }
     public Guid EducationMediumId { get; set; }
-    public FeeAdjustmentType AdjustmentType { get; set; }
     public string AdjustmentTypeName { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
-    public string? Remarks { get; set; }
     public FeeAdjustmentStatus Status { get; set; }
     public string StatusName { get; set; } = string.Empty;
     public double RequestedAmount { get; set; }
@@ -138,8 +130,6 @@ public class FeeAdjustmentApplicationItemDto
     public string RollNo { get; set; } = string.Empty;
     public string StandardName { get; set; } = string.Empty;
     public string DivisionName { get; set; } = string.Empty;
-    public FeeAdjustmentType AdjustmentType { get; set; }
-    public string AdjustmentTypeName { get; set; } = string.Empty;
     public double RequestedAmount { get; set; }
     public double AppliedAmount { get; set; }
     public double RemainingAmount { get; set; }

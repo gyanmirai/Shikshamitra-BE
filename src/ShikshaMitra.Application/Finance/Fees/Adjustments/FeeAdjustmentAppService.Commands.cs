@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Events;
+using ShikshaMitra.Finance.Fees.Charges;
 using Volo.Abp;
 using Volo.Abp.Uow;
 
@@ -22,7 +23,7 @@ public partial class FeeAdjustmentAppService
 
         var lines = input.SourceLines.Select(l => (l.DueFeeId, l.Amount)).ToList();
         var request = await feeAdjustmentManager.CreateAsync(
-            academicYearId, input.StudentId, input.AdjustmentType, input.Reason, input.Remarks, lines);
+            academicYearId, input.StudentId, input.Reason, lines);
 
         await feeAdjustmentRepository.InsertAsync(request, autoSave: false);
 
@@ -111,6 +112,10 @@ public partial class FeeAdjustmentAppService
                     .WithData("Message", "Full apply required when partial apply is disabled.");
         }
 
+        if (CurrentUser.Id == request.ProcessedByUserId && !IsPrivilegedUser())
+			throw new BusinessException(FeeAdjustmentErrorCodes.CannotApply)
+				.WithData("Message", "The approver must differ from the adjustment requestor");
+
         using var uow = unitOfWorkManager.Begin(isTransactional: true);
         var targetLines = input.Lines.Select(l => (l.DueFeeId, l.AppliedAmount)).ToList();
         var batchBefore = request.AppliedAmount;
@@ -170,4 +175,7 @@ public partial class FeeAdjustmentAppService
             RejectionReason = request.RejectionReason ?? input.Message,
         };
     }
+
+    private bool IsPrivilegedUser() =>
+		CurrentUser.IsInRole("admin") || CurrentUser.IsInRole("Finance Officer");
 }

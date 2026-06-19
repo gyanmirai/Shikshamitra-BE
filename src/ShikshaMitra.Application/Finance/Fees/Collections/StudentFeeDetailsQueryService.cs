@@ -1,10 +1,11 @@
-﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Cache;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
@@ -40,7 +41,7 @@ public partial class StudentFeeDetailsQueryService(
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
-	IRepository<ConcessionType, Guid> concessionTypeRepository,
+	IRepository<FeeRefundRequest, Guid> feeRefundRepository,
 	IConcessionRequestRepository concessionRequestRepository,
 	FinanceScopeAccessService financeScopeAccessService,
 	FinanceReferenceCacheService referenceCache,
@@ -84,8 +85,7 @@ public partial class StudentFeeDetailsQueryService(
 			//var concessions = await concessionRequestRepository.GetListAsync(c => c.StudentId == studentId
 			//	&& c.Status == ConcessionRequestStatus.Approved);
 
-			//// due fee wise create total concession amount map
-
+			var refundByDueFee = await GetRefundsByDueFeeAsync(studentId);
 
 			foreach (var group in grouped)
 			{
@@ -96,6 +96,8 @@ public partial class StudentFeeDetailsQueryService(
 					Total = d.OriginalAmount, Paid = d.PaidAmount, Due = d.OutstandingAmount,
 					//ConcessionAmount = concessions.Where(c => c.DueFeeId == d.Id).Sum(c => c.Amount),
 					ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
+					RefundAmount = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Amount,
+					RefundDescription = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Description,
 					Status = d.OutstandingAmount <= 0d ? FeeCollectionStatus.Paid
 						: (d.PaidAmount > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 				}).ToList();
@@ -152,5 +154,16 @@ public partial class StudentFeeDetailsQueryService(
 			Student = BuildStudentInfo(student),
 			Summary = feeSummary, Ledger = ledger, Charges = chargeDtos,
 		};
+	}
+
+	private async Task<Dictionary<Guid, (double Amount, string Description)>> GetRefundsByDueFeeAsync(Guid studentId)
+	{
+		var refunds = await feeRefundRepository.GetListAsync(r => r.StudentId == studentId && r.Status == FeeRefundStatus.Approved);
+		return refunds.SelectMany(r => r.Lines.Select(l => new { l.DueFeeId, l.Amount, r.Reason }))
+			.GroupBy(x => x.DueFeeId)
+			.ToDictionary(g => g.Key, g => (
+				Amount: g.Sum(x => x.Amount),
+				Description: string.Join("; ", g.Select(x => x.Reason).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct())
+			));
 	}
 }

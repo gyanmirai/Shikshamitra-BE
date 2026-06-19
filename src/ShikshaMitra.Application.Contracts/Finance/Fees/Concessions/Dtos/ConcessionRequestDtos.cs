@@ -37,6 +37,7 @@ public class ConcessionDocumentRequirementDto
 {
 	public Guid DocumentId { get; set; }
 	public string DocumentName { get; set; } = string.Empty;
+	public string? Url { get; set; }
 	public bool IsUploaded { get; set; }
 }
 
@@ -216,6 +217,7 @@ public class StudentConcessionRequestItemDto
 	public decimal TotalAmount { get; set; }
 	public List<FeeHeadConcessionDetailDto> FeeHeads { get; set; } = [];
 	public List<ConcessionSubmittedDocumentDto> SubmittedDocuments { get; set; } = [];
+	public List<ConcessionDocumentRequirementDto> RequiredDocuments { get; set; } = [];
 	public DateTime CreatedAt { get; set; }
 	public DateTime? UpdatedAt { get; set; }
 	public string? Message { get; set; }

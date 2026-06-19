@@ -7,15 +7,22 @@ using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Repositories;
+using ShikshaMitra.Finance.Fees.Receipts;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
 
-public class EfCoreFeeAdjustmentRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
+public class EfCoreFeeAdjustmentRepository(
+    IDbContextProvider<ShikshaMitraDbContext> dbContextProvider,
+    ICurrentTenant currentTenant)
     : EfCoreRepository<ShikshaMitraDbContext, FeeAdjustmentRequest, Guid>(dbContextProvider),
         IFeeAdjustmentRepository
 {
+    // Dedicated kind sentinel for adjustment voucher sequences in the shared sequence table.
+    // Must not collide with FeeReceiptKind values (0=FinalFee, 1=ProvisionalFee, 2=ProvisionalCharge).
+    private const int AdjustmentVoucherKind = 100;
     public async Task<FeeAdjustmentRequest> GetWithDetailsAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var queryable = await GetQueryableAsync();
@@ -112,10 +119,59 @@ public class EfCoreFeeAdjustmentRepository(IDbContextProvider<ShikshaMitraDbCont
             .ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
     }
 
-    public async Task<int> GetCountForVoucherAsync(CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public async Task<long> IncrementAndGetVoucherSequenceAsync(int year, CancellationToken cancellationToken = default)
     {
-        var queryable = await GetQueryableAsync();
-        return await queryable.CountAsync(cancellationToken);
+        var storedTenantId = currentTenant.Id ?? ReceiptNumberSequence.HostTenantSentinel;
+
+        for (var retry = 0; retry < 10; retry++)
+        {
+            try
+            {
+                var dbContext = await GetDbContextAsync();
+                var sequences = dbContext.Set<ReceiptNumberSequence>();
+
+                var sequence = await sequences.FirstOrDefaultAsync(
+                    s => s.StoredTenantId == storedTenantId &&
+                         s.Year == year &&
+                         s.StoredKind == AdjustmentVoucherKind,
+                    cancellationToken);
+
+                if (sequence == null)
+                {
+                    sequence = ReceiptNumberSequence.New(Guid.NewGuid(), currentTenant.Id, year, kind: null);
+                    // Overwrite the stored kind with the adjustment voucher sentinel
+                    // by creating a raw instance — ReceiptNumberSequence.New sets Kind=null (StoredKind=-1)
+                    // so we need a different approach: use reflection-free workaround via direct SQL.
+                    // Instead: create via raw upsert so we control StoredKind=AdjustmentVoucherKind.
+                    await dbContext.Database.ExecuteSqlRawAsync(
+                        @"INSERT INTO ""Finance_FinanceReceiptNumberSequences"" (""Id"", ""TenantId"", ""Year"", ""Kind"", ""NextValue"")
+                          VALUES ({0}, {1}, {2}, {3}, 2)
+                          ON CONFLICT (""TenantId"", ""Year"", ""Kind"") DO NOTHING",
+                        Guid.NewGuid(), storedTenantId, year, AdjustmentVoucherKind);
+
+                    sequence = await sequences.FirstOrDefaultAsync(
+                        s => s.StoredTenantId == storedTenantId &&
+                             s.Year == year &&
+                             s.StoredKind == AdjustmentVoucherKind,
+                        cancellationToken);
+                }
+
+                var returnValue = sequence!.NextValue;
+                sequence.Increment();
+                await dbContext.SaveChangesAsync(cancellationToken);
+                return returnValue;
+            }
+            catch (Exception ex) when (ex is DbUpdateConcurrencyException or DbUpdateException)
+            {
+                var dbContext = await GetDbContextAsync();
+                dbContext.ChangeTracker.Clear();
+                if (retry == 9) throw;
+                await Task.Delay(5, cancellationToken);
+            }
+        }
+
+        throw new InvalidOperationException("Failed to generate adjustment voucher sequence due to high concurrency.");
     }
 
     private async Task<IQueryable<FeeAdjustmentRequest>> BuildApplicationsQueryAsync(

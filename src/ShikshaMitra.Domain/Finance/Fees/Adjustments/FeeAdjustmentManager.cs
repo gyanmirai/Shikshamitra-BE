@@ -187,7 +187,7 @@ public class FeeAdjustmentManager(
     private async Task<string> GenerateVoucherNumberAsync()
     {
         var year = DateTime.UtcNow.Year;
-        var count = await feeAdjustmentRepository.GetCountForVoucherAsync();
-        return $"ADJ-{year}-{(count + 1):D6}";
+        var sequence = await feeAdjustmentRepository.IncrementAndGetVoucherSequenceAsync(year);
+        return $"ADJ-{year}-{sequence:D6}";
     }
 }

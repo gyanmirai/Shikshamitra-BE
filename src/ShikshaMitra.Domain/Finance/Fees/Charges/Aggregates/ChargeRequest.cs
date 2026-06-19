@@ -142,7 +142,7 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private void ValidateDueDate()
 	{
-		if (DueDate.Date < DateTime.UtcNow.Date)
+		if (DueDate.Date <= DateTime.UtcNow.Date.AddDays(-1))
 		{
 			throw new BusinessException(FinanceChargeErrorCodes.InvalidDueDate)
 				.WithData("DueDate", DueDate);

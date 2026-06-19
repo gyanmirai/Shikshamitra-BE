@@ -57,5 +57,9 @@ public class ChargeConfiguration : IEntityTypeConfiguration<Charge>
 
 		builder.HasIndex(x => x.DueDate)
 			.HasDatabaseName("IX_Charges_DueDate");
+
+		// Maker-checker inbox: find charges created by a user awaiting their own review
+		builder.HasIndex(x => new { x.CreatorId, x.Status })
+			.HasDatabaseName("IX_Charges_CreatorId_Status");
 	}
 }

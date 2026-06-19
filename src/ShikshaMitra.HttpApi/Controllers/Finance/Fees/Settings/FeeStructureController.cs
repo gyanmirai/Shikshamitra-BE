@@ -1,4 +1,4 @@
-﻿
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
@@ -10,7 +10,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Settings;
 
 [RemoteService]
-[Area("Finance")]
+[Area("finance")]
 [Route("api/fee-structures")]
 [Authorize]
 public class FeeStructureController(

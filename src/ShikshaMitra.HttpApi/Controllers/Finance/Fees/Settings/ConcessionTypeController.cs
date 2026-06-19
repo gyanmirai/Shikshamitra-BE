@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Constants.Permissions;
@@ -11,7 +11,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Settings;
 
 [RemoteService]
-[Area("app")]
+[Area("finance")]
 [Route("api")]
 [Authorize]
 public class ConcessionTypeController(

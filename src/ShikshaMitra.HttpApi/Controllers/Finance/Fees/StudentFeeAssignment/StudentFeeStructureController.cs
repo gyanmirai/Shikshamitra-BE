@@ -8,7 +8,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.StudentFeeAssignment;
 
 [RemoteService]
-[Area("Finance")]
+[Area("finance")]
 [Route("api/student-fee-structure")]
 [Authorize]
 public class StudentFeeStructureController(

@@ -159,16 +159,15 @@ public class FeeCollectionManager(
 		string receiptNumber,
 		string? remarks)
 	{
-		return new FeeRecordMetadata(GuidGenerator.Create())
-		{
-			TenantId = currentTenant.Id,
-			StudentId = studentId,
-			AcademicYearId = academicYearId,
-			TotalPaidFee = received,
-			ReceiptNumber = receiptNumber,
-			Status = status,
-			Remarks = remarks,
-		};
+		return new FeeRecordMetadata(
+			GuidGenerator.Create(),
+			currentTenant.Id,
+			studentId,
+			academicYearId,
+			received,
+			receiptNumber,
+			status,
+			remarks);
 	}
 
 	/// <summary>

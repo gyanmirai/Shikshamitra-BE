@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -267,11 +267,18 @@ public class AssignmentV2AppService(
         AssignmentStatusUpdateDto input
     )
     {
-        var assignment = await assignmentRepository.FindAsync(assignmentId)
+        var q = await assignmentRepository.WithDetailsAsync(a => a.DivisionSchedules);
+        var assignment = await asyncExecuter.FirstOrDefaultAsync(q.Where(a => a.Id == assignmentId))
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
 
         var previousStatus = assignment.Status;
-        assignment.ChangeStatus((AssignmentStatus) input.Status);
+        var newStatus = (AssignmentStatus)input.Status;
+        assignment.ChangeStatus(newStatus);
+
+        if (newStatus == AssignmentStatus.Published)
+        {
+            assignment.PublishAll();
+        }
 
         await assignmentRepository.UpdateAsync(assignment, autoSave: true);
 

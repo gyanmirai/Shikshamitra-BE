@@ -114,18 +114,20 @@ public class ExamResultAppService(
         // Load grading scale from the first subject that has one
         var scaleId = exam.ExamSubjects.FirstOrDefault(s => s.GradeScalingId.HasValue)?.GradeScalingId;
         ICollection<GradeRange>? gradeRanges = null;
+        double scaleTotal = 100.0;
         if (scaleId.HasValue)
         {
             var scaleQuery = await gradingScaleRepository.WithDetailsAsync(s => s.GradeRanges);
             var scale = scaleQuery.FirstOrDefault(s => s.Id == scaleId.Value);
             gradeRanges = scale?.GradeRanges;
+            if (scale != null && double.TryParse(scale.TotalMarks, out var parsedTotal))
+            {
+                scaleTotal = parsedTotal;
+            }
         }
 
         var totalMaxMarks = exam.ExamSubjects.Sum(s => s.TotalMarks ?? 0);
-        var totalPassMarks = exam.ExamSubjects.Sum(s => s.PassingMarks ?? 0);
-        var subjectPassMap = exam.ExamSubjects
-            .Where(s => s.PassingMarks.HasValue)
-            .ToDictionary(s => s.SubjectId, s => s.PassingMarks!.Value);
+        var totalPassMarks = exam.ExamSubjects.Sum(s => s.PassingMarks ?? ((s.TotalMarks ?? 100.0) * 0.33));
 
         // Load marks
         var marks = await examMarkRepository.GetListAsync(
@@ -142,17 +144,19 @@ public class ExamResultAppService(
                 var isAbsent = g.All(m => m.IsAbsent);
                 var obtained = isAbsent ? 0.0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
                 var pct = totalMaxMarks > 0 ? Math.Round(obtained / totalMaxMarks * 100, 2) : 0;
-                var grade = isAbsent ? "—" : ComputeGrade(obtained, totalMaxMarks, gradeRanges);
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, totalMaxMarks, gradeRanges, scaleTotal);
 
-                // Compartment: passed overall but failed at least one subject
-                var failedAnySubject = !isAbsent && subjectPassMap.Count > 0 &&
-                    g.Any(m => !m.IsAbsent &&
-                               subjectPassMap.TryGetValue(m.SubjectId, out var sp) &&
-                               (m.MarksObtained ?? 0) < sp);
+                // Check if they failed any subject (missing mark, absent, or obtained < passing marks)
+                var failedAnySubject = !isAbsent && exam.ExamSubjects.Any(s =>
+                {
+                    var mark = g.FirstOrDefault(m => m.SubjectId == s.SubjectId);
+                    if (mark == null || mark.IsAbsent) return true;
+                    var passingMarksVal = s.PassingMarks ?? ((s.TotalMarks ?? 100.0) * 0.33);
+                    return (mark.MarksObtained ?? 0) < passingMarksVal;
+                });
 
                 var status = isAbsent ? ExamStudentResultStatus.Absent
                     : obtained >= totalPassMarks && !failedAnySubject ? ExamStudentResultStatus.Pass
-                    : obtained >= totalPassMarks && failedAnySubject ? ExamStudentResultStatus.Compartment
                     : ExamStudentResultStatus.Fail;
 
                 return new
@@ -309,15 +313,15 @@ public class ExamResultAppService(
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    private static string ComputeGrade(double obtained, double total, ICollection<GradeRange>? ranges = null)
+    private static string ComputeGrade(double obtained, double total, ICollection<GradeRange>? ranges = null, double scaleTotal = 100.0)
     {
         if (total <= 0) return "—";
         if (ranges?.Any() == true)
         {
-            var pct = obtained / total * 100;
+            var scaledMarks = (obtained / total) * scaleTotal;
             var match = ranges
                 .OrderByDescending(r => r.MinMarks)
-                .FirstOrDefault(r => pct >= r.MinMarks && pct <= r.MaxMarks);
+                .FirstOrDefault(r => scaledMarks >= r.MinMarks && scaledMarks <= r.MaxMarks);
             if (match != null) return match.Grade;
         }
         var p = obtained / total * 100;
@@ -440,11 +444,24 @@ public class ExamResultAppService(
         // Load default grading scale from first subject that has one
         var defaultScaleId = exam.ExamSubjects.FirstOrDefault(s => s.GradeScalingId.HasValue)?.GradeScalingId;
         ICollection<GradeRange>? gradeRanges = null;
-        if (defaultScaleId.HasValue)
+        double scaleTotal = 100.0;
+
+        // Load all grading scales with details to build a map
+        var scaleQuery = await gradingScaleRepository.WithDetailsAsync(s => s.GradeRanges);
+        var allScales = await AsyncExecuter.ToListAsync(scaleQuery);
+        var scaleMap = allScales.ToDictionary(
+            s => s.Id,
+            s => {
+                double totalVal = 100.0;
+                double.TryParse(s.TotalMarks, out totalVal);
+                return (Ranges: s.GradeRanges, ScaleTotal: totalVal);
+            }
+        );
+
+        if (defaultScaleId.HasValue && scaleMap.TryGetValue(defaultScaleId.Value, out var defScaleInfo))
         {
-            var scaleQuery = await gradingScaleRepository.WithDetailsAsync(s => s.GradeRanges);
-            var scale = scaleQuery.FirstOrDefault(s => s.Id == defaultScaleId.Value);
-            gradeRanges = scale?.GradeRanges;
+            gradeRanges = defScaleInfo.Ranges;
+            scaleTotal = defScaleInfo.ScaleTotal;
         }
 
         var subjectMarks = new List<StudentSubjectMarkDto>();
@@ -460,6 +477,7 @@ public class ExamResultAppService(
             string marksObtainedStr = "—";
             string subjectGrade = "—";
             string subjectRemarks = "—";
+            bool isSubjectPassed = false;
 
             if (mark != null)
             {
@@ -473,8 +491,26 @@ public class ExamResultAppService(
                     var obtained = mark.MarksObtained ?? 0;
                     totalObtainedMarks += obtained;
                     marksObtainedStr = obtained.ToString("F2");
-                    subjectGrade = ComputeGrade(obtained, maxMarksVal, gradeRanges);
+
+                    // Load specific grading scale for this subject if available
+                    ICollection<GradeRange>? subRanges = null;
+                    double subScaleTotal = 100.0;
+                    if (examSub.GradeScalingId.HasValue && scaleMap.TryGetValue(examSub.GradeScalingId.Value, out var subScaleInfo))
+                    {
+                        subRanges = subScaleInfo.Ranges;
+                        subScaleTotal = subScaleInfo.ScaleTotal;
+                    }
+                    else
+                    {
+                        subRanges = gradeRanges;
+                        subScaleTotal = scaleTotal;
+                    }
+
+                    subjectGrade = ComputeGrade(obtained, maxMarksVal, subRanges, subScaleTotal);
                     subjectRemarks = GetRemarksFromGrade(subjectGrade);
+
+                    var passingMarksVal = examSub.PassingMarks ?? (maxMarksVal * 0.33);
+                    isSubjectPassed = obtained >= passingMarksVal;
                 }
             }
 
@@ -484,7 +520,8 @@ public class ExamResultAppService(
                 MaxMarks = maxMarksVal.ToString("F2"),
                 MarksObtained = marksObtainedStr,
                 Grade = subjectGrade,
-                Remarks = subjectRemarks
+                Remarks = subjectRemarks,
+                IsPassed = isSubjectPassed
             });
         }
 
@@ -508,8 +545,17 @@ public class ExamResultAppService(
             {
                 var pct = Math.Round(totalObtainedMarks / totalMaxMarks * 100, 2);
                 overallPct = $"{pct}%";
-                overallGrade = ComputeGrade(totalObtainedMarks, totalMaxMarks, gradeRanges);
-                overallStatus = totalObtainedMarks >= exam.ExamSubjects.Sum(s => s.PassingMarks ?? 0) ? "PASS" : "FAIL";
+                overallGrade = ComputeGrade(totalObtainedMarks, totalMaxMarks, gradeRanges, scaleTotal);
+
+                var failedAnySubject = exam.ExamSubjects.Any(s =>
+                {
+                    var mark = marks.FirstOrDefault(m => m.SubjectId == s.SubjectId);
+                    if (mark == null || mark.IsAbsent) return true;
+                    var passingMarksVal = s.PassingMarks ?? ((s.TotalMarks ?? 100.0) * 0.33);
+                    return (mark.MarksObtained ?? 0) < passingMarksVal;
+                });
+
+                overallStatus = failedAnySubject ? "FAIL" : "PASS";
             }
         }
 

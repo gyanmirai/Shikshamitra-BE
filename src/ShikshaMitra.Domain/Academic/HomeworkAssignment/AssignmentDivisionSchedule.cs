@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.MultiTenancy;
@@ -80,6 +80,7 @@ public class AssignmentDivisionSchedule : Entity<Guid>, IMultiTenant
 	{
 		IsPublished = true;
 		PublishedAt = DateTime.UtcNow;
+		PublishDate = DateTime.UtcNow;
 	}
 
 	/// <summary>

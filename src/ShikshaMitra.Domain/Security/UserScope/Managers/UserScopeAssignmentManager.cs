@@ -201,6 +201,30 @@ public class UserScopeAssignmentManager : DomainService
 			EnsureExists(division, nameof(divisionId), divisionId.Value);
 		}
 
+		if (division is not null && standard is null)
+		{
+			standard = await _standardRepository.FindAsync(division.StandardId, cancellationToken: cancellationToken);
+			EnsureExists(standard, nameof(standardId), division.StandardId);
+		}
+
+		if (standard is not null && mediumStage is null)
+		{
+			mediumStage = await _educationMediumStageRepository.FindAsync(standard.EducationMediumStageId, cancellationToken: cancellationToken);
+			EnsureExists(mediumStage, nameof(educationMediumStageId), standard.EducationMediumStageId);
+		}
+
+		if (mediumStage is not null && medium is null)
+		{
+			medium = await _educationMediumRepository.FindAsync(mediumStage.EducationMediumId, cancellationToken: cancellationToken);
+			EnsureExists(medium, nameof(educationMediumId), mediumStage.EducationMediumId);
+		}
+
+		if (medium is not null && board is null)
+		{
+			board = await _educationBoardRepository.FindAsync(medium.EducationBoardId, cancellationToken: cancellationToken);
+			EnsureExists(board, nameof(educationBoardId), medium.EducationBoardId);
+		}
+
 		if (academicYear is not null && board is not null && board.AcademicYearId != academicYear.Id)
 		{
 			ThrowInvalidHierarchy(nameof(educationBoardId), board.Id, nameof(academicYearId), academicYear.Id);

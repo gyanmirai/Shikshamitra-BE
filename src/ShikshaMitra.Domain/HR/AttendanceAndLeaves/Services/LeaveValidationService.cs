@@ -23,6 +23,7 @@ public class LeaveValidationService : DomainService
 	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly LeaveReportingChainService _reportingChainService;
 	private readonly LeaveWorkCalendarUnitService _leaveWorkCalendarUnitService;
+	private readonly LeaveBalanceUnitService _leaveBalanceUnitService;
 	private readonly HrPolicyResolver _hrPolicyResolver;
 	private readonly LeaveCarryForwardBalanceReader _carryForwardBalanceReader;
 
@@ -34,6 +35,7 @@ public class LeaveValidationService : DomainService
 		IAcademicYearRepository academicYearRepository,
 		LeaveReportingChainService reportingChainService,
 		LeaveWorkCalendarUnitService leaveWorkCalendarUnitService,
+		LeaveBalanceUnitService leaveBalanceUnitService,
 		HrPolicyResolver hrPolicyResolver,
 		LeaveCarryForwardBalanceReader carryForwardBalanceReader)
 	{
@@ -44,6 +46,7 @@ public class LeaveValidationService : DomainService
 		_academicYearRepository = academicYearRepository;
 		_reportingChainService = reportingChainService;
 		_leaveWorkCalendarUnitService = leaveWorkCalendarUnitService;
+		_leaveBalanceUnitService = leaveBalanceUnitService;
 		_hrPolicyResolver = hrPolicyResolver;
 		_carryForwardBalanceReader = carryForwardBalanceReader;
 	}
@@ -148,7 +151,12 @@ public class LeaveValidationService : DomainService
 		var policy = await _leavePolicyRepository.GetWithRulesAsync(rule.LeavePolicyId)
 			?? throw new BusinessException(HRErrorCodes.LeavePolicyNotFound);
 		EnsureValidHalfDayRange(startDate, endDate, halfDay);
-		var requestedUnits = LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, halfDay);
+		var requestedUnits = await _leaveWorkCalendarUnitService.CalculateUnitsAsync(
+			employeeId,
+			startDate,
+			endDate,
+			halfDay,
+			policy.AcademicYearId);
 		await EnsureSufficientLeaveBalanceAsync(employeeId, policy, rule, requestedUnits, startDate);
 	}
 
@@ -161,13 +169,13 @@ public class LeaveValidationService : DomainService
 		bool halfDay = false)
 	{
 		EnsureValidHalfDayRange(startDate, endDate, halfDay);
-		var requestedUnits = LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, halfDay);
+		var requestedUnits = await _leaveWorkCalendarUnitService.CalculateUnitsAsync(
+			employeeId,
+			startDate,
+			endDate,
+			halfDay,
+			policy.AcademicYearId);
 		await EnsureSufficientLeaveBalanceAsync(employeeId, policy, rule, requestedUnits, startDate);
-	}
-
-	public decimal CalculateBusinessDays(DateTime startDate, DateTime endDate)
-	{
-		return LeaveDurationCalculator.CountInclusiveBusinessDays(startDate, endDate);
 	}
 
 	public async Task<decimal> GetRemainingLeaveBalanceAsync(
@@ -180,7 +188,7 @@ public class LeaveValidationService : DomainService
 			return 0;
 		}
 
-		var approvedDays = await _employeeLeaveRepository.GetApprovedLeaveDaysByPolicyAndPaidTypeAsync(
+		var approvedDays = await _leaveBalanceUnitService.GetApprovedUsedByPolicyAndPaidTypeAsync(
 			employeeId,
 			rule.LeavePolicyId,
 			rule.PaidType);
@@ -246,7 +254,7 @@ public class LeaveValidationService : DomainService
 			return;
 		}
 
-		var approvedDaysForRule = await _employeeLeaveRepository.GetApprovedLeaveDaysByPolicyAndPaidTypeAsync(
+		var approvedDaysForRule = await _leaveBalanceUnitService.GetApprovedUsedByPolicyAndPaidTypeAsync(
 			employeeId,
 			rule.LeavePolicyId,
 			rule.PaidType);

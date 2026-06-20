@@ -18,6 +18,7 @@ public class LeaveManagementReader(
 	LeaveActorAccessService leaveActorAccessService,
 	LeaveSubmitterResolver leaveSubmitterResolver,
 	LeaveMediumStageResolver leaveMediumStageResolver,
+	ReadSafeLeaveUnitResolver readSafeLeaveUnitResolver,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
@@ -119,9 +120,13 @@ public class LeaveManagementReader(
 		var employeeMediumStageLookup = await leaveMediumStageResolver.ResolveAsync(
 			leaves,
 			input.AcademicYearId);
+		var unitsByLeaveId = await BuildUnitLookupAsync(leaves);
 
 		var items = leaves
-			.Select(leave => LeaveManagementProjection.ToCalendarItemDto(leave, employeeMediumStageLookup))
+			.Select(leave => LeaveManagementProjection.ToCalendarItemDto(
+				leave,
+				employeeMediumStageLookup,
+				unitsByLeaveId[leave.Id]))
 			.ToList();
 
 		return new LeaveManagementCalendarResultDto
@@ -171,6 +176,7 @@ public class LeaveManagementReader(
 		var idOrder = pageIds.Select((id, index) => (id, index)).ToDictionary(t => t.id, t => t.index);
 		leaveRequests = leaveRequests.OrderBy(l => idOrder[l.Id]).ToList();
 		var submitterLookup = await leaveSubmitterResolver.ResolveForLeavesAsync(leaveRequests);
+		var unitsByLeaveId = await BuildUnitLookupAsync(leaveRequests);
 
 		var items = leaveRequests
 			.Select(leave =>
@@ -178,7 +184,7 @@ public class LeaveManagementReader(
 				var submitter = submitterLookup.TryGetValue(leave.Id, out var resolvedSubmitter)
 					? resolvedSubmitter
 					: ("System", (string?)null);
-				return LeaveManagementProjection.ToManagementDto(leave, submitter);
+				return LeaveManagementProjection.ToManagementDto(leave, submitter, unitsByLeaveId[leave.Id]);
 			})
 			.ToList();
 
@@ -194,8 +200,39 @@ public class LeaveManagementReader(
 		var submitter = leave.CreatorId.HasValue && submitterLookup.TryGetValue(leave.CreatorId.Value, out var resolvedSubmitter)
 			? resolvedSubmitter
 			: ("System", (string?)null);
+		var units = await ResolveUnitsAsync(leave);
 
-		return LeaveManagementProjection.ToDetailsDto(leave, submitter);
+		return LeaveManagementProjection.ToDetailsDto(leave, submitter, units);
+	}
+
+	private async Task<Dictionary<Guid, LeaveManagementUnits>> BuildUnitLookupAsync(IReadOnlyCollection<EmployeeLeave> leaves)
+	{
+		var result = new Dictionary<Guid, LeaveManagementUnits>();
+		var unitCache = new Dictionary<ReadSafeLeaveUnitCacheKey, decimal>();
+		foreach (var leave in leaves)
+		{
+			result[leave.Id] = await ResolveUnitsAsync(leave, unitCache);
+		}
+
+		return result;
+	}
+
+	private async Task<LeaveManagementUnits> ResolveUnitsAsync(
+		EmployeeLeave leave,
+		IDictionary<ReadSafeLeaveUnitCacheKey, decimal>? unitCache = null)
+	{
+		var totalDays = await readSafeLeaveUnitResolver.CalculateUnitsForReadAsync(
+			leave.EmployeeId,
+			leave.StartDate.DateTime,
+			leave.EndDate.DateTime,
+			leave.HalfDay,
+			leave.LeavePolicy?.AcademicYearId,
+			unitCache);
+		var approvedUnits = leave.Status == EmployeeLeaveStatusType.Approved
+			? leave.ApprovedLeaveUnits
+			: 0m;
+
+		return new LeaveManagementUnits(totalDays, approvedUnits);
 	}
 
 	private static LeavePaidType? ParsePaidType(string? paidType)

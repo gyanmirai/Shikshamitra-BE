@@ -203,7 +203,6 @@ public class WorkCalendarPolicyApi_Tests : ShikshaMitraApiTestBase
 				null,
 				null,
 				AttendanceHolidayWorkBehavior.CompOff,
-				false,
 				true), autoSave: true);
 
 			await assignmentRepository.InsertAsync(new HrPolicyAssignment(

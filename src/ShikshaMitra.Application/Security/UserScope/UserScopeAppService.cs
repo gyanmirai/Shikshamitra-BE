@@ -177,8 +177,11 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                     .WithData("CorrelationId", correlationId);
             }
 
-            // Generate all combinations of scope parameters
-            var scopeCombinations = GenerateScopeCombinations(input);
+            // Generate all combinations of scope parameters. Explicit clear mode deletes the target
+            // academic-year slice and intentionally creates no replacement scope rows.
+            var scopeCombinations = input.ClearExisting
+                ? new List<ScopeParameterCombination>()
+                : GenerateScopeCombinations(input);
             var totalCombinations = distinctUserIds.Count * scopeCombinations.Count;
 
             _logger.LogInformation(
@@ -280,7 +283,9 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                     AssignmentsCreated = createdCount,
                     TotalCombinations = totalCombinations,
                     AffectedUserIds = affectedUserIds.ToList(),
-                    Message = $"Successfully replaced scope assignments for {affectedUserIds.Count} users in {targetAcademicYearIds.Count} academic years. Deleted {deletedCount} old assignments and created {createdCount} new assignments."
+                    Message = input.ClearExisting
+                        ? $"Successfully cleared scope assignments for {affectedUserIds.Count} users in {targetAcademicYearIds.Count} academic years. Deleted {deletedCount} old assignments."
+                        : $"Successfully replaced scope assignments for {affectedUserIds.Count} users in {targetAcademicYearIds.Count} academic years. Deleted {deletedCount} old assignments and created {createdCount} new assignments."
                 };
             }
             catch (Exception dbEx) when (IsConstraintViolationException(dbEx))

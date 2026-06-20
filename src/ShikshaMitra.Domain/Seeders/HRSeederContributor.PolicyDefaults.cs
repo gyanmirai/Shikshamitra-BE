@@ -102,7 +102,6 @@ public partial class HRSeederContributor
 				overtimeRate: null,
 				minOvertimeMinutes: null,
 				AttendanceHolidayWorkBehavior.CompOff,
-				sandwichRuleEnabled: false,
 				payrollPreviewEnabled: true);
 			if (defaultAttendance != null)
 			{

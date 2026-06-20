@@ -25,13 +25,13 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public int MaxLateAllowedPerMonth { get; protected set; }
 	public AttendancePenaltyType PenaltyType { get; protected set; }
 	public int PenaltyCountThreshold { get; protected set; }
+	public decimal? PenaltyDeductionAmount { get; protected set; }
 	public bool EarlyExitEnabled { get; protected set; }
 	public int EarlyExitGraceTime { get; protected set; }
 	public bool OvertimeEnabled { get; protected set; }
 	public AttendanceOvertimeRate? OvertimeRate { get; protected set; }
 	public int? MinOvertimeMinutes { get; protected set; }
 	public AttendanceHolidayWorkBehavior HolidayWorkBehavior { get; protected set; }
-	public bool SandwichRuleEnabled { get; protected set; }
 	public bool PayrollPreviewEnabled { get; protected set; }
 	public int Version { get; protected set; }
 
@@ -63,8 +63,8 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AttendanceOvertimeRate? overtimeRate,
 		int? minOvertimeMinutes,
 		AttendanceHolidayWorkBehavior holidayWorkBehavior,
-		bool sandwichRuleEnabled,
-		bool payrollPreviewEnabled) : base(id)
+		bool payrollPreviewEnabled,
+		decimal? penaltyDeductionAmount = null) : base(id)
 	{
 		TenantId = tenantId;
 		AcademicYearId = academicYearId;
@@ -91,8 +91,8 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			overtimeRate,
 			minOvertimeMinutes,
 			holidayWorkBehavior,
-			sandwichRuleEnabled,
-			payrollPreviewEnabled);
+			payrollPreviewEnabled,
+			penaltyDeductionAmount);
 	}
 
 	public void Update(
@@ -116,8 +116,8 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AttendanceOvertimeRate? overtimeRate,
 		int? minOvertimeMinutes,
 		AttendanceHolidayWorkBehavior holidayWorkBehavior,
-		bool sandwichRuleEnabled,
-		bool payrollPreviewEnabled)
+		bool payrollPreviewEnabled,
+		decimal? penaltyDeductionAmount = null)
 	{
 		if (AcademicYearId == Guid.Empty)
 		{
@@ -134,7 +134,22 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(HRErrorCodes.PolicyArchiveRequiresArchiveWorkflow);
 		}
 
-		AttendancePolicyRuleValidator.Validate(name, status, isDefault, fullDayThresholdPercentage, halfDayThresholdPercentage, absentThresholdPercentage, graceTime, maxLateAllowedPerMonth, penaltyCountThreshold, earlyExitGraceTime, overtimeEnabled, overtimeRate, minOvertimeMinutes);
+		AttendancePolicyRuleValidator.Validate(
+			name,
+			status,
+			isDefault,
+			fullDayThresholdPercentage,
+			halfDayThresholdPercentage,
+			absentThresholdPercentage,
+			graceTime,
+			maxLateAllowedPerMonth,
+			penaltyType,
+			penaltyCountThreshold,
+			penaltyDeductionAmount,
+			earlyExitGraceTime,
+			overtimeEnabled,
+			overtimeRate,
+			minOvertimeMinutes);
 
 		WorkCalendarPolicyId = workCalendarPolicyId;
 		Name = name.Trim();
@@ -150,13 +165,15 @@ public class AttendancePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MaxLateAllowedPerMonth = maxLateAllowedPerMonth;
 		PenaltyType = penaltyType;
 		PenaltyCountThreshold = penaltyCountThreshold;
+		PenaltyDeductionAmount = penaltyType == AttendancePenaltyType.SalaryDeduction
+			? penaltyDeductionAmount
+			: null;
 		EarlyExitEnabled = earlyExitEnabled;
 		EarlyExitGraceTime = earlyExitGraceTime;
 		OvertimeEnabled = overtimeEnabled;
 		OvertimeRate = overtimeEnabled ? overtimeRate : null;
 		MinOvertimeMinutes = overtimeEnabled ? minOvertimeMinutes : null;
 		HolidayWorkBehavior = holidayWorkBehavior;
-		SandwichRuleEnabled = sandwichRuleEnabled;
 		PayrollPreviewEnabled = payrollPreviewEnabled;
 		Version++;
 	}

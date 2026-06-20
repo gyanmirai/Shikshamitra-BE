@@ -38,6 +38,18 @@ public record LeavePaidTypeBalanceUnits(
 	decimal ApprovedDays,
 	decimal PendingDays);
 
+public record LeaveBalanceUnitRow(
+	Guid EmployeeId,
+	Guid LeavePolicyId,
+	Guid LeavePolicyRuleId,
+	LeavePaidType PaidType,
+	EmployeeLeaveStatusType Status,
+	decimal ApprovedLeaveUnits,
+	DateTimeOffset StartDate,
+	DateTimeOffset EndDate,
+	bool HalfDay,
+	Guid? AcademicYearId);
+
 public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
 {
 	Task<EmployeeLeave?> FindWithoutDetailsAsync(Guid id, CancellationToken cancellationToken = default);
@@ -51,37 +63,12 @@ public interface IEmployeeLeaveRepository : IRepository<EmployeeLeave, Guid>
         DateTimeOffset endDate,
         Guid? excludeLeaveId = null);
 
-    /// <summary>
-    /// Get total approved leave days for employee in a specific period
-    /// </summary>
-    Task<decimal> GetApprovedLeaveDaysAsync(
-        Guid employeeId,
-        Guid leavePolicyId,
-        int year);
-
-	/// <summary>
-	/// Get total approved leave days for employee for a leave policy.
-	/// </summary>
-	Task<decimal> GetApprovedLeaveDaysAsync(
-		Guid employeeId,
-		Guid leavePolicyId);
-
-	Task<decimal> GetApprovedLeaveDaysByRuleAsync(
-		Guid employeeId,
-		Guid leavePolicyRuleId);
-
-	Task<decimal> GetApprovedLeaveDaysByPolicyAndPaidTypeAsync(
-		Guid employeeId,
-		Guid leavePolicyId,
-		LeavePaidType paidType,
-		CancellationToken cancellationToken = default);
-
-	Task<IReadOnlyDictionary<Guid, LeaveRuleBalanceUnits>> GetBalanceUnitsByRuleAsync(
+	Task<List<LeaveBalanceUnitRow>> GetLeaveBalanceRowsByRuleAsync(
 		Guid employeeId,
 		IReadOnlyCollection<Guid> leavePolicyRuleIds,
 		CancellationToken cancellationToken = default);
 
-	Task<IReadOnlyDictionary<LeavePaidType, LeavePaidTypeBalanceUnits>> GetBalanceUnitsByPolicyAndPaidTypeAsync(
+	Task<List<LeaveBalanceUnitRow>> GetLeaveBalanceRowsByPolicyAndPaidTypeAsync(
 		Guid employeeId,
 		Guid leavePolicyId,
 		IReadOnlyCollection<LeavePaidType> paidTypes,

@@ -31,8 +31,8 @@ internal static class AttendancePolicyModelBuilder
 			HrPolicyMapping.ParseOvertimeRate(input.OvertimeRate),
 			input.MinOvertimeMinutes,
 			HrPolicyMapping.ParseHolidayWorkBehavior(input.HolidayWorkBehavior),
-			input.SandwichRuleEnabled,
-			input.PayrollPreviewEnabled);
+			input.PayrollPreviewEnabled,
+			input.PenaltyDeductionAmount);
 
 	public static bool IsUnchanged(
 		AttendancePolicy entity,
@@ -59,13 +59,15 @@ internal static class AttendancePolicyModelBuilder
 			entity.MaxLateAllowedPerMonth == input.MaxLateAllowedPerMonth &&
 			entity.PenaltyType == penaltyType &&
 			entity.PenaltyCountThreshold == input.PenaltyCountThreshold &&
+			entity.PenaltyDeductionAmount == (penaltyType == AttendancePenaltyType.SalaryDeduction
+				? input.PenaltyDeductionAmount
+				: null) &&
 			entity.EarlyExitEnabled == input.EarlyExitEnabled &&
 			entity.EarlyExitGraceTime == input.EarlyExitGraceTime &&
 			entity.OvertimeEnabled == input.OvertimeEnabled &&
 			entity.OvertimeRate == overtimeRate &&
 			entity.MinOvertimeMinutes == input.MinOvertimeMinutes &&
 			entity.HolidayWorkBehavior == holidayWorkBehavior &&
-			entity.SandwichRuleEnabled == input.SandwichRuleEnabled &&
 			entity.PayrollPreviewEnabled == input.PayrollPreviewEnabled;
 	}
 }

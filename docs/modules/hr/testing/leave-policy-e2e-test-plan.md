@@ -12,16 +12,14 @@
 Run from `C:\Repo\ShikshaMitra\Shikshamitra-BE`:
 
 ```powershell
-dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~LeaveAccrualCalculatorTests|FullyQualifiedName~LeaveDurationCalculatorTests"
-dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~LeavePolicyAppService_Tests|FullyQualifiedName~LeaveManagementAppService_Tests|FullyQualifiedName~PayrollApprovedLeaveResolver_Tests"
+dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~LeaveAccrualCalculatorTests"
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~LeavePolicyAppService_Tests|FullyQualifiedName~LeaveManagementAppService_Tests|FullyQualifiedName~LeaveWorkCalendarUnitService_Tests|FullyQualifiedName~PayrollApprovedLeaveResolver_Tests"
 dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~LeavePolicyApi_Tests|FullyQualifiedName~LeaveManagementApi_Tests|FullyQualifiedName~RunPayrollApi_Tests"
 ```
 
 Expected focused results:
 
-- Domain: 10 tests passed.
-- Application: 15 tests passed.
-- HTTP API: 57 tests passed.
+- Domain, application, and HTTP API focused suites pass.
 
 Run from `C:\Repo\ShikshaMitra\Shikshamitra-FE`:
 

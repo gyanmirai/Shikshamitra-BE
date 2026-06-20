@@ -18,7 +18,9 @@ public static class AttendancePolicyRuleValidator
 		double absentThresholdPercentage,
 		int graceTime,
 		int maxLateAllowedPerMonth,
+		AttendancePenaltyType penaltyType,
 		int penaltyCountThreshold,
+		decimal? penaltyDeductionAmount,
 		int earlyExitGraceTime,
 		bool overtimeEnabled,
 		AttendanceOvertimeRate? overtimeRate,
@@ -48,6 +50,14 @@ public static class AttendancePolicyRuleValidator
 			maxLateAllowedPerMonth is < 0 or > MaxLateAllowed ||
 			penaltyCountThreshold is < 0 or > MaxLateAllowed ||
 			earlyExitGraceTime is < 0 or > MaxGraceMinutes)
+		{
+			throw new BusinessException(HRErrorCodes.InvalidAttendancePolicyRule);
+		}
+
+		if (penaltyType == AttendancePenaltyType.SalaryDeduction &&
+			(!penaltyDeductionAmount.HasValue ||
+			 penaltyDeductionAmount.Value <= 0m ||
+			 penaltyDeductionAmount.Value > 1_000_000m))
 		{
 			throw new BusinessException(HRErrorCodes.InvalidAttendancePolicyRule);
 		}

@@ -5,7 +5,8 @@ namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
 public static partial class PersonalInfoContractMapper
 {
-	private static string NormalizePan(string panNo) => panNo.Trim().ToUpperInvariant();
+	private static string? NormalizePan(string? panNo) =>
+		string.IsNullOrWhiteSpace(panNo) ? null : panNo.Trim().ToUpperInvariant();
 
 	private static GenderType MapGender(int gender)
 	{

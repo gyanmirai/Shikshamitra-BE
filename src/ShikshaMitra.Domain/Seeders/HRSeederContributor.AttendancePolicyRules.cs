@@ -57,8 +57,8 @@ public partial class HRSeederContributor
 		AttendanceOvertimeRate? overtimeRate,
 		int? minOvertimeMinutes,
 		AttendanceHolidayWorkBehavior holidayWorkBehavior,
-		bool sandwichRuleEnabled,
-		bool payrollPreviewEnabled)
+		bool payrollPreviewEnabled,
+		decimal? penaltyDeductionAmount = null)
 	{
 		var existing = await _attendancePolicyRepository.FirstOrDefaultAsync(x =>
 			x.AcademicYearId == academicYear.Id &&
@@ -97,8 +97,8 @@ public partial class HRSeederContributor
 						overtimeRate,
 						minOvertimeMinutes,
 						holidayWorkBehavior,
-						sandwichRuleEnabled,
-						payrollPreviewEnabled);
+						payrollPreviewEnabled,
+						penaltyDeductionAmount);
 				}
 
 				await _attendancePolicyRepository.UpdateAsync(existing, autoSave: false);
@@ -139,8 +139,8 @@ public partial class HRSeederContributor
 			overtimeRate,
 			minOvertimeMinutes,
 			holidayWorkBehavior,
-			sandwichRuleEnabled,
-			payrollPreviewEnabled);
+			payrollPreviewEnabled,
+			penaltyDeductionAmount);
 		await _attendancePolicyRepository.InsertAsync(policy, autoSave: false);
 		return policy;
 	}

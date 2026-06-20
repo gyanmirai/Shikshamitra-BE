@@ -45,6 +45,8 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	private readonly ILeavePolicyAppService _leavePolicyAppService;
 	private readonly SalarySlipAccessService _salarySlipAccessService;
 	private readonly IRepository<EmployeeAttendance, Guid> _attendanceRepository;
+	private readonly IEmployeeLeaveRepository _employeeLeaveRepository;
+	private readonly IRepository<WorkCalendarHoliday, Guid> _workCalendarHolidayRepository;
 	private readonly IRepository<EmployeeOrganizationAssignment, Guid> _employeeOrganizationAssignmentRepository;
 	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
 	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
@@ -75,6 +77,8 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		_leavePolicyAppService = GetRequiredService<ILeavePolicyAppService>();
 		_salarySlipAccessService = GetRequiredService<SalarySlipAccessService>();
 		_attendanceRepository = GetRequiredService<IRepository<EmployeeAttendance, Guid>>();
+		_employeeLeaveRepository = GetRequiredService<IEmployeeLeaveRepository>();
+		_workCalendarHolidayRepository = GetRequiredService<IRepository<WorkCalendarHoliday, Guid>>();
 		_employeeOrganizationAssignmentRepository = GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
 		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		_payrollRunItemSnapshotRepository = GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
@@ -224,7 +228,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	}
 
 	[Fact]
-	public async Task GetSalarySlipAsync_Should_Preserve_Draft_From_Locked_Payroll_Snapshot()
+	public async Task GetSalarySlipAsync_Should_Block_Policy_Change_And_Preserve_Draft_From_Locked_Payroll_Snapshot()
 	{
 		var context = await CreatePayrollPolicyContextAsync();
 		var employee = await CreateEmployeeAsync();
@@ -254,7 +258,10 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		snapshot.MarkLocked();
 		await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: true);
 
-		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.WorkingDaysPayroll.Id);
+		var policyChangeEx = await Should.ThrowAsync<BusinessException>(() =>
+			UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.WorkingDaysPayroll.Id));
+		policyChangeEx.Code.ShouldBe(HRErrorCodes.HrPolicyImpactBlocking);
+
 		await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput
 		{
 			Month = "2026-01",
@@ -555,11 +562,42 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		payrollRow.NetPay.ShouldBe((double)regularSalary);
 	}
 
+	[Fact]
+	public async Task SalarySlipManager_Should_Use_WorkCalendar_Units_For_Approved_Leave_Without_Attendance()
+	{
+		const string monthYear = "2026-06";
+		var context = await CreatePayrollPolicyContextAsync(2026, weeklyOffPattern: "sunday");
+		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear));
+		await SaveSalaryComponentsAsync(employee.Id, isTemp: false);
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.WorkingDaysPayroll.Id);
+		await SeedWorkCalendarHolidayAsync(
+			context,
+			new DateOnly(2026, 6, 19),
+			new DateOnly(2026, 6, 20));
+		await SeedApprovedPaidLeaveAsync(
+			context,
+			employee.Id,
+			new DateTimeOffset(new DateTime(2026, 6, 19)),
+			new DateTimeOffset(new DateTime(2026, 6, 30, 23, 59, 59)),
+			approvedUnits: 8m);
+
+		var salarySlip = await WithUnitOfWorkAsync(async () =>
+		{
+			var salarySlipManager = GetRequiredService<SalarySlipManager>();
+			return await salarySlipManager.GenerateOrGetSalarySlipAsync(employee.Id, monthYear);
+		});
+
+		salarySlip.PayrollDayCalculationMode.ShouldBe(DayCalculationType.WorkingDays);
+		salarySlip.PayrollBasisDays.ShouldBe(24m);
+		salarySlip.PayableDays.ShouldBe(8m);
+	}
+
 	private async Task<PayrollPolicyContext> CreatePayrollPolicyContextAsync(
 		int year = 2026,
 		bool overtimeEnabled = false,
 		string? overtimeRate = null,
-		int? minOvertimeMinutes = null)
+		int? minOvertimeMinutes = null,
+		string weeklyOffPattern = "saturday_sunday")
 	{
 		var academicYearId = await CreateAcademicYearAsync(year);
 		var organizationId = await Employees.EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
@@ -570,7 +608,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			Status = "active",
 			EffectiveFrom = new DateTime(year, 1, 1),
 			EffectiveTo = new DateTime(year, 12, 31),
-			WeeklyOffPattern = "saturday_sunday",
+			WeeklyOffPattern = weeklyOffPattern,
 			HolidaySyncMode = "linked_with_overrides"
 		});
 		var workingDays = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
@@ -652,8 +690,20 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 				}
 			]
 		});
+		var paidLeaveRuleId = leavePolicy.Rules
+			.Single(x => string.Equals(x.PaidType, "Paid", StringComparison.OrdinalIgnoreCase))
+			.Id;
 
-		return new PayrollPolicyContext(year, academicYearId, organizationId, workingDays, totalMonth, attendance, leavePolicy.Id);
+		return new PayrollPolicyContext(
+			year,
+			academicYearId,
+			organizationId,
+			workingDays,
+			totalMonth,
+			attendance,
+			calendar.Id,
+			leavePolicy.Id,
+			paidLeaveRuleId);
 	}
 
 	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(
@@ -711,6 +761,48 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			TimeOut = new DateTimeOffset(attendanceDateTime.Add(resolvedTimeOut.ToTimeSpan()), TimeSpan.Zero),
 			EducationMediumStageId = organizationId
 		}, autoSave: true);
+	}
+
+	private Task SeedWorkCalendarHolidayAsync(
+		PayrollPolicyContext context,
+		DateOnly fromDate,
+		DateOnly toDate) =>
+		_workCalendarHolidayRepository.InsertAsync(
+			new WorkCalendarHoliday(
+				_guidGenerator.Create(),
+				_currentTenant.Id,
+				context.AcademicYearId,
+				context.WorkCalendarPolicyId,
+				fromDate,
+				toDate,
+				"Salary slip approved leave holiday",
+				WorkCalendarHolidaySource.Manual,
+				calendarHolidayId: null,
+				isIncluded: true,
+				notes: null),
+			autoSave: true);
+
+	private Task SeedApprovedPaidLeaveAsync(
+		PayrollPolicyContext context,
+		Guid employeeId,
+		DateTimeOffset startDate,
+		DateTimeOffset endDate,
+		decimal approvedUnits)
+	{
+		var leave = EmployeeLeave.Create(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			employeeId,
+			context.LeavePolicyId,
+			context.PaidLeavePolicyRuleId,
+			LeavePaidType.Paid,
+			startDate,
+			endDate,
+			"Salary slip approved leave regression",
+			halfDay: false);
+		leave.SetApprovalPayrollSnapshot(LeavePaidType.Paid, approvedUnits);
+		leave.UpdateLeaveStatus(EmployeeLeaveStatusType.Approved, rejectionReason: null);
+		return _employeeLeaveRepository.InsertAsync(leave, autoSave: true);
 	}
 
 	private Task SaveSalaryComponentsAsync(Guid employeeId, bool isTemp = true) =>
@@ -1064,5 +1156,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		PayrollPolicyDto WorkingDaysPayroll,
 		PayrollPolicyDto TotalMonthPayroll,
 		AttendancePolicyDto AttendancePolicy,
-		Guid LeavePolicyId);
+		Guid WorkCalendarPolicyId,
+		Guid LeavePolicyId,
+		Guid PaidLeavePolicyRuleId);
 }

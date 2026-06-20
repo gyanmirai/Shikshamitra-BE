@@ -108,7 +108,8 @@ internal static class EmployeePayrollProjection
 			Name = component.Name,
 			Amount = component.Amount,
 			IsFixed = component.IsFixed,
-			IsTemp = component.IsTemp
+			IsTemp = component.IsTemp,
+			ApplicableMonth = component.ApplicableMonth
 		};
 	}
 }

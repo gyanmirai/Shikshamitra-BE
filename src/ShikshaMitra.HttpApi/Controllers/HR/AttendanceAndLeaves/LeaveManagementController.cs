@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
-using ShikshaMitra.HttpApi.Models;
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;

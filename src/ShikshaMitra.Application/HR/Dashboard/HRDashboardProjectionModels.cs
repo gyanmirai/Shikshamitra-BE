@@ -27,6 +27,7 @@ internal sealed record LeaveDashboardRow(
 	Guid Id,
 	int PublicId,
 	Guid EmployeeId,
+	Guid LeavePolicyId,
 	LeavePaidType PaidType,
 	DateTimeOffset StartDate,
 	DateTimeOffset EndDate,

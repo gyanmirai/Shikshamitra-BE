@@ -168,6 +168,59 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Legacy_Payroll_Get_Should_Preserve_ApplicableMonth()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayApplicableMonth");
+		var applicableMonth = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc);
+
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "PayApplicableMonthE");
+		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "PayApplicableMonthD");
+		var salaryResponse = await Client.PutAsJsonAsync(
+			$"/api/payroll/employees/{empId}/salary-structure",
+			new UpdateSalaryStructureDto
+			{
+				EarningComponents =
+				[
+					new SalaryComponentDto
+					{
+						ComponentId = earningComponent.Id,
+						Name = earningComponent.Name,
+						Amount = 5000m,
+						IsFixed = true,
+						IsTemp = false,
+						ApplicableMonth = applicableMonth
+					}
+				],
+				DeductionComponents =
+				[
+					new SalaryComponentDto
+					{
+						ComponentId = deductionComponent.Id,
+						Name = deductionComponent.Name,
+						Amount = 1000m,
+						IsFixed = true,
+						IsTemp = false,
+						ApplicableMonth = applicableMonth
+					}
+				]
+			},
+			JsonOptions);
+		var salaryBody = await salaryResponse.Content.ReadAsStringAsync();
+		salaryResponse.StatusCode.ShouldBe(HttpStatusCode.OK, salaryBody);
+
+		var response = await Client.GetAsync($"{BaseUrl}/{empId}/payroll");
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+		var payroll = await response.Content.ReadFromJsonAsync<EmployeePayrollResponse>(JsonOptions);
+
+		payroll.ShouldNotBeNull();
+		payroll.EarningComponents.ShouldNotBeNull();
+		payroll.DeductionComponents.ShouldNotBeNull();
+		payroll.EarningComponents[0].ApplicableMonth.ShouldBe(applicableMonth);
+		payroll.DeductionComponents[0].ApplicableMonth.ShouldBe(applicableMonth);
+	}
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Update_Payroll_When_Form_Sends_Employee_Component_Row_Id()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PayRowId");
@@ -859,6 +912,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 				TargetDisplayName = "Selected payroll override",
 				AttendancePolicyId = context.AttendancePolicyId,
 				PayrollPolicyId = context.ReplacementPayrollPolicyId,
+				LeavePolicyId = context.LeavePolicyId,
 				EffectiveFrom = new DateTime(2026, 4, 1),
 				IsActive = true,
 				Priority = 100,
@@ -880,6 +934,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 				AssignmentId = context.SelectedAssignmentId,
 				PayrollPolicyId = context.ReplacementPayrollPolicyId,
 				AttendancePolicyId = context.AttendancePolicyId,
+				LeavePolicyId = context.LeavePolicyId,
 				EffectiveFrom = new DateTime(2026, 4, 1),
 				AssignmentReason = "Selected payroll override",
 				ConfirmationToken = preview.ConfirmationToken
@@ -1221,11 +1276,17 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		var workCalendarRepository = scope.ServiceProvider.GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
 		var payrollRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
 		var attendanceRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var leavePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<LeavePolicy, Guid>>();
 		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
 		using (currentTenant.Change(tenantId))
 		{
+			var leavePolicy = (await leavePolicyRepository.GetListAsync(x =>
+					x.AcademicYearId == Factory.SeededAcademicYearId &&
+					x.IsDefault &&
+					x.IsActive))
+				.First();
 			var calendar = await workCalendarRepository.InsertAsync(new WorkCalendarPolicy(
 				Guid.NewGuid(),
 				tenantId,
@@ -1289,7 +1350,6 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 				null,
 				0,
 				AttendanceHolidayWorkBehavior.Paid,
-				false,
 				false), autoSave: true);
 			var targetKey = employeeId.ToString("D").ToLowerInvariant();
 			var competing = await assignmentRepository.InsertAsync(new HrPolicyAssignment(
@@ -1301,7 +1361,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 				"Competing payroll override",
 				attendance.Id,
 				existingPayroll.Id,
-				null,
+				leavePolicy.Id,
 				new DateTime(2026, 4, 1),
 				null,
 				true,
@@ -1316,14 +1376,14 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 				"Selected payroll override",
 				attendance.Id,
 				existingPayroll.Id,
-				null,
+				leavePolicy.Id,
 				new DateTime(2026, 4, 1),
 				null,
 				true,
 				100,
 				"Selected payroll override"), autoSave: true);
 
-			return new PolicyOverrideSeedContext(selected.Id, competing.Id, attendance.Id, replacementPayroll.Id);
+			return new PolicyOverrideSeedContext(selected.Id, competing.Id, attendance.Id, replacementPayroll.Id, leavePolicy.Id);
 		}
 	}
 
@@ -1331,5 +1391,6 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 		Guid SelectedAssignmentId,
 		Guid CompetingAssignmentId,
 		Guid AttendancePolicyId,
-		Guid ReplacementPayrollPolicyId);
+		Guid ReplacementPayrollPolicyId,
+		Guid LeavePolicyId);
 }

@@ -26,6 +26,7 @@ public class PayrollSnapshotRefresher(
 	PayrollApprovedLeaveResolver payrollApprovedLeaveResolver,
 	PayrollComponentVersionResolver componentVersionResolver,
 	PayrollAdjustmentReader adjustmentReader,
+	PayrollLateArrivalDeductionAdjustmentService lateArrivalDeductionAdjustmentService,
 	PayrollScopedEmployeeResolver scopedEmployeeResolver,
 	PayrollRunSnapshotStore snapshotStore,
 	PayrollBasisPreviewResolver basisPreviewResolver,
@@ -183,13 +184,22 @@ public class PayrollSnapshotRefresher(
 			}
 		}
 
+		var payrollReadyEmployeeIds = payrollContextByEmployee.Keys.ToList();
 		var leaveUnitsByEmployee = await payrollApprovedLeaveResolver.ResolveLeaveUnitsByEmployeeAsync(
-			employeeIds,
+			payrollReadyEmployeeIds,
 			year,
 			month,
 			payrollContextByEmployee.ToDictionary(
 				x => x.Key,
 				x => (IReadOnlyDictionary<DateOnly, decimal>)x.Value.WorkingUnitsByDate));
+		await lateArrivalDeductionAdjustmentService.SyncAsync(
+			internalMonthYear,
+			year,
+			month,
+			scopedEmployees,
+			attendanceByEmployee,
+			payrollContextByEmployee.ToDictionary(x => x.Key, x => x.Value.ResolvedPolicies));
+		adjustmentsByEmployee = await adjustmentReader.GetByEmployeeAsync(internalMonthYear, employeeIds);
 
 		foreach (var employee in scopedEmployees)
 		{

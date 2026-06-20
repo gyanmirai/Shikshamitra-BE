@@ -489,7 +489,6 @@ public class LeaveYearEndSettlementWorkflow_Tests : ShikshaMitraApplicationTestB
 			overtimeRate: null,
 			minOvertimeMinutes: null,
 			AttendanceHolidayWorkBehavior.CompOff,
-			sandwichRuleEnabled: false,
 			payrollPreviewEnabled: true), autoSave: true);
 
 		var leavePolicy = new LeavePolicy(

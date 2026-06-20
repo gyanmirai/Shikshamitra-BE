@@ -25,7 +25,7 @@ public static partial class PersonalInfoContractMapper
 			Email = request.Email,
 			MobileNo = request.MobileNo,
 			SecondaryMobileNo = request.SecondaryMobileNo,
-			PanNo = NormalizePan(request.PanNo),
+			PanNo = NormalizePan(request.PanNo) ?? string.Empty,
 			AdharNo = request.AdharNo,
 			DateOfJoining = DateOnly.FromDateTime(request.Doj),
 			Department = request.Department?.ToString(),

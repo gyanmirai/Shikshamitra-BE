@@ -4,7 +4,6 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,7 +30,6 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	private const string BaseUrl = "/api/leave-management";
 	private const string LeavePoliciesUrl = "/api/leave-policies";
 	private static readonly Guid TestAcademicYearId = Guid.Parse("00000000-0000-0000-0000-000000000030");
-	private static int _publicIdSeed = 900000;
 	private Guid AcademicYearId => Factory.SeededAcademicYearId != Guid.Empty ? Factory.SeededAcademicYearId : TestAcademicYearId;
 
 	public LeaveManagementApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
@@ -224,6 +222,36 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Create_Leave_With_Direct_File_Form_Field()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"DirectFileLeave{Guid.NewGuid():N}");
+		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		var leaveDate = FirstNonSunday(startDate);
+
+		using var form = new MultipartFormDataContent();
+		form.Add(new StringContent(employee.Id.ToString()), "forEmployeeId");
+		form.Add(new StringContent("Unpaid"), "paidType");
+		form.Add(new StringContent(leaveDate.ToString("yyyy-MM-dd")), "startDate");
+		form.Add(new StringContent(leaveDate.ToString("yyyy-MM-dd")), "endDate");
+		form.Add(new StringContent("Direct file attachment leave request"), "reason");
+		var fileContent = new ByteArrayContent(new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+		form.Add(fileContent, "file", "proof.png");
+
+		var response = await Client.PostAsync($"{BaseUrl}?academicYearId={AcademicYearId}", form);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.Created, rawPayload);
+		var created = JsonSerializer.Deserialize<LeaveRequestCreatedResponse>(rawPayload, JsonOptions);
+		created.ShouldNotBeNull();
+
+		var detailResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}");
+		var detailPayload = await detailResponse.Content.ReadAsStringAsync();
+		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK, detailPayload);
+		var detail = JsonSerializer.Deserialize<LeaveRequestDetailsResponse>(detailPayload, JsonOptions);
+		detail.ShouldNotBeNull();
+		detail.AttachmentUrl.ShouldNotBeNullOrWhiteSpace();
+	}
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Reject_Legacy_LeaveTypeId_Create_Payload()
@@ -596,9 +624,11 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 				new DateTimeOffset(leaveDate.Date),
 				reason);
 
+			var existingLeaves = await leaveRepository.GetListAsync();
+			var nextPublicId = (existingLeaves.Select(x => (int?)x.PublicId).Max() ?? 0) + 1;
 			typeof(EmployeeLeave)
 				.GetProperty(nameof(EmployeeLeave.PublicId))!
-				.SetValue(leave, Interlocked.Increment(ref _publicIdSeed));
+				.SetValue(leave, nextPublicId);
 
 			await leaveRepository.InsertAsync(leave, autoSave: true);
 			return leave.Id;

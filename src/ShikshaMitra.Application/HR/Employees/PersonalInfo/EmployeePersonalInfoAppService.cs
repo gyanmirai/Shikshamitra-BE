@@ -54,8 +54,9 @@ public class EmployeePersonalInfoAppService(
 	{
 		var existingEmployee = await employeeRepository.GetAsync(id);
 		EnsureEmailUnchanged(existingEmployee.Email, input.Email);
-		input.PanNo = EmployeeIdentityUniquenessChecker.NormalizePan(input.PanNo);
-		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo, id);
+		var panNo = ResolvePanNo(input.PanNo, existingEmployee.PanNo);
+		var adharNo = ResolveAdharNo(input.AdharNo, existingEmployee.AdharNo);
+		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(panNo, adharNo, id);
 		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
 
 		var employee = await employeeManager.UpdateEmployeeAsync(
@@ -75,8 +76,8 @@ public class EmployeePersonalInfoAppService(
 			mobileNo: input.MobileNo,
 			secondaryMobileNo: input.SecondaryMobileNo,
 			email: existingEmployee.Email,
-			panNo: input.PanNo,
-			adharNo: input.AdharNo,
+			panNo: panNo,
+			adharNo: adharNo,
 			address1: input.Address1,
 			address2: input.Address2,
 			address3: input.Address3,
@@ -98,6 +99,16 @@ public class EmployeePersonalInfoAppService(
 
 		return await personalInfoProjection.ToPersonalInfoDtoAsync(await employeeRepository.GetAsync(employee.Id));
 	}
+
+	private static string ResolvePanNo(string? requestedPanNo, string existingPanNo) =>
+		string.IsNullOrWhiteSpace(requestedPanNo)
+			? existingPanNo
+			: EmployeeIdentityUniquenessChecker.NormalizePan(requestedPanNo)!;
+
+	private static string ResolveAdharNo(string? requestedAdharNo, string existingAdharNo) =>
+		string.IsNullOrWhiteSpace(requestedAdharNo)
+			? existingAdharNo
+			: requestedAdharNo.Trim();
 
 	private static void EnsureEmailUnchanged(string? existingEmail, string? requestedEmail)
 	{

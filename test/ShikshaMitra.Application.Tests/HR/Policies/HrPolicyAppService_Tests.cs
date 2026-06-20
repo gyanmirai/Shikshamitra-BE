@@ -614,7 +614,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			OvertimeRate = context.AttendancePolicy.OvertimeRate,
 			MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
 			HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
-			SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
 			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
 		});
 
@@ -673,7 +672,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				OvertimeRate = context.AttendancePolicy.OvertimeRate,
 				MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
 				HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
-				SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
 				PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
 			}));
 
@@ -1370,7 +1368,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			OvertimeRate = context.AttendancePolicy.OvertimeRate,
 			MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
 			HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
-			SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
 			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
 		}));
 
@@ -1454,7 +1451,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			OvertimeRate = "1.5x",
 			MinOvertimeMinutes = 30,
 			HolidayWorkBehavior = "ot_payout",
-			SandwichRuleEnabled = true,
 			PayrollPreviewEnabled = true
 		});
 
@@ -1463,7 +1459,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		updated.OvertimeRate.ShouldBe("1.5x");
 		updated.HolidayWorkBehavior.ShouldBe("ot_payout");
 		updated.MinOvertimeMinutes.ShouldBe(30);
-		updated.SandwichRuleEnabled.ShouldBeTrue();
 	}
 
 	[Theory]
@@ -1491,18 +1486,55 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			MaxLateAllowedPerMonth = context.AttendancePolicy.MaxLateAllowedPerMonth,
 			PenaltyType = penaltyType,
 			PenaltyCountThreshold = context.AttendancePolicy.PenaltyCountThreshold,
+			PenaltyDeductionAmount = penaltyType == "salary_deduction" ? 25m : null,
 			EarlyExitEnabled = context.AttendancePolicy.EarlyExitEnabled,
 			EarlyExitGraceTime = context.AttendancePolicy.EarlyExitGraceTime,
 			OvertimeEnabled = context.AttendancePolicy.OvertimeEnabled,
 			OvertimeRate = context.AttendancePolicy.OvertimeRate,
 			MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
 			HolidayWorkBehavior = holidayWorkBehavior,
-			SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
 			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
 		});
 
 		updated.PenaltyType.ShouldBe(penaltyType);
 		updated.HolidayWorkBehavior.ShouldBe(holidayWorkBehavior);
+		updated.PenaltyDeductionAmount.ShouldBe(penaltyType == "salary_deduction" ? 25m : null);
+	}
+
+	[Fact]
+	public async Task AttendancePolicy_Should_Reject_Salary_Deduction_Without_Amount()
+	{
+		var context = await CreatePolicyContextAsync();
+
+		var ex = await Should.ThrowAsync<AbpValidationException>(() => _attendancePolicies.UpdateAsync(context.AttendancePolicy.Id, new CreateUpdateAttendancePolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = context.AttendancePolicy.Name,
+			Status = context.AttendancePolicy.Status,
+			IsDefault = context.AttendancePolicy.IsDefault,
+			FullDayThresholdPercentage = context.AttendancePolicy.FullDayThresholdPercentage,
+			HalfDayThresholdPercentage = context.AttendancePolicy.HalfDayThresholdPercentage,
+			AbsentThresholdPercentage = context.AttendancePolicy.AbsentThresholdPercentage,
+			MissingPunchBehavior = context.AttendancePolicy.MissingPunchBehavior,
+			ManualCorrectionAllowed = context.AttendancePolicy.ManualCorrectionAllowed,
+			GraceTime = context.AttendancePolicy.GraceTime,
+			MaxLateAllowedPerMonth = context.AttendancePolicy.MaxLateAllowedPerMonth,
+			PenaltyType = "salary_deduction",
+			PenaltyCountThreshold = context.AttendancePolicy.PenaltyCountThreshold,
+			PenaltyDeductionAmount = null,
+			EarlyExitEnabled = context.AttendancePolicy.EarlyExitEnabled,
+			EarlyExitGraceTime = context.AttendancePolicy.EarlyExitGraceTime,
+			OvertimeEnabled = context.AttendancePolicy.OvertimeEnabled,
+			OvertimeRate = context.AttendancePolicy.OvertimeRate,
+			MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
+			HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
+			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
+		}));
+
+		ex.ValidationErrors.Any(error =>
+			(error.ErrorMessage ?? string.Empty).Contains("Penalty deduction amount", StringComparison.OrdinalIgnoreCase))
+			.ShouldBeTrue();
 	}
 
 	[Fact]
@@ -1539,7 +1571,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 				OvertimeRate = overtimeRate ?? "1.5x",
 				MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes ?? 30,
 				HolidayWorkBehavior = holidayWorkBehavior ?? context.AttendancePolicy.HolidayWorkBehavior,
-				SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
 				PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
 			}));
 			ex.ValidationErrors.Any(error => (error.ErrorMessage ?? string.Empty).Contains(expectedMessageToken, StringComparison.OrdinalIgnoreCase)).ShouldBeTrue();
@@ -1634,7 +1665,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			OvertimeRate = context.AttendancePolicy.OvertimeRate,
 			MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
 			HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
-			SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
 			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled
 		});
 
@@ -1856,7 +1886,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			OvertimeRate = context.AttendancePolicy.OvertimeRate,
 			MinOvertimeMinutes = context.AttendancePolicy.MinOvertimeMinutes,
 			HolidayWorkBehavior = context.AttendancePolicy.HolidayWorkBehavior,
-			SandwichRuleEnabled = context.AttendancePolicy.SandwichRuleEnabled,
 			PayrollPreviewEnabled = context.AttendancePolicy.PayrollPreviewEnabled,
 			Version = context.AttendancePolicy.Version
 		};
@@ -2157,7 +2186,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			OvertimeRate = attendance.OvertimeRate,
 			MinOvertimeMinutes = attendance.MinOvertimeMinutes,
 			HolidayWorkBehavior = attendance.HolidayWorkBehavior,
-			SandwichRuleEnabled = attendance.SandwichRuleEnabled,
 			PayrollPreviewEnabled = attendance.PayrollPreviewEnabled
 		}));
 
@@ -2287,7 +2315,6 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			OvertimeRate = attendance.OvertimeRate,
 			MinOvertimeMinutes = attendance.MinOvertimeMinutes,
 			HolidayWorkBehavior = attendance.HolidayWorkBehavior,
-			SandwichRuleEnabled = attendance.SandwichRuleEnabled,
 			PayrollPreviewEnabled = attendance.PayrollPreviewEnabled
 		}));
 

@@ -100,6 +100,7 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		var hrStaffPermissions = ModulePermissions(
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.HR,
+			ShikshaMitraModulePermissions.Communication,
 			ShikshaMitraModulePermissions.Calendar,
 			ShikshaMitraModulePermissions.InstituteSetup);
 		var studentFamilyPermissions = ModulePermissions(

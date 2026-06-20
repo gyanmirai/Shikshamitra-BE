@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Seeders;
 using Shouldly;
 using Volo.Abp.Identity;
@@ -22,6 +23,18 @@ public class RolePermissionSeederContributor_Tests
 		hrManagerPermissions
 			.Where(permission => permission.StartsWith("AbpPermissionManagement.", StringComparison.OrdinalIgnoreCase))
 			.ShouldBeEmpty();
+	}
+
+	[Fact]
+	public void HR_Manager_Should_Have_Communication_Operational_Access()
+	{
+		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
+		var hrManagerPermissions = rolePermissions["HR Manager"];
+
+		hrManagerPermissions.ShouldContain(ShikshaMitraModulePermissions.Communication);
+		hrManagerPermissions.ShouldContain(ShikshaMitraSubmodulePermissions.Communication.Campaigns.Send);
+		hrManagerPermissions.ShouldContain(ShikshaMitraSubmodulePermissions.Communication.Notification_Templates.Add);
+		hrManagerPermissions.ShouldContain(ShikshaMitraSubmodulePermissions.Communication.Settings_ProviderSettings.Add);
 	}
 
 	[Fact]

@@ -124,6 +124,25 @@ public class EntranceExamApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_Handled_Error_When_Scheduling_Invalid_Status()
+    {
+        var registration = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(
+            Client,
+            "ExamInvalidStatus");
+        await MoveRegistrationToEntranceExamAsync(registration.StudentId);
+
+        var response = await Client.PostAsJsonAsync(
+            $"{BaseUrl}/{registration.StudentId}/schedule",
+            new ScheduleEntranceExamDto { EntranceExamSlotId = Guid.NewGuid() },
+            JsonOptions);
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+        response.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.UnprocessableEntity);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("ST:Enrollment:030001");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Error_For_Upload_Result_Nonexistent_Student()
     {
         var dto = new UploadEntranceExamResultDto
@@ -254,4 +273,5 @@ public class EntranceExamApi_Tests : ShikshaMitraApiTestBase
             await uow.CompleteAsync();
         }
     }
+
 }

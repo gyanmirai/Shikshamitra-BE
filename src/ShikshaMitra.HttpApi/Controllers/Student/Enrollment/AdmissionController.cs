@@ -18,6 +18,7 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments;
 [RemoteService(Name = "Students")]
 [Area("students")]
 [Route("api/students/admissions")]
+[Route("api/student/enrollment/admissions")]
 public class AdmissionController : AbpControllerBase
 {
 	private readonly IStudentAdmissionAppService _admissionAppService;
@@ -51,6 +52,28 @@ public class AdmissionController : AbpControllerBase
 	public async Task AssignDivisionAsync(Guid studentId, [FromBody] AssignDivisionDto input)
 	{
 		await _admissionAppService.AssignDivisionAsync(studentId, input);
+	}
+
+	/// <summary>
+	/// Updates admission-stage general details using the registration update schema.
+	/// PUT: api/student/enrollment/admissions/{studentId}
+	/// </summary>
+	/// <param name="studentId">The student identifier</param>
+	/// <param name="input">General information data</param>
+	[HttpPut("{studentId}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.Add)]
+	[ProducesResponseType(
+		typeof(ShikshaMitra.Common.Responses.Result<ShikshaMitra.Students.Enrollments.Registrations.StudentGeneralDetailsDto>),
+		Microsoft.AspNetCore.Http.StatusCodes.Status200OK)]
+	[ProducesResponseType(typeof(ShikshaMitra.Common.Responses.Result), Microsoft.AspNetCore.Http.StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(typeof(ShikshaMitra.Common.Responses.Result), Microsoft.AspNetCore.Http.StatusCodes.Status404NotFound)]
+	public async Task<ShikshaMitra.Common.Responses.Result<ShikshaMitra.Students.Enrollments.Registrations.StudentGeneralDetailsDto>>
+		UpdateAdmissionGeneralDetailsAsync(
+			Guid studentId,
+			[FromBody] ShikshaMitra.Students.Enrollments.Registrations.UpdateGeneralInfoDto input)
+	{
+		var result = await _admissionAppService.UpdateAdmissionGeneralDetailsAsync(studentId, input);
+		return ShikshaMitra.Common.Responses.Result.Success(result);
 	}
 
 	/// <summary>

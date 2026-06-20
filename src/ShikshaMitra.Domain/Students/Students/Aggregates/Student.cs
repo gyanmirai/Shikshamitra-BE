@@ -473,7 +473,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 	/// <summary>
 	/// Approves the student admission
 	/// </summary>
-	public void ApproveAdmission()
+	public void ApproveAdmission(string? remarks = null)
 	{
 		if (Status != StudentLifeCycleStatusEnum.Admission)
 		{
@@ -482,7 +482,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 		}
 
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Approved;
-		AdmissionApprovalRemarks = null; // Clear any previous rejection remarks
+		AdmissionApprovalRemarks = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim();
 		Status = StudentLifeCycleStatusEnum.Enrolled;
 	}
 

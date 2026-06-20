@@ -466,19 +466,22 @@ public class StudentManagementAppService(
 		return MapAcademicTerm(term);
 	}
 
-	public async Task<List<RollNumberProjectionDto>> GetRollNumberProjections(Guid divisionId, Guid? academicTermId, ArrangementTypeEnum arrangementType, ArrangementByEnum arrangementBy)
+	public async Task<RollNumberProjectionResponseDto> GetRollNumberProjections(Guid divisionId, Guid? academicTermId, ArrangementTypeEnum? arrangementType, ArrangementByEnum? arrangementBy)
 	{
 		try
 		{
 			await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(GetRollNumberProjections));
 			var academicTerm = await ResolveAcademicTermAsync(divisionId, academicTermId, nameof(GetRollNumberProjections));
+			var settings = await studentManagementSettingsRepository.FirstOrDefaultAsync(s => s.DivisionId == divisionId);
+			var effectiveArrangementType = arrangementType ?? settings?.ArrangementTye ?? ArrangementTypeEnum.Mix;
+			var effectiveArrangementBy = arrangementBy ?? settings?.ArrangementBy ?? ArrangementByEnum.FirstName;
 
 			// Keep roll projection lean; avoid loading the full student aggregate graph.
 			var query = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
 				.Where(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled);
 
 			query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
-			query = ApplyRollArrangement(query, arrangementType, arrangementBy);
+			query = ApplyRollArrangement(query, effectiveArrangementType, effectiveArrangementBy);
 			var students = await AsyncExecuter.ToListAsync(query);
 
 			var studentIds = students.Select(s => s.Id).ToList();
@@ -507,7 +510,15 @@ public class StudentManagementAppService(
 				});
 			}
 
-			return rollNumberProjectionDto;
+			return new RollNumberProjectionResponseDto
+			{
+				TotalCount = rollNumberProjectionDto.Count,
+				PageSize = rollNumberProjectionDto.Count,
+				TotalPages = rollNumberProjectionDto.Count == 0 ? 0 : 1,
+				ArrangementType = effectiveArrangementType,
+				ArrangementBy = effectiveArrangementBy,
+				Items = rollNumberProjectionDto
+			};
 		}
 		catch
 		{

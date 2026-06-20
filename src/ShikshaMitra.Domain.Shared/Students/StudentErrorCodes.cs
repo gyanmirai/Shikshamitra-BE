@@ -82,4 +82,7 @@ public static class StudentErrorCodes
     public const string DuplicateRollNumber                  = "ST:Records:050005";
     public const string RollNumberBatchInvalid               = "ST:Records:050006";
     public const string AcademicTermAlreadyExists            = "ST:Records:050007";
+    public const string CertificateNotFound                  = "ST:Records:050008";
+    public const string CertificateTemplateNotFound          = "ST:Records:050009";
+    public const string CertificateNumberGenerationConflict  = "ST:Records:050010";
 }

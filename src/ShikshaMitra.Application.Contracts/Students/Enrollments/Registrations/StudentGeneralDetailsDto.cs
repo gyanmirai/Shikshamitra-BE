@@ -10,8 +10,8 @@ public class StudentGeneralDetailsDto
 	public string FormNo { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid AcademicBoardId { get; set; }
-	public Guid AcademicMediumId { get; private set; }
-	public Guid StandardId { get; private set; }
+	public Guid AcademicMediumId { get; set; }
+	public Guid StandardId { get; set; }
 
 	public string FirstName { get; set; }
 	public string? MiddleName { get; set; }

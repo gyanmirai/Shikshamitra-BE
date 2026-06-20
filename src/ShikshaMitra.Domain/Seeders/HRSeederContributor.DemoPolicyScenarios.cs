@@ -122,7 +122,6 @@ public partial class HRSeederContributor
 			AttendanceOvertimeRate.OnePointFiveX,
 			minOvertimeMinutes: 30,
 			AttendanceHolidayWorkBehavior.OvertimePayout,
-			sandwichRuleEnabled: true,
 			payrollPreviewEnabled: true);
 		await EnsureAttendancePolicyAsync(
 			academicYear,
@@ -144,7 +143,6 @@ public partial class HRSeederContributor
 			overtimeRate: null,
 			minOvertimeMinutes: null,
 			AttendanceHolidayWorkBehavior.Paid,
-			sandwichRuleEnabled: false,
 			payrollPreviewEnabled: true);
 	}
 

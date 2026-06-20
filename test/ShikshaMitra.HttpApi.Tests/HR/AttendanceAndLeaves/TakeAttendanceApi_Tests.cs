@@ -926,7 +926,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				null,
 				null,
 				AttendanceHolidayWorkBehavior.CompOff,
-				false,
 				true);
 			await attendancePolicyRepository.InsertAsync(policy, autoSave: false);
 			await assignmentRepository.InsertAsync(new HrPolicyAssignment(
@@ -1010,7 +1009,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				null,
 				null,
 				AttendanceHolidayWorkBehavior.CompOff,
-				false,
 				true);
 			await attendancePolicyRepository.InsertAsync(policy, autoSave: false);
 			await assignmentRepository.InsertAsync(new HrPolicyAssignment(
@@ -1230,8 +1228,8 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				end,
 				"Attendance approved leave overlay test",
 				halfDay);
-			var leaveQuery = await leaveRepository.GetQueryableAsync();
-			var nextPublicId = (leaveQuery.Select(x => (int?)x.PublicId).Max() ?? 0) + 1;
+			var existingLeaves = await leaveRepository.GetListAsync();
+			var nextPublicId = (existingLeaves.Select(x => (int?)x.PublicId).Max() ?? 0) + 1;
 			typeof(EmployeeLeave)
 				.GetProperty(nameof(EmployeeLeave.PublicId))!
 				.SetValue(leave, nextPublicId);

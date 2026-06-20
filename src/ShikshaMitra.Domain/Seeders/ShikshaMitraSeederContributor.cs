@@ -136,6 +136,7 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 		TenantStep<Seeders.AcademicSetupSeederContributor>(serviceProvider, "AcademicSetupSeeder", "AcademicSetupSeeder:v2", 140, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.DemoAcademicAndInstituteSeederContributor>(serviceProvider, "DemoAcademicAndInstituteSeeder", "DemoAcademicAndInstituteSeeder:v2", 150, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.HRSeederContributor>(serviceProvider, "HRSeeder", "HRSeeder:v7", 160, Seeders.ShikshaMitraSeederProfile.Demo),
+		TenantStep<Seeders.LeaveApprovedUnitsRepairSeederContributor>(serviceProvider, "LeaveApprovedUnitsRepairSeeder", "LeaveApprovedUnitsRepairSeeder:v1", 165, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.StudentSeederContributor>(serviceProvider, "StudentSeeder", "StudentSeeder:v1", 170, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<Student>(serviceProvider)),
 		TenantStep<Seeders.LibrarySeederContributor>(serviceProvider, "LibrarySeeder", "LibrarySeeder:v1", 175, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<Book>(serviceProvider)),
 		TenantStep<Seeders.FeeRefundSeederContributor>(serviceProvider, "FeeRefundSeeder", "FeeRefundSeeder:v1", 180, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<FeeRefundRequest>(serviceProvider)),

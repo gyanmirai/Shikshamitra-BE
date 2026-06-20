@@ -166,6 +166,65 @@ public class UserScopeAppService_BulkAssign_Tests
     }
 
     [Fact]
+    public async Task BulkAssignAsync_Should_Save_Parent_Medium_Only_Payload_And_Sync_Employee_Organizations()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var user = await CreateUserAsync();
+            var employee = await CreateEmployeeForUserAsync(user.Id);
+            var hierarchy = await CreateAcademicHierarchyAsync();
+
+            await WithUnitOfWorkAsync(() => _userScopeAppService.BulkAssignAsync(new BulkScopeAssignmentDto
+            {
+                UserIds = [user.Id],
+                AcademicYearIds = [hierarchy.AcademicYearId],
+                EducationMediumIds = [hierarchy.MediumId]
+            }));
+
+            var assignments = await GetUserAssignmentsAsync(user.Id);
+            var assignment = assignments.Single();
+            assignment.AcademicYearId.ShouldBe(hierarchy.AcademicYearId);
+            assignment.EducationBoardId.ShouldBeNull();
+            assignment.EducationMediumId.ShouldBe(hierarchy.MediumId);
+            assignment.EducationMediumStageId.ShouldBeNull();
+            assignment.GrantsAllMediumStagesInMedium().ShouldBeTrue();
+
+            var hierarchyResult = await WithUnitOfWorkAsync(() =>
+                _userScopeAppService.GetUserScopeHierarchyAsync(user.Id, hierarchy.AcademicYearId));
+            var mediumNode = hierarchyResult.AccessibleHierarchy
+                .Single()
+                .Boards.Single(x => x.BoardId == hierarchy.BoardId)
+                .Mediums.Single(x => x.MediumId == hierarchy.MediumId);
+            mediumNode.HasFullMediumStageAccess.ShouldBeTrue();
+            mediumNode.MediumStages.ShouldBeEmpty();
+
+            var employeeAssignments = await GetEmployeeOrganizationAssignmentsAsync(employee.Id);
+            employeeAssignments.Select(x => x.EducationMediumStageId).ShouldBe([hierarchy.StageId]);
+        }
+    }
+
+    [Fact]
+    public async Task BulkAssignAsync_Should_Reject_Parent_Medium_Only_When_Medium_Is_Not_In_Academic_Year()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var user = await CreateUserAsync();
+            var yearA = await CreateAcademicHierarchyAsync();
+            var yearB = await CreateAcademicHierarchyAsync();
+
+            var exception = await Should.ThrowAsync<BusinessException>(() =>
+                WithUnitOfWorkAsync(() => _userScopeAppService.BulkAssignAsync(new BulkScopeAssignmentDto
+                {
+                    UserIds = [user.Id],
+                    AcademicYearIds = [yearA.AcademicYearId],
+                    EducationMediumIds = [yearB.MediumId]
+                })));
+
+            exception.Code.ShouldBe(UserScopeErrorCodes.InvalidHierarchy);
+        }
+    }
+
+    [Fact]
     public async Task BulkAssignAsync_Should_Sync_Employee_Organization_Assignments_From_Academic_Permission()
     {
         using (_currentTenant.Change(TestTenantId))
@@ -183,6 +242,85 @@ public class UserScopeAppService_BulkAssign_Tests
 
             var employeeAssignments = await GetEmployeeOrganizationAssignmentsAsync(employee.Id);
             employeeAssignments.Select(x => x.EducationMediumStageId).ShouldBe([hierarchy.StageId]);
+        }
+    }
+
+    [Fact]
+    public async Task BulkAssignAsync_Should_Clear_Target_Academic_Year_When_ClearExisting_Is_True()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var user = await CreateUserAsync();
+            var employee = await CreateEmployeeForUserAsync(user.Id);
+            var hierarchy = await CreateAcademicHierarchyAsync();
+
+            await BulkAssignStageAsync(user.Id, hierarchy.AcademicYearId, hierarchy.StageId);
+
+            var result = await WithUnitOfWorkAsync(() => _userScopeAppService.BulkAssignAsync(new BulkScopeAssignmentDto
+            {
+                UserIds = [user.Id],
+                AcademicYearIds = [hierarchy.AcademicYearId],
+                ClearExisting = true
+            }));
+
+            result.AssignmentsCreated.ShouldBe(0);
+            result.TotalCombinations.ShouldBe(0);
+
+            var assignments = await GetUserAssignmentsAsync(user.Id);
+            assignments.ShouldNotContain(x => x.AcademicYearId == hierarchy.AcademicYearId);
+
+            var employeeAssignments = await GetEmployeeOrganizationAssignmentsAsync(employee.Id);
+            employeeAssignments.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task BulkAssignAsync_Should_Keep_Year_Only_Full_Access_When_ClearExisting_Is_False()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var user = await CreateUserAsync();
+            var hierarchy = await CreateAcademicHierarchyAsync();
+
+            var result = await WithUnitOfWorkAsync(() => _userScopeAppService.BulkAssignAsync(new BulkScopeAssignmentDto
+            {
+                UserIds = [user.Id],
+                AcademicYearIds = [hierarchy.AcademicYearId]
+            }));
+
+            result.AssignmentsCreated.ShouldBe(1);
+            result.TotalCombinations.ShouldBe(1);
+
+            var assignment = (await GetUserAssignmentsAsync(user.Id)).Single();
+            assignment.AcademicYearId.ShouldBe(hierarchy.AcademicYearId);
+            assignment.EducationBoardId.ShouldBeNull();
+            assignment.EducationMediumId.ShouldBeNull();
+            assignment.EducationMediumStageId.ShouldBeNull();
+            assignment.StandardId.ShouldBeNull();
+            assignment.DivisionId.ShouldBeNull();
+            assignment.GrantsAllBoardsInAcademicYear().ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public async Task BulkAssignAsync_Should_Reject_ClearExisting_With_Scope_Ids()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var user = await CreateUserAsync();
+            var hierarchy = await CreateAcademicHierarchyAsync();
+
+            var exception = await Should.ThrowAsync<AbpValidationException>(() =>
+                WithUnitOfWorkAsync(() => _userScopeAppService.BulkAssignAsync(new BulkScopeAssignmentDto
+                {
+                    UserIds = [user.Id],
+                    AcademicYearIds = [hierarchy.AcademicYearId],
+                    EducationMediumIds = [hierarchy.MediumId],
+                    ClearExisting = true
+                })));
+
+            exception.ValidationErrors.ShouldContain(x =>
+                x.MemberNames.Contains(nameof(BulkScopeAssignmentDto.ClearExisting)));
         }
     }
 
@@ -205,6 +343,38 @@ public class UserScopeAppService_BulkAssign_Tests
             employeeAssignments.ShouldContain(x => x.EducationMediumStageId == yearAReplacementStageId);
             employeeAssignments.ShouldContain(x => x.EducationMediumStageId == yearB.StageId);
             employeeAssignments.ShouldNotContain(x => x.EducationMediumStageId == yearA.StageId);
+        }
+    }
+
+    [Fact]
+    public async Task BulkAssignAsync_Should_Not_Delete_Organization_Assignments_For_Other_Employees_With_Same_User()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var user = await CreateUserAsync();
+            var otherEmployeeUser = await CreateUserAsync();
+            var otherEmployee = await CreateEmployeeForUserAsync(otherEmployeeUser.Id, EmployeeStatusType.Left);
+            await AssignEmployeeUserIdAsync(otherEmployee.Id, user.Id);
+            var selectedEmployee = await CreateEmployeeForUserAsync(user.Id);
+            var hierarchy = await CreateAcademicHierarchyAsync();
+            var otherStageId = await CreateStageAsync(hierarchy.MediumId);
+
+            await WithUnitOfWorkAsync(() =>
+                _employeeOrganizationAssignmentRepository.InsertAsync(
+                    new EmployeeOrganizationAssignment(
+                        Guid.NewGuid(),
+                        TestTenantId,
+                        otherEmployee.Id,
+                        otherStageId),
+                    autoSave: true));
+
+            await BulkAssignStageAsync(user.Id, hierarchy.AcademicYearId, hierarchy.StageId);
+
+            var selectedAssignments = await GetEmployeeOrganizationAssignmentsAsync(selectedEmployee.Id);
+            selectedAssignments.Select(x => x.EducationMediumStageId).ShouldBe([hierarchy.StageId]);
+
+            var otherAssignments = await GetEmployeeOrganizationAssignmentsAsync(otherEmployee.Id);
+            otherAssignments.Select(x => x.EducationMediumStageId).ShouldBe([otherStageId]);
         }
     }
 
@@ -313,7 +483,9 @@ public class UserScopeAppService_BulkAssign_Tests
         });
     }
 
-    private async Task<Employee> CreateEmployeeForUserAsync(Guid userId)
+    private async Task<Employee> CreateEmployeeForUserAsync(
+        Guid userId,
+        EmployeeStatusType employeeStatusType = EmployeeStatusType.Active)
     {
         var roleId = await CreateRoleAsync();
 
@@ -327,7 +499,7 @@ public class UserScopeAppService_BulkAssign_Tests
                 "Employee",
                 null,
                 $"SE{suffix[..4]}",
-                EmployeeStatusType.Active,
+                employeeStatusType,
                 DateOnly.FromDateTime(new DateTime(1992, 3, 10)),
                 mobileNo: UniqueEmployeeMobileNo(),
                 email: $"scope.employee.{suffix}@test.local",
@@ -337,6 +509,16 @@ public class UserScopeAppService_BulkAssign_Tests
                 employeeGroup: EmployeeGroupType.Teaching);
 
             return await _employeeRepository.InsertAsync(employee, autoSave: true);
+        });
+    }
+
+    private async Task AssignEmployeeUserIdAsync(Guid employeeId, Guid userId)
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var employee = await _employeeRepository.GetAsync(employeeId);
+            employee.UpdateUserId(userId);
+            await _employeeRepository.UpdateAsync(employee, autoSave: true);
         });
     }
 

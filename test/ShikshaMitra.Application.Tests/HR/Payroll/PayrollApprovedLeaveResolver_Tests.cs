@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,7 +72,8 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 			var result = await _resolver.ResolveLeaveUnitsByEmployeeAsync(
 				new[] { scenario.TargetEmployeeId },
 				2026,
-				1);
+				1,
+				BuildWorkingUnitsByEmployee(scenario.TargetEmployeeId, 2026, 1));
 
 			var map = result[scenario.TargetEmployeeId];
 
@@ -113,6 +115,68 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 			map.ContainsKey(new DateOnly(2026, 1, 6)).ShouldBeFalse();
 			map[new DateOnly(2026, 1, 7)].UnpaidUnits.ShouldBe(0.5m);
 		}
+	}
+
+	[Fact]
+	public async Task Resolver_Should_Fail_When_Working_Units_Are_Missing_For_Employee()
+	{
+		var scenario = await SeedPayrollLeaveScenarioAsync();
+
+		using (_currentTenant.Change(scenario.TenantId))
+		{
+			var ex = await Should.ThrowAsync<InvalidOperationException>(() =>
+				_resolver.ResolveLeaveUnitsByEmployeeAsync(
+					new[] { scenario.TargetEmployeeId },
+					2026,
+					1,
+					new Dictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>>()));
+
+			ex.Message.ShouldContain("Working units are required for employee");
+		}
+	}
+
+	[Fact]
+	public async Task Resolver_Should_Fail_When_Working_Units_Are_Missing_For_Leave_Date()
+	{
+		var scenario = await SeedPayrollLeaveScenarioAsync();
+
+		using (_currentTenant.Change(scenario.TenantId))
+		{
+			var workingUnitsByEmployee = new Dictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>>
+			{
+				[scenario.TargetEmployeeId] = new Dictionary<DateOnly, decimal>
+				{
+					[new(2026, 1, 5)] = 1m,
+					[new(2026, 1, 7)] = 1m
+				}
+			};
+
+			var ex = await Should.ThrowAsync<InvalidOperationException>(() =>
+				_resolver.ResolveLeaveUnitsByEmployeeAsync(
+					new[] { scenario.TargetEmployeeId },
+					2026,
+					1,
+					workingUnitsByEmployee));
+
+			ex.Message.ShouldContain("2026-01-06");
+		}
+	}
+
+	private static Dictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>> BuildWorkingUnitsByEmployee(
+		Guid employeeId,
+		int year,
+		int month)
+	{
+		var workingUnitsByDate = Enumerable
+			.Range(1, DateTime.DaysInMonth(year, month))
+			.ToDictionary(
+				day => new DateOnly(year, month, day),
+				day => 1m);
+
+		return new Dictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>>
+		{
+			[employeeId] = workingUnitsByDate
+		};
 	}
 
 	private async Task<PayrollLeaveScenario> SeedPayrollLeaveScenarioAsync()

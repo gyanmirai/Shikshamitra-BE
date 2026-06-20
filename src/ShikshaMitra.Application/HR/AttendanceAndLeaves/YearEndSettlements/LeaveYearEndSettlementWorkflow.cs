@@ -27,7 +27,7 @@ public class LeaveYearEndSettlementWorkflow(
 	IRepository<LeaveYearEndSettlementItem, Guid> itemRepository,
 	IAcademicYearRepository academicYearRepository,
 	IEmployeeRepository employeeRepository,
-	IEmployeeLeaveRepository employeeLeaveRepository,
+	LeaveBalanceUnitService leaveBalanceUnitService,
 	IEmployeePayrollComponentRepository payrollComponentRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
 	HrPolicyResolver hrPolicyResolver,
@@ -243,7 +243,7 @@ public class LeaveYearEndSettlementWorkflow(
 			}
 
 			var issues = new List<string>();
-			var unitsByRule = await employeeLeaveRepository.GetBalanceUnitsByRuleAsync(
+			var unitsByRule = await leaveBalanceUnitService.GetBalanceUnitsByRuleAsync(
 				employee.Id,
 				new[] { sourceRule.Id });
 			unitsByRule.TryGetValue(sourceRule.Id, out var units);

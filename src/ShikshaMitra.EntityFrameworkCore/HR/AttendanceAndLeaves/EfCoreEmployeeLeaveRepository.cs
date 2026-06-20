@@ -11,15 +11,55 @@ using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
-public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
+public class EfCoreEmployeeLeaveRepository(
+	IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
 	: EfCoreRepository<ShikshaMitraDbContext, EmployeeLeave, Guid>(dbContextProvider), IEmployeeLeaveRepository
 {
+	private static int _sqliteNextPublicId;
+
+	public override async Task<EmployeeLeave> InsertAsync(
+		EmployeeLeave entity,
+		bool autoSave = false,
+		CancellationToken cancellationToken = default)
+	{
+		await EnsureSqlitePublicIdAsync(entity, cancellationToken);
+		return await base.InsertAsync(entity, autoSave, cancellationToken);
+	}
+
 	public async Task<EmployeeLeave?> FindWithoutDetailsAsync(Guid id, CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
 			.IgnoreAutoIncludes()
 			.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+	}
+
+	private async Task EnsureSqlitePublicIdAsync(EmployeeLeave entity, CancellationToken cancellationToken)
+	{
+		if (entity.PublicId > 0)
+		{
+			return;
+		}
+
+		var dbContext = await GetDbContextAsync();
+		if (!string.Equals(
+			    dbContext.Database.ProviderName,
+			    "Microsoft.EntityFrameworkCore.Sqlite",
+			    StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+
+		var maxPublicId = await dbContext.Set<EmployeeLeave>()
+			.Select(x => (int?)x.PublicId)
+			.MaxAsync(cancellationToken) ?? 0;
+		var nextPublicId = Math.Max(
+			Interlocked.Increment(ref _sqliteNextPublicId),
+			maxPublicId + 1);
+
+		typeof(EmployeeLeave)
+			.GetProperty(nameof(EmployeeLeave.PublicId))!
+			.SetValue(entity, nextPublicId);
 	}
 
 	public async Task<bool> HasOverlappingLeaveAsync(
@@ -48,106 +88,19 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			(x.StartDate >= startDate && x.EndDate <= endDate));
 	}
 
-	public async Task<decimal> GetApprovedLeaveDaysAsync(
-		Guid employeeId,
-		Guid leavePolicyId,
-		int year)
-	{
-		var dbSet = await GetDbSetAsync();
-		var startOfYear = new DateTimeOffset(new DateTime(year, 1, 1));
-		var endOfYear = new DateTimeOffset(new DateTime(year, 12, 31, 23, 59, 59));
-
-		var leaves = await dbSet
-			.Where(x =>
-				x.EmployeeId == employeeId &&
-				x.LeavePolicyId == leavePolicyId &&
-				x.Status == EmployeeLeaveStatusType.Approved &&
-				!x.IsDeleted &&
-				x.StartDate >= startOfYear &&
-				x.EndDate <= endOfYear)
-			.ToListAsync();
-
-		return leaves.Sum(GetApprovedUnits);
-	}
-
-	public async Task<decimal> GetApprovedLeaveDaysAsync(
-		Guid employeeId,
-		Guid leavePolicyId)
-	{
-		var dbSet = await GetDbSetAsync();
-		var leaves = await dbSet
-			.Where(x =>
-				x.EmployeeId == employeeId &&
-				x.LeavePolicyId == leavePolicyId &&
-				x.Status == EmployeeLeaveStatusType.Approved &&
-				!x.IsDeleted)
-			.ToListAsync();
-
-		return leaves.Sum(GetApprovedUnits);
-	}
-
-	public async Task<decimal> GetApprovedLeaveDaysByRuleAsync(
-		Guid employeeId,
-		Guid leavePolicyRuleId)
-	{
-		var dbSet = await GetDbSetAsync();
-		var leaves = await dbSet
-			.Where(x =>
-				x.EmployeeId == employeeId &&
-				x.LeavePolicyRuleId == leavePolicyRuleId &&
-				x.Status == EmployeeLeaveStatusType.Approved &&
-				!x.IsDeleted)
-			.ToListAsync();
-
-		return leaves.Sum(GetApprovedUnits);
-	}
-
-	public async Task<decimal> GetApprovedLeaveDaysByPolicyAndPaidTypeAsync(
-		Guid employeeId,
-		Guid leavePolicyId,
-		LeavePaidType paidType,
-		CancellationToken cancellationToken = default)
-	{
-		var dbSet = await GetDbSetAsync();
-		var leaves = await dbSet
-			.IgnoreAutoIncludes()
-			.AsNoTracking()
-			.Where(x =>
-				x.EmployeeId == employeeId &&
-				x.LeavePolicyId == leavePolicyId &&
-				x.PaidType == paidType &&
-				x.Status == EmployeeLeaveStatusType.Approved &&
-				!x.IsDeleted)
-			.Select(x => new
-			{
-				x.ApprovedLeaveUnits,
-				x.StartDate,
-				x.EndDate,
-				x.HalfDay
-			})
-			.ToListAsync(cancellationToken);
-
-		return leaves.Sum(x => x.ApprovedLeaveUnits > 0
-			? x.ApprovedLeaveUnits
-			: LeaveDurationCalculator.CountLeaveUnits(
-				x.StartDate.DateTime,
-				x.EndDate.DateTime,
-				x.HalfDay));
-	}
-
-	public async Task<IReadOnlyDictionary<Guid, LeaveRuleBalanceUnits>> GetBalanceUnitsByRuleAsync(
+	public async Task<List<LeaveBalanceUnitRow>> GetLeaveBalanceRowsByRuleAsync(
 		Guid employeeId,
 		IReadOnlyCollection<Guid> leavePolicyRuleIds,
 		CancellationToken cancellationToken = default)
 	{
 		if (leavePolicyRuleIds.Count == 0)
 		{
-			return new Dictionary<Guid, LeaveRuleBalanceUnits>();
+			return new List<LeaveBalanceUnitRow>();
 		}
 
 		var ruleIds = leavePolicyRuleIds.ToList();
 		var dbSet = await GetDbSetAsync();
-		var leaves = await dbSet
+		return await dbSet
 			.IgnoreAutoIncludes()
 			.AsNoTracking()
 			.Where(x =>
@@ -156,40 +109,21 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 				!x.IsDeleted &&
 				(x.Status == EmployeeLeaveStatusType.Approved ||
 				 x.Status == EmployeeLeaveStatusType.Pending))
-			.Select(x => new
-			{
+			.Select(x => new LeaveBalanceUnitRow(
+				x.EmployeeId,
+				x.LeavePolicyId,
 				x.LeavePolicyRuleId,
+				x.PaidType,
 				x.Status,
 				x.ApprovedLeaveUnits,
 				x.StartDate,
 				x.EndDate,
-				x.HalfDay
-			})
+				x.HalfDay,
+				x.LeavePolicy != null ? x.LeavePolicy.AcademicYearId : (Guid?)null))
 			.ToListAsync(cancellationToken);
-
-		return leaves
-			.GroupBy(x => x.LeavePolicyRuleId)
-			.ToDictionary(
-				group => group.Key,
-				group => new LeaveRuleBalanceUnits(
-					group.Key,
-					group
-						.Where(x => x.Status == EmployeeLeaveStatusType.Approved)
-						.Sum(x => x.ApprovedLeaveUnits > 0
-							? x.ApprovedLeaveUnits
-							: LeaveDurationCalculator.CountLeaveUnits(
-								x.StartDate.DateTime,
-								x.EndDate.DateTime,
-								x.HalfDay)),
-					group
-						.Where(x => x.Status == EmployeeLeaveStatusType.Pending)
-						.Sum(x => LeaveDurationCalculator.CountLeaveUnits(
-							x.StartDate.DateTime,
-							x.EndDate.DateTime,
-					x.HalfDay))));
 	}
 
-	public async Task<IReadOnlyDictionary<LeavePaidType, LeavePaidTypeBalanceUnits>> GetBalanceUnitsByPolicyAndPaidTypeAsync(
+	public async Task<List<LeaveBalanceUnitRow>> GetLeaveBalanceRowsByPolicyAndPaidTypeAsync(
 		Guid employeeId,
 		Guid leavePolicyId,
 		IReadOnlyCollection<LeavePaidType> paidTypes,
@@ -197,12 +131,12 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 	{
 		if (paidTypes.Count == 0)
 		{
-			return new Dictionary<LeavePaidType, LeavePaidTypeBalanceUnits>();
+			return new List<LeaveBalanceUnitRow>();
 		}
 
 		var typeIds = paidTypes.ToList();
 		var dbSet = await GetDbSetAsync();
-		var leaves = await dbSet
+		return await dbSet
 			.IgnoreAutoIncludes()
 			.AsNoTracking()
 			.Where(x =>
@@ -212,37 +146,18 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 				!x.IsDeleted &&
 				(x.Status == EmployeeLeaveStatusType.Approved ||
 				 x.Status == EmployeeLeaveStatusType.Pending))
-			.Select(x => new
-			{
+			.Select(x => new LeaveBalanceUnitRow(
+				x.EmployeeId,
+				x.LeavePolicyId,
+				x.LeavePolicyRuleId,
 				x.PaidType,
 				x.Status,
 				x.ApprovedLeaveUnits,
 				x.StartDate,
 				x.EndDate,
-				x.HalfDay
-			})
+				x.HalfDay,
+				x.LeavePolicy != null ? x.LeavePolicy.AcademicYearId : (Guid?)null))
 			.ToListAsync(cancellationToken);
-
-		return leaves
-			.GroupBy(x => x.PaidType)
-			.ToDictionary(
-				group => group.Key,
-				group => new LeavePaidTypeBalanceUnits(
-					group.Key,
-					group
-						.Where(x => x.Status == EmployeeLeaveStatusType.Approved)
-						.Sum(x => x.ApprovedLeaveUnits > 0
-							? x.ApprovedLeaveUnits
-							: LeaveDurationCalculator.CountLeaveUnits(
-								x.StartDate.DateTime,
-								x.EndDate.DateTime,
-								x.HalfDay)),
-					group
-						.Where(x => x.Status == EmployeeLeaveStatusType.Pending)
-						.Sum(x => LeaveDurationCalculator.CountLeaveUnits(
-							x.StartDate.DateTime,
-							x.EndDate.DateTime,
-							x.HalfDay))));
 	}
 
 	public async Task<IReadOnlySet<Guid>> GetReferencedRuleIdsAsync(
@@ -379,14 +294,6 @@ public class EfCoreEmployeeLeaveRepository(IDbContextProvider<ShikshaMitraDbCont
 			employeeIds,
 			cancellationToken);
 	}
-
-	private static decimal GetApprovedUnits(EmployeeLeave leave) =>
-		leave.ApprovedLeaveUnits > 0
-			? leave.ApprovedLeaveUnits
-			: LeaveDurationCalculator.CountLeaveUnits(
-				leave.StartDate.DateTime,
-				leave.EndDate.DateTime,
-				leave.HalfDay);
 
 	private static IQueryable<PayrollApprovedLeaveRow> ProjectPayrollLeaveRows(IQueryable<EmployeeLeave> query)
 	{

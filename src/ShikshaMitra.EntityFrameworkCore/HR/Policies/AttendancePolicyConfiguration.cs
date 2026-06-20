@@ -20,6 +20,7 @@ public class AttendancePolicyConfiguration : IEntityTypeConfiguration<Attendance
 		builder.Property(x => x.CaptureMode).IsRequired().HasConversion<int>();
 		builder.Property(x => x.MissingPunchBehavior).IsRequired().HasConversion<int>();
 		builder.Property(x => x.PenaltyType).IsRequired().HasConversion<int>();
+		builder.Property(x => x.PenaltyDeductionAmount).HasPrecision(18, 2);
 		builder.Property(x => x.OvertimeRate).HasConversion<int?>();
 		builder.Property(x => x.HolidayWorkBehavior).IsRequired().HasConversion<int>();
 		builder.Property(x => x.Version).IsRequired();

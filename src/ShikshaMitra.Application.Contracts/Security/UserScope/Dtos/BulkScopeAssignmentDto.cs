@@ -60,6 +60,12 @@ public class BulkScopeAssignmentDto : IValidatableObject
     public List<Guid>? DivisionIds { get; set; }
 
     /// <summary>
+    /// When true, clears existing assignments in the supplied academic years and creates no new scope rows.
+    /// All scope ID arrays must be null or empty when this flag is set.
+    /// </summary>
+    public bool ClearExisting { get; set; }
+
+    /// <summary>
     /// Description for all bulk assignments.
     /// </summary>
     [MaxLength(500)]
@@ -77,20 +83,19 @@ public class BulkScopeAssignmentDto : IValidatableObject
                 new[] { nameof(AcademicYearIds) });
         }
 
-        // Validate that at least one scope parameter is provided
-        var hasScopeParams = (AcademicYearIds?.Count > 0) ||
-                            (EducationBoardIds?.Count > 0) ||
-                            (EducationMediumIds?.Count > 0) ||
-                            (EducationMediumStageIds?.Count > 0) ||
-                            (StandardIds?.Count > 0) ||
-                            (DivisionIds?.Count > 0);
-
-        if (!hasScopeParams)
+        if (ClearExisting && HasAnyScopeIds())
         {
             yield return new ValidationResult(
-                "At least one scope parameter (AcademicYearIds, EducationBoardIds, EducationMediumIds, EducationMediumStageIds, StandardIds, or DivisionIds) must be provided.",
-                new[] { nameof(AcademicYearIds), nameof(EducationBoardIds), nameof(EducationMediumIds),
+                "ClearExisting can only be used with empty scope ID arrays.",
+                new[] { nameof(ClearExisting), nameof(EducationBoardIds), nameof(EducationMediumIds),
                        nameof(EducationMediumStageIds), nameof(StandardIds), nameof(DivisionIds) });
         }
     }
+
+    private bool HasAnyScopeIds() =>
+        (EducationBoardIds?.Count > 0) ||
+        (EducationMediumIds?.Count > 0) ||
+        (EducationMediumStageIds?.Count > 0) ||
+        (StandardIds?.Count > 0) ||
+        (DivisionIds?.Count > 0);
 }

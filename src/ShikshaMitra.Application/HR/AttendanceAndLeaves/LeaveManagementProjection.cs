@@ -10,7 +10,8 @@ internal static class LeaveManagementProjection
 {
 	public static LeaveManagementDto ToManagementDto(
 		EmployeeLeave leave,
-		(string Name, string? EmployeeCode) submitter) =>
+		(string Name, string? EmployeeCode) submitter,
+		LeaveManagementUnits units) =>
 		new()
 		{
 			Id = leave.Id,
@@ -23,9 +24,9 @@ internal static class LeaveManagementProjection
 			PaidType = ToPaidType(leave.PaidType),
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
-			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
+			TotalDays = units.TotalDays,
 			HalfDay = leave.HalfDay,
-			ApprovedLeaveUnits = GetApprovedLeaveUnits(leave),
+			ApprovedLeaveUnits = units.ApprovedLeaveUnits,
 			MediumStageName = leave.LeavePolicy?.AcademicYear?.Name ?? "",
 			Description = leave.Description ?? "",
 			Remarks = leave.RejectionReason,
@@ -34,7 +35,8 @@ internal static class LeaveManagementProjection
 
 	public static LeaveManagementCalendarItemDto ToCalendarItemDto(
 		EmployeeLeave leave,
-		IReadOnlyDictionary<Guid, (Guid MediumStageId, string MediumStageName)> employeeMediumStageLookup)
+		IReadOnlyDictionary<Guid, (Guid MediumStageId, string MediumStageName)> employeeMediumStageLookup,
+		LeaveManagementUnits units)
 	{
 		(Guid MediumStageId, string MediumStageName)? mediumStage = null;
 		if (leave.Employee?.UserId is Guid userId &&
@@ -54,9 +56,9 @@ internal static class LeaveManagementProjection
 			PaidType = ToPaidType(leave.PaidType),
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
-			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
+			TotalDays = units.TotalDays,
 			HalfDay = leave.HalfDay,
-			ApprovedLeaveUnits = GetApprovedLeaveUnits(leave),
+			ApprovedLeaveUnits = units.ApprovedLeaveUnits,
 			Status = ToApiStatus(leave.Status),
 			MediumStageName = mediumStage?.MediumStageName ?? string.Empty
 		};
@@ -64,7 +66,8 @@ internal static class LeaveManagementProjection
 
 	public static LeaveRequestDetailsDto ToDetailsDto(
 		EmployeeLeave leave,
-		(string Name, string? EmployeeCode) submitter) =>
+		(string Name, string? EmployeeCode) submitter,
+		LeaveManagementUnits units) =>
 		new()
 		{
 			Id = leave.Id,
@@ -80,27 +83,19 @@ internal static class LeaveManagementProjection
 			PaidType = ToPaidType(leave.PaidType),
 			StartDate = leave.StartDate.DateTime,
 			EndDate = leave.EndDate.DateTime,
-			TotalDays = CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay),
+			TotalDays = units.TotalDays,
 			HalfDay = leave.HalfDay,
-			ApprovedLeaveUnits = GetApprovedLeaveUnits(leave),
+			ApprovedLeaveUnits = units.ApprovedLeaveUnits,
 			Description = leave.Description ?? "",
 			AttachmentUrl = leave.Attachment != null ? $"/api/leave-management/{leave.Id}/attachment" : null,
 			Remarks = leave.RejectionReason,
 			Status = ToApiStatus(leave.Status)
 		};
 
-	public static decimal CalculateDays(DateTime startDate, DateTime endDate, bool isHalfDay) =>
-		LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, isHalfDay);
-
-	public static decimal GetApprovedLeaveUnits(EmployeeLeave leave) =>
-		leave.ApprovedLeaveUnits > 0
-			? leave.ApprovedLeaveUnits
-			: leave.Status == EmployeeLeaveStatusType.Approved
-				? CalculateDays(leave.StartDate.DateTime, leave.EndDate.DateTime, leave.HalfDay)
-				: 0m;
-
 	private static string ToApiStatus(EmployeeLeaveStatusType status) => status.ToString().ToUpperInvariant();
 
 	private static string ToPaidType(LeavePaidType paidType) =>
 		paidType == LeavePaidType.Paid ? "Paid" : "Unpaid";
 }
+
+internal sealed record LeaveManagementUnits(decimal TotalDays, decimal ApprovedLeaveUnits);

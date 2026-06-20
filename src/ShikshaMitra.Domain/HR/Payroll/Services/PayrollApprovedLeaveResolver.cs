@@ -18,18 +18,6 @@ public class PayrollApprovedLeaveResolver : DomainService
 		_employeeLeaveRepository = employeeLeaveRepository;
 	}
 
-	public Task<Dictionary<Guid, IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>>> ResolveLeaveUnitsByEmployeeAsync(
-		IReadOnlyCollection<Guid> employeeIds,
-		int year,
-		int month,
-		CancellationToken cancellationToken = default) =>
-		ResolveLeaveUnitsByEmployeeAsync(
-			employeeIds,
-			year,
-			month,
-			workingUnitsByEmployee: null,
-			cancellationToken);
-
 	public async Task<Dictionary<Guid, IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>>> ResolveLeaveUnitsByEmployeeAsync(
 		IReadOnlyCollection<Guid> employeeIds,
 		int year,
@@ -37,6 +25,8 @@ public class PayrollApprovedLeaveResolver : DomainService
 		IReadOnlyDictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>> workingUnitsByEmployee,
 		CancellationToken cancellationToken = default)
 	{
+		ArgumentNullException.ThrowIfNull(workingUnitsByEmployee);
+
 		if (employeeIds.Count == 0)
 		{
 			return new Dictionary<Guid, IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>>();
@@ -94,16 +84,20 @@ public class PayrollApprovedLeaveResolver : DomainService
 	}
 
 	private static decimal ResolveWorkingUnit(
-		IReadOnlyDictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>>? workingUnitsByEmployee,
+		IReadOnlyDictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>> workingUnitsByEmployee,
 		Guid employeeId,
 		DateOnly date)
 	{
-		if (workingUnitsByEmployee?.TryGetValue(employeeId, out var workingUnitsByDate) == true &&
-		    workingUnitsByDate.TryGetValue(date, out var workingUnit))
+		if (!workingUnitsByEmployee.TryGetValue(employeeId, out var workingUnitsByDate))
 		{
-			return Math.Clamp(workingUnit, 0m, 1m);
+			throw new InvalidOperationException($"Working units are required for employee {employeeId}.");
 		}
 
-		return date.DayOfWeek == DayOfWeek.Sunday ? 0m : 1m;
+		if (!workingUnitsByDate.TryGetValue(date, out var workingUnit))
+		{
+			throw new InvalidOperationException($"Working unit for employee {employeeId} on {date:yyyy-MM-dd} is required.");
+		}
+
+		return Math.Clamp(workingUnit, 0m, 1m);
 	}
 }

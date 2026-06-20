@@ -122,8 +122,8 @@ public class HrPolicyVersionRestoreService(
 			HrPolicyMapping.ParseOvertimeRate(snapshot.OvertimeRate),
 			snapshot.MinOvertimeMinutes,
 			HrPolicyMapping.ParseHolidayWorkBehavior(snapshot.HolidayWorkBehavior),
-			snapshot.SandwichRuleEnabled,
-			snapshot.PayrollPreviewEnabled);
+			snapshot.PayrollPreviewEnabled,
+			snapshot.PenaltyDeductionAmount);
 		await attendancePolicyRepository.InsertAsync(entity, autoSave: true);
 		await captureService.CaptureAsync("attendance", HrPolicyMapping.ToDto(entity), "restore-draft", input.ChangeReason);
 		return entity;

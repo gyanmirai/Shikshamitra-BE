@@ -9272,11 +9272,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("PenaltyCountThreshold")
                         .HasColumnType("integer");
 
+                    b.Property<decimal?>("PenaltyDeductionAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<int>("PenaltyType")
                         .HasColumnType("integer");
-
-                    b.Property<bool>("SandwichRuleEnabled")
-                        .HasColumnType("boolean");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");

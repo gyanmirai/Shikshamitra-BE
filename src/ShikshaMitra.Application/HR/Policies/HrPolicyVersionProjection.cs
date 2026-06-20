@@ -139,13 +139,13 @@ public static class HrPolicyVersionProjection
 			MaxLateAllowedPerMonth = snapshot.MaxLateAllowedPerMonth,
 			PenaltyType = snapshot.PenaltyType,
 			PenaltyCountThreshold = snapshot.PenaltyCountThreshold,
+			PenaltyDeductionAmount = snapshot.PenaltyDeductionAmount,
 			EarlyExitEnabled = snapshot.EarlyExitEnabled,
 			EarlyExitGraceTime = snapshot.EarlyExitGraceTime,
 			OvertimeEnabled = snapshot.OvertimeEnabled,
 			OvertimeRate = snapshot.OvertimeRate,
 			MinOvertimeMinutes = snapshot.MinOvertimeMinutes,
 			HolidayWorkBehavior = snapshot.HolidayWorkBehavior,
-			SandwichRuleEnabled = snapshot.SandwichRuleEnabled,
 			PayrollPreviewEnabled = snapshot.PayrollPreviewEnabled
 		};
 	}

@@ -133,6 +133,7 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 		TenantStep<Seeders.RolesSeederContributor>(serviceProvider, "RolesSeeder", "RolesSeeder:v3", 110, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.RolePermissionSeederContributor>(serviceProvider, "RolePermissionSeeder", "RolePermissionSeeder:v6", 120, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.UserSeederContributor>(serviceProvider, "UserSeeder", "UserSeeder:v2", 130, Seeders.ShikshaMitraSeederProfile.All),
+		TenantStep<Seeders.CommunicationProviderSeederContributor>(serviceProvider, "CommunicationProviderSeeder", "CommunicationProviderSeeder:v1", 135, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.AcademicSetupSeederContributor>(serviceProvider, "AcademicSetupSeeder", "AcademicSetupSeeder:v2", 140, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.DemoAcademicAndInstituteSeederContributor>(serviceProvider, "DemoAcademicAndInstituteSeeder", "DemoAcademicAndInstituteSeeder:v2", 150, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.HRSeederContributor>(serviceProvider, "HRSeeder", "HRSeeder:v7", 160, Seeders.ShikshaMitraSeederProfile.Demo),

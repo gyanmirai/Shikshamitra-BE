@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Application.Contracts.HR.Calendar.Events;
+using ShikshaMitra.Communication;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Controllers;
 using Volo.Abp.Application.Dtos;
@@ -20,10 +21,14 @@ namespace ShikshaMitra.HttpApi.Controllers.HR.Calendar;
 public class EventController : ShikshaMitraController
 {
     private readonly IEventAppService _eventAppService;
+    private readonly ICalendarCommunicationAppService _calendarCommunicationAppService;
 
-    public EventController(IEventAppService eventAppService)
+    public EventController(
+        IEventAppService eventAppService,
+        ICalendarCommunicationAppService calendarCommunicationAppService)
     {
         _eventAppService = eventAppService;
+        _calendarCommunicationAppService = calendarCommunicationAppService;
     }
 
     /// <summary>
@@ -57,6 +62,23 @@ public class EventController : ShikshaMitraController
     public async Task<ActionResult<EventDto>> GetAsync(Guid id)
     {
         var result = await _eventAppService.GetAsync(id);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Create and optionally publish a Communication announcement for this event.
+    /// </summary>
+    /// <param name="id">Event ID</param>
+    /// <param name="input">Communication campaign options</param>
+    /// <returns>Created Communication campaign and publish state</returns>
+    [HttpPost("{id}/communication/announcement")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
+    [ProducesResponseType(typeof(CalendarCommunicationResultDto), 200)]
+    public async Task<ActionResult<CalendarCommunicationResultDto>> AnnounceAsync(
+        Guid id,
+        [FromBody] CalendarCommunicationRequestDto input)
+    {
+        var result = await _calendarCommunicationAppService.AnnounceEventAsync(id, input);
         return Ok(result);
     }
 

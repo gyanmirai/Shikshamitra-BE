@@ -26,6 +26,18 @@ public class RolePermissionSeederContributor_Tests
 	}
 
 	[Fact]
+	public void HR_Manager_Should_Have_Communication_Operational_Access()
+	{
+		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
+		var hrManagerPermissions = rolePermissions["HR Manager"];
+
+		hrManagerPermissions.ShouldContain(ShikshaMitraModulePermissions.Communication);
+		hrManagerPermissions.ShouldContain(ShikshaMitraSubmodulePermissions.Communication.Campaigns.Send);
+		hrManagerPermissions.ShouldContain(ShikshaMitraSubmodulePermissions.Communication.Notification_Templates.Add);
+		hrManagerPermissions.ShouldContain(ShikshaMitraSubmodulePermissions.Communication.Settings_ProviderSettings.Add);
+	}
+
+	[Fact]
 	public void Tenant_Admin_Should_Retain_Role_Management_Access()
 	{
 		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();

@@ -6,16 +6,20 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Library.Members;
+using ShikshaMitra.Common;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Common.Responses;
+using ShikshaMitra.Students.Compliance;
 using ShikshaMitra.Students.Admissions;
 using ShikshaMitra.Students.Enrollment;
 using ShikshaMitra.Students.Enrollments.Admissions;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.Divisions;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Application.Dtos;
@@ -238,6 +242,113 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Persist_And_Return_Admission_Remarks_On_Approval()
+    {
+        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto("AdmissionRemarks");
+        dto.Email = TestDataHelper.UniqueEmail("student-admission-remarks");
+        var createResponse = await Client.PostAsJsonAsync(
+            "/api/student/enrollment/registrations/general-details",
+            dto,
+            JsonOptions);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+        var createBody = await createResponse.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
+        createBody.ShouldNotBeNull();
+        createBody.Data.ShouldNotBeNull();
+
+        await MoveRegistrationToAdmissionWithMembershipFlagsAsync(createBody.Data.StudentId);
+        var remarks = $"Approved with verified documents {Guid.NewGuid():N}";
+
+        var approveResponse = await Client.PostAsJsonAsync(
+            $"{BaseUrl}/status",
+            new BatchAdmissionStatusChangeRequestDto
+            {
+                Items =
+                [
+                    new AdmissionStatusChangeItemDto
+                    {
+                        StudentId = createBody.Data.StudentId,
+                        Action = StudentEnrollmentApprovalState.Approved,
+                        Remarks = remarks
+                    }
+                ]
+            },
+            JsonOptions);
+        approveResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await approveResponse.Content.ReadAsStringAsync());
+
+        var listResponse = await Client.GetAsync(
+            $"{BaseUrl}?approvalStatus={(int)StudentEnrollmentApprovalState.Approved}&search={Uri.EscapeDataString(dto.FirstName)}&maxResultCount=20");
+        listResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await listResponse.Content.ReadAsStringAsync());
+        var admissions = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<StudentDto>>(JsonOptions);
+        admissions.ShouldNotBeNull();
+        admissions.Items.Single(item => item.StudentId == createBody.Data.StudentId).Remarks.ShouldBe(remarks);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Update_Admission_General_Details_Without_Reverting_Lifecycle()
+    {
+        var registration = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(
+            Client,
+            "AdmissionPut");
+        await MoveRegistrationToAdmissionWithMembershipFlagsAsync(registration.StudentId);
+        await EnsureDefaultTestUserHasTenantWideScopeAsync();
+        var targetDivisionId = await CreateAdditionalDivisionAsync();
+        var updatedFirstName = TestDataHelper.UniqueName("AdmissionPutEdited");
+        var aadhaarNo = "123456789012";
+        var apaarId = $"apaar-{Guid.NewGuid():N}"[..18];
+        var penNo = $"pen-{Guid.NewGuid():N}"[..14];
+
+        var response = await Client.PutAsJsonAsync(
+            $"/api/student/enrollment/admissions/{registration.StudentId}",
+            new UpdateGeneralInfoDto
+            {
+                FormNumber = registration.FormNo ?? StudentEnrollmentTestHelper.UniqueFormNumber(),
+                FirstName = updatedFirstName,
+                LastName = "TestStudent",
+                AcademicMediumId = StudentEnrollmentTestHelper.DefaultAcademicMediumId,
+                StandardId = Factory.SeededStandardId,
+                DivisionId = targetDivisionId,
+                DateOfBirth = DateTimeOffset.UtcNow.AddYears(-11),
+                Gender = GenderEnum.Female,
+                PrimaryContactNo = TestDataHelper.UniquePhone(),
+                AadharNo = aadhaarNo,
+                ApparId = apaarId,
+                PennNo = penNo,
+                FamilyCast = "General",
+                City = "Pune",
+                State = new State("Maharashtra", "MH"),
+                Country = new Country("India", "IN")
+            },
+            JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.FirstName.ShouldBe(updatedFirstName);
+        body.Data.StandardId.ShouldBe(Factory.SeededStandardId);
+        body.Data.AdharNo.ShouldBe("XXXX-XXXX-9012");
+        body.Data.AadhaarMasked.ShouldBe("XXXX-XXXX-9012");
+        body.Data.AadhaarVerificationStatus.ShouldBe(IdentityVerificationStatus.Pending);
+        body.Data.ApparId.ShouldBe(apaarId.ToUpperInvariant());
+        body.Data.ApaarVerificationStatus.ShouldBe(IdentityVerificationStatus.Pending);
+        body.Data.PennNo.ShouldBe(penNo.ToUpperInvariant());
+
+        var placement = await GetStudentPlacementAsync(registration.StudentId);
+        placement.Status.ShouldBe(StudentLifeCycleStatusEnum.Admission);
+        placement.StandardId.ShouldBe(Factory.SeededStandardId);
+        placement.DivisionId.ShouldBe(targetDivisionId);
+
+        var compliance = await GetStudentComplianceAsync(registration.StudentId);
+        compliance.AadhaarLast4.ShouldBe("9012");
+        compliance.AadhaarVerificationStatus.ShouldBe(IdentityVerificationStatus.Pending);
+        compliance.ApaarId.ShouldBe(apaarId.ToUpperInvariant());
+        compliance.ApaarVerificationStatus.ShouldBe(IdentityVerificationStatus.Pending);
+        compliance.PenNumber.ShouldBe(penNo.ToUpperInvariant());
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Add_Parent_Role_To_Existing_Parent_User_On_Approval()
     {
         var parentEmail = TestDataHelper.UniqueEmail("existing-parent");
@@ -408,6 +519,91 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
             var exists = query.Any(member => member.StudentId == studentId && member.IsActive);
             await uow.CompleteAsync();
             return exists;
+        }
+    }
+
+    private async Task<StudentLifeCycleStatusEnum> GetStudentLifecycleStatusAsync(Guid studentId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var student = await studentRepository.GetInquiryForUpdateAsync(studentId)
+                          ?? throw new InvalidOperationException($"Student not found: {studentId}");
+            await uow.CompleteAsync();
+            return student.Status;
+        }
+    }
+
+    private async Task<Guid> CreateAdditionalDivisionAsync()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var divisionManager = scope.ServiceProvider.GetRequiredService<DivisionManager>();
+        var divisionRepository = scope.ServiceProvider.GetRequiredService<IRepository<Division, Guid>>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var division = await divisionManager.CreateAsync(
+                Factory.SeededStandardId,
+                $"AdmPut{Guid.NewGuid():N}"[..16],
+                strength: 40,
+                roomNumber: "B202");
+            await divisionRepository.InsertAsync(division);
+            await uow.CompleteAsync();
+            return division.Id;
+        }
+    }
+
+    private async Task<(Guid? StandardId, Guid? DivisionId, StudentLifeCycleStatusEnum Status)> GetStudentPlacementAsync(Guid studentId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+            var result = query
+                .Where(student => student.Id == studentId)
+                .Select(student => new
+                {
+                    student.StandardId,
+                    student.DivisionId,
+                    student.Status
+                })
+                .Single();
+            await uow.CompleteAsync();
+            return (result.StandardId, result.DivisionId, result.Status);
+        }
+    }
+
+    private async Task<StudentIdentityCompliance> GetStudentComplianceAsync(Guid studentId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var repository = scope.ServiceProvider.GetRequiredService<IRepository<StudentIdentityCompliance, Guid>>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var query = await repository.GetQueryableAsync();
+            var compliance = query.Single(item => item.StudentId == studentId);
+            await uow.CompleteAsync();
+            return compliance;
         }
     }
 

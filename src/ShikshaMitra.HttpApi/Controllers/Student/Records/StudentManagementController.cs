@@ -132,9 +132,9 @@ public class StudentManagementController(
 	// API to get roll number projections for all students in division
 	[HttpGet("{divisionId}/roll-number-projections")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentManagement.View)]
-	public async Task<Result<List<RollNumberProjectionDto>>> GetRollNumberProjections(Guid divisionId, [FromQuery] Guid? academicTermId, [FromQuery] ArrangementTypeEnum? arrangementType, [FromQuery] ArrangementByEnum? arrangementBy)
+	public async Task<Result<RollNumberProjectionResponseDto>> GetRollNumberProjections(Guid divisionId, [FromQuery] Guid? academicTermId, [FromQuery] ArrangementTypeEnum? arrangementType, [FromQuery] ArrangementByEnum? arrangementBy)
 	{
-		var rollNumberProjections = await studentManagementAppService.GetRollNumberProjections(divisionId, academicTermId, arrangementType ?? ArrangementTypeEnum.Mix, arrangementBy ?? ArrangementByEnum.FirstName);
+		var rollNumberProjections = await studentManagementAppService.GetRollNumberProjections(divisionId, academicTermId, arrangementType, arrangementBy);
 		return Result.Success(rollNumberProjections);
 	}
 

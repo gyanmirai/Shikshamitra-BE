@@ -23,6 +23,13 @@ public interface IStudentAdmissionAppService : IApplicationService
 	Task AssignDivisionAsync(Guid studentId, AssignDivisionDto input);
 
 	/// <summary>
+	/// Updates general details for a student in admission stage.
+	/// </summary>
+	Task<ShikshaMitra.Students.Enrollments.Registrations.StudentGeneralDetailsDto> UpdateAdmissionGeneralDetailsAsync(
+		Guid studentId,
+		ShikshaMitra.Students.Enrollments.Registrations.UpdateGeneralInfoDto input);
+
+	/// <summary>
 	/// Changes admission status (approve/reject) for multiple students
 	/// </summary>
 	Task<BatchAdmissionStatusChangeResultDto> ChangeStatusBatchAsync(BatchAdmissionStatusChangeRequestDto input);

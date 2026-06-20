@@ -81,7 +81,7 @@ public class StudentGeneralInfoAppService(
 			input.Country,
 			input.Pincode);
 
-		if (student.Status != StudentLifeCycleStatusEnum.Registration)
+		if (student.Status == StudentLifeCycleStatusEnum.RegistrationFormIssued)
 		{
 			student.ChangeStatus(StudentLifeCycleStatusEnum.Registration);
 		}

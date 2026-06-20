@@ -44,6 +44,8 @@ public partial class ShikshaMitraDbContext
     public DbSet<StudentDashboardPreview> StudentDashboardPreviews { get; set; }
     public DbSet<AcademicTerm> AcademicTerms { get; set; }
     public DbSet<StudentRollNumberAssignment> StudentRollNumberAssignments { get; set; }
+    public DbSet<StudentCertificate> StudentCertificates { get; set; }
+    public DbSet<StudentCertificateTemplate> StudentCertificateTemplates { get; set; }
 
     // ───────────────────────────────────────────────
     // Students — Attendance

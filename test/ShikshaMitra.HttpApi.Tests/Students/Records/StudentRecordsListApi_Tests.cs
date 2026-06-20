@@ -311,6 +311,36 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         body.Items.ShouldAllBe(student => student.PhotoUrl == null);
         body.Items.ShouldAllBe(student => student.RequiredDocumentsCount >= 0);
         body.Items.ShouldAllBe(student => student.UploadedDocumentsCount >= 0);
+        var includedStudent = body.Items.Single(student => student.StudentId == included.StudentId);
+        includedStudent.FormNo.ShouldBe(included.FormNo);
+        includedStudent.DateOfBirth.ShouldNotBeNull();
+        includedStudent.Age.ShouldNotBeNullOrWhiteSpace();
+        includedStudent.Gender.ShouldNotBeNull();
+        includedStudent.PrimaryContactNo.ShouldNotBeNullOrWhiteSpace();
+        includedStudent.City.ShouldBe("Pune");
+        includedStudent.State.ShouldNotBeNull();
+        includedStudent.Country.ShouldNotBeNull();
+        includedStudent.Address.ShouldContain("Pune");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_List_And_Summarize_Student_With_Feb_29_Birthday()
+    {
+        var leapDayStudent = await CreateDirectRegistrationWithBirthdayAsync(
+            "LeapDay",
+            new DateTimeOffset(2012, 2, 29, 0, 0, 0, TimeSpan.Zero));
+        await MoveRegistrationToEnrolledAsync(leapDayStudent.StudentId);
+
+        var listResponse = await Client.GetAsync(
+            $"{BaseUrl}/{Factory.SeededDivisionId}?skipCount=0&maxResultCount=20&searchTerm={Uri.EscapeDataString(leapDayStudent.FirstName)}");
+        listResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await listResponse.Content.ReadAsStringAsync());
+        var list = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<StudentDto>>(JsonOptions);
+        list.ShouldNotBeNull();
+        list.Items.Single(student => student.StudentId == leapDayStudent.StudentId).Age.ShouldNotBeNullOrWhiteSpace();
+
+        var dashboardResponse = await Client.GetAsync("/api/students/records/dashboard-summary");
+        dashboardResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await dashboardResponse.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -698,6 +728,29 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     }
 
     [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_Roll_Number_Arrangement_Metadata_In_Response_Body()
+    {
+        var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollMetadata");
+        await MoveRegistrationToEnrolledAsync(student.StudentId);
+
+        var response = await Client.GetAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-number-projections?arrangementType={(int)ArrangementTypeEnum.BoysFirst}&arrangementBy={(int)ArrangementByEnum.LastName}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<Result<RollNumberProjectionResponseDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.ArrangementType.ShouldBe(ArrangementTypeEnum.BoysFirst);
+        body.Data.ArrangementBy.ShouldBe(ArrangementByEnum.LastName);
+        body.Data.Items.ShouldContain(item => item.StudentId == student.StudentId);
+        body.Data.TotalCount.ShouldBe(body.Data.Items.Count);
+        body.Data.CurrentPage.ShouldBe(1);
+        body.Data.PageSize.ShouldBe(body.Data.Items.Count);
+        body.Data.TotalPages.ShouldBe(body.Data.Items.Count == 0 ? 0 : 1);
+    }
+
+    [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Reject_Duplicate_Roll_Number_Batch_Without_Partial_Save()
     {
@@ -1021,10 +1074,10 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
             $"/api/students/records/{Factory.SeededDivisionId}/roll-number-projections?academicTermId={academicTermId}");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<Result<List<RollNumberProjectionDto>>>(JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<Result<RollNumberProjectionResponseDto>>(JsonOptions);
         body.ShouldNotBeNull();
         body.Data.ShouldNotBeNull();
-        return body.Data;
+        return body.Data.Items;
     }
 
     private async Task<decimal> CalculateExpectedSchoolAttendancePercentageAsync(

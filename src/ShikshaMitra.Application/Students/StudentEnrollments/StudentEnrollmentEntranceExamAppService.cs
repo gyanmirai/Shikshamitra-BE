@@ -175,8 +175,9 @@ public class StudentEnrollmentEntranceExamAppService(
 
 	public async Task ScheduleExamAsync(Guid studentId, ScheduleEntranceExamDto input)
 	{
-		var student = await studentRepository.GetAsync(studentId, includeDetails: true) ?? throw new EntityNotFoundException(typeof(Student), studentId);
+		var student = await studentRepository.GetInquiryForUpdateAsync(studentId) ?? throw new EntityNotFoundException(typeof(Student), studentId);
 		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(ScheduleExamAsync));
+		entranceExamManager.ValidateSchedulingStatus(student, student.Id);
 
 		var slot = await entranceExamSlotRepository.GetAsync(input.EntranceExamSlotId);
 		await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(slot.AcademicYearId, nameof(ScheduleExamAsync));
@@ -187,7 +188,7 @@ public class StudentEnrollmentEntranceExamAppService(
 				.WithData("EntranceExamSlotId", slot.Id);
 		}
 
-		await entranceExamManager.ValidateScheduling(student.Id, slot.Id);
+		await entranceExamManager.ValidateScheduling(student, slot);
 
 		student.ScheduleEntranceExam(slot.Id, slot.StartDate, slot.EndDate, slot.RoomNo);
 		await studentRepository.UpdateAsync(student, autoSave: true);

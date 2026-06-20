@@ -11,6 +11,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
@@ -33,7 +34,8 @@ public class TimetableAppService(
     IRepository<Room, Guid> roomRepository,
     IRepository<AssignedSubject, Guid> assignedSubjectRepository,
     TimetableReportPdfService timetableReportPdfService,
-    ITenantRepository tenantRepository
+    ITenantRepository tenantRepository,
+    IRepository<Employee, Guid> employeeRepository
 ) : ApplicationService, ITimetableAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
@@ -61,6 +63,13 @@ public class TimetableAppService(
         var subjects = needsSubjectData ? await subjectRepository.GetListAsync() : [];
         var electiveGroups = needsSubjectData ? await electiveGroupRepository.GetListAsync() : [];
         var rooms = hasSavedData ? await roomRepository.GetListAsync() : [];
+
+        var teacherIds = hasSavedData
+            ? timetable!.Slots.SelectMany(s => s.Subjects).Select(sub => sub.TeacherId).Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList()
+            : new List<Guid>();
+        var employees = teacherIds.Count > 0
+            ? await employeeRepository.GetListAsync(e => teacherIds.Contains(e.Id))
+            : new List<Employee>();
 
         // Compute occupied slots per subject across all days in this timetable
         var occupiedBySubject = hasSavedData
@@ -144,7 +153,9 @@ public class TimetableAppService(
                                 Name = subject?.Name ?? string.Empty,
                                 Color = subject?.Color,
                                 TeacherId = sub.TeacherId,
-                                TeacherName = null,
+                                TeacherName = sub.TeacherId.HasValue
+                                    ? employees.FirstOrDefault(e => e.Id == sub.TeacherId.Value)?.EmployeeName
+                                    : null,
                                 RoomId = sub.RoomId,
                                 RoomName = room?.RoomName,
                                 TotalSlots = totalSlots,

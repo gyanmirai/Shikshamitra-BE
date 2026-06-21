@@ -14,7 +14,9 @@ internal static class PayrollReadinessProjector
 	{
 		var missingAttendanceCount = items.Count(x => x.IssueCodes.Contains(IssueCodes.NoAttendance));
 		var missingSalaryStructureCount = items.Count(x => x.IssueCodes.Contains(IssueCodes.MissingSalaryStructure));
-		var policyConfigurationIssueCount = items.Count(x => x.IssueCodes.Contains(IssueCodes.PayrollPolicyConfiguration));
+		var policyConfigurationIssueCount = items.Count(x =>
+			x.IssueCodes.Contains(IssueCodes.PayrollPolicyConfiguration) ||
+			x.IssueCodes.Contains(IssueCodes.AttendanceSalaryDeductionConfiguration));
 		var reviewedCount = items.Count(x => x.ReviewStatus == ReviewStatuses.Reviewed);
 		var lockedCount = lockedCountOverride ?? items.Count(x => x.IsLocked || x.ReviewStatus == ReviewStatuses.Locked);
 		var employeeCount = employeeCountOverride ?? items.Count;
@@ -36,8 +38,17 @@ internal static class PayrollReadinessProjector
 
 		if (policyConfigurationIssueCount > 0)
 		{
-			blockingIssues.Add(IssueCodes.PayrollPolicyConfiguration);
-			recommendedActions.Add("fix-payroll-policy");
+			if (items.Any(x => x.IssueCodes.Contains(IssueCodes.PayrollPolicyConfiguration)))
+			{
+				blockingIssues.Add(IssueCodes.PayrollPolicyConfiguration);
+				recommendedActions.Add("fix-payroll-policy");
+			}
+
+			if (items.Any(x => x.IssueCodes.Contains(IssueCodes.AttendanceSalaryDeductionConfiguration)))
+			{
+				blockingIssues.Add(IssueCodes.AttendanceSalaryDeductionConfiguration);
+				recommendedActions.Add("fix-attendance-policy");
+			}
 		}
 
 		if (items.Any(x => x.IssueCodes.Contains(IssueCodes.NoWorkingDays)))

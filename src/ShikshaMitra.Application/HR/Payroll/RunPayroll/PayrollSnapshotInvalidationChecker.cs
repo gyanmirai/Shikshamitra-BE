@@ -16,6 +16,7 @@ public class PayrollSnapshotInvalidationChecker(
 	PayrollBasisPreviewResolver basisPreviewResolver,
 	PayrollSnapshotAttendanceInvalidationReader attendanceInvalidationReader,
 	PayrollSnapshotAdjustmentInvalidationReader adjustmentInvalidationReader,
+	PayrollLateArrivalDeductionSnapshotInvalidationReader lateArrivalDeductionInvalidationReader,
 	ILogger<PayrollSnapshotInvalidationChecker> logger) : ITransientDependency
 {
 	public async Task<bool> HasInvalidationsAsync(
@@ -41,7 +42,7 @@ public class PayrollSnapshotInvalidationChecker(
 			return true;
 		}
 
-		if (await HavePolicyChangesAfterSnapshotsAsync(year, month, academicYearId, snapshotByEmployee))
+		if (await HavePolicyChangesAfterSnapshotsAsync(monthYear, year, month, academicYearId, snapshotByEmployee))
 		{
 			return true;
 		}
@@ -60,6 +61,7 @@ public class PayrollSnapshotInvalidationChecker(
 	}
 
 	private async Task<bool> HavePolicyChangesAfterSnapshotsAsync(
+		string monthYear,
 		int year,
 		int month,
 		Guid? academicYearId,
@@ -75,6 +77,7 @@ public class PayrollSnapshotInvalidationChecker(
 
 		var calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId);
 		var effectiveDate = PayrollRunRules.GetPayrollPolicyResolutionDate(year, month);
+		var resolvedPoliciesByEmployee = new Dictionary<Guid, HrResolvedPolicies>();
 		foreach (var snapshot in unlockedSnapshots)
 		{
 			HrResolvedPolicies resolvedPolicies;
@@ -95,6 +98,7 @@ public class PayrollSnapshotInvalidationChecker(
 					ex.Code);
 				return true;
 			}
+			resolvedPoliciesByEmployee[snapshot.EmployeeId] = resolvedPolicies;
 
 			if (SnapshotPolicyMetadataChanged(snapshot, resolvedPolicies))
 			{
@@ -113,6 +117,16 @@ public class PayrollSnapshotInvalidationChecker(
 					snapshot.MonthYear);
 				return true;
 			}
+		}
+
+		if (await lateArrivalDeductionInvalidationReader.HasInvalidationsAsync(
+			    monthYear,
+			    year,
+			    month,
+			    snapshotByEmployee,
+			    resolvedPoliciesByEmployee))
+		{
+			return true;
 		}
 
 		return false;

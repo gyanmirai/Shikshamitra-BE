@@ -16,6 +16,7 @@ public static class IssueCodes
 	public const string NoPreviousMonthComparison = "NO_PREVIOUS_MONTH_COMPARISON";
 	public const string LargeSalaryVariance = "LARGE_SALARY_VARIANCE";
 	public const string AttendancePolicyEffectiveBoundary = "ATTENDANCE_POLICY_EFFECTIVE_BOUNDARY";
+	public const string AttendanceSalaryDeductionConfiguration = "ATTENDANCE_SALARY_DEDUCTION_CONFIGURATION";
 	public const string PayrollPolicyConfiguration = "PAYROLL_POLICY_CONFIGURATION";
 	public const string NoWorkingDays = "NO_WORKING_DAYS";
 }

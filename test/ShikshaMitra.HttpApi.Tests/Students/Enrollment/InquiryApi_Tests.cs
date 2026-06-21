@@ -200,6 +200,32 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Not_Delete_Inquiry_Preference_When_Assigned_To_Student()
+    {
+        var preferenceName = $"Assigned {Guid.NewGuid():N}";
+        var preferenceResponse = await Client.PostAsJsonAsync(
+            $"/api/student-enrollment/{Factory.SeededAcademicYearId}/settings/inquiry-preferences",
+            new CreateUpdateInquiryPreferenceDto { PreferenceName = preferenceName },
+            JsonOptions);
+        preferenceResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await preferenceResponse.Content.ReadAsStringAsync());
+        var preference = await preferenceResponse.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        preference.ShouldNotBeNull();
+
+        var dto = StudentEnrollmentTestHelper.BuildInquiryDto("InqPrefInUse");
+        dto.InquiryPreferenceId = preference.Id;
+        var inquiryResponse = await Client.PostAsJsonAsync($"{BaseUrl}/inquiries", dto, JsonOptions);
+        inquiryResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await inquiryResponse.Content.ReadAsStringAsync());
+
+        var deleteResponse = await Client.DeleteAsync(
+            $"/api/student-enrollment/settings/inquiry-preferences/{preference.Id}");
+        var deleteBody = await deleteResponse.Content.ReadAsStringAsync();
+
+        deleteResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        deleteBody.ShouldContain("InquiryPreference:InUse");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
     public async Task Scoped_User_Should_Not_Get_OutOfScope_Inquiry_By_Id()
     {
         var studentId = await StudentEnrollmentTestHelper.CreateInquiryAndGetIdAsync(

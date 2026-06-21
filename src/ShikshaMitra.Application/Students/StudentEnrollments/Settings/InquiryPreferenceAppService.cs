@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Students;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -16,15 +17,18 @@ namespace ShikshaMitra.Students.StudentEnrollments.Settings;
 public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenceAppService
 {
 	private readonly IRepository<InquiryPreference, Guid> _inquiryPreferenceRepository;
+	private readonly IRepository<StudentAdditionalDetail, Guid> _studentAdditionalDetailRepository;
 	private readonly InquiryPreferenceManager _inquiryPreferenceManager;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 
 	public InquiryPreferenceAppService(
 		IRepository<InquiryPreference, Guid> inquiryPreferenceRepository,
+		IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
 		InquiryPreferenceManager inquiryPreferenceManager,
 		StudentScopeAccessService studentScopeAccessService)
 	{
 		_inquiryPreferenceRepository = inquiryPreferenceRepository;
+		_studentAdditionalDetailRepository = studentAdditionalDetailRepository;
 		_inquiryPreferenceManager = inquiryPreferenceManager;
 		_studentScopeAccessService = studentScopeAccessService;
 	}
@@ -180,6 +184,17 @@ public class InquiryPreferenceAppService : ApplicationService, IInquiryPreferenc
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
 			inquiryPreference.AcademicYearId,
 			nameof(DeleteAsync));
+
+		var assignedCount = await _studentAdditionalDetailRepository.CountAsync(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.InquiryPreferenceId == id);
+		if (assignedCount > 0)
+		{
+			throw new BusinessException("InquiryPreference:InUse")
+				.WithData("Id", id)
+				.WithData("PreferenceName", inquiryPreference.PreferenceName)
+				.WithData("AssignedStudentsCount", assignedCount);
+		}
 
 		await _inquiryPreferenceRepository.DeleteAsync(inquiryPreference, autoSave: true);
 	}

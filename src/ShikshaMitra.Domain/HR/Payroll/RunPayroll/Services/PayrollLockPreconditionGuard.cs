@@ -69,6 +69,7 @@ public static class PayrollLockPreconditionGuard
 		return issues.Contains(IssueCodes.NoAttendance)
 		       || issues.Contains(IssueCodes.MissingSalaryStructure)
 		       || issues.Contains(IssueCodes.NegativeNetPay)
+		       || issues.Contains(IssueCodes.AttendanceSalaryDeductionConfiguration)
 		       || issues.Contains(IssueCodes.PayrollPolicyConfiguration)
 		       || issues.Contains(IssueCodes.NoWorkingDays);
 	}

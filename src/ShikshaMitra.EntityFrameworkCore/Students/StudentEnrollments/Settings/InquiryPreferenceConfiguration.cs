@@ -30,6 +30,7 @@ public class InquiryPreferenceConfiguration : IEntityTypeConfiguration<InquiryPr
 
 		// Create unique index on PreferenceName per tenant and academic year
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.PreferenceName })
-			.IsUnique();
+			.IsUnique()
+			.HasFilter("\"IsDeleted\" = false");
 	}
 }

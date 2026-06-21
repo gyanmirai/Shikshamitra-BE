@@ -172,6 +172,34 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Recreate_Inquiry_Preference_After_Delete()
+    {
+        var preferenceName = $"Online {Guid.NewGuid():N}";
+        var createResponse = await Client.PostAsJsonAsync(
+            $"/api/student-enrollment/{Factory.SeededAcademicYearId}/settings/inquiry-preferences",
+            new CreateUpdateInquiryPreferenceDto { PreferenceName = preferenceName },
+            JsonOptions);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+        var createdPreference = await createResponse.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        createdPreference.ShouldNotBeNull();
+
+        var deleteResponse = await Client.DeleteAsync(
+            $"/api/student-enrollment/settings/inquiry-preferences/{createdPreference.Id}");
+        deleteResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.NoContent);
+
+        var recreateResponse = await Client.PostAsJsonAsync(
+            $"/api/student-enrollment/{Factory.SeededAcademicYearId}/settings/inquiry-preferences",
+            new CreateUpdateInquiryPreferenceDto { PreferenceName = preferenceName },
+            JsonOptions);
+
+        recreateResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await recreateResponse.Content.ReadAsStringAsync());
+        var recreatedPreference = await recreateResponse.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        recreatedPreference.ShouldNotBeNull();
+        recreatedPreference.PreferenceName.ShouldBe(preferenceName);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
     public async Task Scoped_User_Should_Not_Get_OutOfScope_Inquiry_By_Id()
     {
         var studentId = await StudentEnrollmentTestHelper.CreateInquiryAndGetIdAsync(

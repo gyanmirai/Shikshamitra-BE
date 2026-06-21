@@ -41,6 +41,48 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 	}
 
 	[Fact]
+	public async Task GetFilteredListAsync_Should_Match_Full_Name_With_Multiple_Tokens()
+	{
+		var targetInput = await BuildCreateDtoAsync("full.name.target");
+		targetInput.FirstName = "Akshay";
+		targetInput.MiddleName = "Kumar";
+		targetInput.LastName = "Patel";
+		targetInput.MobileNo = $"8{DateTime.UtcNow.Ticks % 1000000000:D9}";
+		var target = await _personalInfoAppService.CreateAsync(targetInput);
+
+		var outsiderInput = await BuildCreateDtoAsync("full.name.outsider");
+		outsiderInput.FirstName = "Ramesh";
+		outsiderInput.MiddleName = "Kumar";
+		outsiderInput.LastName = "Shah";
+		outsiderInput.MobileNo = $"7{DateTime.UtcNow.AddTicks(1).Ticks % 1000000000:D9}";
+		var outsider = await _personalInfoAppService.CreateAsync(outsiderInput);
+
+		var fullNameResult = await _employeeSearchAppService.GetFilteredListAsync(new GetEmployeeListInput
+		{
+			Search = "  aKsHaY    pAtEl  ",
+			SkipCount = 0,
+			MaxResultCount = 50
+		});
+		var middleNameResult = await _employeeSearchAppService.GetFilteredListAsync(new GetEmployeeListInput
+		{
+			Search = "akshay kumar patel",
+			SkipCount = 0,
+			MaxResultCount = 50
+		});
+		var firstNameResult = await _employeeSearchAppService.GetFilteredListAsync(new GetEmployeeListInput
+		{
+			Search = "akshay",
+			SkipCount = 0,
+			MaxResultCount = 50
+		});
+
+		fullNameResult.Items.Select(x => x.Id).ShouldContain(target.Id);
+		fullNameResult.Items.Select(x => x.Id).ShouldNotContain(outsider.Id);
+		middleNameResult.Items.Select(x => x.Id).ShouldContain(target.Id);
+		firstNameResult.Items.Select(x => x.Id).ShouldContain(target.Id);
+	}
+
+	[Fact]
 	public async Task GetFilteredListAsync_Should_Return_Reportees_And_Descendants_For_Reporting_Manager()
 	{
 		var manager = await _personalInfoAppService.CreateAsync(await BuildCreateDtoAsync("mgr.scope"));

@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
@@ -163,6 +164,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         var duplicateBatchContent = await duplicateBatchResponse.Content.ReadAsStringAsync();
         duplicateBatchContent.ShouldContain(StudentErrorCodes.DuplicateGrNo);
         duplicateBatchContent.ShouldContain($"GR Number {grBase + 2} is already assigned to another student.");
+        ReadProblemDetail(duplicateBatchContent).ShouldBe(
+            $"GR Number {grBase + 2} is already assigned to another student.");
         var afterDuplicateBatch = await GetGrNumbersAsync(first.StudentId, second.StudentId);
         afterDuplicateBatch[first.StudentId].ShouldBe(grBase);
         afterDuplicateBatch[second.StudentId].ShouldBe(grBase + 1);
@@ -178,6 +181,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         var existingConflictContent = await existingConflictResponse.Content.ReadAsStringAsync();
         existingConflictContent.ShouldContain(StudentErrorCodes.DuplicateGrNo);
         existingConflictContent.ShouldContain($"GR Number {grBase + 1} is already assigned to another student.");
+        ReadProblemDetail(existingConflictContent).ShouldBe(
+            $"GR Number {grBase + 1} is already assigned to another student.");
         var afterExistingConflict = await GetGrNumbersAsync(first.StudentId, second.StudentId);
         afterExistingConflict[first.StudentId].ShouldBe(grBase);
         afterExistingConflict[second.StudentId].ShouldBe(grBase + 1);
@@ -704,15 +709,17 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollSummaryB");
         await MoveRegistrationToEnrolledAsync(first.StudentId);
         await MoveRegistrationToEnrolledAsync(second.StudentId);
-        var firstRollNo = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 100000;
-        var secondRollNo = firstRollNo + 1;
+        var term = await CreateAcademicTermAsync(
+            "Roll Summary",
+            Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 100000,
+            isCurrent: false);
 
         var response = await Client.PostAsJsonAsync(
-            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers",
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={term.Id}",
             new List<UpdateStudentRollNumberDto>
             {
-                new() { StudentId = first.StudentId, RollNo = firstRollNo },
-                new() { StudentId = second.StudentId, RollNo = secondRollNo },
+                new() { StudentId = first.StudentId, RollNo = 1 },
+                new() { StudentId = second.StudentId, RollNo = 2 },
             },
             JsonOptions);
 
@@ -758,14 +765,17 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollDupB");
         await MoveRegistrationToEnrolledAsync(first.StudentId);
         await MoveRegistrationToEnrolledAsync(second.StudentId);
-        var duplicateRollNo = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 200000;
+        var term = await CreateAcademicTermAsync(
+            "Roll Duplicate Guard",
+            Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 200000,
+            isCurrent: false);
 
         var response = await Client.PostAsJsonAsync(
-            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers",
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={term.Id}",
             new List<UpdateStudentRollNumberDto>
             {
-                new() { StudentId = first.StudentId, RollNo = duplicateRollNo },
-                new() { StudentId = second.StudentId, RollNo = duplicateRollNo },
+                new() { StudentId = first.StudentId, RollNo = 1 },
+                new() { StudentId = second.StudentId, RollNo = 1 },
             },
             JsonOptions);
 
@@ -773,6 +783,75 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         var rollNumbers = await GetRollNumbersAsync(first.StudentId, second.StudentId);
         rollNumbers[first.StudentId].ShouldBeNull();
         rollNumbers[second.StudentId].ShouldBeNull();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Reject_Roll_Number_For_Non_Enrolled_Student()
+    {
+        var registration = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollNotEnrolled");
+        var term = await CreateAcademicTermAsync(
+            "Roll Enrollment Guard",
+            Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 240000,
+            isCurrent: false);
+
+        var response = await Client.PostAsJsonAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={term.Id}",
+            new List<UpdateStudentRollNumberDto>
+            {
+                new() { StudentId = registration.StudentId, RollNo = 1 },
+            },
+            JsonOptions);
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        var content = await response.Content.ReadAsStringAsync();
+        content.ShouldContain(StudentErrorCodes.RollNumberBatchInvalid);
+        content.ShouldContain("are not enrolled");
+
+        var assignments = await GetRollAssignmentNumbersAsync(term.Id, registration.StudentId);
+        assignments[registration.StudentId].ShouldBeNull();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Reject_Roll_Number_Above_Division_Student_Count_Without_Partial_Save()
+    {
+        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollMaxA");
+        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollMaxB");
+        await MoveRegistrationToEnrolledAsync(first.StudentId);
+        await MoveRegistrationToEnrolledAsync(second.StudentId);
+        var term = await CreateAcademicTermAsync(
+            "Roll Max Guard",
+            Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 250000,
+            isCurrent: false);
+        var divisionStudentCount = await GetDivisionStudentCountAsync(Factory.SeededDivisionId);
+
+        var validResponse = await Client.PostAsJsonAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={term.Id}",
+            new List<UpdateStudentRollNumberDto>
+            {
+                new() { StudentId = first.StudentId, RollNo = divisionStudentCount },
+            },
+            JsonOptions);
+        validResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await validResponse.Content.ReadAsStringAsync());
+
+        var rejectedResponse = await Client.PostAsJsonAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={term.Id}",
+            new List<UpdateStudentRollNumberDto>
+            {
+                new() { StudentId = first.StudentId, RollNo = divisionStudentCount + 1 },
+                new() { StudentId = second.StudentId, RollNo = 1 },
+            },
+            JsonOptions);
+
+        rejectedResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        var rejectedContent = await rejectedResponse.Content.ReadAsStringAsync();
+        rejectedContent.ShouldContain(StudentErrorCodes.RollNumberBatchInvalid);
+        rejectedContent.ShouldContain($"Roll numbers cannot exceed total students ({divisionStudentCount}).");
+
+        var assignments = await GetRollAssignmentNumbersAsync(term.Id, first.StudentId, second.StudentId);
+        assignments[first.StudentId].ShouldBe(divisionStudentCount);
+        assignments[second.StudentId].ShouldBeNull();
     }
 
     [Fact]
@@ -791,8 +870,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
             $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={currentTerm.Id}",
             new List<UpdateStudentRollNumberDto>
             {
-                new() { StudentId = first.StudentId, RollNo = 11 },
-                new() { StudentId = second.StudentId, RollNo = 12 },
+                new() { StudentId = first.StudentId, RollNo = 1 },
+                new() { StudentId = second.StudentId, RollNo = 2 },
             },
             JsonOptions);
         currentResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -801,8 +880,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
             $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={nextTerm.Id}",
             new List<UpdateStudentRollNumberDto>
             {
-                new() { StudentId = first.StudentId, RollNo = 31 },
-                new() { StudentId = second.StudentId, RollNo = 32 },
+                new() { StudentId = first.StudentId, RollNo = 2 },
+                new() { StudentId = second.StudentId, RollNo = 1 },
             },
             JsonOptions);
         nextResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -810,14 +889,14 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         var currentProjection = await GetRollProjectionsAsync(currentTerm.Id);
         var nextProjection = await GetRollProjectionsAsync(nextTerm.Id);
 
-        currentProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldBe(11);
-        nextProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldBe(31);
+        currentProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldBe(1);
+        nextProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldBe(2);
         currentProjection.Single(item => item.StudentId == first.StudentId).AcademicTermId.ShouldBe(currentTerm.Id);
         nextProjection.Single(item => item.StudentId == first.StudentId).AcademicTermId.ShouldBe(nextTerm.Id);
 
         var rollNumbers = await GetRollNumbersAsync(first.StudentId, second.StudentId);
-        rollNumbers[first.StudentId].ShouldBe(11);
-        rollNumbers[second.StudentId].ShouldBe(12);
+        rollNumbers[first.StudentId].ShouldBe(1);
+        rollNumbers[second.StudentId].ShouldBe(2);
     }
 
     [Fact]
@@ -836,8 +915,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
             $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={firstTerm.Id}",
             new List<UpdateStudentRollNumberDto>
             {
-                new() { StudentId = first.StudentId, RollNo = 41 },
-                new() { StudentId = second.StudentId, RollNo = 42 },
+                new() { StudentId = first.StudentId, RollNo = 1 },
+                new() { StudentId = second.StudentId, RollNo = 2 },
             },
             JsonOptions);
         okResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -846,8 +925,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
             $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?academicTermId={secondTerm.Id}",
             new List<UpdateStudentRollNumberDto>
             {
-                new() { StudentId = first.StudentId, RollNo = 51 },
-                new() { StudentId = second.StudentId, RollNo = 51 },
+                new() { StudentId = first.StudentId, RollNo = 2 },
+                new() { StudentId = second.StudentId, RollNo = 2 },
             },
             JsonOptions);
 
@@ -855,8 +934,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         var firstTermProjection = await GetRollProjectionsAsync(firstTerm.Id);
         var secondTermProjection = await GetRollProjectionsAsync(secondTerm.Id);
 
-        firstTermProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldBe(41);
-        secondTermProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldNotBe(51);
+        firstTermProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldBe(1);
+        secondTermProjection.Single(item => item.StudentId == first.StudentId).RollNo.ShouldNotBe(2);
     }
 
     private async Task MoveRegistrationToEnrolledAsync(Guid studentId, Guid? divisionId = null)
@@ -1080,6 +1159,51 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         return body.Data.Items;
     }
 
+    private async Task<Dictionary<Guid, int?>> GetRollAssignmentNumbersAsync(Guid academicTermId, params Guid[] studentIds)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var assignmentRepository = scope.ServiceProvider
+            .GetRequiredService<IRepository<StudentRollNumberAssignment, Guid>>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var ids = studentIds.ToList();
+            var query = await assignmentRepository.GetQueryableAsync();
+            var existing = query
+                .Where(assignment =>
+                    assignment.AcademicTermId == academicTermId &&
+                    ids.Contains(assignment.StudentId))
+                .ToDictionary(assignment => assignment.StudentId, assignment => assignment.RollNo);
+            var result = ids.ToDictionary(id => id, id => existing.TryGetValue(id, out var rollNo) ? rollNo : null);
+            await uow.CompleteAsync();
+            return result;
+        }
+    }
+
+    private async Task<int> GetDivisionStudentCountAsync(Guid divisionId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+            var count = query.Count(student =>
+                student.DivisionId == divisionId &&
+                student.Status == StudentLifeCycleStatusEnum.Enrolled);
+            await uow.CompleteAsync();
+            return count;
+        }
+    }
+
     private async Task<decimal> CalculateExpectedSchoolAttendancePercentageAsync(
         DateTime startDate,
         DateTime endDate)
@@ -1162,6 +1286,14 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     }
 
     private sealed record SeededDivisionContext(Guid StandardId, Guid AcademicMediumId);
+
+    private static string? ReadProblemDetail(string content)
+    {
+        using var document = JsonDocument.Parse(content);
+        return document.RootElement.TryGetProperty("detail", out var detail)
+            ? detail.GetString()
+            : null;
+    }
 
     private static string BuildBulkStudentUploadCsv(
         SeededDivisionContext context,

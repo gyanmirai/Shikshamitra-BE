@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Services;
 using Volo.Abp;
@@ -113,13 +114,16 @@ public class EntranceExamSlotManager(
 		int roomNo,
 		Guid? excludingSlotId = null)
 	{
-		var existingSlot = await entranceExamSlotRepository.FindAsync(slot =>
+		var candidateSlots = await entranceExamSlotRepository.GetListAsync(slot =>
 			slot.AcademicYearId == academicYearId &&
-			slot.RoomNo == roomNo &&
+			slot.RoomNo == roomNo);
+
+		var existingSlot = candidateSlots.FirstOrDefault(slot =>
+			(!excludingSlotId.HasValue || slot.Id != excludingSlotId.Value) &&
 			slot.StartDate < endDate &&
 			startDate < slot.EndDate);
 
-		if (existingSlot != null && (!excludingSlotId.HasValue || existingSlot.Id != excludingSlotId.Value))
+		if (existingSlot != null)
 		{
 			throw new BusinessException("SM:EntranceExamSlot:004")
 				.WithData("existingSlotId", existingSlot.Id)

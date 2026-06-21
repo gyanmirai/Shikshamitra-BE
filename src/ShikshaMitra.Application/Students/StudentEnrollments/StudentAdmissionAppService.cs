@@ -417,18 +417,38 @@ public class StudentAdmissionAppService(
 				// Apply action
 				if (item.Action == StudentEnrollmentApprovalState.Approved)
 				{
-					student.ApproveAdmission(item.Remarks);
+					var isAlreadyApproved =
+						student.Status == StudentLifeCycleStatusEnum.Enrolled &&
+						student.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved;
 
-					// Create user account and send welcome email ONLY on approval
-					await CreateStudentUserAndSendEmailAsync(student);
+					if (!isAlreadyApproved)
+					{
+						student.ApproveAdmission(item.Remarks);
 
-					// Create single parent account
-					await CreateParentAccountAsync(student);
+						// Create user account and send welcome email ONLY on first approval
+						await CreateStudentUserAndSendEmailAsync(student);
 
-					await SyncAdmissionMembershipsAsync(student);
+						// Create single parent account
+						await CreateParentAccountAsync(student);
+
+						await SyncAdmissionMembershipsAsync(student);
+
+						itemResult.Message = "Admission approved successfully. Student and parent accounts created and welcome emails sent.";
+					}
+					else
+					{
+						if (item.Remarks is not null)
+						{
+							student.UpdateAdmissionApprovalRemarks(item.Remarks);
+							itemResult.Message = "Admission approval remarks updated successfully.";
+						}
+						else
+						{
+							itemResult.Message = "Admission is already approved.";
+						}
+					}
 
 					itemResult.NewStatus = StudentEnrollmentApprovalState.Approved.ToString();
-					itemResult.Message = "Admission approved successfully. Student and parent accounts created and welcome emails sent.";
 				}
 				else if (item.Action == StudentEnrollmentApprovalState.Rejected)
 				{

@@ -88,6 +88,31 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_Cumulative_Present_Days_And_Attendance_Percentage()
+    {
+        var context = await ResolveSeededDivisionContextAsync();
+        var student = await CreateEnrolledStudentAsync(context, "AttendanceCumulative");
+        var firstDate = DateTime.Today.AddDays(-3);
+        var secondDate = DateTime.Today.AddDays(-2);
+        var thirdDate = DateTime.Today.AddDays(-1);
+
+        await MarkAttendanceAsync(student.StudentId, AttendanceStatus.Present, firstDate, "Cumulative present 1");
+        await MarkAttendanceAsync(student.StudentId, AttendanceStatus.Absent, secondDate, "Cumulative absent");
+        await MarkAttendanceAsync(student.StudentId, AttendanceStatus.Present, thirdDate, "Cumulative present 2");
+
+        var response = await Client.GetAsync(
+            $"{AttendanceBaseUrl}/students?academicYearId={Factory.SeededAcademicYearId}&standardId={context.StandardId}&divisionId={Factory.SeededDivisionId}&date={DateTime.Today:yyyy-MM-dd}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<StudentAttendanceListDto>(JsonOptions);
+        body.ShouldNotBeNull();
+        var attendanceStudent = body.Students.Single(s => s.StudentId == student.StudentId);
+        attendanceStudent.PresentDays.ShouldBe(2);
+        attendanceStudent.AttendancePercentage.ShouldBe(66.67, 0.01);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Attendance_History_For_Selected_Student_Range_With_Paging()
     {
         var context = await ResolveSeededDivisionContextAsync();

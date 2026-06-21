@@ -238,6 +238,31 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
         item.Success.ShouldBeTrue();
         (item.Message ?? string.Empty).ShouldNotContain("unexpected error");
         item.NewStatus.ShouldBe(StudentEnrollmentApprovalState.Approved.ToString());
+
+        var secondApproveResponse = await Client.PostAsJsonAsync(
+            $"{BaseUrl}/status",
+            new BatchAdmissionStatusChangeRequestDto
+            {
+                Items =
+                [
+                    new AdmissionStatusChangeItemDto
+                    {
+                        StudentId = createBody.Data.StudentId,
+                        Action = StudentEnrollmentApprovalState.Approved
+                    }
+                ]
+            },
+            JsonOptions);
+
+        secondApproveResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await secondApproveResponse.Content.ReadAsStringAsync());
+        var secondResult = await secondApproveResponse.Content.ReadFromJsonAsync<BatchAdmissionStatusChangeResultDto>(JsonOptions);
+        secondResult.ShouldNotBeNull();
+        secondResult.Succeeded.ShouldBe(1);
+        secondResult.Failed.ShouldBe(0);
+        var secondItem = secondResult.Results.Single();
+        secondItem.Success.ShouldBeTrue();
+        (secondItem.Message ?? string.Empty).ShouldNotContain("unexpected error");
+        secondItem.NewStatus.ShouldBe(StudentEnrollmentApprovalState.Approved.ToString());
     }
 
     [Fact]
@@ -281,6 +306,31 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
         var admissions = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<StudentDto>>(JsonOptions);
         admissions.ShouldNotBeNull();
         admissions.Items.Single(item => item.StudentId == createBody.Data.StudentId).Remarks.ShouldBe(remarks);
+
+        var updatedRemarks = $"Updated approval remarks {Guid.NewGuid():N}";
+        var repeatApproveResponse = await Client.PostAsJsonAsync(
+            $"{BaseUrl}/status",
+            new BatchAdmissionStatusChangeRequestDto
+            {
+                Items =
+                [
+                    new AdmissionStatusChangeItemDto
+                    {
+                        StudentId = createBody.Data.StudentId,
+                        Action = StudentEnrollmentApprovalState.Approved,
+                        Remarks = updatedRemarks
+                    }
+                ]
+            },
+            JsonOptions);
+        repeatApproveResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await repeatApproveResponse.Content.ReadAsStringAsync());
+
+        var repeatListResponse = await Client.GetAsync(
+            $"{BaseUrl}?approvalStatus={(int)StudentEnrollmentApprovalState.Approved}&search={Uri.EscapeDataString(dto.FirstName)}&maxResultCount=20");
+        repeatListResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await repeatListResponse.Content.ReadAsStringAsync());
+        var repeatAdmissions = await repeatListResponse.Content.ReadFromJsonAsync<PagedResultDto<StudentDto>>(JsonOptions);
+        repeatAdmissions.ShouldNotBeNull();
+        repeatAdmissions.Items.Single(item => item.StudentId == createBody.Data.StudentId).Remarks.ShouldBe(updatedRemarks);
     }
 
     [Fact]

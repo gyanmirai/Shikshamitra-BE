@@ -23,14 +23,14 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid DivisionId { get; private set; }
 	public string PurposeDescription { get; private set; }
 	public decimal Amount { get; private set; }
-	public DateTime DueDate { get; private set; }
-	public DateTime AppliedOn { get; private set; }
+	public DateTimeOffset DueDate { get; private set; }
+	public DateTimeOffset AppliedOn { get; private set; }
 	public ChargePriority Priority { get; private set; }
 	public ChargeStatus Status { get; private set; }
 	public string? AdditionalNotes { get; private set; }
 	public Guid RequestorId { get; private set; }
 	public Guid? ApprovedBy { get; private set; }
-	public DateTime? ApprovedOn { get; private set; }
+	public DateTimeOffset? ApprovedOn { get; private set; }
 	public string? ApprovalNotes { get; private set; }
 
 	private Charge()
@@ -52,7 +52,7 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid divisionId,
 		string purposeDescription,
 		decimal amount,
-		DateTime dueDate,
+		DateTimeOffset dueDate,
 		ChargePriority priority,
 		ChargeStatus initialStatus,
 		Guid requestorId,
@@ -72,7 +72,7 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PurposeDescription = Check.NotNullOrWhiteSpace(purposeDescription, nameof(purposeDescription));
 		Amount = amount;
 		DueDate = dueDate;
-		AppliedOn = DateTime.UtcNow;
+		AppliedOn = DateTimeOffset.UtcNow;
 		Priority = priority;
 		Status = initialStatus;
 		RequestorId = Check.NotNull(requestorId, nameof(requestorId));
@@ -89,7 +89,7 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? chargeCategoryId = null,
 		string? purposeDescription = null,
 		decimal? amount = null,
-		DateTime? dueDate = null,
+		DateTimeOffset? dueDate = null,
 		ChargePriority? priority = null,
 		string? additionalNotes = null)
 	{
@@ -144,7 +144,7 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		Status = ChargeStatus.Approved;
 		ApprovedBy = approvedBy;
-		ApprovedOn = DateTime.UtcNow;
+		ApprovedOn = DateTimeOffset.UtcNow;
 		ApprovalNotes = approvalNotes;
 	}
 
@@ -169,7 +169,7 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		Status = ChargeStatus.Rejected;
 		ApprovedBy = rejectedBy;
-		ApprovedOn = DateTime.UtcNow;
+		ApprovedOn = DateTimeOffset.UtcNow;
 		ApprovalNotes = rejectionReason;
 	}
 
@@ -184,7 +184,7 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			return;
 
 		Status = ChargeStatus.Approved;
-		ApprovedOn = DateTime.UtcNow;
+		ApprovedOn = DateTimeOffset.UtcNow;
 	}
 
 	/// <summary>
@@ -212,11 +212,15 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private void ValidateDueDate()
 	{
-		if (DueDate.Date < DateTime.UtcNow.Date)
+		var dueDateDate = DueDate.Date;
+		var todayInDueDateOffset = DateTimeOffset.UtcNow
+			.ToOffset(DueDate.Offset)
+			.Date;
+
+		if (dueDateDate < todayInDueDateOffset)
 		{
 			throw new BusinessException(FinanceChargeErrorCodes.InvalidDueDate)
-				.WithData("DueDate", DueDate)
-				.WithData("Message", "Due date must be in the future");
+				.WithData("DueDate", DueDate);
 		}
 	}
 }

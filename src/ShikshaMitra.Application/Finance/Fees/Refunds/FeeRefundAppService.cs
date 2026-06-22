@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Common;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
+using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Students;
 using System;
@@ -22,7 +24,7 @@ public partial class FeeRefundAppService(
 	IDueFeeRepository dueFeeRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<Student, Guid> studentRepository,
-	IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
+	IRepository<FeePaymentReceipt, Guid> feePaymentReceiptRepository,
 	FeeRefundManager feeRefundManager,
 	FinanceScopeAccessService financeScopeAccessService,
 	ICurrentUser currentUser,

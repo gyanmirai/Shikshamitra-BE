@@ -13,7 +13,7 @@ public class CreateChargeRequest
 
 	public decimal Amount { get; set; }
 
-	public DateTime DueDate { get; set; }
+	public DateTimeOffset DueDate { get; set; }
 
 	public int Priority { get; set; } = 1;
 

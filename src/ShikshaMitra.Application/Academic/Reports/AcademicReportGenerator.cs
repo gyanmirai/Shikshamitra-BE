@@ -1748,6 +1748,7 @@ public class AcademicReportGenerator(
         columns.Add(new() { Id = "Total", Label = "Total" });
         columns.Add(new() { Id = "Percentage", Label = "Percentage" });
         columns.Add(new() { Id = "Grade", Label = "Grade" });
+        columns.Add(new() { Id = "Status", Label = "Status" });
         payload.Columns = columns;
 
         // Index marks by (StudentId, SubjectId)
@@ -1781,6 +1782,7 @@ public class AcademicReportGenerator(
                 };
 
                 double total = 0;
+                var hasFailedSubject = false;
                 foreach (var (subjectId, _) in orderedSubjects)
                 {
                     markIndex.TryGetValue((student.Id, subjectId), out var mark);
@@ -1791,6 +1793,7 @@ public class AcademicReportGenerator(
 
                     var examSubject = data.ExamSubjects.FirstOrDefault(es => es.SubjectId == subjectId);
                     var maxMarks = examSubject?.TotalMarks ?? 100;
+                    var passingMarks = examSubject?.PassingMarks ?? (maxMarks * 0.33);
                     row[$"subj_{subjectId}_Max"] = maxMarks.ToString("F2");
 
                     if (mark is { IsAbsent: false } && mark.MarksObtained.HasValue)
@@ -1798,9 +1801,12 @@ public class AcademicReportGenerator(
                         var subjectGrade = ComputeGrade(mark.MarksObtained.Value, maxMarks);
                         row[$"subj_{subjectId}_Grade"] = subjectGrade;
                         row[$"subj_{subjectId}_Remarks"] = GetRemarksFromGrade(subjectGrade);
+                        if (mark.MarksObtained.Value < passingMarks)
+                            hasFailedSubject = true;
                     }
                     else
                     {
+                        hasFailedSubject = true;
                         row[$"subj_{subjectId}_Grade"] = "—";
                         row[$"subj_{subjectId}_Remarks"] = mark is { IsAbsent: true } ? "Absent" : "—";
                     }
@@ -1810,6 +1816,7 @@ public class AcademicReportGenerator(
                 row["Total"] = total.ToString("F2");
                 row["Percentage"] = $"{pct}%";
                 row["Grade"] = ComputeGrade(total, data.TotalMaxMarks);
+                row["Status"] = hasFailedSubject ? "Failed" : "Passed";
                 return row;
             }).ToList();
 

@@ -127,11 +127,24 @@ public class HomeworkAppService(
         query = query
             .Where(h => h.EducationMediumId == academicMediumId)
             .Where(h => h.StandardId == filter.StandardId)
-            .Where(h => h.SubjectId == filter.SubjectId)
-            // Only homeworks with a schedule for the requested division
-            .Where(h => h.DivisionSchedules.Any(s =>
+            .Where(h => h.SubjectId == filter.SubjectId);
+
+        if (filter.HomeworkDate.HasValue)
+        {
+            var homeworkDate = filter.HomeworkDate.Value.Date;
+            query = query.Where(h => h.DivisionSchedules.Any(s =>
                 s.DivisionId == filter.DivisionId
-                && (!filter.HomeworkDate.HasValue || !s.PublishDate.HasValue || s.PublishDate.Value <= filter.HomeworkDate.Value)));
+                && (
+                    h.CreationTime.Date == homeworkDate
+                    || (s.PublishDate.HasValue && s.PublishDate.Value.Date == homeworkDate)
+                    || s.DueDate.Date == homeworkDate
+                )));
+        }
+        else
+        {
+            query = query.Where(h => h.DivisionSchedules.Any(s =>
+                s.DivisionId == filter.DivisionId));
+        }
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {

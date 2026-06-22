@@ -68,14 +68,13 @@ public class ExamResultController(
     }
 
     /// <summary>
-    /// Returns the current result header for a given Exam + Division, or 404 if not generated.
+    /// Returns the current result header for a given Exam + Division, or null if not generated.
     /// </summary>
     [HttpGet]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.View)]
     public async Task<IActionResult> GetHeaderAsync([FromQuery] Guid examId, [FromQuery] Guid divisionId)
     {
         var result = await examResultAppService.GetHeaderAsync(examId, divisionId);
-        if (result is null) return NotFound();
         return Ok(result);
     }
 

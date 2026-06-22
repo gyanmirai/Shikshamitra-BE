@@ -23,6 +23,9 @@ public class LectureSlotAppService(
     IRepository<Room, Guid> roomRepository
 ) : ApplicationService, ILectureSlotAppService
 {
+    private const string LectureSlotConfigHasTimetableMessage =
+        "This class already has generated timetable assignments. Remove or update those timetable assignments before changing lecture slot timings.";
+
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.View)]
     public async Task<PagedResultDto<LectureSlotListDto>> GetByMediumAsync(GetLectureSlotsByMediumInput input)
     {
@@ -256,7 +259,8 @@ public class LectureSlotAppService(
             if (matchingGroup == null)
             {
                 throw new BusinessException(TimetableErrorCodes.LectureSlotConfigHasTimetable)
-                    .WithData("StandardId", standardId);
+                    .WithData("StandardId", standardId)
+                    .WithData("message", LectureSlotConfigHasTimetableMessage);
             }
 
             var matchingSlot = matchingGroup.TimeSlots.FirstOrDefault(ts =>
@@ -267,7 +271,8 @@ public class LectureSlotAppService(
             if (matchingSlot == null)
             {
                 throw new BusinessException(TimetableErrorCodes.LectureSlotConfigHasTimetable)
-                    .WithData("StandardId", standardId);
+                    .WithData("StandardId", standardId)
+                    .WithData("message", LectureSlotConfigHasTimetableMessage);
             }
         }
     }
@@ -301,7 +306,8 @@ public class LectureSlotAppService(
             if (matchingGroup == null)
             {
                 throw new BusinessException(TimetableErrorCodes.LectureSlotConfigHasTimetable)
-                    .WithData("StandardId", standardId);
+                    .WithData("StandardId", standardId)
+                    .WithData("message", LectureSlotConfigHasTimetableMessage);
             }
 
             var matchingSlot = matchingGroup.TimeSlots.FirstOrDefault(ts =>
@@ -312,7 +318,8 @@ public class LectureSlotAppService(
             if (matchingSlot == null)
             {
                 throw new BusinessException(TimetableErrorCodes.LectureSlotConfigHasTimetable)
-                    .WithData("StandardId", standardId);
+                    .WithData("StandardId", standardId)
+                    .WithData("message", LectureSlotConfigHasTimetableMessage);
             }
         }
     }

@@ -354,7 +354,7 @@
     "Academic:Timetable:020001": "Lecture slot configuration already exists for the selected class.",
     "Academic:Timetable:020002": "Lecture slot configuration was not found.",
     "Academic:Timetable:020003": "Lecture slots are already configured for the selected class.",
-    "Academic:Timetable:020004": "Subject is already assigned to this slot. First remove it, after that you can delete/modify it.",
+    "Academic:Timetable:020004": "This class already has generated timetable assignments. Remove or update those timetable assignments before changing lecture slot timings.",
     "Academic:Timetable:030001": "Timetable was not found.",
     "Academic:Timetable:030002": "A timetable already exists for the selected class and week.",
     "Academic:Timetable:030003": "Teacher is already assigned to another class during this time slot.",

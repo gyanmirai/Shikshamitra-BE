@@ -28,7 +28,7 @@ public class ChargeRequestManager(
 		Guid chargeCategoryId,
 		string purposeDescription,
 		decimal amount,
-		DateTime dueDate,
+		DateTimeOffset dueDate,
 		ChargePriority priority,
 		ChargeAudience audience,
 		string audienceSnapshot,

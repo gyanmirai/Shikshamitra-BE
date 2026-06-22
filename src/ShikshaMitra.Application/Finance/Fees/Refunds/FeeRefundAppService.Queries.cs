@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Common;
+using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
+using ShikshaMitra.Finance.Fees.Receipts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -55,6 +57,11 @@ public partial class FeeRefundAppService
 		var feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
 		var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
 		var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
+
+		// reconciliation amount which are not approved or rejected
+		var reconciliations = await feePaymentReceiptRepository.GetListAsync(x => x.StudentId == studentId && x.VerificationStatus == FeeReceiptVerificationStatus.PendingVerification);
+
+		
 
 		var grouped = dueFees
 			.GroupBy(df => df.FeeHeadId)

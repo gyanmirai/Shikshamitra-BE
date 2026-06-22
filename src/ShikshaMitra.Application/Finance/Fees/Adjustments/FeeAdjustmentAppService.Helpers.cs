@@ -122,7 +122,7 @@ public partial class FeeAdjustmentAppService
     private static string FormatMonthLabel(MonthEnum month, int year)
     {
         var idx = (int)month;
-        var name = idx >= 1 && idx <= 12 ? MonthNames[idx - 1] : month.ToString();
+        var name = idx >= 1 && idx <= 12 ? MonthNames[idx] : month.ToString();
         return $"{name[..3]} {year}";
     }
 

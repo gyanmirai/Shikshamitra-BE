@@ -81,9 +81,8 @@ public partial class StudentFeeDetailsQueryService(
 			var grouped = dueFees.GroupBy(d => (d.Year, d.Month))
 				.OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month);
 
-				// TODO
-			//var concessions = await concessionRequestRepository.GetListAsync(c => c.StudentId == studentId
-			//	&& c.Status == ConcessionRequestStatus.Approved);
+			var concessions = await concessionRequestRepository.GetListAsync(c => c.StudentId == studentId
+				&& c.Status == ConcessionRequestStatus.Approved);
 
 			var refundByDueFee = await GetRefundsByDueFeeAsync(studentId);
 
@@ -107,6 +106,16 @@ public partial class StudentFeeDetailsQueryService(
 					Month = group.Key.Month.ToString(), Year = group.Key.Year,
 					TotalDue = lines.Sum(l => l.Due), Items = lines,
 				});
+			}
+
+			foreach (var concession in concessions)
+			{
+				foreach (var line in concession.ConcessionDueFeeAllocations)
+				{
+					var ledgerLine = ledger.SelectMany(l => l.Items)
+						.FirstOrDefault(l => l.DueFeeId == line.DueFeeId);
+					ledgerLine?.ConcessionAmount += (double)line.ConcessionAmount;
+				}
 			}
 
 			feeSummary = new FeeSummaryDto

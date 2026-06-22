@@ -19,8 +19,8 @@ public class ChargeData
 	public string CategoryName { get; set; } = string.Empty;
 	public string PurposeDescription { get; set; } = string.Empty;
 	public decimal Amount { get; set; }
-	public DateTime DueDate { get; set; }
-	public DateTime AppliedOn { get; set; }
+	public DateTimeOffset DueDate { get; set; }
+	public DateTimeOffset AppliedOn { get; set; }
 	public int Priority { get; set; }
 	public int Status { get; set; }
 	public Guid BoardId { get; set; }
@@ -28,7 +28,7 @@ public class ChargeData
 	public string? AdditionalNotes { get; set; }
 	public Guid RequestorId { get; set; }
 	public string RequestorName { get; set; } = string.Empty;
-	public DateTime RequestedOn { get; set; }
+	public DateTimeOffset RequestedOn { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string AcademicYearName { get; set; } = string.Empty;
 }
@@ -56,8 +56,8 @@ public class ChargeListItem
 	public string CategoryName { get; set; } = string.Empty;
 	public decimal Amount { get; set; }
 	public string PurposeDescription { get; set; } = string.Empty;
-	public DateTime DueDate { get; set; }
-	public DateTime AppliedOn { get; set; }
+	public DateTimeOffset DueDate { get; set; }
+	public DateTimeOffset AppliedOn { get; set; }
 	public int Priority { get; set; }
 	/// <summary>0 = Pending, 1 = Processed</summary>
 	public int DisplayStatus { get; set; }
@@ -69,7 +69,7 @@ public class ChargeListItem
 	public int ProcessedCount { get; set; }
 	public Guid RequestorId { get; set; }
 	public string RequestorName { get; set; } = string.Empty;
-	public DateTime RequestedOn { get; set; }
+	public DateTimeOffset RequestedOn { get; set; }
 	public string? AdditionalNotes { get; set; }
 }
 
@@ -96,7 +96,7 @@ public class ChargeLineListItem
 	public string CategoryName { get; set; } = string.Empty;
 	public decimal Amount { get; set; }
 	public string PurposeDescription { get; set; } = string.Empty;
-	public DateTime DueDate { get; set; }
+	public DateTimeOffset DueDate { get; set; }
 	public int Status { get; set; }
 }
 
@@ -115,8 +115,8 @@ public class ChargeDetailData
 	public string CategoryName { get; set; } = string.Empty;
 	public string PurposeDescription { get; set; } = string.Empty;
 	public decimal Amount { get; set; }
-	public DateTime DueDate { get; set; }
-	public DateTime AppliedOn { get; set; }
+	public DateTimeOffset DueDate { get; set; }
+	public DateTimeOffset AppliedOn { get; set; }
 	public int Priority { get; set; }
 	public int Status { get; set; }
 	public string? AdditionalNotes { get; set; }
@@ -146,14 +146,14 @@ public class RequestorInfo
 	public Guid RequestorId { get; set; }
 	public string RequestorName { get; set; } = string.Empty;
 	public string RequestorRole { get; set; } = "User";
-	public DateTime RequestedOn { get; set; }
+	public DateTimeOffset RequestedOn { get; set; }
 }
 
 public class ApprovalDetails
 {
 	public Guid? ApprovedBy { get; set; }
 	public string? ApprovedByName { get; set; }
-	public DateTime? ApprovedOn { get; set; }
+	public DateTimeOffset? ApprovedOn { get; set; }
 	public string? ApprovalNotes { get; set; }
 }
 
@@ -172,7 +172,7 @@ public class ApprovalData
 	public int RemainingPendingCount { get; set; }
 	public Guid ApprovedBy { get; set; }
 	public string ApprovedByName { get; set; } = string.Empty;
-	public DateTime ApprovedOn { get; set; }
+	public DateTimeOffset ApprovedOn { get; set; }
 	public string? ApprovalNotes { get; set; }
 }
 
@@ -191,6 +191,6 @@ public class RejectionData
 	public int RemainingPendingCount { get; set; }
 	public Guid RejectedBy { get; set; }
 	public string RejectedByName { get; set; } = string.Empty;
-	public DateTime RejectedOn { get; set; }
+	public DateTimeOffset RejectedOn { get; set; }
 	public string RejectionReason { get; set; } = string.Empty;
 }

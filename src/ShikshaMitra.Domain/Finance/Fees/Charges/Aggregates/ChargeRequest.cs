@@ -18,13 +18,13 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid ChargeCategoryId { get; private set; }
 	public string PurposeDescription { get; private set; } = string.Empty;
 	public decimal Amount { get; private set; }
-	public DateTime DueDate { get; private set; }
+	public DateTimeOffset DueDate { get; private set; }
 	public ChargePriority Priority { get; private set; }
 	public Guid BoardId { get; private set; }
 	public Guid EducationMediumId { get; private set; }
 	public string? AdditionalNotes { get; private set; }
 	public Guid RequestorId { get; private set; }
-	public DateTime AppliedOn { get; private set; }
+	public DateTimeOffset AppliedOn { get; private set; }
 
 	/// <summary>JSON snapshot of <see cref="ChargeAudience"/> for audit and edit-form rehydration.</summary>
 	public string AudienceSnapshot { get; private set; } = string.Empty;
@@ -41,7 +41,7 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid chargeCategoryId,
 		string purposeDescription,
 		decimal amount,
-		DateTime dueDate,
+		DateTimeOffset dueDate,
 		ChargePriority priority,
 		Guid boardId,
 		Guid educationMediumId,
@@ -69,7 +69,7 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RequestorId = Check.NotNull(requestorId, nameof(requestorId));
 		AudienceSnapshot = Check.NotNullOrWhiteSpace(audienceSnapshot, nameof(audienceSnapshot));
 		AdditionalNotes = additionalNotes;
-		AppliedOn = DateTime.UtcNow;
+		AppliedOn = DateTimeOffset.UtcNow;
 
 		ValidateAmount();
 		ValidateDueDate();
@@ -80,7 +80,7 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? chargeCategoryId = null,
 		string? purposeDescription = null,
 		decimal? amount = null,
-		DateTime? dueDate = null,
+		DateTimeOffset? dueDate = null,
 		ChargePriority? priority = null,
 		string? additionalNotes = null,
 		string? audienceSnapshot = null)
@@ -142,7 +142,12 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private void ValidateDueDate()
 	{
-		if (DueDate.Date <= DateTime.UtcNow.Date.AddDays(-1))
+		var dueDateDate = DueDate.Date;
+		var todayInDueDateOffset = DateTimeOffset.UtcNow
+			.ToOffset(DueDate.Offset)
+			.Date;
+
+		if (dueDateDate < todayInDueDateOffset)
 		{
 			throw new BusinessException(FinanceChargeErrorCodes.InvalidDueDate)
 				.WithData("DueDate", DueDate);

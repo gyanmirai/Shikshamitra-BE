@@ -140,6 +140,7 @@
     "Permission:UserScope.BulkAssign": "Bulk Assign User Scopes",
     "Permission:UserScope.Revoke": "Revoke User Scope",
     "Permission:UserScope.Manage": "Manage User Scopes",
+    "UserScope:InvalidHierarchy": "The selected academic permission row is not a valid hierarchy path. Please choose board, medium, stage, class, and division from the same branch.",
     "Permission:Group": "Group Management",
     "Permission:Group.List": "List Groups",
     "Permission:Group.View": "View Group Details",

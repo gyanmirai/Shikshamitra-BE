@@ -34,6 +34,8 @@ public abstract class ShikshaMitraApiTestBase
 		EmployeeTestHelper.DefaultRoleId = factory.SeededRoleId;
 		EmployeeTestHelper.DefaultShiftId = factory.SeededShiftId;
 		EmployeeTestHelper.DefaultAcademicYearId = factory.SeededAcademicYearId;
+		EmployeeTestHelper.DefaultBoardId = factory.SeededBoardId;
+		EmployeeTestHelper.DefaultMediumId = factory.SeededMediumId;
 		EmployeeTestHelper.DefaultMediumStageId = factory.SeededMediumStageId;
 
 		StudentEnrollmentTestHelper.DefaultAcademicMediumId = factory.SeededMediumId;

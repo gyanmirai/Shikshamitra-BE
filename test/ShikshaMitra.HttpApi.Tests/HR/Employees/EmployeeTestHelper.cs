@@ -23,6 +23,8 @@ public static class EmployeeTestHelper
 	public static Guid DefaultRoleId { get; set; }
 	public static Guid DefaultShiftId { get; set; }
 	public static Guid DefaultAcademicYearId { get; set; }
+	public static Guid DefaultBoardId { get; set; }
+	public static Guid DefaultMediumId { get; set; }
 	public static Guid DefaultMediumStageId { get; set; }
 
 	/// <summary>
@@ -200,6 +202,8 @@ public static class EmployeeTestHelper
 	{
 		if (!employee.UserId.HasValue ||
 			DefaultAcademicYearId == Guid.Empty ||
+			DefaultBoardId == Guid.Empty ||
+			DefaultMediumId == Guid.Empty ||
 			DefaultMediumStageId == Guid.Empty)
 		{
 			return;
@@ -210,8 +214,16 @@ public static class EmployeeTestHelper
 			new
 			{
 				userIds = new[] { employee.UserId.Value },
-				academicYearIds = new[] { DefaultAcademicYearId },
-				educationMediumStageIds = new[] { DefaultMediumStageId },
+				academicYearId = DefaultAcademicYearId,
+				scopes = new[]
+				{
+					new
+					{
+						educationBoardId = DefaultBoardId,
+						educationMediumId = DefaultMediumId,
+						educationMediumStageId = DefaultMediumStageId
+					}
+				},
 				description = "HTTP API test default employee academic permission"
 			},
 			JsonOptions);

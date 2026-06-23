@@ -2250,14 +2250,22 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 
 	private async Task AssignEmployeeStageAcademicPermissionAsync(Guid userId, Guid stageId)
 	{
-		var academicYearId = await ResolveAcademicYearIdForStageAsync(stageId);
+		var scope = await ResolveScopeRowForStageAsync(stageId);
 		var response = await Client.PostAsJsonAsync(
 			"/api/app/user-scope/bulk-assign",
 			new
 			{
 				userIds = new[] { userId },
-				academicYearIds = new[] { academicYearId },
-				educationMediumStageIds = new[] { stageId },
+				academicYearId = scope.AcademicYearId,
+				scopes = new[]
+				{
+					new
+					{
+						educationBoardId = scope.BoardId,
+						educationMediumId = scope.MediumId,
+						educationMediumStageId = scope.StageId
+					}
+				},
 				description = "HTTP API report test employee academic permission"
 			},
 			JsonOptions);
@@ -2271,7 +2279,7 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	private async Task<Guid> ResolveAcademicYearIdForStageAsync(Guid stageId)
+	private async Task<StageScopeRow> ResolveScopeRowForStageAsync(Guid stageId)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -2288,9 +2296,11 @@ public class HrReportApi_Tests : ShikshaMitraApiTestBase
 			var medium = await mediumRepository.GetAsync(stage.EducationMediumId);
 			var board = await boardRepository.GetAsync(medium.EducationBoardId);
 			await uow.CompleteAsync();
-			return board.AcademicYearId;
+			return new StageScopeRow(board.AcademicYearId, board.Id, medium.Id, stage.Id);
 		}
 	}
+
+	private sealed record StageScopeRow(Guid AcademicYearId, Guid BoardId, Guid MediumId, Guid StageId);
 
 	private async Task SeedEmployeePolicyAssignmentsAsync(params (Guid EmployeeId, string TargetDisplayName)[] assignments)
 	{

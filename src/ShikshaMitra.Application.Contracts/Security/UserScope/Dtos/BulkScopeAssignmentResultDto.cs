@@ -21,7 +21,7 @@ public class BulkScopeAssignmentResultDto
     public int AssignmentsCreated { get; set; }
 
     /// <summary>
-    /// Total number of assignment combinations (Users × AcademicYears × Boards × Mediums × Stages × Standards × Divisions).
+    /// Total number of assignment rows requested (Users × scope rows).
     /// </summary>
     public int TotalCombinations { get; set; }
 

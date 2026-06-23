@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -14,6 +14,8 @@ public class ExamBasicDetailsRequestDto
 
     [Required]
     public Guid StandardId { get; set; }
+
+    public Guid? GradingScaleId { get; set; }
 
     [Required]
     [MinLength(1)]

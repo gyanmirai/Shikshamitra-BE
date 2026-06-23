@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Volo.Abp.Domain.Repositories;
@@ -12,9 +12,9 @@ public class ExamManager(
     IGuidGenerator guidGenerator
 ) : DomainService
 {
-    public Exam Create(Guid examTypeId, string examName, Guid standardId, List<Guid> divisionIds, List<Guid> subjectIds)
+    public Exam Create(Guid examTypeId, string examName, Guid standardId, List<Guid> divisionIds, List<Guid> subjectIds, Guid? gradingScaleId = null)
     {
-        var exam = new Exam(guidGenerator.Create(), examTypeId, examName, standardId, CurrentTenant.Id);
+        var exam = new Exam(guidGenerator.Create(), examTypeId, examName, standardId, CurrentTenant.Id, gradingScaleId);
 
         foreach (var divisionId in divisionIds)
         {
@@ -29,9 +29,9 @@ public class ExamManager(
         return exam;
     }
 
-    public void UpdateBasicDetails(Exam exam, string examName, Guid examTypeId, Guid standardId, List<Guid> divisionIds, List<Guid> subjectIds)
+    public void UpdateBasicDetails(Exam exam, string examName, Guid examTypeId, Guid standardId, List<Guid> divisionIds, List<Guid> subjectIds, Guid? gradingScaleId = null)
     {
-        exam.UpdateExamDetails(examName, examTypeId, standardId);
+        exam.UpdateExamDetails(examName, examTypeId, standardId, gradingScaleId);
         exam.UpdateDivisions(divisionIds);
         exam.UpdateSubjects(subjectIds);
     }

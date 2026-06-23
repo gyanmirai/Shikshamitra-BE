@@ -23,4 +23,8 @@ public static class CurriculumErrorCodes
     // ── Elective Group: 03xxxx ───────────────────────────────────
 
     public const string ElectiveGroupHasActiveAllocations = "Academic:Curriculum:030001";
+
+    // ── Chapter: 04xxxx ──────────────────────────────────────────
+
+    public const string ChapterIsInUse = "Academic:Curriculum:040001";
 }

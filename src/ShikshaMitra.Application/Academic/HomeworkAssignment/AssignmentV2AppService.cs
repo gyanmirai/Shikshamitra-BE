@@ -27,7 +27,8 @@ public class AssignmentV2AppService(
     IRepository<IdentityUser, Guid> userRepository,
     IUserScopeService userScopeService,
     AssignmentManager assignmentManager,
-    IAsyncQueryableExecuter asyncExecuter
+    IAsyncQueryableExecuter asyncExecuter,
+    IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository
 ) : ApplicationService, IAssignmentV2AppService
 {
 
@@ -253,6 +254,13 @@ public class AssignmentV2AppService(
     {
         var assignment = await assignmentRepository.FindAsync(assignmentId)
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
+
+        var submissionsCount = await studentSubmissionRepository.CountAsync(s => s.AssignmentId == assignmentId);
+        if (submissionsCount > 0)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.AssignmentIsInUse)
+                .WithData("message", $"Cannot delete assignment '{assignment.Title}' because it is in use: {submissionsCount} student submission(s). Please remove these submissions first.");
+        }
 
         await assignmentRepository.DeleteAsync(assignment, autoSave: true);
     }

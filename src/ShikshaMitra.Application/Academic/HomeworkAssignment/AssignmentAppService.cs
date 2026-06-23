@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -36,6 +36,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 	private readonly IUserScopeAccessService _userScopeAccessService;
 	private readonly AssignmentManager _assignmentManager;
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
+	private readonly IRepository<StudentSubmissionEntity, Guid> _studentSubmissionRepository;
 
 	public AssignmentAppService(
 		IRepository<AssignmentEntity, Guid> assignmentRepository,
@@ -47,7 +48,8 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		IRepository<IdentityUser, Guid> userRepository,
 		IUserScopeAccessService userScopeAccessService,
 		AssignmentManager assignmentManager,
-		IAsyncQueryableExecuter asyncExecuter
+		IAsyncQueryableExecuter asyncExecuter,
+		IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository
 	)
 	{
 		_assignmentRepository = assignmentRepository;
@@ -60,6 +62,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		_userScopeAccessService = userScopeAccessService;
 		_assignmentManager = assignmentManager;
 		_asyncExecuter = asyncExecuter;
+		_studentSubmissionRepository = studentSubmissionRepository;
 	}
 
 	/// <summary>
@@ -429,6 +432,13 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(
 			assignment,
 			operation: nameof(DeleteAsync));
+
+		var submissionsCount = await _studentSubmissionRepository.CountAsync(s => s.AssignmentId == id);
+		if (submissionsCount > 0)
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.AssignmentIsInUse)
+				.WithData("message", $"Cannot delete assignment '{assignment.Title}' because it is in use: {submissionsCount} student submission(s). Please remove these submissions first.");
+		}
 
 		// 2. Soft delete
 		await _assignmentRepository.DeleteAsync(assignment);

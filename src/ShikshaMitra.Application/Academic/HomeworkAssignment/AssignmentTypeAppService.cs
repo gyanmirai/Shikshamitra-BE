@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -7,6 +7,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
@@ -20,18 +21,21 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 	private readonly AssignmentTypeManager _manager;
 	private readonly IEducationMediumRepository _mediumRepository;
 	private readonly ILogger<AssignmentTypeAppService> _logger;
+	private readonly IRepository<AssignmentEntity, Guid> _assignmentRepository;
 
 	public AssignmentTypeAppService(
 		IAssignmentTypeRepository repository,
 		AssignmentTypeManager manager,
 		IEducationMediumRepository mediumRepository,
-		ILogger<AssignmentTypeAppService> logger
+		ILogger<AssignmentTypeAppService> logger,
+		IRepository<AssignmentEntity, Guid> assignmentRepository
 	)
 	{
 		_repository = repository;
 		_manager = manager;
 		_mediumRepository = mediumRepository;
 		_logger = logger;
+		_assignmentRepository = assignmentRepository;
 	}
 
 	/// <summary>
@@ -252,12 +256,29 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 				throw new EntityNotFoundException(typeof(AssignmentType), id);
 			}
 
+			// Block deletion if the assignment type is in use
+			var usageParts = new System.Collections.Generic.List<string>();
+
+			var assignmentCount = await _assignmentRepository.CountAsync(a => a.AssignmentTypeId == id);
+			if (assignmentCount > 0)
+				usageParts.Add($"{assignmentCount} assignment(s)");
+
+			if (usageParts.Count > 0)
+			{
+				throw new BusinessException(HomeworkAssignmentErrorCodes.AssignmentTypeIsInUse)
+					.WithData("message", $"Cannot delete '{assignmentType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+			}
+
 			// Soft delete (FullAuditedAggregateRoot)
 			await _repository.DeleteAsync(assignmentType, autoSave: true);
 
 			_logger.LogInformation("Successfully deleted assignment type {Id}", id);
 
 			return new MessageResponseDto { Message = "Assignment type deleted successfully" };
+		}
+		catch (BusinessException)
+		{
+			throw;
 		}
 		catch (EntityNotFoundException)
 		{

@@ -111,8 +111,8 @@ public class ExamResultAppService(
         if (existing?.Status == ExamResultStatus.Frozen && !input.ForceRegenerate)
             throw new UserFriendlyException("Result is frozen. Set ForceRegenerate=true to override.");
 
-        // Load grading scale from the first subject that has one
-        var scaleId = exam.ExamSubjects.FirstOrDefault(s => s.GradeScalingId.HasValue)?.GradeScalingId;
+        // Load grading scale from the overall exam
+        var scaleId = exam.GradingScaleId;
         ICollection<GradeRange>? gradeRanges = null;
         double scaleTotal = 100.0;
         if (scaleId.HasValue)
@@ -441,8 +441,8 @@ public class ExamResultAppService(
         var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
         var subjectMap = subjects.ToDictionary(s => s.Id, s => s.Name);
 
-        // Load default grading scale from first subject that has one
-        var defaultScaleId = exam.ExamSubjects.FirstOrDefault(s => s.GradeScalingId.HasValue)?.GradeScalingId;
+        // Load default grading scale from the overall exam
+        var defaultScaleId = exam.GradingScaleId;
         ICollection<GradeRange>? gradeRanges = null;
         double scaleTotal = 100.0;
 

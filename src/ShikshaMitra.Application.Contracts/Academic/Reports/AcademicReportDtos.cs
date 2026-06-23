@@ -31,6 +31,7 @@ public class AcademicReportFilterDto
     public double? MaxMarks { get; set; }
     public List<Guid>? StudentIds { get; set; }
     public List<Guid>? AssignmentIds { get; set; }
+    public List<Guid>? ChapterIds { get; set; }
 
     /// <summary>
     /// Upcoming = 1, In Progress = 2, Completed = 3

@@ -19,4 +19,19 @@ public static class ExamErrorCodes
     /// overlapping time slot in another exam.
     /// </summary>
     public const string DuplicateSubjectSchedule = "AC:Exam:050002";
+
+    /// <summary>
+    /// The exam type is currently in use.
+    /// </summary>
+    public const string ExamTypeIsInUse = "AC:Exam:050003";
+
+    /// <summary>
+    /// The grading scale is currently in use.
+    /// </summary>
+    public const string GradingScaleIsInUse = "AC:Exam:050004";
+
+    /// <summary>
+    /// The exam is currently in use (e.g. marks entered, seat allocations made).
+    /// </summary>
+    public const string ExamIsInUse = "AC:Exam:050005";
 }

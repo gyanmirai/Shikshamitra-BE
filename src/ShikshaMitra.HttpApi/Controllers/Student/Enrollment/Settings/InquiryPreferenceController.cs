@@ -24,7 +24,7 @@ public class InquiryPreferenceController(IInquiryPreferenceAppService inquiryPre
 	/// <returns>Paginated list of inquiry preferences</returns>
 	[HttpGet("/api/student-enrollment/{academicYearId}/settings/inquiry-preferences")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsInquiryPreference.View)]
-	public async Task<PagedResultDto<InquiryPreferenceDto>> GetListAsync([FromRoute] Guid academicYearId, [FromQuery] PagedAndSortedResultRequestDto input)
+	public async Task<PagedResultDto<InquiryPreferenceDto>> GetListAsync([FromRoute] Guid academicYearId, [FromQuery] GetInquiryPreferenceListInput input)
 	{
 		return await inquiryPreferenceAppService.GetListAsync(input, academicYearId);
 	}
@@ -64,6 +64,19 @@ public class InquiryPreferenceController(IInquiryPreferenceAppService inquiryPre
     public async Task<InquiryPreferenceDto> UpdateAsync(Guid id, [FromBody] CreateUpdateInquiryPreferenceDto input)
 	{
         return await inquiryPreferenceAppService.UpdateAsync(id, input);
+	}
+
+	/// <summary>
+	/// Activates or deactivates an inquiry preference.
+	/// </summary>
+	/// <param name="id">The inquiry preference identifier</param>
+	/// <param name="input">Active status payload</param>
+	/// <returns>Updated inquiry preference</returns>
+	[HttpPatch("{id}/status")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_SettingsInquiryPreference.Add)]
+	public async Task<InquiryPreferenceDto> UpdateStatusAsync(Guid id, [FromBody] UpdateInquiryPreferenceStatusDto input)
+	{
+		return await inquiryPreferenceAppService.UpdateStatusAsync(id, input);
 	}
 
 	/// <summary>

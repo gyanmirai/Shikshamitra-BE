@@ -36,6 +36,7 @@ public class StudentGeneralDetailsDto
 	public bool? RteStatus { get; set; }
 	public ScholarshipStatus ScholarshipStatus { get; set; } = ScholarshipStatus.NotApplicable;
 	public Guid? InquiryPreferenceId { get; set; }
+	public string? InquiryPreference { get; set; }
 	public ReligionEnum? Religion { get; set; }
 	public string FamilyCast { get; set; }
 	public CastCategoryEnum? CastCategory { get; set; }

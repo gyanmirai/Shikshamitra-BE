@@ -18,6 +18,7 @@ using ShikshaMitra.Students.Enrollments.Admissions;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.Divisions;
 using Shouldly;
@@ -399,6 +400,83 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Allow_Admission_General_Update_When_Inactive_Inquiry_Source_Is_Unchanged()
+    {
+        var preference = await CreateInquirySourceAsync($"Admission Same {Guid.NewGuid():N}");
+        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto("AdmissionInactiveSame");
+        dto.InquiryPreferenceId = preference.Id;
+        var registration = await CreateDirectRegistrationAsync(dto);
+        await MoveRegistrationToAdmissionWithMembershipFlagsAsync(registration.StudentId);
+
+        await SetInquirySourceStatusAsync(preference.Id, isActive: false, "Legacy admission source");
+
+        var response = await Client.PutAsJsonAsync(
+            $"/api/student/enrollment/admissions/{registration.StudentId}",
+            new UpdateGeneralInfoDto
+            {
+                FormNumber = registration.FormNo ?? StudentEnrollmentTestHelper.UniqueFormNumber(),
+                FirstName = TestDataHelper.UniqueName("AdmissionSameEdit"),
+                LastName = "TestStudent",
+                AcademicMediumId = StudentEnrollmentTestHelper.DefaultAcademicMediumId,
+                StandardId = Factory.SeededStandardId,
+                DateOfBirth = DateTimeOffset.UtcNow.AddYears(-11),
+                Gender = GenderEnum.Female,
+                PrimaryContactNo = TestDataHelper.UniquePhone(),
+                FamilyCast = "General",
+                City = "Pune",
+                State = new State("Maharashtra", "MH"),
+                Country = new Country("India", "IN"),
+                InquiryPreferenceId = preference.Id
+            },
+            JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.InquiryPreferenceId.ShouldBe(preference.Id);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Reject_Admission_General_Update_When_Changing_To_Inactive_Inquiry_Source()
+    {
+        var activePreference = await CreateInquirySourceAsync($"Admission Active {Guid.NewGuid():N}");
+        var inactivePreference = await CreateInquirySourceAsync($"Admission Inactive {Guid.NewGuid():N}");
+        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto("AdmissionInactiveChange");
+        dto.InquiryPreferenceId = activePreference.Id;
+        var registration = await CreateDirectRegistrationAsync(dto);
+        await MoveRegistrationToAdmissionWithMembershipFlagsAsync(registration.StudentId);
+
+        await SetInquirySourceStatusAsync(inactivePreference.Id, isActive: false, "Closed admission source");
+
+        var response = await Client.PutAsJsonAsync(
+            $"/api/student/enrollment/admissions/{registration.StudentId}",
+            new UpdateGeneralInfoDto
+            {
+                FormNumber = registration.FormNo ?? StudentEnrollmentTestHelper.UniqueFormNumber(),
+                FirstName = TestDataHelper.UniqueName("AdmissionInactiveEdit"),
+                LastName = "TestStudent",
+                AcademicMediumId = StudentEnrollmentTestHelper.DefaultAcademicMediumId,
+                StandardId = Factory.SeededStandardId,
+                DateOfBirth = DateTimeOffset.UtcNow.AddYears(-11),
+                Gender = GenderEnum.Female,
+                PrimaryContactNo = TestDataHelper.UniquePhone(),
+                FamilyCast = "General",
+                City = "Pune",
+                State = new State("Maharashtra", "MH"),
+                Country = new Country("India", "IN"),
+                InquiryPreferenceId = inactivePreference.Id
+            },
+            JsonOptions);
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        content.ShouldContain("InquiryPreference:Inactive");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Add_Parent_Role_To_Existing_Parent_User_On_Approval()
     {
         var parentEmail = TestDataHelper.UniqueEmail("existing-parent");
@@ -518,6 +596,51 @@ public class AdmissionApi_Tests : ShikshaMitraApiTestBase
     }
 
     #endregion
+
+    private async Task<InquiryPreferenceDto> CreateInquirySourceAsync(string preferenceName)
+    {
+        var response = await Client.PostAsJsonAsync(
+            $"/api/student-enrollment/{Factory.SeededAcademicYearId}/settings/inquiry-preferences",
+            new CreateUpdateInquiryPreferenceDto { PreferenceName = preferenceName },
+            JsonOptions);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var preference = await response.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        preference.ShouldNotBeNull();
+        return preference;
+    }
+
+    private async Task<InquiryPreferenceDto> SetInquirySourceStatusAsync(
+        Guid preferenceId,
+        bool isActive,
+        string? deactivationReason = null)
+    {
+        var response = await Client.PatchAsJsonAsync(
+            $"/api/student-enrollment/settings/inquiry-preferences/{preferenceId}/status",
+            new UpdateInquiryPreferenceStatusDto
+            {
+                IsActive = isActive,
+                DeactivationReason = deactivationReason,
+            },
+            JsonOptions);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var preference = await response.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        preference.ShouldNotBeNull();
+        return preference;
+    }
+
+    private async Task<StudentGeneralDetailsDto> CreateDirectRegistrationAsync(
+        CreateDirectRegistrationDto dto)
+    {
+        var response = await Client.PostAsJsonAsync(
+            "/api/student/enrollment/registrations/general-details",
+            dto,
+            JsonOptions);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var result = await response.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
+        result.ShouldNotBeNull();
+        result.Data.ShouldNotBeNull();
+        return result.Data;
+    }
 
     private async Task MoveRegistrationToAdmissionWithMembershipFlagsAsync(Guid studentId)
     {

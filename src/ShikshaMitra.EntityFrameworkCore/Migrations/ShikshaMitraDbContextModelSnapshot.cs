@@ -687,6 +687,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<Guid?>("GradingScaleId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -4400,7 +4403,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("AppliedOn")
+                    b.Property<DateTimeOffset>("AppliedOn")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ApprovalNotes")
@@ -4410,7 +4413,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("ApprovedBy")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("ApprovedOn")
+                    b.Property<DateTimeOffset?>("ApprovedOn")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("BoardId")
@@ -4453,7 +4456,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("DivisionId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("DueDate")
+                    b.Property<DateTimeOffset>("DueDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EducationMediumId")
@@ -4540,7 +4543,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("AppliedOn")
+                    b.Property<DateTimeOffset>("AppliedOn")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("AudienceSnapshot")
@@ -4581,7 +4584,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<DateTime>("DueDate")
+                    b.Property<DateTimeOffset>("DueDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EducationMediumId")
@@ -15227,6 +15230,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<string>("DeactivationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -15234,10 +15241,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
-
-                    b.Property<string>("DeactivationReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)

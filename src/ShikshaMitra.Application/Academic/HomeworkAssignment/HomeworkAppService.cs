@@ -31,7 +31,8 @@ public class HomeworkAppService(
     IRepository<IdentityUser, Guid> userRepository,
     IUserScopeService userScopeService,
     HomeworkManager homeworkManager,
-    IAsyncQueryableExecuter asyncExecuter
+    IAsyncQueryableExecuter asyncExecuter,
+    IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository
 ) : ApplicationService, IHomeworkAppService
 {
 
@@ -354,6 +355,13 @@ public class HomeworkAppService(
     {
         var homework = await homeworkRepository.FindAsync(homeworkId)
             ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
+
+        var submissionsCount = await studentSubmissionRepository.CountAsync(s => s.HomeworkAssignmentId == homeworkId);
+        if (submissionsCount > 0)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.HomeworkIsInUse)
+                .WithData("message", $"Cannot delete homework '{homework.Title}' because it is in use: {submissionsCount} student submission(s). Please remove these submissions first.");
+        }
 
         await homeworkRepository.DeleteAsync(homework, autoSave: true);
     }

@@ -8,13 +8,17 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using ShikshaMitra.Academic.HomeworkAssignment;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
 [RemoteService(IsEnabled = false)]
 public class ChapterAppService(
 	IRepository<AssignedSubject, Guid> assignedSubjectRepository,
-	IGuidGenerator guidGenerator
+	IGuidGenerator guidGenerator,
+	IRepository<Syllabus.ChapterProgress, Guid> progressRepository,
+	IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
+	IRepository<AssignmentEntity, Guid> assignmentRepository
 ) : ApplicationService, IChapterAppService
 {
 	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, List<CreateChapterDto> input)
@@ -106,6 +110,29 @@ public class ChapterAppService(
 				includeDetails: true
 			)
 			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
+
+		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
+
+		// Block deletion if the chapter is in use
+		var usageParts = new System.Collections.Generic.List<string>();
+
+		var progressCount = await progressRepository.CountAsync(p => p.ChapterId == id);
+		if (progressCount > 0)
+			usageParts.Add($"{progressCount} chapter progress record(s)");
+
+		var homeworkCount = await homeworkRepository.CountAsync(h => h.ChapterId == id || (h.ChapterIdsJson != null && h.ChapterIdsJson.Contains(id.ToString())));
+		if (homeworkCount > 0)
+			usageParts.Add($"{homeworkCount} homework(s)");
+
+		var assignmentCount = await assignmentRepository.CountAsync(a => a.ChapterIdsJson != null && a.ChapterIdsJson.Contains(id.ToString()));
+		if (assignmentCount > 0)
+			usageParts.Add($"{assignmentCount} assignment(s)");
+
+		if (usageParts.Count > 0)
+		{
+			throw new BusinessException(CurriculumErrorCodes.ChapterIsInUse)
+				.WithData("message", $"Cannot delete '{chapter.ChapterName}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+		}
 
 		assignedSubject.RemoveChapter(id);
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);

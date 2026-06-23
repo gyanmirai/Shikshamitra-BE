@@ -19,6 +19,7 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
+using ShikshaMitra.Academic.Examination.SeatAllocation;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
 
@@ -38,7 +39,8 @@ public class ExamAppService(
 	IRepository<GradingScale, Guid> gradingScaleRepository,
 	IRepository<ExamSubjectDivision, Guid> examSubjectDivisionRepository,
 	IRepository<ExamMarksWorkflowState, Guid> examMarksWorkflowStateRepository,
-	ExamManager examManager) : ApplicationService, IExamAppService
+	ExamManager examManager,
+	IRepository<ExamSeatAllocation, Guid> examSeatAllocationRepository) : ApplicationService, IExamAppService
 {
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
 	{
@@ -47,7 +49,8 @@ public class ExamAppService(
 			input.ExamName,
 			input.StandardId,
 			input.DivisionIds,
-			input.SubjectIds
+			input.SubjectIds,
+			input.GradingScaleId
 		);
 
 		await examRepository.InsertAsync(exam);
@@ -64,7 +67,8 @@ public class ExamAppService(
 			input.ExamTypeId,
 			input.StandardId,
 			input.DivisionIds,
-			input.SubjectIds
+			input.SubjectIds,
+			input.GradingScaleId
 		);
 
 		await examRepository.UpdateAsync(exam);
@@ -79,6 +83,7 @@ public class ExamAppService(
 			ExamTypeId = exam.ExamTypeId,
 			ExamName = exam.ExamName,
 			StandardId = exam.StandardId,
+			GradingScaleId = exam.GradingScaleId,
 			DivisionIds = exam.ExamDivisions.Select(x => x.DivisionId).ToList(),
 			SubjectIds = exam.ExamSubjects.Select(x => x.SubjectId).ToList()
 		};
@@ -363,6 +368,27 @@ public class ExamAppService(
 		if (exam.Status != ExamStatus.Pending)
 		{
 			throw new UserFriendlyException("Completed exams cannot be deleted");
+		}
+
+		// Block deletion if the exam is in use
+		var usageParts = new System.Collections.Generic.List<string>();
+
+		var marksCount = await examMarkRepository.CountAsync(m => m.ExamId == examId);
+		if (marksCount > 0)
+			usageParts.Add($"{marksCount} exam mark(s)");
+
+		var workflowStateCount = await examMarksWorkflowStateRepository.CountAsync(w => w.ExamId == examId);
+		if (workflowStateCount > 0)
+			usageParts.Add($"{workflowStateCount} exam marks workflow state(s)");
+
+		var seatAllocationCount = await examSeatAllocationRepository.CountAsync(s => s.ExamId == examId);
+		if (seatAllocationCount > 0)
+			usageParts.Add($"{seatAllocationCount} seat allocation(s)");
+
+		if (usageParts.Count > 0)
+		{
+			throw new BusinessException(ExamErrorCodes.ExamIsInUse)
+				.WithData("message", $"Cannot delete exam '{exam.ExamName}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
 		}
 
 		await examRepository.DeleteAsync(exam);

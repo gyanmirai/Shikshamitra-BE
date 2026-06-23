@@ -356,6 +356,11 @@ public class AcademicReportGenerator(
 
             foreach (var chapter in s.Chapters.OrderBy(c => c.ChapterNumber))
             {
+                if (request.Filters.ChapterIds?.Any() == true && !request.Filters.ChapterIds.Contains(chapter.Id))
+                {
+                    continue;
+                }
+
                 var progress = progressMap.TryGetValue(chapter.Id, out var p) ? p.Progress : 0;
                 rows.Add(new Dictionary<string, string?>
                 {
@@ -442,6 +447,11 @@ public class AcademicReportGenerator(
         {
             foreach (var chapter in s.Chapters.OrderBy(c => c.ChapterNumber))
             {
+                if (request.Filters.ChapterIds?.Any() == true && !request.Filters.ChapterIds.Contains(chapter.Id))
+                {
+                    continue;
+                }
+
                 rows.Add(new Dictionary<string, string?>
                 {
                     { "SubjectName", s.Subject?.Name ?? "—" },
@@ -656,6 +666,11 @@ public class AcademicReportGenerator(
 
             foreach (var chapter in s.Chapters.OrderBy(c => c.ChapterNumber))
             {
+                if (request.Filters.ChapterIds?.Any() == true && !request.Filters.ChapterIds.Contains(chapter.Id))
+                {
+                    continue;
+                }
+
                 progressMap.TryGetValue(chapter.Id, out var prog);
                 var completionDate = prog.CompletionDate.HasValue
                     ? prog.CompletionDate.Value.ToString("dd-MM-yyyy")
@@ -1491,8 +1506,8 @@ public class AcademicReportGenerator(
         var subjectList = await asyncExecuter.ToListAsync(subjectQuery.Where(s => subjectIds.Contains(s.Id)));
         var subjectNames = subjectList.ToDictionary(s => s.Id, s => s.Name);
 
-        // Load default grading scale from first subject that has one
-        var defaultScaleId = examSubjects.FirstOrDefault(s => s.GradeScalingId.HasValue)?.GradeScalingId;
+        // Load default grading scale from the overall exam
+        var defaultScaleId = examWithSubjects.GradingScaleId;
         IReadOnlyCollection<GradeRange>? defaultGradeRanges = null;
         if (defaultScaleId.HasValue)
         {
@@ -1798,7 +1813,7 @@ public class AcademicReportGenerator(
 
                     if (mark is { IsAbsent: false } && mark.MarksObtained.HasValue)
                     {
-                        var subjectGrade = ComputeGrade(mark.MarksObtained.Value, maxMarks);
+                        var subjectGrade = ComputeGrade(mark.MarksObtained.Value, maxMarks, data.DefaultGradeRanges);
                         row[$"subj_{subjectId}_Grade"] = subjectGrade;
                         row[$"subj_{subjectId}_Remarks"] = GetRemarksFromGrade(subjectGrade);
                         if (mark.MarksObtained.Value < passingMarks)
@@ -1815,7 +1830,7 @@ public class AcademicReportGenerator(
                 var pct = data.TotalMaxMarks > 0 ? Math.Round(total / data.TotalMaxMarks * 100, 2) : 0;
                 row["Total"] = total.ToString("F2");
                 row["Percentage"] = $"{pct}%";
-                row["Grade"] = ComputeGrade(total, data.TotalMaxMarks);
+                row["Grade"] = ComputeGrade(total, data.TotalMaxMarks, data.DefaultGradeRanges);
                 row["Status"] = hasFailedSubject ? "Failed" : "Passed";
                 return row;
             }).ToList();
@@ -2057,7 +2072,7 @@ public class AcademicReportGenerator(
         {
             var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
             var obtained = m.MarksObtained ?? 0;
-            return (obtained, grade: ComputeGrade(obtained, maxMarks), maxMarks);
+            return (obtained, grade: ComputeGrade(obtained, maxMarks, data.DefaultGradeRanges), maxMarks);
         }).ToList();
 
         var total = marksWithGrade.Count;
@@ -2126,7 +2141,7 @@ public class AcademicReportGenerator(
                 var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
                 var passMarks = subjectPassMap.GetValueOrDefault(m.SubjectId, 0);
                 var obtained = m.MarksObtained ?? 0;
-                var grade = ComputeGrade(obtained, maxMarks);
+                var grade = ComputeGrade(obtained, maxMarks, data.DefaultGradeRanges);
                 var status = obtained >= passMarks ? "Pass" : "Fail";
                 return (student, subjectName, obtained, grade, status);
             })
@@ -2234,7 +2249,7 @@ public class AcademicReportGenerator(
                 var subjectName = data.SubjectNames.GetValueOrDefault(g.Key, "—");
                 var maxMarks = subjectMaxMap.GetValueOrDefault(g.Key, 0);
                 var gradeCounts = g
-                    .GroupBy(m => ComputeGrade(m.MarksObtained ?? 0, maxMarks))
+                    .GroupBy(m => ComputeGrade(m.MarksObtained ?? 0, maxMarks, data.DefaultGradeRanges))
                     .ToDictionary(x => x.Key, x => x.Count());
 
                 var row = new Dictionary<string, string?> { { "Subject", subjectName } };
@@ -2283,7 +2298,7 @@ public class AcademicReportGenerator(
                 var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
                 var passMarks = subjectPassMap.GetValueOrDefault(m.SubjectId, 0);
                 var obtained = m.IsAbsent ? 0 : (m.MarksObtained ?? 0);
-                var grade = m.IsAbsent ? "—" : ComputeGrade(obtained, maxMarks);
+                var grade = m.IsAbsent ? "—" : ComputeGrade(obtained, maxMarks, data.DefaultGradeRanges);
                 var result = m.IsAbsent ? "Absent" : obtained >= passMarks ? "Pass" : "Fail";
                 return new Dictionary<string, string?>
                 {
@@ -2404,7 +2419,7 @@ public class AcademicReportGenerator(
                 var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
                 var passMarks = subjectPassMap.GetValueOrDefault(m.SubjectId, 0);
                 var obtained = m.MarksObtained ?? 0;
-                var grade = ComputeGrade(obtained, maxMarks);
+                var grade = ComputeGrade(obtained, maxMarks, data.DefaultGradeRanges);
                 var status = obtained >= passMarks ? "Pass" : "Fail";
                 var rank = subjectRankMap.TryGetValue(m.SubjectId, out var rm) && rm.TryGetValue(m.StudentId, out var r)
                     ? r.ToString() : "—";
@@ -2454,7 +2469,7 @@ public class AcademicReportGenerator(
                 var isAbsent = g.All(m => m.IsAbsent);
                 var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
                 var pct = data.TotalMaxMarks > 0 ? Math.Round(obtained / data.TotalMaxMarks * 100, 2) : 0;
-                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks);
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks, data.DefaultGradeRanges);
                 var result = isAbsent ? "Absent" : obtained >= data.TotalPassMarks ? "Pass" : "Fail";
                 return new Dictionary<string, string?>
                 {
@@ -2515,7 +2530,7 @@ public class AcademicReportGenerator(
                 var maxMarks = subjectMaxMap.GetValueOrDefault(m.SubjectId, 0);
                 var passMarks = subjectPassMap.GetValueOrDefault(m.SubjectId, 0);
                 var obtained = m.MarksObtained ?? 0;
-                var grade = ComputeGrade(obtained, maxMarks);
+                var grade = ComputeGrade(obtained, maxMarks, data.DefaultGradeRanges);
                 var status = obtained >= passMarks ? "Pass" : "Fail";
                 return new Dictionary<string, string?>
                 {
@@ -2804,7 +2819,7 @@ public class AcademicReportGenerator(
                 var isAbsent = g.All(m => m.IsAbsent);
                 var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
                 var pct = data.TotalMaxMarks > 0 ? Math.Round(obtained / data.TotalMaxMarks * 100, 2) : 0;
-                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks);
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks, data.DefaultGradeRanges);
                 return (student, obtained, pct, grade, isAbsent);
             })
             .Where(x => !x.isAbsent)
@@ -2869,7 +2884,7 @@ public class AcademicReportGenerator(
                 {
                     var obtained = m.MarksObtained ?? 0;
                     var pct = subjectMax > 0 ? Math.Round(obtained / subjectMax * 100, 2) : 0;
-                    var grade = ComputeGrade(obtained, subjectMax);
+                    var grade = ComputeGrade(obtained, subjectMax, data.DefaultGradeRanges);
                     return (m, obtained, pct, grade);
                 })
                 .Where(x => string.IsNullOrWhiteSpace(targetGrade) || x.grade.Equals(targetGrade, StringComparison.OrdinalIgnoreCase))
@@ -2922,7 +2937,7 @@ public class AcademicReportGenerator(
                 var isAbsent = g.All(m => m.IsAbsent);
                 var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
                 var pct = data.TotalMaxMarks > 0 ? Math.Round(obtained / data.TotalMaxMarks * 100, 2) : 0;
-                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks);
+                var grade = isAbsent ? "—" : ComputeGrade(obtained, data.TotalMaxMarks, data.DefaultGradeRanges);
                 var failedSubjects = g
                     .Where(m => !m.IsAbsent && (m.MarksObtained ?? 0) < subjectPassMap.GetValueOrDefault(m.SubjectId, 0))
                     .Select(m => data.SubjectNames.GetValueOrDefault(m.SubjectId, "—"))
@@ -3032,7 +3047,7 @@ public class AcademicReportGenerator(
             {
                 var isAbsent = g.All(m => m.IsAbsent);
                 var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
-                var grade = isAbsent ? "Absent" : ComputeGrade(obtained, data.TotalMaxMarks);
+                var grade = isAbsent ? "Absent" : ComputeGrade(obtained, data.TotalMaxMarks, data.DefaultGradeRanges);
                 return (obtained, grade, isAbsent);
             }).ToList();
 
@@ -3150,7 +3165,7 @@ public class AcademicReportGenerator(
             {
                 var isAbsent = g.All(m => m.IsAbsent);
                 var obtained = isAbsent ? 0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
-                var grade = isAbsent ? "Absent" : ComputeGrade(obtained, data.TotalMaxMarks);
+                var grade = isAbsent ? "Absent" : ComputeGrade(obtained, data.TotalMaxMarks, data.DefaultGradeRanges);
                 return (obtained, grade, isAbsent);
             })
             .OrderByDescending(x => x.obtained)

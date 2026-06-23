@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -14,6 +14,7 @@ public class Exam : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid ExamTypeId { get; private set; }
     public string ExamName { get; private set; } = null!;
     public Guid StandardId { get; private set; }
+    public Guid? GradingScaleId { get; private set; }
     public ExamStatus Status { get; private set; }
 
     public ICollection<ExamDivision> ExamDivisions { get; private set; }
@@ -30,12 +31,14 @@ public class Exam : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Guid examTypeId,
         string examName,
         Guid standardId,
-        Guid? tenantId = null) : base(id)
+        Guid? tenantId = null,
+        Guid? gradingScaleId = null) : base(id)
     {
         ExamTypeId = examTypeId;
         ExamName = Check.NotNullOrWhiteSpace(examName, nameof(examName));
         StandardId = standardId;
         TenantId = tenantId;
+        GradingScaleId = gradingScaleId;
         Status = ExamStatus.Pending;
 
         ExamDivisions = new Collection<ExamDivision>();
@@ -101,11 +104,12 @@ public class Exam : FullAuditedAggregateRoot<Guid>, IMultiTenant
         }
     }
 
-    public void UpdateExamDetails(string examName, Guid examTypeId, Guid standardId)
+    public void UpdateExamDetails(string examName, Guid examTypeId, Guid standardId, Guid? gradingScaleId)
     {
         ExamName = Check.NotNullOrWhiteSpace(examName, nameof(examName));
         ExamTypeId = examTypeId;
         StandardId = standardId;
+        GradingScaleId = gradingScaleId;
     }
 
     public void ChangeStatus(ExamStatus newStatus)

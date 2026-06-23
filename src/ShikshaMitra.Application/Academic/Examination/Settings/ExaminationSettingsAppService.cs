@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
@@ -10,6 +10,8 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 
+using ShikshaMitra.Academic.Examination.Exams;
+
 namespace ShikshaMitra.Academic.Examination.Settings;
 
 [Authorize]
@@ -18,7 +20,9 @@ public class ExaminationSettingsAppService(
 	IRepository<GradingScale, Guid> gradingScaleRepository,
 	IRepository<ExamType, Guid> examTypeRepository,
 	ExamTypeManager examTypeManager,
-	IGuidGenerator guidGenerator
+	IGuidGenerator guidGenerator,
+	IRepository<Exam, Guid> examRepository,
+	IRepository<ExamSubject, Guid> examSubjectRepository
 ) : ApplicationService, IExaminationSettingsAppService
 {
 	public async Task CreateGradingScaleAsync(Guid academicMediumId, CreateGradingScaleDto input)
@@ -139,6 +143,23 @@ public class ExaminationSettingsAppService(
 			throw new UserFriendlyException("Grading scale not found");
 		}
 
+		// Block deletion if the grading scale is in use
+		var usageParts = new System.Collections.Generic.List<string>();
+
+		var examCount = await examRepository.CountAsync(e => e.GradingScaleId == id);
+		if (examCount > 0)
+			usageParts.Add($"{examCount} exam(s)");
+
+		var examSubjectCount = await examSubjectRepository.CountAsync(es => es.GradeScalingId == id);
+		if (examSubjectCount > 0)
+			usageParts.Add($"{examSubjectCount} exam subject(s)");
+
+		if (usageParts.Count > 0)
+		{
+			throw new BusinessException(ExamErrorCodes.GradingScaleIsInUse)
+				.WithData("message", $"Cannot delete grading scale '{gradingScale.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+		}
+
 		await gradingScaleRepository.DeleteAsync(gradingScale);
 	}
 
@@ -208,6 +229,19 @@ public class ExaminationSettingsAppService(
 		if (examType == null)
 		{
 			throw new UserFriendlyException("Exam type not found");
+		}
+
+		// Block deletion if the exam type is in use
+		var usageParts = new System.Collections.Generic.List<string>();
+
+		var examCount = await examRepository.CountAsync(e => e.ExamTypeId == id);
+		if (examCount > 0)
+			usageParts.Add($"{examCount} exam(s)");
+
+		if (usageParts.Count > 0)
+		{
+			throw new BusinessException(ExamErrorCodes.ExamTypeIsInUse)
+				.WithData("message", $"Cannot delete exam type '{examType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
 		}
 
 		await examTypeRepository.DeleteAsync(examType);

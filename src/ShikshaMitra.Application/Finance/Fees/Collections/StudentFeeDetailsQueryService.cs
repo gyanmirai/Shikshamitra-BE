@@ -114,7 +114,10 @@ public partial class StudentFeeDetailsQueryService(
 				{
 					var ledgerLine = ledger.SelectMany(l => l.Items)
 						.FirstOrDefault(l => l.DueFeeId == line.DueFeeId);
-					ledgerLine?.ConcessionAmount += (double)line.ConcessionAmount;
+					if (ledgerLine != null)
+					{
+						ledgerLine.ConcessionAmount += (double)line.ConcessionAmount;
+					}
 				}
 			}
 

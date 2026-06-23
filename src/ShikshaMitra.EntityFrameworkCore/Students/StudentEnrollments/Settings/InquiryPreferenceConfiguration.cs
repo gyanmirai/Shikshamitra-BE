@@ -24,6 +24,20 @@ public class InquiryPreferenceConfiguration : IEntityTypeConfiguration<InquiryPr
 			.HasMaxLength(InquiryPreferenceConsts.MaxPreferenceNameLength)
 			.IsRequired();
 
+		builder.Property(x => x.Description)
+			.HasMaxLength(InquiryPreferenceConsts.MaxDescriptionLength);
+
+		builder.Property(x => x.DeactivationReason)
+			.HasMaxLength(InquiryPreferenceConsts.MaxDeactivationReasonLength);
+
+		builder.Property(x => x.DisplayOrder)
+			.HasDefaultValue(0)
+			.IsRequired();
+
+		builder.Property(x => x.IsActive)
+			.HasDefaultValue(true)
+			.IsRequired();
+
 		// AcademicYearId is required
 		builder.Property(x => x.AcademicYearId)
 			.IsRequired();

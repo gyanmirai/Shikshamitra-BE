@@ -198,7 +198,8 @@ public class StudentScopeAccessService(
 	public async Task EnsureCanUseInquiryPreferenceAsync(
 		Guid? inquiryPreferenceId,
 		Guid academicYearId,
-		string operation)
+		string operation,
+		Guid? existingInquiryPreferenceId = null)
 	{
 		if (!inquiryPreferenceId.HasValue)
 		{
@@ -209,6 +210,14 @@ public class StudentScopeAccessService(
 		if (inquiryPreference.AcademicYearId != academicYearId)
 		{
 			throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+				.WithData("InquiryPreferenceId", inquiryPreference.Id)
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("Operation", operation);
+		}
+
+		if (!inquiryPreference.IsActive && inquiryPreference.Id != existingInquiryPreferenceId)
+		{
+			throw new BusinessException("InquiryPreference:Inactive")
 				.WithData("InquiryPreferenceId", inquiryPreference.Id)
 				.WithData("AcademicYearId", academicYearId)
 				.WithData("Operation", operation);

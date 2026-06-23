@@ -6,6 +6,7 @@ Canonical module documentation lives under `docs/modules/<module>/`.
 |---|---|
 | HR | [docs/modules/hr/README.md](./hr/README.md) |
 | Institute Setup | [docs/modules/institute-setup/README.md](./institute-setup/README.md) |
+| Student | [docs/modules/student/README.md](./student/README.md) |
 
 ## Module Template
 

@@ -45,7 +45,8 @@ public class StudentGeneralInfoAppService(
 		await studentScopeAccessService.EnsureCanUseInquiryPreferenceAsync(
 			input.InquiryPreferenceId,
 			student.AcademicYearId ?? throw new BusinessException(StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo),
-			nameof(UpdateGeneralInfoAsync));
+			nameof(UpdateGeneralInfoAsync),
+			student.AdditionalDetail?.InquiryPreferenceId);
 
 		student.UpdateGeneralInformation(input.FirstName, input.MiddleName, input.LastName);
 

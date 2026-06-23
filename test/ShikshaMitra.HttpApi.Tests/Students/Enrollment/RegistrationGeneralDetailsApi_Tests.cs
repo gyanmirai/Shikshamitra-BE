@@ -13,6 +13,7 @@ using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Students.Enrollment;
 using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
@@ -295,6 +296,22 @@ public class RegistrationGeneralDetailsApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Reject_Direct_Registration_With_Inactive_Inquiry_Source()
+    {
+        var preference = await CreateInquirySourceAsync($"Inactive Reg {Guid.NewGuid():N}");
+        await SetInquirySourceStatusAsync(preference.Id, isActive: false, "Registration source disabled");
+
+        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto("RegInactiveSource");
+        dto.InquiryPreferenceId = preference.Id;
+        var response = await Client.PostAsJsonAsync($"{BaseUrl}/general-details", dto, JsonOptions);
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        content.ShouldContain("InquiryPreference:Inactive");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
     public async Task Authenticated_Request_Should_Not_Return_401()
     {
         var studentId = await StudentEnrollmentTestHelper
@@ -489,6 +506,37 @@ public class RegistrationGeneralDetailsApi_Tests : ShikshaMitraApiTestBase
             .GetProperty("standardId")
             .GetGuid();
         return standardId;
+    }
+
+    private async Task<InquiryPreferenceDto> CreateInquirySourceAsync(string preferenceName)
+    {
+        var response = await Client.PostAsJsonAsync(
+            $"/api/student-enrollment/{Factory.SeededAcademicYearId}/settings/inquiry-preferences",
+            new CreateUpdateInquiryPreferenceDto { PreferenceName = preferenceName },
+            JsonOptions);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var preference = await response.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        preference.ShouldNotBeNull();
+        return preference;
+    }
+
+    private async Task<InquiryPreferenceDto> SetInquirySourceStatusAsync(
+        Guid preferenceId,
+        bool isActive,
+        string? deactivationReason = null)
+    {
+        var response = await Client.PatchAsJsonAsync(
+            $"/api/student-enrollment/settings/inquiry-preferences/{preferenceId}/status",
+            new UpdateInquiryPreferenceStatusDto
+            {
+                IsActive = isActive,
+                DeactivationReason = deactivationReason,
+            },
+            JsonOptions);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var preference = await response.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        preference.ShouldNotBeNull();
+        return preference;
     }
 
     private static JsonElement FindSchema(JsonElement schemas, string schemaName)

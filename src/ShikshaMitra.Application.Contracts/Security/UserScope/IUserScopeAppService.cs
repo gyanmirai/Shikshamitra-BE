@@ -18,18 +18,18 @@ public interface IUserScopeAppService : IApplicationService
     Task<UserScopeAssignmentDto> AssignScopeAsync(CreateUserScopeAssignmentDto input);
 
     /// <summary>
-    /// Bulk assigns scope to multiple users with support for multiple boards, standards, etc.
-    /// Creates assignments for all combinations (cartesian product) of the provided scope parameters.
-    /// For example: 2 users × 3 boards × 2 standards = 12 assignments.
+    /// Bulk assigns scope to multiple users with explicit hierarchy path rows.
+    /// Creates one assignment per user and per supplied scope row.
+    /// For example: 2 users × 3 scope rows = 6 assignments.
     ///
     /// IMPORTANT - ACADEMIC-YEAR-SCOPED OVERWRITE STRATEGY:
     /// This operation first DELETES existing scope assignments for the specified users
-    /// only within the supplied AcademicYearIds, then creates the new assignments.
+    /// only within the supplied AcademicYearId, then creates the new assignments.
     /// Assignments for other academic years are preserved.
     ///
     /// The entire operation is transactional - either all operations (delete + create) succeed or none are applied.
     /// </summary>
-    /// <param name="input">Bulk assignment details with lists for each scope level</param>
+    /// <param name="input">Bulk assignment details with one academic year and explicit scope path rows</param>
     /// <returns>Result containing deleted count, created count, and affected users</returns>
     Task<BulkScopeAssignmentResultDto> BulkAssignAsync(BulkScopeAssignmentDto input);
 

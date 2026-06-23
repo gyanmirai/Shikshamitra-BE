@@ -266,7 +266,9 @@ public class UserScopeAssignmentManager : DomainService
 
 	private static void ThrowInvalidHierarchy(string childField, Guid childId, string parentField, Guid parentId)
 	{
-		throw new BusinessException(UserScopeErrorCodes.InvalidHierarchy)
+		throw new BusinessException(
+				UserScopeErrorCodes.InvalidHierarchy,
+				"The selected academic permission row is not a valid hierarchy path. Please choose board, medium, stage, class, and division from the same branch.")
 			.WithData("ChildField", childField)
 			.WithData("ChildId", childId)
 			.WithData("ParentField", parentField)

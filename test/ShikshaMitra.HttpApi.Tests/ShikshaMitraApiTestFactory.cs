@@ -57,6 +57,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	public Guid SeededRoleId { get; private set; }
 	public Guid SeededShiftId { get; private set; }
 	public Guid SeededAcademicYearId { get; private set; }
+	public Guid SeededBoardId { get; private set; }
 	public Guid SeededMediumStageId { get; private set; }
 	public Guid SeededMediumId { get; private set; }
 	public Guid SeededStandardId { get; private set; }
@@ -140,6 +141,14 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			else if (firstStage != null)
 			{
 				SeededMediumId = firstStage.EducationMediumId;
+			}
+
+			if (SeededMediumId != Guid.Empty)
+			{
+				var mediumRepo = services.GetRequiredService<IEducationMediumRepository>();
+				var medium = await (await mediumRepo.GetQueryableAsync()).AsNoTracking()
+					.FirstOrDefaultAsync(m => m.Id == SeededMediumId);
+				SeededBoardId = medium?.EducationBoardId ?? Guid.Empty;
 			}
 
 			var divisionRepo = services.GetRequiredService<IDivisionRepository>();

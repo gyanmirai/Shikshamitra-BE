@@ -1,16 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 
 namespace ShikshaMitra.Security.UserScope;
 
 /// <summary>
-/// DTO for bulk scope assignment to multiple users supporting multiple values at each hierarchical level.
-/// Creates assignments for all combinations (cartesian product) of the provided scope parameters.
-/// Example: 2 users × 2 boards × 3 standards × 2 divisions = 24 assignments.
+/// DTO for bulk scope assignment to multiple users using explicit hierarchy path rows.
+/// Creates one assignment for each user and each supplied scope row.
 /// This operation is transactional and follows an ACADEMIC-YEAR-SCOPED OVERWRITE strategy:
-/// - First, deletes existing scope assignments only for the specified users and academic years
-/// - Then, creates the new assignments based on the provided parameters for those years
+/// - First, deletes existing scope assignments only for the specified users and academic year
+/// - Then, creates the new assignments based on the provided scope rows for that year
 /// - Either all operations succeed or none are applied (rollback)
 /// </summary>
 public class BulkScopeAssignmentDto : IValidatableObject
@@ -23,45 +23,19 @@ public class BulkScopeAssignmentDto : IValidatableObject
     public List<Guid> UserIds { get; set; } = new();
 
     /// <summary>
-    /// List of Academic Year IDs to replace. Required for bulk assignment.
-    /// Creates one assignment per academic year (if multiple provided).
+    /// Academic year ID to replace. Required for bulk assignment.
     /// </summary>
-    public List<Guid>? AcademicYearIds { get; set; }
+    [Required]
+    public Guid? AcademicYearId { get; set; }
 
     /// <summary>
-    /// List of Education Board IDs. NULL or empty = all boards.
-    /// Creates one assignment per board (if multiple provided).
+    /// Explicit hierarchy path rows to assign. An empty row represents full academic-year access.
     /// </summary>
-    public List<Guid>? EducationBoardIds { get; set; }
-
-    /// <summary>
-    /// List of Education Medium IDs. NULL or empty = all mediums.
-    /// Creates one assignment per medium (if multiple provided).
-    /// </summary>
-    public List<Guid>? EducationMediumIds { get; set; }
-
-    /// <summary>
-    /// List of Education Medium Stage IDs. NULL or empty = all stages.
-    /// Creates one assignment per stage (if multiple provided).
-    /// </summary>
-    public List<Guid>? EducationMediumStageIds { get; set; }
-
-    /// <summary>
-    /// List of Standard/Class IDs to assign. NULL or empty = all standards.
-    /// Creates one assignment per standard (if multiple provided).
-    /// </summary>
-    public List<Guid>? StandardIds { get; set; }
-
-    /// <summary>
-    /// List of Division IDs to assign. NULL or empty = all divisions.
-    /// Creates one assignment per division (if multiple provided).
-    /// Combines with StandardIds to create standard-division combinations.
-    /// </summary>
-    public List<Guid>? DivisionIds { get; set; }
+    public List<BulkScopeAssignmentScopeDto> Scopes { get; set; } = [];
 
     /// <summary>
     /// When true, clears existing assignments in the supplied academic years and creates no new scope rows.
-    /// All scope ID arrays must be null or empty when this flag is set.
+    /// Scopes must be empty when this flag is set.
     /// </summary>
     public bool ClearExisting { get; set; }
 
@@ -76,26 +50,111 @@ public class BulkScopeAssignmentDto : IValidatableObject
     /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (AcademicYearIds == null || AcademicYearIds.Count == 0)
+        var scopes = Scopes ?? new List<BulkScopeAssignmentScopeDto>();
+
+        if (!AcademicYearId.HasValue || AcademicYearId.Value == Guid.Empty)
         {
             yield return new ValidationResult(
-                "At least one academic year must be provided. Bulk assignment replaces permissions only within the supplied academic year scope.",
-                new[] { nameof(AcademicYearIds) });
+                "An academic year must be provided. Bulk assignment replaces permissions only within the supplied academic year.",
+                new[] { nameof(AcademicYearId) });
         }
 
-        if (ClearExisting && HasAnyScopeIds())
+        if (UserIds?.Any(x => x == Guid.Empty) == true)
         {
             yield return new ValidationResult(
-                "ClearExisting can only be used with empty scope ID arrays.",
-                new[] { nameof(ClearExisting), nameof(EducationBoardIds), nameof(EducationMediumIds),
-                       nameof(EducationMediumStageIds), nameof(StandardIds), nameof(DivisionIds) });
+                "User IDs cannot be empty GUIDs.",
+                new[] { nameof(UserIds) });
+        }
+
+        if (scopes.Any(scope => scope == null || HasEmptyGuid(scope)))
+        {
+            yield return new ValidationResult(
+                "Scope IDs cannot be empty GUIDs.",
+                new[] { nameof(Scopes) });
+        }
+
+        if (ClearExisting && scopes.Count > 0)
+        {
+            yield return new ValidationResult(
+                "ClearExisting can only be used with an empty scopes array.",
+                new[] { nameof(ClearExisting), nameof(Scopes) });
+        }
+
+        if (!ClearExisting && scopes.Count == 0)
+        {
+            yield return new ValidationResult(
+                "At least one scope row must be provided when ClearExisting is false. Use an empty scope row for full academic-year access.",
+                new[] { nameof(Scopes) });
+        }
+
+        foreach (var scope in scopes)
+        {
+            if (scope == null)
+            {
+                continue;
+            }
+
+            if (scope.EducationMediumId.HasValue && !scope.EducationBoardId.HasValue)
+            {
+                yield return MissingParent(nameof(scope.EducationMediumId), nameof(scope.EducationBoardId));
+            }
+
+            if (scope.EducationMediumStageId.HasValue &&
+                (!scope.EducationBoardId.HasValue || !scope.EducationMediumId.HasValue))
+            {
+                yield return MissingParent(
+                    nameof(scope.EducationMediumStageId),
+                    $"{nameof(scope.EducationBoardId)}, {nameof(scope.EducationMediumId)}");
+            }
+
+            if (scope.StandardId.HasValue &&
+                (!scope.EducationBoardId.HasValue ||
+                 !scope.EducationMediumId.HasValue ||
+                 !scope.EducationMediumStageId.HasValue))
+            {
+                yield return MissingParent(
+                    nameof(scope.StandardId),
+                    $"{nameof(scope.EducationBoardId)}, {nameof(scope.EducationMediumId)}, {nameof(scope.EducationMediumStageId)}");
+            }
+
+            if (scope.DivisionId.HasValue &&
+                (!scope.EducationBoardId.HasValue ||
+                 !scope.EducationMediumId.HasValue ||
+                 !scope.EducationMediumStageId.HasValue ||
+                 !scope.StandardId.HasValue))
+            {
+                yield return MissingParent(
+                    nameof(scope.DivisionId),
+                    $"{nameof(scope.EducationBoardId)}, {nameof(scope.EducationMediumId)}, {nameof(scope.EducationMediumStageId)}, {nameof(scope.StandardId)}");
+            }
         }
     }
 
-    private bool HasAnyScopeIds() =>
-        (EducationBoardIds?.Count > 0) ||
-        (EducationMediumIds?.Count > 0) ||
-        (EducationMediumStageIds?.Count > 0) ||
-        (StandardIds?.Count > 0) ||
-        (DivisionIds?.Count > 0);
+    private static bool HasEmptyGuid(BulkScopeAssignmentScopeDto scope) =>
+        scope.EducationBoardId == Guid.Empty ||
+        scope.EducationMediumId == Guid.Empty ||
+        scope.EducationMediumStageId == Guid.Empty ||
+        scope.StandardId == Guid.Empty ||
+        scope.DivisionId == Guid.Empty;
+
+    private static ValidationResult MissingParent(string childMember, string parentMembers) =>
+        new(
+            $"{childMember} requires parent scope ID(s): {parentMembers}.",
+            new[] { nameof(Scopes) });
+}
+
+/// <summary>
+/// A single explicit hierarchy path row within one academic year.
+/// </summary>
+public class BulkScopeAssignmentScopeDto
+{
+    public Guid? EducationBoardId { get; set; }
+
+    public Guid? EducationMediumId { get; set; }
+
+    public Guid? EducationMediumStageId { get; set; }
+
+    public Guid? StandardId { get; set; }
+
+    public Guid? DivisionId { get; set; }
 }

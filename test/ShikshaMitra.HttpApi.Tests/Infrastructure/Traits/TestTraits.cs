@@ -34,6 +34,7 @@ public static class TestTraits
 		public const string Finance = nameof(Finance);
 		public const string Communication = nameof(Communication);
 		public const string Library = nameof(Library);
+		public const string Transport = nameof(Transport);
 		public const string TenantSettings = nameof(TenantSettings);
 		public const string Security = nameof(Security);
 	}

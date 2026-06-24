@@ -63,6 +63,25 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		public static class Settings_FuelType
+		{
+			private const string SubmoduleName = $"{ModuleName}.Settings.FuelType";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Settings.FuelType";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
 		public static class Settings_FeeConfiguration
 		{
 			private const string SubmoduleName = $"{ModuleName}.Settings.FeeConfiguration";

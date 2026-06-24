@@ -19,7 +19,7 @@ public class StudentManagementController(
 {
 	[HttpGet("{divisionId}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentManagement.View)]
-	public async Task<Result<List<StudentRecordDto>>> GetStudentRecords(Guid divisionId)
+	public async Task<Result<StudentRecordListResponseDto>> GetStudentRecords(Guid divisionId)
 	{
 		var (studentRecords, arrangementType, arrangementBy) = await studentManagementAppService.GetStudentRecords(divisionId);
 
@@ -33,7 +33,24 @@ public class StudentManagementController(
 			Response.Headers["X-Arrangement-By"] = arrangementBy.Value.ToString();
 		}
 
-		return Result.Success(studentRecords);
+		return Result.Success(new StudentRecordListResponseDto
+		{
+			TotalCount = studentRecords.Count,
+			CurrentPage = 1,
+			PageSize = studentRecords.Count,
+			TotalPages = studentRecords.Count == 0 ? 0 : 1,
+			ArrangementType = arrangementType,
+			ArrangementBy = arrangementBy,
+			Items = studentRecords
+		});
+	}
+
+	[HttpGet("pending-assignments")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentManagement.View)]
+	public async Task<Result<PendingAssignmentResponseDto>> GetPendingAssignments([FromQuery] GetPendingAssignmentStudentsInput input)
+	{
+		var result = await studentManagementAppService.GetPendingAssignmentsAsync(input);
+		return Result.Success(result);
 	}
 
 	[HttpPost("{studentId}/houses")]

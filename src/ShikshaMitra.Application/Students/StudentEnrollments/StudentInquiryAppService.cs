@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 
@@ -18,6 +19,7 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 [RemoteService(false)]
 public class StudentInquiryAppService(
 	IStudentRepository studentRepository,
+	IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IGuidGenerator guidGenerator,
 	StudentEnrollmentManager studentEnrollmentManager,
@@ -232,16 +234,29 @@ public class StudentInquiryAppService(
 		IssueRegistrationFormDto issueFormDto
 	)
 	{
-		// Load the complete aggregate
-		var student = await studentRepository.GetAsync(studentId);
+		var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var student = await AsyncExecuter.FirstOrDefaultAsync(
+			query
+				.Where(s => s.Id == studentId));
+		if (student == null)
+		{
+			throw new EntityNotFoundException(typeof(Student), studentId);
+		}
+
 		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(AssignRegistrationFormAsync));
 
 		await studentEnrollmentManager.ValidateFormNumberUniqueAsync(issueFormDto.FormNumber, student.AcademicYearId ?? Guid.Empty);
 
-		// Use aggregate method - it encapsulates business rules
-		student.IssueRegistrationForm(issueFormDto.FormNumber, issueFormDto.Amount);
+		if (student.Status != StudentLifeCycleStatusEnum.Inquiry)
+		{
+			throw new InvalidOperationException($"Cannot issue registration form. Student must be in Inquiry status. Current status: {student.Status}");
+		}
 
-		// Single update call
+		var additionalDetail = await studentAdditionalDetailRepository.GetAsync(studentId);
+		additionalDetail.IssueRegistrationForm(issueFormDto.FormNumber, issueFormDto.Amount);
+		student.ChangeStatus(StudentLifeCycleStatusEnum.RegistrationFormIssued);
+
+		await studentAdditionalDetailRepository.UpdateAsync(additionalDetail, autoSave: false);
 		await studentRepository.UpdateAsync(student, autoSave: true);
 	}
 

@@ -67,6 +67,20 @@ public class PolicyAggregateRequiredIds_Tests
 	}
 
 	[Fact]
+	public void AttendancePolicy_Should_Reject_Salary_Deduction_Without_Amount()
+	{
+		var missingAmount = Should.Throw<BusinessException>(() => CreateAttendancePolicy(
+			penaltyType: AttendancePenaltyType.SalaryDeduction,
+			penaltyDeductionAmount: null));
+		missingAmount.Code.ShouldBe(HRErrorCodes.InvalidAttendancePolicyRule);
+
+		var zeroAmount = Should.Throw<BusinessException>(() => CreateAttendancePolicy(
+			penaltyType: AttendancePenaltyType.SalaryDeduction,
+			penaltyDeductionAmount: 0m));
+		zeroAmount.Code.ShouldBe(HRErrorCodes.InvalidAttendancePolicyRule);
+	}
+
+	[Fact]
 	public void Assignment_Should_Reject_Missing_Required_Ids()
 	{
 		var missingAcademicYear = Should.Throw<BusinessException>(() => CreateAssignment(academicYearId: Guid.Empty));
@@ -175,7 +189,6 @@ public class PolicyAggregateRequiredIds_Tests
 			attendance.OvertimeRate,
 			attendance.MinOvertimeMinutes,
 			attendance.HolidayWorkBehavior,
-			attendance.SandwichRuleEnabled,
 			attendance.PayrollPreviewEnabled));
 
 		calendarCreate.Code.ShouldBe(HRErrorCodes.PolicyArchiveRequiresArchiveWorkflow);
@@ -217,7 +230,9 @@ public class PolicyAggregateRequiredIds_Tests
 		Guid? academicYearId = null,
 		Guid? workCalendarPolicyId = null,
 		HrPolicyStatus status = HrPolicyStatus.Draft,
-		bool isDefault = false) =>
+		bool isDefault = false,
+		AttendancePenaltyType penaltyType = AttendancePenaltyType.None,
+		decimal? penaltyDeductionAmount = null) =>
 		new(
 			Guid.NewGuid(),
 			Guid.NewGuid(),
@@ -234,7 +249,7 @@ public class PolicyAggregateRequiredIds_Tests
 			true,
 			0,
 			0,
-			AttendancePenaltyType.None,
+			penaltyType,
 			0,
 			false,
 			0,
@@ -242,8 +257,8 @@ public class PolicyAggregateRequiredIds_Tests
 			null,
 			null,
 			AttendanceHolidayWorkBehavior.CompOff,
-			false,
-			true);
+			true,
+			penaltyDeductionAmount);
 
 	private static HrPolicyAssignment CreateAssignment(
 		Guid? academicYearId = null,

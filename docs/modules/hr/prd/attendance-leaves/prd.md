@@ -79,7 +79,7 @@ Leave Type settings are removed from the target HR leave model. Sick, Casual, Ea
 2. Each policy references one `WorkCalendarPolicy`.
 3. One active attendance policy can be marked as default per tenant and academic year.
 4. Employee-specific policy assignment overrides the default policy for the assignment date range.
-5. Attendance policy owns punch thresholds, missing punch behavior, late/early rules, overtime, holiday work behavior, sandwich rule, and payroll integration mode.
+5. Attendance policy owns punch thresholds, missing punch behavior, late/early rules, overtime, holiday work behavior, and payroll integration mode.
 6. Calendar holidays remain neutral; attendance policy decides whether attendance is required and how holiday work is treated.
 
 ### 6. Automated Notifications

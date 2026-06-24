@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -27,7 +27,8 @@ public class AssignmentV2AppService(
     IRepository<IdentityUser, Guid> userRepository,
     IUserScopeService userScopeService,
     AssignmentManager assignmentManager,
-    IAsyncQueryableExecuter asyncExecuter
+    IAsyncQueryableExecuter asyncExecuter,
+    IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository
 ) : ApplicationService, IAssignmentV2AppService
 {
 
@@ -254,6 +255,13 @@ public class AssignmentV2AppService(
         var assignment = await assignmentRepository.FindAsync(assignmentId)
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
 
+        var submissionsCount = await studentSubmissionRepository.CountAsync(s => s.AssignmentId == assignmentId);
+        if (submissionsCount > 0)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.AssignmentIsInUse)
+                .WithData("message", $"Cannot delete assignment '{assignment.Title}' because it is in use: {submissionsCount} student submission(s). Please remove these submissions first.");
+        }
+
         await assignmentRepository.DeleteAsync(assignment, autoSave: true);
     }
 
@@ -267,11 +275,18 @@ public class AssignmentV2AppService(
         AssignmentStatusUpdateDto input
     )
     {
-        var assignment = await assignmentRepository.FindAsync(assignmentId)
+        var q = await assignmentRepository.WithDetailsAsync(a => a.DivisionSchedules);
+        var assignment = await asyncExecuter.FirstOrDefaultAsync(q.Where(a => a.Id == assignmentId))
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
 
         var previousStatus = assignment.Status;
-        assignment.ChangeStatus((AssignmentStatus) input.Status);
+        var newStatus = (AssignmentStatus)input.Status;
+        assignment.ChangeStatus(newStatus);
+
+        if (newStatus == AssignmentStatus.Published)
+        {
+            assignment.PublishAll();
+        }
 
         await assignmentRepository.UpdateAsync(assignment, autoSave: true);
 

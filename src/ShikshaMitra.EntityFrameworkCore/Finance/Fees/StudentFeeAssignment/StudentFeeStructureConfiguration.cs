@@ -11,6 +11,7 @@ public class StudentFeeStructureConfiguration : IEntityTypeConfiguration<Student
 		builder.ToTable("Finance_StudentFeeStructures", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
-		builder.HasIndex(x => x.StudentId);
+		builder.HasIndex(x => x.StudentId)
+			.HasDatabaseName("IX_StudentFeeStructures_StudentId");
 	}
 }

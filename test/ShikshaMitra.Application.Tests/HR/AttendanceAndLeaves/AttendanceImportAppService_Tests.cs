@@ -1030,8 +1030,8 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 				policy.OvertimeRate,
 				policy.MinOvertimeMinutes,
 				policy.HolidayWorkBehavior,
-				policy.SandwichRuleEnabled,
-				policy.PayrollPreviewEnabled);
+				policy.PayrollPreviewEnabled,
+				penaltyType == AttendancePenaltyType.SalaryDeduction ? 1m : null);
 			await _attendancePolicyRepository.UpdateAsync(policy, autoSave: true);
 		});
 	}
@@ -1138,7 +1138,6 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 			null,
 			null,
 			AttendanceHolidayWorkBehavior.CompOff,
-			false,
 			true), autoSave: true);
 
 		return academicYear;

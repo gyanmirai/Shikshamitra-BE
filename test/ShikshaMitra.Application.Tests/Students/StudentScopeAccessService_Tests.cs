@@ -111,7 +111,9 @@ public class StudentScopeAccessService_Tests : ShikshaMitraApplicationTestBase<S
 			var preference = await _inquiryPreferenceManager.CreateAsync(
 				_currentTenant.Id,
 				academicYearId,
-				$"Scope Test {Guid.NewGuid():N}");
+				$"Scope Test {Guid.NewGuid():N}",
+				null,
+				0);
 
 			return await _inquiryPreferenceRepository.InsertAsync(preference, autoSave: true);
 		});

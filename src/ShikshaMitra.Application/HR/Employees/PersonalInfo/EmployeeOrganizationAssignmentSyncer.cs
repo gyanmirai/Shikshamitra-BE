@@ -49,7 +49,7 @@ public class EmployeeOrganizationAssignmentSyncer(
 			.Where(x => x.UserId.HasValue)
 			.GroupBy(x => x.UserId!.Value)
 			.ToDictionary(x => x.Key, ChooseEmployeeForUser);
-		var employeeIds = employees.Select(x => x.Id).Distinct().ToList();
+		var employeeIds = selectedEmployeeByUserId.Values.Select(x => x.Id).Distinct().ToList();
 		var requestedStageIdsByEmployeeId = employeeIds.ToDictionary(x => x, _ => new HashSet<Guid>());
 
 		foreach (var academicYearId in targetAcademicYearIds)

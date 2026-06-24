@@ -401,16 +401,9 @@ public class ReconciliationSeederContributor : BaseSeederContributor
 
         var dueFee = await FindAllocatableDueFeeAsync(student.Id, feeHeadId, amount);
 
-        var metadata = new FeeRecordMetadata(GuidGenerator.Create())
-        {
-            TenantId       = CurrentTenant.Id,
-            StudentId      = student.Id,
-            AcademicYearId = academicYearId,
-            TotalPaidFee   = amount,
-            ReceiptNumber  = txnKey,
-            Status         = FeeCollectionStatus.Paid,
-            Remarks        = "Seed transaction for reconciliation seeder",
-        };
+        var metadata = new FeeRecordMetadata(
+            GuidGenerator.Create(), CurrentTenant.Id, student.Id, academicYearId,
+            amount, txnKey, FeeCollectionStatus.Paid, "Seed transaction for reconciliation seeder");
         await _feeRecordMetadataRepository.InsertAsync(metadata, autoSave: false);
 
         await _feeCollectionRecordRepository.InsertAsync(new FeeCollectionRecord(GuidGenerator.Create())

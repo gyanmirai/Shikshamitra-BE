@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -11,7 +11,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Accounts.Income;
 
 [RemoteService]
-[Area("Finance")]
+[Area("finance")]
 [Route("api/incomes")]
 [Authorize]
 public class IncomeController(ITransactionAppService transactionAppService) : AbpController

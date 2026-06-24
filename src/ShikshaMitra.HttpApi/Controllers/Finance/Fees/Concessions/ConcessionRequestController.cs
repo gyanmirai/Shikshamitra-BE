@@ -13,7 +13,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Concessions;
 
 [RemoteService]
-[Area("app")]
+[Area("finance")]
 [Route("api/concession-request")]
 [Authorize]
 public class ConcessionRequestController(IConcessionRequestAppService concessionRequestAppService)
@@ -80,20 +80,10 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 	[ProducesResponseType(typeof(ConcessionApprovalContextDto), StatusCodes.Status200OK)]
 	public Task<ConcessionApprovalContextDto> GetApprovalContextAsync(Guid id) =>
 		concessionRequestAppService.GetApprovalContextAsync(id);
-
-	[HttpPost("{id:guid}/approve")]
-	[ProducesResponseType(typeof(ConcessionApprovalResponseDto), StatusCodes.Status200OK)]
-	public Task<ConcessionApprovalResponseDto> ApproveAsync(Guid id, [FromBody] ApproveConcessionRequestDto input) =>
-		concessionRequestAppService.ApproveAsync(id, input);
-
-	[HttpPost("{id:guid}/reject")]
-	[ProducesResponseType(typeof(ConcessionRejectionResponseDto), StatusCodes.Status200OK)]
-	public Task<ConcessionRejectionResponseDto> RejectAsync(Guid id, [FromBody] RejectConcessionRequestDto input) =>
-		concessionRequestAppService.RejectAsync(id, input);
 }
 
 [RemoteService]
-[Area("app")]
+[Area("finance")]
 [Route("api/concession-requests")]
 [Authorize]
 public class ConcessionRequestsController(IConcessionRequestAppService concessionRequestAppService)

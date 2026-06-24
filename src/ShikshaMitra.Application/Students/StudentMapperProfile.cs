@@ -105,6 +105,7 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.Progress, opt => opt.MapFrom(src => src.AdditionalDetail != null
 				? ((double)src.AdditionalDetail.StudentRegistrationState / (Enum.GetValues<StudentRegistrationStateEnum>().Length - 1))*100
 				: 0))
+			.ForMember(dest => dest.StudentEnrollmentState, opt => opt.MapFrom(src => src.Status))
 			.ForMember(dest => dest.IsFeeStructureAssigned, opt => opt.MapFrom(src => src.FeeStructureId.HasValue))
 			.IncludeAllDerived();
 
@@ -137,6 +138,7 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.ApparId, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.ApparId : null))
 			.ForMember(dest => dest.PanNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.PanNo : null))
 			.ForMember(dest => dest.InquiryPreferenceId, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquiryPreferenceId : null))
+			.ForMember(dest => dest.InquiryPreference, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.InquiryPreference != null ? src.AdditionalDetail.InquiryPreference.PreferenceName : null))
 			.ForMember(dest => dest.Religion, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.Religion : null))
 			.ForMember(dest => dest.FamilyCast, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.FamilyCast : null))
 			.ForMember(dest => dest.CastCategory, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.CastCategory : null))

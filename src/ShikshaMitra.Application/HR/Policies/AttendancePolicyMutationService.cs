@@ -93,8 +93,8 @@ public class AttendancePolicyMutationService(
 			overtimeRate,
 			input.MinOvertimeMinutes,
 			holidayWorkBehavior,
-			input.SandwichRuleEnabled,
-			input.PayrollPreviewEnabled);
+			input.PayrollPreviewEnabled,
+			input.PenaltyDeductionAmount);
 
 		if (entity.IsDefault)
 		{
@@ -135,8 +135,8 @@ public class AttendancePolicyMutationService(
 			source.OvertimeRate,
 			source.MinOvertimeMinutes,
 			source.HolidayWorkBehavior,
-			source.SandwichRuleEnabled,
-			source.PayrollPreviewEnabled);
+			source.PayrollPreviewEnabled,
+			source.PenaltyDeductionAmount);
 
 		await repository.InsertAsync(entity, autoSave: true);
 		var dto = HrPolicyMapping.ToDto(entity);

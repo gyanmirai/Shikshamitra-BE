@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.Examination.Exams;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -15,6 +15,7 @@ public class ExamConfiguration : IEntityTypeConfiguration<Exam>
         builder.Property(x => x.ExamName).IsRequired().HasMaxLength(256);
         builder.Property(x => x.ExamTypeId).IsRequired();
         builder.Property(x => x.StandardId).IsRequired();
+        builder.Property(x => x.GradingScaleId).IsRequired(false);
 
         builder.HasMany(x => x.ExamDivisions)
             .WithOne()

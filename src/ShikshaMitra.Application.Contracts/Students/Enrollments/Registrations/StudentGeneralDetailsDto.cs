@@ -10,8 +10,8 @@ public class StudentGeneralDetailsDto
 	public string FormNo { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid AcademicBoardId { get; set; }
-	public Guid AcademicMediumId { get; private set; }
-	public Guid StandardId { get; private set; }
+	public Guid AcademicMediumId { get; set; }
+	public Guid StandardId { get; set; }
 
 	public string FirstName { get; set; }
 	public string? MiddleName { get; set; }
@@ -36,6 +36,7 @@ public class StudentGeneralDetailsDto
 	public bool? RteStatus { get; set; }
 	public ScholarshipStatus ScholarshipStatus { get; set; } = ScholarshipStatus.NotApplicable;
 	public Guid? InquiryPreferenceId { get; set; }
+	public string? InquiryPreference { get; set; }
 	public ReligionEnum? Religion { get; set; }
 	public string FamilyCast { get; set; }
 	public CastCategoryEnum? CastCategory { get; set; }

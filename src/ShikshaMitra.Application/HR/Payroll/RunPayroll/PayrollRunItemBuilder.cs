@@ -10,6 +10,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.TenantSettings;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
@@ -32,9 +33,26 @@ internal static class PayrollRunItemBuilder
 		PayrollRunReview? review,
 		decimal? previousMonthNetPay,
 		IReadOnlyList<string>? additionalIssueCodes = null,
-		DateOnly? employmentStartDate = null)
+		DateOnly? employmentStartDate = null,
+		ShiftManagement? shift = null)
 	{
+		var resolvedShift = shift ?? employee.Shift;
 		var itemAttendancePolicyWarnings = new List<string>();
+		var issueCodes = (additionalIssueCodes ?? Array.Empty<string>()).ToList();
+		var lateArrivalDeductionWarning =
+			PayrollLateArrivalDeductionDiagnostics.BuildConfigurationWarning(
+				employee,
+				attendanceRecords,
+				year,
+				month,
+				resolvedPolicies.AttendancePolicy,
+				resolvedShift);
+		if (!string.IsNullOrWhiteSpace(lateArrivalDeductionWarning))
+		{
+			issueCodes.Add(IssueCodes.AttendanceSalaryDeductionConfiguration);
+			itemAttendancePolicyWarnings.Add(lateArrivalDeductionWarning);
+		}
+
 		var preview = PayrollRunItemPreview.Prepare(
 			attendanceRecords,
 			components,
@@ -46,7 +64,7 @@ internal static class PayrollRunItemBuilder
 			leaveUnitsByDate,
 			previousMonthNetPay,
 			employmentStartDate,
-			employee.Shift,
+			resolvedShift,
 			resolvedPolicies.AttendancePolicy);
 
 		return new RunPayrollItem
@@ -67,7 +85,7 @@ internal static class PayrollRunItemBuilder
 			PreviousMonthNetPay = previousMonthNetPay.HasValue ? (double)previousMonthNetPay.Value : null,
 			NetPayDelta = preview.NetPayDelta.HasValue ? (double)preview.NetPayDelta.Value : null,
 			NetPayDeltaPercent = preview.NetPayDeltaPercent.HasValue ? (double)preview.NetPayDeltaPercent.Value : null,
-			IssueCodes = (additionalIssueCodes ?? Array.Empty<string>())
+			IssueCodes = issueCodes
 				.Concat(PayrollIssueCodeBuilder.Build(payrollDetails, components, basis.BasisDays, preview.Computation.PayableDays, preview.Computation.NetPay, previousMonthNetPay, preview.NetPayDeltaPercent, preview.HasAttendanceOrPaidLeave))
 				.Distinct()
 				.ToList(),

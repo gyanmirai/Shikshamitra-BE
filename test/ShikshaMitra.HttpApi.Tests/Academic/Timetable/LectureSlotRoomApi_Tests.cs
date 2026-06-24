@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Academic.Timetable;
@@ -204,6 +205,12 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 			JsonOptions);
 
 		updateResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var errorJson = await updateResponse.Content.ReadAsStringAsync();
+		using var errorDocument = JsonDocument.Parse(errorJson);
+		errorDocument.RootElement.GetProperty("errorCode").GetString()
+			.ShouldBe(TimetableErrorCodes.LectureSlotConfigHasTimetable);
+		errorDocument.RootElement.GetProperty("detail").GetString()
+			.ShouldBe("This class already has generated timetable assignments. Remove or update those timetable assignments before changing lecture slot timings.");
 	}
 
 	[Fact]

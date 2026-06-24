@@ -172,6 +172,169 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Recreate_Inquiry_Preference_After_Delete()
+    {
+        var preferenceName = $"Online {Guid.NewGuid():N}";
+        var createdPreference = await CreateInquirySourceAsync(preferenceName);
+
+        var deactivateResponse = await SetInquirySourceStatusAsync(
+            createdPreference.Id,
+            isActive: false,
+            "Unused source cleanup");
+        deactivateResponse.IsActive.ShouldBeFalse();
+
+        var deleteResponse = await Client.DeleteAsync(
+            $"/api/student-enrollment/settings/inquiry-preferences/{createdPreference.Id}");
+        deleteResponse.StatusCode.ShouldBeOneOf(HttpStatusCode.OK, HttpStatusCode.NoContent);
+
+        var recreateResponse = await Client.PostAsJsonAsync(
+            $"/api/student-enrollment/{Factory.SeededAcademicYearId}/settings/inquiry-preferences",
+            new CreateUpdateInquiryPreferenceDto { PreferenceName = preferenceName },
+            JsonOptions);
+
+        recreateResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await recreateResponse.Content.ReadAsStringAsync());
+        var recreatedPreference = await recreateResponse.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        recreatedPreference.ShouldNotBeNull();
+        recreatedPreference.PreferenceName.ShouldBe(preferenceName);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_Inquiry_Source_Metadata_And_Filter_Active_List()
+    {
+        var online = await CreateInquirySourceAsync(
+            $"Online {Guid.NewGuid():N}",
+            "Website and app inquiries",
+            20);
+        var walkIn = await CreateInquirySourceAsync(
+            $"Walk-in {Guid.NewGuid():N}",
+            "Front desk inquiries",
+            10);
+
+        online.Description.ShouldBe("Website and app inquiries");
+        online.DisplayOrder.ShouldBe(20);
+        online.IsActive.ShouldBeTrue();
+        online.AssignedStudentsCount.ShouldBe(0);
+        online.CanDelete.ShouldBeTrue();
+
+        var inactive = await SetInquirySourceStatusAsync(walkIn.Id, isActive: false, "Merged into Online");
+        inactive.IsActive.ShouldBeFalse();
+        inactive.DeactivationReason.ShouldBe("Merged into Online");
+
+        var allResponse = await Client.GetAsync(
+            $"/api/student-enrollment/{Factory.SeededAcademicYearId}/settings/inquiry-preferences?maxResultCount=1000");
+        allResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await allResponse.Content.ReadAsStringAsync());
+        var all = await allResponse.Content.ReadFromJsonAsync<PagedResultDto<InquiryPreferenceDto>>(JsonOptions);
+        all.ShouldNotBeNull();
+        all.Items.Select(x => x.Id).ShouldContain(online.Id);
+        all.Items.Select(x => x.Id).ShouldContain(walkIn.Id);
+
+        var activeResponse = await Client.GetAsync(
+            $"/api/student-enrollment/{Factory.SeededAcademicYearId}/settings/inquiry-preferences?isActive=true&maxResultCount=1000");
+        activeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await activeResponse.Content.ReadAsStringAsync());
+        var active = await activeResponse.Content.ReadFromJsonAsync<PagedResultDto<InquiryPreferenceDto>>(JsonOptions);
+        active.ShouldNotBeNull();
+        active.Items.Select(x => x.Id).ShouldContain(online.Id);
+        active.Items.Select(x => x.Id).ShouldNotContain(walkIn.Id);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Reject_Inactive_Inquiry_Source_For_New_Inquiry()
+    {
+        var preference = await CreateInquirySourceAsync($"Inactive New {Guid.NewGuid():N}");
+        await SetInquirySourceStatusAsync(preference.Id, isActive: false, "No longer used");
+
+        var dto = StudentEnrollmentTestHelper.BuildInquiryDto("InqInactiveNew");
+        dto.InquiryPreferenceId = preference.Id;
+        var response = await Client.PostAsJsonAsync($"{BaseUrl}/inquiries", dto, JsonOptions);
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        content.ShouldContain("InquiryPreference:Inactive");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Allow_Update_When_Inactive_Inquiry_Source_Is_Unchanged()
+    {
+        var preference = await CreateInquirySourceAsync($"Inactive Same {Guid.NewGuid():N}");
+        var createDto = StudentEnrollmentTestHelper.BuildInquiryDto("InqInactiveSame");
+        createDto.InquiryPreferenceId = preference.Id;
+        var studentId = await CreateInquiryAndFindStudentIdAsync(createDto);
+
+        await SetInquirySourceStatusAsync(preference.Id, isActive: false, "Legacy source");
+
+        var updateDto = StudentEnrollmentTestHelper.BuildInquiryDto("InqInactiveSameEdit");
+        updateDto.InquiryPreferenceId = preference.Id;
+        updateDto.PreviousSchool = "Legacy School";
+        var updateResponse = await Client.PutAsJsonAsync(
+            $"{BaseUrl}/inquiries/{studentId}",
+            updateDto,
+            JsonOptions);
+
+        updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateResponse.Content.ReadAsStringAsync());
+        var body = await updateResponse.Content
+            .ReadFromJsonAsync<Common.Responses.Result<StudentDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.InquiryPreferenceId.ShouldBe(preference.Id);
+        body.Data.PreviousSchool.ShouldBe("Legacy School");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Reject_Update_When_Changing_To_Inactive_Inquiry_Source()
+    {
+        var activePreference = await CreateInquirySourceAsync($"Active Existing {Guid.NewGuid():N}");
+        var inactivePreference = await CreateInquirySourceAsync($"Inactive Change {Guid.NewGuid():N}");
+        var createDto = StudentEnrollmentTestHelper.BuildInquiryDto("InqInactiveChange");
+        createDto.InquiryPreferenceId = activePreference.Id;
+        var studentId = await CreateInquiryAndFindStudentIdAsync(createDto);
+
+        await SetInquirySourceStatusAsync(inactivePreference.Id, isActive: false, "Closed channel");
+
+        var updateDto = StudentEnrollmentTestHelper.BuildInquiryDto("InqInactiveChangeEdit");
+        updateDto.InquiryPreferenceId = inactivePreference.Id;
+        var response = await Client.PutAsJsonAsync(
+            $"{BaseUrl}/inquiries/{studentId}",
+            updateDto,
+            JsonOptions);
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        content.ShouldContain("InquiryPreference:Inactive");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Not_Delete_Inquiry_Preference_When_Assigned_To_Student()
+    {
+        var preference = await CreateInquirySourceAsync($"Assigned {Guid.NewGuid():N}");
+
+        var dto = StudentEnrollmentTestHelper.BuildInquiryDto("InqPrefInUse");
+        dto.InquiryPreferenceId = preference.Id;
+        var inquiryResponse = await Client.PostAsJsonAsync($"{BaseUrl}/inquiries", dto, JsonOptions);
+        inquiryResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await inquiryResponse.Content.ReadAsStringAsync());
+
+        var deleteResponse = await Client.DeleteAsync(
+            $"/api/student-enrollment/settings/inquiry-preferences/{preference.Id}");
+        var deleteBody = await deleteResponse.Content.ReadAsStringAsync();
+
+        deleteResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        deleteBody.ShouldContain("InquiryPreference:InUse");
+
+        var deactivatedPreference = await SetInquirySourceStatusAsync(
+            preference.Id,
+            isActive: false,
+            "No longer used for new inquiries");
+        deactivatedPreference.IsActive.ShouldBeFalse();
+        deactivatedPreference.AssignedStudentsCount.ShouldBeGreaterThan(0);
+        deactivatedPreference.CanDelete.ShouldBeFalse();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
     public async Task Scoped_User_Should_Not_Get_OutOfScope_Inquiry_By_Id()
     {
         var studentId = await StudentEnrollmentTestHelper.CreateInquiryAndGetIdAsync(
@@ -359,5 +522,60 @@ public class InquiryApi_Tests : ShikshaMitraApiTestBase
             await userScopeService.InvalidateUserScopeCacheAsync(userId);
             await uow.CompleteAsync();
         }
+    }
+
+    private async Task<InquiryPreferenceDto> CreateInquirySourceAsync(
+        string preferenceName,
+        string? description = null,
+        int displayOrder = 0)
+    {
+        var response = await Client.PostAsJsonAsync(
+            $"/api/student-enrollment/{Factory.SeededAcademicYearId}/settings/inquiry-preferences",
+            new CreateUpdateInquiryPreferenceDto
+            {
+                PreferenceName = preferenceName,
+                Description = description,
+                DisplayOrder = displayOrder,
+            },
+            JsonOptions);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var preference = await response.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        preference.ShouldNotBeNull();
+        return preference;
+    }
+
+    private async Task<InquiryPreferenceDto> SetInquirySourceStatusAsync(
+        Guid preferenceId,
+        bool isActive,
+        string? deactivationReason = null)
+    {
+        var response = await Client.PatchAsJsonAsync(
+            $"/api/student-enrollment/settings/inquiry-preferences/{preferenceId}/status",
+            new UpdateInquiryPreferenceStatusDto
+            {
+                IsActive = isActive,
+                DeactivationReason = deactivationReason,
+            },
+            JsonOptions);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var preference = await response.Content.ReadFromJsonAsync<InquiryPreferenceDto>(JsonOptions);
+        preference.ShouldNotBeNull();
+        return preference;
+    }
+
+    private async Task<Guid> CreateInquiryAndFindStudentIdAsync(CreateUpdateInquiryDto dto)
+    {
+        var createResponse = await Client.PostAsJsonAsync($"{BaseUrl}/inquiries", dto, JsonOptions);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+
+        var listResponse = await Client.GetAsync(
+            $"{BaseUrl}/{StudentEnrollmentTestHelper.DefaultAcademicMediumId}/inquiries?maxResultCount=50&searchTerm={Uri.EscapeDataString(dto.FirstName)}");
+        listResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await listResponse.Content.ReadAsStringAsync());
+        var listResult = await listResponse.Content
+            .ReadFromJsonAsync<Common.Responses.Result<PagedResultDto<StudentDto>>>(JsonOptions);
+        listResult.ShouldNotBeNull();
+        listResult.Data.ShouldNotBeNull();
+
+        return listResult.Data.Items.Single(item => item.FirstName == dto.FirstName).StudentId;
     }
 }

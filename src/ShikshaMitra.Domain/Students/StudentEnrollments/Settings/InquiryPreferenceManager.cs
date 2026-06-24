@@ -26,7 +26,9 @@ public class InquiryPreferenceManager : DomainService
 	public async Task<InquiryPreference> CreateAsync(
 		Guid? tenantId,
 		Guid academicYearId,
-		string preferenceName)
+		string preferenceName,
+		string? description,
+		int displayOrder)
 	{
 		// Check if inquiry preference with same name already exists for this tenant
 		await CheckNameUniquenessAsync(tenantId, academicYearId, preferenceName);
@@ -35,7 +37,9 @@ public class InquiryPreferenceManager : DomainService
 			GuidGenerator.Create(),
 			tenantId,
 			academicYearId,
-			preferenceName
+			preferenceName,
+			description,
+			displayOrder
 		);
 
 		return inquiryPreference;
@@ -46,7 +50,9 @@ public class InquiryPreferenceManager : DomainService
 	/// </summary>
 	public async Task<InquiryPreference> UpdateAsync(
 		InquiryPreference inquiryPreference,
-		string preferenceName)
+		string preferenceName,
+		string? description,
+		int displayOrder)
 	{
 		// Check uniqueness only if name is changing
 		if (inquiryPreference.PreferenceName != preferenceName)
@@ -54,7 +60,7 @@ public class InquiryPreferenceManager : DomainService
 			await CheckNameUniquenessAsync(inquiryPreference.TenantId, inquiryPreference.AcademicYearId, preferenceName, inquiryPreference.Id);
 		}
 
-		inquiryPreference.Update(inquiryPreference.AcademicYearId, preferenceName);
+		inquiryPreference.Update(preferenceName, description, displayOrder);
 
 		return inquiryPreference;
 	}

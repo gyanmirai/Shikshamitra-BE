@@ -11,13 +11,17 @@ public static class HomeworkAssignmentErrorCodes
 
     public const string DuplicateAssignmentType = "Academic:HomeworkAssignment:010001";
     public const string AssignmentTypeNotFound = "Academic:HomeworkAssignment:010002";
+    public const string AssignmentTypeIsInUse = "Academic:HomeworkAssignment:010003";
 
     // ── HomeworkType: 02xxxx ──────────────────────────────────────
 
     public const string DuplicateHomeworkType = "Academic:HomeworkAssignment:020001";
     public const string HomeworkTypeNotFound = "Academic:HomeworkAssignment:020002";
+    public const string HomeworkTypeIsInUse = "Academic:HomeworkAssignment:020003";
 
     // ── Shared: 09xxxx ────────────────────────────────────────────
 
     public const string AcademicMediumNotFound = "Academic:HomeworkAssignment:090001";
+    public const string HomeworkIsInUse = "Academic:HomeworkAssignment:090002";
+    public const string AssignmentIsInUse = "Academic:HomeworkAssignment:090003";
 }

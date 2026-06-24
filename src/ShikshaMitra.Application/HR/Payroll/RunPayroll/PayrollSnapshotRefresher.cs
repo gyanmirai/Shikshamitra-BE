@@ -7,12 +7,14 @@ using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.TenantSettings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
@@ -20,12 +22,14 @@ public class PayrollSnapshotRefresher(
 	IEmployeeRepository employeeRepository,
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
 	IEmployeePayrollComponentRepository payrollComponentRepository,
+	IRepository<ShiftManagement, Guid> shiftRepository,
 	ISalarySlipRepository salarySlipRepository,
 	HrPolicyResolver hrPolicyResolver,
 	PayrollCalendarResolver payrollCalendarResolver,
 	PayrollApprovedLeaveResolver payrollApprovedLeaveResolver,
 	PayrollComponentVersionResolver componentVersionResolver,
 	PayrollAdjustmentReader adjustmentReader,
+	PayrollLateArrivalDeductionAdjustmentService lateArrivalDeductionAdjustmentService,
 	PayrollScopedEmployeeResolver scopedEmployeeResolver,
 	PayrollRunSnapshotStore snapshotStore,
 	PayrollBasisPreviewResolver basisPreviewResolver,
@@ -115,6 +119,7 @@ public class PayrollSnapshotRefresher(
 		var attendanceByEmployee = await lookupReader.GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
 		var payrollDetailsByEmployee = await payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
 		var componentsByEmployee = await payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
+		var shiftsById = await GetShiftsByIdAsync(scopedEmployees);
 		var resolvedComponentsByEmployee = await componentVersionResolver.ResolveByEmployeeAsync(
 			componentsByEmployee,
 			internalMonthYear);
@@ -183,13 +188,23 @@ public class PayrollSnapshotRefresher(
 			}
 		}
 
+		var payrollReadyEmployeeIds = payrollContextByEmployee.Keys.ToList();
 		var leaveUnitsByEmployee = await payrollApprovedLeaveResolver.ResolveLeaveUnitsByEmployeeAsync(
-			employeeIds,
+			payrollReadyEmployeeIds,
 			year,
 			month,
 			payrollContextByEmployee.ToDictionary(
 				x => x.Key,
 				x => (IReadOnlyDictionary<DateOnly, decimal>)x.Value.WorkingUnitsByDate));
+		await lateArrivalDeductionAdjustmentService.SyncAsync(
+			internalMonthYear,
+			year,
+			month,
+			scopedEmployees,
+			attendanceByEmployee,
+			shiftsById,
+			payrollContextByEmployee.ToDictionary(x => x.Key, x => x.Value.ResolvedPolicies));
+		adjustmentsByEmployee = await adjustmentReader.GetByEmployeeAsync(internalMonthYear, employeeIds);
 
 		foreach (var employee in scopedEmployees)
 		{
@@ -215,7 +230,8 @@ public class PayrollSnapshotRefresher(
 				reviewByEmployee.GetValueOrDefault(employee.Id),
 				previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
 				payrollContext.PayrollPolicyIssueCodes,
-				PayrollRunRules.GetEffectiveEmploymentStartDate(employee)
+				PayrollRunRules.GetEffectiveEmploymentStartDate(employee),
+				ResolveShift(employee, shiftsById)
 			));
 		}
 
@@ -228,6 +244,36 @@ public class PayrollSnapshotRefresher(
 		int year,
 		int month) =>
 		PayrollComponentMonthScope.FilterForMonth(resolvedComponentsByEmployee[employeeId], year, month);
+
+	private async Task<Dictionary<Guid, ShiftManagement>> GetShiftsByIdAsync(IEnumerable<Employee> employees)
+	{
+		var shiftIds = employees
+			.Where(employee => employee.ShiftId.HasValue)
+			.Select(employee => employee.ShiftId!.Value)
+			.Distinct()
+			.ToList();
+		if (shiftIds.Count == 0)
+		{
+			return new Dictionary<Guid, ShiftManagement>();
+		}
+
+		var shifts = await shiftRepository.GetListAsync(shift => shiftIds.Contains(shift.Id));
+		return shifts.ToDictionary(shift => shift.Id);
+	}
+
+	private static ShiftManagement? ResolveShift(
+		Employee employee,
+		IReadOnlyDictionary<Guid, ShiftManagement> shiftsById)
+	{
+		if (employee.Shift != null)
+		{
+			return employee.Shift;
+		}
+
+		return employee.ShiftId.HasValue && shiftsById.TryGetValue(employee.ShiftId.Value, out var shift)
+			? shift
+			: null;
+	}
 
 	private sealed record PayrollEmployeeComputationContext(
 		HrResolvedPolicies ResolvedPolicies,

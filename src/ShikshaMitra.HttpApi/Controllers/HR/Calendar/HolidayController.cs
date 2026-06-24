@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Application.Contracts.HR.Calendar.Holidays;
+using ShikshaMitra.Communication;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
@@ -20,10 +21,14 @@ namespace ShikshaMitra.Controllers.HR.Calendar;
 public class HolidayController : ShikshaMitraController
 {
     private readonly IHolidayAppService _holidayAppService;
+    private readonly ICalendarCommunicationAppService _calendarCommunicationAppService;
 
-    public HolidayController(IHolidayAppService holidayAppService)
+    public HolidayController(
+        IHolidayAppService holidayAppService,
+        ICalendarCommunicationAppService calendarCommunicationAppService)
     {
         _holidayAppService = holidayAppService;
+        _calendarCommunicationAppService = calendarCommunicationAppService;
     }
 
     /// <summary>
@@ -59,6 +64,22 @@ public class HolidayController : ShikshaMitraController
     public virtual async Task<HolidayDto> GetAsync(Guid id)
     {
         return await _holidayAppService.GetAsync(id);
+    }
+
+    /// <summary>
+    /// Create and optionally publish a Communication announcement for this holiday.
+    /// </summary>
+    /// <param name="id">Holiday ID</param>
+    /// <param name="input">Communication campaign options</param>
+    /// <returns>Created Communication campaign and publish state</returns>
+    [HttpPost("{id}/communication/announcement")]
+    [Authorize(ShikshaMitraSubmodulePermissions.HR.Calendar.View)]
+    [ProducesResponseType(typeof(CalendarCommunicationResultDto), StatusCodes.Status200OK)]
+    public virtual async Task<CalendarCommunicationResultDto> AnnounceAsync(
+        Guid id,
+        [FromBody] CalendarCommunicationRequestDto input)
+    {
+        return await _calendarCommunicationAppService.AnnounceHolidayAsync(id, input);
     }
 
     /// <summary>

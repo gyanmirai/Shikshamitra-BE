@@ -13,14 +13,18 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
+			public const string Send = $"{SubmoduleName}.Send";
+			public const string Approve = $"{SubmoduleName}.Approve";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { View, Add, Delete };
+			public static readonly string[] All = { View, Add, Send, Approve, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Send, $"{SubmoduleDisplayName}.Send" },
+				{ Approve, $"{SubmoduleDisplayName}.Approve" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
@@ -32,14 +36,16 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
+			public const string Approve = $"{SubmoduleName}.Approve";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { View, Add, Delete };
+			public static readonly string[] All = { View, Add, Approve, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Approve, $"{SubmoduleDisplayName}.Approve" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}

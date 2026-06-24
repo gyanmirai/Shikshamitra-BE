@@ -188,7 +188,8 @@ public class StudentInquiryAppService(
 		await studentScopeAccessService.EnsureCanUseInquiryPreferenceAsync(
 			updateInquiryDto.InquiryPreferenceId,
 			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
-			nameof(UpdateInquiryAsync));
+			nameof(UpdateInquiryAsync),
+			student.AdditionalDetail?.InquiryPreferenceId);
 
 		// Update the aggregate using its business method
 		// This maintains aggregate consistency

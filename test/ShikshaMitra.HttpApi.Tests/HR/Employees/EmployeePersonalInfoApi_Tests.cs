@@ -56,6 +56,26 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Create_When_Pan_And_Adhar_Are_Blank()
+	{
+		var personalInfo = EmployeeTestHelper.BuildPersonalInfoRequest("CreateBlankIdentity");
+		personalInfo.PanNo = string.Empty;
+		personalInfo.AdharNo = string.Empty;
+		var jsonData = JsonSerializer.Serialize(personalInfo, JsonOptions);
+
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(jsonData), "data");
+
+		var response = await Client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+		var payload = await response.Content.ReadAsStringAsync();
+		payload.ShouldContain("PAN number is required");
+		payload.ShouldContain("Aadhaar number is required");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Create_Employee_With_Profile_Picture()
 	{
 		var result = await EmployeeTestHelper.CreateEmployeeWithPictureAsync(Client, "WithPic");
@@ -113,6 +133,75 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		body.Email.ShouldBe(created.Email);
 		body.PanNo.ShouldBe(updateRequest.PanNo);
 		body.AdharNo.ShouldBe(updateRequest.AdharNo);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Update_Personal_Info_When_Pan_And_Adhar_Are_Omitted()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "UpdateNoIdentity");
+		var updateRequest = new
+		{
+			FirstName = created.FirstName,
+			LastName = "NoIdentityDoe",
+			MobileNo = TestDataHelper.UniquePhone(),
+			Doj = created.Doj,
+			IsTeaching = created.IsTeaching,
+			RoleId = created.RoleId,
+			ShiftId = created.ShiftId,
+			Email = created.Email,
+			Gender = created.Gender,
+			Department = "Identity Preserve"
+		};
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}/personal-info", updateRequest, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var body = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.LastName.ShouldBe("NoIdentityDoe");
+		body.Department.ShouldBe("Identity Preserve");
+		body.PanNo.ShouldBe(created.PanNo);
+		body.AdharNo.ShouldBe(created.AdharNo);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Update_Personal_Info_When_Pan_And_Adhar_Are_Blank()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "UpdateBlankIdentity");
+		var updateRequest = EmployeeTestHelper.BuildPersonalInfoRequest("BlankIdentityUpdate");
+		updateRequest.Email = created.Email;
+		updateRequest.PanNo = string.Empty;
+		updateRequest.AdharNo = string.Empty;
+		updateRequest.Department = "Blank Identity Preserve";
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}/personal-info", updateRequest, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var body = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Department.ShouldBe("Blank Identity Preserve");
+		body.PanNo.ShouldBe(created.PanNo);
+		body.AdharNo.ShouldBe(created.AdharNo);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Personal_Info_Update_When_Pan_And_Adhar_Are_Invalid_Nonblank()
+	{
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "UpdateInvalidIdentity");
+		var updateRequest = EmployeeTestHelper.BuildPersonalInfoRequest("InvalidIdentityUpdate");
+		updateRequest.Email = created.Email;
+		updateRequest.PanNo = "BADPAN";
+		updateRequest.AdharNo = "123";
+
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{created.Id}/personal-info", updateRequest, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+		var payload = await response.Content.ReadAsStringAsync();
+		payload.ShouldContain("PAN must be in format AAAAA9999A.");
+		payload.ShouldContain("Aadhaar number must be 12 digits.");
 	}
 
 	[Fact]

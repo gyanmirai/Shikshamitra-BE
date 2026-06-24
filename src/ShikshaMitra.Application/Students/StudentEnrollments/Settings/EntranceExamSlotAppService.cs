@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
@@ -43,26 +42,36 @@ public class EntranceExamSlotAppService(
 			queryable = queryable.Where(s => s.SlotName != null && s.SlotName.Contains(searchTerm));
 		}
 
+		var filteredSlots = await AsyncExecuter.ToListAsync(queryable);
+
 		if (input.StartDateTime.HasValue)
 		{
-			queryable = queryable.Where(s => s.StartDate >= input.StartDateTime.Value);
+			filteredSlots = filteredSlots
+				.Where(s => s.StartDate >= input.StartDateTime.Value)
+				.ToList();
 		}
 
 		if (input.EndDateTime.HasValue)
 		{
-			queryable = queryable.Where(s => s.EndDate < input.EndDateTime.Value);
+			filteredSlots = filteredSlots
+				.Where(s => s.EndDate < input.EndDateTime.Value)
+				.ToList();
 		}
 
-		var totalCount = await AsyncExecuter.CountAsync(queryable);
-
-		var query = queryable
-			.OrderBy(input.Sorting ?? "StartDate desc")
+		var totalCount = filteredSlots.Count;
+		var slots = ApplySorting(filteredSlots, input.Sorting)
 			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount);
-
-		var slots = await AsyncExecuter.ToListAsync(query);
+			.Take(input.MaxResultCount)
+			.ToList();
 
 		var slotsDto = ObjectMapper.Map<List<EntranceExamSlot>, List<EntranceExamSlotDto>>(slots);
+		var enrolledCounts = await GetEnrolledCountsForSlotsAsync(slots.Select(x => x.Id).ToList());
+		foreach (var dto in slotsDto)
+		{
+			var enrolledCount = enrolledCounts.GetValueOrDefault(dto.Id);
+			dto.EnrolledStudents = enrolledCount;
+			dto.AvailableSeats = dto.StudentLimit - enrolledCount;
+		}
 
 		return new PagedResultDto<EntranceExamSlotDto>(totalCount, slotsDto);
 	}
@@ -156,55 +165,53 @@ public class EntranceExamSlotAppService(
 	public async Task<PagedResultDto<AvailableExamSlotDto>> GetAvailableSlotsAsync(GetAvailableExamSlotsInput input)
 	{
 		var slotQueryable = await slotRepository.GetQueryableAsync();
-		var detailQueryable = await studentAdditionalDetailRepository.GetQueryableAsync();
 		var academicYearScope = await studentScopeAccessService.GetCurrentUserAcademicYearScopeAsync();
 		if (!academicYearScope.HasAllAcademicYears)
 		{
 			slotQueryable = slotQueryable.Where(s => academicYearScope.AcademicYearIds.Contains(s.AcademicYearId));
 		}
 
-		// Compute enrolled count per slot as a DB-side subquery — avoids N+1 and in-memory paging
-		var enrolledPerSlot = detailQueryable
-			.Where(sd => sd.EntranceExamSlotId != null)
-			.GroupBy(sd => sd.EntranceExamSlotId!.Value)
-			.Select(g => new { SlotId = g.Key, Count = g.Count() });
-
-		var availableQuery =
-			from slot in slotQueryable
-			join e in enrolledPerSlot on slot.Id equals e.SlotId into eGroup
-			from e in eGroup.DefaultIfEmpty()
-			let enrolled = e == null ? 0 : e.Count
-			let available = slot.StudentLimit - enrolled
-			where available > 0
-			select new { slot, enrolled, available };
-
 		if (input.AcademicYearId.HasValue)
 		{
 			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
 				input.AcademicYearId.Value,
 				nameof(GetAvailableSlotsAsync));
-			availableQuery = availableQuery.Where(x => x.slot.AcademicYearId == input.AcademicYearId.Value);
+			slotQueryable = slotQueryable.Where(x => x.AcademicYearId == input.AcademicYearId.Value);
 		}
+
+		var now = DateTimeOffset.UtcNow;
+		var slots = await AsyncExecuter.ToListAsync(slotQueryable);
+		var enrolledCounts = await GetEnrolledCountsForSlotsAsync(slots.Select(x => x.Id).ToList());
+		var availableRows = slots
+			.Select(slot =>
+			{
+				var enrolled = enrolledCounts.GetValueOrDefault(slot.Id);
+				return new
+				{
+					slot,
+					enrolled,
+					available = slot.StudentLimit - enrolled
+				};
+			})
+			.Where(x => x.available > 0 && x.slot.StartDate > now);
 
 		if (input.Date.HasValue)
 		{
 			var targetDate = input.Date.Value.Date;
-			availableQuery = availableQuery.Where(x => x.slot.StartDate.Date == targetDate);
+			availableRows = availableRows.Where(x => x.slot.StartDate.Date == targetDate);
 		}
 
 		if (input.MinAvailableSeats.HasValue)
 		{
-			availableQuery = availableQuery.Where(x => x.available >= input.MinAvailableSeats.Value);
+			availableRows = availableRows.Where(x => x.available >= input.MinAvailableSeats.Value);
 		}
 
-		var totalCount = await AsyncExecuter.CountAsync(availableQuery);
-
-		availableQuery = availableQuery
+		var totalCount = availableRows.Count();
+		var results = availableRows
 			.OrderBy(x => x.slot.StartDate)
 			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount);
-
-		var results = await AsyncExecuter.ToListAsync(availableQuery);
+			.Take(input.MaxResultCount)
+			.ToList();
 
 		var items = results.Select(r =>
 		{
@@ -227,5 +234,62 @@ public class EntranceExamSlotAppService(
 	{
 		var queryable = await studentAdditionalDetailRepository.GetQueryableAsync();
 		return await AsyncExecuter.CountAsync(queryable.Where(sd => sd.EntranceExamSlotId == slotId));
+	}
+
+	private async Task<Dictionary<Guid, int>> GetEnrolledCountsForSlotsAsync(IReadOnlyCollection<Guid> slotIds)
+	{
+		if (slotIds.Count == 0)
+		{
+			return new Dictionary<Guid, int>();
+		}
+
+		var slotIdList = slotIds.ToList();
+		var queryable = await studentAdditionalDetailRepository.GetQueryableAsync();
+		var rows = await AsyncExecuter.ToListAsync(
+			queryable
+				.Where(sd => sd.EntranceExamSlotId.HasValue && slotIdList.Contains(sd.EntranceExamSlotId.Value))
+				.GroupBy(sd => sd.EntranceExamSlotId!.Value)
+				.Select(g => new
+				{
+					SlotId = g.Key,
+					Count = g.Count()
+				}));
+
+		return rows.ToDictionary(x => x.SlotId, x => x.Count);
+	}
+
+	private static IEnumerable<EntranceExamSlot> ApplySorting(
+		IEnumerable<EntranceExamSlot> slots,
+		string? sorting)
+	{
+		var trimmed = sorting?.Trim();
+		var descending = trimmed?.EndsWith(" desc", StringComparison.OrdinalIgnoreCase) == true ||
+		                 trimmed?.EndsWith(" descending", StringComparison.OrdinalIgnoreCase) == true;
+		var field = trimmed?
+			.Replace(" descending", string.Empty, StringComparison.OrdinalIgnoreCase)
+			.Replace(" desc", string.Empty, StringComparison.OrdinalIgnoreCase)
+			.Replace(" ascending", string.Empty, StringComparison.OrdinalIgnoreCase)
+			.Replace(" asc", string.Empty, StringComparison.OrdinalIgnoreCase)
+			.Trim()
+			.ToLowerInvariant();
+
+		return field switch
+		{
+			"slotname" => descending
+				? slots.OrderByDescending(s => s.SlotName).ThenBy(s => s.Id)
+				: slots.OrderBy(s => s.SlotName).ThenBy(s => s.Id),
+			"enddate" or "enddatetime" => descending
+				? slots.OrderByDescending(s => s.EndDate).ThenBy(s => s.Id)
+				: slots.OrderBy(s => s.EndDate).ThenBy(s => s.Id),
+			"studentlimit" => descending
+				? slots.OrderByDescending(s => s.StudentLimit).ThenBy(s => s.Id)
+				: slots.OrderBy(s => s.StudentLimit).ThenBy(s => s.Id),
+			"roomno" => descending
+				? slots.OrderByDescending(s => s.RoomNo).ThenBy(s => s.Id)
+				: slots.OrderBy(s => s.RoomNo).ThenBy(s => s.Id),
+			_ => descending || string.IsNullOrWhiteSpace(field)
+				? slots.OrderByDescending(s => s.StartDate).ThenBy(s => s.Id)
+				: slots.OrderBy(s => s.StartDate).ThenBy(s => s.Id)
+		};
 	}
 }

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Infrastructure.Traits;
@@ -45,6 +46,14 @@ public class HouseSettingsApi_Tests : ShikshaMitraApiTestBase
 			JsonOptions);
 
 		duplicateResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		var duplicateContent = await duplicateResponse.Content.ReadAsStringAsync();
+		using var duplicateDocument = JsonDocument.Parse(duplicateContent);
+		duplicateDocument.RootElement.GetProperty("errorCode").GetString()
+			.ShouldBe(StudentErrorCodes.HouseSettingsAlreadyExists);
+		var duplicateDetail = duplicateDocument.RootElement.GetProperty("detail").GetString();
+		duplicateDetail.ShouldNotBeNullOrWhiteSpace();
+		duplicateDetail.ShouldContain("already exists");
+		duplicateDetail.ShouldNotContain("One or more business rules were violated");
 
 		var listResponse = await Client.GetAsync(createUrl);
 		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK);

@@ -54,10 +54,15 @@ test/
 
 ## Build & run
 
+Run commands from the `Shikshamitra-BE` repo root. If you opened the wrapper checkout at `C:\Repo\ShikshaMitra`, `git` will fail there because the wrapper itself is not the repository.
+
 ```bash
 # Restore + build
 dotnet restore
 dotnet build
+
+# Windows fallback when a running host locks shared outputs
+dotnet build --artifacts-path .artifacts/local-build
 
 # Run database migrations (requires ConnectionStrings__Default)
 cd src/ShikshaMitra.DbMigrator && dotnet run
@@ -144,6 +149,9 @@ dotnet test
 ```bash
 # App service tests
 dotnet test --filter "Project=ShikshaMitra.Application.Tests"
+
+# Windows fallback when test/build outputs are locked by another local host
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Tier=Critical" --artifacts-path .artifacts/test-critical
 
 # API tests (all tiers except smoke)
 dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Tier!=Smoke"

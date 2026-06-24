@@ -37,13 +37,18 @@ public class PayrollSnapshotAdjustmentInvalidationReader(
 		PayrollRunItemSnapshot snapshot,
 		IReadOnlyDictionary<Guid, List<PayrollAdjustment>> adjustmentsByEmployee)
 	{
-		var currentAdjustmentsJson = JsonSerializer.Serialize(
-			adjustmentsByEmployee.GetValueOrDefault(snapshot.EmployeeId)?.Select(ToAdjustmentFingerprint).ToList()
-			?? new List<PayrollAdjustmentFingerprint>());
-		var snapshotAdjustmentsJson = JsonSerializer.Serialize(
+		var currentAdjustments =
+			(adjustmentsByEmployee.GetValueOrDefault(snapshot.EmployeeId)?.Select(ToAdjustmentFingerprint)
+			 ?? Enumerable.Empty<PayrollAdjustmentFingerprint>())
+			.OrderBy(x => x.Id)
+			.ToList();
+		var snapshotAdjustments =
 			(JsonSerializer.Deserialize<List<PayrollAdjustmentDto>>(snapshot.PayrollAdjustmentsJson)
-			 ?? new List<PayrollAdjustmentDto>()).Select(ToAdjustmentFingerprint).ToList());
-		return snapshotAdjustmentsJson != currentAdjustmentsJson;
+			 ?? new List<PayrollAdjustmentDto>())
+			.Select(ToAdjustmentFingerprint)
+			.OrderBy(x => x.Id)
+			.ToList();
+		return !snapshotAdjustments.SequenceEqual(currentAdjustments);
 	}
 
 	private static PayrollAdjustmentFingerprint ToAdjustmentFingerprint(PayrollAdjustment adjustment) =>

@@ -1,17 +1,21 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Policies;
-using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 public class LeaveWorkCalendarUnitService(
 	HrPolicyResolver hrPolicyResolver,
-	PayrollCalendarResolver payrollCalendarResolver) : DomainService
+	PayrollCalendarResolver payrollCalendarResolver,
+	IRepository<WorkCalendarHoliday, Guid> workCalendarHolidayRepository) : DomainService
 {
 	public async Task<decimal> CalculateUnitsAsync(
 		Guid employeeId,
@@ -26,6 +30,11 @@ public class LeaveWorkCalendarUnitService(
 			return 0m;
 		}
 
+		if (halfDay && startDate.Date != endDate.Date)
+		{
+			return 0m;
+		}
+
 		var total = 0m;
 		var cursor = new DateTime(startDate.Year, startDate.Month, 1);
 		var lastMonth = new DateTime(endDate.Year, endDate.Month, 1);
@@ -33,26 +42,22 @@ public class LeaveWorkCalendarUnitService(
 		{
 			var year = cursor.Year;
 			var month = cursor.Month;
-			PayrollCalendarResolution calendar;
-			HrResolvedPolicies resolvedPolicies;
-			try
-			{
-				calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId, cancellationToken);
-				resolvedPolicies = await hrPolicyResolver.ResolveAsync(
-					employeeId,
-					PayrollRunRules.GetPayrollPolicyResolutionDate(year, month),
-					calendar.AcademicYearId,
-					cancellationToken);
-			}
-			catch (BusinessException ex) when (ex.Code == HRErrorCodes.DefaultPayrollPolicyRequired)
-			{
-				return LeaveDurationCalculator.CountLeaveUnits(startDate, endDate, halfDay);
-			}
+			var calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId, cancellationToken);
+			var resolvedPolicies = await hrPolicyResolver.ResolveAsync(
+				employeeId,
+				PayrollRunRules.GetPayrollPolicyResolutionDate(year, month),
+				calendar.AcademicYearId,
+				cancellationToken);
 
+			var workCalendarHolidays = await GetIncludedWorkCalendarHolidaysAsync(
+				resolvedPolicies.PayrollWorkCalendarPolicy.Id,
+				year,
+				month,
+				cancellationToken);
 			var workingUnits = PayrollMonthCalendar.BuildWorkingUnitsByDate(
 				year,
 				month,
-				calendar.Holidays,
+				workCalendarHolidays,
 				resolvedPolicies.PayrollPolicy.SaturdayWorkPolicy,
 				resolvedPolicies.PayrollPolicy.GetHolidayOverrides(),
 				resolvedPolicies.PayrollWorkCalendarPolicy);
@@ -74,5 +79,29 @@ public class LeaveWorkCalendarUnitService(
 		}
 
 		return total;
+	}
+
+	private async Task<List<Holiday>> GetIncludedWorkCalendarHolidaysAsync(
+		Guid workCalendarPolicyId,
+		int year,
+		int month,
+		CancellationToken cancellationToken)
+	{
+		var start = new DateOnly(year, month, 1);
+		var end = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+		var rows = await workCalendarHolidayRepository.GetListAsync(
+			x =>
+				x.WorkCalendarPolicyId == workCalendarPolicyId &&
+				x.IsIncluded &&
+				x.ToDate >= start &&
+				x.FromDate <= end,
+			includeDetails: false,
+			cancellationToken);
+
+		return rows
+			.OrderBy(x => x.FromDate)
+			.ThenBy(x => x.HolidayName)
+			.Select(x => x.ToCalendarHoliday(CurrentTenant.Id))
+			.ToList();
 	}
 }

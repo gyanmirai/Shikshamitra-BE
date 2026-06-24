@@ -20,7 +20,7 @@ public interface IStudentManagementAppService : IApplicationService
 	Task<List<AcademicTermDto>> GetAcademicTermsAsync(Guid academicYearId);
 	Task<AcademicTermDto> CreateAcademicTermAsync(CreateAcademicTermDto input);
 	Task<AcademicTermDto> SetCurrentAcademicTermAsync(Guid academicTermId);
-	Task<List<RollNumberProjectionDto>> GetRollNumberProjections(Guid divisionId, Guid? academicTermId, ArrangementTypeEnum arrangementType, ArrangementByEnum arrangementBy);
+	Task<RollNumberProjectionResponseDto> GetRollNumberProjections(Guid divisionId, Guid? academicTermId, ArrangementTypeEnum? arrangementType, ArrangementByEnum? arrangementBy);
 	Task<RollNumberSaveResultDto> StoreRollNumbers(Guid divisionId, Guid? academicTermId, List<UpdateStudentRollNumberDto> updateStudentRollNumberDto, ArrangementTypeEnum? arrangementType, ArrangementByEnum? arrangementBy);
 	Task ChangeDivision(List<ChangeStudentDivisionDto> changeStudentDivisionDto);
 

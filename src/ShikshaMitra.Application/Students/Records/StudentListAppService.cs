@@ -7,6 +7,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.StudentRecords;
 using Volo.Abp;
@@ -61,26 +62,64 @@ public class StudentListAppService(
 				.Select(s => new StudentDto
 				{
 					StudentId = s.Id,
-					InquiryNo = string.Empty,
-					FormNo = null,
+					InquiryNo = s.AdditionalDetail != null ? s.AdditionalDetail.InquiryNo ?? string.Empty : string.Empty,
+					FormNo = s.AdditionalDetail != null ? s.AdditionalDetail.RegistrationFormNo : null,
 					StudentName = (s.FirstName + " " + (s.MiddleName ?? string.Empty) + " " + s.LastName).Trim(),
 					FirstName = s.FirstName,
 					MiddleName = s.MiddleName,
 					LastName = s.LastName,
 					AcademicYearId = s.AcademicYearId,
+					AcademicYearName = s.AcademicYear != null ? s.AcademicYear.Name : null,
 					AcademicBoardId = s.AcademicBoardId,
+					AcademicBoardName = s.AcademicBoard != null ? s.AcademicBoard.Type.ToString() : null,
 					AcademicMediumId = s.AcademicMediumId,
+					AcademicMediumName = s.AcademicMedium != null ? s.AcademicMedium.Name : null,
 					StandardId = s.StandardId ?? Guid.Empty,
 					Standard = s.Standard != null ? s.Standard.Name : string.Empty,
 					DivisionId = s.DivisionId,
 					Division = s.Division != null ? s.Division.Name : string.Empty,
+					DateOfBirth = s.AdditionalDetail != null ? s.AdditionalDetail.DateOfBirth : null,
+					DateOfInquiry = s.AdditionalDetail != null ? s.AdditionalDetail.DateOfInquiry : null,
+					Gender = s.AdditionalDetail != null ? s.AdditionalDetail.Gender : null,
 					RollNo = s.RollNo,
 					GrNo = s.GrNo,
+					Category = s.AdditionalDetail != null ? s.AdditionalDetail.Category : Category.General,
+					IsLibraryMember = s.AdditionalDetail != null && s.AdditionalDetail.IsLibraryMember == true,
+					IsTransportMember = s.AdditionalDetail != null && s.AdditionalDetail.IsTransportMember == true,
+					Address1 = s.ContactDetail != null ? s.ContactDetail.Address1 : null,
+					Address2 = s.ContactDetail != null ? s.ContactDetail.Address2 : null,
+					Address3 = s.ContactDetail != null ? s.ContactDetail.Address3 : null,
+					City = s.ContactDetail != null ? s.ContactDetail.City : null,
+					State = s.ContactDetail != null ? s.ContactDetail.State : null,
+					Country = s.ContactDetail != null ? s.ContactDetail.Country : null,
+					PinCode = s.ContactDetail != null ? s.ContactDetail.Pincode : null,
+					PrimaryContactNo = s.ContactDetail != null ? s.ContactDetail.PrimaryContactNo : null,
+					SecondaryContactNo = s.ContactDetail != null ? s.ContactDetail.SecondaryContactNo : null,
+					Email = s.ContactDetail != null ? s.ContactDetail.Email : null,
+					PreviousSchool = s.AdditionalDetail != null ? s.AdditionalDetail.PreviousSchool : null,
+					InquiryPreferenceId = s.AdditionalDetail != null ? s.AdditionalDetail.InquiryPreferenceId : null,
+					InquiryPreference = s.AdditionalDetail != null && s.AdditionalDetail.InquiryPreference != null
+						? s.AdditionalDetail.InquiryPreference.PreferenceName
+						: null,
 					IsFeeStructureAssigned = s.FeeStructureId.HasValue,
 					HasPhoto = !string.IsNullOrWhiteSpace(s.PhotoBlobName),
 					PhotoUrl = !string.IsNullOrWhiteSpace(s.PhotoBlobName) ? $"/api/students/records/{s.Id}/photo" : null
 				})
 				.PageBy(skipCount, maxResultCount));
+
+		foreach (var student in students)
+		{
+			student.Age = CalculateAge(student.DateOfBirth);
+			student.Address = string.Join(", ", new[]
+			{
+				student.Address1,
+				student.Address2,
+				student.Address3,
+				student.City,
+				student.State?.Name,
+				student.Country?.Name
+			}.Where(x => !string.IsNullOrWhiteSpace(x)));
+		}
 
 		await AttachDocumentStatusAsync(students);
 		return new PagedResultDto<StudentDto>(totalCount, students);
@@ -476,6 +515,24 @@ public class StudentListAppService(
 	private static string BuildClassName(string standard, string division) =>
 		string.IsNullOrWhiteSpace(division) ? standard : $"{standard} - {division}";
 
+	private static string? CalculateAge(DateTimeOffset? dateOfBirth)
+	{
+		if (!dateOfBirth.HasValue)
+		{
+			return null;
+		}
+
+		var today = DateTime.UtcNow.Date;
+		var age = today.Year - dateOfBirth.Value.Year;
+		var birthdayThisYear = GetBirthdayInYear(dateOfBirth.Value, today.Year);
+		if (birthdayThisYear > today)
+		{
+			age--;
+		}
+
+		return Math.Max(age, 0).ToString();
+	}
+
 	private static string GetStandardName(Guid? standardId, IReadOnlyDictionary<Guid, string> standardNames)
 	{
 		return standardId.HasValue && standardNames.TryGetValue(standardId.Value, out var name)
@@ -499,8 +556,14 @@ public class StudentListAppService(
 
 	private static DateTime GetNextBirthday(DateTimeOffset dateOfBirth, DateTime now)
 	{
-		var birthday = new DateTime(now.Year, dateOfBirth.Month, dateOfBirth.Day);
-		return birthday < now.Date ? birthday.AddYears(1) : birthday;
+		var birthday = GetBirthdayInYear(dateOfBirth, now.Year);
+		return birthday < now.Date ? GetBirthdayInYear(dateOfBirth, now.Year + 1) : birthday;
+	}
+
+	private static DateTime GetBirthdayInYear(DateTimeOffset dateOfBirth, int year)
+	{
+		var day = Math.Min(dateOfBirth.Day, DateTime.DaysInMonth(year, dateOfBirth.Month));
+		return new DateTime(year, dateOfBirth.Month, day);
 	}
 
 	private static decimal CalculateAttendancePercentage(IEnumerable<AttendanceStatus> statuses)
@@ -546,7 +609,7 @@ public class StudentListAppService(
 		var age = dateOfBirth.HasValue ? now.Year - dateOfBirth.Value.Year : 0;
 		if (dateOfBirth.HasValue)
 		{
-			var birthdayThisYear = new DateTime(now.Year, dateOfBirth.Value.Month, dateOfBirth.Value.Day);
+			var birthdayThisYear = GetBirthdayInYear(dateOfBirth.Value, now.Year);
 			if (birthdayThisYear > now.Date)
 			{
 				age--;

@@ -1,10 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Students.Compliance;
 using ShikshaMitra.Students.Admissions;
 using ShikshaMitra.Students.Enrollments.Admissions;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,12 +37,15 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public class StudentAdmissionAppService(
 	IStudentRepository studentRepository,
 	IRepository<Division, Guid> divisionRepository,
+	IRepository<Standard, Guid> standardRepository,
 	IdentityUserManager userManager,
 	IGuidGenerator guidGenerator,
 	IStudentEmailService studentEmailService,
 	AdmissionManager admissionManager,
+	EntityValidationService validationService,
 	IUserScopeAccessService userScopeAccessService,
 	StudentScopeAccessService studentScopeAccessService,
+	StudentIdentityComplianceAppService identityComplianceAppService,
 	ILibraryMemberAppService libraryMemberAppService) : ApplicationService, IStudentAdmissionAppService
 {
 	/// <summary>
@@ -168,6 +174,7 @@ public class StudentAdmissionAppService(
 			Progress = s.AdditionalDetail != null
 				? ((double)(int)s.AdditionalDetail.StudentRegistrationState / registrationProgressDenominator) * 100
 				: 0,
+			Remarks = s.AdmissionApprovalRemarks,
 			IsFeeStructureAssigned = s.FeeStructureId.HasValue,
 			HasPhoto = !string.IsNullOrWhiteSpace(s.PhotoBlobName),
 			PhotoUrl = s.PhotoBlobName
@@ -214,6 +221,173 @@ public class StudentAdmissionAppService(
 	}
 
 	/// <summary>
+	/// Updates general details for a student in admission stage.
+	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.Add)]
+	public async Task<ShikshaMitra.Students.Enrollments.Registrations.StudentGeneralDetailsDto> UpdateAdmissionGeneralDetailsAsync(
+		Guid studentId,
+		ShikshaMitra.Students.Enrollments.Registrations.UpdateGeneralInfoDto input)
+	{
+		var student = await studentRepository.GetRegistrationAggregateAsync(studentId)
+			?? throw new EntityNotFoundException(typeof(Student), studentId);
+
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+			student,
+			operation: nameof(UpdateAdmissionGeneralDetailsAsync));
+
+		if (student.Status != StudentLifeCycleStatusEnum.Admission)
+		{
+			throw new BusinessException(
+					StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo,
+					"Student must be in Admission status to update admission general details.")
+				.WithData("StudentId", studentId)
+				.WithData("CurrentStatus", student.Status);
+		}
+
+		await UpdateAdmissionAcademicPlacementAsync(student, input);
+		await studentScopeAccessService.EnsureCanUseInquiryPreferenceAsync(
+			input.InquiryPreferenceId,
+			student.AcademicYearId ?? throw new BusinessException(StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo),
+			nameof(UpdateAdmissionGeneralDetailsAsync),
+			student.AdditionalDetail?.InquiryPreferenceId);
+
+		student.UpdateGeneralInformation(input.FirstName, input.MiddleName, input.LastName);
+
+		student.AdditionalDetail?.UpdateGeneralInformation(
+			input.DateOfBirth,
+			input.Gender,
+			input.ProfilePictureUrl,
+			null,
+			null,
+			input.PanNo,
+			null,
+			input.Religion,
+			input.FamilyCast,
+			input.CastCategory,
+			input.Nationality,
+			input.BirthPlace,
+			input.MotherTongue,
+			input.PreviousSchool,
+			input.LastClassPassed,
+			StudentRegistrationStateEnum.General,
+			input.InquiryPreferenceId,
+			input.FormNumber);
+
+		student.ContactDetail?.UpdateContactInfo(
+			input.PrimaryContactNo,
+			input.SecondaryContactNo,
+			input.Email,
+			input.Address1,
+			input.Address2,
+			input.Address3,
+			input.City,
+			input.State,
+			input.Country,
+			input.Pincode);
+
+		await studentRepository.UpdateAsync(student, autoSave: true);
+		var compliance = await UpsertComplianceAsync(student.Id, input);
+
+		var result = ObjectMapper.Map<Student, ShikshaMitra.Students.Enrollments.Registrations.StudentGeneralDetailsDto>(student);
+		ApplyComplianceMask(result, compliance);
+
+		return result;
+	}
+
+	private async Task UpdateAdmissionAcademicPlacementAsync(
+		Student student,
+		ShikshaMitra.Students.Enrollments.Registrations.UpdateGeneralInfoDto input)
+	{
+		if (!input.AcademicMediumId.HasValue &&
+		    !input.StandardId.HasValue &&
+		    !input.DivisionId.HasValue)
+		{
+			return;
+		}
+
+		var academicMediumId = input.AcademicMediumId ?? student.AcademicMediumId;
+		var standardId = input.StandardId ?? student.StandardId
+			?? throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard is required");
+
+		await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
+		await validationService.ValidateStandardExistsAsync(standardId);
+
+		var standard = await standardRepository.GetAsync(standardId, includeDetails: true)
+			?? throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard not found");
+
+		if (standard.EducationMediumStage.EducationMedium.Id != academicMediumId)
+		{
+			throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard does not belong to the specified Academic Medium");
+		}
+
+		await studentScopeAccessService.EnsureCanAccessStandardAsync(standardId, nameof(UpdateAdmissionGeneralDetailsAsync));
+
+		Guid? divisionId = input.DivisionId;
+		if (divisionId.HasValue)
+		{
+			await EnsureDivisionMatchesStandardAsync(
+				divisionId.Value,
+				standardId,
+				nameof(UpdateAdmissionGeneralDetailsAsync));
+		}
+		else if (student.StandardId == standardId)
+		{
+			divisionId = student.DivisionId;
+		}
+
+		student.UpdateAcademicPlacement(
+			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			standard.EducationMediumStage.EducationMedium.EducationBoardId,
+			academicMediumId,
+			standard.EducationMediumStageId,
+			standardId,
+			divisionId);
+	}
+
+	private async Task EnsureDivisionMatchesStandardAsync(Guid divisionId, Guid standardId, string operation)
+	{
+		var division = await divisionRepository.GetAsync(divisionId);
+		if (division.StandardId != standardId)
+		{
+			throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Division does not belong to the selected Standard");
+		}
+
+		await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, operation);
+	}
+
+	private Task<StudentIdentityComplianceDto> UpsertComplianceAsync(Guid studentId, RegistrationGeneralInfoBaseDto input) =>
+		identityComplianceAppService.UpsertFromRegistrationAsync(studentId, new UpdateStudentIdentityComplianceDto
+		{
+			AadhaarNo = input.AadharNo,
+			AadhaarName = BuildStudentName(input.FirstName, input.MiddleName, input.LastName),
+			AadhaarVerificationStatus = string.IsNullOrWhiteSpace(input.AadharNo) ? IdentityVerificationStatus.NotProvided : IdentityVerificationStatus.Pending,
+			ApaarId = input.ApparId,
+			ApaarVerificationStatus = string.IsNullOrWhiteSpace(input.ApparId) ? IdentityVerificationStatus.NotProvided : IdentityVerificationStatus.Pending,
+			PenNumber = input.PennNo,
+			UdiseSyncStatus = UdiseSyncStatus.NotReady
+		});
+
+	private static void ApplyComplianceMask(
+		ShikshaMitra.Students.Enrollments.Registrations.StudentGeneralDetailsDto result,
+		StudentIdentityComplianceDto compliance)
+	{
+		result.AdharNo = compliance.AadhaarMasked;
+		result.AadhaarMasked = compliance.AadhaarMasked;
+		result.AadhaarVerificationStatus = compliance.AadhaarVerificationStatus;
+		result.ApparId = compliance.ApaarId;
+		result.ApaarConsentStatus = compliance.ApaarConsentStatus;
+		result.ApaarVerificationStatus = compliance.ApaarVerificationStatus;
+		result.PennNo = compliance.PenNumber;
+		result.UdiseStudentCode = compliance.UdiseStudentCode;
+		result.UdiseSyncStatus = compliance.UdiseSyncStatus;
+		result.RteStatus = compliance.RteStatus;
+		result.ScholarshipStatus = compliance.ScholarshipStatus;
+	}
+
+	private static string BuildStudentName(string firstName, string? middleName, string lastName) =>
+		$"{firstName} {middleName} {lastName}".Replace("  ", " ").Trim();
+
+	/// <summary>
 	/// Changes admission status (approve/reject) for multiple students
 	/// </summary>
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.Add)]
@@ -244,18 +418,38 @@ public class StudentAdmissionAppService(
 				// Apply action
 				if (item.Action == StudentEnrollmentApprovalState.Approved)
 				{
-					student.ApproveAdmission();
+					var isAlreadyApproved =
+						student.Status == StudentLifeCycleStatusEnum.Enrolled &&
+						student.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved;
 
-					// Create user account and send welcome email ONLY on approval
-					await CreateStudentUserAndSendEmailAsync(student);
+					if (!isAlreadyApproved)
+					{
+						student.ApproveAdmission(item.Remarks);
 
-					// Create single parent account
-					await CreateParentAccountAsync(student);
+						// Create user account and send welcome email ONLY on first approval
+						await CreateStudentUserAndSendEmailAsync(student);
 
-					await SyncAdmissionMembershipsAsync(student);
+						// Create single parent account
+						await CreateParentAccountAsync(student);
+
+						await SyncAdmissionMembershipsAsync(student);
+
+						itemResult.Message = "Admission approved successfully. Student and parent accounts created and welcome emails sent.";
+					}
+					else
+					{
+						if (item.Remarks is not null)
+						{
+							student.UpdateAdmissionApprovalRemarks(item.Remarks);
+							itemResult.Message = "Admission approval remarks updated successfully.";
+						}
+						else
+						{
+							itemResult.Message = "Admission is already approved.";
+						}
+					}
 
 					itemResult.NewStatus = StudentEnrollmentApprovalState.Approved.ToString();
-					itemResult.Message = "Admission approved successfully. Student and parent accounts created and welcome emails sent.";
 				}
 				else if (item.Action == StudentEnrollmentApprovalState.Rejected)
 				{

@@ -22,13 +22,13 @@ public class AttendancePolicyDto : EntityDto<Guid>
 	public int MaxLateAllowedPerMonth { get; set; }
 	public string PenaltyType { get; set; } = "none";
 	public int PenaltyCountThreshold { get; set; }
+	public decimal? PenaltyDeductionAmount { get; set; }
 	public bool EarlyExitEnabled { get; set; }
 	public int EarlyExitGraceTime { get; set; }
 	public bool OvertimeEnabled { get; set; }
 	public string? OvertimeRate { get; set; }
 	public int? MinOvertimeMinutes { get; set; }
 	public string HolidayWorkBehavior { get; set; } = "comp_off";
-	public bool SandwichRuleEnabled { get; set; }
 	public bool PayrollPreviewEnabled { get; set; }
 	public int Version { get; set; }
 	public DateTime CreationTime { get; set; }
@@ -54,13 +54,13 @@ public class CreateUpdateAttendancePolicyDto
 	public int MaxLateAllowedPerMonth { get; set; }
 	public string PenaltyType { get; set; } = "none";
 	public int PenaltyCountThreshold { get; set; }
+	public decimal? PenaltyDeductionAmount { get; set; }
 	public bool EarlyExitEnabled { get; set; }
 	public int EarlyExitGraceTime { get; set; }
 	public bool OvertimeEnabled { get; set; }
 	public string? OvertimeRate { get; set; }
 	public int? MinOvertimeMinutes { get; set; }
 	public string HolidayWorkBehavior { get; set; } = "comp_off";
-	public bool SandwichRuleEnabled { get; set; }
 	public bool PayrollPreviewEnabled { get; set; } = true;
 }
 
@@ -114,6 +114,20 @@ public class CreateUpdateAttendancePolicyDtoValidator : AbstractValidator<Create
 
 		RuleFor(x => x.PenaltyCountThreshold)
 			.InclusiveBetween(0, 31);
+
+		RuleFor(x => x.PenaltyDeductionAmount)
+			.NotNull()
+			.When(x => string.Equals(x.PenaltyType, "salary_deduction", StringComparison.OrdinalIgnoreCase))
+			.WithMessage("Penalty deduction amount is required when penalty type is salary_deduction.");
+
+		RuleFor(x => x.PenaltyDeductionAmount)
+			.GreaterThan(0)
+			.When(x => string.Equals(x.PenaltyType, "salary_deduction", StringComparison.OrdinalIgnoreCase))
+			.WithMessage("Penalty deduction amount must be greater than 0 when penalty type is salary_deduction.");
+
+		RuleFor(x => x.PenaltyDeductionAmount)
+			.Must(x => !x.HasValue || x.Value <= 1_000_000m)
+			.WithMessage("Penalty deduction amount must be 1,000,000 or less.");
 
 		RuleFor(x => x.EarlyExitGraceTime)
 			.InclusiveBetween(0, 240);

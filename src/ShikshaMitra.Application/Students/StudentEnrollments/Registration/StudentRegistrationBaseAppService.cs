@@ -24,7 +24,8 @@ public abstract class StudentRegistrationBaseAppService(
 	[
 		StudentLifeCycleStatusEnum.RegistrationFormIssued,
 		StudentLifeCycleStatusEnum.Registration,
-		StudentLifeCycleStatusEnum.EntranceExam
+		StudentLifeCycleStatusEnum.EntranceExam,
+		StudentLifeCycleStatusEnum.Admission
 	];
 
 	/// <summary>

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
-using ShikshaMitra.HttpApi.Models;
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
@@ -25,7 +25,8 @@ public partial class LeaveManagementController
 		[FromForm, Required] DateTime endDate,
 		[FromForm] bool halfDay,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
-		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
+		IFormFile? file,
+		[ModelBinder(Name = "attachment.File")] IFormFile? attachmentFile)
 	{
 		var createDto = new LeaveRequestCreateDto
 		{
@@ -36,10 +37,10 @@ public partial class LeaveManagementController
 			HalfDay = halfDay,
 			Reason = reason
 		};
-		var file = attachment?.File;
-		var created = file is null
+		var uploadedFile = file ?? attachmentFile;
+		var created = uploadedFile is null
 			? await _leaveManagementAppService.CreateAsync(academicYearId, createDto)
-			: await _leaveManagementAppService.CreateAsync(academicYearId, createDto, file);
+			: await _leaveManagementAppService.CreateAsync(academicYearId, createDto, uploadedFile);
 		return StatusCode(StatusCodes.Status201Created, LeaveManagementContractMapper.ToCreatedResponse(created));
 	}
 
@@ -56,7 +57,8 @@ public partial class LeaveManagementController
 		[FromForm, Required] DateTime endDate,
 		[FromForm] bool halfDay,
 		[FromForm, Required, MinLength(5), MaxLength(500)] string reason,
-		[FromForm] EmployeeLeaveCreateUploadRequest? attachment)
+		IFormFile? file,
+		[ModelBinder(Name = "attachment.File")] IFormFile? attachmentFile)
 	{
 		var createDto = new LeaveRequestCreateDto
 		{
@@ -67,10 +69,10 @@ public partial class LeaveManagementController
 			Reason = reason
 		};
 
-		var file = attachment?.File;
-		var created = file is null
+		var uploadedFile = file ?? attachmentFile;
+		var created = uploadedFile is null
 			? await _leaveManagementAppService.CreateMyAsync(academicYearId, createDto)
-			: await _leaveManagementAppService.CreateMyAsync(academicYearId, createDto, file);
+			: await _leaveManagementAppService.CreateMyAsync(academicYearId, createDto, uploadedFile);
 		return StatusCode(StatusCodes.Status201Created, LeaveManagementContractMapper.ToCreatedResponse(created));
 	}
 }

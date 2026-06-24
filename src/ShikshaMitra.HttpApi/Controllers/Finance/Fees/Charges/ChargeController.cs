@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Fees.Charges;
@@ -9,7 +9,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Charges;
 
 [RemoteService]
-[Area("app")]
+[Area("finance")]
 [Route("api/charges")]
 [Authorize]
 public class ChargeController(IChargeAppService chargeAppService) : AbpController

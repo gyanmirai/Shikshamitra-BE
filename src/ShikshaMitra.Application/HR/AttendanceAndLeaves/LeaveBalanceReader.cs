@@ -15,7 +15,7 @@ using Volo.Abp.Timing;
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 public class LeaveBalanceReader(
-	IEmployeeLeaveRepository employeeLeaveRepository,
+	LeaveBalanceUnitService leaveBalanceUnitService,
 	IEmployeeRepository employeeRepository,
 	IAcademicYearRepository academicYearRepository,
 	LeaveActorAccessService leaveActorAccessService,
@@ -48,7 +48,7 @@ public class LeaveBalanceReader(
 		var activeRules = policy.Rules
 			.Where(rule => rule.IsActive)
 			.ToList();
-		var unitsByPaidType = await employeeLeaveRepository.GetBalanceUnitsByPolicyAndPaidTypeAsync(
+		var unitsByPaidType = await leaveBalanceUnitService.GetBalanceUnitsByPolicyAndPaidTypeAsync(
 			targetId.Value,
 			policy.Id,
 			activeRules.Select(rule => rule.PaidType).ToList());

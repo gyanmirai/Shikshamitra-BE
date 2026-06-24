@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -8,6 +8,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
@@ -21,18 +22,21 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 	private readonly HomeworkTypeManager _manager;
 	private readonly IEducationMediumRepository _mediumRepository;
 	private readonly ILogger<HomeworkTypeAppService> _logger;
+	private readonly IRepository<HomeworkAssignmentEntity, Guid> _homeworkRepository;
 
 	public HomeworkTypeAppService(
 		IHomeworkTypeRepository repository,
 		HomeworkTypeManager manager,
 		IEducationMediumRepository mediumRepository,
-		ILogger<HomeworkTypeAppService> logger
+		ILogger<HomeworkTypeAppService> logger,
+		IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository
 	)
 	{
 		_repository = repository;
 		_manager = manager;
 		_mediumRepository = mediumRepository;
 		_logger = logger;
+		_homeworkRepository = homeworkRepository;
 	}
 
 	/// <summary>
@@ -253,12 +257,29 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 				throw new EntityNotFoundException(typeof(HomeworkType), id);
 			}
 
+			// Block deletion if the homework type is in use
+			var usageParts = new System.Collections.Generic.List<string>();
+
+			var homeworkCount = await _homeworkRepository.CountAsync(h => h.HomeworkTypeId == id);
+			if (homeworkCount > 0)
+				usageParts.Add($"{homeworkCount} homework(s)");
+
+			if (usageParts.Count > 0)
+			{
+				throw new BusinessException(HomeworkAssignmentErrorCodes.HomeworkTypeIsInUse)
+					.WithData("message", $"Cannot delete '{homeworkType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+			}
+
 			// Soft delete (FullAuditedAggregateRoot)
 			await _repository.DeleteAsync(homeworkType, autoSave: true);
 
 			_logger.LogInformation("Successfully deleted homework type {Id}", id);
 
 			return new MessageResponseDto { Message = "Homework type deleted successfully" };
+		}
+		catch (BusinessException)
+		{
+			throw;
 		}
 		catch (EntityNotFoundException)
 		{

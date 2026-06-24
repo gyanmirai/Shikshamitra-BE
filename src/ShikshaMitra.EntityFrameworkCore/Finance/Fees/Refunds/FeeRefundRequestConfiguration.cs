@@ -40,7 +40,7 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
 
         builder.OwnsMany(r => r.Lines, lb =>
         {
-            lb.ToTable("FeeRefundLines", ShikshaMitraConsts.DbSchema);
+            lb.ToTable("Finance_FeeRefundLines", ShikshaMitraConsts.DbSchema);
             lb.WithOwner().HasForeignKey("FeeRefundRequestId");
             lb.HasKey(l => l.Id);
             lb.Property(l => l.Amount).IsRequired();

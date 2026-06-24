@@ -62,6 +62,12 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 			.Where(s => s.StandardId == input.StandardId && s.DivisionId == input.DivisionId);
 		studentQuery = await _studentScopeAccessService.ApplyCurrentUserScopeAsync(studentQuery);
 		var students = await AsyncExecuter.ToListAsync(studentQuery);
+		var cumulativeAttendance = await GetCumulativeAttendanceAsync(
+			students.Select(s => s.Id).ToList(),
+			input.AcademicYearId,
+			input.StandardId,
+			input.DivisionId,
+			input.Date);
 
 		var standard = await _standardRepository.GetAsync(input.StandardId);
 		var division = await _divisionRepository.GetAsync(input.DivisionId);
@@ -83,6 +89,7 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 		foreach (var student in students.OrderBy(s => s.RollNo).ThenBy(s => s.FirstName))
 		{
 			var attendanceEntry = attendanceDay?.Entries.FirstOrDefault(e => e.StudentId == student.Id);
+			var summary = cumulativeAttendance.GetValueOrDefault(student.Id);
 
 			studentDtos.Add(new StudentAttendanceDto
 			{
@@ -96,6 +103,10 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 				ClassName = standard.Name,
 				DivisionName = division.Name,
 				Status = attendanceEntry?.Status ?? AttendanceStatus.Pending,
+				PresentDays = summary?.PresentDays ?? 0,
+				AttendancePercentage = summary == null
+					? 0
+					: CalculateAttendancePercentage(summary.PresentDays, summary.AttendanceDays),
 				Remarks = attendanceEntry?.Remarks
 			});
 		}
@@ -312,6 +323,51 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 
 	#endregion
 
+	private async Task<Dictionary<Guid, StudentAttendanceSummary>> GetCumulativeAttendanceAsync(
+		IReadOnlyCollection<Guid> studentIds,
+		Guid academicYearId,
+		Guid standardId,
+		Guid divisionId,
+		DateTime date)
+	{
+		if (studentIds.Count == 0)
+		{
+			return new Dictionary<Guid, StudentAttendanceSummary>();
+		}
+
+		var attendanceDays = await _attendanceDayRepository.GetQueryableAsync();
+		var attendanceEntries = await _attendanceEntryRepository.GetQueryableAsync();
+		var endDate = date.Date;
+
+		var rows = await AsyncExecuter.ToListAsync(
+			from entry in attendanceEntries
+			join day in attendanceDays on entry.AttendanceDayId equals day.Id
+			where day.AcademicYearId == academicYearId
+			      && day.StandardId == standardId
+			      && day.DivisionId == divisionId
+			      && day.Date <= endDate
+			      && studentIds.Contains(entry.StudentId)
+			      && (entry.Status == AttendanceStatus.Present || entry.Status == AttendanceStatus.Absent)
+			group entry by entry.StudentId into g
+			select new
+			{
+				StudentId = g.Key,
+				PresentDays = g.Count(entry => entry.Status == AttendanceStatus.Present),
+				AttendanceDays = g.Count()
+			});
+
+		return rows.ToDictionary(
+			x => x.StudentId,
+			x => new StudentAttendanceSummary(x.PresentDays, x.AttendanceDays));
+	}
+
+	private static double CalculateAttendancePercentage(int presentDays, int attendanceDays)
+	{
+		return attendanceDays == 0
+			? 0
+			: Math.Round(presentDays * 100d / attendanceDays, 2);
+	}
+
 	private (DateTime StartDate, DateTime EndDate) ResolveDateRange(DateTime? startDate, DateTime? endDate)
 	{
 		var now = Clock.Now.Date;
@@ -357,4 +413,6 @@ public class StudentAttendanceAppService : ApplicationService, IStudentAttendanc
 			_ => query.OrderByDescending(e => e.AttendanceDay.Date).ThenBy(e => e.Id)
 		};
 	}
+
+	private sealed record StudentAttendanceSummary(int PresentDays, int AttendanceDays);
 }

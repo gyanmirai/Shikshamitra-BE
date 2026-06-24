@@ -10,7 +10,9 @@ using Volo.Abp.Linq;
 
 namespace ShikshaMitra.HR.Dashboard;
 
-public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITransientDependency
+public class HRDashboardLeaveReader(
+	IAsyncQueryableExecuter asyncExecuter,
+	ReadSafeLeaveUnitResolver readSafeLeaveUnitResolver) : ITransientDependency
 {
 	public async Task<HRDashboardLeaveDto> BuildLeaveAsync(
 		IQueryable<EmployeeLeave> leaveQuery,
@@ -34,6 +36,7 @@ public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITr
 				l.Id,
 				l.PublicId,
 				l.EmployeeId,
+				l.LeavePolicyId,
 				l.PaidType,
 				l.StartDate,
 				l.EndDate,
@@ -51,6 +54,7 @@ public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITr
 					l.Id,
 					l.PublicId,
 					l.EmployeeId,
+					l.LeavePolicyId,
 					l.PaidType,
 					l.StartDate,
 					l.EndDate,
@@ -73,6 +77,42 @@ public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITr
 				.Where(e => pendingEmployeeIds.Contains(e.Id))
 				.Select(e => new { e.Id, e.EmployeeName, e.EmployeeCode }));
 		var employeeById = pendingEmployees.ToDictionary(e => e.Id);
+		var pendingPolicyIds = recentPendingRows.Select(l => l.LeavePolicyId).Distinct().ToList();
+		var pendingPolicyRows = await asyncExecuter.ToListAsync(
+			leavePolicyQuery
+				.Where(p => pendingPolicyIds.Contains(p.Id))
+				.Select(p => new { p.Id, p.AcademicYearId }));
+		var academicYearIdByLeavePolicyId = pendingPolicyRows.ToDictionary(p => p.Id, p => p.AcademicYearId);
+
+		var recentPendingRequests = new List<HRDashboardLeaveRequestDto>();
+		foreach (var leave in recentPendingRows)
+		{
+			employeeById.TryGetValue(leave.EmployeeId, out var employee);
+			var academicYearId = academicYearIdByLeavePolicyId.TryGetValue(
+				leave.LeavePolicyId,
+				out var resolvedAcademicYearId)
+				? resolvedAcademicYearId
+				: (Guid?)null;
+			recentPendingRequests.Add(new HRDashboardLeaveRequestDto
+			{
+				Id = leave.Id,
+				PublicId = leave.PublicId,
+				EmployeeId = leave.EmployeeId,
+				EmployeeName = employee?.EmployeeName ?? "Employee",
+				EmployeeIdentifier = employee?.EmployeeCode ?? string.Empty,
+				LeaveType = ToPaidType(leave.PaidType),
+				StartDate = leave.StartDate.DateTime,
+				EndDate = leave.EndDate.DateTime,
+				TotalDays = await readSafeLeaveUnitResolver.CalculateUnitsForReadAsync(
+					leave.EmployeeId,
+					leave.StartDate.DateTime,
+					leave.EndDate.DateTime,
+					leave.HalfDay,
+					academicYearId),
+				Status = leave.Status.ToString(),
+				SubmittedAt = leave.CreationTime
+			});
+		}
 
 		return new HRDashboardLeaveDto
 		{
@@ -88,24 +128,7 @@ public class HRDashboardLeaveReader(IAsyncQueryableExecuter asyncExecuter) : ITr
 				.OrderByDescending(x => x.Count)
 				.Take(6)
 				.ToList(),
-			RecentPendingRequests = recentPendingRows.Select(l =>
-			{
-				employeeById.TryGetValue(l.EmployeeId, out var employee);
-				return new HRDashboardLeaveRequestDto
-				{
-					Id = l.Id,
-					PublicId = l.PublicId,
-					EmployeeId = l.EmployeeId,
-					EmployeeName = employee?.EmployeeName ?? "Employee",
-					EmployeeIdentifier = employee?.EmployeeCode ?? string.Empty,
-					LeaveType = ToPaidType(l.PaidType),
-					StartDate = l.StartDate.DateTime,
-					EndDate = l.EndDate.DateTime,
-					TotalDays = LeaveDurationCalculator.CountLeaveUnits(l.StartDate.Date, l.EndDate.Date, l.HalfDay),
-					Status = l.Status.ToString(),
-					SubmittedAt = l.CreationTime
-				};
-			}).ToList()
+			RecentPendingRequests = recentPendingRequests
 		};
 	}
 

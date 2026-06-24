@@ -466,19 +466,22 @@ public class StudentManagementAppService(
 		return MapAcademicTerm(term);
 	}
 
-	public async Task<List<RollNumberProjectionDto>> GetRollNumberProjections(Guid divisionId, Guid? academicTermId, ArrangementTypeEnum arrangementType, ArrangementByEnum arrangementBy)
+	public async Task<RollNumberProjectionResponseDto> GetRollNumberProjections(Guid divisionId, Guid? academicTermId, ArrangementTypeEnum? arrangementType, ArrangementByEnum? arrangementBy)
 	{
 		try
 		{
 			await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(GetRollNumberProjections));
 			var academicTerm = await ResolveAcademicTermAsync(divisionId, academicTermId, nameof(GetRollNumberProjections));
+			var settings = await studentManagementSettingsRepository.FirstOrDefaultAsync(s => s.DivisionId == divisionId);
+			var effectiveArrangementType = arrangementType ?? settings?.ArrangementTye ?? ArrangementTypeEnum.Mix;
+			var effectiveArrangementBy = arrangementBy ?? settings?.ArrangementBy ?? ArrangementByEnum.FirstName;
 
 			// Keep roll projection lean; avoid loading the full student aggregate graph.
 			var query = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
 				.Where(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled);
 
 			query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
-			query = ApplyRollArrangement(query, arrangementType, arrangementBy);
+			query = ApplyRollArrangement(query, effectiveArrangementType, effectiveArrangementBy);
 			var students = await AsyncExecuter.ToListAsync(query);
 
 			var studentIds = students.Select(s => s.Id).ToList();
@@ -507,7 +510,15 @@ public class StudentManagementAppService(
 				});
 			}
 
-			return rollNumberProjectionDto;
+			return new RollNumberProjectionResponseDto
+			{
+				TotalCount = rollNumberProjectionDto.Count,
+				PageSize = rollNumberProjectionDto.Count,
+				TotalPages = rollNumberProjectionDto.Count == 0 ? 0 : 1,
+				ArrangementType = effectiveArrangementType,
+				ArrangementBy = effectiveArrangementBy,
+				Items = rollNumberProjectionDto
+			};
 		}
 		catch
 		{
@@ -566,13 +577,14 @@ public class StudentManagementAppService(
 
 		var requestedStudentIds = updateStudentRollNumberDto.Select(x => x.StudentId).ToList();
 		var studentQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
-		var query = studentQuery.Where(s => requestedStudentIds.Contains(s.Id));
+		var enrolledStudentQuery = studentQuery.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled);
+		var query = enrolledStudentQuery.Where(s => requestedStudentIds.Contains(s.Id));
 		query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 		var students = await AsyncExecuter.ToListAsync(query);
 		if (students.Count != requestedStudentIds.Count)
 		{
 			throw new BusinessException(StudentErrorCodes.RollNumberBatchInvalid)
-				.WithData("Reason", "One or more students were not found or are outside the current user scope.");
+				.WithData("Reason", "One or more students were not found, are not enrolled, or are outside the current user scope.");
 		}
 
 		var studentsById = students.ToDictionary(s => s.Id);
@@ -585,6 +597,23 @@ public class StudentManagementAppService(
 			throw new BusinessException(StudentErrorCodes.RollNumberBatchInvalid)
 				.WithData("Reason", "Every student must belong to the selected division.")
 				.WithData("StudentIds", string.Join(", ", outOfDivisionStudents));
+		}
+
+		var divisionStudentCount = await AsyncExecuter.CountAsync(
+			await studentScopeAccessService.ApplyCurrentUserScopeAsync(
+				enrolledStudentQuery.Where(s => s.DivisionId == divisionId)));
+		var rollNumbersAboveStudentCount = updateStudentRollNumberDto
+			.Where(x => x.RollNo.HasValue && x.RollNo.Value > divisionStudentCount)
+			.Select(x => x.RollNo!.Value)
+			.Distinct()
+			.OrderBy(x => x)
+			.ToList();
+		if (rollNumbersAboveStudentCount.Count != 0)
+		{
+			throw new BusinessException(StudentErrorCodes.RollNumberBatchInvalid)
+				.WithData("Reason", $"Roll numbers cannot exceed total students ({divisionStudentCount}).")
+				.WithData("MaxRollNo", divisionStudentCount)
+				.WithData("RollNumbers", string.Join(", ", rollNumbersAboveStudentCount));
 		}
 
 		var requestedRollNumbers = updateStudentRollNumberDto

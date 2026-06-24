@@ -14,6 +14,8 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
+using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Academic.HomeworkAssignment;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -30,7 +32,10 @@ public class SubjectAssignmentAppService(
 	ILogger<SubjectAssignmentAppService> logger,
 	IWeeklyLectureSlotRepository weeklyLectureSlotRepository,
 	ITimetableRepository timetableRepository,
-	IUserScopeAccessService userScopeAccessService
+	IUserScopeAccessService userScopeAccessService,
+	IRepository<Exam, Guid> examRepository,
+	IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
+	IRepository<AssignmentEntity, Guid> learningTaskAssignmentRepository
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -594,6 +599,54 @@ public class SubjectAssignmentAppService(
 		else
 		{
 			groupAssignments = new List<AssignedSubject> { assignment };
+		}
+
+		var subjectIds = groupAssignments.Select(a => a.SubjectId).ToList();
+
+		var usageParts = new System.Collections.Generic.List<string>();
+
+		// 1. Timetable Slots
+		var timetables = await timetableRepository.GetByStandardIdAsync(assignment.StandardId);
+		var timetableSlotSubjectsCount = timetables
+			.SelectMany(t => t.Slots)
+			.SelectMany(s => s.Subjects)
+			.Count(ss => subjectIds.Contains(ss.SubjectId));
+		var timetableSlotElectivesCount = assignment.ElectiveGroupId.HasValue
+			? timetables.SelectMany(t => t.Slots).Count(s => s.ElectiveGroupId == assignment.ElectiveGroupId.Value)
+			: 0;
+		var totalTimetableSlots = timetableSlotSubjectsCount + timetableSlotElectivesCount;
+		if (totalTimetableSlots > 0)
+			usageParts.Add($"{totalTimetableSlots} timetable slot(s)");
+
+		// 2. Exams
+		var examCount = await examRepository.CountAsync(e =>
+			e.StandardId == assignment.StandardId &&
+			e.ExamSubjects.Any(es => subjectIds.Contains(es.SubjectId) || (assignment.ElectiveGroupId.HasValue && es.SubjectId == assignment.ElectiveGroupId.Value)));
+		if (examCount > 0)
+			usageParts.Add($"{examCount} exam(s)");
+
+		// 3. Homeworks
+		var homeworkCount = await homeworkRepository.CountAsync(h =>
+			h.StandardId == assignment.StandardId &&
+			subjectIds.Contains(h.SubjectId));
+		if (homeworkCount > 0)
+			usageParts.Add($"{homeworkCount} homework(s)");
+
+		// 4. Assignments
+		var learningTaskCount = await learningTaskAssignmentRepository.CountAsync(a =>
+			a.StandardId == assignment.StandardId &&
+			subjectIds.Contains(a.SubjectId));
+		if (learningTaskCount > 0)
+			usageParts.Add($"{learningTaskCount} assignment(s)");
+
+		if (usageParts.Count > 0)
+		{
+			string name = assignment.ElectiveGroupId.HasValue
+				? (await electiveGroupRepository.GetAsync(assignment.ElectiveGroupId.Value)).Name
+				: (await subjectRepository.GetAsync(assignment.SubjectId)).Name;
+
+			throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectAssignment)
+				.WithData("message", $"Cannot delete subject assignment '{name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
 		}
 
 		await assignmentRepository.DeleteManyAsync(groupAssignments, autoSave: true);

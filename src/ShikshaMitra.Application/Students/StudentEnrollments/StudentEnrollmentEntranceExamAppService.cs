@@ -73,16 +73,6 @@ public class StudentEnrollmentEntranceExamAppService(
 			query = query.Where(x => x.Student.StandardId == input.StandardId.Value);
 		}
 
-		if (input.StartDate.HasValue)
-		{
-			query = query.Where(x => x.AdditionalDetail.EntranceExamStartDateTime >= input.StartDate.Value);
-		}
-
-		if (input.EndDate.HasValue)
-		{
-			query = query.Where(x => x.AdditionalDetail.EntranceExamStartDateTime <= input.EndDate.Value);
-		}
-
 		if (input.ExamStatus.HasValue)
 		{
 			query = query.Where(x => x.AdditionalDetail.EntranceExamStatus == input.ExamStatus.Value);
@@ -97,25 +87,91 @@ public class StudentEnrollmentEntranceExamAppService(
 				(x.Student.LastName != null && x.Student.LastName.ToLower().Contains(searchTerm)));
 		}
 
-		var totalCount = await AsyncExecuter.CountAsync(query);
-
 		var sorting = input.Sorting?.Trim().ToLowerInvariant();
-		query = sorting switch
-		{
-			"studentname desc" or "studentname descending" =>
-				query.OrderByDescending(x => x.Student.FirstName).ThenByDescending(x => x.Student.LastName),
-			"studentname" or "studentname asc" or "studentname ascending" =>
-				query.OrderBy(x => x.Student.FirstName).ThenBy(x => x.Student.LastName),
-			"examstarttime desc" or "examstarttime descending" =>
-				query.OrderByDescending(x => x.Student.FirstName).ThenByDescending(x => x.Student.LastName),
-			"examstatus desc" or "examstatus descending" =>
-				query.OrderByDescending(x => x.AdditionalDetail.EntranceExamStatus).ThenBy(x => x.Student.FirstName),
-			"examstatus" or "examstatus asc" or "examstatus ascending" =>
-				query.OrderBy(x => x.AdditionalDetail.EntranceExamStatus).ThenBy(x => x.Student.FirstName),
-			_ => query.OrderBy(x => x.Student.FirstName).ThenBy(x => x.Student.LastName).ThenBy(x => x.Student.Id)
-		};
+		var requiresInMemoryDateHandling =
+			input.StartDate.HasValue ||
+			input.EndDate.HasValue ||
+			sorting is "examstarttime" or "examstarttime asc" or "examstarttime ascending" or
+				"examstarttime desc" or "examstarttime descending";
 
-		var rows = await AsyncExecuter.ToListAsync(query.Skip(input.SkipCount).Take(input.MaxResultCount));
+		int totalCount;
+		List<EntranceExamStudentRow> rows;
+
+		if (requiresInMemoryDateHandling)
+		{
+			var filteredRows = await AsyncExecuter.ToListAsync(
+				query.Select(x => new EntranceExamStudentRow(
+					x.Student,
+					x.AdditionalDetail,
+					x.EducationBoard,
+					x.EducationMedium,
+					x.Standard)));
+
+			if (input.StartDate.HasValue)
+			{
+				filteredRows = filteredRows
+					.Where(x => x.AdditionalDetail.EntranceExamStartDateTime >= input.StartDate.Value)
+					.ToList();
+			}
+
+			if (input.EndDate.HasValue)
+			{
+				filteredRows = filteredRows
+					.Where(x => x.AdditionalDetail.EntranceExamStartDateTime <= input.EndDate.Value)
+					.ToList();
+			}
+
+			totalCount = filteredRows.Count;
+
+			var orderedRows = sorting switch
+			{
+				"studentname desc" or "studentname descending" =>
+					filteredRows.OrderByDescending(x => x.Student.FirstName).ThenByDescending(x => x.Student.LastName),
+				"studentname" or "studentname asc" or "studentname ascending" =>
+					filteredRows.OrderBy(x => x.Student.FirstName).ThenBy(x => x.Student.LastName),
+				"examstarttime desc" or "examstarttime descending" =>
+					filteredRows.OrderByDescending(x => x.AdditionalDetail.EntranceExamStartDateTime).ThenBy(x => x.Student.Id),
+				"examstarttime" or "examstarttime asc" or "examstarttime ascending" =>
+					filteredRows.OrderBy(x => x.AdditionalDetail.EntranceExamStartDateTime).ThenBy(x => x.Student.Id),
+				"examstatus desc" or "examstatus descending" =>
+					filteredRows.OrderByDescending(x => x.AdditionalDetail.EntranceExamStatus).ThenBy(x => x.Student.FirstName),
+				"examstatus" or "examstatus asc" or "examstatus ascending" =>
+					filteredRows.OrderBy(x => x.AdditionalDetail.EntranceExamStatus).ThenBy(x => x.Student.FirstName),
+				_ => filteredRows.OrderBy(x => x.Student.FirstName).ThenBy(x => x.Student.LastName).ThenBy(x => x.Student.Id)
+			};
+
+			rows = orderedRows
+				.Skip(input.SkipCount)
+				.Take(input.MaxResultCount)
+				.ToList();
+		}
+		else
+		{
+			totalCount = await AsyncExecuter.CountAsync(query);
+			query = sorting switch
+			{
+				"studentname desc" or "studentname descending" =>
+					query.OrderByDescending(x => x.Student.FirstName).ThenByDescending(x => x.Student.LastName),
+				"studentname" or "studentname asc" or "studentname ascending" =>
+					query.OrderBy(x => x.Student.FirstName).ThenBy(x => x.Student.LastName),
+				"examstatus desc" or "examstatus descending" =>
+					query.OrderByDescending(x => x.AdditionalDetail.EntranceExamStatus).ThenBy(x => x.Student.FirstName),
+				"examstatus" or "examstatus asc" or "examstatus ascending" =>
+					query.OrderBy(x => x.AdditionalDetail.EntranceExamStatus).ThenBy(x => x.Student.FirstName),
+				_ => query.OrderBy(x => x.Student.FirstName).ThenBy(x => x.Student.LastName).ThenBy(x => x.Student.Id)
+			};
+
+			rows = await AsyncExecuter.ToListAsync(
+				query
+					.Skip(input.SkipCount)
+					.Take(input.MaxResultCount)
+					.Select(x => new EntranceExamStudentRow(
+						x.Student,
+						x.AdditionalDetail,
+						x.EducationBoard,
+						x.EducationMedium,
+						x.Standard)));
+		}
 		var results = rows.Select(x => new EntranceExamStudentDto
 		{
 			StudentId = x.Student.Id,
@@ -143,39 +199,49 @@ public class StudentEnrollmentEntranceExamAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.View)]
 	public async Task<EntranceExamDetailDto> GetAsync(Guid studentId)
 	{
-		var student = await studentRepository.GetAsync(studentId, includeDetails: true) ?? throw new EntityNotFoundException(typeof(Student), studentId);
+		var student = await studentRepository.GetInquiryForUpdateAsync(studentId) ?? throw new EntityNotFoundException(typeof(Student), studentId);
 		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(GetAsync));
+		var additionalDetail = student.AdditionalDetail
+			?? throw new EntityNotFoundException(typeof(StudentAdditionalDetail), studentId);
+		var educationBoard = student.AcademicBoardId.HasValue
+			? await educationBoardRepository.GetAsync(student.AcademicBoardId.Value)
+			: null;
+		var educationMedium = await educationMediumRepository.GetAsync(student.AcademicMediumId);
+		var standard = student.StandardId.HasValue
+			? await standardRepository.GetAsync(student.StandardId.Value)
+			: null;
 
 		return new EntranceExamDetailDto
 		{
 			StudentId = student.Id,
 			StudentName = BuildStudentName(student.FirstName, student.MiddleName, student.LastName),
-			InquiryNo = student.AdditionalDetail.InquiryNo,
-			RegistrationFormNo = student.AdditionalDetail.RegistrationFormNo,
-			EducationBoard = student.AcademicBoard.Type.ToString(),
-			EducationMedium = student.AcademicMedium.Name,
-			Standard = student.Standard?.Name ?? string.Empty,
-			ExamScheduled = student.AdditionalDetail.EntranceExamStartDateTime.HasValue,
-			EntranceExamSlotId = student.AdditionalDetail.EntranceExamSlotId,
-			ExamDate = student.AdditionalDetail.EntranceExamStartDateTime?.DateTime,
-			ExamStartTime = student.AdditionalDetail.EntranceExamStartDateTime?.TimeOfDay,
-			ExamEndTime = student.AdditionalDetail.EntranceExamEndDateTime?.TimeOfDay,
-			ExamRoomNo = student.AdditionalDetail.EntranceExamRoomNo,
-			ResultUploaded = student.AdditionalDetail.EntranceExamObtainedMarks.HasValue,
-			TotalMarks = student.AdditionalDetail.EntranceExamTotalMarks,
-			PassingMarks = student.AdditionalDetail.EntranceExamPassingMarks,
-			ObtainedMarks = student.AdditionalDetail.EntranceExamObtainedMarks,
-			Percentage = student.AdditionalDetail.EntranceExamPercentage,
-			ExamStatus = student.AdditionalDetail.EntranceExamStatus,
-			ResultDate = student.AdditionalDetail.EntranceExamResultDate?.DateTime,
+			InquiryNo = additionalDetail.InquiryNo,
+			RegistrationFormNo = additionalDetail.RegistrationFormNo,
+			EducationBoard = educationBoard?.Type.ToString() ?? string.Empty,
+			EducationMedium = educationMedium.Name,
+			Standard = standard?.Name ?? string.Empty,
+			ExamScheduled = additionalDetail.EntranceExamStartDateTime.HasValue,
+			EntranceExamSlotId = additionalDetail.EntranceExamSlotId,
+			ExamDate = additionalDetail.EntranceExamStartDateTime?.DateTime,
+			ExamStartTime = additionalDetail.EntranceExamStartDateTime?.TimeOfDay,
+			ExamEndTime = additionalDetail.EntranceExamEndDateTime?.TimeOfDay,
+			ExamRoomNo = additionalDetail.EntranceExamRoomNo,
+			ResultUploaded = additionalDetail.EntranceExamObtainedMarks.HasValue,
+			TotalMarks = additionalDetail.EntranceExamTotalMarks,
+			PassingMarks = additionalDetail.EntranceExamPassingMarks,
+			ObtainedMarks = additionalDetail.EntranceExamObtainedMarks,
+			Percentage = additionalDetail.EntranceExamPercentage,
+			ExamStatus = additionalDetail.EntranceExamStatus,
+			ResultDate = additionalDetail.EntranceExamResultDate?.DateTime,
 			EnrollmentState = student.Status,
-			CanMoveToAdmission = student.AdditionalDetail.EntranceExamStatus == EntranceExamStatusEnum.Pass
+			CanMoveToAdmission = additionalDetail.EntranceExamStatus == EntranceExamStatusEnum.Pass
 		};
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
 	public async Task ScheduleExamAsync(Guid studentId, ScheduleEntranceExamDto input)
 	{
-		var student = await studentRepository.GetAsync(studentId, includeDetails: true) ?? throw new EntityNotFoundException(typeof(Student), studentId);
+		var student = await studentRepository.GetInquiryForUpdateAsync(studentId) ?? throw new EntityNotFoundException(typeof(Student), studentId);
 		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(ScheduleExamAsync));
 
 		var slot = await entranceExamSlotRepository.GetAsync(input.EntranceExamSlotId);
@@ -187,12 +253,21 @@ public class StudentEnrollmentEntranceExamAppService(
 				.WithData("EntranceExamSlotId", slot.Id);
 		}
 
-		await entranceExamManager.ValidateScheduling(student.Id, slot.Id);
+		await entranceExamManager.ValidateScheduling(student, slot, DateTimeOffset.UtcNow);
 
-		student.ScheduleEntranceExam(slot.Id, slot.StartDate, slot.EndDate, slot.RoomNo);
+		if (student.Status == StudentLifeCycleStatusEnum.EntranceExam)
+		{
+			student.RescheduleEntranceExam(slot.Id, slot.StartDate, slot.EndDate, slot.RoomNo);
+		}
+		else
+		{
+			student.ScheduleEntranceExam(slot.Id, slot.StartDate, slot.EndDate, slot.RoomNo);
+		}
+
 		await studentRepository.UpdateAsync(student, autoSave: true);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_EntranceExam.Add)]
 	public async Task<EntranceExamResultResponseDto> UploadResultAsync(Guid studentId, UploadEntranceExamResultDto input)
 	{
 		var student = await studentRepository.GetAsync(studentId) ?? throw new EntityNotFoundException(typeof(Student), studentId);
@@ -315,4 +390,11 @@ public class StudentEnrollmentEntranceExamAppService(
 			.Count(s => s != StudentRegistrationStateEnum.Default);
 		return (double)registrationState / totalStates * 100;
 	}
+
+	private sealed record EntranceExamStudentRow(
+		Student Student,
+		StudentAdditionalDetail AdditionalDetail,
+		EducationBoard EducationBoard,
+		EducationMedium EducationMedium,
+		Standard? Standard);
 }

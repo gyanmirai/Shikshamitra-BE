@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -8,6 +8,9 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
+using ShikshaMitra.Academic.Timetable.Timetables;
+using ShikshaMitra.Academic.Examination.Exams;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -19,7 +22,11 @@ public class ElectiveGroupAppService(
 	IRepository<ElectiveGroup, Guid> ElectiveGroupRepository,
 	ElectiveGroupManager ElectiveGroupManager,
 	IRepository<AssignedSubject, Guid> assignedSubjectRepository,
-	ILogger<ElectiveGroupAppService> logger
+	ILogger<ElectiveGroupAppService> logger,
+	IRepository<StudentElectiveSelection, Guid> studentElectiveSelectionRepository,
+	IRepository<WeeklyLectureSlotSubject, Guid> weeklyLectureSlotSubjectRepository,
+	IRepository<TimetableSlot, Guid> timetableSlotRepository,
+	IRepository<ExamSubject, Guid> examSubjectRepository
 ) : ApplicationService, IElectiveGroupAppService
 {
 	/// <summary>
@@ -185,7 +192,7 @@ public class ElectiveGroupAppService(
 	}
 
 	/// <summary>
-	/// Delete an elective group. Blocked if the group is still in use by Subject Allocation.
+	/// Delete an elective group. Blocked if the group is still in use.
 	/// </summary>
 	public async Task DeleteAsync(Guid academicMediumId, Guid id)
 	{
@@ -199,12 +206,33 @@ public class ElectiveGroupAppService(
 				throw new EntityNotFoundException(typeof(ElectiveGroup), id);
 			}
 
-			// Block deletion if the group is still referenced in Subject Allocation
-			var hasAllocations = (await assignedSubjectRepository.GetListAsync(a => a.ElectiveGroupId == id)).Count > 0;
-			if (hasAllocations)
+			// Block deletion if the group is in use anywhere
+			var usageParts = new System.Collections.Generic.List<string>();
+
+			var allocationCount = await assignedSubjectRepository.CountAsync(a => a.ElectiveGroupId == id);
+			if (allocationCount > 0)
+				usageParts.Add($"{allocationCount} subject allocation(s)");
+
+			var studentSelectionCount = await studentElectiveSelectionRepository.CountAsync(s => s.ElectiveGroupId == id);
+			if (studentSelectionCount > 0)
+				usageParts.Add($"{studentSelectionCount} student elective assignment(s)");
+
+			var weeklySlotCount = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.ElectiveGroupId == id);
+			if (weeklySlotCount > 0)
+				usageParts.Add($"{weeklySlotCount} weekly lecture slot(s)");
+
+			var timetableSlotCount = await timetableSlotRepository.CountAsync(t => t.ElectiveGroupId == id);
+			if (timetableSlotCount > 0)
+				usageParts.Add($"{timetableSlotCount} timetable slot(s)");
+
+			var examSubjectCount = await examSubjectRepository.CountAsync(e => e.SubjectId == id);
+			if (examSubjectCount > 0)
+				usageParts.Add($"{examSubjectCount} exam(s)");
+
+			if (usageParts.Count > 0)
 			{
 				throw new BusinessException(CurriculumErrorCodes.ElectiveGroupHasActiveAllocations)
-					.WithData("message", $"Cannot delete elective group '{electiveGroup.Name}' because it is assigned to subjects in Subject Allocation. Please remove those allocations first.");
+					.WithData("message", $"Cannot delete elective group '{electiveGroup.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
 			}
 
 			await ElectiveGroupRepository.DeleteAsync(id);

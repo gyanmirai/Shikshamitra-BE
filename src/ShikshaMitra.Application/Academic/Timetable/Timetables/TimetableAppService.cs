@@ -11,6 +11,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
@@ -33,7 +34,8 @@ public class TimetableAppService(
     IRepository<Room, Guid> roomRepository,
     IRepository<AssignedSubject, Guid> assignedSubjectRepository,
     TimetableReportPdfService timetableReportPdfService,
-    ITenantRepository tenantRepository
+    ITenantRepository tenantRepository,
+    IRepository<Employee, Guid> employeeRepository
 ) : ApplicationService, ITimetableAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
@@ -61,6 +63,13 @@ public class TimetableAppService(
         var subjects = needsSubjectData ? await subjectRepository.GetListAsync() : [];
         var electiveGroups = needsSubjectData ? await electiveGroupRepository.GetListAsync() : [];
         var rooms = hasSavedData ? await roomRepository.GetListAsync() : [];
+
+        var teacherIds = hasSavedData
+            ? timetable!.Slots.SelectMany(s => s.Subjects).Select(sub => sub.TeacherId).Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList()
+            : new List<Guid>();
+        var employees = teacherIds.Count > 0
+            ? await employeeRepository.GetListAsync(e => teacherIds.Contains(e.Id))
+            : new List<Employee>();
 
         // Compute occupied slots per subject across all days in this timetable
         var occupiedBySubject = hasSavedData
@@ -104,8 +113,83 @@ public class TimetableAppService(
         foreach (var day in Enum.GetValues<TimetableDayOfWeek>())
         {
             var dayName = day.ToString().ToUpperInvariant();
+            var dayIndex = (int)day;
 
-            if (savedSlotsByDay.TryGetValue(day, out var savedSlots) && savedSlots.Count > 0)
+            var slotGroup = slotConfig?.SlotGroups
+                .FirstOrDefault(g => g.WeekRangeStart <= dayIndex && dayIndex <= g.WeekRangeEnd);
+            var configTimeSlots = slotGroup?.TimeSlots.OrderBy(ts => ts.StartTime).ToList();
+
+            if (configTimeSlots != null && configTimeSlots.Count > 0)
+            {
+                response.Days[dayName] = configTimeSlots.Select((ts, index) =>
+                {
+                    var matchingSavedSlot = savedSlotsByDay.TryGetValue(day, out var savedSlots)
+                        ? savedSlots.FirstOrDefault(s => s.StartTime == ts.StartTime && s.EndTime == ts.EndTime)
+                        : null;
+
+                    if (matchingSavedSlot != null)
+                    {
+                        return new TimetableSlotResponseDto
+                        {
+                            Sequence = index + 1,
+                            StartTime = ts.StartTime.ToString("HH:mm"),
+                            EndTime = ts.EndTime.ToString("HH:mm"),
+                            Type = ts.SlotType,
+                            BreakType = ts.BreakType,
+                            SubjectType = matchingSavedSlot.SubjectType,
+                            ElectiveGroupId = matchingSavedSlot.ElectiveGroupId,
+                            ElectiveGroupName = matchingSavedSlot.ElectiveGroupId.HasValue
+                                ? electiveGroups.FirstOrDefault(eg => eg.Id == matchingSavedSlot.ElectiveGroupId.Value)?.Name
+                                : null,
+                            ElectiveGroupColor = matchingSavedSlot.ElectiveGroupId.HasValue
+                                ? electiveGroups.FirstOrDefault(eg => eg.Id == matchingSavedSlot.ElectiveGroupId.Value)?.Color
+                                : null,
+                            Subjects = matchingSavedSlot.Subjects.Select(sub =>
+                            {
+                                var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);
+                                var room = sub.RoomId.HasValue
+                                    ? rooms.FirstOrDefault(r => r.Id == sub.RoomId.Value) : null;
+                                var totalSlots = totalSlotsBySubject.GetValueOrDefault(sub.SubjectId, 0);
+                                if (totalSlots == 0 && matchingSavedSlot.ElectiveGroupId.HasValue)
+                                    totalSlots = totalSlotsByElective.GetValueOrDefault(matchingSavedSlot.ElectiveGroupId.Value, 0);
+                                var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
+                                return new TimetableSubjectResponseDto
+                                {
+                                    SubjectAssignmentId = assignedSubjectBySubjectId.GetValueOrDefault(sub.SubjectId),
+                                    SubjectId = sub.SubjectId,
+                                    Name = subject?.Name ?? string.Empty,
+                                    Color = subject?.Color,
+                                    TeacherId = sub.TeacherId,
+                                    TeacherName = sub.TeacherId.HasValue
+                                        ? employees.FirstOrDefault(e => e.Id == sub.TeacherId.Value)?.EmployeeName
+                                        : null,
+                                    RoomId = sub.RoomId,
+                                    RoomName = room?.RoomName,
+                                    TotalSlots = totalSlots,
+                                    OccupiedSlots = occupiedSlots,
+                                    UnoccupiedSlots = totalSlots - occupiedSlots
+                                };
+                            }).ToList()
+                        };
+                    }
+                    else
+                    {
+                        return new TimetableSlotResponseDto
+                        {
+                            Sequence = index + 1,
+                            StartTime = ts.StartTime.ToString("HH:mm"),
+                            EndTime = ts.EndTime.ToString("HH:mm"),
+                            Type = ts.SlotType,
+                            BreakType = ts.BreakType,
+                            SubjectType = null,
+                            ElectiveGroupId = null,
+                            ElectiveGroupName = null,
+                            Subjects = []
+                        };
+                    }
+                }).ToList();
+            }
+            else if (savedSlotsByDay.TryGetValue(day, out var savedSlots) && savedSlots.Count > 0)
             {
                 response.Days[dayName] = savedSlots.OrderBy(s => s.Sequence).Select(slot =>
                 {
@@ -144,7 +228,9 @@ public class TimetableAppService(
                                 Name = subject?.Name ?? string.Empty,
                                 Color = subject?.Color,
                                 TeacherId = sub.TeacherId,
-                                TeacherName = null,
+                                TeacherName = sub.TeacherId.HasValue
+                                    ? employees.FirstOrDefault(e => e.Id == sub.TeacherId.Value)?.EmployeeName
+                                    : null,
                                 RoomId = sub.RoomId,
                                 RoomName = room?.RoomName,
                                 TotalSlots = totalSlots,
@@ -157,25 +243,7 @@ public class TimetableAppService(
             }
             else
             {
-                // No saved data for this day — build placeholder from slot config
-                var dayIndex = (int) day;
-                var slotGroup = slotConfig?.SlotGroups
-                    .FirstOrDefault(g => g.WeekRangeStart <= dayIndex && dayIndex <= g.WeekRangeEnd);
-
-                response.Days[dayName] = slotGroup?.TimeSlots
-                    .OrderBy(ts => ts.StartTime)
-                    .Select((ts, index) => new TimetableSlotResponseDto
-                    {
-                        Sequence = index + 1,
-                        StartTime = ts.StartTime.ToString("HH:mm"),
-                        EndTime = ts.EndTime.ToString("HH:mm"),
-                        Type = ts.SlotType,
-                        BreakType = ts.BreakType,
-                        SubjectType = null,
-                        ElectiveGroupId = null,
-                        ElectiveGroupName = null,
-                        Subjects = []
-                    }).ToList() ?? [];
+                response.Days[dayName] = [];
             }
         }
 

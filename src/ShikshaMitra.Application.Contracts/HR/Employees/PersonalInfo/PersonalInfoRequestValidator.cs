@@ -48,16 +48,16 @@ public class PersonalInfoRequestValidator : AbstractValidator<PersonalInfoReques
 			.WithMessage("Secondary mobile number must be different from the primary mobile number.");
 
 		RuleFor(x => x.PanNo)
-			.NotEmpty()
 			.MaximumLength(10)
 			.Matches(@"^[A-Z]{5}[0-9]{4}[A-Z]$")
-			.WithMessage("PAN must be in format AAAAA9999A.");
+			.WithMessage("PAN must be in format AAAAA9999A.")
+			.When(x => !string.IsNullOrWhiteSpace(x.PanNo));
 
 		RuleFor(x => x.AdharNo)
-			.NotEmpty()
 			.MaximumLength(12)
 			.Matches(@"^\d{12}$")
-			.WithMessage("Aadhaar number must be 12 digits.");
+			.WithMessage("Aadhaar number must be 12 digits.")
+			.When(x => !string.IsNullOrWhiteSpace(x.AdharNo));
 
 		RuleFor(x => x.Doj).NotEmpty();
 		RuleFor(x => x.RoleId).NotEmpty();

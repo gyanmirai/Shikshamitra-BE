@@ -7,7 +7,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.Finance.Reports;
 
 [RemoteService(Name = "Default")]
-[Area("app")]
+[Area("finance")]
 [Route("api/app/finance-report")]
 public class FinanceReportController(IFinanceReportAppService appService) : AbpController, IFinanceReportAppService
 {

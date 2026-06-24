@@ -145,14 +145,15 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                 );
             }
 
-            var targetAcademicYearIds = input.AcademicYearIds?.Distinct().ToList() ?? [];
-            if (targetAcademicYearIds.Count == 0)
+            if (!input.AcademicYearId.HasValue || input.AcademicYearId.Value == Guid.Empty)
             {
                 throw new BusinessException(
                     code: UserScopeErrorCodes.InvalidInput,
-                    message: "At least one academic year ID must be provided for bulk scope assignment."
+                    message: "An academic year ID must be provided for bulk scope assignment."
                 );
             }
+            var targetAcademicYearId = input.AcademicYearId.Value;
+            var scopeRows = NormalizeBulkScopeRows(input);
 
             // Validate all users exist before processing - OPTIMIZED: Batch validation
             var distinctUserIds = input.UserIds.Distinct().ToList();
@@ -177,13 +178,13 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                     .WithData("CorrelationId", correlationId);
             }
 
-            // Generate all combinations of scope parameters
-            var scopeCombinations = GenerateScopeCombinations(input);
-            var totalCombinations = distinctUserIds.Count * scopeCombinations.Count;
+            // Scope rows are already compressed hierarchy paths from the UI. Explicit clear mode
+            // deletes the target academic-year slice and intentionally creates no replacement rows.
+            var totalCombinations = distinctUserIds.Count * scopeRows.Count;
 
             _logger.LogInformation(
-                "Generated {CombinationCount} scope combinations for {UserCount} users. Total assignments to create: {TotalAssignments}, CorrelationId: {CorrelationId}",
-                scopeCombinations.Count, distinctUserIds.Count, totalCombinations, correlationId);
+                "Prepared {ScopeRowCount} scope rows for {UserCount} users. Total assignments to create: {TotalAssignments}, CorrelationId: {CorrelationId}",
+                scopeRows.Count, distinctUserIds.Count, totalCombinations, correlationId);
 
             var deletedCount = 0;
             var createdCount = 0;
@@ -195,12 +196,12 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
                 foreach (var userId in distinctUserIds)
                 {
-                    foreach (var scope in scopeCombinations)
+                    foreach (var scope in scopeRows)
                     {
                         var assignment = await _assignmentManager.CreateAsync(
                             userId,
                             null,
-                            scope.AcademicYearId,
+                            targetAcademicYearId,
                             scope.EducationBoardId,
                             scope.EducationMediumId,
                             scope.EducationMediumStageId,
@@ -218,15 +219,15 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
                 // STEP 1: Replace only the academic-year slice being edited.
                 _logger.LogInformation(
-                    "Step 1/2: Deleting existing scope assignments for {UserCount} users in {AcademicYearCount} academic years. CorrelationId: {CorrelationId}",
-                    distinctUserIds.Count, targetAcademicYearIds.Count, correlationId);
+                    "Step 1/2: Deleting existing scope assignments for {UserCount} users in academic year {AcademicYearId}. CorrelationId: {CorrelationId}",
+                    distinctUserIds.Count, targetAcademicYearId, correlationId);
 
                 var existingQuery = (await _scopeRepository.GetQueryableAsync())
                     .Where(x =>
                         x.UserId.HasValue &&
                         distinctUserIds.Contains(x.UserId.Value) &&
                         x.AcademicYearId.HasValue &&
-                        targetAcademicYearIds.Contains(x.AcademicYearId.Value));
+                        x.AcademicYearId.Value == targetAcademicYearId);
 
                 var existingAssignments = await AsyncExecuter.ToListAsync(existingQuery);
                 deletedCount = existingAssignments.Count;
@@ -256,7 +257,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
                 await _employeeOrganizationAssignmentSyncer.SyncFromAcademicPermissionsAsync(
                     distinctUserIds,
-                    targetAcademicYearIds);
+                    [targetAcademicYearId]);
                 await CurrentUnitOfWork.SaveChangesAsync();
 
                 // Invalidate cache for all affected users (only after successful save) - OPTIMIZED: Parallel
@@ -280,7 +281,9 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                     AssignmentsCreated = createdCount,
                     TotalCombinations = totalCombinations,
                     AffectedUserIds = affectedUserIds.ToList(),
-                    Message = $"Successfully replaced scope assignments for {affectedUserIds.Count} users in {targetAcademicYearIds.Count} academic years. Deleted {deletedCount} old assignments and created {createdCount} new assignments."
+                    Message = input.ClearExisting
+                        ? $"Successfully cleared scope assignments for {affectedUserIds.Count} users in one academic year. Deleted {deletedCount} old assignments."
+                        : $"Successfully replaced scope assignments for {affectedUserIds.Count} users in one academic year. Deleted {deletedCount} old assignments and created {createdCount} new assignments."
                 };
             }
             catch (Exception dbEx) when (IsConstraintViolationException(dbEx))
@@ -313,78 +316,58 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         }
     }
 
-    /// <summary>
-    /// Generates all combinations (cartesian product) of scope parameters from the input.
-    /// </summary>
-    private List<ScopeParameterCombination> GenerateScopeCombinations(BulkScopeAssignmentDto input)
+    private static List<BulkScopeAssignmentScopeDto> NormalizeBulkScopeRows(BulkScopeAssignmentDto input)
     {
-        // Start with a single empty combination
-        var currentCombinations = new List<ScopeParameterCombination> { new ScopeParameterCombination() };
+        var scopes = input.Scopes;
 
-        // Helper function to multiply combinations with a list of IDs
-        void MultiplyWithIds(List<Guid>? ids, Action<ScopeParameterCombination, Guid?> setter)
+        if (input.ClearExisting)
         {
-            if (ids == null || !ids.Any())
+            if (scopes is { Count: > 0 })
             {
-                // If no IDs provided, add null to each combination
-                foreach (var combo in currentCombinations)
-                {
-                    setter(combo, null);
-                }
+                throw InvalidBulkScopeInput("ClearExisting can only be used with an empty scopes array.");
             }
-            else
-            {
-                // Create new combinations for each ID
-                var newCombinations = new List<ScopeParameterCombination>();
-                foreach (var combo in currentCombinations)
-                {
-                    foreach (var id in ids.Distinct())
-                    {
-                        var newCombo = combo.Clone();
-                        setter(newCombo, id);
-                        newCombinations.Add(newCombo);
-                    }
-                }
-                currentCombinations = newCombinations;
-            }
+
+            return [];
         }
 
-        // Multiply combinations for each hierarchical level
-        MultiplyWithIds(input.AcademicYearIds, (combo, id) => combo.AcademicYearId = id);
-        MultiplyWithIds(input.EducationBoardIds, (combo, id) => combo.EducationBoardId = id);
-        MultiplyWithIds(input.EducationMediumIds, (combo, id) => combo.EducationMediumId = id);
-        MultiplyWithIds(input.EducationMediumStageIds, (combo, id) => combo.EducationMediumStageId = id);
-        MultiplyWithIds(input.StandardIds, (combo, id) => combo.StandardId = id);
-        MultiplyWithIds(input.DivisionIds, (combo, id) => combo.DivisionId = id);
-
-        return currentCombinations;
-    }
-
-    /// <summary>
-    /// Helper class to represent a single scope parameter combination.
-    /// </summary>
-    private class ScopeParameterCombination
-    {
-        public Guid? AcademicYearId { get; set; }
-        public Guid? EducationBoardId { get; set; }
-        public Guid? EducationMediumId { get; set; }
-        public Guid? EducationMediumStageId { get; set; }
-        public Guid? StandardId { get; set; }
-        public Guid? DivisionId { get; set; }
-
-        public ScopeParameterCombination Clone()
+        if (scopes == null || scopes.Count == 0)
         {
-            return new ScopeParameterCombination
-            {
-                AcademicYearId = this.AcademicYearId,
-                EducationBoardId = this.EducationBoardId,
-                EducationMediumId = this.EducationMediumId,
-                EducationMediumStageId = this.EducationMediumStageId,
-                StandardId = this.StandardId,
-                DivisionId = this.DivisionId
-            };
+            throw InvalidBulkScopeInput(
+                "At least one scope row must be provided when ClearExisting is false. Use an empty scope row for full academic-year access.");
         }
+
+        if (scopes.Any(scope => scope == null))
+        {
+            throw InvalidBulkScopeInput("Scope rows cannot be null.");
+        }
+
+        if (scopes.Any(HasEmptyGuid))
+        {
+            throw InvalidBulkScopeInput("Scope IDs cannot be empty GUIDs.");
+        }
+
+        return scopes
+            .GroupBy(x => new
+            {
+                x.EducationBoardId,
+                x.EducationMediumId,
+                x.EducationMediumStageId,
+                x.StandardId,
+                x.DivisionId
+            })
+            .Select(x => x.First())
+            .ToList();
     }
+
+    private static bool HasEmptyGuid(BulkScopeAssignmentScopeDto scope) =>
+        scope.EducationBoardId == Guid.Empty ||
+        scope.EducationMediumId == Guid.Empty ||
+        scope.EducationMediumStageId == Guid.Empty ||
+        scope.StandardId == Guid.Empty ||
+        scope.DivisionId == Guid.Empty;
+
+    private static BusinessException InvalidBulkScopeInput(string message) =>
+        new(code: UserScopeErrorCodes.InvalidInput, message: message);
 
     [Authorize(ShikshaMitraPermissions.UserScope.Revoke)]
     public async Task RevokeScopeAsync(Guid id)

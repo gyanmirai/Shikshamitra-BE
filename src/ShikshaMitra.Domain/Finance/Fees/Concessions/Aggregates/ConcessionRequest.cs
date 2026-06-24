@@ -149,11 +149,6 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(FinanceConcessionErrorCodes.InvalidRejectionReason);
 		}
 
-		if (rejectorId == CreatorId)
-		{
-			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
-		}
-
 		Status = ConcessionRequestStatus.Rejected;
 		RejectionReason = reason.Trim();
 		this.SetProperty(ApprovedByProperty, rejectorId);

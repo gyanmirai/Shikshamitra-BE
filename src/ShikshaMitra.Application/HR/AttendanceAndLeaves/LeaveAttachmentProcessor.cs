@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Volo.Abp;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -24,6 +25,24 @@ internal static class LeaveAttachmentProcessor
 			using var ms = new MemoryStream();
 			await stream.CopyToAsync(ms);
 			return ms.ToArray();
+		}
+
+		if (attachment is IFormFile formFile)
+		{
+			if (formFile.Length == 0 || string.IsNullOrEmpty(formFile.FileName))
+			{
+				return null;
+			}
+
+			ValidateFileUpload(formFile.Length, formFile.FileName);
+
+			using var formFileStream = new MemoryStream();
+			await formFile.CopyToAsync(formFileStream);
+			var formFileBytes = formFileStream.ToArray();
+
+			ValidateFileContent(formFileBytes, formFile.FileName);
+
+			return formFileBytes;
 		}
 
 		var formFileType = attachment.GetType();

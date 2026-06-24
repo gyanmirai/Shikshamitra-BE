@@ -13,6 +13,8 @@ public class HomeworkDto
     public string SubjectName { get; set; } = string.Empty;
     public Guid? ChapterId { get; set; }
     public string? ChapterName { get; set; }
+    public List<Guid>? ChapterIds { get; set; } = new();
+    public List<string>? ChapterNames { get; set; } = new();
     public string Title { get; set; } = string.Empty;
     public Guid HomeworkTypeId { get; set; }
     public string HomeworkTypeName { get; set; } = string.Empty;

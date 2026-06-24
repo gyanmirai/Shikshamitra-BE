@@ -444,7 +444,35 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 				$"Cannot schedule entrance exam. Student must be in RegistrationFormIssued or Registration status. Current status: {Status}");
 		}
 
-		AdditionalDetail?.ScheduleEntranceExam(
+		EnsureAdditionalDetailExists();
+		AdditionalDetail!.ScheduleEntranceExam(
+			entranceExamSlotId,
+			slotStartDate,
+			slotEndDate,
+			slotRoomNo);
+
+		ChangeStatus(StudentLifeCycleStatusEnum.EntranceExam);
+	}
+
+	public void RescheduleEntranceExam(
+		Guid entranceExamSlotId,
+		DateTimeOffset slotStartDate,
+		DateTimeOffset slotEndDate,
+		int slotRoomNo)
+	{
+		if (Status != StudentLifeCycleStatusEnum.EntranceExam)
+		{
+			throw new InvalidOperationException(
+				$"Cannot reschedule entrance exam. Student must be in EntranceExam status. Current status: {Status}");
+		}
+
+		if (AdditionalDetail?.EntranceExamObtainedMarks.HasValue == true)
+		{
+			throw new InvalidOperationException("Cannot reschedule entrance exam after a result has been uploaded.");
+		}
+
+		EnsureAdditionalDetailExists();
+		AdditionalDetail!.ScheduleEntranceExam(
 			entranceExamSlotId,
 			slotStartDate,
 			slotEndDate,
@@ -473,7 +501,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 	/// <summary>
 	/// Approves the student admission
 	/// </summary>
-	public void ApproveAdmission()
+	public void ApproveAdmission(string? remarks = null)
 	{
 		if (Status != StudentLifeCycleStatusEnum.Admission)
 		{
@@ -482,8 +510,19 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 		}
 
 		AdmissionApprovalStatus = StudentEnrollmentApprovalState.Approved;
-		AdmissionApprovalRemarks = null; // Clear any previous rejection remarks
+		AdmissionApprovalRemarks = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim();
 		Status = StudentLifeCycleStatusEnum.Enrolled;
+	}
+
+	public void UpdateAdmissionApprovalRemarks(string? remarks)
+	{
+		if (AdmissionApprovalStatus != StudentEnrollmentApprovalState.Approved)
+		{
+			throw new InvalidOperationException(
+				$"Cannot update approval remarks when admission approval status is {AdmissionApprovalStatus}.");
+		}
+
+		AdmissionApprovalRemarks = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim();
 	}
 
 	/// <summary>

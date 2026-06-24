@@ -19,6 +19,7 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
+using ShikshaMitra.Academic.Examination.SeatAllocation;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
 
@@ -38,7 +39,8 @@ public class ExamAppService(
 	IRepository<GradingScale, Guid> gradingScaleRepository,
 	IRepository<ExamSubjectDivision, Guid> examSubjectDivisionRepository,
 	IRepository<ExamMarksWorkflowState, Guid> examMarksWorkflowStateRepository,
-	ExamManager examManager) : ApplicationService, IExamAppService
+	ExamManager examManager,
+	IRepository<ExamSeatAllocation, Guid> examSeatAllocationRepository) : ApplicationService, IExamAppService
 {
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
 	{
@@ -47,7 +49,8 @@ public class ExamAppService(
 			input.ExamName,
 			input.StandardId,
 			input.DivisionIds,
-			input.SubjectIds
+			input.SubjectIds,
+			input.GradingScaleId
 		);
 
 		await examRepository.InsertAsync(exam);
@@ -64,7 +67,8 @@ public class ExamAppService(
 			input.ExamTypeId,
 			input.StandardId,
 			input.DivisionIds,
-			input.SubjectIds
+			input.SubjectIds,
+			input.GradingScaleId
 		);
 
 		await examRepository.UpdateAsync(exam);
@@ -79,6 +83,7 @@ public class ExamAppService(
 			ExamTypeId = exam.ExamTypeId,
 			ExamName = exam.ExamName,
 			StandardId = exam.StandardId,
+			GradingScaleId = exam.GradingScaleId,
 			DivisionIds = exam.ExamDivisions.Select(x => x.DivisionId).ToList(),
 			SubjectIds = exam.ExamSubjects.Select(x => x.SubjectId).ToList()
 		};
@@ -365,6 +370,27 @@ public class ExamAppService(
 			throw new UserFriendlyException("Completed exams cannot be deleted");
 		}
 
+		// Block deletion if the exam is in use
+		var usageParts = new System.Collections.Generic.List<string>();
+
+		var marksCount = await examMarkRepository.CountAsync(m => m.ExamId == examId);
+		if (marksCount > 0)
+			usageParts.Add($"{marksCount} exam mark(s)");
+
+		var workflowStateCount = await examMarksWorkflowStateRepository.CountAsync(w => w.ExamId == examId);
+		if (workflowStateCount > 0)
+			usageParts.Add($"{workflowStateCount} exam marks workflow state(s)");
+
+		var seatAllocationCount = await examSeatAllocationRepository.CountAsync(s => s.ExamId == examId);
+		if (seatAllocationCount > 0)
+			usageParts.Add($"{seatAllocationCount} seat allocation(s)");
+
+		if (usageParts.Count > 0)
+		{
+			throw new BusinessException(ExamErrorCodes.ExamIsInUse)
+				.WithData("message", $"Cannot delete exam '{exam.ExamName}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+		}
+
 		await examRepository.DeleteAsync(exam);
 	}
 
@@ -505,18 +531,34 @@ public class ExamAppService(
 
 		var isPublished = existingMarks.Any() && existingMarks.All(m => m.IsPublished);
 
-		// Grading scales
-		var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
-		var gradeRanges = (await AsyncExecuter.ToListAsync(gradingScales))
-			.SelectMany(gs => gs.GradeRanges)
-			.OrderByDescending(gr => gr.MinMarks)
-			.ToList();
+		// Fetch the specific grading scale configured for this subject
+		ICollection<GradeRange> gradeRanges = new List<GradeRange>();
+		double scaleTotal = 100.0;
+		if (examSubject.GradeScalingId.HasValue)
+		{
+			var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
+			var customScale = gradingScales.FirstOrDefault(gs => gs.Id == examSubject.GradeScalingId.Value);
+			if (customScale != null)
+			{
+				gradeRanges = customScale.GradeRanges.OrderByDescending(gr => gr.MinMarks).ToList();
+				if (double.TryParse(customScale.TotalMarks, out var parsedTotal))
+				{
+					scaleTotal = parsedTotal;
+				}
+			}
+		}
 
 		string? GetGrade(double? marks, double totalMarks)
 		{
 			if (marks == null || totalMarks == 0) return null;
+			if (gradeRanges.Any())
+			{
+				var scaled = (marks.Value / totalMarks) * scaleTotal;
+				return gradeRanges.FirstOrDefault(gr => scaled >= gr.MinMarks && scaled <= gr.MaxMarks)?.Grade;
+			}
 			var pct = (marks.Value / totalMarks) * 100;
-			return gradeRanges.FirstOrDefault(gr => pct >= gr.MinMarks && pct <= gr.MaxMarks)?.Grade;
+			return pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 70 ? "B+" : pct >= 60 ? "B"
+				 : pct >= 50 ? "C+" : pct >= 40 ? "C" : pct >= 33 ? "D" : "F";
 		}
 
 		var items = pagedStudents.Select(student =>
@@ -535,7 +577,8 @@ public class ExamAppService(
 				Grade = assigned ? GetGrade(mark!.MarksObtained, examSubject.TotalMarks ?? 0) : null,
 				Feedback = mark?.Feedback,
 				Status = assigned ? 1 : 0,
-				AttendanceStatus = mark != null ? (int) mark.AttendanceStatus : (int) ExamAttendanceStatus.Present
+				AttendanceStatus = mark != null ? (int) mark.AttendanceStatus : (int) ExamAttendanceStatus.Present,
+				GradeScalingId = examSubject.GradeScalingId
 			};
 		}).ToList();
 
@@ -589,18 +632,34 @@ public class ExamAppService(
 		if (isPresent && input.Marks == null)
 			throw new UserFriendlyException("Obtained marks are required for present students.");
 
-		// Grading
-		var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
-		var gradeRanges = (await AsyncExecuter.ToListAsync(gradingScales))
-			.SelectMany(gs => gs.GradeRanges)
-			.OrderByDescending(gr => gr.MinMarks)
-			.ToList();
+		// Fetch the specific grading scale configured for this subject
+		ICollection<GradeRange> gradeRanges = new List<GradeRange>();
+		double scaleTotal = 100.0;
+		if (examSubject.GradeScalingId.HasValue)
+		{
+			var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
+			var customScale = gradingScales.FirstOrDefault(gs => gs.Id == examSubject.GradeScalingId.Value);
+			if (customScale != null)
+			{
+				gradeRanges = customScale.GradeRanges.OrderByDescending(gr => gr.MinMarks).ToList();
+				if (double.TryParse(customScale.TotalMarks, out var parsedTotal))
+				{
+					scaleTotal = parsedTotal;
+				}
+			}
+		}
 
 		string? GetGrade(double marks, double totalMarks)
 		{
 			if (totalMarks == 0) return null;
+			if (gradeRanges.Any())
+			{
+				var scaled = (marks / totalMarks) * scaleTotal;
+				return gradeRanges.FirstOrDefault(gr => scaled >= gr.MinMarks && scaled <= gr.MaxMarks)?.Grade;
+			}
 			var pct = (marks / totalMarks) * 100;
-			return gradeRanges.FirstOrDefault(gr => pct >= gr.MinMarks && pct <= gr.MaxMarks)?.Grade;
+			return pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 70 ? "B+" : pct >= 60 ? "B"
+				 : pct >= 50 ? "C+" : pct >= 40 ? "C" : pct >= 33 ? "D" : "F";
 		}
 
 		if (existing != null)
@@ -637,7 +696,8 @@ public class ExamAppService(
 			TotalMarks = examSubject.TotalMarks ?? input.TotalMarks,
 			Grade = grade,
 			Feedback = isPresent ? input.Feedback : null,
-			AttendanceStatus = input.AttendanceStatus
+			AttendanceStatus = input.AttendanceStatus,
+			GradeScalingId = examSubject.GradeScalingId
 		};
 	}
 

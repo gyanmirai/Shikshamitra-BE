@@ -124,6 +124,10 @@ public partial class SalarySlipManager : DomainService
 			new[] { employeeId },
 			year,
 			month,
+			new Dictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>>
+			{
+				[employeeId] = workingUnitsByDate
+			},
 			cancellationToken);
 		var components = await _payrollComponentRepository.GetByEmployeeIdAsync(employeeId, cancellationToken);
 		components = await _componentVersionResolver.ResolveAsync(components, normalizedMonthYear);

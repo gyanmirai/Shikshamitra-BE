@@ -15,7 +15,7 @@ namespace ShikshaMitra.Finance.Fees.Charges;
 public class ChargeRequestManager(
 	IRepository<ChargeRequest, Guid> chargeRequestRepository,
 	IRepository<Charge, Guid> chargeRepository,
-	IRepository<Student, Guid> studentRepository,
+	IStudentRepository studentRepository,
 	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
 	ChargeAudienceResolver audienceResolver,
 	IGuidGenerator guidGenerator,
@@ -189,12 +189,28 @@ public class ChargeRequestManager(
 		bool autoApprove)
 	{
 		var lines = new List<Charge>();
+		var distinctStudentIds = studentIds.Distinct().ToList();
+		var studentQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var students = await AsyncExecuter.ToListAsync(
+			studentQuery
+				.Where(student => distinctStudentIds.Contains(student.Id))
+				.Select(student => new
+				{
+					student.Id,
+					student.AcademicBoardId,
+					student.AcademicMediumId,
+					student.StandardId,
+					student.DivisionId
+				}));
+		var studentMap = students.ToDictionary(student => student.Id);
 
-		foreach (var studentId in studentIds)
+		foreach (var studentId in distinctStudentIds)
 		{
-			var student = await studentRepository.FindAsync(studentId)
-				?? throw new BusinessException(FinanceChargeErrorCodes.StudentNotFound)
+			if (!studentMap.TryGetValue(studentId, out var student))
+			{
+				throw new BusinessException(FinanceChargeErrorCodes.StudentNotFound)
 					.WithData("StudentId", studentId);
+			}
 
 			if (student.StandardId is null || student.DivisionId is null)
 			{

@@ -96,7 +96,7 @@ public class EfCoreStudentRepository(
         var dbSet = await GetDbSetAsync();
         var classIdSet = classIds.ToList();
 
-        var query = dbSet.Where(s =>
+        var query = dbSet.IgnoreAutoIncludes().Where(s =>
             s.AcademicYearId == academicYearId
             && s.AcademicBoardId == boardId
             && s.AcademicMediumId == educationMediumId

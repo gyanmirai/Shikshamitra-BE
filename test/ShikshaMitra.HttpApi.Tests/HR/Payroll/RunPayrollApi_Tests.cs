@@ -380,6 +380,52 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Reduce_Payable_Days_For_Approved_Unpaid_Leave()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		const string month = "2026-06";
+		const decimal monthlyGross = 30000m;
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollUnpaidLeave{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+		await AssignSalaryStructureAsync(
+			employee.Id,
+			"PayrollUnpaidLeave",
+			earningAmount: monthlyGross,
+			deductionAmount: 0m,
+			useMasterComponents: false);
+		await MarkAttendanceAsync(employee.Id, "04-06-2026");
+		await MarkAttendanceAsync(employee.Id, "05-06-2026");
+		var leavePolicyId = await EnsureActiveDefaultLeavePolicyAsync(new DateTime(2026, 6, 1));
+		await SeedApprovedLeaveAsync(
+			employee.Id,
+			leavePolicyId,
+			new DateTime(2026, 6, 5),
+			LeavePaidType.Unpaid,
+			approvedUnits: 1m);
+
+		var preview = await GetPayrollPreviewAsync(month, forceRefresh: true);
+		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
+		item.BasisDays.ShouldBeGreaterThan(0);
+		var expectedGross = Math.Round(
+			monthlyGross / (decimal)item.BasisDays,
+			2,
+			MidpointRounding.AwayFromZero);
+
+		item.PresentDays.ShouldBe(2);
+		item.PayableDays.ShouldBe(1d);
+		item.FullGrossSalary.ShouldBe((double)monthlyGross);
+		item.GrossSalary.ShouldBe((double)expectedGross);
+		item.NetPay.ShouldBe((double)expectedGross);
+		item.IssueCodes.ShouldNotContain(IssueCodes.NoAttendance);
+		item.IssueCodes.ShouldNotContain(IssueCodes.MissingSalaryStructure);
+		item.IssueCodes.ShouldNotContain(IssueCodes.PayrollPolicyConfiguration);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_And_Payslip_Should_Include_Overtime_Earning()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
@@ -2111,6 +2157,19 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		Guid leavePolicyId,
 		DateTime leaveDate,
 		decimal approvedUnits)
+		=> await SeedApprovedLeaveAsync(
+			employeeId,
+			leavePolicyId,
+			leaveDate,
+			LeavePaidType.Paid,
+			approvedUnits);
+
+	private async Task SeedApprovedLeaveAsync(
+		Guid employeeId,
+		Guid leavePolicyId,
+		DateTime leaveDate,
+		LeavePaidType paidType,
+		decimal approvedUnits)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -2125,20 +2184,20 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			var leavePolicy = await leavePolicyRepository.GetWithRulesAsync(leavePolicyId)
 				?? throw new InvalidOperationException("Leave policy not found for payroll regression setup.");
-			var paidRule = leavePolicy.Rules.Single(x => x.PaidType == LeavePaidType.Paid);
+			var leaveRule = leavePolicy.Rules.Single(x => x.PaidType == paidType);
 			var leave = EmployeeLeave.Create(
 				Guid.NewGuid(),
 				tenantId,
 				employeeId,
 				leavePolicy.Id,
-				paidRule.Id,
-				LeavePaidType.Paid,
+				leaveRule.Id,
+				paidType,
 				new DateTimeOffset(leaveDate.Date),
 				new DateTimeOffset(leaveDate.Date),
 				"Approved leave for payroll setup regression");
 
 			await leaveRepository.InsertAsync(leave, autoSave: false);
-			await leaveManager.ApproveAsync(leave, LeavePaidType.Paid, approvedUnits);
+			await leaveManager.ApproveAsync(leave, paidType, approvedUnits);
 			await uow.CompleteAsync();
 		}
 	}

@@ -74,7 +74,7 @@ public class TakeAttendanceAccessService(
 		}
 
 		var scopedStage = assignedStages.FirstOrDefault(accessibleStageIds.Contains);
-		return scopedStage == Guid.Empty ? null : scopedStage;
+		return scopedStage == Guid.Empty ? assignedStages.First() : scopedStage;
 	}
 
 	public static void EnsureTenantWideDayLockAllowed(UserScopeContext scope)

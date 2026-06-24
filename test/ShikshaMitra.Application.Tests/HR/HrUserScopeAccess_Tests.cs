@@ -1,4 +1,5 @@
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using Shouldly;
 using System;
 using System.Collections.Generic;
@@ -80,5 +81,43 @@ public class HrUserScopeAccess_Tests
 			includeUnknownStageEmployees: false);
 
 		result.ShouldBe(new[] { inScopeEmployeeId });
+	}
+
+	[Fact]
+	public void ResolveAssignedStageForScope_Should_Prefer_Accessible_Assignment()
+	{
+		var inScopeStageId = Guid.NewGuid();
+		var outOfScopeStageId = Guid.NewGuid();
+		var scope = new UserScopeContext
+		{
+			UserId = Guid.NewGuid(),
+			MediumStageIds = new List<Guid> { inScopeStageId }
+		};
+
+		var result = TakeAttendanceAccessService.ResolveAssignedStageForScope(
+			new[] { outOfScopeStageId, inScopeStageId },
+			scope,
+			new HashSet<Guid> { inScopeStageId });
+
+		result.ShouldBe(inScopeStageId);
+	}
+
+	[Fact]
+	public void ResolveAssignedStageForScope_Should_Preserve_OutOfScope_Assignment_For_Denial()
+	{
+		var inScopeStageId = Guid.NewGuid();
+		var outOfScopeStageId = Guid.NewGuid();
+		var scope = new UserScopeContext
+		{
+			UserId = Guid.NewGuid(),
+			MediumStageIds = new List<Guid> { inScopeStageId }
+		};
+
+		var result = TakeAttendanceAccessService.ResolveAssignedStageForScope(
+			new[] { outOfScopeStageId },
+			scope,
+			new HashSet<Guid> { inScopeStageId });
+
+		result.ShouldBe(outOfScopeStageId);
 	}
 }

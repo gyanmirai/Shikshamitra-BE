@@ -118,12 +118,22 @@ public class LeaveRequestActionWorkflow(
 		}
 
 		var actorContext = await leaveActorAccessService.ResolveContextAsync();
-		if (!actorContext.IsAdminBypass && leave.EmployeeId != actorContext.ActorEmployeeId!.Value)
+		var isApprovedLeaveCancellation = leave.Status == EmployeeLeaveStatusType.Approved;
+		if (isApprovedLeaveCancellation)
+		{
+			if (!actorContext.IsAdminBypass)
+			{
+				await leaveValidationService.EnsureActorMayChangeLeaveStatusAsync(
+					leave.EmployeeId,
+					actorContext.ActorEmployeeId!.Value);
+			}
+		}
+		else if (!actorContext.IsAdminBypass && leave.EmployeeId != actorContext.ActorEmployeeId!.Value)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveDeleteOwnOnly);
 		}
 
-		await employeeLeaveManager.CancelAsync(leave);
+		await employeeLeaveManager.CancelAsync(leave, allowApproved: isApprovedLeaveCancellation);
 		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { leave.EmployeeId });
 
 		return new LeaveRequestDeleteDto { Id = leave.Id };

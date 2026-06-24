@@ -173,6 +173,44 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task SaveDay_Should_Reject_Approved_Leave_Attendance_Mutation()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"OnLeaveSaveBlocked{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		await InsertLeaveForAttendanceAsync(
+			employee.Id,
+			attendanceDate,
+			attendanceDate,
+			EmployeeLeaveStatusType.Approved);
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					InTime = "09:00",
+					OutTime = "17:00",
+					Remarks = "Approved leave mutation must be rejected"
+				}
+			]
+		}, JsonOptions);
+
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.Conflict, body);
+		body.ShouldContain(HRErrorCodes.TakeAttendanceApprovedLeaveMutationNotAllowed);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Day_Should_Not_Auto_Fill_Approved_Leave_Outside_Selected_Date()
 	{

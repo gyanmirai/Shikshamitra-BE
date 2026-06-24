@@ -69,9 +69,9 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 	/// <summary>
 	/// Soft-cancel a leave request: transitions to Cancelled status with audit retention.
 	/// </summary>
-	public async Task<EmployeeLeave> CancelAsync(EmployeeLeave employeeLeave)
+	public async Task<EmployeeLeave> CancelAsync(EmployeeLeave employeeLeave, bool allowApproved = false)
 	{
-		employeeLeave.Cancel();
+		employeeLeave.Cancel(allowApproved);
 		return await employeeLeaveRepository.UpdateAsync(employeeLeave);
 	}
 }

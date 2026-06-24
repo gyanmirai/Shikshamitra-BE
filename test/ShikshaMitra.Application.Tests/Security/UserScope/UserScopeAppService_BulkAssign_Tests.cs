@@ -213,6 +213,54 @@ public class UserScopeAppService_BulkAssign_Tests
     }
 
     [Fact]
+    public async Task BulkAssignAsync_Should_Assign_Multiple_Boards_To_One_Employee()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var user = await CreateUserAsync();
+            var employee = await CreateEmployeeForUserAsync(user.Id);
+            var cbse = await CreateAcademicHierarchyAsync();
+            var gseb = await CreateGsebHierarchyBranchAsync(cbse.AcademicYearId);
+
+            var result = await WithUnitOfWorkAsync(() => _userScopeAppService.BulkAssignAsync(new BulkScopeAssignmentDto
+            {
+                UserIds = [user.Id],
+                AcademicYearId = cbse.AcademicYearId,
+                Scopes =
+                [
+                    new BulkScopeAssignmentScopeDto
+                    {
+                        EducationBoardId = cbse.BoardId
+                    },
+                    new BulkScopeAssignmentScopeDto
+                    {
+                        EducationBoardId = gseb.BoardId
+                    }
+                ]
+            }));
+
+            result.AssignmentsCreated.ShouldBe(2);
+            result.TotalCombinations.ShouldBe(2);
+
+            var assignments = await GetUserAssignmentsAsync(user.Id);
+            assignments.Count.ShouldBe(2);
+            assignments.ShouldContain(x =>
+                x.AcademicYearId == cbse.AcademicYearId &&
+                x.EducationBoardId == cbse.BoardId &&
+                x.GrantsAllMediumsInBoard());
+            assignments.ShouldContain(x =>
+                x.AcademicYearId == gseb.AcademicYearId &&
+                x.EducationBoardId == gseb.BoardId &&
+                x.GrantsAllMediumsInBoard());
+
+            var employeeAssignments = await GetEmployeeOrganizationAssignmentsAsync(employee.Id);
+            employeeAssignments.Select(x => x.EducationMediumStageId).ShouldBe(
+                [cbse.StageId, gseb.StageId],
+                ignoreOrder: true);
+        }
+    }
+
+    [Fact]
     public async Task BulkAssignAsync_Should_Save_Parent_Medium_Node_As_Full_Stage_Access()
     {
         using (_currentTenant.Change(TestTenantId))

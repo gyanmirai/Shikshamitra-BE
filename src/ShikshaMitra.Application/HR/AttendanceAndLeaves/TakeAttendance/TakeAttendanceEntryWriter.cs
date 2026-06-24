@@ -68,7 +68,6 @@ public class TakeAttendanceEntryWriter(
 
 		employeeStageMap.TryGetValue(entry.EmployeeId, out var assignmentStageId);
 		var resolvedStageId = assignmentStageId ?? existing?.EducationMediumStageId;
-		resolvedStageId = TakeAttendanceAccessService.ResolveScopedStageFallback(scope, resolvedStageId);
 
 		await accessService.EnsureEmployeeScopeAllowedAsync(scope, resolvedStageId);
 

@@ -110,8 +110,6 @@ public class TakeAttendanceSaveWorkflow(
 			existingAttendanceStageByEmployeeId.TryGetValue(employeeId, out var existingStageId);
 
 			var resolvedStageId = assignmentStageId ?? existingStageId;
-			resolvedStageId = TakeAttendanceAccessService.ResolveScopedStageFallback(scope, resolvedStageId);
-
 			await accessService.EnsureEmployeeScopeAllowedAsync(scope, resolvedStageId);
 		}
 	}

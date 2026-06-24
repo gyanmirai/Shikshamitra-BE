@@ -19,6 +19,7 @@ public class HrUserScopeAccess_Tests
 		};
 
 		HrUserScopeAccess.CanAccessEmployeeStage(scope, Guid.NewGuid()).ShouldBeTrue();
+		HrUserScopeAccess.CanAccessEmployeeStage(scope, null).ShouldBeTrue();
 	}
 
 	[Fact]
@@ -33,6 +34,7 @@ public class HrUserScopeAccess_Tests
 
 		HrUserScopeAccess.CanAccessEmployeeStage(scope, stageId).ShouldBeTrue();
 		HrUserScopeAccess.CanAccessEmployeeStage(scope, Guid.NewGuid()).ShouldBeFalse();
+		HrUserScopeAccess.CanAccessEmployeeStage(scope, null).ShouldBeFalse();
 	}
 
 	[Fact]

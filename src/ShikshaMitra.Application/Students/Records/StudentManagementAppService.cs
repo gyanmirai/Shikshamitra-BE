@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -37,20 +38,36 @@ public class StudentManagementAppService(
 		{
 			await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(GetStudentRecords));
 
-			// Get students with their additional details
-			var query = (await studentRepository.WithDetailsAsync())
+			var query = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
 				.Where(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled);
 
 			query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
-			var students = await AsyncExecuter.ToListAsync(query);
+			var students = await AsyncExecuter.ToListAsync(
+				query
+					.OrderBy(s => s.FirstName)
+					.ThenBy(s => s.LastName)
+					.ThenBy(s => s.Id)
+					.Select(s => new
+					{
+						StudentId = s.Id,
+						s.FirstName,
+						s.MiddleName,
+						s.LastName,
+						s.GrNo,
+						s.RollNo,
+						s.Status,
+						HouseSettingId = s.AdditionalDetail != null ? s.AdditionalDetail.HouseId : null,
+						IsDivisionHouseLeader = s.AdditionalDetail != null ? s.AdditionalDetail.IsDivisionHouseLeader : null,
+						IsGlobalHouseLeader = s.AdditionalDetail != null ? s.AdditionalDetail.IsGlobalHouseLeader : null
+					}));
 
 			// Get arrangement settings for the division
 			var settings = await studentManagementSettingsRepository.FirstOrDefaultAsync(s => s.DivisionId == divisionId);
 
 			// Get all unique house IDs
 			var houseIds = students
-				.Where(s => s.AdditionalDetail?.HouseId != null)
-				.Select(s => s.AdditionalDetail!.HouseId!.Value)
+				.Where(s => s.HouseSettingId != null)
+				.Select(s => s.HouseSettingId!.Value)
 				.Distinct()
 				.ToList();
 
@@ -65,18 +82,20 @@ public class StudentManagementAppService(
 			foreach (var student in students)
 			{
 				HouseSettings? house = null;
-				if (student.AdditionalDetail?.HouseId != null)
+				if (student.HouseSettingId != null)
 				{
-					houseDictionary.TryGetValue(student.AdditionalDetail.HouseId.Value, out house);
+					houseDictionary.TryGetValue(student.HouseSettingId.Value, out house);
 				}
 
 				result.Add(new StudentRecordDto
 				{
-					StudentId = student.Id,
+					StudentId = student.StudentId,
 					StudentName = $"{student.FirstName} {student.MiddleName} {student.LastName}",
 					GrNo = student.GrNo,
 					RollNo = student.RollNo,
-					HouseSettingId = student.AdditionalDetail?.HouseId,
+					Status = student.Status,
+					OperationalStatus = StudentStatus.Active,
+					HouseSettingId = student.HouseSettingId,
 					HouseSetting = house != null
 						? new HouseSettingsDto
 						{
@@ -86,8 +105,8 @@ public class StudentManagementAppService(
 							Description = house.Description,
 						}
 						: null,
-					IsDivisionHouseLeader = student.AdditionalDetail?.IsDivisionHouseLeader,
-					IsGlobalHouseLeader = student.AdditionalDetail?.IsGlobalHouseLeader
+					IsDivisionHouseLeader = student.IsDivisionHouseLeader,
+					IsGlobalHouseLeader = student.IsGlobalHouseLeader
 				});
 			}
 
@@ -98,6 +117,132 @@ public class StudentManagementAppService(
 			throw new UserFriendlyException("An error occurred while fetching student records.");
 		}
 	}
+
+	public async Task<PendingAssignmentResponseDto> GetPendingAssignmentsAsync(GetPendingAssignmentStudentsInput input)
+	{
+		if (input.StandardId == Guid.Empty)
+		{
+			throw new BusinessException(StudentErrorCodes.RollNumberBatchInvalid)
+				.WithData("Reason", "Standard is required.");
+		}
+
+		if (input.DivisionId == Guid.Empty)
+		{
+			throw new BusinessException(StudentErrorCodes.RollNumberBatchInvalid)
+				.WithData("Reason", "Division is required.");
+		}
+
+		await studentScopeAccessService.EnsureCanAccessStandardAsync(input.StandardId, nameof(GetPendingAssignmentsAsync));
+		await studentScopeAccessService.EnsureCanAccessDivisionAsync(input.DivisionId, nameof(GetPendingAssignmentsAsync));
+
+		var maxResultCount = Math.Clamp(input.MaxResultCount <= 0 ? 500 : input.MaxResultCount, 1, 1000);
+		var skipCount = Math.Max(0, input.SkipCount);
+		var studentsQuery = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
+			.Where(s => s.StandardId == input.StandardId
+				&& s.DivisionId == input.DivisionId
+				&& s.Status == StudentLifeCycleStatusEnum.Enrolled
+				&& (!s.GrNo.HasValue || !s.RollNo.HasValue));
+
+		if (input.AdmissionDateFrom.HasValue)
+		{
+			var from = input.AdmissionDateFrom.Value.UtcDateTime;
+			studentsQuery = studentsQuery.Where(s => s.CreationTime >= from);
+		}
+
+		if (input.AdmissionDateTo.HasValue)
+		{
+			var to = input.AdmissionDateTo.Value.UtcDateTime.Date.AddDays(1);
+			studentsQuery = studentsQuery.Where(s => s.CreationTime < to);
+		}
+
+		studentsQuery = await studentScopeAccessService.ApplyCurrentUserScopeAsync(studentsQuery);
+		var totalCount = await AsyncExecuter.CountAsync(studentsQuery);
+		var rawRows = await AsyncExecuter.ToListAsync(
+			studentsQuery
+				.OrderBy(s => s.CreationTime)
+				.ThenBy(s => s.Id)
+				.Skip(skipCount)
+				.Take(maxResultCount)
+				.Select(s => new
+				{
+					StudentId = s.Id,
+					s.FirstName,
+					s.MiddleName,
+					s.LastName,
+					DateOfBirth = s.AdditionalDetail != null ? s.AdditionalDetail.DateOfBirth : null,
+					Gender = s.AdditionalDetail != null ? s.AdditionalDetail.Gender : null,
+					ContactNo = s.ContactDetail != null ? s.ContactDetail.PrimaryContactNo : null,
+					Address1 = s.ContactDetail != null ? s.ContactDetail.Address1 : null,
+					Address2 = s.ContactDetail != null ? s.ContactDetail.Address2 : null,
+					Address3 = s.ContactDetail != null ? s.ContactDetail.Address3 : null,
+					City = s.ContactDetail != null ? s.ContactDetail.City : null,
+					StateName = s.ContactDetail != null && s.ContactDetail.State != null ? s.ContactDetail.State.Name : null,
+					CountryName = s.ContactDetail != null && s.ContactDetail.Country != null ? s.ContactDetail.Country.Name : null,
+					ApplicationNo = s.AdditionalDetail != null ? s.AdditionalDetail.InquiryNo : null,
+					AdmissionNo = s.GrNo.HasValue ? s.GrNo.Value.ToString() : null,
+					AdmissionDate = s.CreationTime,
+					FormNo = s.AdditionalDetail != null ? s.AdditionalDetail.RegistrationFormNo : null,
+					GrNo = s.GrNo,
+					RollNo = s.RollNo,
+					AcademicYearName = s.AcademicYear != null ? s.AcademicYear.Name : null,
+					AcademicMediumName = s.AcademicMedium != null ? s.AcademicMedium.Name : null,
+					s.AcademicMediumStageId,
+					StandardName = s.Standard != null ? s.Standard.Name : null,
+					DivisionName = s.Division != null ? s.Division.Name : null
+				}));
+
+		var stageIds = rawRows
+			.Select(x => x.AcademicMediumStageId)
+			.Where(id => id.HasValue)
+			.Select(id => id!.Value)
+			.Distinct()
+			.ToList();
+		var stages = stageIds.Count == 0
+			? new Dictionary<Guid, string>()
+			: (await educationMediumStageRepository.GetListAsync(stage => stageIds.Contains(stage.Id)))
+				.ToDictionary(stage => stage.Id, stage => stage.Name);
+		var rows = rawRows.Select(s => new PendingAssignmentStudentDto
+		{
+			StudentId = s.StudentId,
+			StudentName = string.Join(" ", new[] { s.FirstName, s.MiddleName, s.LastName }
+				.Where(part => !string.IsNullOrWhiteSpace(part))),
+			FirstName = s.FirstName,
+			MiddleName = s.MiddleName,
+			LastName = s.LastName,
+			DateOfBirth = s.DateOfBirth,
+			Gender = s.Gender,
+			ContactNo = s.ContactNo,
+			Address = string.Join(", ", new[]
+			{
+				s.Address1,
+				s.Address2,
+				s.Address3,
+				s.City,
+				s.StateName,
+				s.CountryName
+			}.Where(part => !string.IsNullOrWhiteSpace(part))),
+			ApplicationNo = s.ApplicationNo,
+			AdmissionNo = s.AdmissionNo,
+			AdmissionDate = s.AdmissionDate,
+			FormNo = s.FormNo,
+			GrNo = s.GrNo,
+			RollNo = s.RollNo,
+			AcademicYearName = s.AcademicYearName,
+			AcademicMediumName = s.AcademicMediumName,
+			EducationMediumStageName = s.AcademicMediumStageId.HasValue && stages.TryGetValue(s.AcademicMediumStageId.Value, out var stageName)
+				? stageName
+				: null,
+			StandardName = s.StandardName,
+			DivisionName = s.DivisionName
+		}).ToList();
+
+		return new PendingAssignmentResponseDto
+		{
+			TotalCount = totalCount,
+			Items = rows
+		};
+	}
+
 	public async Task AssignHouseToStudent(Guid studentId, Guid houseId)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);

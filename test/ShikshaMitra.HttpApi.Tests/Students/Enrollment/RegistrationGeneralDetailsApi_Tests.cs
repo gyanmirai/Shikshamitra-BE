@@ -11,13 +11,17 @@ using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Students;
 using ShikshaMitra.Students.Enrollment;
+using ShikshaMitra.Students.Enrollments.Notes;
 using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using Shouldly;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -159,6 +163,57 @@ public class RegistrationGeneralDetailsApi_Tests : ShikshaMitraApiTestBase
             item.FormNo == registration.FormNo &&
             item.Status == StudentLifeCycleStatusEnum.Registration &&
             item.StudentName.Contains(registration.FirstName));
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_Latest_Note_Status_For_Form_Issued_Students()
+    {
+        var studentId = await StudentEnrollmentTestHelper.CreateStudentWithFormAndGetIdAsync(
+            Client,
+            "FormStatus");
+        var note = new CreateUpdateStudentNoteDto
+        {
+            Note = "Parents are interested after form issue.",
+            NextReminderDate = DateTimeOffset.UtcNow.AddDays(2),
+            Status = NoteStatusEnum.Interested
+        };
+        var noteResponse = await Client.PostAsJsonAsync(
+            $"/api/student/enrollment/{studentId}/notes",
+            note,
+            JsonOptions);
+        noteResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent, await noteResponse.Content.ReadAsStringAsync());
+
+        var response = await Client.GetAsync(
+            $"/api/student/enrollment/registrations/forms?academicMediumId={StudentEnrollmentTestHelper.DefaultAcademicMediumId}&maxResultCount=50");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<Result<PagedResultDto<StudentDto>>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        var row = body.Data.Items.Single(item => item.StudentId == studentId);
+        row.InquiryStatus.ShouldBe(NoteStatusEnum.Interested);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_Entrance_Exam_Status_For_Registration_Table()
+    {
+        var registration = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(
+            Client,
+            "EntranceStatus");
+
+        var response = await Client.GetAsync(
+            $"/api/student/enrollment/registrations?academicMediumId={StudentEnrollmentTestHelper.DefaultAcademicMediumId}&maxResultCount=50");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<Result<PagedResultDto<StudentDto>>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        var row = body.Data.Items.Single(item => item.StudentId == registration.StudentId);
+        row.EntranceExamStatus.ShouldBeNull();
+        row.EntranceExamStatusDisplay.ShouldBe("Not Scheduled");
+        row.Status.ShouldBe(StudentLifeCycleStatusEnum.Registration);
     }
 
     [Fact]

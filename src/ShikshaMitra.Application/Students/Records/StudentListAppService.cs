@@ -14,6 +14,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using DocumentTypeEntity = ShikshaMitra.Students.StudentEnrollments.Settings.DocumentType;
 
@@ -42,7 +43,10 @@ public class StudentListAppService(
 		await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(GetStudentsByDivisionAsync));
 
 		var studentsQuery = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
-			.Where(s => s.DivisionId == divisionId && s.Status == StudentLifeCycleStatusEnum.Enrolled);
+			.Where(s => s.DivisionId == divisionId
+				&& (s.Status == StudentLifeCycleStatusEnum.Enrolled
+					|| s.Status == StudentLifeCycleStatusEnum.InActive
+					|| s.Status == StudentLifeCycleStatusEnum.Left));
 
 		studentsQuery = await studentScopeAccessService.ApplyCurrentUserScopeAsync(studentsQuery);
 
@@ -102,6 +106,13 @@ public class StudentListAppService(
 						? s.AdditionalDetail.InquiryPreference.PreferenceName
 						: null,
 					IsFeeStructureAssigned = s.FeeStructureId.HasValue,
+					StudentEnrollmentState = s.Status,
+					Status = s.Status,
+					OperationalStatus = s.Status == StudentLifeCycleStatusEnum.Left
+						? StudentStatus.Left
+						: s.Status == StudentLifeCycleStatusEnum.InActive
+							? StudentStatus.Inactive
+							: StudentStatus.Active,
 					HasPhoto = !string.IsNullOrWhiteSpace(s.PhotoBlobName),
 					PhotoUrl = !string.IsNullOrWhiteSpace(s.PhotoBlobName) ? $"/api/students/records/{s.Id}/photo" : null
 				})
@@ -350,7 +361,13 @@ public class StudentListAppService(
 
 	public async Task ChangeStudentStatusAsync(Guid studentId, ChangeStudentStatusDto input)
 	{
-		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
+		var studentQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var student = await AsyncExecuter.FirstOrDefaultAsync(studentQuery.Where(s => s.Id == studentId));
+		if (student == null)
+		{
+			throw new EntityNotFoundException(typeof(Student), studentId);
+		}
+
 		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, nameof(ChangeStudentStatusAsync));
 
 		try

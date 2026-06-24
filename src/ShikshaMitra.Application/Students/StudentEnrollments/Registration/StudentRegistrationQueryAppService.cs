@@ -12,6 +12,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
 public class StudentRegistrationQueryAppService(
     IStudentRepository studentRepository,
+    IRepository<StudentNote, Guid> studentNoteRepository,
     EntityValidationService validationService,
     StudentScopeAccessService studentScopeAccessService
 ) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
@@ -47,7 +48,8 @@ public class StudentRegistrationQueryAppService(
             .Skip(skipCount)
             .Take(maxResultCount);
 
-        var results = await AsyncExecuter.ToListAsync(SelectRegistrationRows(pagedQuery));
+        var results = await AttachLatestInquiryStatusesAsync(
+            await AsyncExecuter.ToListAsync(SelectRegistrationRows(pagedQuery)));
         var resultList = results.Select(MapRegistrationListRow).ToList();
 
         return new PagedResultDto<StudentDto>(totalCount, resultList);
@@ -83,7 +85,8 @@ public class StudentRegistrationQueryAppService(
             .Skip(skipCount)
             .Take(maxResultCount);
 
-        var results = await AsyncExecuter.ToListAsync(SelectRegistrationRows(pagedQuery));
+        var results = await AttachLatestInquiryStatusesAsync(
+            await AsyncExecuter.ToListAsync(SelectRegistrationRows(pagedQuery)));
         var resultList = results.Select(MapRegistrationListRow).ToList();
 
         return new PagedResultDto<StudentDto>(totalCount, resultList);
@@ -195,6 +198,9 @@ public class StudentRegistrationQueryAppService(
             s.AdditionalDetail != null ? s.AdditionalDetail.Category : Category.General,
             s.AdditionalDetail != null && s.AdditionalDetail.IsLibraryMember == true,
             s.AdditionalDetail != null && s.AdditionalDetail.IsTransportMember == true,
+            s.AdditionalDetail != null ? s.AdditionalDetail.EntranceExamSlotId : null,
+            s.AdditionalDetail != null ? s.AdditionalDetail.EntranceExamStatus : null,
+            NoteStatusEnum.Pending,
             s.ContactDetail != null ? s.ContactDetail.Address1 : null,
             s.ContactDetail != null ? s.ContactDetail.Address2 : null,
             s.ContactDetail != null ? s.ContactDetail.Address3 : null,
@@ -263,9 +269,66 @@ public class StudentRegistrationQueryAppService(
             PreviousSchool = row.PreviousSchool,
             InquiryPreferenceId = row.InquiryPreferenceId,
             InquiryPreference = row.InquiryPreference,
+            InquiryStatus = row.InquiryStatus,
             Progress = CalculateRegistrationProgressPercentage(row.RegistrationState),
             StudentEnrollmentState = row.StudentEnrollmentState,
+            Status = row.StudentEnrollmentState,
+            EntranceExamStatus = row.EntranceExamStatus,
+            EntranceExamStatusDisplay = ResolveEntranceExamStatusDisplay(
+                row.StudentEnrollmentState,
+                row.EntranceExamSlotId,
+                row.EntranceExamStatus),
             IsFeeStructureAssigned = row.IsFeeStructureAssigned
+        };
+    }
+
+    private async Task<List<StudentRegistrationListRow>> AttachLatestInquiryStatusesAsync(
+        List<StudentRegistrationListRow> rows)
+    {
+        if (rows.Count == 0)
+        {
+            return rows;
+        }
+
+        var studentIds = rows.Select(row => row.StudentId).ToList();
+        var noteRows = await AsyncExecuter.ToListAsync(
+            (await studentNoteRepository.GetQueryableAsync())
+                .Where(note => studentIds.Contains(note.StudentId))
+                .OrderByDescending(note => note.CreationTime)
+                .ThenByDescending(note => note.Id)
+                .Select(note => new
+                {
+                    note.StudentId,
+                    note.Status
+                }));
+
+        var latestStatusByStudent = noteRows
+            .GroupBy(note => note.StudentId)
+            .ToDictionary(group => group.Key, group => group.First().Status);
+
+        return rows
+            .Select(row => latestStatusByStudent.TryGetValue(row.StudentId, out var status)
+                ? row with { InquiryStatus = status }
+                : row)
+            .ToList();
+    }
+
+    private static string ResolveEntranceExamStatusDisplay(
+        StudentLifeCycleStatusEnum studentStatus,
+        Guid? entranceExamSlotId,
+        EntranceExamStatusEnum? entranceExamStatus)
+    {
+        if (studentStatus == StudentLifeCycleStatusEnum.Enrolled)
+        {
+            return "Enrolled";
+        }
+
+        return entranceExamStatus switch
+        {
+            EntranceExamStatusEnum.Pass or EntranceExamStatusEnum.Fail or EntranceExamStatusEnum.Absent => "Completed",
+            EntranceExamStatusEnum.Pending => "Scheduled",
+            _ when entranceExamSlotId.HasValue => "Scheduled",
+            _ => "Not Scheduled"
         };
     }
 
@@ -327,6 +390,9 @@ public class StudentRegistrationQueryAppService(
         Category Category,
         bool IsLibraryMember,
         bool IsTransportMember,
+        Guid? EntranceExamSlotId,
+        EntranceExamStatusEnum? EntranceExamStatus,
+        NoteStatusEnum InquiryStatus,
         string? Address1,
         string? Address2,
         string? Address3,

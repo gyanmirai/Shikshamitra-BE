@@ -321,11 +321,43 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         includedStudent.DateOfBirth.ShouldNotBeNull();
         includedStudent.Age.ShouldNotBeNullOrWhiteSpace();
         includedStudent.Gender.ShouldNotBeNull();
+        includedStudent.Status.ShouldBe(StudentLifeCycleStatusEnum.Enrolled);
+        includedStudent.StudentEnrollmentState.ShouldBe(StudentLifeCycleStatusEnum.Enrolled);
+        includedStudent.OperationalStatus.ShouldBe(ShikshaMitra.Students.StudentRecords.StudentStatus.Active);
         includedStudent.PrimaryContactNo.ShouldNotBeNullOrWhiteSpace();
         includedStudent.City.ShouldBe("Pune");
         includedStudent.State.ShouldNotBeNull();
         includedStudent.Country.ShouldNotBeNull();
         includedStudent.Address.ShouldContain("Pune");
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_List_Inactive_Students_With_Source_Of_Truth_Status()
+    {
+        var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RecordsInactive");
+        await MoveRegistrationToEnrolledAsync(student.StudentId);
+
+        var statusResponse = await Client.PutAsJsonAsync(
+            $"/api/students/records/list/{student.StudentId}/status",
+            new ChangeStudentStatusDto
+            {
+                Status = ShikshaMitra.Students.StudentRecords.StudentStatus.Inactive,
+                Remarks = "Temporary inactive for regression test."
+            },
+            JsonOptions);
+        statusResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent, await statusResponse.Content.ReadAsStringAsync());
+
+        var response = await Client.GetAsync(
+            $"{BaseUrl}/{Factory.SeededDivisionId}?skipCount=0&maxResultCount=20&searchTerm={Uri.EscapeDataString(student.FirstName)}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<PagedResultDto<StudentDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        var row = body.Items.Single(item => item.StudentId == student.StudentId);
+        row.Status.ShouldBe(StudentLifeCycleStatusEnum.InActive);
+        row.StudentEnrollmentState.ShouldBe(StudentLifeCycleStatusEnum.InActive);
+        row.OperationalStatus.ShouldBe(ShikshaMitra.Students.StudentRecords.StudentStatus.Inactive);
     }
 
     [Fact]
@@ -755,6 +787,81 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         body.Data.CurrentPage.ShouldBe(1);
         body.Data.PageSize.ShouldBe(body.Data.Items.Count);
         body.Data.TotalPages.ShouldBe(body.Data.Items.Count == 0 ? 0 : 1);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_Record_List_Arrangement_Metadata_In_Response_Body()
+    {
+        var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RecordMetadata");
+        await MoveRegistrationToEnrolledAsync(student.StudentId);
+
+        var settingsResponse = await Client.PostAsJsonAsync(
+            $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?arrangementType={(int)ArrangementTypeEnum.GirlsFirst}&arrangementBy={(int)ArrangementByEnum.LastName}",
+            new List<UpdateStudentRollNumberDto>
+            {
+                new() { StudentId = student.StudentId, RollNo = 1 }
+            },
+            JsonOptions);
+        settingsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await settingsResponse.Content.ReadAsStringAsync());
+
+        var response = await Client.GetAsync($"/api/students/records/{Factory.SeededDivisionId}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<Result<StudentRecordListResponseDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.ArrangementType.ShouldBe(ArrangementTypeEnum.GirlsFirst);
+        body.Data.ArrangementBy.ShouldBe(ArrangementByEnum.LastName);
+        body.Data.Items.ShouldContain(item => item.StudentId == student.StudentId);
+        body.Data.TotalCount.ShouldBe(body.Data.Items.Count);
+        body.Data.CurrentPage.ShouldBe(1);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_Pending_Gr_And_Roll_Assignment_Students()
+    {
+        var pending = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "PendingAssign");
+        await MoveRegistrationToEnrolledAsync(pending.StudentId);
+
+        var response = await Client.GetAsync(
+            $"/api/students/records/pending-assignments?standardId={Factory.SeededStandardId}&divisionId={Factory.SeededDivisionId}&maxResultCount=50");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<Result<PendingAssignmentResponseDto>>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.Data.ShouldNotBeNull();
+        body.Data.TotalCount.ShouldBeGreaterThanOrEqualTo(1);
+        var row = body.Data.Items.Single(item => item.StudentId == pending.StudentId);
+        row.GrNo.ShouldBeNull();
+        row.RollNo.ShouldBeNull();
+        row.StandardName.ShouldNotBeNullOrWhiteSpace();
+        row.DivisionName.ShouldNotBeNullOrWhiteSpace();
+        row.AdmissionDate.ShouldNotBe(default);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Return_Division_Capacity_Distribution_For_Assign_Division_Lookup()
+    {
+        var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "DivisionCapacity");
+        await MoveRegistrationToEnrolledAsync(student.StudentId);
+
+        var response = await Client.GetAsync(
+            $"/api/education-medium/{StudentEnrollmentTestHelper.DefaultAcademicMediumId}/standards");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var standards = await response.Content.ReadFromJsonAsync<List<StandardDto>>(JsonOptions);
+        standards.ShouldNotBeNull();
+        var division = standards
+            .SelectMany(item => item.Divisions)
+            .Single(item => item.Id == StudentEnrollmentTestHelper.DefaultDivisionId);
+        division.CurrentStudentCount.ShouldBeGreaterThanOrEqualTo(1);
+        division.HeadCount.ShouldBe(division.CurrentStudentCount);
+        division.AvailableSeats.ShouldBe(Math.Max(division.Strength - division.CurrentStudentCount, 0));
+        division.MaleCount.ShouldBeGreaterThanOrEqualTo(0);
+        division.FemaleCount.ShouldBeGreaterThanOrEqualTo(1);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.Students.StudentRecords;
 using System;
 using Volo.Abp.Application.Dtos;
 
@@ -57,6 +58,10 @@ public class StudentDto : EntityDto
 	public double Progress { get; set; } = 0;
 	public string? Remarks { get; set; }
 	public StudentLifeCycleStatusEnum StudentEnrollmentState { get; set; }
+	public StudentLifeCycleStatusEnum Status { get; set; }
+	public StudentStatus? OperationalStatus { get; set; }
+	public EntranceExamStatusEnum? EntranceExamStatus { get; set; }
+	public string? EntranceExamStatusDisplay { get; set; }
 
 	/// <summary>
 	/// True when a fee structure has been assigned to the student.

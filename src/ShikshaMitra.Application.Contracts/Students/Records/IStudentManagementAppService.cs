@@ -8,6 +8,7 @@ namespace ShikshaMitra.Students.Records;
 public interface IStudentManagementAppService : IApplicationService
 {
 	Task<(List<StudentRecordDto> StudentRecords, ArrangementTypeEnum? ArrangementType, ArrangementByEnum? ArrangementBy)> GetStudentRecords(Guid divisionId);
+	Task<PendingAssignmentResponseDto> GetPendingAssignmentsAsync(GetPendingAssignmentStudentsInput input);
 	Task AssignHouseToStudent(Guid studentId, Guid houseId);
 	Task AssignHouseGlobalLeaderAsync(Guid studentId);
 	Task AssignHouseDivisionLeaderAsync(Guid studentId);

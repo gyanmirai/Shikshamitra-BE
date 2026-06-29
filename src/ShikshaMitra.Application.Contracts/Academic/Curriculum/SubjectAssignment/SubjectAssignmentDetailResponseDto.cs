@@ -21,4 +21,19 @@ public class SubjectAssignmentDetailResponseDto
         public string? Prerequisites { get; set; }
         public string? Description { get; set; }
         public List<string> Documents { get; set; } = [];
+
+        public int WeeklyPeriods { get; set; }
+        public DifficultyLevel DifficultyLevel { get; set; }
+        public string? SubjectGroup { get; set; }
+        public bool IsAiSuggested { get; set; }
+        public bool IsCopiedFromPreviousYear { get; set; }
+
+        /// <summary>Setup health score 0-100</summary>
+        public int SetupHealthScore { get; set; }
+
+        /// <summary>Number of chapters/syllabus units</summary>
+        public int ChaptersCount { get; set; }
+
+        /// <summary>Last update timestamp</summary>
+        public DateTime? LastUpdatedAt { get; set; }
 }

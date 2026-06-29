@@ -48,4 +48,29 @@ public class SubjectAssignmentDetailDto
 	/// Attached documents (syllabus, resources, etc.)
 	/// </summary>
 	public List<string>? Documents { get; set; } = new List<string>();
+
+	/// <summary>
+	/// Number of periods per week
+	/// </summary>
+	public int WeeklyPeriods { get; set; } = 0;
+
+	/// <summary>
+	/// Difficulty level (0=Beginner, 1=Intermediate, 2=Advanced)
+	/// </summary>
+	public DifficultyLevel DifficultyLevel { get; set; } = DifficultyLevel.Beginner;
+
+	/// <summary>
+	/// Subject group or department (e.g., "Science", "Humanities")
+	/// </summary>
+	public string? SubjectGroup { get; set; }
+
+	/// <summary>
+	/// Whether this subject was suggested by AI
+	/// </summary>
+	public bool IsAiSuggested { get; set; } = false;
+
+	/// <summary>
+	/// Whether this subject was copied from previous year
+	/// </summary>
+	public bool IsCopiedFromPreviousYear { get; set; } = false;
 }

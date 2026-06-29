@@ -24,7 +24,6 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <summary>
 	/// Gets all subject assignment groups for a standard with optional filters
 	/// </summary>
-	/// <param name="academicMediumId">Academic medium ID</param>
 	/// <param name="classId">Standard/Class ID</param>
 	/// <param name="page">Page number (0-indexed)</param>
 	/// <param name="pageSize">Items per page</param>
@@ -79,7 +78,30 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <summary>
 	/// Gets core and elective subjects for a given academic medium
 	/// </summary>
-	/// <param name="academicMediumId">Academic medium ID</param>
-	/// <returns>List of core and elective subjects</returns>
 	Task<List<CoreElectiveSubjectResponseDto>> GetCoreElectiveSubjectsAsync(Guid academicMediumId);
+
+	/// <summary>
+	/// Returns the setup health score and list of missing items for a single subject assignment
+	/// </summary>
+	Task<SetupHealthDto> GetSetupHealthAsync(Guid assignmentId);
+
+	/// <summary>
+	/// Returns publish readiness for all subjects in a class — overall score, ready count, and per-subject issues
+	/// </summary>
+	Task<PublishReadinessDto> GetPublishReadinessAsync(Guid classId);
+
+	/// <summary>
+	/// Returns current workload summary for a teacher
+	/// </summary>
+	Task<TeacherWorkloadDto> GetTeacherWorkloadAsync(Guid teacherId);
+
+	/// <summary>
+	/// Returns KPI summary cards data for a class (total, core, elective, teacher mapping, health)
+	/// </summary>
+	Task<SubjectKpiDto> GetKpiAsync(Guid classId);
+
+	/// <summary>
+	/// Archives a subject assignment (sets status to Archived without deleting)
+	/// </summary>
+	Task ArchiveAsync(Guid assignmentId);
 }

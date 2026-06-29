@@ -87,6 +87,36 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	public DateTimeOffset? PublishedAt { get; set; }
 
+	/// <summary>
+	/// Number of periods per week allocated for this subject
+	/// </summary>
+	public int WeeklyPeriods { get; set; } = 0;
+
+	/// <summary>
+	/// Difficulty level of the subject for this class
+	/// </summary>
+	public DifficultyLevel DifficultyLevel { get; set; } = DifficultyLevel.Beginner;
+
+	/// <summary>
+	/// Subject group or department (e.g., "Science", "Humanities")
+	/// </summary>
+	public string? SubjectGroup { get; set; }
+
+	/// <summary>
+	/// Whether this subject was suggested by AI
+	/// </summary>
+	public bool IsAiSuggested { get; set; } = false;
+
+	/// <summary>
+	/// Whether this subject was copied from a previous academic year
+	/// </summary>
+	public bool IsCopiedFromPreviousYear { get; set; } = false;
+
+	/// <summary>
+	/// Computed setup health score (0-100)
+	/// </summary>
+	public int SetupHealthScore { get; set; } = 0;
+
 	public ICollection<AssignedSubjectChapter> Chapters { get; set; } =
 		new HashSet<AssignedSubjectChapter>();
 	#endregion
@@ -114,7 +144,12 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? electiveGroupId = null,
 		string? learningGoals = null,
 		string? prerequisites = null,
-		string? description = null
+		string? description = null,
+		int weeklyPeriods = 0,
+		DifficultyLevel difficultyLevel = DifficultyLevel.Beginner,
+		string? subjectGroup = null,
+		bool isAiSuggested = false,
+		bool isCopiedFromPreviousYear = false
 	)
 		: base(id)
 	{
@@ -129,6 +164,11 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Prerequisites = prerequisites;
 		Description = description;
 		ElectiveGroupId = electiveGroupId;
+		WeeklyPeriods = weeklyPeriods;
+		DifficultyLevel = difficultyLevel;
+		SubjectGroup = subjectGroup;
+		IsAiSuggested = isAiSuggested;
+		IsCopiedFromPreviousYear = isCopiedFromPreviousYear;
 
 		Teachers = new HashSet<AssignedSubjectTeacher>();
 		Documents = new HashSet<AssignedSubjectDocument>();
@@ -198,7 +238,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
-	public void AddChapter(Guid id, int chapterNumber, string chapterName, DateTimeOffset startTime, DateTimeOffset endTime, List<string> documents, string? description = null)
+	public AssignedSubjectChapter AddChapter(Guid id, int chapterNumber, string chapterName, DateTimeOffset startTime, DateTimeOffset endTime, List<string> documents, string? description = null)
 	{
 		var chapter = new AssignedSubjectChapter(id, Id, chapterNumber, chapterName, startTime, endTime, description);
 		foreach (var document in documents)
@@ -206,6 +246,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			chapter.AddDocument(new AssignedSubjectDocument(Guid.NewGuid(), Id, chapter.Id, document));
 		}
 		Chapters.Add(chapter);
+		return chapter;
 	}
 
 	public void RemoveChapter(Guid chapterId)
@@ -215,6 +256,27 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			Chapters.Remove(chapter);
 		}
+	}
+
+	/// <summary>
+	/// Recomputes and stores the setup health score based on plan scoring criteria.
+	/// Score breakdown: SubjectCode=10, SubjectType=10, PrimaryTeacher=20,
+	/// LearningGoals=15, Description=10, Syllabus(chapters)=15, ChaptersAdded=10,
+	/// WeeklyPeriods=5, Documents=5 → total 100
+	/// </summary>
+	public void RecalculateSetupHealth()
+	{
+		var score = 0;
+		if (!string.IsNullOrWhiteSpace(SubjectCode)) score += 10;
+		score += 10; // SubjectType is always set (enum), always award
+		if (Teachers.Any(t => t.TeacherType == SubjectTeacherType.Primary)) score += 20;
+		if (!string.IsNullOrWhiteSpace(LearningGoals)) score += 15;
+		if (!string.IsNullOrWhiteSpace(Description)) score += 10;
+		if (Chapters.Count > 0) score += 15;
+		if (Chapters.Count >= 3) score += 10;
+		if (WeeklyPeriods > 0) score += 5;
+		if (Documents.Count > 0) score += 5;
+		SetupHealthScore = Math.Min(score, 100);
 	}
 	#endregion
 }

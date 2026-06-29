@@ -8,6 +8,8 @@ using ShikshaMitra.Academic.Examination.SeatAllocation;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Academic.QuestionBank;
+using ShikshaMitra.Academic.QuestionPapers;
 using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
@@ -61,6 +63,24 @@ public partial class ShikshaMitraDbContext
     public DbSet<ExamMark> ExamMarks { get; set; }
     public DbSet<ExamMarksWorkflowState> ExamMarksWorkflowStates { get; set; }
     public DbSet<ExamSeatAllocation> ExamSeatAllocations { get; set; }
+
+    // Question Bank
+    public DbSet<QuestionBankSetting> QuestionBankSettings { get; set; }
+    public DbSet<QuestionBankItem> QuestionBankItems { get; set; }
+    public DbSet<QuestionOption> QuestionOptions { get; set; }
+    public DbSet<QuestionAttachment> QuestionAttachments { get; set; }
+    public DbSet<QuestionTag> QuestionTags { get; set; }
+    public DbSet<QuestionUsageLog> QuestionUsageLogs { get; set; }
+
+    // Question Papers
+    public DbSet<QuestionPaperSetting> QuestionPaperSettings { get; set; }
+    public DbSet<QuestionPaper> QuestionPapers { get; set; }
+    public DbSet<QuestionPaperSection> QuestionPaperSections { get; set; }
+    public DbSet<QuestionPaperQuestion> QuestionPaperQuestions { get; set; }
+    public DbSet<QuestionPaperBlueprint> QuestionPaperBlueprints { get; set; }
+    public DbSet<QuestionPaperBlueprintChapterRule> QuestionPaperBlueprintChapterRules { get; set; }
+    public DbSet<QuestionPaperBlueprintDifficultyRule> QuestionPaperBlueprintDifficultyRules { get; set; }
+    public DbSet<QuestionPaperBlueprintBloomRule> QuestionPaperBlueprintBloomRules { get; set; }
 
     // Result lifecycle
     public DbSet<ExamResultHeader> ExamResultHeaders { get; set; }

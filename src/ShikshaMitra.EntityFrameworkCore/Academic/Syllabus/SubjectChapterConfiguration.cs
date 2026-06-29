@@ -25,5 +25,21 @@ public class SubjectChapterConfiguration : IEntityTypeConfiguration<AssignedSubj
 
 		builder.Property(x => x.ChapterNumber)
 			.IsRequired();
+
+		builder.Property(x => x.UnitName).HasMaxLength(128);
+		builder.Property(x => x.TermName).HasMaxLength(128);
+		builder.Property(x => x.Topic).HasMaxLength(256);
+		builder.Property(x => x.DifficultyLevel).HasMaxLength(64);
+		builder.Property(x => x.BloomLevel).HasMaxLength(64);
+		builder.Property(x => x.Visibility).HasMaxLength(64);
+		builder.Property(x => x.PublishStatus).HasMaxLength(64);
+		builder.Property(x => x.ReviewStatus).HasMaxLength(64);
+		builder.Property(x => x.CoverageStatus).HasMaxLength(64);
+		builder.Property(x => x.LessonPlanStatus).HasMaxLength(64);
+		builder.Property(x => x.HomeworkStatus).HasMaxLength(64);
+		builder.Property(x => x.AssessmentStatus).HasMaxLength(64);
+		builder.Property(x => x.ResourceStatus).HasMaxLength(64);
+		builder.Property(x => x.TemplateSource).HasMaxLength(128);
+		builder.Property(x => x.VersionLabel).HasMaxLength(64);
 	}
 }

@@ -136,6 +136,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<int>("DifficultyLevel")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("ElectiveGroupId")
                         .HasColumnType("uuid");
 
@@ -143,6 +146,12 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsAiSuggested")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsCopiedFromPreviousYear")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -167,6 +176,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTimeOffset?>("PublishedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("SetupHealthScore")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
 
@@ -177,6 +189,9 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<string>("SubjectGroup")
+                        .HasColumnType("text");
 
                     b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid");
@@ -189,6 +204,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
+
+                    b.Property<int>("WeeklyPeriods")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -210,8 +228,31 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AssessmentMethod")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AssessmentStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<Guid>("AssignedSubjectId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("AudioVideoMaterials")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BloomCoverage")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BloomLevel")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("BoardDocuments")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("BufferDays")
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("ChapterEndTime")
                         .HasColumnType("timestamp with time zone");
@@ -226,6 +267,19 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<DateTimeOffset>("ChapterStartTime")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ClassActivities")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CompletionCriteria")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("CopiedFromPreviousYear")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("CoverageStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
@@ -243,9 +297,35 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<string>("DependencyChapterIds")
+                        .HasColumnType("text");
+
                     b.Property<string>("Description")
                         .HasMaxLength(5000)
                         .HasColumnType("character varying(5000)");
+
+                    b.Property<string>("DifficultyDistribution")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DifficultyLevel")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("EstimatedPeriods")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EstimatedTeachingDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("HealthScore")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("HomeworkStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsAiGenerated")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -261,9 +341,97 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<string>("LearningOutcomes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("LessonPlanStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("MarksWeightage")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("NotifyOnPublish")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ParentSummary")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Prerequisites")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ProgressPercentage")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PublishStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("QuestionCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("QuestionTypes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReferenceLinks")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResourceStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ReviewStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("RevisionDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SkillsCovered")
+                        .HasColumnType("text");
+
+                    b.Property<string>("StudentSummary")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Tags")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TeacherNotes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TeachingMethods")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TemplateSource")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
+
+                    b.Property<string>("TermName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Topic")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("UnitName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("VersionLabel")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Visibility")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Worksheets")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 

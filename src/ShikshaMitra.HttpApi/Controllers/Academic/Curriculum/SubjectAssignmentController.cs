@@ -160,4 +160,52 @@ public class SubjectAssignmentController(
 		var result = await subjectAssignmentAppService.GetCoreElectiveSubjectsAsync(academicMediumId);
 		return Result.Success(result);
 	}
+
+	/// <summary>Returns setup health score and missing items for a single subject assignment</summary>
+	[HttpGet("subject-assignments/{assignmentId}/setup-health")]
+	[ProducesResponseType(typeof(SetupHealthDto), 200)]
+	[ProducesResponseType(404)]
+	public async Task<Result<SetupHealthDto>> GetSetupHealthAsync([FromRoute] Guid assignmentId)
+	{
+		var result = await subjectAssignmentAppService.GetSetupHealthAsync(assignmentId);
+		return Result.Success(result);
+	}
+
+	/// <summary>Returns publish readiness report for all subjects in a class</summary>
+	[HttpGet("{classId}/publish-readiness")]
+	[ProducesResponseType(typeof(PublishReadinessDto), 200)]
+	public async Task<Result<PublishReadinessDto>> GetPublishReadinessAsync([FromRoute] Guid classId)
+	{
+		var result = await subjectAssignmentAppService.GetPublishReadinessAsync(classId);
+		return Result.Success(result);
+	}
+
+	/// <summary>Returns workload summary for a teacher</summary>
+	[HttpGet("teachers/{teacherId}/workload")]
+	[ProducesResponseType(typeof(TeacherWorkloadDto), 200)]
+	[ProducesResponseType(404)]
+	public async Task<Result<TeacherWorkloadDto>> GetTeacherWorkloadAsync([FromRoute] Guid teacherId)
+	{
+		var result = await subjectAssignmentAppService.GetTeacherWorkloadAsync(teacherId);
+		return Result.Success(result);
+	}
+
+	/// <summary>Returns KPI summary cards data for a class</summary>
+	[HttpGet("{classId}/subject-kpi")]
+	[ProducesResponseType(typeof(SubjectKpiDto), 200)]
+	public async Task<Result<SubjectKpiDto>> GetKpiAsync([FromRoute] Guid classId)
+	{
+		var result = await subjectAssignmentAppService.GetKpiAsync(classId);
+		return Result.Success(result);
+	}
+
+	/// <summary>Archives a subject assignment (safe alternative to delete when subject is in use)</summary>
+	[HttpPost("subject-assignments/{assignmentId}/archive")]
+	[ProducesResponseType(200)]
+	[ProducesResponseType(404)]
+	public async Task<Result> ArchiveAsync([FromRoute] Guid assignmentId)
+	{
+		await subjectAssignmentAppService.ArchiveAsync(assignmentId);
+		return Result.Success();
+	}
 }

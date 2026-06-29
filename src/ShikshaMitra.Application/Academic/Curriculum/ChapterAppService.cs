@@ -41,7 +41,7 @@ public class ChapterAppService(
 				throw new BusinessException("Academic:Chapter:004", $"Chapter number {createChapterDto.ChapterNo} already exists.");
 			}
 
-			assignedSubject.AddChapter(
+			var chapter = assignedSubject.AddChapter(
 				guidGenerator.Create(),
 				createChapterDto.ChapterNo,
 				createChapterDto.ChapterName,
@@ -50,6 +50,7 @@ public class ChapterAppService(
 				createChapterDto.Documents ?? [],
 				createChapterDto.Description
 			);
+			ApplyPlanningDetails(chapter, createChapterDto);
 		}
 
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
@@ -94,6 +95,7 @@ public class ChapterAppService(
 			updateChapterDto.StartDate,
 			updateChapterDto.EndDate
 		);
+		ApplyPlanningDetails(chapter, updateChapterDto);
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
 		var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
@@ -136,5 +138,107 @@ public class ChapterAppService(
 
 		assignedSubject.RemoveChapter(id);
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
+	}
+
+	private static void ApplyPlanningDetails(AssignedSubjectChapter chapter, CreateChapterDto dto)
+	{
+		chapter.UpdatePlanningDetails(
+			dto.UnitName,
+			dto.TermName,
+			dto.Topic,
+			dto.EstimatedTeachingDays,
+			dto.EstimatedPeriods,
+			dto.RevisionDays,
+			dto.BufferDays,
+			dto.DifficultyLevel,
+			dto.BloomLevel,
+			dto.Tags,
+			dto.LearningOutcomes,
+			dto.SkillsCovered,
+			dto.Prerequisites,
+			dto.TeachingMethods,
+			dto.ClassActivities,
+			dto.CompletionCriteria,
+			dto.TeacherNotes,
+			dto.StudentSummary,
+			dto.ParentSummary,
+			dto.ReferenceLinks,
+			dto.Worksheets,
+			dto.AudioVideoMaterials,
+			dto.BoardDocuments,
+			dto.AssessmentMethod,
+			dto.QuestionTypes,
+			dto.MarksWeightage,
+			dto.BloomCoverage,
+			dto.DifficultyDistribution,
+			dto.Visibility,
+			dto.PublishStatus,
+			dto.ReviewStatus,
+			dto.NotifyOnPublish,
+			dto.ProgressPercentage,
+			dto.CoverageStatus,
+			dto.LessonPlanStatus,
+			dto.HomeworkStatus,
+			dto.AssessmentStatus,
+			dto.ResourceStatus,
+			dto.QuestionCount,
+			dto.HealthScore,
+			dto.IsAiGenerated,
+			dto.CopiedFromPreviousYear,
+			dto.TemplateSource,
+			dto.DependencyChapterIds,
+			dto.VersionLabel
+		);
+	}
+
+	private static void ApplyPlanningDetails(AssignedSubjectChapter chapter, CreateUpdateChapterDto dto)
+	{
+		chapter.UpdatePlanningDetails(
+			dto.UnitName,
+			dto.TermName,
+			dto.Topic,
+			dto.EstimatedTeachingDays,
+			dto.EstimatedPeriods,
+			dto.RevisionDays,
+			dto.BufferDays,
+			dto.DifficultyLevel,
+			dto.BloomLevel,
+			dto.Tags,
+			dto.LearningOutcomes,
+			dto.SkillsCovered,
+			dto.Prerequisites,
+			dto.TeachingMethods,
+			dto.ClassActivities,
+			dto.CompletionCriteria,
+			dto.TeacherNotes,
+			dto.StudentSummary,
+			dto.ParentSummary,
+			dto.ReferenceLinks,
+			dto.Worksheets,
+			dto.AudioVideoMaterials,
+			dto.BoardDocuments,
+			dto.AssessmentMethod,
+			dto.QuestionTypes,
+			dto.MarksWeightage,
+			dto.BloomCoverage,
+			dto.DifficultyDistribution,
+			dto.Visibility,
+			dto.PublishStatus,
+			dto.ReviewStatus,
+			dto.NotifyOnPublish,
+			dto.ProgressPercentage,
+			dto.CoverageStatus,
+			dto.LessonPlanStatus,
+			dto.HomeworkStatus,
+			dto.AssessmentStatus,
+			dto.ResourceStatus,
+			dto.QuestionCount,
+			dto.HealthScore,
+			dto.IsAiGenerated,
+			dto.CopiedFromPreviousYear,
+			dto.TemplateSource,
+			dto.DependencyChapterIds,
+			dto.VersionLabel
+		);
 	}
 }

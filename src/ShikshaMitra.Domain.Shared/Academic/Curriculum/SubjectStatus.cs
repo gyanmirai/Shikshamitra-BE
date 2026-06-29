@@ -3,5 +3,9 @@
 public enum SubjectStatus
 {
 	Draft = 0,
-	Published = 1
+	Published = 1,
+	InReview = 2,
+	NeedsSetup = 3,
+	Archived = 4,
+	Inactive = 5
 }

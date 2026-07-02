@@ -89,6 +89,11 @@ public static class ShikshaMitraSubModulePermissions
 	public const string FinanceAuditing = $"{ShikshaMitraModulePermissions.Finance}.Auditing";
 	public const string FinanceAdjustment = $"{ShikshaMitraModulePermissions.Finance}.Fees.Adjustment";
 	public const string FinanceFeeStructureAssign = $"{ShikshaMitraModulePermissions.Finance}.Fees.StructureAssign";
+	public const string Policies = $"{ShikshaMitraModulePermissions.Finance}.Policies";
+	public const string ConcessionPolicies = $"{ShikshaMitraModulePermissions.Finance}.Policies.ConcessionPolicy";
+	public const string RefundPolicies = $"{ShikshaMitraModulePermissions.Finance}.Policies.RefundPolicy";
+	public const string CollectionPolicies = $"{ShikshaMitraModulePermissions.Finance}.Policies.CollectionPolicy";
+	public const string ProrationPolicies = $"{ShikshaMitraModulePermissions.Finance}.Policies.ProrationPolicy";
 
 	// Communication module submodules
 	public const string CommunicationDashboard = $"{ShikshaMitraModulePermissions.Communication}.Dashboard";
@@ -255,6 +260,11 @@ public static class ShikshaMitraSubModulePermissions
 		FinanceAuditing,
 		FinanceAdjustment,
 		FinanceFeeStructureAssign,
+		Policies,
+		ConcessionPolicies,
+		RefundPolicies,
+		CollectionPolicies,
+		ProrationPolicies,
 		CommunicationDashboard,
 		Announcements,
 		CommunicationNotification,
@@ -415,6 +425,11 @@ public static class ShikshaMitraSubModulePermissions
 		{ FinanceAuditing, $"{DisplayNamePrefix}.FinanceAuditing" },
 		{ FinanceAdjustment, $"{DisplayNamePrefix}.FinanceAdjustment" },
 		{ FinanceFeeStructureAssign, $"{DisplayNamePrefix}.FinanceFeeStructureAssign" },
+		{ Policies, $"{DisplayNamePrefix}.Policies" },
+		{ ConcessionPolicies, $"{DisplayNamePrefix}.ConcessionPolicies" },
+		{ RefundPolicies, $"{DisplayNamePrefix}.RefundPolicies" },
+		{ CollectionPolicies, $"{DisplayNamePrefix}.CollectionPolicies" },
+		{ ProrationPolicies, $"{DisplayNamePrefix}.ProrationPolicies" },
 
 		// Communication module submodules
 		{ CommunicationDashboard, $"{DisplayNamePrefix}.CommunicationDashboard" },

@@ -28,7 +28,7 @@ public class TransportRouteListRequestDto : TransportPagedRequestDto
 public class TransportStaffListRequestDto : TransportPagedRequestDto
 {
 	public TransportStaffRole? Role { get; set; }
-	public new TransportStaffStatus? Status { get; set; }
+	public TransportStaffStatus? StaffStatus { get; set; }
 }
 
 public class TransportStaffOptionsRequestDto
@@ -512,7 +512,7 @@ public class TransportMemberCandidateDto
 public class TransportMemberListRequestDto : TransportPagedRequestDto
 {
 	public TransportMemberType? MemberType { get; set; }
-	public new TransportMemberStatus? Status { get; set; }
+	public TransportMemberStatus? MemberStatus { get; set; }
 	public Guid? RouteId { get; set; }
 	public Guid? StopId { get; set; }
 }
@@ -573,7 +573,7 @@ public class TransportMemberRouteAssignmentDto : AuditedEntityDto<Guid>
 public class TransportApplicationListRequestDto : TransportPagedRequestDto
 {
 	public TransportMemberType? MemberType { get; set; }
-	public new TransportApplicationStatus? Status { get; set; }
+	public TransportApplicationStatus? ApplicationStatus { get; set; }
 	public TransportApplicationType? ApplicationType { get; set; }
 }
 

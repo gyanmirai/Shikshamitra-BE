@@ -541,7 +541,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		if (env.IsDevelopment())
 		{
-			app.UseDevAutoAuth();
+			// app.UseDevAutoAuth();
 		}
 
 		app.UseAuthentication();

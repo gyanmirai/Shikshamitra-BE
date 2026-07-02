@@ -82,9 +82,9 @@ public class TransportMemberApplicationAppService(
 			query = query.Where(member => member.MemberType == input.MemberType.Value);
 		}
 
-		if (input.Status.HasValue)
+		if (input.MemberStatus.HasValue)
 		{
-			query = query.Where(member => member.Status == input.Status.Value);
+			query = query.Where(member => member.Status == input.MemberStatus.Value);
 		}
 
 		if (input.RouteId.HasValue)
@@ -213,9 +213,9 @@ public class TransportMemberApplicationAppService(
 			query = query.Where(application => application.MemberType == input.MemberType.Value);
 		}
 
-		if (input.Status.HasValue)
+		if (input.ApplicationStatus.HasValue)
 		{
-			query = query.Where(application => application.Status == input.Status.Value);
+			query = query.Where(application => application.Status == input.ApplicationStatus.Value);
 		}
 
 		if (input.ApplicationType.HasValue)

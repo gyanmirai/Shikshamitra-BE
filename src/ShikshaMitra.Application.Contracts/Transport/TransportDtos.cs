@@ -4,16 +4,20 @@ using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Transport;
 
-public class TransportPagedRequestDto
+public class TransportPagedRequestDto<TStatus> where TStatus : struct
 {
 	public Guid AcademicMediumId { get; set; }
 	public int PageNumber { get; set; } = 1;
 	public int PageSize { get; set; } = 10;
 	public string? Search { get; set; }
-	public TransportRecordStatus? Status { get; set; }
+	public TStatus? Status { get; set; }
 
 	public int SkipCount => (Math.Max(PageNumber, 1) - 1) * NormalizedPageSize;
 	public int NormalizedPageSize => Math.Clamp(PageSize <= 0 ? 10 : PageSize, 1, 100);
+}
+
+public class TransportPagedRequestDto : TransportPagedRequestDto<TransportRecordStatus>
+{
 }
 
 public class TransportStopListRequestDto : TransportPagedRequestDto
@@ -25,10 +29,9 @@ public class TransportRouteListRequestDto : TransportPagedRequestDto
 {
 }
 
-public class TransportStaffListRequestDto : TransportPagedRequestDto
+public class TransportStaffListRequestDto : TransportPagedRequestDto<TransportStaffStatus>
 {
 	public TransportStaffRole? Role { get; set; }
-	public new TransportStaffStatus? Status { get; set; }
 }
 
 public class TransportStaffOptionsRequestDto
@@ -509,10 +512,9 @@ public class TransportMemberCandidateDto
 	public bool HasOpenApplication { get; set; }
 }
 
-public class TransportMemberListRequestDto : TransportPagedRequestDto
+public class TransportMemberListRequestDto : TransportPagedRequestDto<TransportMemberStatus>
 {
 	public TransportMemberType? MemberType { get; set; }
-	public new TransportMemberStatus? Status { get; set; }
 	public Guid? RouteId { get; set; }
 	public Guid? StopId { get; set; }
 }
@@ -570,10 +572,9 @@ public class TransportMemberRouteAssignmentDto : AuditedEntityDto<Guid>
 	public string? Remarks { get; set; }
 }
 
-public class TransportApplicationListRequestDto : TransportPagedRequestDto
+public class TransportApplicationListRequestDto : TransportPagedRequestDto<TransportApplicationStatus>
 {
 	public TransportMemberType? MemberType { get; set; }
-	public new TransportApplicationStatus? Status { get; set; }
 	public TransportApplicationType? ApplicationType { get; set; }
 }
 

@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Extensions;
+using ShikshaMitra.Extensions;
 using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -28,16 +28,23 @@ public class EducationBoardManager(IEducationBoardRepository educationBoardRepos
 	/// <exception cref="AlreadyExistsException">Thrown if an education board with the specified name already exists.</exception>
 	public async Task<EducationBoard> CreateAsync(
 		Guid academicYearId,
-		EducationBoardType educationBoardType)
+		EducationBoardType educationBoardType,
+		DateTime? startDate = null,
+		DateTime? endDate = null)
 	{
 		// Validate the name is unique within the same academic year.
 		await ValidateEducationBoardAsync(educationBoardType, academicYearId);
+
+		var start = startDate ?? DateTime.UtcNow;
+		var end = endDate ?? DateTime.UtcNow.AddYears(1);
 
 		return new EducationBoard(
 			GuidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			educationBoardType,
-			academicYearId
+			academicYearId,
+			start,
+			end
 		);
 	}
 
@@ -46,25 +53,30 @@ public class EducationBoardManager(IEducationBoardRepository educationBoardRepos
 	/// </summary>
 	/// <param name="educationBoard">The education board to update.</param>
 	/// <param name="newEducationBoardType">The type of the education board.</param>
+	/// <param name="startDate">The start date of the education board.</param>
+	/// <param name="endDate">The end date of the education board.</param>
 	/// <returns>The updated <see cref="EducationBoard"/> entity.</returns>
 	/// <exception cref="AlreadyExistsException">Thrown if an education board with the new name already exists.</exception>
 	public async Task<EducationBoard> UpdateAsync(
 		EducationBoard educationBoard,
-		EducationBoardType newEducationBoardType)
+		EducationBoardType newEducationBoardType,
+		DateTime? startDate = null,
+		DateTime? endDate = null)
 	{
 		Check.NotNull(educationBoard, nameof(educationBoard));
 
-		// If the name is the same as the current one, return the existing entity without changes.
-		if (educationBoard.Type == newEducationBoardType)
-		if (educationBoard.Type == newEducationBoardType)
+		// Validate the name is unique within the same academic year if changed.
+		if (educationBoard.Type != newEducationBoardType)
 		{
-			return educationBoard;
+			await ValidateEducationBoardAsync(newEducationBoardType, educationBoard.AcademicYearId);
+			educationBoard.SetEducationBoardType(newEducationBoardType);
 		}
-		// Validate the name is unique within the same academic year.
-		await ValidateEducationBoardAsync(newEducationBoardType, educationBoard.AcademicYearId);
 
-		// Update the name of the education board.
-		educationBoard.SetEducationBoardType(newEducationBoardType);
+		// Update start and end dates if provided.
+		if (startDate.HasValue && endDate.HasValue)
+		{
+			educationBoard.SetDates(startDate.Value, endDate.Value);
+		}
 
 		return educationBoard;
 	}

@@ -60,6 +60,9 @@ public class AcademicSetupsConfiguration
 		);
 		builder.ConfigureByConvention();
 
+		builder.Property(x => x.StartDate).IsRequired();
+		builder.Property(x => x.EndDate).IsRequired();
+
 		// Make the Name property required with a max length
 		builder.Navigation(x => x.EducationMediums).AutoInclude();
 

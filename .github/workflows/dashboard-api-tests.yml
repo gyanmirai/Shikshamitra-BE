@@ -1,0 +1,36 @@
+name: Dashboard API Tests
+
+on:
+  pull_request:
+    paths:
+      - 'src/ShikshaMitra.Application/Dashboard/**'
+      - 'src/ShikshaMitra.Application.Contracts/Dashboard/**'
+      - 'src/ShikshaMitra.HttpApi/Controllers/Dashboard/**'
+      - 'test/ShikshaMitra.HttpApi.Tests/Dashboard/**'
+      - 'test/ShikshaMitra.HttpApi.Tests/Infrastructure/**'
+      - '.github/workflows/dashboard-api-tests.yml'
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '9.0.x'
+
+jobs:
+  dashboard-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Dashboard API tests
+        run: >
+          dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj
+          --filter Dashboard

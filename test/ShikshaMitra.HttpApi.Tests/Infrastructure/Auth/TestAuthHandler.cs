@@ -27,6 +27,7 @@ public class TestAuthHandler(
 	public const string TestEmail = "admin@abp.io";
 	public const string TestTenantId = "11111111-1111-1111-1111-111111111111";
 	public const string TestUserIdHeader = "X-Test-UserId";
+	public const string TestEmailHeader = "X-Test-Email";
 	public const string TestRolesHeader = "X-Test-Roles";
 	public const string TestTenantIdHeader = "X-Test-TenantId";
 
@@ -44,11 +45,18 @@ public class TestAuthHandler(
 			userId = userIdOverride.ToString();
 		}
 
+		var email = TestEmail;
+		if (Context.Request.Headers.TryGetValue(TestEmailHeader, out var emailOverride) &&
+		    !string.IsNullOrWhiteSpace(emailOverride.ToString()))
+		{
+			email = emailOverride.ToString();
+		}
+
 		var claims = new List<Claim>
 		{
 			new(AbpClaimTypes.UserId, userId),
 			new(AbpClaimTypes.UserName, TestUserName),
-			new(AbpClaimTypes.Email, TestEmail),
+			new(AbpClaimTypes.Email, email),
 			new(ClaimTypes.Name, TestUserName),
 			new(ClaimTypes.NameIdentifier, userId),
 		};

@@ -81,8 +81,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			});
 		});
 
-		if (hostingEnvironment.IsDevelopment()) return;
-
 		PreConfigure<AbpOpenIddictAspNetCoreOptions>(options => options.AddDevelopmentEncryptionAndSigningCertificate = false);
 		PreConfigure<OpenIddictServerBuilder>(builder =>
 		{
@@ -91,6 +89,14 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			builder.AddSigningCertificate(
 				GetSigningCertificate(hostingEnvironment, context.Services.GetConfiguration()));
 			builder.SetIssuer(new Uri(configuration["AuthServer:Authority"]!));
+
+			if (
+				hostingEnvironment.IsDevelopment() &&
+				configuration.GetValue<bool>("AuthServer:DisableTransportSecurityRequirement")
+			)
+			{
+				builder.UseAspNetCore().DisableTransportSecurityRequirement();
+			}
 		});
 
 	}

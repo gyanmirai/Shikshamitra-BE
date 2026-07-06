@@ -15,6 +15,7 @@ using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Academic.Calendar;
+using ShikshaMitra.Academic.Timetable.RoomAvailability;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -103,6 +104,15 @@ public partial class ShikshaMitraDbContext
     public DbSet<Timetable> Timetables { get; set; }
     public DbSet<TimetableSlot> TimetableSlots { get; set; }
     public DbSet<TimetableSlotSubject> TimetableSlotSubjects { get; set; }
+
+    // ───────────────────────────────────────────────
+    // Academic — Room Availability
+    // ───────────────────────────────────────────────
+    public DbSet<RoomReservation> RoomReservations { get; set; }
+    public DbSet<RoomRecurringConfig> RoomRecurringConfigs { get; set; }
+    public DbSet<RoomMaintenanceBlock> RoomMaintenanceBlocks { get; set; }
+    public DbSet<RoomConfig> RoomConfigs { get; set; }
+    public DbSet<RoomAuditLog> RoomAuditLogs { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Calendar

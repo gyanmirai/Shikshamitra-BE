@@ -248,55 +248,6 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         return dates;
     }
 
-    public async Task<RoomAvailabilitySummaryDto> GetSummaryAsync(RoomAvailabilityFilterDto input)
-    {
-        var rooms = await _roomRepository.GetListAsync();
-        var dateVal = input.Date != default ? input.Date.Date : DateTime.Today;
-        var reservations = await _reservationRepository.GetListAsync(r => 
-            r.Date == dateVal && 
-            (r.Status == RoomReservationStatus.Approved || r.Status == RoomReservationStatus.Active || r.Status == RoomReservationStatus.CheckedIn || r.Status == RoomReservationStatus.PendingApproval));
-        
-        var freeCount = 0;
-        var occupiedCount = 0;
-        var conflictCount = 0;
-
-        var timeStart = input.StartTime ?? new TimeSpan(8, 0, 0);
-        var timeEnd = input.EndTime ?? new TimeSpan(16, 0, 0);
-
-        foreach (var room in rooms)
-        {
-            var conflictCheck = await _conflictService.CheckConflictsAsync(room.Id, dateVal, timeStart, timeEnd);
-            if (conflictCheck.OverallSeverity == "critical")
-            {
-                occupiedCount++;
-            }
-            else
-            {
-                freeCount++;
-            }
-
-            if (conflictCheck.OverallSeverity != "none")
-            {
-                conflictCount++;
-            }
-        }
-
-        var total = rooms.Count;
-        var percentage = total > 0 ? (freeCount * 100) / total : 100;
-        var bestRoom = rooms.OrderByDescending(r => r.Capacity).FirstOrDefault();
-
-        return new RoomAvailabilitySummaryDto
-        {
-            FreeRooms = freeCount,
-            FreeRoomPercentage = percentage,
-            BestAvailableRoom = bestRoom?.RoomName ?? "None",
-            BestAvailableRoomCapacity = bestRoom?.Capacity ?? 0,
-            OccupiedRooms = occupiedCount,
-            ActiveReservations = reservations.Count,
-            ConflictsVisible = conflictCount
-        };
-    }
-
     public async Task<List<RoomReservationDto>> GetReservationsAsync()
     {
         var reservations = await _reservationRepository.GetListAsync(r => 

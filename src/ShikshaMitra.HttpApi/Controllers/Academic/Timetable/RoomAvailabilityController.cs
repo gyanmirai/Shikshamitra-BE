@@ -25,12 +25,7 @@ public class RoomAvailabilityController : AbpController
         return await _service.GetAvailabilityAsync(input);
     }
 
-    [HttpGet]
-    [Route("room-availability/summary")]
-    public async Task<RoomAvailabilitySummaryDto> GetSummaryAsync([FromQuery] RoomAvailabilityFilterDto input)
-    {
-        return await _service.GetSummaryAsync(input);
-    }
+
 
     [HttpGet]
     [Route("room-reservations")]

@@ -197,8 +197,8 @@ public class CreateCalendarDto
     public Guid AcademicYearId { get; set; }
     public string Name { get; set; }
     public string? Description { get; set; }
-    public DateTime StartDate { get; set; }
-    public DateTime EndDate { get; set; }
+    public DateTimeOffset StartDate { get; set; }
+    public DateTimeOffset EndDate { get; set; }
     public bool IsDefault { get; set; }
 }
 
@@ -211,7 +211,7 @@ public class UpdateCalendarDto
 
 public class CreateCalendarDayDto
 {
-    public DateTime Date { get; set; }
+    public DateTimeOffset Date { get; set; }
     public DayType DayType { get; set; }
     public HolidayCategory? HolidayCategory { get; set; }
     public string Title { get; set; }
@@ -234,7 +234,7 @@ public class CreateCalendarDaysBulkDto
 
 public class CreateEmergencyClosureDto
 {
-    public DateTime Date { get; set; }
+    public DateTimeOffset Date { get; set; }
     public string Title { get; set; }
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
@@ -259,13 +259,13 @@ public class IgnoreImpactLogDto
 
 public class RescheduleImpactLogDto
 {
-    public DateTime NewDate { get; set; }
+    public DateTimeOffset NewDate { get; set; }
     public string? Note { get; set; }
 }
 
 public class CheckDateQueryDto
 {
-    public DateTime Date { get; set; }
+    public DateTimeOffset Date { get; set; }
     public Guid? StandardId { get; set; }
     public Guid? DivisionId { get; set; }
     public string ValidationType { get; set; } // Timetable, HomeworkDueDate, ExamSchedule, etc.

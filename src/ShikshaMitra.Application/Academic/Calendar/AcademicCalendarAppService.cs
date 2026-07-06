@@ -103,8 +103,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var calendar = await _calendarManager.CreateAsync(
             input.AcademicYearId,
             input.Name,
-            input.StartDate,
-            input.EndDate,
+            input.StartDate.DateTime,
+            input.EndDate.DateTime,
             input.Description,
             input.IsDefault
         );
@@ -251,7 +251,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     public async Task<AcademicCalendarDayDto> CreateCalendarDayAsync(Guid calendarId, CreateCalendarDayDto input)
     {
         var calendar = await _calendarRepository.GetAsync(calendarId);
-        await _calendarManager.ValidateDayRangeAsync(calendar, input.Date);
+        var inputDate = input.Date.DateTime;
+        await _calendarManager.ValidateDayRangeAsync(calendar, inputDate);
 
         // One row per targeted class; a single null entry means the marker applies to all
         var targetStandardIds = input.AppliesToAll
@@ -268,13 +269,13 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         {
             // Check duplicates
             var duplicate = await _calendarDayRepository.FirstOrDefaultAsync(d =>
-                d.AcademicCalendarId == calendarId && d.Date.Date == input.Date.Date &&
+                d.AcademicCalendarId == calendarId && d.Date.Date == inputDate.Date &&
                 d.Status == CalendarDayStatus.Active &&
                 (d.AppliesToAll || input.AppliesToAll || d.StandardId == standardId));
 
             if (duplicate != null)
             {
-                throw new UserFriendlyException($"A calendar day configuration already exists for {input.Date:yyyy-MM-dd}. Delete or update it instead.");
+                throw new UserFriendlyException($"A calendar day configuration already exists for {inputDate:yyyy-MM-dd}. Delete or update it instead.");
             }
 
             var dayId = GuidGenerator.Create();
@@ -282,7 +283,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 dayId,
                 CurrentTenant.Id,
                 calendarId,
-                input.Date,
+                inputDate,
                 input.DayType,
                 input.Title,
                 input.Description,
@@ -589,19 +590,20 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
     public async Task<CheckDateResponseDto> CheckDateAsync(CheckDateQueryDto input)
     {
+        var inputDate = input.Date.DateTime;
         // Find default active calendar for this date's academic year
         // We find the calendar matching the date range first
         var calendar = await _calendarRepository.FirstOrDefaultAsync(c =>
             c.Status == CalendarStatus.Published &&
-            input.Date.Date >= c.StartDate.Date &&
-            input.Date.Date <= c.EndDate.Date);
+            inputDate.Date >= c.StartDate.Date &&
+            inputDate.Date <= c.EndDate.Date);
 
         if (calendar == null)
         {
             return new CheckDateResponseDto
             {
                 IsAllowed = true,
-                Date = input.Date,
+                Date = inputDate,
                 Message = "No active published academic calendar covers this date. Date is allowed by default."
             };
         }
@@ -609,7 +611,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         // Search for day config
         var day = await _calendarDayRepository.FirstOrDefaultAsync(d =>
             d.AcademicCalendarId == calendar.Id &&
-            d.Date.Date == input.Date.Date &&
+            d.Date.Date == inputDate.Date &&
             d.Status == CalendarDayStatus.Active &&
             (d.AppliesToAll || 
              (input.StandardId.HasValue && d.StandardId == input.StandardId.Value && 
@@ -620,7 +622,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             return new CheckDateResponseDto
             {
                 IsAllowed = true,
-                Date = input.Date,
+                Date = inputDate,
                 Message = "Active working day."
             };
         }
@@ -634,7 +636,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         if (isBlocked)
         {
             // Suggest next working day (recursive scan)
-            var nextWorking = input.Date.AddDays(1);
+            var nextWorking = inputDate.AddDays(1);
             while (nextWorking <= calendar.EndDate)
             {
                 var nextDay = await _calendarDayRepository.FirstOrDefaultAsync(d =>
@@ -656,10 +658,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             return new CheckDateResponseDto
             {
                 IsAllowed = false,
-                Date = input.Date,
+                Date = inputDate,
                 DayType = day.DayType,
                 Title = day.Title,
-                Message = $"Date blocked: {input.Date:MMM dd} falls on {day.Title} ({day.DayType}).",
+                Message = $"Date blocked: {inputDate:MMM dd} falls on {day.Title} ({day.DayType}).",
                 BlockingReason = blockingReason,
                 SuggestedNextWorkingDate = nextWorking
             };
@@ -668,7 +670,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return new CheckDateResponseDto
         {
             IsAllowed = true,
-            Date = input.Date,
+            Date = inputDate,
             DayType = day.DayType,
             Title = day.Title,
             Message = "Date is allowed."
@@ -739,10 +741,11 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
     public async Task<List<AcademicCalendarDayDto>> CreateEmergencyClosureAsync(CreateEmergencyClosureDto input)
     {
+        var inputDate = input.Date.DateTime;
         var matchingCalendars = await _calendarRepository.GetListAsync(c =>
             c.Status != CalendarStatus.Archived &&
-            input.Date.Date >= c.StartDate.Date &&
-            input.Date.Date <= c.EndDate.Date);
+            inputDate.Date >= c.StartDate.Date &&
+            inputDate.Date <= c.EndDate.Date);
         var calendar = matchingCalendars
             .OrderBy(c => c.Status == CalendarStatus.Published ? 0 : c.IsDefault ? 1 : 2)
             .ThenByDescending(c => c.CreationTime)
@@ -765,7 +768,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     dayId,
                     CurrentTenant.Id,
                     calendar.Id,
-                    input.Date,
+                    inputDate,
                     DayType.EmergencyClosure,
                     input.Title,
                     input.Description,
@@ -806,7 +809,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 dayId,
                 CurrentTenant.Id,
                 calendar.Id,
-                input.Date,
+                inputDate,
                 DayType.EmergencyClosure,
                 input.Title,
                 input.Description,
@@ -935,7 +938,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     public async Task RescheduleImpactLogAsync(Guid id, RescheduleImpactLogDto input)
     {
         var log = await _impactLogRepository.GetAsync(id);
-        log.Reschedule(input.NewDate, input.Note);
+        log.Reschedule(input.NewDate.DateTime, input.Note);
         await _impactLogRepository.UpdateAsync(log);
     }
 

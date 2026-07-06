@@ -1,4 +1,4 @@
-# ShikshaMitra — Project Best Practices
+﻿# ShikshaMitra - Project Best Practices
 
 > **Audience**: AI agents, solution architects.
 > **Applies to**: All modules across the ShikshaMitra backend.
@@ -34,17 +34,17 @@ Each module follows identical folder structure across all layers:
 
 #### Canonical Domain Sub-module Template
 
-Every sub-module in the Domain layer **must** contain these seven folders. Add a `.gitkeep` file to any folder that starts empty — Git does not track empty directories and the scaffolding is lost on a fresh clone without it.
+Every sub-module in the Domain layer **must** contain these seven folders. Add a `.gitkeep` file to any folder that starts empty - Git does not track empty directories and the scaffolding is lost on a fresh clone without it.
 
 ```
 {SubModule}/
-  Aggregates/     → Aggregate roots, one class per file
-  Entities/       → Non-root entities with own identity and lifecycle (separate DB table)
-  ValueObjects/   → Immutable owned types (record or sealed class; OwnsOne/OwnsMany in EF)
-  Managers/       → Domain services: lifecycle orchestration, cross-repo or cross-aggregate ops
-  Services/       → Focused domain services: code generation, validation, initialization
-  Repositories/   → IXxxRepository interface definitions
-  Exceptions/     → Domain exceptions: InvalidXxxException, XxxAlreadyExistsException, etc.
+  Aggregates/     -> Aggregate roots, one class per file
+  Entities/       -> Non-root entities with own identity and lifecycle (separate DB table)
+  ValueObjects/   -> Immutable owned types (record or sealed class; OwnsOne/OwnsMany in EF)
+  Managers/       -> Domain services: lifecycle orchestration, cross-repo or cross-aggregate ops
+  Services/       -> Focused domain services: code generation, validation, initialization
+  Repositories/   -> IXxxRepository interface definitions
+  Exceptions/     -> Domain exceptions: InvalidXxxException, XxxAlreadyExistsException, etc.
 ```
 
 #### Nested Concern Template
@@ -63,7 +63,7 @@ When a sub-module contains a secondary concern with its own aggregates and repos
     Exceptions/
 ```
 
-A sub-module may combine both patterns: canonical folders at its root **and** nested concern subfolders. `Employees/` is the reference for this hybrid — canonical folders at root plus `Settings/` and `Payroll/` as nested concerns.
+A sub-module may combine both patterns: canonical folders at its root **and** nested concern subfolders. `Employees/` is the reference for this hybrid - canonical folders at root plus `Settings/` and `Payroll/` as nested concerns.
 
 **Depth cap**: Maximum nesting is `{Module}/{SubModule}/{NestedConcern}/`. A fourth level is never added. If a concern feels like it needs deeper nesting, promote it to its own top-level sub-module.
 
@@ -73,23 +73,23 @@ A sub-module may combine both patterns: canonical folders at its root **and** ne
 |---|---|
 | No flat root files | Every `.cs` file belongs inside a canonical folder. A file at `{SubModule}/` root is a structural violation. |
 | Exceptions in `Exceptions/` | Domain exception classes must not be placed at the sub-module root or alongside the type they relate to. |
-| One aggregate per file | `Aggregates/` holds one aggregate root per file. Status enums or auxiliary types tightly coupled to one aggregate (e.g., `EventStatus`, `HolidayStatus`) live in the same `Aggregates/` folder — not in `Domain.Shared`. |
+| One aggregate per file | `Aggregates/` holds one aggregate root per file. Status enums or auxiliary types tightly coupled to one aggregate (e.g., `EventStatus`, `HolidayStatus`) live in the same `Aggregates/` folder - not in `Domain.Shared`. |
 | No ad-hoc folders | One-off folders like `NotificationHistories/` violate the template. The contained type belongs in `Entities/` (if it has identity) or `ValueObjects/` (if it does not). |
 | No orphaned types | If a sub-module uses nested concerns, every type for a concern lives inside its concern folder. Do not leave related aggregates at the parent level while siblings are nested. |
 | No duplicate sub-modules | Never maintain two sub-modules that model the same real-world concept. The richer, structured model wins. The flat duplicate is a migration artifact and must be deleted after data migration. |
 
 #### Anti-patterns
 
-**Flat sub-module root** — `.cs` files loose at `{SubModule}/` root:
+**Flat sub-module root** - `.cs` files loose at `{SubModule}/` root:
 
 ```
-❌  HR/AttendanceAndLeaves/
+X  HR/AttendanceAndLeaves/
       EmployeeLeave.cs
       EmployeeAttendance.cs
       IEmployeeLeaveRepository.cs
       NotificationHistories/NotificationInfo.cs
 
-✅  HR/AttendanceAndLeaves/
+OK  HR/AttendanceAndLeaves/
       Aggregates/EmployeeLeave.cs
       Aggregates/EmployeeAttendance.cs
       Entities/NotificationInfo.cs
@@ -100,22 +100,22 @@ A sub-module may combine both patterns: canonical folders at its root **and** ne
 **Orphaned type outside its nested-concern folder**:
 
 ```
-❌  HR/Calendar/
-      Aggregates/HolidayType.cs            ← orphaned from HolidayTypes/ group
+X  HR/Calendar/
+      Aggregates/HolidayType.cs            <- orphaned from HolidayTypes/ group
       Repositories/IHolidayTypeRepository.cs
 
-✅  HR/Calendar/
+OK  HR/Calendar/
       HolidayTypes/Aggregates/HolidayType.cs
       HolidayTypes/Repositories/IHolidayTypeRepository.cs
 ```
 
-**Duplicate sub-modules** — two sub-modules modelling the same domain concept:
+**Duplicate sub-modules** - two sub-modules modelling the same domain concept:
 
 ```
-❌  HR/Calendar/Events/Aggregates/Event.cs                  ← rich, academic-year-scoped
-    HR/EventAndHolidays/Aggregates/EventAndHoliday.cs       ← flat single-flag duplicate
+X  HR/Calendar/Events/Aggregates/Event.cs                  <- rich, academic-year-scoped
+    HR/EventAndHolidays/Aggregates/EventAndHoliday.cs       <- flat single-flag duplicate
 
-✅  HR/Calendar/Events/Aggregates/Event.cs
+OK  HR/Calendar/Events/Aggregates/Event.cs
     (HR/EventAndHolidays/ deleted after data migration completes)
 ```
 
@@ -124,7 +124,7 @@ A sub-module may combine both patterns: canonical folders at its root **and** ne
 - Root namespace: `ShikshaMitra`
 - Modules: `ShikshaMitra.{Module}.{Subdomain}` (e.g., `ShikshaMitra.HR.Employees`)
 - Shared enums/types: `ShikshaMitra.Common` (lives in Domain.Shared but namespace is `ShikshaMitra.Common`)
-- All projects use `<RootNamespace>ShikshaMitra</RootNamespace>` — namespaces mirror folder paths from the project root.
+- All projects use `<RootNamespace>ShikshaMitra</RootNamespace>` - namespaces mirror folder paths from the project root.
 
 ---
 
@@ -134,7 +134,7 @@ A sub-module may combine both patterns: canonical folders at its root **and** ne
 
 - Aggregate roots inherit `FullAuditedAggregateRoot<Guid>` and implement `IMultiTenant`.
 - Non-root entities inherit `FullAuditedEntity<Guid>` + `IMultiTenant`.
-- All properties use `private set` — mutations only through named methods on the entity.
+- All properties use `private set` - mutations only through named methods on the entity.
 - Constructors: public constructor with all required parameters; `private` parameterless constructor for ORM.
 - Value objects: owned by aggregate, configured via EF Core `OwnsOne`/`OwnsMany`.
 
@@ -176,26 +176,26 @@ Domain services (`DomainService` base class) exist when logic:
 ### 3.1 App Services
 
 - Inherit `ApplicationService` or `CrudAppService<>`.
-- Thin orchestration: validate input → delegate to domain service → persist via repository → map to DTO.
-- Never contain business logic — that belongs in domain services or entities.
-- Use `ObjectMapper.Map<>()` (AutoMapper) for DTO ↔ Entity mapping.
+- Thin orchestration: validate input -> delegate to domain service -> persist via repository -> map to DTO.
+- Never contain business logic - that belongs in domain services or entities.
+- Use `ObjectMapper.Map<>()` (AutoMapper) for DTO <-> Entity mapping.
 - **Single Responsibility**: One AppService per cohesive concern. Target ~200 lines max per class; if larger, split by concern.
-- **No manual `MapToDto` helpers** — register all mappings in the module's `AutoMapper Profile`. Exception: complex projections or DTO-to-DTO transforms may use extension methods in the Application layer.
+- **No manual `MapToDto` helpers** - register all mappings in the module's `AutoMapper Profile`. Exception: complex projections or DTO-to-DTO transforms may use extension methods in the Application layer.
 
 ### 3.2 DTOs
 
 - Defined in Application.Contracts.
 - Input DTOs: `Create{Entity}Dto`, `Update{Entity}Dto`, `Get{Entity}ListInput`.
 - Output DTOs: `{Entity}Dto`, `{Entity}ListResponse`.
-- No domain types in DTOs — enums from Domain.Shared are acceptable.
-- **No mapper classes in Application.Contracts** — Contracts define shapes only; mapping lives in the Application layer.
+- No domain types in DTOs - enums from Domain.Shared are acceptable.
+- **No mapper classes in Application.Contracts** - Contracts define shapes only; mapping lives in the Application layer.
 
 ### 3.3 Authorization
 
 Two-layer authorization pattern:
 
-1. **Coarse-grained** — `[Authorize(Permission)]` attribute on every public AppService method. Enforces "does this user have the right to call this endpoint at all?"
-2. **Fine-grained (IDOR)** — Programmatic ownership/access checks inside the method body for operations on a specific resource. Use a dedicated authorization service (e.g., `EmployeeAuthorizationService.CheckEmployeeAccessAsync(id)`).
+1. **Coarse-grained** - `[Authorize(Permission)]` attribute on every public AppService method. Enforces "does this user have the right to call this endpoint at all?"
+2. **Fine-grained (IDOR)** - Programmatic ownership/access checks inside the method body for operations on a specific resource. Use a dedicated authorization service (e.g., `EmployeeAuthorizationService.CheckEmployeeAccessAsync(id)`).
 
 ```csharp
 [Authorize(HRPermissions.Employee.EmployeeList.View)]
@@ -222,7 +222,7 @@ public async Task<EmployeeDto> GetAsync(Guid employeeId)
 - All business/domain errors use **`BusinessException`** with error codes from a centralized catalog.
 - Error code constants live in `Domain.Shared` (e.g., `HRErrorCodes.cs`).
 - Convention: `"{Module}:{SubModule}:{6-digit code}"` (e.g., `"HR:Employee:010001"`).
-- **Never use `UserFriendlyException`** for business errors — reserve it only for truly exceptional edge cases where no error code makes sense.
+- **Never use `UserFriendlyException`** for business errors - reserve it only for truly exceptional edge cases where no error code makes sense.
 - `BusinessException` supports localization via the ABP localization framework.
 
 ```csharp
@@ -264,15 +264,15 @@ throw new UserFriendlyException("Email is already in use.");
 
 - Controllers inherit `AbpControllerBase`.
 - Route pattern: `api/{resource}` (e.g., `api/employees`, `api/leave-types`).
-- Thin delegation: controller → app service interface → return.
+- Thin delegation: controller -> app service interface -> return.
 - Use `[ProducesResponseType]` for OpenAPI documentation.
 - Area: `[Area("app")]`, Remote service: `[RemoteService(Name = "Default")]`.
-- Inline validation in controllers is discouraged — use FluentValidation on input DTOs instead.
+- Inline validation in controllers is discouraged - use FluentValidation on input DTOs instead.
 
 ### 5.1 Contract Mappers
 
 - Contract mappers (static classes that convert between HTTP-layer Request/Response types and AppService DTOs) belong in the **HttpApi** project under `Mappers/{Module}/`.
-- They are NOT allowed in Application.Contracts — Contracts define shapes only.
+- They are NOT allowed in Application.Contracts - Contracts define shapes only.
 - Use `BusinessException(HRErrorCodes.X)` for mapping failures, never `UserFriendlyException`.
 - Naming: `{Concern}ContractMapper` (e.g., `PersonalInfoContractMapper`).
 
@@ -281,7 +281,7 @@ throw new UserFriendlyException("Email is already in use.");
 ## 6. Multi-Tenancy
 
 - Every tenant-scoped entity implements `IMultiTenant` (`Guid? TenantId`).
-- ABP automatic tenant filter handles query isolation — never manually filter by `TenantId` in queries.
+- ABP automatic tenant filter handles query isolation - never manually filter by `TenantId` in queries.
 - Tenant-agnostic entities (host-level data) omit `IMultiTenant`.
 
 ---
@@ -291,10 +291,10 @@ throw new UserFriendlyException("Email is already in use.");
 ### 7.1 Enum Placement
 
 All shared enums live in `ShikshaMitra.Domain.Shared` project, typically under:
-- `Common/` → Cross-cutting types: `CastType`, `GenderType`, `MaritalStatusType`, `State`, `Country`
-- `HR/Employees/` → Module-specific: `EmployeeStatusType`, `EmployeeGroupType`, `FamilyRelationType`
-- `HR/AttendanceAndLeaves/` → `EmployeeAttendanceStatusType`, `EmployeeLeaveStatusType`
-- `HR/Payroll/Settings/` → `PayElementType`, `EarningComponentType`, `DeductionComponentType`
+- `Common/` -> Cross-cutting types: `CastType`, `GenderType`, `MaritalStatusType`, `State`, `Country`
+- `HR/Employees/` -> Module-specific: `EmployeeStatusType`, `EmployeeGroupType`, `FamilyRelationType`
+- `HR/AttendanceAndLeaves/` -> `EmployeeAttendanceStatusType`, `EmployeeLeaveStatusType`
+- `HR/Payroll/Settings/` -> `PayElementType`, `EarningComponentType`, `DeductionComponentType`
 
 All use namespace `ShikshaMitra.Common` or `ShikshaMitra.HR.*`.
 
@@ -314,7 +314,7 @@ All use namespace `ShikshaMitra.Common` or `ShikshaMitra.HR.*`.
 ### 7.4 User-Scope Filtering
 
 - Entities needing hierarchical filtering implement `IUserScopedEntity`.
-- Scope hierarchy: Board → Medium → Stage → Class → Division.
+- Scope hierarchy: Board -> Medium -> Stage -> Class -> Division.
 - `NULL = ALL` principle: null scope value means unrestricted access at that level.
 
 ---
@@ -354,42 +354,40 @@ All use namespace `ShikshaMitra.Common` or `ShikshaMitra.HR.*`.
 - Module-owned docs must live under `docs/modules/<module>/`.
 - Standard module layout:
   - `README.md`
-  - `prd/`
-  - `contracts/raw/`
-  - `contracts/curated/`
-  - `implementation/`
-  - `testing/`
+  - `product.md`
+  - `api.md`
+  - `architecture.md`
+  - `workflows.md`
+  - `testing.md`
+  - `references/` for active deep notes only
 - Cross-cutting docs must live under `docs/common/`. Architecture decisions stay under `docs/architecture/`. Root-level guidance is limited to `README.md` and `best-practices.md`.
 
-### 11.2 Contract Naming Rules
+### 11.2 Page responsibilities
 
-- Curated contracts: `kebab-case` + `-api.md`.
-- Raw contracts: `kebab-case` + `-api.raw.YYYY-MM-DD.md`.
+- `README.md` routes humans and agents to the right page.
+- `product.md` owns behavior, rules, shipped areas, and partial surfaces.
+- `api.md` owns endpoint families, request rules, permissions, and contract caveats.
+- `architecture.md` owns source paths, layer ownership, and implementation rules.
+- `workflows.md` owns end-to-end operational flows.
+- `testing.md` owns validation commands and known verification gaps.
 
-### 11.3 Curated Contract Required Sections
+### 11.3 Metadata and README handoff
 
-Every curated contract file under `contracts/curated/` must include this exact heading order:
+- Active module docs must include `module`, `domain`, `content_type`, `status`, `updated_on`, `owner`, and `audience`.
+- `content_type` must be one of `Landing`, `Reference`, `Tutorial`, `How-to`, `Troubleshooting`, or `Conceptual`.
+- Each module `README.md` must include `TL;DR`, `Read order`, `Source of truth`, `For agents`, and `Validation`.
+- `updated_on` must be refreshed when a page is reverified against current source.
 
-1. `## Purpose`
-2. `## Endpoint(s)`
-3. `## Auth & permissions`
-4. `## Request headers`
-5. `## Path/query/body contract`
-6. `## Response contract (success + errors)`
-7. `## Business rules / invariants`
-8. `## Idempotency / concurrency notes (if relevant)`
-9. `## Examples (minimal, copy-ready)`
-10. `## Change log`
+### 11.4 Local docs validation
 
-### 11.4 PRD vs Contract Boundary
+- Run `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1` before handing off backend docs changes.
+- Run `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -AllModules` before changing docs standards.
+- Run `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module <module>` for focused module edits.
+- The validator checks required files, metadata, freshness, README handoff sections, links, source paths, stale text, and removed doc structures.
 
-- `prd/` documents behavior, rules, permissions, transitions, and invariants.
-- `contracts/` documents endpoint wire contract (request/response/error shapes).
-- PRD and contract docs must cross-link; neither should silently replace the other.
+### 11.5 Cross-link rules
 
-### 11.5 Cross-link Rules
-
-- Every module `README.md` links to `prd`, `contracts`, `implementation`, and `testing`.
-- Every PRD subdomain `README.md` links to its curated contract.
+- Every module `README.md` links to the five canonical module pages.
+- Reference docs link back to the canonical page they support.
 - Broken links in active docs are not allowed.
 

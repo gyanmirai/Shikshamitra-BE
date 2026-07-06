@@ -1,94 +1,62 @@
-# Finance Module
-
-## Sub-modules
-
-- [Concession requests](./concession-requests.md) — fee concessions (single-form create, due-fee approval)
-
+---
+module: finance
+domain: overview
+content_type: Landing
+status: canonical
+updated_on: 2026-07-06
+owner: backend-team
+audience: humans-and-agents
 ---
 
-# Finance Module — Charges
+# Understand the Finance backend module
 
-## Overview
+TL;DR: use this page as the entrypoint for Finance behavior, API families, architecture, workflows, and validation.
+Finance covers fees, collections, concessions, adjustments, refunds, receipts, accounts, audit, and reports.
 
-The **Charges** sub-module lets staff create ad-hoc financial charges against a student (e.g. library fine, sports fee, damage). Charges flow through a maker-checker workflow: the person who creates a charge cannot approve or reject it.
+## Read order
 
-Only **Approved** charges appear in fee-collection dues and overdue calculations.
+| Step | File | Use it to |
+|---|---|---|
+| 1 | [product.md](./product.md) | Understand Finance product areas and data-integrity rules |
+| 2 | [api.md](./api.md) | Find endpoint families, permissions, and route ownership |
+| 3 | [architecture.md](./architecture.md) | Locate source paths and domain boundaries |
+| 4 | [workflows.md](./workflows.md) | Trace charge, concession, adjustment, collection, refund, and reconciliation flows |
+| 5 | [testing.md](./testing.md) | Pick focused Finance validation commands |
 
----
+## Source of truth
 
-## Domain concepts
+| Need | Source |
+|---|---|
+| Contracts | `src/ShikshaMitra.Application.Contracts/Finance/**` |
+| Application logic | `src/ShikshaMitra.Application/Finance/**` |
+| Domain rules | `src/ShikshaMitra.Domain/Finance/**` |
+| Persistence | `src/ShikshaMitra.EntityFrameworkCore/Finance/**` |
+| HTTP controllers | `src/ShikshaMitra.HttpApi/Controllers/Finance/**` |
+| Tests | `test/ShikshaMitra.*.Tests/Finance/**` |
 
-| Concept | Description |
-|---------|-------------|
-| `Charge` | Aggregate root. Tracks lifecycle: `Pending → Approved \| Rejected`. |
-| `ChargeCategory` | Settings entity. Controls whether approval is required (`IsApprovalRequired`) and whether the category is active (`IsActive`). |
-| `ChargeManager` | Domain service. Orchestrates creation: derives scope from Student, validates category active, sets initial status. |
-| `FinanceChargeErrorCodes` | Centralized error code constants (`Finance:Charge:xxxxxx`). |
+## For agents
 
----
+Use this table before searching code:
 
-## Status machine
+| Question | First file |
+|---|---|
+| What does Finance own? | [product.md](./product.md) |
+| Which endpoint or permission should I use? | [api.md](./api.md) |
+| Where is the code? | [architecture.md](./architecture.md) |
+| Which workflow should I trace? | [workflows.md](./workflows.md) |
+| Which tests should I run? | [testing.md](./testing.md) |
 
+## Supporting material
+
+| Folder | Purpose |
+|---|---|
+| [references](./references/README.md) | Active deep notes, when needed |
+
+## Validation
+
+Run these commands from the `Shikshamitra-BE` repo root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module finance
+git diff --check
 ```
-[Create] ──► Pending ──► Approved
-                    └──► Rejected
-```
-
-- If `ChargeCategory.IsApprovalRequired = false`, charge is auto-approved on creation.
-- Only `Pending` charges can be updated or deleted.
-- Approver / rejector **must differ** from the requestor (maker-checker enforced in domain entity).
-
----
-
-## Scope derivation
-
-`BoardId`, `EducationMediumId`, `StandardId`, `DivisionId` are **not** accepted from the API caller. They are derived server-side from the `Student` aggregate to prevent tampering. The `CreateChargeRequest` only accepts `StudentId`.
-
----
-
-## Permissions
-
-| Permission | String | Description |
-|------------|--------|-------------|
-| View | `Finance.Fees.Charges.View` | List / read charges |
-| Add | `Finance.Fees.Charges.Add` | Create new charge |
-| Update | `Finance.Fees.Charges.Update` | Edit pending charge |
-| Delete | `Finance.Fees.Charges.Delete` | Delete pending charge |
-| Approve | `Finance.Fees.Charges.Approve` | Approve pending charge |
-| Reject | `Finance.Fees.Charges.Reject` | Reject pending charge |
-
----
-
-## API endpoints
-
-All routes are under `api/app/charges`.
-
-| Method | Route | Permission | Description |
-|--------|-------|-----------|-------------|
-| POST | `/api/app/charges?academicYearId=` | Add | Create charge |
-| GET | `/api/app/charges?academicYearId=` | View | List charges (max 100/page) |
-| GET | `/api/app/charges/{chargeId}` | View | Get charge detail |
-| PUT | `/api/app/charges/{chargeId}` | Update | Update pending charge |
-| POST | `/api/app/charges/{chargeId}/approve` | Approve | Approve pending charge |
-| POST | `/api/app/charges/{chargeId}/reject` | Reject | Reject pending charge |
-| DELETE | `/api/app/charges/{chargeId}` | Delete | Delete pending charge |
-
----
-
-## Error codes
-
-See `FinanceChargeErrorCodes` in `Domain.Shared/Finance/Charges/`.
-
-| Code | Meaning |
-|------|---------|
-| `Finance:Charge:010001` | Charge is not in Pending status |
-| `Finance:Charge:010002` | Invalid charge amount (≤ 0) |
-| `Finance:Charge:010003` | Due date is in the past |
-| `Finance:Charge:010004` | Charge cannot be deleted (not Pending) |
-| `Finance:Charge:010005` | Rejection reason too short |
-| `Finance:Charge:010006` | Charge category is inactive |
-| `Finance:Charge:020001` | Academic year not found |
-| `Finance:Charge:020002` | Student not found |
-| `Finance:Charge:020003` | Charge category not found |
-| `Finance:Charge:020004` | Student missing academic scope (no Standard/Division) |
-| `Finance:Charge:030001` | Approver/rejector cannot be the same as requestor |

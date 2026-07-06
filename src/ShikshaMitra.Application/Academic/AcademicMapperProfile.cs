@@ -5,6 +5,7 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.Academic.Calendar;
 
 namespace ShikshaMitra.Academic;
 
@@ -41,6 +42,17 @@ public class AcademicMapperProfile : Profile
 		CreateMap<ExamType, ExamTypeDto>()
 			.ForMember(dest => dest.ExamType, opt => opt.MapFrom(src => src.Name))
 			.ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreationTime));
+		#endregion
+		#region Calendar
+		CreateMap<AcademicCalendar, AcademicCalendarDto>();
+		CreateMap<AcademicCalendarDay, AcademicCalendarDayDto>();
+		CreateMap<AcademicCalendarWorkingHour, AcademicCalendarWorkingHourDto>();
+		CreateMap<AcademicCalendarWorkingHourDto, AcademicCalendarWorkingHour>();
+		CreateMap<AcademicCalendarSetting, AcademicCalendarSettingDto>();
+		CreateMap<AcademicCalendarSettingDto, AcademicCalendarSetting>();
+		CreateMap<CalendarImpactLog, CalendarImpactLogDto>();
+		// AcademicCalendarAuditLog -> AcademicCalendarAuditLogDto is projected manually via
+		// AcademicCalendarAuditLogProjector (parses the structured diff JSON, resolves action label).
 		#endregion
 		#endregion
 	}

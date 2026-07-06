@@ -21,7 +21,9 @@ public class TenantSettingsMapperProfile : Profile
 	{
 		#region Academic Setup
 		// Mapping for AcademicYear
-		CreateMap<AcademicYear, AcademicYearDto>();
+		CreateMap<AcademicYear, AcademicYearDto>()
+			.ForMember(dest => dest.StartYear, opt => opt.MapFrom(src => src.StartDate))
+			.ForMember(dest => dest.EndYear, opt => opt.MapFrom(src => src.EndDate));
         CreateMap<CreateUpdateAcademicYearDto, AcademicYear>();
 
         // Mapping for EducationBoard

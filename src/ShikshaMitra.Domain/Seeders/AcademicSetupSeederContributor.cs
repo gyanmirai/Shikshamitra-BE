@@ -100,7 +100,9 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 						GuidGenerator.Create(),
 						CurrentTenant.Id,
 						boardSpec.Type,
-						academicYear.Id);
+						academicYear.Id,
+						academicYear.StartDate,
+						academicYear.EndDate);
 					boardsByKey[(academicYear.Id, boardSpec.Type)] = board;
 					boardsToInsert.Add(board);
 				}

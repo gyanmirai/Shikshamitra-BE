@@ -145,7 +145,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Academics.LearningManagementSystem.Settings.Integration", new SubmoduleInfo(LearningManagementSystem_SettingsIntegration.All, LearningManagementSystem_SettingsIntegration.DisplayNames) },
 
 			// Notification
-			{ "Academics.Notification", new SubmoduleInfo(Notification.All, Notification.DisplayNames) }
+			{ "Academics.Notification", new SubmoduleInfo(Notification.All, Notification.DisplayNames) },
+
+			// Academic Calendar
+			{ "Academics.AcademicCalendar", new SubmoduleInfo(Academics_AcademicCalendar.All, Academics_AcademicCalendar.DisplayNames) }
 		};
 	}
 }

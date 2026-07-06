@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using System;
@@ -22,8 +22,8 @@ public class AcademicYearAppService(
 	{
 		AcademicYear academicYear = await academicYearManager.CreateAsync(
 			input.Name,
-			input.StartDate,
-			input.EndDate
+			input.StartYear,
+			input.EndYear
 		);
 
 		await academicYearRepository.InsertAsync(academicYear);
@@ -33,7 +33,7 @@ public class AcademicYearAppService(
 	public override async Task<AcademicYearDto> UpdateAsync(Guid id, CreateUpdateAcademicYearDto input)
 	{
 		AcademicYear academicYear = await academicYearRepository.GetAsync(id);
-		await academicYearManager.UpdateAsync(academicYear, input.Name, input.StartDate, input.EndDate);
+		await academicYearManager.UpdateAsync(academicYear, input.Name, input.StartYear, input.EndYear);
 		return ObjectMapper.Map<AcademicYear, AcademicYearDto>(academicYear);
 	}
 }

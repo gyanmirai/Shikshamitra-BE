@@ -3,9 +3,9 @@ description: Documentation router for ShikshaMitra backend (developer + AI-agent
 tags: [docs, backend, api-contracts, modules]
 ---
 
-# ShikshaMitra Backend Documentation
+# Find backend documentation
 
-This documentation is backend-first, pattern-driven, and contract-centric.
+This documentation is backend-first, module-first, and agent-friendly.
 
 ## Start Here
 
@@ -17,21 +17,17 @@ This documentation is backend-first, pattern-driven, and contract-centric.
 ## Information Architecture
 
 - `docs/modules/<module>/` is the canonical home for module-owned docs.
-- `docs/modules/<module>/contracts/curated/` is the canonical home for AI/dev contract consumption.
-- `docs/modules/<module>/contracts/raw/` stores downloaded/generated raw contract files.
-- Module contracts live only under `docs/modules/<module>/contracts/`.
+- New or refactored modules follow [Module Docs Standard](./common/standards/module-docs-standard.md).
+- `docs/modules/<module>/api.md` is the canonical home for module API behavior.
+- Active module docs use six canonical files and optional `references/`.
+- Generated exports and old plans do not belong in `docs/`.
 - Shared cross-cutting docs live only under `docs/common/`.
 
 ## Quick Links
 
 - [HR Module](./modules/hr/README.md)
 - [Institute Setup Module](./modules/institute-setup/README.md)
-- [HR PRD](./modules/hr/prd/README.md)
-- [HR Curated Contracts](./modules/hr/contracts/curated/README.md)
-- [Common Docs](./common/README.md)
-
-## Legacy and Archive
-
-- Obsolete root HR exports were moved to [meta/legacy/hr-root](./meta/legacy/hr-root/).
-- Historical reorg notes remain under [meta](./meta/README.md).
-- Cleanup decisions are tracked in [meta/legacy-migration-log.md](./meta/legacy-migration-log.md).
+- [Module Docs Standard](./common/standards/module-docs-standard.md)
+- [HR product](./modules/hr/product.md)
+- [HR API](./modules/hr/api.md)
+- [Common docs](./common/README.md)

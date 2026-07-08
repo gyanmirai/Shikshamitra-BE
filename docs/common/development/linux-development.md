@@ -1,6 +1,6 @@
-# Linux development notes
+﻿# Linux development notes
 
-## Copilot Testing Workflow — Activation Code: `957400 Authorization`
+## Copilot Testing Workflow - Activation Code: `957400 Authorization`
 
 When the user shares a curl command copied from the browser (which includes cookies, `authorization: Bearer ...`, and other headers), Copilot should:
 
@@ -8,7 +8,7 @@ When the user shares a curl command copied from the browser (which includes cook
 2. **Strip** all `-b '...'` cookie headers
 3. **Replace** the hostname with `https://localhost:44332`
 4. **Add** `-k` flag (skip SSL verification)
-5. **Do NOT add any Authorization header** — the `DevAutoAuthMiddleware` handles auth automatically
+5. **Do NOT add any Authorization header** - the `DevAutoAuthMiddleware` handles auth automatically
 
 **This workflow is only activated when the user says: `957400 Authorization logic`**
 
@@ -39,7 +39,7 @@ curl -sk 'https://localhost:44332/api/app/academic-year'
 
 ---
 
-## 1. `dotnet ef` Tool — Install & Run
+## 1. `dotnet ef` Tool - Install & Run
 
 ### Problem
 
@@ -63,7 +63,7 @@ Framework: 'Microsoft.NETCore.App', version '9.0.0' (x64)
 
 `dotnet-ef` internally targets `net8.0/net9.0` but only .NET 10 runtime is available.
 
-### Fix — Use `DOTNET_ROLL_FORWARD`
+### Fix - Use `DOTNET_ROLL_FORWARD`
 
 Prefix **all** `dotnet ef` commands with:
 
@@ -99,7 +99,7 @@ DOTNET_ROLL_FORWARD=LatestMajor dotnet ef migrations remove \
 
 ---
 
-## 2. DbMigrator Project — Connection String Not Initialized
+## 2. DbMigrator Project - Connection String Not Initialized
 
 ### Problem
 
@@ -128,13 +128,13 @@ Running `dotnet run --project src/ShikshaMitra.DbMigrator` fails with empty conn
 
 The empty environment variable `ConnectionStrings__Default=""` takes **highest precedence** over `appsettings.json` and `appsettings.Development.json`, effectively clearing the connection string at runtime.
 
-### Fix Option A — Bypass launchSettings (recommended)
+### Fix Option A - Bypass launchSettings (recommended)
 
 ```bash
 DOTNET_ROLL_FORWARD=LatestMajor dotnet run --project src/ShikshaMitra.DbMigrator --no-launch-profile
 ```
 
-### Fix Option B — Set connection string in launchSettings
+### Fix Option B - Set connection string in launchSettings
 
 Edit `src/ShikshaMitra.DbMigrator/Properties/launchSettings.json`:
 
@@ -142,7 +142,7 @@ Edit `src/ShikshaMitra.DbMigrator/Properties/launchSettings.json`:
 "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=postgres;User ID=postgres;Password=postgres;"
 ```
 
-### Fix Option C — Use `dotnet ef database update` instead
+### Fix Option C - Use `dotnet ef database update` instead
 
 Skip DbMigrator entirely and apply migrations directly:
 
@@ -152,7 +152,7 @@ DOTNET_ROLL_FORWARD=LatestMajor dotnet ef database update \
   --startup-project src/ShikshaMitra.HttpApi.Host
 ```
 
-This uses `ShikshaMitraDbContextFactory` which reads directly from `DbMigrator/appsettings.json` — no launchSettings involved.
+This uses `ShikshaMitraDbContextFactory` which reads directly from `DbMigrator/appsettings.json` - no launchSettings involved.
 
 > **Note:** This only applies schema changes. It does **not** run data seeders (OpenIddict apps, admin user, etc.). Use DbMigrator for initial setup.
 
@@ -179,7 +179,7 @@ dotnet run --project src/ShikshaMitra.HttpApi.Host
 
 Default URL: `https://localhost:44332`
 
-### Test any endpoint — no token needed
+### Test any endpoint - no token needed
 
 ```bash
 curl -sk https://localhost:44332/api/app/academic-year
@@ -217,7 +217,7 @@ curl -sk https://localhost:44332/api/app/academic-year \
 ### Notes
 
 - The middleware skips `/connect/*` paths (token endpoint) to avoid recursion
-- It has no effect in `Staging` or `Production` — only `Development`
+- It has no effect in `Staging` or `Production` - only `Development`
 - `__tenant` is sent as an **HTTP header** to the token endpoint (not a form field)
 
 ---
@@ -236,26 +236,26 @@ DOTNET_ROLL_FORWARD=LatestMajor dotnet run --project src/ShikshaMitra.HttpApi.Ho
 dotnet build ShikshaMitra.sln
 ```
 
-> Build works fine with .NET 10 SDK targeting `net9.0` — no roll-forward needed for build.
+> Build works fine with .NET 10 SDK targeting `net9.0` - no roll-forward needed for build.
 
 ---
 
 ## 5. Setting `ASPNETCORE_ENVIRONMENT`
 
-### Option A — Prefix a single command (recommended)
+### Option A - Prefix a single command (recommended)
 
 ```bash
 ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile
 ```
 
-### Option B — Export for the current terminal session
+### Option B - Export for the current terminal session
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
 dotnet run --no-launch-profile   # all commands in this session inherit it
 ```
 
-### Option C — Set permanently in `~/.bashrc`
+### Option C - Set permanently in `~/.bashrc`
 
 ```bash
 echo 'export ASPNETCORE_ENVIRONMENT=Development' >> ~/.bashrc
@@ -290,7 +290,7 @@ The API always runs on `https://localhost:44332` locally. The only thing that ch
 
 ---
 
-## Pro Tip — Set Roll-Forward Globally
+## Pro Tip - Set Roll-Forward Globally
 
 Add to your `~/.bashrc` or `~/.zshrc` to avoid typing it every time:
 

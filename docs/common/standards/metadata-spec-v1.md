@@ -1,23 +1,53 @@
-# Metadata Spec v1
+---
+module: common
+domain: documentation
+content_type: Reference
+status: canonical
+updated_on: 2026-07-06
+owner: backend-team
+audience: humans-and-agents
+---
 
-Required frontmatter keys for curated contracts:
+# Add documentation metadata
+
+TL;DR: active module docs need consistent frontmatter so humans and agents can classify a page without reading the whole file.
+
+## Required keys
+
+Use these keys for active canonical and reference docs:
 
 - `module`
 - `domain`
+- `content_type`
 - `status`
-- `source`
 - `updated_on`
 - `owner`
+- `audience`
 
-Example:
+## Example
 
 ```yaml
 ---
 module: hr
-domain: employees
+domain: api
+content_type: Reference
 status: canonical
-source: ../raw/employees-api.raw.2026-03-27.md
-updated_on: 2026-03-27
+updated_on: 2026-07-06
 owner: backend-team
+audience: humans-and-agents
 ---
 ```
+
+## Status values
+
+Use these status values:
+
+| Status | Meaning |
+|---|---|
+| `canonical` | Current source-of-truth doc |
+| `active` | Current supporting reference doc |
+
+## Metadata rule
+
+Do not use metadata to keep old plans, raw exports, or stale generated files in `docs/`.
+Update canonical pages from current source instead.

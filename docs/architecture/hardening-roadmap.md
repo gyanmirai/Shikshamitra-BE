@@ -58,7 +58,7 @@ Run the frontend commands from `Shikshamitra-FE`. Run the backend command from `
 
 Current automated checks:
 
-- `src/screens/mainDashboard/dashboard-widget-registry.test.ts` verifies every mock widget ID exists in the frontend registry.
+- `../Shikshamitra-FE/src/screens/mainDashboard/dashboard-widget-registry.test.ts` verifies every mock widget ID exists in the frontend registry.
 - The same test now compares frontend dashboard widget IDs with backend `DashboardWidgetCatalog` widget definitions.
 - The same test verifies frontend widget permissions stay the same as, or narrower than, backend widget permissions, while tolerating existing FE suffix-only permission naming.
 - The same test verifies every registered dashboard `drilldownUrl` points to an existing Next.js page route and matches the target route's most specific permission guard.

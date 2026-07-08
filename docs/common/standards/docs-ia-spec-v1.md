@@ -1,6 +1,21 @@
-# Docs IA Spec v1
+---
+module: common
+domain: documentation
+content_type: Reference
+status: canonical
+updated_on: 2026-07-08
+owner: backend-team
+audience: humans-and-agents
+---
 
-Canonical module-owned documentation layout:
+# Use the documentation information architecture
+
+TL;DR: backend docs are module-first.
+New and refactored modules follow the compact module standard.
+
+## Root layout
+
+Use this root layout:
 
 ```text
 docs/
@@ -9,23 +24,30 @@ docs/
   architecture/
   common/
   modules/
-  meta/
 ```
 
-Canonical module layout:
+## Module layout
+
+Use this module layout for new and refactored modules:
 
 ```text
 docs/modules/<module>/
   README.md
-  prd/
-  contracts/
-    raw/
-    curated/
-  implementation/
-  testing/
+  product.md
+  api.md
+  architecture.md
+  workflows.md
+  testing.md
+  references/        # optional, only when active deep notes exist
 ```
 
-Rules:
+See [module-docs-standard.md](./module-docs-standard.md) for the complete standard and [module-docs-template.md](./module-docs-template.md) for a copyable template.
+
+## Rules
+
 - Module docs live in module folders.
 - Cross-cutting docs live under `docs/common/`.
-- No root-level API folder is used; API contracts are module-owned.
+- Canonical API behavior for compact modules lives in `api.md`.
+- Empty reference folders and placeholder reference indexes are not allowed.
+- Generated exports and old plans do not belong in `docs/`.
+- Retired module folders such as `prd/`, `contracts/`, `implementation/`, and `testing/` are not allowed in compact modules.

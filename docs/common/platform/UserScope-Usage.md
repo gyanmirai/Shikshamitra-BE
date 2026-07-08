@@ -150,6 +150,35 @@ This invalidates cache for **all users** with that role.
 
 ---
 
+## Hierarchy API contract
+
+Use `IUserScopeAppService.GetUserScopeHierarchyAsync(userId, academicYearId)` when a client needs a resolved tree for display.
+The current DTO is `UserScopeHierarchyDto` in `src/ShikshaMitra.Application.Contracts/Security/UserScope/Dtos/UserScopeHierarchyDto.cs`.
+
+The response includes:
+
+| Field | Meaning |
+|---|---|
+| `userId`, `userName`, `email` | User identity shown with the tree |
+| `isAdmin` | Admin users bypass normal scope checks |
+| `accessibleHierarchy` | Resolved academic year, board, medium, stage, standard, and division tree |
+| `fromCache` | Whether the raw user scope came from cache |
+| `generatedAt` | UTC timestamp for this response |
+
+Each hierarchy node uses explicit access flags such as `hasFullBoardAccess`, `hasFullMediumAccess`, `hasFullMediumStageAccess`, `hasFullStandardAccess`, and `hasFullDivisionAccess`.
+Clients must use those flags and the returned tree.
+There is no separate top-level `summary` object in the current contract.
+
+Source files to inspect first:
+
+| Need | Source path |
+|---|---|
+| DTO shape | `src/ShikshaMitra.Application.Contracts/Security/UserScope/Dtos/UserScopeHierarchyDto.cs` |
+| API method | `src/ShikshaMitra.Application/Security/UserScope/UserScopeAppService.cs` |
+| Bulk assignment behavior | `test/ShikshaMitra.Application.Tests/Security/UserScope/UserScopeAppService_BulkAssign_Tests.cs` |
+
+---
+
 ## Common Patterns
 
 ### Application Service Example

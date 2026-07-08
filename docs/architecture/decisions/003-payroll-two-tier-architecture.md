@@ -41,5 +41,5 @@ API contracts (e.g. payroll contract DTOs) expose Tier 2 to clients; Tier 1 rema
 ## Key details
 
 - Employee aggregate may hold `PayrollStructureId` (FK to Tier 1) while amounts live in Tier 2 owned tables.
-- See [HR module reference](../../modules/hr/technical-reference.md) and [payroll PRD](../../modules/hr/prd/payroll/prd.md) for current endpoint and entity names.
+- See [HR architecture](../../modules/hr/architecture.md), [HR product behavior](../../modules/hr/product.md), and [HR APIs](../../modules/hr/api.md) for current endpoint and entity names.
 

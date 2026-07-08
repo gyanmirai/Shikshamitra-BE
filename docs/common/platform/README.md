@@ -1,15 +1,32 @@
-# Platform: access control & scope
+---
+description: Canonical backend platform docs for access control and academic scope.
+tags: [docs, backend, platform, user-scope]
+---
 
-Cross-cutting documentation for **UserScope** and bulk scope assignment. These apply across HR and other modules.
+# Platform access and scope
 
-| Document | Description |
-|----------|-------------|
-| [UserScope-Usage.md](./UserScope-Usage.md) | Hierarchical scope model (Board → Medium → Stage → Class → Division); `NULL = ALL` |
-| [BulkScopeAssignment-API-Guide.md](./BulkScopeAssignment-API-Guide.md) | Bulk assignment API for user scope |
-| [HIERARCHY_API_OPTIMIZATION.md](./HIERARCHY_API_OPTIMIZATION.md) | User scope hierarchy API performance optimization (technical) |
-| [SUMMARY_REMOVAL_MIGRATION_GUIDE.md](./SUMMARY_REMOVAL_MIGRATION_GUIDE.md) | Migration after removal of `Summary` on hierarchy DTO |
-| [FRONTEND_INTEGRATION_GUIDE.md](./FRONTEND_INTEGRATION_GUIDE.md) | Frontend integration examples (`HasFullAccess`, etc.) |
-| [OPTIMIZATION_SUMMARY.md](./OPTIMIZATION_SUMMARY.md) | Short reference for the optimization work |
+This folder owns shared backend docs for UserScope and academic access control.
+Use these pages before searching module docs for scope behavior.
+
+## Read order
+
+| Order | Document | Use it for |
+|---|---|---|
+| 1 | [UserScope usage](./UserScope-Usage.md) | Scope model, `NULL = ALL`, hierarchy response, cache rules, and implementation patterns |
+| 2 | [Bulk scope assignment API](./BulkScopeAssignment-API-Guide.md) | Bulk assignment endpoint, overwrite semantics, payloads, responses, and rollback rules |
+
+## Source of truth
+
+| Concern | Source path |
+|---|---|
+| Scope service | `src/ShikshaMitra.Domain/Security/UserScope/**` |
+| Scope app service | `src/ShikshaMitra.Application/Security/UserScope/**` |
+| Scope contracts | `src/ShikshaMitra.Application.Contracts/Security/UserScope/**` |
+| Scope tests | `test/ShikshaMitra.*.Tests/Security/UserScope/**` |
+
+## Do not add old handoff docs
+
+Do not keep optimization summaries, migration handoff notes, generated exports, or one-off frontend integration guides in this folder.
+Fold current behavior into the canonical docs above instead.
 
 [Back to common docs](../README.md)
-

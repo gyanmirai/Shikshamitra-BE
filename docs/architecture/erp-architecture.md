@@ -168,9 +168,9 @@ Live dashboard areas currently include scoped student records, scoped student at
 
 Supporting dashboard docs live in the frontend repo:
 
-- [Dashboard PRD](../../../Shikshamitra-FE/docs/dashboard/prd.md)
-- [Dashboard data contract](../../../Shikshamitra-FE/docs/dashboard/data-contract.md)
-- [Dashboard testing and acceptance](../../../Shikshamitra-FE/docs/dashboard/testing-and-acceptance.md)
+- [Dashboard frontend docs](../../../Shikshamitra-FE/docs/dashboard/README.md)
+- [Dashboard client map](../../../Shikshamitra-FE/docs/dashboard/clients.md)
+- [Dashboard validation](../../../Shikshamitra-FE/docs/dashboard/testing.md)
 
 ## Security And Scope Model
 

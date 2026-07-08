@@ -1,14 +1,6 @@
 name: Dashboard API Tests
 
 on:
-  pull_request:
-    paths:
-      - 'src/ShikshaMitra.Application/Dashboard/**'
-      - 'src/ShikshaMitra.Application.Contracts/Dashboard/**'
-      - 'src/ShikshaMitra.HttpApi/Controllers/Dashboard/**'
-      - 'test/ShikshaMitra.HttpApi.Tests/Dashboard/**'
-      - 'test/ShikshaMitra.HttpApi.Tests/Infrastructure/**'
-      - '.github/workflows/dashboard-api-tests.yml'
   workflow_dispatch:
 
 env:

@@ -3,7 +3,7 @@ module: student
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -33,6 +33,12 @@ Student data is critical school data and must be protected for accuracy, tenant 
 | Persistence | `src/ShikshaMitra.EntityFrameworkCore/Students/**` |
 | HTTP controllers | `src/ShikshaMitra.HttpApi/Controllers/Student/**` |
 | Tests | `test/ShikshaMitra.*.Tests/Students/**` |
+| Frontend integration docs | [Student frontend docs](../../../../Shikshamitra-FE/docs/student/README.md) |
+
+## Ownership boundary
+
+Backend Student docs own product rules, endpoint contracts, domain rules, persistence, and data integrity notes.
+Frontend Student docs own routes, screens, React state, Redux Toolkit Query clients, and browser workflow coverage.
 
 ## For agents
 
@@ -45,12 +51,7 @@ Use this table before searching code:
 | Where is the code? | [architecture.md](./architecture.md) |
 | Which workflow should I trace? | [workflows.md](./workflows.md) |
 | Which tests should I run? | [testing.md](./testing.md) |
-
-## Supporting material
-
-| Folder | Purpose |
-|---|---|
-| [references](./references/README.md) | Active focused references |
+| Which frontend route or client owns a screen? | [Student frontend docs](../../../../Shikshamitra-FE/docs/student/README.md) |
 
 ## Validation
 
@@ -59,4 +60,10 @@ Run these commands from the `Shikshamitra-BE` repo root:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module student
 git diff --check
+```
+
+Run the frontend Student docs check from `../../../../Shikshamitra-FE` when frontend docs or integration docs changed:
+
+```bash
+node scripts/docs/validate-docs.mjs --module student
 ```

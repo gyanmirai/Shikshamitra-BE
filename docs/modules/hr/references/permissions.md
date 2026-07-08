@@ -3,12 +3,14 @@ module: hr
 domain: permissions
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-08
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # HR permission mapping from FE to canonical BE
+
+TL;DR: use this page only when frontend and backend HR permission keys need to be compared.
 
 ## Purpose
 

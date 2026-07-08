@@ -3,12 +3,14 @@ module: hr
 domain: hr-policy-architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-08
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Understand HR policy architecture
+
+TL;DR: use this page for the shared work calendar, attendance policy, payroll policy, and assignment resolution model.
 
 ## Purpose
 

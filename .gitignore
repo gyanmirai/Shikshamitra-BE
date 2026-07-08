@@ -277,6 +277,10 @@ src/ShikshaMitra.Blazor.Server.Tiered/Logs/*
 **/wwwroot/libs/*
 
 .agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/shikshamitra-module-docs/
+!.agents/skills/shikshamitra-module-docs/**
 skills-lock.json
 skills-output.txt
 /.gemini/*

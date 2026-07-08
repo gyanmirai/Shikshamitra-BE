@@ -9,6 +9,19 @@
 
 ---
 
+## Agentic documentation practice
+
+- Trace source code before changing module docs.
+- Backend docs own product behavior, API contracts, permissions, errors, domain invariants, data integrity, and backend validation.
+- Frontend docs own routes, screen folders, client wiring, cache behavior, UI workflows, browser checks, and frontend validation.
+- Link to sibling frontend docs instead of copying frontend route or client details.
+- Use `references/` only for active deep notes.
+- Do not add placeholder reference pages, old plans, generated exports, or phase notes.
+- Use `.agents/skills/shikshamitra-module-docs/SKILL.md` for repeatable module-doc updates.
+- Run docs validators before handing off docs changes.
+
+---
+
 ## Tech stack
 
 | Component | Technology |
@@ -194,8 +207,10 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Module=HR"
 | Multi-tenancy (tenants, roles) | `docs/common/multi-tenancy/` |
 | Testing guides | `docs/common/testing/` |
 | API testing framework & blueprint | `docs/common/testing/api-testing-guide.md` |
+| Backend docs CI validation workflow | `.github/workflows/docs-validation.yml` |
 | HR docs validation | `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module hr` |
 | Backend docs full local gate | `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1` |
 | Backend all-module docs gate | `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -AllModules` |
+| Backend docs stale-review gate | `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -AllModules -MaxAgeDays 365` |
 
 When in doubt, search `docs/` for the module name and open the nearest `README.md`.

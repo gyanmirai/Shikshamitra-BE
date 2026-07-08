@@ -3,7 +3,7 @@ module: common
 domain: documentation
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -25,8 +25,7 @@ docs/modules/<module>/
   architecture.md
   workflows.md
   testing.md
-  references/
-    README.md
+  references/        # optional, only when active deep notes exist
     <topic>.md
 ```
 
@@ -52,6 +51,8 @@ Use `references/` only when the canonical files need more detail:
 | `references/` | Active deep notes that are too detailed for canonical pages |
 
 Do not place first-read docs under `references/`.
+Do not add empty `references/README.md` placeholders.
+A `references/README.md` is allowed only when it indexes active reference files.
 Do not keep generated exports, raw exports, or old plans under `docs/`.
 
 ## Metadata

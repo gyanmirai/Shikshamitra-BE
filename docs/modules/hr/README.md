@@ -3,7 +3,7 @@ module: hr
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -30,7 +30,7 @@ Follow this order when you need to change or review HR:
 
 Backend HR docs own canonical product behavior, API contracts, permissions, errors, domain rules, and data integrity notes.
 Frontend HR docs own routes, screens, React state, RTK Query clients, and browser workflow coverage.
-Start frontend work at `../Shikshamitra-FE/docs/hr/README.md`.
+Start frontend work at [HR frontend docs](../../../../Shikshamitra-FE/docs/hr/README.md).
 
 ## Source of truth
 
@@ -44,7 +44,7 @@ Use source code when a document and implementation disagree:
 | Backend persistence | `src/ShikshaMitra.EntityFrameworkCore/HR/**` |
 | Backend permissions | `src/ShikshaMitra.Domain.Shared/Constants/Permissions/SubmodulePermissions/HR/**` |
 | Backend API tests | `test/ShikshaMitra.HttpApi.Tests/HR/**` |
-| Frontend integration docs | `../Shikshamitra-FE/docs/hr/README.md` |
+| Frontend integration docs | [HR frontend docs](../../../../Shikshamitra-FE/docs/hr/README.md) |
 
 ## For agents
 
@@ -77,7 +77,7 @@ powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module 
 git diff --check
 ```
 
-Run the frontend HR docs check from `../Shikshamitra-FE`:
+Run the frontend HR docs check from `../../../../Shikshamitra-FE`:
 
 ```bash
 npm run docs:hr:check

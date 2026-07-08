@@ -3,7 +3,7 @@ module: finance
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -45,12 +45,6 @@ Use this table before searching code:
 | Where is the code? | [architecture.md](./architecture.md) |
 | Which workflow should I trace? | [workflows.md](./workflows.md) |
 | Which tests should I run? | [testing.md](./testing.md) |
-
-## Supporting material
-
-| Folder | Purpose |
-|---|---|
-| [references](./references/README.md) | Active deep notes, when needed |
 
 ## Validation
 

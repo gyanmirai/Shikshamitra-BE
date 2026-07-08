@@ -3,7 +3,7 @@ module: common
 domain: documentation-template
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -25,9 +25,11 @@ docs/modules/<module>/
   architecture.md
   workflows.md
   testing.md
-  references/
-    README.md
+  references/        # optional, only when active deep notes exist
 ```
+
+Do not add a `references/README.md` placeholder.
+Create `references/` only when there is active deep material to link from a canonical page.
 
 ## Page template
 
@@ -55,7 +57,7 @@ Use these sections:
 - `Ownership boundary`
 - `Source of truth`
 - `For agents`
-- `Supporting material`
+- `Supporting material`, only when active references exist
 - `Validation`
 
 ## product.md sections

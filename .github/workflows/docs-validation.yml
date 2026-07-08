@@ -1,0 +1,28 @@
+name: Documentation Validation
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'scripts/docs/**'
+      - 'AGENTS.md'
+      - '.agents/skills/**'
+      - '.gitignore'
+      - '.github/workflows/docs-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  backend-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Validate docs
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -AllModules

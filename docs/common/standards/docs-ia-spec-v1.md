@@ -3,7 +3,7 @@ module: common
 domain: documentation
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -38,7 +38,7 @@ docs/modules/<module>/
   architecture.md
   workflows.md
   testing.md
-  references/
+  references/        # optional, only when active deep notes exist
 ```
 
 See [module-docs-standard.md](./module-docs-standard.md) for the complete standard and [module-docs-template.md](./module-docs-template.md) for a copyable template.
@@ -48,5 +48,6 @@ See [module-docs-standard.md](./module-docs-standard.md) for the complete standa
 - Module docs live in module folders.
 - Cross-cutting docs live under `docs/common/`.
 - Canonical API behavior for compact modules lives in `api.md`.
+- Empty reference folders and placeholder reference indexes are not allowed.
 - Generated exports and old plans do not belong in `docs/`.
 - Retired module folders such as `prd/`, `contracts/`, `implementation/`, and `testing/` are not allowed in compact modules.

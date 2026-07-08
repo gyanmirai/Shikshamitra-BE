@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -22,7 +22,7 @@ powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module 
 git diff --check
 ```
 
-Run this from `../Shikshamitra-FE` when frontend HR docs or integration docs changed:
+Run this from `../../../../Shikshamitra-FE` when frontend HR docs or integration docs changed:
 
 ```bash
 npm run docs:hr:check

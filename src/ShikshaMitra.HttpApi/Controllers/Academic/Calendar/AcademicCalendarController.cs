@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Calendar;
+using ShikshaMitra.Constants.Permissions;
 
 namespace ShikshaMitra.Controllers.Academic.Calendar;
 
@@ -151,6 +152,8 @@ public class AcademicCalendarController : AbpController
 
     [HttpGet("academic/calendar-emergency-closures")]
     [HttpGet("academic/calendar-days/emergency-closures")]
+    [AllowAnonymous]
+    // [Authorize(ShikshaMitraSubmodulePermissions.Academics.Academics_AcademicCalendar.View)]
     public async Task<PagedResultDto<EmergencyClosureListItemDto>> GetEmergencyClosuresAsync(
         [FromQuery] Guid? academicYearId,
         [FromQuery] CalendarDayStatus? status,
@@ -161,12 +164,16 @@ public class AcademicCalendarController : AbpController
     }
 
     [HttpPost("academic/calendar-days/emergency-closure")]
+    [AllowAnonymous]
+    // [Authorize(ShikshaMitraSubmodulePermissions.Academics.Academics_AcademicCalendar.EmergencyClosure)]
     public async Task<List<AcademicCalendarDayDto>> CreateEmergencyClosureAsync([FromBody] CreateEmergencyClosureDto input)
     {
         return await _calendarAppService.CreateEmergencyClosureAsync(input);
     }
 
     [HttpPost("academic/calendar-days/{id}/cancel-emergency-closure")]
+    [AllowAnonymous]
+    // [Authorize(ShikshaMitraSubmodulePermissions.Academics.Academics_AcademicCalendar.EmergencyClosure)]
     public async Task CancelEmergencyClosureAsync([FromRoute] Guid id)
     {
         await _calendarAppService.CancelEmergencyClosureAsync(id);

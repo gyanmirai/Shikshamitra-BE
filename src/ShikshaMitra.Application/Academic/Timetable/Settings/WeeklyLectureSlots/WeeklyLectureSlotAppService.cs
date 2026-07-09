@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
@@ -19,7 +20,8 @@ public class WeeklyLectureSlotAppService(
     IWeeklyLectureSlotRepository weeklyLectureSlotRepository,
     IRepository<Standard, Guid> standardRepository,
     IRepository<Subject, Guid> subjectRepository,
-    IRepository<ElectiveGroup, Guid> electiveGroupRepository
+    IRepository<ElectiveGroup, Guid> electiveGroupRepository,
+    ILectureSlotConfigRepository lectureSlotConfigRepository
 ) : ApplicationService, IWeeklyLectureSlotAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsWeeklyLectures.View)]
@@ -59,38 +61,70 @@ public class WeeklyLectureSlotAppService(
         var subjects = await subjectRepository.GetListAsync();
         var electiveGroupQueryable = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
         var electiveGroups = await AsyncExecuter.ToListAsync(electiveGroupQueryable);
+        var capacityDict = await LoadAvailableCapacityAsync(standardIds);
 
-        var items = pagedSlots.Select(slot => new WeeklyLectureSlotListDto
+        var items = pagedSlots.Select(slot =>
         {
-            Id = slot.Id,
-            StandardId = slot.StandardId,
-            StandardName = standardsDict.GetValueOrDefault(slot.StandardId, string.Empty),
-            TotalLectures = slot.GetTotalLectures(),
-            Subjects = slot.Subjects.Select(sub =>
+            var totalLectures = slot.GetTotalLectures();
+            var hasCapacity = capacityDict.TryGetValue(slot.StandardId, out var availableCapacity);
+            var difference = TimetableCapacityCalculator.GetCapacityDifference(availableCapacity, totalLectures);
+            var status = TimetableCapacityCalculator.GetStatus(
+                hasSlots: hasCapacity,
+                hasWeeklyLectures: totalLectures > 0,
+                requiredWeeklyLectures: totalLectures,
+                availableWeeklyCapacity: availableCapacity);
+
+            return new WeeklyLectureSlotListDto
             {
-                var eg = sub.ElectiveGroupId.HasValue
-                    ? electiveGroups.FirstOrDefault(x => x.Id == sub.ElectiveGroupId.Value) : null;
-                return new WeeklyLectureSubjectSummaryDto
+                Id = slot.Id,
+                StandardId = slot.StandardId,
+                StandardName = standardsDict.GetValueOrDefault(slot.StandardId, string.Empty),
+                TotalLectures = totalLectures,
+                AvailableTeachingCapacity = availableCapacity,
+                Difference = difference,
+                Status = status,
+                Subjects = slot.Subjects.Select(sub =>
                 {
-                    SubjectId = sub.SubjectId,
-                    SubjectName = sub.SubjectId.HasValue
-                        ? subjects.FirstOrDefault(s => s.Id == sub.SubjectId.Value)?.Name ?? string.Empty
-                        : string.Empty,
-                    ElectiveGroupId = sub.ElectiveGroupId,
-                    ElectiveGroupName = eg?.Name,
-                    ElectiveGroupColor = eg?.Color,
-                    ElectiveGroupSubjects = eg?.Subjects.Select(c => new ElectiveGroupSubjectDto
+                    var eg = sub.ElectiveGroupId.HasValue
+                        ? electiveGroups.FirstOrDefault(x => x.Id == sub.ElectiveGroupId.Value) : null;
+                    return new WeeklyLectureSubjectSummaryDto
                     {
-                        Id = c.SubjectId,
-                        Name = subjects.FirstOrDefault(s => s.Id == c.SubjectId)?.Name ?? string.Empty,
-                        Color = subjects.FirstOrDefault(s => s.Id == c.SubjectId)?.Color
-                    }).ToList() ?? [],
-                    WeeklyLectures = sub.WeeklyLectures
-                };
-            }).ToList()
+                        SubjectId = sub.SubjectId,
+                        SubjectName = sub.SubjectId.HasValue
+                            ? subjects.FirstOrDefault(s => s.Id == sub.SubjectId.Value)?.Name ?? string.Empty
+                            : string.Empty,
+                        ElectiveGroupId = sub.ElectiveGroupId,
+                        ElectiveGroupName = eg?.Name,
+                        ElectiveGroupColor = eg?.Color,
+                        ElectiveGroupSubjects = eg?.Subjects.Select(c => new ElectiveGroupSubjectDto
+                        {
+                            Id = c.SubjectId,
+                            Name = subjects.FirstOrDefault(s => s.Id == c.SubjectId)?.Name ?? string.Empty,
+                            Color = subjects.FirstOrDefault(s => s.Id == c.SubjectId)?.Color
+                        }).ToList() ?? [],
+                        WeeklyLectures = sub.WeeklyLectures
+                    };
+                }).ToList()
+            };
         }).ToList();
 
         return new PagedResultDto<WeeklyLectureSlotListDto>(totalCount, items);
+    }
+
+    private async Task<Dictionary<Guid, int>> LoadAvailableCapacityAsync(List<Guid> standardIds)
+    {
+        if (standardIds.Count == 0)
+        {
+            return new Dictionary<Guid, int>();
+        }
+
+        var queryable = await lectureSlotConfigRepository.WithDetailsAsync();
+        var configs = await AsyncExecuter.ToListAsync(queryable.Where(c => standardIds.Contains(c.StandardId)));
+
+        return configs.ToDictionary(
+            c => c.StandardId,
+            c => TimetableCapacityCalculator.GetWeeklyTeachingCapacity(
+                c.SlotGroups.Select(g => (g.TimeSlots.Count(ts => ts.SlotType == SlotType.Period), g.WeekRangeEnd - g.WeekRangeStart + 1))));
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsWeeklyLectures.View)]
@@ -101,13 +135,26 @@ public class WeeklyLectureSlotAppService(
         var subjects = await subjectRepository.GetListAsync();
         var electiveGroupQueryable = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
         var electiveGroups = await AsyncExecuter.ToListAsync(electiveGroupQueryable);
+        var capacityDict = await LoadAvailableCapacityAsync([slot.StandardId]);
+
+        var totalLectures = slot.GetTotalLectures();
+        var hasCapacity = capacityDict.TryGetValue(slot.StandardId, out var availableCapacity);
+        var difference = TimetableCapacityCalculator.GetCapacityDifference(availableCapacity, totalLectures);
+        var status = TimetableCapacityCalculator.GetStatus(
+            hasSlots: hasCapacity,
+            hasWeeklyLectures: totalLectures > 0,
+            requiredWeeklyLectures: totalLectures,
+            availableWeeklyCapacity: availableCapacity);
 
         return new WeeklyLectureSlotDto
         {
             Id = slot.Id,
             StandardId = slot.StandardId,
             StandardName = standard.Name,
-            TotalLectures = slot.GetTotalLectures(),
+            TotalLectures = totalLectures,
+            AvailableTeachingCapacity = availableCapacity,
+            Difference = difference,
+            Status = status,
             Subjects = slot.Subjects.Select(sub =>
             {
                 var subject = sub.SubjectId.HasValue

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -15,6 +16,7 @@ public class TakeAttendanceSaveWorkflow(
 	TakeAttendanceHolidayReader holidayReader,
 	TakeAttendanceEmployeeStageResolver employeeStageResolver,
 	TakeAttendanceEntryWriter entryWriter,
+	TakeAttendanceTeacherAvailabilitySyncService teacherAvailabilitySyncService,
 	TakeAttendancePayrollSnapshotInvalidator payrollSnapshotInvalidator
 	)
 	: ApplicationService, ITransientDependency
@@ -53,10 +55,17 @@ public class TakeAttendanceSaveWorkflow(
 		var requestedEmployeeIds = parsedEntries.Select(x => x.Entry.EmployeeId).Distinct().ToList();
 		var employeeStageMap = await employeeStageResolver.ResolveEmployeeStagesAsync(requestedEmployeeIds, scope);
 		var upserted = 0;
+		var savedEntries = new List<TakeAttendanceSavedEntry>();
 		foreach (var parsedEntry in parsedEntries)
 		{
-			await entryWriter.SaveEntryAsync(parsedEntry, dateOnly, scope, employeeStageMap);
+			var savedEntry = await entryWriter.SaveEntryAsync(parsedEntry, dateOnly, scope, employeeStageMap);
+			savedEntries.Add(savedEntry);
 			upserted++;
+		}
+
+		foreach (var savedEntry in savedEntries)
+		{
+			await teacherAvailabilitySyncService.SyncAsync(savedEntry);
 		}
 
 		if (UnitOfWorkManager.Current != null)

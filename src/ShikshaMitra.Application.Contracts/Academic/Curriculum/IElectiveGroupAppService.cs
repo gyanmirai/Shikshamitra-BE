@@ -53,4 +53,21 @@ public interface IElectiveGroupAppService : IApplicationService
 	/// <param name="academicMediumId">Education medium ID</param>
 	/// <param name="id">Elective group ID</param>
 	Task DeleteAsync(Guid academicMediumId, Guid id);
+
+	Task<ElectiveGroupDto> ArchiveAsync(
+		Guid academicMediumId,
+		Guid id,
+		ElectiveGroupStatusChangeDto input
+	);
+
+	Task<ElectiveGroupDto> RestoreAsync(Guid academicMediumId, Guid id);
+
+	Task<ElectiveGroupDuplicateCheckResultDto> CheckDuplicateAsync(
+		Guid academicMediumId,
+		ElectiveGroupDuplicateCheckDto input
+	);
+
+	Task<ElectiveGroupUsageDetailDto> GetUsageDetailsAsync(Guid academicMediumId, Guid id);
+
+	Task<List<ElectiveGroupAuditLogDto>> GetAuditLogsAsync(Guid academicMediumId, Guid id);
 }

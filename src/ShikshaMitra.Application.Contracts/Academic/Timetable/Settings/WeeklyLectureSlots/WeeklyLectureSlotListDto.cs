@@ -10,6 +10,10 @@ public class WeeklyLectureSlotListDto : EntityDto<Guid>
     public string StandardName { get; set; } = string.Empty;
     public int TotalLectures { get; set; }
     public List<WeeklyLectureSubjectSummaryDto> Subjects { get; set; } = [];
+
+    public int AvailableTeachingCapacity { get; set; }
+    public int Difference { get; set; }
+    public TimetableSettingStatus Status { get; set; }
 }
 
 public class WeeklyLectureSubjectSummaryDto

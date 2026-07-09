@@ -16,6 +16,7 @@ using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Timetable.RoomAvailability;
+using ShikshaMitra.Academic.Timetable.Substitutions;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -29,6 +30,8 @@ public partial class ShikshaMitraDbContext
     public DbSet<AssignedSubject> StandardSubjectAssignments { get; set; }
     public DbSet<TeacherSubjectAllocation> TeacherSubjectAllocations { get; set; }
     public DbSet<StudentElectiveSelection> StudentElectiveSelections { get; set; }
+    public DbSet<LessonPlan> LessonPlans { get; set; }
+    public DbSet<TeacherDiary> TeacherDiaries { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Class Teacher
@@ -113,6 +116,11 @@ public partial class ShikshaMitraDbContext
     public DbSet<RoomMaintenanceBlock> RoomMaintenanceBlocks { get; set; }
     public DbSet<RoomConfig> RoomConfigs { get; set; }
     public DbSet<RoomAuditLog> RoomAuditLogs { get; set; }
+    public DbSet<SubstitutionRequest> AcademicSubstitutionRequests { get; set; }
+    public DbSet<TeacherAvailability> AcademicTeacherAvailabilities { get; set; }
+    public DbSet<SubstitutionAuditLog> AcademicSubstitutionAuditLogs { get; set; }
+    public DbSet<SubstitutionNotificationLog> AcademicSubstitutionNotificationLogs { get; set; }
+    public DbSet<SubstitutionSetting> AcademicSubstitutionSettings { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Calendar

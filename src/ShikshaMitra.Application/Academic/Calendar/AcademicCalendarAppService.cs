@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -19,6 +20,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     private readonly IRepository<AcademicCalendarSetting, Guid> _settingRepository;
     private readonly IRepository<CalendarImpactLog, Guid> _impactLogRepository;
     private readonly IRepository<AcademicCalendarAuditLog, Guid> _auditLogRepository;
+    private readonly IAcademicYearRepository _academicYearRepository;
     private readonly IAcademicCalendarManager _calendarManager;
     private readonly AcademicCalendarAuditWriter _auditWriter;
 
@@ -29,6 +31,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         IRepository<AcademicCalendarSetting, Guid> settingRepository,
         IRepository<CalendarImpactLog, Guid> impactLogRepository,
         IRepository<AcademicCalendarAuditLog, Guid> auditLogRepository,
+        IAcademicYearRepository academicYearRepository,
         IAcademicCalendarManager calendarManager,
         AcademicCalendarAuditWriter auditWriter)
     {
@@ -38,6 +41,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         _settingRepository = settingRepository;
         _impactLogRepository = impactLogRepository;
         _auditLogRepository = auditLogRepository;
+        _academicYearRepository = academicYearRepository;
         _calendarManager = calendarManager;
         _auditWriter = auditWriter;
     }
@@ -679,6 +683,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
     // ─── Emergency Closures ─────────────────────────────────────────────────
 
+    [AllowAnonymous]
     public async Task<PagedResultDto<EmergencyClosureListItemDto>> GetEmergencyClosuresAsync(
         Guid? academicYearId,
         CalendarDayStatus? status,
@@ -739,22 +744,11 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return new PagedResultDto<EmergencyClosureListItemDto>(totalCount, items);
     }
 
+    [AllowAnonymous]
     public async Task<List<AcademicCalendarDayDto>> CreateEmergencyClosureAsync(CreateEmergencyClosureDto input)
     {
         var inputDate = input.Date.DateTime;
-        var matchingCalendars = await _calendarRepository.GetListAsync(c =>
-            c.Status != CalendarStatus.Archived &&
-            inputDate.Date >= c.StartDate.Date &&
-            inputDate.Date <= c.EndDate.Date);
-        var calendar = matchingCalendars
-            .OrderBy(c => c.Status == CalendarStatus.Published ? 0 : c.IsDefault ? 1 : 2)
-            .ThenByDescending(c => c.CreationTime)
-            .FirstOrDefault();
-
-        if (calendar == null)
-        {
-            throw new UserFriendlyException("Cannot declare emergency closure: No active calendar covers this date.");
-        }
+        var calendar = await ResolveCalendarForEmergencyClosureAsync(inputDate);
 
         var results = new List<AcademicCalendarDayDto>();
 
@@ -846,6 +840,86 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return results;
     }
 
+    private async Task<AcademicCalendar> ResolveCalendarForEmergencyClosureAsync(DateTime inputDate)
+    {
+        var requestedDate = inputDate.Date;
+        var matchingCalendars = await _calendarRepository.GetListAsync(c =>
+            c.Status != CalendarStatus.Archived &&
+            requestedDate >= c.StartDate.Date &&
+            requestedDate <= c.EndDate.Date);
+        var calendar = matchingCalendars
+            .OrderBy(c => c.Status == CalendarStatus.Published ? 0 : c.IsDefault ? 1 : 2)
+            .ThenByDescending(c => c.CreationTime)
+            .FirstOrDefault();
+
+        if (calendar != null)
+        {
+            return calendar;
+        }
+
+        var academicYear = await _academicYearRepository.FirstOrDefaultAsync(y =>
+            requestedDate >= y.StartDate.Date &&
+            requestedDate <= y.EndDate.Date);
+
+        if (academicYear == null)
+        {
+            throw new UserFriendlyException("Cannot declare emergency closure: No academic year covers this date.");
+        }
+
+        var existingYearCalendars = await _calendarRepository.GetListAsync(c =>
+            c.AcademicYearId == academicYear.Id &&
+            c.Status != CalendarStatus.Archived);
+        var calendarName = BuildAutoCalendarName(academicYear.Name, existingYearCalendars);
+        var autoCalendar = await _calendarManager.CreateAsync(
+            academicYear.Id,
+            calendarName,
+            academicYear.StartDate,
+            academicYear.EndDate,
+            "System-created calendar for emergency closure entries.",
+            isDefault: existingYearCalendars.All(c => !c.IsDefault));
+
+        var settings = await _settingRepository.FirstOrDefaultAsync(s => s.AcademicYearId == academicYear.Id);
+        if (settings != null)
+        {
+            await _calendarManager.GenerateWeekendDaysAsync(autoCalendar, settings.WeekendRule);
+        }
+
+        await _calendarRepository.InsertAsync(autoCalendar);
+
+        await _auditWriter.WriteAsync(
+            autoCalendar.Id,
+            CalendarAuditAction.CalendarCreated,
+            beforeJson: null,
+            afterJson: System.Text.Json.JsonSerializer.Serialize(autoCalendar),
+            entityType: "Academic Calendar",
+            entityName: autoCalendar.Name,
+            reason: "Calendar auto-created while declaring emergency closure.",
+            module: "EmergencyClosure");
+
+        return autoCalendar;
+    }
+
+    private static string BuildAutoCalendarName(string academicYearName, IReadOnlyCollection<AcademicCalendar> existingCalendars)
+    {
+        var baseName = $"{academicYearName} Calendar";
+        if (existingCalendars.All(c => !string.Equals(c.Name, baseName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return baseName;
+        }
+
+        var index = 2;
+        string candidate;
+        do
+        {
+            candidate = $"{baseName} {index}";
+            index++;
+        }
+        while (existingCalendars.Any(c => string.Equals(c.Name, candidate, StringComparison.OrdinalIgnoreCase)));
+
+        return candidate;
+    }
+
+    [AllowAnonymous]
     public async Task CancelEmergencyClosureAsync(Guid dayId)
     {
         var day = await _calendarDayRepository.GetAsync(dayId);

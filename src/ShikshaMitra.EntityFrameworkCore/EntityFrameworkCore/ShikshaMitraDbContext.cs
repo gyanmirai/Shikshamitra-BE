@@ -8,6 +8,7 @@ using Volo.Abp.BlobStoring.Database.EntityFrameworkCore;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.EntityFrameworkCore;
+using Volo.Abp.EntityFrameworkCore.Modeling;
 using Volo.Abp.FeatureManagement.EntityFrameworkCore;
 using Volo.Abp.Identity;
 using Volo.Abp.Identity.EntityFrameworkCore;
@@ -72,6 +73,30 @@ public partial class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContex
 		builder.Ignore<FeeRefundLine>();
 
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
+		builder.Entity<TeacherDiary>(b =>
+		{
+			b.ToTable(ShikshaMitraConsts.DbTablePrefix + "TeacherDiaries", ShikshaMitraConsts.DbSchema);
+			b.ConfigureByConvention();
+			b.Property(x => x.ActualTopicCovered).HasMaxLength(256);
+			b.Property(x => x.ActualContentSummary).HasMaxLength(2048);
+			b.Property(x => x.TeachingMethodUsed).HasMaxLength(256);
+			b.Property(x => x.StudentResponse).HasMaxLength(1024);
+			b.Property(x => x.ClassUnderstandingLevel).HasMaxLength(64);
+			b.Property(x => x.StudentEngagementLevel).HasMaxLength(64);
+			b.Property(x => x.Reflection).HasMaxLength(2048);
+			b.Property(x => x.WhatWentWell).HasMaxLength(1024);
+			b.Property(x => x.WhatWasDifficult).HasMaxLength(1024);
+			b.Property(x => x.StudentsNeedingSupport).HasMaxLength(1024);
+			b.Property(x => x.NextClassFollowUp).HasMaxLength(1024);
+			b.Property(x => x.RemedialActionRequired).HasMaxLength(1024);
+			b.Property(x => x.HomeworkAssigned).HasMaxLength(1024);
+			b.Property(x => x.MissedReason).HasMaxLength(128);
+			b.Property(x => x.BackdatedReason).HasMaxLength(1024);
+			b.Property(x => x.TeacherRemarks).HasMaxLength(2048);
+			b.Property(x => x.Status).HasConversion<int>().IsRequired();
+			b.HasIndex(x => x.LessonPlanId).IsUnique();
+			b.HasIndex(x => new { x.TeacherId, x.ActualDate });
+		});
 		builder.ConfigureBlobStoring();
 	}
 }

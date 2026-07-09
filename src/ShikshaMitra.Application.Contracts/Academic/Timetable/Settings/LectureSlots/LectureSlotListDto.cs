@@ -9,6 +9,15 @@ public class LectureSlotListDto : EntityDto<Guid>
     public Guid StandardId { get; set; }
     public string StandardName { get; set; } = string.Empty;
     public List<SlotConfigurationSummaryDto> SlotConfigurations { get; set; } = [];
+
+    public int TotalSlotsPerDay { get; set; }
+    public int TeachingSlotsPerDay { get; set; }
+    public int NonTeachingSlotsPerDay { get; set; }
+    public int ActiveDaysCount { get; set; }
+    public int WeeklyTeachingCapacity { get; set; }
+    public int RequiredWeeklyLectures { get; set; }
+    public int Difference { get; set; }
+    public TimetableSettingStatus Status { get; set; }
 }
 
 public class SlotConfigurationSummaryDto

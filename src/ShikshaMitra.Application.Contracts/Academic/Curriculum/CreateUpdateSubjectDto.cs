@@ -19,6 +19,12 @@ public class CreateUpdateSubjectDto
 	)]
 	public required string Name { get; set; }
 
+	[StringLength(SubjectConsts.MaxDisplayNameLength)]
+	public string? DisplayName { get; set; }
+
+	[StringLength(SubjectConsts.MaxCategoryLength)]
+	public string? Category { get; set; }
+
 	/// <summary>
 	/// Hex color code for visual identification (e.g., #FF5733 or #F57)
 	/// </summary>
@@ -28,6 +34,17 @@ public class CreateUpdateSubjectDto
 		ErrorMessage = SubjectConsts.ColorFormatErrorMessage
 	)]
 	public required string Color { get; set; }
+
+	[StringLength(SubjectConsts.MaxIconLength)]
+	public string? Icon { get; set; }
+
+	[StringLength(SubjectConsts.MaxDescriptionLength)]
+	public string? Description { get; set; }
+
+	public SubjectMasterStatus Status { get; set; } = SubjectMasterStatus.Active;
+
+	[Range(0, int.MaxValue, ErrorMessage = "Sort order cannot be negative")]
+	public int? SortOrder { get; set; }
 
 	/// <summary>
 	/// ID of the Education Medium this subject belongs to

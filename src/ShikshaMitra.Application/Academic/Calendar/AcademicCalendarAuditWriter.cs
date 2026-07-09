@@ -108,14 +108,16 @@ public class AcademicCalendarAuditWriter(
 
         var ignored = DefaultIgnoredDiffFields.Concat(ignoredFields).Select(x => x.ToLowerInvariant()).ToHashSet();
 
-        Dictionary<string, string> beforeValues;
-        Dictionary<string, string> afterValues;
+        Dictionary<string, string?> beforeValues;
+        Dictionary<string, string?> afterValues;
         try
         {
             using var beforeDoc = JsonDocument.Parse(beforeJson);
             using var afterDoc = JsonDocument.Parse(afterJson);
-            beforeValues = beforeDoc.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.GetRawText());
-            afterValues = afterDoc.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.GetRawText());
+            beforeValues = beforeDoc.RootElement.EnumerateObject()
+                .ToDictionary(x => x.Name, x => x.Value.ValueKind == JsonValueKind.Null ? null : x.Value.GetRawText());
+            afterValues = afterDoc.RootElement.EnumerateObject()
+                .ToDictionary(x => x.Name, x => x.Value.ValueKind == JsonValueKind.Null ? null : x.Value.GetRawText());
         }
         catch (JsonException)
         {

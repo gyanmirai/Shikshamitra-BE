@@ -24,7 +24,7 @@ public class TakeAttendanceEntryWriter(
 {
 	private const int AttendanceRemarksMaxLength = 512;
 
-	public async Task SaveEntryAsync(
+	public async Task<TakeAttendanceSavedEntry> SaveEntryAsync(
 		ParsedTakeAttendanceEntry parsedEntry,
 		DateOnly dateOnly,
 		UserScopeContext scope,
@@ -81,10 +81,10 @@ public class TakeAttendanceEntryWriter(
 			existing.EducationMediumStageId = resolvedStageId;
 			existing.Remarks = normalizedRemarks;
 			await employeeAttendanceRepository.UpdateAsync(existing, autoSave: false);
-			return;
+			return new TakeAttendanceSavedEntry(employee, existing);
 		}
 
-		await employeeAttendanceRepository.InsertAsync(new EmployeeAttendance
+		var inserted = new EmployeeAttendance
 		{
 			TenantId = CurrentTenant.Id,
 			EmployeeId = entry.EmployeeId,
@@ -95,7 +95,9 @@ public class TakeAttendanceEntryWriter(
 			TimeIn = tIn,
 			TimeOut = tOut,
 			Remarks = normalizedRemarks
-		}, autoSave: false);
+		};
+		await employeeAttendanceRepository.InsertAsync(inserted, autoSave: false);
+		return new TakeAttendanceSavedEntry(employee, inserted);
 	}
 
 	private static void EnsureEmployeeCanTakeAttendanceOnDate(

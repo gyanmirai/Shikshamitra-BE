@@ -9,6 +9,7 @@ using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -27,8 +28,11 @@ public class SubjectAppService(
 		IRepository<ExamMark, Guid> examMarkRepository,
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkAssignmentRepository,
 	IRepository<AssignmentEntity, Guid> assignmentRepository,
+	IRepository<AssignedSubjectChapter, Guid> chapterRepository,
+	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
+	IRepository<LessonPlan, Guid> lessonPlanRepository,
+	IRepository<Standard, Guid> standardRepository,
 	ILogger<SubjectAppService> logger,
-	AcademicOrganizationScopeAccessService scopeAccessService,
 	IRepository<ElectiveGroup, Guid> electiveGroupRepository
 ) : ApplicationService, ISubjectAppService
 {
@@ -37,7 +41,7 @@ public class SubjectAppService(
 		try
 		{
 			var subject = await subjectRepository.GetAsync(id);
-			return ObjectMapper.Map<Subject, SubjectDto>(subject);
+			return await MapSubjectAsync(subject);
 		}
 		catch (Exception ex)
 		{
@@ -53,11 +57,6 @@ public class SubjectAppService(
 	{
 		try
 		{
-			if (!await scopeAccessService.CanAccessMediumAsync(educationMediumId))
-			{
-				return [];
-			}
-
 			var queryable = await subjectRepository.GetQueryableAsync();
 
 			// Filter by education medium
@@ -66,13 +65,24 @@ public class SubjectAppService(
 			// Apply search filter if provided
 			if (!string.IsNullOrWhiteSpace(searchTerm))
 			{
-				queryable = queryable.Where(x => x.Name.Contains(searchTerm));
+				queryable = queryable.Where(x =>
+					x.Name.Contains(searchTerm)
+					|| (x.DisplayName != null && x.DisplayName.Contains(searchTerm))
+					|| (x.Category != null && x.Category.Contains(searchTerm))
+				);
 			}
 
 			// Use ABP's AsyncExecuter for asynchronous query execution
-			var subjects = await AsyncExecuter.ToListAsync(queryable);
+			var subjects = await AsyncExecuter.ToListAsync(
+				queryable.OrderBy(x => x.SortOrder ?? int.MaxValue).ThenBy(x => x.Name)
+			);
 
-			return ObjectMapper.Map<List<Subject>, List<SubjectDto>>(subjects);
+			var result = new List<SubjectDto>();
+			foreach (var subject in subjects)
+			{
+				result.Add(await MapSubjectAsync(subject));
+			}
+			return result;
 		}
 		catch (UserFriendlyException ex)
 		{
@@ -97,12 +107,18 @@ public class SubjectAppService(
 			Subject subject = await subjectManager.CreateSubject(
 				createSubjectDto.Name,
 				createSubjectDto.Color,
-				createSubjectDto.EducationMediumId
+				createSubjectDto.EducationMediumId,
+				createSubjectDto.DisplayName,
+				createSubjectDto.Category,
+				createSubjectDto.Icon,
+				createSubjectDto.Description,
+				createSubjectDto.Status,
+				createSubjectDto.SortOrder
 			);
 
 			await subjectRepository.InsertAsync(subject);
 
-			return ObjectMapper.Map<Subject, SubjectDto>(subject);
+			return await MapSubjectAsync(subject);
 		}
 		catch (BusinessException)
 		{
@@ -119,6 +135,58 @@ public class SubjectAppService(
 		}
 	}
 
+	public async Task<List<SubjectDto>> BulkCreateAsync(BulkCreateSubjectsDto input)
+	{
+		var result = new List<SubjectDto>();
+		foreach (var subjectInput in input.Subjects)
+		{
+			result.Add(await CreateAsync(subjectInput));
+		}
+		return result;
+	}
+
+	public async Task<SubjectDuplicateCheckResultDto> CheckDuplicateAsync(
+		Guid educationMediumId,
+		SubjectDuplicateCheckDto input
+	)
+	{
+		var normalized = NormalizeSubjectName(input.Name);
+		var queryable = await subjectRepository.GetQueryableAsync();
+		var subjects = await AsyncExecuter.ToListAsync(
+			queryable.Where(x => x.EducationMediumId == educationMediumId && x.Id != input.ExcludeSubjectId)
+		);
+
+		var matches = subjects
+			.Select(x => new
+			{
+				Subject = x,
+				Normalized = NormalizeSubjectName(x.Name),
+				DisplayNormalized = NormalizeSubjectName(x.DisplayName ?? string.Empty)
+			})
+			.Where(x =>
+				x.Normalized == normalized
+				|| x.DisplayNormalized == normalized
+				|| IsSimilarSubjectName(normalized, x.Normalized)
+				|| IsSimilarSubjectName(normalized, x.DisplayNormalized)
+			)
+			.Select(x => new SubjectDuplicateMatchDto
+			{
+				Id = x.Subject.Id,
+				Name = x.Subject.Name,
+				DisplayName = x.Subject.DisplayName,
+				Status = x.Subject.Status,
+				MatchType = x.Normalized == normalized || x.DisplayNormalized == normalized ? "Exact" : "Similar"
+			})
+			.ToList();
+
+		return new SubjectDuplicateCheckResultDto
+		{
+			HasExactDuplicate = matches.Any(x => x.MatchType == "Exact" && x.Status == SubjectMasterStatus.Active),
+			HasSimilarDuplicate = matches.Any(x => x.MatchType == "Similar"),
+			Matches = matches
+		};
+	}
+
 	public async Task<SubjectDto> UpdateAsync(Guid id, CreateUpdateSubjectDto updateSubjectDto)
 	{
 		try
@@ -127,12 +195,18 @@ public class SubjectAppService(
 				id,
 				updateSubjectDto.Name,
 				updateSubjectDto.Color,
-				updateSubjectDto.EducationMediumId
+				updateSubjectDto.EducationMediumId,
+				updateSubjectDto.DisplayName,
+				updateSubjectDto.Category,
+				updateSubjectDto.Icon,
+				updateSubjectDto.Description,
+				updateSubjectDto.Status,
+				updateSubjectDto.SortOrder
 			);
 
 			await subjectRepository.UpdateAsync(subject);
 
-			return ObjectMapper.Map<Subject, SubjectDto>(subject);
+			return await MapSubjectAsync(subject);
 		}
 		catch (BusinessException)
 		{
@@ -143,6 +217,22 @@ public class SubjectAppService(
 			logger.LogError(ex, "Error updating subject with ID {SubjectId}", id);
 			throw new UserFriendlyException("Error occurred while updating subject");
 		}
+	}
+
+	public async Task<SubjectDto> ArchiveAsync(Guid id, SubjectStatusChangeDto input)
+	{
+		var subject = await subjectRepository.GetAsync(id);
+		subject.Archive(input.Reason);
+		await subjectRepository.UpdateAsync(subject);
+		return await MapSubjectAsync(subject);
+	}
+
+	public async Task<SubjectDto> RestoreAsync(Guid id)
+	{
+		var subject = await subjectRepository.GetAsync(id);
+		subject.Restore();
+		await subjectRepository.UpdateAsync(subject);
+		return await MapSubjectAsync(subject);
 	}
 
 	public async Task DeleteAsync(Guid id)
@@ -217,13 +307,14 @@ public class SubjectAppService(
 		{
 			var subject = await subjectRepository.GetAsync(id);
 
-			var allocations = await assignedSubjectRepository.CountAsync(a => a.SubjectId == id);
-			var weeklySlots = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.SubjectId == id);
-			var timetableSlots = await timetableSlotSubjectRepository.CountAsync(t => t.SubjectId == id);
-			var examSubjects = await examSubjectRepository.CountAsync(e => e.SubjectId == id);
-			var examResults = await examMarkRepository.CountAsync(m => m.SubjectId == id);
-			var homeworks = await homeworkAssignmentRepository.CountAsync(h => h.SubjectId == id);
-			var assignments = await assignmentRepository.CountAsync(a => a.SubjectId == id);
+			var usage = await GetUsageCountsAsync(id);
+			var allocations = usage.Allocations;
+			var weeklySlots = usage.WeeklySlots;
+			var timetableSlots = usage.TimetableSlots;
+			var examSubjects = usage.ExamSubjects;
+			var examResults = usage.ExamResults;
+			var homeworks = usage.Homeworks;
+			var assignments = usage.Assignments;
 
 			var total = allocations + weeklySlots + timetableSlots + examSubjects + examResults + homeworks + assignments;
 
@@ -246,5 +337,144 @@ public class SubjectAppService(
 			logger.LogError(ex, "Error checking usages for subject {SubjectId}", id);
 			throw new UserFriendlyException("Error occurred while checking subject usages");
 		}
+	}
+
+	public async Task<SubjectUsageDetailDto> GetUsageDetailsAsync(Guid id)
+	{
+		var subject = await subjectRepository.GetAsync(id);
+		var assignedSubjects = await assignedSubjectRepository.GetListAsync(x => x.SubjectId == id);
+		var standards = await standardRepository.GetListAsync(x => assignedSubjects.Select(a => a.StandardId).Contains(x.Id));
+		var groups = await electiveGroupRepository.WithDetailsAsync(x => x.Subjects);
+		var usage = await GetUsageCountsAsync(id);
+
+		var detail = new SubjectUsageDetailDto
+		{
+			SubjectId = id,
+			SubjectName = subject.Name,
+			CanDelete = usage.Total == 0,
+			SafeActions = usage.Total == 0
+				? ["Edit display name", "Edit color", "Edit icon", "Delete"]
+				: ["Edit display name", "Edit color", "Edit icon", "Archive"],
+			Usage = new SubjectUsageSummaryDto
+			{
+				SubjectAllocations = assignedSubjects.Select(a => new SubjectAllocationUsageDto
+				{
+					Standard = standards.FirstOrDefault(s => s.Id == a.StandardId)?.Name,
+					Code = a.SubjectCode
+				}).ToList(),
+				ElectiveGroups = groups.Where(g => g.Subjects.Any(s => s.SubjectId == id)).Select(g => g.Name).ToList(),
+				ChaptersCount = usage.Chapters,
+				TimetablePeriodsCount = usage.WeeklySlots + usage.TimetableSlots,
+				ExamSchedulesCount = usage.ExamSubjects,
+				LessonPlansCount = usage.LessonPlans,
+				HomeworkCount = usage.Homeworks + usage.Assignments,
+				TeacherMappingsCount = usage.TeacherMappings
+			}
+		};
+
+		return detail;
+	}
+
+	public async Task<List<SubjectAuditLogDto>> GetAuditLogsAsync(Guid id)
+	{
+		var subject = await subjectRepository.GetAsync(id);
+		var logs = new List<SubjectAuditLogDto>
+		{
+			new()
+			{
+				ChangedDate = subject.CreationTime,
+				ChangedBy = subject.CreatorId?.ToString(),
+				Action = "Subject Created",
+				AfterValue = subject.Name
+			}
+		};
+
+		if (subject.LastModificationTime.HasValue)
+		{
+			logs.Add(new SubjectAuditLogDto
+			{
+				ChangedDate = subject.LastModificationTime.Value,
+				ChangedBy = subject.LastModifierId?.ToString(),
+				Action = subject.Status == SubjectMasterStatus.Archived ? "Subject Archived" : "Subject Updated",
+				AfterValue = subject.Name,
+				Reason = subject.ArchiveReason
+			});
+		}
+
+		return logs.OrderByDescending(x => x.ChangedDate).ToList();
+	}
+
+	private async Task<SubjectDto> MapSubjectAsync(Subject subject)
+	{
+		var dto = ObjectMapper.Map<Subject, SubjectDto>(subject);
+		var usage = await GetUsageCountsAsync(subject.Id);
+		dto.UsedInClassesCount = usage.Allocations;
+		dto.UsedInElectiveGroupsCount = usage.ElectiveGroups;
+		dto.IsUsed = usage.Total > 0;
+		dto.CanDelete = usage.Total == 0;
+		dto.LastUpdatedAt = subject.LastModificationTime ?? subject.CreationTime;
+		dto.LastUpdatedBy = (subject.LastModifierId ?? subject.CreatorId)?.ToString();
+		return dto;
+	}
+
+	private async Task<SubjectUsageCounts> GetUsageCountsAsync(Guid subjectId)
+	{
+		var assignedSubjects = await assignedSubjectRepository.GetListAsync(a => a.SubjectId == subjectId);
+		var assignedSubjectIds = assignedSubjects.Select(a => a.Id).ToList();
+		var groups = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
+		var electiveGroups = groups.Count(eg => eg.Subjects.Any(s => s.SubjectId == subjectId));
+
+		var usage = new SubjectUsageCounts
+		{
+			Allocations = assignedSubjects.Count,
+			ElectiveGroups = electiveGroups,
+			Chapters = assignedSubjectIds.Count == 0
+				? 0
+				: await chapterRepository.CountAsync(c => assignedSubjectIds.Contains(c.AssignedSubjectId)),
+			WeeklySlots = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.SubjectId == subjectId),
+			TimetableSlots = await timetableSlotSubjectRepository.CountAsync(t => t.SubjectId == subjectId),
+			ExamSubjects = await examSubjectRepository.CountAsync(e => e.SubjectId == subjectId),
+			ExamResults = await examMarkRepository.CountAsync(m => m.SubjectId == subjectId),
+			Homeworks = await homeworkAssignmentRepository.CountAsync(h => h.SubjectId == subjectId),
+			Assignments = await assignmentRepository.CountAsync(a => a.SubjectId == subjectId),
+			TeacherMappings = await teacherSubjectAllocationRepository.CountAsync(t => t.SubjectId == subjectId),
+			LessonPlans = await lessonPlanRepository.CountAsync(l => l.SubjectId == subjectId)
+		};
+		return usage;
+	}
+
+	private static string NormalizeSubjectName(string name)
+	{
+		var normalized = new string(name.Trim().ToUpperInvariant().Where(char.IsLetterOrDigit).ToArray());
+		return normalized switch
+		{
+			"MATH" or "MATHS" => "MATHEMATICS",
+			"SCI" => "SCIENCE",
+			"SS" or "SOCIALSTUDIES" => "SOCIALSCIENCE",
+			"COMP" or "COMPUTER" => "COMPUTERSCIENCE",
+			_ => normalized
+		};
+	}
+
+	private static bool IsSimilarSubjectName(string left, string right)
+	{
+		return left.Length >= 3 && right.Length >= 3 && (left.Contains(right) || right.Contains(left));
+	}
+
+	private sealed class SubjectUsageCounts
+	{
+		public int Allocations { get; set; }
+		public int ElectiveGroups { get; set; }
+		public int Chapters { get; set; }
+		public int WeeklySlots { get; set; }
+		public int TimetableSlots { get; set; }
+		public int ExamSubjects { get; set; }
+		public int ExamResults { get; set; }
+		public int Homeworks { get; set; }
+		public int Assignments { get; set; }
+		public int TeacherMappings { get; set; }
+		public int LessonPlans { get; set; }
+		public int Total => Allocations + ElectiveGroups + Chapters + WeeklySlots + TimetableSlots
+			+ ExamSubjects + ExamResults + Homeworks + Assignments + TeacherMappings + LessonPlans;
 	}
 }

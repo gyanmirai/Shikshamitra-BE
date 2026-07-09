@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
@@ -20,7 +21,8 @@ public class LectureSlotAppService(
     ILectureSlotConfigRepository lectureSlotConfigRepository,
     ITimetableRepository timetableRepository,
     IRepository<Standard, Guid> standardRepository,
-    IRepository<Room, Guid> roomRepository
+    IRepository<Room, Guid> roomRepository,
+    IWeeklyLectureSlotRepository weeklyLectureSlotRepository
 ) : ApplicationService, ILectureSlotAppService
 {
     private const string LectureSlotConfigHasTimetableMessage =
@@ -60,32 +62,13 @@ public class LectureSlotAppService(
 
         var standardsDict = allStandards.ToDictionary(s => s.Id, s => s.Name);
         var roomNames = await LoadRoomNamesAsync(pagedConfigs);
+        var requiredLecturesDict = await LoadRequiredWeeklyLecturesAsync(standardIds);
 
-        var items = pagedConfigs.Select(config => new LectureSlotListDto
-        {
-            Id = config.Id,
-            StandardId = config.StandardId,
-            StandardName = standardsDict.GetValueOrDefault(config.StandardId, string.Empty),
-            SlotConfigurations = config.SlotGroups
-                .OrderBy(g => g.TimeSlots.Count > 0 ? g.TimeSlots.Min(ts => ts.StartTime) : TimeOnly.MaxValue)
-                .Select(g => new SlotConfigurationSummaryDto
-                {
-                    FromDay = g.WeekRangeStart,
-                    ToDay = g.WeekRangeEnd,
-                    TotalSlots = g.TotalSlots,
-                    TimeSlots = g.TimeSlots
-                        .OrderBy(ts => ts.StartTime)
-                        .Select(ts => new TimeSlotDetailDto
-                        {
-                            StartTime = ts.StartTime,
-                            EndTime = ts.EndTime,
-                            SlotType = ts.SlotType,
-                            RoomId = ts.RoomId,
-                            RoomName = ts.RoomId.HasValue ? roomNames.GetValueOrDefault(ts.RoomId.Value) : null,
-                            BreakType = ts.BreakType
-                        }).ToList()
-                }).ToList()
-        }).ToList();
+        var items = pagedConfigs.Select(config => MapToListDto(
+            config,
+            standardsDict.GetValueOrDefault(config.StandardId, string.Empty),
+            roomNames,
+            requiredLecturesDict.GetValueOrDefault(config.StandardId, 0))).ToList();
 
         return new PagedResultDto<LectureSlotListDto>(totalCount, items);
     }
@@ -96,8 +79,9 @@ public class LectureSlotAppService(
         var config = await lectureSlotConfigRepository.GetAsync(id);
         var standard = await standardRepository.GetAsync(config.StandardId);
         var roomNames = await LoadRoomNamesAsync([config]);
+        var weeklyLectureSlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(config.StandardId);
 
-        return MapToDto(config, standard.Name, roomNames);
+        return MapToDto(config, standard.Name, roomNames, weeklyLectureSlot?.GetTotalLectures() ?? 0);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
@@ -124,7 +108,8 @@ public class LectureSlotAppService(
 
         var standard = await standardRepository.GetAsync(config.StandardId);
         var roomNames = await LoadRoomNamesAsync([config]);
-        return MapToDto(config, standard.Name, roomNames);
+        var weeklyLectureSlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(config.StandardId);
+        return MapToDto(config, standard.Name, roomNames, weeklyLectureSlot?.GetTotalLectures() ?? 0);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
@@ -145,7 +130,8 @@ public class LectureSlotAppService(
 
         var standard = await standardRepository.GetAsync(config.StandardId);
         var roomNames = await LoadRoomNamesAsync([config]);
-        return MapToDto(config, standard.Name, roomNames);
+        var weeklyLectureSlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(config.StandardId);
+        return MapToDto(config, standard.Name, roomNames, weeklyLectureSlot?.GetTotalLectures() ?? 0);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
@@ -398,32 +384,125 @@ public class LectureSlotAppService(
         return rooms.ToDictionary(room => room.Id, room => room.RoomName);
     }
 
-    private static LectureSlotDto MapToDto(LectureSlotConfig config, string standardName, IReadOnlyDictionary<Guid, string> roomNames) => new()
+    private async Task<Dictionary<Guid, int>> LoadRequiredWeeklyLecturesAsync(List<Guid> standardIds)
     {
-        Id = config.Id,
-        StandardId = config.StandardId,
-        StandardName = standardName,
-        SchoolHours = config.SchoolHours,
-        PreviousStandardId = config.PreviousStandardId,
-        CreatedAt = config.CreationTime,
-        UpdatedAt = config.LastModificationTime,
-        SlotConfigurations = config.SlotGroups
-            .OrderBy(g => g.TimeSlots.Count > 0 ? g.TimeSlots.Min(ts => ts.StartTime) : TimeOnly.MaxValue)
-            .Select(g => new SlotConfigurationDetailDto
-            {
-                TotalSlots = g.TotalSlots,
-                WeekRange = [g.WeekRangeStart, g.WeekRangeEnd],
-                TimeSlots = g.TimeSlots
-                    .OrderBy(ts => ts.StartTime)
-                    .Select(ts => new TimeSlotDetailDto
-                    {
-                        StartTime = ts.StartTime,
-                        EndTime = ts.EndTime,
-                        SlotType = ts.SlotType,
-                        RoomId = ts.RoomId,
-                        RoomName = ts.RoomId.HasValue ? roomNames.GetValueOrDefault(ts.RoomId.Value) : null,
-                        BreakType = ts.BreakType
-                    }).ToList()
-            }).ToList()
-    };
+        if (standardIds.Count == 0)
+        {
+            return new Dictionary<Guid, int>();
+        }
+
+        var queryable = await weeklyLectureSlotRepository.WithDetailsAsync();
+        var slots = await AsyncExecuter.ToListAsync(queryable.Where(w => standardIds.Contains(w.StandardId)));
+        return slots.ToDictionary(w => w.StandardId, w => w.GetTotalLectures());
+    }
+
+    private static (int TotalSlotsPerDay, int TeachingSlotsPerDay, int NonTeachingSlotsPerDay, int ActiveDaysCount, int WeeklyTeachingCapacity, int Difference, TimetableSettingStatus Status)
+        ComputeCapacityStats(LectureSlotConfig config, int requiredWeeklyLectures)
+    {
+        var groups = config.SlotGroups.ToList();
+        var primaryGroup = groups.FirstOrDefault();
+
+        var totalSlotsPerDay = primaryGroup?.TotalSlots ?? 0;
+        var teachingSlotsPerDay = primaryGroup?.TimeSlots.Count(ts => ts.SlotType == SlotType.Period) ?? 0;
+        var nonTeachingSlotsPerDay = totalSlotsPerDay - teachingSlotsPerDay;
+
+        var activeDaysCount = TimetableCapacityCalculator.GetActiveDaysCount(
+            groups.Select(g => (g.WeekRangeStart, g.WeekRangeEnd)));
+
+        var weeklyTeachingCapacity = TimetableCapacityCalculator.GetWeeklyTeachingCapacity(
+            groups.Select(g => (g.TimeSlots.Count(ts => ts.SlotType == SlotType.Period), g.WeekRangeEnd - g.WeekRangeStart + 1)));
+
+        var difference = TimetableCapacityCalculator.GetCapacityDifference(weeklyTeachingCapacity, requiredWeeklyLectures);
+
+        var status = TimetableCapacityCalculator.GetStatus(
+            hasSlots: groups.Count > 0,
+            hasWeeklyLectures: requiredWeeklyLectures > 0,
+            requiredWeeklyLectures: requiredWeeklyLectures,
+            availableWeeklyCapacity: weeklyTeachingCapacity);
+
+        return (totalSlotsPerDay, teachingSlotsPerDay, nonTeachingSlotsPerDay, activeDaysCount, weeklyTeachingCapacity, difference, status);
+    }
+
+    private static LectureSlotDto MapToDto(
+        LectureSlotConfig config, string standardName, IReadOnlyDictionary<Guid, string> roomNames, int requiredWeeklyLectures)
+    {
+        var stats = ComputeCapacityStats(config, requiredWeeklyLectures);
+
+        return new LectureSlotDto
+        {
+            Id = config.Id,
+            StandardId = config.StandardId,
+            StandardName = standardName,
+            SchoolHours = config.SchoolHours,
+            PreviousStandardId = config.PreviousStandardId,
+            CreatedAt = config.CreationTime,
+            UpdatedAt = config.LastModificationTime,
+            SlotConfigurations = config.SlotGroups
+                .OrderBy(g => g.TimeSlots.Count > 0 ? g.TimeSlots.Min(ts => ts.StartTime) : TimeOnly.MaxValue)
+                .Select(g => new SlotConfigurationDetailDto
+                {
+                    TotalSlots = g.TotalSlots,
+                    WeekRange = [g.WeekRangeStart, g.WeekRangeEnd],
+                    TimeSlots = g.TimeSlots
+                        .OrderBy(ts => ts.StartTime)
+                        .Select(ts => new TimeSlotDetailDto
+                        {
+                            StartTime = ts.StartTime,
+                            EndTime = ts.EndTime,
+                            SlotType = ts.SlotType,
+                            RoomId = ts.RoomId,
+                            RoomName = ts.RoomId.HasValue ? roomNames.GetValueOrDefault(ts.RoomId.Value) : null,
+                            BreakType = ts.BreakType
+                        }).ToList()
+                }).ToList(),
+            TotalSlotsPerDay = stats.TotalSlotsPerDay,
+            TeachingSlotsPerDay = stats.TeachingSlotsPerDay,
+            NonTeachingSlotsPerDay = stats.NonTeachingSlotsPerDay,
+            ActiveDaysCount = stats.ActiveDaysCount,
+            WeeklyTeachingCapacity = stats.WeeklyTeachingCapacity,
+            RequiredWeeklyLectures = requiredWeeklyLectures,
+            Difference = stats.Difference,
+            Status = stats.Status
+        };
+    }
+
+    private static LectureSlotListDto MapToListDto(
+        LectureSlotConfig config, string standardName, IReadOnlyDictionary<Guid, string> roomNames, int requiredWeeklyLectures)
+    {
+        var stats = ComputeCapacityStats(config, requiredWeeklyLectures);
+
+        return new LectureSlotListDto
+        {
+            Id = config.Id,
+            StandardId = config.StandardId,
+            StandardName = standardName,
+            SlotConfigurations = config.SlotGroups
+                .OrderBy(g => g.TimeSlots.Count > 0 ? g.TimeSlots.Min(ts => ts.StartTime) : TimeOnly.MaxValue)
+                .Select(g => new SlotConfigurationSummaryDto
+                {
+                    FromDay = g.WeekRangeStart,
+                    ToDay = g.WeekRangeEnd,
+                    TotalSlots = g.TotalSlots,
+                    TimeSlots = g.TimeSlots
+                        .OrderBy(ts => ts.StartTime)
+                        .Select(ts => new TimeSlotDetailDto
+                        {
+                            StartTime = ts.StartTime,
+                            EndTime = ts.EndTime,
+                            SlotType = ts.SlotType,
+                            RoomId = ts.RoomId,
+                            RoomName = ts.RoomId.HasValue ? roomNames.GetValueOrDefault(ts.RoomId.Value) : null,
+                            BreakType = ts.BreakType
+                        }).ToList()
+                }).ToList(),
+            TotalSlotsPerDay = stats.TotalSlotsPerDay,
+            TeachingSlotsPerDay = stats.TeachingSlotsPerDay,
+            NonTeachingSlotsPerDay = stats.NonTeachingSlotsPerDay,
+            ActiveDaysCount = stats.ActiveDaysCount,
+            WeeklyTeachingCapacity = stats.WeeklyTeachingCapacity,
+            RequiredWeeklyLectures = requiredWeeklyLectures,
+            Difference = stats.Difference,
+            Status = stats.Status
+        };
+    }
 }

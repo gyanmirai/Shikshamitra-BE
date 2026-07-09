@@ -31,6 +31,8 @@ public interface ISubjectAppService
 	/// <returns>Created subject details</returns>
 	Task<SubjectDto> CreateAsync(CreateUpdateSubjectDto createSubjectDto);
 
+	Task<List<SubjectDto>> BulkCreateAsync(BulkCreateSubjectsDto input);
+
 	/// <summary>
 	/// Update an existing subject
 	/// </summary>
@@ -38,6 +40,10 @@ public interface ISubjectAppService
 	/// <param name="updateSubjectDto">Subject update data</param>
 	/// <returns>Updated subject details</returns>
 	Task<SubjectDto> UpdateAsync(Guid id, CreateUpdateSubjectDto updateSubjectDto);
+
+	Task<SubjectDto> ArchiveAsync(Guid id, SubjectStatusChangeDto input);
+
+	Task<SubjectDto> RestoreAsync(Guid id);
 
 	/// <summary>
 	/// Delete a subject
@@ -51,4 +57,13 @@ public interface ISubjectAppService
 	/// </summary>
 	/// <param name="id">Subject ID</param>
 	Task<SubjectUsageCheckDto> CheckUsagesAsync(Guid id);
+
+	Task<SubjectDuplicateCheckResultDto> CheckDuplicateAsync(
+		Guid educationMediumId,
+		SubjectDuplicateCheckDto input
+	);
+
+	Task<SubjectUsageDetailDto> GetUsageDetailsAsync(Guid id);
+
+	Task<List<SubjectAuditLogDto>> GetAuditLogsAsync(Guid id);
 }

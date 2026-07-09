@@ -42,7 +42,11 @@ public class ElectiveGroupManager : DomainService
 		[NotNull] string name,
 		[NotNull] string color,
 		[NotNull] Guid educationMediumId,
-		[CanBeNull] IEnumerable<Guid> subjectIds
+		[CanBeNull] IEnumerable<Guid> subjectIds,
+		string? groupType = null,
+		string? description = null,
+		SubjectMasterStatus status = SubjectMasterStatus.Active,
+		int? sortOrder = null
 	)
 	{
 		// Validate minimum subjects requirement
@@ -59,7 +63,11 @@ public class ElectiveGroupManager : DomainService
 			CurrentTenant.Id,
 			name,
 			color,
-			educationMediumId
+			educationMediumId,
+			groupType,
+			description,
+			status,
+			sortOrder
 		);
 
 		ElectiveGroup.ReplaceSubjects(subjectIds);
@@ -81,7 +89,11 @@ public class ElectiveGroupManager : DomainService
 		[NotNull] string name,
 		[NotNull] string color,
 		[NotNull] Guid educationMediumId,
-		[CanBeNull] IEnumerable<Guid> subjectIds
+		[CanBeNull] IEnumerable<Guid> subjectIds,
+		string? groupType = null,
+		string? description = null,
+		SubjectMasterStatus status = SubjectMasterStatus.Active,
+		int? sortOrder = null
 	)
 	{
 		var ElectiveGroup = await ElectiveGroupRepository.GetAsync(id, includeDetails: true);
@@ -109,6 +121,7 @@ public class ElectiveGroupManager : DomainService
 		await ValidateSubjectsBelongToMediumAsync(subjectIds, educationMediumId);
 
 		ElectiveGroup.SetColor(color);
+		ElectiveGroup.SetDetails(groupType, description, status, sortOrder);
 		ElectiveGroup.ReplaceSubjects(subjectIds);
 
 		return ElectiveGroup;

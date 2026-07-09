@@ -149,6 +149,63 @@ public class ElectiveGroupController(IElectiveGroupAppService electiveGroupAppSe
 		return Ok(electiveGroup);
 	}
 
+	[HttpPost("check-duplicate")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsElectiveGroupCreation
+			.View
+	)]
+	public async Task<IActionResult> CheckDuplicate(
+		Guid academicMediumId,
+		[FromBody] ElectiveGroupDuplicateCheckDto input
+	)
+	{
+		return Ok(await electiveGroupAppService.CheckDuplicateAsync(academicMediumId, input));
+	}
+
+	[HttpGet("{id}/usage")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsElectiveGroupCreation
+			.View
+	)]
+	public async Task<IActionResult> GetUsage(Guid academicMediumId, Guid id)
+	{
+		return Ok(await electiveGroupAppService.GetUsageDetailsAsync(academicMediumId, id));
+	}
+
+	[HttpPost("{id}/archive")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsElectiveGroupCreation
+			.Add
+	)]
+	public async Task<IActionResult> Archive(
+		Guid academicMediumId,
+		Guid id,
+		[FromBody] ElectiveGroupStatusChangeDto input
+	)
+	{
+		return Ok(await electiveGroupAppService.ArchiveAsync(academicMediumId, id, input));
+	}
+
+	[HttpPost("{id}/restore")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsElectiveGroupCreation
+			.Add
+	)]
+	public async Task<IActionResult> Restore(Guid academicMediumId, Guid id)
+	{
+		return Ok(await electiveGroupAppService.RestoreAsync(academicMediumId, id));
+	}
+
+	[HttpGet("{id}/audit-logs")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsElectiveGroupCreation
+			.View
+	)]
+	public async Task<IActionResult> GetAuditLogs(Guid academicMediumId, Guid id)
+	{
+		return Ok(await electiveGroupAppService.GetAuditLogsAsync(academicMediumId, id));
+	}
+
 	/// <summary>
 	/// Delete an elective group
 	/// </summary>

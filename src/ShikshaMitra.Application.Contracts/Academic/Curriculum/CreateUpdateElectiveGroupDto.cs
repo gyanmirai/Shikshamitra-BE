@@ -30,6 +30,15 @@ public class CreateUpdateElectiveGroupDto
 	)]
 	public required string Color { get; set; }
 
+	public string? GroupType { get; set; }
+
+	public string? Description { get; set; }
+
+	public SubjectMasterStatus Status { get; set; } = SubjectMasterStatus.Active;
+
+	[Range(0, int.MaxValue, ErrorMessage = "Sort order cannot be negative")]
+	public int? SortOrder { get; set; }
+
 	/// <summary>
 	/// List of subject IDs to include in this elective group (minimum 2)
 	/// </summary>

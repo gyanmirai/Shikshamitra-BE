@@ -13,6 +13,15 @@ public class LectureSlotDto : EntityDto<Guid>
     public List<SlotConfigurationDetailDto> SlotConfigurations { get; set; } = [];
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
+
+    public int TotalSlotsPerDay { get; set; }
+    public int TeachingSlotsPerDay { get; set; }
+    public int NonTeachingSlotsPerDay { get; set; }
+    public int ActiveDaysCount { get; set; }
+    public int WeeklyTeachingCapacity { get; set; }
+    public int RequiredWeeklyLectures { get; set; }
+    public int Difference { get; set; }
+    public TimetableSettingStatus Status { get; set; }
 }
 
 public class SlotConfigurationDetailDto

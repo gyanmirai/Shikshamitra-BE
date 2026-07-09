@@ -15,6 +15,14 @@ public static class SubjectConsts
 	/// </summary>
 	public const int MinNameLength = 2;
 
+	public const int MaxDisplayNameLength = 50;
+
+	public const int MaxCategoryLength = 50;
+
+	public const int MaxIconLength = 50;
+
+	public const int MaxDescriptionLength = 500;
+
 	/// <summary>
 	/// Regular expression pattern for validating hex color codes
 	/// Supports both 3-digit (#RGB) and 6-digit (#RRGGBB) formats

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -35,6 +35,12 @@ public class FeeOverviewDto
     public double PaidFee { get; set; }
     public double PendingFee { get; set; }
     public double? ConcessionAmount { get; set; }
+
+    /// <summary>
+    /// Sum of outstanding amounts for fee periods that have already passed the current
+    /// month. Null when the student has no overdue obligations.
+    /// </summary>
+    public double? OverdueFee { get; set; }
 
     /// <summary>
     /// Sum of all fee-head allocations whose parent <c>FeeRecordMetadata</c> is currently

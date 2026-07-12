@@ -17,7 +17,7 @@ public static class ReconciliationTestHelper
     private static readonly System.Text.Json.JsonSerializerOptions JsonOptions =
         new(System.Text.Json.JsonSerializerDefaults.Web);
 
-    private const string FeeCollectionUrl = "/api/v2/fee-collections";
+    private const string FeeCollectionUrl = "/api/fee-collections";
     private const string ReconciliationUrl = "/api/v1/finance/reconciliations";
 
     /// <summary>

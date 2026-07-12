@@ -50,7 +50,7 @@ internal static class DashboardWidgetCatalog
 			["leadership-admission-approvals"] = new(
 				Actions,
 				"/student/enrollment/admission",
-				[ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.View],
+				[ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View],
 				"Admissions"),
 			["leadership-payroll-review"] = new(
 				Actions,
@@ -90,7 +90,7 @@ internal static class DashboardWidgetCatalog
 			["principal-pending-admissions"] = new(
 				Kpis,
 				"/student/enrollment/admission",
-				[ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.View]),
+				[ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View]),
 			["principal-leave-approvals"] = new(
 				Actions,
 				"/hr/leave-approvals",

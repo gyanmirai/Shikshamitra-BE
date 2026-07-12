@@ -873,7 +873,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 			string.Join(
 				",",
 				ShikshaMitraModulePermissions.Dashboard,
-				ShikshaMitraSubmodulePermissions.Students.Enrollment_Admission.View));
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View));
 
 		var response = await client.GetAsync(
 			$"{BaseUrl}?dashboardTemplate=leadership&from=2026-05-01&to=2026-05-23");

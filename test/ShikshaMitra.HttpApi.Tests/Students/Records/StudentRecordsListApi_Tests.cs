@@ -800,7 +800,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
             $"/api/students/records/{Factory.SeededDivisionId}/roll-numbers?arrangementType={(int)ArrangementTypeEnum.GirlsFirst}&arrangementBy={(int)ArrangementByEnum.LastName}",
             new List<UpdateStudentRollNumberDto>
             {
-                new() { StudentId = student.StudentId, RollNo = 1 }
+                new() { StudentId = student.StudentId, RollNo = null }
             },
             JsonOptions);
         settingsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await settingsResponse.Content.ReadAsStringAsync());

@@ -22,7 +22,7 @@ public static class FeeRefundTestHelper
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private const string FeeRefundUrl = "/api/fee-refunds";
-    private const string FeeCollectionUrl = "/api/v2/fee-collections";
+    private const string FeeCollectionUrl = "/api/fee-collections";
 
     // ── Defaults set by test class ctor ──────────────────────────────────────
 

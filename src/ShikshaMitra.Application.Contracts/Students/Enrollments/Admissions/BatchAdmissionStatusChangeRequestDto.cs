@@ -27,4 +27,6 @@ public class AdmissionStatusChangeItemDto
 	public StudentEnrollmentApprovalState Action { get; set; }
 
 	public string? Remarks { get; set; }
+
+	public bool SkipAccountProvisioning { get; set; }
 }

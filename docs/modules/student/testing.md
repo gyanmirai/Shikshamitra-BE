@@ -3,7 +3,7 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-11
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -23,20 +23,21 @@ git diff --check
 
 | Change area | First tests |
 |---|---|
-| Enrollment inquiry | `InquiryApi_Tests` |
-| Registration sections | `RegistrationGeneralDetailsApi_Tests`, `RegistrationFamilyDetailsApi_Tests`, `RegistrationAdditionalDetailsApi_Tests`, `RegistrationMedicalPreviousSchoolApi_Tests` |
-| Admission | `AdmissionApi_Tests` |
-| Entrance exam and notes | `EntranceExamApi_Tests`, `StudentNotesApi_Tests` |
+| Enrollment admissions CRM, playbooks, registration, documents, automation, operations, and CRM entrance exam | `AdmissionCrmApi_Tests`, `AdmissionCrmPlaybookApi_Tests`, `AdmissionCrmRegistrationApi_Tests` |
+| Active Student notes | `StudentNotesApi_Tests` |
 | Student attendance and leave | `StudentAttendanceApi_Tests`, `StudentLeaveApi_Tests` |
 | Records, dashboard, and certificates | `StudentRecordsListApi_Tests`, `StudentDashboardApi_Tests`, `StudentCertificateApi_Tests` |
 | House settings | `HouseSettingsApi_Tests` |
 | Scope access | `StudentScopeAccessService_Tests` |
+| Readiness approval governance | `AdmissionCrmDocumentChecklistAssignment_Tests` |
 
 ## Example commands
 
 ```bash
 dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~Students"
 dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Students"
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter "FullyQualifiedName~AdmissionCrm"
+dotnet test test/ShikshaMitra.Domain.Tests/ShikshaMitra.Domain.Tests.csproj --filter "FullyQualifiedName~AdmissionCrmDocumentChecklistAssignment"
 ```
 
 ## Acceptance gates

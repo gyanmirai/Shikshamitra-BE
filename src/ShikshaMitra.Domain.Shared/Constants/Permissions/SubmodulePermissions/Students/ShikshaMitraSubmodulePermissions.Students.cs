@@ -50,16 +50,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 		public static readonly Dictionary<string, SubmoduleInfo> Submodules = new()
 		{
 			// Enrollment submodules (defined in Students.Enrollment.cs)
-			{ "Students.Enrollment.Inquiry", new SubmoduleInfo(Enrollment_Inquiry.All, Enrollment_Inquiry.DisplayNames) },
-			{ "Students.Enrollment.RegistrationFormIssued", new SubmoduleInfo(Enrollment_RegistrationFormIssued.All, Enrollment_RegistrationFormIssued.DisplayNames) },
-			{ "Students.Enrollment.EntranceExam", new SubmoduleInfo(Enrollment_EntranceExam.All, Enrollment_EntranceExam.DisplayNames) },
-			{ "Students.Enrollment.Admission", new SubmoduleInfo(Enrollment_Admission.All, Enrollment_Admission.DisplayNames) },
-			{ "Students.Enrollment.Reports", new SubmoduleInfo(Enrollment_Reports.All, Enrollment_Reports.DisplayNames) },
-			{ "Students.Enrollment.Settings.DocumentTypes", new SubmoduleInfo(Enrollment_SettingsDocumentTypes.All, Enrollment_SettingsDocumentTypes.DisplayNames) },
-			{ "Students.Enrollment.Settings.InquiryPreference", new SubmoduleInfo(Enrollment_SettingsInquiryPreference.All, Enrollment_SettingsInquiryPreference.DisplayNames) },
-			{ "Students.Enrollment.Settings.EntranceExamSlots", new SubmoduleInfo(Enrollment_SettingsEntranceExamSlots.All, Enrollment_SettingsEntranceExamSlots.DisplayNames) },
-			{ "Students.Enrollment.Settings.RegistrationFormAmount", new SubmoduleInfo(Enrollment_SettingsRegistrationFormAmount.All, Enrollment_SettingsRegistrationFormAmount.DisplayNames) },
-			{ "Students.Enrollment.Settings.FormNumberSeries", new SubmoduleInfo(Enrollment_SettingsFormNumberSeries.All, Enrollment_SettingsFormNumberSeries.DisplayNames) },
+			{ "Students.Enrollment.AdmissionsCrm", new SubmoduleInfo(Enrollment_AdmissionsCrm.All, Enrollment_AdmissionsCrm.DisplayNames) },
 			{ "Students.IdentityCompliance", new SubmoduleInfo(IdentityCompliance.All, IdentityCompliance.DisplayNames) },
 
 			// Records submodules (defined in Students.Records.cs)

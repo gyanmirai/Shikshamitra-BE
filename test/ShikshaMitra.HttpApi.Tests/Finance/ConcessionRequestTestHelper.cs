@@ -37,13 +37,15 @@ public static class ConcessionRequestTestHelper
 	public static Guid DefaultStandardId { get; set; }
 	public static Guid DefaultDivisionId { get; set; }
 
-	public static async Task<(Guid StudentId, Guid BoardId)> CreateStudentAsync(HttpClient client)
+	public static async Task<(Guid StudentId, Guid BoardId)> CreateStudentAsync(
+		HttpClient client,
+		Guid? divisionId = null)
 	{
 		var dto = new CreateDirectRegistrationDto
 		{
 			AcademicMediumId = DefaultMediumId,
 			StandardId = DefaultStandardId,
-			DivisionId = DefaultDivisionId,
+			DivisionId = divisionId ?? DefaultDivisionId,
 			FormNumber = $"FORM-{Guid.NewGuid():N}"[..13].ToUpperInvariant(),
 			FirstName = TestDataHelper.UniqueName("ConcStudent"),
 			LastName = "TestStudent",
@@ -57,7 +59,7 @@ public static class ConcessionRequestTestHelper
 		};
 
 		var response = await client.PostAsJsonAsync($"{RegistrationUrl}/general-details", dto, JsonOptions);
-		response.EnsureSuccessStatusCode();
+		await EnsureSuccessAsync(response, "Student creation failed");
 
 		var result = await response.Content
 			.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions)
@@ -82,11 +84,11 @@ public static class ConcessionRequestTestHelper
 
 		var createResponse = await client.PostAsJsonAsync(
 			$"/api/{DefaultAcademicYearId}/concession-types", request, JsonOptions);
-		createResponse.EnsureSuccessStatusCode();
+		await EnsureSuccessAsync(createResponse, "Concession type creation failed");
 
 		var listResponse = await client.GetAsync(
 			$"/api/{DefaultAcademicYearId}/concession-types?searchTerm={name}&maxResultCount=50");
-		listResponse.EnsureSuccessStatusCode();
+		await EnsureSuccessAsync(listResponse, "Concession type lookup failed");
 
 		var list = await listResponse.Content
 			.ReadFromJsonAsync<Result<PagedResultDto<ConcessionTypeResponse>>>(JsonOptions)
@@ -103,11 +105,11 @@ public static class ConcessionRequestTestHelper
 
 		var createResponse = await client.PostAsJsonAsync(
 			$"{FeeCategoryUrl}?academicYearId={DefaultAcademicYearId}", request, JsonOptions);
-		createResponse.EnsureSuccessStatusCode();
+		await EnsureSuccessAsync(createResponse, "Fee category creation failed");
 
 		var listResponse = await client.GetAsync(
 			$"{FeeCategoryUrl}?academicYearId={DefaultAcademicYearId}&search={name}&pageSize=50");
-		listResponse.EnsureSuccessStatusCode();
+		await EnsureSuccessAsync(listResponse, "Fee category lookup failed");
 
 		var list = await listResponse.Content
 			.ReadFromJsonAsync<FeeCategoryListResponse>(JsonOptions)
@@ -129,11 +131,11 @@ public static class ConcessionRequestTestHelper
 
 		var createResponse = await client.PostAsJsonAsync(
 			$"{FeeHeadUrl}?academicYearId={DefaultAcademicYearId}", request, JsonOptions);
-		createResponse.EnsureSuccessStatusCode();
+		await EnsureSuccessAsync(createResponse, "Fee head creation failed");
 
 		var listResponse = await client.GetAsync(
 			$"{FeeHeadUrl}?academicYearId={DefaultAcademicYearId}&search={name}&pageSize=50");
-		listResponse.EnsureSuccessStatusCode();
+		await EnsureSuccessAsync(listResponse, "Fee head lookup failed");
 
 		var list = await listResponse.Content
 			.ReadFromJsonAsync<FeeHeadListResponse>(JsonOptions)
@@ -177,7 +179,7 @@ public static class ConcessionRequestTestHelper
 
 		var createResponse = await client.PostAsJsonAsync(
 			$"{ConcessionRequestUrl}?academicYearId={DefaultAcademicYearId}", input, JsonOptions);
-		createResponse.EnsureSuccessStatusCode();
+		await EnsureSuccessAsync(createResponse, "Concession request creation failed");
 
 		var body = await createResponse.Content
 			.ReadFromJsonAsync<ApiDataResponseDto<ConcessionRequestDetailDto>>(JsonOptions)
@@ -205,5 +207,17 @@ public static class ConcessionRequestTestHelper
 				},
 			],
 		};
+	}
+
+	private static async Task EnsureSuccessAsync(HttpResponseMessage response, string context)
+	{
+		if (response.IsSuccessStatusCode)
+		{
+			return;
+		}
+
+		var body = await response.Content.ReadAsStringAsync();
+		var snippet = body.Length > 1000 ? body[..1000] : body;
+		throw new InvalidOperationException($"{context} ({(int)response.StatusCode}): {snippet}");
 	}
 }

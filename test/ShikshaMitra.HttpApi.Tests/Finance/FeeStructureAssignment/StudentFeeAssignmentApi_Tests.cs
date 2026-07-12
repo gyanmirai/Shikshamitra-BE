@@ -23,7 +23,7 @@ public class StudentFeeAssignmentApi_Tests : ShikshaMitraApiTestBase
     private const string GetByStudentUrl  = "/api/student-fee-structure/student";
     private const string FeeStructuresUrl = "/api/fee-structures";
     private const string MetadataUrl      = "/api/fee-structures-metadata";
-    private const string CollectFormUrl   = "/api/v2/fee-collections";
+    private const string CollectFormUrl   = "/api/fee-collections";
 
     public StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
     {

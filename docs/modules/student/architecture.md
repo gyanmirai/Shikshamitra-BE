@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-10
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -28,6 +28,7 @@ TL;DR: Student code is under `Students` in contracts, application, domain, and E
 | Subsystem | Source area |
 |---|---|
 | Enrollment | `Students/StudentEnrollments/**` |
+| Enrollment admissions CRM | `Students/StudentEnrollments/AdmissionsCrm/**` |
 | Records | `Students/Records/**` and root Student entities |
 | Attendance | `Students/Attendance/**` |
 | Attendance settings | `Students/Attendance/Settings/**` |
@@ -39,6 +40,8 @@ TL;DR: Student code is under `Students` in contracts, application, domain, and E
 | Rule | Why it matters |
 |---|---|
 | Preserve route compatibility for renamed settings | Inquiry Source still uses `inquiry-preferences` API names |
+| Keep incomplete admission leads separate | CRM leads should not become `Student` rows until the admission handoff is ready |
+| Keep pre-admission exam records separate | CRM entrance exam records should not require `StudentAdditionalDetail` until a real student admission is created |
 | Keep historical lookup values visible | Inactive sources must remain visible on records that already use them |
 | Protect document access | Student documents are sensitive and require audit discipline |
 | Verify academic scope before reports or fees | Student scope feeds Finance, attendance, and reporting |

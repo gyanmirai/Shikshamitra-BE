@@ -3,13 +3,19 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.FeeCollectionTests;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.Finance.FeeCollections;
@@ -18,7 +24,7 @@ namespace ShikshaMitra.Finance.FeeCollections;
 [TestModule(TestTraits.Modules.Finance)]
 public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
 {
-    private const string BaseUrl = "/api/v2/fee-collections";
+    private const string BaseUrl = "/api/fee-collections";
 
     public FeeCollectionV2Api_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
     {
@@ -64,11 +70,14 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Get_Summary_Returns_Empty_When_No_Enrolled_Students()
     {
-        var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var divisionId = await CreateDivisionAsync(FeeCollectionTestHelper.DefaultStandardId, "FeeEmpty");
+        var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client, divisionId);
 
         var url = $"{BaseUrl}?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}" +
                   $"&boardId={boardId}" +
-                  $"&educationMediumId={FeeCollectionTestHelper.DefaultMediumId}";
+                  $"&educationMediumId={FeeCollectionTestHelper.DefaultMediumId}" +
+                  $"&standardId={FeeCollectionTestHelper.DefaultStandardId}" +
+                  $"&divisionId={divisionId}";
 
         var response = await Client.GetAsync(url);
 
@@ -480,6 +489,28 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
             var isNumeric = int.TryParse(month.Month, out numericValue);
             isNumeric.ShouldBeFalse($"Month '{month.Month}' should be a name, not a number");
             month.Month.Length.ShouldBeGreaterThan(2, $"Month '{month.Month}' looks like a number not a name");
+        }
+    }
+
+    private async Task<Guid> CreateDivisionAsync(Guid standardId, string namePrefix)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        var divisionManager = scope.ServiceProvider.GetRequiredService<DivisionManager>();
+        var divisionRepository = scope.ServiceProvider.GetRequiredService<IDivisionRepository>();
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+        using (currentTenant.Change(tenantId))
+        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var division = await divisionManager.CreateAsync(
+                standardId,
+                $"{namePrefix}-{Guid.NewGuid():N}",
+                60);
+            await divisionRepository.InsertAsync(division, autoSave: false);
+            await uow.CompleteAsync();
+            return division.Id;
         }
     }
 }

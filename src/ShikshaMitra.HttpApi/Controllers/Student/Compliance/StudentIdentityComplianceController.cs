@@ -14,7 +14,7 @@ public class StudentIdentityComplianceController(
 	IStudentIdentityComplianceAppService complianceAppService) : AbpControllerBase
 {
 	[HttpGet]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.IdentityCompliance.View)]
 	public async Task<Result<StudentIdentityComplianceDto>> GetAsync(Guid studentId)
 	{
 		return Result.Success(await complianceAppService.GetAsync(studentId));

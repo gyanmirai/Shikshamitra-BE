@@ -50,6 +50,18 @@ public class RolePermissionSeederContributor_Tests
 	}
 
 	[Fact]
+	public void Principal_Should_Have_Admissions_Crm_Operational_Access()
+	{
+		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
+		var principalPermissions = rolePermissions["Principal"];
+
+		foreach (var permission in ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.All)
+		{
+			principalPermissions.ShouldContain(permission);
+		}
+	}
+
+	[Fact]
 	public void Seeded_Staff_Roles_Should_Have_Leave_Center_Self_Service_Access()
 	{
 		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();

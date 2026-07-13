@@ -117,6 +117,41 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Update_Salary_Structure_With_No_Deductions()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalNoDed");
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "SalNoDedEarn");
+
+		var updateDto = new UpdateSalaryStructureDto
+		{
+			EarningComponents =
+			[
+				new()
+				{
+					ComponentId = earningComponent.Id,
+					Name = "Basic Salary",
+					Amount = 25000m,
+					IsFixed = true,
+					IsTemp = false
+				}
+			],
+			DeductionComponents = []
+		};
+
+		var response = await Client.PutAsJsonAsync(Url(empId), updateDto, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+		var getResponse = await Client.GetAsync(Url(empId));
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await getResponse.Content.ReadFromJsonAsync<SalaryStructureResponseDto>(JsonOptions);
+		payload.ShouldNotBeNull();
+		payload.EarningComponents.Count.ShouldBe(1);
+		payload.DeductionComponents.ShouldBeEmpty();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Salary_Structure_With_Employee_Edit_And_Payroll_Permission()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalEditPerm");

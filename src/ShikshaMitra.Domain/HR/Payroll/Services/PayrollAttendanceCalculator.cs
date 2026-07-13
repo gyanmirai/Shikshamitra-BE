@@ -64,33 +64,14 @@ public static class PayrollAttendanceCalculator
 				return Math.Clamp(a.PayableUnits, 0m, maxUnits);
 			});
 
-		var payableDays = payableByDate.Values.Sum();
-		if (leaveUnitsByDate is { Count: > 0 })
-		{
-			foreach (var (date, leaveUnits) in leaveUnitsByDate)
-			{
-				if (date < startDate || date > endDate)
-				{
-					continue;
-				}
-
-				if (basis.EffectiveMode == DayCalculationType.WorkingDays && !IsWorkingDay(date, workingUnitsByDate))
-				{
-					continue;
-				}
-
-				var maxUnitsForDate = basis.EffectiveMode == DayCalculationType.WorkingDays
-					? GetWorkingUnit(date, workingUnitsByDate)
-					: 1m;
-				var paidUnitsForDate = Math.Clamp(leaveUnits.PaidUnits, 0m, maxUnitsForDate);
-				var attendanceUnits = payableByDate.GetValueOrDefault(date);
-				if (paidUnitsForDate > attendanceUnits)
-				{
-					payableDays += paidUnitsForDate - attendanceUnits;
-					payableByDate[date] = paidUnitsForDate;
-				}
-			}
-		}
+		var payableDays = ApplyApprovedLeaveUnits(
+			payableByDate.Values.Sum(),
+			payableByDate,
+			leaveUnitsByDate,
+			startDate,
+			endDate,
+			basis,
+			workingUnitsByDate);
 
 		return new PayrollAttendancePayableDays(present, half, Math.Max(0m, payableDays));
 	}
@@ -142,38 +123,75 @@ public static class PayrollAttendanceCalculator
 				return GetPayableUnitsForStatus(a.StatusType, dayUnit);
 			});
 
-		var payableDays = attendancePayableByDate.Values.Sum();
-		if (leaveUnitsByDate is { Count: > 0 })
-		{
-			foreach (var (date, leaveUnits) in leaveUnitsByDate)
-			{
-				if (date < startDate || date > endDate)
-				{
-					continue;
-				}
-
-				if (basis.EffectiveMode == DayCalculationType.WorkingDays && !IsWorkingDay(date, workingUnitsByDate))
-				{
-					continue;
-				}
-
-				var maxUnitsForDate = basis.EffectiveMode == DayCalculationType.WorkingDays
-					? GetWorkingUnit(date, workingUnitsByDate)
-					: 1m;
-				var paidUnitsForDate = Math.Clamp(leaveUnits.PaidUnits, 0m, maxUnitsForDate);
-				var attendanceUnits = attendancePayableByDate.GetValueOrDefault(date);
-				if (paidUnitsForDate > attendanceUnits)
-				{
-					payableDays += paidUnitsForDate - attendanceUnits;
-					attendancePayableByDate[date] = paidUnitsForDate;
-				}
-			}
-		}
+		var payableDays = ApplyApprovedLeaveUnits(
+			attendancePayableByDate.Values.Sum(),
+			attendancePayableByDate,
+			leaveUnitsByDate,
+			startDate,
+			endDate,
+			basis,
+			workingUnitsByDate);
 
 		return new PayrollAttendancePayableDays(
 			present,
 			half,
-			payableDays);
+			Math.Max(0m, payableDays));
+	}
+
+	private static decimal ApplyApprovedLeaveUnits(
+		decimal payableDays,
+		Dictionary<DateOnly, decimal> payableByDate,
+		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate,
+		DateOnly startDate,
+		DateOnly endDate,
+		PayrollBasisDaysResult basis,
+		IReadOnlyDictionary<DateOnly, decimal> workingUnitsByDate)
+	{
+		if (leaveUnitsByDate is not { Count: > 0 })
+		{
+			return payableDays;
+		}
+
+		foreach (var (date, leaveUnits) in leaveUnitsByDate)
+		{
+			if (date < startDate || date > endDate)
+			{
+				continue;
+			}
+
+			if (basis.EffectiveMode == DayCalculationType.WorkingDays && !IsWorkingDay(date, workingUnitsByDate))
+			{
+				continue;
+			}
+
+			var maxUnitsForDate = basis.EffectiveMode == DayCalculationType.WorkingDays
+				? GetWorkingUnit(date, workingUnitsByDate)
+				: 1m;
+			var currentUnits = payableByDate.GetValueOrDefault(date);
+			var resolvedUnits = ResolvePayableUnitsWithApprovedLeave(currentUnits, leaveUnits, maxUnitsForDate);
+			if (resolvedUnits == currentUnits)
+			{
+				continue;
+			}
+
+			payableDays += resolvedUnits - currentUnits;
+			payableByDate[date] = resolvedUnits;
+		}
+
+		return payableDays;
+	}
+
+	private static decimal ResolvePayableUnitsWithApprovedLeave(
+		decimal currentUnits,
+		PayrollLeaveUnits leaveUnits,
+		decimal maxUnitsForDate)
+	{
+		var paidUnitsForDate = Math.Clamp(leaveUnits.PaidUnits, 0m, maxUnitsForDate);
+		var unpaidUnitsForDate = Math.Clamp(leaveUnits.UnpaidUnits, 0m, maxUnitsForDate);
+		var attendanceCapacityAfterUnpaidLeave = Math.Max(0m, maxUnitsForDate - unpaidUnitsForDate);
+		var attendanceUnitsAfterUnpaidLeave = Math.Min(currentUnits, attendanceCapacityAfterUnpaidLeave);
+
+		return Math.Clamp(Math.Max(attendanceUnitsAfterUnpaidLeave, paidUnitsForDate), 0m, maxUnitsForDate);
 	}
 
 	private static bool IsWorkingDay(DateOnly date, IReadOnlyDictionary<DateOnly, decimal> workingUnitsByDate) =>

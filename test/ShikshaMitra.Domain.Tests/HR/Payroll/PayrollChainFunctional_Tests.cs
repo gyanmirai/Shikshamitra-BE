@@ -125,6 +125,57 @@ public class PayrollChainFunctional_Tests
 		result.PayableDays.ShouldBe(1m);
 	}
 
+	[Fact]
+	public void Approved_Unpaid_Leave_Should_Remove_Payable_Units_From_Existing_Attendance()
+	{
+		var basis = BuildWorkingDaysBasis(2026, 4);
+		var attendance = new List<EmployeeAttendance>
+		{
+			BuildAttendance(new DateOnly(2026, 4, 1), EmployeeAttendanceStatusType.Present),
+			BuildAttendance(new DateOnly(2026, 4, 2), EmployeeAttendanceStatusType.Present)
+		};
+		var leaveUnits = new Dictionary<DateOnly, PayrollLeaveUnits>
+		{
+			[new DateOnly(2026, 4, 2)] = new(PaidUnits: 0m, UnpaidUnits: 1m)
+		};
+
+		var result = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendance,
+			basis,
+			2026,
+			4,
+			holidays: [],
+			leaveUnits);
+
+		result.PresentDays.ShouldBe(2);
+		result.PayableDays.ShouldBe(1m);
+	}
+
+	[Fact]
+	public void Approved_Half_Day_Unpaid_Leave_Should_Cap_Full_Attendance_To_Half_Payable_Day()
+	{
+		var basis = BuildWorkingDaysBasis(2026, 4);
+		var attendance = new List<EmployeeAttendance>
+		{
+			BuildAttendance(new DateOnly(2026, 4, 1), EmployeeAttendanceStatusType.Present)
+		};
+		var leaveUnits = new Dictionary<DateOnly, PayrollLeaveUnits>
+		{
+			[new DateOnly(2026, 4, 1)] = new(PaidUnits: 0m, UnpaidUnits: 0.5m)
+		};
+
+		var result = PayrollAttendanceCalculator.CalculatePayableDays(
+			attendance,
+			basis,
+			2026,
+			4,
+			holidays: [],
+			leaveUnits);
+
+		result.PresentDays.ShouldBe(1);
+		result.PayableDays.ShouldBe(0.5m);
+	}
+
 	[Theory]
 	[InlineData(DayCalculationType.WorkingDays, 22)]
 	[InlineData(DayCalculationType.TotalMonthDays, 30)]

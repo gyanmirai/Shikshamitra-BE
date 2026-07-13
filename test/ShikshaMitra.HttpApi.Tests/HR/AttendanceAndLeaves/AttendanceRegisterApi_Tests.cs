@@ -682,6 +682,98 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Grouped_Register_Should_Include_Unassigned_Staff_When_All_Organizations_Selected()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var seeded = await SeedRegisterAcademicOrganizationsAsync();
+		var marker = $"RegUnassignedAll{Guid.NewGuid():N}";
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			marker,
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+		await ClearEmployeeOrganizationAssignmentsAsync(employee.Id);
+
+		var response = await Client.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&academicYearId={seeded.AcademicYearId:D}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
+		var group = payload.Items.Single(x => x.EmployeeId == employee.Id);
+		var day = group.Days.Single();
+
+		payload.TotalCount.ShouldBe(1);
+		payload.Summary.StaffCount.ShouldBe(1);
+		payload.Summary.NotMarked.ShouldBe(1);
+		group.EducationMediumStageId.ShouldBeNull();
+		day.EducationMediumStageId.ShouldBeNull();
+		day.Status.ShouldBe(AttendanceRegisterStatus.NotMarked);
+		day.IsMarked.ShouldBeFalse();
+		day.CanEdit.ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Grouped_Register_Should_Include_Staff_Assigned_Only_In_Other_AcademicYear_When_All_Organizations_Selected()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var seeded = await SeedRegisterAcademicOrganizationsAsync();
+		var marker = $"RegUnassignedYear{Guid.NewGuid():N}";
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			marker,
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+		await AssignEmployeeToStageAsync(employee.Id, seeded.OtherYearStageId);
+
+		var response = await Client.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&academicYearId={seeded.AcademicYearId:D}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
+		var group = payload.Items.Single(x => x.EmployeeId == employee.Id);
+		var day = group.Days.Single();
+
+		payload.TotalCount.ShouldBe(1);
+		payload.Summary.StaffCount.ShouldBe(1);
+		group.EducationMediumStageId.ShouldBeNull();
+		day.EducationMediumStageId.ShouldBeNull();
+		day.Status.ShouldBe(AttendanceRegisterStatus.NotMarked);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Grouped_Register_Should_Exclude_Unassigned_Staff_When_Specific_Organization_Selected()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var seeded = await SeedRegisterAcademicOrganizationsAsync();
+		var marker = $"RegUnassignedSpecific{Guid.NewGuid():N}";
+		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			marker,
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+		await ClearEmployeeOrganizationAssignmentsAsync(employee.Id);
+
+		var response = await Client.GetAsync(
+			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&academicYearId={seeded.AcademicYearId:D}&educationMediumStageId={seeded.CurrentYearStageId:D}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
+
+		payload.TotalCount.ShouldBe(0);
+		payload.Items.ShouldBeEmpty();
+		payload.Summary.StaffCount.ShouldBe(0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Grouped_Register_Should_Only_Return_Employees_In_UserScope_Stage()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
@@ -895,6 +987,29 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 					new EmployeeOrganizationAssignment(Guid.NewGuid(), tenantId, employeeId, stageId),
 					autoSave: false);
 			}
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task ClearEmployeeOrganizationAssignmentsAsync(Guid employeeId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var assignmentRepository =
+			scope.ServiceProvider.GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var query = await assignmentRepository.GetQueryableAsync();
+			var assignments = query.Where(x => x.EmployeeId == employeeId).ToList();
+			foreach (var assignment in assignments)
+			{
+				await assignmentRepository.DeleteAsync(assignment, autoSave: false);
+			}
+
 			await uow.CompleteAsync();
 		}
 	}

@@ -173,6 +173,44 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task SaveDay_Should_Reject_Approved_Leave_Attendance_Mutation()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"OnLeaveSaveBlocked{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		await InsertLeaveForAttendanceAsync(
+			employee.Id,
+			attendanceDate,
+			attendanceDate,
+			EmployeeLeaveStatusType.Approved);
+
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					InTime = "09:00",
+					OutTime = "17:00",
+					Remarks = "Approved leave mutation must be rejected"
+				}
+			]
+		}, JsonOptions);
+
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.Conflict, body);
+		body.ShouldContain(HRErrorCodes.TakeAttendanceApprovedLeaveMutationNotAllowed);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Day_Should_Not_Auto_Fill_Approved_Leave_Outside_Selected_Date()
 	{
@@ -789,6 +827,42 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task SaveDay_Should_Reject_Unassigned_Employee_For_Scoped_User()
+	{
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"ScopedUnassigned{Guid.NewGuid():N}",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+		await ClearEmployeeOrganizationAssignmentsAsync(employee.Id);
+
+		var scopedUserId = Guid.NewGuid();
+		await EnsureUserHasStageScopeAsync(scopedUserId, EmployeeTestHelper.DefaultMediumStageId);
+		using var scopedClient = CreateClientAs(scopedUserId);
+
+		var response = await scopedClient.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					InTime = "09:00",
+					OutTime = "17:00",
+					Remarks = "Scoped save should not infer missing organization assignment"
+				}
+			]
+		}, JsonOptions);
+
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, body);
+		body.ShouldContain(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task SaveDay_Should_Reject_Invalid_StatusWire()
 	{
@@ -834,6 +908,29 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				x.EmployeeId == employeeId &&
 				x.AttendanceDate == attendanceDate);
 			attendance.EducationMediumStageId.ShouldBe(expectedStageId);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task ClearEmployeeOrganizationAssignmentsAsync(Guid employeeId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var assignmentRepository =
+			scope.ServiceProvider.GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var query = await assignmentRepository.GetQueryableAsync();
+			var assignments = query.Where(x => x.EmployeeId == employeeId).ToList();
+			foreach (var assignment in assignments)
+			{
+				await assignmentRepository.DeleteAsync(assignment, autoSave: false);
+			}
+
 			await uow.CompleteAsync();
 		}
 	}

@@ -88,10 +88,17 @@ public class EmployeeLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	/// <summary>
 	/// Soft-cancel: transitions to Cancelled status with audit retention.
-	/// Only allowed from Pending or Reviewed states.
+	/// Only allowed from Pending or Reviewed states unless the application workflow
+	/// explicitly permits approved-leave cancellation.
 	/// </summary>
-	internal EmployeeLeave Cancel()
+	internal EmployeeLeave Cancel(bool allowApproved = false)
 	{
+		if (Status == EmployeeLeaveStatusType.Approved && allowApproved)
+		{
+			Status = EmployeeLeaveStatusType.Cancelled;
+			return this;
+		}
+
 		if (Status != EmployeeLeaveStatusType.Pending && Status != EmployeeLeaveStatusType.Reviewed)
 		{
 			throw new BusinessException(HRErrorCodes.LeaveNotCancellable);

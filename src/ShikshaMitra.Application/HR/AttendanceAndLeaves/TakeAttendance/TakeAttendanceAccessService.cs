@@ -48,16 +48,6 @@ public class TakeAttendanceAccessService(
 			? []
 			: (await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope)).ToHashSet();
 
-	public static Guid? ResolveScopedStageFallback(UserScopeContext scope, Guid? employeeStageId)
-	{
-		if (employeeStageId.HasValue || HrUserScopeAccess.HasHrWideAccess(scope))
-		{
-			return employeeStageId;
-		}
-
-		return scope.MediumStageIds.Count == 1 ? scope.MediumStageIds[0] : null;
-	}
-
 	public static Guid? ResolveAssignedStageForScope(
 		IReadOnlyCollection<Guid> assignedStages,
 		UserScopeContext scope,
@@ -74,7 +64,7 @@ public class TakeAttendanceAccessService(
 		}
 
 		var scopedStage = assignedStages.FirstOrDefault(accessibleStageIds.Contains);
-		return scopedStage == Guid.Empty ? null : scopedStage;
+		return scopedStage == Guid.Empty ? assignedStages.First() : scopedStage;
 	}
 
 	public static void EnsureTenantWideDayLockAllowed(UserScopeContext scope)

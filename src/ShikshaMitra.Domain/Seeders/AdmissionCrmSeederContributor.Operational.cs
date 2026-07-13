@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -143,12 +144,19 @@ public partial class AdmissionCrmSeederContributor
 	private async Task RepairOperationalScenariosAsync(
 		Guid tenantId,
 		Guid academicYearId,
-		ExtendedConfiguration configuration)
+		ExtendedConfiguration configuration,
+		IReadOnlyDictionary<Guid, AdmissionInquiryLead> leads,
+		IReadOnlyList<AdmissionCrmExamSlot> slots)
 	{
-		var leads = (await _leadRepository.GetListAsync(item => item.AcademicYearId == academicYearId))
-			.ToDictionary(item => item.Id);
-		var slots = await _slotRepository.GetListAsync(item => item.AcademicYearId == academicYearId && item.IsActive);
-		if (slots.Count == 0) return;
+		_logger.LogInformation(
+			"[AdmissionCrmSeeder] Operational prerequisites loaded. Leads={LeadCount}, Slots={SlotCount}.",
+			leads.Count,
+			slots.Count);
+		if (slots.Count == 0)
+		{
+			_logger.LogWarning("[AdmissionCrmSeeder] Operational scenarios skipped because no active exam slots were visible.");
+			return;
+		}
 
 		var examRepository = Repository<AdmissionCrmEntranceExamRecord>();
 		foreach (var spec in ExamScenarioSpecs())

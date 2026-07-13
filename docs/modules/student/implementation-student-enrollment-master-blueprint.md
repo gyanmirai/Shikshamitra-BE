@@ -3,7 +3,7 @@ module: student
 domain: implementation
 content_type: Reference
 status: canonical
-updated_on: 2026-07-11
+updated_on: 2026-07-12
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -16,7 +16,8 @@ TL;DR: The Student Enrollment program is implemented from inquiry capture throug
 
 The [Student Enrollment Master Blueprint](./prd-student-enrollment-master-blueprint.md) and its capability ownership matrix remain the functional source of truth.
 This document records implementation and validation evidence without redefining product requirements.
-Existing inquiry, registration, entrance-exam, admission, division, fee-structure, and account workflows remain available for compatibility.
+Legacy Enrollment inquiry, follow-up, registration, entrance-exam, admission, report, and settings workflows have been removed from the release surface.
+Active Student profile entities, academic placement, account provisioning, and Finance-owned behavior remain available through their owning modules.
 
 ## Implemented capability map
 
@@ -41,7 +42,7 @@ Government interfaces remain versioned exports or pluggable adapters where an ap
 The product does not claim automatic legal or statutory compliance.
 Online testing and proctoring remain outside the offline entrance-exam baseline.
 Optional transport, hostel, library, health, uniform, and related service fulfillment remains outside Student Enrollment.
-Restricted-user browser denial remains an additional validation when `E2E_STUDENT_CRM_DENIED_EMAIL` is supplied.
+The deterministic DDVS runner includes principal, receptionist, counselor, approver, CRM-restricted, and anonymous access validation.
 
 ## Migration evidence
 
@@ -53,23 +54,25 @@ The local PostgreSQL DDVS development database applied every pending CRM migrati
 
 ## Validation evidence
 
-The following evidence was recorded on 2026-07-11 after the final governance and SLA changes.
+The following evidence was recorded on 2026-07-12 after release polish and a fresh deterministic DDVS seed.
 
 | Validation | Result |
 |---|---|
 | Backend build | Passed with zero errors and existing warning debt |
-| CRM domain tests | 29 passed |
-| CRM application tests | 6 passed |
+| Release-polish role and seeder domain tests | 8 passed |
+| Student application tests | 10 passed |
 | CRM HTTP API tests | 85 passed |
 | Frontend TypeScript | Passed |
-| Focused CRM, settings, public, and menu tests | 74 passed |
+| Frontend production build | Passed all 352 routes |
+| Focused Student client, Enrollment, settings, and permission tests | 86 passed |
 | Backend Student documentation validator | Passed |
 | Frontend Student documentation validator | Passed |
 | EF pending-model check | No pending model changes |
 | Local DDVS read-only Playwright preflight | 1 passed |
-| Local DDVS mutating Playwright smoke | 6 passed and 1 optional restricted-user case skipped |
+| Local DDVS mutating and permission Playwright suite | 11 passed |
+| Protected Enrollment WCAG 2 A and AA scan | 8 routes passed with no serious or critical violations |
 
-The browser smoke proves anonymous denial, principal inquiry capture, duplicate review, public consent, OTP status creation, exam scheduling, result and eligibility, registration gating, secure partial registration, document correction and replacement, original confirmation, readiness, and handoff.
+The browser suite proves anonymous and restricted denial, receptionist, counselor, approver, and principal permission boundaries, inquiry capture, duplicate review, public consent, OTP status creation, exam scheduling, result and eligibility, registration gating, secure partial registration, document correction and replacement, original confirmation, readiness, and handoff.
 The local browser host must run with development auto-authentication disabled so anonymous denial is tested under production-equivalent authentication behavior.
 Remote mutating CRM smoke remains prohibited unless explicitly approved for a disposable staging tenant.
 
@@ -87,6 +90,6 @@ Partial activation failures remain visible and repairable and do not report fals
 ## Remaining release actions
 
 Publish the frontend and backend changes through the normal code-review process.
-Run restricted-user browser denial when a dedicated denied credential is available.
+Complete the connected Chrome visual review at the four release viewports.
 Select communication vendors before planning first-party provider adapters.
 Validate future government adapters against the approved interface and jurisdiction before enabling them.

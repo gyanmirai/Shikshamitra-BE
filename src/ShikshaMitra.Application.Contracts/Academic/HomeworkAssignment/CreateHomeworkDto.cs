@@ -27,7 +27,7 @@ public class CreateHomeworkDto
     public string Description { get; set; } = string.Empty;
 
     [Required]
-    [Range(0, 2)]
+    [Range(0, 3)]
     public int SubmissionType { get; set; }
 
     [Required]

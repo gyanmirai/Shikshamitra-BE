@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.HomeworkAssignment;
@@ -23,6 +23,9 @@ public class GradingScaleConfiguration : IEntityTypeConfiguration<GradingScale>
 
 		// ABP conventions (CreationTime, CreatorId, etc.)
 		builder.ConfigureByConvention();
+
+		builder.Property(x => x.Description).HasMaxLength(512);
+		builder.Property(x => x.Status).HasDefaultValue(SettingStatus.Active);
 
 		// Configure GradeRanges relationship
 		builder.HasMany(gs => gs.GradeRanges)

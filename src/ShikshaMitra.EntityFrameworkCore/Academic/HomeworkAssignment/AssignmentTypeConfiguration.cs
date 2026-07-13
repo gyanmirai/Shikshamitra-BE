@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -28,6 +28,14 @@ public class AssignmentTypeConfiguration : IEntityTypeConfiguration<AssignmentTy
 			.HasMaxLength(AssignmentTypeConsts.MaxNameLength);
 
 		builder.Property(x => x.AcademicMediumId).IsRequired();
+
+		builder.Property(x => x.Description).HasMaxLength(250).IsRequired(false);
+		builder.Property(x => x.DefaultSubmissionType).IsRequired(false);
+		builder.Property(x => x.DefaultMarks).HasPrecision(18, 2).IsRequired(false);
+		builder.Property(x => x.DefaultDueDays).IsRequired(false);
+		builder.Property(x => x.EvaluationRequired).IsRequired().HasDefaultValue(true);
+		builder.Property(x => x.DefaultEvaluationMethod).IsRequired(false);
+		builder.Property(x => x.Status).IsRequired().HasDefaultValue(TaskTypeStatus.Active);
 
 		// Indexes
 		builder

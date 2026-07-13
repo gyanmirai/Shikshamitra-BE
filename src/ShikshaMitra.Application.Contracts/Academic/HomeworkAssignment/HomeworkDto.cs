@@ -18,10 +18,22 @@ public class HomeworkDto
     public string Title { get; set; } = string.Empty;
     public Guid HomeworkTypeId { get; set; }
     public string HomeworkTypeName { get; set; } = string.Empty;
+    public int? DefaultSubmissionType { get; set; }
+    public decimal? DefaultMarks { get; set; }
+    public int? DefaultDueDays { get; set; }
+    public bool EvaluationRequired { get; set; } = true;
+    public int? DefaultEvaluationMethod { get; set; }
+    public int? HomeworkTypeStatus { get; set; }
     public string Description { get; set; } = string.Empty;
     public string? Attachment { get; set; }
     public int SubmissionType { get; set; }
     public int Status { get; set; }
+    public int TotalStudents { get; set; }
+    public int SubmittedCount { get; set; }
+    public int PendingCount { get; set; }
+    public int LateCount { get; set; }
+    public int CheckedCount { get; set; }
+    public int EvaluationPendingCount { get; set; }
     public List<HomeworkDivisionScheduleDto> DivisionSchedules { get; set; } = new();
     public DateTime CreatedAt { get; set; }
     public string CreatedBy { get; set; } = string.Empty;

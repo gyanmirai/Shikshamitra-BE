@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
@@ -50,4 +50,14 @@ public interface IExamAppService : IApplicationService
     Task<UpdateStudentAttendanceResponseDto> UpdateStudentAttendanceAsync(Guid examId, Guid studentId, Guid subjectId, UpdateStudentAttendanceDto input);
 
     Task<GetExamMarksSummaryResponseDto> GetMarksSummaryAsync(GetExamMarksSummaryInput input);
+
+    Task<MarksWorkflowActionResponseDto> BulkSaveMarksAsync(Guid examId, BulkSaveMarksInputDto input);
+
+    Task<MarksValidationResponseDto> ValidateMarksAsync(Guid examId, MarksWorkflowActionInput input);
+
+    Task<MarksWorkflowActionResponseDto> RequestChangesAsync(Guid examId, RequestChangesInputDto input);
+
+    Task<MarksWorkflowActionResponseDto> UnlockMarksAsync(Guid examId, UnlockWorkflowInputDto input);
+
+    Task<List<GradeEntryAuditLogDto>> GetAuditLogsAsync(Guid examId, Guid subjectId, Guid divisionId);
 }

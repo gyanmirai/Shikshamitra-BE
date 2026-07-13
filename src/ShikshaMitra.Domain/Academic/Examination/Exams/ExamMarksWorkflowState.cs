@@ -14,6 +14,8 @@ public class ExamMarksWorkflowState : FullAuditedEntity<Guid>, IMultiTenant
     public Guid SubjectId { get; private set; }
     public Guid DivisionId { get; private set; }
     public ExamMarksWorkflowStatus Status { get; private set; }
+    public string? ReviewerNote { get; private set; }
+    public string? UnlockReason { get; private set; }
 
     private ExamMarksWorkflowState() { }
 
@@ -34,5 +36,15 @@ public class ExamMarksWorkflowState : FullAuditedEntity<Guid>, IMultiTenant
     public void TransitionTo(ExamMarksWorkflowStatus newStatus)
     {
         Status = newStatus;
+    }
+
+    public void SetReviewerNote(string? note)
+    {
+        ReviewerNote = note;
+    }
+
+    public void SetUnlockReason(string? reason)
+    {
+        UnlockReason = reason;
     }
 }

@@ -22,6 +22,12 @@ public class AssignmentDto : AuditedEntityDto<Guid>
 
 	public Guid AssignmentTypeId { get; set; }
 	public string AssignmentTypeName { get; set; } = string.Empty;
+	public int? DefaultSubmissionType { get; set; }
+	public decimal? DefaultMarks { get; set; }
+	public int? DefaultDueDays { get; set; }
+	public bool EvaluationRequired { get; set; } = true;
+	public int? DefaultEvaluationMethod { get; set; }
+	public int? AssignmentTypeStatus { get; set; }
 
 	public int SubmissionType { get; set; }
 	public string SubmissionTypeName { get; set; } = string.Empty;
@@ -34,6 +40,12 @@ public class AssignmentDto : AuditedEntityDto<Guid>
 
 	public DateTime? PublishedAt { get; set; } // Earliest publish date across divisions
 	public string Status { get; set; } = string.Empty; // Draft / Partially Published / Published
+	public int TotalStudents { get; set; }
+	public int SubmittedCount { get; set; }
+	public int PendingCount { get; set; }
+	public int LateCount { get; set; }
+	public int CheckedCount { get; set; }
+	public int EvaluationPendingCount { get; set; }
 }
 
 /// <summary>

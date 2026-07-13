@@ -80,6 +80,13 @@ public class ResultReadinessDto
     public Guid ExamId { get; set; }
     public Guid DivisionId { get; set; }
     public bool IsReady { get; set; }
+    public int Percentage { get; set; }
+    public int RequiredSubjects { get; set; }
+    public int CompletedSubjects { get; set; }
+    public int MissingMarks { get; set; }
+    public int BlockerCount { get; set; }
+    public int WarningCount { get; set; }
+    public List<string> PendingSubjects { get; set; } = new();
     public List<ReadinessCheckDto> Checks { get; set; } = new();
 }
 
@@ -88,6 +95,8 @@ public class ReadinessCheckDto
     public string Label { get; set; } = string.Empty;
     public bool Passed { get; set; }
     public string? Hint { get; set; }
+    public string Severity { get; set; } = "success";
+    public string? FixTarget { get; set; }
 }
 
 public class StudentResultViewDto
@@ -106,6 +115,7 @@ public class StudentResultViewDto
     public int TotalStudentsInClass { get; set; }
     public string TotalMarks { get; set; } = string.Empty;
     public string ObtainedMarks { get; set; } = string.Empty;
+    public string Percentage { get; set; } = string.Empty;
     public string AttendancePercentage { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
 

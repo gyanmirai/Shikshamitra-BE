@@ -152,11 +152,18 @@ public class AttendanceRegisterAdjustRequest
 public class AttendanceRegisterBulkAdjustRequest
 {
 	public List<Guid> AttendanceIds { get; set; } = [];
+	public List<EmployeeDateInput> EmployeeDates { get; set; } = [];
 	public string StatusWire { get; set; } = "PRESENT";
 	public string? InTime { get; set; }
 	public string? OutTime { get; set; }
 	public string? Remarks { get; set; }
 	public string? Reason { get; set; }
+}
+
+public class EmployeeDateInput
+{
+	public Guid EmployeeId { get; set; }
+	public string AttendanceDate { get; set; } = string.Empty;
 }
 
 public class AttendanceRegisterAdjustmentResult

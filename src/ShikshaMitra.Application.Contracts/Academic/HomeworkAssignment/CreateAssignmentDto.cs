@@ -28,7 +28,7 @@ public class CreateAssignmentDto
 	public Guid AssignmentTypeId { get; set; }
 
 	[Required(ErrorMessage = "ShikshaMitra.Assignment:SubmissionTypeRequired")]
-	[Range(0, 2, ErrorMessage = "ShikshaMitra.Assignment:SubmissionTypeInvalid")]
+	[Range(0, 3, ErrorMessage = "ShikshaMitra.Assignment:SubmissionTypeInvalid")]
 	// 0=OnlineText, 1=FileUpload, 2=InPerson
 	public int SubmissionType { get; set; }
 

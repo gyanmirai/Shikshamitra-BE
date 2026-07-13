@@ -68,6 +68,13 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
 			.HasForeignKey(r => r.RoomTypeId)
 			.OnDelete(DeleteBehavior.Restrict);
 
+		builder.Property(x => x.BoardPosition).HasMaxLength(20).IsRequired(false);
+		builder.Property(x => x.EntrancePosition).HasMaxLength(20).IsRequired(false);
+		builder.Property(x => x.DisabledSeatNumbersCsv).HasMaxLength(2000).IsRequired(false);
+		builder.Property(x => x.ReservedSeatNumbersCsv).HasMaxLength(2000).IsRequired(false);
+		builder.Property(x => x.AccessibleSeatNumbersCsv).HasMaxLength(2000).IsRequired(false);
+		builder.Property(x => x.AisleAfterColumnsCsv).HasMaxLength(500).IsRequired(false);
+
 		// Indexes for common queries
 		builder.HasIndex(x => x.BuildingId);
 		builder.HasIndex(x => x.FloorId);

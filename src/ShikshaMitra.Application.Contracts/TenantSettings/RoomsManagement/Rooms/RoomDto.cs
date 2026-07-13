@@ -19,4 +19,10 @@ public class RoomDto : AuditedEntityDto<Guid>
 	public int BenchesPerRow { get; set; }
 	public int BenchesPerColumn { get; set; }
 	public List<string>? Features { get; set; }
+	public string? BoardPosition { get; set; }
+	public string? EntrancePosition { get; set; }
+	public string? DisabledSeatNumbersCsv { get; set; }
+	public string? ReservedSeatNumbersCsv { get; set; }
+	public string? AccessibleSeatNumbersCsv { get; set; }
+	public string? AisleAfterColumnsCsv { get; set; }
 }

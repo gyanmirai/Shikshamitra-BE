@@ -13,6 +13,7 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
+using Volo.Abp.Authorization;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -36,6 +37,14 @@ public class LessonPlanAppService(
     IHomeworkAppService homeworkAppService
 ) : ApplicationService, ILessonPlanAppService
 {
+    private static readonly string[] LessonPlanReviewerRoles =
+    {
+        "admin",
+        "administrator",
+        "coordinator",
+        "academic coordinator"
+    };
+
     public async Task<PagedResultDto<LessonPlanDto>> GetListAsync(GetLessonPlansInput input)
     {
         var query = await lessonPlanRepository.GetQueryableAsync();
@@ -143,6 +152,8 @@ public class LessonPlanAppService(
             throw new UserFriendlyException("Selected chapter is invalid.");
         }
 
+        await EnsureUniqueLessonPlanTopicAsync(input.TeacherId, input.PlannedDate, input.Topic);
+
         var lessonPlan = new LessonPlan(
             GuidGenerator.Create(),
             CurrentTenant.Id,
@@ -176,6 +187,13 @@ public class LessonPlanAppService(
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         EnsureOwnTeacherRecord(lessonPlan.TeacherId, "modify");
+
+        await EnsureUniqueLessonPlanTopicAsync(
+            lessonPlan.TeacherId,
+            lessonPlan.PlannedDate,
+            input.Topic,
+            lessonPlan.Id
+        );
 
         lessonPlan.UpdatePlan(
             input.ChapterId,
@@ -213,6 +231,7 @@ public class LessonPlanAppService(
 
     public async Task<LessonPlanDto> ApproveAsync(Guid id, ReviewRemarksDto input)
     {
+        EnsureCanReviewLessonPlans();
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         lessonPlan.Approve(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
@@ -221,6 +240,7 @@ public class LessonPlanAppService(
 
     public async Task<LessonPlanDto> RejectAsync(Guid id, ReviewRemarksDto input)
     {
+        EnsureCanReviewLessonPlans();
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         lessonPlan.Reject(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
@@ -229,6 +249,7 @@ public class LessonPlanAppService(
 
     public async Task<LessonPlanDto> RequestChangesAsync(Guid id, ReviewRemarksDto input)
     {
+        EnsureCanReviewLessonPlans();
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         lessonPlan.RequestChanges(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
@@ -490,6 +511,49 @@ public class LessonPlanAppService(
         if (teacherId != CurrentUser.GetId())
         {
             throw new UserFriendlyException($"You can only {action} your own lesson records.");
+        }
+    }
+
+    private void EnsureCanReviewLessonPlans()
+    {
+        var canReview = LessonPlanReviewerRoles.Any(role =>
+            CurrentUser.Roles.Any(currentRole =>
+                string.Equals(currentRole, role, StringComparison.OrdinalIgnoreCase) ||
+                currentRole.Contains("coordinator", StringComparison.OrdinalIgnoreCase)));
+
+        if (!canReview)
+        {
+            throw new AbpAuthorizationException(
+                "Only Admin or Coordinator roles can approve, reject, or request changes for lesson plans.");
+        }
+    }
+
+    private async Task EnsureUniqueLessonPlanTopicAsync(
+        Guid teacherId,
+        DateTime plannedDate,
+        string topic,
+        Guid? excludedLessonPlanId = null)
+    {
+        var normalizedTopic = topic?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedTopic))
+        {
+            return;
+        }
+
+        var query = await lessonPlanRepository.GetQueryableAsync();
+        var duplicateExists = await AsyncExecuter.AnyAsync(
+            query.Where(plan =>
+                plan.TeacherId == teacherId &&
+                plan.PlannedDate.Date == plannedDate.Date &&
+                plan.Topic != null &&
+                plan.Topic.ToLower() == normalizedTopic &&
+                (!excludedLessonPlanId.HasValue || plan.Id != excludedLessonPlanId.Value))
+        );
+
+        if (duplicateExists)
+        {
+            throw new UserFriendlyException(
+                "A lesson plan with the same topic already exists for this teacher on this date.");
         }
     }
 

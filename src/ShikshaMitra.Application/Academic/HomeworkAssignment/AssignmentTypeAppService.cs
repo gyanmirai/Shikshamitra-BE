@@ -57,11 +57,19 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 			// Create through domain manager (handles all business logic + persistence)
 			var assignmentType = await _manager.CreateAsync(
 				academicMediumId,
-				input.AssignmentTypeName
+				input.AssignmentTypeName,
+				input.Description,
+				input.DefaultSubmissionType,
+				input.DefaultMarks,
+				input.DefaultDueDays,
+				input.EvaluationRequired,
+				input.DefaultEvaluationMethod,
+				input.Status
 			);
 
 			// Map to DTO
 			var dto = ObjectMapper.Map<AssignmentType, AssignmentTypeDto>(assignmentType);
+			dto.UsageCount = 0;
 
 			_logger.LogInformation(
 				"Successfully created assignment type with ID {Id}",
@@ -113,6 +121,11 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 			// Map to DTOs
 			var dtos = ObjectMapper.Map<List<AssignmentType>, List<AssignmentTypeDto>>(types);
 
+			foreach (var dto in dtos)
+			{
+				dto.UsageCount = await _assignmentRepository.CountAsync(a => a.AssignmentTypeId == dto.Id);
+			}
+
 			_logger.LogDebug(
 				"Found {Count} assignment types for academic medium {MediumId}",
 				dtos.Count,
@@ -161,6 +174,7 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 			}
 
 			var dto = ObjectMapper.Map<AssignmentType, AssignmentTypeDto>(assignmentType);
+			dto.UsageCount = await _assignmentRepository.CountAsync(a => a.AssignmentTypeId == dto.Id);
 
 			return new AssignmentTypeGetResponseDto { Data = dto };
 		}
@@ -208,7 +222,17 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 			}
 
 			// Update through domain manager
-			await _manager.UpdateAsync(assignmentType, input.AssignmentTypeName);
+			await _manager.UpdateAsync(
+				assignmentType,
+				input.AssignmentTypeName,
+				input.Description,
+				input.DefaultSubmissionType,
+				input.DefaultMarks,
+				input.DefaultDueDays,
+				input.EvaluationRequired,
+				input.DefaultEvaluationMethod,
+				input.Status
+			);
 
 			// Persist changes
 			await _repository.UpdateAsync(assignmentType, autoSave: true);
@@ -267,6 +291,21 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 			{
 				throw new BusinessException(HomeworkAssignmentErrorCodes.AssignmentTypeIsInUse)
 					.WithData("message", $"Cannot delete '{assignmentType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+			}
+
+			// Block if it's the last active assignment type
+			if (assignmentType.Status == TaskTypeStatus.Active)
+			{
+				var activeCount = await _repository.CountAsync(t =>
+					t.AcademicMediumId == assignmentType.AcademicMediumId &&
+					t.Status == TaskTypeStatus.Active &&
+					t.Id != assignmentType.Id
+				);
+				if (activeCount == 0)
+				{
+					throw new BusinessException(HomeworkAssignmentErrorCodes.AtLeastOneActiveAssignmentTypeMustRemain)
+						.WithData("message", "At least one active assignment type must remain. You cannot delete this type.");
+				}
 			}
 
 			// Soft delete (FullAuditedAggregateRoot)

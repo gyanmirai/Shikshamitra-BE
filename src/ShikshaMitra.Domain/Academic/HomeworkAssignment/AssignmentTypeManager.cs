@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using ShikshaMitra.Extensions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp;
 using Volo.Abp.Data;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
@@ -37,11 +38,17 @@ public class AssignmentTypeManager : DomainService
 	/// If a soft-deleted record with the same name exists it is restored in-place
 	/// (reusing its ID) to avoid violating the unique index on {Name, AcademicMediumId}.
 	/// </summary>
-	/// <param name="academicMediumId">Academic medium ID</param>
-	/// <param name="name">Assignment type name</param>
-	/// <returns>Persisted AssignmentType entity (inserted or restored)</returns>
-	/// <exception cref="BusinessException">Thrown when validation fails</exception>
-	public async Task<AssignmentType> CreateAsync(Guid academicMediumId, string name)
+	public async Task<AssignmentType> CreateAsync(
+		Guid academicMediumId,
+		string name,
+		string? description = null,
+		SubmissionType? defaultSubmissionType = null,
+		decimal? defaultMarks = null,
+		int? defaultDueDays = null,
+		bool evaluationRequired = true,
+		EvaluationMethod? defaultEvaluationMethod = null,
+		TaskTypeStatus status = TaskTypeStatus.Active
+	)
 	{
 		// Validate academic medium exists
 		await ValidateAcademicMediumExistsAsync(academicMediumId);
@@ -66,40 +73,88 @@ public class AssignmentTypeManager : DomainService
 			existing.IsDeleted = false;
 			existing.DeletionTime = null;
 			existing.DeleterId = null;
-			existing.SetName(name);
+			existing.UpdateInfo(
+				name,
+				description,
+				defaultSubmissionType,
+				defaultMarks,
+				defaultDueDays,
+				evaluationRequired,
+				defaultEvaluationMethod,
+				status
+			);
 			return await _repository.UpdateAsync(existing, autoSave: true);
 		}
 
-		var entity = new AssignmentType(GuidGenerator.Create(), name, academicMediumId, CurrentTenant.Id);
+		var entity = new AssignmentType(
+			GuidGenerator.Create(),
+			name,
+			academicMediumId,
+			CurrentTenant.Id,
+			description,
+			defaultSubmissionType,
+			defaultMarks,
+			defaultDueDays,
+			evaluationRequired,
+			defaultEvaluationMethod,
+			status
+		);
 		return await _repository.InsertAsync(entity, autoSave: true);
 	}
 
 	/// <summary>
 	/// Updates an existing assignment type with validation
 	/// </summary>
-	/// <param name="assignmentType">Assignment type to update</param>
-	/// <param name="newName">New name for the assignment type</param>
-	/// <returns>Updated AssignmentType entity</returns>
-	/// <exception cref="BusinessException">Thrown when validation fails</exception>
-	public async Task<AssignmentType> UpdateAsync(AssignmentType assignmentType, string newName)
+	public async Task<AssignmentType> UpdateAsync(
+		AssignmentType assignmentType,
+		string newName,
+		string? description = null,
+		SubmissionType? defaultSubmissionType = null,
+		decimal? defaultMarks = null,
+		int? defaultDueDays = null,
+		bool evaluationRequired = true,
+		EvaluationMethod? defaultEvaluationMethod = null,
+		TaskTypeStatus status = TaskTypeStatus.Active
+	)
 	{
 		Check.NotNull(assignmentType, nameof(assignmentType));
 
-		// If name hasn't changed, return as-is
-		if (assignmentType.Name == newName)
+		// Validate new name doesn't conflict with existing assignment types
+		if (assignmentType.Name != newName)
 		{
-			return assignmentType;
+			await ValidateAssignmentTypeAsync(
+				newName,
+				assignmentType.AcademicMediumId,
+				assignmentType.Id
+			);
 		}
 
-		// Validate new name doesn't conflict with existing assignment types
-		await ValidateAssignmentTypeAsync(
-			newName,
-			assignmentType.AcademicMediumId,
-			assignmentType.Id
-		);
+		// Validation check: At least one active assignment type must remain
+		if (status == TaskTypeStatus.Inactive && assignmentType.Status == TaskTypeStatus.Active)
+		{
+			var activeCount = await _repository.CountAsync(t =>
+				t.AcademicMediumId == assignmentType.AcademicMediumId &&
+				t.Status == TaskTypeStatus.Active &&
+				t.Id != assignmentType.Id
+			);
+			if (activeCount == 0)
+			{
+				throw new BusinessException(HomeworkAssignmentErrorCodes.AtLeastOneActiveAssignmentTypeMustRemain)
+					.WithData("message", "At least one active assignment type must remain. You cannot deactivate this type.");
+			}
+		}
 
-		// Update name
-		assignmentType.SetName(newName);
+		// Update info
+		assignmentType.UpdateInfo(
+			newName,
+			description,
+			defaultSubmissionType,
+			defaultMarks,
+			defaultDueDays,
+			evaluationRequired,
+			defaultEvaluationMethod,
+			status
+		);
 
 		return assignmentType;
 	}

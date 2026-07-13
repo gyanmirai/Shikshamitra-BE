@@ -348,6 +348,7 @@ public class ExamAppService(
 			var subject = subjectDict.GetValueOrDefault(es.SubjectId);
 			return new ExamSubjectResponseDto
 			{
+				ExamSubjectId = es.Id,
 				SubjectId = es.SubjectId,
 				SubjectName = subject?.Name,
 				SubjectColor = subject?.Color,
@@ -1045,5 +1046,299 @@ public class ExamAppService(
 			WorkflowStatus = workflowState != null ? (int) workflowState.Status : (int) ExamMarksWorkflowStatus.Draft,
 			PendingPublishedCount = pendingPublishedCount
 		};
+	}
+
+	// ─── 8. Bulk Save Marks ────────────────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	public async Task<MarksWorkflowActionResponseDto> BulkSaveMarksAsync(Guid examId, BulkSaveMarksInputDto input)
+	{
+		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
+
+		if (state.Status == ExamMarksWorkflowStatus.Published)
+			throw new UserFriendlyException("Marks are published/locked and cannot be edited.");
+
+		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		var examSubject = exam.ExamSubjects.FirstOrDefault(s => s.SubjectId == input.SubjectId)
+			?? throw new UserFriendlyException("Subject not found in this exam");
+
+		var existingMarks = await examMarkRepository.GetListAsync(m =>
+			m.ExamId == examId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId);
+		var marksLookup = existingMarks.ToDictionary(m => m.StudentId);
+
+		foreach (var row in input.Rows)
+		{
+			var attendanceStatus = (ExamAttendanceStatus) row.AttendanceStatus;
+			var isPresent = attendanceStatus == ExamAttendanceStatus.Present;
+
+			if (isPresent && row.ObtainedMarks == null)
+				throw new UserFriendlyException("Obtained marks are required for present students.");
+
+			if (row.ObtainedMarks.HasValue && (row.ObtainedMarks.Value < 0 || row.ObtainedMarks.Value > (examSubject.TotalMarks ?? 100)))
+				throw new UserFriendlyException($"Obtained marks must be between 0 and {examSubject.TotalMarks ?? 100}");
+
+			marksLookup.TryGetValue(row.StudentId, out var existing);
+
+			if (existing != null)
+			{
+				existing.UpdateAttendance(attendanceStatus);
+				if (isPresent)
+					existing.Update(row.ObtainedMarks, isAbsent: false, row.Feedback);
+				await examMarkRepository.UpdateAsync(existing, autoSave: true);
+			}
+			else
+			{
+				var student = await studentRepository.GetAsync(row.StudentId);
+				var mark = new ExamMark(
+					GuidGenerator.Create(),
+					examId,
+					row.StudentId,
+					input.SubjectId,
+					input.DivisionId,
+					marksObtained: isPresent ? row.ObtainedMarks : null,
+					isAbsent: !isPresent,
+					feedback: isPresent ? row.Feedback : null,
+					CurrentTenant.Id);
+				mark.UpdateAttendance(attendanceStatus);
+				await examMarkRepository.InsertAsync(mark, autoSave: true);
+			}
+		}
+
+		return BuildWorkflowResponse("Bulk marks saved successfully.", examId, new MarksWorkflowActionInput { SubjectId = input.SubjectId, DivisionId = input.DivisionId }, state.Status);
+	}
+
+	// ─── 9. Validate Marks ─────────────────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
+	public async Task<MarksValidationResponseDto> ValidateMarksAsync(Guid examId, MarksWorkflowActionInput input)
+	{
+		var response = new MarksValidationResponseDto { IsValid = true };
+
+		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		var examSubject = exam.ExamSubjects.FirstOrDefault(s => s.SubjectId == input.SubjectId)
+			?? throw new UserFriendlyException("Subject not found in this exam");
+
+		var enrolledStudents = await studentRepository.GetListAsync(s =>
+			s.DivisionId == input.DivisionId
+			&& s.Status == StudentLifeCycleStatusEnum.Enrolled
+			&& s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved
+			&& !s.IsDeleted);
+
+		var existingMarks = await examMarkRepository.GetListAsync(m =>
+			m.ExamId == examId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId);
+		var marksLookup = existingMarks.ToDictionary(m => m.StudentId);
+
+		var maxMarks = examSubject.TotalMarks ?? 100;
+		var passThreshold = examSubject.PassingMarks ?? (maxMarks * 0.33);
+
+		foreach (var student in enrolledStudents)
+		{
+			marksLookup.TryGetValue(student.Id, out var mark);
+			var studentName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim();
+
+			if (mark == null)
+			{
+				response.Blockers.Add(new MarksValidationErrorDto
+				{
+					Code = "MISSING_ATTENDANCE",
+					Message = $"Attendance status is missing for {studentName}.",
+					StudentId = student.Id,
+					StudentName = studentName
+				});
+				continue;
+			}
+
+			if (mark.AttendanceStatus == ExamAttendanceStatus.Present)
+			{
+				if (!mark.MarksObtained.HasValue)
+				{
+					response.Blockers.Add(new MarksValidationErrorDto
+					{
+						Code = "MISSING_MARKS",
+						Message = $"Marks are missing for present student {studentName}.",
+						StudentId = student.Id,
+						StudentName = studentName
+					});
+				}
+				else
+				{
+					if (mark.MarksObtained.Value > maxMarks)
+					{
+						response.Blockers.Add(new MarksValidationErrorDto
+						{
+							Code = "MARKS_EXCEED_TOTAL",
+							Message = $"Marks for {studentName} ({mark.MarksObtained.Value}) exceed total marks ({maxMarks}).",
+							StudentId = student.Id,
+							StudentName = studentName
+						});
+					}
+
+					if (mark.MarksObtained.Value < 0)
+					{
+						response.Blockers.Add(new MarksValidationErrorDto
+						{
+							Code = "MARKS_NEGATIVE",
+							Message = $"Marks for {studentName} ({mark.MarksObtained.Value}) cannot be negative.",
+							StudentId = student.Id,
+							StudentName = studentName
+						});
+					}
+
+					if (mark.MarksObtained.Value == 0)
+					{
+						response.Warnings.Add(new MarksValidationErrorDto
+						{
+							Code = "ZERO_MARKS_PRESENT",
+							Message = $"Present student {studentName} scored zero marks.",
+							StudentId = student.Id,
+							StudentName = studentName
+						});
+					}
+				}
+			}
+			else
+			{
+				if (mark.MarksObtained.HasValue)
+				{
+					response.Warnings.Add(new MarksValidationErrorDto
+					{
+						Code = "MARKS_FOR_ABSENT_STUDENT",
+						Message = $"Student {studentName} is absent but has obtained marks recorded.",
+						StudentId = student.Id,
+						StudentName = studentName
+					});
+				}
+			}
+		}
+
+		// Analytics checks
+		var gradedPresent = existingMarks.Where(m => m.MarksObtained.HasValue && m.AttendanceStatus == ExamAttendanceStatus.Present).ToList();
+		if (gradedPresent.Count > 0)
+		{
+			var fails = gradedPresent.Count(m => m.MarksObtained!.Value < passThreshold);
+			var failPercentage = (double) fails / gradedPresent.Count * 100;
+			if (failPercentage > 50)
+			{
+				response.Warnings.Add(new MarksValidationErrorDto
+				{
+					Code = "HIGH_FAIL_PERCENTAGE",
+					Message = $"Unusually high failure rate detected: {Math.Round(failPercentage, 1)}% of students failed this subject."
+				});
+			}
+
+			var distinctMarks = gradedPresent.Select(m => m.MarksObtained!.Value).Distinct().ToList();
+			if (gradedPresent.Count > 1 && distinctMarks.Count == 1)
+			{
+				response.Warnings.Add(new MarksValidationErrorDto
+				{
+					Code = "IDENTICAL_MARKS",
+					Message = "All students graded have identical marks recorded."
+				});
+			}
+		}
+
+		response.IsValid = response.Blockers.Count == 0;
+		return response;
+	}
+
+	// ─── 10. Request Changes ───────────────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	public async Task<MarksWorkflowActionResponseDto> RequestChangesAsync(Guid examId, RequestChangesInputDto input)
+	{
+		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
+
+		if (state.Status != ExamMarksWorkflowStatus.Submitted)
+			throw new UserFriendlyException("Changes can only be requested from Submitted status.");
+
+		state.TransitionTo(ExamMarksWorkflowStatus.ChangesRequested);
+		state.SetReviewerNote(input.ReviewerNote);
+		await examMarksWorkflowStateRepository.UpdateAsync(state, autoSave: true);
+
+		return BuildWorkflowResponse("Correction requested and note recorded.", examId, new MarksWorkflowActionInput { SubjectId = input.SubjectId, DivisionId = input.DivisionId }, ExamMarksWorkflowStatus.ChangesRequested);
+	}
+
+	// ─── 11. Unlock Marks ──────────────────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	public async Task<MarksWorkflowActionResponseDto> UnlockMarksAsync(Guid examId, UnlockWorkflowInputDto input)
+	{
+		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
+
+		if (state.Status != ExamMarksWorkflowStatus.Published)
+			throw new UserFriendlyException("Marks can only be unlocked from Published status.");
+
+		// Reset publish state for all marks
+		var marks = await examMarkRepository.GetListAsync(m =>
+			m.ExamId == examId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId);
+
+		foreach (var mark in marks)
+		{
+			mark.Unpublish();
+			await examMarkRepository.UpdateAsync(mark, autoSave: true);
+		}
+
+		state.TransitionTo(ExamMarksWorkflowStatus.Draft);
+		state.SetUnlockReason(input.Reason);
+		await examMarksWorkflowStateRepository.UpdateAsync(state, autoSave: true);
+
+		return BuildWorkflowResponse("Marks unlocked successfully back to Draft.", examId, new MarksWorkflowActionInput { SubjectId = input.SubjectId, DivisionId = input.DivisionId }, ExamMarksWorkflowStatus.Draft);
+	}
+
+	// ─── 12. Get Audit Logs ────────────────────────────────────────────────────
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
+	public async Task<List<GradeEntryAuditLogDto>> GetAuditLogsAsync(Guid examId, Guid subjectId, Guid divisionId)
+	{
+		var result = new List<GradeEntryAuditLogDto>();
+
+		var marks = await examMarkRepository.GetListAsync(m =>
+			m.ExamId == examId && m.SubjectId == subjectId && m.DivisionId == divisionId);
+
+		var state = (await examMarksWorkflowStateRepository.GetListAsync(
+			w => w.ExamId == examId && w.SubjectId == subjectId && w.DivisionId == divisionId))
+			.FirstOrDefault();
+
+		// Fetch user details for modifier/creator
+		var userIds = marks.Select(m => m.LastModifierId ?? m.CreatorId)
+			.Where(id => id.HasValue)
+			.Select(id => id!.Value)
+			.Distinct()
+			.ToList();
+
+		if (state?.LastModifierId.HasValue == true)
+			userIds.Add(state.LastModifierId.Value);
+
+		var users = userIds.Count > 0
+			? await identityUserRepository.GetListAsync(u => userIds.Contains(u.Id))
+			: new List<IdentityUser>();
+		var userDict = users.ToDictionary(u => u.Id, u => u.Name ?? u.UserName);
+
+		string GetUserName(Guid? id) => id.HasValue && userDict.TryGetValue(id.Value, out var name) ? name : "System";
+
+		if (state != null)
+		{
+			result.Add(new GradeEntryAuditLogDto
+			{
+				Timestamp = state.LastModificationTime ?? state.CreationTime,
+				Action = "Workflow Status Transition",
+				ChangedBy = GetUserName(state.LastModifierId ?? state.CreatorId),
+				Details = $"Workflow transitioned to status {state.Status}. Notes: {state.ReviewerNote ?? state.UnlockReason ?? "None"}"
+			});
+		}
+
+		var lastMark = marks.OrderByDescending(m => m.LastModificationTime ?? m.CreationTime).FirstOrDefault();
+		if (lastMark != null)
+		{
+			result.Add(new GradeEntryAuditLogDto
+			{
+				Timestamp = lastMark.LastModificationTime ?? lastMark.CreationTime,
+				Action = "Marks Modified",
+				ChangedBy = GetUserName(lastMark.LastModifierId ?? lastMark.CreatorId),
+				Details = $"Latest changes applied to student records. Active count of records: {marks.Count}."
+			});
+		}
+
+		return result;
 	}
 }

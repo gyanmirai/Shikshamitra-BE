@@ -53,6 +53,7 @@ public class ChapterAppService(
 			ApplyPlanningDetails(chapter, createChapterDto);
 		}
 
+		assignedSubject.RecalculateSetupHealth();
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
 		return new ApiSuccessResponseDto { Message = "Chapters created successfully." };
@@ -96,6 +97,7 @@ public class ChapterAppService(
 			updateChapterDto.EndDate
 		);
 		ApplyPlanningDetails(chapter, updateChapterDto);
+		assignedSubject.RecalculateSetupHealth();
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
 		var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
@@ -137,6 +139,7 @@ public class ChapterAppService(
 		}
 
 		assignedSubject.RemoveChapter(id);
+		assignedSubject.RecalculateSetupHealth();
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 	}
 

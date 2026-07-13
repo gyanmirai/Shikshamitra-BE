@@ -62,4 +62,9 @@ public class ExamMark : FullAuditedEntity<Guid>, IMultiTenant
     {
         IsPublished = true;
     }
+
+    public void Unpublish()
+    {
+        IsPublished = false;
+    }
 }

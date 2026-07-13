@@ -13,6 +13,8 @@ public class ExamTypeConfiguration : IEntityTypeConfiguration<ExamType>
 
         builder.Property(x => x.Name).IsRequired().HasMaxLength(128);
         builder.Property(x => x.Description).HasMaxLength(512);
+        builder.Property(x => x.Category).HasMaxLength(128);
+        builder.Property(x => x.Status).HasDefaultValue(SettingStatus.Active);
 
         builder.HasIndex(x => new { x.Name, x.AcademicMediumId }).IsUnique();
     }

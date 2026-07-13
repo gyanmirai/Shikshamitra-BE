@@ -7,6 +7,7 @@ namespace ShikshaMitra.Academic.Examination.SeatAllocation;
 public class ExamSeatAllocation : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
+    public Guid SeatingPlanId { get; private set; }
     public Guid ExamId { get; private set; }
     public Guid StudentId { get; private set; }
     public Guid RoomId { get; private set; }
@@ -19,6 +20,7 @@ public class ExamSeatAllocation : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public ExamSeatAllocation(
         Guid id,
         Guid? tenantId,
+        Guid seatingPlanId,
         Guid examId,
         Guid studentId,
         Guid roomId,
@@ -27,6 +29,7 @@ public class ExamSeatAllocation : FullAuditedAggregateRoot<Guid>, IMultiTenant
         bool isRoomAssign) : base(id)
     {
         TenantId = tenantId;
+        SeatingPlanId = seatingPlanId;
         ExamId = examId;
         StudentId = studentId;
         RoomId = roomId;
@@ -35,8 +38,9 @@ public class ExamSeatAllocation : FullAuditedAggregateRoot<Guid>, IMultiTenant
         IsRoomAssign = isRoomAssign;
     }
 
-    public void Update(Guid roomId, int seatNumber, Guid? benchId, bool isRoomAssign)
+    public void Update(Guid seatingPlanId, Guid roomId, int seatNumber, Guid? benchId, bool isRoomAssign)
     {
+        SeatingPlanId = seatingPlanId;
         RoomId = roomId;
         SeatNumber = seatNumber;
         BenchId = benchId;

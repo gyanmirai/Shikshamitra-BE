@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -33,6 +33,41 @@ public class HomeworkType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public virtual EducationMedium AcademicMedium { get; }
 
 	/// <summary>
+	/// Gets the description of the homework type
+	/// </summary>
+	public string? Description { get; private set; }
+
+	/// <summary>
+	/// Gets the default submission type
+	/// </summary>
+	public SubmissionType? DefaultSubmissionType { get; private set; }
+
+	/// <summary>
+	/// Gets the default marks
+	/// </summary>
+	public decimal? DefaultMarks { get; private set; }
+
+	/// <summary>
+	/// Gets the default due days
+	/// </summary>
+	public int? DefaultDueDays { get; private set; }
+
+	/// <summary>
+	/// Gets whether evaluation is required by default
+	/// </summary>
+	public bool EvaluationRequired { get; private set; } = true;
+
+	/// <summary>
+	/// Gets the default evaluation method
+	/// </summary>
+	public EvaluationMethod? DefaultEvaluationMethod { get; private set; }
+
+	/// <summary>
+	/// Gets the status of the homework type
+	/// </summary>
+	public TaskTypeStatus Status { get; private set; } = TaskTypeStatus.Active;
+
+	/// <summary>
 	/// Private constructor for EF Core
 	/// </summary>
 	private HomeworkType()
@@ -43,28 +78,36 @@ public class HomeworkType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Internal constructor for creating homework type through domain manager
 	/// </summary>
-	/// <param name="id">Unique identifier</param>
-	/// <param name="name">Name of the homework type</param>
-	/// <param name="academicMediumId">Academic medium ID</param>
-	/// <param name="tenantId">Tenant ID for multi-tenancy</param>
 	internal HomeworkType(
 		Guid id,
 		string name,
 		Guid academicMediumId,
-		Guid? tenantId = null
+		Guid? tenantId = null,
+		string? description = null,
+		SubmissionType? defaultSubmissionType = null,
+		decimal? defaultMarks = null,
+		int? defaultDueDays = null,
+		bool evaluationRequired = true,
+		EvaluationMethod? defaultEvaluationMethod = null,
+		TaskTypeStatus status = TaskTypeStatus.Active
 	)
 		: base(id)
 	{
 		TenantId = tenantId;
 		AcademicMediumId = Check.NotNull(academicMediumId, nameof(academicMediumId));
 		SetName(name);
+		SetDescription(description);
+		SetDefaultSubmissionType(defaultSubmissionType);
+		SetDefaultMarks(defaultMarks);
+		SetDefaultDueDays(defaultDueDays);
+		SetEvaluationRequired(evaluationRequired);
+		SetDefaultEvaluationMethod(defaultEvaluationMethod);
+		SetStatus(status);
 	}
 
 	/// <summary>
 	/// Sets the name with validation
 	/// </summary>
-	/// <param name="name">New name for the homework type</param>
-	/// <returns>Current instance for method chaining</returns>
 	internal HomeworkType SetName(string name)
 	{
 		Name = Check.NotNullOrWhiteSpace(
@@ -72,6 +115,82 @@ public class HomeworkType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			nameof(name),
 			maxLength: HomeworkTypeConsts.MaxNameLength
 		);
+		return this;
+	}
+
+	internal HomeworkType SetDescription(string? description)
+	{
+		if (description != null && description.Length > 250)
+		{
+			throw new ArgumentException("Description cannot exceed 250 characters.", nameof(description));
+		}
+		Description = description;
+		return this;
+	}
+
+	internal HomeworkType SetDefaultSubmissionType(SubmissionType? defaultSubmissionType)
+	{
+		DefaultSubmissionType = defaultSubmissionType;
+		return this;
+	}
+
+	internal HomeworkType SetDefaultMarks(decimal? defaultMarks)
+	{
+		if (defaultMarks.HasValue && defaultMarks.Value < 0)
+		{
+			throw new ArgumentException("Default marks cannot be negative.", nameof(defaultMarks));
+		}
+		DefaultMarks = defaultMarks;
+		return this;
+	}
+
+	internal HomeworkType SetDefaultDueDays(int? defaultDueDays)
+	{
+		if (defaultDueDays.HasValue && defaultDueDays.Value < 0)
+		{
+			throw new ArgumentException("Default due days cannot be negative.", nameof(defaultDueDays));
+		}
+		DefaultDueDays = defaultDueDays;
+		return this;
+	}
+
+	internal HomeworkType SetEvaluationRequired(bool evaluationRequired)
+	{
+		EvaluationRequired = evaluationRequired;
+		return this;
+	}
+
+	internal HomeworkType SetDefaultEvaluationMethod(EvaluationMethod? defaultEvaluationMethod)
+	{
+		DefaultEvaluationMethod = defaultEvaluationMethod;
+		return this;
+	}
+
+	internal HomeworkType SetStatus(TaskTypeStatus status)
+	{
+		Status = status;
+		return this;
+	}
+
+	public HomeworkType UpdateInfo(
+		string name,
+		string? description,
+		SubmissionType? defaultSubmissionType,
+		decimal? defaultMarks,
+		int? defaultDueDays,
+		bool evaluationRequired,
+		EvaluationMethod? defaultEvaluationMethod,
+		TaskTypeStatus status
+	)
+	{
+		SetName(name);
+		SetDescription(description);
+		SetDefaultSubmissionType(defaultSubmissionType);
+		SetDefaultMarks(defaultMarks);
+		SetDefaultDueDays(defaultDueDays);
+		SetEvaluationRequired(evaluationRequired);
+		SetDefaultEvaluationMethod(defaultEvaluationMethod);
+		SetStatus(status);
 		return this;
 	}
 }

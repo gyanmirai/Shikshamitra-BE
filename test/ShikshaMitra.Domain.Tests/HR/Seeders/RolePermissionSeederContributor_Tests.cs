@@ -62,6 +62,31 @@ public class RolePermissionSeederContributor_Tests
 	}
 
 	[Fact]
+	public void Admissions_Personas_Should_Keep_Least_Privilege_Boundaries()
+	{
+		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
+		var receptionist = rolePermissions["Admissions Receptionist"];
+		var counselor = rolePermissions["Admissions Counselor"];
+		var approver = rolePermissions["Admissions Approver"];
+
+		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add);
+		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.AssignOwner);
+		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult);
+		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveOffers);
+
+		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ScheduleExam);
+		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ReviewDocuments);
+		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideExamResult);
+		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation);
+
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveOffers);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideExamResult);
+		approver.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration);
+		approver.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add);
+	}
+
+	[Fact]
 	public void Seeded_Staff_Roles_Should_Have_Leave_Center_Self_Service_Access()
 	{
 		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();

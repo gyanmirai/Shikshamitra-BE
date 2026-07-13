@@ -77,9 +77,10 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		await RepairCycleAsync(tenantId, academicYear.Id, academicYear.Name);
 		await RepairStagesAsync(tenantId, academicYear.Id);
 		var sources = await RepairSourcesAsync(tenantId, academicYear.Id);
-		await RepairSlotsAsync(tenantId, academicYear.Id, academicYear.Name);
+		var slots = await RepairSlotsAsync(tenantId, academicYear.Id, academicYear.Name);
 		await RepairDocumentTypesAsync(tenantId, academicYear.Id);
 		var extendedConfiguration = await RepairExtendedConfigurationAsync(tenantId, academicYear.Id, academicYear.Name);
+		await CurrentUnitOfWork.SaveChangesAsync();
 
 		var profile = ShikshaMitraSeederProfile.Normalize(
 			context.Properties.TryGetValue(ShikshaMitraSeederProfile.ContextPropertyName, out var value)
@@ -87,8 +88,14 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 				: _configuration["ShikshaMitra:Seeders:Profile"]);
 		if (profile != ShikshaMitraSeederProfile.Minimal)
 		{
-			await RepairScenarioLeadsAsync(tenantId, academicYear.Id, sources);
-			await RepairOperationalScenariosAsync(tenantId, academicYear.Id, extendedConfiguration);
+			var scenarioLeads = await RepairScenarioLeadsAsync(tenantId, academicYear.Id, sources);
+			await CurrentUnitOfWork.SaveChangesAsync();
+			await RepairOperationalScenariosAsync(
+				tenantId,
+				academicYear.Id,
+				extendedConfiguration,
+				scenarioLeads,
+				slots);
 		}
 
 		await CurrentUnitOfWork.SaveChangesAsync();
@@ -177,9 +184,13 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		return result;
 	}
 
-	private async Task RepairSlotsAsync(Guid tenantId, Guid academicYearId, string academicYearName)
+	private async Task<IReadOnlyList<AdmissionCrmExamSlot>> RepairSlotsAsync(
+		Guid tenantId,
+		Guid academicYearId,
+		string academicYearName)
 	{
 		var existing = await _slotRepository.GetListAsync(item => item.AcademicYearId == academicYearId);
+		var repaired = new List<AdmissionCrmExamSlot>();
 		var nextMonday = SeedExamMonday(academicYearName);
 		var specs = new[]
 		{
@@ -197,7 +208,9 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 			slot.SetActive(true);
 			if (existing.Any(item => item.Id == slot.Id)) await _slotRepository.UpdateAsync(slot);
 			else await _slotRepository.InsertAsync(slot);
+			repaired.Add(slot);
 		}
+		return repaired;
 	}
 
 	private static DateTimeOffset SeedExamMonday(string academicYearName)
@@ -253,7 +266,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		}
 	}
 
-	private async Task RepairScenarioLeadsAsync(
+	private async Task<IReadOnlyDictionary<Guid, AdmissionInquiryLead>> RepairScenarioLeadsAsync(
 		Guid tenantId,
 		Guid academicYearId,
 		IReadOnlyDictionary<string, AdmissionCrmInquirySource> sources)
@@ -281,14 +294,13 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 			new LeadSpec("activation-repair", "Neil", "Gandhi", AdmissionInquiryStage.Eligible, "WALK_IN", AdmissionInquiryChannel.WalkInReception),
 			new LeadSpec("first-day-ready", "Tara", "Pandya", AdmissionInquiryStage.Eligible, "WEBSITE", AdmissionInquiryChannel.SchoolWebsiteForm)
 		};
-		var existingIds = (await _leadRepository.GetListAsync(item => item.AcademicYearId == academicYearId))
-			.Select(item => item.Id)
-			.ToHashSet();
+		var repaired = (await _leadRepository.GetListAsync(item => item.AcademicYearId == academicYearId))
+			.ToDictionary(item => item.Id);
 		for (var index = 0; index < scenarios.Length; index++)
 		{
 			var spec = scenarios[index];
 			var id = StableId(tenantId, $"lead:{spec.Key}");
-			if (existingIds.Contains(id)) continue;
+			if (repaired.ContainsKey(id)) continue;
 			var source = sources[spec.SourceCode];
 			var lead = new AdmissionInquiryLead(
 				id, tenantId, academicYearId, source.Id, source.DisplayName, spec.Channel,
@@ -302,7 +314,9 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 			else if (spec.Stage == AdmissionInquiryStage.Archived) lead.Archive("Seeded archived scenario.", DateTime.UtcNow.AddDays(-5));
 			else if (spec.Stage != AdmissionInquiryStage.NewInquiry) lead.ChangeStage(spec.Stage);
 			await _leadRepository.InsertAsync(lead);
+			repaired[id] = lead;
 		}
+		return repaired;
 	}
 
 	private static Guid StableId(Guid tenantId, string key)

@@ -93,6 +93,9 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			new("principal-gseb", "principal-gseb@ddvs.com", "Principal", "GSEB", "Principal", ["principal1@ddvs.com", "rajesh.kumar@school.edu", "hiren.vadher@ddvs.com"], ["principal1"]),
 			new("principal-cbse", "principal-cbse@ddvs.com", "Principal", "CBSE", "Principal", ["principle1@ddvs.com"], ["principle1"]),
 			new("teacher-gseb", "teacher-gseb@ddvs.com", "Teacher", "GSEB", "Teacher", ["teacher1@ddvs.com", "vikram.singh@school.edu", "sweta.badgujar@ddvs.com"], ["teacher1"]),
+			new("admissions-reception", "admissions-reception@ddvs.com", "Admissions", "Reception", "Admissions Receptionist", [], []),
+			new("admissions-counselor", "admissions-counselor@ddvs.com", "Admissions", "Counselor", "Admissions Counselor", [], []),
+			new("admissions-approver", "admissions-approver@ddvs.com", "Admissions", "Approver", "Admissions Approver", [], []),
 			new("student-crm-denied", "student-crm-denied@ddvs.com", "CRM", "Restricted", "HR Manager", [], []),
 			new("clerk-office", "clerk-office@ddvs.com", "Clerk", "Office", "Clerk", ["clerk1@ddvs.com", "clerk@school.edu", "raj.baku@ddvs.com"], ["clerk1"]),
 			new("finance-officer", "finance-officer@ddvs.com", "Finance", "Officer", "Finance Officer", ["finance1@ddvs.com", "suresh.patil@school.edu", "punam.badgujar@ddvs.com"], ["finance1"])

@@ -33,10 +33,11 @@ Student data is critical school data and must be protected for accuracy, tenant 
 | 14 | [implementation-inquiry-entrance-exam-crm.md](./implementation-inquiry-entrance-exam-crm.md) | Track CRM implementation milestones, validation, and remaining gaps |
 | 15 | [evaluation-inquiry-entrance-exam-crm.md](./evaluation-inquiry-entrance-exam-crm.md) | Evaluate current CRM evidence and choose the next implementation slice |
 | 16 | [qa-student-enrollment-computer-use-bugs-2026-07-12.md](./qa-student-enrollment-computer-use-bugs-2026-07-12.md) | Review resolved Enrollment browser defects and verification evidence |
-| 17 | [api.md](./api.md) | Find endpoint families and compatibility notes |
-| 18 | [architecture.md](./architecture.md) | Locate Student source paths |
-| 19 | [workflows.md](./workflows.md) | Trace inquiry, registration, admission, records, attendance, and certificate flows |
-| 20 | [testing.md](./testing.md) | Pick focused Student validation commands |
+| 17 | [qa-student-enrollment-release-polish-2026-07-12.md](./qa-student-enrollment-release-polish-2026-07-12.md) | Review release-polish findings, fixes, and final validation evidence |
+| 18 | [api.md](./api.md) | Find endpoint families and compatibility notes |
+| 19 | [architecture.md](./architecture.md) | Locate Student source paths |
+| 20 | [workflows.md](./workflows.md) | Trace inquiry, registration, admission, records, attendance, and certificate flows |
+| 21 | [testing.md](./testing.md) | Pick focused Student validation commands |
 
 ## Source of truth
 
@@ -77,6 +78,7 @@ Use this table before searching code:
 | What CRM slices are implemented now? | [implementation-inquiry-entrance-exam-crm.md](./implementation-inquiry-entrance-exam-crm.md) |
 | What CRM slice should be built next? | [evaluation-inquiry-entrance-exam-crm.md](./evaluation-inquiry-entrance-exam-crm.md) |
 | Which Enrollment browser defects were found and resolved? | [qa-student-enrollment-computer-use-bugs-2026-07-12.md](./qa-student-enrollment-computer-use-bugs-2026-07-12.md) |
+| Which release-polish defects and validation gates apply? | [qa-student-enrollment-release-polish-2026-07-12.md](./qa-student-enrollment-release-polish-2026-07-12.md) |
 | Which endpoint should I use? | [api.md](./api.md) |
 | Where is the code? | [architecture.md](./architecture.md) |
 | Which workflow should I trace? | [workflows.md](./workflows.md) |

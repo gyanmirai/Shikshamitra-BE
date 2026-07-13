@@ -17,6 +17,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 [RemoteService(false)]
 public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissionCrmCommunicationAppService
 {
+	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 	private readonly IRepository<AdmissionCrmCommunicationProviderConfiguration, Guid> _providerRepository;
 	private readonly IRepository<AdmissionCrmCommunicationOptOut, Guid> _optOutRepository;
 	private readonly IRepository<AdmissionCrmMessageDeliveryLog, Guid> _deliveryLogRepository;
@@ -69,12 +70,13 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 			academicYearId,
 			nameof(UpdateProviderAsync));
 
+		ValidateProviderEndpoint(input.Settings, input.WebhookUrl);
 		var provider = await GetOrCreateProviderAsync(academicYearId, channel);
 		provider.Update(
 			input.IsEnabled,
 			input.ProviderName,
 			input.SenderId,
-			input.SettingsJson,
+			SerializeProviderSettings(input.Settings),
 			input.WebhookUrl,
 			input.LastValidatedAt);
 		await _providerRepository.UpdateAsync(provider, autoSave: true);
@@ -755,10 +757,54 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 			IsEnabled = provider.IsEnabled,
 			ProviderName = provider.ProviderName,
 			SenderId = provider.SenderId,
-			SettingsJson = provider.SettingsJson,
+			Settings = DeserializeProviderSettings(provider.SettingsJson),
 			WebhookUrl = provider.WebhookUrl,
 			LastValidatedAt = provider.LastValidatedAt
 		};
+	}
+
+	private static string SerializeProviderSettings(AdmissionCrmCommunicationProviderSettingsDto settings)
+	{
+		settings ??= new AdmissionCrmCommunicationProviderSettingsDto();
+		var adapter = (settings.Adapter ?? string.Empty).Trim().ToLowerInvariant();
+		if (adapter is not ("manual" or "manual-queue" or "webhook" or "generic-webhook" or "custom-webhook"))
+			throw new BusinessException("AdmissionCrm:UnsupportedCommunicationAdapter").WithData("Adapter", settings.Adapter);
+		var payloadMode = (settings.PayloadMode ?? string.Empty).Trim().ToLowerInvariant();
+		if (payloadMode is not ("default" or "envelope"))
+			throw new BusinessException("AdmissionCrm:UnsupportedCommunicationPayloadMode").WithData("PayloadMode", settings.PayloadMode);
+		if (settings.Headers.Count > 20 || settings.Parameters.Count > 20 ||
+		    settings.Headers.Any(item => item.Key.Length > 120 || item.Value.Length > 1000) ||
+		    settings.Parameters.Any(item => item.Key.Length > 120 || item.Value.Length > 1000))
+			throw new BusinessException("AdmissionCrm:CommunicationProviderSettingsTooLarge");
+		settings.Adapter = adapter;
+		settings.PayloadMode = payloadMode;
+		return JsonSerializer.Serialize(settings, JsonOptions);
+	}
+
+	private static void ValidateProviderEndpoint(
+		AdmissionCrmCommunicationProviderSettingsDto settings,
+		string? webhookUrl)
+	{
+		var adapter = (settings?.Adapter ?? string.Empty).Trim().ToLowerInvariant();
+		if (adapter is not ("webhook" or "generic-webhook" or "custom-webhook")) return;
+		if (!Uri.TryCreate(webhookUrl, UriKind.Absolute, out var uri) ||
+		    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+			throw new BusinessException("AdmissionCrm:InvalidCommunicationWebhookUrl")
+				.WithData("WebhookUrl", webhookUrl);
+	}
+
+	private static AdmissionCrmCommunicationProviderSettingsDto DeserializeProviderSettings(string? settingsJson)
+	{
+		if (string.IsNullOrWhiteSpace(settingsJson)) return new AdmissionCrmCommunicationProviderSettingsDto();
+		try
+		{
+			return JsonSerializer.Deserialize<AdmissionCrmCommunicationProviderSettingsDto>(settingsJson, JsonOptions)
+			       ?? new AdmissionCrmCommunicationProviderSettingsDto();
+		}
+		catch (JsonException)
+		{
+			return new AdmissionCrmCommunicationProviderSettingsDto { Adapter = "unsupported-json" };
+		}
 	}
 
 	private static AdmissionCrmCommunicationOptOutDto ToDto(AdmissionCrmCommunicationOptOut optOut)

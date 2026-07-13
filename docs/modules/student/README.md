@@ -3,7 +3,7 @@ module: student
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-07-11
+updated_on: 2026-07-12
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -32,10 +32,11 @@ Student data is critical school data and must be protected for accuracy, tenant 
 | 13 | [implementation-admissions-playbook-registration-documents-exam-configuration.md](./implementation-admissions-playbook-registration-documents-exam-configuration.md) | Track companion PRD delivery phases and validation gates |
 | 14 | [implementation-inquiry-entrance-exam-crm.md](./implementation-inquiry-entrance-exam-crm.md) | Track CRM implementation milestones, validation, and remaining gaps |
 | 15 | [evaluation-inquiry-entrance-exam-crm.md](./evaluation-inquiry-entrance-exam-crm.md) | Evaluate current CRM evidence and choose the next implementation slice |
-| 16 | [api.md](./api.md) | Find endpoint families and compatibility notes |
-| 17 | [architecture.md](./architecture.md) | Locate Student source paths |
-| 18 | [workflows.md](./workflows.md) | Trace inquiry, registration, admission, records, attendance, and certificate flows |
-| 19 | [testing.md](./testing.md) | Pick focused Student validation commands |
+| 16 | [qa-student-enrollment-computer-use-bugs-2026-07-12.md](./qa-student-enrollment-computer-use-bugs-2026-07-12.md) | Review resolved Enrollment browser defects and verification evidence |
+| 17 | [api.md](./api.md) | Find endpoint families and compatibility notes |
+| 18 | [architecture.md](./architecture.md) | Locate Student source paths |
+| 19 | [workflows.md](./workflows.md) | Trace inquiry, registration, admission, records, attendance, and certificate flows |
+| 20 | [testing.md](./testing.md) | Pick focused Student validation commands |
 
 ## Source of truth
 
@@ -75,6 +76,7 @@ Use this table before searching code:
 | How should the companion admissions PRD be implemented and validated? | [implementation-admissions-playbook-registration-documents-exam-configuration.md](./implementation-admissions-playbook-registration-documents-exam-configuration.md) |
 | What CRM slices are implemented now? | [implementation-inquiry-entrance-exam-crm.md](./implementation-inquiry-entrance-exam-crm.md) |
 | What CRM slice should be built next? | [evaluation-inquiry-entrance-exam-crm.md](./evaluation-inquiry-entrance-exam-crm.md) |
+| Which Enrollment browser defects were found and resolved? | [qa-student-enrollment-computer-use-bugs-2026-07-12.md](./qa-student-enrollment-computer-use-bugs-2026-07-12.md) |
 | Which endpoint should I use? | [api.md](./api.md) |
 | Where is the code? | [architecture.md](./architecture.md) |
 | Which workflow should I trace? | [workflows.md](./workflows.md) |

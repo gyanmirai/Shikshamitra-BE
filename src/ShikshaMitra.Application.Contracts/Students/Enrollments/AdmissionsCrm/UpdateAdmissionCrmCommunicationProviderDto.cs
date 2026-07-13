@@ -13,8 +13,8 @@ public class UpdateAdmissionCrmCommunicationProviderDto
 	[MaxLength(AdmissionCrmConsts.MaxNameLength)]
 	public string? SenderId { get; set; }
 
-	[MaxLength(AdmissionCrmConsts.MaxRoutingRulesJsonLength)]
-	public string? SettingsJson { get; set; }
+
+	public AdmissionCrmCommunicationProviderSettingsDto Settings { get; set; } = new();
 
 	[MaxLength(AdmissionCrmConsts.MaxUrlLength)]
 	public string? WebhookUrl { get; set; }

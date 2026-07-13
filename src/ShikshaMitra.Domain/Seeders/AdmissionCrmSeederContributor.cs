@@ -16,7 +16,7 @@ using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Seeders;
 
-public class AdmissionCrmSeederContributor : BaseSeederContributor
+public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 {
 	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly IRepository<AdmissionCrmCycleConfiguration, Guid> _cycleRepository;
@@ -25,6 +25,7 @@ public class AdmissionCrmSeederContributor : BaseSeederContributor
 	private readonly IRepository<AdmissionCrmExamSlot, Guid> _slotRepository;
 	private readonly IRepository<AdmissionCrmDocumentType, Guid> _documentTypeRepository;
 	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
+	private readonly IServiceProvider _serviceProvider;
 	private readonly IConfiguration _configuration;
 	private readonly ILogger<AdmissionCrmSeederContributor> _logger;
 
@@ -39,6 +40,7 @@ public class AdmissionCrmSeederContributor : BaseSeederContributor
 		IRepository<AdmissionCrmExamSlot, Guid> slotRepository,
 		IRepository<AdmissionCrmDocumentType, Guid> documentTypeRepository,
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
+		IServiceProvider serviceProvider,
 		IConfiguration configuration,
 		ILogger<AdmissionCrmSeederContributor> logger)
 		: base(currentTenant, guidGenerator, currentUnitOfWork)
@@ -50,6 +52,7 @@ public class AdmissionCrmSeederContributor : BaseSeederContributor
 		_slotRepository = slotRepository;
 		_documentTypeRepository = documentTypeRepository;
 		_leadRepository = leadRepository;
+		_serviceProvider = serviceProvider;
 		_configuration = configuration;
 		_logger = logger;
 	}
@@ -76,6 +79,7 @@ public class AdmissionCrmSeederContributor : BaseSeederContributor
 		var sources = await RepairSourcesAsync(tenantId, academicYear.Id);
 		await RepairSlotsAsync(tenantId, academicYear.Id, academicYear.Name);
 		await RepairDocumentTypesAsync(tenantId, academicYear.Id);
+		var extendedConfiguration = await RepairExtendedConfigurationAsync(tenantId, academicYear.Id, academicYear.Name);
 
 		var profile = ShikshaMitraSeederProfile.Normalize(
 			context.Properties.TryGetValue(ShikshaMitraSeederProfile.ContextPropertyName, out var value)
@@ -84,6 +88,7 @@ public class AdmissionCrmSeederContributor : BaseSeederContributor
 		if (profile != ShikshaMitraSeederProfile.Minimal)
 		{
 			await RepairScenarioLeadsAsync(tenantId, academicYear.Id, sources);
+			await RepairOperationalScenariosAsync(tenantId, academicYear.Id, extendedConfiguration);
 		}
 
 		await CurrentUnitOfWork.SaveChangesAsync();

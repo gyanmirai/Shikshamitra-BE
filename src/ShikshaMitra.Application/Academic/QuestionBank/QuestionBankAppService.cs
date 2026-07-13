@@ -65,13 +65,14 @@ public class QuestionBankAppService(
         var pageSize = Math.Clamp(input.PageSize, 5, 100);
         var items = await asyncExecuter.ToListAsync(query.OrderByDescending(x => x.CreationTime).Skip((page - 1) * pageSize).Take(pageSize));
         var usageCounts = await GetUsageCountsAsync(items.Select(x => x.Id).ToList());
+        var duplicateIds = GetDuplicateQuestionIds(items);
 
         return new QuestionListResponseDto
         {
             TotalCount = total,
             CurrentPage = page,
             PageSize = pageSize,
-            Items = items.Select(x => Map(x, usageCounts.GetValueOrDefault(x.Id))).ToList()
+            Items = items.Select(x => Map(x, usageCounts.GetValueOrDefault(x.Id), duplicateIds.Contains(x.Id))).ToList()
         };
     }
 
@@ -241,12 +242,38 @@ public class QuestionBankAppService(
             query = query.Where(x => x.Id != input.ExcludeQuestionId.Value);
         }
 
-        var matches = await asyncExecuter.ToListAsync(query.Take(10));
+        var exactMatches = await asyncExecuter.ToListAsync(query.Take(10));
+
+        var similarQuery = await questionRepository.WithDetailsAsync(x => x.Options, x => x.Tags);
+        var similarCandidates = await asyncExecuter.ToListAsync(similarQuery
+            .Where(x =>
+                x.AcademicYearId == input.AcademicYearId &&
+                x.StandardId == input.StandardId &&
+                x.SubjectId == input.SubjectId &&
+                !x.IsArchived &&
+                (!input.ExcludeQuestionId.HasValue || x.Id != input.ExcludeQuestionId.Value))
+            .OrderByDescending(x => x.CreationTime)
+            .Take(100));
+        var similarMatches = similarCandidates
+            .Select(x => new { Question = x, Similarity = CalculateSimilarity(normalized, x.PlainTextSearchContent ?? QuestionBankItem.Normalize(x.QuestionText)) })
+            .Where(x => x.Similarity >= 70)
+            .OrderByDescending(x => x.Similarity)
+            .Take(10)
+            .ToList();
+        var matches = exactMatches
+            .Concat(similarMatches.Select(x => x.Question))
+            .GroupBy(x => x.Id)
+            .Select(x => x.First())
+            .ToList();
+        var highestSimilarity = exactMatches.Count > 0
+            ? 100
+            : similarMatches.Select(x => x.Similarity).DefaultIfEmpty(0).Max();
         return new DuplicateQuestionResultDto
         {
             HasDuplicate = matches.Count > 0,
             IsBlocked = matches.Count > 0 && setting.EnableDuplicateCheck && setting.DuplicateQuestionAction != DuplicateQuestionAction.AllowWithWarning,
-            Message = matches.Count > 0 ? "A matching question already exists for this class and subject." : null,
+            Message = matches.Count > 0 ? "A matching or similar question already exists for this class and subject." : null,
+            HighestSimilarity = highestSimilarity,
             Matches = matches.Select(x => Map(x, 0)).ToList()
         };
     }
@@ -257,13 +284,20 @@ public class QuestionBankAppService(
     public async Task<QuestionBankDashboardDto> GetDashboardAsync(Guid academicYearId)
     {
         var rows = await questionRepository.GetListAsync(x => x.AcademicYearId == academicYearId && !x.IsArchived);
+        var rowIds = rows.Select(r => r.Id).ToList();
+        var usageRows = await usageRepository.GetListAsync(x => rowIds.Contains(x.QuestionBankItemId));
+        var usedQuestionIds = usageRows.Select(x => x.QuestionBankItemId).ToHashSet();
+        var duplicateIds = GetDuplicateQuestionIds(rows);
         return new QuestionBankDashboardDto
         {
             TotalQuestions = rows.Count,
             ApprovedQuestions = rows.Count(x => x.Status == QuestionStatus.Approved),
             DraftQuestions = rows.Count(x => x.Status == QuestionStatus.Draft),
             PendingReview = rows.Count(x => x.Status == QuestionStatus.Submitted),
-            RejectedQuestions = rows.Count(x => x.Status == QuestionStatus.Rejected)
+            RejectedQuestions = rows.Count(x => x.Status == QuestionStatus.Rejected),
+            NeedsImprovement = rows.Count(x => CalculateQualityScore(x) < 70),
+            DuplicateRisk = duplicateIds.Count,
+            NeverUsed = rows.Count(x => !usedQuestionIds.Contains(x.Id))
         };
     }
 
@@ -369,6 +403,68 @@ public class QuestionBankAppService(
         return rows.GroupBy(x => x.QuestionBankItemId).ToDictionary(x => x.Key, x => x.Count());
     }
 
+    private static HashSet<Guid> GetDuplicateQuestionIds(IEnumerable<QuestionBankItem> questions)
+    {
+        return questions
+            .Where(x => !string.IsNullOrWhiteSpace(x.PlainTextSearchContent))
+            .GroupBy(x => x.PlainTextSearchContent)
+            .Where(group => group.Count() > 1)
+            .SelectMany(group => group.Select(question => question.Id))
+            .ToHashSet();
+    }
+
+    private static int CalculateQualityScore(QuestionBankItem question)
+    {
+        var score = 0;
+        if (question.StandardId != Guid.Empty && question.SubjectId != Guid.Empty) score += 15;
+        if (question.ChapterId.HasValue) score += 10;
+        if (!string.IsNullOrWhiteSpace(question.QuestionText) && question.QuestionText.Trim().Length >= 10) score += 15;
+        if (question.Marks > 0) score += 10;
+        if (question.BloomLevel.HasValue) score += 10;
+        if (!string.IsNullOrWhiteSpace(question.AnswerKey)) score += 10;
+        if (!string.IsNullOrWhiteSpace(question.Explanation) || !string.IsNullOrWhiteSpace(question.MarkingScheme)) score += 10;
+        if (!string.IsNullOrWhiteSpace(question.LearningOutcome)) score += 10;
+        if (question.Tags.Count > 0) score += 5;
+
+        if (question.QuestionType is QuestionType.McqSingleCorrect or QuestionType.McqMultipleCorrect or QuestionType.TrueFalse)
+        {
+            var correctCount = question.Options.Count(x => x.IsCorrect);
+            var hasEnoughOptions = question.Options.Count >= 2;
+            var hasValidCorrectAnswer = question.QuestionType == QuestionType.McqSingleCorrect
+                ? correctCount == 1
+                : correctCount >= 1;
+            if (hasEnoughOptions && hasValidCorrectAnswer) score += 5;
+        }
+        else
+        {
+            score += 5;
+        }
+
+        return Math.Clamp(score, 0, 100);
+    }
+
+    private static string GetQualityBand(int score)
+    {
+        if (score >= 85) return "Excellent";
+        if (score >= 70) return "Ready";
+        if (score >= 50) return "Needs Review";
+        return "Needs Improvement";
+    }
+
+    private static int CalculateSimilarity(string left, string right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return 0;
+        if (left == right) return 100;
+
+        var leftWords = left.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var rightWords = right.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (leftWords.Count == 0 || rightWords.Count == 0) return 0;
+
+        var intersection = leftWords.Intersect(rightWords, StringComparer.OrdinalIgnoreCase).Count();
+        var union = leftWords.Union(rightWords, StringComparer.OrdinalIgnoreCase).Count();
+        return union == 0 ? 0 : (int)Math.Round(intersection / (double)union * 100);
+    }
+
     private void SyncChildren(QuestionBankItem question, CreateUpdateQuestionDto input)
     {
         foreach (var option in input.Options.OrderBy(x => x.SortOrder))
@@ -405,40 +501,47 @@ public class QuestionBankAppService(
         if (input.Visibility.HasValue) question.Visibility = input.Visibility.Value;
     }
 
-    private static QuestionBankItemDto Map(QuestionBankItem question, int usedCount) => new()
+    private static QuestionBankItemDto Map(QuestionBankItem question, int usedCount, bool duplicateRisk = false)
     {
-        Id = question.Id,
-        AcademicYearId = question.AcademicYearId,
-        BoardId = question.BoardId,
-        MediumId = question.MediumId,
-        StandardId = question.StandardId,
-        SubjectId = question.SubjectId,
-        ChapterId = question.ChapterId,
-        TopicId = question.TopicId,
-        QuestionText = question.QuestionText,
-        QuestionType = question.QuestionType,
-        DifficultyLevel = question.DifficultyLevel,
-        BloomLevel = question.BloomLevel,
-        Marks = question.Marks,
-        NegativeMarks = question.NegativeMarks,
-        AnswerKey = question.AnswerKey,
-        LearningOutcome = question.LearningOutcome,
-        Explanation = question.Explanation,
-        MarkingScheme = question.MarkingScheme,
-        Status = question.Status,
-        Visibility = question.Visibility,
-        CreatedByTeacherId = question.CreatedByTeacherId,
-        ReviewedByUserId = question.ReviewedByUserId,
-        ReviewedAt = question.ReviewedAt,
-        ReviewComment = question.ReviewComment,
-        VersionNumber = question.VersionNumber,
-        ParentQuestionId = question.ParentQuestionId,
-        IsLocked = question.IsLocked,
-        IsArchived = question.IsArchived,
-        UsedCount = usedCount,
-        Options = question.Options.OrderBy(x => x.SortOrder).Select(x => new QuestionOptionDto { Id = x.Id, OptionText = x.OptionText, IsCorrect = x.IsCorrect, SortOrder = x.SortOrder }).ToList(),
-        Tags = question.Tags.Select(x => x.TagName).ToList()
-    };
+        var qualityScore = CalculateQualityScore(question);
+        return new QuestionBankItemDto
+        {
+            Id = question.Id,
+            AcademicYearId = question.AcademicYearId,
+            BoardId = question.BoardId,
+            MediumId = question.MediumId,
+            StandardId = question.StandardId,
+            SubjectId = question.SubjectId,
+            ChapterId = question.ChapterId,
+            TopicId = question.TopicId,
+            QuestionText = question.QuestionText,
+            QuestionType = question.QuestionType,
+            DifficultyLevel = question.DifficultyLevel,
+            BloomLevel = question.BloomLevel,
+            Marks = question.Marks,
+            NegativeMarks = question.NegativeMarks,
+            AnswerKey = question.AnswerKey,
+            LearningOutcome = question.LearningOutcome,
+            Explanation = question.Explanation,
+            MarkingScheme = question.MarkingScheme,
+            Status = question.Status,
+            Visibility = question.Visibility,
+            CreatedByTeacherId = question.CreatedByTeacherId,
+            ReviewedByUserId = question.ReviewedByUserId,
+            ReviewedAt = question.ReviewedAt,
+            ReviewComment = question.ReviewComment,
+            VersionNumber = question.VersionNumber,
+            ParentQuestionId = question.ParentQuestionId,
+            IsLocked = question.IsLocked,
+            IsArchived = question.IsArchived,
+            UsedCount = usedCount,
+            QualityScore = qualityScore,
+            DuplicateRisk = duplicateRisk,
+            QualityBand = GetQualityBand(qualityScore),
+            Options = question.Options.OrderBy(x => x.SortOrder).Select(x => new QuestionOptionDto { Id = x.Id, OptionText = x.OptionText, IsCorrect = x.IsCorrect, SortOrder = x.SortOrder }).ToList(),
+            Tags = question.Tags.Select(x => x.TagName).ToList()
+        };
+    }
 
     private static QuestionBankSettingDto Map(QuestionBankSetting setting) => new()
     {

@@ -35,13 +35,23 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
+			public const string AutoAllocate = $"{SubmoduleName}.AutoAllocate";
+			public const string Finalize = $"{SubmoduleName}.Finalize";
+			public const string Publish = $"{SubmoduleName}.Publish";
+			public const string Unlock = $"{SubmoduleName}.Unlock";
+			public const string Print = $"{SubmoduleName}.Print";
 
-			public static readonly string[] All = { View, Add, Delete };
+			public static readonly string[] All = { View, Add, Delete, AutoAllocate, Finalize, Publish, Unlock, Print };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
+				{ AutoAllocate, $"{SubmoduleDisplayName}.AutoAllocate" },
+				{ Finalize, $"{SubmoduleDisplayName}.Finalize" },
+				{ Publish, $"{SubmoduleDisplayName}.Publish" },
+				{ Unlock, $"{SubmoduleDisplayName}.Unlock" },
+				{ Print, $"{SubmoduleDisplayName}.Print" }
 			};
 		}
 

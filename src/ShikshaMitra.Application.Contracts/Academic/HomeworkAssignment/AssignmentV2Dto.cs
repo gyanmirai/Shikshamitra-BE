@@ -14,6 +14,12 @@ public class AssignmentV2Dto
     public string Title { get; set; } = string.Empty;
     public Guid AssignmentTypeId { get; set; }
     public string AssignmentTypeName { get; set; } = string.Empty;
+    public int? DefaultSubmissionType { get; set; }
+    public decimal? DefaultMarks { get; set; }
+    public int? DefaultDueDays { get; set; }
+    public bool EvaluationRequired { get; set; } = true;
+    public int? DefaultEvaluationMethod { get; set; }
+    public int? AssignmentTypeStatus { get; set; }
     public decimal TotalMarks { get; set; }
     public string Description { get; set; } = string.Empty;
     public string? Attachment { get; set; }

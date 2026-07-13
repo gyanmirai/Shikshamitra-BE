@@ -13,5 +13,6 @@ public class AssignmentSubmissionsResponseDto
 	public string DivisionId { get; set; } = string.Empty;
 	public string SubjectId { get; set; } = string.Empty;
 	public string DueDate { get; set; } = string.Empty;
+	public EvaluationWorkspaceSummaryDto Summary { get; set; } = new();
 	public List<HomeworkSubmissionDto> Data { get; set; } = new();
 }

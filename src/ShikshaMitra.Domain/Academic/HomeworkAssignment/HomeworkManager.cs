@@ -152,6 +152,14 @@ public class HomeworkManager : DomainService
 				homeworkTypeId
 			);
 		}
+
+		if (homeworkType.Status == TaskTypeStatus.Inactive)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:InactiveHomeworkType").WithData(
+				"HomeworkTypeId",
+				homeworkTypeId
+			);
+		}
 	}
 
 	/// <summary>

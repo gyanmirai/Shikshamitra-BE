@@ -147,8 +147,14 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				TotalMarks = submission?.TotalMarks,
 				Feedback = submission?.Feedback,
 				Remarks = submission?.Remarks,
-				Status = (int) (submission?.Status ?? SubmissionStatus.NeedsReview),
-				SubmittedContent = submission?.SubmittedContent
+				Status = (int) (submission?.Status ?? SubmissionStatus.NotSubmitted),
+				SubmissionStatusLabel = GetSubmissionStatusLabel(submission?.Status ?? SubmissionStatus.NotSubmitted),
+				EvaluationStatus = GetEvaluationStatus(submission?.Status, submission?.Marks, submission?.Feedback),
+				FeedbackStatus = string.IsNullOrWhiteSpace(submission?.Feedback) ? "Feedback Pending" : "Feedback Added",
+				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks),
+				SubmittedContent = submission?.SubmittedContent,
+				SubmittedDocumentUrl = submission?.SubmittedDocumentUrl,
+				OriginalFileName = submission?.OriginalFileName
 			};
 
 			submissionDtos.Add(dto);
@@ -171,8 +177,60 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			DivisionId = filter.DivisionId.ToString(),
 			SubjectId = filter.SubjectId.ToString(),
 			SubmissionType = (int) homework.SubmissionType,
+			Summary = BuildSummary(submissionDtos),
 			Data = submissionDtos
 		};
+	}
+
+	private static EvaluationWorkspaceSummaryDto BuildSummary(List<HomeworkSubmissionDto> submissions)
+	{
+		var reviewedRows = submissions.Where(s => s.Marks.HasValue && s.TotalMarks.HasValue).ToList();
+
+		return new EvaluationWorkspaceSummaryDto
+		{
+			TotalStudents = submissions.Count,
+			Submitted = submissions.Count(s => s.Status is (int)SubmissionStatus.Submitted or (int)SubmissionStatus.Late or (int)SubmissionStatus.Reviewed or (int)SubmissionStatus.NeedsReview),
+			NotSubmitted = submissions.Count(s => s.Status == (int)SubmissionStatus.NotSubmitted),
+			Reviewed = submissions.Count(s => s.Status == (int)SubmissionStatus.Reviewed),
+			NeedsReview = submissions.Count(s => s.Status is (int)SubmissionStatus.Submitted or (int)SubmissionStatus.Late or (int)SubmissionStatus.NeedsReview),
+			Late = submissions.Count(s => s.Status == (int)SubmissionStatus.Late),
+			TotalMarks = reviewedRows.Select(s => s.TotalMarks).FirstOrDefault(x => x.HasValue),
+			AverageMarks = reviewedRows.Count == 0 ? null : Math.Round(reviewedRows.Average(s => s.Marks!.Value), 2)
+		};
+	}
+
+	private static string GetEvaluationStatus(SubmissionStatus? status, decimal? marks, string? feedback)
+	{
+		if (status == SubmissionStatus.Reviewed)
+		{
+			return "Reviewed";
+		}
+
+		if (marks.HasValue || !string.IsNullOrWhiteSpace(feedback))
+		{
+			return "Draft";
+		}
+
+		return status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview
+			? "Needs Review"
+			: "Not Started";
+	}
+
+	private static string GetSubmissionStatusLabel(SubmissionStatus status)
+	{
+		return status switch
+		{
+			SubmissionStatus.NotSubmitted => "Not Submitted",
+			SubmissionStatus.NeedsReview => "Needs Review",
+			_ => status.ToString()
+		};
+	}
+
+	private static decimal? CalculatePercentage(decimal? marks, decimal? totalMarks)
+	{
+		return marks.HasValue && totalMarks.HasValue && totalMarks.Value > 0
+			? Math.Round(marks.Value / totalMarks.Value * 100, 2)
+			: null;
 	}
 
 	/// <summary>

@@ -228,17 +228,26 @@ public class HomeworkAppService(
         var users = allUserIds.Any()
             ? await userRepository.GetListAsync(u => allUserIds.Contains(u.Id))
             : new List<IdentityUser>();
+        var homeworkIds = items.Select(h => h.Id).ToList();
+        var submissions = homeworkIds.Any()
+            ? await studentSubmissionRepository.GetListAsync(s =>
+                s.HomeworkAssignmentId.HasValue && homeworkIds.Contains(s.HomeworkAssignmentId.Value))
+            : new List<StudentSubmissionEntity>();
+        var submissionLookup = submissions
+            .GroupBy(s => s.HomeworkAssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => BuildSubmissionSummary(g));
 
         var standardLookup = standards.ToDictionary(s => s.Id, s => s.Name);
         var subjectLookup = subjectLookupByHomeworkId;
         var chapterLookup = chapters.ToDictionary(c => c.Id, c => c.ChapterName);
-        var hwTypeLookup = hwTypes.ToDictionary(t => t.Id, t => t.Name);
+        var hwTypeLookup = hwTypes.ToDictionary(t => t.Id);
         var divisionLookup = divisions.ToDictionary(d => d.Id, d => d.Name);
         var userLookup = users.ToDictionary(u => u.Id, u => $"{u.Name} {u.Surname}".Trim());
 
         var dtos = items
             .Select(h => MapToHomeworkDto(h, academicMediumId, standardLookup, subjectLookup,
-                chapterLookup, hwTypeLookup, divisionLookup, userLookup))
+                chapterLookup, hwTypeLookup, divisionLookup, userLookup,
+                submissionLookup.GetValueOrDefault(h.Id)))
             .ToList();
 
         return new HomeworkListResponseDto
@@ -419,7 +428,7 @@ public class HomeworkAppService(
         string? chapterName = null;
         var chapterIds = new List<Guid>();
         var chapterNames = new List<string>();
-        var hwTypeName = string.Empty;
+        HomeworkType? hwType = null;
         var divisionLookup = new Dictionary<Guid, string>();
         var createdBy = string.Empty;
         var updatedBy = string.Empty;
@@ -468,8 +477,7 @@ public class HomeworkAppService(
 
         if (h.HomeworkTypeId.HasValue)
         {
-            var hwType = await homeworkTypeRepository.FindAsync(h.HomeworkTypeId.Value);
-            hwTypeName = hwType?.Name ?? string.Empty;
+            hwType = await homeworkTypeRepository.FindAsync(h.HomeworkTypeId.Value);
         }
 
         var divisionIds = h.DivisionSchedules.Select(s => s.DivisionId).ToList();
@@ -490,9 +498,12 @@ public class HomeworkAppService(
             var updater = await userRepository.FindAsync(h.LastModifierId.Value);
             updatedBy = updater != null ? $"{updater.Name} {updater.Surname}".Trim() : string.Empty;
         }
+        var submissions = await studentSubmissionRepository.GetListAsync(s => s.HomeworkAssignmentId == h.Id);
+        var submissionSummary = BuildSubmissionSummary(submissions);
 
         return BuildHomeworkDto(h, academicMediumId, standardName, subjectName, chapterName,
-            chapterIds, chapterNames, hwTypeName, divisionLookup, createdBy, updatedBy);
+            chapterIds, chapterNames, hwType, divisionLookup, createdBy, updatedBy,
+            submissionSummary);
     }
 
     private static HomeworkDto MapToHomeworkDto(
@@ -501,9 +512,10 @@ public class HomeworkAppService(
         Dictionary<Guid, string> standardLookup,
         Dictionary<Guid, string> subjectLookup,
         Dictionary<Guid, string> chapterLookup,
-        Dictionary<Guid, string> hwTypeLookup,
+        Dictionary<Guid, HomeworkType> hwTypeLookup,
         Dictionary<Guid, string> divisionLookup,
-        Dictionary<Guid, string> userLookup
+        Dictionary<Guid, string> userLookup,
+        LearningTaskSubmissionSummary? submissionSummary = null
     )
     {
         var standardName = standardLookup.GetValueOrDefault(h.StandardId, string.Empty);
@@ -530,9 +542,9 @@ public class HomeworkAppService(
 
         string? chapterName = chapterNames.Any() ? string.Join(", ", chapterNames) : null;
 
-        var hwTypeName = h.HomeworkTypeId.HasValue
-            ? hwTypeLookup.GetValueOrDefault(h.HomeworkTypeId.Value, string.Empty)
-            : string.Empty;
+        var hwType = h.HomeworkTypeId.HasValue
+            ? hwTypeLookup.GetValueOrDefault(h.HomeworkTypeId.Value)
+            : null;
         var createdBy = h.CreatorId.HasValue
             ? userLookup.GetValueOrDefault(h.CreatorId.Value, string.Empty)
             : string.Empty;
@@ -541,7 +553,8 @@ public class HomeworkAppService(
             : string.Empty;
 
         return BuildHomeworkDto(h, academicMediumId, standardName, subjectName, chapterName,
-            chapterIds, chapterNames, hwTypeName, divisionLookup, createdBy, updatedBy);
+            chapterIds, chapterNames, hwType, divisionLookup, createdBy, updatedBy,
+            submissionSummary);
     }
 
     private static HomeworkDto BuildHomeworkDto(
@@ -552,10 +565,11 @@ public class HomeworkAppService(
         string? chapterName,
         List<Guid> chapterIds,
         List<string> chapterNames,
-        string hwTypeName,
+        HomeworkType? homeworkType,
         Dictionary<Guid, string> divisionLookup,
         string createdBy,
-        string updatedBy
+        string updatedBy,
+        LearningTaskSubmissionSummary? submissionSummary = null
     ) => new()
     {
         Id = h.Id,
@@ -570,11 +584,23 @@ public class HomeworkAppService(
         ChapterNames = chapterNames,
         Title = h.Title,
         HomeworkTypeId = h.HomeworkTypeId ?? Guid.Empty,
-        HomeworkTypeName = hwTypeName,
+        HomeworkTypeName = homeworkType?.Name ?? string.Empty,
+        DefaultSubmissionType = homeworkType?.DefaultSubmissionType.HasValue == true ? (int) homeworkType.DefaultSubmissionType.Value : null,
+        DefaultMarks = homeworkType?.DefaultMarks,
+        DefaultDueDays = homeworkType?.DefaultDueDays,
+        EvaluationRequired = homeworkType?.EvaluationRequired ?? true,
+        DefaultEvaluationMethod = homeworkType?.DefaultEvaluationMethod.HasValue == true ? (int) homeworkType.DefaultEvaluationMethod.Value : null,
+        HomeworkTypeStatus = homeworkType != null ? (int) homeworkType.Status : null,
         Description = h.Description,
         Attachment = h.DocumentUrl,
         SubmissionType = (int) h.SubmissionType,
         Status = (int) h.Status,
+        TotalStudents = submissionSummary?.TotalStudents ?? 0,
+        SubmittedCount = submissionSummary?.SubmittedCount ?? 0,
+        PendingCount = submissionSummary?.PendingCount ?? 0,
+        LateCount = submissionSummary?.LateCount ?? 0,
+        CheckedCount = submissionSummary?.CheckedCount ?? 0,
+        EvaluationPendingCount = submissionSummary?.EvaluationPendingCount ?? 0,
         DivisionSchedules = h.DivisionSchedules
             .Select(s => new HomeworkDivisionScheduleDto
             {
@@ -590,4 +616,33 @@ public class HomeworkAppService(
         UpdatedAt = h.LastModificationTime ?? h.CreationTime,
         UpdatedBy = updatedBy,
     };
+
+    private static LearningTaskSubmissionSummary BuildSubmissionSummary(IEnumerable<StudentSubmissionEntity> submissions)
+    {
+        var list = submissions.ToList();
+        var submittedCount = list.Count(s =>
+            s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.Reviewed);
+        var lateCount = list.Count(s => s.Status == SubmissionStatus.Late);
+        var checkedCount = list.Count(s => s.Status == SubmissionStatus.Reviewed);
+        var evaluationPendingCount = list.Count(s =>
+            s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview);
+
+        return new LearningTaskSubmissionSummary(
+            TotalStudents: 0,
+            SubmittedCount: submittedCount,
+            PendingCount: 0,
+            LateCount: lateCount,
+            CheckedCount: checkedCount,
+            EvaluationPendingCount: evaluationPendingCount
+        );
+    }
+
+    private sealed record LearningTaskSubmissionSummary(
+        int TotalStudents,
+        int SubmittedCount,
+        int PendingCount,
+        int LateCount,
+        int CheckedCount,
+        int EvaluationPendingCount
+    );
 }

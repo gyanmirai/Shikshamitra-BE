@@ -164,7 +164,7 @@ public class SubjectAssignmentAppService(
 		int pageSize
 	)
 	{
-		var query = await assignmentRepository.GetQueryableAsync();
+		var query = await assignmentRepository.WithDetailsAsync(a => a.Chapters, a => a.Teachers);
 
 		query = query.Where(a => a.StandardId == classId);
 
@@ -176,6 +176,7 @@ public class SubjectAssignmentAppService(
 		}
 
 		var assignments = await AsyncExecuter.ToListAsync(query);
+		await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(assignments, classId);
 
 		// Group assignments
 		var groupedAssignments = new List<SubjectAssignmentGroupDto>();
@@ -338,7 +339,7 @@ public class SubjectAssignmentAppService(
 
 	public async Task<SubjectAssignmentDto> GetAsync(Guid assignmentId)
 	{
-		var baseQuery = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents, a => a.Subject);
+		var baseQuery = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents, a => a.Subject, a => a.Chapters);
 
 		var assignment = await AsyncExecuter.FirstOrDefaultAsync(
 			baseQuery.Where(a => a.Id == assignmentId)
@@ -355,6 +356,8 @@ public class SubjectAssignmentAppService(
 		{
 			groupAssignments = new List<AssignedSubject> { assignment };
 		}
+
+		await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(groupAssignments, assignment.StandardId);
 
 		ElectiveGroup? electiveGroup = null;
 		if (assignment.ElectiveGroupId.HasValue)
@@ -410,6 +413,14 @@ public class SubjectAssignmentAppService(
 					Prerequisites = a.Prerequisites,
 					Description = a.Description,
 					Documents = a.Documents.Select(d => d.BlobName).ToList(),
+					WeeklyPeriods = a.WeeklyPeriods,
+					DifficultyLevel = a.DifficultyLevel,
+					SubjectGroup = a.SubjectGroup,
+					IsAiSuggested = a.IsAiSuggested,
+					IsCopiedFromPreviousYear = a.IsCopiedFromPreviousYear,
+					SetupHealthScore = a.SetupHealthScore,
+					ChaptersCount = a.Chapters.Count,
+					LastUpdatedAt = a.LastModificationTime ?? a.CreationTime,
 				};
 			}).ToList()
 		};
@@ -766,8 +777,7 @@ public class SubjectAssignmentAppService(
 			query.Where(a => a.Id == assignmentId)
 		) ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(AssignedSubject), assignmentId);
 
-		assignment.RecalculateSetupHealth();
-		await assignmentRepository.UpdateAsync(assignment, autoSave: true);
+		await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(new List<AssignedSubject> { assignment }, assignment.StandardId);
 
 		var missing = new List<string>();
 		if (string.IsNullOrWhiteSpace(assignment.SubjectCode)) missing.Add("Subject code is missing");
@@ -793,10 +803,11 @@ public class SubjectAssignmentAppService(
 		var query = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents, a => a.Chapters, a => a.Subject);
 		var assignments = await AsyncExecuter.ToListAsync(query.Where(a => a.StandardId == classId));
 
+		await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(assignments, classId);
+
 		var issues = new List<PublishReadinessIssueDto>();
 		foreach (var a in assignments)
 		{
-			a.RecalculateSetupHealth();
 
 			if (!a.Teachers.Any(t => t.TeacherType == SubjectTeacherType.Primary))
 			{
@@ -911,5 +922,38 @@ public class SubjectAssignmentAppService(
 		var assignment = await assignmentRepository.GetAsync(assignmentId);
 		assignment.ChangeStatus(SubjectStatus.Archived);
 		await assignmentRepository.UpdateAsync(assignment, autoSave: true);
+	}
+
+	private async Task SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(List<AssignedSubject> assignments, Guid classId)
+	{
+		var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(classId);
+		var weeklyLecturesBySubject = weeklySlot?.Subjects
+			.Where(s => s.SubjectId.HasValue)
+			.ToDictionary(s => s.SubjectId!.Value, s => s.WeeklyLectures)
+			?? new Dictionary<Guid, int>();
+		var weeklyLecturesByElective = weeklySlot?.Subjects
+			.Where(s => s.ElectiveGroupId.HasValue)
+			.ToDictionary(s => s.ElectiveGroupId!.Value, s => s.WeeklyLectures)
+			?? new Dictionary<Guid, int>();
+
+		foreach (var a in assignments)
+		{
+			var lectures = 0;
+			if (a.SubjectType == SubjectType.Elective && a.ElectiveGroupId.HasValue)
+			{
+				lectures = weeklyLecturesByElective.GetValueOrDefault(a.ElectiveGroupId.Value, 0);
+			}
+			else
+			{
+				lectures = weeklyLecturesBySubject.GetValueOrDefault(a.SubjectId, 0);
+			}
+
+			if (a.WeeklyPeriods != lectures)
+			{
+				a.WeeklyPeriods = lectures;
+			}
+			a.RecalculateSetupHealth();
+			await assignmentRepository.UpdateAsync(a);
+		}
 	}
 }

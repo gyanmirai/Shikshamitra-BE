@@ -151,7 +151,7 @@ public class AssignmentV2AppService(
 
         var standardLookup = standards.ToDictionary(s => s.Id, s => s.Name);
         var subjectLookup = subjects.ToDictionary(s => s.Id, s => s.Name);
-        var typeLookup = assignmentTypes.ToDictionary(t => t.Id, t => t.Name);
+        var typeLookup = assignmentTypes.ToDictionary(t => t.Id);
         var divisionLookup = divisions.ToDictionary(d => d.Id, d => d.Name);
         var userLookup = users.ToDictionary(u => u.Id, u => $"{u.Name} {u.Surname}".Trim());
 
@@ -316,13 +316,12 @@ public class AssignmentV2AppService(
         var standard = await standardRepository.FindAsync(a.StandardId);
         var subject = await subjectRepository.FindAsync(a.SubjectId);
 
-        string assignmentTypeName = string.Empty;
+        AssignmentType? assignmentType = null;
         if (a.AssignmentType != null)
-            assignmentTypeName = a.AssignmentType.Name;
+            assignmentType = a.AssignmentType;
         else
         {
-            var at = await assignmentTypeRepository.FindAsync(a.AssignmentTypeId);
-            assignmentTypeName = at?.Name ?? string.Empty;
+            assignmentType = await assignmentTypeRepository.FindAsync(a.AssignmentTypeId);
         }
 
         var divisionIds = a.DivisionSchedules.Select(s => s.DivisionId).ToList();
@@ -347,7 +346,7 @@ public class AssignmentV2AppService(
         return BuildAssignmentDto(a, academicMediumId,
             standard?.Name ?? string.Empty,
             subject?.Name ?? string.Empty,
-            assignmentTypeName,
+            assignmentType,
             divisionLookup,
             createdBy, updatedBy);
     }
@@ -357,14 +356,14 @@ public class AssignmentV2AppService(
         Guid academicMediumId,
         Dictionary<Guid, string> standardLookup,
         Dictionary<Guid, string> subjectLookup,
-        Dictionary<Guid, string> typeLookup,
+        Dictionary<Guid, AssignmentType> typeLookup,
         Dictionary<Guid, string> divisionLookup,
         Dictionary<Guid, string> userLookup
     ) => BuildAssignmentDto(
         a, academicMediumId,
         standardLookup.GetValueOrDefault(a.StandardId, string.Empty),
         subjectLookup.GetValueOrDefault(a.SubjectId, string.Empty),
-        typeLookup.GetValueOrDefault(a.AssignmentTypeId, string.Empty),
+        typeLookup.GetValueOrDefault(a.AssignmentTypeId),
         divisionLookup,
         a.CreatorId.HasValue ? userLookup.GetValueOrDefault(a.CreatorId.Value, string.Empty) : string.Empty,
         a.LastModifierId.HasValue ? userLookup.GetValueOrDefault(a.LastModifierId.Value, string.Empty) : string.Empty
@@ -375,7 +374,7 @@ public class AssignmentV2AppService(
         Guid academicMediumId,
         string standardName,
         string subjectName,
-        string assignmentTypeName,
+        AssignmentType? assignmentType,
         Dictionary<Guid, string> divisionLookup,
         string createdBy,
         string updatedBy
@@ -389,7 +388,13 @@ public class AssignmentV2AppService(
         SubjectName = subjectName,
         Title = a.Title,
         AssignmentTypeId = a.AssignmentTypeId,
-        AssignmentTypeName = assignmentTypeName,
+        AssignmentTypeName = assignmentType?.Name ?? string.Empty,
+        DefaultSubmissionType = assignmentType?.DefaultSubmissionType.HasValue == true ? (int) assignmentType.DefaultSubmissionType.Value : null,
+        DefaultMarks = assignmentType?.DefaultMarks,
+        DefaultDueDays = assignmentType?.DefaultDueDays,
+        EvaluationRequired = assignmentType?.EvaluationRequired ?? true,
+        DefaultEvaluationMethod = assignmentType?.DefaultEvaluationMethod.HasValue == true ? (int) assignmentType.DefaultEvaluationMethod.Value : null,
+        AssignmentTypeStatus = assignmentType != null ? (int) assignmentType.Status : null,
         TotalMarks = a.TotalMarks,
         Description = a.Description,
         Attachment = a.AttachmentsJson,

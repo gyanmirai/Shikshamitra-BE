@@ -152,6 +152,14 @@ public class AssignmentManager : DomainService
 				assignmentTypeId
 			);
 		}
+
+		if (assignmentType.Status == TaskTypeStatus.Inactive)
+		{
+			throw new BusinessException("ShikshaMitra.Assignment:InactiveAssignmentType").WithData(
+				"AssignmentTypeId",
+				assignmentTypeId
+			);
+		}
 	}
 
 	/// <summary>

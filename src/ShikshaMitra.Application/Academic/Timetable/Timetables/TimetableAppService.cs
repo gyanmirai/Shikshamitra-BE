@@ -424,11 +424,6 @@ public class TimetableAppService(
         Guid standardId, GetTimetableManagementInput input)
     {
         var lectureSlotConfig = await lectureSlotConfigRepository.FindByStandardIdAsync(standardId);
-        if (lectureSlotConfig is null)
-        {
-            throw new BusinessException(TimetableErrorCodes.LectureSlotNotCreated)
-                .WithData("message", "Please first create lecture slot for selected standard");
-        }
 
         var standard = await standardRepository.GetAsync(standardId);
         var divisionQueryable = await divisionRepository.GetQueryableAsync();
@@ -449,15 +444,199 @@ public class TimetableAppService(
             .ToList();
 
         var timetables = await timetableRepository.GetByStandardIdAsync(standardId);
+        var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(standardId);
+        var assignedSubjectsQueryable = await assignedSubjectRepository.WithDetailsAsync(a => a.Teachers);
+        var assignedSubjects = await AsyncExecuter.ToListAsync(
+            assignedSubjectsQueryable.Where(a => a.StandardId == standardId));
+        var roomsCount = await roomRepository.GetCountAsync();
+
+        int weeklySlots = 0;
+        if (lectureSlotConfig != null)
+        {
+            foreach (var group in lectureSlotConfig.SlotGroups)
+            {
+                int numDays = group.WeekRangeEnd - group.WeekRangeStart + 1;
+                int lectureSlotsInGroup = group.TimeSlots.Count(ts => ts.SlotType == SlotType.Period);
+                weeklySlots += numDays * lectureSlotsInGroup;
+            }
+        }
+
+        int totalRequiredWeeklyLectures = weeklySlot?.Subjects.Sum(s => s.WeeklyLectures) ?? 0;
+        int subjectsWithoutTeachersCount = assignedSubjects.Count(a => a.Teachers == null || a.Teachers.Count == 0);
+        bool hasRooms = roomsCount > 0;
 
         var items = pagedDivisions.Select(division =>
         {
             var tt = timetables.FirstOrDefault(t => t.DivisionId == division.Id);
+            
+            int filledSlots = tt?.Slots.Count(s => s.SlotType == SlotType.Period && s.Subjects.Count > 0) ?? 0;
+            int subjectCompletedCount = 0;
+            int subjectTotalCount = weeklySlot?.Subjects.Count ?? 0;
+            int teacherAssignedCount = tt?.Slots.Where(s => s.SlotType == SlotType.Period).SelectMany(s => s.Subjects).Count(sub => sub.TeacherId.HasValue) ?? 0;
+            int teacherTotalCount = tt?.Slots.Where(s => s.SlotType == SlotType.Period).SelectMany(s => s.Subjects).Count() ?? 0;
+            int roomAssignedCount = tt?.Slots.Where(s => s.SlotType == SlotType.Period).SelectMany(s => s.Subjects).Count(sub => sub.RoomId.HasValue) ?? 0;
+            int roomTotalCount = tt?.Slots.Where(s => s.SlotType == SlotType.Period).SelectMany(s => s.Subjects).Count() ?? 0;
+            int conflictCount = 0;
+
+            if (tt != null && weeklySlot != null)
+            {
+                var coreOccupied = tt.Slots
+                    .Where(s => s.ElectiveGroupId == null)
+                    .SelectMany(s => s.Subjects)
+                    .GroupBy(ss => ss.SubjectId)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                var electiveOccupied = tt.Slots
+                    .Where(s => s.ElectiveGroupId.HasValue)
+                    .GroupBy(s => s.ElectiveGroupId!.Value)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                foreach (var req in weeklySlot.Subjects)
+                {
+                    int assigned = 0;
+                    if (req.ElectiveGroupId.HasValue)
+                    {
+                        assigned = electiveOccupied.GetValueOrDefault(req.ElectiveGroupId.Value, 0);
+                    }
+                    else if (req.SubjectId.HasValue)
+                    {
+                        assigned = coreOccupied.GetValueOrDefault(req.SubjectId.Value, 0);
+                    }
+
+                    if (assigned == req.WeeklyLectures)
+                    {
+                        subjectCompletedCount++;
+                    }
+                }
+            }
+
+            if (tt != null)
+            {
+                // 1. Same-slot conflicts
+                foreach (var slot in tt.Slots.Where(s => s.SlotType == SlotType.Period))
+                {
+                    var slotTeachers = slot.Subjects.Where(sub => sub.TeacherId.HasValue).Select(sub => sub.TeacherId!.Value).ToList();
+                    if (slotTeachers.Count != slotTeachers.Distinct().Count())
+                    {
+                        conflictCount += (slotTeachers.Count - slotTeachers.Distinct().Count());
+                    }
+
+                    var slotRooms = slot.Subjects.Where(sub => sub.RoomId.HasValue).Select(sub => sub.RoomId!.Value).ToList();
+                    if (slotRooms.Count != slotRooms.Distinct().Count())
+                    {
+                        conflictCount += (slotRooms.Count - slotRooms.Distinct().Count());
+                    }
+                }
+
+                // 2. Inter-division conflicts (only with Published timetables of other divisions)
+                var otherTimetables = timetables
+                    .Where(t => t.DivisionId != tt.DivisionId && t.Status == TimetableStatus.Published)
+                    .ToList();
+
+                foreach (var slot in tt.Slots.Where(s => s.SlotType == SlotType.Period))
+                {
+                    var teacherIds = slot.Subjects.Where(sub => sub.TeacherId.HasValue).Select(sub => sub.TeacherId!.Value).ToList();
+                    var roomIds = slot.Subjects.Where(sub => sub.RoomId.HasValue).Select(sub => sub.RoomId!.Value).ToList();
+
+                    if (teacherIds.Count > 0 || roomIds.Count > 0)
+                    {
+                        foreach (var otherTt in otherTimetables)
+                        {
+                            var otherSlot = otherTt.Slots.FirstOrDefault(s => s.Day == slot.Day && s.StartTime == slot.StartTime && s.EndTime == slot.EndTime);
+                            if (otherSlot != null)
+                            {
+                                var otherTeacherIds = otherSlot.Subjects.Where(sub => sub.TeacherId.HasValue).Select(sub => sub.TeacherId!.Value);
+                                var otherRoomIds = otherSlot.Subjects.Where(sub => sub.RoomId.HasValue).Select(sub => sub.RoomId!.Value);
+
+                                conflictCount += teacherIds.Intersect(otherTeacherIds).Count();
+                                conflictCount += roomIds.Intersect(otherRoomIds).Count();
+                            }
+                        }
+                    }
+                }
+
+                // 3. Subject over-assignment conflicts
+                if (weeklySlot != null)
+                {
+                    var coreOccupied = tt.Slots
+                        .Where(s => s.ElectiveGroupId == null)
+                        .SelectMany(s => s.Subjects)
+                        .GroupBy(ss => ss.SubjectId)
+                        .ToDictionary(g => g.Key, g => g.Count());
+
+                    var electiveOccupied = tt.Slots
+                        .Where(s => s.ElectiveGroupId.HasValue)
+                        .GroupBy(s => s.ElectiveGroupId!.Value)
+                        .ToDictionary(g => g.Key, g => g.Count());
+
+                    foreach (var req in weeklySlot.Subjects)
+                    {
+                        int assigned = 0;
+                        if (req.ElectiveGroupId.HasValue)
+                        {
+                            assigned = electiveOccupied.GetValueOrDefault(req.ElectiveGroupId.Value, 0);
+                        }
+                        else if (req.SubjectId.HasValue)
+                        {
+                            assigned = coreOccupied.GetValueOrDefault(req.SubjectId.Value, 0);
+                        }
+
+                        if (assigned > req.WeeklyLectures)
+                        {
+                            conflictCount += (assigned - req.WeeklyLectures);
+                        }
+                    }
+                }
+            }
+
+            var missingItems = new List<string>();
+            if (lectureSlotConfig == null || weeklySlots == 0)
+            {
+                missingItems.Add("Lecture Slots not configured");
+            }
+            if (weeklySlot == null || weeklySlot.Subjects.Count == 0)
+            {
+                missingItems.Add("Weekly Lectures not configured");
+            }
+            if (assignedSubjects.Count == 0)
+            {
+                missingItems.Add("Subjects not assigned to standard");
+            }
+            if (subjectsWithoutTeachersCount > 0)
+            {
+                missingItems.Add($"{subjectsWithoutTeachersCount} subjects do not have teachers assigned");
+            }
+            if (!hasRooms)
+            {
+                missingItems.Add("Rooms not configured");
+            }
+            if (weeklySlots > 0 && totalRequiredWeeklyLectures > weeklySlots)
+            {
+                missingItems.Add("Available weekly slots are less than required weekly lectures (capacity mismatch)");
+            }
+
+            bool isReady = missingItems.Count == 0;
+            int totalChecklistItems = 6;
+            int readinessScore = (totalChecklistItems - missingItems.Count) * 100 / totalChecklistItems;
+            if (readinessScore < 0) readinessScore = 0;
+
             return new DivisionTimetableStatusDto
             {
                 DivisionId = division.Id,
                 DivisionName = division.Name,
-                Status = tt?.Status ?? TimetableStatus.NotCreated
+                Status = tt?.Status ?? TimetableStatus.NotCreated,
+                WeeklySlots = weeklySlots,
+                FilledSlots = filledSlots,
+                SubjectCompletedCount = subjectCompletedCount,
+                SubjectTotalCount = subjectTotalCount,
+                TeacherAssignedCount = teacherAssignedCount,
+                TeacherTotalCount = teacherTotalCount,
+                RoomAssignedCount = roomAssignedCount,
+                RoomTotalCount = roomTotalCount,
+                ConflictCount = conflictCount,
+                IsReady = isReady,
+                ReadinessScore = readinessScore,
+                MissingItems = missingItems
             };
         }).ToList();
 

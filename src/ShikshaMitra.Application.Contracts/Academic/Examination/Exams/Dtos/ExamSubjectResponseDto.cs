@@ -4,6 +4,7 @@ namespace ShikshaMitra.Academic.Examination.Exams.Dtos;
 
 public class ExamSubjectResponseDto
 {
+    public Guid ExamSubjectId { get; set; }
     public Guid SubjectId { get; set; }
     public string SubjectName { get; set; }
     public string SubjectColor { get; set; }

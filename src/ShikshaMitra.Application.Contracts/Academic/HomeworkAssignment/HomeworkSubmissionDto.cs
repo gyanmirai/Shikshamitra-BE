@@ -22,5 +22,11 @@ public class HomeworkSubmissionDto
 	public string? Feedback { get; set; }
 	public string? Remarks { get; set; }
 	public int Status { get; set; }
+	public string SubmissionStatusLabel { get; set; } = string.Empty;
+	public string EvaluationStatus { get; set; } = string.Empty;
+	public string FeedbackStatus { get; set; } = string.Empty;
+	public decimal? Percentage { get; set; }
 	public string? SubmittedContent { get; set; }
+	public string? SubmittedDocumentUrl { get; set; }
+	public string? OriginalFileName { get; set; }
 }

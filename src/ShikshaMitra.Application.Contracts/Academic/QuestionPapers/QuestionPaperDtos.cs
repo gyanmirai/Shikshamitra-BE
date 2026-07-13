@@ -158,6 +158,12 @@ public class BlueprintBloomRuleDto
 public class BlueprintValidationResultDto
 {
     public bool IsValid { get; set; }
+    public int BalanceScore { get; set; }
+    public decimal AssignedMarks { get; set; }
+    public decimal RemainingMarks { get; set; }
+    public int QuestionCount { get; set; }
+    public int BlockingErrorCount { get; set; }
+    public int WarningCount { get; set; }
     public List<string> Errors { get; set; } = new();
     public List<string> Warnings { get; set; } = new();
 }
@@ -204,4 +210,6 @@ public class QuestionPaperDashboardDto
     public int ApprovedPapers { get; set; }
     public int PublishedPapers { get; set; }
     public int LockedPapers { get; set; }
+    public int NeedsAttention { get; set; }
+    public int MissingQuestions { get; set; }
 }

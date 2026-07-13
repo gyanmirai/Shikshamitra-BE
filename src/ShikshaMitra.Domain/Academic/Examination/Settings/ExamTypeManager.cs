@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Data;
@@ -14,7 +14,20 @@ public class ExamTypeManager(
     IDataFilter dataFilter
 ) : DomainService
 {
-    public async Task<ExamType> CreateAsync(string name, string? description, Guid academicMediumId)
+    public async Task<ExamType> CreateAsync(
+        string name,
+        string? description,
+        Guid academicMediumId,
+        string? category = null,
+        SettingStatus status = SettingStatus.Active,
+        double? defaultTotalMarks = null,
+        double? defaultWeightage = null,
+        bool includedInResult = false,
+        bool marksEntryRequired = false,
+        bool gradeScaleRequired = false,
+        bool allowPracticalOral = false,
+        Guid? defaultGradeScaleId = null
+    )
     {
         Check.NotNullOrWhiteSpace(name, nameof(name));
 
@@ -39,14 +52,51 @@ public class ExamTypeManager(
             existing.DeleterId = null;
             existing.SetName(name);
             existing.SetDescription(description);
+            existing.SetCategory(category);
+            existing.SetStatus(status);
+            existing.SetDefaultTotalMarks(defaultTotalMarks);
+            existing.SetDefaultWeightage(defaultWeightage);
+            existing.SetIncludedInResult(includedInResult);
+            existing.SetMarksEntryRequired(marksEntryRequired);
+            existing.SetGradeScaleRequired(gradeScaleRequired);
+            existing.SetAllowPracticalOral(allowPracticalOral);
+            existing.SetDefaultGradeScaleId(defaultGradeScaleId);
             return await examTypeRepository.UpdateAsync(existing);
         }
 
-        var examType = new ExamType(guidGenerator.Create(), CurrentTenant.Id, name, description, academicMediumId);
+        var examType = new ExamType(
+            guidGenerator.Create(),
+            CurrentTenant.Id,
+            name,
+            description,
+            academicMediumId,
+            category,
+            status,
+            defaultTotalMarks,
+            defaultWeightage,
+            includedInResult,
+            marksEntryRequired,
+            gradeScaleRequired,
+            allowPracticalOral,
+            defaultGradeScaleId
+        );
         return await examTypeRepository.InsertAsync(examType);
     }
 
-    public async Task UpdateAsync(ExamType examType, string name, string? description)
+    public async Task UpdateAsync(
+        ExamType examType,
+        string name,
+        string? description,
+        string? category,
+        SettingStatus status,
+        double? defaultTotalMarks,
+        double? defaultWeightage,
+        bool includedInResult,
+        bool marksEntryRequired,
+        bool gradeScaleRequired,
+        bool allowPracticalOral,
+        Guid? defaultGradeScaleId
+    )
     {
         Check.NotNull(examType, nameof(examType));
         Check.NotNullOrWhiteSpace(name, nameof(name));
@@ -62,6 +112,15 @@ public class ExamTypeManager(
         }
 
         examType.SetDescription(description);
+        examType.SetCategory(category);
+        examType.SetStatus(status);
+        examType.SetDefaultTotalMarks(defaultTotalMarks);
+        examType.SetDefaultWeightage(defaultWeightage);
+        examType.SetIncludedInResult(includedInResult);
+        examType.SetMarksEntryRequired(marksEntryRequired);
+        examType.SetGradeScaleRequired(gradeScaleRequired);
+        examType.SetAllowPracticalOral(allowPracticalOral);
+        examType.SetDefaultGradeScaleId(defaultGradeScaleId);
         await examTypeRepository.UpdateAsync(examType);
     }
 }

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Examination.Exams;
@@ -158,5 +158,40 @@ public class ExamController(
     public async Task<GetExamMarksSummaryResponseDto> GetMarksSummaryAsync([FromQuery] GetExamMarksSummaryInput input)
     {
         return await examAppService.GetMarksSummaryAsync(input);
+    }
+
+    [HttpPost("{examId}/marks/bulk-save")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+    public async Task<MarksWorkflowActionResponseDto> BulkSaveMarksAsync(Guid examId, [FromBody] BulkSaveMarksInputDto input)
+    {
+        return await examAppService.BulkSaveMarksAsync(examId, input);
+    }
+
+    [HttpPost("{examId}/marks/validate")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
+    public async Task<MarksValidationResponseDto> ValidateMarksAsync(Guid examId, [FromQuery] MarksWorkflowActionInput input)
+    {
+        return await examAppService.ValidateMarksAsync(examId, input);
+    }
+
+    [HttpPost("{examId}/marks/request-changes")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+    public async Task<MarksWorkflowActionResponseDto> RequestChangesAsync(Guid examId, [FromBody] RequestChangesInputDto input)
+    {
+        return await examAppService.RequestChangesAsync(examId, input);
+    }
+
+    [HttpPost("{examId}/marks/unlock")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+    public async Task<MarksWorkflowActionResponseDto> UnlockMarksAsync(Guid examId, [FromBody] UnlockWorkflowInputDto input)
+    {
+        return await examAppService.UnlockMarksAsync(examId, input);
+    }
+
+    [HttpGet("{examId}/marks/audit")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
+    public async Task<List<GradeEntryAuditLogDto>> GetAuditLogsAsync(Guid examId, [FromQuery] Guid subjectId, [FromQuery] Guid divisionId)
+    {
+        return await examAppService.GetAuditLogsAsync(examId, subjectId, divisionId);
     }
 }

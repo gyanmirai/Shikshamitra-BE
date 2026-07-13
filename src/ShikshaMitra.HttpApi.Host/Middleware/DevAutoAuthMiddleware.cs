@@ -41,7 +41,7 @@ public class DevAutoAuthMiddleware : ITransientDependency
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (string.Equals(_configuration["DevAutoAuth:Enabled"], "false", StringComparison.OrdinalIgnoreCase))
+        if (!_configuration.GetValue<bool>("DevAutoAuth:Enabled"))
         {
             await _next(context);
             return;

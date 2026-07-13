@@ -31,6 +31,19 @@ namespace ShikshaMitra.Students.Enrollments;
 [TestModule(TestTraits.Modules.Students)]
 public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 {
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Anonymous_Crm_Workspace_Access()
+	{
+		using var anonymousClient = CreateAnonymousClient();
+		anonymousClient.DefaultRequestHeaders.Add("__tenant", TestAuthHandler.TestTenantId);
+
+		var response = await anonymousClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads");
+
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
+	}
+
 	public AdmissionCrmApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
 	{
 	}
@@ -1581,7 +1594,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				IsEnabled = true,
 				ProviderName = "WhatsApp Sandbox",
 				SenderId = "school-main",
-				SettingsJson = "{}"
+				Settings = new AdmissionCrmCommunicationProviderSettingsDto()
 			},
 			JsonOptions);
 		updateProviderResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateProviderResponse.Content.ReadAsStringAsync());
@@ -1680,19 +1693,19 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				IsEnabled = true,
 				ProviderName = "WhatsApp Sandbox",
 				SenderId = "school-main",
-				SettingsJson = JsonSerializer.Serialize(new
+				Settings = new AdmissionCrmCommunicationProviderSettingsDto
 				{
-					adapter = "manual",
-					payloadMode = "envelope",
-					headers = new Dictionary<string, string>
+					Adapter = "manual",
+					PayloadMode = "envelope",
+					Headers = new Dictionary<string, string>
 					{
 						["X-School"] = "admission"
 					},
-					parameters = new Dictionary<string, string>
+					Parameters = new Dictionary<string, string>
 					{
 						["templateLanguage"] = "en"
 					}
-				})
+				}
 			},
 			JsonOptions);
 		manualProviderResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await manualProviderResponse.Content.ReadAsStringAsync());
@@ -1714,21 +1727,11 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				IsEnabled = true,
 				ProviderName = "WhatsApp Sandbox",
 				SenderId = "school-main",
-				SettingsJson = JsonSerializer.Serialize(new { adapter = "unsupported-provider" }),
+				Settings = new AdmissionCrmCommunicationProviderSettingsDto { Adapter = "unsupported-provider" },
 				WebhookUrl = "https://provider.invalid/send"
 			},
 			JsonOptions);
-		unsupportedProviderResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await unsupportedProviderResponse.Content.ReadAsStringAsync());
-
-		var unsupportedDispatchResponse = await Client.PostAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/messages/send-template",
-			new SendAdmissionCrmMessageTemplateDto { TemplateId = template.Id },
-			JsonOptions);
-		unsupportedDispatchResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await unsupportedDispatchResponse.Content.ReadAsStringAsync());
-		var unsupportedDispatchLog = await unsupportedDispatchResponse.Content.ReadFromJsonAsync<AdmissionCrmMessageDeliveryLogDto>(JsonOptions);
-		unsupportedDispatchLog.ShouldNotBeNull();
-		unsupportedDispatchLog.Status.ShouldBe(AdmissionCrmMessageDeliveryLog.FailedStatus);
-		unsupportedDispatchLog.StatusDetails.ShouldContain("not supported");
+		unsupportedProviderResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await unsupportedProviderResponse.Content.ReadAsStringAsync());
 
 		var invalidWebhookProviderResponse = await Client.PutAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int)AdmissionCrmMessageChannel.WhatsApp}",
@@ -1737,22 +1740,11 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				IsEnabled = true,
 				ProviderName = "WhatsApp Sandbox",
 				SenderId = "school-main",
-				SettingsJson = "{}",
+				Settings = new AdmissionCrmCommunicationProviderSettingsDto { Adapter = "webhook" },
 				WebhookUrl = "ftp://provider.invalid/send"
 			},
 			JsonOptions);
-		invalidWebhookProviderResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await invalidWebhookProviderResponse.Content.ReadAsStringAsync());
-
-		var failedDispatchResponse = await Client.PostAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/messages/send-template",
-			new SendAdmissionCrmMessageTemplateDto { TemplateId = template.Id },
-			JsonOptions);
-		failedDispatchResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await failedDispatchResponse.Content.ReadAsStringAsync());
-		var failedDispatchLog = await failedDispatchResponse.Content.ReadFromJsonAsync<AdmissionCrmMessageDeliveryLogDto>(JsonOptions);
-		failedDispatchLog.ShouldNotBeNull();
-		failedDispatchLog.Status.ShouldBe(AdmissionCrmMessageDeliveryLog.FailedStatus);
-		failedDispatchLog.AttemptCount.ShouldBe(1);
-		failedDispatchLog.StatusDetails.ShouldContain("webhook URL is invalid");
+		invalidWebhookProviderResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await invalidWebhookProviderResponse.Content.ReadAsStringAsync());
 
 		var logsResponse = await Client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/delivery-logs?leadId={lead.Id}&status={AdmissionCrmMessageDeliveryLog.QueuedStatus}");
@@ -1784,11 +1776,11 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				IsEnabled = true,
 				ProviderName = "WhatsApp Callback Sandbox",
 				SenderId = "school-main",
-				SettingsJson = JsonSerializer.Serialize(new
+				Settings = new AdmissionCrmCommunicationProviderSettingsDto
 				{
-					adapter = "manual",
-					callbackSecret
-				})
+					Adapter = "manual",
+					CallbackSecret = callbackSecret
+				}
 			},
 			JsonOptions);
 		updateProviderResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateProviderResponse.Content.ReadAsStringAsync());
@@ -1885,18 +1877,18 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				IsEnabled = true,
 				ProviderName = "WhatsApp Mapped Callback Sandbox",
 				SenderId = "school-main",
-				SettingsJson = JsonSerializer.Serialize(new
+				Settings = new AdmissionCrmCommunicationProviderSettingsDto
 				{
-					adapter = "manual",
-					callbackSecret,
-					callbackMappings = new
+					Adapter = "manual",
+					CallbackSecret = callbackSecret,
+					CallbackMappings = new AdmissionCrmCommunicationCallbackMappingsDto
 					{
-						statusPath = "event.status",
-						statusDetailsPath = "event.description",
-						providerMessageIdPath = "message.id",
-						callbackSecretPath = "auth.secret"
+						StatusPath = "event.status",
+						StatusDetailsPath = "event.description",
+						ProviderMessageIdPath = "message.id",
+						CallbackSecretPath = "auth.secret"
 					}
-				})
+				}
 			},
 			JsonOptions);
 		mappedProviderResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await mappedProviderResponse.Content.ReadAsStringAsync());
@@ -3080,7 +3072,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				IsEnabled = true,
 				ProviderName = "SMS Sandbox",
 				SenderId = "school-sms",
-				SettingsJson = "{}"
+				Settings = new AdmissionCrmCommunicationProviderSettingsDto()
 			},
 			JsonOptions);
 		providerResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await providerResponse.Content.ReadAsStringAsync());

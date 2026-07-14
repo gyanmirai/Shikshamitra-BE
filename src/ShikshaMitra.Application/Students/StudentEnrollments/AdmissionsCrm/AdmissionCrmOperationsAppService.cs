@@ -335,6 +335,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			AdmissionCrmOperationsQueueType.UnassignedExam => BuildUnassignedExamQueue(data, leads),
 			AdmissionCrmOperationsQueueType.CapacityConflict => BuildCapacityConflictQueue(data, leads),
 			AdmissionCrmOperationsQueueType.NoShow => BuildNoShowQueue(data, leads),
+			AdmissionCrmOperationsQueueType.RegistrationInvitationPending => BuildRegistrationInvitationPendingQueue(data),
 			AdmissionCrmOperationsQueueType.ExpiringRegistrationLink => BuildExpiringLinkQueue(data, leads),
 			AdmissionCrmOperationsQueueType.IncompleteRegistration => BuildIncompleteRegistrationQueue(data, leads),
 			AdmissionCrmOperationsQueueType.RejectedDocument => BuildDocumentQueue(data, leads, AdmissionCrmApplicantDocumentStatus.Rejected),
@@ -372,6 +373,32 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		return data.Leads
 			.Where(x => x.Stage == AdmissionInquiryStage.ExamReady && !scheduledLeadIds.Contains(x.Id))
 			.Select(lead => CreateItem(lead, $"exam:{lead.Id}", "Entrance exam needs assignment", "No exam slot has been assigned.", "Exam ready", null, AgeDays(lead.LastActivityTime, data.Now), true))
+			.ToList();
+	}
+
+	private static List<AdmissionCrmOperationsQueueItemDto> BuildRegistrationInvitationPendingQueue(
+		OperationsData data)
+	{
+		var registeredLeadIds = data.Registrations
+			.Where(x => x.Status != AdmissionCrmRegistrationStatus.Revoked)
+			.Select(x => x.LeadId)
+			.ToHashSet();
+
+		return data.Leads
+			.Where(x => x.Stage == AdmissionInquiryStage.Eligible && !registeredLeadIds.Contains(x.Id))
+			.Select(lead =>
+			{
+				var ageDays = AgeDays(lead.LastActivityTime, data.Now);
+				return CreateItem(
+					lead,
+					$"registration-invitation:{lead.Id}",
+					"Registration invitation is pending",
+					"No current registration form is available. Choose a published template to continue.",
+					"Ready to invite",
+					null,
+					ageDays,
+					ageDays >= RegistrationAbandonmentWarningDays);
+			})
 			.ToList();
 	}
 
@@ -697,6 +724,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			AdmissionCrmOperationsQueueType.UnassignedExam => "Unassigned exams",
 			AdmissionCrmOperationsQueueType.CapacityConflict => "Capacity conflicts",
 			AdmissionCrmOperationsQueueType.NoShow => "No-shows and overdue attendance",
+			AdmissionCrmOperationsQueueType.RegistrationInvitationPending => "Eligible applicants awaiting registration",
 			AdmissionCrmOperationsQueueType.ExpiringRegistrationLink => "Expiring registration links",
 			AdmissionCrmOperationsQueueType.IncompleteRegistration => "Incomplete registrations",
 			AdmissionCrmOperationsQueueType.RejectedDocument => "Rejected documents",

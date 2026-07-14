@@ -111,8 +111,14 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			filter.DivisionId
 		);
 
-		// Create a dictionary for quick lookup
-		var submissionDict = submissions.ToDictionary(s => s.StudentId);
+		// Use the latest row if legacy data already contains duplicate submissions.
+		var submissionDict = submissions
+			.GroupBy(s => s.StudentId)
+			.ToDictionary(
+				g => g.Key,
+				g => g.OrderByDescending(s => s.SubmissionDate ?? DateTimeOffset.MinValue)
+					.ThenByDescending(s => s.CreationTime)
+					.First());
 
 		// 5. Resolve homework type name: prefer new HomeworkType, fall back to legacy HomeworkAssignmentType
 		var homeworkTypeName = homework.HomeworkType?.Name
@@ -255,12 +261,14 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			throw new BusinessException("ShikshaMitra.Homework:NotFound")
 				.WithData("HomeworkId", homeworkId);
 		}
+		EnsureHomeworkOpenForEvaluation(homework);
 
 		// 2. Validate student exists
 		var student = await _studentRepository.GetAsync(studentId);
 
 		// 3. Validate feedback data
 		_submissionManager.ValidateFeedback(input.Marks, input.TotalMarks);
+		EnsureFeedbackStatusAllowed(input);
 
 		// 4. Get or create submission
 		var submission = await _submissionRepository.GetSubmissionByStudentAndHomeworkAsync(
@@ -270,44 +278,12 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		if (submission == null)
 		{
-			// Resolve divisionId and dueDate — V1 uses entity fields, V2 uses DivisionSchedules
-			Guid divisionId;
-			DateTime dueDate;
-
-			if (homework.DivisionId.HasValue && homework.DueDate.HasValue)
-			{
-				// V1 homework
-				divisionId = homework.DivisionId.Value;
-				dueDate = homework.DueDate.Value;
-			}
-			else
-			{
-				// V2 homework — look up the schedule for the student's division
-				var studentDivisionId = student.DivisionId
-					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
-						.WithData("Message", "Student has no division assigned");
-
-				var schedule = homework.DivisionSchedules
-					?.FirstOrDefault(s => s.DivisionId == studentDivisionId)
-					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
-						.WithData("Message", "Homework is not assigned to the student's division");
-
-				divisionId = schedule.DivisionId;
-				dueDate = schedule.DueDate;
-			}
-
-			// Create new submission
-			submission = await _submissionManager.CreateOrGetSubmissionAsync(
-				homeworkId,
-				studentId,
-				divisionId,
-				dueDate,
-				CurrentTenant.Id
-			);
+			throw new BusinessException("ShikshaMitra.Submission:CannotEvaluateMissingSubmission")
+				.WithData("StudentId", studentId)
+				.WithData("HomeworkId", homeworkId);
 		}
 
-		// Set SubmissionDate if not yet recorded (InPersonSubmission / OnlineText paths)
-		submission.SubmissionDate ??= DateTimeOffset.UtcNow;
+		EnsureSubmissionCanBeEvaluated(submission);
 
 		// 5. Update feedback
 		submission.UpdateFeedback(
@@ -361,6 +337,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			throw new BusinessException("ShikshaMitra.Homework:NotFound")
 				.WithData("HomeworkId", homeworkId);
 		}
+		EnsureHomeworkOpenForEvaluation(homework);
 
 		// 2. Get student to resolve division for V2 homeworks
 		var student = await _studentRepository.GetAsync(studentId);
@@ -373,44 +350,12 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		if (submission == null)
 		{
-			// Resolve divisionId and dueDate — V1 uses entity fields, V2 uses DivisionSchedules
-			Guid divisionId;
-			DateTime dueDate;
-
-			if (homework.DivisionId.HasValue && homework.DueDate.HasValue)
-			{
-				// V1 homework
-				divisionId = homework.DivisionId.Value;
-				dueDate = homework.DueDate.Value;
-			}
-			else
-			{
-				// V2 homework — look up the schedule for the student's division
-				var studentDivisionId = student.DivisionId
-					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
-						.WithData("Message", "Student has no division assigned");
-
-				var schedule = homework.DivisionSchedules
-					?.FirstOrDefault(s => s.DivisionId == studentDivisionId)
-					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
-						.WithData("Message", "Homework is not assigned to the student's division");
-
-				divisionId = schedule.DivisionId;
-				dueDate = schedule.DueDate;
-			}
-
-			// Create new submission
-			submission = await _submissionManager.CreateOrGetSubmissionAsync(
-				homeworkId,
-				studentId,
-				divisionId,
-				dueDate,
-				CurrentTenant.Id
-			);
+			throw new BusinessException("ShikshaMitra.Submission:CannotUpdateMissingSubmission")
+				.WithData("StudentId", studentId)
+				.WithData("HomeworkId", homeworkId);
 		}
 
-		// Set SubmissionDate if not yet recorded (InPersonSubmission / OnlineText paths)
-		submission.SubmissionDate ??= DateTimeOffset.UtcNow;
+		EnsureStatusTransitionAllowed(submission, input.Status);
 
 		// 3. Update status
 		submission.UpdateStatus(input.Status);
@@ -423,5 +368,67 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		{
 			Message = L["ShikshaMitra.Homework:StatusUpdatedSuccessfully"]
 		};
+	}
+
+	private static void EnsureHomeworkOpenForEvaluation(HomeworkAssignmentEntity homework)
+	{
+		var published = homework.Status == HomeworkStatus.Published || homework.IsPublished || homework.HasPublishedDivisions;
+		if (!published)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:NotPublished");
+		}
+
+		if (homework.Status == HomeworkStatus.Closed)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:Closed");
+		}
+	}
+
+	private static void EnsureFeedbackStatusAllowed(GiveFeedbackDto input)
+	{
+		if (input.Status == SubmissionStatus.Reviewed &&
+			(!input.Marks.HasValue || !input.TotalMarks.HasValue || string.IsNullOrWhiteSpace(input.Feedback)))
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ReviewRequiresMarksAndFeedback");
+		}
+
+		if (input.Status == SubmissionStatus.NeedsReview && string.IsNullOrWhiteSpace(input.Remarks))
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ReviewChangeReasonRequired");
+		}
+
+		if (input.Status == SubmissionStatus.Excused && string.IsNullOrWhiteSpace(input.Remarks))
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ExcuseReasonRequired");
+		}
+	}
+
+	private static void EnsureSubmissionCanBeEvaluated(StudentSubmissionEntity submission)
+	{
+		if (submission.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:NotSubmittedYet")
+				.WithData("SubmissionId", submission.Id);
+		}
+	}
+
+	private static void EnsureStatusTransitionAllowed(StudentSubmissionEntity submission, SubmissionStatus requestedStatus)
+	{
+		if (submission.Status == SubmissionStatus.Reviewed && requestedStatus != SubmissionStatus.Reviewed)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ReviewedSubmissionLocked")
+				.WithData("SubmissionId", submission.Id);
+		}
+
+		if (requestedStatus == SubmissionStatus.Reviewed)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:UseFeedbackToReview");
+		}
+
+		if (requestedStatus == SubmissionStatus.NotSubmitted && submission.SubmissionDate.HasValue)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:CannotMarkSubmittedWorkNotSubmitted")
+				.WithData("SubmissionId", submission.Id);
+		}
 	}
 }

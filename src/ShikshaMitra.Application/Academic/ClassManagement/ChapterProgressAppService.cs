@@ -244,6 +244,23 @@ public class ChapterProgressAppService(
 		UpdateChapterProgressDto input
 	)
 	{
+		if (chapterId == Guid.Empty)
+		{
+			throw new BusinessException("ClassManagement:ChapterRequired");
+		}
+
+		if (input.DivisionId == Guid.Empty)
+		{
+			throw new BusinessException("ClassManagement:DivisionRequired");
+		}
+
+		var chapterExists = await chapterRepository.AnyAsync(chapter => chapter.Id == chapterId);
+		if (!chapterExists)
+		{
+			throw new BusinessException("ClassManagement:ChapterNotFound")
+				.WithData("ChapterId", chapterId);
+		}
+
 		logger.LogInformation(
 			"Updating progress for chapter {ChapterId} in division {DivisionId} to {Progress}%",
 			chapterId, input.DivisionId, input.Progress
@@ -267,6 +284,9 @@ public class ChapterProgressAppService(
 
 					if (progress != null)
 					{
+						EnsureProgressUpdateAllowed(progress.Progress, input.Progress, input.Description);
+						var previousProgress = progress.Progress;
+
 						// Update existing record
 						progress.UpdateProgress(input.Progress, input.Description);
 						await progressRepository.UpdateAsync(progress);
@@ -275,9 +295,13 @@ public class ChapterProgressAppService(
 							"Updated existing progress for chapter {ChapterId}, division {DivisionId}",
 							chapterId, input.DivisionId
 						);
+
+						await InsertProgressLogAsync(chapterId, input.DivisionId, previousProgress, input.Progress, input.Description);
 					}
 					else
 					{
+						EnsureProgressUpdateAllowed(0, input.Progress, input.Description);
+
 						// Create new progress record
 						var newProgress = new Syllabus.ChapterProgress(
 							guidGenerator.Create(),
@@ -291,17 +315,9 @@ public class ChapterProgressAppService(
 							"Created new progress for chapter {ChapterId}, division {DivisionId}",
 							chapterId, input.DivisionId
 						);
-					}
 
-					// Insert audit log entry for this change
-					var log = new ChapterProgressLog(
-						guidGenerator.Create(),
-						chapterId,
-						input.DivisionId,
-						input.Progress,
-						GetCurrentUserDisplayName()
-					);
-					await progressLogRepository.InsertAsync(log);
+						await InsertProgressLogAsync(chapterId, input.DivisionId, 0, input.Progress, input.Description);
+					}
 
 					break; // Success - exit retry loop
 				}
@@ -357,6 +373,60 @@ public class ChapterProgressAppService(
 	/// Determines if the exception is a duplicate key/unique constraint violation.
 	/// Handles database-specific exception types using type checking, error codes, and message patterns.
 	/// </summary>
+	private static void EnsureProgressUpdateAllowed(int currentProgress, int requestedProgress, string? description)
+	{
+		if (requestedProgress == currentProgress)
+		{
+			throw new BusinessException("ClassManagement:ProgressNoChange")
+				.WithData("CurrentProgress", currentProgress)
+				.WithData("RequestedProgress", requestedProgress);
+		}
+
+		if (requestedProgress < currentProgress && string.IsNullOrWhiteSpace(description))
+		{
+			throw new BusinessException("ClassManagement:ProgressDecreaseReasonRequired")
+				.WithData("CurrentProgress", currentProgress)
+				.WithData("RequestedProgress", requestedProgress);
+		}
+
+		if (requestedProgress == 100 && string.IsNullOrWhiteSpace(description))
+		{
+			throw new BusinessException("ClassManagement:CompletionEvidenceRequired")
+				.WithData("RequestedProgress", requestedProgress);
+		}
+
+		if (string.IsNullOrWhiteSpace(description))
+		{
+			throw new BusinessException("ClassManagement:ProgressReasonRequired")
+				.WithData("CurrentProgress", currentProgress)
+				.WithData("RequestedProgress", requestedProgress);
+		}
+	}
+
+	private async Task InsertProgressLogAsync(
+		Guid chapterId,
+		Guid divisionId,
+		int previousProgress,
+		int requestedProgress,
+		string? reason)
+	{
+		var log = new ChapterProgressLog(
+			guidGenerator.Create(),
+			chapterId,
+			divisionId,
+			requestedProgress,
+			BuildProgressLogActorSummary(previousProgress, requestedProgress, reason)
+		);
+		await progressLogRepository.InsertAsync(log);
+	}
+
+	private string BuildProgressLogActorSummary(int previousProgress, int requestedProgress, string? reason)
+	{
+		var displayName = GetCurrentUserDisplayName();
+		var normalizedReason = string.Join(' ', (reason ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+		return $"{displayName} | {previousProgress}% -> {requestedProgress}% | Reason: {normalizedReason}";
+	}
+
 	private string GetCurrentUserDisplayName()
 	{
 		if (!string.IsNullOrWhiteSpace(CurrentUser.Name))

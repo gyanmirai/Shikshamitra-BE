@@ -70,6 +70,20 @@ public class HomeworkController : AbpControllerBase
     }
 
     /// <summary>
+    /// GET api/academic/homeworks/dashboard?academicMediumId={id}
+    /// Returns action dashboard counts for publish, due, overdue, and evaluation queues.
+    /// </summary>
+    [HttpGet("dashboard")]
+    [ProducesResponseType(typeof(LearningTaskDashboardDto), 200)]
+    public async Task<LearningTaskDashboardDto> GetDashboard(
+        [FromQuery] Guid academicMediumId,
+        [FromQuery] LearningTaskDashboardFilterDto input
+    )
+    {
+        return await _service.GetDashboardAsync(academicMediumId, input);
+    }
+
+    /// <summary>
     /// GET api/academic/homeworks/{homeworkId}
     /// Returns full homework details.
     /// </summary>
@@ -143,6 +157,34 @@ public class HomeworkController : AbpControllerBase
     )
     {
         return await _service.ChangeStatusAsync(homeworkId, input);
+    }
+
+    /// <summary>
+    /// POST api/academic/homeworks/{homeworkId}/reminder
+    /// Queues a reminder for published target divisions and returns the impacted counts.
+    /// </summary>
+    [HttpPost("{homeworkId:guid}/reminder")]
+    [ProducesResponseType(typeof(LearningTaskReminderResponseDto), 200)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(409)]
+    public async Task<LearningTaskReminderResponseDto> SendReminder(
+        Guid homeworkId,
+        [FromBody] LearningTaskReminderRequestDto input
+    )
+    {
+        return await _service.SendReminderAsync(homeworkId, input);
+    }
+
+    /// <summary>
+    /// GET api/academic/homeworks/{homeworkId}/history
+    /// Returns human-readable lifecycle history for audit/review panels.
+    /// </summary>
+    [HttpGet("{homeworkId:guid}/history")]
+    [ProducesResponseType(typeof(LearningTaskHistoryDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<LearningTaskHistoryDto> GetHistory(Guid homeworkId)
+    {
+        return await _service.GetHistoryAsync(homeworkId);
     }
 
     private async Task<string?> UploadAttachmentAsync(IFormFile? file, string prefix)

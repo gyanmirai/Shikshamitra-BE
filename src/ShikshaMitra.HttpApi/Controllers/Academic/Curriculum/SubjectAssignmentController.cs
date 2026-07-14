@@ -208,4 +208,14 @@ public class SubjectAssignmentController(
 		await subjectAssignmentAppService.ArchiveAsync(assignmentId);
 		return Result.Success();
 	}
+
+	/// <summary>Restores an archived subject assignment as Draft after conflict checks</summary>
+	[HttpPost("subject-assignments/{assignmentId}/restore")]
+	[ProducesResponseType(200)]
+	[ProducesResponseType(404)]
+	public async Task<Result> RestoreAsync([FromRoute] Guid assignmentId)
+	{
+		await subjectAssignmentAppService.RestoreAsync(assignmentId);
+		return Result.Success();
+	}
 }

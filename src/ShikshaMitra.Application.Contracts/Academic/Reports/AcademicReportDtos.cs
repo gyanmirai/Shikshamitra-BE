@@ -47,6 +47,8 @@ public class AcademicReportFilterDto
 public class AcademicReportPreviewDto
 {
     public string ReportType { get; set; } = string.Empty;
+    public DateTime GeneratedAtUtc { get; set; }
+    public string FilterSummary { get; set; } = string.Empty;
     public int TotalCount { get; set; }
     public int Page { get; set; }
     public int PageSize { get; set; }

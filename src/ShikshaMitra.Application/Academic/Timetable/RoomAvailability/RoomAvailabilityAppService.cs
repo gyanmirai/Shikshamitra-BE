@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -50,7 +51,12 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
     public async Task<List<RoomAvailabilityDto>> GetAvailabilityAsync(RoomAvailabilityFilterDto input)
     {
+        Logger.LogInformation($"[RoomAvailability] CurrentTenant.Id: {CurrentTenant.Id}");
         var rooms = await _roomRepository.GetListAsync();
+        foreach (var r in rooms)
+        {
+            Logger.LogInformation($"[RoomAvailability] Room: {r.RoomName}, TenantId: {r.TenantId}, BuildingId: {r.BuildingId}");
+        }
 
         if (input.BuildingId.HasValue)
         {

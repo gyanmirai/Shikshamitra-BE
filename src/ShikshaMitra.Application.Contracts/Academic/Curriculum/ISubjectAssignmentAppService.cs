@@ -104,4 +104,9 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// Archives a subject assignment (sets status to Archived without deleting)
 	/// </summary>
 	Task ArchiveAsync(Guid assignmentId);
+
+	/// <summary>
+	/// Restores an archived subject assignment as Draft after conflict checks
+	/// </summary>
+	Task RestoreAsync(Guid assignmentId);
 }

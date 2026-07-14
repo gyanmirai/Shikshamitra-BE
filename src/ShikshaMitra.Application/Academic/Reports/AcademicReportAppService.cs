@@ -34,6 +34,7 @@ public class AcademicReportAppService(
     public async Task<AcademicReportPreviewDto> PreviewAsync(AcademicReportRequestDto input)
     {
         var userId = CurrentUser.Id ?? throw new BusinessException("Academic:Reports:050003");
+        input = reportGenerator.NormalizeAndValidateRequest(input, exportAllRows: false);
         return await reportGenerator.GenerateAsync(input, userId, CurrentTenant.Id, exportAllRows: false);
     }
 
@@ -41,6 +42,7 @@ public class AcademicReportAppService(
     {
         var tenantId = CurrentTenant.Id;
         var userId = CurrentUser.Id ?? throw new BusinessException("Academic:Reports:050003");
+        input = reportGenerator.NormalizeAndValidateRequest(input, exportAllRows: true);
         var jobId = guidGenerator.Create();
         var expiresAt = DateTime.UtcNow.AddDays(7);
 
@@ -83,14 +85,15 @@ public class AcademicReportAppService(
 
         return jobs
             .OrderByDescending(x => x.CreationTime)
-            .Select(MapJob)
+            .Take(100)
+            .Select(job => MapJob(job, includeRequestJson: false))
             .ToList();
     }
 
     public async Task<AcademicReportExportJobDto> GetExportAsync(Guid jobId)
     {
         var job = await GetAuthorizedJobAsync(jobId);
-        return MapJob(job);
+        return MapJob(job, includeRequestJson: true);
     }
 
     public async Task<AcademicReportDownloadDto> DownloadExportAsync(Guid jobId)
@@ -118,7 +121,7 @@ public class AcademicReportAppService(
             : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
         var extension = job.Format.Equals(AcademicReportFormat.Pdf, StringComparison.OrdinalIgnoreCase) ? "pdf" : "xlsx";
-        var fileName = $"{job.ReportType.Replace(" ", "_")}_{job.CreationTime:yyyyMMddHHmmss}.{extension}";
+        var fileName = BuildDownloadFileName(job.ReportType, job.CreationTime, extension);
 
         return new AcademicReportDownloadDto
         {
@@ -141,7 +144,7 @@ public class AcademicReportAppService(
         return job;
     }
 
-    private static AcademicReportExportJobDto MapJob(ShikshaMitra.HR.Reports.HrReportExportJob job)
+    private static AcademicReportExportJobDto MapJob(ShikshaMitra.HR.Reports.HrReportExportJob job, bool includeRequestJson = true)
     {
         var format = job.Format ?? "excel";
         var extension = format.Equals(AcademicReportFormat.Pdf, StringComparison.OrdinalIgnoreCase) ? "pdf" : "xlsx";
@@ -153,15 +156,29 @@ public class AcademicReportAppService(
             Format = job.Format ?? "N/A",
             Status = job.Status,
             FileName = job.Status == HrReportExportStatus.Completed
-                       ? $"{job.ReportType.Replace(" ", "_")}_{job.CreationTime:yyyyMMddHHmmss}.{extension}"
+                       ? BuildDownloadFileName(job.ReportType, job.CreationTime, extension)
                        : null,
             ErrorMessage = job.ErrorMessage,
             CreationTime = job.CreationTime,
             StartedAt = job.StartedAt,
             CompletedAt = job.CompletedAt,
             ExpiresAt = job.ExpiresAt,
-            RequestJson = job.RequestJson
+            RequestJson = includeRequestJson ? job.RequestJson : null
         };
+    }
+
+    private static string BuildDownloadFileName(string reportType, DateTime creationTime, string extension)
+    {
+        var safeName = new string((reportType ?? "Academic_Report")
+            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '_')
+            .ToArray());
+        safeName = string.Join("_", safeName.Split('_', StringSplitOptions.RemoveEmptyEntries));
+        if (string.IsNullOrWhiteSpace(safeName))
+        {
+            safeName = "Academic_Report";
+        }
+
+        return $"{safeName}_{creationTime:yyyyMMddHHmmss}.{extension}";
     }
 }
 

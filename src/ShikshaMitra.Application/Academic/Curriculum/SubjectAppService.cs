@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -181,7 +181,7 @@ public class SubjectAppService(
 
 		return new SubjectDuplicateCheckResultDto
 		{
-			HasExactDuplicate = matches.Any(x => x.MatchType == "Exact" && x.Status == SubjectMasterStatus.Active),
+			HasExactDuplicate = matches.Any(x => x.MatchType == "Exact"),
 			HasSimilarDuplicate = matches.Any(x => x.MatchType == "Similar"),
 			Matches = matches
 		};
@@ -230,6 +230,22 @@ public class SubjectAppService(
 	public async Task<SubjectDto> RestoreAsync(Guid id)
 	{
 		var subject = await subjectRepository.GetAsync(id);
+
+		// Check if another active/inactive subject with the same name already exists
+		var normalizedName = subject.Name.Trim().ToUpperInvariant();
+		var duplicateActiveSubject = await subjectRepository.FindAsync(s =>
+			s.Name.ToUpper() == normalizedName
+			&& s.EducationMediumId == subject.EducationMediumId
+			&& s.Id != id
+			&& s.Status != SubjectMasterStatus.Archived);
+
+		if (duplicateActiveSubject != null)
+		{
+			throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectName)
+				.WithData("Name", subject.Name)
+				.WithData("message", $"Cannot restore '{subject.Name}' because another active/inactive subject with the same name already exists.");
+		}
+
 		subject.Restore();
 		await subjectRepository.UpdateAsync(subject);
 		return await MapSubjectAsync(subject);

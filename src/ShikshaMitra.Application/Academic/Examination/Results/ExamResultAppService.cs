@@ -54,11 +54,12 @@ public class ExamResultAppService(
             FixTarget = exam.ExamSubjects.Any() ? null : "exam-setup"
         });
 
-        // Check 2: All marks verified (Verified or Published workflow state)
+        // Check 2: All marks published/locked
         var workflowStates = await workflowStateRepository.GetListAsync(
             s => s.ExamId == examId && s.DivisionId == divisionId);
+        var examSubjectIds = exam.ExamSubjects.Select(s => s.SubjectId).ToHashSet();
         var verifiedSubjectIds = workflowStates
-            .Where(s => s.Status == ExamMarksWorkflowStatus.Verified || s.Status == ExamMarksWorkflowStatus.Published)
+            .Where(s => s.Status == ExamMarksWorkflowStatus.Published && examSubjectIds.Contains(s.SubjectId))
             .Select(s => s.SubjectId)
             .ToHashSet();
         var verifiedCount = verifiedSubjectIds.Count;
@@ -78,10 +79,10 @@ public class ExamResultAppService(
         var allMarksVerified = totalSubjects > 0 && verifiedCount >= totalSubjects;
         checks.Add(new ReadinessCheckDto
         {
-            Label = "Marks verified for all subjects",
+            Label = "Marks published and locked for all subjects",
             Passed = allMarksVerified,
             Hint = verifiedCount < totalSubjects
-                ? $"{totalSubjects - verifiedCount} subject(s) not yet verified."
+                ? $"{totalSubjects - verifiedCount} subject(s) not yet published."
                 : null,
             Severity = allMarksVerified ? "success" : "blocker",
             FixTarget = allMarksVerified ? null : "grade-entry"
@@ -91,13 +92,23 @@ public class ExamResultAppService(
         var marksCount = await examMarkRepository.CountAsync(
             m => m.ExamId == examId && m.DivisionId == divisionId);
         var hasMarks = marksCount > 0;
+        var enrolledStudents = await studentRepository.GetListAsync(s =>
+            s.DivisionId == divisionId &&
+            s.Status == StudentLifeCycleStatusEnum.Enrolled &&
+            !s.IsDeleted);
+        var expectedMarkRows = enrolledStudents.Count * totalSubjects;
+        var hasAllMarkRows = totalSubjects == 0 || marksCount >= expectedMarkRows;
         checks.Add(new ReadinessCheckDto
         {
             Label = "Marks data available",
-            Passed = hasMarks,
-            Hint = marksCount == 0 ? "No marks found for this division." : null,
-            Severity = hasMarks ? "success" : "blocker",
-            FixTarget = hasMarks ? null : "grade-entry"
+            Passed = hasMarks && hasAllMarkRows,
+            Hint = marksCount == 0
+                ? "No marks found for this division."
+                : !hasAllMarkRows
+                    ? $"{Math.Max(expectedMarkRows - marksCount, 0)} student-subject mark row(s) are missing."
+                    : null,
+            Severity = hasMarks && hasAllMarkRows ? "success" : "blocker",
+            FixTarget = hasMarks && hasAllMarkRows ? null : "grade-entry"
         });
 
         // Check 4: Grading scale assigned to at least one subject
@@ -142,12 +153,27 @@ public class ExamResultAppService(
     public async Task<ResultHeaderDto> GenerateAsync(GenerateResultRequestDto input)
     {
         var exam = await examRepository.GetAsync(input.ExamId, includeDetails: true);
+        if (exam.ExamDivisions.All(x => x.DivisionId != input.DivisionId))
+            throw new UserFriendlyException("Selected division does not belong to this exam.");
 
-        // Guard: Frozen without ForceRegenerate
         var existing = await resultHeaderRepository.FirstOrDefaultAsync(
             h => h.ExamId == input.ExamId && h.DivisionId == input.DivisionId);
-        if (existing?.Status == ExamResultStatus.Frozen && !input.ForceRegenerate)
-            throw new UserFriendlyException("Result is frozen. Set ForceRegenerate=true to override.");
+        if (existing != null)
+        {
+            if (existing.Status is ExamResultStatus.Published or ExamResultStatus.Frozen)
+            {
+                throw new UserFriendlyException("Published or frozen results cannot be regenerated directly. Use the unlock/correction workflow first.");
+            }
+
+            if (!input.ForceRegenerate)
+            {
+                throw new UserFriendlyException("Result is already generated. Set ForceRegenerate=true to regenerate the draft result.");
+            }
+        }
+
+        var readiness = await GetReadinessAsync(input.ExamId, input.DivisionId);
+        if (!readiness.IsReady)
+            throw new UserFriendlyException("Result cannot be generated until all blocking readiness checks pass.");
 
         // Load grading scale from the overall exam
         var scaleId = exam.GradingScaleId;
@@ -170,24 +196,44 @@ public class ExamResultAppService(
         // Load marks
         var marks = await examMarkRepository.GetListAsync(
             m => m.ExamId == input.ExamId && m.DivisionId == input.DivisionId);
+        if (marks.Count == 0)
+            throw new UserFriendlyException("No marks found for this exam and division.");
+
+        var enrolledStudents = await studentRepository.GetListAsync(s =>
+            s.DivisionId == input.DivisionId &&
+            s.Status == StudentLifeCycleStatusEnum.Enrolled &&
+            !s.IsDeleted);
+        if (enrolledStudents.Count == 0)
+            throw new UserFriendlyException("No enrolled students found for this division.");
+
+        var enrolledStudentIds = enrolledStudents.Select(s => s.Id).ToHashSet();
+        marks = marks.Where(m => enrolledStudentIds.Contains(m.StudentId)).ToList();
+        if (marks.Count == 0)
+            throw new UserFriendlyException("No valid marks found for currently enrolled students in this division.");
 
         // Compute per-student results
         var userId = CurrentUser.GetId();
         var tenantId = CurrentTenant.Id;
 
-        var studentResults = marks
+        var marksByStudent = marks
             .GroupBy(m => m.StudentId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var studentResults = enrolledStudents
             .Select(g =>
             {
-                var isAbsent = g.All(m => m.IsAbsent);
-                var obtained = isAbsent ? 0.0 : g.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
+                marksByStudent.TryGetValue(g.Id, out var studentMarks);
+                studentMarks ??= new List<ExamMark>();
+
+                var isAbsent = studentMarks.Count == 0 || studentMarks.All(m => m.IsAbsent);
+                var obtained = isAbsent ? 0.0 : studentMarks.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
                 var pct = totalMaxMarks > 0 ? Math.Round(obtained / totalMaxMarks * 100, 2) : 0;
                 var grade = isAbsent ? "—" : ComputeGrade(obtained, totalMaxMarks, gradeRanges, scaleTotal);
 
                 // Check if they failed any subject (missing mark, absent, or obtained < passing marks)
                 var failedAnySubject = !isAbsent && exam.ExamSubjects.Any(s =>
                 {
-                    var mark = g.FirstOrDefault(m => m.SubjectId == s.SubjectId);
+                    var mark = studentMarks.FirstOrDefault(m => m.SubjectId == s.SubjectId);
                     if (mark == null || mark.IsAbsent) return true;
                     var passingMarksVal = s.PassingMarks ?? ((s.TotalMarks ?? 100.0) * 0.33);
                     return (mark.MarksObtained ?? 0) < passingMarksVal;
@@ -199,7 +245,7 @@ public class ExamResultAppService(
 
                 return new
                 {
-                    StudentId = g.Key,
+                    StudentId = g.Id,
                     TotalObtainedMarks = obtained,
                     Percentage = pct,
                     Grade = grade,
@@ -286,6 +332,12 @@ public class ExamResultAppService(
     {
         var header = await resultHeaderRepository.GetAsync(input.ResultHeaderId);
         var userId = CurrentUser.GetId();
+        if (header.Status != ExamResultStatus.Generated)
+            throw new UserFriendlyException("Only generated results can be published.");
+
+        var details = await resultDetailRepository.GetListAsync(d => d.ResultHeaderId == header.Id);
+        if (details.Count == 0)
+            throw new UserFriendlyException("Result has no student details to publish.");
 
         header.Publish(userId);
         await resultHeaderRepository.UpdateAsync(header, autoSave: false);
@@ -295,7 +347,6 @@ public class ExamResultAppService(
             "Published", userId, null, CurrentTenant.Id);
         await resultAuditLogRepository.InsertAsync(log, autoSave: true);
 
-        var details = await resultDetailRepository.GetListAsync(d => d.ResultHeaderId == header.Id);
         return MapToHeaderDto(header, details);
     }
 

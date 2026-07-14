@@ -44,6 +44,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<AssignedSubjectChapter> SubjectChapters { get; set; }
     public DbSet<ChapterProgress> ChapterProgresses { get; set; }
     public DbSet<ChapterProgressLog> ChapterProgressLogs { get; set; }
+    public DbSet<LearningResource> LearningResources { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Homework & Assignments
@@ -56,6 +57,10 @@ public partial class ShikshaMitraDbContext
     public DbSet<HomeworkDivisionSchedule> HomeworkDivisionSchedules { get; set; }
     public DbSet<AssignmentEntity> Assignments { get; set; }
     public DbSet<AssignmentDivisionSchedule> AssignmentDivisionSchedules { get; set; }
+    public DbSet<AssessmentRubric> AssessmentRubrics { get; set; }
+    public DbSet<AssessmentRubricCriterion> AssessmentRubricCriteria { get; set; }
+    public DbSet<RubricEvaluation> RubricEvaluations { get; set; }
+    public DbSet<RubricCriterionScore> RubricCriterionScores { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Examination

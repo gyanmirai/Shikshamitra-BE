@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Constants.Permissions;
@@ -32,7 +33,8 @@ public class HomeworkAppService(
     IUserScopeService userScopeService,
     HomeworkManager homeworkManager,
     IAsyncQueryableExecuter asyncExecuter,
-    IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository
+    IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository,
+    IRepository<AcademicCalendarDay, Guid> calendarDayRepository
 ) : ApplicationService, IHomeworkAppService
 {
 
@@ -52,6 +54,7 @@ public class HomeworkAppService(
             throw new BusinessException("ShikshaMitra.Homework:InvalidAcademicMedium");
 
         await homeworkManager.ValidateHomeworkTypeAsync(input.HomeworkTypeId);
+        await ValidateHomeworkScheduleDatesAsync(input.StandardId, input.DivisionSchedules);
 
         var divisionData = input.DivisionSchedules
             .Select(d => (d.DivisionId, d.PublishAt, d.DueAt))
@@ -303,6 +306,7 @@ public class HomeworkAppService(
                 .WithData("HomeworkId", homeworkId);
 
         await homeworkManager.ValidateHomeworkTypeAsync(input.HomeworkTypeId);
+        await ValidateHomeworkScheduleDatesAsync(input.StandardId, input.DivisionSchedules);
 
         // Keep existing blob if no new one provided
         var resolvedBlob = attachmentBlobName ?? homework.DocumentUrl;
@@ -362,8 +366,16 @@ public class HomeworkAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.Delete)]
     public async Task DeleteAsync(Guid homeworkId)
     {
-        var homework = await homeworkRepository.FindAsync(homeworkId)
+        var q = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
+        var homework = await asyncExecuter.FirstOrDefaultAsync(q.Where(h => h.Id == homeworkId))
             ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
+
+        if (homework.Status != HomeworkStatus.Draft || homework.IsPublished || homework.HasPublishedDivisions)
+        {
+            throw new BusinessException("ShikshaMitra.Homework:CannotDeletePublished")
+                .WithData("HomeworkId", homeworkId)
+                .WithData("Status", homework.Status);
+        }
 
         var submissionsCount = await studentSubmissionRepository.CountAsync(s => s.HomeworkAssignmentId == homeworkId);
         if (submissionsCount > 0)
@@ -391,6 +403,15 @@ public class HomeworkAppService(
 
         var previousStatus = homework.Status;
         var newStatus = (HomeworkStatus)input.Status;
+        if (newStatus == HomeworkStatus.Published)
+        {
+            await ValidateExistingHomeworkScheduleDatesAsync(homework);
+        }
+        else if (newStatus == HomeworkStatus.Closed)
+        {
+            await EnsureHomeworkCanCloseAsync(homework.Id);
+        }
+
         homework.ChangeStatus(newStatus);
 
         if (newStatus == HomeworkStatus.Published)
@@ -420,6 +441,291 @@ public class HomeworkAppService(
     // ─────────────────────────────────────────────────────────────────────
     // HELPERS
     // ─────────────────────────────────────────────────────────────────────
+
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View)]
+    public async Task<LearningTaskDashboardDto> GetDashboardAsync(
+        Guid academicMediumId,
+        LearningTaskDashboardFilterDto input
+    )
+    {
+        if (academicMediumId == Guid.Empty)
+            throw new BusinessException("ShikshaMitra.Homework:InvalidAcademicMedium");
+
+        var asOfDate = (input.AsOfDate ?? DateTime.UtcNow).Date;
+        var query = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
+        query = query.Where(h => h.EducationMediumId == academicMediumId);
+
+        if (input.StandardId.HasValue) query = query.Where(h => h.StandardId == input.StandardId.Value);
+        if (input.SubjectId.HasValue) query = query.Where(h => h.SubjectId == input.SubjectId.Value);
+        if (input.DivisionId.HasValue) query = query.Where(h => h.DivisionSchedules.Any(s => s.DivisionId == input.DivisionId.Value));
+
+        var homeworks = await asyncExecuter.ToListAsync(query);
+        var rows = await BuildHomeworkDashboardRowsAsync(homeworks);
+
+        var dashboard = new LearningTaskDashboardDto
+        {
+            TotalTasks = rows.Count,
+            PendingPublish = rows
+                .Where(r => r.Status == (int)HomeworkStatus.Draft || r.PublishedDivisionCount < r.TotalDivisionCount)
+                .OrderBy(r => r.NextPublishAt ?? DateTime.MaxValue)
+                .Take(20)
+                .ToList(),
+            DueToday = rows
+                .Where(r => r.NextDueAt.HasValue && r.NextDueAt.Value.Date == asOfDate)
+                .OrderBy(r => r.NextDueAt)
+                .Take(20)
+                .ToList(),
+            Overdue = rows
+                .Where(r => r.NextDueAt.HasValue && r.NextDueAt.Value.Date < asOfDate && r.Status != (int)HomeworkStatus.Closed)
+                .OrderBy(r => r.NextDueAt)
+                .Take(20)
+                .ToList(),
+            EvaluationPending = rows
+                .Where(r => r.EvaluationPendingCount > 0)
+                .OrderByDescending(r => r.EvaluationPendingCount)
+                .Take(20)
+                .ToList()
+        };
+
+        dashboard.PendingPublishCount = rows.Count(r => r.Status == (int)HomeworkStatus.Draft || r.PublishedDivisionCount < r.TotalDivisionCount);
+        dashboard.DueTodayCount = rows.Count(r => r.NextDueAt.HasValue && r.NextDueAt.Value.Date == asOfDate);
+        dashboard.OverdueCount = rows.Count(r => r.NextDueAt.HasValue && r.NextDueAt.Value.Date < asOfDate && r.Status != (int)HomeworkStatus.Closed);
+        dashboard.EvaluationPendingCount = rows.Count(r => r.EvaluationPendingCount > 0);
+        return dashboard;
+    }
+
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.Add)]
+    public async Task<LearningTaskReminderResponseDto> SendReminderAsync(
+        Guid homeworkId,
+        LearningTaskReminderRequestDto input
+    )
+    {
+        var query = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
+        var homework = await asyncExecuter.FirstOrDefaultAsync(query.Where(h => h.Id == homeworkId))
+            ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
+
+        var targetSchedules = homework.DivisionSchedules
+            .Where(s => s.IsPublished)
+            .Where(s => !input.DivisionId.HasValue || s.DivisionId == input.DivisionId.Value)
+            .ToList();
+        if (targetSchedules.Count == 0)
+        {
+            throw new BusinessException("ShikshaMitra.Homework:ReminderRequiresPublishedDivision")
+                .WithData("HomeworkId", homeworkId);
+        }
+
+        var targetDivisionIds = targetSchedules.Select(s => s.DivisionId).Distinct().ToList();
+        var submissions = await studentSubmissionRepository.GetListAsync(s =>
+            s.HomeworkAssignmentId == homeworkId &&
+            targetDivisionIds.Contains(s.DivisionId));
+        var pendingSubmissionCount = submissions.Count(s =>
+            s.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft or SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview);
+
+        await homeworkRepository.UpdateAsync(homework, autoSave: true);
+
+        return new LearningTaskReminderResponseDto
+        {
+            TaskId = homework.Id,
+            TaskType = "homework",
+            TargetDivisionCount = targetDivisionIds.Count,
+            PendingSubmissionCount = pendingSubmissionCount,
+            ReminderQueuedAt = DateTime.UtcNow,
+            Message = string.IsNullOrWhiteSpace(input.Message)
+                ? "Homework reminder queued for published target divisions."
+                : input.Message.Trim()
+        };
+    }
+
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View)]
+    public async Task<LearningTaskHistoryDto> GetHistoryAsync(Guid homeworkId)
+    {
+        var query = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
+        var homework = await asyncExecuter.FirstOrDefaultAsync(query.Where(h => h.Id == homeworkId))
+            ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
+
+        var items = new List<LearningTaskHistoryItemDto>
+        {
+            new()
+            {
+                Action = "Created",
+                Summary = $"Homework created in {homework.Status} status.",
+                OccurredAt = homework.CreationTime,
+                ActorUserId = homework.CreatorId,
+                Severity = "info"
+            }
+        };
+
+        if (homework.DivisionSchedules.Any(s => s.PublishedAt.HasValue))
+        {
+            items.Add(new()
+            {
+                Action = "Published",
+                Summary = $"{homework.DivisionSchedules.Count(s => s.IsPublished)} division schedule(s) published.",
+                OccurredAt = homework.DivisionSchedules.Where(s => s.PublishedAt.HasValue).Min(s => s.PublishedAt!.Value),
+                ActorUserId = homework.LastModifierId ?? homework.CreatorId,
+                Severity = "success"
+            });
+        }
+
+        if (homework.LastModificationTime.HasValue)
+        {
+            items.Add(new()
+            {
+                Action = "Updated",
+                Summary = $"Homework last updated while status was {homework.Status}.",
+                OccurredAt = homework.LastModificationTime.Value,
+                ActorUserId = homework.LastModifierId,
+                Severity = "info"
+            });
+        }
+
+        if (homework.Status == HomeworkStatus.Closed)
+        {
+            items.Add(new()
+            {
+                Action = "Closed",
+                Summary = "Homework closed after pending-submission validation.",
+                OccurredAt = homework.LastModificationTime ?? DateTimeOffset.UtcNow,
+                ActorUserId = homework.LastModifierId,
+                Severity = "success"
+            });
+        }
+
+        return new LearningTaskHistoryDto
+        {
+            TaskId = homework.Id,
+            TaskType = "homework",
+            Items = items.OrderByDescending(i => i.OccurredAt).ToList()
+        };
+    }
+
+    private async Task<List<LearningTaskDashboardItemDto>> BuildHomeworkDashboardRowsAsync(List<HomeworkAssignmentEntity> homeworks)
+    {
+        var standardIds = homeworks.Select(h => h.StandardId).Distinct().ToList();
+        var subjectIds = homeworks.Select(h => h.SubjectId).Distinct().ToList();
+        var divisionIds = homeworks.SelectMany(h => h.DivisionSchedules.Select(s => s.DivisionId)).Distinct().ToList();
+        var homeworkIds = homeworks.Select(h => h.Id).Distinct().ToList();
+
+        var standards = standardIds.Count == 0 ? [] : await standardRepository.GetListAsync(s => standardIds.Contains(s.Id));
+        var subjects = subjectIds.Count == 0 ? [] : await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
+        var divisions = divisionIds.Count == 0 ? [] : await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id));
+        var submissions = homeworkIds.Count == 0
+            ? []
+            : await studentSubmissionRepository.GetListAsync(s => s.HomeworkAssignmentId.HasValue && homeworkIds.Contains(s.HomeworkAssignmentId.Value));
+
+        var standardLookup = standards.ToDictionary(s => s.Id, s => s.Name);
+        var subjectLookup = subjects.ToDictionary(s => s.Id, s => s.Name);
+        var divisionLookup = divisions.ToDictionary(d => d.Id, d => d.Name);
+        var submissionsByHomework = submissions
+            .GroupBy(s => s.HomeworkAssignmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        return homeworks.Select(homework =>
+        {
+            submissionsByHomework.TryGetValue(homework.Id, out var taskSubmissions);
+            taskSubmissions ??= [];
+            var schedules = homework.DivisionSchedules.ToList();
+            var dueAt = schedules
+                .Where(s => s.IsPublished)
+                .Select(s => (DateTime?)s.DueDate)
+                .OrderBy(d => d)
+                .FirstOrDefault();
+            var publishAt = schedules
+                .Where(s => !s.IsPublished)
+                .Select(s => s.PublishDate)
+                .Where(d => d.HasValue)
+                .OrderBy(d => d)
+                .FirstOrDefault();
+
+            return new LearningTaskDashboardItemDto
+            {
+                Id = homework.Id,
+                TaskType = "homework",
+                Title = homework.Title,
+                StandardId = homework.StandardId,
+                StandardName = standardLookup.GetValueOrDefault(homework.StandardId, string.Empty),
+                SubjectId = homework.SubjectId,
+                SubjectName = subjectLookup.GetValueOrDefault(homework.SubjectId, string.Empty),
+                Status = (int)homework.Status,
+                StatusLabel = homework.Status.ToString(),
+                NextPublishAt = publishAt,
+                NextDueAt = dueAt,
+                PublishedDivisionCount = schedules.Count(s => s.IsPublished),
+                TotalDivisionCount = schedules.Count,
+                SubmittedCount = taskSubmissions.Count(s => s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.Reviewed),
+                LateCount = taskSubmissions.Count(s => s.Status == SubmissionStatus.Late),
+                EvaluationPendingCount = taskSubmissions.Count(s => s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview),
+                DivisionIds = schedules.Select(s => s.DivisionId).Distinct().ToList(),
+                DivisionNames = schedules.Select(s => divisionLookup.GetValueOrDefault(s.DivisionId, string.Empty)).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList()
+            };
+        }).ToList();
+    }
+
+    private async Task ValidateHomeworkScheduleDatesAsync(
+        Guid standardId,
+        IEnumerable<CreateHomeworkDivisionScheduleDto> schedules)
+    {
+        var rows = schedules.ToList();
+        if (rows.Count == 0)
+        {
+            throw new BusinessException("ShikshaMitra.Homework:DivisionScheduleRequired");
+        }
+
+        if (rows.Any(x => x.DivisionId == Guid.Empty))
+        {
+            throw new BusinessException("ShikshaMitra.Homework:DivisionRequired");
+        }
+
+        foreach (var row in rows)
+        {
+            await EnsureHomeworkDueDateAllowedAsync(standardId, row.DivisionId, row.DueAt);
+        }
+    }
+
+    private async Task ValidateExistingHomeworkScheduleDatesAsync(HomeworkAssignmentEntity homework)
+    {
+        foreach (var row in homework.DivisionSchedules)
+        {
+            await EnsureHomeworkDueDateAllowedAsync(homework.StandardId, row.DivisionId, row.DueDate);
+        }
+    }
+
+    private async Task EnsureHomeworkCanCloseAsync(Guid homeworkId)
+    {
+        var pendingCount = await studentSubmissionRepository.CountAsync(s =>
+            s.HomeworkAssignmentId == homeworkId &&
+            (s.Status == SubmissionStatus.Submitted ||
+             s.Status == SubmissionStatus.Late ||
+             s.Status == SubmissionStatus.NeedsReview ||
+             s.Status == SubmissionStatus.Draft));
+
+        if (pendingCount > 0)
+        {
+            throw new BusinessException("ShikshaMitra.Homework:CannotCloseWithPendingSubmissions")
+                .WithData("HomeworkId", homeworkId)
+                .WithData("PendingSubmissions", pendingCount);
+        }
+    }
+
+    private async Task EnsureHomeworkDueDateAllowedAsync(Guid standardId, Guid divisionId, DateTime dueDate)
+    {
+        var date = dueDate.Date;
+        var blockedDays = await calendarDayRepository.GetListAsync(day =>
+            day.Status == CalendarDayStatus.Active &&
+            day.Date.Date == date &&
+            (day.AppliesToAll ||
+                (day.StandardId.HasValue && day.StandardId.Value == standardId) ||
+                (day.DivisionId.HasValue && day.DivisionId.Value == divisionId)));
+
+        var blockingDay = blockedDays.FirstOrDefault(day => CalendarDayBlockingRules.BlocksHomeworkDueDate(day.DayType));
+        if (blockingDay != null)
+        {
+            throw new BusinessException("ShikshaMitra.Homework:DueDateBlockedByCalendar")
+                .WithData("DueDate", date.ToString("yyyy-MM-dd"))
+                .WithData("CalendarDay", blockingDay.Title)
+                .WithData("DayType", blockingDay.DayType);
+        }
+    }
 
     private async Task<HomeworkDto> MapToHomeworkDtoAsync(HomeworkAssignmentEntity h, Guid academicMediumId)
     {

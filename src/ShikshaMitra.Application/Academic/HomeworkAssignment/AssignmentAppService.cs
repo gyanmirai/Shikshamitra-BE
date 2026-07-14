@@ -406,6 +406,11 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 			operation: nameof(PublishAsync));
 
 		// 2. Publish all divisions
+		if (assignment.Status == AssignmentStatus.Draft)
+		{
+			assignment.ChangeStatus(AssignmentStatus.Published);
+		}
+
 		assignment.PublishAll();
 
 		// 3. Save changes
@@ -432,7 +437,9 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 	public async Task<MessageResponseDto> DeleteAsync(Guid id, Guid academicMediumId)
 	{
 		// 1. Get assignment
-		var assignment = await _assignmentRepository.GetAsync(id);
+		var q = await _assignmentRepository.WithDetailsAsync(a => a.DivisionSchedules);
+		var assignment = await _asyncExecuter.FirstOrDefaultAsync(q.Where(a => a.Id == id))
+			?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", id);
 
 		if (assignment.EducationMediumId != academicMediumId)
 		{
@@ -441,6 +448,13 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(
 			assignment,
 			operation: nameof(DeleteAsync));
+
+		if (assignment.Status != AssignmentStatus.Draft || assignment.HasPublishedDivisions)
+		{
+			throw new BusinessException("ShikshaMitra.Assignment:CannotDeletePublished")
+				.WithData("AssignmentId", id)
+				.WithData("Status", assignment.Status);
+		}
 
 		var submissionsCount = await _studentSubmissionRepository.CountAsync(s => s.AssignmentId == id);
 		if (submissionsCount > 0)

@@ -70,6 +70,20 @@ public class AssignmentController : AbpControllerBase
     }
 
     /// <summary>
+    /// GET api/academic/assignments/dashboard?academicMediumId={id}
+    /// Returns action dashboard counts for publish, due, overdue, and evaluation queues.
+    /// </summary>
+    [HttpGet("dashboard")]
+    [ProducesResponseType(typeof(LearningTaskDashboardDto), 200)]
+    public async Task<LearningTaskDashboardDto> GetDashboard(
+        [FromQuery] Guid academicMediumId,
+        [FromQuery] LearningTaskDashboardFilterDto input
+    )
+    {
+        return await _service.GetDashboardAsync(academicMediumId, input);
+    }
+
+    /// <summary>
     /// GET api/academic/assignments/{assignmentId}
     /// Returns full assignment details.
     /// </summary>
@@ -139,6 +153,34 @@ public class AssignmentController : AbpControllerBase
     )
     {
         return await _service.ChangeStatusAsync(assignmentId, input);
+    }
+
+    /// <summary>
+    /// POST api/academic/assignments/{assignmentId}/reminder
+    /// Queues a reminder for published target divisions and returns the impacted counts.
+    /// </summary>
+    [HttpPost("{assignmentId:guid}/reminder")]
+    [ProducesResponseType(typeof(LearningTaskReminderResponseDto), 200)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(409)]
+    public async Task<LearningTaskReminderResponseDto> SendReminder(
+        Guid assignmentId,
+        [FromBody] LearningTaskReminderRequestDto input
+    )
+    {
+        return await _service.SendReminderAsync(assignmentId, input);
+    }
+
+    /// <summary>
+    /// GET api/academic/assignments/{assignmentId}/history
+    /// Returns human-readable lifecycle history for audit/review panels.
+    /// </summary>
+    [HttpGet("{assignmentId:guid}/history")]
+    [ProducesResponseType(typeof(LearningTaskHistoryDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<LearningTaskHistoryDto> GetHistory(Guid assignmentId)
+    {
+        return await _service.GetHistoryAsync(assignmentId);
     }
 
     private async Task<string?> UploadAttachmentAsync(IFormFile? file)

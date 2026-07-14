@@ -184,6 +184,11 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void SetPrimaryTeacher(Guid teacherId)
 	{
+		if (teacherId == Guid.Empty)
+		{
+			throw new ArgumentException("Primary teacher is required.", nameof(teacherId));
+		}
+
 		// find the current primary teacher
 		var currentPrimary = Teachers.FirstOrDefault(t =>
 			t.TeacherType == SubjectTeacherType.Primary
@@ -191,6 +196,13 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (currentPrimary != null)
 		{
 			Teachers.Remove(currentPrimary);
+		}
+		var duplicateSecondary = Teachers
+			.Where(t => t.TeacherType == SubjectTeacherType.Secondary && t.TeacherId == teacherId)
+			.ToList();
+		foreach (var teacher in duplicateSecondary)
+		{
+			Teachers.Remove(teacher);
 		}
 		Teachers.Add(new AssignedSubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Primary, TenantId));
 	}
@@ -208,6 +220,15 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void SetSecondaryTeachers(IEnumerable<Guid> teacherIds)
 	{
+		var primaryTeacherId = Teachers
+			.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary)
+			?.TeacherId;
+		var secondaryTeacherIds = teacherIds
+			.Where(id => id != Guid.Empty)
+			.Where(id => !primaryTeacherId.HasValue || id != primaryTeacherId.Value)
+			.Distinct()
+			.ToList();
+
 		// find the current secondary teachers
 		var currentSecondary = Teachers
 			.Where(t => t.TeacherType == SubjectTeacherType.Secondary)
@@ -216,7 +237,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			Teachers.Remove(teacher);
 		}
-		foreach (var teacherId in teacherIds)
+		foreach (var teacherId in secondaryTeacherIds)
 		{
 			Teachers.Add(
 				new AssignedSubjectTeacher(Id, SubjectId, teacherId, SubjectTeacherType.Secondary, TenantId)

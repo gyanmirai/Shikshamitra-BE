@@ -43,6 +43,52 @@ public class AcademicReportGenerator(
     IRepository<AssignmentEntity, Guid> assignmentRepository,
     IRepository<GradingScale, Guid> gradingScaleRepository) : ITransientDependency
 {
+    private const int MaxPreviewPageSize = 500;
+    private const int MaxFilterIds = 250;
+    private static readonly HashSet<string> KnownReportTypes = typeof(AcademicReportTypes)
+        .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+        .Where(field => field.FieldType == typeof(string))
+        .Select(field => (string)field.GetValue(null)!)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    public AcademicReportRequestDto NormalizeAndValidateRequest(AcademicReportRequestDto request, bool exportAllRows)
+    {
+        if (request == null)
+        {
+            throw new BusinessException("Academic:Reports:RequestRequired");
+        }
+
+        request.ReportType = request.ReportType?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(request.ReportType) || !KnownReportTypes.Contains(request.ReportType))
+        {
+            throw new BusinessException("Academic:Reports:UnknownReportType")
+                .WithData("ReportType", request.ReportType);
+        }
+
+        request.Format = string.Equals(request.Format, AcademicReportFormat.Pdf, StringComparison.OrdinalIgnoreCase)
+            ? AcademicReportFormat.Pdf
+            : AcademicReportFormat.Excel;
+
+        request.Page = request.Page <= 0 ? 1 : request.Page;
+        if (request.PageSize <= 0)
+        {
+            request.PageSize = 50;
+        }
+
+        if (!exportAllRows && request.PageSize > MaxPreviewPageSize)
+        {
+            throw new BusinessException("Academic:Reports:PreviewPageSizeTooLarge")
+                .WithData("MaxPageSize", MaxPreviewPageSize);
+        }
+
+        request.Filters ??= new AcademicReportFilterDto();
+        ValidateDateRange(request.Filters);
+        ValidateFilterIdCounts(request.Filters);
+        ValidateMarksRange(request.Filters);
+
+        return request;
+    }
+
     public Task<AcademicReportOptionsDto> GetOptionsAsync(Guid userId, Guid? tenantId)
     {
         var dto = new AcademicReportOptionsDto
@@ -141,9 +187,12 @@ public class AcademicReportGenerator(
 
     public async Task<AcademicReportPreviewDto> GenerateAsync(AcademicReportRequestDto request, Guid userId, Guid? tenantId, bool exportAllRows)
     {
+        request = NormalizeAndValidateRequest(request, exportAllRows);
         var payload = new AcademicReportPreviewDto
         {
             ReportType = request.ReportType,
+            GeneratedAtUtc = DateTime.UtcNow,
+            FilterSummary = BuildFilterSummary(request.Filters),
             NormalizedFilters = request.Filters
         };
 
@@ -310,8 +359,88 @@ public class AcademicReportGenerator(
                 return await BuildClasswiseOverallHomeworkAssignmentReportAsync(request, payload, exportAllRows);
 
             default:
-                return await BuildChapterProgressReportAsync(query, request, payload, exportAllRows);
+                throw new BusinessException("Academic:Reports:UnknownReportType")
+                    .WithData("ReportType", request.ReportType);
         }
+    }
+
+    private static void ValidateDateRange(AcademicReportFilterDto filters)
+    {
+        if (filters.FromDate.HasValue && filters.ToDate.HasValue && filters.FromDate.Value.Date > filters.ToDate.Value.Date)
+        {
+            throw new BusinessException("Academic:Reports:InvalidDateRange")
+                .WithData("FromDate", filters.FromDate.Value.ToString("yyyy-MM-dd"))
+                .WithData("ToDate", filters.ToDate.Value.ToString("yyyy-MM-dd"));
+        }
+
+        if (filters.FromDate.HasValue && filters.ToDate.HasValue &&
+            (filters.ToDate.Value.Date - filters.FromDate.Value.Date).TotalDays > 370)
+        {
+            throw new BusinessException("Academic:Reports:DateRangeTooLarge")
+                .WithData("MaxDays", 370);
+        }
+    }
+
+    private static void ValidateFilterIdCounts(AcademicReportFilterDto filters)
+    {
+        EnsureFilterIdCount(filters.ClassIds, nameof(filters.ClassIds));
+        EnsureFilterIdCount(filters.DivisionIds, nameof(filters.DivisionIds));
+        EnsureFilterIdCount(filters.SubjectIds, nameof(filters.SubjectIds));
+        EnsureFilterIdCount(filters.TeacherIds, nameof(filters.TeacherIds));
+        EnsureFilterIdCount(filters.RoomIds, nameof(filters.RoomIds));
+        EnsureFilterIdCount(filters.StudentIds, nameof(filters.StudentIds));
+        EnsureFilterIdCount(filters.AssignmentIds, nameof(filters.AssignmentIds));
+        EnsureFilterIdCount(filters.ChapterIds, nameof(filters.ChapterIds));
+    }
+
+    private static void EnsureFilterIdCount(List<Guid>? ids, string filterName)
+    {
+        if (ids is { Count: > MaxFilterIds })
+        {
+            throw new BusinessException("Academic:Reports:TooManyFilterValues")
+                .WithData("Filter", filterName)
+                .WithData("MaxCount", MaxFilterIds);
+        }
+    }
+
+    private static void ValidateMarksRange(AcademicReportFilterDto filters)
+    {
+        if (filters.MinMarks.HasValue && filters.MinMarks.Value < 0)
+        {
+            throw new BusinessException("Academic:Reports:InvalidMarksRange")
+                .WithData("MinMarks", filters.MinMarks);
+        }
+
+        if (filters.MaxMarks.HasValue && filters.MaxMarks.Value < 0)
+        {
+            throw new BusinessException("Academic:Reports:InvalidMarksRange")
+                .WithData("MaxMarks", filters.MaxMarks);
+        }
+
+        if (filters.MinMarks.HasValue && filters.MaxMarks.HasValue && filters.MinMarks.Value > filters.MaxMarks.Value)
+        {
+            throw new BusinessException("Academic:Reports:InvalidMarksRange")
+                .WithData("MinMarks", filters.MinMarks)
+                .WithData("MaxMarks", filters.MaxMarks);
+        }
+    }
+
+    private static string BuildFilterSummary(AcademicReportFilterDto filters)
+    {
+        var parts = new List<string>();
+        if (filters.AcademicYearId.HasValue) parts.Add($"AcademicYear={filters.AcademicYearId}");
+        if (filters.ClassIds is { Count: > 0 }) parts.Add($"Classes={filters.ClassIds.Count}");
+        if (filters.DivisionIds is { Count: > 0 }) parts.Add($"Divisions={filters.DivisionIds.Count}");
+        if (filters.SubjectIds is { Count: > 0 }) parts.Add($"Subjects={filters.SubjectIds.Count}");
+        if (filters.TeacherIds is { Count: > 0 }) parts.Add($"Teachers={filters.TeacherIds.Count}");
+        if (filters.StudentIds is { Count: > 0 }) parts.Add($"Students={filters.StudentIds.Count}");
+        if (filters.ExamId.HasValue) parts.Add($"Exam={filters.ExamId}");
+        if (filters.FromDate.HasValue || filters.ToDate.HasValue)
+        {
+            parts.Add($"Date={filters.FromDate?.ToString("yyyy-MM-dd") ?? "*"}..{filters.ToDate?.ToString("yyyy-MM-dd") ?? "*"}");
+        }
+
+        return parts.Count == 0 ? "No filters" : string.Join("; ", parts);
     }
 
     private string GetChapterStatus(DateTimeOffset start, DateTimeOffset end)

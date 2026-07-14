@@ -74,7 +74,8 @@ public class QuestionBankItem : FullAuditedAggregateRoot<Guid>, IMultiTenant
         ReviewComment = comment;
     }
 
-    public static string Normalize(string text) => text.Trim().ToLowerInvariant();
+    public static string Normalize(string text) =>
+        string.Join(" ", text.Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
 }
 
 public class QuestionOption : FullAuditedEntity<Guid>

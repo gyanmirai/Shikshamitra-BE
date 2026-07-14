@@ -367,6 +367,10 @@ public class TimetableAppService(
                 standardId,
                 divisionId);
         }
+        else
+        {
+            EnsureTimetableEditable(timetable);
+        }
 
         timetable.ClearSlots();
 
@@ -402,6 +406,7 @@ public class TimetableAppService(
 
         if (input.Status == TimetableStatus.Published)
         {
+            await EnsureTimetableReadyToPublishAsync(timetable);
             timetable.Publish();
         }
         else
@@ -666,6 +671,7 @@ public class TimetableAppService(
         var timetable = await timetableRepository.FindByStandardAndDivisionAsync(
             input.StandardId, input.DivisionId)
             ?? throw new BusinessException(TimetableErrorCodes.TimetableNotFound);
+        EnsureTimetableEditable(timetable);
 
         var slot = timetable.FindSlot(day, startTime, endTime)
             ?? throw new BusinessException(TimetableErrorCodes.TimetableSlotNotFound);
@@ -693,6 +699,7 @@ public class TimetableAppService(
         var timetable = await timetableRepository.FindByStandardAndDivisionAsync(
             input.StandardId, input.DivisionId)
             ?? throw new BusinessException(TimetableErrorCodes.TimetableNotFound);
+        EnsureTimetableEditable(timetable);
 
         var slot = timetable.FindSlot(day, startTime, endTime)
             ?? throw new BusinessException(TimetableErrorCodes.TimetableSlotNotFound);
@@ -704,6 +711,222 @@ public class TimetableAppService(
         }
 
         await timetableRepository.UpdateAsync(timetable);
+    }
+
+    private static void EnsureTimetableEditable(Timetable timetable)
+    {
+        if (timetable.Status == TimetableStatus.Published)
+        {
+            throw new BusinessException("Academic:Timetable:PublishedTimetableLocked")
+                .WithData("StandardId", timetable.StandardId)
+                .WithData("DivisionId", timetable.DivisionId)
+                .WithData("message", "Published timetable cannot be edited directly. Create a new draft/change workflow before changing slots, teachers, or rooms.");
+        }
+    }
+
+    private async Task EnsureTimetableReadyToPublishAsync(Timetable timetable)
+    {
+        var lectureSlotConfig = await lectureSlotConfigRepository.FindByStandardIdAsync(timetable.StandardId);
+        if (lectureSlotConfig == null || lectureSlotConfig.SlotGroups.Count == 0)
+        {
+            throw new BusinessException(TimetableErrorCodes.LectureSlotConfigNotFound)
+                .WithData("StandardId", timetable.StandardId);
+        }
+
+        var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(timetable.StandardId);
+        if (weeklySlot == null || weeklySlot.Subjects.Count == 0)
+        {
+            throw new BusinessException(TimetableErrorCodes.WeeklyLectureSlotNotFound)
+                .WithData("StandardId", timetable.StandardId);
+        }
+
+        var periodSlots = timetable.Slots
+            .Where(s => s.SlotType == SlotType.Period)
+            .ToList();
+        if (periodSlots.Count == 0)
+        {
+            throw new BusinessException("Academic:Timetable:NoTeachingSlots")
+                .WithData("StandardId", timetable.StandardId)
+                .WithData("DivisionId", timetable.DivisionId);
+        }
+
+        EnsureNoDuplicateTimetableSlots(periodSlots);
+        EnsureNoDuplicateTeacherOrRoomInsideSlot(periodSlots);
+        EnsureEveryTeachingSubjectHasTeacherAndRoom(periodSlots);
+        await EnsureNoPublishedTeacherOrRoomConflictsAsync(timetable, periodSlots);
+        EnsureWeeklyLectureCountsMatch(timetable, periodSlots, weeklySlot);
+    }
+
+    private static void EnsureNoDuplicateTimetableSlots(List<TimetableSlot> periodSlots)
+    {
+        var duplicateSlot = periodSlots
+            .GroupBy(s => new { s.Day, s.StartTime, s.EndTime })
+            .FirstOrDefault(g => g.Count() > 1);
+
+        if (duplicateSlot != null)
+        {
+            throw new BusinessException(TimetableErrorCodes.InvalidSlotConfiguration)
+                .WithData("Day", duplicateSlot.Key.Day)
+                .WithData("StartTime", duplicateSlot.Key.StartTime)
+                .WithData("EndTime", duplicateSlot.Key.EndTime)
+                .WithData("message", "Duplicate teaching slot found in the timetable.");
+        }
+    }
+
+    private static void EnsureNoDuplicateTeacherOrRoomInsideSlot(List<TimetableSlot> periodSlots)
+    {
+        foreach (var slot in periodSlots)
+        {
+            var teacherIds = slot.Subjects
+                .Where(s => s.TeacherId.HasValue)
+                .Select(s => s.TeacherId!.Value)
+                .ToList();
+            var duplicateTeacher = teacherIds.GroupBy(id => id).FirstOrDefault(g => g.Count() > 1);
+            if (duplicateTeacher != null)
+            {
+                throw new BusinessException(TimetableErrorCodes.TeacherConflict)
+                    .WithData("TeacherId", duplicateTeacher.Key)
+                    .WithData("Day", slot.Day)
+                    .WithData("StartTime", slot.StartTime)
+                    .WithData("EndTime", slot.EndTime);
+            }
+
+            var roomIds = slot.Subjects
+                .Where(s => s.RoomId.HasValue)
+                .Select(s => s.RoomId!.Value)
+                .ToList();
+            var duplicateRoom = roomIds.GroupBy(id => id).FirstOrDefault(g => g.Count() > 1);
+            if (duplicateRoom != null)
+            {
+                throw new BusinessException(TimetableErrorCodes.RoomConflict)
+                    .WithData("RoomId", duplicateRoom.Key)
+                    .WithData("Day", slot.Day)
+                    .WithData("StartTime", slot.StartTime)
+                    .WithData("EndTime", slot.EndTime);
+            }
+        }
+    }
+
+    private static void EnsureEveryTeachingSubjectHasTeacherAndRoom(List<TimetableSlot> periodSlots)
+    {
+        var missingTeacher = periodSlots.FirstOrDefault(s => s.Subjects.Any(subject => !subject.TeacherId.HasValue));
+        if (missingTeacher != null)
+        {
+            throw new BusinessException("Academic:Timetable:TeacherRequiredBeforePublish")
+                .WithData("Day", missingTeacher.Day)
+                .WithData("StartTime", missingTeacher.StartTime)
+                .WithData("EndTime", missingTeacher.EndTime);
+        }
+
+        var missingRoom = periodSlots.FirstOrDefault(s => s.Subjects.Any(subject => !subject.RoomId.HasValue));
+        if (missingRoom != null)
+        {
+            throw new BusinessException("Academic:Timetable:RoomRequiredBeforePublish")
+                .WithData("Day", missingRoom.Day)
+                .WithData("StartTime", missingRoom.StartTime)
+                .WithData("EndTime", missingRoom.EndTime);
+        }
+    }
+
+    private async Task EnsureNoPublishedTeacherOrRoomConflictsAsync(Timetable timetable, List<TimetableSlot> periodSlots)
+    {
+        foreach (var slot in periodSlots)
+        {
+            var teacherIds = slot.Subjects
+                .Where(s => s.TeacherId.HasValue)
+                .Select(s => s.TeacherId!.Value)
+                .Distinct()
+                .ToList();
+            if (teacherIds.Count > 0)
+            {
+                await timetableManager.CheckTeacherConflictAsync(
+                    timetable.StandardId,
+                    timetable.DivisionId,
+                    slot.Day,
+                    slot.StartTime,
+                    slot.EndTime,
+                    teacherIds);
+            }
+
+            var roomIds = slot.Subjects
+                .Where(s => s.RoomId.HasValue)
+                .Select(s => s.RoomId!.Value)
+                .Distinct()
+                .ToList();
+            if (roomIds.Count > 0)
+            {
+                await timetableManager.CheckRoomConflictAsync(
+                    timetable.StandardId,
+                    timetable.DivisionId,
+                    slot.Day,
+                    slot.StartTime,
+                    slot.EndTime,
+                    roomIds);
+            }
+        }
+    }
+
+    private static void EnsureWeeklyLectureCountsMatch(Timetable timetable, List<TimetableSlot> periodSlots, WeeklyLectureSlot weeklySlot)
+    {
+        var coreOccupied = periodSlots
+            .Where(s => !s.ElectiveGroupId.HasValue)
+            .SelectMany(s => s.Subjects)
+            .GroupBy(s => s.SubjectId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var electiveOccupied = periodSlots
+            .Where(s => s.ElectiveGroupId.HasValue)
+            .GroupBy(s => s.ElectiveGroupId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        foreach (var requirement in weeklySlot.Subjects)
+        {
+            var assigned = 0;
+            Guid? referenceId = null;
+            if (requirement.ElectiveGroupId.HasValue)
+            {
+                referenceId = requirement.ElectiveGroupId.Value;
+                assigned = electiveOccupied.GetValueOrDefault(requirement.ElectiveGroupId.Value, 0);
+            }
+            else if (requirement.SubjectId.HasValue)
+            {
+                referenceId = requirement.SubjectId.Value;
+                assigned = coreOccupied.GetValueOrDefault(requirement.SubjectId.Value, 0);
+            }
+
+            if (assigned != requirement.WeeklyLectures)
+            {
+                throw new BusinessException("Academic:Timetable:WeeklyLectureMismatch")
+                    .WithData("StandardId", timetable.StandardId)
+                    .WithData("DivisionId", timetable.DivisionId)
+                    .WithData("SubjectOrElectiveGroupId", referenceId)
+                    .WithData("RequiredWeeklyLectures", requirement.WeeklyLectures)
+                    .WithData("AssignedWeeklyLectures", assigned);
+            }
+        }
+
+        var allowedCoreSubjectIds = weeklySlot.Subjects
+            .Where(s => s.SubjectId.HasValue)
+            .Select(s => s.SubjectId!.Value)
+            .ToHashSet();
+        var allowedElectiveGroupIds = weeklySlot.Subjects
+            .Where(s => s.ElectiveGroupId.HasValue)
+            .Select(s => s.ElectiveGroupId!.Value)
+            .ToHashSet();
+
+        var unexpectedCore = coreOccupied.Keys.FirstOrDefault(subjectId => !allowedCoreSubjectIds.Contains(subjectId));
+        if (unexpectedCore != Guid.Empty)
+        {
+            throw new BusinessException("Academic:Timetable:SubjectNotInWeeklyPlan")
+                .WithData("SubjectId", unexpectedCore);
+        }
+
+        var unexpectedElective = electiveOccupied.Keys.FirstOrDefault(groupId => !allowedElectiveGroupIds.Contains(groupId));
+        if (unexpectedElective != Guid.Empty)
+        {
+            throw new BusinessException("Academic:Timetable:ElectiveGroupNotInWeeklyPlan")
+                .WithData("ElectiveGroupId", unexpectedElective);
+        }
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]

@@ -64,6 +64,11 @@ public class AssignmentManager : DomainService
 		}
 
 		var divisionIds = divisions.Select(d => d.DivisionId).ToList();
+		if (divisionIds.Distinct().Count() != divisionIds.Count)
+		{
+			throw new BusinessException("ShikshaMitra.Assignment:DuplicateDivisionSchedule");
+		}
+
 		var divisionEntities = await _divisionRepository.GetListAsync(d =>
 			divisionIds.Contains(d.Id)
 		);
@@ -184,6 +189,22 @@ public class AssignmentManager : DomainService
 	public async Task<AssignmentEntity> ValidateCanPublishAsync(Guid assignmentId)
 	{
 		var assignment = await _repository.GetAsync(assignmentId, includeDetails: true);
+
+		if (assignment.DivisionSchedules == null || !assignment.DivisionSchedules.Any())
+		{
+			throw new BusinessException("ShikshaMitra.Assignment:DivisionScheduleRequired").WithData(
+				"AssignmentId",
+				assignmentId
+			);
+		}
+
+		if (assignment.Status == AssignmentStatus.Closed)
+		{
+			throw new BusinessException("ShikshaMitra.Assignment:CannotPublishClosed").WithData(
+				"AssignmentId",
+				assignmentId
+			);
+		}
 
 		if (assignment.AllDivisionsPublished)
 		{

@@ -50,6 +50,7 @@ public class StudentAcademic360AppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Dashboard.View)]
     public async Task<StudentAcademic360Dto> GetAsync(Guid studentId, StudentAcademic360Input input)
     {
+        input = NormalizeInput(input);
         var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(GetAsync), includeDetails: true);
         var studentDto = await MapStudentAsync(student);
         var attendance = await BuildAttendanceAsync(studentId, input);
@@ -66,6 +67,7 @@ public class StudentAcademic360AppService(
 
         return new StudentAcademic360Dto
         {
+            GeneratedAtUtc = Clock.Now.ToUniversalTime(),
             Student = studentDto,
             AcademicHealth = academicHealth,
             Kpis = BuildKpis(attendance, learningTasks, exams, academicHealth),
@@ -80,6 +82,7 @@ public class StudentAcademic360AppService(
             Achievements = achievements,
             Interventions = [],
             DataCompleteness = dataCompleteness,
+            SourceSnapshot = BuildSourceSnapshot(attendance, learningTasks, exams, timetable, subjectPerformance),
             Permissions = new StudentAcademic360PermissionsDto
             {
                 CanViewRank = true,
@@ -88,6 +91,33 @@ public class StudentAcademic360AppService(
                 CanDownloadReport = true
             }
         };
+    }
+
+    private static StudentAcademic360Input NormalizeInput(StudentAcademic360Input? input)
+    {
+        input ??= new StudentAcademic360Input();
+        input.RecentTaskCount = Math.Clamp(input.RecentTaskCount <= 0 ? 10 : input.RecentTaskCount, 1, 25);
+        input.RecentExamCount = Math.Clamp(input.RecentExamCount <= 0 ? 5 : input.RecentExamCount, 1, 10);
+
+        if (input.AttendanceStartDate.HasValue && input.AttendanceEndDate.HasValue)
+        {
+            var start = input.AttendanceStartDate.Value.Date;
+            var end = input.AttendanceEndDate.Value.Date;
+            if (start > end)
+            {
+                (start, end) = (end, start);
+            }
+
+            if ((end - start).TotalDays > 370)
+            {
+                start = end.AddDays(-370);
+            }
+
+            input.AttendanceStartDate = start;
+            input.AttendanceEndDate = end;
+        }
+
+        return input;
     }
 
     private async Task<StudentDto> MapStudentAsync(Student student)
@@ -193,14 +223,22 @@ public class StudentAcademic360AppService(
         };
     }
 
-    private async Task<TimetableResponseDto?> BuildTimetableAsync(Guid? standardId, Guid? divisionId)
+    private async Task<TimetableResponseDto> BuildTimetableAsync(Guid? standardId, Guid? divisionId)
     {
         if (!standardId.HasValue || !divisionId.HasValue)
         {
-            return null;
+            return new TimetableResponseDto();
         }
 
-        return await timetableAppService.GetByStandardAndDivisionAsync(standardId.Value, divisionId.Value);
+        try
+        {
+            return await timetableAppService.GetByStandardAndDivisionAsync(standardId.Value, divisionId.Value)
+                ?? new TimetableResponseDto();
+        }
+        catch (BusinessException)
+        {
+            return new TimetableResponseDto();
+        }
     }
 
     private async Task<StudentAcademic360LearningTaskSummaryDto> BuildLearningTasksAsync(
@@ -218,20 +256,29 @@ public class StudentAcademic360AppService(
         var submissionByHomework = submissions
             .Where(s => s.HomeworkAssignmentId.HasValue)
             .GroupBy(s => s.HomeworkAssignmentId!.Value)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.CreationTime).First());
+            .ToDictionary(g => g.Key, g => g
+                .OrderByDescending(x => x.SubmissionDate ?? DateTimeOffset.MinValue)
+                .ThenByDescending(x => x.CreationTime)
+                .First());
         var submissionByAssignment = submissions
             .Where(s => s.AssignmentId.HasValue)
             .GroupBy(s => s.AssignmentId!.Value)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.CreationTime).First());
+            .ToDictionary(g => g.Key, g => g
+                .OrderByDescending(x => x.SubmissionDate ?? DateTimeOffset.MinValue)
+                .ThenByDescending(x => x.CreationTime)
+                .First());
 
         var homeworkQuery = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
         var homeworks = await AsyncExecuter.ToListAsync(homeworkQuery.Where(h =>
             h.StandardId == student.StandardId.Value &&
-            (h.DivisionId == divisionId || h.DivisionSchedules.Any(s => s.DivisionId == divisionId && s.IsPublished))));
+            (h.Status == HomeworkStatus.Published || h.IsPublished || h.DivisionSchedules.Any(s => s.IsPublished)) &&
+            ((h.DivisionId == divisionId && (h.IsPublished || h.Status == HomeworkStatus.Published)) ||
+             h.DivisionSchedules.Any(s => s.DivisionId == divisionId && s.IsPublished))));
 
         var assignmentQuery = await assignmentRepository.WithDetailsAsync(a => a.DivisionSchedules);
         var assignments = await AsyncExecuter.ToListAsync(assignmentQuery.Where(a =>
             a.StandardId == student.StandardId.Value &&
+            (a.Status == AssignmentStatus.Published || a.DivisionSchedules.Any(s => s.IsPublished)) &&
             a.DivisionSchedules.Any(s => s.DivisionId == divisionId && s.IsPublished)));
 
         var tasks = new List<StudentAcademic360LearningTaskDto>();
@@ -258,7 +305,12 @@ public class StudentAcademic360AppService(
 
         tasks.AddRange(assignments.Select(assignment =>
         {
-            var schedule = assignment.DivisionSchedules.First(s => s.DivisionId == divisionId);
+            var schedule = assignment.DivisionSchedules.FirstOrDefault(s => s.DivisionId == divisionId && s.IsPublished);
+            if (schedule == null)
+            {
+                return null;
+            }
+
             submissionByAssignment.TryGetValue(assignment.Id, out var submission);
             var status = ResolveSubmissionStatus(submission, schedule.DueDate);
             return new StudentAcademic360LearningTaskDto
@@ -275,7 +327,7 @@ public class StudentAcademic360AppService(
                 TotalMarks = submission?.TotalMarks ?? assignment.TotalMarks,
                 Feedback = submission?.Feedback
             };
-        }));
+        }).Where(task => task != null)!);
 
         var ordered = tasks.OrderByDescending(t => t.DueDate).ToList();
 
@@ -383,7 +435,7 @@ public class StudentAcademic360AppService(
         StudentAcademic360AttendanceDto attendance,
         StudentAcademic360LearningTaskSummaryDto tasks,
         IReadOnlyCollection<StudentAcademic360ExamResultDto> exams,
-        TimetableResponseDto? timetable)
+        TimetableResponseDto timetable)
     {
         var alerts = new List<StudentAcademic360AlertDto>();
         if (attendance.TotalDays > 0 && attendance.Percentage < 75)
@@ -502,7 +554,7 @@ public class StudentAcademic360AppService(
     }
 
     private static List<StudentAcademic360UpcomingItemDto> BuildUpcomingItems(
-        TimetableResponseDto? timetable,
+        TimetableResponseDto timetable,
         StudentAcademic360LearningTaskSummaryDto tasks,
         IReadOnlyCollection<StudentAcademic360ExamResultDto> exams)
     {
@@ -619,7 +671,7 @@ public class StudentAcademic360AppService(
         StudentAcademic360AttendanceDto attendance,
         StudentAcademic360LearningTaskSummaryDto tasks,
         IReadOnlyCollection<StudentAcademic360ExamResultDto> exams,
-        TimetableResponseDto? timetable,
+        TimetableResponseDto timetable,
         IReadOnlyCollection<StudentAcademic360SubjectPerformanceDto> subjects)
     {
         var available = new List<string>();
@@ -638,6 +690,50 @@ public class StudentAcademic360AppService(
             AvailableItems = available,
             MissingItems = missing
         };
+    }
+
+    private static List<StudentAcademic360SourceSnapshotDto> BuildSourceSnapshot(
+        StudentAcademic360AttendanceDto attendance,
+        StudentAcademic360LearningTaskSummaryDto tasks,
+        IReadOnlyCollection<StudentAcademic360ExamResultDto> exams,
+        TimetableResponseDto timetable,
+        IReadOnlyCollection<StudentAcademic360SubjectPerformanceDto> subjects)
+    {
+        return
+        [
+            new()
+            {
+                Source = "Attendance",
+                Count = attendance.TotalDays,
+                Status = attendance.TotalDays > 0 ? "Available" : "No data",
+                LastUpdatedAtUtc = attendance.RecentHistory.FirstOrDefault()?.Date
+            },
+            new()
+            {
+                Source = "HomeworkAssignment",
+                Count = tasks.TotalAssigned,
+                Status = tasks.TotalAssigned > 0 ? "Available" : "No data",
+                LastUpdatedAtUtc = tasks.RecentTasks.OrderByDescending(x => x.DueDate).FirstOrDefault()?.DueDate
+            },
+            new()
+            {
+                Source = "Examination",
+                Count = exams.Count,
+                Status = exams.Count > 0 ? "Available" : "No data"
+            },
+            new()
+            {
+                Source = "Timetable",
+                Count = timetable.TotalSlots,
+                Status = timetable.TotalSlots > 0 ? "Available" : "No data"
+            },
+            new()
+            {
+                Source = "SubjectPerformance",
+                Count = subjects.Count,
+                Status = subjects.Count > 0 ? "Available" : "No data"
+            }
+        ];
     }
 
     private static void AddCompleteness(bool condition, string label, ICollection<string> available, ICollection<string> missing)

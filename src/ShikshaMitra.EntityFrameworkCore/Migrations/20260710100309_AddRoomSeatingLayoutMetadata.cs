@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -10,75 +10,29 @@ namespace ShikshaMitra.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "AccessibleSeatNumbersCsv",
-                table: "AppRooms",
-                type: "character varying(2000)",
-                maxLength: 2000,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "AisleAfterColumnsCsv",
-                table: "AppRooms",
-                type: "character varying(500)",
-                maxLength: 500,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "BoardPosition",
-                table: "AppRooms",
-                type: "character varying(20)",
-                maxLength: 20,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "DisabledSeatNumbersCsv",
-                table: "AppRooms",
-                type: "character varying(2000)",
-                maxLength: 2000,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "EntrancePosition",
-                table: "AppRooms",
-                type: "character varying(20)",
-                maxLength: 20,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "ReservedSeatNumbersCsv",
-                table: "AppRooms",
-                type: "character varying(2000)",
-                maxLength: 2000,
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE IF EXISTS "AppRooms"
+                    ADD COLUMN IF NOT EXISTS "AccessibleSeatNumbersCsv" character varying(2000),
+                    ADD COLUMN IF NOT EXISTS "AisleAfterColumnsCsv" character varying(500),
+                    ADD COLUMN IF NOT EXISTS "BoardPosition" character varying(20),
+                    ADD COLUMN IF NOT EXISTS "DisabledSeatNumbersCsv" character varying(2000),
+                    ADD COLUMN IF NOT EXISTS "EntrancePosition" character varying(20),
+                    ADD COLUMN IF NOT EXISTS "ReservedSeatNumbersCsv" character varying(2000);
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "AccessibleSeatNumbersCsv",
-                table: "AppRooms");
-
-            migrationBuilder.DropColumn(
-                name: "AisleAfterColumnsCsv",
-                table: "AppRooms");
-
-            migrationBuilder.DropColumn(
-                name: "BoardPosition",
-                table: "AppRooms");
-
-            migrationBuilder.DropColumn(
-                name: "DisabledSeatNumbersCsv",
-                table: "AppRooms");
-
-            migrationBuilder.DropColumn(
-                name: "EntrancePosition",
-                table: "AppRooms");
-
-            migrationBuilder.DropColumn(
-                name: "ReservedSeatNumbersCsv",
-                table: "AppRooms");
+            migrationBuilder.Sql("""
+                ALTER TABLE IF EXISTS "AppRooms"
+                    DROP COLUMN IF EXISTS "AccessibleSeatNumbersCsv",
+                    DROP COLUMN IF EXISTS "AisleAfterColumnsCsv",
+                    DROP COLUMN IF EXISTS "BoardPosition",
+                    DROP COLUMN IF EXISTS "DisabledSeatNumbersCsv",
+                    DROP COLUMN IF EXISTS "EntrancePosition",
+                    DROP COLUMN IF EXISTS "ReservedSeatNumbersCsv";
+                """);
         }
     }
 }

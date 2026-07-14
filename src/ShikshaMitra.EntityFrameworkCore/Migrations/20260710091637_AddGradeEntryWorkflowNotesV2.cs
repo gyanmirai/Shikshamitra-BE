@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -10,29 +10,21 @@ namespace ShikshaMitra.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "ReviewerNote",
-                table: "AppExamMarksWorkflowStates",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "UnlockReason",
-                table: "AppExamMarksWorkflowStates",
-                type: "text",
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE IF EXISTS "AppExamMarksWorkflowStates"
+                    ADD COLUMN IF NOT EXISTS "ReviewerNote" text,
+                    ADD COLUMN IF NOT EXISTS "UnlockReason" text;
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "ReviewerNote",
-                table: "AppExamMarksWorkflowStates");
-
-            migrationBuilder.DropColumn(
-                name: "UnlockReason",
-                table: "AppExamMarksWorkflowStates");
+            migrationBuilder.Sql("""
+                ALTER TABLE IF EXISTS "AppExamMarksWorkflowStates"
+                    DROP COLUMN IF EXISTS "ReviewerNote",
+                    DROP COLUMN IF EXISTS "UnlockReason";
+                """);
         }
     }
 }

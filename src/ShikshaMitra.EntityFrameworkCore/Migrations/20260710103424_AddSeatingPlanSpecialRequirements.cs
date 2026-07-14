@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -10,20 +10,19 @@ namespace ShikshaMitra.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "SpecialRequirementStudentIdsCsv",
-                table: "AppExamSeatingPlans",
-                type: "character varying(4000)",
-                maxLength: 4000,
-                nullable: true);
+            migrationBuilder.Sql("""
+                ALTER TABLE IF EXISTS "AppExamSeatingPlans"
+                    ADD COLUMN IF NOT EXISTS "SpecialRequirementStudentIdsCsv" character varying(4000);
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "SpecialRequirementStudentIdsCsv",
-                table: "AppExamSeatingPlans");
+            migrationBuilder.Sql("""
+                ALTER TABLE IF EXISTS "AppExamSeatingPlans"
+                    DROP COLUMN IF EXISTS "SpecialRequirementStudentIdsCsv";
+                """);
         }
     }
 }

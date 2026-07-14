@@ -1,168 +1,52 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace ShikshaMitra.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddSmartLearningTaskTypeSettings : Migration
-    {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<int>(
-                name: "DefaultDueDays",
-                table: "AppHomeworkTypes",
-                type: "integer",
-                nullable: true);
+	/// <inheritdoc />
+	public partial class AddSmartLearningTaskTypeSettings : Migration
+	{
+		/// <inheritdoc />
+		protected override void Up(MigrationBuilder migrationBuilder)
+		{
+			AddTaskTypeSettingsColumns(migrationBuilder, "AppHomeworkTypes");
+			AddTaskTypeSettingsColumns(migrationBuilder, "AppAssignmentTypes");
+		}
 
-            migrationBuilder.AddColumn<int>(
-                name: "DefaultEvaluationMethod",
-                table: "AppHomeworkTypes",
-                type: "integer",
-                nullable: true);
+		/// <inheritdoc />
+		protected override void Down(MigrationBuilder migrationBuilder)
+		{
+			DropTaskTypeSettingsColumns(migrationBuilder, "AppHomeworkTypes");
+			DropTaskTypeSettingsColumns(migrationBuilder, "AppAssignmentTypes");
+		}
 
-            migrationBuilder.AddColumn<decimal>(
-                name: "DefaultMarks",
-                table: "AppHomeworkTypes",
-                type: "numeric(18,2)",
-                precision: 18,
-                scale: 2,
-                nullable: true);
+		private static void AddTaskTypeSettingsColumns(MigrationBuilder migrationBuilder, string tableName)
+		{
+			migrationBuilder.Sql($"""
+                ALTER TABLE IF EXISTS "{tableName}"
+                    ADD COLUMN IF NOT EXISTS "DefaultDueDays" integer,
+                    ADD COLUMN IF NOT EXISTS "DefaultEvaluationMethod" integer,
+                    ADD COLUMN IF NOT EXISTS "DefaultMarks" numeric(18,2),
+                    ADD COLUMN IF NOT EXISTS "DefaultSubmissionType" integer,
+                    ADD COLUMN IF NOT EXISTS "Description" character varying(250),
+                    ADD COLUMN IF NOT EXISTS "EvaluationRequired" boolean NOT NULL DEFAULT true,
+                    ADD COLUMN IF NOT EXISTS "Status" integer NOT NULL DEFAULT 0;
+                """);
+		}
 
-            migrationBuilder.AddColumn<int>(
-                name: "DefaultSubmissionType",
-                table: "AppHomeworkTypes",
-                type: "integer",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "Description",
-                table: "AppHomeworkTypes",
-                type: "character varying(250)",
-                maxLength: 250,
-                nullable: true);
-
-            migrationBuilder.AddColumn<bool>(
-                name: "EvaluationRequired",
-                table: "AppHomeworkTypes",
-                type: "boolean",
-                nullable: false,
-                defaultValue: true);
-
-            migrationBuilder.AddColumn<int>(
-                name: "Status",
-                table: "AppHomeworkTypes",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
-
-            migrationBuilder.AddColumn<int>(
-                name: "DefaultDueDays",
-                table: "AppAssignmentTypes",
-                type: "integer",
-                nullable: true);
-
-            migrationBuilder.AddColumn<int>(
-                name: "DefaultEvaluationMethod",
-                table: "AppAssignmentTypes",
-                type: "integer",
-                nullable: true);
-
-            migrationBuilder.AddColumn<decimal>(
-                name: "DefaultMarks",
-                table: "AppAssignmentTypes",
-                type: "numeric(18,2)",
-                precision: 18,
-                scale: 2,
-                nullable: true);
-
-            migrationBuilder.AddColumn<int>(
-                name: "DefaultSubmissionType",
-                table: "AppAssignmentTypes",
-                type: "integer",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "Description",
-                table: "AppAssignmentTypes",
-                type: "character varying(250)",
-                maxLength: 250,
-                nullable: true);
-
-            migrationBuilder.AddColumn<bool>(
-                name: "EvaluationRequired",
-                table: "AppAssignmentTypes",
-                type: "boolean",
-                nullable: false,
-                defaultValue: true);
-
-            migrationBuilder.AddColumn<int>(
-                name: "Status",
-                table: "AppAssignmentTypes",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
-        }
-
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "DefaultDueDays",
-                table: "AppHomeworkTypes");
-
-            migrationBuilder.DropColumn(
-                name: "DefaultEvaluationMethod",
-                table: "AppHomeworkTypes");
-
-            migrationBuilder.DropColumn(
-                name: "DefaultMarks",
-                table: "AppHomeworkTypes");
-
-            migrationBuilder.DropColumn(
-                name: "DefaultSubmissionType",
-                table: "AppHomeworkTypes");
-
-            migrationBuilder.DropColumn(
-                name: "Description",
-                table: "AppHomeworkTypes");
-
-            migrationBuilder.DropColumn(
-                name: "EvaluationRequired",
-                table: "AppHomeworkTypes");
-
-            migrationBuilder.DropColumn(
-                name: "Status",
-                table: "AppHomeworkTypes");
-
-            migrationBuilder.DropColumn(
-                name: "DefaultDueDays",
-                table: "AppAssignmentTypes");
-
-            migrationBuilder.DropColumn(
-                name: "DefaultEvaluationMethod",
-                table: "AppAssignmentTypes");
-
-            migrationBuilder.DropColumn(
-                name: "DefaultMarks",
-                table: "AppAssignmentTypes");
-
-            migrationBuilder.DropColumn(
-                name: "DefaultSubmissionType",
-                table: "AppAssignmentTypes");
-
-            migrationBuilder.DropColumn(
-                name: "Description",
-                table: "AppAssignmentTypes");
-
-            migrationBuilder.DropColumn(
-                name: "EvaluationRequired",
-                table: "AppAssignmentTypes");
-
-            migrationBuilder.DropColumn(
-                name: "Status",
-                table: "AppAssignmentTypes");
-        }
-    }
+		private static void DropTaskTypeSettingsColumns(MigrationBuilder migrationBuilder, string tableName)
+		{
+			migrationBuilder.Sql($"""
+                ALTER TABLE IF EXISTS "{tableName}"
+                    DROP COLUMN IF EXISTS "DefaultDueDays",
+                    DROP COLUMN IF EXISTS "DefaultEvaluationMethod",
+                    DROP COLUMN IF EXISTS "DefaultMarks",
+                    DROP COLUMN IF EXISTS "DefaultSubmissionType",
+                    DROP COLUMN IF EXISTS "Description",
+                    DROP COLUMN IF EXISTS "EvaluationRequired",
+                    DROP COLUMN IF EXISTS "Status";
+                """);
+		}
+	}
 }

@@ -4,13 +4,13 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ShikshaMitra.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddSmartExaminationSettings : Migration
-    {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.Sql("""
+	/// <inheritdoc />
+	public partial class AddSmartExaminationSettings : Migration
+	{
+		/// <inheritdoc />
+		protected override void Up(MigrationBuilder migrationBuilder)
+		{
+			migrationBuilder.Sql("""
                 ALTER TABLE IF EXISTS "AppGradingScales"
                     ADD COLUMN IF NOT EXISTS "Description" character varying(512),
                     ADD COLUMN IF NOT EXISTS "IsDefault" boolean NOT NULL DEFAULT false,
@@ -33,12 +33,12 @@ namespace ShikshaMitra.Migrations
                     ADD COLUMN IF NOT EXISTS "MarksEntryRequired" boolean NOT NULL DEFAULT false,
                     ADD COLUMN IF NOT EXISTS "Status" integer NOT NULL DEFAULT 0;
                 """);
-        }
+		}
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.Sql("""
+		/// <inheritdoc />
+		protected override void Down(MigrationBuilder migrationBuilder)
+		{
+			migrationBuilder.Sql("""
                 ALTER TABLE IF EXISTS "AppGradingScales"
                     DROP COLUMN IF EXISTS "Description",
                     DROP COLUMN IF EXISTS "IsDefault",
@@ -61,6 +61,6 @@ namespace ShikshaMitra.Migrations
                     DROP COLUMN IF EXISTS "MarksEntryRequired",
                     DROP COLUMN IF EXISTS "Status";
                 """);
-        }
-    }
+		}
+	}
 }

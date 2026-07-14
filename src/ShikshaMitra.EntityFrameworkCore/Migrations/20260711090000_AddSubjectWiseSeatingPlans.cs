@@ -7,15 +7,15 @@ using ShikshaMitra.EntityFrameworkCore;
 
 namespace ShikshaMitra.Migrations
 {
-    /// <inheritdoc />
-    [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20260711090000_AddSubjectWiseSeatingPlans")]
-    public partial class AddSubjectWiseSeatingPlans : Migration
-    {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.Sql("""
+	/// <inheritdoc />
+	[DbContext(typeof(ShikshaMitraDbContext))]
+	[Migration("20260711090000_AddSubjectWiseSeatingPlans")]
+	public partial class AddSubjectWiseSeatingPlans : Migration
+	{
+		/// <inheritdoc />
+		protected override void Up(MigrationBuilder migrationBuilder)
+		{
+			migrationBuilder.Sql("""
                 ALTER TABLE IF EXISTS "AppExamSeatingPlans"
                     ADD COLUMN IF NOT EXISTS "Name" character varying(160) NOT NULL DEFAULT 'All Subjects',
                     ADD COLUMN IF NOT EXISTS "ScopeType" integer NOT NULL DEFAULT 0;
@@ -24,23 +24,23 @@ namespace ShikshaMitra.Migrations
                     ADD COLUMN IF NOT EXISTS "SeatingPlanId" uuid;
                 """);
 
-            migrationBuilder.CreateTable(
-                name: "AppExamSeatingPlanSubjects",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    SeatingPlanId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ExamId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ExamSubjectId = table.Column<Guid>(type: "uuid", nullable: false),
-                    SubjectId = table.Column<Guid>(type: "uuid", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppExamSeatingPlanSubjects", x => x.Id);
-                });
+			migrationBuilder.CreateTable(
+				name: "AppExamSeatingPlanSubjects",
+				columns: table => new
+				{
+					Id = table.Column<Guid>(type: "uuid", nullable: false),
+					TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+					SeatingPlanId = table.Column<Guid>(type: "uuid", nullable: false),
+					ExamId = table.Column<Guid>(type: "uuid", nullable: false),
+					ExamSubjectId = table.Column<Guid>(type: "uuid", nullable: false),
+					SubjectId = table.Column<Guid>(type: "uuid", nullable: false)
+				},
+				constraints: table =>
+				{
+					table.PrimaryKey("PK_AppExamSeatingPlanSubjects", x => x.Id);
+				});
 
-            migrationBuilder.Sql("""
+			migrationBuilder.Sql("""
                 DO $$
                 BEGIN
                     IF to_regclass('public."AppExams"') IS NOT NULL
@@ -78,7 +78,7 @@ namespace ShikshaMitra.Migrations
                 END $$;
                 """);
 
-            migrationBuilder.Sql("""
+			migrationBuilder.Sql("""
                 DO $$
                 BEGIN
                     IF to_regclass('public."AppExamSeatAllocations"') IS NOT NULL
@@ -93,7 +93,7 @@ namespace ShikshaMitra.Migrations
                 END $$;
                 """);
 
-            migrationBuilder.Sql("""
+			migrationBuilder.Sql("""
                 DO $$
                 BEGIN
                     IF to_regclass('public."AppExamSeatingPlanSubjects"') IS NOT NULL
@@ -112,7 +112,7 @@ namespace ShikshaMitra.Migrations
                 END $$;
                 """);
 
-            migrationBuilder.Sql("""
+			migrationBuilder.Sql("""
                 ALTER TABLE IF EXISTS "AppExamSeatAllocations"
                     ALTER COLUMN "SeatingPlanId" SET NOT NULL;
 
@@ -143,53 +143,53 @@ namespace ShikshaMitra.Migrations
                     END IF;
                 END $$;
                 """);
-        }
+		}
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropIndex(
-                name: "IX_AppExamSeatAllocations_SeatingPlanId_StudentId",
-                table: "AppExamSeatAllocations");
+		/// <inheritdoc />
+		protected override void Down(MigrationBuilder migrationBuilder)
+		{
+			migrationBuilder.DropIndex(
+				name: "IX_AppExamSeatAllocations_SeatingPlanId_StudentId",
+				table: "AppExamSeatAllocations");
 
-            migrationBuilder.DropIndex(
-                name: "IX_AppExamSeatAllocations_SeatingPlanId_RoomId_SeatNumber",
-                table: "AppExamSeatAllocations");
+			migrationBuilder.DropIndex(
+				name: "IX_AppExamSeatAllocations_SeatingPlanId_RoomId_SeatNumber",
+				table: "AppExamSeatAllocations");
 
-            migrationBuilder.DropIndex(
-                name: "IX_AppExamSeatAllocations_ExamId",
-                table: "AppExamSeatAllocations");
+			migrationBuilder.DropIndex(
+				name: "IX_AppExamSeatAllocations_ExamId",
+				table: "AppExamSeatAllocations");
 
-            migrationBuilder.DropTable(
-                name: "AppExamSeatingPlanSubjects");
+			migrationBuilder.DropTable(
+				name: "AppExamSeatingPlanSubjects");
 
-            migrationBuilder.DropIndex(
-                name: "IX_AppExamSeatingPlans_ExamId",
-                table: "AppExamSeatingPlans");
+			migrationBuilder.DropIndex(
+				name: "IX_AppExamSeatingPlans_ExamId",
+				table: "AppExamSeatingPlans");
 
-            migrationBuilder.DropColumn(
-                name: "SeatingPlanId",
-                table: "AppExamSeatAllocations");
+			migrationBuilder.DropColumn(
+				name: "SeatingPlanId",
+				table: "AppExamSeatAllocations");
 
-            migrationBuilder.DropColumn(
-                name: "Name",
-                table: "AppExamSeatingPlans");
+			migrationBuilder.DropColumn(
+				name: "Name",
+				table: "AppExamSeatingPlans");
 
-            migrationBuilder.DropColumn(
-                name: "ScopeType",
-                table: "AppExamSeatingPlans");
+			migrationBuilder.DropColumn(
+				name: "ScopeType",
+				table: "AppExamSeatingPlans");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_AppExamSeatingPlans_ExamId",
-                table: "AppExamSeatingPlans",
-                column: "ExamId",
-                unique: true);
+			migrationBuilder.CreateIndex(
+				name: "IX_AppExamSeatingPlans_ExamId",
+				table: "AppExamSeatingPlans",
+				column: "ExamId",
+				unique: true);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_AppExamSeatAllocations_ExamId_StudentId",
-                table: "AppExamSeatAllocations",
-                columns: new[] { "ExamId", "StudentId" },
-                unique: true);
-        }
-    }
+			migrationBuilder.CreateIndex(
+				name: "IX_AppExamSeatAllocations_ExamId_StudentId",
+				table: "AppExamSeatAllocations",
+				columns: new[] { "ExamId", "StudentId" },
+				unique: true);
+		}
+	}
 }

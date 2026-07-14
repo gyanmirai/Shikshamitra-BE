@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Application.Contracts.Groups;
 using ShikshaMitra.Application.Contracts.Communication.AnnouncementTypes;
@@ -140,5 +140,15 @@ public class ShikshaMitraApplicationAutoMapperProfile : Profile
 		// Library - BookCopy mappings
 		CreateMap<ShikshaMitra.Library.Books.BookCopy, ShikshaMitra.Library.Books.BookCopyDto>()
 			.ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()));
+
+		// Lesson Plan mappings
+		CreateMap<LessonPlan, LessonPlanDto>();
+		CreateMap<TeacherDiary, TeacherDiaryDto>()
+			.ForMember(dest => dest.DiaryStatus, opt => opt.MapFrom(src => src.Status))
+			.ForMember(dest => dest.ActualTopicTaught, opt => opt.MapFrom(src => src.ActualTopicCovered))
+			.ForMember(dest => dest.CompletionPercentage, opt => opt.MapFrom(src => src.ActualCompletionPercentage))
+			.ForMember(dest => dest.IsSubstituteDiary, opt => opt.MapFrom(_ => false))
+			.ForMember(dest => dest.ResourcesUsed, opt => opt.Ignore())
+			.ForMember(dest => dest.TeacherName, opt => opt.Ignore());
 	}
 }

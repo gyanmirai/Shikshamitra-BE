@@ -93,6 +93,10 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			new("principal-gseb", "principal-gseb@ddvs.com", "Principal", "GSEB", "Principal", ["principal1@ddvs.com", "rajesh.kumar@school.edu", "hiren.vadher@ddvs.com"], ["principal1"]),
 			new("principal-cbse", "principal-cbse@ddvs.com", "Principal", "CBSE", "Principal", ["principle1@ddvs.com"], ["principle1"]),
 			new("teacher-gseb", "teacher-gseb@ddvs.com", "Teacher", "GSEB", "Teacher", ["teacher1@ddvs.com", "vikram.singh@school.edu", "sweta.badgujar@ddvs.com"], ["teacher1"]),
+			new("admissions-reception", "admissions-reception@ddvs.com", "Admissions", "Reception", "Admissions Receptionist", [], []),
+			new("admissions-counselor", "admissions-counselor@ddvs.com", "Admissions", "Counselor", "Admissions Counselor", [], []),
+			new("admissions-approver", "admissions-approver@ddvs.com", "Admissions", "Approver", "Admissions Approver", [], []),
+			new("student-crm-denied", "student-crm-denied@ddvs.com", "CRM", "Restricted", "HR Manager", [], []),
 			new("clerk-office", "clerk-office@ddvs.com", "Clerk", "Office", "Clerk", ["clerk1@ddvs.com", "clerk@school.edu", "raj.baku@ddvs.com"], ["clerk1"]),
 			new("finance-officer", "finance-officer@ddvs.com", "Finance", "Officer", "Finance Officer", ["finance1@ddvs.com", "suresh.patil@school.edu", "punam.badgujar@ddvs.com"], ["finance1"])
 		};
@@ -206,7 +210,7 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			await ResetPasswordAsync(managedUser, TempPassword);
 		}
 
-		await EnsureRoleMembershipAsync(user, spec.RoleName);
+		await EnsureExclusiveRoleMembershipAsync(user, spec.RoleName);
 		await LinkEmployeeAliasesToUserAsync(user, spec);
 	}
 
@@ -345,7 +349,7 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		}
 	}
 
-	private async Task EnsureRoleMembershipAsync(IdentityUser user, string roleName)
+	private async Task EnsureExclusiveRoleMembershipAsync(IdentityUser user, string roleName)
 	{
 		var normalizedRoleName = _lookupNormalizer.NormalizeName(roleName);
 		var role = await _roleRepository.FindByNormalizedNameAsync(normalizedRoleName);
@@ -356,6 +360,20 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		}
 
 		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
+		var staleRoles = (await _userManager.GetRolesAsync(managedUser))
+			.Where(currentRole => !string.Equals(currentRole, role.Name, StringComparison.OrdinalIgnoreCase))
+			.ToList();
+		if (staleRoles.Count > 0)
+		{
+			var removeResult = await _userManager.RemoveFromRolesAsync(managedUser, staleRoles);
+			if (!removeResult.Succeeded)
+			{
+				throw new Exception(
+					$"Failed to repair roles for seeded test user '{managedUser.Email}': " +
+					string.Join(", ", removeResult.Errors));
+			}
+		}
+
 		if (await _userManager.IsInRoleAsync(managedUser, role.Name))
 		{
 			return;

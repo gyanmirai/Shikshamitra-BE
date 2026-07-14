@@ -21,6 +21,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 public class ElectiveGroupAppService(
 	IRepository<ElectiveGroup, Guid> ElectiveGroupRepository,
 	ElectiveGroupManager ElectiveGroupManager,
+	IRepository<Subject, Guid> subjectRepository,
 	IRepository<AssignedSubject, Guid> assignedSubjectRepository,
 	ILogger<ElectiveGroupAppService> logger,
 	IRepository<StudentElectiveSelection, Guid> studentElectiveSelectionRepository,
@@ -41,16 +42,24 @@ public class ElectiveGroupAppService(
 		{
 			var query = await ElectiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
 
-			var electiveGroups = query
+			var filtered = query
 				.Where(eg => eg.AcademicMediumId == academicMediumId)
 				.WhereIf(
 					!string.IsNullOrWhiteSpace(searchTerm),
 					eg => eg.Name.Contains(searchTerm!)
+						|| (eg.GroupType != null && eg.GroupType.Contains(searchTerm!))
+						|| eg.Subjects.Any(s => s.Subject.Name.Contains(searchTerm!))
 				)
-				.OrderBy(eg => eg.Name)
+				.OrderBy(eg => eg.SortOrder ?? int.MaxValue)
+				.ThenBy(eg => eg.Name)
 				.ToList();
 
-			return ObjectMapper.Map<List<ElectiveGroup>, List<ElectiveGroupDto>>(electiveGroups);
+			var result = new List<ElectiveGroupDto>();
+			foreach (var electiveGroup in filtered)
+			{
+				result.Add(await MapElectiveGroupAsync(electiveGroup));
+			}
+			return result;
 		}
 		catch (Exception ex)
 		{
@@ -80,7 +89,7 @@ public class ElectiveGroupAppService(
 				throw new EntityNotFoundException(typeof(ElectiveGroup), id);
 			}
 
-			return ObjectMapper.Map<ElectiveGroup, ElectiveGroupDto>(electiveGroup);
+			return await MapElectiveGroupAsync(electiveGroup);
 		}
 		catch (EntityNotFoundException)
 		{
@@ -114,7 +123,11 @@ public class ElectiveGroupAppService(
 				input.Name,
 				input.Color,
 				academicMediumId, // From route parameter
-				input.SubjectIds
+				input.SubjectIds,
+				input.GroupType,
+				input.Description,
+				input.Status,
+				input.SortOrder
 			);
 
 			// Ensure the entity is saved before re-fetching with details
@@ -154,12 +167,18 @@ public class ElectiveGroupAppService(
 	{
 		try
 		{
+			await EnsureSubjectRemovalIsAllowedAsync(id, input.SubjectIds);
+
 			var electiveGroup = await ElectiveGroupManager.UpdateAsync(
 				id,
 				input.Name,
 				input.Color,
 				academicMediumId, // Verify medium
-				input.SubjectIds
+				input.SubjectIds,
+				input.GroupType,
+				input.Description,
+				input.Status,
+				input.SortOrder
 			);
 
 			await ElectiveGroupRepository.UpdateAsync(electiveGroup, autoSave: true);
@@ -206,28 +225,8 @@ public class ElectiveGroupAppService(
 				throw new EntityNotFoundException(typeof(ElectiveGroup), id);
 			}
 
-			// Block deletion if the group is in use anywhere
-			var usageParts = new System.Collections.Generic.List<string>();
-
-			var allocationCount = await assignedSubjectRepository.CountAsync(a => a.ElectiveGroupId == id);
-			if (allocationCount > 0)
-				usageParts.Add($"{allocationCount} subject allocation(s)");
-
-			var studentSelectionCount = await studentElectiveSelectionRepository.CountAsync(s => s.ElectiveGroupId == id);
-			if (studentSelectionCount > 0)
-				usageParts.Add($"{studentSelectionCount} student elective assignment(s)");
-
-			var weeklySlotCount = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.ElectiveGroupId == id);
-			if (weeklySlotCount > 0)
-				usageParts.Add($"{weeklySlotCount} weekly lecture slot(s)");
-
-			var timetableSlotCount = await timetableSlotRepository.CountAsync(t => t.ElectiveGroupId == id);
-			if (timetableSlotCount > 0)
-				usageParts.Add($"{timetableSlotCount} timetable slot(s)");
-
-			var examSubjectCount = await examSubjectRepository.CountAsync(e => e.SubjectId == id);
-			if (examSubjectCount > 0)
-				usageParts.Add($"{examSubjectCount} exam(s)");
+			var usage = await GetUsageCountsAsync(id);
+			var usageParts = BuildUsageParts(usage);
 
 			if (usageParts.Count > 0)
 			{
@@ -263,5 +262,257 @@ public class ElectiveGroupAppService(
 				"An error occurred while deleting the elective group."
 			);
 		}
+	}
+
+	public async Task<ElectiveGroupDto> ArchiveAsync(
+		Guid academicMediumId,
+		Guid id,
+		ElectiveGroupStatusChangeDto input
+	)
+	{
+		var electiveGroup = await GetGroupForMediumAsync(academicMediumId, id);
+		electiveGroup.Archive(input.Reason);
+		await ElectiveGroupRepository.UpdateAsync(electiveGroup, autoSave: true);
+		return await GetAsync(academicMediumId, id);
+	}
+
+	public async Task<ElectiveGroupDto> RestoreAsync(Guid academicMediumId, Guid id)
+	{
+		var electiveGroup = await GetGroupForMediumAsync(academicMediumId, id);
+		electiveGroup.Restore();
+		await ElectiveGroupRepository.UpdateAsync(electiveGroup, autoSave: true);
+		return await GetAsync(academicMediumId, id);
+	}
+
+	public async Task<ElectiveGroupDuplicateCheckResultDto> CheckDuplicateAsync(
+		Guid academicMediumId,
+		ElectiveGroupDuplicateCheckDto input
+	)
+	{
+		var normalized = NormalizeName(input.Name);
+		var incomingSubjects = input.SubjectIds.Distinct().OrderBy(x => x).ToList();
+		var query = await ElectiveGroupRepository.WithDetailsAsync(x => x.Subjects);
+		var groups = query
+			.Where(x => x.AcademicMediumId == academicMediumId && x.Id != input.ExcludeElectiveGroupId)
+			.ToList();
+
+		var matches = groups
+			.Select(group => new
+			{
+				Group = group,
+				Normalized = NormalizeName(group.Name),
+				SubjectIds = group.Subjects.Select(x => x.SubjectId).Distinct().OrderBy(x => x).ToList()
+			})
+			.Where(x =>
+				x.Normalized == normalized
+				|| IsSimilarName(normalized, x.Normalized)
+				|| (incomingSubjects.Count >= 2 && x.SubjectIds.SequenceEqual(incomingSubjects))
+			)
+			.Select(x => new ElectiveGroupDuplicateMatchDto
+			{
+				Id = x.Group.Id,
+				Name = x.Group.Name,
+				Status = x.Group.Status,
+				MatchType = x.SubjectIds.SequenceEqual(incomingSubjects)
+					? "Same Subjects"
+					: x.Normalized == normalized ? "Exact" : "Similar"
+			})
+			.ToList();
+
+		return new ElectiveGroupDuplicateCheckResultDto
+		{
+			HasExactDuplicate = matches.Any(x => x.MatchType == "Exact" && x.Status == SubjectMasterStatus.Active),
+			HasSimilarDuplicate = matches.Any(x => x.MatchType == "Similar"),
+			HasSameSubjectCombination = matches.Any(x => x.MatchType == "Same Subjects"),
+			Matches = matches
+		};
+	}
+
+	public async Task<ElectiveGroupUsageDetailDto> GetUsageDetailsAsync(
+		Guid academicMediumId,
+		Guid id
+	)
+	{
+		var electiveGroup = await GetGroupForMediumAsync(academicMediumId, id);
+		var usage = await GetUsageCountsAsync(id);
+		var selections = await studentElectiveSelectionRepository.GetListAsync(x => x.ElectiveGroupId == id);
+		var subjectIds = selections.Select(x => x.SelectedSubjectId).Distinct().ToList();
+		var subjects = subjectIds.Count == 0
+			? []
+			: await subjectRepository.GetListAsync(x => subjectIds.Contains(x.Id));
+
+		return new ElectiveGroupUsageDetailDto
+		{
+			ElectiveGroupId = id,
+			ElectiveGroupName = electiveGroup.Name,
+			CanDelete = usage.Total == 0,
+			SafeActions = usage.Total == 0
+				? ["Edit", "Delete"]
+				: ["Edit color", "Edit description", "Archive"],
+			Subjects = electiveGroup.Subjects.Select(x => x.Subject.Name).ToList(),
+			Usage = new ElectiveGroupUsageSummaryDto
+			{
+				ClassAllocationsCount = usage.Allocations,
+				StudentSelectionsCount = usage.StudentSelections,
+				TimetablePeriodsCount = usage.WeeklySlots + usage.TimetableSlots,
+				ExamSchedulesCount = usage.ExamSubjects,
+				SubjectWiseStudentCount = subjects.Select(subject => new ElectiveGroupSubjectStudentCountDto
+				{
+					Subject = subject.Name,
+					Count = selections.Count(selection => selection.SelectedSubjectId == subject.Id)
+				}).ToList()
+			}
+		};
+	}
+
+	public async Task<List<ElectiveGroupAuditLogDto>> GetAuditLogsAsync(
+		Guid academicMediumId,
+		Guid id
+	)
+	{
+		var electiveGroup = await GetGroupForMediumAsync(academicMediumId, id);
+		var logs = new List<ElectiveGroupAuditLogDto>
+		{
+			new()
+			{
+				ChangedDate = electiveGroup.CreationTime,
+				ChangedBy = electiveGroup.CreatorId?.ToString(),
+				Action = "Elective Group Created",
+				AfterValue = electiveGroup.Name
+			}
+		};
+
+		if (electiveGroup.LastModificationTime.HasValue)
+		{
+			logs.Add(new ElectiveGroupAuditLogDto
+			{
+				ChangedDate = electiveGroup.LastModificationTime.Value,
+				ChangedBy = electiveGroup.LastModifierId?.ToString(),
+				Action = electiveGroup.Status == SubjectMasterStatus.Archived
+					? "Elective Group Archived"
+					: "Elective Group Updated",
+				AfterValue = electiveGroup.Name,
+				Reason = electiveGroup.ArchiveReason
+			});
+		}
+
+		return logs.OrderByDescending(x => x.ChangedDate).ToList();
+	}
+
+	private async Task<ElectiveGroup> GetGroupForMediumAsync(Guid academicMediumId, Guid id)
+	{
+		var electiveGroup = await ElectiveGroupRepository.GetAsync(id, includeDetails: true);
+		if (electiveGroup.AcademicMediumId != academicMediumId)
+		{
+			throw new EntityNotFoundException(typeof(ElectiveGroup), id);
+		}
+		return electiveGroup;
+	}
+
+	private async Task<ElectiveGroupDto> MapElectiveGroupAsync(ElectiveGroup electiveGroup)
+	{
+		var usage = await GetUsageCountsAsync(electiveGroup.Id);
+		return new ElectiveGroupDto
+		{
+			Id = electiveGroup.Id,
+			Name = electiveGroup.Name,
+			Color = electiveGroup.Color,
+			GroupType = electiveGroup.GroupType,
+			Description = electiveGroup.Description,
+			Status = electiveGroup.Status,
+			SortOrder = electiveGroup.SortOrder,
+			ArchiveReason = electiveGroup.ArchiveReason,
+			EducationMediumId = electiveGroup.AcademicMediumId,
+			Subjects = ObjectMapper.Map<List<Subject>, List<SubjectDto>>(
+				electiveGroup.Subjects.Select(x => x.Subject).ToList()
+			),
+			UsedInClassesCount = usage.Allocations,
+			StudentSelectionsCount = usage.StudentSelections,
+			TimetablePeriodsCount = usage.WeeklySlots + usage.TimetableSlots,
+			ExamSchedulesCount = usage.ExamSubjects,
+			IsUsed = usage.Total > 0,
+			CanDelete = usage.Total == 0,
+			LastUpdatedAt = electiveGroup.LastModificationTime ?? electiveGroup.CreationTime,
+			LastUpdatedBy = (electiveGroup.LastModifierId ?? electiveGroup.CreatorId)?.ToString()
+		};
+	}
+
+	private async Task EnsureSubjectRemovalIsAllowedAsync(Guid groupId, List<Guid> incomingSubjectIds)
+	{
+		var existingGroup = await ElectiveGroupRepository.GetAsync(groupId, includeDetails: true);
+		var removedSubjectIds = existingGroup.Subjects
+			.Select(x => x.SubjectId)
+			.Except(incomingSubjectIds)
+			.ToList();
+		if (removedSubjectIds.Count == 0)
+		{
+			return;
+		}
+
+		var selectedRemovedSubjects = await studentElectiveSelectionRepository.CountAsync(x =>
+			x.ElectiveGroupId == groupId && removedSubjectIds.Contains(x.SelectedSubjectId)
+		);
+		if (selectedRemovedSubjects > 0)
+		{
+			throw new BusinessException(CurriculumErrorCodes.ElectiveGroupHasActiveAllocations)
+				.WithData("message", "This group already has student selections. Direct subject removal is blocked to protect academic history. Please create a new group or manage changes through allocation rules.");
+		}
+	}
+
+	private async Task<ElectiveGroupUsageCounts> GetUsageCountsAsync(Guid electiveGroupId)
+	{
+		return new ElectiveGroupUsageCounts
+		{
+			Allocations = await assignedSubjectRepository.CountAsync(a => a.ElectiveGroupId == electiveGroupId),
+			StudentSelections = await studentElectiveSelectionRepository.CountAsync(s => s.ElectiveGroupId == electiveGroupId),
+			WeeklySlots = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.ElectiveGroupId == electiveGroupId),
+			TimetableSlots = await timetableSlotRepository.CountAsync(t => t.ElectiveGroupId == electiveGroupId),
+			ExamSubjects = await examSubjectRepository.CountAsync(e => e.SubjectId == electiveGroupId)
+		};
+	}
+
+	private static List<string> BuildUsageParts(ElectiveGroupUsageCounts usage)
+	{
+		var parts = new List<string>();
+		if (usage.Allocations > 0)
+			parts.Add($"{usage.Allocations} subject allocation(s)");
+		if (usage.StudentSelections > 0)
+			parts.Add($"{usage.StudentSelections} student elective assignment(s)");
+		if (usage.WeeklySlots > 0)
+			parts.Add($"{usage.WeeklySlots} weekly lecture slot(s)");
+		if (usage.TimetableSlots > 0)
+			parts.Add($"{usage.TimetableSlots} timetable slot(s)");
+		if (usage.ExamSubjects > 0)
+			parts.Add($"{usage.ExamSubjects} exam(s)");
+		return parts;
+	}
+
+	private static string NormalizeName(string name)
+	{
+		var normalized = new string(name.Trim().ToUpperInvariant().Where(char.IsLetterOrDigit).ToArray());
+		return normalized switch
+		{
+			"SECONDLANG" => "SECONDLANGUAGE",
+			"THIRDLANG" => "THIRDLANGUAGE",
+			"SKILL" => "SKILLSUBJECT",
+			"OPTIONAL" => "OPTIONALSUBJECT",
+			"VOCATIONAL" => "VOCATIONALSUBJECT",
+			_ => normalized
+		};
+	}
+
+	private static bool IsSimilarName(string left, string right)
+	{
+		return left.Length >= 4 && right.Length >= 4 && (left.Contains(right) || right.Contains(left));
+	}
+
+	private sealed class ElectiveGroupUsageCounts
+	{
+		public int Allocations { get; set; }
+		public int StudentSelections { get; set; }
+		public int WeeklySlots { get; set; }
+		public int TimetableSlots { get; set; }
+		public int ExamSubjects { get; set; }
+		public int Total => Allocations + StudentSelections + WeeklySlots + TimetableSlots + ExamSubjects;
 	}
 }

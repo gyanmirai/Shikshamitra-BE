@@ -92,9 +92,9 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
     {
         var context = await ResolveSeededDivisionContextAsync();
         var student = await CreateEnrolledStudentAsync(context, "AttendanceCumulative");
-        var firstDate = DateTime.Today.AddDays(-3);
-        var secondDate = DateTime.Today.AddDays(-2);
-        var thirdDate = DateTime.Today.AddDays(-1);
+        var firstDate = DateTime.Today.AddDays(-8);
+        var secondDate = DateTime.Today.AddDays(-7);
+        var thirdDate = DateTime.Today.AddDays(-6);
 
         await MarkAttendanceAsync(student.StudentId, AttendanceStatus.Present, firstDate, "Cumulative present 1");
         await MarkAttendanceAsync(student.StudentId, AttendanceStatus.Absent, secondDate, "Cumulative absent");

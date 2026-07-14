@@ -329,6 +329,7 @@
     "HR:Leave:020214": "This attendance import is locked and cannot be edited.",
     "HR:Leave:020215": "Payroll is locked for this attendance import month.",
     "HR:Leave:020216": "Attendance import row save request does not match the imported rows.",
+    "HR:Attendance:020315": "Attendance cannot be changed for an approved leave day.",
     "HR:Payroll:030009": "EmployeeId is required.",
     "HR:Payroll:030010": "An error occurred while fetching the salary slip. Please try again.",
     "HR:Payroll:030019": "Payroll snapshot schema is not applied. Run DB migration 20260428034756_PayrollRunItemSnapshots and try again.",

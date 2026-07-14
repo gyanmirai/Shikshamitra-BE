@@ -43,39 +43,61 @@ public class ExamResultAppService(
         var checks = new List<ReadinessCheckDto>();
 
         var exam = await examRepository.GetAsync(examId, includeDetails: true);
-        var subjectIds = exam.ExamSubjects.Select(s => s.SubjectId).ToList();
 
         // Check 1: At least one subject configured
         checks.Add(new ReadinessCheckDto
         {
             Label = "Exam subjects configured",
             Passed = exam.ExamSubjects.Any(),
-            Hint = !exam.ExamSubjects.Any() ? "No subjects are configured for this exam." : null
+            Hint = !exam.ExamSubjects.Any() ? "No subjects are configured for this exam." : null,
+            Severity = exam.ExamSubjects.Any() ? "success" : "blocker",
+            FixTarget = exam.ExamSubjects.Any() ? null : "exam-setup"
         });
 
         // Check 2: All marks verified (Verified or Published workflow state)
         var workflowStates = await workflowStateRepository.GetListAsync(
             s => s.ExamId == examId && s.DivisionId == divisionId);
-        var verifiedCount = workflowStates.Count(
-            s => s.Status == ExamMarksWorkflowStatus.Verified || s.Status == ExamMarksWorkflowStatus.Published);
+        var verifiedSubjectIds = workflowStates
+            .Where(s => s.Status == ExamMarksWorkflowStatus.Verified || s.Status == ExamMarksWorkflowStatus.Published)
+            .Select(s => s.SubjectId)
+            .ToHashSet();
+        var verifiedCount = verifiedSubjectIds.Count;
         var totalSubjects = exam.ExamSubjects.Count;
+        var pendingSubjectIds = exam.ExamSubjects
+            .Where(s => !verifiedSubjectIds.Contains(s.SubjectId))
+            .Select(s => s.SubjectId)
+            .ToList();
+        var pendingSubjects = pendingSubjectIds.Count == 0
+            ? new List<string>()
+            : (await subjectRepository.GetListAsync(s => pendingSubjectIds.Contains(s.Id)))
+                .Select(s => s.Name)
+                .OrderBy(name => name)
+                .ToList();
+        var completedSubjects = Math.Min(verifiedCount, totalSubjects);
+        var missingMarks = Math.Max(totalSubjects - verifiedCount, 0);
+        var allMarksVerified = totalSubjects > 0 && verifiedCount >= totalSubjects;
         checks.Add(new ReadinessCheckDto
         {
             Label = "Marks verified for all subjects",
-            Passed = totalSubjects > 0 && verifiedCount >= totalSubjects,
+            Passed = allMarksVerified,
             Hint = verifiedCount < totalSubjects
                 ? $"{totalSubjects - verifiedCount} subject(s) not yet verified."
-                : null
+                : null,
+            Severity = allMarksVerified ? "success" : "blocker",
+            FixTarget = allMarksVerified ? null : "grade-entry"
         });
 
         // Check 3: Marks entries exist
         var marksCount = await examMarkRepository.CountAsync(
             m => m.ExamId == examId && m.DivisionId == divisionId);
+        var hasMarks = marksCount > 0;
         checks.Add(new ReadinessCheckDto
         {
             Label = "Marks data available",
-            Passed = marksCount > 0,
-            Hint = marksCount == 0 ? "No marks found for this division." : null
+            Passed = hasMarks,
+            Hint = marksCount == 0 ? "No marks found for this division." : null,
+            Severity = hasMarks ? "success" : "blocker",
+            FixTarget = hasMarks ? null : "grade-entry"
         });
 
         // Check 4: Grading scale assigned to at least one subject
@@ -84,14 +106,30 @@ public class ExamResultAppService(
         {
             Label = "Grading scale assigned",
             Passed = hasScale,
-            Hint = !hasScale ? "No grading scale assigned to exam subjects; fallback grading will be used." : null
+            Hint = !hasScale ? "No grading scale assigned to exam subjects; fallback grading will be used." : null,
+            Severity = hasScale ? "success" : "warning",
+            FixTarget = hasScale ? null : "grade-scaling"
         });
+
+        var requiredChecks = checks.Take(3).ToList();
+        var blockerCount = checks.Count(c => !c.Passed && c.Severity == "blocker");
+        var warningCount = checks.Count(c => !c.Passed && c.Severity == "warning");
+        var percentage = requiredChecks.Count == 0
+            ? 0
+            : (int)Math.Round(requiredChecks.Count(c => c.Passed) / (double)requiredChecks.Count * 100);
 
         return new ResultReadinessDto
         {
             ExamId = examId,
             DivisionId = divisionId,
-            IsReady = checks.Take(3).All(c => c.Passed),   // scale is a soft warning, not a hard blocker
+            IsReady = blockerCount == 0,   // scale is a soft warning, not a hard blocker
+            Percentage = percentage,
+            RequiredSubjects = totalSubjects,
+            CompletedSubjects = completedSubjects,
+            MissingMarks = missingMarks,
+            BlockerCount = blockerCount,
+            WarningCount = warningCount,
+            PendingSubjects = pendingSubjects,
             Checks = checks
         };
     }
@@ -529,9 +567,13 @@ public class ExamResultAppService(
         string overallGrade = "—";
         string overallStatus = "—";
         int overallRank = 1;
+        var displayTotalMaxMarks = totalMaxMarks;
+        var displayTotalObtainedMarks = totalObtainedMarks;
 
         if (detail != null)
         {
+            displayTotalMaxMarks = detail.TotalMaxMarks;
+            displayTotalObtainedMarks = detail.TotalObtainedMarks;
             overallPct = $"{detail.Percentage}%";
             overallGrade = detail.Grade;
             overallStatus = detail.ResultStatus.ToString().ToUpper();
@@ -572,8 +614,9 @@ public class ExamResultAppService(
             Grade = overallGrade,
             Rank = overallRank,
             TotalStudentsInClass = totalStudentsCount > 0 ? totalStudentsCount : 1,
-            TotalMarks = totalMaxMarks.ToString("F2"),
-            ObtainedMarks = totalObtainedMarks.ToString("F2"),
+            TotalMarks = displayTotalMaxMarks.ToString("F2"),
+            ObtainedMarks = displayTotalObtainedMarks.ToString("F2"),
+            Percentage = overallPct,
             AttendancePercentage = $"{attendanceRate}%",
             Status = overallStatus,
             Subjects = subjectMarks

@@ -31,36 +31,34 @@ public class HrEmployeeScopedQueryBuilder(
 			employeeQuery,
 			assignmentQuery,
 			scope,
-			options.EducationMediumStageId,
-			options.AcademicYearId);
+			options);
 	}
 
 	private async Task<IQueryable<Employee>> ApplyScopeFilterAsync(
 		IQueryable<Employee> employeeQuery,
 		IQueryable<EmployeeOrganizationAssignment> assignmentQuery,
 		UserScopeContext scope,
-		Guid? educationMediumStageId,
-		Guid? academicYearId)
+		HrEmployeeScopeOptions options)
 	{
 		List<Guid>? academicYearStageIds = null;
-		if (academicYearId.HasValue)
+		if (options.AcademicYearId.HasValue)
 		{
 			academicYearStageIds = (await stageScopeReader.GetAllAsync())
-				.Where(x => x.AcademicYearId == academicYearId.Value)
+				.Where(x => x.AcademicYearId == options.AcademicYearId.Value)
 				.Select(x => x.StageId)
 				.ToList();
 		}
 
-		if (educationMediumStageId.HasValue)
+		if (options.EducationMediumStageId.HasValue)
 		{
-			await EnsureStageInScopeAsync(scope, educationMediumStageId.Value);
-			if (academicYearStageIds is not null && !academicYearStageIds.Contains(educationMediumStageId.Value))
+			await EnsureStageInScopeAsync(scope, options.EducationMediumStageId.Value);
+			if (academicYearStageIds is not null && !academicYearStageIds.Contains(options.EducationMediumStageId.Value))
 			{
 				throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 			}
 
 			var stageEmployeeIds = assignmentQuery
-				.Where(x => x.EducationMediumStageId == educationMediumStageId.Value)
+				.Where(x => x.EducationMediumStageId == options.EducationMediumStageId.Value)
 				.Select(x => x.EmployeeId);
 			return employeeQuery.Where(x => stageEmployeeIds.Contains(x.Id));
 		}
@@ -72,6 +70,11 @@ public class HrEmployeeScopedQueryBuilder(
 				var academicYearEmployeeIds = assignmentQuery
 					.Where(x => academicYearStageIds.Contains(x.EducationMediumStageId))
 					.Select(x => x.EmployeeId);
+				if (options.IncludeUnassignedEmployeesWhenAcademicYearScoped)
+				{
+					return employeeQuery;
+				}
+
 				return employeeQuery.Where(x => academicYearEmployeeIds.Contains(x.Id));
 			}
 

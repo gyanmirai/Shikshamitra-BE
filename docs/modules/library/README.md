@@ -1,20 +1,56 @@
-# Library Module Documentation
+---
+module: library
+domain: overview
+content_type: Landing
+status: canonical
+updated_on: 2026-07-08
+owner: backend-team
+audience: humans-and-agents
+---
 
-This documentation pack is the canonical handoff for the Library module as implemented through Phase 3D release hardening.
+# Understand the Library backend module
 
-## Documents
+TL;DR: use this page as the entrypoint for Library behavior, API families, architecture, workflows, and validation.
+Library covers catalog, copies, reservations, issue and return, members, charges, reports, notifications, and settings.
 
-- [Product requirements](prd/prd.md) describes the delivered product scope, actors, workflows, and future boundaries.
-- [API contract map](contracts/curated/library-api.md) lists the canonical `/api/library/...` routes, request shapes, response conventions, permissions, and error behavior.
-- [Implementation handoff](implementation/README.md) explains backend and frontend integration responsibilities for future agents.
-- [Testing and readiness](testing/README.md) records the release gates, browser E2E expectations, and current QA status.
+## Read order
 
-## Current Release Surface
+| Step | File | Use it to |
+|---|---|---|
+| 1 | [product.md](./product.md) | Understand Library product areas and data-integrity rules |
+| 2 | [api.md](./api.md) | Find endpoint families, compatibility routes, and permissions |
+| 3 | [architecture.md](./architecture.md) | Locate source paths and domain boundaries |
+| 4 | [workflows.md](./workflows.md) | Trace catalog, reservation, issue, return, member, charge, and report flows |
+| 5 | [testing.md](./testing.md) | Pick focused Library validation commands |
 
-The active Library menu is Dashboard, All Books, Issue & Return, Library Members, Charges, Reports, Notification, and Settings. Settings includes Book Categories, Charges Categories, Library Hours, Borrowing Rules, and Section Management.
+## Source of truth
 
-Prototype Library routes that are not part of that surface should remain redirected, hidden, or marked coming soon until they are deliberately promoted into the release menu.
+| Need | Source |
+|---|---|
+| Contracts | `src/ShikshaMitra.Application.Contracts/Library/**` |
+| Application logic | `src/ShikshaMitra.Application/Library/**` |
+| Domain rules | `src/ShikshaMitra.Domain/Library/**` |
+| Persistence | `src/ShikshaMitra.EntityFrameworkCore/Library/**` |
+| HTTP controllers | `src/ShikshaMitra.HttpApi/Controllers/Library/**` |
+| Tests | `test/ShikshaMitra.*.Tests/Library/**` |
 
-## Next Phase Boundary
+## For agents
 
-The next step before product expansion is Phase 3E: run the gated browser E2E suite against a live local stack and close any defects it finds. Finance integration should start only after Phase 3E sign-off.
+Use this table before searching code:
+
+| Question | First file |
+|---|---|
+| What does Library own? | [product.md](./product.md) |
+| Which endpoint or permission should I use? | [api.md](./api.md) |
+| Where is the code? | [architecture.md](./architecture.md) |
+| Which workflow should I trace? | [workflows.md](./workflows.md) |
+| Which tests should I run? | [testing.md](./testing.md) |
+
+## Validation
+
+Run these commands from the `Shikshamitra-BE` repo root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module library
+git diff --check
+```

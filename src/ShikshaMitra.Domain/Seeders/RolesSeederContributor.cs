@@ -33,7 +33,10 @@ public class RolesSeederContributor : BaseSeederContributor
 		{ "HR Manager", "#c2185b" },
 		{ "Finance Officer", "#5d4037" },
 		{ "IT Administrator", "#00796b" },
-		{ "Office Assistant", "#388e3c" }
+		{ "Office Assistant", "#388e3c" },
+		{ "Admissions Receptionist", "#00897b" },
+		{ "Admissions Counselor", "#1565c0" },
+		{ "Admissions Approver", "#6a1b9a" }
 	};
 
 	public RolesSeederContributor(
@@ -72,7 +75,10 @@ public class RolesSeederContributor : BaseSeederContributor
 			new IdentityRole(GuidGenerator.Create(), "HR Manager", tenantId),
 			new IdentityRole(GuidGenerator.Create(), "Finance Officer", tenantId),
 			new IdentityRole(GuidGenerator.Create(), "IT Administrator", tenantId),
-			new IdentityRole(GuidGenerator.Create(), "Office Assistant", tenantId)
+			new IdentityRole(GuidGenerator.Create(), "Office Assistant", tenantId),
+			new IdentityRole(GuidGenerator.Create(), "Admissions Receptionist", tenantId),
+			new IdentityRole(GuidGenerator.Create(), "Admissions Counselor", tenantId),
+			new IdentityRole(GuidGenerator.Create(), "Admissions Approver", tenantId)
 		};
 
 		foreach (var role in roles)

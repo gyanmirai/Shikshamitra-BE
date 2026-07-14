@@ -82,6 +82,8 @@ public class SeatAllocationSummaryDto
     public int TotalStudents { get; set; }
     public int AllocatedStudents { get; set; }
     public int PendingStudents { get; set; }
+    public int SeatingPlanCount { get; set; }
+    public int SubjectCount { get; set; }
     /// <summary>0 = Pending, 1 = Updated, 2 = Allocated</summary>
     public int Status { get; set; }
 }
@@ -129,6 +131,7 @@ public class SaveSeatStudentDto
 
 public class SaveSeatAllocationRequestDto
 {
+    public Guid? SeatingPlanId { get; set; }
     public Guid RoomId { get; set; }
     public List<SaveSeatStudentDto> Students { get; set; } = [];
 }

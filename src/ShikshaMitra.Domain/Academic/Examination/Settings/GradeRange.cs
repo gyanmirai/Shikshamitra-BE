@@ -9,10 +9,24 @@ public class GradeRange : Entity<Guid>
     public int MinMarks { get; private set; }
     public int MaxMarks { get; private set; }
     public string Grade { get; private set; }
+    public double? GradePoint { get; private set; }
+    public string? Remark { get; private set; }
+    public GradeResultStatus ResultStatus { get; private set; }
 
     private GradeRange()
     {
         /* This constructor is for deserialization / ORM purpose */
+    }
+
+    public GradeRange(Guid id, Guid gradingScaleId, int minMarks, int maxMarks, string grade, double? gradePoint, string? remark, GradeResultStatus resultStatus) : base(id)
+    {
+        GradingScaleId = gradingScaleId;
+        MinMarks = minMarks;
+        MaxMarks = maxMarks;
+        Grade = grade;
+        GradePoint = gradePoint;
+        Remark = remark;
+        ResultStatus = resultStatus;
     }
 
     public GradeRange(Guid id, Guid gradingScaleId, int minMarks, int maxMarks, string grade) : base(id)
@@ -21,6 +35,7 @@ public class GradeRange : Entity<Guid>
         MinMarks = minMarks;
         MaxMarks = maxMarks;
         Grade = grade;
+        ResultStatus = GradeResultStatus.Pass;
     }
 
     internal void SetGrade(string grade)

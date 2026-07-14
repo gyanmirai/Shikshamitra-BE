@@ -207,7 +207,14 @@ public class QuestionPaperAppService(
     {
         var paper = await GetPaperEntityAsync(paperId);
         var blueprint = (await GetBlueprintEntityAsync(paperId, true))!;
-        var result = new BlueprintValidationResultDto { IsValid = true };
+        var questionMarks = paper.Questions.Sum(x => x.Marks);
+        var result = new BlueprintValidationResultDto
+        {
+            IsValid = true,
+            AssignedMarks = questionMarks,
+            RemainingMarks = Math.Max(0, paper.TotalMarks - questionMarks),
+            QuestionCount = paper.Questions.Count
+        };
         var chapterTotal = blueprint.ChapterRules.Sum(x => x.Marks);
         if (chapterTotal != paper.TotalMarks)
         {
@@ -221,8 +228,23 @@ public class QuestionPaperAppService(
         {
             result.Errors.Add("Bloom distribution total must be 100%.");
         }
+        if (paper.Questions.Count > 0 && questionMarks != paper.TotalMarks)
+        {
+            result.Errors.Add($"Selected question marks {questionMarks} must equal paper total {paper.TotalMarks}.");
+        }
+        if (paper.Questions.Count == 0)
+        {
+            result.Warnings.Add("No questions have been added to this paper yet.");
+        }
+        if (blueprint.ChapterRules.Count == 0)
+        {
+            result.Warnings.Add("Chapter coverage is not configured.");
+        }
 
         result.IsValid = result.Errors.Count == 0;
+        result.BlockingErrorCount = result.Errors.Count;
+        result.WarningCount = result.Warnings.Count;
+        result.BalanceScore = CalculateBlueprintBalanceScore(paper, blueprint, result);
         return result;
     }
 
@@ -352,7 +374,8 @@ public class QuestionPaperAppService(
 
     public async Task<QuestionPaperDashboardDto> GetDashboardAsync(Guid academicYearId)
     {
-        var rows = await paperRepository.GetListAsync(x => x.AcademicYearId == academicYearId);
+        var query = await paperRepository.WithDetailsAsync(x => x.Questions);
+        var rows = await asyncExecuter.ToListAsync(query.Where(x => x.AcademicYearId == academicYearId));
         return new QuestionPaperDashboardDto
         {
             TotalPapers = rows.Count,
@@ -361,7 +384,9 @@ public class QuestionPaperAppService(
             PendingApproval = rows.Count(x => x.Status == QuestionPaperStatus.Submitted),
             ApprovedPapers = rows.Count(x => x.Status == QuestionPaperStatus.Approved),
             PublishedPapers = rows.Count(x => x.Status == QuestionPaperStatus.Published),
-            LockedPapers = rows.Count(x => x.Status == QuestionPaperStatus.Locked)
+            LockedPapers = rows.Count(x => x.Status == QuestionPaperStatus.Locked),
+            NeedsAttention = rows.Count(x => x.Status == QuestionPaperStatus.Rejected),
+            MissingQuestions = rows.Count(x => x.Questions.Count == 0)
         };
     }
 
@@ -387,6 +412,37 @@ public class QuestionPaperAppService(
             throw new BusinessException("ShikshaMitra.QuestionPapers:QuestionMarksMismatch");
         }
         await Task.CompletedTask;
+    }
+
+    private static int CalculateBlueprintBalanceScore(
+        QuestionPaper paper,
+        QuestionPaperBlueprint blueprint,
+        BlueprintValidationResultDto validation)
+    {
+        var score = 100;
+        score -= validation.Errors.Count * 20;
+        score -= validation.Warnings.Count * 8;
+
+        if (paper.TotalMarks > 0)
+        {
+            var questionGap = Math.Abs(paper.TotalMarks - validation.AssignedMarks);
+            score -= (int)Math.Min(25, Math.Round((double)(questionGap / paper.TotalMarks * 100)));
+
+            var chapterGap = Math.Abs(paper.TotalMarks - blueprint.ChapterRules.Sum(x => x.Marks));
+            score -= (int)Math.Min(20, Math.Round((double)(chapterGap / paper.TotalMarks * 100)));
+        }
+
+        if (blueprint.DifficultyRules.Count > 0)
+        {
+            score -= (int)Math.Min(15, Math.Abs(100 - blueprint.DifficultyRules.Sum(x => x.Percentage)));
+        }
+
+        if (blueprint.BloomRules.Count > 0)
+        {
+            score -= (int)Math.Min(15, Math.Abs(100 - blueprint.BloomRules.Sum(x => x.Percentage)));
+        }
+
+        return Math.Clamp(score, 0, 100);
     }
 
     private async Task<QuestionPaperSetting> GetSettingsEntityAsync(Guid academicYearId)

@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using ShikshaMitra.Extensions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp;
 using Volo.Abp.Data;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
@@ -37,11 +38,17 @@ public class HomeworkTypeManager : DomainService
 	/// If a soft-deleted record with the same name exists it is restored in-place
 	/// (reusing its ID) to avoid violating the unique index on {Name, AcademicMediumId}.
 	/// </summary>
-	/// <param name="academicMediumId">Academic medium ID</param>
-	/// <param name="name">Homework type name</param>
-	/// <returns>Persisted HomeworkType entity (inserted or restored)</returns>
-	/// <exception cref="BusinessException">Thrown when validation fails</exception>
-	public async Task<HomeworkType> CreateAsync(Guid academicMediumId, string name)
+	public async Task<HomeworkType> CreateAsync(
+		Guid academicMediumId,
+		string name,
+		string? description = null,
+		SubmissionType? defaultSubmissionType = null,
+		decimal? defaultMarks = null,
+		int? defaultDueDays = null,
+		bool evaluationRequired = true,
+		EvaluationMethod? defaultEvaluationMethod = null,
+		TaskTypeStatus status = TaskTypeStatus.Active
+	)
 	{
 		// Validate academic medium exists
 		await ValidateAcademicMediumExistsAsync(academicMediumId);
@@ -67,40 +74,88 @@ public class HomeworkTypeManager : DomainService
 			existing.IsDeleted = false;
 			existing.DeletionTime = null;
 			existing.DeleterId = null;
-			existing.SetName(name);
+			existing.UpdateInfo(
+				name,
+				description,
+				defaultSubmissionType,
+				defaultMarks,
+				defaultDueDays,
+				evaluationRequired,
+				defaultEvaluationMethod,
+				status
+			);
 			return await _repository.UpdateAsync(existing, autoSave: true);
 		}
 
-		var entity = new HomeworkType(GuidGenerator.Create(), name, academicMediumId, CurrentTenant.Id);
+		var entity = new HomeworkType(
+			GuidGenerator.Create(),
+			name,
+			academicMediumId,
+			CurrentTenant.Id,
+			description,
+			defaultSubmissionType,
+			defaultMarks,
+			defaultDueDays,
+			evaluationRequired,
+			defaultEvaluationMethod,
+			status
+		);
 		return await _repository.InsertAsync(entity, autoSave: true);
 	}
 
 	/// <summary>
 	/// Updates an existing homework type with validation
 	/// </summary>
-	/// <param name="homeworkType">Homework type to update</param>
-	/// <param name="newName">New name for the homework type</param>
-	/// <returns>Updated HomeworkType entity</returns>
-	/// <exception cref="BusinessException">Thrown when validation fails</exception>
-	public async Task<HomeworkType> UpdateAsync(HomeworkType homeworkType, string newName)
+	public async Task<HomeworkType> UpdateAsync(
+		HomeworkType homeworkType,
+		string newName,
+		string? description = null,
+		SubmissionType? defaultSubmissionType = null,
+		decimal? defaultMarks = null,
+		int? defaultDueDays = null,
+		bool evaluationRequired = true,
+		EvaluationMethod? defaultEvaluationMethod = null,
+		TaskTypeStatus status = TaskTypeStatus.Active
+	)
 	{
 		Check.NotNull(homeworkType, nameof(homeworkType));
 
-		// If name hasn't changed, return as-is
-		if (homeworkType.Name == newName)
+		// Validate new name doesn't conflict with existing homework types
+		if (homeworkType.Name != newName)
 		{
-			return homeworkType;
+			await ValidateHomeworkTypeAsync(
+				newName,
+				homeworkType.AcademicMediumId,
+				homeworkType.Id
+			);
 		}
 
-		// Validate new name doesn't conflict with existing homework types
-		await ValidateHomeworkTypeAsync(
-			newName,
-			homeworkType.AcademicMediumId,
-			homeworkType.Id
-		);
+		// Validation check: At least one active homework type must remain
+		if (status == TaskTypeStatus.Inactive && homeworkType.Status == TaskTypeStatus.Active)
+		{
+			var activeCount = await _repository.CountAsync(t =>
+				t.AcademicMediumId == homeworkType.AcademicMediumId &&
+				t.Status == TaskTypeStatus.Active &&
+				t.Id != homeworkType.Id
+			);
+			if (activeCount == 0)
+			{
+				throw new BusinessException(HomeworkAssignmentErrorCodes.AtLeastOneActiveHomeworkTypeMustRemain)
+					.WithData("message", "At least one active homework type must remain. You cannot deactivate this type.");
+			}
+		}
 
-		// Update name
-		homeworkType.SetName(newName);
+		// Update info
+		homeworkType.UpdateInfo(
+			newName,
+			description,
+			defaultSubmissionType,
+			defaultMarks,
+			defaultDueDays,
+			evaluationRequired,
+			defaultEvaluationMethod,
+			status
+		);
 
 		return homeworkType;
 	}

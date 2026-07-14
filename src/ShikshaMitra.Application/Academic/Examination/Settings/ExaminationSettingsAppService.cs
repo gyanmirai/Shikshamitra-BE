@@ -25,6 +25,37 @@ public class ExaminationSettingsAppService(
 	IRepository<ExamSubject, Guid> examSubjectRepository
 ) : ApplicationService, IExaminationSettingsAppService
 {
+	private async Task HandleDefaultGradingScaleAsync(Guid academicMediumId, Guid currentScaleId, bool isDefault)
+	{
+		if (!isDefault)
+		{
+			return;
+		}
+
+		var queryable = await gradingScaleRepository.GetQueryableAsync();
+		var otherScales = queryable
+			.Where(gs => gs.AcademicMediumId == academicMediumId && gs.Id != currentScaleId && gs.IsDefault)
+			.ToList();
+
+		foreach (var scale in otherScales)
+		{
+			scale.SetIsDefault(false);
+			await gradingScaleRepository.UpdateAsync(scale);
+		}
+	}
+
+	private async Task<int> GetGradingScaleUsageCountAsync(Guid id)
+	{
+		var examCount = await examRepository.CountAsync(e => e.GradingScaleId == id);
+		var examSubjectCount = await examSubjectRepository.CountAsync(es => es.GradeScalingId == id);
+		return examCount + examSubjectCount;
+	}
+
+	private async Task<int> GetExamTypeUsageCountAsync(Guid id)
+	{
+		return await examRepository.CountAsync(e => e.ExamTypeId == id);
+	}
+
 	public async Task CreateGradingScaleAsync(Guid academicMediumId, CreateGradingScaleDto input)
 	{
 		var gradingScale = new GradingScale(
@@ -32,7 +63,11 @@ public class ExaminationSettingsAppService(
 			CurrentTenant.Id,
 			input.Name,
 			input.TotalMarks,
-			academicMediumId
+			academicMediumId,
+			input.PassMarks,
+			input.Description,
+			input.IsDefault,
+			SettingStatus.Active
 		);
 
 		foreach (var range in input.GradingScale)
@@ -41,11 +76,15 @@ public class ExaminationSettingsAppService(
 				guidGenerator.Create(),
 				range.MinMarks,
 				range.MaxMarks,
-				range.Grade
+				range.Grade,
+				range.GradePoint,
+				range.Remark,
+				range.ResultStatus
 			);
 		}
 
 		await gradingScaleRepository.InsertAsync(gradingScale);
+		await HandleDefaultGradingScaleAsync(academicMediumId, gradingScale.Id, input.IsDefault);
 	}
 
 	public async Task<GradingScaleListResponseDto> GetAllGradingScalesAsync(Guid academicMediumId)
@@ -57,22 +96,35 @@ public class ExaminationSettingsAppService(
 			.OrderByDescending(gs => gs.CreationTime)
 			.ToList();
 
-		var gradingScaleDtos = gradingScales.Select(gs => new GradingScaleDto
+		var gradingScaleDtos = new List<GradingScaleDto>();
+		foreach (var gs in gradingScales)
 		{
-			Id = gs.Id,
-			Name = gs.Name,
-			TotalMarks = gs.TotalMarks,
-			CreatedAt = gs.CreationTime,
-			GradingScale = gs.GradeRanges
-				.OrderBy(gr => gr.MinMarks)
-				.Select(gr => new GradeRangeDto
-				{
-					MinMarks = gr.MinMarks,
-					MaxMarks = gr.MaxMarks,
-					Grade = gr.Grade
-				})
-				.ToList()
-		}).ToList();
+			var dto = new GradingScaleDto
+			{
+				Id = gs.Id,
+				Name = gs.Name,
+				TotalMarks = gs.TotalMarks,
+				PassMarks = gs.PassMarks,
+				Description = gs.Description,
+				IsDefault = gs.IsDefault,
+				Status = gs.Status,
+				UsageCount = await GetGradingScaleUsageCountAsync(gs.Id),
+				CreatedAt = gs.CreationTime,
+				GradingScale = gs.GradeRanges
+					.OrderBy(gr => gr.MinMarks)
+					.Select(gr => new GradeRangeDto
+					{
+						MinMarks = gr.MinMarks,
+						MaxMarks = gr.MaxMarks,
+						Grade = gr.Grade,
+						GradePoint = gr.GradePoint,
+						Remark = gr.Remark,
+						ResultStatus = gr.ResultStatus
+					})
+					.ToList()
+			};
+			gradingScaleDtos.Add(dto);
+		}
 
 		return new GradingScaleListResponseDto(gradingScaleDtos);
 	}
@@ -94,6 +146,11 @@ public class ExaminationSettingsAppService(
 			Id = gradingScale.Id,
 			Name = gradingScale.Name,
 			TotalMarks = gradingScale.TotalMarks,
+			PassMarks = gradingScale.PassMarks,
+			Description = gradingScale.Description,
+			IsDefault = gradingScale.IsDefault,
+			Status = gradingScale.Status,
+			UsageCount = await GetGradingScaleUsageCountAsync(gradingScale.Id),
 			CreatedAt = gradingScale.CreationTime,
 			GradingScale = gradingScale.GradeRanges
 				.OrderBy(gr => gr.MinMarks)
@@ -101,7 +158,10 @@ public class ExaminationSettingsAppService(
 				{
 					MinMarks = gr.MinMarks,
 					MaxMarks = gr.MaxMarks,
-					Grade = gr.Grade
+					Grade = gr.Grade,
+					GradePoint = gr.GradePoint,
+					Remark = gr.Remark,
+					ResultStatus = gr.ResultStatus
 				})
 				.ToList()
 		};
@@ -123,14 +183,19 @@ public class ExaminationSettingsAppService(
 
 		gradingScale.SetName(input.Name);
 		gradingScale.SetTotalMarks(input.TotalMarks);
+		gradingScale.SetPassMarks(input.PassMarks);
+		gradingScale.SetDescription(input.Description);
+		gradingScale.SetIsDefault(input.IsDefault);
+		gradingScale.SetStatus(input.Status);
 
 		var gradeRanges = input.GradingScale
-			.Select(range => (guidGenerator.Create(), range.MinMarks, range.MaxMarks, range.Grade))
+			.Select(range => (guidGenerator.Create(), range.MinMarks, range.MaxMarks, range.Grade, range.GradePoint, range.Remark, range.ResultStatus))
 			.ToList();
 
 		gradingScale.UpdateGradeRanges(gradeRanges);
 
 		await gradingScaleRepository.UpdateAsync(gradingScale);
+		await HandleDefaultGradingScaleAsync(academicMediumId, gradingScale.Id, input.IsDefault);
 	}
 
 	public async Task DeleteGradingScaleAsync(Guid id, Guid academicMediumId)
@@ -157,7 +222,7 @@ public class ExaminationSettingsAppService(
 		if (usageParts.Count > 0)
 		{
 			throw new BusinessException(ExamErrorCodes.GradingScaleIsInUse)
-				.WithData("message", $"Cannot delete grading scale '{gradingScale.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+				.WithData("message", $"Cannot delete grading scale '{gradingScale.Name}' because it is in use: {string.Join(", ", usageParts)}. Please deactivate it to stop future usage.");
 		}
 
 		await gradingScaleRepository.DeleteAsync(gradingScale);
@@ -165,7 +230,20 @@ public class ExaminationSettingsAppService(
 
 	public async Task CreateExamTypeAsync(Guid academicMediumId, CreateExamTypeDto input)
 	{
-		var examType = await examTypeManager.CreateAsync(input.ExamType, input.Description, academicMediumId);
+		var examType = await examTypeManager.CreateAsync(
+			input.ExamType,
+			input.Description,
+			academicMediumId,
+			input.Category,
+			SettingStatus.Active,
+			input.DefaultTotalMarks,
+			input.DefaultWeightage,
+			input.IncludedInResult,
+			input.MarksEntryRequired,
+			input.GradeScaleRequired,
+			input.AllowPracticalOral,
+			input.DefaultGradeScaleId
+		);
 	}
 
 	public async Task<ExamTypeListResponseDto> GetExamTypesAsync(GetExamTypesInput input)
@@ -185,9 +263,15 @@ public class ExaminationSettingsAppService(
 			sortedQuery.PageBy(input)
 		);
 
+		var dtos = ObjectMapper.Map<List<ExamType>, List<ExamTypeDto>>(examTypes);
+		foreach (var dto in dtos)
+		{
+			dto.UsageCount = await GetExamTypeUsageCountAsync(dto.Id);
+		}
+
 		return new ExamTypeListResponseDto
 		{
-			Items = ObjectMapper.Map<List<ExamType>, List<ExamTypeDto>>(examTypes),
+			Items = dtos,
 			PageNumber = input.SkipCount / input.MaxResultCount + 1,
 			PageSize = input.MaxResultCount,
 			TotalPages = (int) Math.Ceiling(totalCount / (double) input.MaxResultCount),
@@ -204,9 +288,12 @@ public class ExaminationSettingsAppService(
 			throw new UserFriendlyException("Exam type not found");
 		}
 
+		var dto = ObjectMapper.Map<ExamType, ExamTypeDto>(examType);
+		dto.UsageCount = await GetExamTypeUsageCountAsync(dto.Id);
+
 		return new ExamTypeSingleResponseDto
 		{
-			Item = ObjectMapper.Map<ExamType, ExamTypeDto>(examType)
+			Item = dto
 		};
 	}
 
@@ -219,7 +306,20 @@ public class ExaminationSettingsAppService(
 			throw new UserFriendlyException("Exam type not found");
 		}
 
-		await examTypeManager.UpdateAsync(examType, input.ExamType, input.Description);
+		await examTypeManager.UpdateAsync(
+			examType,
+			input.ExamType,
+			input.Description,
+			input.Category,
+			input.Status,
+			input.DefaultTotalMarks,
+			input.DefaultWeightage,
+			input.IncludedInResult,
+			input.MarksEntryRequired,
+			input.GradeScaleRequired,
+			input.AllowPracticalOral,
+			input.DefaultGradeScaleId
+		);
 	}
 
 	public async Task DeleteExamTypeAsync(Guid id, Guid academicMediumId)
@@ -241,7 +341,7 @@ public class ExaminationSettingsAppService(
 		if (usageParts.Count > 0)
 		{
 			throw new BusinessException(ExamErrorCodes.ExamTypeIsInUse)
-				.WithData("message", $"Cannot delete exam type '{examType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+				.WithData("message", $"Cannot delete exam type '{examType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please deactivate it to stop future usage.");
 		}
 
 		await examTypeRepository.DeleteAsync(examType);

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -26,7 +27,8 @@ public class StudentScopeAccessService(
 	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 	IRepository<EducationMedium, Guid> educationMediumRepository,
 	IRepository<EducationBoard, Guid> educationBoardRepository,
-	IRepository<InquiryPreference, Guid> inquiryPreferenceRepository)
+	IRepository<InquiryPreference, Guid> inquiryPreferenceRepository,
+	IRepository<AdmissionCrmInquirySource, Guid> admissionCrmInquirySourceRepository)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<IQueryable<Student>> ApplyCurrentUserScopeAsync(IQueryable<Student> query)
@@ -224,6 +226,43 @@ public class StudentScopeAccessService(
 		}
 
 		await EnsureCanAccessAcademicYearAsync(inquiryPreference.AcademicYearId, operation);
+	}
+
+	public async Task EnsureCanUseInquirySourceAsync(
+		Guid? inquirySourceId,
+		Guid academicYearId,
+		AdmissionInquiryChannel channel,
+		string operation,
+		Guid? existingInquirySourceId = null)
+	{
+		if (!inquirySourceId.HasValue)
+		{
+			return;
+		}
+
+		var source = await admissionCrmInquirySourceRepository.GetAsync(inquirySourceId.Value);
+		if (source.TenantId != CurrentTenant.Id || source.AcademicYearId != academicYearId)
+		{
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+				.WithData("InquirySourceId", source.Id)
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("Operation", operation);
+		}
+
+		if (!source.IsActive && source.Id != existingInquirySourceId)
+		{
+			throw new BusinessException("AdmissionCrm:InquirySourceInactive")
+				.WithData("InquirySourceId", source.Id);
+		}
+
+		if (!source.Supports(channel))
+		{
+			throw new BusinessException("AdmissionCrm:InquirySourceChannelNotAllowed")
+				.WithData("InquirySourceId", source.Id)
+				.WithData("Channel", channel);
+		}
+
+		await EnsureCanAccessAcademicYearAsync(source.AcademicYearId, operation);
 	}
 
 	public async Task<(bool HasAllAcademicYears, IReadOnlyCollection<Guid> AcademicYearIds)> GetCurrentUserAcademicYearScopeAsync()

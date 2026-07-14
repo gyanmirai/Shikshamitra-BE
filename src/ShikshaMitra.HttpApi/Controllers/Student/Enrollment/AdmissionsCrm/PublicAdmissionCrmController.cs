@@ -1,0 +1,169 @@
+using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
+using Volo.Abp;
+using Volo.Abp.AspNetCore.Mvc;
+
+namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
+
+[Area("app")]
+[RemoteService(Name = "Default")]
+[Route("api/public/student-enrollment/admissions-crm")]
+[AllowAnonymous]
+public class PublicAdmissionCrmController(
+	IAdmissionCrmPublicAppService admissionCrmPublicAppService) : AbpControllerBase
+{
+	[HttpGet("{tenantId}/forms/{templateId}")]
+	public async Task<PublicAdmissionInquiryFormDto> GetFormAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute] Guid templateId,
+		[FromQuery] string? language = null)
+	{
+		return await admissionCrmPublicAppService.GetPublicFormAsync(tenantId, templateId, language);
+	}
+
+	[HttpPost("{tenantId}/forms/{templateId}/submit")]
+	public async Task<PublicAdmissionInquirySubmitResultDto> SubmitFormAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute] Guid templateId,
+		[FromBody] PublicAdmissionInquirySubmitDto input)
+	{
+		return await admissionCrmPublicAppService.SubmitPublicFormAsync(
+			tenantId,
+			templateId,
+			input,
+			HttpContext.Connection.RemoteIpAddress?.ToString(),
+			Request.Headers.UserAgent.ToString());
+	}
+
+	[HttpPost("{tenantId}/status/{token}/otp")]
+	public async Task<AdmissionApplicantStatusOtpChallengeDto> IssueStatusOtpAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token)
+	{
+		return await admissionCrmPublicAppService.IssueStatusOtpAsync(tenantId, token);
+	}
+
+	[HttpPost("{tenantId}/status/{token}/verify")]
+	public async Task<AdmissionApplicantStatusDto> VerifyStatusOtpAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromBody] VerifyAdmissionApplicantStatusOtpDto input)
+	{
+		return await admissionCrmPublicAppService.VerifyStatusOtpAsync(tenantId, token, input);
+	}
+
+	[HttpPut("{tenantId}/status/{token}/registration")]
+	public async Task<AdmissionCrmRegistrationApplicationDto> SaveRegistrationAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromBody] SavePublicAdmissionCrmRegistrationDto input)
+	{
+		return await admissionCrmPublicAppService.SaveRegistrationAsync(tenantId, token, input);
+	}
+
+	[HttpPost("{tenantId}/status/{token}/registration/submit")]
+	public async Task<AdmissionCrmRegistrationApplicationDto> SubmitRegistrationAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromBody] SavePublicAdmissionCrmRegistrationDto input)
+	{
+		return await admissionCrmPublicAppService.SubmitRegistrationAsync(tenantId, token, input);
+	}
+
+	[HttpPost("{tenantId}/status/{token}/registration/documents")]
+	[Consumes("multipart/form-data")]
+	public async Task<AdmissionCrmApplicantDocumentChecklistDto> UploadRegistrationDocumentAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromForm] PublicAdmissionCrmDocumentUploadRequest request)
+	{
+		const long maximumBytes = 25L * 1024 * 1024;
+		if (request.File == null || request.File.Length == 0 || request.File.Length > maximumBytes)
+			throw new BusinessException("AdmissionCrm:InvalidDocumentContent");
+		await using var stream = request.File.OpenReadStream();
+		await using var memory = new MemoryStream((int)Math.Min(request.File.Length, 1024 * 1024));
+		await stream.CopyToAsync(memory, HttpContext.RequestAborted);
+		if (memory.Length > maximumBytes) throw new BusinessException("AdmissionCrm:DocumentFileSizeExceeded");
+		return await admissionCrmPublicAppService.UploadRegistrationDocumentAsync(
+			tenantId,
+			token,
+			request.AccessSessionToken,
+			new ProcessedAdmissionCrmApplicantDocumentUploadDto
+			{
+				RequirementKey = request.RequirementKey,
+				FileName = request.File.FileName,
+				ContentType = request.File.ContentType,
+				Size = request.File.Length,
+				Content = memory.ToArray(),
+				ValidUntil = request.ValidUntil
+			});
+	}
+
+	[HttpGet("{tenantId}/status/{token}/exam/available-slots")]
+	public Task<AdmissionCrmPublicExamSlotListDto> GetAvailableExamSlotsAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromHeader(Name = "X-Admission-Access-Session"), Required] string accessSessionToken)
+	{
+		return admissionCrmPublicAppService.GetAvailableExamSlotsAsync(tenantId, token, accessSessionToken);
+	}
+
+	[HttpPost("{tenantId}/status/{token}/exam/schedule")]
+	public Task<AdmissionCrmEntranceExamDto> ScheduleExamAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromBody] ScheduleAdmissionCrmPublicExamDto input)
+	{
+		return admissionCrmPublicAppService.ScheduleExamAsync(tenantId, token, input);
+	}
+
+	[HttpPost("{tenantId}/status/{token}/offers/{offerId}/respond")]
+	public Task<AdmissionApplicantStatusOfferDto> RespondToOfferAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromRoute] Guid offerId,
+		[FromBody] RespondAdmissionApplicantOfferDto input)
+	{
+		return admissionCrmPublicAppService.RespondToOfferAsync(tenantId, token, offerId, input);
+	}
+
+	[HttpPost("{tenantId}/communication/delivery-logs/{deliveryLogId}/callback")]
+	public async Task<AdmissionCrmMessageDeliveryLogDto> ApplyDeliveryCallbackAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute] Guid deliveryLogId,
+		[FromBody] ApplyAdmissionCrmDeliveryCallbackDto input)
+	{
+		return await admissionCrmPublicAppService.ApplyDeliveryCallbackAsync(
+			tenantId,
+			deliveryLogId,
+			input);
+	}
+
+	[HttpPost("{tenantId}/communication/{academicYearId}/{channel}/delivery-callback")]
+	public async Task<AdmissionCrmMessageDeliveryLogDto> ApplyDeliveryCallbackByProviderMessageAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute] Guid academicYearId,
+		[FromRoute] AdmissionCrmMessageChannel channel,
+		[FromBody] ApplyAdmissionCrmDeliveryCallbackDto input)
+	{
+		return await admissionCrmPublicAppService.ApplyDeliveryCallbackByProviderMessageAsync(
+			tenantId,
+			academicYearId,
+			channel,
+			input);
+	}
+}
+
+public class PublicAdmissionCrmDocumentUploadRequest
+{
+	[Required]
+	public string AccessSessionToken { get; set; } = string.Empty;
+	[Required]
+	public string RequirementKey { get; set; } = string.Empty;
+	public DateTime? ValidUntil { get; set; }
+	[Required]
+	public IFormFile? File { get; set; }
+}

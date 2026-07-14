@@ -20,6 +20,18 @@ public class DivisionTimetableStatusDto
     public Guid DivisionId { get; set; }
     public string DivisionName { get; set; } = string.Empty;
     public TimetableStatus Status { get; set; }
+    public int WeeklySlots { get; set; }
+    public int FilledSlots { get; set; }
+    public int SubjectCompletedCount { get; set; }
+    public int SubjectTotalCount { get; set; }
+    public int TeacherAssignedCount { get; set; }
+    public int TeacherTotalCount { get; set; }
+    public int RoomAssignedCount { get; set; }
+    public int RoomTotalCount { get; set; }
+    public int ConflictCount { get; set; }
+    public bool IsReady { get; set; }
+    public int ReadinessScore { get; set; }
+    public List<string> MissingItems { get; set; } = [];
 }
 
 public class GetTimetableManagementInput : PagedAndSortedResultRequestDto

@@ -14,6 +14,11 @@ public class ElectiveGroup : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public string Name { get; private set; }
 	public string Color { get; private set; }
+	public string? GroupType { get; private set; }
+	public string? Description { get; private set; }
+	public SubjectMasterStatus Status { get; private set; }
+	public int? SortOrder { get; private set; }
+	public string? ArchiveReason { get; private set; }
 	public virtual ICollection<ElectiveGroupComponent> Subjects { get; set; }
 	public Guid AcademicMediumId { get; set; }
 	public EducationMedium AcademicMedium { get; set; }
@@ -26,12 +31,23 @@ public class ElectiveGroup : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Subjects = new HashSet<ElectiveGroupComponent>();
 	}
 
-	public ElectiveGroup(Guid id, Guid? tenantId, string name, string color, Guid educationMediumId)
+	public ElectiveGroup(
+		Guid id,
+		Guid? tenantId,
+		string name,
+		string color,
+		Guid educationMediumId,
+		string? groupType = null,
+		string? description = null,
+		SubjectMasterStatus status = SubjectMasterStatus.Active,
+		int? sortOrder = null
+	)
 		: base(id)
 	{
 		TenantId = tenantId;
 		SetName(name);
 		SetColor(color);
+		SetDetails(groupType, description, status, sortOrder);
 		AcademicMediumId = educationMediumId;
 		Subjects = new HashSet<ElectiveGroupComponent>();
 	}
@@ -48,6 +64,35 @@ public class ElectiveGroup : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		Check.NotNullOrWhiteSpace(color, nameof(color));
 		Color = color;
+	}
+
+	public void SetDetails(
+		string? groupType,
+		string? description,
+		SubjectMasterStatus status,
+		int? sortOrder
+	)
+	{
+		GroupType = string.IsNullOrWhiteSpace(groupType) ? null : groupType.Trim();
+		Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+		Status = status;
+		SortOrder = sortOrder;
+		if (status != SubjectMasterStatus.Archived)
+		{
+			ArchiveReason = null;
+		}
+	}
+
+	public void Archive(string? reason)
+	{
+		Status = SubjectMasterStatus.Archived;
+		ArchiveReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+	}
+
+	public void Restore()
+	{
+		Status = SubjectMasterStatus.Active;
+		ArchiveReason = null;
 	}
 
 	public void AddSubject(Guid subjectId)

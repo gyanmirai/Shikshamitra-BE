@@ -86,7 +86,9 @@ public class AttendanceRegisterRowReader(
 				EducationMediumStageId = input.EducationMediumStageId,
 				ActiveOnOrAfter = startDate,
 				JoinedOnOrBefore = endDate,
-				TreatNullStatusAsActive = true
+				TreatNullStatusAsActive = true,
+				IncludeUnassignedEmployeesWhenAcademicYearScoped =
+					academicYearId.HasValue && !input.EducationMediumStageId.HasValue
 			});
 
 		if (input.EmployeeId.HasValue)
@@ -112,6 +114,7 @@ public class AttendanceRegisterRowReader(
 		{
 			employeeQuery = employeeQuery.Where(x => x.RoleId == input.RoleId);
 		}
+		employeeQuery = await ApplySearchPrefilterAsync(employeeQuery, input.Search, startDate, endDate);
 
 		var employees = await asyncExecuter.ToListAsync(employeeQuery.Select(x => new EmployeeProjection
 		{
@@ -129,6 +132,34 @@ public class AttendanceRegisterRowReader(
 			StatusEffectiveDate = x.StatusEffectiveDate
 		}));
 		return employees;
+	}
+
+	private async Task<IQueryable<Employee>> ApplySearchPrefilterAsync(
+		IQueryable<Employee> employeeQuery,
+		string? search,
+		DateOnly startDate,
+		DateOnly endDate)
+	{
+		if (string.IsNullOrWhiteSpace(search))
+		{
+			return employeeQuery;
+		}
+
+		var trimmed = search.Trim().ToLowerInvariant();
+		var attendanceQuery = await employeeAttendanceRepository.GetQueryableAsync();
+		var remarkEmployeeIds = attendanceQuery
+			.Where(x =>
+				x.AttendanceDate >= startDate &&
+				x.AttendanceDate <= endDate &&
+				x.Remarks != null &&
+				x.Remarks.ToLower().Contains(trimmed))
+			.Select(x => x.EmployeeId);
+
+		return employeeQuery.Where(x =>
+			(((x.FirstName ?? "") + " " + (x.LastName ?? "")).ToLower().Contains(trimmed)) ||
+			(x.EmployeeCode ?? "").ToLower().Contains(trimmed) ||
+			(x.MobileNo ?? "").ToLower().Contains(trimmed) ||
+			remarkEmployeeIds.Contains(x.Id));
 	}
 
 	private static bool ShouldRetryExplicitEmployeeWithoutAcademicYear(GetAttendanceRegisterInput input) =>

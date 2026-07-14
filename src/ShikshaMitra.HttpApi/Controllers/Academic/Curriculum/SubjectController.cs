@@ -91,6 +91,37 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 		);
 	}
 
+	[HttpPost("bulk")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsSubjectCreation
+			.Add
+	)]
+	public async Task<IActionResult> BulkCreateSubjects(
+		Guid academicMediumId,
+		[FromBody] BulkCreateSubjectsDto input
+	)
+	{
+		foreach (var subject in input.Subjects)
+		{
+			subject.EducationMediumId = academicMediumId;
+		}
+
+		return Ok(await subjectAppService.BulkCreateAsync(input));
+	}
+
+	[HttpPost("check-duplicate")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsSubjectCreation
+			.View
+	)]
+	public async Task<IActionResult> CheckDuplicate(
+		Guid academicMediumId,
+		[FromBody] SubjectDuplicateCheckDto input
+	)
+	{
+		return Ok(await subjectAppService.CheckDuplicateAsync(academicMediumId, input));
+	}
+
 	/// <summary>
 	/// Update an existing subject
 	/// </summary>
@@ -128,6 +159,42 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 		return Ok(subject);
 	}
 
+	[HttpPost("{id}/archive")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsSubjectCreation
+			.Add
+	)]
+	public async Task<IActionResult> ArchiveSubject(
+		Guid academicMediumId,
+		Guid id,
+		[FromBody] SubjectStatusChangeDto input
+	)
+	{
+		var existingSubject = await subjectAppService.GetAsync(id);
+		if (existingSubject.EducationMediumId != academicMediumId)
+		{
+			return NotFound();
+		}
+
+		return Ok(await subjectAppService.ArchiveAsync(id, input));
+	}
+
+	[HttpPost("{id}/restore")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsSubjectCreation
+			.Add
+	)]
+	public async Task<IActionResult> RestoreSubject(Guid academicMediumId, Guid id)
+	{
+		var existingSubject = await subjectAppService.GetAsync(id);
+		if (existingSubject.EducationMediumId != academicMediumId)
+		{
+			return NotFound();
+		}
+
+		return Ok(await subjectAppService.RestoreAsync(id));
+	}
+
 	/// <summary>
 	/// Check whether a subject has linked records (allocations, timetable slots, exams, etc.).
 	/// Call this before deletion so the UI can show a confirmation popup.
@@ -145,6 +212,34 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 
 		var usages = await subjectAppService.CheckUsagesAsync(id);
 		return Ok(usages);
+	}
+
+	[HttpGet("{id}/usage")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsSubjectCreation
+			.View
+	)]
+	public async Task<IActionResult> GetSubjectUsage(Guid academicMediumId, Guid id)
+	{
+		var subject = await subjectAppService.GetAsync(id);
+		if (subject.EducationMediumId != academicMediumId)
+			return NotFound();
+
+		return Ok(await subjectAppService.GetUsageDetailsAsync(id));
+	}
+
+	[HttpGet("{id}/audit-logs")]
+	[Authorize(
+		ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsSubjectCreation
+			.View
+	)]
+	public async Task<IActionResult> GetAuditLogs(Guid academicMediumId, Guid id)
+	{
+		var subject = await subjectAppService.GetAsync(id);
+		if (subject.EducationMediumId != academicMediumId)
+			return NotFound();
+
+		return Ok(await subjectAppService.GetAuditLogsAsync(id));
 	}
 
 	/// <summary>

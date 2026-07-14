@@ -9,6 +9,19 @@
 
 ---
 
+## Agentic documentation practice
+
+- Trace source code before changing module docs.
+- Backend docs own product behavior, API contracts, permissions, errors, domain invariants, data integrity, and backend validation.
+- Frontend docs own routes, screen folders, client wiring, cache behavior, UI workflows, browser checks, and frontend validation.
+- Link to sibling frontend docs instead of copying frontend route or client details.
+- Use `references/` only for active deep notes.
+- Do not add placeholder reference pages, old plans, generated exports, or phase notes.
+- Use `.agents/skills/shikshamitra-module-docs/SKILL.md` for repeatable module-doc updates.
+- Run docs validators before handing off docs changes.
+
+---
+
 ## Tech stack
 
 | Component | Technology |
@@ -73,6 +86,15 @@ cd src/ShikshaMitra.HttpApi.Host && dotnet run
 # Run tests
 dotnet test
 ```
+
+## Publish / branch sync checks
+
+- Start from `C:\Repo\ShikshaMitra\Shikshamitra-BE` and confirm the current branch and dirty state with `git status --short --branch`.
+- Confirm GitHub CLI auth with `gh auth status` before relying on PR commands.
+- When syncing `main` while preserving tracked local edits, use `git pull --autostash origin main`.
+- After merge-based syncs, run `git diff --name-only --diff-filter=U` to prove no unresolved files remain.
+- Run `git diff --check` before commit or PR creation to catch whitespace errors and conflict markers.
+- If local runtime log noise appears, prove it is ignored with `git check-ignore -v Logs/logs.txt` instead of guessing.
 
 ### Required environment / secrets
 
@@ -144,7 +166,8 @@ dotnet test
 - App-service test classes: `{AppService}_Tests` (e.g., `EmployeeAppService_Tests`).
 - API test classes: `{Controller}Api_Tests` (e.g., `EarningComponentApi_Tests`).
 - Seeders: `ShikshaMitraSeederContributor` → module-specific seeders.
-- **Current coverage**: HR module (app-service + API tests). Students, Finance, Academic, Library have **zero test coverage**.
+- **Current coverage**: HR module has focused app-service and API tests.
+- Other module coverage changes quickly, so inspect the relevant `test/` folder before claiming a gap.
 
 ```bash
 # App service tests
@@ -169,21 +192,25 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Module=HR"
 
 | Task | Location |
 |------|----------|
-| HR behavior specs (PRD) & API contracts | `docs/prd/hr/` |
-| Employee PRD & endpoints | `docs/prd/hr/employees/` |
-| Calendar PRD & endpoints | `docs/prd/hr/calendar/` |
-| Attendance & leave PRD & endpoints | `docs/prd/hr/attendance-leaves/` |
-| Payroll operations PRD & endpoints | `docs/prd/hr/payroll/` |
-| Payroll settings PRD & endpoints | `docs/prd/hr/payroll/settings/` |
-| Reports PRD & endpoints | `docs/prd/hr/reports/` |
+| HR documentation landing page | `docs/modules/hr/README.md` |
+| Module documentation standard | `docs/common/standards/module-docs-standard.md` |
+| HR product behavior | `docs/modules/hr/product.md` |
+| HR API contracts, endpoints, and permissions | `docs/modules/hr/api.md` |
+| HR backend architecture and source paths | `docs/modules/hr/architecture.md` |
+| HR end-to-end workflows | `docs/modules/hr/workflows.md` |
+| HR backend test commands and gates | `docs/modules/hr/testing.md` |
+| HR FE to BE permission mapping | `docs/modules/hr/references/permissions.md` |
+| HR policy architecture | `docs/modules/hr/references/policy-architecture.md` |
 | Architecture decisions (ADRs: eager loading, caching, payroll model) | `docs/architecture/decisions/` |
-| HR application-layer patterns & refactor notes | `docs/implementation/hr/` |
-| Rooms / buildings API docs | `docs/api/rooms/` |
-| UserScope & bulk scope assignment | `docs/platform/` |
-| Multi-tenancy (tenants, roles) | `docs/multi-tenancy/` |
-| Testing guides | `docs/testing/` |
+| Rooms / buildings API docs | `docs/modules/institute-setup/api.md` |
+| UserScope & bulk scope assignment | `docs/common/platform/` |
+| Multi-tenancy (tenants, roles) | `docs/common/multi-tenancy/` |
+| Testing guides | `docs/common/testing/` |
 | API testing framework & blueprint | `docs/common/testing/api-testing-guide.md` |
-| HR API tests & contract reference | `docs/modules/hr/testing/api-testing.md` |
-| Historical doc moves / old structure notes | `docs/meta/` -- **not** current architecture |
+| Backend docs CI validation workflow | `.github/workflows/docs-validation.yml` |
+| HR docs validation | `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module hr` |
+| Backend docs full local gate | `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1` |
+| Backend all-module docs gate | `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -AllModules` |
+| Backend docs stale-review gate | `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -AllModules -MaxAgeDays 365` |
 
 When in doubt, search `docs/` for the module name and open the nearest `README.md`.

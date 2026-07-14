@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
@@ -14,6 +14,9 @@ using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
+using ShikshaMitra.Academic.Calendar;
+using ShikshaMitra.Academic.Timetable.RoomAvailability;
+using ShikshaMitra.Academic.Timetable.Substitutions;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -27,6 +30,8 @@ public partial class ShikshaMitraDbContext
     public DbSet<AssignedSubject> StandardSubjectAssignments { get; set; }
     public DbSet<TeacherSubjectAllocation> TeacherSubjectAllocations { get; set; }
     public DbSet<StudentElectiveSelection> StudentElectiveSelections { get; set; }
+    public DbSet<LessonPlan> LessonPlans { get; set; }
+    public DbSet<TeacherDiary> TeacherDiaries { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Class Teacher
@@ -63,6 +68,9 @@ public partial class ShikshaMitraDbContext
     public DbSet<ExamMark> ExamMarks { get; set; }
     public DbSet<ExamMarksWorkflowState> ExamMarksWorkflowStates { get; set; }
     public DbSet<ExamSeatAllocation> ExamSeatAllocations { get; set; }
+    public DbSet<ExamSeatingPlan> ExamSeatingPlans { get; set; }
+    public DbSet<ExamSeatingPlanSubject> ExamSeatingPlanSubjects { get; set; }
+    public DbSet<SeatingPlanAuditLog> SeatingPlanAuditLogs { get; set; }
 
     // Question Bank
     public DbSet<QuestionBankSetting> QuestionBankSettings { get; set; }
@@ -102,4 +110,28 @@ public partial class ShikshaMitraDbContext
     public DbSet<Timetable> Timetables { get; set; }
     public DbSet<TimetableSlot> TimetableSlots { get; set; }
     public DbSet<TimetableSlotSubject> TimetableSlotSubjects { get; set; }
+
+    // ───────────────────────────────────────────────
+    // Academic — Room Availability
+    // ───────────────────────────────────────────────
+    public DbSet<RoomReservation> RoomReservations { get; set; }
+    public DbSet<RoomRecurringConfig> RoomRecurringConfigs { get; set; }
+    public DbSet<RoomMaintenanceBlock> RoomMaintenanceBlocks { get; set; }
+    public DbSet<RoomConfig> RoomConfigs { get; set; }
+    public DbSet<RoomAuditLog> RoomAuditLogs { get; set; }
+    public DbSet<SubstitutionRequest> AcademicSubstitutionRequests { get; set; }
+    public DbSet<TeacherAvailability> AcademicTeacherAvailabilities { get; set; }
+    public DbSet<SubstitutionAuditLog> AcademicSubstitutionAuditLogs { get; set; }
+    public DbSet<SubstitutionNotificationLog> AcademicSubstitutionNotificationLogs { get; set; }
+    public DbSet<SubstitutionSetting> AcademicSubstitutionSettings { get; set; }
+
+    // ───────────────────────────────────────────────
+    // Academic — Calendar
+    // ───────────────────────────────────────────────
+    public DbSet<AcademicCalendar> AcademicCalendars { get; set; }
+    public DbSet<AcademicCalendarDay> AcademicCalendarDays { get; set; }
+    public DbSet<AcademicCalendarWorkingHour> AcademicCalendarWorkingHours { get; set; }
+    public DbSet<AcademicCalendarSetting> AcademicCalendarSettings { get; set; }
+    public DbSet<CalendarImpactLog> CalendarImpactLogs { get; set; }
+    public DbSet<AcademicCalendarAuditLog> AcademicCalendarAuditLogs { get; set; }
 }

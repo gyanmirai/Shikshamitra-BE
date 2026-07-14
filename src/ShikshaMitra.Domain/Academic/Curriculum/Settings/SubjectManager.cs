@@ -17,7 +17,17 @@ public class SubjectManager(
 	ILogger<Subject> logger
 ) : DomainService
 {
-	public async Task<Subject> CreateSubject(string name, string color, Guid educationMediumId)
+	public async Task<Subject> CreateSubject(
+		string name,
+		string color,
+		Guid educationMediumId,
+		string? displayName = null,
+		string? category = null,
+		string? icon = null,
+		string? description = null,
+		SubjectMasterStatus status = SubjectMasterStatus.Active,
+		int? sortOrder = null
+	)
 	{
 		try
 		{
@@ -29,8 +39,9 @@ public class SubjectManager(
 			}
 
 			// Check for duplicate subject name within the same education medium
+			var normalizedName = name.Trim().ToUpperInvariant();
 			var existingByName = await subjectRepository.FindAsync(s =>
-				s.Name == name && s.EducationMediumId == educationMediumId);
+				s.Name.ToUpper() == normalizedName && s.EducationMediumId == educationMediumId && s.Status != SubjectMasterStatus.Archived);
 			if (existingByName != null)
 			{
 				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectName)
@@ -45,7 +56,13 @@ public class SubjectManager(
 				CurrentTenant.Id,
 				name,
 				color,
-				educationMediumId
+				educationMediumId,
+				displayName,
+				category,
+				icon,
+				description,
+				status,
+				sortOrder
 			);
 		}
 		catch (BusinessException)
@@ -63,7 +80,13 @@ public class SubjectManager(
 		Guid id,
 		string name,
 		string color,
-		Guid? educationMediumId
+		Guid? educationMediumId,
+		string? displayName = null,
+		string? category = null,
+		string? icon = null,
+		string? description = null,
+		SubjectMasterStatus status = SubjectMasterStatus.Active,
+		int? sortOrder = null
 	)
 	{
 		try
@@ -74,8 +97,12 @@ public class SubjectManager(
 					.WithData("SubjectId", id);
 
 			// Check for duplicate name (excluding current subject)
+			var normalizedName = name.Trim().ToUpperInvariant();
 			var duplicateName = await subjectRepository.FindAsync(s =>
-				s.Name == name && s.EducationMediumId == existingSubject.EducationMediumId && s.Id != id);
+				s.Name.ToUpper() == normalizedName
+				&& s.EducationMediumId == existingSubject.EducationMediumId
+				&& s.Id != id
+				&& s.Status != SubjectMasterStatus.Archived);
 			if (duplicateName != null)
 			{
 				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectName)
@@ -87,6 +114,7 @@ public class SubjectManager(
 
 			existingSubject.SetName(name);
 			existingSubject.SetColor(color);
+			existingSubject.SetMasterDetails(displayName, category, icon, description, status, sortOrder);
 
 			return existingSubject;
 		}

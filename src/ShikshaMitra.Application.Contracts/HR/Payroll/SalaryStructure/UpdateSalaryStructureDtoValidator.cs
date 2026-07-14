@@ -9,7 +9,7 @@ public class UpdateSalaryStructureDtoValidator : AbstractValidator<UpdateSalaryS
 	public UpdateSalaryStructureDtoValidator()
 	{
 		RuleFor(x => x.EarningComponents).NotEmpty();
-		RuleFor(x => x.DeductionComponents).NotEmpty();
+		RuleFor(x => x.DeductionComponents).NotNull();
 
 		RuleForEach(x => x.EarningComponents).SetValidator(new SalaryComponentDtoValidator());
 		RuleForEach(x => x.DeductionComponents).SetValidator(new SalaryComponentDtoValidator());
@@ -23,9 +23,14 @@ public class UpdateSalaryStructureDtoValidator : AbstractValidator<UpdateSalaryS
 
 	private static void AddComponentFailures(
 		ValidationContext<UpdateSalaryStructureDto> context,
-		IReadOnlyList<SalaryComponentDto> components,
+		IReadOnlyList<SalaryComponentDto>? components,
 		string arrayName)
 	{
+		if (components == null)
+		{
+			return;
+		}
+
 		for (var i = 0; i < components.Count; i++)
 		{
 			var component = components[i];

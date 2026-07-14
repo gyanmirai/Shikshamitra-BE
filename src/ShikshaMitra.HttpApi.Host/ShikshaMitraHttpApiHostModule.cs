@@ -81,8 +81,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			});
 		});
 
-		if (hostingEnvironment.IsDevelopment()) return;
-
 		PreConfigure<AbpOpenIddictAspNetCoreOptions>(options => options.AddDevelopmentEncryptionAndSigningCertificate = false);
 		PreConfigure<OpenIddictServerBuilder>(builder =>
 		{
@@ -91,6 +89,14 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			builder.AddSigningCertificate(
 				GetSigningCertificate(hostingEnvironment, context.Services.GetConfiguration()));
 			builder.SetIssuer(new Uri(configuration["AuthServer:Authority"]!));
+
+			if (
+				hostingEnvironment.IsDevelopment() &&
+				configuration.GetValue<bool>("AuthServer:DisableTransportSecurityRequirement")
+			)
+			{
+				builder.UseAspNetCore().DisableTransportSecurityRequirement();
+			}
 		});
 
 	}
@@ -102,7 +108,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		var services = context.Services;
 		services.AddHttpClient();
 
-		if (hostingEnvironment.IsDevelopment())
+		if (hostingEnvironment.IsDevelopment() && configuration.GetValue<bool>("DevAutoAuth:Enabled"))
 		{
 			// DevAutoAuthMiddleware uses this named client to call the local OpenIddict token
 			// endpoint, which may use a self-signed certificate in development.
@@ -514,6 +520,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	{
 		var app = context.GetApplicationBuilder();
 		var env = context.GetEnvironment();
+		var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
 
 		QuestPDF.Settings.License = LicenseType.Community;
 
@@ -539,7 +546,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseRouting();
 		app.UseCors();
 
-		if (env.IsDevelopment())
+		if (env.IsDevelopment() && configuration.GetValue<bool>("DevAutoAuth:Enabled"))
 		{
 			// app.UseDevAutoAuth();
 		}
@@ -598,6 +605,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	{
 		OnApplicationInitialization(context);
 		await context.AddBackgroundWorkerAsync<ExamAutoCompleteWorker>();
+		await context.AddBackgroundWorkerAsync<AdmissionCrmAutomationWorker>();
 		await context.AddBackgroundWorkerAsync<HrDashboardPreviewRefreshWorker>();
 		await context.AddBackgroundWorkerAsync<StudentDashboardPreviewRefreshWorker>();
 		await context.AddBackgroundWorkerAsync<HrReportScheduleWorker>();

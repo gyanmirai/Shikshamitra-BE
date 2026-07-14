@@ -4,6 +4,7 @@ namespace ShikshaMitra.Academic.Examination.SeatAllocation.Dtos;
 
 public class GetSeatLayoutInput
 {
+    public Guid? SeatingPlanId { get; set; }
     public Guid DivisionId { get; set; }
     public Guid RoomId { get; set; }
     public int Page { get; set; } = 1;
@@ -13,6 +14,7 @@ public class GetSeatLayoutInput
 
 public class GetSeatStudentsInput
 {
+    public Guid? SeatingPlanId { get; set; }
     public Guid StandardId { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
@@ -39,6 +41,7 @@ public class GetSeatAllocationTableInput
 
 public class GetExamRoomsInput
 {
+    public Guid? SeatingPlanId { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
     public string? Search { get; set; }

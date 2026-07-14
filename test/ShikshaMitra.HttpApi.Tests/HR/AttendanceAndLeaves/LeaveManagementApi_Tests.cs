@@ -363,6 +363,41 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Admin_Should_Cancel_Approved_Leave_Without_Hard_Delete()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"AdminCancelApproved{Guid.NewGuid():N}");
+		var policy = await CreateLeavePolicyFixtureAsync("AdminCancelApproved");
+		var paidRule = policy.Rules.Single(rule => rule.PaidType == "Paid");
+		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		var leaveDate = FirstNonSunday(DateTime.UtcNow.Date < startDate ? startDate : DateTime.UtcNow.Date);
+		var created = await SeedPendingLeaveRequestAsync(
+			employee.Id,
+			policy.Id,
+			paidRule.Id,
+			LeavePaidType.Paid,
+			leaveDate,
+			"Approved leave cancellation regression");
+
+		var approveResponse = await Client.PatchAsJsonAsync(
+			$"{BaseUrl}/{created}/approve",
+			new LeaveApprovalRequestDto { Remarks = "Approved before cancellation" },
+			JsonOptions);
+		approveResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await approveResponse.Content.ReadAsStringAsync());
+
+		var deleteResponse = await Client.DeleteAsync($"{BaseUrl}/{created}");
+		var deletePayload = await deleteResponse.Content.ReadAsStringAsync();
+		deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK, deletePayload);
+
+		var detailResponse = await Client.GetAsync($"{BaseUrl}/{created}");
+		var detailPayload = await detailResponse.Content.ReadAsStringAsync();
+		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK, detailPayload);
+		var detail = JsonSerializer.Deserialize<LeaveRequestDetailsResponse>(detailPayload, JsonOptions);
+		detail.ShouldNotBeNull();
+		detail.Status.ShouldBe("CANCELLED");
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Admin_Should_Create_Employee_Leave_And_Reject_It()
 	{

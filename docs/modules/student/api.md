@@ -1,0 +1,136 @@
+---
+module: student
+domain: api
+content_type: Reference
+status: canonical
+updated_on: 2026-07-10
+owner: backend-team
+audience: humans-and-agents
+---
+
+# Use Student backend APIs
+
+TL;DR: use this page to find Student endpoint families and compatibility notes.
+Controller source paths are canonical when route details change.
+
+## Enrollment API families
+
+| Family | Controller path | Notes |
+|---|---|---|
+| Inquiry | `Controllers/Student/Enrollment/InquiryController.cs` | Enrollment inquiry workflows |
+| Registration | `Controllers/Student/Enrollment/RegistrationController.cs` and registration sub-controllers | Multi-section registration data |
+| Admission | `Controllers/Student/Enrollment/AdmissionController.cs` | Admission workflow |
+| Entrance exam | `Controllers/Student/Enrollment/EntranceExamController.cs` | Entrance exam slot and workflow APIs |
+| Notes | `Controllers/Student/Enrollment/NotesController.cs` | Student enrollment notes |
+| Enrollment settings | `Controllers/Student/Enrollment/Settings/**` | Inquiry Source, document type, and entrance exam slot settings |
+| Admissions CRM | `Controllers/Student/Enrollment/AdmissionsCrm/**` | Future inquiry-to-entrance-exam CRM APIs |
+
+## Records API families
+
+| Family | Controller path |
+|---|---|
+| Student list | `Controllers/Student/Records/StudentListController.cs` |
+| Student management | `Controllers/Student/Records/StudentManagementController.cs` |
+| Bulk upload | `Controllers/Student/Records/StudentBulkUploadController.cs` |
+| Dashboard | `Controllers/Student/Records/StudentDashboardController.cs` |
+| Certificates | `Controllers/Student/Records/StudentCertificateController.cs` |
+| House settings | `Controllers/Student/Records/Settings/HouseSettingsController.cs` |
+
+## Attendance, leave, and compliance API families
+
+| Family | Controller path |
+|---|---|
+| Student attendance | `Controllers/Student/Attendance/StudentAttendanceController.cs` |
+| Student leave | `Controllers/Student/Attendance/StudentLeaveController.cs` |
+| Student leave type settings | `Controllers/Student/Attendance/Settings/StudentLeaveTypeController.cs` |
+| Identity compliance | `Controllers/Student/Compliance/StudentIdentityComplianceController.cs` |
+
+## Inquiry Source compatibility
+
+Inquiry Source is exposed through the existing `inquiry-preferences` route for compatibility.
+Product copy should say Inquiry Source, while route and DTO names can still use Inquiry Preference.
+
+| Route | Purpose |
+|---|---|
+| `/api/student-enrollment/{academicYearId}/settings/inquiry-preferences` | List or create Inquiry Sources |
+| `/api/student-enrollment/settings/inquiry-preferences/{id}` | Get, update, or delete one source |
+| `/api/student-enrollment/settings/inquiry-preferences/{id}/status` | Activate or deactivate one source |
+
+## Admissions CRM API
+
+The CRM route family is `api/student-enrollment/admissions-crm`.
+Use it for future-state inquiry leads, CRM configuration, and entrance exam CRM behavior.
+Keep legacy inquiry and entrance exam routes stable until their consumers are fully migrated.
+CRM inquiry lead payloads support optional applicant DOB for duplicate review and eligibility handoff context without making DOB required for quick inquiry creation.
+
+| Route pattern | Purpose |
+|---|---|
+| `/{academicYearId}/leads` | Create and list lightweight CRM inquiry leads |
+| `/{academicYearId}/leads/duplicate-preview` | Preview likely duplicate CRM leads |
+| `/leads/{leadId}/duplicates/merge` | Merge one duplicate lead into the surviving CRM lead with reason |
+| `/leads/{leadId}/owner` | Assign or clear a CRM lead owner |
+| `/leads/{leadId}/priority` | Set manual CRM lead priority with optional reason |
+| `/leads/{leadId}/stage` | Move a CRM lead across operational inquiry stages with reason |
+| `/leads/{leadId}/registration-form` | Issue a CRM-native registration form on one lead before exam scheduling when the cycle requires it |
+| `/leads/{leadId}/score/recalculate` | Recalculate a baseline CRM lead score |
+| `/leads/{leadId}/archive` | Archive one CRM lead with reason |
+| `/leads/{leadId}/reopen` | Reopen one stale or archived CRM lead with reason |
+| `/{academicYearId}/automation/stale-archive/run` | Run configured stale and archive thresholds and create internal stale follow-up tasks |
+| `/{academicYearId}/automation/sla-reminders/run` | Create follow-up tasks for CRM leads that missed their stage SLA threshold, with cycle default fallback |
+| `/{academicYearId}/automation/journeys/run` | Run configured condition-aware journey rules for one trigger and create deduplicated follow-up tasks, message delivery logs, or failure evidence |
+| `/leads/{leadId}/tasks` | Create or list follow-up tasks for one CRM lead |
+| `/leads/{leadId}/timeline` | List timeline events for one CRM lead |
+| `/leads/{leadId}/applicant-checklist` | List cycle-configured applicant checklist items merged with lead-specific progress |
+| `/leads/{leadId}/applicant-checklist/{key}` | Update one lead-specific applicant checklist item with progress and internal notes |
+| `/leads/{leadId}/notes` | Add a staff lead note or call note to the CRM timeline |
+| `/tasks/{taskId}/complete` | Complete one follow-up task |
+| `/{academicYearId}/exams` | List CRM entrance exam records |
+| `/leads/{leadId}/exam` | Get the CRM entrance exam record for one lead |
+| `/leads/{leadId}/exam/schedule` | Schedule or reschedule a CRM lead into an entrance exam slot after cycle readiness checks |
+| `/exams/{examRecordId}/attendance` | Mark CRM entrance exam attendance |
+| `/exams/{examRecordId}/result` | Record CRM entrance exam marks and manual or class-wise merit rank |
+| `/exams/{examRecordId}/eligibility` | Set eligibility, waitlist, or rejection decision |
+| `/exams/{examRecordId}/eligibility-handoff` | Return read-only lead and exam context for admission handoff |
+| `/{academicYearId}/analytics/summary` | Return funnel, lead-level conversion rates, stage-configured first-response SLA, follow-up SLA miss, source, campaign, date-range trend, staff workload, task, duplicate, automation run, automation failure, exam, class-wise exam, and exam governance analytics |
+| `/{academicYearId}/configuration/cycle` | Get or update CRM cycle defaults, inquiry channel enablement and defaults, exam readiness fields, merit ranking mode, lead scoring rules, routing strategy, owner pool, routing rules, and condition-aware journey rules |
+| `/{academicYearId}/configuration/pipeline-stages` | Get fixed CRM pipeline milestones with color, SLA target, owner responsibility, and allowed next-stage metadata |
+| `/configuration/pipeline-stages/{stageId}` | Update one CRM pipeline stage display and governance configuration used by manual transition enforcement |
+| `/{academicYearId}/configuration/form-templates` | Create and list inquiry form templates |
+| `/configuration/form-templates/{id}` | Get or update one inquiry form template |
+| `/configuration/form-templates/{id}/status` | Activate or deactivate one inquiry form template |
+| `/{academicYearId}/configuration/message-templates` | Create and list WhatsApp, SMS, and email message templates |
+| `/configuration/message-templates/{id}` | Get or update one message template |
+| `/configuration/message-templates/{id}/status` | Update message template approval status and active state |
+| `/{academicYearId}/communication/message-templates/preview` | Render one draft or approved message template with sample, provided, or lead variables without creating a delivery log |
+| `/{academicYearId}/communication/providers` | Get or initialize WhatsApp, SMS, and email provider settings |
+| `/{academicYearId}/communication/providers/{channel}` | Update one channel provider setting |
+| `/{academicYearId}/communication/opt-outs` | List, filter, or record communication opt-out records |
+| `/{academicYearId}/communication/opt-outs/clear` | Clear one active communication opt-out |
+| `/leads/{leadId}/messages/send-template` | Render one approved template, apply opt-out and provider checks, optionally dispatch to provider webhook, and create a communication delivery log |
+| `/{academicYearId}/communication/delivery-logs` | List communication delivery logs with provider message ID evidence and provider ID filtering |
+| `/communication/delivery-logs/{deliveryLogId}/retry` | Queue a delivery retry after provider and opt-out checks |
+
+## Public Admissions CRM API
+
+The public CRM route family is `api/public/student-enrollment/admissions-crm`.
+Public routes are tenant-qualified until a school slug or domain resolver is added.
+Public form submission stores consent and the complete submitted dynamic field payload.
+Public form system-field mapping can populate optional applicant DOB and use it for internal duplicate review.
+OTP challenge creation uses the applicant's consented SMS, WhatsApp, or email channel when a matching CRM communication provider is configured.
+OTP challenge creation is rate-limited per status token, and repeated invalid verification attempts lock the current OTP challenge.
+OTP delivery logs store a masked body snapshot instead of the raw OTP value.
+
+| Route pattern | Purpose |
+|---|---|
+| `/{tenantId}/forms/{templateId}` | Read one active public inquiry form |
+| `/{tenantId}/forms/{templateId}/submit` | Submit one public inquiry form and create a CRM lead |
+| `/{tenantId}/status/{token}/otp` | Issue an applicant status OTP challenge and create provider delivery evidence when a consented channel is available |
+| `/{tenantId}/status/{token}/verify` | Verify OTP and return applicant status, checklist, exam schedule, exam result, and eligibility details |
+| `/{tenantId}/communication/delivery-logs/{deliveryLogId}/callback` | Reconcile a provider callback using direct callback fields or `callbackMappings` JSON paths in provider settings |
+| `/{tenantId}/communication/{academicYearId}/{channel}/delivery-callback` | Reconcile a provider callback by provider message ID, academic year, and channel using direct callback fields or `callbackMappings` JSON paths |
+
+## Contract rule
+
+Do not add a parallel curated contract tree for Student.
+Add endpoint summaries here when Student API docs need more route detail.
+Do not restore generated exports under `docs/`.

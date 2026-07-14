@@ -58,11 +58,19 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 			// Create through domain manager (handles all business logic + persistence)
 			var homeworkType = await _manager.CreateAsync(
 				academicMediumId,
-				input.HomeworkTypeName
+				input.HomeworkTypeName,
+				input.Description,
+				input.DefaultSubmissionType,
+				input.DefaultMarks,
+				input.DefaultDueDays,
+				input.EvaluationRequired,
+				input.DefaultEvaluationMethod,
+				input.Status
 			);
 
 			// Map to DTO
 			var dto = ObjectMapper.Map<HomeworkType, HomeworkTypeDto>(homeworkType);
+			dto.UsageCount = 0;
 
 			_logger.LogInformation(
 				"Successfully created homework type with ID {Id}",
@@ -114,6 +122,11 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 			// Map to DTOs
 			var dtos = ObjectMapper.Map<List<HomeworkType>, List<HomeworkTypeDto>>(types);
 
+			foreach (var dto in dtos)
+			{
+				dto.UsageCount = await _homeworkRepository.CountAsync(h => h.HomeworkTypeId == dto.Id);
+			}
+
 			_logger.LogDebug(
 				"Found {Count} homework types for academic medium {MediumId}",
 				dtos.Count,
@@ -162,6 +175,7 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 			}
 
 			var dto = ObjectMapper.Map<HomeworkType, HomeworkTypeDto>(homeworkType);
+			dto.UsageCount = await _homeworkRepository.CountAsync(h => h.HomeworkTypeId == dto.Id);
 
 			return new HomeworkTypeGetResponseDto { Data = dto };
 		}
@@ -209,7 +223,17 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 			}
 
 			// Update through domain manager
-			await _manager.UpdateAsync(homeworkType, input.HomeworkTypeName);
+			await _manager.UpdateAsync(
+				homeworkType,
+				input.HomeworkTypeName,
+				input.Description,
+				input.DefaultSubmissionType,
+				input.DefaultMarks,
+				input.DefaultDueDays,
+				input.EvaluationRequired,
+				input.DefaultEvaluationMethod,
+				input.Status
+			);
 
 			// Persist changes
 			await _repository.UpdateAsync(homeworkType, autoSave: true);
@@ -268,6 +292,21 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 			{
 				throw new BusinessException(HomeworkAssignmentErrorCodes.HomeworkTypeIsInUse)
 					.WithData("message", $"Cannot delete '{homeworkType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+			}
+
+			// Block if it's the last active homework type
+			if (homeworkType.Status == TaskTypeStatus.Active)
+			{
+				var activeCount = await _repository.CountAsync(t =>
+					t.AcademicMediumId == homeworkType.AcademicMediumId &&
+					t.Status == TaskTypeStatus.Active &&
+					t.Id != homeworkType.Id
+				);
+				if (activeCount == 0)
+				{
+					throw new BusinessException(HomeworkAssignmentErrorCodes.AtLeastOneActiveHomeworkTypeMustRemain)
+						.WithData("message", "At least one active homework type must remain. You cannot delete this type.");
+				}
 			}
 
 			// Soft delete (FullAuditedAggregateRoot)

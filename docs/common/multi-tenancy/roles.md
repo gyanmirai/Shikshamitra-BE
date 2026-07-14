@@ -1,18 +1,17 @@
-# ShikshaMitra Role Setup Guide
+# Set up roles
 
-## 🎯 Overview
+This guide explains how ShikshaMitra roles relate to permissions and data scope.
+Use it when you create test roles, verify seeded roles, or debug role assignment failures.
 
-This guide explains how to set up and use roles in ShikshaMitra application.
+## Role basics
 
----
+Roles define what a user can do.
+UserScope defines which tenant data rows a staff user can see.
+Never use a role name as a substitute for tenant or data-scope filtering.
 
-## 📋 Creating Roles
+## Create roles through the Identity API
 
-Roles need to be created manually in your system before you can assign them to users.
-
-### Method 1: Using ABP Identity API
-
-Create roles via the Identity API:
+Use the ABP Identity API when you need to create a role manually.
 
 ```http
 POST /api/identity/roles
@@ -26,45 +25,24 @@ Authorization: Bearer {token}
 }
 ```
 
-### Method 2: Using Database
+## Create roles through SQL only for local repair
 
-You can also insert roles directly into the database:
+Use direct SQL only for local development repair.
+Do not use this path as the normal production workflow.
 
 ```sql
 INSERT INTO "AbpRoles" ("Id", "TenantId", "Name", "NormalizedName", "IsDefault", "IsStatic", "IsPublic", "ConcurrencyStamp")
-VALUES 
+VALUES
   (gen_random_uuid(), NULL, 'teacher', 'TEACHER', false, false, true, gen_random_uuid()::text),
   (gen_random_uuid(), NULL, 'principal', 'PRINCIPAL', false, false, true, gen_random_uuid()::text),
   (gen_random_uuid(), NULL, 'student', 'STUDENT', false, false, true, gen_random_uuid()::text);
 ```
 
----
+## Use lower-case role names
 
-## 📝 Recommended Roles
+Role names are case-sensitive in user creation payloads.
+Use the exact lower-case role name created in Identity.
 
-Here are some common roles you might want to create:
-
-| Role Name | Description |
-|-----------|-------------|
-| `teacher` | Teachers who teach subjects |
-| `principal` | School principal with full access |
-| `vice_principal` | Vice principal with administrative access |
-| `hod` | HOD for specific subjects |
-| `librarian` | Library management staff |
-| `accountant` | Accounts and finance staff |
-| `admin_staff` | General administrative staff |
-| `student` | Students enrolled in the school |
-| `parent` | Parent or guardian of students |
-
----
-
-## 📝 Creating Users with Roles
-
-### Using Postman
-
-**Important:** Role names are **case-sensitive** and should be **lowercase**.
-
-#### ✅ Correct Example
 ```json
 {
   "userName": "teacher.john",
@@ -77,157 +55,34 @@ Here are some common roles you might want to create:
 }
 ```
 
-#### ❌ Incorrect Examples
-```json
-{
-  "roleNames": ["TEACHER"]  // ❌ Wrong - uppercase
-}
+## Recommended role names
 
-{
-  "roleNames": ["Teacher"]  // ❌ Wrong - capitalized
-}
-```
+Use concise names that map to school responsibilities.
 
-### Multiple Roles
+| Role name | Description |
+|---|---|
+| `teacher` | Teachers who teach subjects |
+| `principal` | School principal |
+| `vice_principal` | Vice principal |
+| `hod` | Head of department |
+| `librarian` | Library staff |
+| `accountant` | Finance staff |
+| `admin_staff` | Administrative staff |
+| `student` | Enrolled student |
+| `parent` | Parent or guardian |
 
-You can assign multiple roles to a single user:
+## Troubleshoot role assignment
 
-```json
-{
-  "userName": "admin.jane",
-  "name": "Jane",
-  "surname": "Smith",
-  "email": "jane@school.com",
-  "phoneNumber": "+1234567890",
-  "roleNames": ["principal", "teacher"],
-  "password": "Admin@123"
-}
-```
+Use this checklist when user creation fails with a missing role error.
 
----
+1. Query available roles with `SELECT "Name" FROM "AbpRoles";`
+2. Verify exact case in `roleNames`
+3. Create the missing role through the Identity API
+4. Re-run the user creation request
+5. Check `src/ShikshaMitra.HttpApi.Host/Logs/` if the error persists
 
-## 🔧 Common Issues & Solutions
+## Related docs
 
-### Issue 1: "Role TEACHER does not exist!" or "Role teacher does not exist!"
-
-**Cause:** The role hasn't been created in the database yet.
-
-**Solution:**
-1. Create the role first using the Identity API or SQL
-2. Then create the user with that role name
-
-### Issue 2: Case Sensitivity
-
-**Note:** Role names are case-sensitive. Make sure you use the exact same case when:
-- Creating the role
-- Assigning it to users
-
-**Example:**
-```json
-// If you created role as "teacher" (lowercase)
-{
-  "roleNames": ["teacher"]  // ✅ Correct
-}
-
-// Don't use different casing
-{
-  "roleNames": ["Teacher"]  // ❌ Wrong - will fail
-}
-```
-
----
-
-## 🛠️ Creating Custom Roles
-
-### Via Identity API (Recommended)
-
-Use the ABP Identity API to create roles:
-
-```http
-POST /api/identity/roles
-Content-Type: application/json
-Authorization: Bearer {token}
-
-{
-  "name": "sports_coach",
-  "isDefault": false,
-  "isPublic": true
-}
-```
-
-### Via Database
-
-Insert directly into the database:
-
-```sql
-INSERT INTO "AbpRoles" ("Id", "TenantId", "Name", "NormalizedName", "IsDefault", "IsStatic", "IsPublic", "ConcurrencyStamp")
-VALUES (gen_random_uuid(), NULL, 'sports_coach', 'SPORTS_COACH', false, false, true, gen_random_uuid()::text);
-```
-
----
-
-## 📖 Role Naming Conventions
-
-### Best Practices
-
-1. **Use lowercase with underscores** for multi-word roles
-   - ✅ `vice_principal`
-   - ✅ `admin_staff`
-   - ❌ `VicePrincipal`
-   - ❌ `Admin Staff`
-
-2. **Be descriptive but concise**
-   - ✅ `teacher`
-   - ✅ `librarian`
-   - ❌ `t`
-   - ❌ `person_who_teaches_students`
-
-3. **Use singular form**
-   - ✅ `teacher`
-   - ❌ `teachers`
-
----
-
-## 🔐 Role-Based Permissions
-
-Roles are separate from UserScope. Remember:
-
-- **Roles** = What a user CAN do (permissions)
-- **UserScope** = What data a user CAN see (data filtering)
-
-### Example
-
-A user with role `teacher` might have permissions to:
-- Create assignments
-- Grade students
-- View attendance
-
-But their **UserScope** determines:
-- Which divisions they can see
-- Which students they can access
-- Which classes they can manage
-
----
-
-## 📚 Related Documentation
-
-- [Modules Index](../../modules/README.md)
-- [UserScope Usage Guide](../platform/UserScope-Usage.md)
-
----
-
-## 🆘 Need Help?
-
-If you encounter issues:
-
-1. **Check available roles** in database: `SELECT Name FROM AbpRoles;`
-2. **Verify exact role name** (case-sensitive)
-3. **Create missing roles** using Identity API
-4. **Check the logs** in `src/ShikshaMitra.HttpApi.Host/Logs/`
-
----
-
-**Last Updated:** December 2024  
-**Version:** 2.0
-
-
+- [Modules index](../../modules/README.md)
+- [UserScope usage guide](../platform/UserScope-Usage.md)
+- [Seeded accounts and access](../testing/seeded-accounts-access.md)

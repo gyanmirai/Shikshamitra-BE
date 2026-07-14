@@ -101,6 +101,9 @@ public class QuestionBankItemDto
     public bool IsLocked { get; set; }
     public bool IsArchived { get; set; }
     public int UsedCount { get; set; }
+    public int QualityScore { get; set; }
+    public bool DuplicateRisk { get; set; }
+    public string QualityBand { get; set; } = "Needs Review";
     public List<QuestionOptionDto> Options { get; set; } = new();
     public List<string> Tags { get; set; } = new();
 }
@@ -175,6 +178,7 @@ public class DuplicateQuestionResultDto
     public bool HasDuplicate { get; set; }
     public bool IsBlocked { get; set; }
     public string? Message { get; set; }
+    public int HighestSimilarity { get; set; }
     public List<QuestionBankItemDto> Matches { get; set; } = new();
 }
 
@@ -196,4 +200,7 @@ public class QuestionBankDashboardDto
     public int DraftQuestions { get; set; }
     public int PendingReview { get; set; }
     public int RejectedQuestions { get; set; }
+    public int NeedsImprovement { get; set; }
+    public int DuplicateRisk { get; set; }
+    public int NeverUsed { get; set; }
 }

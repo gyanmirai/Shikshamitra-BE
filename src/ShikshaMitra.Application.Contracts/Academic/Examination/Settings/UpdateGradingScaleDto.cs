@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Academic.Examination.Settings;
@@ -10,6 +10,14 @@ public class UpdateGradingScaleDto
 
     [Required]
     public string TotalMarks { get; set; }
+
+    public double? PassMarks { get; set; }
+
+    public string? Description { get; set; }
+
+    public bool IsDefault { get; set; }
+
+    public SettingStatus Status { get; set; }
 
     [Required]
     [MinLength(1)]

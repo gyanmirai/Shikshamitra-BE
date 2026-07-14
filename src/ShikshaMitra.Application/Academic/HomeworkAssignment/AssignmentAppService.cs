@@ -225,6 +225,14 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		var creators = creatorIds.Any()
 			? await _userRepository.GetListAsync(u => creatorIds.Contains(u.Id))
 			: new List<IdentityUser>();
+		var assignmentIds = assignments.Select(a => a.Id).ToList();
+		var submissions = assignmentIds.Any()
+			? await _studentSubmissionRepository.GetListAsync(s =>
+				s.AssignmentId.HasValue && assignmentIds.Contains(s.AssignmentId.Value))
+			: new List<StudentSubmissionEntity>();
+		var submissionLookup = submissions
+			.GroupBy(s => s.AssignmentId!.Value)
+			.ToDictionary(g => g.Key, g => BuildSubmissionSummary(g));
 
 		// Create lookup dictionaries for O(1) access
 		var standardLookup = standards.ToDictionary(s => s.Id, s => s.Name);
@@ -244,7 +252,8 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 				standardLookup,
 				subjectLookup,
 				divisionLookup,
-				creatorLookup
+				creatorLookup,
+				submissionLookup.GetValueOrDefault(assignment.Id)
 			);
 			dtos.Add(dto);
 		}
@@ -465,7 +474,8 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		Dictionary<Guid, string>? standardLookup = null,
 		Dictionary<Guid, string>? subjectLookup = null,
 		Dictionary<Guid, string>? divisionLookup = null,
-		Dictionary<Guid, string>? creatorLookup = null
+		Dictionary<Guid, string>? creatorLookup = null,
+		LearningTaskSubmissionSummary? submissionSummary = null
 	)
 	{
 		// 1. Base mapping
@@ -514,6 +524,18 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 
 		// 4. Get AssignmentType name
 		dto.AssignmentTypeName = assignment.AssignmentType?.Name ?? string.Empty;
+		dto.DefaultSubmissionType = assignment.AssignmentType?.DefaultSubmissionType.HasValue == true
+			? (int) assignment.AssignmentType.DefaultSubmissionType.Value
+			: null;
+		dto.DefaultMarks = assignment.AssignmentType?.DefaultMarks;
+		dto.DefaultDueDays = assignment.AssignmentType?.DefaultDueDays;
+		dto.EvaluationRequired = assignment.AssignmentType?.EvaluationRequired ?? true;
+		dto.DefaultEvaluationMethod = assignment.AssignmentType?.DefaultEvaluationMethod.HasValue == true
+			? (int) assignment.AssignmentType.DefaultEvaluationMethod.Value
+			: null;
+		dto.AssignmentTypeStatus = assignment.AssignmentType != null
+			? (int) assignment.AssignmentType.Status
+			: null;
 
 		// 5. Get Division names
 		if (dto.Divisions != null && dto.Divisions.Any())
@@ -572,8 +594,50 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 			}
 		}
 
+		if (submissionSummary == null)
+		{
+			var submissions = await _studentSubmissionRepository.GetListAsync(s => s.AssignmentId == assignment.Id);
+			submissionSummary = BuildSubmissionSummary(submissions);
+		}
+
+		dto.TotalStudents = submissionSummary.TotalStudents;
+		dto.SubmittedCount = submissionSummary.SubmittedCount;
+		dto.PendingCount = submissionSummary.PendingCount;
+		dto.LateCount = submissionSummary.LateCount;
+		dto.CheckedCount = submissionSummary.CheckedCount;
+		dto.EvaluationPendingCount = submissionSummary.EvaluationPendingCount;
+
 		return dto;
 	}
+
+	private static LearningTaskSubmissionSummary BuildSubmissionSummary(IEnumerable<StudentSubmissionEntity> submissions)
+	{
+		var list = submissions.ToList();
+		var submittedCount = list.Count(s =>
+			s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.Reviewed);
+		var lateCount = list.Count(s => s.Status == SubmissionStatus.Late);
+		var checkedCount = list.Count(s => s.Status == SubmissionStatus.Reviewed);
+		var evaluationPendingCount = list.Count(s =>
+			s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview);
+
+		return new LearningTaskSubmissionSummary(
+			TotalStudents: 0,
+			SubmittedCount: submittedCount,
+			PendingCount: 0,
+			LateCount: lateCount,
+			CheckedCount: checkedCount,
+			EvaluationPendingCount: evaluationPendingCount
+		);
+	}
+
+	private sealed record LearningTaskSubmissionSummary(
+		int TotalStudents,
+		int SubmittedCount,
+		int PendingCount,
+		int LateCount,
+		int CheckedCount,
+		int EvaluationPendingCount
+	);
 
 	#endregion
 }

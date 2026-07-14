@@ -179,4 +179,5 @@ public class HrEmployeeScopeOptions
 	public DateOnly? ActiveOnOrAfter { get; set; }
 	public DateOnly? JoinedOnOrBefore { get; set; }
 	public bool TreatNullStatusAsActive { get; set; } = true;
+	public bool IncludeUnassignedEmployeesWhenAcademicYearScoped { get; set; }
 }

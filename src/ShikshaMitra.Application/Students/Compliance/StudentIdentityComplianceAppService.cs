@@ -21,7 +21,7 @@ public class StudentIdentityComplianceAppService(
 	IStringEncryptionService stringEncryptionService,
 	IGuidGenerator guidGenerator) : ApplicationService, IStudentIdentityComplianceAppService
 {
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_RegistrationFormIssued.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.IdentityCompliance.View)]
 	public async Task<StudentIdentityComplianceDto> GetAsync(Guid studentId)
 	{
 		await studentScopeAccessService.GetStudentAsync(studentId, nameof(GetAsync));

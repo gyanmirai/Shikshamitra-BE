@@ -22,4 +22,15 @@ public class Room : AuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Features (stored as JSON array)
 	public List<string>? Features { get; set; }
+
+	// ── Exam seating layout metadata (spec §15 room layout templates) ──
+	// Board/entrance orientation shown on the seat canvas.
+	public string? BoardPosition { get; set; }
+	public string? EntrancePosition { get; set; }
+	// Comma-separated seat numbers (1-based, matching ExamSeatAllocation.SeatNumber ordering).
+	public string? DisabledSeatNumbersCsv { get; set; }
+	public string? ReservedSeatNumbersCsv { get; set; }
+	public string? AccessibleSeatNumbersCsv { get; set; }
+	// Zero-based column indexes after which an aisle gap is rendered.
+	public string? AisleAfterColumnsCsv { get; set; }
 }

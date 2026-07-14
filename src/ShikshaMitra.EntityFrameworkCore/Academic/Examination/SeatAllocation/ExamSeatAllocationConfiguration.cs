@@ -12,6 +12,7 @@ public class ExamSeatAllocationConfiguration : IEntityTypeConfiguration<ExamSeat
         builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamSeatAllocations", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
+        builder.Property(x => x.SeatingPlanId).IsRequired();
         builder.Property(x => x.ExamId).IsRequired();
         builder.Property(x => x.StudentId).IsRequired();
         builder.Property(x => x.RoomId).IsRequired();
@@ -19,6 +20,8 @@ public class ExamSeatAllocationConfiguration : IEntityTypeConfiguration<ExamSeat
         builder.Property(x => x.BenchId).IsRequired(false);
         builder.Property(x => x.IsRoomAssign).IsRequired();
 
-        builder.HasIndex(x => new { x.ExamId, x.StudentId }).IsUnique();
+        builder.HasIndex(x => new { x.SeatingPlanId, x.StudentId }).IsUnique();
+        builder.HasIndex(x => new { x.SeatingPlanId, x.RoomId, x.SeatNumber }).IsUnique();
+        builder.HasIndex(x => x.ExamId);
     }
 }

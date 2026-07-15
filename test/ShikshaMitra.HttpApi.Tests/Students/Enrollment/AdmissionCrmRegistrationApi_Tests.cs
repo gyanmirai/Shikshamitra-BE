@@ -5,6 +5,8 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
@@ -300,6 +302,35 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		queueSummary.ShouldNotBeNull();
 		queueSummary.Queues.Single(x => x.QueueType == AdmissionCrmOperationsQueueType.AdmissionReady).Count.ShouldBeGreaterThan(0);
 
+		var admissionReadyQueueResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/operations/queues/{(int)AdmissionCrmOperationsQueueType.AdmissionReady}?registrationStatus={(int)AdmissionCrmRegistrationStatus.AdmissionReady}&maxResultCount=50");
+		admissionReadyQueueResponse.StatusCode.ShouldBe(HttpStatusCode.OK,
+			await admissionReadyQueueResponse.Content.ReadAsStringAsync());
+		var admissionReadyQueue = await admissionReadyQueueResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmOperationsQueueDto>(JsonOptions);
+		admissionReadyQueue.ShouldNotBeNull();
+		var admissionReadyItem = admissionReadyQueue.Items.Single(x => x.LeadId == lead.Id);
+		admissionReadyItem.Registration.ShouldNotBeNull();
+		admissionReadyItem.Registration.Status.ShouldBe(AdmissionCrmRegistrationStatus.AdmissionReady);
+		admissionReadyItem.Registration.FormNumber.ShouldBe(issued.FormNumber);
+		admissionReadyItem.Registration.ReadinessConfirmed.ShouldBeTrue();
+
+		var overviewResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/operations/overview");
+		overviewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await overviewResponse.Content.ReadAsStringAsync());
+		var overview = await overviewResponse.Content.ReadFromJsonAsync<AdmissionCrmEnrollmentOverviewDto>(JsonOptions);
+		overview.ShouldNotBeNull();
+		overview.Queues.Single(x => x.QueueType == AdmissionCrmOperationsQueueType.AdmissionReady).Count
+			.ShouldBeGreaterThan(0);
+		overview.UrgentItems.Count.ShouldBeLessThanOrEqualTo(12);
+		overview.UrgentItems.ShouldAllBe(x =>
+			x.Item.LeadId != Guid.Empty &&
+			(x.Workspace == "exams" ||
+			 x.Workspace == "registrations" ||
+			 x.Workspace == "offers" ||
+			 x.Workspace == "activation" ||
+			 x.Workspace == "operations"));
+
 		var handoffResponse = await Client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/registrations/{issued.Id}/admission-handoff");
 		handoffResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await handoffResponse.Content.ReadAsStringAsync());
@@ -385,6 +416,69 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		updatedLead.RegistrationFormNumber.ShouldStartWith("AUTO-" + unique.ToUpperInvariant() + "-");
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_List_Eligible_Lead_When_Registration_Invitation_Is_Pending()
+	{
+		var unique = Guid.NewGuid().ToString("N")[..8];
+		var leadResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+			new CreateAdmissionCrmLeadDto
+			{
+				AdmissionIntent = "Registration invitation " + unique,
+				DesiredClassName = "Grade 3",
+				PrimaryContactNo = "96" + Random.Shared.NextInt64(10000000, 99999999),
+				Channel = AdmissionInquiryChannel.QuickCallEntry,
+				FirstName = "Pending",
+				LastName = "Registration"
+			},
+			JsonOptions);
+		leadResponse.EnsureSuccessStatusCode();
+		var lead = await leadResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
+		lead.ShouldNotBeNull();
+
+		await SetLeadStageAsync(lead.Id, AdmissionInquiryStage.Eligible);
+
+		var queueResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/operations/queues/{(int)AdmissionCrmOperationsQueueType.RegistrationInvitationPending}?maxResultCount=50");
+		queueResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await queueResponse.Content.ReadAsStringAsync());
+		var queue = await queueResponse.Content.ReadFromJsonAsync<AdmissionCrmOperationsQueueDto>(JsonOptions);
+		queue.ShouldNotBeNull();
+		var item = queue.Items.Single(x => x.LeadId == lead.Id);
+		item.Status.ShouldBe("Ready to invite");
+		item.RegistrationApplicationId.ShouldBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Filter_Overview_And_Reject_Queue_Outside_Granted_Workspace()
+	{
+		using var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestTenantIdHeader, TestAuthHandler.TestTenantId);
+		client.DefaultRequestHeaders.Add(
+			AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			string.Join(",",
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View,
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageRegistrationLinks));
+
+		var overviewResponse = await client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/operations/overview");
+		overviewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await overviewResponse.Content.ReadAsStringAsync());
+		var overview = await overviewResponse.Content.ReadFromJsonAsync<AdmissionCrmEnrollmentOverviewDto>(JsonOptions);
+		overview.ShouldNotBeNull();
+		overview.Queues.ShouldContain(x => x.QueueType == AdmissionCrmOperationsQueueType.IncompleteRegistration);
+		overview.Queues.ShouldNotContain(x => x.QueueType == AdmissionCrmOperationsQueueType.FinalApproval);
+		overview.Queues.ShouldNotContain(x => x.QueueType == AdmissionCrmOperationsQueueType.ActivationRepair);
+		overview.Queues.ShouldNotContain(x => x.QueueType == AdmissionCrmOperationsQueueType.UnassignedExam);
+		overview.Queues.ShouldNotContain(x => x.QueueType == AdmissionCrmOperationsQueueType.HouseholdResolution);
+		overview.UpcomingExamCount.ShouldBe(0);
+
+		var forbiddenQueueResponse = await client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/operations/queues/{(int)AdmissionCrmOperationsQueueType.FinalApproval}?maxResultCount=50");
+		forbiddenQueueResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden,
+			await forbiddenQueueResponse.Content.ReadAsStringAsync());
+	}
+
 	private static CreateAdmissionCrmRegistrationTemplateDto CreateTemplateInput(string name) => new()
 	{
 		Name = name,
@@ -435,6 +529,22 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			}
 		]
 	};
+
+	private async Task SetLeadStageAsync(Guid leadId, AdmissionInquiryStage stage)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider.GetRequiredService<IRepository<AdmissionInquiryLead, Guid>>();
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var lead = await repository.GetAsync(leadId);
+			lead.ChangeStage(stage);
+			await repository.UpdateAsync(lead);
+			await uow.CompleteAsync();
+		}
+	}
 
 	private async Task<string> GetOtpCodeAsync(Guid tenantId, Guid leadId)
 	{

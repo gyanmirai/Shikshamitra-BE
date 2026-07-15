@@ -14,6 +14,11 @@ public class AdmissionCrmOperationsController(
 	IAdmissionCrmOperationsAppService operationsAppService,
 	IAdmissionCrmLifecycleAutomationAppService lifecycleAutomationAppService) : AbpControllerBase
 {
+	[HttpGet("{academicYearId}/operations/overview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
+	public Task<AdmissionCrmEnrollmentOverviewDto> GetOverviewAsync(Guid academicYearId) =>
+		operationsAppService.GetOverviewAsync(academicYearId);
+
 	[HttpGet("{academicYearId}/operations/queues/summary")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
 	public Task<AdmissionCrmOperationsQueueSummaryDto> GetQueueSummaryAsync(Guid academicYearId) =>

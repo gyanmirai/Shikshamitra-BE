@@ -3534,6 +3534,14 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		exam.ExamStatus.ShouldBe(EntranceExamStatusEnum.Pending);
 		exam.EligibilityDecision.ShouldBe(AdmissionCrmEligibilityDecision.Pending);
 
+		var searchResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/exams?filterText={Uri.EscapeDataString(exam.ApplicantName)}&maxResultCount=50");
+		searchResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await searchResponse.Content.ReadAsStringAsync());
+		var searchResult = await searchResponse.Content
+			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmEntranceExamDto>>(JsonOptions);
+		searchResult.ShouldNotBeNull();
+		searchResult.Items.ShouldContain(x => x.Id == exam.Id);
+
 		var leadResponse = await Client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}");
 		leadResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await leadResponse.Content.ReadAsStringAsync());

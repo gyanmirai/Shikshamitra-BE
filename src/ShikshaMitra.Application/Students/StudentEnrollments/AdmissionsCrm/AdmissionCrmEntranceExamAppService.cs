@@ -158,9 +158,29 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 			nameof(GetListAsync));
 
 		var queryable = await _examRepository.GetQueryableAsync();
+		var leadQueryable = await _leadRepository.GetQueryableAsync();
 		var query = queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId);
+
+		if (!string.IsNullOrWhiteSpace(input.FilterText))
+		{
+			var filter = input.FilterText.Trim().ToLowerInvariant();
+			var matchingLeadIds = leadQueryable
+				.Where(x =>
+					x.TenantId == CurrentTenant.Id &&
+					x.AcademicYearId == academicYearId &&
+					((x.FirstName != null && x.FirstName.ToLower().Contains(filter)) ||
+					 (x.MiddleName != null && x.MiddleName.ToLower().Contains(filter)) ||
+					 (x.LastName != null && x.LastName.ToLower().Contains(filter)) ||
+					 (x.ParentGuardianName != null && x.ParentGuardianName.ToLower().Contains(filter)) ||
+					 (x.PrimaryContactNo != null && x.PrimaryContactNo.Contains(filter)) ||
+					 (x.Email != null && x.Email.ToLower().Contains(filter))))
+				.Select(x => x.Id);
+			query = query.Where(x =>
+				matchingLeadIds.Contains(x.LeadId) ||
+				(x.SlotNameSnapshot != null && x.SlotNameSnapshot.ToLower().Contains(filter)));
+		}
 
 		if (input.AttendanceStatus.HasValue)
 		{
@@ -178,14 +198,14 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
+		var sortedQuery = string.IsNullOrWhiteSpace(input.FilterText)
+			? query.OrderBy(x => x.ExamStartTime).ThenBy(x => x.LeadId)
+			: query.OrderByDescending(x => x.ScheduledAt).ThenBy(x => x.LeadId);
 		var exams = await AsyncExecuter.ToListAsync(
-			query
-				.OrderBy(x => x.ExamStartTime)
-				.ThenBy(x => x.LeadId)
+			sortedQuery
 				.Skip(input.SkipCount)
 				.Take(input.MaxResultCount));
 		var leadIds = exams.Select(x => x.LeadId).Distinct().ToList();
-		var leadQueryable = await _leadRepository.GetQueryableAsync();
 		var leads = await AsyncExecuter.ToListAsync(
 			leadQueryable.Where(x =>
 				x.TenantId == CurrentTenant.Id &&

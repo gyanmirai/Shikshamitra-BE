@@ -50,6 +50,54 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Return_Only_Configured_Hr_Employee_Owners()
+	{
+		var originalCycle = await GetCrmCycleConfigurationAsync();
+		var eligibleStaff = await GetEligibleCrmOwnersAsync();
+		var configuredOwners = eligibleStaff
+			.Where(owner => owner.Email is "admissions-reception@ddvs.com" or "admissions-counselor@ddvs.com")
+			.ToList();
+		configuredOwners.Count.ShouldBe(2);
+		var routingSettings = AdmissionCrmLeadRoutingSettingsDto.CreateDefault();
+		routingSettings.IsEnabled = true;
+		routingSettings.DefaultOwnerUserId = configuredOwners[0].Id;
+		routingSettings.OwnerPoolUserIds.AddRange(configuredOwners.Select(owner => owner.Id));
+
+		await UpdateCrmCycleConfigurationAsync(
+			originalCycle,
+			originalCycle.ExamReadinessFields,
+			originalCycle.LeadScoringRules,
+			routingSettings);
+
+		try
+		{
+			var response = await Client.GetAsync(
+				$"/api/student-enrollment/admissions-crm/workspace/staff?academicYearId={Factory.SeededAcademicYearId}&ownerOnly=true&maxResultCount=25");
+
+			response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+			var owners = await response.Content.ReadFromJsonAsync<List<AdmissionCrmStaffLookupDto>>(JsonOptions);
+			owners.ShouldNotBeNull();
+			owners.Count.ShouldBe(2);
+			owners.ShouldAllBe(owner =>
+				owner.EmployeeId != Guid.Empty &&
+				!string.IsNullOrWhiteSpace(owner.EmployeeCode) &&
+				owner.IsOwnerEligible);
+			owners.Select(owner => owner.Email).ShouldContain("admissions-reception@ddvs.com");
+			owners.Select(owner => owner.Email).ShouldContain("admissions-counselor@ddvs.com");
+			owners.Select(owner => owner.Email).ShouldNotContain("admissions-approver@ddvs.com");
+		}
+		finally
+		{
+			await UpdateCrmCycleConfigurationAsync(
+				originalCycle,
+				originalCycle.ExamReadinessFields,
+				originalCycle.LeadScoringRules,
+				originalCycle.LeadRoutingSettings);
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Create_Minimal_Crm_Lead_Without_Dob_Or_Address()
 	{
 		var input = new CreateAdmissionCrmLeadDto
@@ -1031,8 +1079,9 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Round_Robin_New_Leads_Across_Cycle_Owner_Pool()
 	{
 		var originalCycle = await GetCrmCycleConfigurationAsync();
-		var firstOwnerUserId = Guid.Parse("00000000-0000-0000-0000-000000000101");
-		var secondOwnerUserId = Guid.Parse("00000000-0000-0000-0000-000000000202");
+		var owners = await GetEligibleCrmOwnersAsync();
+		var firstOwnerUserId = owners[0].Id;
+		var secondOwnerUserId = owners[1].Id;
 		var routingSettings = AdmissionCrmLeadRoutingSettingsDto.CreateDefault();
 		routingSettings.IsEnabled = true;
 		routingSettings.RoutingStrategy = AdmissionCrmLeadRoutingStrategy.RoundRobin;
@@ -1046,13 +1095,17 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 		try
 		{
+			var workload = (await GetCrmAnalyticsSummaryAsync()).StaffWorkload;
+			var routedLeadCount = GetOwnerCounts(firstOwnerUserId, workload).Total +
+				GetOwnerCounts(secondOwnerUserId, workload).Total;
+			var ownerPool = new[] { firstOwnerUserId, secondOwnerUserId };
 			var firstLead = await CreateCrmLeadAsync("Round robin routing inquiry one");
 			var secondLead = await CreateCrmLeadAsync("Round robin routing inquiry two");
 			var thirdLead = await CreateCrmLeadAsync("Round robin routing inquiry three");
 
-			firstLead.OwnerUserId.ShouldBe(firstOwnerUserId);
-			secondLead.OwnerUserId.ShouldBe(secondOwnerUserId);
-			thirdLead.OwnerUserId.ShouldBe(firstOwnerUserId);
+			firstLead.OwnerUserId.ShouldBe(ownerPool[routedLeadCount % ownerPool.Length]);
+			secondLead.OwnerUserId.ShouldBe(ownerPool[(routedLeadCount + 1) % ownerPool.Length]);
+			thirdLead.OwnerUserId.ShouldBe(ownerPool[(routedLeadCount + 2) % ownerPool.Length]);
 		}
 		finally
 		{
@@ -1069,8 +1122,9 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Route_New_Lead_To_Least_Open_Lead_Owner()
 	{
 		var originalCycle = await GetCrmCycleConfigurationAsync();
-		var firstOwnerUserId = Guid.Parse("00000000-0000-0000-0000-000000000303");
-		var secondOwnerUserId = Guid.Parse("00000000-0000-0000-0000-000000000404");
+		var owners = await GetEligibleCrmOwnersAsync();
+		var firstOwnerUserId = owners[0].Id;
+		var secondOwnerUserId = owners[1].Id;
 		var routingSettings = AdmissionCrmLeadRoutingSettingsDto.CreateDefault();
 		routingSettings.IsEnabled = true;
 		routingSettings.RoutingStrategy = AdmissionCrmLeadRoutingStrategy.LeastOpenLeads;
@@ -1084,11 +1138,22 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 		try
 		{
+			var workload = (await GetCrmAnalyticsSummaryAsync()).StaffWorkload;
+			var ownerCounts = new Dictionary<Guid, (int Open, int Total)>
+			{
+				[firstOwnerUserId] = GetOwnerCounts(firstOwnerUserId, workload),
+				[secondOwnerUserId] = GetOwnerCounts(secondOwnerUserId, workload)
+			};
+			var expectedFirstOwner = LeastLoadedOwner(ownerCounts);
 			var firstLead = await CreateCrmLeadAsync("Least workload routing inquiry one");
+			ownerCounts[expectedFirstOwner] = (
+				ownerCounts[expectedFirstOwner].Open + 1,
+				ownerCounts[expectedFirstOwner].Total + 1);
+			var expectedSecondOwner = LeastLoadedOwner(ownerCounts);
 			var secondLead = await CreateCrmLeadAsync("Least workload routing inquiry two");
 
-			firstLead.OwnerUserId.ShouldBe(firstOwnerUserId);
-			secondLead.OwnerUserId.ShouldBe(secondOwnerUserId);
+			firstLead.OwnerUserId.ShouldBe(expectedFirstOwner);
+			secondLead.OwnerUserId.ShouldBe(expectedSecondOwner);
 		}
 		finally
 		{
@@ -1100,13 +1165,34 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
+	private static (int Open, int Total) GetOwnerCounts(
+		Guid ownerUserId,
+		IReadOnlyList<AdmissionCrmStaffWorkloadDto> workload)
+	{
+		var ownerWorkload = workload.FirstOrDefault(item => item.OwnerUserId == ownerUserId);
+		return ownerWorkload == null
+			? (0, 0)
+			: (ownerWorkload.OpenLeadCount, ownerWorkload.LeadCount);
+	}
+
+	private static Guid LeastLoadedOwner(IReadOnlyDictionary<Guid, (int Open, int Total)> ownerCounts)
+	{
+		return ownerCounts
+			.OrderBy(item => item.Value.Open)
+			.ThenBy(item => item.Value.Total)
+			.ThenBy(item => item.Key)
+			.First()
+			.Key;
+	}
+
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Route_New_Lead_By_Branch_And_Preferred_Language_Rules()
 	{
 		var originalCycle = await GetCrmCycleConfigurationAsync();
-		var branchLanguageOwnerUserId = Guid.Parse("00000000-0000-0000-0000-000000000454");
-		var fallbackOwnerUserId = Guid.Parse("00000000-0000-0000-0000-000000000555");
+		var owners = await GetEligibleCrmOwnersAsync();
+		var branchLanguageOwnerUserId = owners[0].Id;
+		var fallbackOwnerUserId = owners[1].Id;
 		var routingSettings = AdmissionCrmLeadRoutingSettingsDto.CreateDefault();
 		routingSettings.IsEnabled = true;
 		routingSettings.DefaultOwnerUserId = fallbackOwnerUserId;
@@ -1181,8 +1267,9 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Route_New_Lead_By_Target_Standard_Rule()
 	{
 		var originalCycle = await GetCrmCycleConfigurationAsync();
-		var standardOwnerUserId = Guid.Parse("00000000-0000-0000-0000-000000000151");
-		var fallbackOwnerUserId = Guid.Parse("00000000-0000-0000-0000-000000000252");
+		var owners = await GetEligibleCrmOwnersAsync();
+		var standardOwnerUserId = owners[0].Id;
+		var fallbackOwnerUserId = owners[1].Id;
 		var routingSettings = AdmissionCrmLeadRoutingSettingsDto.CreateDefault();
 		routingSettings.IsEnabled = true;
 		routingSettings.DefaultOwnerUserId = fallbackOwnerUserId;

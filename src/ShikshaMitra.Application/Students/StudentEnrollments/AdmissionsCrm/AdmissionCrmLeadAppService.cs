@@ -37,6 +37,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 	private readonly IAdmissionCrmRegistrationAppService _registrationAppService;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 	private readonly StudentEnrollmentManager _studentEnrollmentManager;
+	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
 
 	public AdmissionCrmLeadAppService(
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
@@ -52,7 +53,8 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		IAdmissionCrmCommunicationAppService communicationAppService,
 		IAdmissionCrmRegistrationAppService registrationAppService,
 		StudentScopeAccessService studentScopeAccessService,
-		StudentEnrollmentManager studentEnrollmentManager)
+		StudentEnrollmentManager studentEnrollmentManager,
+		AdmissionCrmStaffEligibilityService staffEligibilityService)
 	{
 		_leadRepository = leadRepository;
 		_inquirySourceRepository = inquirySourceRepository;
@@ -68,6 +70,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		_registrationAppService = registrationAppService;
 		_studentScopeAccessService = studentScopeAccessService;
 		_studentEnrollmentManager = studentEnrollmentManager;
+		_staffEligibilityService = staffEligibilityService;
 	}
 
 	public async Task<AdmissionCrmLeadDto> CreateAsync(Guid academicYearId, CreateAdmissionCrmLeadDto input)
@@ -131,9 +134,14 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			lead,
 			routingSettings,
 			existingLeads) ?? channelSetting.DefaultOwnerUserId;
-		if (routedOwnerUserId.HasValue)
+		if (routedOwnerUserId.HasValue &&
+			await _staffEligibilityService.IsOwnerEligibleAsync(routedOwnerUserId.Value, academicYearId))
 		{
 			lead.AssignOwner(routedOwnerUserId.Value);
+		}
+		else
+		{
+			routedOwnerUserId = null;
 		}
 
 		await _leadRepository.InsertAsync(lead, autoSave: true);
@@ -295,6 +303,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 	public async Task<AdmissionCrmLeadDto> AssignOwnerAsync(Guid leadId, AssignAdmissionCrmLeadOwnerDto input)
 	{
 		var lead = await GetLeadForCurrentTenantAsync(leadId, nameof(AssignOwnerAsync));
+		await _staffEligibilityService.EnsureOwnerEligibleAsync(input.OwnerUserId, lead.AcademicYearId);
 		lead.AssignOwner(input.OwnerUserId);
 		await _leadRepository.UpdateAsync(lead, autoSave: true);
 		await AddTimelineEventAsync(
@@ -1050,6 +1059,8 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		CreateAdmissionCrmFollowUpTaskDto input)
 	{
 		var lead = await GetLeadForCurrentTenantAsync(leadId, nameof(CreateTaskAsync));
+		var assignedUserId = input.AssignedUserId ?? lead.OwnerUserId;
+		await _staffEligibilityService.EnsureTaskAssigneeEligibleAsync(assignedUserId);
 		var task = new AdmissionCrmFollowUpTask(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
@@ -1057,7 +1068,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			lead.AcademicYearId,
 			input.Title,
 			input.DueAt,
-			input.AssignedUserId ?? lead.OwnerUserId,
+			assignedUserId,
 			input.Notes);
 
 		await _taskRepository.InsertAsync(task, autoSave: true);

@@ -94,6 +94,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private readonly IAdmissionCrmDocumentAppService _documentAppService;
 	private readonly IAdmissionCrmEntranceExamAppService _entranceExamAppService;
 	private readonly IStringEncryptionService _stringEncryptionService;
+	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
 
 	public AdmissionCrmPublicAppService(
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
@@ -124,7 +125,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		IAdmissionCrmLeadAppService leadAppService,
 		IAdmissionCrmDocumentAppService documentAppService,
 		IAdmissionCrmEntranceExamAppService entranceExamAppService,
-		IStringEncryptionService stringEncryptionService)
+		IStringEncryptionService stringEncryptionService,
+		AdmissionCrmStaffEligibilityService staffEligibilityService)
 	{
 		_leadRepository = leadRepository;
 		_formTemplateRepository = formTemplateRepository;
@@ -155,6 +157,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		_documentAppService = documentAppService;
 		_entranceExamAppService = entranceExamAppService;
 		_stringEncryptionService = stringEncryptionService;
+		_staffEligibilityService = staffEligibilityService;
 	}
 
 	public async Task<PublicAdmissionInquiryFormDto> GetPublicFormAsync(Guid tenantId, Guid templateId, string? language = null)
@@ -227,7 +230,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			lead.UpdateScore(AdmissionCrmLeadScoreCalculator.Calculate(
 				lead,
 				AdmissionCrmLeadScoreCalculator.DeserializeRules(configuration.LeadScoringRulesJson)));
-			if (ownerUserId.HasValue)
+			if (ownerUserId.HasValue &&
+				await _staffEligibilityService.IsOwnerEligibleAsync(ownerUserId.Value, template.AcademicYearId))
 			{
 				lead.AssignOwner(ownerUserId.Value);
 			}

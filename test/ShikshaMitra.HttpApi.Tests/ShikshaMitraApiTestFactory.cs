@@ -18,6 +18,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Infrastructure;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
@@ -104,6 +106,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			// correctly. Without this, the charge requestor JOIN returns null and the charge is
 			// reported as "not found" immediately after creation.
 			await EnsureTestAuthUserExistsAsync(services, tenantId, lookupNormalizer);
+			await EnsureTestAuthEmployeeExistsAsync(services);
 			await EnsureTestAuthUserHasTenantWideScopeAsync(services, tenantId);
 
 			var shiftRepo = services.GetRequiredService<IRepository<ShiftManagement, Guid>>();
@@ -183,6 +186,36 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		var testUser = new Volo.Abp.Identity.IdentityUser(testUserId, TestAuthHandler.TestUserName, TestAuthHandler.TestEmail, tenantId);
 		await dbContext.Set<Volo.Abp.Identity.IdentityUser>().AddAsync(testUser);
 		await dbContext.SaveChangesAsync();
+	}
+
+	private async Task EnsureTestAuthEmployeeExistsAsync(IServiceProvider services)
+	{
+		var userId = Guid.Parse(TestAuthHandler.TestUserId);
+		var employeeRepository = services.GetRequiredService<IEmployeeRepository>();
+		if (await employeeRepository.GetEmployeeByUserIdAsync(userId) != null)
+		{
+			return;
+		}
+
+		var employeeManager = services.GetRequiredService<EmployeeManager>();
+		var employee = await employeeManager.CreateEmployeeAsync(
+			userId,
+			SeededRoleId,
+			"API",
+			"Test User",
+			null,
+			"API Test",
+			EmployeeStatusType.Active,
+			new DateOnly(1990, 1, 1),
+			mobileNo: "9898989898",
+			email: TestAuthHandler.TestEmail,
+			panNo: "APITS1234A",
+			adharNo: "900000000001",
+			department: "Quality Assurance",
+			designation: "API Test Operator",
+			dateOfJoining: new DateOnly(2020, 1, 1),
+			employeeGroup: EmployeeGroupType.NonTeaching);
+		await employeeRepository.InsertAsync(employee, autoSave: true);
 	}
 
 	private static async Task EnsureTestAuthUserHasTenantWideScopeAsync(

@@ -4,11 +4,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
-using Volo.Abp.PermissionManagement;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
@@ -17,35 +17,51 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionCrmWorkspaceAppService : ApplicationService, IAdmissionCrmWorkspaceAppService
 {
 	private readonly IRepository<IdentityUser, Guid> _userRepository;
-	private readonly IRepository<IdentityRole, Guid> _roleRepository;
-	private readonly IRepository<PermissionGrant, Guid> _permissionGrantRepository;
 	private readonly IRepository<AdmissionCrmCommunicationProviderConfiguration, Guid> _providerRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
+	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
 
 	public AdmissionCrmWorkspaceAppService(
 		IRepository<IdentityUser, Guid> userRepository,
-		IRepository<IdentityRole, Guid> roleRepository,
-		IRepository<PermissionGrant, Guid> permissionGrantRepository,
 		IRepository<AdmissionCrmCommunicationProviderConfiguration, Guid> providerRepository,
-		StudentScopeAccessService studentScopeAccessService)
+		StudentScopeAccessService studentScopeAccessService,
+		AdmissionCrmStaffEligibilityService staffEligibilityService)
 	{
 		_userRepository = userRepository;
-		_roleRepository = roleRepository;
-		_permissionGrantRepository = permissionGrantRepository;
 		_providerRepository = providerRepository;
 		_studentScopeAccessService = studentScopeAccessService;
+		_staffEligibilityService = staffEligibilityService;
 	}
 
 	public async Task<IReadOnlyList<AdmissionCrmStaffLookupDto>> GetStaffAsync(
 		string? filter = null,
 		string? ids = null,
-		int maxResultCount = 20)
+		int maxResultCount = 20,
+		Guid? academicYearId = null,
+		bool ownerOnly = false)
 	{
-		var allowedUserIds = await GetCrmUserIdsAsync();
-		if (allowedUserIds.Count == 0)
+		if (ownerOnly && !academicYearId.HasValue)
+		{
+			throw new ArgumentException("An academic year is required for owner lookups.", nameof(academicYearId));
+		}
+		if (academicYearId.HasValue)
+		{
+			await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+				academicYearId.Value,
+				nameof(GetStaffAsync));
+		}
+
+		var employeesByUserId = await _staffEligibilityService.GetEligibleEmployeesByUserIdAsync();
+		if (employeesByUserId.Count == 0)
 		{
 			return [];
 		}
+		var ownerEligibleUserIds = academicYearId.HasValue
+			? await _staffEligibilityService.GetOwnerEligibleUserIdsAsync(academicYearId.Value)
+			: employeesByUserId.Keys.ToHashSet();
+		var allowedUserIds = ownerOnly
+			? ownerEligibleUserIds
+			: employeesByUserId.Keys.ToHashSet();
 
 		var requestedIds = ParseIds(ids);
 		var take = Math.Clamp(maxResultCount, 1, 50);
@@ -74,7 +90,10 @@ public class AdmissionCrmWorkspaceAppService : ApplicationService, IAdmissionCrm
 
 		return requested.Concat(searchResults)
 			.DistinctBy(user => user.Id)
-			.Select(MapStaff)
+			.Select(user => MapStaff(
+				user,
+				employeesByUserId[user.Id],
+				ownerEligibleUserIds.Contains(user.Id)))
 			.ToList();
 	}
 
@@ -105,40 +124,6 @@ public class AdmissionCrmWorkspaceAppService : ApplicationService, IAdmissionCrm
 		];
 	}
 
-	private async Task<HashSet<Guid>> GetCrmUserIdsAsync()
-	{
-		var grants = await _permissionGrantRepository.GetListAsync(grant =>
-			grant.Name == ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View &&
-			(grant.ProviderName == "U" || grant.ProviderName == "R"));
-		var userIds = grants
-			.Where(grant => grant.ProviderName == "U" && Guid.TryParse(grant.ProviderKey, out _))
-			.Select(grant => Guid.Parse(grant.ProviderKey!))
-			.ToHashSet();
-		var roleNames = grants
-			.Where(grant => grant.ProviderName == "R" && !string.IsNullOrWhiteSpace(grant.ProviderKey))
-			.Select(grant => grant.ProviderKey!)
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.ToList();
-		if (roleNames.Count == 0)
-		{
-			return userIds;
-		}
-
-		var roles = await _roleRepository.GetListAsync(role => roleNames.Contains(role.Name));
-		var roleIds = roles.Select(role => role.Id).ToList();
-		if (roleIds.Count == 0)
-		{
-			return userIds;
-		}
-
-		var queryable = await _userRepository.GetQueryableAsync();
-		var roleUserIds = await AsyncExecuter.ToListAsync(queryable
-			.Where(user => user.Roles.Any(role => roleIds.Contains(role.RoleId)))
-			.Select(user => user.Id));
-		userIds.UnionWith(roleUserIds);
-		return userIds;
-	}
-
 	private static HashSet<Guid> ParseIds(string? ids) => string.IsNullOrWhiteSpace(ids)
 		? []
 		: ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -146,14 +131,20 @@ public class AdmissionCrmWorkspaceAppService : ApplicationService, IAdmissionCrm
 			.Where(id => id != Guid.Empty)
 			.ToHashSet();
 
-	private static AdmissionCrmStaffLookupDto MapStaff(IdentityUser user) => new()
+	private static AdmissionCrmStaffLookupDto MapStaff(
+		IdentityUser user,
+		Employee employee,
+		bool isOwnerEligible) => new()
 	{
 		Id = user.Id,
+		EmployeeId = employee.Id,
+		EmployeeCode = employee.EmployeeCode,
 		DisplayName = string.Join(" ", new[] { user.Name, user.Surname }.Where(value => !string.IsNullOrWhiteSpace(value))) is { Length: > 0 } name
 			? name
-			: user.UserName,
+			: employee.EmployeeName,
 		UserName = user.UserName,
-		Email = user.Email
+		Email = user.Email,
+		IsOwnerEligible = isOwnerEligible
 	};
 
 	private static AdmissionCrmIntegrationCapabilityDto Capability(

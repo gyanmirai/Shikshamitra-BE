@@ -35,6 +35,8 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 	private readonly IRepository<AdmissionCrmAdmissionQuotation, Guid> _quotationRepository;
 	private readonly IRepository<AdmissionCrmApplicantIdentityProfile, Guid> _identityProfileRepository;
 	private readonly IRepository<AdmissionCrmAdmissionDecision, Guid> _decisionRepository;
+	private readonly IRepository<AdmissionCrmSeatOffer, Guid> _offerRepository;
+	private readonly IRepository<AdmissionCrmSeatPool, Guid> _seatPoolRepository;
 	private readonly IRepository<AdmissionCrmOperationsSavedView, Guid> _savedViewRepository;
 	private readonly IRepository<AdmissionCrmWorkDelegation, Guid> _delegationRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
@@ -54,6 +56,8 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		IRepository<AdmissionCrmAdmissionQuotation, Guid> quotationRepository,
 		IRepository<AdmissionCrmApplicantIdentityProfile, Guid> identityProfileRepository,
 		IRepository<AdmissionCrmAdmissionDecision, Guid> decisionRepository,
+		IRepository<AdmissionCrmSeatOffer, Guid> offerRepository,
+		IRepository<AdmissionCrmSeatPool, Guid> seatPoolRepository,
 		IRepository<AdmissionCrmOperationsSavedView, Guid> savedViewRepository,
 		IRepository<AdmissionCrmWorkDelegation, Guid> delegationRepository,
 		StudentScopeAccessService studentScopeAccessService)
@@ -72,16 +76,67 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		_quotationRepository = quotationRepository;
 		_identityProfileRepository = identityProfileRepository;
 		_decisionRepository = decisionRepository;
+		_offerRepository = offerRepository;
+		_seatPoolRepository = seatPoolRepository;
 		_savedViewRepository = savedViewRepository;
 		_delegationRepository = delegationRepository;
 		_studentScopeAccessService = studentScopeAccessService;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
+	public async Task<AdmissionCrmEnrollmentOverviewDto> GetOverviewAsync(Guid academicYearId)
+	{
+		var data = await LoadDataAsync(academicYearId, nameof(GetOverviewAsync));
+		var permittedQueueTypes = await GetPermittedQueueTypesAsync();
+		var queueItems = permittedQueueTypes.ToDictionary(x => x, x => BuildQueueItems(data, x));
+		var queueCounts = queueItems.Select(x => new AdmissionCrmOperationsQueueCountDto
+		{
+			QueueType = x.Key,
+			Label = GetQueueLabel(x.Key),
+			Count = x.Value.Count,
+			UrgentCount = x.Value.Count(item => item.IsUrgent)
+		}).ToList();
+		var urgentItems = queueItems
+			.SelectMany(x => x.Value.Where(item => item.IsUrgent).Select(item => new AdmissionCrmEnrollmentOverviewItemDto
+			{
+				Workspace = GetQueueWorkspace(x.Key),
+				QueueType = x.Key,
+				Item = item
+			}))
+			.OrderBy(x => x.Item.DueAt ?? DateTimeOffset.MaxValue)
+			.ThenByDescending(x => x.Item.AgeDays)
+			.Take(12)
+			.ToList();
+		var now = Clock.Now;
+
+		return new AdmissionCrmEnrollmentOverviewDto
+		{
+			AcademicYearId = academicYearId,
+			GeneratedAt = now,
+			UnassignedLeadCount = data.Leads.Count(x => !x.OwnerUserId.HasValue),
+			UpcomingExamCount = permittedQueueTypes.Any(IsExamQueue)
+				? data.Exams.Count(x => x.ExamStartTime.UtcDateTime >= now &&
+					x.ExamStartTime.UtcDateTime <= now.AddDays(7) &&
+					x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked)
+				: 0,
+			ExpiringRegistrationCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.ExpiringRegistrationLink),
+			PendingApprovalCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.FinalApproval) +
+				GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.PolicyException) +
+				GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.RouteAppealReview),
+			ActivationFailureCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.ActivationRepair),
+			HandoffBlockerCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.ServiceHandoffException),
+			UrgentCount = queueCounts.Sum(x => x.UrgentCount),
+			Queues = queueCounts,
+			UrgentItems = urgentItems
+		};
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
 	public async Task<AdmissionCrmOperationsQueueSummaryDto> GetQueueSummaryAsync(Guid academicYearId)
 	{
 		var data = await LoadDataAsync(academicYearId, nameof(GetQueueSummaryAsync));
-		var queues = Enum.GetValues<AdmissionCrmOperationsQueueType>()
+		var permittedQueueTypes = await GetPermittedQueueTypesAsync();
+		var queues = permittedQueueTypes
 			.Select(queueType =>
 			{
 				var items = BuildQueueItems(data, queueType);
@@ -113,6 +168,11 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		{
 			throw new BusinessException("AdmissionCrm:InvalidOperationsQueueType");
 		}
+		var permittedQueueTypes = await GetPermittedQueueTypesAsync();
+		if (!permittedQueueTypes.Contains(queueType))
+		{
+			throw new AbpAuthorizationException("The current user cannot access this admissions queue.");
+		}
 
 		var data = await LoadDataAsync(academicYearId, nameof(GetQueueAsync));
 		var items = BuildQueueItems(data, queueType).AsEnumerable();
@@ -127,6 +187,13 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		if (input.UrgentOnly == true) items = items.Where(x => x.IsUrgent);
 		if (input.MinimumAgeDays.HasValue) items = items.Where(x => x.AgeDays >= input.MinimumAgeDays.Value);
 		if (input.DueBefore.HasValue) items = items.Where(x => x.DueAt.HasValue && x.DueAt <= input.DueBefore.Value);
+		if (input.RegistrationStatus.HasValue) items = items.Where(x => x.Registration?.Status == input.RegistrationStatus);
+		if (input.DocumentStatus.HasValue) items = items.Where(x => x.Registration?.CurrentDocumentStatus == input.DocumentStatus);
+		if (input.OfferStatus.HasValue) items = items.Where(x => x.Offer?.OfferStatus == input.OfferStatus);
+		if (input.RouteType.HasValue) items = items.Where(x => x.Offer?.RouteType == input.RouteType);
+		if (input.SeatPoolId.HasValue) items = items.Where(x => x.Offer?.SeatPoolId == input.SeatPoolId);
+		if (input.ActivationStatus.HasValue) items = items.Where(x => x.Activation?.Status == input.ActivationStatus);
+		if (input.ServiceHandoffStatus.HasValue) items = items.Where(x => x.Operation?.ServiceHandoffStatus == input.ServiceHandoffStatus);
 		if (input.AssignedToUserId.HasValue)
 		{
 			var delegatedOwners = await GetDelegatedOwnersAsync(academicYearId, queueType, input.AssignedToUserId.Value);
@@ -306,6 +373,8 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		var quotationQueryable = await _quotationRepository.GetQueryableAsync();
 		var identityProfileQueryable = await _identityProfileRepository.GetQueryableAsync();
 		var decisionQueryable = await _decisionRepository.GetQueryableAsync();
+		var offerQueryable = await _offerRepository.GetQueryableAsync();
+		var seatPoolQueryable = await _seatPoolRepository.GetQueryableAsync();
 
 		return new OperationsData(
 			await AsyncExecuter.ToListAsync(leadQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
@@ -322,6 +391,8 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			await AsyncExecuter.ToListAsync(quotationQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
 			await AsyncExecuter.ToListAsync(identityProfileQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
 			await AsyncExecuter.ToListAsync(decisionQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
+			await AsyncExecuter.ToListAsync(offerQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
+			await AsyncExecuter.ToListAsync(seatPoolQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
 			Clock.Now);
 	}
 
@@ -356,6 +427,8 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			AdmissionCrmOperationsQueueType.ServiceHandoffException => BuildServiceHandoffExceptionQueue(data, leads),
 			_ => []
 		};
+
+		PopulateQueueContexts(data, queueType, items);
 
 		return items
 			.OrderByDescending(x => x.IsUrgent)
@@ -697,6 +770,222 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		};
 	}
 
+	private static void PopulateQueueContexts(
+		OperationsData data,
+		AdmissionCrmOperationsQueueType queueType,
+		IReadOnlyCollection<AdmissionCrmOperationsQueueItemDto> items)
+	{
+		var currentDocuments = GetCurrentDocuments(data.Documents).ToList();
+		foreach (var item in items)
+		{
+			var registration = item.RegistrationApplicationId.HasValue
+				? data.Registrations.FirstOrDefault(x => x.Id == item.RegistrationApplicationId.Value)
+				: data.Registrations.Where(x => x.LeadId == item.LeadId)
+					.OrderByDescending(x => x.IssuedAt).FirstOrDefault();
+			var checklist = registration == null
+				? null
+				: data.Checklists.Where(x => x.RegistrationApplicationId == registration.Id)
+					.OrderByDescending(x => x.AssignedAt).FirstOrDefault();
+			IReadOnlyList<AdmissionCrmApplicantDocument> documents = checklist == null
+				? []
+				: currentDocuments.Where(x => x.ChecklistAssignmentId == checklist.Id).ToList();
+			var currentDocument = item.DocumentId.HasValue
+				? documents.FirstOrDefault(x => x.Id == item.DocumentId.Value)
+				: null;
+			if (registration != null || IsRegistrationQueue(queueType))
+			{
+				var resolvedCount = documents.Count(x => x.Status is AdmissionCrmApplicantDocumentStatus.Verified
+					or AdmissionCrmApplicantDocumentStatus.Waived
+					or AdmissionCrmApplicantDocumentStatus.OriginalSeen);
+				item.Registration = new AdmissionCrmRegistrationQueueContextDto
+				{
+					RegistrationApplicationId = registration?.Id,
+					Status = registration?.Status,
+					FormNumber = registration?.FormNumber,
+					CompletionPercentage = registration?.CompletionPercentage ?? 0,
+					LinkExpiresAt = registration?.LinkExpiresAt,
+					FeeStatus = registration?.FeeStatus,
+					DocumentTotalCount = documents.Count,
+					DocumentResolvedCount = resolvedCount,
+					DocumentPendingCount = Math.Max(0, documents.Count - resolvedCount),
+					CurrentDocumentStatus = currentDocument?.Status,
+					ReadinessConfirmed = checklist?.ReadinessConfirmedAt.HasValue == true
+				};
+			}
+
+			var offer = data.Offers.Where(x => x.LeadId == item.LeadId)
+				.OrderByDescending(x => x.Version).ThenByDescending(x => x.CreationTime).FirstOrDefault();
+			var decision = data.Decisions.Where(x => x.LeadId == item.LeadId)
+				.OrderByDescending(x => x.DecidedAt ?? x.CreationTime).FirstOrDefault();
+			var route = data.Routes.Where(x => x.LeadId == item.LeadId && x.IsPrimary)
+				.OrderByDescending(x => x.AssignedAt).FirstOrDefault();
+			var quotation = data.Quotations.Where(x => x.LeadId == item.LeadId)
+				.OrderByDescending(x => x.Version).FirstOrDefault();
+			var seatPoolId = offer?.SeatPoolId ?? decision?.SeatPoolId;
+			var seatPool = seatPoolId.HasValue
+				? data.SeatPools.FirstOrDefault(x => x.Id == seatPoolId.Value)
+				: null;
+			if (offer != null || decision != null || route != null || quotation != null || IsOfferQueue(queueType))
+			{
+				item.Offer = new AdmissionCrmOfferQueueContextDto
+				{
+					OfferId = offer?.Id,
+					OfferNumber = offer?.OfferNumber,
+					OfferStatus = offer?.Status,
+					OfferExpiresAt = offer?.ValidUntil,
+					SeatPoolId = seatPoolId,
+					SeatPoolName = seatPool?.Name,
+					RemainingSeats = seatPool?.RemainingCapacity,
+					DecisionStatus = decision?.Status,
+					RouteType = route?.RouteType,
+					RouteStatus = route?.Status,
+					FinanceState = quotation?.FinanceState,
+					PaymentGateSatisfied = quotation == null ? null : quotation.IsGateSatisfiedAt(data.Now)
+				};
+			}
+
+			var activation = data.Activations.Where(x => x.LeadId == item.LeadId)
+				.OrderByDescending(x => x.RequestedAt).FirstOrDefault();
+			if (activation != null || IsActivationQueue(queueType))
+			{
+				item.Activation = new AdmissionCrmActivationQueueContextDto
+				{
+					ActivationId = activation?.Id,
+					StudentId = activation?.StudentId,
+					ActivationReference = activation?.ActivationReference,
+					Status = activation?.Status,
+					PlacementConfigured = activation != null && activation.StandardId != Guid.Empty && activation.DivisionId != Guid.Empty,
+					RollNumber = activation?.RollNumber,
+					RequireStudentAccount = activation?.RequireStudentAccount ?? false,
+					RequireGuardianAccount = activation?.RequireGuardianAccount ?? false,
+					AttemptCount = activation?.AttemptCount ?? 0,
+					RepairStep = activation?.RepairStep,
+					RepairReason = activation?.RepairReason
+				};
+			}
+
+			var handoff = item.ServiceHandoffId.HasValue
+				? data.ServiceHandoffs.FirstOrDefault(x => x.Id == item.ServiceHandoffId.Value)
+				: null;
+			item.Operation = new AdmissionCrmOperationQueueContextDto
+			{
+				QueueType = queueType,
+				Severity = item.IsUrgent ? "Urgent" : item.AgeDays > 0 ? "Attention" : "Normal",
+				AssignmentStatus = item.OwnerUserId.HasValue ? "Assigned" : "Unassigned",
+				ServiceHandoffStatus = handoff?.Status,
+				RetryAttemptCount = handoff?.AttemptCount
+			};
+		}
+	}
+
+	private static bool IsRegistrationQueue(AdmissionCrmOperationsQueueType queueType) => queueType is
+		AdmissionCrmOperationsQueueType.RegistrationInvitationPending or
+		AdmissionCrmOperationsQueueType.ExpiringRegistrationLink or
+		AdmissionCrmOperationsQueueType.IncompleteRegistration or
+		AdmissionCrmOperationsQueueType.RejectedDocument or
+		AdmissionCrmOperationsQueueType.DocumentVerificationBacklog or
+		AdmissionCrmOperationsQueueType.AdmissionReady;
+
+	private static bool IsExamQueue(AdmissionCrmOperationsQueueType queueType) => queueType is
+		AdmissionCrmOperationsQueueType.UnassignedExam or
+		AdmissionCrmOperationsQueueType.CapacityConflict or
+		AdmissionCrmOperationsQueueType.NoShow;
+
+	private static bool IsOfferQueue(AdmissionCrmOperationsQueueType queueType) => queueType is
+		AdmissionCrmOperationsQueueType.FinalApproval or
+		AdmissionCrmOperationsQueueType.PolicyException or
+		AdmissionCrmOperationsQueueType.PaymentCondition or
+		AdmissionCrmOperationsQueueType.RouteEligibilityReview or
+		AdmissionCrmOperationsQueueType.GovernmentAllotmentReconciliation or
+		AdmissionCrmOperationsQueueType.RouteAppealReview;
+
+	private static bool IsActivationQueue(AdmissionCrmOperationsQueueType queueType) => queueType is
+		AdmissionCrmOperationsQueueType.ActivationRepair or
+		AdmissionCrmOperationsQueueType.CancellationReview or
+		AdmissionCrmOperationsQueueType.ServiceHandoffException;
+
+	private async Task<IReadOnlyList<AdmissionCrmOperationsQueueType>> GetPermittedQueueTypesAsync()
+	{
+		var queueTypes = Enum.GetValues<AdmissionCrmOperationsQueueType>().ToHashSet();
+		if (!await IsAnyPermissionGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ScheduleExam,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.PublishExamResults))
+		{
+			queueTypes.RemoveWhere(IsExamQueue);
+		}
+		if (!await IsAnyPermissionGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageRegistrationLinks,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.VerifyRegistration,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ReviewDocuments,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ConfirmAdmissionReadiness))
+		{
+			queueTypes.RemoveWhere(IsRegistrationQueue);
+		}
+		if (!await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewSeatPlans))
+		{
+			queueTypes.RemoveWhere(IsOfferQueue);
+		}
+		if (!await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewFinancialStatus))
+		{
+			queueTypes.Remove(AdmissionCrmOperationsQueueType.PaymentCondition);
+		}
+		if (!await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewActivation))
+		{
+			queueTypes.RemoveWhere(IsActivationQueue);
+		}
+		if (!await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewAdmissionRoutes))
+		{
+			queueTypes.Remove(AdmissionCrmOperationsQueueType.RouteEligibilityReview);
+			queueTypes.Remove(AdmissionCrmOperationsQueueType.GovernmentAllotmentReconciliation);
+			queueTypes.Remove(AdmissionCrmOperationsQueueType.TransferEvidencePending);
+			queueTypes.Remove(AdmissionCrmOperationsQueueType.ReturningIdentityMatch);
+			queueTypes.Remove(AdmissionCrmOperationsQueueType.RouteAppealReview);
+		}
+		if (!await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewHouseholds))
+		{
+			queueTypes.Remove(AdmissionCrmOperationsQueueType.HouseholdResolution);
+			queueTypes.Remove(AdmissionCrmOperationsQueueType.IdentityConflict);
+		}
+		if (!await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewPolicyPacks))
+		{
+			queueTypes.Remove(AdmissionCrmOperationsQueueType.PolicyException);
+		}
+		return queueTypes.OrderBy(x => (int)x).ToList();
+	}
+
+	private async Task<bool> IsAnyPermissionGrantedAsync(params string[] permissions)
+	{
+		foreach (var permission in permissions)
+		{
+			if (await AuthorizationService.IsGrantedAsync(permission)) return true;
+		}
+		return false;
+	}
+
+	private static int GetQueueCount(
+		IReadOnlyDictionary<AdmissionCrmOperationsQueueType, IReadOnlyList<AdmissionCrmOperationsQueueItemDto>> queues,
+		AdmissionCrmOperationsQueueType queueType) =>
+		queues.TryGetValue(queueType, out var items) ? items.Count : 0;
+
+	private static string GetQueueWorkspace(AdmissionCrmOperationsQueueType queueType)
+	{
+		if (IsRegistrationQueue(queueType)) return "registrations";
+		if (IsOfferQueue(queueType)) return "offers";
+		if (IsActivationQueue(queueType)) return "activation";
+		return queueType is AdmissionCrmOperationsQueueType.UnassignedExam or
+			AdmissionCrmOperationsQueueType.CapacityConflict or AdmissionCrmOperationsQueueType.NoShow
+			? "exams"
+			: "operations";
+	}
+
 	private static bool IsRegistrationOpen(AdmissionCrmRegistrationStatus status)
 	{
 		return status is AdmissionCrmRegistrationStatus.Issued
@@ -762,5 +1051,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		IReadOnlyList<AdmissionCrmAdmissionQuotation> Quotations,
 		IReadOnlyList<AdmissionCrmApplicantIdentityProfile> IdentityProfiles,
 		IReadOnlyList<AdmissionCrmAdmissionDecision> Decisions,
+		IReadOnlyList<AdmissionCrmSeatOffer> Offers,
+		IReadOnlyList<AdmissionCrmSeatPool> SeatPools,
 		DateTime Now);
 }

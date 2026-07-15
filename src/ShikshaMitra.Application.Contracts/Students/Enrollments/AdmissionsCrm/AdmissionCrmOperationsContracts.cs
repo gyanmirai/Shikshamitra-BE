@@ -37,6 +37,13 @@ public class GetAdmissionCrmOperationsQueueInput : PagedResultRequestDto
 	public bool? UrgentOnly { get; set; }
 	public int? MinimumAgeDays { get; set; }
 	public DateTimeOffset? DueBefore { get; set; }
+	public AdmissionCrmRegistrationStatus? RegistrationStatus { get; set; }
+	public AdmissionCrmApplicantDocumentStatus? DocumentStatus { get; set; }
+	public AdmissionCrmSeatOfferStatus? OfferStatus { get; set; }
+	public AdmissionCrmRouteType? RouteType { get; set; }
+	public Guid? SeatPoolId { get; set; }
+	public AdmissionCrmActivationStatus? ActivationStatus { get; set; }
+	public AdmissionCrmServiceHandoffStatus? ServiceHandoffStatus { get; set; }
 }
 
 public class CreateAdmissionCrmOperationsSavedViewDto
@@ -74,6 +81,87 @@ public class AdmissionCrmOperationsQueueItemDto
 	public int AgeDays { get; set; }
 	public bool IsUrgent { get; set; }
 	public Guid? OwnerUserId { get; set; }
+	public AdmissionCrmRegistrationQueueContextDto? Registration { get; set; }
+	public AdmissionCrmOfferQueueContextDto? Offer { get; set; }
+	public AdmissionCrmActivationQueueContextDto? Activation { get; set; }
+	public AdmissionCrmOperationQueueContextDto? Operation { get; set; }
+}
+
+public class AdmissionCrmRegistrationQueueContextDto
+{
+	public Guid? RegistrationApplicationId { get; set; }
+	public AdmissionCrmRegistrationStatus? Status { get; set; }
+	public string? FormNumber { get; set; }
+	public decimal CompletionPercentage { get; set; }
+	public DateTime? LinkExpiresAt { get; set; }
+	public AdmissionCrmRegistrationFeeStatus? FeeStatus { get; set; }
+	public int DocumentTotalCount { get; set; }
+	public int DocumentResolvedCount { get; set; }
+	public int DocumentPendingCount { get; set; }
+	public AdmissionCrmApplicantDocumentStatus? CurrentDocumentStatus { get; set; }
+	public bool ReadinessConfirmed { get; set; }
+}
+
+public class AdmissionCrmOfferQueueContextDto
+{
+	public Guid? OfferId { get; set; }
+	public string? OfferNumber { get; set; }
+	public AdmissionCrmSeatOfferStatus? OfferStatus { get; set; }
+	public DateTime? OfferExpiresAt { get; set; }
+	public Guid? SeatPoolId { get; set; }
+	public string? SeatPoolName { get; set; }
+	public int? RemainingSeats { get; set; }
+	public AdmissionCrmAdmissionDecisionStatus? DecisionStatus { get; set; }
+	public AdmissionCrmRouteType? RouteType { get; set; }
+	public AdmissionCrmRouteEligibilityStatus? RouteStatus { get; set; }
+	public AdmissionCrmFinanceState? FinanceState { get; set; }
+	public bool? PaymentGateSatisfied { get; set; }
+}
+
+public class AdmissionCrmActivationQueueContextDto
+{
+	public Guid? ActivationId { get; set; }
+	public Guid? StudentId { get; set; }
+	public string? ActivationReference { get; set; }
+	public AdmissionCrmActivationStatus? Status { get; set; }
+	public bool PlacementConfigured { get; set; }
+	public int? RollNumber { get; set; }
+	public bool RequireStudentAccount { get; set; }
+	public bool RequireGuardianAccount { get; set; }
+	public int AttemptCount { get; set; }
+	public string? RepairStep { get; set; }
+	public string? RepairReason { get; set; }
+}
+
+public class AdmissionCrmOperationQueueContextDto
+{
+	public AdmissionCrmOperationsQueueType QueueType { get; set; }
+	public string Severity { get; set; } = "Normal";
+	public string AssignmentStatus { get; set; } = "Unassigned";
+	public AdmissionCrmServiceHandoffStatus? ServiceHandoffStatus { get; set; }
+	public int? RetryAttemptCount { get; set; }
+}
+
+public class AdmissionCrmEnrollmentOverviewDto
+{
+	public Guid AcademicYearId { get; set; }
+	public DateTime GeneratedAt { get; set; }
+	public int UnassignedLeadCount { get; set; }
+	public int UpcomingExamCount { get; set; }
+	public int ExpiringRegistrationCount { get; set; }
+	public int PendingApprovalCount { get; set; }
+	public int ActivationFailureCount { get; set; }
+	public int HandoffBlockerCount { get; set; }
+	public int UrgentCount { get; set; }
+	public IReadOnlyList<AdmissionCrmOperationsQueueCountDto> Queues { get; set; } = [];
+	public IReadOnlyList<AdmissionCrmEnrollmentOverviewItemDto> UrgentItems { get; set; } = [];
+}
+
+public class AdmissionCrmEnrollmentOverviewItemDto
+{
+	public string Workspace { get; set; } = string.Empty;
+	public AdmissionCrmOperationsQueueType QueueType { get; set; }
+	public AdmissionCrmOperationsQueueItemDto Item { get; set; } = new();
 }
 
 public class AdmissionCrmAdmissionHandoffPackageDto

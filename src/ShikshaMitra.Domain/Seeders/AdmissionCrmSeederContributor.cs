@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp.Data;
@@ -74,7 +78,8 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		}
 
 		var tenantId = CurrentTenant.Id.Value;
-		await RepairCycleAsync(tenantId, academicYear.Id, academicYear.Name);
+		var ownerUserIds = await GetConfiguredOwnerUserIdsAsync();
+		await RepairCycleAsync(tenantId, academicYear.Id, academicYear.Name, ownerUserIds);
 		await RepairStagesAsync(tenantId, academicYear.Id);
 		var sources = await RepairSourcesAsync(tenantId, academicYear.Id);
 		var slots = await RepairSlotsAsync(tenantId, academicYear.Id, academicYear.Name);
@@ -106,10 +111,28 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 			profile);
 	}
 
-	private async Task RepairCycleAsync(Guid tenantId, Guid academicYearId, string academicYearName)
+	private async Task RepairCycleAsync(
+		Guid tenantId,
+		Guid academicYearId,
+		string academicYearName,
+		IReadOnlyDictionary<string, Guid> ownerUserIds)
 	{
 		var cycle = await _cycleRepository.FirstOrDefaultAsync(item => item.AcademicYearId == academicYearId);
 		cycle ??= new AdmissionCrmCycleConfiguration(StableId(tenantId, "cycle"), tenantId, academicYearId, $"Admissions {academicYearName}");
+		var ownerPool = new[] { "admissions-reception@ddvs.com", "admissions-counselor@ddvs.com" }
+			.Where(ownerUserIds.ContainsKey)
+			.Select(email => ownerUserIds[email])
+			.Distinct()
+			.ToList();
+		var defaultOwnerUserId = ownerUserIds.GetValueOrDefault("admissions-counselor@ddvs.com");
+		var routingSettingsJson = JsonSerializer.Serialize(new
+		{
+			isEnabled = ownerPool.Count > 0,
+			defaultOwnerUserId = defaultOwnerUserId == Guid.Empty ? (Guid?)null : defaultOwnerUserId,
+			routingStrategy = AdmissionCrmLeadRoutingStrategy.RoundRobin,
+			ownerPoolUserIds = ownerPool,
+			rules = Array.Empty<object>()
+		}, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 		cycle.Update(
 			$"Admissions {academicYearName}",
 			true,
@@ -122,7 +145,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 			AdmissionCrmMeritRankingMode.MarksThenInquiryDate,
 			AdmissionCrmExamReadinessField.Contact | AdmissionCrmExamReadinessField.AdmissionIntent | AdmissionCrmExamReadinessField.DesiredClass,
 			"{\"sourceScores\":{},\"channelScores\":{\"SchoolWebsiteForm\":15,\"WalkInReception\":12,\"QuickCallEntry\":8}}",
-			"{\"strategy\":\"RoundRobin\",\"rules\":[]}",
+			routingSettingsJson,
 			"[]",
 			"[{\"key\":\"contactVerified\",\"label\":\"Contact verified\",\"required\":true},{\"key\":\"classConfirmed\",\"label\":\"Class confirmed\",\"required\":true}]",
 			"[]",
@@ -136,6 +159,22 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		{
 			await _cycleRepository.InsertAsync(cycle);
 		}
+	}
+
+	private async Task<IReadOnlyDictionary<string, Guid>> GetConfiguredOwnerUserIdsAsync()
+	{
+		var employeeRepository = _serviceProvider.GetRequiredService<IEmployeeRepository>();
+		var employees = await employeeRepository.GetListAsync(employee =>
+			employee.UserId.HasValue &&
+			(!employee.EmployeeStatusType.HasValue || employee.EmployeeStatusType == EmployeeStatusType.Active));
+
+		return employees
+			.Where(employee => employee.UserId.HasValue && !string.IsNullOrWhiteSpace(employee.Email))
+			.GroupBy(employee => employee.Email!, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(
+				group => group.Key,
+				group => group.First().UserId!.Value,
+				StringComparer.OrdinalIgnoreCase);
 	}
 
 	private async Task RepairStagesAsync(Guid tenantId, Guid academicYearId)

@@ -23,19 +23,22 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 	private readonly IRepository<AdmissionInquiryFormTemplate, Guid> _formTemplateRepository;
 	private readonly IRepository<AdmissionCrmMessageTemplate, Guid> _messageTemplateRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
+	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
 
 	public AdmissionCrmConfigurationAppService(
 		IRepository<AdmissionCrmCycleConfiguration, Guid> cycleRepository,
 		IRepository<AdmissionCrmPipelineStage, Guid> stageRepository,
 		IRepository<AdmissionInquiryFormTemplate, Guid> formTemplateRepository,
 		IRepository<AdmissionCrmMessageTemplate, Guid> messageTemplateRepository,
-		StudentScopeAccessService studentScopeAccessService)
+		StudentScopeAccessService studentScopeAccessService,
+		AdmissionCrmStaffEligibilityService staffEligibilityService)
 	{
 		_cycleRepository = cycleRepository;
 		_stageRepository = stageRepository;
 		_formTemplateRepository = formTemplateRepository;
 		_messageTemplateRepository = messageTemplateRepository;
 		_studentScopeAccessService = studentScopeAccessService;
+		_staffEligibilityService = staffEligibilityService;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
@@ -50,6 +53,11 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmCycleConfigurationDto input)
 	{
 		ValidateSlaPolicy(input.SlaPolicy);
+		await _staffEligibilityService.ValidateConfigurationStaffAsync(
+			input.LeadRoutingSettings,
+			input.ChannelSettings,
+			input.JourneyRules,
+			input.SlaPolicy);
 		var configuration = await EnsureSchoolDefaultCycleConfigurationAsync();
 		configuration.Update(
 			input.CycleName,
@@ -87,6 +95,14 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmCycleConfigurationDto input)
 	{
 		ValidateSlaPolicy(input.SlaPolicy);
+		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+			academicYearId,
+			nameof(UpdateCycleConfigurationAsync));
+		await _staffEligibilityService.ValidateConfigurationStaffAsync(
+			input.LeadRoutingSettings,
+			input.ChannelSettings,
+			input.JourneyRules,
+			input.SlaPolicy);
 		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
 		configuration.Update(
 			input.CycleName,

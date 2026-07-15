@@ -23,7 +23,7 @@ public class AdmissionCrmBulkOperationsApi_Tests : ShikshaMitraApiTestBase
 	{
 		var lead = await CreateLeadAsync();
 		var missingLeadId = Guid.NewGuid();
-		var ownerId = Guid.NewGuid();
+		var ownerId = (await GetEligibleCrmOwnersAsync())[0].Id;
 		var response = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/bulk/lead-owners",
 			new AdmissionCrmBulkAssignOwnersDto

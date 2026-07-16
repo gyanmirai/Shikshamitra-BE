@@ -40,4 +40,10 @@ public class SubjectAssignmentGroupDto
 
     /// <summary>Whether copied from previous year</summary>
     public bool IsCopiedFromPreviousYear { get; set; }
+
+    /// <summary>Whether this assignment can be permanently removed.</summary>
+    public bool CanDelete { get; set; } = true;
+
+    /// <summary>Reason shown when permanent remove is blocked.</summary>
+    public string? DeleteDisabledReason { get; set; }
 }

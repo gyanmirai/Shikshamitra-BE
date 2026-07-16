@@ -34,6 +34,15 @@ public class EfCoreTimetableRepository(
             .ToListAsync();
     }
 
+    public async Task<List<Timetables.Timetable>> GetAllWithSlotsAsync()
+    {
+        var dbSet = await GetDbSetAsync();
+        return await dbSet
+            .Include(x => x.Slots)
+                .ThenInclude(s => s.Subjects)
+            .ToListAsync();
+    }
+
     public override async Task<IQueryable<Timetables.Timetable>> WithDetailsAsync()
     {
         return (await GetQueryableAsync())

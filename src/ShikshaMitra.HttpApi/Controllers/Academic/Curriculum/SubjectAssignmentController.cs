@@ -45,6 +45,7 @@ public class SubjectAssignmentController(
 	/// <param name="standardId">Standard/Class ID (required)</param>
 	/// <param name="page">Page number (default 0)</param>
 	/// <param name="pageSize">Page size (default 10)</param>
+	/// <param name="status">Optional assignment status filter</param>
 	/// <returns>Paginated list of assignment groups</returns>
 	/// <response code="200">Subject assignments fetched</response>
 	[HttpGet("{standardId}/subject-assignments")]
@@ -52,13 +53,15 @@ public class SubjectAssignmentController(
 	public async Task<Result<SubjectAssignmentPagedResponse>> GetListAsync(
 		[FromRoute] Guid standardId,
 		[FromQuery] int page = 0,
-		[FromQuery] int pageSize = 10
+		[FromQuery] int pageSize = 10,
+		[FromQuery] SubjectStatus? status = null
 	)
 	{
 		var result = await subjectAssignmentAppService.GetListAsync(
 			standardId,
 			page,
-			pageSize
+			pageSize,
+			status
 		);
 
 		return Result.Success(result);

@@ -286,9 +286,10 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	public async Task<AdmissionCrmActivationDto> ApproveAsync(Guid id)
 	{
 		var entity = await GetActivationAsync(id, nameof(ApproveAsync));
+		var lead = await GetLeadAsync(entity.LeadId, nameof(ApproveAsync));
+		await EnsureCurrentReadinessAsync(entity, lead);
 		entity.Approve(GetCurrentUserId(), Clock.Now);
 		await _activationRepository.UpdateAsync(entity, autoSave: true);
-		var lead = await GetLeadAsync(entity.LeadId, nameof(ApproveAsync));
 		await AddTimelineAsync(lead, AdmissionCrmTimelineEventType.ActivationApproved,
 			"Student activation approved", entity.ActivationReference, entity.Id);
 		return await MapActivationAsync(entity);
@@ -299,9 +300,10 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	{
 		var activation = await GetActivationAsync(id, nameof(ExecuteAsync));
 		if (activation.Status == AdmissionCrmActivationStatus.FirstDayReady) return await MapActivationAsync(activation);
+		var lead = await GetLeadAsync(activation.LeadId, nameof(ExecuteAsync));
+		await EnsureCurrentReadinessAsync(activation, lead);
 		activation.StartAttempt();
 		var steps = Deserialize<List<AdmissionCrmActivationStepDto>>(activation.StepsJson) ?? [];
-		var lead = await GetLeadAsync(activation.LeadId, nameof(ExecuteAsync));
 		try
 		{
 			var student = lead.StudentId.HasValue ? await _studentRepository.GetAsync(lead.StudentId.Value) : null;
@@ -540,8 +542,10 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 
 		var quoteQuery = await _quotationRepository.GetQueryableAsync();
 		var quotes = await AsyncExecuter.ToListAsync(quoteQuery.Where(x => x.TenantId == CurrentTenant.Id && x.LeadId == lead.Id && x.Status == AdmissionCrmQuotationStatus.Issued));
-		var activationQuote = quotes.OrderByDescending(x => x.Version).FirstOrDefault(x => x.GateMilestone == AdmissionCrmPaymentGateMilestone.StudentActivation);
-		var financialReady = activationQuote == null || activationQuote.IsGateSatisfiedAt(Clock.Now);
+		var activationQuote = quotes.OrderByDescending(x => x.Version).FirstOrDefault();
+		var financialReady = activationQuote == null ||
+			activationQuote.GateMilestone > AdmissionCrmPaymentGateMilestone.StudentActivation ||
+			activationQuote.IsGateSatisfiedAt(Clock.Now);
 		Item("payment_gate", "Activation payment gate", financialReady, financialReady ? "Financial condition is satisfied or not required." : "Finance has not confirmed the activation gate.");
 
 		var identityQuery = await _identityRepository.GetQueryableAsync();
@@ -587,6 +591,34 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 			GrNumberPreview = series == null ? string.Empty : $"{series.Prefix}{series.NextSequence.ToString().PadLeft(series.Padding, '0')}{series.Suffix}",
 			DivisionStrength = placement.Strength, DivisionOccupancy = placement.Occupancy
 		};
+	}
+
+	private async Task EnsureCurrentReadinessAsync(
+		AdmissionCrmActivation activation,
+		AdmissionInquiryLead lead)
+	{
+		var input = new PreviewAdmissionCrmActivationDto
+		{
+			EducationBoardId = activation.EducationBoardId,
+			AcademicMediumId = activation.AcademicMediumId,
+			AcademicMediumStageId = activation.AcademicMediumStageId,
+			StandardId = activation.StandardId,
+			DivisionId = activation.DivisionId,
+			GrNumberSeriesId = activation.GrNumberSeriesId,
+			RollNumber = activation.RollNumber,
+			RequireStudentAccount = activation.RequireStudentAccount,
+			RequireGuardianAccount = activation.RequireGuardianAccount,
+			ServiceHandoffs = Deserialize<List<AdmissionCrmServiceHandoffRequestDto>>(
+				activation.ServiceHandoffRequestsJson) ?? []
+		};
+		var preview = await BuildPreviewAsync(lead, input);
+		if (!preview.IsReady)
+		{
+			throw new BusinessException("AdmissionCrm:ActivationReadinessChanged")
+				.WithData("BlockingItems", string.Join(",", preview.Items
+					.Where(item => item.Blocking && item.Status == AdmissionCrmActivationStepStatus.Failed)
+					.Select(item => item.Key)));
+		}
 	}
 
 	private async Task<AdmissionCrmActivationCancellationPreviewDto> BuildCancellationPreviewAsync(AdmissionCrmActivation activation)

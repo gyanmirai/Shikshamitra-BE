@@ -780,7 +780,7 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 			.Where(x => x.TenantId == CurrentTenant.Id && x.LeadId == leadId &&
 				x.Status == AdmissionCrmQuotationStatus.Issued)
 			.OrderByDescending(x => x.Version));
-		if (quotation == null || quotation.GateMilestone != milestone || quotation.IsGateSatisfiedAt(Clock.Now))
+		if (quotation == null || quotation.GateMilestone > milestone || quotation.IsGateSatisfiedAt(Clock.Now))
 		{
 			return;
 		}

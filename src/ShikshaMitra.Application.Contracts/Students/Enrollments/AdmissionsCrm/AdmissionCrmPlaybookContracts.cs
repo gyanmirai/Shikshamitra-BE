@@ -90,6 +90,7 @@ public class AdmissionCrmExamDefinitionDto
 	public string? Board { get; set; }
 	public string? Medium { get; set; }
 	public int DurationMinutes { get; set; }
+	public bool HallTicketEnabled { get; set; } = true;
 	public string? Instructions { get; set; }
 	public IReadOnlyList<AdmissionCrmExamComponentDto> Components { get; set; } = [];
 	public AdmissionCrmExamResultRuleDto ResultRule { get; set; } = new();

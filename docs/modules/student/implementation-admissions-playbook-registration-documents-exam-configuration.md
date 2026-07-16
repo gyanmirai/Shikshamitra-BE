@@ -3,7 +3,7 @@ module: student
 domain: implementation-plan
 content_type: Reference
 status: current
-updated_on: 2026-07-11
+updated_on: 2026-07-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,7 +19,25 @@ Phases one through five are complete for the supported release baseline.
 The release baseline includes admissions playbooks, exam rules and operations, configurable registration, secure applicant links, document verification, one-person or two-person readiness approval, operations queues, automation, generic communication dispatch, analytics, and admission handoff.
 Applicant self-scheduling is enabled only by an explicit published playbook assignment rule.
 Generic webhook and manual queue adapters are the supported communication baseline.
-Provider-specific SDK adapters, online testing, optional assisted document extraction, final admission creation, fee-ledger posting, and class allocation remain outside this release.
+Provider-specific SDK adapters, online testing, optional assisted document extraction, and Finance fee-ledger posting remain outside this release.
+Final admission, seat allocation, and student activation are delivered by their companion Enrollment workflows.
+
+## Workflow clarification and safety hardening
+
+The pipeline now reports whether registration has been issued and opens the template-backed Registration workspace instead of the legacy manual form-number dialog.
+Pipeline applicant drawers expose only Overview, the current exam work when applicable, and Registration after eligibility or issuance.
+Offer, Activation, and Governance remain available from their owning workspaces instead of appearing prematurely in Pipeline.
+Staff with document-review permission can upload or replace applicant registration checklist documents through the authenticated registration document endpoint.
+Applicant and staff uploads share the same extension, size, versioning, replacement-history, and timeline rules.
+Generated documents are grouped by their owning workflow: hall tickets under Exam, acknowledgements and corrections under Registration, offers under Offer, and admission or cancellation letters under Activation.
+Backend availability checks prevent each document from being previewed or issued before its owning registration, correction, offer, activation, or cancellation state exists.
+Each exam definition now records whether hall tickets are enabled.
+Older stored exam definitions remain hall-ticket enabled for compatibility, while new quick setups default hall tickets off.
+Hall-ticket preview and issuance require a scheduled exam, respect the resolved playbook setting, and include the scheduled date, time, and venue.
+The Exam and Eligibility page provides a quick setup for a written exam, student interaction, or no entrance assessment while retaining the advanced versioned playbook editor.
+Finance remains a manual confirmation placeholder until the Finance integration is connected.
+An issued unsatisfied payment gate now blocks its configured milestone and every later milestone.
+Activation readiness is recalculated at approval and execution so an expired, reversed, disputed, or newly introduced gate cannot be bypassed by an older readiness snapshot.
 
 ## Program rules
 
@@ -165,4 +183,4 @@ The browser suite covers anonymous denial, inquiry and duplicate handling, publi
 The complete secure browser journey covers local webhook OTP delivery, partial save, submission, document upload, staff rejection, replacement upload, verification, original-seen evidence, readiness confirmation, and admission handoff.
 Restricted-user browser denial remains optional and was skipped because `E2E_STUDENT_CRM_DENIED_EMAIL` was not supplied.
 Provider-specific WhatsApp, SMS, and email SDK adapters remain outside completion until vendors are selected.
-Final admission creation, fee-ledger posting, and class allocation remain outside this implementation plan.
+Finance fee-ledger posting remains outside this implementation plan and is represented by audited manual confirmation until the Finance integration is connected.

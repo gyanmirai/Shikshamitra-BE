@@ -102,7 +102,63 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 				Value = $"MAN-GR-{manualSequence}", Reason = "Verified migration from the predecessor admission register."
 			}, JsonOptions);
 		manualResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await manualResponse.Content.ReadAsStringAsync());
+
+		var policyResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/financial/fee-policies",
+			new CreateAdmissionCrmFeePolicyDto
+			{
+				Code = "ACT-" + Guid.NewGuid().ToString("N")[..8],
+				Name = "Activation fee gate",
+				Applicability = new AdmissionCrmFeePolicyApplicabilityDto
+				{
+					DesiredClass = placement.StandardName
+				},
+				Components =
+				[
+					new AdmissionCrmFeeComponentDto
+					{
+						Key = "activation-fee",
+						Name = "Activation fee",
+						Amount = 500,
+						ParentDescription = "Required before student activation."
+					}
+				],
+				GateType = AdmissionCrmPaymentGateType.FinanceCleared,
+				GateMilestone = AdmissionCrmPaymentGateMilestone.StudentActivation,
+				RequiredAmount = 500,
+				EffectiveFrom = DateTime.UtcNow.AddDays(-1),
+				EffectiveUntil = DateTime.UtcNow.AddDays(30)
+			}, JsonOptions);
+		policyResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await policyResponse.Content.ReadAsStringAsync());
+		var policy = (await policyResponse.Content.ReadFromJsonAsync<AdmissionCrmFeePolicyDto>(JsonOptions))!;
+		await PublishFeePolicyAsync(policy.Id);
+		var quotationResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/financial/quotations",
+			new IssueAdmissionCrmQuotationDto
+			{
+				FeePolicyId = policy.Id,
+				ValidUntil = DateTime.UtcNow.AddDays(2)
+			}, JsonOptions);
+		quotationResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await quotationResponse.Content.ReadAsStringAsync());
+		var quotation = (await quotationResponse.Content.ReadFromJsonAsync<AdmissionCrmAdmissionQuotationDto>(JsonOptions))!;
+
 		await ApproveActivationAsDifferentUserAsync(activation.Id);
+		var blockedExecute = await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/activation/{activation.Id}/execute",
+			null);
+		blockedExecute.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await blockedExecute.Content.ReadAsStringAsync()).ShouldContain("AdmissionCrm:ActivationReadinessChanged");
+		var financeResponse = await Client.PutAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/financial/quotations/{quotation.Id}/finance-state",
+			new RecordAdmissionCrmFinanceStateDto
+			{
+				State = AdmissionCrmFinanceState.Confirmed,
+				ConfirmedAmount = 500,
+				FinanceReference = "ACTIVATION-PAID",
+				Source = "Finance placeholder confirmation",
+				ConfirmedAt = DateTime.UtcNow
+			}, JsonOptions);
+		financeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await financeResponse.Content.ReadAsStringAsync());
 
 		var executeResponse = await Client.PostAsync($"/api/student-enrollment/admissions-crm/activation/{activation.Id}/execute", null);
 		executeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await executeResponse.Content.ReadAsStringAsync());
@@ -167,6 +223,24 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 		{
 			var entity = await repository.GetAsync(id); entity.Submit(Guid.NewGuid()); entity.Publish(Guid.NewGuid());
 			await repository.UpdateAsync(entity); await uow.CompleteAsync();
+		}
+	}
+
+	private async Task PublishFeePolicyAsync(Guid id)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider.GetRequiredService<IRepository<AdmissionCrmFeePolicy, Guid>>();
+		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var entity = await repository.GetAsync(id);
+			entity.Submit(Guid.NewGuid(), DateTime.UtcNow);
+			entity.Approve(Guid.NewGuid(), DateTime.UtcNow);
+			entity.Publish(DateTime.UtcNow);
+			await repository.UpdateAsync(entity);
+			await uow.CompleteAsync();
 		}
 	}
 

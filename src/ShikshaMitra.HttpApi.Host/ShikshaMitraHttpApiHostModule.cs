@@ -562,6 +562,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseUnitOfWork();
 		app.UseDynamicClaims();
 		app.UseAuthorization();
+		app.UseMiddleware<AdmissionCrmSettingsAccessMiddleware>();
 
 		app.UseSwagger();
 		app.UseAbpSwaggerUI(c =>

@@ -372,37 +372,9 @@ public class TimetableAppService(
             EnsureTimetableEditable(timetable);
         }
 
-        timetable.ClearSlots();
+        ReplaceSlotsFromInput(timetable, input);
 
-        foreach (var (day, slots) in input.Timetable)
-        {
-            foreach (var slotDto in slots)
-            {
-                var slot = new TimetableSlot(
-                    GuidGenerator.Create(),
-                    timetable.Id,
-                    day,
-                    slotDto.Sequence,
-                    slotDto.StartTime,
-                    slotDto.EndTime,
-                    slotDto.Type,
-                    slotDto.BreakType,
-                    slotDto.SubjectType,
-                    slotDto.ElectiveGroupId);
-
-                foreach (var subjectDto in slotDto.Subjects)
-                {
-                    slot.AddSubject(new TimetableSlotSubject(
-                        GuidGenerator.Create(),
-                        slot.Id,
-                        subjectDto.SubjectId,
-                        subjectDto.TeacherId,
-                        subjectDto.RoomId));
-                }
-
-                timetable.AddSlot(slot);
-            }
-        }
+        await EnsureNoTeacherOrRoomConflictsAsync(timetable);
 
         if (input.Status == TimetableStatus.Published)
         {
@@ -422,6 +394,19 @@ public class TimetableAppService(
         {
             await timetableRepository.UpdateAsync(timetable);
         }
+    }
+
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
+    public async Task ValidateAsync(Guid standardId, Guid divisionId, SaveTimetableDto input)
+    {
+        var timetable = new Timetable(
+            GuidGenerator.Create(),
+            CurrentTenant.Id,
+            standardId,
+            divisionId);
+
+        ReplaceSlotsFromInput(timetable, input);
+        await EnsureNoTeacherOrRoomConflictsAsync(timetable);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
@@ -449,6 +434,7 @@ public class TimetableAppService(
             .ToList();
 
         var timetables = await timetableRepository.GetByStandardIdAsync(standardId);
+        var allTimetables = await timetableRepository.GetAllWithSlotsAsync();
         var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(standardId);
         var assignedSubjectsQueryable = await assignedSubjectRepository.WithDetailsAsync(a => a.Teachers);
         var assignedSubjects = await AsyncExecuter.ToListAsync(
@@ -533,9 +519,11 @@ public class TimetableAppService(
                     }
                 }
 
-                // 2. Inter-division conflicts (only with Published timetables of other divisions)
-                var otherTimetables = timetables
-                    .Where(t => t.DivisionId != tt.DivisionId && t.Status == TimetableStatus.Published)
+                // 2. Cross-class/division conflicts with any active timetable.
+                var otherTimetables = allTimetables
+                    .Where(t =>
+                        (t.StandardId != tt.StandardId || t.DivisionId != tt.DivisionId) &&
+                        t.Status != TimetableStatus.NotCreated)
                     .ToList();
 
                 foreach (var slot in tt.Slots.Where(s => s.SlotType == SlotType.Period))
@@ -753,8 +741,54 @@ public class TimetableAppService(
         EnsureNoDuplicateTimetableSlots(periodSlots);
         EnsureNoDuplicateTeacherOrRoomInsideSlot(periodSlots);
         EnsureEveryTeachingSubjectHasTeacherAndRoom(periodSlots);
-        await EnsureNoPublishedTeacherOrRoomConflictsAsync(timetable, periodSlots);
+        await EnsureNoTeacherOrRoomConflictsAsync(timetable, periodSlots);
         EnsureWeeklyLectureCountsMatch(timetable, periodSlots, weeklySlot);
+    }
+
+    private void ReplaceSlotsFromInput(Timetable timetable, SaveTimetableDto input)
+    {
+        timetable.ClearSlots();
+
+        foreach (var (day, slots) in input.Timetable)
+        {
+            foreach (var slotDto in slots)
+            {
+                var slot = new TimetableSlot(
+                    GuidGenerator.Create(),
+                    timetable.Id,
+                    day,
+                    slotDto.Sequence,
+                    slotDto.StartTime,
+                    slotDto.EndTime,
+                    slotDto.Type,
+                    slotDto.BreakType,
+                    slotDto.SubjectType,
+                    slotDto.ElectiveGroupId);
+
+                foreach (var subjectDto in slotDto.Subjects)
+                {
+                    slot.AddSubject(new TimetableSlotSubject(
+                        GuidGenerator.Create(),
+                        slot.Id,
+                        subjectDto.SubjectId,
+                        subjectDto.TeacherId,
+                        subjectDto.RoomId));
+                }
+
+                timetable.AddSlot(slot);
+            }
+        }
+    }
+
+    private async Task EnsureNoTeacherOrRoomConflictsAsync(Timetable timetable)
+    {
+        var periodSlots = timetable.Slots
+            .Where(s => s.SlotType == SlotType.Period)
+            .ToList();
+
+        EnsureNoDuplicateTimetableSlots(periodSlots);
+        EnsureNoDuplicateTeacherOrRoomInsideSlot(periodSlots);
+        await EnsureNoTeacherOrRoomConflictsAsync(timetable, periodSlots);
     }
 
     private static void EnsureNoDuplicateTimetableSlots(List<TimetableSlot> periodSlots)
@@ -828,7 +862,7 @@ public class TimetableAppService(
         }
     }
 
-    private async Task EnsureNoPublishedTeacherOrRoomConflictsAsync(Timetable timetable, List<TimetableSlot> periodSlots)
+    private async Task EnsureNoTeacherOrRoomConflictsAsync(Timetable timetable, List<TimetableSlot> periodSlots)
     {
         foreach (var slot in periodSlots)
         {

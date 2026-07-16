@@ -44,8 +44,11 @@ public class ExamAppService(
 	IRepository<ExamResultHeader, Guid> resultHeaderRepository,
 	ExamManager examManager,
 	IRepository<ExamSeatAllocation, Guid> examSeatAllocationRepository,
+	IRepository<AcademicCalendar, Guid> calendarRepository,
 	IRepository<AcademicCalendarDay, Guid> calendarDayRepository) : ApplicationService, IExamAppService
 {
+	private const string CalendarSyncDescriptionPrefix = "Auto-created from examination schedule. ExamId: ";
+
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
 	{
 		var exam = examManager.Create(
@@ -117,6 +120,11 @@ public class ExamAppService(
 		examManager.SaveSchedule(exam, schedules);
 
 		await examRepository.UpdateAsync(exam);
+
+		if (input.SyncToAcademicCalendar)
+		{
+			await SyncScheduleToAcademicCalendarAsync(exam, input.Subjects);
+		}
 	}
 
 	public async Task<ExamScheduleResponseDto> GetScheduleAsync(Guid examId)
@@ -999,6 +1007,121 @@ public class ExamAppService(
 				.WithData("CalendarDay", blockingDay.Title)
 				.WithData("DayType", blockingDay.DayType);
 		}
+	}
+
+	private async Task SyncScheduleToAcademicCalendarAsync(Exam exam, IReadOnlyCollection<ExamSubjectScheduleDto> subjectSchedules)
+	{
+		var scheduledRows = subjectSchedules
+			.Where(row => row.ExamDate.HasValue)
+			.Select(row => (
+				SubjectId: row.ElectiveGroupId ?? row.SubjectId,
+				Date: row.ExamDate!.Value.Date,
+				row.StartTime,
+				row.EndTime
+			))
+			.GroupBy(row => new { row.SubjectId, row.Date, row.StartTime, row.EndTime })
+			.Select(group => group.First())
+			.ToList();
+
+		if (scheduledRows.Count == 0)
+		{
+			return;
+		}
+
+		var minDate = scheduledRows.Min(row => row.Date);
+		var maxDate = scheduledRows.Max(row => row.Date);
+		var calendars = await calendarRepository.GetListAsync(calendar =>
+			calendar.Status != CalendarStatus.Archived &&
+			calendar.StartDate.Date <= maxDate &&
+			calendar.EndDate.Date >= minDate);
+
+		if (calendars.Count == 0)
+		{
+			throw new BusinessException("ShikshaMitra.Exam:AcademicCalendarNotFound")
+				.WithData("StartDate", minDate.ToString("yyyy-MM-dd"))
+				.WithData("EndDate", maxDate.ToString("yyyy-MM-dd"));
+		}
+
+		var syncMarker = $"{CalendarSyncDescriptionPrefix}{exam.Id}";
+		var calendarIds = calendars.Select(calendar => calendar.Id).ToList();
+		var existingSyncedDays = await calendarDayRepository.GetListAsync(day =>
+			calendarIds.Contains(day.AcademicCalendarId) &&
+			day.DayType == DayType.Exam &&
+			day.Status == CalendarDayStatus.Active &&
+			day.Description != null &&
+			day.Description.Contains(syncMarker));
+
+		foreach (var day in existingSyncedDays)
+		{
+			day.Cancel("Refreshed from examination schedule.");
+			await calendarDayRepository.UpdateAsync(day);
+		}
+
+		var subjectNames = await ResolveExamScheduleSubjectNamesAsync(scheduledRows.Select(row => row.SubjectId).Distinct().ToList());
+
+		foreach (var row in scheduledRows)
+		{
+			var calendar = calendars
+				.Where(candidate => candidate.StartDate.Date <= row.Date && candidate.EndDate.Date >= row.Date)
+				.OrderByDescending(candidate => candidate.Status == CalendarStatus.Published)
+				.ThenByDescending(candidate => candidate.IsDefault)
+				.FirstOrDefault();
+
+			if (calendar == null)
+			{
+				throw new BusinessException("ShikshaMitra.Exam:AcademicCalendarNotFound")
+					.WithData("ExamDate", row.Date.ToString("yyyy-MM-dd"));
+			}
+
+			var subjectName = subjectNames.GetValueOrDefault(row.SubjectId, "Subject");
+			var calendarDay = new AcademicCalendarDay(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				calendar.Id,
+				row.Date,
+				DayType.Exam,
+				$"{exam.ExamName} ({subjectName})",
+				syncMarker,
+				appliesToAll: false,
+				standardId: exam.StandardId,
+				divisionId: null,
+				holidayCategory: null,
+				startTime: row.StartTime?.TimeOfDay,
+				endTime: row.EndTime?.TimeOfDay);
+
+			await calendarDayRepository.InsertAsync(calendarDay);
+		}
+	}
+
+	private async Task<Dictionary<Guid, string>> ResolveExamScheduleSubjectNamesAsync(List<Guid> subjectIds)
+	{
+		var subjectNames = new Dictionary<Guid, string>();
+		if (subjectIds.Count == 0)
+		{
+			return subjectNames;
+		}
+
+		var subjects = await subjectRepository.GetListAsync(subject => subjectIds.Contains(subject.Id));
+		foreach (var subject in subjects)
+		{
+			subjectNames[subject.Id] = string.IsNullOrWhiteSpace(subject.DisplayName)
+				? subject.Name
+				: subject.DisplayName!;
+		}
+
+		var unresolvedIds = subjectIds.Where(id => !subjectNames.ContainsKey(id)).ToList();
+		if (unresolvedIds.Count == 0)
+		{
+			return subjectNames;
+		}
+
+		var electiveGroups = await electiveGroupRepository.GetListAsync(group => unresolvedIds.Contains(group.Id));
+		foreach (var group in electiveGroups)
+		{
+			subjectNames[group.Id] = group.Name;
+		}
+
+		return subjectNames;
 	}
 
 	private async Task EnsureMarksEditableAsync(Guid examId, Guid subjectId, Guid divisionId)

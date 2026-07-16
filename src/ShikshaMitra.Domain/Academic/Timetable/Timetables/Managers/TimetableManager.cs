@@ -17,10 +17,12 @@ public class TimetableManager(ITimetableRepository timetableRepository) : Domain
         TimeOnly endTime,
         IEnumerable<Guid> teacherIds)
     {
-        var allTimetables = await timetableRepository.GetByStandardIdAsync(standardId);
+        var allTimetables = await timetableRepository.GetAllWithSlotsAsync();
 
         var otherTimetables = allTimetables
-            .Where(t => t.DivisionId != divisionId && t.Status == TimetableStatus.Published)
+            .Where(t =>
+                (t.StandardId != standardId || t.DivisionId != divisionId) &&
+                t.Status != TimetableStatus.NotCreated)
             .ToList();
 
         foreach (var timetable in otherTimetables)
@@ -33,6 +35,10 @@ public class TimetableManager(ITimetableRepository timetableRepository) : Domain
             if (conflictingSlots.Any())
             {
                 throw new BusinessException(TimetableErrorCodes.TeacherConflict)
+                    .WithData("ConflictingDivisionId", timetable.DivisionId)
+                    .WithData("Day", day)
+                    .WithData("StartTime", startTime)
+                    .WithData("EndTime", endTime)
                     .WithData("message", "One or more selected teachers are already assigned to another class during this time slot.");
             }
         }
@@ -46,10 +52,12 @@ public class TimetableManager(ITimetableRepository timetableRepository) : Domain
         TimeOnly endTime,
         IEnumerable<Guid> roomIds)
     {
-        var allTimetables = await timetableRepository.GetByStandardIdAsync(standardId);
+        var allTimetables = await timetableRepository.GetAllWithSlotsAsync();
 
         var otherTimetables = allTimetables
-            .Where(t => t.DivisionId != divisionId && t.Status == TimetableStatus.Published)
+            .Where(t =>
+                (t.StandardId != standardId || t.DivisionId != divisionId) &&
+                t.Status != TimetableStatus.NotCreated)
             .ToList();
 
         foreach (var timetable in otherTimetables)
@@ -62,6 +70,10 @@ public class TimetableManager(ITimetableRepository timetableRepository) : Domain
             if (conflictingSlots.Any())
             {
                 throw new BusinessException(TimetableErrorCodes.RoomConflict)
+                    .WithData("ConflictingDivisionId", timetable.DivisionId)
+                    .WithData("Day", day)
+                    .WithData("StartTime", startTime)
+                    .WithData("EndTime", endTime)
                     .WithData("message", "One or more selected rooms are already assigned to another class during this time slot.");
             }
         }

@@ -6,4 +6,6 @@ public class UploadHomeworkSubmissionDto
 {
     public Guid StudentId { get; set; }
     public Guid HomeworkId { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string? OriginalFileName { get; set; }
 }

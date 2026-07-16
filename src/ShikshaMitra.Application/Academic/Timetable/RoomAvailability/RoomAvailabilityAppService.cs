@@ -51,23 +51,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
     public async Task<List<RoomAvailabilityDto>> GetAvailabilityAsync(RoomAvailabilityFilterDto input)
     {
-        Logger.LogInformation($"[RoomAvailability] CurrentTenant.Id: {CurrentTenant.Id}");
         var rooms = await _roomRepository.GetListAsync();
-        foreach (var r in rooms)
-        {
-            Logger.LogInformation($"[RoomAvailability] Room: {r.RoomName}, TenantId: {r.TenantId}, BuildingId: {r.BuildingId}");
-        }
-
-        if (input.BuildingId.HasValue)
-        {
-            rooms = rooms.Where(r => r.BuildingId == input.BuildingId.Value).ToList();
-        }
-
-        if (input.FloorId.HasValue)
-        {
-            rooms = rooms.Where(r => r.FloorId == input.FloorId.Value).ToList();
-        }
-
         var buildings = await _buildingRepository.GetListAsync();
         var floors = await _floorRepository.GetListAsync();
         var roomTypes = await _roomTypeRepository.GetListAsync();
@@ -75,6 +59,11 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         var buildingLookup = buildings.ToDictionary(b => b.Id, b => b.BuildingName);
         var floorLookup = floors.ToDictionary(f => f.Id, f => f.FloorName);
         var roomTypeLookup = roomTypes.ToDictionary(t => t.Id, t => t.RoomTypeName);
+
+        rooms = ApplyRoomMasterFilters(rooms, input, buildingLookup, floorLookup, roomTypeLookup)
+            .OrderByDescending(r => r.CreationTime)
+            .ThenBy(r => r.RoomName)
+            .ToList();
 
         var result = new List<RoomAvailabilityDto>();
 
@@ -125,8 +114,65 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             result.Add(dto);
         }
 
-        return result;
+        return input.IncludeOccupied
+            ? result
+            : result.Where(r => r.Status == "available").ToList();
     }
+
+    private static IEnumerable<Room> ApplyRoomMasterFilters(
+        IEnumerable<Room> rooms,
+        RoomAvailabilityFilterDto input,
+        IReadOnlyDictionary<Guid, string> buildingLookup,
+        IReadOnlyDictionary<Guid, string> floorLookup,
+        IReadOnlyDictionary<Guid, string> roomTypeLookup)
+    {
+        var query = rooms;
+
+        if (input.BuildingId.HasValue)
+        {
+            query = query.Where(r => r.BuildingId == input.BuildingId.Value);
+        }
+
+        if (input.FloorId.HasValue)
+        {
+            query = query.Where(r => r.FloorId == input.FloorId.Value);
+        }
+
+        if (input.RoomTypeId.HasValue)
+        {
+            query = query.Where(r => r.RoomTypeId == input.RoomTypeId.Value);
+        }
+
+        if (input.MinimumCapacity.HasValue && input.MinimumCapacity.Value > 0)
+        {
+            query = query.Where(r => r.Capacity >= input.MinimumCapacity.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(input.Search))
+        {
+            var search = input.Search.Trim();
+            query = query.Where(r =>
+                ContainsIgnoreCase(r.RoomName, search) ||
+                ContainsIgnoreCase(BuildingName(r, buildingLookup), search) ||
+                ContainsIgnoreCase(FloorName(r, floorLookup), search) ||
+                ContainsIgnoreCase(RoomTypeName(r, roomTypeLookup), search) ||
+                r.Features?.Any(feature => ContainsIgnoreCase(feature, search)) == true);
+        }
+
+        return query;
+    }
+
+    private static string BuildingName(Room room, IReadOnlyDictionary<Guid, string> lookup) =>
+        lookup.TryGetValue(room.BuildingId, out var name) ? name : string.Empty;
+
+    private static string FloorName(Room room, IReadOnlyDictionary<Guid, string> lookup) =>
+        lookup.TryGetValue(room.FloorId, out var name) ? name : string.Empty;
+
+    private static string RoomTypeName(Room room, IReadOnlyDictionary<Guid, string> lookup) =>
+        lookup.TryGetValue(room.RoomTypeId, out var name) ? name : string.Empty;
+
+    private static bool ContainsIgnoreCase(string? value, string search) =>
+        value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
 
     public async Task<ConflictCheckResultDto> CheckConflictsAsync(CheckConflictRequestDto input)
     {

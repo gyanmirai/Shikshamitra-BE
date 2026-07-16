@@ -27,11 +27,13 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <param name="classId">Standard/Class ID</param>
 	/// <param name="page">Page number (0-indexed)</param>
 	/// <param name="pageSize">Items per page</param>
+	/// <param name="status">Optional assignment status filter</param>
 	/// <returns>Paginated list of assignment groups</returns>
 	Task<SubjectAssignmentPagedResponse> GetListAsync(
 		Guid classId,
 		int page,
-		int pageSize
+		int pageSize,
+		SubjectStatus? status = null
 	);
 
 	/// <summary>

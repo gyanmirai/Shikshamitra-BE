@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -7,7 +6,6 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
-using Volo.Abp.BlobStoring;
 
 namespace ShikshaMitra.Controllers.Academic.HomeworkAssignment;
 
@@ -17,12 +15,10 @@ namespace ShikshaMitra.Controllers.Academic.HomeworkAssignment;
 public class HomeworkController : AbpControllerBase
 {
     private readonly IHomeworkAppService _service;
-    private readonly IBlobContainer _blobContainer;
 
-    public HomeworkController(IHomeworkAppService service, IBlobContainer blobContainer)
+    public HomeworkController(IHomeworkAppService service)
     {
         _service = service;
-        _blobContainer = blobContainer;
     }
 
     /// <summary>
@@ -39,7 +35,7 @@ public class HomeworkController : AbpControllerBase
         IFormFile? attachment
     )
     {
-        var blobName = await UploadAttachmentAsync(attachment, "homework");
+        var blobName = ResolveUploadedFileName(attachment);
         
         if (blobName == null && Request.Form.TryGetValue("attachment", out var attachmentStr))
         {
@@ -113,7 +109,7 @@ public class HomeworkController : AbpControllerBase
         IFormFile? attachment
     )
     {
-        var blobName = await UploadAttachmentAsync(attachment, "homework");
+        var blobName = ResolveUploadedFileName(attachment);
         
         if (blobName == null && Request.Form.TryGetValue("attachment", out var attachmentStr))
         {
@@ -187,17 +183,11 @@ public class HomeworkController : AbpControllerBase
         return await _service.GetHistoryAsync(homeworkId);
     }
 
-    private async Task<string?> UploadAttachmentAsync(IFormFile? file, string prefix)
+    private string? ResolveUploadedFileName(IFormFile? file)
     {
-        if (file == null) return null;
+        if (file != null)
+            throw new UserFriendlyException("Upload files with /api/files first, then send the returned file name as attachment.");
 
-        const long maxSize = 5 * 1024 * 1024;
-        if (file.Length > maxSize)
-            throw new BusinessException($"ShikshaMitra.{prefix}:AttachmentTooLarge");
-
-        var blobName = $"{prefix}/{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
-        await using var stream = file.OpenReadStream();
-        await _blobContainer.SaveAsync(blobName, stream, overrideExisting: true);
-        return blobName;
+        return null;
     }
 }

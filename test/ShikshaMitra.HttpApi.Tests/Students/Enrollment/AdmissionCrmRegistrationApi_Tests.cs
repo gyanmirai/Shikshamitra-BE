@@ -107,6 +107,19 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		issued.FormNumber.ShouldBe(series.NextPreview);
 		issued.RegistrationTemplateVersion.ShouldBe(1);
 		issued.ApplicantStatusPath.ShouldNotBeNullOrWhiteSpace();
+		var issuedDocumentAvailabilityResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/documents/availability");
+		issuedDocumentAvailabilityResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await issuedDocumentAvailabilityResponse.Content.ReadAsStringAsync());
+		var issuedDocumentAvailability = (await issuedDocumentAvailabilityResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmGeneratedDocumentAvailabilityDto[]>(JsonOptions))!;
+		issuedDocumentAvailability.Single(item =>
+			item.DocumentType == AdmissionCrmGeneratedDocumentType.RegistrationAcknowledgement)
+			.IsAvailable.ShouldBeTrue();
+		issuedDocumentAvailability.Single(item =>
+			item.DocumentType == AdmissionCrmGeneratedDocumentType.CorrectionNotice)
+			.IsAvailable.ShouldBeFalse();
 
 		var currentRegistrationResponse = await Client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/current");
@@ -182,6 +195,13 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			},
 			JsonOptions);
 		correctionResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await correctionResponse.Content.ReadAsStringAsync());
+		var correctionAvailabilityResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/documents/availability");
+		var correctionAvailability = (await correctionAvailabilityResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmGeneratedDocumentAvailabilityDto[]>(JsonOptions))!;
+		correctionAvailability.Single(item =>
+			item.DocumentType == AdmissionCrmGeneratedDocumentType.CorrectionNotice)
+			.IsAvailable.ShouldBeTrue();
 
 		var resubmitResponse = await Client.PostAsJsonAsync(
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{token}/registration/submit",
@@ -260,7 +280,11 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		rejected.ShouldNotBeNull();
 		rejected.DecisionReason.ShouldBe("The scan is not readable.");
 
-		var replacementUpload = await UploadDocumentAsync(tenantId, token, status.AccessSessionToken!, "birth-certificate", "birth.pdf", "clear-second-version");
+		var replacementUpload = await UploadDocumentFromStaffAsync(
+			issued.Id,
+			"birth-certificate",
+			"birth.pdf",
+			"clear-second-version");
 		replacementUpload.StatusCode.ShouldBe(HttpStatusCode.OK, await replacementUpload.Content.ReadAsStringAsync());
 		var replacementChecklist = await replacementUpload.Content.ReadFromJsonAsync<AdmissionCrmApplicantDocumentChecklistDto>(JsonOptions);
 		replacementChecklist.ShouldNotBeNull();
@@ -580,6 +604,22 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		form.Add(file, "File", fileName);
 		return await Client.PostAsync(
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{token}/registration/documents",
+			form);
+	}
+
+	private async Task<HttpResponseMessage> UploadDocumentFromStaffAsync(
+		Guid registrationApplicationId,
+		string requirementKey,
+		string fileName,
+		string content)
+	{
+		using var form = new MultipartFormDataContent();
+		form.Add(new StringContent(requirementKey), "RequirementKey");
+		var file = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(content));
+		file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+		form.Add(file, "File", fileName);
+		return await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/registrations/{registrationApplicationId}/documents",
 			form);
 	}
 }

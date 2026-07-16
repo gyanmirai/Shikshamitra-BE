@@ -20,6 +20,7 @@ public interface IAdmissionCrmDocumentAppService : IApplicationService
 	Task<AdmissionCrmApplicantDocumentChecklistDto> GetChecklistAsync(Guid registrationApplicationId);
 	Task<AdmissionCrmApplicantDocumentChecklistDto?> GetChecklistFromApplicantAsync(Guid leadId);
 	Task<AdmissionCrmApplicantDocumentChecklistDto> UploadFromApplicantAsync(Guid leadId, ProcessedAdmissionCrmApplicantDocumentUploadDto input);
+	Task<AdmissionCrmApplicantDocumentChecklistDto> UploadFromStaffAsync(Guid registrationApplicationId, ProcessedAdmissionCrmApplicantDocumentUploadDto input);
 	Task<AdmissionCrmApplicantDocumentDto> ReviewAsync(Guid documentId, ReviewAdmissionCrmApplicantDocumentDto input);
 	Task<AdmissionCrmApplicantDocumentDto> WaiveAsync(Guid assignmentId, string requirementKey, AdmissionCrmDocumentReasonDto input);
 	Task<AdmissionCrmApplicantDocumentDto> MarkOriginalSeenAsync(Guid documentId);

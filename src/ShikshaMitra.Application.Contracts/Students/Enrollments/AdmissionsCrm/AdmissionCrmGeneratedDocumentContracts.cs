@@ -58,9 +58,18 @@ public class AdmissionCrmGeneratedDocumentHistoryDto
 	public Guid? ActorUserId { get; set; }
 }
 
+public class AdmissionCrmGeneratedDocumentAvailabilityDto
+{
+	public AdmissionCrmGeneratedDocumentType DocumentType { get; set; }
+	public bool IsAvailable { get; set; }
+	public string? ReasonCode { get; set; }
+	public string Message { get; set; } = string.Empty;
+}
+
 public interface IAdmissionCrmGeneratedDocumentAppService : IApplicationService
 {
 	Task<AdmissionCrmGeneratedDocumentDto> PreviewAsync(Guid leadId, PreviewAdmissionCrmGeneratedDocumentDto input);
 	Task<AdmissionCrmGeneratedDocumentDto> IssueAsync(Guid leadId, IssueAdmissionCrmGeneratedDocumentDto input);
+	Task<IReadOnlyList<AdmissionCrmGeneratedDocumentAvailabilityDto>> GetAvailabilityAsync(Guid leadId);
 	Task<IReadOnlyList<AdmissionCrmGeneratedDocumentHistoryDto>> GetHistoryAsync(Guid leadId);
 }

@@ -211,6 +211,26 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 		var assignment = await GetAssignmentByLeadOrDefaultAsync(leadId)
 		                 ?? throw new BusinessException("AdmissionCrm:DocumentChecklistNotAssigned");
 		var application = await _applicationRepository.GetAsync(assignment.RegistrationApplicationId);
+		return await ProcessUploadAsync(assignment, application, input, actorUserId: null);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ReviewDocuments)]
+	public async Task<AdmissionCrmApplicantDocumentChecklistDto> UploadFromStaffAsync(
+		Guid registrationApplicationId,
+		ProcessedAdmissionCrmApplicantDocumentUploadDto input)
+	{
+		var application = await GetApplicationAsync(registrationApplicationId, nameof(UploadFromStaffAsync));
+		var assignment = await GetAssignmentByApplicationAsync(registrationApplicationId);
+		return await ProcessUploadAsync(assignment, application, input, CurrentUser.Id);
+	}
+
+	private async Task<AdmissionCrmApplicantDocumentChecklistDto> ProcessUploadAsync(
+		AdmissionCrmDocumentChecklistAssignment assignment,
+		AdmissionCrmRegistrationApplication application,
+		ProcessedAdmissionCrmApplicantDocumentUploadDto input,
+		Guid? actorUserId)
+	{
+		var leadId = application.LeadId;
 		var template = Deserialize<AdmissionCrmDocumentChecklistTemplateDto>(assignment.TemplateSnapshotJson);
 		var requirement = template.Requirements.FirstOrDefault(x =>
 			string.Equals(x.Key, input.RequirementKey, StringComparison.OrdinalIgnoreCase))
@@ -233,7 +253,7 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 			if (current != null) await _documentRepository.UpdateAsync(current, autoSave: false);
 			await _documentRepository.InsertAsync(document, autoSave: true);
 			await AddTimelineAsync(leadId, assignment.AcademicYearId, AdmissionCrmTimelineEventType.DocumentUploaded,
-				"Document uploaded", $"{requirement.Name} v{document.Version}.", document.Id, actorUserId: null);
+				"Document uploaded", $"{requirement.Name} v{document.Version}.", document.Id, actorUserId);
 		}
 		catch
 		{

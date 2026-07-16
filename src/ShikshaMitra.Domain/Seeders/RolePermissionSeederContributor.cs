@@ -355,6 +355,10 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		yield return "AbpTenantManagement.Tenants.Add";
 		yield return TenantManagementPermissions.Tenants.Delete;
 		yield return TenantManagementPermissions.Tenants.ManageConnectionStrings;
+		foreach (var permission in AdmissionCrmPlatformPermissions.All)
+		{
+			yield return permission;
+		}
 	}
 
 }

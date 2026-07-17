@@ -14,4 +14,29 @@ public class UpdateChapterProgressDto
 
 	[MaxLength(1000, ErrorMessage = "Description cannot exceed 1000 characters")]
 	public string? Description { get; set; }
+
+	[MaxLength(100, ErrorMessage = "Status cannot exceed 100 characters")]
+	public string? Status { get; set; }
+
+	[MaxLength(120, ErrorMessage = "Delay reason cannot exceed 120 characters")]
+	public string? DelayReason { get; set; }
+
+	[MaxLength(500, ErrorMessage = "Delay description cannot exceed 500 characters")]
+	public string? DelayDescription { get; set; }
+
+	public DateTime? RevisedEndDate { get; set; }
+
+	[Range(0, 500, ErrorMessage = "Conducted lectures must be between 0 and 500")]
+	public int? ConductedLectures { get; set; }
+
+	[MaxLength(250, ErrorMessage = "Current topic cannot exceed 250 characters")]
+	public string? CurrentTopic { get; set; }
+
+	[MaxLength(250, ErrorMessage = "Teaching method cannot exceed 250 characters")]
+	public string? TeachingMethod { get; set; }
+
+	[MaxLength(250, ErrorMessage = "Student understanding cannot exceed 250 characters")]
+	public string? StudentUnderstanding { get; set; }
+
+	public bool? EscalationRequired { get; set; }
 }

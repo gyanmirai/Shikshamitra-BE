@@ -21,7 +21,7 @@ public class SubstitutionController(ISubstitutionAppService substitutionAppServi
 
     [HttpGet("dashboard")]
     public Task<SubstitutionDashboardDto> GetDashboardAsync(
-        [FromQuery] DateTime date,
+        [FromQuery] DateTimeOffset date,
         [FromQuery] Guid? academicYearId = null)
     {
         return substitutionAppService.GetDashboardAsync(date, academicYearId);

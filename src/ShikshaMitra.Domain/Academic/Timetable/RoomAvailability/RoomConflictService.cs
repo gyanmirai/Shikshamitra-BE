@@ -4,7 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Timetable.Timetables;
+using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 
@@ -14,22 +16,31 @@ public class RoomConflictService : DomainService
 {
     private readonly IRepository<RoomReservation, Guid> _reservationRepository;
     private readonly IRepository<RoomMaintenanceBlock, Guid> _maintenanceRepository;
-    private readonly IRepository<Timetables.Timetable, Guid> _timetableRepository;
+    private readonly ITimetableRepository _timetableRepository;
     private readonly IRepository<AcademicCalendar, Guid> _calendarRepository;
     private readonly IRepository<AcademicCalendarDay, Guid> _calendarDayRepository;
+    private readonly IRepository<Room, Guid> _roomRepository;
+    private readonly IRepository<Division, Guid> _divisionRepository;
+    private readonly IRepository<Standard, Guid> _standardRepository;
 
     public RoomConflictService(
         IRepository<RoomReservation, Guid> reservationRepository,
         IRepository<RoomMaintenanceBlock, Guid> maintenanceRepository,
-        IRepository<Timetables.Timetable, Guid> timetableRepository,
+        ITimetableRepository timetableRepository,
         IRepository<AcademicCalendar, Guid> calendarRepository,
-        IRepository<AcademicCalendarDay, Guid> calendarDayRepository)
+        IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
+        IRepository<Room, Guid> roomRepository,
+        IRepository<Division, Guid> divisionRepository,
+        IRepository<Standard, Guid> standardRepository)
     {
         _reservationRepository = reservationRepository;
         _maintenanceRepository = maintenanceRepository;
         _timetableRepository = timetableRepository;
         _calendarRepository = calendarRepository;
         _calendarDayRepository = calendarDayRepository;
+        _roomRepository = roomRepository;
+        _divisionRepository = divisionRepository;
+        _standardRepository = standardRepository;
     }
 
     public async Task<ConflictCheckResult> CheckConflictsAsync(
@@ -165,28 +176,62 @@ public class RoomConflictService : DomainService
             // Only scan timetable slots if the calendar doesn't block timetable classes on this date
             if (calAllowed)
             {
-                var timetables = await _timetableRepository.GetListAsync(t => t.Status == TimetableStatus.Published);
+                var timetables = (await _timetableRepository.GetAllWithSlotsAsync())
+                    .Where(t => t.Status != TimetableStatus.NotCreated)
+                    .ToList();
                 var slotOccupations = timetables
                     .SelectMany(t => t.Slots)
                     .Where(s => s.Day == timetableDay && s.StartTime < TimeOnly.FromTimeSpan(endTime) && s.EndTime > TimeOnly.FromTimeSpan(startTime))
-                    .SelectMany(s => s.Subjects)
-                    .Where(subj => subj.RoomId == roomId)
+                    .SelectMany(s => s.Subjects.Select(subject => new { Slot = s, Subject = subject }))
+                    .Where(row => row.Subject.RoomId == roomId)
                     .ToList();
 
                 if (slotOccupations.Any())
                 {
+                    var firstOccupation = slotOccupations.First();
+                    var timetable = timetables.FirstOrDefault(t => t.Id == firstOccupation.Slot.TimetableId);
+                    var timetableRoomMessage = await BuildTimetableRoomConflictMessageAsync(
+                        timetable,
+                        firstOccupation.Slot,
+                        date);
+
                     conflicts.Add(new ConflictItem(
                         "roomAvailability",
                         "critical",
-                        "Room is pre-allocated in Timetable for recurring lectures in this slot.",
-                        "Timetable allocation conflicts must be overridden or alternate room allocated."
+                        timetableRoomMessage,
+                        "Choose another room, change the timetable room allocation, or select a non-overlapping time."
                     ));
-                    result.RoomAvailability = new ValidationPass(false, "Timetable assignment conflict.");
+                    result.RoomAvailability = new ValidationPass(false, timetableRoomMessage);
                 }
             }
         }
 
-        // 5. Check Teacher Double-booking (Warning)
+        // 5. Check institute setup class-room assignment against class shift timing.
+        if (calAllowed && date.DayOfWeek != DayOfWeek.Sunday)
+        {
+            var classOccupancy = await FindClassShiftOccupancyAsync(roomId, startTime, endTime);
+            if (classOccupancy != null)
+            {
+                var shiftName = string.IsNullOrWhiteSpace(classOccupancy.ShiftName)
+                    ? "configured class shift"
+                    : classOccupancy.ShiftName;
+
+                var message =
+                    $"Room is occupied by {classOccupancy.StandardName} Division {classOccupancy.DivisionName} " +
+                    $"from {classOccupancy.StartTime:hh\\:mm} to {classOccupancy.EndTime:hh\\:mm} based on institute setup shift '{shiftName}'.";
+
+                conflicts.Add(new ConflictItem(
+                    "classAvailability",
+                    "critical",
+                    message,
+                    "Choose another room or change the division room assignment / class shift in institute setup."
+                ));
+                result.ClassAvailability = new ValidationPass(false, message);
+                result.RoomAvailability = new ValidationPass(false, "Class shift assignment conflict.");
+            }
+        }
+
+        // 6. Check Teacher Double-booking (Warning)
         if (teacherId.HasValue)
         {
             var teacherReserved = await _reservationRepository.AnyAsync(r =>
@@ -219,6 +264,88 @@ public class RoomConflictService : DomainService
 
         return result;
     }
+
+    private async Task<string> BuildTimetableRoomConflictMessageAsync(
+        Timetables.Timetable? timetable,
+        TimetableSlot slot,
+        DateTime date)
+    {
+        var classLabel = "another class";
+
+        if (timetable != null)
+        {
+            var standard = await _standardRepository.FindAsync(timetable.StandardId);
+            var division = await _divisionRepository.FindAsync(timetable.DivisionId);
+            classLabel = $"{standard?.Name ?? "Class"} Division {division?.Name ?? "-"}";
+        }
+
+        return
+            $"Room is already allocated in the timetable for {classLabel} on {date:dddd} " +
+            $"{slot.StartTime:HH\\:mm}-{slot.EndTime:HH\\:mm}.";
+    }
+
+    private async Task<ClassShiftOccupancy?> FindClassShiftOccupancyAsync(
+        Guid roomId,
+        TimeSpan startTime,
+        TimeSpan endTime)
+    {
+        var room = await _roomRepository.GetAsync(roomId);
+        var divisions = await _divisionRepository.GetListAsync(d => d.RoomNumber != null && d.RoomNumber != string.Empty);
+        var matchedDivisions = divisions
+            .Where(d => IsAssignedToRoom(d.RoomNumber, room))
+            .ToList();
+
+        if (!matchedDivisions.Any())
+        {
+            return null;
+        }
+
+        var standardIds = matchedDivisions.Select(d => d.StandardId).Distinct().ToList();
+        var standards = await _standardRepository.GetListAsync(s => standardIds.Contains(s.Id));
+        var standardsById = standards.ToDictionary(s => s.Id);
+
+        foreach (var division in matchedDivisions.OrderBy(d => d.Name))
+        {
+            if (!standardsById.TryGetValue(division.StandardId, out var standard) || standard.Shift == null)
+            {
+                continue;
+            }
+
+            var shiftStart = standard.Shift.StartTime.ToTimeSpan();
+            var shiftEnd = standard.Shift.EndTime.ToTimeSpan();
+            if (shiftStart < endTime && shiftEnd > startTime)
+            {
+                return new ClassShiftOccupancy(
+                    standard.Name,
+                    division.Name,
+                    standard.Shift.ShiftName,
+                    shiftStart,
+                    shiftEnd);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsAssignedToRoom(string roomNumber, Room room)
+    {
+        var assignedRoom = roomNumber.Trim();
+
+        if (Guid.TryParse(assignedRoom, out var assignedRoomId) && assignedRoomId == room.Id)
+        {
+            return true;
+        }
+
+        return string.Equals(assignedRoom, room.RoomName, StringComparison.OrdinalIgnoreCase)
+               || room.RoomName.EndsWith(assignedRoom, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed record ClassShiftOccupancy(
+        string StandardName,
+        string DivisionName,
+        string ShiftName,
+        TimeSpan StartTime,
+        TimeSpan EndTime);
 
     private TimetableDayOfWeek GetTimetableDayOfWeek(DayOfWeek dayOfWeek)
     {

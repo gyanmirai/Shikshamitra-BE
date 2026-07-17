@@ -108,6 +108,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 OccupiedBy = occupiedBy,
                 ConflictReason = reason,
                 ConflictSeverity = conflictCheck.OverallSeverity,
+                Source = ResolveAvailabilitySource(conflictCheck.Conflicts.FirstOrDefault()),
+                NextAvailableAt = ResolveNextAvailableAt(conflictCheck.Conflicts.FirstOrDefault()),
                 UtilizationPercentage = new Random().Next(40, 85)
             };
 
@@ -212,10 +214,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             input.TeacherId, input.StandardId, input.DivisionId
         );
 
-        if (conflicts.OverallSeverity == "critical")
-        {
-            throw new Volo.Abp.UserFriendlyException("Cannot complete booking: Critical conflicts detected. Check conflict log.");
-        }
+        EnsureNoCriticalConflicts(conflicts, "Cannot complete booking");
 
         Guid? configId = null;
 
@@ -247,6 +246,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 {
                     continue;
                 }
+
+                EnsureNoCriticalConflicts(stepConflict, $"Cannot create recurring booking for {date:yyyy-MM-dd}");
 
                 var subReservation = new RoomReservation(
                     GuidGenerator.Create(), CurrentTenant.Id, input.RoomId, date,
@@ -418,6 +419,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         var reservation = await _reservationRepository.GetAsync(id);
         var oldValJson = JsonSerializer.Serialize(reservation);
 
+        await EnsureReservationCanBeApprovedAsync(reservation);
+
         reservation.Approve(CurrentUser.Id ?? Guid.Empty);
         await _reservationRepository.UpdateAsync(reservation);
 
@@ -428,6 +431,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 !r.IsRecurring);
             foreach (var child in children)
             {
+                await EnsureReservationCanBeApprovedAsync(child);
                 child.Approve(CurrentUser.Id ?? Guid.Empty);
                 await _reservationRepository.UpdateAsync(child);
             }
@@ -448,6 +452,43 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             "Reservation approved."
         );
         await _auditLogRepository.InsertAsync(auditLog);
+    }
+
+    private async Task EnsureReservationCanBeApprovedAsync(RoomReservation reservation)
+    {
+        var conflicts = await _conflictService.CheckConflictsAsync(
+            reservation.RoomId,
+            reservation.Date,
+            reservation.StartTime,
+            reservation.EndTime,
+            reservation.Id,
+            reservation.TeacherId,
+            reservation.StandardId,
+            reservation.DivisionId
+        );
+
+        EnsureNoCriticalConflicts(conflicts, "Cannot approve booking");
+    }
+
+    private static void EnsureNoCriticalConflicts(ConflictCheckResult conflicts, string action)
+    {
+        if (conflicts.OverallSeverity != "critical")
+        {
+            return;
+        }
+
+        var criticalMessages = conflicts.Conflicts
+            .Where(conflict => conflict.Severity == "critical")
+            .Select(conflict => conflict.Message)
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .Distinct()
+            .ToList();
+
+        var detail = criticalMessages.Count > 0
+            ? string.Join(" ", criticalMessages)
+            : "Critical conflicts detected.";
+
+        throw new Volo.Abp.UserFriendlyException($"{action}: {detail}");
     }
 
     public async Task RejectReservationAsync(Guid id, string reason)
@@ -624,16 +665,63 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             }
             else
             {
+                var conflict = await _conflictService.CheckConflictsAsync(roomId, date, cfg.Start, cfg.End);
+                var block = conflict.Conflicts.FirstOrDefault(c => c.Severity == "critical");
+
                 schedule.Slots.Add(new ScheduleSlotDto
                 {
                     Period = cfg.Period,
                     Time = cfg.Time,
-                    Status = "free",
-                    Details = "Available"
+                    Status = ResolveScheduleStatus(block),
+                    Details = block?.Message ?? "Available",
+                    OccupiedBy = ResolveAvailabilitySource(block)
                 });
             }
         }
 
         return schedule;
+    }
+
+    private static string? ResolveAvailabilitySource(ConflictItem? conflict)
+    {
+        return conflict?.Type switch
+        {
+            "classAvailability" => "Institute setup class shift",
+            "maintenanceCheck" => "Maintenance",
+            "holidayCalendar" => "Academic calendar",
+            "roomAvailability" => "Timetable / reservation",
+            _ => null
+        };
+    }
+
+    private static string? ResolveNextAvailableAt(ConflictItem? conflict)
+    {
+        if (conflict?.Type != "classAvailability")
+        {
+            return null;
+        }
+
+        var marker = " to ";
+        var index = conflict.Message.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var remainder = conflict.Message[(index + marker.Length)..];
+        var endIndex = remainder.IndexOf(" based on", StringComparison.OrdinalIgnoreCase);
+        return endIndex > 0 ? remainder[..endIndex] : null;
+    }
+
+    private static string ResolveScheduleStatus(ConflictItem? conflict)
+    {
+        return conflict?.Type switch
+        {
+            "classAvailability" => "class",
+            "maintenanceCheck" => "maintenance",
+            "holidayCalendar" => "event",
+            "roomAvailability" => "reserved",
+            _ => "free"
+        };
     }
 }

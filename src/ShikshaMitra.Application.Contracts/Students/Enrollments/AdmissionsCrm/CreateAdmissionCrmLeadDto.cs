@@ -23,7 +23,10 @@ public class CreateAdmissionCrmLeadDto : IValidatableObject
 	[Required]
 	[MaxLength(AdmissionCrmConsts.MaxIntentLength)]
 	public required string AdmissionIntent { get; set; }
+	public AdmissionCrmRouteType? IntendedRouteType { get; set; }
 	public Guid? TargetStandardId { get; set; }
+	public Guid? AcademicBoardId { get; set; }
+	public Guid? AcademicMediumId { get; set; }
 	public string? DesiredClassName { get; set; }
 	public string? Notes { get; set; }
 	[MaxLength(AdmissionCrmConsts.MaxNotesLength)]

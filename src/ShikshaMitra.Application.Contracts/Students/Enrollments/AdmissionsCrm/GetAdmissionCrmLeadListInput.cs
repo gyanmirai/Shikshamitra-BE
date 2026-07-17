@@ -12,4 +12,7 @@ public class GetAdmissionCrmLeadListInput : PagedAndSortedResultRequestDto
 	public string? CampaignName { get; set; }
 	public Guid? OwnerUserId { get; set; }
 	public AdmissionCrmLeadPriority? Priority { get; set; }
+	public AdmissionCrmRouteType? IntendedRouteType { get; set; }
+	public string? DesiredClassName { get; set; }
+	public Guid? AcademicMediumId { get; set; }
 }

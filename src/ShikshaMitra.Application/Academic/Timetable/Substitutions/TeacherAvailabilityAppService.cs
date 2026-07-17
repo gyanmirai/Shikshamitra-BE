@@ -253,7 +253,8 @@ public class TeacherAvailabilityAppService(
             return new AffectedLectureResultDto();
         }
 
-        var timetableDay = ToTimetableDay(input.AvailabilityDate.DayOfWeek);
+        var availabilityDate = NormalizeDate(input.AvailabilityDate);
+        var timetableDay = ToTimetableDay(availabilityDate.DayOfWeek);
         if (!timetableDay.HasValue)
         {
             return new AffectedLectureResultDto();
@@ -261,7 +262,6 @@ public class TeacherAvailabilityAppService(
 
         var start = ParseTime(input.StartTime, "startTime");
         var end = ParseTime(input.EndTime, "endTime");
-        var availabilityDate = NormalizeDate(input.AvailabilityDate);
         var timetableQuery = await timetableRepository.WithDetailsAsync();
         var timetables = await AsyncExecuter.ToListAsync(timetableQuery.Where(x => x.Status == TimetableStatus.Published));
         var standards = await standardRepository.GetListAsync();
@@ -524,8 +524,25 @@ public class TeacherAvailabilityAppService(
         return parsed;
     }
 
-    private static DateTime NormalizeDate(DateTime value) =>
-        DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
+    private static TimeZoneInfo GetInstitutionTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+        }
+    }
+
+    private static DateTime NormalizeDate(DateTime value)
+    {
+        var tz = GetInstitutionTimeZone();
+        var utcTime = value.Kind == DateTimeKind.Utc ? value : TimeZoneInfo.ConvertTimeToUtc(value);
+        var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime, tz);
+        return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
+    }
 
     private static DateTime CombineDateAndTime(DateTime date, TimeOnly time) =>
         DateTime.SpecifyKind(date.Date.Add(time.ToTimeSpan()), DateTimeKind.Utc);

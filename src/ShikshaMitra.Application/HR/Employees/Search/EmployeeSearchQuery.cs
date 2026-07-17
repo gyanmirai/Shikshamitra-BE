@@ -13,6 +13,9 @@ public static class EmployeeSearchQuery
 		GetEmployeeListInput input,
 		EmployeeOrganizationScopeResolver organizationScopeResolver)
 	{
+		var today = DateOnly.FromDateTime(DateTime.UtcNow);
+		queryable = queryable.Where(e => e.DateOfJoining == null || e.DateOfJoining <= today);
+
 		if (!string.IsNullOrEmpty(input.Status) &&
 			Enum.TryParse<EmployeeStatusType>(input.Status, true, out var statusType))
 		{

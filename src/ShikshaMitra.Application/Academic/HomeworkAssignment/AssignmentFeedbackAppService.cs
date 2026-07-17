@@ -199,12 +199,17 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			return "Reviewed";
 		}
 
-		if (marks.HasValue || !string.IsNullOrWhiteSpace(feedback))
+		if (status == SubmissionStatus.NeedsReview)
 		{
-			return "Draft";
+			return "Needs Review";
 		}
 
-		return status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview
+		if (marks.HasValue || !string.IsNullOrWhiteSpace(feedback))
+		{
+			return "Reviewed";
+		}
+
+		return status is SubmissionStatus.Submitted or SubmissionStatus.Late
 			? "Needs Review"
 			: "Not Started";
 	}

@@ -547,8 +547,10 @@ public class SubstitutionAppService(
             return [];
         }
 
+        var tz = GetInstitutionTimeZone();
         var lectureDate = input.Date == default ? DateTimeOffset.Now : input.Date;
-        var timetableDay = ToTimetableDay(lectureDate.Date.DayOfWeek);
+        var localLectureDate = TimeZoneInfo.ConvertTime(lectureDate, tz);
+        var timetableDay = ToTimetableDay(localLectureDate.DayOfWeek);
         if (!timetableDay.HasValue)
         {
             return [];
@@ -1273,11 +1275,32 @@ public class SubstitutionAppService(
         return parsed;
     }
 
-    private static DateTime NormalizeDate(DateTime value) =>
-        DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
+    private static TimeZoneInfo GetInstitutionTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+        }
+    }
 
-    private static DateTime NormalizeDate(DateTimeOffset value) =>
-        DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
+    private static DateTime NormalizeDate(DateTime value)
+    {
+        var tz = GetInstitutionTimeZone();
+        var utcTime = value.Kind == DateTimeKind.Utc ? value : TimeZoneInfo.ConvertTimeToUtc(value);
+        var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime, tz);
+        return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
+    }
+
+    private static DateTime NormalizeDate(DateTimeOffset value)
+    {
+        var tz = GetInstitutionTimeZone();
+        var localTime = TimeZoneInfo.ConvertTime(value, tz);
+        return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
+    }
 
     private static DateTime CombineDateAndTime(DateTime date, TimeOnly time) =>
         DateTime.SpecifyKind(date.Date.Add(time.ToTimeSpan()), DateTimeKind.Utc);

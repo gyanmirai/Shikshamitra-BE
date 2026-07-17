@@ -453,7 +453,28 @@ public class TimetableAppService(
         }
 
         int totalRequiredWeeklyLectures = weeklySlot?.Subjects.Sum(s => s.WeeklyLectures) ?? 0;
-        int subjectsWithoutTeachersCount = assignedSubjects.Count(a => a.Teachers == null || a.Teachers.Count == 0);
+        int subjectsWithoutTeachersCount = 0;
+        if (weeklySlot != null)
+        {
+            var weeklySubjectIds = weeklySlot.Subjects
+                .Where(s => s.SubjectId.HasValue && s.WeeklyLectures > 0)
+                .Select(s => s.SubjectId!.Value)
+                .ToHashSet();
+
+            var electiveGroupIds = weeklySlot.Subjects
+                .Where(s => s.ElectiveGroupId.HasValue && s.WeeklyLectures > 0)
+                .Select(s => s.ElectiveGroupId!.Value)
+                .ToHashSet();
+
+            subjectsWithoutTeachersCount = assignedSubjects.Count(a =>
+                ((a.SubjectType == SubjectType.Core && weeklySubjectIds.Contains(a.SubjectId)) ||
+                 (a.SubjectType == SubjectType.Elective && a.ElectiveGroupId.HasValue && electiveGroupIds.Contains(a.ElectiveGroupId.Value))) &&
+                (a.Teachers == null || a.Teachers.Count == 0));
+        }
+        else
+        {
+            subjectsWithoutTeachersCount = assignedSubjects.Count(a => a.Teachers == null || a.Teachers.Count == 0);
+        }
         bool hasRooms = roomsCount > 0;
 
         var items = pagedDivisions.Select(division =>

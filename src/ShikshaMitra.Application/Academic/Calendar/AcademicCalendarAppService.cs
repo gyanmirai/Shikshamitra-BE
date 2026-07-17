@@ -727,6 +727,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 AcademicCalendarId = x.day.AcademicCalendarId,
                 CalendarName = x.calendar.Name,
                 Date = x.day.Date,
+                StartTime = x.day.StartTime,
+                EndTime = x.day.EndTime,
                 Title = x.day.Title,
                 Description = x.day.Description,
                 AppliesToAll = x.day.AppliesToAll,
@@ -747,11 +749,40 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     [AllowAnonymous]
     public async Task<List<AcademicCalendarDayDto>> CreateEmergencyClosureAsync(CreateEmergencyClosureDto input)
     {
-        var inputDate = input.Date.DateTime;
-        var calendar = await ResolveCalendarForEmergencyClosureAsync(inputDate);
+        var startDate = (input.StartDate ?? input.Date).DateTime.Date;
+        var endDate = (input.EndDate ?? input.StartDate ?? input.Date).DateTime.Date;
+
+        if (endDate < startDate)
+        {
+            throw new UserFriendlyException("Closure end date cannot be before the start date.");
+        }
+
+        if (input.StartTime.HasValue != input.EndTime.HasValue)
+        {
+            throw new UserFriendlyException("Both start time and end time are required for a partial-day closure.");
+        }
+
+        if (input.StartTime.HasValue && input.EndTime.HasValue && input.EndTime <= input.StartTime)
+        {
+            throw new UserFriendlyException("Closure end time must be after the start time.");
+        }
 
         var results = new List<AcademicCalendarDayDto>();
+        for (var closureDate = startDate; closureDate <= endDate; closureDate = closureDate.AddDays(1))
+        {
+            var calendar = await ResolveCalendarForEmergencyClosureAsync(closureDate);
+            await CreateEmergencyClosureForDateAsync(input, closureDate, calendar, results);
+        }
 
+        return results;
+    }
+
+    private async Task CreateEmergencyClosureForDateAsync(
+        CreateEmergencyClosureDto input,
+        DateTime inputDate,
+        AcademicCalendar calendar,
+        List<AcademicCalendarDayDto> results)
+    {
         // Create Day records for each standard/division if specific standards are requested
         if (!input.AppliesToAll && input.StandardIds != null && input.StandardIds.Count > 0)
         {
@@ -769,7 +800,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     appliesToAll: false,
                     standardId: stdId,
                     divisionId: null,
-                    holidayCategory: HolidayCategory.WeatherEmergency
+                    holidayCategory: HolidayCategory.WeatherEmergency,
+                    startTime: input.StartTime,
+                    endTime: input.EndTime
                 );
                 await _calendarDayRepository.InsertAsync(day);
                 results.Add(ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(day));
@@ -810,7 +843,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 appliesToAll: true,
                 standardId: null,
                 divisionId: null,
-                holidayCategory: HolidayCategory.WeatherEmergency
+                holidayCategory: HolidayCategory.WeatherEmergency,
+                startTime: input.StartTime,
+                endTime: input.EndTime
             );
             await _calendarDayRepository.InsertAsync(day);
             results.Add(ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(day));
@@ -836,8 +871,6 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 academicCalendarDayId: day.Id,
                 module: "EmergencyClosure");
         }
-
-        return results;
     }
 
     private async Task<AcademicCalendar> ResolveCalendarForEmergencyClosureAsync(DateTime inputDate)

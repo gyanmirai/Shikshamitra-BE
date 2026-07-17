@@ -282,7 +282,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Recomputes and stores the setup health score based on plan scoring criteria.
 	/// Score breakdown: SubjectCode=10, SubjectType=10, PrimaryTeacher=20,
-	/// LearningGoals=15, Description=10, Syllabus(chapters)=15, ChaptersAdded=10,
+	/// LearningGoals=15, Description=5, Prerequisites=5, Syllabus(chapters)=15, ChaptersAdded=10,
 	/// WeeklyPeriods=5, Documents=5 → total 100
 	/// </summary>
 	public void RecalculateSetupHealth()
@@ -291,13 +291,26 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (!string.IsNullOrWhiteSpace(SubjectCode)) score += 10;
 		score += 10; // SubjectType is always set (enum), always award
 		if (Teachers.Any(t => t.TeacherType == SubjectTeacherType.Primary)) score += 20;
-		if (!string.IsNullOrWhiteSpace(LearningGoals)) score += 15;
-		if (!string.IsNullOrWhiteSpace(Description)) score += 10;
+		if (HasMeaningfulContent(LearningGoals)) score += 15;
+		if (HasMeaningfulContent(Description)) score += 5;
+		if (HasMeaningfulContent(Prerequisites)) score += 5;
 		if (Chapters.Count > 0) score += 15;
 		if (Chapters.Count >= 3) score += 10;
 		if (WeeklyPeriods > 0) score += 5;
 		if (Documents.Count > 0) score += 5;
 		SetupHealthScore = Math.Min(score, 100);
+	}
+
+	private static bool HasMeaningfulContent(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			return false;
+		}
+
+		var text = System.Text.RegularExpressions.Regex.Replace(value, "<.*?>", string.Empty);
+		text = text.Replace("&nbsp;", " ").Trim();
+		return !string.IsNullOrWhiteSpace(text);
 	}
 	#endregion
 }

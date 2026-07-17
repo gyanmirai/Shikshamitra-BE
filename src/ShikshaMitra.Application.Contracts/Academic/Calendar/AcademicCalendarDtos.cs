@@ -50,6 +50,8 @@ public class EmergencyClosureListItemDto : EntityDto<Guid>
     public Guid AcademicCalendarId { get; set; }
     public string CalendarName { get; set; }
     public DateTime Date { get; set; }
+    public TimeSpan? StartTime { get; set; }
+    public TimeSpan? EndTime { get; set; }
     public string Title { get; set; }
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
@@ -235,6 +237,10 @@ public class CreateCalendarDaysBulkDto
 public class CreateEmergencyClosureDto
 {
     public DateTimeOffset Date { get; set; }
+    public DateTimeOffset? StartDate { get; set; }
+    public DateTimeOffset? EndDate { get; set; }
+    public TimeSpan? StartTime { get; set; }
+    public TimeSpan? EndTime { get; set; }
     public string Title { get; set; }
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }

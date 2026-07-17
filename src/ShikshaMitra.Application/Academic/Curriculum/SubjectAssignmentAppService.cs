@@ -184,6 +184,10 @@ public class SubjectAssignmentAppService(
 		{
 			query = query.Where(a => a.Status == status.Value);
 		}
+		else
+		{
+			query = query.Where(a => a.Status != SubjectStatus.Archived);
+		}
 
 		// Non-admin users only see subjects they are personally assigned to teach.
 		if (!await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())

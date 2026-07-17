@@ -115,6 +115,28 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		}
 	}
 
+	[Fact]
+	public async Task GetFilteredListAsync_Should_Exclude_Future_Joining_Employees()
+	{
+		var futureEmployeeInput = await BuildCreateDtoAsync("future.join");
+		futureEmployeeInput.DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
+		var futureEmployee = await _personalInfoAppService.CreateAsync(futureEmployeeInput);
+
+		var currentEmployeeInput = await BuildCreateDtoAsync("current.join");
+		currentEmployeeInput.DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow);
+		var currentEmployee = await _personalInfoAppService.CreateAsync(currentEmployeeInput);
+
+		var result = await _employeeSearchAppService.GetFilteredListAsync(new GetEmployeeListInput
+		{
+			SkipCount = 0,
+			MaxResultCount = 50
+		});
+
+		var ids = result.Items.Select(x => x.Id).ToList();
+		ids.ShouldContain(currentEmployee.Id);
+		ids.ShouldNotContain(futureEmployee.Id);
+	}
+
 	private ClaimsPrincipal BuildPrincipal(Guid userId)
 	{
 		var claims = new List<Claim>

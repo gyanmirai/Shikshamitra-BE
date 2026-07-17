@@ -28,7 +28,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<Subject, Guid> _subjectRepository;
-	private readonly StudentSubmissionManager _submissionManager;
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
 
 	public HomeworkFeedbackAppService(
@@ -37,7 +36,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		IRepository<Student, Guid> studentRepository,
 		IRepository<Standard, Guid> standardRepository,
 		IRepository<Subject, Guid> subjectRepository,
-		StudentSubmissionManager submissionManager,
 		IAsyncQueryableExecuter asyncExecuter
 	)
 	{
@@ -46,7 +44,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		_studentRepository = studentRepository;
 		_standardRepository = standardRepository;
 		_subjectRepository = subjectRepository;
-		_submissionManager = submissionManager;
 		_asyncExecuter = asyncExecuter;
 	}
 
@@ -149,15 +146,15 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				DueDate = homework.DueDate?.ToString("dd-MM-yyyy")
 					?? homework.DivisionSchedules.FirstOrDefault(ds => ds.DivisionId == filter.DivisionId)?.DueDate.ToString("dd-MM-yyyy")
 					?? string.Empty,
-				Marks = submission?.Marks,
-				TotalMarks = submission?.TotalMarks,
+				Marks = null,
+				TotalMarks = null,
 				Feedback = submission?.Feedback,
 				Remarks = submission?.Remarks,
 				Status = (int) (submission?.Status ?? SubmissionStatus.NotSubmitted),
 				SubmissionStatusLabel = GetSubmissionStatusLabel(submission?.Status ?? SubmissionStatus.NotSubmitted),
-				EvaluationStatus = GetEvaluationStatus(submission?.Status, submission?.Marks, submission?.Feedback),
+				EvaluationStatus = GetEvaluationStatus(submission?.Status, submission?.Feedback),
 				FeedbackStatus = string.IsNullOrWhiteSpace(submission?.Feedback) ? "Feedback Pending" : "Feedback Added",
-				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks),
+				Percentage = null,
 				SubmittedContent = submission?.SubmittedContent,
 				SubmittedDocumentUrl = submission?.SubmittedDocumentUrl,
 				OriginalFileName = submission?.OriginalFileName
@@ -190,8 +187,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 	private static EvaluationWorkspaceSummaryDto BuildSummary(List<HomeworkSubmissionDto> submissions)
 	{
-		var reviewedRows = submissions.Where(s => s.Marks.HasValue && s.TotalMarks.HasValue).ToList();
-
 		return new EvaluationWorkspaceSummaryDto
 		{
 			TotalStudents = submissions.Count,
@@ -200,24 +195,29 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			Reviewed = submissions.Count(s => s.Status == (int)SubmissionStatus.Reviewed),
 			NeedsReview = submissions.Count(s => s.Status is (int)SubmissionStatus.Submitted or (int)SubmissionStatus.Late or (int)SubmissionStatus.NeedsReview),
 			Late = submissions.Count(s => s.Status == (int)SubmissionStatus.Late),
-			TotalMarks = reviewedRows.Select(s => s.TotalMarks).FirstOrDefault(x => x.HasValue),
-			AverageMarks = reviewedRows.Count == 0 ? null : Math.Round(reviewedRows.Average(s => s.Marks!.Value), 2)
+			TotalMarks = null,
+			AverageMarks = null
 		};
 	}
 
-	private static string GetEvaluationStatus(SubmissionStatus? status, decimal? marks, string? feedback)
+	private static string GetEvaluationStatus(SubmissionStatus? status, string? feedback)
 	{
 		if (status == SubmissionStatus.Reviewed)
 		{
 			return "Reviewed";
 		}
 
-		if (marks.HasValue || !string.IsNullOrWhiteSpace(feedback))
+		if (status == SubmissionStatus.NeedsReview)
 		{
-			return "Draft";
+			return "Needs Review";
 		}
 
-		return status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview
+		if (!string.IsNullOrWhiteSpace(feedback))
+		{
+			return "Reviewed";
+		}
+
+		return status is SubmissionStatus.Submitted or SubmissionStatus.Late
 			? "Needs Review"
 			: "Not Started";
 	}
@@ -230,13 +230,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			SubmissionStatus.NeedsReview => "Needs Review",
 			_ => status.ToString()
 		};
-	}
-
-	private static decimal? CalculatePercentage(decimal? marks, decimal? totalMarks)
-	{
-		return marks.HasValue && totalMarks.HasValue && totalMarks.Value > 0
-			? Math.Round(marks.Value / totalMarks.Value * 100, 2)
-			: null;
 	}
 
 	/// <summary>
@@ -267,7 +260,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		var student = await _studentRepository.GetAsync(studentId);
 
 		// 3. Validate feedback data
-		_submissionManager.ValidateFeedback(input.Marks, input.TotalMarks);
 		EnsureFeedbackStatusAllowed(input);
 
 		// 4. Get or create submission
@@ -287,8 +279,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		// 5. Update feedback
 		submission.UpdateFeedback(
-			input.Marks,
-			input.TotalMarks,
+			null,
+			null,
 			input.Feedback,
 			input.Remarks,
 			input.Status,
@@ -306,8 +298,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			{
 				StudentId = studentId.ToString(),
 				HomeworkId = homeworkId.ToString(),
-				Marks = input.Marks,
-				TotalMarks = input.TotalMarks,
+				Marks = null,
+				TotalMarks = null,
 				Feedback = input.Feedback,
 				Remarks = input.Remarks,
 				Status = input.Status.ToString()
@@ -386,10 +378,9 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 	private static void EnsureFeedbackStatusAllowed(GiveFeedbackDto input)
 	{
-		if (input.Status == SubmissionStatus.Reviewed &&
-			(!input.Marks.HasValue || !input.TotalMarks.HasValue || string.IsNullOrWhiteSpace(input.Feedback)))
+		if (input.Status == SubmissionStatus.Reviewed && string.IsNullOrWhiteSpace(input.Feedback))
 		{
-			throw new BusinessException("ShikshaMitra.Submission:ReviewRequiresMarksAndFeedback");
+			throw new BusinessException("ShikshaMitra.Submission:ReviewRequiresFeedback");
 		}
 
 		if (input.Status == SubmissionStatus.NeedsReview && string.IsNullOrWhiteSpace(input.Remarks))

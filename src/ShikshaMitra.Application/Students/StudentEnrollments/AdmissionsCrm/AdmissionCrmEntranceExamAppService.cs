@@ -198,9 +198,7 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		var sortedQuery = string.IsNullOrWhiteSpace(input.FilterText)
-			? query.OrderBy(x => x.ExamStartTime).ThenBy(x => x.LeadId)
-			: query.OrderByDescending(x => x.ScheduledAt).ThenBy(x => x.LeadId);
+		var sortedQuery = ApplyExamSorting(query, leadQueryable, input.Sorting);
 		var exams = await AsyncExecuter.ToListAsync(
 			sortedQuery
 				.Skip(input.SkipCount)
@@ -730,6 +728,31 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 			EligibilityOverrideReason = exam.EligibilityOverrideReason,
 			ResultRecordedAt = exam.ResultRecordedAt,
 			EligibilityDecidedAt = exam.EligibilityDecidedAt
+		};
+	}
+
+	private static IOrderedQueryable<AdmissionCrmEntranceExamRecord> ApplyExamSorting(
+		IQueryable<AdmissionCrmEntranceExamRecord> query,
+		IQueryable<AdmissionInquiryLead> leads,
+		string? sorting)
+	{
+		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return field switch
+		{
+			"applicantname" => descending
+				? query.OrderByDescending(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.FirstName).FirstOrDefault())
+					.ThenByDescending(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.LastName).FirstOrDefault())
+				: query.OrderBy(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.FirstName).FirstOrDefault())
+					.ThenBy(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.LastName).FirstOrDefault()),
+			"examstarttime" => descending ? query.OrderByDescending(x => x.ExamStartTime) : query.OrderBy(x => x.ExamStartTime),
+			"attendancestatus" => descending ? query.OrderByDescending(x => x.AttendanceStatus) : query.OrderBy(x => x.AttendanceStatus),
+			"examstatus" => descending ? query.OrderByDescending(x => x.ExamStatus) : query.OrderBy(x => x.ExamStatus),
+			"obtainedmarks" => descending ? query.OrderByDescending(x => x.ObtainedMarks) : query.OrderBy(x => x.ObtainedMarks),
+			"eligibilitydecision" => descending
+				? query.OrderByDescending(x => x.EligibilityDecision)
+				: query.OrderBy(x => x.EligibilityDecision),
+			_ => query.OrderBy(x => x.ExamStartTime).ThenBy(x => x.LeadId)
 		};
 	}
 

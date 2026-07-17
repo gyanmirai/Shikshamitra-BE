@@ -29,7 +29,7 @@ public class AdmissionCrmOperationsQueueDto
 	public IReadOnlyList<AdmissionCrmOperationsQueueItemDto> Items { get; set; } = [];
 }
 
-public class GetAdmissionCrmOperationsQueueInput : PagedResultRequestDto
+public class GetAdmissionCrmOperationsQueueInput : PagedAndSortedResultRequestDto
 {
 	public string? Search { get; set; }
 	public Guid? OwnerUserId { get; set; }

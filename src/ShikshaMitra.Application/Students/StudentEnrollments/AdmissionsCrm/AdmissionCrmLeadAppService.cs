@@ -314,8 +314,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var leads = await AsyncExecuter.ToListAsync(
-			query
-				.OrderByDescending(x => x.CreationTime)
+			ApplyLeadSorting(query, input.Sorting)
 				.Skip(input.SkipCount)
 				.Take(input.MaxResultCount));
 		var duplicatesByLeadId = await FindDuplicatesForLeadsAsync(academicYearId, leads);
@@ -2187,6 +2186,40 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 				.Trim()
 				.ToLowerInvariant()
 				.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+	}
+
+	private static IOrderedQueryable<AdmissionInquiryLead> ApplyLeadSorting(
+		IQueryable<AdmissionInquiryLead> query,
+		string? sorting)
+	{
+		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return field switch
+		{
+			"applicantname" => descending
+				? query.OrderByDescending(x => x.FirstName).ThenByDescending(x => x.LastName)
+				: query.OrderBy(x => x.FirstName).ThenBy(x => x.LastName),
+			"stage" => descending ? query.OrderByDescending(x => x.Stage) : query.OrderBy(x => x.Stage),
+			"registrationformnumber" => descending
+				? query.OrderByDescending(x => x.RegistrationFormNumber)
+				: query.OrderBy(x => x.RegistrationFormNumber),
+			"channel" => descending ? query.OrderByDescending(x => x.Channel) : query.OrderBy(x => x.Channel),
+			"desiredclassname" => descending
+				? query.OrderByDescending(x => x.DesiredClassName)
+				: query.OrderBy(x => x.DesiredClassName),
+			"intendedroutetype" => descending
+				? query.OrderByDescending(x => x.IntendedRouteType)
+				: query.OrderBy(x => x.IntendedRouteType),
+			"owneruserid" => descending
+				? query.OrderByDescending(x => x.OwnerUserId)
+				: query.OrderBy(x => x.OwnerUserId),
+			"priority" => descending ? query.OrderByDescending(x => x.Priority) : query.OrderBy(x => x.Priority),
+			"leadscore" => descending ? query.OrderByDescending(x => x.LeadScore) : query.OrderBy(x => x.LeadScore),
+			"lastactivitytime" => descending
+				? query.OrderByDescending(x => x.LastActivityTime)
+				: query.OrderBy(x => x.LastActivityTime),
+			_ => query.OrderByDescending(x => x.LastActivityTime).ThenBy(x => x.Id)
+		};
 	}
 
 	private static string? NormalizePhone(string? value)

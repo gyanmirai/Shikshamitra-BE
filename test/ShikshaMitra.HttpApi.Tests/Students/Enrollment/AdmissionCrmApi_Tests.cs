@@ -469,6 +469,39 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Sort_Crm_Leads_By_Applicant_Name()
+	{
+		var campaign = "Sorting " + Guid.NewGuid().ToString("N")[..8];
+		foreach (var firstName in new[] { "Zara", "Aarav" })
+		{
+			var response = await Client.PostAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+				new CreateAdmissionCrmLeadDto
+				{
+					AdmissionIntent = "Sorting verification",
+					PrimaryContactNo = "979797" + Random.Shared.Next(1000, 9999),
+					Email = $"{firstName.ToLowerInvariant()}.{Guid.NewGuid():N}@example.com",
+					Channel = AdmissionInquiryChannel.WalkInReception,
+					FirstName = firstName,
+					ParentGuardianName = "Sorting Parent",
+					CampaignName = campaign,
+					DesiredClassName = "Grade 4"
+				},
+				JsonOptions);
+			response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		}
+
+		var listResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads?campaignName={Uri.EscapeDataString(campaign)}&sorting=ApplicantName%20ASC&maxResultCount=25");
+
+		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await listResponse.Content.ReadAsStringAsync());
+		var list = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<AdmissionCrmLeadDto>>(JsonOptions);
+		list.ShouldNotBeNull();
+		list.Items.Select(x => x.FirstName).ShouldBe(new[] { "Aarav", "Zara" });
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Return_Default_Cycle_Configuration()
 	{

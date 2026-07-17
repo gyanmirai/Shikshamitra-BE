@@ -328,7 +328,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			var delegatedOwners = await GetDelegatedOwnersAsync(academicYearId, queueType, input.AssignedToUserId.Value);
 			items = items.Where(x => x.OwnerUserId == input.AssignedToUserId || (x.OwnerUserId.HasValue && delegatedOwners.Contains(x.OwnerUserId.Value)));
 		}
-		var filtered = items.ToList();
+		var filtered = ApplyQueueSorting(items, input.Sorting).ToList();
 		return new AdmissionCrmOperationsQueueDto
 		{
 			AcademicYearId = academicYearId,
@@ -1168,6 +1168,59 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			_ => items.OrderByDescending(x => x.Urgency)
 				.ThenBy(x => x.DueAt ?? DateTimeOffset.MaxValue)
 				.ThenBy(x => GetPriorityRank(x.Priority))
+				.ThenBy(x => x.ApplicantName)
+		};
+	}
+
+	private static IEnumerable<AdmissionCrmOperationsQueueItemDto> ApplyQueueSorting(
+		IEnumerable<AdmissionCrmOperationsQueueItemDto> items,
+		string? sorting)
+	{
+		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return field switch
+		{
+			"applicantname" => descending ? items.OrderByDescending(x => x.ApplicantName) : items.OrderBy(x => x.ApplicantName),
+			"title" => descending ? items.OrderByDescending(x => x.Title) : items.OrderBy(x => x.Title),
+			"status" => descending ? items.OrderByDescending(x => x.Status) : items.OrderBy(x => x.Status),
+			"owneruserid" => descending ? items.OrderByDescending(x => x.OwnerUserId) : items.OrderBy(x => x.OwnerUserId),
+			"dueat" => descending
+				? items.OrderByDescending(x => x.DueAt ?? DateTimeOffset.MinValue)
+				: items.OrderBy(x => x.DueAt ?? DateTimeOffset.MaxValue),
+			"agedays" => descending ? items.OrderByDescending(x => x.AgeDays) : items.OrderBy(x => x.AgeDays),
+			"isurgent" => descending ? items.OrderByDescending(x => x.IsUrgent) : items.OrderBy(x => x.IsUrgent),
+			"registrationstatus" => descending
+				? items.OrderByDescending(x => x.Registration?.Status)
+				: items.OrderBy(x => x.Registration?.Status),
+			"completionpercentage" => descending
+				? items.OrderByDescending(x => x.Registration?.CompletionPercentage)
+				: items.OrderBy(x => x.Registration?.CompletionPercentage),
+			"documentpendingcount" => descending
+				? items.OrderByDescending(x => x.Registration?.DocumentPendingCount)
+				: items.OrderBy(x => x.Registration?.DocumentPendingCount),
+			"linkexpiresat" => descending
+				? items.OrderByDescending(x => x.Registration?.LinkExpiresAt)
+				: items.OrderBy(x => x.Registration?.LinkExpiresAt),
+			"routetype" => descending ? items.OrderByDescending(x => x.Offer?.RouteType) : items.OrderBy(x => x.Offer?.RouteType),
+			"offerstatus" => descending ? items.OrderByDescending(x => x.Offer?.OfferStatus) : items.OrderBy(x => x.Offer?.OfferStatus),
+			"seatpoolname" => descending ? items.OrderByDescending(x => x.Offer?.SeatPoolName) : items.OrderBy(x => x.Offer?.SeatPoolName),
+			"paymentgatesatisfied" => descending
+				? items.OrderByDescending(x => x.Offer?.PaymentGateSatisfied)
+				: items.OrderBy(x => x.Offer?.PaymentGateSatisfied),
+			"offerexpiresat" => descending
+				? items.OrderByDescending(x => x.Offer?.OfferExpiresAt)
+				: items.OrderBy(x => x.Offer?.OfferExpiresAt),
+			"activationstatus" => descending
+				? items.OrderByDescending(x => x.Activation?.Status)
+				: items.OrderBy(x => x.Activation?.Status),
+			"placementconfigured" => descending
+				? items.OrderByDescending(x => x.Activation?.PlacementConfigured)
+				: items.OrderBy(x => x.Activation?.PlacementConfigured),
+			"servicehandoffstatus" => descending
+				? items.OrderByDescending(x => x.Operation?.ServiceHandoffStatus)
+				: items.OrderBy(x => x.Operation?.ServiceHandoffStatus),
+			_ => items.OrderByDescending(x => x.IsUrgent)
+				.ThenBy(x => x.DueAt ?? DateTimeOffset.MaxValue)
 				.ThenBy(x => x.ApplicantName)
 		};
 	}

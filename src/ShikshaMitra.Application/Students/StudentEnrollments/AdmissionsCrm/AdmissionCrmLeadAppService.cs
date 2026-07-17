@@ -6,9 +6,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
@@ -38,6 +42,9 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 	private readonly StudentEnrollmentManager _studentEnrollmentManager;
 	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
+	private readonly IRepository<Standard, Guid> _standardRepository;
+	private readonly IRepository<EducationMediumStage, Guid> _mediumStageRepository;
+	private readonly IRepository<EducationMedium, Guid> _mediumRepository;
 
 	public AdmissionCrmLeadAppService(
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
@@ -54,7 +61,10 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		IAdmissionCrmRegistrationAppService registrationAppService,
 		StudentScopeAccessService studentScopeAccessService,
 		StudentEnrollmentManager studentEnrollmentManager,
-		AdmissionCrmStaffEligibilityService staffEligibilityService)
+		AdmissionCrmStaffEligibilityService staffEligibilityService,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<EducationMediumStage, Guid> mediumStageRepository,
+		IRepository<EducationMedium, Guid> mediumRepository)
 	{
 		_leadRepository = leadRepository;
 		_inquirySourceRepository = inquirySourceRepository;
@@ -71,6 +81,9 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		_studentScopeAccessService = studentScopeAccessService;
 		_studentEnrollmentManager = studentEnrollmentManager;
 		_staffEligibilityService = staffEligibilityService;
+		_standardRepository = standardRepository;
+		_mediumStageRepository = mediumStageRepository;
+		_mediumRepository = mediumRepository;
 	}
 
 	public async Task<AdmissionCrmLeadDto> CreateAsync(Guid academicYearId, CreateAdmissionCrmLeadDto input)
@@ -78,6 +91,13 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
 			academicYearId,
 			nameof(CreateAsync));
+		if (input.TargetStandardId.HasValue)
+		{
+			await _studentScopeAccessService.EnsureCanAccessStandardAsync(
+				input.TargetStandardId.Value,
+				nameof(CreateAsync));
+			await EnsureAcademicPlacementAsync(input);
+		}
 		var configuration = await GetCycleConfigurationOrDefaultAsync(academicYearId);
 		var channelSetting = AdmissionCrmChannelSettingsSerializer.GetChannelSetting(
 			configuration.ChannelSettingsJson,
@@ -119,7 +139,8 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			input.TargetStandardId,
 			input.DesiredClassName,
 			input.Notes,
-			Clock.Now);
+			Clock.Now,
+			input.IntendedRouteType);
 		lead.UpdateScore(AdmissionCrmLeadScoreCalculator.Calculate(lead, scoringRules));
 		IReadOnlyCollection<AdmissionInquiryLead> existingLeads = Array.Empty<AdmissionInquiryLead>();
 		if (routingSettings.IsEnabled && routingSettings.OwnerPoolUserIds.Count > 0)
@@ -250,6 +271,31 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		if (input.Priority.HasValue)
 		{
 			query = query.Where(x => x.Priority == input.Priority.Value);
+		}
+		if (input.IntendedRouteType.HasValue)
+		{
+			query = query.Where(x => x.IntendedRouteType == input.IntendedRouteType.Value);
+		}
+		if (!string.IsNullOrWhiteSpace(input.DesiredClassName))
+		{
+			var desiredClass = input.DesiredClassName.Trim().ToLowerInvariant();
+			query = query.Where(x => x.DesiredClassName != null && x.DesiredClassName.ToLower().Contains(desiredClass));
+		}
+
+		if (input.AcademicMediumId.HasValue)
+		{
+			await _studentScopeAccessService.EnsureCanAccessMediumAsync(
+				input.AcademicMediumId.Value,
+				nameof(GetListAsync));
+			var stageQueryable = await _mediumStageRepository.GetQueryableAsync();
+			var stageIds = stageQueryable
+				.Where(x => x.EducationMediumId == input.AcademicMediumId.Value)
+				.Select(x => x.Id);
+			var standardQueryable = await _standardRepository.GetQueryableAsync();
+			var standardIds = standardQueryable
+				.Where(x => stageIds.Contains(x.EducationMediumStageId))
+				.Select(x => x.Id);
+			query = query.Where(x => !x.TargetStandardId.HasValue || standardIds.Contains(x.TargetStandardId.Value));
 		}
 
 		if (!string.IsNullOrWhiteSpace(input.FilterText))
@@ -1298,6 +1344,13 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		CompleteAdmissionCrmFollowUpTaskDto input)
 	{
 		var task = await GetTaskForCurrentTenantAsync(taskId, nameof(CompleteTaskAsync));
+		var currentUserId = CurrentUser.Id ?? throw new AbpAuthorizationException("Authenticated user required.");
+		var canSupervise = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageOperationsQueues);
+		if (task.AssignedUserId != currentUserId && !canSupervise)
+		{
+			throw new AbpAuthorizationException("Only the assigned staff member or an operations supervisor can complete this task.");
+		}
 		task.Complete(Clock.Now, input.CompletionNotes);
 		await _taskRepository.UpdateAsync(task, autoSave: true);
 		await AddTimelineEventAsync(
@@ -1355,6 +1408,23 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			CurrentTenant.Id,
 			academicYearId,
 			"Default Admission Cycle");
+	}
+
+	private async Task EnsureAcademicPlacementAsync(CreateAdmissionCrmLeadDto input)
+	{
+		if (!input.TargetStandardId.HasValue) return;
+
+		var standard = await _standardRepository.GetAsync(input.TargetStandardId.Value);
+		var stage = await _mediumStageRepository.GetAsync(standard.EducationMediumStageId);
+		var medium = await _mediumRepository.GetAsync(stage.EducationMediumId);
+		if ((input.AcademicMediumId.HasValue && input.AcademicMediumId.Value != medium.Id) ||
+			(input.AcademicBoardId.HasValue && input.AcademicBoardId.Value != medium.EducationBoardId))
+		{
+			throw new BusinessException("AdmissionCrm:AcademicPlacementMismatch")
+				.WithData("TargetStandardId", standard.Id)
+				.WithData("AcademicMediumId", input.AcademicMediumId)
+				.WithData("AcademicBoardId", input.AcademicBoardId);
+		}
 	}
 
 	private async Task<IReadOnlyList<AdmissionCrmApplicantChecklistProgressDto>> BuildApplicantChecklistProgressDtosAsync(
@@ -1754,6 +1824,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			PrimaryContactNo = lead.PrimaryContactNo,
 			Email = lead.Email,
 			AdmissionIntent = lead.AdmissionIntent,
+			IntendedRouteType = lead.IntendedRouteType,
 			TargetStandardId = lead.TargetStandardId,
 			DesiredClassName = lead.DesiredClassName,
 			Stage = lead.Stage,

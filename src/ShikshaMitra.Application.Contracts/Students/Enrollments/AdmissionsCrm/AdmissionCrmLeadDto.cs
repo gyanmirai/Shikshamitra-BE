@@ -22,6 +22,7 @@ public class AdmissionCrmLeadDto : EntityDto<Guid>
 	public string? PrimaryContactNo { get; set; }
 	public string? Email { get; set; }
 	public string AdmissionIntent { get; set; } = string.Empty;
+	public AdmissionCrmRouteType? IntendedRouteType { get; set; }
 	public Guid? TargetStandardId { get; set; }
 	public string? DesiredClassName { get; set; }
 	public AdmissionInquiryStage Stage { get; set; }

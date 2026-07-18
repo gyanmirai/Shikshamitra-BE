@@ -20,23 +20,29 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	private readonly IAdmissionCrmLeadAppService _leadService;
 	private readonly IAdmissionCrmFinalAdmissionAppService _finalAdmissionService;
 	private readonly IAdmissionCrmActivationAppService _activationService;
+	private readonly IAdmissionCrmEntranceExamAppService _entranceExamService;
 	private readonly IAdmissionCrmCommunicationAppService _communicationService;
 	private readonly IRepository<AdmissionCrmActivation, Guid> _activationRepository;
+	private readonly IRepository<AdmissionCrmEntranceExamRecord, Guid> _entranceExamRepository;
 	private readonly StudentScopeAccessService _scopeAccess;
 
 	public AdmissionCrmBulkOperationsAppService(
 		IAdmissionCrmLeadAppService leadService,
 		IAdmissionCrmFinalAdmissionAppService finalAdmissionService,
 		IAdmissionCrmActivationAppService activationService,
+		IAdmissionCrmEntranceExamAppService entranceExamService,
 		IAdmissionCrmCommunicationAppService communicationService,
 		IRepository<AdmissionCrmActivation, Guid> activationRepository,
+		IRepository<AdmissionCrmEntranceExamRecord, Guid> entranceExamRepository,
 		StudentScopeAccessService scopeAccess)
 	{
 		_leadService = leadService;
 		_finalAdmissionService = finalAdmissionService;
 		_activationService = activationService;
+		_entranceExamService = entranceExamService;
 		_communicationService = communicationService;
 		_activationRepository = activationRepository;
+		_entranceExamRepository = entranceExamRepository;
 		_scopeAccess = scopeAccess;
 	}
 
@@ -61,6 +67,26 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 			{
 				Title = input.Title, DueAt = input.DueAt, AssignedUserId = input.AssignedUserId, Notes = input.Notes
 			});
+			return result.Id.ToString();
+		});
+	}
+
+	[UnitOfWork(IsDisabled = true)]
+	public async Task<AdmissionCrmBulkOperationResultDto> MarkExamAttendanceAsync(
+		Guid academicYearId,
+		AdmissionCrmBulkExamAttendanceDto input)
+	{
+		await EnsureBatchAsync(academicYearId, input.ExamRecordIds, nameof(MarkExamAttendanceAsync));
+		if (!Enum.IsDefined(input.AttendanceStatus) || input.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked)
+			throw new BusinessException("AdmissionCrm:InvalidBulkExamAttendanceStatus");
+		return await RunAsync(input.ExamRecordIds.Distinct().ToList(), x => x, async examRecordId =>
+		{
+			var exam = await _entranceExamRepository.GetAsync(examRecordId);
+			if (exam.AcademicYearId != academicYearId)
+				throw new BusinessException("AdmissionCrm:BulkAcademicYearMismatch");
+			var result = await _entranceExamService.MarkAttendanceAsync(
+				examRecordId,
+				new MarkAdmissionCrmExamAttendanceDto { AttendanceStatus = input.AttendanceStatus });
 			return result.Id.ToString();
 		});
 	}

@@ -124,6 +124,41 @@ public class IssueAdmissionCrmRegistrationApplicationDto
 	public string? WaiverReason { get; set; }
 }
 
+public class CreateDirectAdmissionCrmRegistrationDto : IValidatableObject
+{
+	[Required]
+	public required CreateAdmissionCrmLeadDto Applicant { get; set; }
+	[Required]
+	public required IssueAdmissionCrmRegistrationApplicationDto Registration { get; set; }
+
+	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+	{
+		if (string.IsNullOrWhiteSpace(Applicant.FirstName))
+		{
+			yield return new ValidationResult(
+				"Student name is required for a direct registration.",
+				[$"{nameof(Applicant)}.{nameof(Applicant.FirstName)}"]);
+		}
+		if (!Applicant.TargetStandardId.HasValue)
+		{
+			yield return new ValidationResult(
+				"Target class is required for a direct registration.",
+				[$"{nameof(Applicant)}.{nameof(Applicant.TargetStandardId)}"]);
+		}
+	}
+}
+
+public class AdmissionCrmDirectRegistrationResultDto
+{
+	public required AdmissionCrmLeadDto Applicant { get; set; }
+	public required AdmissionCrmRegistrationApplicationDto Registration { get; set; }
+}
+
+public class SaveAdmissionCrmRegistrationResponsesDto
+{
+	public Dictionary<string, JsonElement> Responses { get; set; } = new();
+}
+
 public class AdmissionCrmRegistrationApplicationDto
 {
 	public Guid Id { get; set; }

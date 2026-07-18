@@ -9,6 +9,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public interface IAdmissionCrmLeadAppService : IApplicationService
 {
 	Task<AdmissionCrmLeadDto> CreateAsync(Guid academicYearId, CreateAdmissionCrmLeadDto input);
+	Task<AdmissionCrmDirectRegistrationResultDto> CreateDirectRegistrationAsync(
+		Guid academicYearId,
+		CreateDirectAdmissionCrmRegistrationDto input);
 	Task<AdmissionCrmLeadDto> GetAsync(Guid id);
 	Task<PagedResultDto<AdmissionCrmLeadDto>> GetListAsync(Guid academicYearId, GetAdmissionCrmLeadListInput input);
 	Task<IReadOnlyList<AdmissionCrmLeadDuplicateDto>> PreviewDuplicatesAsync(

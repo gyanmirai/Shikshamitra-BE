@@ -14,6 +14,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
@@ -214,6 +215,37 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		return ToDto(lead, duplicates);
 	}
 
+	[UnitOfWork]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add)]
+	public async Task<AdmissionCrmDirectRegistrationResultDto> CreateDirectRegistrationAsync(
+		Guid academicYearId,
+		CreateDirectAdmissionCrmRegistrationDto input)
+	{
+		await AuthorizationService.CheckAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm);
+
+		input.Applicant.Channel = AdmissionInquiryChannel.ManualBackOffice;
+		var created = await CreateAsync(academicYearId, input.Applicant);
+		var lead = await GetLeadForCurrentTenantAsync(created.Id, nameof(CreateDirectRegistrationAsync));
+		lead.ChangeStage(AdmissionInquiryStage.Eligible);
+		await _leadRepository.UpdateAsync(lead, autoSave: false);
+		await AddTimelineEventAsync(
+			lead,
+			AdmissionCrmTimelineEventType.StageChanged,
+			"Direct registration started",
+			"The applicant entered Enrollment at registration through an authorized staff workflow.",
+			lead.Id);
+
+		var registration = await _registrationAppService.IssueAsync(lead.Id, input.Registration);
+		await CurrentUnitOfWork!.SaveChangesAsync();
+
+		return new AdmissionCrmDirectRegistrationResultDto
+		{
+			Applicant = ToDto(lead, created.LikelyDuplicates),
+			Registration = registration
+		};
+	}
+
 	public async Task<AdmissionCrmLeadDto> GetAsync(Guid id)
 	{
 		var lead = await GetLeadForCurrentTenantAsync(id, nameof(GetAsync));
@@ -311,6 +343,24 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 				 x.NormalizedPrimaryContactNo != null &&
 				 x.NormalizedPrimaryContactNo.Contains(normalizedPhone)));
 		}
+		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
+		{
+			var applicant = input.ApplicantSearch.Trim().ToLowerInvariant();
+			query = query.Where(x =>
+				(x.FirstName != null && x.FirstName.ToLower().Contains(applicant)) ||
+				(x.LastName != null && x.LastName.ToLower().Contains(applicant)) ||
+				(x.ParentGuardianName != null && x.ParentGuardianName.ToLower().Contains(applicant)));
+		}
+		if (!string.IsNullOrWhiteSpace(input.RegistrationFormNumber))
+		{
+			var formNumber = input.RegistrationFormNumber.Trim().ToLowerInvariant();
+			query = query.Where(x => x.RegistrationFormNumber != null &&
+				x.RegistrationFormNumber.ToLower().Contains(formNumber));
+		}
+		if (input.LastActivityFrom.HasValue)
+			query = query.Where(x => x.LastActivityTime >= input.LastActivityFrom.Value);
+		if (input.LastActivityUntil.HasValue)
+			query = query.Where(x => x.LastActivityTime < input.LastActivityUntil.Value.AddDays(1));
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var leads = await AsyncExecuter.ToListAsync(

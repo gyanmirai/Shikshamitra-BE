@@ -23,6 +23,12 @@ public class AdmissionCrmBulkCreateTasksDto
 	public string? Notes { get; set; }
 }
 
+public class AdmissionCrmBulkExamAttendanceDto
+{
+	public IReadOnlyList<Guid> ExamRecordIds { get; set; } = [];
+	public AdmissionCrmExamAttendanceStatus AttendanceStatus { get; set; }
+}
+
 public class AdmissionCrmBulkChangeStageDto
 {
 	public IReadOnlyList<Guid> LeadIds { get; set; } = [];

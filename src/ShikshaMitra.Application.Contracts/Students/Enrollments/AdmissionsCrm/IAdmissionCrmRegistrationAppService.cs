@@ -21,6 +21,12 @@ public interface IAdmissionCrmRegistrationAppService : IApplicationService
 	Task<bool> IssueApplicableFromAutomationAsync(Guid leadId, AdmissionInquiryStage stage);
 	Task<AdmissionCrmRegistrationApplicationDto> GetApplicationAsync(Guid id);
 	Task<AdmissionCrmRegistrationApplicationDto> GetCurrentApplicationByLeadAsync(Guid leadId);
+	Task<AdmissionCrmRegistrationApplicationDto> SaveStaffResponsesAsync(
+		Guid id,
+		SaveAdmissionCrmRegistrationResponsesDto input);
+	Task<AdmissionCrmRegistrationApplicationDto> SubmitStaffResponsesAsync(
+		Guid id,
+		SaveAdmissionCrmRegistrationResponsesDto input);
 	Task<AdmissionCrmRegistrationApplicationDto> ReturnForCorrectionAsync(Guid id, ReturnAdmissionCrmRegistrationForCorrectionDto input);
 	Task<AdmissionCrmRegistrationApplicationDto> VerifyAsync(Guid id);
 	Task<AdmissionCrmRegistrationApplicationDto> ExtendAsync(Guid id, ExtendAdmissionCrmRegistrationLinkDto input);

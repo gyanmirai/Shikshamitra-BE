@@ -5,13 +5,16 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
@@ -30,8 +33,13 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 	private readonly IRepository<AdmissionCrmDocumentType, Guid> _documentTypeRepository;
 	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
 	private readonly IServiceProvider _serviceProvider;
-	private readonly IConfiguration _configuration;
 	private readonly ILogger<AdmissionCrmSeederContributor> _logger;
+	private static readonly string[] RequiredDemoOwnerEmails =
+	[
+		"admissions-reception@ddvs.com",
+		"admissions-counselor@ddvs.com",
+		"admissions-approver@ddvs.com"
+	];
 
 	public AdmissionCrmSeederContributor(
 		ICurrentTenant currentTenant,
@@ -45,7 +53,6 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		IRepository<AdmissionCrmDocumentType, Guid> documentTypeRepository,
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
 		IServiceProvider serviceProvider,
-		IConfiguration configuration,
 		ILogger<AdmissionCrmSeederContributor> logger)
 		: base(currentTenant, guidGenerator, currentUnitOfWork)
 	{
@@ -57,7 +64,6 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		_documentTypeRepository = documentTypeRepository;
 		_leadRepository = leadRepository;
 		_serviceProvider = serviceProvider;
-		_configuration = configuration;
 		_logger = logger;
 	}
 
@@ -68,9 +74,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 			return;
 		}
 
-		var currentYear = DateTime.Now.Year.ToString();
-		var academicYear = await _academicYearRepository.FirstOrDefaultAsync(year => year.Name.StartsWith(currentYear)) ??
-			await _academicYearRepository.FirstOrDefaultAsync();
+		var academicYear = await GetTargetAcademicYearAsync();
 		if (academicYear == null)
 		{
 			_logger.LogWarning("[AdmissionCrmSeeder] No academic year exists for tenant {TenantId}.", CurrentTenant.Id);
@@ -81,34 +85,130 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		var ownerUserIds = await GetConfiguredOwnerUserIdsAsync();
 		await RepairCycleAsync(tenantId, academicYear.Id, academicYear.Name, ownerUserIds);
 		await RepairStagesAsync(tenantId, academicYear.Id);
-		var sources = await RepairSourcesAsync(tenantId, academicYear.Id);
-		var slots = await RepairSlotsAsync(tenantId, academicYear.Id, academicYear.Name);
+		await RepairSourcesAsync(tenantId, academicYear.Id);
+		await RepairSlotsAsync(tenantId, academicYear.Id, academicYear.Name);
 		await RepairDocumentTypesAsync(tenantId, academicYear.Id);
-		var extendedConfiguration = await RepairExtendedConfigurationAsync(tenantId, academicYear.Id, academicYear.Name);
-		await CurrentUnitOfWork.SaveChangesAsync();
-
-		var profile = ShikshaMitraSeederProfile.Normalize(
-			context.Properties.TryGetValue(ShikshaMitraSeederProfile.ContextPropertyName, out var value)
-				? value?.ToString()
-				: _configuration["ShikshaMitra:Seeders:Profile"]);
-		if (profile != ShikshaMitraSeederProfile.Minimal)
-		{
-			var scenarioLeads = await RepairScenarioLeadsAsync(tenantId, academicYear.Id, sources);
-			await CurrentUnitOfWork.SaveChangesAsync();
-			await RepairOperationalScenariosAsync(
-				tenantId,
-				academicYear.Id,
-				extendedConfiguration,
-				scenarioLeads,
-				slots);
-		}
-
+		await RepairExtendedConfigurationAsync(tenantId, academicYear.Id, academicYear.Name);
 		await CurrentUnitOfWork.SaveChangesAsync();
 		_logger.LogInformation(
-			"[AdmissionCrmSeeder] Repaired CRM configuration for tenant {TenantId}, academic year {AcademicYearId}, profile {Profile}.",
+			"[AdmissionCrmSeeder] Repaired CRM configuration for tenant {TenantId}, academic year {AcademicYearId}.",
+			tenantId,
+			academicYear.Id);
+	}
+
+	internal async Task SeedDemoScenariosAsync()
+	{
+		if (!CurrentTenant.Id.HasValue)
+		{
+			return;
+		}
+
+		var tenantId = CurrentTenant.Id.Value;
+		var academicYear = await GetDemoScenarioAcademicYearAsync(tenantId);
+		if (academicYear == null)
+		{
+			_logger.LogWarning("[AdmissionCrmDemoSeeder] No academic year exists for tenant {TenantId}.", CurrentTenant.Id);
+			return;
+		}
+
+		var ownerUserIds = await GetConfiguredOwnerUserIdsAsync();
+		var missingOwnerEmails = RequiredDemoOwnerEmails.Where(email => !ownerUserIds.ContainsKey(email)).ToList();
+		if (missingOwnerEmails.Count > 0)
+		{
+			_logger.LogWarning(
+				"[AdmissionCrmDemoSeeder] Demo scenarios skipped for tenant {TenantId}; active employee users are missing for {MissingOwnerEmails}.",
+				tenantId,
+				string.Join(", ", missingOwnerEmails));
+			return;
+		}
+
+		await RepairCycleAsync(tenantId, academicYear.Id, academicYear.Name, ownerUserIds);
+		await RepairStagesAsync(tenantId, academicYear.Id);
+		await RepairDocumentTypesAsync(tenantId, academicYear.Id);
+		var standards = await ResolveDemoStandardsAsync(academicYear.Id);
+		await ResetLegacyDemoScenariosAsync(tenantId);
+		await CurrentUnitOfWork.SaveChangesAsync();
+
+		var sources = await RepairSourcesAsync(tenantId, academicYear.Id);
+		var slots = await RepairSlotsAsync(tenantId, academicYear.Id, academicYear.Name);
+		var configuration = await RepairExtendedConfigurationAsync(tenantId, academicYear.Id, academicYear.Name);
+		var scenarioLeads = await RepairScenarioLeadsAsync(
 			tenantId,
 			academicYear.Id,
-			profile);
+			sources,
+			ownerUserIds,
+			standards);
+		await CurrentUnitOfWork.SaveChangesAsync();
+
+		await RepairFollowUpTasksAsync(tenantId, academicYear.Id, scenarioLeads, ownerUserIds);
+		await RepairOperationalScenariosAsync(
+			tenantId,
+			academicYear.Id,
+			configuration,
+			scenarioLeads,
+			slots,
+			ownerUserIds,
+			standards);
+		await CurrentUnitOfWork.SaveChangesAsync();
+
+		_logger.LogInformation(
+			"[AdmissionCrmDemoSeeder] Seeded {LeadCount} focused Enrollment scenarios for tenant {TenantId}, academic year {AcademicYearId}.",
+			scenarioLeads.Count,
+			tenantId,
+			academicYear.Id);
+	}
+
+	private async Task<AcademicYear?> GetTargetAcademicYearAsync()
+	{
+		var currentYear = DateTime.Now.Year.ToString();
+		return await _academicYearRepository.FirstOrDefaultAsync(year => year.Name.StartsWith(currentYear)) ??
+			await _academicYearRepository.FirstOrDefaultAsync();
+	}
+
+	private async Task<AcademicYear?> GetDemoScenarioAcademicYearAsync(Guid tenantId)
+	{
+		var deterministicLeadIds = LegacyDemoLeadKeys()
+			.Select(key => StableId(tenantId, $"lead:{key}"))
+			.ToHashSet();
+		var existingDemoLeads = await _leadRepository.GetListAsync(item => deterministicLeadIds.Contains(item.Id));
+		var existingAcademicYearId = existingDemoLeads
+			.GroupBy(item => item.AcademicYearId)
+			.OrderByDescending(group => group.Count())
+			.Select(group => (Guid?)group.Key)
+			.FirstOrDefault();
+
+		if (existingAcademicYearId.HasValue)
+		{
+			var existingAcademicYear = await _academicYearRepository.FindAsync(existingAcademicYearId.Value);
+			if (existingAcademicYear != null)
+			{
+				return existingAcademicYear;
+			}
+		}
+
+		return await GetTargetAcademicYearAsync();
+	}
+
+	private async Task<IReadOnlyDictionary<string, Standard>> ResolveDemoStandardsAsync(Guid academicYearId)
+	{
+		var board = await Repository<EducationBoard>().FirstOrDefaultAsync(item =>
+			item.AcademicYearId == academicYearId && item.Type == EducationBoardType.CBSE)
+			?? throw new InvalidOperationException("The demo Enrollment dataset requires a CBSE board for the selected academic year.");
+		var medium = await Repository<EducationMedium>().FirstOrDefaultAsync(item =>
+			item.EducationBoardId == board.Id && item.Name == "English")
+			?? throw new InvalidOperationException("The demo Enrollment dataset requires the CBSE English medium.");
+		var stage = await Repository<EducationMediumStage>().FirstOrDefaultAsync(item =>
+			item.EducationMediumId == medium.Id && item.Name == "Primary")
+			?? throw new InvalidOperationException("The demo Enrollment dataset requires the CBSE English Primary stage.");
+		var standards = await Repository<Standard>().GetListAsync(item =>
+			item.EducationMediumStageId == stage.Id && (item.Name == "Class 4" || item.Name == "Class 5"));
+
+		if (standards.Count != 2)
+		{
+			throw new InvalidOperationException("The demo Enrollment dataset requires Class 4 and Class 5 under CBSE English Primary.");
+		}
+
+		return standards.ToDictionary(item => item.Name, StringComparer.OrdinalIgnoreCase);
 	}
 
 	private async Task RepairCycleAsync(
@@ -308,47 +408,30 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 	private async Task<IReadOnlyDictionary<Guid, AdmissionInquiryLead>> RepairScenarioLeadsAsync(
 		Guid tenantId,
 		Guid academicYearId,
-		IReadOnlyDictionary<string, AdmissionCrmInquirySource> sources)
+		IReadOnlyDictionary<string, AdmissionCrmInquirySource> sources,
+		IReadOnlyDictionary<string, Guid> ownerUserIds,
+		IReadOnlyDictionary<string, Standard> standards)
 	{
-		var scenarios = new[]
-		{
-			new LeadSpec("new-inquiry", "Aarav", "Patel", AdmissionInquiryStage.NewInquiry, "WEBSITE", AdmissionInquiryChannel.SchoolWebsiteForm),
-			new LeadSpec("duplicate-warning", "Aarav", "Patel", AdmissionInquiryStage.FollowUp, "PHONE", AdmissionInquiryChannel.QuickCallEntry),
-			new LeadSpec("stale", "Diya", "Shah", AdmissionInquiryStage.Stale, "WHATSAPP", AdmissionInquiryChannel.WhatsAppInquiry),
-			new LeadSpec("archived", "Kabir", "Mehta", AdmissionInquiryStage.Archived, "BACK_OFFICE", AdmissionInquiryChannel.ManualBackOffice),
-			new LeadSpec("exam-ready", "Meera", "Joshi", AdmissionInquiryStage.ExamReady, "WALK_IN", AdmissionInquiryChannel.WalkInReception),
-			new LeadSpec("exam-scheduled", "Vivaan", "Desai", AdmissionInquiryStage.ExamScheduled, "WEBSITE", AdmissionInquiryChannel.SchoolWebsiteForm),
-			new LeadSpec("no-show", "Anaya", "Trivedi", AdmissionInquiryStage.ExamScheduled, "STAFF_LINK", AdmissionInquiryChannel.StaffSharedLink),
-			new LeadSpec("passed", "Aditya", "Bhatt", AdmissionInquiryStage.ExamCompleted, "QR", AdmissionInquiryChannel.QrCodeScan),
-			new LeadSpec("failed", "Ishita", "Prajapati", AdmissionInquiryStage.Rejected, "CAMPAIGN", AdmissionInquiryChannel.CampaignLink),
-			new LeadSpec("registration-correction", "Riya", "Modi", AdmissionInquiryStage.Eligible, "WEBSITE", AdmissionInquiryChannel.SchoolWebsiteForm),
-			new LeadSpec("document-rejection", "Arjun", "Raval", AdmissionInquiryStage.Eligible, "WALK_IN", AdmissionInquiryChannel.WalkInReception),
-			new LeadSpec("admission-ready", "Saanvi", "Dave", AdmissionInquiryStage.Eligible, "STAFF_LINK", AdmissionInquiryChannel.StaffSharedLink),
-			new LeadSpec("offer-pending", "Reyansh", "Thakkar", AdmissionInquiryStage.Eligible, "WEBSITE", AdmissionInquiryChannel.SchoolWebsiteForm),
-			new LeadSpec("offer-accepted", "Aadhya", "Parikh", AdmissionInquiryStage.Eligible, "WALK_IN", AdmissionInquiryChannel.WalkInReception),
-			new LeadSpec("waitlisted", "Krishna", "Vyas", AdmissionInquiryStage.Waitlisted, "CAMPAIGN", AdmissionInquiryChannel.CampaignLink),
-			new LeadSpec("rte-allotment", "Fatima", "Shaikh", AdmissionInquiryStage.Eligible, "BACK_OFFICE", AdmissionInquiryChannel.ManualBackOffice),
-			new LeadSpec("payment-pending", "Dev", "Solanki", AdmissionInquiryStage.Eligible, "WEBSITE", AdmissionInquiryChannel.SchoolWebsiteForm),
-			new LeadSpec("activation-pending", "Mahi", "Chauhan", AdmissionInquiryStage.Eligible, "STAFF_LINK", AdmissionInquiryChannel.StaffSharedLink),
-			new LeadSpec("activation-repair", "Neil", "Gandhi", AdmissionInquiryStage.Eligible, "WALK_IN", AdmissionInquiryChannel.WalkInReception),
-			new LeadSpec("first-day-ready", "Tara", "Pandya", AdmissionInquiryStage.Eligible, "WEBSITE", AdmissionInquiryChannel.SchoolWebsiteForm)
-		};
+		var scenarios = DemoLeadSpecs();
 		var repaired = (await _leadRepository.GetListAsync(item => item.AcademicYearId == academicYearId))
 			.ToDictionary(item => item.Id);
-		for (var index = 0; index < scenarios.Length; index++)
+		for (var index = 0; index < scenarios.Count; index++)
 		{
 			var spec = scenarios[index];
 			var id = StableId(tenantId, $"lead:{spec.Key}");
 			if (repaired.ContainsKey(id)) continue;
 			var source = sources[spec.SourceCode];
+			var standard = standards[spec.StandardName];
 			var lead = new AdmissionInquiryLead(
 				id, tenantId, academicYearId, source.Id, source.DisplayName, spec.Channel,
-				spec.Key.Contains("campaign", StringComparison.OrdinalIgnoreCase) ? "DDVS Open House" : null,
+				spec.Channel == AdmissionInquiryChannel.CampaignLink ? "DDVS Open House" : null,
 				"Main Campus", index % 3 == 0 ? "gu" : index % 3 == 1 ? "hi" : "en",
-				spec.FirstName, null, spec.LastName, DateTimeOffset.Now.AddYears(-6 - index % 8),
+				spec.FirstName, null, spec.LastName, DateTimeOffset.UtcNow.AddYears(spec.StandardName == "Class 4" ? -9 : -10),
 				$"Parent of {spec.FirstName}", $"900000{index:0000}", $"admission.crm.{index:00}@ddvs.example",
-				"Admission for the upcoming academic cycle", null, $"Class {(index % 10) + 1}",
-				$"DDVS scenario: {spec.Key}.", DateTimeOffset.Now.AddDays(-(index + 1)));
+				"Admission for the upcoming academic cycle", standard.Id, standard.Name,
+				$"Focused DDVS scenario: {spec.Key}.", DateTimeOffset.UtcNow.AddDays(-(index + 1)), spec.RouteType);
+			lead.AssignOwner(ownerUserIds[spec.OwnerEmail]);
+			lead.ChangePriority(spec.Priority);
 			if (spec.Stage == AdmissionInquiryStage.Stale) lead.MarkStale();
 			else if (spec.Stage == AdmissionInquiryStage.Archived) lead.Archive("Seeded archived scenario.", DateTime.UtcNow.AddDays(-5));
 			else if (spec.Stage != AdmissionInquiryStage.NewInquiry) lead.ChangeStage(spec.Stage);
@@ -358,7 +441,21 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		return repaired;
 	}
 
-	private static Guid StableId(Guid tenantId, string key)
+	internal static IReadOnlyList<LeadSpec> DemoLeadSpecs() =>
+	[
+		new("new-inquiry", "Aarav", "Patel", "Class 4", AdmissionInquiryStage.NewInquiry, "WEBSITE", AdmissionInquiryChannel.SchoolWebsiteForm, "admissions-reception@ddvs.com", AdmissionCrmRouteType.Fresh, AdmissionCrmLeadPriority.Warm),
+		new("follow-up", "Diya", "Shah", "Class 5", AdmissionInquiryStage.FollowUp, "PHONE", AdmissionInquiryChannel.QuickCallEntry, "admissions-counselor@ddvs.com", AdmissionCrmRouteType.Fresh, AdmissionCrmLeadPriority.Warm),
+		new("exam-scheduled", "Meera", "Joshi", "Class 4", AdmissionInquiryStage.ExamScheduled, "WALK_IN", AdmissionInquiryChannel.WalkInReception, "admissions-counselor@ddvs.com", AdmissionCrmRouteType.Fresh, AdmissionCrmLeadPriority.Warm),
+		new("no-show", "Anaya", "Trivedi", "Class 5", AdmissionInquiryStage.ExamScheduled, "STAFF_LINK", AdmissionInquiryChannel.StaffSharedLink, "admissions-counselor@ddvs.com", AdmissionCrmRouteType.Fresh, AdmissionCrmLeadPriority.Hot),
+		new("passed", "Aditya", "Bhatt", "Class 4", AdmissionInquiryStage.ExamCompleted, "QR", AdmissionInquiryChannel.QrCodeScan, "admissions-reception@ddvs.com", AdmissionCrmRouteType.Fresh, AdmissionCrmLeadPriority.Warm),
+		new("registration-correction", "Riya", "Modi", "Class 5", AdmissionInquiryStage.Eligible, "WEBSITE", AdmissionInquiryChannel.SchoolWebsiteForm, "admissions-reception@ddvs.com", AdmissionCrmRouteType.Direct, AdmissionCrmLeadPriority.Warm),
+		new("rte-allotment", "Fatima", "Shaikh", "Class 4", AdmissionInquiryStage.Eligible, "BACK_OFFICE", AdmissionInquiryChannel.ManualBackOffice, "admissions-reception@ddvs.com", AdmissionCrmRouteType.RteEws, AdmissionCrmLeadPriority.Warm),
+		new("offer-pending", "Reyansh", "Thakkar", "Class 5", AdmissionInquiryStage.Eligible, "WEBSITE", AdmissionInquiryChannel.SchoolWebsiteForm, "admissions-approver@ddvs.com", AdmissionCrmRouteType.Direct, AdmissionCrmLeadPriority.Hot),
+		new("waitlisted", "Krishna", "Vyas", "Class 4", AdmissionInquiryStage.Waitlisted, "CAMPAIGN", AdmissionInquiryChannel.CampaignLink, "admissions-counselor@ddvs.com", AdmissionCrmRouteType.Fresh, AdmissionCrmLeadPriority.Cold),
+		new("activation-repair", "Neil", "Gandhi", "Class 5", AdmissionInquiryStage.Eligible, "WALK_IN", AdmissionInquiryChannel.WalkInReception, "admissions-approver@ddvs.com", AdmissionCrmRouteType.Direct, AdmissionCrmLeadPriority.Hot)
+	];
+
+	internal static Guid StableId(Guid tenantId, string key)
 	{
 		var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{tenantId:N}:admission-crm:{key}"));
 		return new Guid(hash.AsSpan(0, 16));
@@ -386,5 +483,15 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 	private sealed record SourceSpec(string Code, string Name, AdmissionInquiryChannel Channel, int Order);
 	private sealed record SlotSpec(string Name, DateTimeOffset Start, DateTimeOffset End, string Campus, string Hall, int Capacity, int RoomNo);
 	private sealed record DocumentSpec(string Code, string Name, bool RequiresOriginal, bool ValidityRequired, int Order);
-	private sealed record LeadSpec(string Key, string FirstName, string LastName, AdmissionInquiryStage Stage, string SourceCode, AdmissionInquiryChannel Channel);
+	internal sealed record LeadSpec(
+		string Key,
+		string FirstName,
+		string LastName,
+		string StandardName,
+		AdmissionInquiryStage Stage,
+		string SourceCode,
+		AdmissionInquiryChannel Channel,
+		string OwnerEmail,
+		AdmissionCrmRouteType RouteType,
+		AdmissionCrmLeadPriority Priority);
 }

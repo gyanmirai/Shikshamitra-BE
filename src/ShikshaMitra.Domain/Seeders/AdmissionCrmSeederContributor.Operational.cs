@@ -1,24 +1,26 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.Seeders;
 
 public partial class AdmissionCrmSeederContributor
 {
-	private static readonly DateTime SeededAt = new(2026, 7, 1, 9, 0, 0, DateTimeKind.Utc);
-	private static readonly Guid SeedRequesterId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1");
-	private static readonly Guid SeedApproverId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2");
+	private static DateTime SeededAt => DateTime.UtcNow.Date.AddHours(9);
+	private Guid _seedRequesterId;
+	private Guid _seedApproverId;
 
 	private IRepository<TEntity, Guid> Repository<TEntity>() where TEntity : class, Volo.Abp.Domain.Entities.IEntity<Guid> =>
 		_serviceProvider.GetRequiredService<IRepository<TEntity, Guid>>();
@@ -39,7 +41,7 @@ public partial class AdmissionCrmSeederContributor
 				"{}",
 				"[{\"code\":\"INQUIRY\",\"displayName\":\"Inquiry\",\"reportingMilestone\":0,\"order\":10,\"isRequired\":true,\"isParentVisible\":true,\"slaHours\":4,\"allowedNextStageCodes\":[\"EXAM_READY\"]},{\"code\":\"EXAM_READY\",\"displayName\":\"Exam ready\",\"reportingMilestone\":2,\"order\":20,\"isRequired\":true,\"isParentVisible\":true,\"slaHours\":24,\"allowedNextStageCodes\":[\"EXAM_SCHEDULED\"]},{\"code\":\"EXAM_SCHEDULED\",\"displayName\":\"Exam scheduled\",\"reportingMilestone\":3,\"order\":30,\"isRequired\":true,\"isParentVisible\":true,\"allowedNextStageCodes\":[\"EXAM_COMPLETED\"]},{\"code\":\"EXAM_COMPLETED\",\"displayName\":\"Exam completed\",\"reportingMilestone\":4,\"order\":40,\"isRequired\":true,\"isParentVisible\":true,\"allowedNextStageCodes\":[\"ELIGIBLE\"]},{\"code\":\"ELIGIBLE\",\"displayName\":\"Eligible\",\"reportingMilestone\":5,\"order\":50,\"isRequired\":true,\"isParentVisible\":true,\"allowedNextStageCodes\":[]}]",
 				"[{\"code\":\"MAIN\",\"name\":\"Main admission round\",\"openingDate\":\"2026-01-01T00:00:00Z\",\"closingDate\":\"2027-03-31T00:00:00Z\",\"isActive\":true}]",
-				"[{\"code\":\"GENERAL-1\",\"roundCode\":\"MAIN\",\"campus\":\"Main Campus\",\"desiredClass\":\"Class 1\",\"board\":\"GSEB\",\"medium\":\"English\",\"plannedSeats\":40,\"approvedCapacity\":40,\"offeredSeats\":0,\"acceptedSeats\":0,\"waitlistedApplicants\":0,\"withdrawnApplicants\":0,\"remainingCapacity\":40,\"isOverAllocated\":false}]",
+				"[{\"code\":\"GENERAL-PRIMARY\",\"roundCode\":\"MAIN\",\"campus\":\"Main Campus\",\"desiredClass\":\"Class 4 / Class 5\",\"board\":\"CBSE\",\"medium\":\"English\",\"plannedSeats\":40,\"approvedCapacity\":40,\"offeredSeats\":0,\"acceptedSeats\":0,\"waitlistedApplicants\":0,\"withdrawnApplicants\":0,\"remainingCapacity\":40,\"isOverAllocated\":false}]",
 				"[{\"code\":\"GENERAL\",\"name\":\"General entrance exam\",\"roundCode\":\"MAIN\",\"campus\":\"Main Campus\",\"durationMinutes\":120,\"instructions\":\"Report 30 minutes before the exam.\",\"components\":[{\"code\":\"APTITUDE\",\"name\":\"Aptitude\",\"componentType\":0,\"maximumMarks\":100,\"minimumMarks\":40,\"weightPercentage\":100,\"isMandatory\":true,\"scorePrecision\":0}],\"resultRule\":{\"aggregatePassingPercentage\":40,\"requireMandatoryComponentPass\":true,\"meritCapacity\":30,\"waitlistCapacity\":10,\"tieBreakerCodes\":[\"APTITUDE\"]}}]",
 				"[{\"code\":\"GENERAL-MORNING\",\"name\":\"General morning slot\",\"examDefinitionCode\":\"GENERAL\",\"campus\":\"Main Campus\",\"roomOrHall\":\"Hall A\",\"roomNo\":101,\"capacity\":40,\"reportingTime\":\"08:30:00\",\"startTime\":\"09:00:00\",\"endTime\":\"11:00:00\",\"daysOfWeek\":[1,3,5],\"blackoutDates\":[],\"isActive\":true}]",
 				"[{\"code\":\"EXAM-READY-EARLIEST\",\"name\":\"Assign earliest available slot\",\"trigger\":\"ExamReady\",\"strategy\":2,\"priority\":10,\"slotTemplateCode\":\"GENERAL-MORNING\",\"isActive\":true}]",
@@ -95,9 +97,25 @@ public partial class AdmissionCrmSeederContributor
 		if (seatPool == null)
 		{
 			seatPool = new AdmissionCrmSeatPool(
-				seatPoolId, tenantId, academicYearId, playbook.Id, "GENERAL-1", "Class 1 general seats", "MAIN",
-				"Main Campus", "Class 1", "GSEB", "English", "General", 32, 40);
+				seatPoolId, tenantId, academicYearId, playbook.Id, "GENERAL-1", "Primary admission seats", "MAIN",
+				"Main Campus", "Class 4 / Class 5", "CBSE", "English", "General", 32, 40);
 			await seatPoolRepository.InsertAsync(seatPool);
+		}
+		else
+		{
+			seatPool.UpdateDefinition(
+				playbook.Id,
+				"Primary admission seats",
+				"MAIN",
+				"Main Campus",
+				"Class 4 / Class 5",
+				"CBSE",
+				"English",
+				"General",
+				32,
+				40,
+				true);
+			await seatPoolRepository.UpdateAsync(seatPool);
 		}
 
 		return new ExtendedConfiguration(playbook, registrationTemplate, checklist, formSeries, seatPool);
@@ -146,48 +164,54 @@ public partial class AdmissionCrmSeederContributor
 		Guid academicYearId,
 		ExtendedConfiguration configuration,
 		IReadOnlyDictionary<Guid, AdmissionInquiryLead> leads,
-		IReadOnlyList<AdmissionCrmExamSlot> slots)
+		IReadOnlyList<AdmissionCrmExamSlot> slots,
+		IReadOnlyDictionary<string, Guid> ownerUserIds,
+		IReadOnlyDictionary<string, Standard> standards)
 	{
+		_seedRequesterId = ownerUserIds["admissions-reception@ddvs.com"];
+		_seedApproverId = ownerUserIds["admissions-approver@ddvs.com"];
 		_logger.LogInformation(
 			"[AdmissionCrmSeeder] Operational prerequisites loaded. Leads={LeadCount}, Slots={SlotCount}.",
 			leads.Count,
 			slots.Count);
 		if (slots.Count == 0)
 		{
-			_logger.LogWarning("[AdmissionCrmSeeder] Operational scenarios skipped because no active exam slots were visible.");
-			return;
+			_logger.LogWarning("[AdmissionCrmSeeder] Exam scenarios skipped because no active exam slots were visible.");
 		}
-
-		var examRepository = Repository<AdmissionCrmEntranceExamRecord>();
-		foreach (var spec in ExamScenarioSpecs())
+		else
 		{
-			var leadId = StableId(tenantId, $"lead:{spec.Key}");
-			if (!leads.ContainsKey(leadId)) continue;
-			var examId = StableId(tenantId, $"exam:{spec.Key}");
-			if (await examRepository.AnyAsync(item => item.Id == examId)) continue;
-			var exam = new AdmissionCrmEntranceExamRecord(
-				examId, tenantId, academicYearId, leadId, slots[spec.SlotIndex % slots.Count], false, null, SeededAt.AddDays(spec.SlotIndex));
-			if (spec.Absent)
+			var examRepository = Repository<AdmissionCrmEntranceExamRecord>();
+			foreach (var spec in ExamScenarioSpecs())
 			{
-				exam.MarkAttendance(AdmissionCrmExamAttendanceStatus.Absent, SeededAt.AddDays(spec.SlotIndex + 1));
-			}
-			else if (spec.Marks.HasValue)
-			{
-				exam.MarkAttendance(AdmissionCrmExamAttendanceStatus.Present, SeededAt.AddDays(spec.SlotIndex + 1));
-				exam.RecordResult(100, 40, spec.Marks.Value, spec.MeritRank, SeededAt.AddDays(spec.SlotIndex + 1));
-				if (spec.Decision == AdmissionCrmEligibilityDecision.Waitlisted)
+				var leadId = StableId(tenantId, $"lead:{spec.Key}");
+				if (!leads.ContainsKey(leadId)) continue;
+				var examId = StableId(tenantId, $"exam:{spec.Key}");
+				if (await examRepository.AnyAsync(item => item.Id == examId)) continue;
+				var exam = new AdmissionCrmEntranceExamRecord(
+					examId, tenantId, academicYearId, leadId, slots[spec.SlotIndex % slots.Count], false, null, SeededAt.AddDays(spec.SlotIndex));
+				if (spec.Absent)
 				{
-					exam.SetEligibilityDecision(AdmissionCrmEligibilityDecision.Waitlisted, "Applicant placed on the seeded waitlist.", false, null, spec.MeritRank, SeededAt.AddDays(spec.SlotIndex + 1));
+					exam.MarkAttendance(AdmissionCrmExamAttendanceStatus.Absent, SeededAt.AddDays(spec.SlotIndex + 1));
 				}
+				else if (spec.Marks.HasValue)
+				{
+					exam.MarkAttendance(AdmissionCrmExamAttendanceStatus.Present, SeededAt.AddDays(spec.SlotIndex + 1));
+					exam.RecordResult(100, 40, spec.Marks.Value, spec.MeritRank, SeededAt.AddDays(spec.SlotIndex + 1));
+					if (spec.Decision == AdmissionCrmEligibilityDecision.Waitlisted)
+					{
+						exam.SetEligibilityDecision(AdmissionCrmEligibilityDecision.Waitlisted, "Applicant placed on the seeded waitlist.", false, null, spec.MeritRank, SeededAt.AddDays(spec.SlotIndex + 1));
+					}
+				}
+				await examRepository.InsertAsync(exam);
+				await EnsureTimelineAsync(tenantId, academicYearId, leadId, $"exam:{spec.Key}", AdmissionCrmTimelineEventType.ExamScheduled,
+					"Entrance exam scheduled", $"Seeded exam scenario: {spec.Key}.", exam.Id);
 			}
-			await examRepository.InsertAsync(exam);
-			await EnsureTimelineAsync(tenantId, academicYearId, leadId, $"exam:{spec.Key}", AdmissionCrmTimelineEventType.ExamScheduled,
-				"Entrance exam scheduled", $"Seeded exam scenario: {spec.Key}.", exam.Id);
 		}
 
 		await RepairRegistrationScenariosAsync(tenantId, academicYearId, configuration, leads);
 		await RepairOfferAndWaitlistScenariosAsync(tenantId, academicYearId, configuration, leads);
-		await RepairActivationScenariosAsync(tenantId, academicYearId, configuration, leads);
+		await RepairRouteScenariosAsync(tenantId, academicYearId, leads);
+		await RepairActivationScenariosAsync(tenantId, academicYearId, leads, standards);
 	}
 
 	private async Task RepairRegistrationScenariosAsync(
@@ -199,8 +223,8 @@ public partial class AdmissionCrmSeederContributor
 		var applicationRepository = Repository<AdmissionCrmRegistrationApplication>();
 		var assignmentRepository = Repository<AdmissionCrmDocumentChecklistAssignment>();
 		var documentRepository = Repository<AdmissionCrmApplicantDocument>();
-		var keys = new[] { "registration-correction", "document-rejection", "admission-ready", "offer-pending", "offer-accepted", "waitlisted", "rte-allotment", "payment-pending", "activation-pending", "activation-repair", "first-day-ready" };
-		for (var index = 0; index < keys.Length; index++)
+		var keys = DemoRegistrationKeys();
+		for (var index = 0; index < keys.Count; index++)
 		{
 			var key = keys[index];
 			var leadId = StableId(tenantId, $"lead:{key}");
@@ -213,21 +237,25 @@ public partial class AdmissionCrmSeederContributor
 					applicationId, tenantId, academicYearId, leadId, configuration.RegistrationTemplate.Id, 1,
 					configuration.Playbook.Id, $"DDVS-REG-{index + 1:00000}", "{\"template\":\"DDVS registration form\"}",
 					$"{{\"scenario\":\"{key}\"}}", SeededAt, SeededAt.AddDays(30), 0);
-				application.Save("{\"firstName\":\"Seeded applicant\",\"parentName\":\"Seeded parent\"}", 75, SeededAt.AddHours(1));
-				application.Submit("{\"firstName\":\"Seeded applicant\",\"parentName\":\"Seeded parent\"}", SeededAt.AddHours(2), false);
-				if (key == "registration-correction")
+				var completionPercentage = key == "passed" ? 60 : 100;
+				application.Save("{\"firstName\":\"Seeded applicant\",\"parentName\":\"Seeded parent\"}", completionPercentage, SeededAt.AddHours(1));
+				if (key != "passed")
 				{
-					application.ReturnForCorrection("[{\"fieldKey\":\"dateOfBirth\",\"message\":\"Upload a matching birth certificate.\"}]", "Date of birth evidence does not match.");
-				}
-				else
-				{
-					application.Verify(SeededAt.AddHours(3));
-					if (key != "document-rejection") application.MarkAdmissionReady();
+					application.Submit("{\"firstName\":\"Seeded applicant\",\"parentName\":\"Seeded parent\"}", SeededAt.AddHours(2), key is "rte-allotment" or "activation-repair");
+					if (key == "registration-correction")
+					{
+						application.ReturnForCorrection("[{\"fieldKey\":\"dateOfBirth\",\"message\":\"Upload a matching birth certificate.\"}]", "Date of birth evidence does not match.");
+					}
+					else
+					{
+						application.Verify(SeededAt.AddHours(3));
+						application.MarkAdmissionReady();
+					}
 				}
 				await applicationRepository.InsertAsync(application);
 			}
 
-			if (key is "registration-correction") continue;
+			if (key is "passed" or "registration-correction") continue;
 			var assignmentId = StableId(tenantId, $"document-assignment:{key}");
 			var assignment = await assignmentRepository.FindAsync(assignmentId);
 			if (assignment == null)
@@ -235,10 +263,7 @@ public partial class AdmissionCrmSeederContributor
 				assignment = new AdmissionCrmDocumentChecklistAssignment(
 					assignmentId, tenantId, academicYearId, leadId, application.Id, configuration.Checklist.Id, 1,
 					"{\"requirements\":[\"birthCertificate\",\"addressProof\"]}", SeededAt.AddHours(3));
-				if (key != "document-rejection")
-				{
-					assignment.ConfirmReadiness(SeedApproverId, 1, false, null, SeededAt.AddHours(5));
-				}
+				assignment.ConfirmReadiness(_seedApproverId, 1, false, null, SeededAt.AddHours(5));
 				await assignmentRepository.InsertAsync(assignment);
 			}
 
@@ -249,15 +274,12 @@ public partial class AdmissionCrmSeederContributor
 					documentId, tenantId, academicYearId, leadId, assignment.Id, "birthCertificate", 1,
 					$"seed/admissions/{key}/birth-certificate.pdf", "birth-certificate.pdf", "application/pdf", 1024,
 					new string('a', 64), null, SeededAt.AddHours(4));
-				if (key == "document-rejection")
-					document.Reject(SeedApproverId, "The uploaded copy is unreadable.", SeededAt.AddHours(5));
-				else
-					document.Verify(SeedApproverId, SeededAt.AddHours(5));
+				document.Verify(_seedApproverId, SeededAt.AddHours(5));
 				await documentRepository.InsertAsync(document);
 			}
 		}
 
-		var minimumNextNumber = keys.LongLength + 1;
+		var minimumNextNumber = keys.Count + 1L;
 		if (configuration.FormSeries.NextNumber < minimumNextNumber)
 		{
 			configuration.FormSeries.Update(
@@ -281,7 +303,7 @@ public partial class AdmissionCrmSeederContributor
 		var offerRepository = Repository<AdmissionCrmSeatOffer>();
 		var reservationRepository = Repository<AdmissionCrmSeatReservation>();
 		var waitlistRepository = Repository<AdmissionCrmWaitlistEntry>();
-		foreach (var key in new[] { "offer-pending", "offer-accepted", "payment-pending" })
+		foreach (var key in DemoOfferKeys())
 		{
 			var leadId = StableId(tenantId, $"lead:{key}");
 			if (!leads.ContainsKey(leadId)) continue;
@@ -293,10 +315,10 @@ public partial class AdmissionCrmSeederContributor
 				configuration.Playbook.Id, null, $"DDVS-OFFER-{key.ToUpperInvariant()}", 1,
 				AdmissionCrmSeatOfferType.Provisional, "{\"paymentGate\":\"ReferenceRecorded\"}", "en",
 				SeededAt, SeededAt.AddDays(14));
-			offer.SubmitForApproval(SeedRequesterId, SeededAt.AddHours(1));
+			offer.SubmitForApproval(_seedRequesterId, SeededAt.AddHours(1));
 			if (key != "offer-pending")
 			{
-				offer.Approve(SeedApproverId, SeededAt.AddHours(2));
+				offer.Approve(_seedApproverId, SeededAt.AddHours(2));
 				var reservationId = StableId(tenantId, $"reservation:{key}");
 				configuration.SeatPool.ReserveSeat(false, null);
 				var reservation = new AdmissionCrmSeatReservation(
@@ -325,37 +347,34 @@ public partial class AdmissionCrmSeederContributor
 	private async Task RepairActivationScenariosAsync(
 		Guid tenantId,
 		Guid academicYearId,
-		ExtendedConfiguration configuration,
-		IReadOnlyDictionary<Guid, AdmissionInquiryLead> leads)
+		IReadOnlyDictionary<Guid, AdmissionInquiryLead> leads,
+		IReadOnlyDictionary<string, Standard> standards)
 	{
-		var board = await Repository<EducationBoard>().FirstOrDefaultAsync();
-		if (board == null) return;
-		var medium = await Repository<EducationMedium>().FirstOrDefaultAsync(item => item.EducationBoardId == board.Id);
-		if (medium == null) return;
-		var academicStage = await Repository<EducationMediumStage>().FirstOrDefaultAsync(item => item.EducationMediumId == medium.Id);
+		var standard = standards["Class 5"];
+		var academicStage = await Repository<EducationMediumStage>().FindAsync(standard.EducationMediumStageId);
 		if (academicStage == null) return;
-		var standard = await Repository<Standard>().FirstOrDefaultAsync(item => item.EducationMediumStageId == academicStage.Id);
-		if (standard == null) return;
+		var medium = await Repository<EducationMedium>().FindAsync(academicStage.EducationMediumId);
+		if (medium == null) return;
+		var board = await Repository<EducationBoard>().FindAsync(medium.EducationBoardId);
+		if (board == null) return;
 		var division = await Repository<Division>().FirstOrDefaultAsync(item => item.StandardId == standard.Id);
 		if (division == null) return;
 
 		var numberSeriesRepository = Repository<AdmissionCrmNumberSeries>();
-		var numberSeriesId = StableId(tenantId, "number-series:gr");
+		var numberSeriesId = StableId(tenantId, "number-series:gr:class-5-demo-v2");
 		var numberSeries = await numberSeriesRepository.FindAsync(numberSeriesId);
 		if (numberSeries == null)
 		{
 			numberSeries = new AdmissionCrmNumberSeries(
 				numberSeriesId, tenantId, academicYearId, "DDVS-GR", "DDVS GR number", AdmissionCrmIdentifierType.GrNumber,
 				board.Id, medium.Id, standard.Id, "DDVS-GR-", string.Empty, 5, 1, 99999, SeededAt, SeededAt.AddYears(2));
-			numberSeries.Submit(SeedRequesterId);
-			numberSeries.Publish(SeedApproverId);
+			numberSeries.Submit(_seedRequesterId);
+			numberSeries.Publish(_seedApproverId);
 			await numberSeriesRepository.InsertAsync(numberSeries);
 		}
 
 		var activationRepository = Repository<AdmissionCrmActivation>();
-		var student = (await _serviceProvider.GetRequiredService<IStudentRepository>().GetListAsync())
-			.FirstOrDefault(candidate => leads.Values.All(lead => lead.StudentId != candidate.Id));
-		foreach (var key in new[] { "activation-pending", "activation-repair", "first-day-ready" })
+		foreach (var key in DemoActivationKeys())
 		{
 			var leadId = StableId(tenantId, $"lead:{key}");
 			if (!leads.ContainsKey(leadId)) continue;
@@ -365,25 +384,238 @@ public partial class AdmissionCrmSeederContributor
 				activationId, tenantId, academicYearId, leadId, $"DDVS-ACT-{key.ToUpperInvariant()}", board.Id, medium.Id,
 				academicStage.Id, standard.Id, division.Id, numberSeries.Id, null, ShikshaMitra.Students.GenderEnum.Male,
 				"{\"registrationReady\":true,\"documentsReady\":true,\"paymentGate\":\"Manual\"}", "[]",
-				true, true, SeedRequesterId, SeededAt);
-			if (key != "activation-pending")
-			{
-				activation.Approve(SeedApproverId, SeededAt.AddHours(1));
-				activation.StartAttempt();
-				if (key == "activation-repair")
-					activation.RequireRepair("StudentAccount", "Seeded account provisioning retry scenario.");
-				else if (student != null)
-				{
-					activation.LinkStudent(student.Id);
-					activation.UpdateSteps("[{\"code\":\"StudentLinked\",\"status\":\"Completed\"},{\"code\":\"AccountsProvisioned\",\"status\":\"Completed\"}]");
-					activation.Complete(SeededAt.AddHours(2));
-					leads[leadId].LinkStudent(student.Id);
-					await _leadRepository.UpdateAsync(leads[leadId]);
-				}
-			}
+				true, true, _seedRequesterId, SeededAt);
+			activation.Approve(_seedApproverId, SeededAt.AddHours(1));
+			activation.StartAttempt();
+			activation.RequireRepair("StudentAccount", "Student account provisioning needs a retry.");
 			await activationRepository.InsertAsync(activation);
 		}
 	}
+
+	private async Task RepairFollowUpTasksAsync(
+		Guid tenantId,
+		Guid academicYearId,
+		IReadOnlyDictionary<Guid, AdmissionInquiryLead> leads,
+		IReadOnlyDictionary<string, Guid> ownerUserIds)
+	{
+		var repository = Repository<AdmissionCrmFollowUpTask>();
+		var today = DateTime.UtcNow.Date;
+		foreach (var spec in FollowUpTaskSpecs())
+		{
+			var leadId = StableId(tenantId, $"lead:{spec.LeadKey}");
+			if (!leads.ContainsKey(leadId)) continue;
+			var taskId = StableId(tenantId, $"task:{spec.LeadKey}");
+			if (await repository.AnyAsync(item => item.Id == taskId)) continue;
+
+			await repository.InsertAsync(new AdmissionCrmFollowUpTask(
+				taskId,
+				tenantId,
+				leadId,
+				academicYearId,
+				spec.Title,
+				today.AddDays(spec.DueDayOffset).AddHours(17),
+				ownerUserIds[spec.AssigneeEmail],
+				spec.Notes));
+		}
+	}
+
+	private async Task RepairRouteScenariosAsync(
+		Guid tenantId,
+		Guid academicYearId,
+		IReadOnlyDictionary<Guid, AdmissionInquiryLead> leads)
+	{
+		var leadId = StableId(tenantId, "lead:rte-allotment");
+		if (!leads.ContainsKey(leadId)) return;
+
+		var definitionRepository = Repository<AdmissionCrmRouteDefinition>();
+		var definitionId = StableId(tenantId, "route-definition:rte-ews");
+		var definition = await definitionRepository.FindAsync(definitionId);
+		if (definition == null)
+		{
+			definition = new AdmissionCrmRouteDefinition(
+				definitionId,
+				tenantId,
+				academicYearId,
+				"RTE-EWS",
+				"RTE / EWS admission",
+				AdmissionCrmRouteType.RteEws,
+				1,
+				"{\"requiresGovernmentAllotment\":true}",
+				SeededAt,
+				SeededAt.AddYears(1));
+			definition.Submit(_seedRequesterId);
+			definition.Publish(_seedApproverId);
+			await definitionRepository.InsertAsync(definition);
+		}
+
+		var assignmentRepository = Repository<AdmissionCrmRouteAssignment>();
+		var assignmentId = StableId(tenantId, "route-assignment:rte-allotment");
+		if (!await assignmentRepository.AnyAsync(item => item.Id == assignmentId))
+		{
+			var assignment = new AdmissionCrmRouteAssignment(
+				assignmentId,
+				tenantId,
+				academicYearId,
+				leadId,
+				definition.Id,
+				definition.Version,
+				AdmissionCrmRouteType.RteEws,
+				"{\"allotmentReference\":\"DDVS-RTE-DEMO\"}",
+				"[]",
+				null,
+				"Government allotment requires staff reconciliation.",
+				_seedRequesterId,
+				SeededAt);
+			assignment.Evaluate(
+				AdmissionCrmRouteEligibilityStatus.Eligible,
+				"Government allotment verified for the demo admission.",
+				_seedApproverId,
+				SeededAt.AddHours(1));
+			await assignmentRepository.InsertAsync(assignment);
+		}
+	}
+
+	private async Task ResetLegacyDemoScenariosAsync(Guid tenantId)
+	{
+		var leadIds = LegacyDemoLeadKeys()
+			.Select(key => StableId(tenantId, $"lead:{key}"))
+			.ToHashSet();
+		await ReconcileLegacySeatPoolCountersAsync(tenantId, leadIds);
+
+		await HardDeleteByLeadIdsAsync<AdmissionApplicantStatusAccess>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmActivation>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmAdmissionDecision>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmAdmissionQuotation>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmApplicantChecklistProgress>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmApplicantDocument>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmApplicantIdentityProfile>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmConcessionRequest>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmDocumentChecklistAssignment>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmEntranceExamRecord>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmFollowUpTask>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmGuardianRelationship>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmIdentifierAllocation>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmIdentityConsent>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmPolicyEvaluation>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmPolicyException>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmPrivacyRequest>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmRegistrationApplication>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmRouteAppeal>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmRouteAssignment>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmSeatOffer>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmSeatReservation>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmServiceHandoff>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmSlaHold>(item => leadIds.Contains(item.LeadId));
+		await DeleteByLeadIdsAsync<AdmissionCrmTimelineEvent>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionCrmWaitlistEntry>(item => leadIds.Contains(item.LeadId));
+		await DeleteByLeadIdsAsync<AdmissionCrmWaitlistHistory>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionInquiryConsentRecord>(item => leadIds.Contains(item.LeadId));
+		await HardDeleteByLeadIdsAsync<AdmissionInquiryFormSubmission>(item => leadIds.Contains(item.LeadId));
+
+		var leads = await _leadRepository.GetListAsync(item => leadIds.Contains(item.Id));
+		foreach (var lead in leads)
+		{
+			await _leadRepository.HardDeleteAsync(lead, autoSave: false);
+		}
+
+		var oldNumberSeriesId = StableId(tenantId, "number-series:gr");
+		if (!await Repository<AdmissionCrmIdentifierAllocation>().AnyAsync(item => item.NumberSeriesId == oldNumberSeriesId))
+		{
+			var oldNumberSeries = await Repository<AdmissionCrmNumberSeries>().FindAsync(oldNumberSeriesId);
+			if (oldNumberSeries != null)
+			{
+				await Repository<AdmissionCrmNumberSeries>().HardDeleteAsync(oldNumberSeries, autoSave: false);
+			}
+		}
+
+	}
+
+	private async Task ReconcileLegacySeatPoolCountersAsync(Guid tenantId, IReadOnlySet<Guid> leadIds)
+	{
+		var seatPoolRepository = Repository<AdmissionCrmSeatPool>();
+		var seatPool = await seatPoolRepository.FindAsync(StableId(tenantId, "seat-pool:general-1"));
+		if (seatPool == null) return;
+
+		var reservations = await Repository<AdmissionCrmSeatReservation>().GetListAsync(item =>
+			item.SeatPoolId == seatPool.Id && leadIds.Contains(item.LeadId));
+		foreach (var reservation in reservations)
+		{
+			if (reservation.Status == AdmissionCrmSeatReservationStatus.Active && seatPool.ReservedSeats > 0)
+			{
+				seatPool.ReleaseSeat(wasAccepted: false, cancelled: false);
+			}
+			else if (reservation.Status == AdmissionCrmSeatReservationStatus.Committed && seatPool.AcceptedSeats > 0)
+			{
+				seatPool.ReleaseSeat(wasAccepted: true, cancelled: false);
+			}
+		}
+
+		var activeWaitlistCount = (await Repository<AdmissionCrmWaitlistEntry>().GetListAsync(item =>
+			item.SeatPoolId == seatPool.Id && leadIds.Contains(item.LeadId)))
+			.Count(item => item.Status == AdmissionCrmWaitlistStatus.Active);
+		for (var index = 0; index < Math.Min(activeWaitlistCount, seatPool.WaitlistedApplicants); index++)
+		{
+			seatPool.RemoveWaitlistedApplicant();
+		}
+
+		await seatPoolRepository.UpdateAsync(seatPool, autoSave: false);
+	}
+
+	private async Task HardDeleteByLeadIdsAsync<TEntity>(
+		Expression<Func<TEntity, bool>> predicate)
+		where TEntity : class, IEntity<Guid>, ISoftDelete
+	{
+		var repository = Repository<TEntity>();
+		var entities = await repository.GetListAsync(predicate);
+		foreach (var entity in entities)
+		{
+			await repository.HardDeleteAsync(entity, autoSave: false);
+		}
+	}
+
+	private async Task DeleteByLeadIdsAsync<TEntity>(Expression<Func<TEntity, bool>> predicate)
+		where TEntity : class, IEntity<Guid>
+	{
+		var repository = Repository<TEntity>();
+		var entities = await repository.GetListAsync(predicate);
+		foreach (var entity in entities)
+		{
+			await repository.DeleteAsync(entity, autoSave: false);
+		}
+	}
+
+	internal static IReadOnlyList<string> LegacyDemoLeadKeys() =>
+	[
+		"new-inquiry", "follow-up", "duplicate-warning", "stale", "archived", "exam-ready", "exam-scheduled",
+		"no-show", "passed", "failed", "registration-correction", "document-rejection", "admission-ready",
+		"offer-pending", "offer-accepted", "waitlisted", "rte-allotment", "payment-pending", "activation-pending",
+		"activation-repair", "first-day-ready"
+	];
+
+	internal static IReadOnlyList<FollowUpTaskSpec> FollowUpTaskSpecs() =>
+	[
+		new("new-inquiry", "Confirm class and contact", "admissions-reception@ddvs.com", 0, "Confirm the target class and the best parent contact number."),
+		new("follow-up", "Call parent about admission intent", "admissions-counselor@ddvs.com", 2, "Confirm the family's admission intent and preferred next step."),
+		new("no-show", "Reschedule missed entrance exam", "admissions-counselor@ddvs.com", -1, "Offer a new exam slot or record a reasoned rejection decision."),
+		new("registration-correction", "Review corrected registration", "admissions-reception@ddvs.com", 0, "Review the date-of-birth correction and matching evidence."),
+		new("offer-pending", "Review offer approval", "admissions-approver@ddvs.com", 1, "Approve or return the prepared seat offer."),
+		new("activation-repair", "Repair student account activation", "admissions-approver@ddvs.com", 2, "Retry the failed student-account provisioning step.")
+	];
+
+	internal static IReadOnlyList<string> DemoRegistrationKeys() =>
+	[
+		"passed", "registration-correction", "rte-allotment", "offer-pending", "activation-repair"
+	];
+
+	internal static IReadOnlyList<string> DemoOfferKeys() =>
+	[
+		"offer-pending", "rte-allotment", "activation-repair"
+	];
+
+	internal static IReadOnlyList<string> DemoActivationKeys() =>
+	[
+		"activation-repair"
+	];
 
 	private async Task EnsureTimelineAsync(
 		Guid tenantId,
@@ -400,26 +632,15 @@ public partial class AdmissionCrmSeederContributor
 		if (await repository.AnyAsync(item => item.Id == eventId)) return;
 		await repository.InsertAsync(new AdmissionCrmTimelineEvent(
 			eventId, tenantId, leadId, academicYearId, eventType, title, details, relatedEntityId,
-			SeedRequesterId, new DateTimeOffset(SeededAt)));
+			_seedRequesterId, new DateTimeOffset(SeededAt)));
 	}
 
-	private static IReadOnlyList<ExamScenario> ExamScenarioSpecs() =>
+	internal static IReadOnlyList<ExamScenario> ExamScenarioSpecs() =>
 	[
 		new("exam-scheduled", 0, false, null, null, AdmissionCrmEligibilityDecision.Pending),
 		new("no-show", 1, true, null, null, AdmissionCrmEligibilityDecision.Rejected),
 		new("passed", 2, false, 82, 2, AdmissionCrmEligibilityDecision.Eligible),
-		new("failed", 0, false, 35, null, AdmissionCrmEligibilityDecision.Rejected),
-		new("registration-correction", 1, false, 76, 4, AdmissionCrmEligibilityDecision.Eligible),
-		new("document-rejection", 2, false, 74, 5, AdmissionCrmEligibilityDecision.Eligible),
-		new("admission-ready", 0, false, 88, 1, AdmissionCrmEligibilityDecision.Eligible),
-		new("offer-pending", 1, false, 72, 7, AdmissionCrmEligibilityDecision.Eligible),
-		new("offer-accepted", 2, false, 84, 3, AdmissionCrmEligibilityDecision.Eligible),
-		new("waitlisted", 0, false, 68, 12, AdmissionCrmEligibilityDecision.Waitlisted),
-		new("rte-allotment", 1, false, 79, 6, AdmissionCrmEligibilityDecision.Eligible),
-		new("payment-pending", 2, false, 81, 5, AdmissionCrmEligibilityDecision.Eligible),
-		new("activation-pending", 0, false, 86, 2, AdmissionCrmEligibilityDecision.Eligible),
-		new("activation-repair", 1, false, 83, 3, AdmissionCrmEligibilityDecision.Eligible),
-		new("first-day-ready", 2, false, 91, 1, AdmissionCrmEligibilityDecision.Eligible)
+		new("waitlisted", 0, false, 68, 12, AdmissionCrmEligibilityDecision.Waitlisted)
 	];
 
 	private sealed record ExtendedConfiguration(
@@ -429,11 +650,18 @@ public partial class AdmissionCrmSeederContributor
 		AdmissionCrmFormNumberSeries FormSeries,
 		AdmissionCrmSeatPool SeatPool);
 
-	private sealed record ExamScenario(
+	internal sealed record ExamScenario(
 		string Key,
 		int SlotIndex,
 		bool Absent,
 		double? Marks,
 		int? MeritRank,
 		AdmissionCrmEligibilityDecision Decision);
+
+	internal sealed record FollowUpTaskSpec(
+		string LeadKey,
+		string Title,
+		string AssigneeEmail,
+		int DueDayOffset,
+		string Notes);
 }

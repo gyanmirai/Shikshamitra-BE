@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Constants.Permissions;
@@ -372,6 +374,127 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		analytics.ShouldNotBeNull();
 		analytics.RegistrationAnalytics.AdmissionReadyCount.ShouldBeGreaterThan(0);
 		analytics.DocumentAnalytics.ReadinessConfirmedCount.ShouldBeGreaterThan(0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Create_And_Submit_Direct_Offline_Registration()
+	{
+		var unique = Guid.NewGuid().ToString("N")[..8];
+		var templateResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/registration-templates",
+			CreateTemplateInput("Offline registration " + unique),
+			JsonOptions);
+		templateResponse.EnsureSuccessStatusCode();
+		var template = await templateResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationTemplateDto>(JsonOptions);
+		template.ShouldNotBeNull();
+		(await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/configuration/registration-templates/{template.Id}/publish",
+			null)).EnsureSuccessStatusCode();
+
+		var seriesResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/form-number-series",
+			new AdmissionCrmFormNumberSeriesUpsertDto
+			{
+				Name = "Offline series " + unique,
+				Prefix = "OFF-" + unique.ToUpperInvariant() + "-",
+				Padding = 4,
+				NextNumber = 1,
+				IsActive = true
+			},
+			JsonOptions);
+		seriesResponse.EnsureSuccessStatusCode();
+		var series = await seriesResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmFormNumberSeriesDto>(JsonOptions);
+		series.ShouldNotBeNull();
+
+		var directInput = new CreateDirectAdmissionCrmRegistrationDto
+		{
+			Applicant = new CreateAdmissionCrmLeadDto
+			{
+				FirstName = "Riya",
+				ParentGuardianName = "Kavita Patel",
+				PrimaryContactNo = "96" + Random.Shared.NextInt64(10000000, 99999999),
+				AdmissionIntent = "RTE admission",
+				IntendedRouteType = AdmissionCrmRouteType.RteEws,
+				TargetStandardId = Factory.SeededStandardId,
+				AcademicBoardId = Factory.SeededBoardId,
+				AcademicMediumId = Factory.SeededMediumId,
+				DesiredClassName = "Grade 1"
+			},
+			Registration = new IssueAdmissionCrmRegistrationApplicationDto
+			{
+				RegistrationTemplateId = template.Id,
+				FormNumberSeriesId = series.Id
+			}
+		};
+
+		foreach (var permission in new[]
+		         {
+			         ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add,
+			         ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm
+		         })
+		{
+			using var restrictedClient = Factory.CreateClient();
+			restrictedClient.DefaultRequestHeaders.Add(
+				TestAuthHandler.TestTenantIdHeader,
+				TestAuthHandler.TestTenantId);
+			restrictedClient.DefaultRequestHeaders.Add(
+				AlwaysGrantPermissionChecker.TestPermissionsHeader,
+				permission);
+			var forbiddenResponse = await restrictedClient.PostAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/registrations/direct",
+				directInput,
+				JsonOptions);
+			forbiddenResponse.StatusCode.ShouldBe(
+				HttpStatusCode.Forbidden,
+				await forbiddenResponse.Content.ReadAsStringAsync());
+		}
+
+		var directResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/registrations/direct",
+			directInput,
+			JsonOptions);
+		directResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await directResponse.Content.ReadAsStringAsync());
+		var direct = await directResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmDirectRegistrationResultDto>(JsonOptions);
+		direct.ShouldNotBeNull();
+		direct.Applicant.Stage.ShouldBe(AdmissionInquiryStage.Eligible);
+		direct.Applicant.Channel.ShouldBe(AdmissionInquiryChannel.ManualBackOffice);
+		direct.Registration.Status.ShouldBe(AdmissionCrmRegistrationStatus.Issued);
+
+		var responses = new SaveAdmissionCrmRegistrationResponsesDto
+		{
+			Responses = new Dictionary<string, JsonElement>
+			{
+				["parentOccupation"] = JsonSerializer.SerializeToElement("Teacher"),
+				["declarationAccepted"] = JsonSerializer.SerializeToElement(true)
+			}
+		};
+		var saveResponse = await Client.PutAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/registrations/{direct.Registration.Id}/staff-responses",
+			responses,
+			JsonOptions);
+		saveResponse.EnsureSuccessStatusCode();
+		var saved = await saveResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		saved.ShouldNotBeNull();
+		saved.Status.ShouldBe(AdmissionCrmRegistrationStatus.PartiallyCompleted);
+
+		var submitResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/registrations/{direct.Registration.Id}/staff-submit",
+			responses,
+			JsonOptions);
+		submitResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await submitResponse.Content.ReadAsStringAsync());
+		var submitted = await submitResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		submitted.ShouldNotBeNull();
+		submitted.Status.ShouldBe(AdmissionCrmRegistrationStatus.Submitted);
 	}
 
 	[Fact]

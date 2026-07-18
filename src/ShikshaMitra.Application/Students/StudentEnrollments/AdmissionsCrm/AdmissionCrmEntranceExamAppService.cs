@@ -181,6 +181,24 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 				matchingLeadIds.Contains(x.LeadId) ||
 				(x.SlotNameSnapshot != null && x.SlotNameSnapshot.ToLower().Contains(filter)));
 		}
+		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
+		{
+			var applicant = input.ApplicantSearch.Trim().ToLowerInvariant();
+			var matchingLeadIds = leadQueryable
+				.Where(x =>
+					x.TenantId == CurrentTenant.Id &&
+					x.AcademicYearId == academicYearId &&
+					((x.FirstName != null && x.FirstName.ToLower().Contains(applicant)) ||
+					 (x.MiddleName != null && x.MiddleName.ToLower().Contains(applicant)) ||
+					 (x.LastName != null && x.LastName.ToLower().Contains(applicant)) ||
+					 (x.ParentGuardianName != null && x.ParentGuardianName.ToLower().Contains(applicant))))
+				.Select(x => x.Id);
+			query = query.Where(x => matchingLeadIds.Contains(x.LeadId));
+		}
+		if (input.ExamStartFrom.HasValue)
+			query = query.Where(x => x.ExamStartTime >= input.ExamStartFrom.Value);
+		if (input.ExamStartUntil.HasValue)
+			query = query.Where(x => x.ExamStartTime < input.ExamStartUntil.Value.AddDays(1));
 
 		if (input.AttendanceStatus.HasValue)
 		{

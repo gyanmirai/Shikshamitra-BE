@@ -32,6 +32,8 @@ public class AdmissionCrmOperationsQueueDto
 public class GetAdmissionCrmOperationsQueueInput : PagedAndSortedResultRequestDto
 {
 	public string? Search { get; set; }
+	public string? ApplicantSearch { get; set; }
+	public string? ActionSearch { get; set; }
 	public Guid? OwnerUserId { get; set; }
 	public Guid? AssignedToUserId { get; set; }
 	public bool? UrgentOnly { get; set; }
@@ -44,6 +46,14 @@ public class GetAdmissionCrmOperationsQueueInput : PagedAndSortedResultRequestDt
 	public Guid? SeatPoolId { get; set; }
 	public AdmissionCrmActivationStatus? ActivationStatus { get; set; }
 	public AdmissionCrmServiceHandoffStatus? ServiceHandoffStatus { get; set; }
+	public DateTime? RegistrationLinkExpiresFrom { get; set; }
+	public DateTime? RegistrationLinkExpiresUntil { get; set; }
+	public DateTime? OfferExpiresFrom { get; set; }
+	public DateTime? OfferExpiresUntil { get; set; }
+	public bool? PaymentGateSatisfied { get; set; }
+	public bool? PlacementConfigured { get; set; }
+	public bool? AccountProvisioningPending { get; set; }
+	public string? RepairSearch { get; set; }
 }
 
 public class CreateAdmissionCrmOperationsSavedViewDto
@@ -206,6 +216,9 @@ public enum AdmissionCrmWorkspaceSection
 public class GetAdmissionCrmMyWorkInput : PagedAndSortedResultRequestDto
 {
 	public string? Search { get; set; }
+	public string? ApplicantSearch { get; set; }
+	public string? TargetClassSearch { get; set; }
+	public string? AssignedSearch { get; set; }
 	public AdmissionCrmMyWorkType? WorkType { get; set; }
 	public AdmissionCrmOperationsQueueType? QueueType { get; set; }
 	public AdmissionInquiryStage? Stage { get; set; }

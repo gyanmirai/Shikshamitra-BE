@@ -187,6 +187,21 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 				x.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
 				(x.Details?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
 		}
+		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
+		{
+			var applicantSearch = input.ApplicantSearch.Trim();
+			filtered = filtered.Where(x => x.ApplicantName.Contains(applicantSearch, StringComparison.OrdinalIgnoreCase));
+		}
+		if (!string.IsNullOrWhiteSpace(input.TargetClassSearch))
+		{
+			var targetClassSearch = input.TargetClassSearch.Trim();
+			filtered = filtered.Where(x => x.TargetClassName?.Contains(targetClassSearch, StringComparison.OrdinalIgnoreCase) == true);
+		}
+		if (!string.IsNullOrWhiteSpace(input.AssignedSearch))
+		{
+			var assignedSearch = input.AssignedSearch.Trim();
+			filtered = filtered.Where(x => x.AssignedDisplayName?.Contains(assignedSearch, StringComparison.OrdinalIgnoreCase) == true);
+		}
 		if (input.WorkType.HasValue) filtered = filtered.Where(x => x.WorkType == input.WorkType.Value);
 		if (input.QueueType.HasValue) filtered = filtered.Where(x => x.QueueType == input.QueueType.Value);
 		if (input.Stage.HasValue) filtered = filtered.Where(x => x.Stage == input.Stage.Value);
@@ -312,6 +327,17 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 				x.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
 				(x.Details?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
 		}
+		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
+		{
+			var applicantSearch = input.ApplicantSearch.Trim();
+			items = items.Where(x => x.ApplicantName.Contains(applicantSearch, StringComparison.OrdinalIgnoreCase));
+		}
+		if (!string.IsNullOrWhiteSpace(input.ActionSearch))
+		{
+			var actionSearch = input.ActionSearch.Trim();
+			items = items.Where(x => x.Title.Contains(actionSearch, StringComparison.OrdinalIgnoreCase) ||
+				(x.Details?.Contains(actionSearch, StringComparison.OrdinalIgnoreCase) ?? false));
+		}
 		if (input.OwnerUserId.HasValue) items = items.Where(x => x.OwnerUserId == input.OwnerUserId);
 		if (input.UrgentOnly == true) items = items.Where(x => x.IsUrgent);
 		if (input.MinimumAgeDays.HasValue) items = items.Where(x => x.AgeDays >= input.MinimumAgeDays.Value);
@@ -323,6 +349,31 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		if (input.SeatPoolId.HasValue) items = items.Where(x => x.Offer?.SeatPoolId == input.SeatPoolId);
 		if (input.ActivationStatus.HasValue) items = items.Where(x => x.Activation?.Status == input.ActivationStatus);
 		if (input.ServiceHandoffStatus.HasValue) items = items.Where(x => x.Operation?.ServiceHandoffStatus == input.ServiceHandoffStatus);
+		if (input.RegistrationLinkExpiresFrom.HasValue)
+			items = items.Where(x => x.Registration?.LinkExpiresAt >= input.RegistrationLinkExpiresFrom.Value);
+		if (input.RegistrationLinkExpiresUntil.HasValue)
+			items = items.Where(x => x.Registration?.LinkExpiresAt < input.RegistrationLinkExpiresUntil.Value.AddDays(1));
+		if (input.OfferExpiresFrom.HasValue)
+			items = items.Where(x => x.Offer?.OfferExpiresAt >= input.OfferExpiresFrom.Value);
+		if (input.OfferExpiresUntil.HasValue)
+			items = items.Where(x => x.Offer?.OfferExpiresAt < input.OfferExpiresUntil.Value.AddDays(1));
+		if (input.PaymentGateSatisfied.HasValue)
+			items = items.Where(x => x.Offer?.PaymentGateSatisfied == input.PaymentGateSatisfied.Value);
+		if (input.PlacementConfigured.HasValue)
+			items = items.Where(x => x.Activation?.PlacementConfigured == input.PlacementConfigured.Value);
+		if (input.AccountProvisioningPending.HasValue)
+		{
+			items = items.Where(x => x.Activation != null &&
+				(x.Activation.RequireStudentAccount || x.Activation.RequireGuardianAccount) &&
+				(input.AccountProvisioningPending.Value ? !x.Activation.StudentId.HasValue : x.Activation.StudentId.HasValue));
+		}
+		if (!string.IsNullOrWhiteSpace(input.RepairSearch))
+		{
+			var repairSearch = input.RepairSearch.Trim();
+			items = items.Where(x =>
+				(x.Activation?.RepairStep?.Contains(repairSearch, StringComparison.OrdinalIgnoreCase) ?? false) ||
+				(x.Activation?.RepairReason?.Contains(repairSearch, StringComparison.OrdinalIgnoreCase) ?? false));
+		}
 		if (input.AssignedToUserId.HasValue)
 		{
 			var delegatedOwners = await GetDelegatedOwnersAsync(academicYearId, queueType, input.AssignedToUserId.Value);

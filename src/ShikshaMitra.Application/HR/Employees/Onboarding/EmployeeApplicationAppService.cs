@@ -84,6 +84,8 @@ public class EmployeeApplicationAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.Add)]
 	public async Task<EmployeeApplicationInviteDto> CreateAsync(CreateEmployeeApplicationInviteDto input)
 	{
+		await EnsureInviteEmailAvailableAsync(input.Email);
+
 		var token = CreateRawToken();
 		var now = Clock.Now;
 		var publicPath = CreatePublicPath(token);
@@ -106,6 +108,38 @@ public class EmployeeApplicationAppService(
 		application = await applicationRepository.InsertAsync(application, autoSave: true);
 		var emailResult = await invitationEmailService.SendInvitationAsync(application, publicPath);
 		return CreateInviteResponse(application, token, emailResult);
+	}
+
+	private async Task EnsureInviteEmailAvailableAsync(string email)
+	{
+		var normalizedEmail = email.Trim().ToLowerInvariant();
+		var employeeQuery = await employeeRepository.GetQueryableAsync();
+		if (await AsyncExecuter.AnyAsync(employeeQuery.Where(x => x.Email != null && x.Email.ToLower() == normalizedEmail)))
+		{
+			throw new BusinessException(
+					HRErrorCodes.EmployeeApplicationEmailAlreadyInUse,
+					"An employee or open onboarding application already uses this email.")
+				.WithData("field", nameof(CreateEmployeeApplicationInviteDto.Email));
+		}
+
+		var applicationQuery = await applicationRepository.GetQueryableAsync();
+		var terminalStatuses = new[]
+		{
+			EmployeeApplicationStatus.Finalized,
+			EmployeeApplicationStatus.Rejected,
+			EmployeeApplicationStatus.Withdrawn
+		};
+		var hasOpenApplication = await AsyncExecuter.AnyAsync(applicationQuery.Where(x =>
+			x.Email != null &&
+			x.Email.ToLower() == normalizedEmail &&
+			!terminalStatuses.Contains(x.Status)));
+		if (hasOpenApplication)
+		{
+			throw new BusinessException(
+					HRErrorCodes.EmployeeApplicationEmailAlreadyInUse,
+					"An employee or open onboarding application already uses this email.")
+				.WithData("field", nameof(CreateEmployeeApplicationInviteDto.Email));
+		}
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.View)]

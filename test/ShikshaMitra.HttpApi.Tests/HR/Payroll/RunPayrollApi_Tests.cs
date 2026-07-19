@@ -497,6 +497,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			item.PresentDays.ShouldBeGreaterThanOrEqualTo(1);
 			item.PayableDays.ShouldBeGreaterThan(0);
 			overtimeLine.Amount.ShouldBe((double)expectedOvertime);
+			overtimeLine.Description.ShouldNotBeNull();
 			overtimeLine.Description.ShouldContain("90");
 			item.GrossSalary.ShouldBe((double)expectedGross);
 			item.NetPay.ShouldBe((double)expectedGross);
@@ -614,6 +615,59 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			await RestoreAttendancePolicyLateDeductionAsync(policySnapshot);
 		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_And_Payslip_Should_Apply_Assigned_Pf_Rule()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		const string month = "2026-06";
+		const string slipMonth = "JUNE-2026";
+		const decimal monthlyGross = 30000m;
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"PayrollPfRule{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+		var pfRule = await PayrollTestHelper.CreatePfRuleAsync(Client, "PayrollPFRule");
+		await EnsureActiveDefaultLeavePolicyAsync(new DateTime(2026, 6, 1));
+		await AssignSalaryStructureAsync(
+			employee.Id,
+			"PayrollPfRule",
+			earningAmount: monthlyGross,
+			deductionAmount: 0m,
+			useMasterComponents: false,
+			pfRuleId: pfRule.Id);
+		await MarkAttendanceAsync(employee.Id, "10-06-2026");
+
+		var preview = await GetPayrollPreviewAsync(month, forceRefresh: true);
+		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
+		var pfDeduction = item.DeductionComponents.Single(x =>
+			x.Name.StartsWith("Provident Fund -", StringComparison.OrdinalIgnoreCase));
+
+		pfDeduction.Amount.ShouldBeGreaterThan(0d);
+		pfDeduction.Description.ShouldNotBeNull();
+		pfDeduction.Description.ShouldContain("12");
+		item.TotalDeduction.ShouldBe(pfDeduction.Amount);
+		item.NetPay.ShouldBe(item.GrossSalary - pfDeduction.Amount);
+
+		await ReviewAndLockPayrollAsync(employee.Id, month);
+
+		var lockedRegister = await GetPayrollPreviewAsync(month, forceRefresh: false);
+		var lockedItem = lockedRegister.Items.Single(x => x.EmployeeId == employee.Id);
+		lockedItem.IsLocked.ShouldBeTrue();
+		lockedItem.DeductionComponents.ShouldContain(x =>
+			x.Name == pfDeduction.Name &&
+			x.Amount == pfDeduction.Amount);
+
+		var salarySlip = await GetSalarySlipResponseAsync(employee.Id, slipMonth);
+		salarySlip.Deductions.ShouldContain(x =>
+			x.Name == pfDeduction.Name &&
+			x.Amount == pfDeduction.Amount);
+		salarySlip.TotalDeduction.ShouldBe(pfDeduction.Amount);
+		salarySlip.NetSalary.ShouldBe(item.NetPay);
+		salarySlip.NetPay.ShouldBe(item.NetPay);
 	}
 
 	[Fact]
@@ -1716,7 +1770,8 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		string suffix,
 		decimal earningAmount = 25000m,
 		decimal deductionAmount = 1000m,
-		bool useMasterComponents = true)
+		bool useMasterComponents = true,
+		Guid? pfRuleId = null)
 	{
 		var detailsResponse = await Client.PutAsJsonAsync(
 			$"/api/employees/{employeeId}/payroll",
@@ -1732,6 +1787,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				},
 				SalaryDetails = new SalaryDetailsContract
 				{
+					PfRuleId = pfRuleId,
 					TotalWorkingHourPerMonth = 160m,
 					PunchId = suffix.Length > 20 ? suffix[..20] : suffix
 				}

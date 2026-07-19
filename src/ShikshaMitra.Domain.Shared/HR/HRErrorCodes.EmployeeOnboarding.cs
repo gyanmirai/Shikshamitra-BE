@@ -10,4 +10,5 @@ public static partial class HRErrorCodes
 	public const string EmployeeApplicationInvalidStatusTransition = "HR:Employee:010406";
 	public const string EmployeeApplicationInvalidUpload = "HR:Employee:010407";
 	public const string EmployeeApplicationCannotDeleteFinalized = "HR:Employee:010408";
+	public const string EmployeeApplicationEmailAlreadyInUse = "HR:Employee:010409";
 }

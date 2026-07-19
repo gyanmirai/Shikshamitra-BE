@@ -11,8 +11,9 @@ using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicYears;
-using Shouldly;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Shouldly;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -3889,6 +3890,49 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
+	public async Task PolicyResolver_Should_Select_Employee_Assignment_Over_Default_Package()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var assignmentRepository = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var employeePayroll = await _payrollPolicies.CreateAsync(new CreateUpdatePayrollPolicyDto
+		{
+			AcademicYearId = context.AcademicYearId,
+			WorkCalendarPolicyId = context.WorkCalendar.Id,
+			Name = $"Employee Package Payroll {Guid.NewGuid():N}",
+			Status = "active",
+			IsDefault = false,
+			DayCalculationType = "total-month-days",
+			SaturdayWorkPolicy = "full-day"
+		});
+		var effectiveDate = new DateTime(2026, 5, 15);
+
+		var before = await ResolvePolicyIdsAsync(employee.Id, effectiveDate, context.AcademicYearId);
+		before.PayrollPolicyId.ShouldBe(context.PayrollPolicy.Id);
+
+		await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			context.AcademicYearId,
+			HrPolicyAssignmentTargetType.Employee,
+			employee.Id.ToString("D").ToLowerInvariant(),
+			employee.FullName,
+			context.AttendancePolicy.Id,
+			employeePayroll.Id,
+			context.LeavePolicy.Id,
+			new DateTime(2026, 4, 1),
+			null,
+			true,
+			priority: 100,
+			assignmentReason: "Policy package resolution regression"), autoSave: true);
+
+		var after = await ResolvePolicyIdsAsync(employee.Id, effectiveDate, context.AcademicYearId);
+		after.PayrollPolicyId.ShouldBe(employeePayroll.Id);
+		after.AttendancePolicyId.ShouldBe(context.AttendancePolicy.Id);
+		after.LeavePolicyId.ShouldBe(context.LeavePolicy.Id);
+	}
+
+	[Fact]
 	public async Task EmployeeOverride_Upsert_Should_Move_Selected_Assignment_To_New_Range()
 	{
 		var context = await CreatePolicyContextAsync();
@@ -5541,6 +5585,24 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		return calendar;
 	}
 
+	private async Task<ResolvedPolicyIds> ResolvePolicyIdsAsync(
+		Guid employeeId,
+		DateTime effectiveDate,
+		Guid academicYearId)
+	{
+		using var scope = ServiceProvider.CreateScope();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		using var uow = uowManager.Begin(requiresNew: true);
+		var resolver = scope.ServiceProvider.GetRequiredService<HrPolicyResolver>();
+		var resolved = await resolver.ResolveAsync(employeeId, effectiveDate, academicYearId);
+		await uow.CompleteAsync();
+
+		return new ResolvedPolicyIds(
+			resolved.PayrollPolicy.Id,
+			resolved.AttendancePolicy.Id,
+			resolved.LeavePolicy?.Id);
+	}
+
 	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync(Guid? roleId = null)
 	{
 		var resolvedRoleId = roleId ?? await EnsureRoleExistsAsync();
@@ -5561,6 +5623,11 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			ShiftId = shiftId
 		});
 	}
+
+	private sealed record ResolvedPolicyIds(
+		Guid PayrollPolicyId,
+		Guid AttendancePolicyId,
+		Guid? LeavePolicyId);
 
 	private string UniqueMobileNo()
 	{

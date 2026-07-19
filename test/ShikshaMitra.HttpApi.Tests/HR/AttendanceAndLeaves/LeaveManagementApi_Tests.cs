@@ -12,6 +12,7 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.HR;
@@ -252,6 +253,45 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		detail.ShouldNotBeNull();
 		detail.AttachmentUrl.ShouldNotBeNullOrWhiteSpace();
 	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Admin_Should_Create_Auto_Approved_Leave_When_Resolved_Rule_Does_Not_Require_Approval()
+	{
+		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
+		var leaveDate = FirstNonSunday(startDate);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"AutoApproveLeave{Guid.NewGuid():N}",
+			dateOfJoining: leaveDate.AddDays(-1));
+		var policy = await CreateLeavePolicyFixtureAsync("AutoApprove", unpaidRequiresApproval: false);
+		await AssignLeavePolicyOverrideAsync(employee.Id, policy.Id, leaveDate);
+
+		using var form = new MultipartFormDataContent();
+		form.Add(new StringContent(employee.Id.ToString()), "forEmployeeId");
+		form.Add(new StringContent("Unpaid"), "paidType");
+		form.Add(new StringContent(leaveDate.ToString("yyyy-MM-dd")), "startDate");
+		form.Add(new StringContent(leaveDate.ToString("yyyy-MM-dd")), "endDate");
+		form.Add(new StringContent("Auto-approval leave request"), "reason");
+
+		var response = await Client.PostAsync($"{BaseUrl}?academicYearId={AcademicYearId}", form);
+		var rawPayload = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.Created, rawPayload);
+		var created = JsonSerializer.Deserialize<LeaveRequestCreatedResponse>(rawPayload, JsonOptions);
+		created.ShouldNotBeNull();
+		created.Status.ShouldBe("APPROVED");
+
+		var detailResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}");
+		var detailPayload = await detailResponse.Content.ReadAsStringAsync();
+		detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK, detailPayload);
+		var detail = JsonSerializer.Deserialize<LeaveRequestDetailsResponse>(detailPayload, JsonOptions);
+		detail.ShouldNotBeNull();
+		detail.Status.ShouldBe("APPROVED");
+		detail.PaidType.ShouldBe("Unpaid");
+		detail.LeavePolicyId.ShouldBe(policy.Id);
+		detail.ApprovedLeaveUnits.ShouldBe(1m);
+	}
+
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Reject_Legacy_LeaveTypeId_Create_Payload()
@@ -588,7 +628,9 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	private async Task<LeavePolicyResponse> CreateLeavePolicyFixtureAsync(string marker)
+	private async Task<LeavePolicyResponse> CreateLeavePolicyFixtureAsync(
+		string marker,
+		bool unpaidRequiresApproval = true)
 	{
 		var (academicYearStart, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		var policyRequest = new LeavePolicyCreateRequest
@@ -617,7 +659,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 					LeaveCount = null,
 					CarryForward = false,
 					EncashmentAllowed = false,
-					RequiresApproval = true,
+					RequiresApproval = unpaidRequiresApproval,
 					AllowNegativeBalance = true
 				}
 			]
@@ -631,6 +673,49 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 			?? throw new InvalidOperationException("Failed to create leave policy.");
 
 		return policy;
+	}
+
+	private async Task AssignLeavePolicyOverrideAsync(Guid employeeId, Guid leavePolicyId, DateTime effectiveFrom)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<Volo.Abp.Uow.IUnitOfWorkManager>();
+		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var payrollPolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<PayrollPolicy, Guid>>();
+		var assignmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new Volo.Abp.Uow.AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var attendanceQuery = await attendancePolicyRepository.GetQueryableAsync();
+			var attendancePolicy = attendanceQuery.Single(x =>
+				x.AcademicYearId == AcademicYearId &&
+				x.Status == HrPolicyStatus.Active &&
+				x.IsDefault);
+			var payrollQuery = await payrollPolicyRepository.GetQueryableAsync();
+			var payrollPolicy = payrollQuery.Single(x =>
+				x.AcademicYearId == AcademicYearId &&
+				x.Status == HrPolicyStatus.Active &&
+				x.IsDefault);
+
+			await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+				Guid.NewGuid(),
+				tenantId,
+				AcademicYearId,
+				HrPolicyAssignmentTargetType.Employee,
+				employeeId.ToString("D"),
+				null,
+				attendancePolicy.Id,
+				payrollPolicy.Id,
+				leavePolicyId,
+				effectiveFrom.Date,
+				null,
+				true,
+				priority: 100,
+				assignmentReason: "Auto approval regression test"), autoSave: false);
+			await uow.CompleteAsync();
+		}
 	}
 
 	private async Task<Guid> SeedPendingLeaveRequestAsync(

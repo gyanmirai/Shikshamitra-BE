@@ -27,6 +27,7 @@ namespace ShikshaMitra.HR.Employees.Onboarding;
 public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private readonly IEmployeeApplicationAppService _applications;
+	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IRepository<EmployeeApplication, Guid> _applicationRepository;
 	private readonly FakeEmployeeOnboardingInvitationEmailService _emailService;
 	private readonly IRepository<HrPolicyAssignment, Guid> _assignmentRepository;
@@ -46,6 +47,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	public EmployeeApplicationAppService_Tests()
 	{
 		_applications = GetRequiredService<IEmployeeApplicationAppService>();
+		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_applicationRepository = GetRequiredService<IRepository<EmployeeApplication, Guid>>();
 		_emailService = GetRequiredService<FakeEmployeeOnboardingInvitationEmailService>();
 		_assignmentRepository = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
@@ -108,6 +110,37 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 
 		var persisted = await _applicationRepository.GetAsync(invite.Application.Id);
 		persisted.EncryptedToken.ShouldNotBeNullOrWhiteSpace();
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Duplicate_Email_For_Open_Application()
+	{
+		_emailService.Reset();
+		var email = $"onboarding.duplicate.open.{Guid.NewGuid():N}@test.com";
+		await CreateInviteAsync(email);
+
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
+			CreateInviteAsync(email.ToUpperInvariant()));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeApplicationEmailAlreadyInUse);
+		exception.Message.ShouldContain("already uses this email");
+		_emailService.Sent.Count.ShouldBe(1);
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Duplicate_Email_For_Existing_Employee()
+	{
+		_emailService.Reset();
+		var email = $"onboarding.duplicate.employee.{Guid.NewGuid():N}@test.com";
+		var personalInfo = await BuildPersonalInfoAsync();
+		personalInfo.Email = email;
+		await _personalInfoAppService.CreateAsync(personalInfo);
+
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
+			CreateInviteAsync(email));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeApplicationEmailAlreadyInUse);
+		exception.Message.ShouldContain("already uses this email");
 	}
 
 	[Fact]

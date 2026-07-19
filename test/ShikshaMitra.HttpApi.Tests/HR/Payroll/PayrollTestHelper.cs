@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -111,7 +112,7 @@ public static class PayrollTestHelper
 		var input = new CreateUpdateProvidentFundDto
 		{
 			Name = TestDataHelper.UniqueName(nameSuffix ?? "PFRule"),
-			Code = TestDataHelper.UniqueName("PF").Replace("_", "").ToUpperInvariant()[..12],
+			Code = BuildValidPfCode("PF"),
 			EmployeePercentage = 12m,
 			EmployerPercentage = 12m,
 		};
@@ -120,5 +121,21 @@ public static class PayrollTestHelper
 		response.EnsureSuccessStatusCode();
 		return await response.Content.ReadFromJsonAsync<PfRuleCreateResponseDto>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create PF rule");
+	}
+
+	private static string BuildValidPfCode(string prefix)
+	{
+		var raw = $"{prefix}_{Guid.NewGuid():N}".ToUpperInvariant();
+		var chars = raw.Select(c =>
+		{
+			if (char.IsLetter(c) || c == '_')
+			{
+				return c;
+			}
+
+			return (char)('A' + (c - '0'));
+		}).ToArray();
+
+		return new string(chars)[..20];
 	}
 }

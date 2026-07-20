@@ -209,7 +209,12 @@ public class RoomConflictService : DomainService
         // 5. Check institute setup class-room assignment against class shift timing.
         if (calAllowed && date.DayOfWeek != DayOfWeek.Sunday)
         {
-            var classOccupancy = await FindClassShiftOccupancyAsync(roomId, startTime, endTime);
+            var classOccupancy = await FindClassShiftOccupancyAsync(
+                roomId,
+                startTime,
+                endTime,
+                standardId,
+                divisionId);
             if (classOccupancy != null)
             {
                 var shiftName = string.IsNullOrWhiteSpace(classOccupancy.ShiftName)
@@ -287,7 +292,9 @@ public class RoomConflictService : DomainService
     private async Task<ClassShiftOccupancy?> FindClassShiftOccupancyAsync(
         Guid roomId,
         TimeSpan startTime,
-        TimeSpan endTime)
+        TimeSpan endTime,
+        Guid? currentStandardId,
+        Guid? currentDivisionId)
     {
         var room = await _roomRepository.GetAsync(roomId);
         var divisions = await _divisionRepository.GetListAsync(d => d.RoomNumber != null && d.RoomNumber != string.Empty);
@@ -306,6 +313,11 @@ public class RoomConflictService : DomainService
 
         foreach (var division in matchedDivisions.OrderBy(d => d.Name))
         {
+            if (division.StandardId == currentStandardId && division.Id == currentDivisionId)
+            {
+                continue;
+            }
+
             if (!standardsById.TryGetValue(division.StandardId, out var standard) || standard.Shift == null)
             {
                 continue;

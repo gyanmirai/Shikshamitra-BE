@@ -673,9 +673,15 @@ public class TimetableAppService(
         var startTime = input.StartTime;
         var endTime = input.EndTime;
 
-        var teacherIds = input.Subjects.Select(s => s.TeacherId).ToList();
-        await timetableManager.CheckTeacherConflictAsync(
-            input.StandardId, input.DivisionId, day, startTime, endTime, teacherIds);
+        var teacherIds = input.Subjects
+            .Where(s => s.TeacherId.HasValue)
+            .Select(s => s.TeacherId!.Value)
+            .ToList();
+        if (teacherIds.Count > 0)
+        {
+            await timetableManager.CheckTeacherConflictAsync(
+                input.StandardId, input.DivisionId, day, startTime, endTime, teacherIds);
+        }
 
         var timetable = await timetableRepository.FindByStandardAndDivisionAsync(
             input.StandardId, input.DivisionId)
@@ -701,9 +707,15 @@ public class TimetableAppService(
         var startTime = input.StartTime;
         var endTime = input.EndTime;
 
-        var roomIds = input.Subjects.Select(s => s.RoomId).ToList();
-        await timetableManager.CheckRoomConflictAsync(
-            input.StandardId, input.DivisionId, day, startTime, endTime, roomIds);
+        var roomIds = input.Subjects
+            .Where(s => s.RoomId.HasValue)
+            .Select(s => s.RoomId!.Value)
+            .ToList();
+        if (roomIds.Count > 0)
+        {
+            await timetableManager.CheckRoomConflictAsync(
+                input.StandardId, input.DivisionId, day, startTime, endTime, roomIds);
+        }
 
         var timetable = await timetableRepository.FindByStandardAndDivisionAsync(
             input.StandardId, input.DivisionId)
@@ -761,7 +773,6 @@ public class TimetableAppService(
 
         EnsureNoDuplicateTimetableSlots(periodSlots);
         EnsureNoDuplicateTeacherOrRoomInsideSlot(periodSlots);
-        EnsureEveryTeachingSubjectHasTeacherAndRoom(periodSlots);
         await EnsureNoTeacherOrRoomConflictsAsync(timetable, periodSlots);
         EnsureWeeklyLectureCountsMatch(timetable, periodSlots, weeklySlot);
     }
@@ -859,27 +870,6 @@ public class TimetableAppService(
                     .WithData("StartTime", slot.StartTime)
                     .WithData("EndTime", slot.EndTime);
             }
-        }
-    }
-
-    private static void EnsureEveryTeachingSubjectHasTeacherAndRoom(List<TimetableSlot> periodSlots)
-    {
-        var missingTeacher = periodSlots.FirstOrDefault(s => s.Subjects.Any(subject => !subject.TeacherId.HasValue));
-        if (missingTeacher != null)
-        {
-            throw new BusinessException("Academic:Timetable:TeacherRequiredBeforePublish")
-                .WithData("Day", missingTeacher.Day)
-                .WithData("StartTime", missingTeacher.StartTime)
-                .WithData("EndTime", missingTeacher.EndTime);
-        }
-
-        var missingRoom = periodSlots.FirstOrDefault(s => s.Subjects.Any(subject => !subject.RoomId.HasValue));
-        if (missingRoom != null)
-        {
-            throw new BusinessException("Academic:Timetable:RoomRequiredBeforePublish")
-                .WithData("Day", missingRoom.Day)
-                .WithData("StartTime", missingRoom.StartTime)
-                .WithData("EndTime", missingRoom.EndTime);
         }
     }
 

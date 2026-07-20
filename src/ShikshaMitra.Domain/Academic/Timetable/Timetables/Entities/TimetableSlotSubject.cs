@@ -34,12 +34,12 @@ public class TimetableSlotSubject : Entity<Guid>
     #endregion
 
     #region Methods
-    public void AssignTeacher(Guid teacherId)
+    public void AssignTeacher(Guid? teacherId)
     {
         TeacherId = teacherId;
     }
 
-    public void AssignRoom(Guid roomId)
+    public void AssignRoom(Guid? roomId)
     {
         RoomId = roomId;
     }

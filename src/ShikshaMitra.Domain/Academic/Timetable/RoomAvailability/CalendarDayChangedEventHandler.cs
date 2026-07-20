@@ -38,6 +38,7 @@ public class CalendarDayChangedEventHandler
     private async Task ProcessCalendarImpactAsync(AcademicCalendarDay day)
     {
         if (day.Status != CalendarDayStatus.Active) return;
+        if (!day.AutoScanImpacts) return;
         if (!CalendarDayBlockingRules.BlocksTimetable(day.DayType)) return;
 
         // Query active reservations overlapping the blocked date

@@ -76,7 +76,9 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 room.Id, 
                 input.Date, 
                 timeStart, 
-                timeEnd
+                timeEnd,
+                standardId: input.StandardId,
+                divisionId: input.DivisionId
             );
 
             var status = "available";

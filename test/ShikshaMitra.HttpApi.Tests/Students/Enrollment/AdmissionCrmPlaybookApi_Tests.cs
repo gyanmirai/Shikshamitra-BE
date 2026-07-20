@@ -21,6 +21,37 @@ public class AdmissionCrmPlaybookApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Create_Quick_Setup_And_Advanced_Setup_Playbooks()
+	{
+		var quick = CreateQuickSetupPlaybook();
+		var quickResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/playbooks",
+			quick,
+			JsonOptions);
+		quickResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await quickResponse.Content.ReadAsStringAsync());
+		var quickCreated = await quickResponse.Content.ReadFromJsonAsync<AdmissionCrmPlaybookDto>(JsonOptions);
+		quickCreated.ShouldNotBeNull();
+		quickCreated.Status.ShouldBe(AdmissionCrmPlaybookStatus.Draft);
+		quickCreated.IsFallback.ShouldBeTrue();
+		quickCreated.RegistrationPath.ShouldBe(AdmissionCrmRegistrationPath.ExamWaived);
+		quickCreated.ExamDefinitions.ShouldBeEmpty();
+
+		var advanced = CreateValidPlaybook(isFallback: false);
+		var advancedResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/playbooks",
+			advanced,
+			JsonOptions);
+		advancedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await advancedResponse.Content.ReadAsStringAsync());
+		var advancedCreated = await advancedResponse.Content.ReadFromJsonAsync<AdmissionCrmPlaybookDto>(JsonOptions);
+		advancedCreated.ShouldNotBeNull();
+		advancedCreated.Status.ShouldBe(AdmissionCrmPlaybookStatus.Draft);
+		advancedCreated.IsFallback.ShouldBeFalse();
+		advancedCreated.Applicability.Campus.ShouldBe(advanced.Applicability.Campus);
+		advancedCreated.ExamDefinitions.ShouldNotBeEmpty();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Publish_Resolve_And_Version_Playbook()
 	{
 		var input = CreateValidPlaybook(isFallback: false);
@@ -342,6 +373,47 @@ public class AdmissionCrmPlaybookApi_Tests : ShikshaMitraApiTestBase
 					SlotTemplateCode = "WEEKDAY-MORNING"
 				}
 			]
+		};
+	}
+
+	private static CreateAdmissionCrmPlaybookDto CreateQuickSetupPlaybook()
+	{
+		return new CreateAdmissionCrmPlaybookDto
+		{
+			Name = $"Quick setup {Guid.NewGuid():N}",
+			IsFallback = true,
+			RegistrationPath = AdmissionCrmRegistrationPath.ExamWaived,
+			Applicability = new AdmissionCrmPlaybookApplicabilityDto(),
+			Stages =
+			[
+				new AdmissionCrmPlaybookStageDto
+				{
+					Code = "APPLICATION_REVIEW",
+					DisplayName = "Application review",
+					ReportingMilestone = AdmissionInquiryStage.FollowUp,
+					Order = 10,
+					IsRequired = true,
+					IsParentVisible = true,
+					SlaHours = 24,
+					AllowedNextStageCodes = ["ADMISSION_READY"]
+				},
+				new AdmissionCrmPlaybookStageDto
+				{
+					Code = "ADMISSION_READY",
+					DisplayName = "Admission ready",
+					ReportingMilestone = AdmissionInquiryStage.Eligible,
+					Order = 20,
+					IsRequired = true,
+					IsParentVisible = true,
+					AllowedNextStageCodes = []
+				}
+			],
+			Rounds = [],
+			SeatPlans = [],
+			ExamDefinitions = [],
+			SlotTemplates = [],
+			AssignmentRules = [],
+			Notes = null
 		};
 	}
 }

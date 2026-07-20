@@ -92,6 +92,31 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	}
 
 	[UnitOfWork(IsDisabled = true)]
+	public async Task<AdmissionCrmBulkOperationResultDto> UploadExamResultsAsync(
+		Guid academicYearId,
+		AdmissionCrmBulkExamResultDto input)
+	{
+		await EnsureBatchAsync(academicYearId, input.ExamRecordIds, nameof(UploadExamResultsAsync));
+		ValidateBulkExamResult(input);
+		return await RunAsync(input.ExamRecordIds.Distinct().ToList(), x => x, async examRecordId =>
+		{
+			var exam = await _entranceExamRepository.GetAsync(examRecordId);
+			if (exam.AcademicYearId != academicYearId)
+				throw new BusinessException("AdmissionCrm:BulkAcademicYearMismatch");
+			var result = await _entranceExamService.UploadResultAsync(
+				examRecordId,
+				new UploadAdmissionCrmEntranceExamResultDto
+				{
+					TotalMarks = input.TotalMarks,
+					PassingMarks = input.PassingMarks,
+					ObtainedMarks = input.ObtainedMarks,
+					MeritRank = input.MeritRank
+				});
+			return result.Id.ToString();
+		});
+	}
+
+	[UnitOfWork(IsDisabled = true)]
 	public async Task<AdmissionCrmBulkOperationResultDto> ChangeStageAsync(Guid academicYearId, AdmissionCrmBulkChangeStageDto input)
 	{
 		await EnsureBatchAsync(academicYearId, input.LeadIds, nameof(ChangeStageAsync));
@@ -216,6 +241,16 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		var values = ids.Distinct().ToList();
 		if (values.Count == 0 || values.Count > MaximumBatchSize || values.Any(x => x == Guid.Empty))
 			throw new BusinessException("AdmissionCrm:InvalidBulkBatch").WithData("MaximumBatchSize", MaximumBatchSize);
+	}
+
+	private static void ValidateBulkExamResult(AdmissionCrmBulkExamResultDto input)
+	{
+		if (input.TotalMarks <= 0)
+			throw new BusinessException("AdmissionCrm:InvalidExamTotalMarks");
+		if (input.PassingMarks < 0 || input.PassingMarks > input.TotalMarks)
+			throw new BusinessException("AdmissionCrm:InvalidExamPassingMarks");
+		if (input.ObtainedMarks < 0 || input.ObtainedMarks > input.TotalMarks)
+			throw new BusinessException("AdmissionCrm:InvalidExamObtainedMarks");
 	}
 
 	private static async Task<AdmissionCrmBulkOperationResultDto> RunAsync<T>(

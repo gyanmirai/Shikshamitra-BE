@@ -21,6 +21,9 @@ public class AdmissionCrmBulkOperationsController(IAdmissionCrmBulkOperationsApp
 	[HttpPost("exams/attendance")]
 	public Task<AdmissionCrmBulkOperationResultDto> MarkExamAttendanceAsync(Guid academicYearId, [FromBody] AdmissionCrmBulkExamAttendanceDto input) => appService.MarkExamAttendanceAsync(academicYearId, input);
 
+	[HttpPost("exams/results")]
+	public Task<AdmissionCrmBulkOperationResultDto> UploadExamResultsAsync(Guid academicYearId, [FromBody] AdmissionCrmBulkExamResultDto input) => appService.UploadExamResultsAsync(academicYearId, input);
+
 	[HttpPost("stages")]
 	public Task<AdmissionCrmBulkOperationResultDto> ChangeStageAsync(Guid academicYearId, [FromBody] AdmissionCrmBulkChangeStageDto input) => appService.ChangeStageAsync(academicYearId, input);
 

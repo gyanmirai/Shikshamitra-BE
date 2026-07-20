@@ -15,9 +15,14 @@ public interface IAdmissionCrmConfigurationAppService : IApplicationService
 		Guid academicYearId,
 		UpdateAdmissionCrmCycleConfigurationDto input);
 	Task<PagedResultDto<AdmissionCrmPipelineStageDto>> GetPipelineStagesAsync(Guid academicYearId);
+	Task<AdmissionCrmPipelineStageDto> CreatePipelineStageAsync(
+		Guid academicYearId,
+		CreateAdmissionCrmPipelineStageDto input);
 	Task<AdmissionCrmPipelineStageDto> UpdatePipelineStageAsync(
 		Guid stageId,
 		UpdateAdmissionCrmPipelineStageDto input);
+	Task<AdmissionCrmCycleConfigurationDto> LockJourneyAsync(Guid academicYearId, AdmissionCrmJourneyLockDto input);
+	Task<AdmissionCrmCycleConfigurationDto> UnlockJourneyAsync(Guid academicYearId, AdmissionCrmJourneyLockDto input);
 	Task<AdmissionCrmFormTemplateDto> CreateFormTemplateAsync(
 		Guid academicYearId,
 		CreateAdmissionCrmFormTemplateDto input);

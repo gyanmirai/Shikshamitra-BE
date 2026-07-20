@@ -18,6 +18,12 @@ public class AdmissionCrmPipelineStageConfiguration : IEntityTypeConfiguration<A
 		builder.Property(x => x.SystemStage)
 			.HasConversion<int>()
 			.IsRequired();
+		builder.Property(x => x.StageKey)
+			.HasMaxLength(AdmissionCrmConsts.MaxPlaybookCodeLength)
+			.IsRequired();
+		builder.Property(x => x.BaseSystemStage)
+			.HasConversion<int>()
+			.IsRequired();
 		builder.Property(x => x.StageName)
 			.HasMaxLength(AdmissionCrmConsts.MaxStageNameLength)
 			.IsRequired();
@@ -28,9 +34,10 @@ public class AdmissionCrmPipelineStageConfiguration : IEntityTypeConfiguration<A
 		builder.Property(x => x.AllowedNextStagesJson)
 			.HasMaxLength(AdmissionCrmConsts.MaxPipelineAllowedNextStagesJsonLength);
 
-		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.SystemStage })
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.StageKey })
 			.IsUnique()
 			.HasFilter("\"IsDeleted\" = false");
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.SystemStage });
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.DisplayOrder });
 	}
 }

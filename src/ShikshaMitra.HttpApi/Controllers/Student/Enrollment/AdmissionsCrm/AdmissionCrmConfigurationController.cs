@@ -53,6 +53,15 @@ public class AdmissionCrmConfigurationController(
 		return await admissionCrmConfigurationAppService.GetPipelineStagesAsync(academicYearId);
 	}
 
+	[HttpPost("{academicYearId}/configuration/pipeline-stages")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmPipelineStageDto> CreatePipelineStageAsync(
+		[FromRoute] Guid academicYearId,
+		[FromBody] CreateAdmissionCrmPipelineStageDto input)
+	{
+		return await admissionCrmConfigurationAppService.CreatePipelineStageAsync(academicYearId, input);
+	}
+
 	[HttpPut("configuration/pipeline-stages/{stageId}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public async Task<AdmissionCrmPipelineStageDto> UpdatePipelineStageAsync(
@@ -60,6 +69,24 @@ public class AdmissionCrmConfigurationController(
 		[FromBody] UpdateAdmissionCrmPipelineStageDto input)
 	{
 		return await admissionCrmConfigurationAppService.UpdatePipelineStageAsync(stageId, input);
+	}
+
+	[HttpPost("{academicYearId}/configuration/journey/lock")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmCycleConfigurationDto> LockJourneyAsync(
+		[FromRoute] Guid academicYearId,
+		[FromBody] AdmissionCrmJourneyLockDto input)
+	{
+		return await admissionCrmConfigurationAppService.LockJourneyAsync(academicYearId, input);
+	}
+
+	[HttpPost("{academicYearId}/configuration/journey/unlock")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmCycleConfigurationDto> UnlockJourneyAsync(
+		[FromRoute] Guid academicYearId,
+		[FromBody] AdmissionCrmJourneyLockDto input)
+	{
+		return await admissionCrmConfigurationAppService.UnlockJourneyAsync(academicYearId, input);
 	}
 
 	[HttpPost("{academicYearId}/configuration/form-templates")]

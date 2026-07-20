@@ -20,6 +20,8 @@ public class AdmissionCrmCycleConfigurationConfiguration : IEntityTypeConfigurat
 			.IsRequired();
 		builder.Property(x => x.Notes)
 			.HasMaxLength(AdmissionCrmConsts.MaxNotesLength);
+		builder.Property(x => x.JourneyLockReason)
+			.HasMaxLength(AdmissionCrmConsts.MaxNotesLength);
 		builder.Property(x => x.MeritRankingMode)
 			.HasConversion<int>()
 			.IsRequired();

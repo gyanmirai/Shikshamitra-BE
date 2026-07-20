@@ -10,6 +10,8 @@ public class AdmissionCrmPipelineStage : FullAuditedAggregateRoot<Guid>, IMultiT
 	public Guid? TenantId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
 	public AdmissionInquiryStage SystemStage { get; private set; }
+	public string StageKey { get; private set; } = string.Empty;
+	public AdmissionInquiryStage BaseSystemStage { get; private set; }
 	public string StageName { get; private set; } = string.Empty;
 	public int DisplayOrder { get; private set; }
 	public bool IsEnabled { get; private set; }
@@ -40,6 +42,8 @@ public class AdmissionCrmPipelineStage : FullAuditedAggregateRoot<Guid>, IMultiT
 		TenantId = tenantId;
 		AcademicYearId = academicYearId;
 		SystemStage = systemStage;
+		StageKey = systemStage.ToString();
+		BaseSystemStage = systemStage;
 		IsSystem = isSystem;
 		IsEnabled = true;
 		Update(
@@ -50,6 +54,36 @@ public class AdmissionCrmPipelineStage : FullAuditedAggregateRoot<Guid>, IMultiT
 			slaTargetHours,
 			ownerResponsibility,
 			allowedNextStagesJson);
+	}
+
+	public static AdmissionCrmPipelineStage CreateCustom(
+		Guid id,
+		Guid? tenantId,
+		Guid academicYearId,
+		string stageKey,
+		AdmissionInquiryStage baseSystemStage,
+		string stageName,
+		int displayOrder,
+		string? colorHex = null,
+		int? slaTargetHours = null,
+		string? ownerResponsibility = null,
+		string? allowedNextStagesJson = null)
+	{
+		var stage = new AdmissionCrmPipelineStage(
+			id,
+			tenantId,
+			academicYearId,
+			baseSystemStage,
+			stageName,
+			displayOrder,
+			colorHex,
+			slaTargetHours,
+			ownerResponsibility,
+			allowedNextStagesJson,
+			isSystem: false);
+		stage.StageKey = NormalizeStageKey(stageKey);
+		stage.BaseSystemStage = baseSystemStage;
+		return stage;
 	}
 
 	public void Update(
@@ -84,6 +118,23 @@ public class AdmissionCrmPipelineStage : FullAuditedAggregateRoot<Guid>, IMultiT
 			allowedNextStagesJson,
 			nameof(allowedNextStagesJson),
 			AdmissionCrmConsts.MaxPipelineAllowedNextStagesJsonLength);
+	}
+
+	private static string NormalizeStageKey(string stageKey)
+	{
+		var normalized = Check.NotNullOrWhiteSpace(stageKey, nameof(stageKey), AdmissionCrmConsts.MaxPlaybookCodeLength)
+			.Trim()
+			.ToUpperInvariant();
+		foreach (var character in normalized)
+		{
+			if (!char.IsLetterOrDigit(character) && character != '-' && character != '_')
+			{
+				throw new BusinessException("AdmissionCrm:InvalidPipelineStageKey")
+					.WithData("StageKey", normalized);
+			}
+		}
+
+		return normalized;
 	}
 
 	private static string? NormalizeColorHex(string? colorHex)

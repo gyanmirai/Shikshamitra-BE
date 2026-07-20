@@ -237,6 +237,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 			$"Admissions {academicYearName}",
 			true,
 			false,
+			true,
 			30,
 			60,
 			24,

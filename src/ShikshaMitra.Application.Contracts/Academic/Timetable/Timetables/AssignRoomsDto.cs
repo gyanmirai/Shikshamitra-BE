@@ -19,5 +19,5 @@ public class AssignRoomsDto
 public class RoomAssignmentItemDto
 {
     public Guid SubjectId { get; set; }
-    public Guid RoomId { get; set; }
+    public Guid? RoomId { get; set; }
 }

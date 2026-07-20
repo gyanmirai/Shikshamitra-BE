@@ -19,5 +19,5 @@ public class AssignTeachersDto
 public class TeacherAssignmentItemDto
 {
     public Guid SubjectId { get; set; }
-    public Guid TeacherId { get; set; }
+    public Guid? TeacherId { get; set; }
 }

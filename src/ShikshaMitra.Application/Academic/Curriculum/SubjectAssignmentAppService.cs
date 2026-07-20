@@ -174,7 +174,8 @@ public class SubjectAssignmentAppService(
 		Guid classId,
 		int page,
 		int pageSize,
-		SubjectStatus? status = null
+		SubjectStatus? status = null,
+		bool includeArchived = false
 	)
 	{
 		var query = await assignmentRepository.WithDetailsAsync(a => a.Chapters, a => a.Teachers);
@@ -184,9 +185,9 @@ public class SubjectAssignmentAppService(
 		{
 			query = query.Where(a => a.Status == status.Value);
 		}
-		else
+		else if (!includeArchived)
 		{
-			query = query.Where(a => a.Status != SubjectStatus.Archived);
+			query = query.Where(a => a.Status == SubjectStatus.Published);
 		}
 
 		// Non-admin users only see subjects they are personally assigned to teach.
@@ -976,9 +977,18 @@ public class SubjectAssignmentAppService(
 	public async Task ArchiveAsync(Guid assignmentId)
 	{
 		var assignment = await assignmentRepository.GetAsync(assignmentId);
-		await EnsureAssignmentRemovalAllowedAsync(assignment);
-		assignment.ChangeStatus(SubjectStatus.Archived);
-		await assignmentRepository.UpdateAsync(assignment, autoSave: true);
+		var groupAssignments = assignment.ElectiveGroupId.HasValue
+			? await assignmentRepository.GetListAsync(a =>
+				a.ElectiveGroupId == assignment.ElectiveGroupId &&
+				a.StandardId == assignment.StandardId)
+			: new List<AssignedSubject> { assignment };
+
+		foreach (var groupAssignment in groupAssignments)
+		{
+			groupAssignment.ChangeStatus(SubjectStatus.Archived);
+		}
+
+		await assignmentRepository.UpdateManyAsync(groupAssignments, autoSave: true);
 	}
 
 	public async Task RestoreAsync(Guid assignmentId)

@@ -1,8 +1,10 @@
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Common.Files;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -12,7 +14,8 @@ namespace ShikshaMitra.Controllers.Academic.HomeworkAssignment;
 [Authorize]
 [Route("api/academic/homework-submissions")]
 public class HomeworkSubmissionController(
-    IStudentSubmissionAppService service
+    IStudentSubmissionAppService service,
+    IFileStorageAppService fileStorageAppService
 ) : AbpControllerBase
 {
     /// <summary>
@@ -24,24 +27,46 @@ public class HomeworkSubmissionController(
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
     [ProducesResponseType(409)]
+    [Consumes("multipart/form-data")]
+    [DisableRequestSizeLimit]
+    [RequestFormLimits(MultipartBodyLengthLimit = 104857600)]
     public async Task<IActionResult> UploadHomeworkSubmission(
         [FromForm] UploadHomeworkSubmissionDto input,
-        IFormFile? file
+        [FromForm] IFormFile? file
     )
     {
-        EnsureNoDirectFileUpload(file);
+        var uploadedFile = await ResolveUploadedFileAsync(input, file);
         var result = await service.UploadHomeworkSubmissionAsync(
             input,
-            RequireUploadedFileName(input.FileName),
-            input.OriginalFileName
+            uploadedFile.FileName,
+            uploadedFile.OriginalFileName
         );
         return StatusCode(201, result);
     }
 
-    private static void EnsureNoDirectFileUpload(IFormFile? file)
+    private async Task<(string FileName, string? OriginalFileName)> ResolveUploadedFileAsync(
+        UploadHomeworkSubmissionDto input,
+        IFormFile? file)
     {
-        if (file != null)
-            throw new UserFriendlyException("Upload files with /api/files first, then submit the returned file name.");
+        if (file == null)
+        {
+            return (RequireUploadedFileName(input.FileName), input.OriginalFileName);
+        }
+
+        if (file.Length == 0)
+        {
+            throw new UserFriendlyException("Uploaded file cannot be empty.");
+        }
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+
+        var fileName = await fileStorageAppService.UploadAsync(file.FileName, ms.ToArray());
+        var originalFileName = string.IsNullOrWhiteSpace(input.OriginalFileName)
+            ? file.FileName
+            : input.OriginalFileName;
+
+        return (fileName, originalFileName);
     }
 
     private static string RequireUploadedFileName(string fileName)

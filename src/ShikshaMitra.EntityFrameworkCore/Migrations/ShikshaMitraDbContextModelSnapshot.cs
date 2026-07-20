@@ -268,6 +268,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<bool>("AppliesToAll")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("AutoScanImpacts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("ChangeReason")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");

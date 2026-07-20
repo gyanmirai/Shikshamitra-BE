@@ -31,7 +31,6 @@ public class AssignTeachersDtoValidator : AbstractValidator<AssignTeachersDto>
         RuleForEach(x => x.Subjects).ChildRules(s =>
         {
             s.RuleFor(x => x.SubjectId).NotEmpty();
-            s.RuleFor(x => x.TeacherId).NotEmpty();
         });
     }
 }
@@ -52,7 +51,6 @@ public class AssignRoomsDtoValidator : AbstractValidator<AssignRoomsDto>
         RuleForEach(x => x.Subjects).ChildRules(s =>
         {
             s.RuleFor(x => x.SubjectId).NotEmpty();
-            s.RuleFor(x => x.RoomId).NotEmpty();
         });
     }
 }

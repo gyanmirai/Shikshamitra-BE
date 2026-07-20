@@ -59,6 +59,11 @@ public class EmployeeStatusAppService(
 				new DateTimeOffset(Clock.Now));
 		}
 
+		statusTransitionValidator.Validate(
+			employee.EmployeeStatusType,
+			input.EmployeeStatusType,
+			input.Remarks);
+
 		if (input.EmployeeStatusType == EmployeeStatusType.Active)
 		{
 			await EnsurePayrollStructureExistsAsync(employee.Id);
@@ -67,11 +72,6 @@ public class EmployeeStatusAppService(
 		{
 			await EnsureNoActiveDirectReportsAsync(employee.Id);
 		}
-
-		statusTransitionValidator.Validate(
-			employee.EmployeeStatusType,
-			input.EmployeeStatusType,
-			input.Remarks);
 
 		var previousStatus = employee.EmployeeStatusType;
 

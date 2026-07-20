@@ -34,6 +34,7 @@ public class AdmissionCrmBulkChangeStageDto
 	public IReadOnlyList<Guid> LeadIds { get; set; } = [];
 	public AdmissionInquiryStage Stage { get; set; }
 	public string Reason { get; set; } = string.Empty;
+	public bool OverrideProtectedStages { get; set; }
 }
 
 public class AdmissionCrmBulkArchiveDto

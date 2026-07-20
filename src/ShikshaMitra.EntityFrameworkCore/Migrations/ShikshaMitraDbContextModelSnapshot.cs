@@ -20241,6 +20241,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("ExamReadinessFields")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("EntranceExamRequired")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -20259,6 +20262,19 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
+
+                    b.Property<bool>("JourneyLocked")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("JourneyLockedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("JourneyLockedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("JourneyLockReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
@@ -22598,6 +22614,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<int>("BaseSystemStage")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ColorHex")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
@@ -22665,6 +22684,11 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<string>("StageKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int>("SystemStage")
                         .HasColumnType("integer");
 
@@ -22676,9 +22700,11 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "AcademicYearId", "DisplayOrder");
 
-                    b.HasIndex("TenantId", "AcademicYearId", "SystemStage")
+                    b.HasIndex("TenantId", "AcademicYearId", "StageKey")
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "SystemStage");
 
                     b.ToTable("AppAdmissionCrmPipelineStages", (string)null);
                 });

@@ -77,6 +77,10 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 	{
 		var lead = await GetLeadForCurrentTenantAsync(leadId, nameof(ScheduleAsync));
 		var cycleConfiguration = await GetCycleConfigurationOrDefaultAsync(lead.AcademicYearId);
+		if (cycleConfiguration?.EntranceExamRequired == false)
+		{
+			throw new BusinessException("AdmissionCrm:EntranceExamDisabled");
+		}
 		await EnsureRegistrationFormReadyAsync(
 			lead,
 			cycleConfiguration?.RegistrationFormRequiredBeforeExam == true);

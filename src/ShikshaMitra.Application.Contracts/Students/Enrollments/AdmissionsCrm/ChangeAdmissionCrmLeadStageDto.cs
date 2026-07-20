@@ -9,4 +9,6 @@ public class ChangeAdmissionCrmLeadStageDto
 	[Required]
 	[MaxLength(AdmissionCrmConsts.MaxNotesLength)]
 	public required string Reason { get; set; }
+
+	public bool OverrideWorkflowGuards { get; set; }
 }

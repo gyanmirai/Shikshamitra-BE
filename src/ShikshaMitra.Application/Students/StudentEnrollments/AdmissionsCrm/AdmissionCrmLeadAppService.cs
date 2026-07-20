@@ -470,7 +470,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			input.Reason,
 			nameof(input.Reason),
 			maxLength: AdmissionCrmConsts.MaxNotesLength);
-		if (lead.Stage is AdmissionInquiryStage.ExamScheduled
+		if (!input.OverrideWorkflowGuards && lead.Stage is AdmissionInquiryStage.ExamScheduled
 		    or AdmissionInquiryStage.ExamCompleted
 		    or AdmissionInquiryStage.Eligible
 		    or AdmissionInquiryStage.Waitlisted
@@ -481,7 +481,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 				.WithData("CurrentStage", lead.Stage);
 		}
 
-		if (input.Stage is AdmissionInquiryStage.ExamScheduled
+		if (!input.OverrideWorkflowGuards && input.Stage is AdmissionInquiryStage.ExamScheduled
 		    or AdmissionInquiryStage.ExamCompleted
 		    or AdmissionInquiryStage.Eligible
 		    or AdmissionInquiryStage.Waitlisted

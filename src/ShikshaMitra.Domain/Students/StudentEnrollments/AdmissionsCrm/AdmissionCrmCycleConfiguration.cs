@@ -25,6 +25,11 @@ public class AdmissionCrmCycleConfiguration : FullAuditedAggregateRoot<Guid>, IM
 	public string CycleName { get; private set; } = string.Empty;
 	public bool IsActive { get; private set; }
 	public bool RegistrationFormRequiredBeforeExam { get; private set; }
+	public bool EntranceExamRequired { get; private set; }
+	public bool JourneyLocked { get; private set; }
+	public DateTime? JourneyLockedAt { get; private set; }
+	public Guid? JourneyLockedByUserId { get; private set; }
+	public string? JourneyLockReason { get; private set; }
 	public int StaleAfterDays { get; private set; }
 	public int ArchiveAfterDays { get; private set; }
 	public int DefaultLeadSlaHours { get; private set; }
@@ -60,6 +65,7 @@ public class AdmissionCrmCycleConfiguration : FullAuditedAggregateRoot<Guid>, IM
 		string cycleName,
 		bool isActive,
 		bool registrationFormRequiredBeforeExam,
+		bool entranceExamRequired,
 		int staleAfterDays,
 		int archiveAfterDays,
 		int defaultLeadSlaHours,
@@ -78,6 +84,7 @@ public class AdmissionCrmCycleConfiguration : FullAuditedAggregateRoot<Guid>, IM
 		SetCycleName(cycleName);
 		IsActive = isActive;
 		RegistrationFormRequiredBeforeExam = registrationFormRequiredBeforeExam;
+		EntranceExamRequired = entranceExamRequired;
 		SetStaleArchiveDays(staleAfterDays, archiveAfterDays);
 		SetDefaultLeadSlaHours(defaultLeadSlaHours);
 		SetActivationCancellationWindowDays(activationCancellationWindowDays);
@@ -101,6 +108,7 @@ public class AdmissionCrmCycleConfiguration : FullAuditedAggregateRoot<Guid>, IM
 			cycleName,
 			source.IsActive,
 			source.RegistrationFormRequiredBeforeExam,
+			source.EntranceExamRequired,
 			source.StaleAfterDays,
 			source.ArchiveAfterDays,
 			source.DefaultLeadSlaHours,
@@ -122,6 +130,11 @@ public class AdmissionCrmCycleConfiguration : FullAuditedAggregateRoot<Guid>, IM
 		SetCycleName(cycleName);
 		IsActive = true;
 		RegistrationFormRequiredBeforeExam = false;
+		EntranceExamRequired = true;
+		JourneyLocked = false;
+		JourneyLockedAt = null;
+		JourneyLockedByUserId = null;
+		JourneyLockReason = null;
 		StaleAfterDays = 30;
 		ArchiveAfterDays = 60;
 		DefaultLeadSlaHours = 24;
@@ -135,6 +148,22 @@ public class AdmissionCrmCycleConfiguration : FullAuditedAggregateRoot<Guid>, IM
 		ApplicantChecklistJson = "[]";
 		ChannelSettingsJson = "[]";
 		SlaPolicyJson = "{\"timeZoneId\":\"Asia/Kolkata\",\"workingDays\":[1,2,3,4,5,6],\"workingDayStartHour\":8,\"workingDayEndHour\":17,\"holidays\":[],\"escalationAfterHours\":24}";
+	}
+
+	public void LockJourney(Guid? lockedByUserId, DateTime lockedAt, string? reason)
+	{
+		JourneyLocked = true;
+		JourneyLockedAt = lockedAt;
+		JourneyLockedByUserId = lockedByUserId;
+		JourneyLockReason = NormalizeOptional(reason, nameof(reason), AdmissionCrmConsts.MaxNotesLength);
+	}
+
+	public void UnlockJourney()
+	{
+		JourneyLocked = false;
+		JourneyLockedAt = null;
+		JourneyLockedByUserId = null;
+		JourneyLockReason = null;
 	}
 
 	private void SetCycleName(string cycleName)

@@ -363,10 +363,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			query = query.Where(x => x.LastActivityTime < input.LastActivityUntil.Value.AddDays(1));
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		var leads = await AsyncExecuter.ToListAsync(
-			ApplyLeadSorting(query, input.Sorting)
-				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount));
+		var leads = await GetSortedLeadPageAsync(query, input);
 		var duplicatesByLeadId = await FindDuplicatesForLeadsAsync(academicYearId, leads);
 
 		return new PagedResultDto<AdmissionCrmLeadDto>(
@@ -2269,6 +2266,52 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 				? query.OrderByDescending(x => x.LastActivityTime)
 				: query.OrderBy(x => x.LastActivityTime),
 			_ => query.OrderByDescending(x => x.LastActivityTime).ThenBy(x => x.Id)
+		};
+	}
+
+	private async Task<List<AdmissionInquiryLead>> GetSortedLeadPageAsync(
+		IQueryable<AdmissionInquiryLead> query,
+		GetAdmissionCrmLeadListInput input)
+	{
+		try
+		{
+			return await AsyncExecuter.ToListAsync(
+				ApplyLeadSorting(query, input.Sorting)
+					.Skip(input.SkipCount)
+					.Take(input.MaxResultCount));
+		}
+		catch (NotSupportedException ex) when (IsDateTimeOffsetOrderingNotSupported(ex) && UsesLastActivitySorting(input.Sorting))
+		{
+			var leads = await AsyncExecuter.ToListAsync(query);
+			return ApplyLeadSortingInMemory(leads, input.Sorting)
+				.Skip(input.SkipCount)
+				.Take(input.MaxResultCount)
+				.ToList();
+		}
+	}
+
+	private static bool UsesLastActivitySorting(string? sorting)
+	{
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return string.IsNullOrWhiteSpace(field) || field == "lastactivitytime";
+	}
+
+	private static bool IsDateTimeOffsetOrderingNotSupported(NotSupportedException ex) =>
+		ex.Message.Contains("DateTimeOffset", StringComparison.OrdinalIgnoreCase) &&
+		ex.Message.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase);
+
+	private static IOrderedEnumerable<AdmissionInquiryLead> ApplyLeadSortingInMemory(
+		IEnumerable<AdmissionInquiryLead> leads,
+		string? sorting)
+	{
+		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return field switch
+		{
+			"lastactivitytime" => descending
+				? leads.OrderByDescending(x => x.LastActivityTime).ThenBy(x => x.Id)
+				: leads.OrderBy(x => x.LastActivityTime).ThenBy(x => x.Id),
+			_ => leads.OrderByDescending(x => x.LastActivityTime).ThenBy(x => x.Id)
 		};
 	}
 

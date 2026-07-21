@@ -35,6 +35,11 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 	{
 		var unique = Guid.NewGuid().ToString("N")[..8];
 		var templateInput = CreateTemplateInput("Primary registration " + unique);
+		templateInput.IsFallback = false;
+		templateInput.Applicability = new AdmissionCrmPlaybookApplicabilityDto
+		{
+			Campus = "Workflow campus " + unique
+		};
 		var createTemplateResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/registration-templates",
 			templateInput,

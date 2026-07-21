@@ -59,7 +59,19 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.Sql(@"
 UPDATE ""AppAdmissionCrmPipelineStages""
-SET ""StageKey"" = ""SystemStage""::text,
+SET ""StageKey"" = CASE ""SystemStage""
+        WHEN 0 THEN 'NewInquiry'
+        WHEN 1 THEN 'FollowUp'
+        WHEN 2 THEN 'ExamReady'
+        WHEN 3 THEN 'ExamScheduled'
+        WHEN 4 THEN 'ExamCompleted'
+        WHEN 5 THEN 'Eligible'
+        WHEN 6 THEN 'Waitlisted'
+        WHEN 7 THEN 'Rejected'
+        WHEN 8 THEN 'Stale'
+        WHEN 9 THEN 'Archived'
+        ELSE ""SystemStage""::text
+    END,
     ""BaseSystemStage"" = ""SystemStage""
 WHERE ""StageKey"" = '';
 ");

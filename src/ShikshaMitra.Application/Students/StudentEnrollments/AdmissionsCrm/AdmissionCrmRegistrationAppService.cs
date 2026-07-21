@@ -305,6 +305,61 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		return ToApplicationDto(application);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm)]
+	public async Task<AdmissionCrmRegistrationApplicationDto> SaveStaffResponsesAsync(
+		Guid id,
+		SaveAdmissionCrmRegistrationResponsesDto input)
+	{
+		var application = await GetApplicationForTenantAsync(id, nameof(SaveStaffResponsesAsync));
+		var template = AdmissionCrmRegistrationResponseValidator.DeserializeTemplate(
+			application.TemplateSnapshotJson);
+		if (!template.AllowPartialSave)
+		{
+			throw new BusinessException("AdmissionCrm:RegistrationPartialSaveDisabled");
+		}
+		var completion = AdmissionCrmRegistrationResponseValidator.Validate(
+			application,
+			template,
+			input.Responses,
+			requireComplete: false,
+			allowStaffManagedFields: true);
+		application.Save(Serialize(input.Responses), completion, Clock.Now);
+		await _applicationRepository.UpdateAsync(application, autoSave: true);
+		await AddApplicationTimelineAsync(
+			application,
+			AdmissionCrmTimelineEventType.RegistrationSaved,
+			"Offline registration saved by staff",
+			$"Completion: {completion:0.##}%.");
+		return ToApplicationDto(application);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm)]
+	public async Task<AdmissionCrmRegistrationApplicationDto> SubmitStaffResponsesAsync(
+		Guid id,
+		SaveAdmissionCrmRegistrationResponsesDto input)
+	{
+		var application = await GetApplicationForTenantAsync(id, nameof(SubmitStaffResponsesAsync));
+		var template = AdmissionCrmRegistrationResponseValidator.DeserializeTemplate(
+			application.TemplateSnapshotJson);
+		AdmissionCrmRegistrationResponseValidator.Validate(
+			application,
+			template,
+			input.Responses,
+			requireComplete: true,
+			allowStaffManagedFields: true);
+		var isResubmission = application.Status == AdmissionCrmRegistrationStatus.ReturnedForCorrection;
+		application.Submit(Serialize(input.Responses), Clock.Now, isResubmission);
+		await _applicationRepository.UpdateAsync(application, autoSave: true);
+		await AddApplicationTimelineAsync(
+			application,
+			AdmissionCrmTimelineEventType.RegistrationSubmitted,
+			isResubmission
+				? "Offline registration corrections submitted by staff"
+				: "Offline registration submitted by staff",
+			"Entered from a paper form by an authorized staff member.");
+		return ToApplicationDto(application);
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.VerifyRegistration)]
 	public async Task<AdmissionCrmRegistrationApplicationDto> ReturnForCorrectionAsync(
 		Guid id,
@@ -676,7 +731,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 			["firstName"] = lead.FirstName, ["middleName"] = lead.MiddleName, ["lastName"] = lead.LastName,
 			["dateOfBirth"] = lead.DateOfBirth?.ToString("yyyy-MM-dd"), ["parentGuardianName"] = lead.ParentGuardianName,
 			["primaryContactNo"] = lead.PrimaryContactNo, ["email"] = lead.Email, ["desiredClassName"] = lead.DesiredClassName,
-			["campus"] = lead.CampusBranchName
+			["campus"] = lead.CampusBranchName, ["admissionRoute"] = lead.IntendedRouteType?.ToString()
 		};
 	}
 

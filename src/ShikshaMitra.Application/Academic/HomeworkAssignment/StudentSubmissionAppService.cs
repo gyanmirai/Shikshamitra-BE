@@ -39,12 +39,24 @@ public class StudentSubmissionAppService(
                 .WithData("Expected", SubmissionType.FileUpload)
                 .WithData("Actual", homework.SubmissionType);
 
-        var schedule = homework.DivisionSchedules.OrderBy(s => s.DueDate).FirstOrDefault();
-        var dueDate = schedule?.DueDate ?? DateTime.UtcNow.AddDays(7);
-        var divisionId = schedule?.DivisionId ?? Guid.Empty;
+        EnsureHomeworkOpenForSubmission(homework);
+        var student = await studentRepository.GetAsync(input.StudentId);
+        var divisionId = student.DivisionId
+            ?? throw new BusinessException("ShikshaMitra.Homework:StudentDivisionRequired")
+                .WithData("StudentId", input.StudentId);
+        var schedule = homework.DivisionSchedules.FirstOrDefault(s => s.DivisionId == divisionId);
+        if (homework.DivisionSchedules.Any() && schedule == null)
+        {
+            throw new BusinessException("ShikshaMitra.Homework:StudentNotInAssignedDivision")
+                .WithData("StudentId", input.StudentId)
+                .WithData("DivisionId", divisionId);
+        }
+
+        var dueDate = schedule?.DueDate ?? homework.DueDate ?? DateTime.UtcNow.AddDays(7);
 
         var submission = await submissionManager.CreateOrGetSubmissionAsync(
             input.HomeworkId, input.StudentId, divisionId, dueDate, CurrentTenant.Id);
+        EnsureStudentCanResubmit(submission);
 
         submission.SubmittedDocumentUrl = blobName;
         submission.OriginalFileName = originalFileName;
@@ -80,12 +92,20 @@ public class StudentSubmissionAppService(
                 .WithData("Expected", SubmissionType.FileUpload)
                 .WithData("Actual", assignment.SubmissionType);
 
-        var schedule = assignment.DivisionSchedules.OrderBy(s => s.DueDate).FirstOrDefault();
-        var dueDate = schedule?.DueDate ?? DateTime.UtcNow.AddDays(7);
-        var divisionId = schedule?.DivisionId ?? Guid.Empty;
+        EnsureAssignmentOpenForSubmission(assignment);
+        var student = await studentRepository.GetAsync(input.StudentId);
+        var divisionId = student.DivisionId
+            ?? throw new BusinessException("ShikshaMitra.Assignment:StudentDivisionRequired")
+                .WithData("StudentId", input.StudentId);
+        var schedule = assignment.DivisionSchedules.FirstOrDefault(s => s.DivisionId == divisionId)
+            ?? throw new BusinessException("ShikshaMitra.Assignment:StudentNotInAssignedDivision")
+                .WithData("StudentId", input.StudentId)
+                .WithData("DivisionId", divisionId);
+        var dueDate = schedule.DueDate;
 
         var submission = await submissionManager.CreateOrGetSubmissionForAssignmentAsync(
             input.AssignmentId, input.StudentId, divisionId, dueDate, CurrentTenant.Id);
+        EnsureStudentCanResubmit(submission);
 
         submission.SubmittedDocumentUrl = blobName;
         submission.OriginalFileName = originalFileName;
@@ -263,6 +283,49 @@ public class StudentSubmissionAppService(
             TotalPages = (int) Math.Ceiling(totalCount / (double) input.PageSize),
             Items = pagedItems
         };
+    }
+
+    private static void EnsureHomeworkOpenForSubmission(HomeworkAssignmentEntity homework)
+    {
+        var published = homework.Status == HomeworkStatus.Published || homework.IsPublished || homework.HasPublishedDivisions;
+        if (!published)
+        {
+            throw new BusinessException("ShikshaMitra.Homework:NotPublished");
+        }
+
+        if (homework.Status == HomeworkStatus.Closed)
+        {
+            throw new BusinessException("ShikshaMitra.Homework:Closed");
+        }
+    }
+
+    private static void EnsureAssignmentOpenForSubmission(AssignmentEntity assignment)
+    {
+        var published = assignment.Status == AssignmentStatus.Published || assignment.HasPublishedDivisions;
+        if (!published)
+        {
+            throw new BusinessException("ShikshaMitra.Assignment:NotPublished");
+        }
+
+        if (assignment.Status == AssignmentStatus.Closed)
+        {
+            throw new BusinessException("ShikshaMitra.Assignment:Closed");
+        }
+    }
+
+    private static void EnsureStudentCanResubmit(StudentSubmissionEntity submission)
+    {
+        if (submission.Status == SubmissionStatus.Reviewed)
+        {
+            throw new BusinessException("ShikshaMitra.Submission:ReviewedSubmissionLocked")
+                .WithData("SubmissionId", submission.Id);
+        }
+
+        if (submission.Status == SubmissionStatus.Excused)
+        {
+            throw new BusinessException("ShikshaMitra.Submission:ExcusedSubmissionLocked")
+                .WithData("SubmissionId", submission.Id);
+        }
     }
 }
 

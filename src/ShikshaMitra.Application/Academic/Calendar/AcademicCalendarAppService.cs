@@ -255,8 +255,20 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     public async Task<AcademicCalendarDayDto> CreateCalendarDayAsync(Guid calendarId, CreateCalendarDayDto input)
     {
         var calendar = await _calendarRepository.GetAsync(calendarId);
-        var inputDate = input.Date.DateTime;
-        await _calendarManager.ValidateDayRangeAsync(calendar, inputDate);
+        var startDate = input.Date.DateTime.Date;
+        var endDate = input.DayType == DayType.Vacation
+            ? (input.EndDate ?? input.Date).DateTime.Date
+            : startDate;
+
+        if (endDate < startDate)
+        {
+            throw new UserFriendlyException("Vacation end date cannot be before the start date.");
+        }
+
+        for (var date = startDate; date <= endDate; date = date.AddDays(1))
+        {
+            await _calendarManager.ValidateDayRangeAsync(calendar, date);
+        }
 
         // One row per targeted class; a single null entry means the marker applies to all
         var targetStandardIds = input.AppliesToAll
@@ -268,63 +280,79 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         // Division is only meaningful when the marker targets a single class
         var divisionId = !input.AppliesToAll && targetStandardIds.Count == 1 ? input.DivisionId : null;
 
-        AcademicCalendarDay? firstDay = null;
-        foreach (var standardId in targetStandardIds)
+        foreach (var date in EnumerateDates(startDate, endDate))
         {
-            // Check duplicates
-            var duplicate = await _calendarDayRepository.FirstOrDefaultAsync(d =>
-                d.AcademicCalendarId == calendarId && d.Date.Date == inputDate.Date &&
-                d.Status == CalendarDayStatus.Active &&
-                (d.AppliesToAll || input.AppliesToAll || d.StandardId == standardId));
-
-            if (duplicate != null)
+            foreach (var standardId in targetStandardIds)
             {
-                throw new UserFriendlyException($"A calendar day configuration already exists for {inputDate:yyyy-MM-dd}. Delete or update it instead.");
-            }
+                var duplicate = await _calendarDayRepository.FirstOrDefaultAsync(d =>
+                    d.AcademicCalendarId == calendarId && d.Date.Date == date.Date &&
+                    d.Status == CalendarDayStatus.Active &&
+                    (d.AppliesToAll || input.AppliesToAll || d.StandardId == standardId));
 
-            var dayId = GuidGenerator.Create();
-            var day = new AcademicCalendarDay(
-                dayId,
-                CurrentTenant.Id,
-                calendarId,
-                inputDate,
-                input.DayType,
-                input.Title,
-                input.Description,
-                input.AppliesToAll,
-                standardId,
-                divisionId,
-                input.HolidayCategory,
-                input.StartTime,
-                input.EndTime
-            );
-
-            await _calendarDayRepository.InsertAsync(day);
-            firstDay ??= day;
-
-            // Generate impact logs only when the calendar is already published (nothing to
-            // reschedule for a draft), but audit the change regardless of publish status.
-            if (calendar.Status == CalendarStatus.Published)
-            {
-                var impacts = await _calendarManager.ScanImpactsAsync(day);
-                foreach (var imp in impacts)
+                if (duplicate != null)
                 {
-                    await _impactLogRepository.InsertAsync(imp);
+                    throw new UserFriendlyException($"A calendar day configuration already exists for {date:yyyy-MM-dd}. Delete or update it instead.");
                 }
             }
+        }
 
-            await _auditWriter.WriteAsync(
-                calendarId,
-                CalendarAuditAction.DayAdded,
-                beforeJson: null,
-                afterJson: System.Text.Json.JsonSerializer.Serialize(day),
-                entityType: day.DayType.ToString(),
-                entityName: day.Title,
-                reason: input.ChangeReason,
-                academicCalendarDayId: day.Id);
+        AcademicCalendarDay? firstDay = null;
+        foreach (var date in EnumerateDates(startDate, endDate))
+        {
+            foreach (var standardId in targetStandardIds)
+            {
+                var dayId = GuidGenerator.Create();
+                var day = new AcademicCalendarDay(
+                    dayId,
+                    CurrentTenant.Id,
+                    calendarId,
+                    date,
+                    input.DayType,
+                    input.Title,
+                    input.Description,
+                    input.AppliesToAll,
+                    standardId,
+                    divisionId,
+                    input.HolidayCategory,
+                    input.StartTime,
+                    input.EndTime
+                );
+
+                await _calendarDayRepository.InsertAsync(day);
+                firstDay ??= day;
+
+                // Generate impact logs only when the calendar is already published (nothing to
+                // reschedule for a draft), but audit the change regardless of publish status.
+                if (calendar.Status == CalendarStatus.Published)
+                {
+                    var impacts = await _calendarManager.ScanImpactsAsync(day);
+                    foreach (var imp in impacts)
+                    {
+                        await _impactLogRepository.InsertAsync(imp);
+                    }
+                }
+
+                await _auditWriter.WriteAsync(
+                    calendarId,
+                    CalendarAuditAction.DayAdded,
+                    beforeJson: null,
+                    afterJson: System.Text.Json.JsonSerializer.Serialize(day),
+                    entityType: day.DayType.ToString(),
+                    entityName: day.Title,
+                    reason: input.ChangeReason,
+                    academicCalendarDayId: day.Id);
+            }
         }
 
         return ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(firstDay!);
+    }
+
+    private static IEnumerable<DateTime> EnumerateDates(DateTime startDate, DateTime endDate)
+    {
+        for (var date = startDate.Date; date <= endDate.Date; date = date.AddDays(1))
+        {
+            yield return date;
+        }
     }
 
     public async Task<List<AcademicCalendarDayDto>> CreateCalendarDaysBulkAsync(Guid calendarId, CreateCalendarDaysBulkDto input)
@@ -342,6 +370,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     {
         var day = await _calendarDayRepository.GetAsync(id);
         var oldVal = System.Text.Json.JsonSerializer.Serialize(day);
+        var calendar = await _calendarRepository.GetAsync(day.AcademicCalendarId);
+        var targetDate = input.Date.DateTime.Date;
+
+        await _calendarManager.ValidateDayRangeAsync(calendar, targetDate);
 
         // Sibling rows created together for a multi-class marker (same date, title, day type)
         var siblings = await _calendarDayRepository.GetListAsync(d =>
@@ -369,6 +401,41 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         // Division is only meaningful when the marker targets a single class
         var divisionId = !input.AppliesToAll && targetStandardIds.Count == 1 ? input.DivisionId : null;
 
+        var group = new List<AcademicCalendarDay> { day };
+        group.AddRange(siblings);
+        var groupIds = group.Select(x => x.Id).ToHashSet();
+
+        if (input.AppliesToAll)
+        {
+            var duplicate = await _calendarDayRepository.FirstOrDefaultAsync(d =>
+                d.AcademicCalendarId == day.AcademicCalendarId &&
+                d.Date.Date == targetDate &&
+                d.Status == CalendarDayStatus.Active &&
+                !groupIds.Contains(d.Id));
+
+            if (duplicate != null)
+            {
+                throw new UserFriendlyException($"A calendar day configuration already exists for {targetDate:yyyy-MM-dd}. Delete or update it instead.");
+            }
+        }
+        else
+        {
+            foreach (var standardId in targetStandardIds)
+            {
+                var duplicate = await _calendarDayRepository.FirstOrDefaultAsync(d =>
+                    d.AcademicCalendarId == day.AcademicCalendarId &&
+                    d.Date.Date == targetDate &&
+                    d.Status == CalendarDayStatus.Active &&
+                    !groupIds.Contains(d.Id) &&
+                    (d.AppliesToAll || d.StandardId == standardId));
+
+                if (duplicate != null)
+                {
+                    throw new UserFriendlyException($"A calendar day configuration already exists for {targetDate:yyyy-MM-dd}. Delete or update it instead.");
+                }
+            }
+        }
+
         AcademicCalendarDay? resultDay = null;
 
         if (input.AppliesToAll)
@@ -379,6 +446,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             }
 
             day.Update(
+                targetDate,
                 input.DayType,
                 input.Title,
                 input.Description,
@@ -397,9 +465,6 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         {
             // Reconcile marker rows against the requested classes: keep rows whose class
             // is still selected, reassign or delete the rest, and add rows for new classes.
-            var group = new List<AcademicCalendarDay> { day };
-            group.AddRange(siblings);
-
             var remaining = new List<Guid>(targetStandardIds);
             var unmatched = new List<AcademicCalendarDay>();
             foreach (var row in group)
@@ -407,6 +472,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 if (row.StandardId.HasValue && remaining.Remove(row.StandardId.Value))
                 {
                     row.Update(
+                        targetDate,
                         input.DayType,
                         input.Title,
                         input.Description,
@@ -434,6 +500,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     var reassignedStandardId = remaining[0];
                     remaining.RemoveAt(0);
                     row.Update(
+                        targetDate,
                         input.DayType,
                         input.Title,
                         input.Description,
@@ -460,7 +527,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     GuidGenerator.Create(),
                     CurrentTenant.Id,
                     day.AcademicCalendarId,
-                    day.Date,
+                    targetDate,
                     input.DayType,
                     input.Title,
                     input.Description,
@@ -727,6 +794,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 AcademicCalendarId = x.day.AcademicCalendarId,
                 CalendarName = x.calendar.Name,
                 Date = x.day.Date,
+                StartTime = x.day.StartTime,
+                EndTime = x.day.EndTime,
                 Title = x.day.Title,
                 Description = x.day.Description,
                 AppliesToAll = x.day.AppliesToAll,
@@ -734,6 +803,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 DivisionId = x.day.DivisionId,
                 Status = x.day.Status,
                 ChangeReason = x.day.ChangeReason,
+                AutoScanImpacts = x.day.AutoScanImpacts,
                 ImpactCount = dayImpacts.Count,
                 PendingImpactCount = dayImpacts.Count(i =>
                     i.Status == CalendarImpactStatus.Pending ||
@@ -747,11 +817,40 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     [AllowAnonymous]
     public async Task<List<AcademicCalendarDayDto>> CreateEmergencyClosureAsync(CreateEmergencyClosureDto input)
     {
-        var inputDate = input.Date.DateTime;
-        var calendar = await ResolveCalendarForEmergencyClosureAsync(inputDate);
+        var startDate = (input.StartDate ?? input.Date).DateTime.Date;
+        var endDate = (input.EndDate ?? input.StartDate ?? input.Date).DateTime.Date;
+
+        if (endDate < startDate)
+        {
+            throw new UserFriendlyException("Closure end date cannot be before the start date.");
+        }
+
+        if (input.StartTime.HasValue != input.EndTime.HasValue)
+        {
+            throw new UserFriendlyException("Both start time and end time are required for a partial-day closure.");
+        }
+
+        if (input.StartTime.HasValue && input.EndTime.HasValue && input.EndTime <= input.StartTime)
+        {
+            throw new UserFriendlyException("Closure end time must be after the start time.");
+        }
 
         var results = new List<AcademicCalendarDayDto>();
+        for (var closureDate = startDate; closureDate <= endDate; closureDate = closureDate.AddDays(1))
+        {
+            var calendar = await ResolveCalendarForEmergencyClosureAsync(closureDate);
+            await CreateEmergencyClosureForDateAsync(input, closureDate, calendar, results);
+        }
 
+        return results;
+    }
+
+    private async Task CreateEmergencyClosureForDateAsync(
+        CreateEmergencyClosureDto input,
+        DateTime inputDate,
+        AcademicCalendar calendar,
+        List<AcademicCalendarDayDto> results)
+    {
         // Create Day records for each standard/division if specific standards are requested
         if (!input.AppliesToAll && input.StandardIds != null && input.StandardIds.Count > 0)
         {
@@ -769,7 +868,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     appliesToAll: false,
                     standardId: stdId,
                     divisionId: null,
-                    holidayCategory: HolidayCategory.WeatherEmergency
+                    holidayCategory: HolidayCategory.WeatherEmergency,
+                    startTime: input.StartTime,
+                    endTime: input.EndTime,
+                    autoScanImpacts: input.AutoScanImpacts
                 );
                 await _calendarDayRepository.InsertAsync(day);
                 results.Add(ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(day));
@@ -810,7 +912,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 appliesToAll: true,
                 standardId: null,
                 divisionId: null,
-                holidayCategory: HolidayCategory.WeatherEmergency
+                holidayCategory: HolidayCategory.WeatherEmergency,
+                startTime: input.StartTime,
+                endTime: input.EndTime,
+                autoScanImpacts: input.AutoScanImpacts
             );
             await _calendarDayRepository.InsertAsync(day);
             results.Add(ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(day));
@@ -836,8 +941,6 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 academicCalendarDayId: day.Id,
                 module: "EmergencyClosure");
         }
-
-        return results;
     }
 
     private async Task<AcademicCalendar> ResolveCalendarForEmergencyClosureAsync(DateTime inputDate)

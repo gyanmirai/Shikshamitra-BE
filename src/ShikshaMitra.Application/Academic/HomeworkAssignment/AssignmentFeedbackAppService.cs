@@ -102,8 +102,14 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			filter.DivisionId
 		);
 
-		// Create a dictionary for quick lookup
-		var submissionDict = submissions.ToDictionary(s => s.StudentId);
+		// Use the latest row if legacy data already contains duplicate submissions.
+		var submissionDict = submissions
+			.GroupBy(s => s.StudentId)
+			.ToDictionary(
+				g => g.Key,
+				g => g.OrderByDescending(s => s.SubmissionDate ?? DateTimeOffset.MinValue)
+					.ThenByDescending(s => s.CreationTime)
+					.First());
 
 		// 5. Get assignment type name
 		var assignmentTypeName = assignment.AssignmentType?.Name ?? "Assignment";
@@ -193,12 +199,17 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			return "Reviewed";
 		}
 
-		if (marks.HasValue || !string.IsNullOrWhiteSpace(feedback))
+		if (status == SubmissionStatus.NeedsReview)
 		{
-			return "Draft";
+			return "Needs Review";
 		}
 
-		return status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview
+		if (marks.HasValue || !string.IsNullOrWhiteSpace(feedback))
+		{
+			return "Reviewed";
+		}
+
+		return status is SubmissionStatus.Submitted or SubmissionStatus.Late
 			? "Needs Review"
 			: "Not Started";
 	}
@@ -242,6 +253,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			throw new BusinessException("ShikshaMitra.Assignment:NotFound")
 				.WithData("AssignmentId", assignmentId);
 		}
+		EnsureAssignmentOpenForEvaluation(assignment);
 
 		// 2. Validate student exists and get their division
 		var student = await _studentRepository.GetAsync(studentId);
@@ -259,6 +271,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 
 		// 4. Validate feedback data
 		_submissionManager.ValidateFeedback(input.Marks, input.TotalMarks);
+		EnsureFeedbackStatusAllowed(input);
 
 		// 5. Get or create submission
 		var submission = await _submissionRepository.GetSubmissionByStudentAndAssignmentAsync(
@@ -268,18 +281,12 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 
 		if (submission == null)
 		{
-			// Create new submission
-			submission = await _submissionManager.CreateOrGetSubmissionForAssignmentAsync(
-				assignmentId,
-				studentId,
-				student.DivisionId.Value,
-				divisionSchedule.DueDate,
-				CurrentTenant.Id
-			);
+			throw new BusinessException("ShikshaMitra.Submission:CannotEvaluateMissingSubmission")
+				.WithData("StudentId", studentId)
+				.WithData("AssignmentId", assignmentId);
 		}
 
-		// Set SubmissionDate if not yet recorded (InPersonSubmission / OnlineText paths)
-		submission.SubmissionDate ??= DateTimeOffset.UtcNow;
+		EnsureSubmissionCanBeEvaluated(submission);
 
 		// 6. Update feedback
 		submission.UpdateFeedback(
@@ -333,6 +340,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			throw new BusinessException("ShikshaMitra.Assignment:NotFound")
 				.WithData("AssignmentId", assignmentId);
 		}
+		EnsureAssignmentOpenForEvaluation(assignment);
 
 		// 2. Validate student exists
 		var student = await _studentRepository.GetAsync(studentId);
@@ -355,18 +363,12 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 
 		if (submission == null)
 		{
-			// Create new submission
-			submission = await _submissionManager.CreateOrGetSubmissionForAssignmentAsync(
-				assignmentId,
-				studentId,
-				student.DivisionId.Value,
-				divisionSchedule.DueDate,
-				CurrentTenant.Id
-			);
+			throw new BusinessException("ShikshaMitra.Submission:CannotUpdateMissingSubmission")
+				.WithData("StudentId", studentId)
+				.WithData("AssignmentId", assignmentId);
 		}
 
-		// Set SubmissionDate if not yet recorded (InPersonSubmission / OnlineText paths)
-		submission.SubmissionDate ??= DateTimeOffset.UtcNow;
+		EnsureStatusTransitionAllowed(submission, input.Status);
 
 		// 5. Update status
 		submission.UpdateStatus(input.Status);
@@ -379,5 +381,67 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		{
 			Message = L["ShikshaMitra.Assignment:StatusUpdatedSuccessfully"]
 		};
+	}
+
+	private static void EnsureAssignmentOpenForEvaluation(AssignmentEntity assignment)
+	{
+		var published = assignment.Status == AssignmentStatus.Published || assignment.HasPublishedDivisions;
+		if (!published)
+		{
+			throw new BusinessException("ShikshaMitra.Assignment:NotPublished");
+		}
+
+		if (assignment.Status == AssignmentStatus.Closed)
+		{
+			throw new BusinessException("ShikshaMitra.Assignment:Closed");
+		}
+	}
+
+	private static void EnsureFeedbackStatusAllowed(GiveFeedbackDto input)
+	{
+		if (input.Status == SubmissionStatus.Reviewed &&
+			(!input.Marks.HasValue || !input.TotalMarks.HasValue || string.IsNullOrWhiteSpace(input.Feedback)))
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ReviewRequiresMarksAndFeedback");
+		}
+
+		if (input.Status == SubmissionStatus.NeedsReview && string.IsNullOrWhiteSpace(input.Remarks))
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ReviewChangeReasonRequired");
+		}
+
+		if (input.Status == SubmissionStatus.Excused && string.IsNullOrWhiteSpace(input.Remarks))
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ExcuseReasonRequired");
+		}
+	}
+
+	private static void EnsureSubmissionCanBeEvaluated(StudentSubmissionEntity submission)
+	{
+		if (submission.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:NotSubmittedYet")
+				.WithData("SubmissionId", submission.Id);
+		}
+	}
+
+	private static void EnsureStatusTransitionAllowed(StudentSubmissionEntity submission, SubmissionStatus requestedStatus)
+	{
+		if (submission.Status == SubmissionStatus.Reviewed && requestedStatus != SubmissionStatus.Reviewed)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ReviewedSubmissionLocked")
+				.WithData("SubmissionId", submission.Id);
+		}
+
+		if (requestedStatus == SubmissionStatus.Reviewed)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:UseFeedbackToReview");
+		}
+
+		if (requestedStatus == SubmissionStatus.NotSubmitted && submission.SubmissionDate.HasValue)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:CannotMarkSubmittedWorkNotSubmitted")
+				.WithData("SubmissionId", submission.Id);
+		}
 	}
 }

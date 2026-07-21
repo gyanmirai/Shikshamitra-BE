@@ -47,7 +47,7 @@ public partial class CollectFeeWorkflow
 			var pendingBefore = dueFeeBeforeSnapshots[dfp.DueFeeId];
 			var pendingAfter = Math.Max(0, pendingBefore - dfp.Amount);
 			var feeHeadName = dueFeeContext.FeeHeadMap[dfp.FeeHeadId].Name;
-			var installmentLabel = $"{df.Month} {df.Year}";
+			var installmentLabel = df.GetDisplayInstallmentLabel();
 			allocationLines.Add(new FinanceAuditAllocationLineDto
 			{
 				DueFeeId = dfp.DueFeeId, FeeHeadId = dfp.FeeHeadId, FeeHeadName = feeHeadName,
@@ -56,7 +56,7 @@ public partial class CollectFeeWorkflow
 			});
 			paymentChangedFields.Add(new FinanceAuditChangedFieldDto
 			{
-				Field = $"{feeHeadName} {df.Month} - {df.Year}",
+				Field = $"{feeHeadName} — {installmentLabel}",
 				OldValue = pendingBefore.ToString("F2"),
 				NewValue = pendingAfter.ToString("F2")
 			});

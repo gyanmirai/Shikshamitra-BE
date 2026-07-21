@@ -18,8 +18,13 @@ using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.Results;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Academic.QuestionBank;
+using ShikshaMitra.Academic.QuestionPapers;
+using ShikshaMitra.Academic.Examination.SeatAllocation;
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 
 namespace ShikshaMitra.Academic.Dashboard;
 
@@ -41,6 +46,16 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
     private readonly IRepository<AssignedSubject, Guid> _assignedSubjectRepository;
     private readonly IRepository<ExamResultDetail, Guid> _examResultDetailRepository;
     private readonly IRepository<AssignedSubjectChapter, Guid> _chapterRepository;
+    private readonly IRepository<AcademicCalendarSetting, Guid> _calendarSettingRepository;
+    private readonly IRepository<CalendarImpactLog, Guid> _calendarImpactRepository;
+    private readonly IRepository<LessonPlan, Guid> _lessonPlanRepository;
+    private readonly IRepository<TeacherDiary, Guid> _teacherDiaryRepository;
+    private readonly IRepository<QuestionBankItem, Guid> _questionBankRepository;
+    private readonly IRepository<QuestionPaper, Guid> _questionPaperRepository;
+    private readonly IRepository<ExamSeatingPlan, Guid> _seatingPlanRepository;
+    private readonly IRepository<ExamSeatAllocation, Guid> _seatAllocationRepository;
+    private readonly IRepository<AssignmentEntity, Guid> _assignmentRepository;
+    private readonly IRepository<Room, Guid> _roomRepository;
 
     public AcademicDashboardAppService(
         IRepository<Student, Guid> studentRepository,
@@ -56,7 +71,17 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         IRepository<StudentSubmissionEntity, Guid> submissionRepository,
         IRepository<AssignedSubject, Guid> assignedSubjectRepository,
         IRepository<ExamResultDetail, Guid> examResultDetailRepository,
-        IRepository<AssignedSubjectChapter, Guid> chapterRepository)
+        IRepository<AssignedSubjectChapter, Guid> chapterRepository,
+        IRepository<AcademicCalendarSetting, Guid> calendarSettingRepository,
+        IRepository<CalendarImpactLog, Guid> calendarImpactRepository,
+        IRepository<LessonPlan, Guid> lessonPlanRepository,
+        IRepository<TeacherDiary, Guid> teacherDiaryRepository,
+        IRepository<QuestionBankItem, Guid> questionBankRepository,
+        IRepository<QuestionPaper, Guid> questionPaperRepository,
+        IRepository<ExamSeatingPlan, Guid> seatingPlanRepository,
+        IRepository<ExamSeatAllocation, Guid> seatAllocationRepository,
+        IRepository<AssignmentEntity, Guid> assignmentRepository,
+        IRepository<Room, Guid> roomRepository)
     {
         _studentRepository = studentRepository;
         _employeeRepository = employeeRepository;
@@ -72,50 +97,69 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         _assignedSubjectRepository = assignedSubjectRepository;
         _examResultDetailRepository = examResultDetailRepository;
         _chapterRepository = chapterRepository;
+        _calendarSettingRepository = calendarSettingRepository;
+        _calendarImpactRepository = calendarImpactRepository;
+        _lessonPlanRepository = lessonPlanRepository;
+        _teacherDiaryRepository = teacherDiaryRepository;
+        _questionBankRepository = questionBankRepository;
+        _questionPaperRepository = questionPaperRepository;
+        _seatingPlanRepository = seatingPlanRepository;
+        _seatAllocationRepository = seatAllocationRepository;
+        _assignmentRepository = assignmentRepository;
+        _roomRepository = roomRepository;
     }
 
     public async Task<AdminAcademicDashboardDto> GetAdminDashboardAsync()
     {
-        var studentsCount = (int)await _studentRepository.GetCountAsync();
-        var totalStudents = studentsCount > 0 ? studentsCount : 1248;
+        var adminStudents = await _studentRepository.GetListAsync();
+        var studentsCount = adminStudents.Count;
+        var totalStudents = studentsCount;
 
         var employees = await _employeeRepository.GetListAsync();
         var totalTeachers = employees.Count(e => e.EmployeeGroup == EmployeeGroupType.Teaching);
-        if (totalTeachers == 0) totalTeachers = 64;
 
         var subjects = await _subjectRepository.GetListAsync();
-        var assignedSubjectsCount = subjects.Count > 0 ? subjects.Count : 38;
+        var assignedSubjectsCount = subjects.Count;
 
         var electiveGroups = await _electiveGroupRepository.GetListAsync();
-        var electiveGroupsCount = electiveGroups.Count > 0 ? electiveGroups.Count : 4;
+        var electiveGroupsCount = electiveGroups.Count;
 
         var pendingElectivesCount = electiveGroups.Count > 0
             ? electiveGroups.Count(eg => eg.Subjects == null || eg.Subjects.Count == 0)
-            : 2;
+            : 0;
 
         var progressList = await _chapterProgressRepository.GetListAsync();
         var curriculumCompletion = progressList.Count > 0
             ? (int)Math.Round(progressList.Average(c => c.Progress))
-            : (subjects.Count > 0 ? 0 : 75);
+            : 0;
 
         var timetables = await _timetableRepository.GetListAsync();
         var divisions = await _divisionRepository.GetListAsync();
         var publishedTimetables = timetables.Count(t => t.Status == TimetableStatus.Published);
         var timetableRate = divisions.Count > 0
             ? (int)Math.Round((double)publishedTimetables / divisions.Count * 100)
-            : 78;
-        if (timetableRate == 0 && timetables.Count == 0) timetableRate = 78;
+            : 0;
 
         var activeTimetables = timetables.Count(t => t.Status == TimetableStatus.Published);
-        if (activeTimetables == 0 && timetables.Count == 0) activeTimetables = 18;
 
         var pendingTimetables = timetables.Count(t => t.Status == TimetableStatus.Draft);
-        if (pendingTimetables == 0 && timetables.Count == 0) pendingTimetables = 3;
 
-        var conflictsCount = timetables.Count == 0 ? 1 : 0;
+        var conflictsCount = 0;
 
         var assignedSubjects = await _assignedSubjectRepository.GetListAsync();
-        var readinessRate = 68;
+        var calendarSettings = await _calendarSettingRepository.GetListAsync();
+        var calendarImpacts = await _calendarImpactRepository.GetListAsync();
+        var lessonPlans = await _lessonPlanRepository.GetListAsync();
+        var teacherDiaries = await _teacherDiaryRepository.GetListAsync();
+        var questions = await _questionBankRepository.GetListAsync();
+        var questionPapers = await _questionPaperRepository.GetListAsync();
+        var seatingPlans = await _seatingPlanRepository.GetListAsync();
+        var seatAllocations = await _seatAllocationRepository.GetListAsync();
+        var homeworkAssignments = await _homeworkRepository.GetListAsync();
+        var learningAssignments = await _assignmentRepository.GetListAsync();
+        var rooms = await _roomRepository.GetListAsync();
+
+        var readinessRate = 0;
         if (subjects.Count > 0 && divisions.Count > 0)
         {
             var assignedCount = assignedSubjects.Count;
@@ -128,14 +172,11 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
 
         var exams = await _examRepository.GetListAsync();
         var pendingGradeEntries = exams.Count(e => e.Status == ExamStatus.Published);
-        if (pendingGradeEntries == 0 && exams.Count == 0) pendingGradeEntries = 18;
 
         var upcomingExams = exams.Count(e => e.Status == ExamStatus.Pending);
-        if (upcomingExams == 0 && exams.Count == 0) upcomingExams = 6;
 
         var submissions = await _submissionRepository.GetListAsync();
         var pendingEvaluations = submissions.Count(s => s.Status == SubmissionStatus.NeedsReview || s.Status == SubmissionStatus.Submitted || s.Status == SubmissionStatus.Late);
-        if (pendingEvaluations == 0 && submissions.Count == 0) pendingEvaluations = 24;
 
         var insights = new List<AcademicDashboardInsightDto>();
         if (pendingTimetables > 0)
@@ -162,6 +203,19 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 ActionHref = "/academic/gradeEntry"
             });
         }
+        var submittedLessonPlans = lessonPlans.Count(p => p.Status == LessonPlanStatus.Submitted);
+        if (submittedLessonPlans > 0)
+        {
+            insights.Add(new()
+            {
+                Title = $"{submittedLessonPlans} lesson plans awaiting review",
+                Summary = "Coordinator/admin approval is required before these plans are counted as approved.",
+                Severity = "warning",
+                Source = "lesson-plan",
+                ActionLabel = "Review",
+                ActionHref = "/academic/lesson-plan"
+            });
+        }
         if (progressList.Any(p => p.Progress < 50))
         {
             var lagCount = progressList.Count(p => p.Progress < 50);
@@ -175,17 +229,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 ActionHref = "/academic/courseSubjects"
             });
         }
-        if (insights.Count == 0)
-        {
-            insights.AddRange(new List<AcademicDashboardInsightDto>
-            {
-                new() { Title = "Timetable conflict detected in Class 9B", Summary = "Teacher Aarav Sharma is double-booked during Period 3 on Monday.", Severity = "critical", Source = "timetable", ActionLabel = "Resolve Overlap", ActionHref = "/academic/newTimetable" },
-                new() { Title = "Grade entries overdue for 3 subjects", Summary = "Class 10A Mathematics & Science UT grades have not been compiled.", Severity = "critical", Source = "grades", ActionLabel = "Record Marks", ActionHref = "/academic/gradeEntry" },
-                new() { Title = "Syllabus coverage lag in Grade 10", Summary = "Class 10A Science is 45% behind the planned curriculum schedule.", Severity = "warning", Source = "curriculum", ActionLabel = "View Chapter Tracker", ActionHref = "/academic/courseSubjects" },
-                new() { Title = "Exam seating plan not generated", Summary = "Mid-term seating layouts need allocation before tomorrow afternoon.", Severity = "warning", Source = "exams", ActionLabel = "Generate Seats", ActionHref = "/academic/seatallocation" }
-            });
-        }
-
         var activities = new List<AcademicDashboardActivityDto>();
         var recentExams = exams.OrderByDescending(e => e.CreationTime).Take(2).ToList();
         foreach (var exam in recentExams)
@@ -197,17 +240,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 Actor = "Admin",
                 Time = "Recent",
                 Type = "schedule"
-            });
-        }
-        if (activities.Count == 0)
-        {
-            activities.AddRange(new List<AcademicDashboardActivityDto>
-            {
-                new() { Id = "ac1", Action = "Subject 'Physics Advanced' created", Actor = "Admin", Time = "2 hours ago", Type = "create" },
-                new() { Id = "ac2", Action = "Timetable updated for Class 10B — added Saturday sessions", Actor = "Admin", Time = "4 hours ago", Type = "update" },
-                new() { Id = "ac3", Action = "Final Exam scheduled for Class 10A, 10B, 10C", Actor = "Admin", Time = "1 day ago", Type = "schedule" },
-                new() { Id = "ac4", Action = "Grade scaling changed for Grade 9 — updated pass percentage", Actor = "Admin", Time = "1 day ago", Type = "configure" },
-                new() { Id = "ac5", Action = "Elective group 'Science Stream' created with 3 subjects", Actor = "Admin", Time = "2 days ago", Type = "create" }
             });
         }
 
@@ -223,10 +255,10 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
 
         var operationStatus = new List<AcademicDashboardOperationItemDto>
         {
-            new() { Module = "Subject Allocation", Status = assignedSubjects.Any() ? "92% Complete" : "Pending", Level = assignedSubjects.Any() ? "success" : "warning", Progress = assignedSubjects.Any() ? 92 : 0, Icon = "fluent:book-24-regular" },
+            new() { Module = "Subject Allocation", Status = assignedSubjects.Any() ? $"{readinessRate}% Complete" : "Pending", Level = assignedSubjects.Any() ? "success" : "warning", Progress = readinessRate, Icon = "fluent:book-24-regular" },
             new() { Module = "Timetable Setup", Status = $"Pending for {pendingTimetables} Classes", Level = pendingTimetables > 0 ? "warning" : "success", Progress = timetableRate, Icon = "solar:calendar-bold" },
-            new() { Module = "Grade Entry", Status = $"{pendingGradeEntries} Pending", Level = pendingGradeEntries > 0 ? "error" : "success", Progress = 55, Icon = "solar:document-text-bold" },
-            new() { Module = "Homework Evaluation", Status = $"{pendingEvaluations} Pending", Level = pendingEvaluations > 0 ? "warning" : "success", Progress = 62, Icon = "solar:notebook-bold" }
+            new() { Module = "Grade Entry", Status = $"{pendingGradeEntries} Pending", Level = pendingGradeEntries > 0 ? "error" : "success", Progress = pendingGradeEntries > 0 ? 0 : 100, Icon = "solar:document-text-bold" },
+            new() { Module = "Homework Evaluation", Status = $"{pendingEvaluations} Pending", Level = pendingEvaluations > 0 ? "warning" : "success", Progress = pendingEvaluations > 0 ? 0 : 100, Icon = "solar:notebook-bold" }
         };
 
         var results = await _examResultDetailRepository.GetListAsync();
@@ -261,20 +293,14 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         }
         else
         {
-            passFailChart = new AcademicDashboardPassFailChartDto
-            {
-                SubjectNames = new List<string> { "Math", "Science", "English", "History", "Geography", "Art" },
-                PassCounts = new List<int> { 85, 78, 92, 88, 90, 95 },
-                FailCounts = new List<int> { 15, 22, 8, 12, 10, 5 }
-            };
+            passFailChart = new AcademicDashboardPassFailChartDto();
         }
 
         var plannedVsActual = new AcademicDashboardPlannedVsActualChartDto
         {
             Intervals = new List<string> { "Week 1", "Week 2", "Week 3", "Week 4", "Week 5", "Week 6" },
             PlannedPercentages = new List<int> { 15, 30, 45, 60, 75, 90 },
-            ActualPercentages = (progressList.Count > 0 || subjects.Count > 0)
-                ? new List<int> {
+            ActualPercentages = new List<int> {
                     (int)Math.Max(0, curriculumCompletion * 0.15),
                     (int)Math.Max(0, curriculumCompletion * 0.35),
                     (int)Math.Max(0, curriculumCompletion * 0.55),
@@ -282,7 +308,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                     (int)Math.Max(0, curriculumCompletion * 0.90),
                     curriculumCompletion
                   }
-                : new List<int> { 12, 28, 40, 58, 72, 85 }
         };
 
         var result = new AdminAcademicDashboardDto
@@ -305,6 +330,46 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
             RecentActivities = activities,
             ConfigurationStatus = configStatus,
             OperationalStatus = operationStatus,
+            ReadinessItems = BuildReadinessItems(
+                adminStudents,
+                employees.Where(e => e.EmployeeGroup == EmployeeGroupType.Teaching).ToList(),
+                subjects,
+                assignedSubjects,
+                divisions,
+                timetables,
+                exams,
+                progressList,
+                homeworkAssignments,
+                learningAssignments,
+                lessonPlans,
+                teacherDiaries,
+                calendarSettings,
+                questions,
+                questionPapers,
+                seatingPlans,
+                seatAllocations,
+                results,
+                rooms.Count),
+            ActionCenterItems = BuildActionCenterItems(
+                pendingTimetables,
+                pendingGradeEntries,
+                pendingEvaluations,
+                lessonPlans,
+                teacherDiaries,
+                questionPapers,
+                seatingPlans,
+                calendarImpacts),
+            DataHealthItems = BuildDataHealthItems(
+                subjects,
+                assignedSubjects,
+                divisions,
+                timetables,
+                lessonPlans,
+                teacherDiaries,
+                questions,
+                questionPapers,
+                seatingPlans,
+                calendarImpacts),
             SubjectPassFailChart = passFailChart,
             PlannedVsActualProgressChart = plannedVsActual
         };
@@ -315,11 +380,10 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
     public async Task<PrincipalAcademicDashboardDto> GetPrincipalDashboardAsync()
     {
         var studentsCount = (int)await _studentRepository.GetCountAsync();
-        var totalStudents = studentsCount > 0 ? studentsCount : 1248;
+        var totalStudents = studentsCount;
 
         var employees = await _employeeRepository.GetListAsync();
         var totalTeachers = employees.Count(e => e.EmployeeGroup == EmployeeGroupType.Teaching);
-        if (totalTeachers == 0) totalTeachers = 64;
 
         var subjects = await _subjectRepository.GetListAsync();
 
@@ -333,14 +397,10 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         var results = await _examResultDetailRepository.GetListAsync();
         var schoolPerformanceIndex = results.Count > 0
             ? (int)Math.Round(results.Average(r => r.Percentage))
-            : (exams.Count > 0 ? 0 : 82);
+            : 0;
 
-        var schoolAverageGrade = "B+";
-        if (exams.Count > 0 && results.Count == 0)
-        {
-            schoolAverageGrade = "N/A";
-        }
-        else if (results.Count > 0)
+        var schoolAverageGrade = "N/A";
+        if (results.Count > 0)
         {
             if (schoolPerformanceIndex >= 90) schoolAverageGrade = "A+";
             else if (schoolPerformanceIndex >= 80) schoolAverageGrade = "A";
@@ -354,21 +414,21 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         var scienceSub = subjects.FirstOrDefault(s => s.Name.Contains("Science", StringComparison.OrdinalIgnoreCase) || s.Name.Contains("Physics", StringComparison.OrdinalIgnoreCase) || s.Name.Contains("Chemistry", StringComparison.OrdinalIgnoreCase));
         var englishSub = subjects.FirstOrDefault(s => s.Name.Contains("English", StringComparison.OrdinalIgnoreCase));
 
-        var mathProgress = subjects.Count > 0 ? 0 : 88;
+        var mathProgress = 0;
         var mathTarget = 90;
         if (mathSub != null && progressList.Count > 0)
         {
             mathProgress = (int)Math.Round(progressList.Average(p => p.Progress));
         }
 
-        var scienceProgress = subjects.Count > 0 ? 0 : 70;
+        var scienceProgress = 0;
         var scienceTarget = 85;
         if (scienceSub != null && progressList.Count > 0)
         {
             scienceProgress = (int)Math.Round(progressList.Average(p => p.Progress) * 0.85);
         }
 
-        var englishProgress = subjects.Count > 0 ? 0 : 90;
+        var englishProgress = 0;
         var englishTarget = 92;
         if (englishSub != null && progressList.Count > 0)
         {
@@ -377,10 +437,9 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         }
 
         var upcomingExamsCount = exams.Count(e => e.Status == ExamStatus.Pending);
-        if (upcomingExamsCount == 0 && exams.Count == 0) upcomingExamsCount = 6;
 
         var insights = new List<AcademicDashboardInsightDto>();
-        if (scienceProgress < 75)
+        if (scienceSub != null && progressList.Count > 0 && scienceProgress < 75)
         {
             insights.Add(new()
             {
@@ -406,16 +465,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 ActionHref = "/academic/gradingAndFeedback"
             });
         }
-        if (insights.Count == 0)
-        {
-            insights.AddRange(new List<AcademicDashboardInsightDto>
-            {
-                new() { Title = "Grade 10 Science syllabus lag detected", Summary = "Science syllabus progress is 15% behind the scheduled target timeline.", Severity = "warning", Source = "curriculum", ActionLabel = "Syllabus Tracker", ActionHref = "/academic/courseSubjects" },
-                new() { Title = "24 homework evaluations pending review", Summary = "Grade 9 and 10 teachers have pending assessments older than 5 days.", Severity = "warning", Source = "evaluations", ActionLabel = "Assessment portal", ActionHref = "/academic/gradingAndFeedback" },
-                new() { Title = "Math exam passing ratio drop", Summary = "Class 10B Mathematics UT passing ratio has dropped to 89% vs average 94%.", Severity = "info", Source = "performance", ActionLabel = "Report list", ActionHref = "/academic/curriculumReports" }
-            });
-        }
-
         var standards = await _standardRepository.GetListAsync();
         var divisions = await _divisionRepository.GetListAsync();
         var chartStandards = new List<string>();
@@ -431,12 +480,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 chartPercentages.Add(avgProgress);
             }
         }
-        else
-        {
-            chartStandards.AddRange(new List<string> { "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12" });
-            chartPercentages.AddRange(new List<int> { 88, 85, 78, 92, 80, 75 });
-        }
-
         AcademicDashboardPassFailChartDto passFailChart;
         if (exams.Count > 0)
         {
@@ -468,12 +511,7 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         }
         else
         {
-            passFailChart = new AcademicDashboardPassFailChartDto
-            {
-                SubjectNames = new List<string> { "Math", "Science", "English", "History", "Geography", "Art" },
-                PassCounts = new List<int> { 85, 78, 92, 88, 90, 95 },
-                FailCounts = new List<int> { 15, 22, 8, 12, 10, 5 }
-            };
+            passFailChart = new AcademicDashboardPassFailChartDto();
         }
 
         var teacherComparison = new List<AcademicDashboardTeacherPerformanceDto>();
@@ -485,17 +523,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 teacherComparison.Add(new() { TeacherName = t.EmployeeName, AverageScore = 80 + (t.EmployeeCode.GetHashCode() % 15) });
             }
         }
-        if (teacherComparison.Count == 0)
-        {
-            teacherComparison.AddRange(new List<AcademicDashboardTeacherPerformanceDto>
-            {
-                new() { TeacherName = "Aarav Sharma", AverageScore = 88 },
-                new() { TeacherName = "Neha Gupta", AverageScore = 72 },
-                new() { TeacherName = "Prakash Raj", AverageScore = 94 },
-                new() { TeacherName = "Sita Raman", AverageScore = 80 }
-            });
-        }
-
         var upcomingExamsList = new List<AcademicDashboardExamDto>();
         var pendingExams = exams.Where(e => e.Status == ExamStatus.Pending).OrderBy(e => e.CreationTime).Take(5).ToList();
         foreach (var exam in pendingExams)
@@ -511,15 +538,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 RoomName = "Exam Hall"
             });
         }
-        if (upcomingExamsList.Count == 0)
-        {
-            upcomingExamsList.AddRange(new List<AcademicDashboardExamDto>
-            {
-                new() { Id = "ex1", ExamName = "UT-2 Mathematics", Date = "23 Jun 2026", Time = "09:00 AM", ClassName = "Class 10-A", RoomName = "Room 204" },
-                new() { Id = "ex2", ExamName = "Mid-Term Physics", Date = "25 Jun 2026", Time = "10:30 AM", ClassName = "Class 11-B", RoomName = "Physics Lab" }
-            });
-        }
-
         var students = await _studentRepository.GetListAsync();
         var topPerformers = new List<AcademicDashboardPerformerDto>();
         var bottomPerformers = new List<AcademicDashboardPerformerDto>();
@@ -538,33 +556,60 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 bottomPerformers.Add(new() { Id = r.Id.ToString(), Name = $"{s?.FirstName} {s?.LastName}".Trim(), AvatarUrl = "/static/images/avatars/avatar_4.png", TotalMarks = (int)r.Percentage });
             }
         }
-        if (topPerformers.Count == 0)
-        {
-            topPerformers.AddRange(new List<AcademicDashboardPerformerDto>
-            {
-                new() { Id = "tp1", Name = "Priya Patel", AvatarUrl = "/static/images/avatars/avatar_1.png", TotalMarks = 98 },
-                new() { Id = "tp2", Name = "Raj Kumar", AvatarUrl = "/static/images/avatars/avatar_2.png", TotalMarks = 95 },
-                new() { Id = "tp3", Name = "Meera Singh", AvatarUrl = "/static/images/avatars/avatar_3.png", TotalMarks = 92 }
-            });
-        }
-        if (bottomPerformers.Count == 0)
-        {
-            bottomPerformers.AddRange(new List<AcademicDashboardPerformerDto>
-            {
-                new() { Id = "bp1", Name = "Rohan Singh", AvatarUrl = "/static/images/avatars/avatar_4.png", TotalMarks = 45 },
-                new() { Id = "bp2", Name = "Sneha Kumari", AvatarUrl = "/static/images/avatars/avatar_5.png", TotalMarks = 42 },
-                new() { Id = "bp3", Name = "Vijay Pratap", AvatarUrl = "/static/images/avatars/avatar_6.png", TotalMarks = 38 }
-            });
-        }
+        var principalAssignedSubjects = await _assignedSubjectRepository.GetListAsync();
+        var principalDivisions = await _divisionRepository.GetListAsync();
+        var principalTimetables = await _timetableRepository.GetListAsync();
+        var principalCalendarSettings = await _calendarSettingRepository.GetListAsync();
+        var principalCalendarImpacts = await _calendarImpactRepository.GetListAsync();
+        var principalLessonPlans = await _lessonPlanRepository.GetListAsync();
+        var principalTeacherDiaries = await _teacherDiaryRepository.GetListAsync();
+        var principalQuestions = await _questionBankRepository.GetListAsync();
+        var principalQuestionPapers = await _questionPaperRepository.GetListAsync();
+        var principalSeatingPlans = await _seatingPlanRepository.GetListAsync();
+        var principalSeatAllocations = await _seatAllocationRepository.GetListAsync();
+        var principalHomeworkAssignments = await _homeworkRepository.GetListAsync();
+        var principalLearningAssignments = await _assignmentRepository.GetListAsync();
+        var principalRooms = await _roomRepository.GetListAsync();
+        var principalSubmissions = await _submissionRepository.GetListAsync();
+        var principalPendingEvaluations = principalSubmissions.Count(s =>
+            s.Status == SubmissionStatus.NeedsReview ||
+            s.Status == SubmissionStatus.Submitted ||
+            s.Status == SubmissionStatus.Late);
+        var principalPendingTimetables = principalTimetables.Count(t => t.Status == TimetableStatus.Draft);
+        var principalPendingGradeEntries = exams.Count(e => e.Status == ExamStatus.Published);
+
+        var principalReadinessItems = BuildReadinessItems(
+            students,
+            employees.Where(e => e.EmployeeGroup == EmployeeGroupType.Teaching).ToList(),
+            subjects,
+            principalAssignedSubjects,
+            principalDivisions,
+            principalTimetables,
+            exams,
+            progressList,
+            principalHomeworkAssignments,
+            principalLearningAssignments,
+            principalLessonPlans,
+            principalTeacherDiaries,
+            principalCalendarSettings,
+            principalQuestions,
+            principalQuestionPapers,
+            principalSeatingPlans,
+            principalSeatAllocations,
+            results,
+            principalRooms.Count);
+        var principalReadinessRate = principalReadinessItems.Count > 0
+            ? (int)Math.Round(principalReadinessItems.Average(i => i.TotalCount == 0 ? 0 : (double)i.CompletedCount / i.TotalCount * 100))
+            : 0;
 
         var result = new PrincipalAcademicDashboardDto
         {
             SchoolPerformanceIndex = schoolPerformanceIndex,
             SchoolAverageGrade = schoolAverageGrade,
-            AverageAttendance = "94.2%",
+            AverageAttendance = "N/A",
             TotalTeachers = totalTeachers,
             TotalStudents = totalStudents,
-            PerformanceIndexHelper = "Improvement over last term",
+            PerformanceIndexHelper = results.Count > 0 ? "Based on recorded result details" : "No published result data yet",
             SyllabusProgress = curriculumCompletion,
             MathProgress = mathProgress,
             MathTarget = mathTarget,
@@ -572,10 +617,31 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
             ScienceTarget = scienceTarget,
             EnglishProgress = englishProgress,
             EnglishTarget = englishTarget,
-            ReadinessRate = 91,
-            EvaluationLag = "2.4 days",
+            ReadinessRate = principalReadinessRate,
+            EvaluationLag = pendingEvaluations > 0 ? $"{pendingEvaluations} pending" : "No pending evaluations",
             UpcomingExams = upcomingExamsCount,
             Insights = insights,
+            ReadinessItems = principalReadinessItems,
+            ActionCenterItems = BuildActionCenterItems(
+                principalPendingTimetables,
+                principalPendingGradeEntries,
+                principalPendingEvaluations,
+                principalLessonPlans,
+                principalTeacherDiaries,
+                principalQuestionPapers,
+                principalSeatingPlans,
+                principalCalendarImpacts),
+            DataHealthItems = BuildDataHealthItems(
+                subjects,
+                principalAssignedSubjects,
+                principalDivisions,
+                principalTimetables,
+                principalLessonPlans,
+                principalTeacherDiaries,
+                principalQuestions,
+                principalQuestionPapers,
+                principalSeatingPlans,
+                principalCalendarImpacts),
             ChapterCompletionChart = new AcademicDashboardChapterCompletionChartDto
             {
                 StandardNames = chartStandards,
@@ -604,26 +670,73 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
             : new List<AssignedSubject>();
 
         var assignedClassesCount = teacherAssigned.Select(ta => ta.StandardId).Distinct().Count();
-        if (assignedClassesCount == 0) assignedClassesCount = 3;
 
         var assignedSubjectsCount = teacherAssigned.Select(ta => ta.SubjectId).Distinct().Count();
-        if (assignedSubjectsCount == 0) assignedSubjectsCount = 5;
+        var teacherStandardIds = teacherAssigned.Select(ta => ta.StandardId).Distinct().ToList();
+        var teacherSubjectIds = teacherAssigned.Select(ta => ta.SubjectId).Distinct().ToList();
+        var hasTeacherScope = teacherAssigned.Count > 0;
 
         var homeworks = await _homeworkRepository.GetListAsync();
-        var pendingHomework = homeworks.Count(h => h.Status == HomeworkStatus.Draft || h.Status == HomeworkStatus.Published);
-        if (pendingHomework == 0) pendingHomework = 7;
+        if (hasTeacherScope)
+        {
+            homeworks = homeworks
+                .Where(h => teacherStandardIds.Contains(h.StandardId) && teacherSubjectIds.Contains(h.SubjectId))
+                .ToList();
+        }
+        else
+        {
+            homeworks = [];
+        }
 
-        var submissions = await _submissionRepository.GetListAsync();
-        var pendingEvaluations = submissions.Count(s => s.Status == SubmissionStatus.NeedsReview || s.Status == SubmissionStatus.Submitted || s.Status == SubmissionStatus.Late);
-        if (pendingEvaluations == 0) pendingEvaluations = 12;
+        var teacherLearningAssignments = await _assignmentRepository.GetListAsync();
+        if (hasTeacherScope)
+        {
+            teacherLearningAssignments = teacherLearningAssignments
+                .Where(a => teacherStandardIds.Contains(a.StandardId) && teacherSubjectIds.Contains(a.SubjectId))
+                .ToList();
+        }
+        else
+        {
+            teacherLearningAssignments = [];
+        }
+
+        var pendingHomework = homeworks.Count(h => h.Status == HomeworkStatus.Draft || h.Status == HomeworkStatus.Published);
 
         var exams = await _examRepository.GetListAsync();
-        var upcomingExamsCount = exams.Count(e => e.Status == ExamStatus.Pending);
-        if (upcomingExamsCount == 0) upcomingExamsCount = 4;
+        if (hasTeacherScope)
+        {
+            exams = exams.Where(e => teacherStandardIds.Contains(e.StandardId)).ToList();
+        }
+        else
+        {
+            exams = [];
+        }
 
         var results = await _examResultDetailRepository.GetListAsync();
         var students = await _studentRepository.GetListAsync();
         var divisions = await _divisionRepository.GetListAsync();
+        var teacherDivisions = hasTeacherScope
+            ? divisions.Where(d => teacherStandardIds.Contains(d.StandardId)).ToList()
+            : [];
+        var teacherDivisionIds = teacherDivisions.Select(d => d.Id).Distinct().ToList();
+
+        var submissions = await _submissionRepository.GetListAsync();
+        if (hasTeacherScope)
+        {
+            var homeworkIds = homeworks.Select(h => h.Id).ToHashSet();
+            submissions = submissions
+                .Where(s =>
+                    teacherDivisionIds.Contains(s.DivisionId) &&
+                    (!s.HomeworkAssignmentId.HasValue || homeworkIds.Contains(s.HomeworkAssignmentId.Value)))
+                .ToList();
+        }
+        else
+        {
+            submissions = [];
+        }
+
+        var pendingEvaluations = submissions.Count(s => s.Status == SubmissionStatus.NeedsReview || s.Status == SubmissionStatus.Submitted || s.Status == SubmissionStatus.Late);
+        var upcomingExamsCount = exams.Count(e => e.Status == ExamStatus.Pending);
 
         var attentionStudents = new List<AcademicDashboardAttentionStudentDto>();
         if (results.Count > 0 && students.Count > 0)
@@ -645,15 +758,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 });
             }
         }
-        if (attentionStudents.Count == 0)
-        {
-            attentionStudents.AddRange(new List<AcademicDashboardAttentionStudentDto>
-            {
-                new() { Id = "sa-1", Name = "Kartik Rao", ClassDivision = "10-B", Attendance = 68, Performance = 39, Warning = "Low attendance + weak performance", AvatarUrl = "/static/images/avatars/avatar_7.png" },
-                new() { Id = "sa-2", Name = "Mahi Desai", ClassDivision = "9-A", Attendance = 73, Performance = 44, Warning = "Missing homework submissions", AvatarUrl = "/static/images/avatars/avatar_8.png" },
-                new() { Id = "sa-3", Name = "Arjun Menon", ClassDivision = "11-A", Attendance = 76, Performance = 42, Warning = "Performance decline this week", AvatarUrl = "/static/images/avatars/avatar_9.png" }
-            });
-        }
 
         var insights = new List<AcademicDashboardInsightDto>();
         if (attentionStudents.Count > 0)
@@ -668,30 +772,18 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 ActionLabel = "View Profile"
             });
         }
-        if (insights.Count == 0)
-        {
-            insights.AddRange(new List<AcademicDashboardInsightDto>
-            {
-                new() { Title = "Kartik Rao (10-B) attention needed", Summary = "Low attendance (68%) combined with weak exam performance (39%).", Severity = "critical", Source = "student-att", ActionLabel = "View Profile" },
-                new() { Title = "Mahi Desai (9-A) missing homeworks", Summary = "4 consecutive homework tasks are overdue and missing submissions.", Severity = "critical", Source = "homework-miss", ActionLabel = "Open portal", ActionHref = "/academic/gradingAndFeedback" },
-                new() { Title = "Arjun Menon (11-A) performance decline", Summary = "Assessment average marks declined by 12% over the last week.", Severity = "warning", Source = "perf-decline", ActionLabel = "Details" },
-                new() { Title = "Syllabus behind planned schedule", Summary = "Class 11 Mathematics syllabus tracker is behind target milestones.", Severity = "warning", Source = "syll-delay", ActionLabel = "Update chapters", ActionHref = "/academic/courseSubjects" }
-            });
-        }
 
         var completedHW = submissions.Count(s => s.Status == SubmissionStatus.Reviewed);
         var pendingHW = submissions.Count(s => s.Status == SubmissionStatus.NeedsReview || s.Status == SubmissionStatus.Submitted);
         var homeworkStatus = new AcademicDashboardHomeworkStatusDto
         {
-            Completed = completedHW > 0 ? completedHW : 45,
-            Pending = pendingHW > 0 ? pendingHW : 15,
-            Graded = completedHW > 0 ? completedHW : 30
+            Completed = completedHW,
+            Pending = pendingHW,
+            Graded = completedHW
         };
 
-        var teacherStandardIds = teacherAssigned.Select(ta => ta.StandardId).Distinct().ToList();
-        var teacherDivisionIds = divisions.Where(d => teacherStandardIds.Contains(d.StandardId)).Select(d => d.Id).Distinct().ToList();
         var relevantResults = results;
-        if (teacherDivisionIds.Count > 0)
+        if (hasTeacherScope && teacherDivisionIds.Count > 0)
         {
             relevantResults = results.Where(r => teacherDivisionIds.Contains(r.DivisionId)).ToList();
         }
@@ -707,14 +799,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
             good = relevantResults.Count(r => r.Percentage >= 70 && r.Percentage < 85);
             average = relevantResults.Count(r => r.Percentage >= 50 && r.Percentage < 70);
             needsImprovement = relevantResults.Count(r => r.Percentage < 50);
-        }
-
-        if (excellent == 0 && good == 0 && average == 0 && needsImprovement == 0)
-        {
-            excellent = 30;
-            good = 40;
-            average = 20;
-            needsImprovement = 10;
         }
 
         var performanceDistribution = new TeacherAcademicDashboardPerformanceDistributionDto
@@ -745,12 +829,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
             }
         }
 
-        if (chartChapters.Count == 0)
-        {
-            chartChapters.AddRange(new List<string> { "Numbers", "Algebra", "Geometry", "Data and Statistics", "Problem Solving" });
-            chartPercentages.AddRange(new List<int> { 90, 20, 80, 65, 45 });
-        }
-
         var chapterProgressChart = new AcademicDashboardChapterCompletionChartDto
         {
             StandardNames = chartChapters,
@@ -773,52 +851,144 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 RoomName = "Exam Room"
             });
         }
-        if (upcomingExamsList.Count == 0)
+        var teacherSubjects = await _subjectRepository.GetListAsync();
+        if (hasTeacherScope)
         {
-            upcomingExamsList.AddRange(new List<AcademicDashboardExamDto>
-            {
-                new() { Id = "ex3", ExamName = "Unit Test Math", Date = "23 Jun 2026", Time = "08:00 AM", ClassName = "Class 10-A", RoomName = "Room 204" },
-                new() { Id = "ex4", ExamName = "Oral Math Test", Date = "24 Jun 2026", Time = "10:00 AM", ClassName = "Class 9-A", RoomName = "Room 110" }
-            });
+            teacherSubjects = teacherSubjects.Where(s => teacherSubjectIds.Contains(s.Id)).ToList();
+        }
+        else
+        {
+            teacherSubjects = [];
+        }
+
+        var teacherTimetables = await _timetableRepository.GetListAsync();
+        if (hasTeacherScope)
+        {
+            teacherTimetables = teacherTimetables.Where(t => teacherDivisionIds.Contains(t.DivisionId)).ToList();
+        }
+        else
+        {
+            teacherTimetables = [];
+        }
+
+        var teacherCalendarSettings = await _calendarSettingRepository.GetListAsync();
+        var teacherCalendarImpacts = await _calendarImpactRepository.GetListAsync();
+        var teacherLessonPlans = await _lessonPlanRepository.GetListAsync();
+        var teacherDiaries = await _teacherDiaryRepository.GetListAsync();
+        if (teacherUser != null)
+        {
+            teacherLessonPlans = teacherLessonPlans.Where(p => p.TeacherId == teacherUser.Id).ToList();
+            teacherDiaries = teacherDiaries.Where(d => d.TeacherId == teacherUser.Id).ToList();
+        }
+        else if (hasTeacherScope)
+        {
+            teacherLessonPlans = [];
+            teacherDiaries = [];
+        }
+
+        var teacherQuestions = await _questionBankRepository.GetListAsync();
+        if (hasTeacherScope)
+        {
+            teacherQuestions = teacherQuestions
+                .Where(q => teacherStandardIds.Contains(q.StandardId) && teacherSubjectIds.Contains(q.SubjectId))
+                .ToList();
+        }
+        else
+        {
+            teacherQuestions = [];
+        }
+
+        var teacherQuestionPapers = await _questionPaperRepository.GetListAsync();
+        if (hasTeacherScope)
+        {
+            teacherQuestionPapers = teacherQuestionPapers
+                .Where(p => teacherStandardIds.Contains(p.StandardId) && teacherSubjectIds.Contains(p.SubjectId))
+                .ToList();
+        }
+        else
+        {
+            teacherQuestionPapers = [];
+        }
+
+        var teacherSeatingPlans = await _seatingPlanRepository.GetListAsync();
+        var teacherSeatAllocations = await _seatAllocationRepository.GetListAsync();
+        var teacherRooms = await _roomRepository.GetListAsync();
+        var teacherPendingTimetables = teacherTimetables.Count(t => t.Status == TimetableStatus.Draft);
+        var teacherPendingGradeEntries = exams.Count(e => e.Status == ExamStatus.Published);
+        var teacherReadinessItems = BuildReadinessItems(
+            students,
+            employeesList.Where(e => e.EmployeeGroup == EmployeeGroupType.Teaching).ToList(),
+            teacherSubjects,
+            teacherAssigned,
+            teacherDivisions,
+            teacherTimetables,
+            exams,
+            progressList,
+            homeworks,
+            teacherLearningAssignments,
+            teacherLessonPlans,
+            teacherDiaries,
+            teacherCalendarSettings,
+            teacherQuestions,
+            teacherQuestionPapers,
+            teacherSeatingPlans,
+            teacherSeatAllocations,
+            relevantResults,
+            teacherRooms.Count);
+        var teacherActionCenterItems = BuildActionCenterItems(
+            teacherPendingTimetables,
+            teacherPendingGradeEntries,
+            pendingEvaluations,
+            teacherLessonPlans,
+            teacherDiaries,
+            teacherQuestionPapers,
+            teacherSeatingPlans,
+            teacherCalendarImpacts);
+        var teacherPendingTasks = new List<AcademicDashboardPendingTaskDto>();
+        if (pendingEvaluations > 0)
+        {
+            teacherPendingTasks.Add(new() { Id = "p2", Title = "Homework Reviews Pending", Count = pendingEvaluations, Priority = "high", Action = "Review", Icon = "solar:notebook-bold", Path = "/academic/gradingAndFeedback" });
+        }
+        if (teacherPendingGradeEntries > 0)
+        {
+            teacherPendingTasks.Add(new() { Id = "p3", Title = "Grade Entries Pending", Count = teacherPendingGradeEntries, Priority = "medium", Action = "Enter", Icon = "solar:document-text-bold", Path = "/academic/gradeEntry" });
         }
 
         var result = new TeacherAcademicDashboardDto
         {
-            AttendanceRate = 80,
-            TodaysLecturesCount = 6,
-            LecturesDone = 2,
-            LecturesOngoing = 1,
-            PendingAttendanceClasses = 2,
+            AttendanceRate = 0,
+            TodaysLecturesCount = 0,
+            LecturesDone = 0,
+            LecturesOngoing = 0,
+            PendingAttendanceClasses = 0,
             AssignedClassesCount = assignedClassesCount,
             AssignedSubjectsCount = assignedSubjectsCount,
-            SystemAlertsCount = 3,
-            EvaluationsRate = 85,
+            SystemAlertsCount = teacherActionCenterItems.Count,
+            EvaluationsRate = submissions.Count > 0
+                ? (int)Math.Round((double)completedHW / submissions.Count * 100)
+                : 0,
             PendingHomework = pendingHomework,
             PendingEvaluations = pendingEvaluations,
             UpcomingExams = upcomingExamsCount,
             StudentsAttentionCount = attentionStudents.Count,
             Insights = insights,
-            TodaySchedule = new List<AcademicDashboardLectureDto>
-            {
-                new() { Id = "lec-1", Time = "08:00 - 08:45", Subject = "Mathematics", ClassDivision = "Class 10 - A", Room = "Room 204", Status = "completed", AttendanceMarked = true },
-                new() { Id = "lec-2", Time = "09:00 - 09:45", Subject = "Mathematics", ClassDivision = "Class 11 - B", Room = "Lab 2", Status = "ongoing", AttendanceMarked = false },
-                new() { Id = "lec-3", Time = "10:00 - 10:45", Subject = "Mathematics", ClassDivision = "Class 9 - A", Room = "Room 110", Status = "upcoming", AttendanceMarked = false },
-                new() { Id = "lec-4", Time = "11:20 - 12:05", Subject = "Mathematics", ClassDivision = "Class 10 - B", Room = "Room 307", Status = "upcoming", AttendanceMarked = false }
-            },
-            PendingTasks = new List<AcademicDashboardPendingTaskDto>
-            {
-                new() { Id = "p2", Title = "Homework Reviews Pending", Count = pendingEvaluations, Priority = "high", Action = "Review", Icon = "solar:notebook-bold", Path = "/academic/gradingAndFeedback" },
-                new() { Id = "p3", Title = "Grade Entries Pending", Count = upcomingExamsCount, Priority = "medium", Action = "Enter", Icon = "solar:document-text-bold", Path = "/academic/gradeEntry" },
-                new() { Id = "p4", Title = "Assignment Evaluations Pending", Count = 5, Priority = "medium", Action = "Evaluate", Icon = "solar:clipboard-check-bold", Path = "/academic/gradingAndFeedback" },
-                new() { Id = "p5", Title = "Syllabus Progress Behind Plan", Count = 2, Priority = "low", Action = "Update", Icon = "solar:checklist-minimalistic-bold", Path = "/academic/courseSubjects" }
-            },
+            ReadinessItems = teacherReadinessItems,
+            ActionCenterItems = teacherActionCenterItems,
+            DataHealthItems = BuildDataHealthItems(
+            teacherSubjects,
+                teacherAssigned,
+                teacherDivisions,
+                teacherTimetables,
+                teacherLessonPlans,
+                teacherDiaries,
+                teacherQuestions,
+                teacherQuestionPapers,
+                teacherSeatingPlans,
+                teacherCalendarImpacts),
+            TodaySchedule = [],
+            PendingTasks = teacherPendingTasks,
             StudentsAttention = attentionStudents,
-            RecentActivities = new List<AcademicDashboardActivityDto>
-            {
-                new() { Id = "ra-1", Action = "Homework uploaded for Class 10-A (Algebra Set 4)", Actor = "Teacher", Time = "15 min ago", Type = "info" },
-                new() { Id = "ra-2", Action = "Attendance marked for Class 11-B", Actor = "Teacher", Time = "35 min ago", Type = "success" },
-                new() { Id = "ra-3", Action = "Assignment created: Physics Numerical Practice", Actor = "Teacher", Time = "1 hour ago", Type = "secondary" }
-            },
+            RecentActivities = [],
             HomeworkStatus = homeworkStatus,
             UpcomingExamsList = upcomingExamsList,
             PerformanceDistribution = performanceDistribution,
@@ -831,6 +1001,350 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
     public Task RefreshDashboardAsync()
     {
         return Task.CompletedTask;
+    }
+
+    private static List<AcademicDashboardReadinessItemDto> BuildReadinessItems(
+        IReadOnlyCollection<Student> students,
+        IReadOnlyCollection<Employee> teachers,
+        IReadOnlyCollection<Subject> subjects,
+        IReadOnlyCollection<AssignedSubject> assignedSubjects,
+        IReadOnlyCollection<Division> divisions,
+        IReadOnlyCollection<ShikshaMitra.Academic.Timetable.Timetables.Timetable> timetables,
+        IReadOnlyCollection<Exam> exams,
+        IReadOnlyCollection<ChapterProgress> progressList,
+        IReadOnlyCollection<HomeworkAssignmentEntity> homeworks,
+        IReadOnlyCollection<AssignmentEntity> assignments,
+        IReadOnlyCollection<LessonPlan> lessonPlans,
+        IReadOnlyCollection<TeacherDiary> teacherDiaries,
+        IReadOnlyCollection<AcademicCalendarSetting> calendarSettings,
+        IReadOnlyCollection<QuestionBankItem> questions,
+        IReadOnlyCollection<QuestionPaper> questionPapers,
+        IReadOnlyCollection<ExamSeatingPlan> seatingPlans,
+        IReadOnlyCollection<ExamSeatAllocation> seatAllocations,
+        IReadOnlyCollection<ExamResultDetail> results,
+        int roomCount)
+    {
+        var publishedTimetables = timetables.Count(t => t.Status == TimetableStatus.Published);
+        var activeExams = exams.Count;
+        var publishedOrLockedPapers = questionPapers.Count(p =>
+            p.Status == QuestionPaperStatus.Published ||
+            p.Status == QuestionPaperStatus.Locked ||
+            p.IsLocked);
+        var completeSeatingPlans = seatingPlans.Count(p =>
+            p.Status == SeatingPlanStatus.Completed ||
+            p.Status == SeatingPlanStatus.Published ||
+            p.IsLocked);
+        var mappedStudents = students.Count(s => s.StandardId.HasValue && s.DivisionId.HasValue);
+        var subjectTeacherReady = assignedSubjects.Count(a =>
+            a.Status != SubjectStatus.Archived &&
+            a.Teachers.Any(t => t.TeacherType == SubjectTeacherType.Primary));
+        var activeLessonPlans = lessonPlans.Count(p =>
+            p.Status == LessonPlanStatus.Submitted ||
+            p.Status == LessonPlanStatus.Approved ||
+            p.Status == LessonPlanStatus.NeedsChanges);
+        var submittedDiaries = teacherDiaries.Count(d => d.Status == TeacherDiaryStatus.Submitted);
+        var publishedHomeworks = homeworks.Count(h =>
+            h.Status == HomeworkStatus.Published ||
+            h.IsPublished ||
+            h.DivisionSchedules.Any(d => d.IsPublished));
+        var publishedAssignments = assignments.Count(a =>
+            a.Status == AssignmentStatus.Published ||
+            a.DivisionSchedules.Any(d => d.IsPublished));
+        var resultReadyExams = results.Select(r => r.ExamId).Distinct().Count();
+
+        return
+        [
+            CreateReadinessItem(
+                "student-academic-mapping",
+                "Student academic mapping",
+                mappedStudents,
+                Math.Max(1, students.Count),
+                "Every active student should have class and division mapping before homework, exam, result, and 360 views are trusted.",
+                "/student/studentDetails",
+                "Review students"),
+            CreateReadinessItem(
+                "teacher-allocation",
+                "Teacher allocation",
+                subjectTeacherReady,
+                Math.Max(1, assignedSubjects.Count),
+                $"Each allocated subject needs one primary teacher. Teaching staff available: {teachers.Count}.",
+                "/academic/curriculumSubjects",
+                "Map teachers"),
+            CreateReadinessItem(
+                "calendar-rules",
+                "Calendar rules",
+                calendarSettings.Count,
+                1,
+                "Configure school working-day rules before scheduling timetable, homework, lesson plans, and exams.",
+                "/academic/calendarSettings",
+                "Open settings"),
+            CreateReadinessItem(
+                "subject-allocation",
+                "Subject allocation",
+                assignedSubjects.Count,
+                Math.Max(1, divisions.Count),
+                "Each class/division should have required subjects and teachers mapped before daily academic work starts.",
+                "/academic/curriculumSubjects",
+                "Review allocation"),
+            CreateReadinessItem(
+                "syllabus-progress",
+                "Syllabus tracker",
+                progressList.Count(p => p.Progress > 0),
+                Math.Max(1, assignedSubjects.Count),
+                "Chapter progress must be tracked from diary/evidence instead of only static syllabus setup.",
+                "/academic/courseSubjects",
+                "Open syllabus"),
+            CreateReadinessItem(
+                "timetable-publication",
+                "Published timetable",
+                publishedTimetables,
+                Math.Max(1, divisions.Count),
+                "Published timetables are needed before lesson plans, substitutions, and daily teacher workbench are reliable.",
+                "/academic/newTimetable",
+                "Open timetable"),
+            CreateReadinessItem(
+                "lesson-diary-readiness",
+                "Lesson diary evidence",
+                submittedDiaries,
+                Math.Max(1, activeLessonPlans),
+                "Approved/submitted lesson plans should have diary evidence so syllabus progress and teacher accountability are reliable.",
+                "/academic/lesson-plan",
+                "Open diary"),
+            CreateReadinessItem(
+                "homework-assignment-readiness",
+                "Homework and assignment publishing",
+                publishedHomeworks + publishedAssignments,
+                Math.Max(1, subjects.Count),
+                "At least one published homework or assignment per active subject helps keep the evaluation workflow visible.",
+                "/academic/homeworkAssignment",
+                "Review tasks"),
+            CreateReadinessItem(
+                "question-bank",
+                "Question bank governance",
+                questions.Count(q => q.Status == QuestionStatus.Approved),
+                Math.Max(1, subjects.Count),
+                "Approved question bank items are needed before secure paper generation can be trusted.",
+                "/academic/questionBank",
+                "Review bank"),
+            CreateReadinessItem(
+                "question-paper",
+                "Question paper readiness",
+                publishedOrLockedPapers,
+                Math.Max(1, activeExams),
+                "Published or locked papers should exist for exams before exam execution starts.",
+                "/academic/questionPapers",
+                "Review papers"),
+            CreateReadinessItem(
+                "result-readiness",
+                "Result readiness",
+                resultReadyExams,
+                Math.Max(1, activeExams),
+                "Exam result details should exist before result reports, dashboards, and Student 360 performance panels are trusted.",
+                "/academic/resultCreation",
+                "Review results"),
+            CreateReadinessItem(
+                "room-readiness",
+                "Room setup",
+                roomCount,
+                Math.Max(1, divisions.Count),
+                "Rooms must be configured before timetable room assignment, substitutions, and exam seating can be reliable.",
+                "/academic/roomAvailability",
+                "Review rooms"),
+            CreateReadinessItem(
+                "seat-allocation",
+                "Seat allocation readiness",
+                completeSeatingPlans,
+                Math.Max(1, activeExams),
+                $"Seat plans should be completed/published before exam day. Current allocations: {seatAllocations.Count}.",
+                "/academic/seatallocation",
+                "Review seats")
+        ];
+    }
+
+    private static AcademicDashboardReadinessItemDto CreateReadinessItem(
+        string key,
+        string title,
+        int completed,
+        int total,
+        string description,
+        string actionHref,
+        string actionLabel)
+    {
+        var safeTotal = Math.Max(1, total);
+        var safeCompleted = Math.Clamp(completed, 0, safeTotal);
+        var missing = Math.Max(0, safeTotal - safeCompleted);
+        var status = missing == 0 ? "complete" : safeCompleted == 0 ? "missing" : "partial";
+        var severity = missing == 0 ? "success" : safeCompleted == 0 ? "critical" : "warning";
+
+        return new AcademicDashboardReadinessItemDto
+        {
+            Key = key,
+            Title = title,
+            Status = status,
+            Severity = severity,
+            CompletedCount = safeCompleted,
+            TotalCount = safeTotal,
+            MissingCount = missing,
+            Description = description,
+            ActionHref = actionHref,
+            ActionLabel = actionLabel
+        };
+    }
+
+    private static List<AcademicDashboardActionCenterItemDto> BuildActionCenterItems(
+        int pendingTimetables,
+        int pendingGradeEntries,
+        int pendingEvaluations,
+        IReadOnlyCollection<LessonPlan> lessonPlans,
+        IReadOnlyCollection<TeacherDiary> teacherDiaries,
+        IReadOnlyCollection<QuestionPaper> questionPapers,
+        IReadOnlyCollection<ExamSeatingPlan> seatingPlans,
+        IReadOnlyCollection<CalendarImpactLog> calendarImpacts)
+    {
+        var items = new List<AcademicDashboardActionCenterItemDto>();
+        AddAction(items, "calendar-impacts", "Calendar impacts pending", calendarImpacts.Count(i => !i.IsResolved), "calendar", "Resolve impacted timetable, lesson, homework, and exam records.", "/academic/calendarImpactLogs", "Resolve", "critical");
+        AddAction(items, "timetable-drafts", "Timetable drafts pending publish", pendingTimetables, "timetable", "Draft timetables should be validated and published before teachers plan daily work.", "/academic/newTimetable", "Publish", "warning");
+        AddAction(items, "lesson-review", "Lesson plans awaiting review", lessonPlans.Count(p => p.Status == LessonPlanStatus.Submitted), "lesson-plan", "Submitted lesson plans need coordinator/admin review before they become approved work.", "/academic/lesson-plan", "Review", "warning");
+        AddAction(items, "diary-pending", "Teacher diaries still in draft", teacherDiaries.Count(d => d.Status == TeacherDiaryStatus.Draft), "teacher-diary", "Draft diaries should be submitted so syllabus progress and teacher accountability stay current.", "/academic/lesson-plan", "Open diary", "warning");
+        AddAction(items, "paper-moderation", "Question papers awaiting moderation", questionPapers.Count(p => p.Status == QuestionPaperStatus.Submitted || p.Status == QuestionPaperStatus.Generated), "question-paper", "Generated/submitted papers need review before publication or locking.", "/academic/questionPapers", "Moderate", "warning");
+        AddAction(items, "seating-open", "Seat plans not finalized", seatingPlans.Count(p => p.Status != SeatingPlanStatus.Completed && p.Status != SeatingPlanStatus.Published), "seat-allocation", "Open seating plans must be finalized before exam execution.", "/academic/seatallocation", "Finalize", "critical");
+        AddAction(items, "grade-entry", "Grade entries pending", pendingGradeEntries, "grade-entry", "Published exams need marks entry and validation before result processing.", "/academic/gradeEntry", "Record marks", "critical");
+        AddAction(items, "evaluation", "Homework/assignment evaluations pending", pendingEvaluations, "homework", "Student submissions waiting for review should be evaluated or returned for changes.", "/academic/gradingAndFeedback", "Evaluate", "warning");
+
+        return items;
+    }
+
+    private static void AddAction(
+        ICollection<AcademicDashboardActionCenterItemDto> items,
+        string id,
+        string title,
+        int count,
+        string source,
+        string summary,
+        string actionHref,
+        string actionLabel,
+        string severity)
+    {
+        if (count <= 0)
+        {
+            return;
+        }
+
+        items.Add(new AcademicDashboardActionCenterItemDto
+        {
+            Id = id,
+            Title = title,
+            Summary = summary,
+            Severity = severity,
+            Source = source,
+            Count = count,
+            ActionHref = actionHref,
+            ActionLabel = actionLabel
+        });
+    }
+
+    private static List<AcademicDashboardDataHealthItemDto> BuildDataHealthItems(
+        IReadOnlyCollection<Subject> subjects,
+        IReadOnlyCollection<AssignedSubject> assignedSubjects,
+        IReadOnlyCollection<Division> divisions,
+        IReadOnlyCollection<ShikshaMitra.Academic.Timetable.Timetables.Timetable> timetables,
+        IReadOnlyCollection<LessonPlan> lessonPlans,
+        IReadOnlyCollection<TeacherDiary> teacherDiaries,
+        IReadOnlyCollection<QuestionBankItem> questions,
+        IReadOnlyCollection<QuestionPaper> questionPapers,
+        IReadOnlyCollection<ExamSeatingPlan> seatingPlans,
+        IReadOnlyCollection<CalendarImpactLog> calendarImpacts)
+    {
+        var health = new List<AcademicDashboardDataHealthItemDto>();
+
+        AddHealth(
+            health,
+            "missing-setup",
+            "Setup completeness",
+            subjects.Count == 0 || divisions.Count == 0 || assignedSubjects.Count == 0,
+            "Subjects, divisions, and subject allocations are required before downstream academic modules are reliable.",
+            "/academic/curriculumSubjects");
+        AddHealth(
+            health,
+            "calendar-impact-backlog",
+            "Calendar impact backlog",
+            calendarImpacts.Any(i => !i.IsResolved),
+            "Unresolved calendar impacts can leave timetable, homework, lesson plan, or exam data out of sync.",
+            "/academic/calendarImpactLogs");
+        AddHealth(
+            health,
+            "lesson-diary-gap",
+            "Lesson diary gap",
+            lessonPlans.Count(p => p.Status == LessonPlanStatus.Approved) > teacherDiaries.Count(d => d.Status == TeacherDiaryStatus.Submitted),
+            "Approved lesson plans should eventually have submitted diary evidence.",
+            "/academic/lesson-plan");
+        AddHealth(
+            health,
+            "question-paper-lock",
+            "Question paper lock health",
+            questionPapers.Any(p => p.Status == QuestionPaperStatus.Published && !p.IsLocked),
+            "Published question papers should be locked or version-controlled before exam execution.",
+            "/academic/questionPapers");
+        AddHealth(
+            health,
+            "seat-plan-draft",
+            "Seat plan draft health",
+            seatingPlans.Any(p => p.Status == SeatingPlanStatus.InProgress || p.Status == SeatingPlanStatus.NeedsAttention),
+            "Seat plans in progress or needing attention should be resolved before exam day.",
+            "/academic/seatallocation");
+        AddHealth(
+            health,
+            "question-bank-approval",
+            "Question bank approval health",
+            questions.Any(q => q.Status == QuestionStatus.Submitted),
+            "Submitted questions should be approved/rejected so they do not sit in review backlog.",
+            "/academic/questionBank");
+        AddHealth(
+            health,
+            "timetable-draft-health",
+            "Timetable draft health",
+            timetables.Any(t => t.Status == TimetableStatus.Draft),
+            "Draft timetables should be validated and published, or downstream planning will be incomplete.",
+            "/academic/newTimetable");
+
+        if (health.Count == 0)
+        {
+            health.Add(new AcademicDashboardDataHealthItemDto
+            {
+                Key = "healthy",
+                Title = "Academic data health",
+                Status = "healthy",
+                Severity = "success",
+                Detail = "No immediate academic data-health issues were detected.",
+                ActionHref = "/academic/dashboard"
+            });
+        }
+
+        return health;
+    }
+
+    private static void AddHealth(
+        ICollection<AcademicDashboardDataHealthItemDto> health,
+        string key,
+        string title,
+        bool hasIssue,
+        string detail,
+        string actionHref)
+    {
+        if (!hasIssue)
+        {
+            return;
+        }
+
+        health.Add(new AcademicDashboardDataHealthItemDto
+        {
+            Key = key,
+            Title = title,
+            Status = "needsAttention",
+            Severity = "warning",
+            Detail = detail,
+            ActionHref = actionHref
+        });
     }
 
     public async Task<ExamPassFailCountDto> GetSubjectPassFailChartFilteredAsync(Guid standardId, Guid divisionId, string examName)
@@ -847,19 +1361,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         if (results.Count == 0 && examIds.Count > 0)
         {
             results = await _examResultDetailRepository.GetListAsync(r => examIds.Contains(r.ExamId));
-        }
-
-        if (results.Count == 0)
-        {
-            if (examName != null && examName.Contains("1"))
-            {
-                return new ExamPassFailCountDto { Passed = 45, Failed = 35 };
-            }
-            if (examName != null && examName.Contains("2"))
-            {
-                return new ExamPassFailCountDto { Passed = 52, Failed = 41 };
-            }
-            return new ExamPassFailCountDto { Passed = 38, Failed = 12 };
         }
 
         int passed = results.Count(r => r.ResultStatus == ExamStudentResultStatus.Pass);
@@ -912,19 +1413,6 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
                 CompletedChapters = completed,
                 PendingChapters = pending
             });
-        }
-
-        if (result.Subjects.Count == 0)
-        {
-            result.Subjects = new List<SubjectChapterCompletionDto>
-            {
-                new() { SubjectName = "Math", CompletedChapters = 12, PendingChapters = 3 },
-                new() { SubjectName = "Science", CompletedChapters = 10, PendingChapters = 5 },
-                new() { SubjectName = "English", CompletedChapters = 13, PendingChapters = 2 },
-                new() { SubjectName = "History", CompletedChapters = 11, PendingChapters = 4 },
-                new() { SubjectName = "Geography", CompletedChapters = 9, PendingChapters = 6 },
-                new() { SubjectName = "Physics", CompletedChapters = 14, PendingChapters = 1 }
-            };
         }
 
         return result;

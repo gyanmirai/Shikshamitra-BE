@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -7,7 +6,6 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
-using Volo.Abp.BlobStoring;
 
 namespace ShikshaMitra.Controllers.Academic.HomeworkAssignment;
 
@@ -17,12 +15,10 @@ namespace ShikshaMitra.Controllers.Academic.HomeworkAssignment;
 public class AssignmentController : AbpControllerBase
 {
     private readonly IAssignmentV2AppService _service;
-    private readonly IBlobContainer _blobContainer;
 
-    public AssignmentController(IAssignmentV2AppService service, IBlobContainer blobContainer)
+    public AssignmentController(IAssignmentV2AppService service)
     {
         _service = service;
-        _blobContainer = blobContainer;
     }
 
     /// <summary>
@@ -39,7 +35,7 @@ public class AssignmentController : AbpControllerBase
         IFormFile? attachment
     )
     {
-        var blobName = await UploadAttachmentAsync(attachment);
+        var blobName = ResolveUploadedFileName(attachment);
 
         if (blobName == null && Request.Form.TryGetValue("attachment", out var attachmentStr))
         {
@@ -67,6 +63,20 @@ public class AssignmentController : AbpControllerBase
     )
     {
         return await _service.GetListAsync(academicMediumId, filter);
+    }
+
+    /// <summary>
+    /// GET api/academic/assignments/dashboard?academicMediumId={id}
+    /// Returns action dashboard counts for publish, due, overdue, and evaluation queues.
+    /// </summary>
+    [HttpGet("dashboard")]
+    [ProducesResponseType(typeof(LearningTaskDashboardDto), 200)]
+    public async Task<LearningTaskDashboardDto> GetDashboard(
+        [FromQuery] Guid academicMediumId,
+        [FromQuery] LearningTaskDashboardFilterDto input
+    )
+    {
+        return await _service.GetDashboardAsync(academicMediumId, input);
     }
 
     /// <summary>
@@ -99,7 +109,7 @@ public class AssignmentController : AbpControllerBase
         IFormFile? attachment
     )
     {
-        var blobName = await UploadAttachmentAsync(attachment);
+        var blobName = ResolveUploadedFileName(attachment);
 
         if (blobName == null && Request.Form.TryGetValue("attachment", out var attachmentStr))
         {
@@ -141,17 +151,39 @@ public class AssignmentController : AbpControllerBase
         return await _service.ChangeStatusAsync(assignmentId, input);
     }
 
-    private async Task<string?> UploadAttachmentAsync(IFormFile? file)
+    /// <summary>
+    /// POST api/academic/assignments/{assignmentId}/reminder
+    /// Queues a reminder for published target divisions and returns the impacted counts.
+    /// </summary>
+    [HttpPost("{assignmentId:guid}/reminder")]
+    [ProducesResponseType(typeof(LearningTaskReminderResponseDto), 200)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(409)]
+    public async Task<LearningTaskReminderResponseDto> SendReminder(
+        Guid assignmentId,
+        [FromBody] LearningTaskReminderRequestDto input
+    )
     {
-        if (file == null) return null;
+        return await _service.SendReminderAsync(assignmentId, input);
+    }
 
-        const long maxSize = 5 * 1024 * 1024;
-        if (file.Length > maxSize)
-            throw new BusinessException("ShikshaMitra.Assignment:AttachmentTooLarge");
+    /// <summary>
+    /// GET api/academic/assignments/{assignmentId}/history
+    /// Returns human-readable lifecycle history for audit/review panels.
+    /// </summary>
+    [HttpGet("{assignmentId:guid}/history")]
+    [ProducesResponseType(typeof(LearningTaskHistoryDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<LearningTaskHistoryDto> GetHistory(Guid assignmentId)
+    {
+        return await _service.GetHistoryAsync(assignmentId);
+    }
 
-        var blobName = $"assignment/{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
-        await using var stream = file.OpenReadStream();
-        await _blobContainer.SaveAsync(blobName, stream, overrideExisting: true);
-        return blobName;
+    private string? ResolveUploadedFileName(IFormFile? file)
+    {
+        if (file != null)
+            throw new UserFriendlyException("Upload files with /api/files first, then send the returned file name as attachment.");
+
+        return null;
     }
 }

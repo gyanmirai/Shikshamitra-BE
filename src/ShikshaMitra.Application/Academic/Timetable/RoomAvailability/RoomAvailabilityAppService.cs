@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -51,17 +52,6 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     public async Task<List<RoomAvailabilityDto>> GetAvailabilityAsync(RoomAvailabilityFilterDto input)
     {
         var rooms = await _roomRepository.GetListAsync();
-
-        if (input.BuildingId.HasValue)
-        {
-            rooms = rooms.Where(r => r.BuildingId == input.BuildingId.Value).ToList();
-        }
-
-        if (input.FloorId.HasValue)
-        {
-            rooms = rooms.Where(r => r.FloorId == input.FloorId.Value).ToList();
-        }
-
         var buildings = await _buildingRepository.GetListAsync();
         var floors = await _floorRepository.GetListAsync();
         var roomTypes = await _roomTypeRepository.GetListAsync();
@@ -69,6 +59,11 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         var buildingLookup = buildings.ToDictionary(b => b.Id, b => b.BuildingName);
         var floorLookup = floors.ToDictionary(f => f.Id, f => f.FloorName);
         var roomTypeLookup = roomTypes.ToDictionary(t => t.Id, t => t.RoomTypeName);
+
+        rooms = ApplyRoomMasterFilters(rooms, input, buildingLookup, floorLookup, roomTypeLookup)
+            .OrderByDescending(r => r.CreationTime)
+            .ThenBy(r => r.RoomName)
+            .ToList();
 
         var result = new List<RoomAvailabilityDto>();
 
@@ -81,7 +76,9 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 room.Id, 
                 input.Date, 
                 timeStart, 
-                timeEnd
+                timeEnd,
+                standardId: input.StandardId,
+                divisionId: input.DivisionId
             );
 
             var status = "available";
@@ -113,14 +110,73 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 OccupiedBy = occupiedBy,
                 ConflictReason = reason,
                 ConflictSeverity = conflictCheck.OverallSeverity,
+                Source = ResolveAvailabilitySource(conflictCheck.Conflicts.FirstOrDefault()),
+                NextAvailableAt = ResolveNextAvailableAt(conflictCheck.Conflicts.FirstOrDefault()),
                 UtilizationPercentage = new Random().Next(40, 85)
             };
 
             result.Add(dto);
         }
 
-        return result;
+        return input.IncludeOccupied
+            ? result
+            : result.Where(r => r.Status == "available").ToList();
     }
+
+    private static IEnumerable<Room> ApplyRoomMasterFilters(
+        IEnumerable<Room> rooms,
+        RoomAvailabilityFilterDto input,
+        IReadOnlyDictionary<Guid, string> buildingLookup,
+        IReadOnlyDictionary<Guid, string> floorLookup,
+        IReadOnlyDictionary<Guid, string> roomTypeLookup)
+    {
+        var query = rooms;
+
+        if (input.BuildingId.HasValue)
+        {
+            query = query.Where(r => r.BuildingId == input.BuildingId.Value);
+        }
+
+        if (input.FloorId.HasValue)
+        {
+            query = query.Where(r => r.FloorId == input.FloorId.Value);
+        }
+
+        if (input.RoomTypeId.HasValue)
+        {
+            query = query.Where(r => r.RoomTypeId == input.RoomTypeId.Value);
+        }
+
+        if (input.MinimumCapacity.HasValue && input.MinimumCapacity.Value > 0)
+        {
+            query = query.Where(r => r.Capacity >= input.MinimumCapacity.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(input.Search))
+        {
+            var search = input.Search.Trim();
+            query = query.Where(r =>
+                ContainsIgnoreCase(r.RoomName, search) ||
+                ContainsIgnoreCase(BuildingName(r, buildingLookup), search) ||
+                ContainsIgnoreCase(FloorName(r, floorLookup), search) ||
+                ContainsIgnoreCase(RoomTypeName(r, roomTypeLookup), search) ||
+                r.Features?.Any(feature => ContainsIgnoreCase(feature, search)) == true);
+        }
+
+        return query;
+    }
+
+    private static string BuildingName(Room room, IReadOnlyDictionary<Guid, string> lookup) =>
+        lookup.TryGetValue(room.BuildingId, out var name) ? name : string.Empty;
+
+    private static string FloorName(Room room, IReadOnlyDictionary<Guid, string> lookup) =>
+        lookup.TryGetValue(room.FloorId, out var name) ? name : string.Empty;
+
+    private static string RoomTypeName(Room room, IReadOnlyDictionary<Guid, string> lookup) =>
+        lookup.TryGetValue(room.RoomTypeId, out var name) ? name : string.Empty;
+
+    private static bool ContainsIgnoreCase(string? value, string search) =>
+        value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
 
     public async Task<ConflictCheckResultDto> CheckConflictsAsync(CheckConflictRequestDto input)
     {
@@ -160,10 +216,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             input.TeacherId, input.StandardId, input.DivisionId
         );
 
-        if (conflicts.OverallSeverity == "critical")
-        {
-            throw new Volo.Abp.UserFriendlyException("Cannot complete booking: Critical conflicts detected. Check conflict log.");
-        }
+        EnsureNoCriticalConflicts(conflicts, "Cannot complete booking");
 
         Guid? configId = null;
 
@@ -195,6 +248,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 {
                     continue;
                 }
+
+                EnsureNoCriticalConflicts(stepConflict, $"Cannot create recurring booking for {date:yyyy-MM-dd}");
 
                 var subReservation = new RoomReservation(
                     GuidGenerator.Create(), CurrentTenant.Id, input.RoomId, date,
@@ -366,6 +421,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         var reservation = await _reservationRepository.GetAsync(id);
         var oldValJson = JsonSerializer.Serialize(reservation);
 
+        await EnsureReservationCanBeApprovedAsync(reservation);
+
         reservation.Approve(CurrentUser.Id ?? Guid.Empty);
         await _reservationRepository.UpdateAsync(reservation);
 
@@ -376,6 +433,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 !r.IsRecurring);
             foreach (var child in children)
             {
+                await EnsureReservationCanBeApprovedAsync(child);
                 child.Approve(CurrentUser.Id ?? Guid.Empty);
                 await _reservationRepository.UpdateAsync(child);
             }
@@ -396,6 +454,43 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             "Reservation approved."
         );
         await _auditLogRepository.InsertAsync(auditLog);
+    }
+
+    private async Task EnsureReservationCanBeApprovedAsync(RoomReservation reservation)
+    {
+        var conflicts = await _conflictService.CheckConflictsAsync(
+            reservation.RoomId,
+            reservation.Date,
+            reservation.StartTime,
+            reservation.EndTime,
+            reservation.Id,
+            reservation.TeacherId,
+            reservation.StandardId,
+            reservation.DivisionId
+        );
+
+        EnsureNoCriticalConflicts(conflicts, "Cannot approve booking");
+    }
+
+    private static void EnsureNoCriticalConflicts(ConflictCheckResult conflicts, string action)
+    {
+        if (conflicts.OverallSeverity != "critical")
+        {
+            return;
+        }
+
+        var criticalMessages = conflicts.Conflicts
+            .Where(conflict => conflict.Severity == "critical")
+            .Select(conflict => conflict.Message)
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .Distinct()
+            .ToList();
+
+        var detail = criticalMessages.Count > 0
+            ? string.Join(" ", criticalMessages)
+            : "Critical conflicts detected.";
+
+        throw new Volo.Abp.UserFriendlyException($"{action}: {detail}");
     }
 
     public async Task RejectReservationAsync(Guid id, string reason)
@@ -572,16 +667,63 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             }
             else
             {
+                var conflict = await _conflictService.CheckConflictsAsync(roomId, date, cfg.Start, cfg.End);
+                var block = conflict.Conflicts.FirstOrDefault(c => c.Severity == "critical");
+
                 schedule.Slots.Add(new ScheduleSlotDto
                 {
                     Period = cfg.Period,
                     Time = cfg.Time,
-                    Status = "free",
-                    Details = "Available"
+                    Status = ResolveScheduleStatus(block),
+                    Details = block?.Message ?? "Available",
+                    OccupiedBy = ResolveAvailabilitySource(block)
                 });
             }
         }
 
         return schedule;
+    }
+
+    private static string? ResolveAvailabilitySource(ConflictItem? conflict)
+    {
+        return conflict?.Type switch
+        {
+            "classAvailability" => "Institute setup class shift",
+            "maintenanceCheck" => "Maintenance",
+            "holidayCalendar" => "Academic calendar",
+            "roomAvailability" => "Timetable / reservation",
+            _ => null
+        };
+    }
+
+    private static string? ResolveNextAvailableAt(ConflictItem? conflict)
+    {
+        if (conflict?.Type != "classAvailability")
+        {
+            return null;
+        }
+
+        var marker = " to ";
+        var index = conflict.Message.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var remainder = conflict.Message[(index + marker.Length)..];
+        var endIndex = remainder.IndexOf(" based on", StringComparison.OrdinalIgnoreCase);
+        return endIndex > 0 ? remainder[..endIndex] : null;
+    }
+
+    private static string ResolveScheduleStatus(ConflictItem? conflict)
+    {
+        return conflict?.Type switch
+        {
+            "classAvailability" => "class",
+            "maintenanceCheck" => "maintenance",
+            "holidayCalendar" => "event",
+            "roomAvailability" => "reserved",
+            _ => "free"
+        };
     }
 }

@@ -343,6 +343,11 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 
 	private static IEnumerable<string> HrStaffPlatformPermissions()
 	{
+		yield return "ShikshaMitra.UserScope";
+		yield return "ShikshaMitra.UserScope.Assign";
+		yield return "ShikshaMitra.UserScope.Revoke";
+		yield return "ShikshaMitra.UserScope.View";
+		yield return "ShikshaMitra.UserScope.BulkAssign";
 		yield return IdentityPermissions.Roles.Default;
 		yield return "AbpIdentity.Roles.Add";
 		yield return "AbpIdentity.Roles.Create";
@@ -355,6 +360,10 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		yield return "AbpTenantManagement.Tenants.Add";
 		yield return TenantManagementPermissions.Tenants.Delete;
 		yield return TenantManagementPermissions.Tenants.ManageConnectionStrings;
+		foreach (var permission in AdmissionCrmPlatformPermissions.All)
+		{
+			yield return permission;
+		}
 	}
 
 }

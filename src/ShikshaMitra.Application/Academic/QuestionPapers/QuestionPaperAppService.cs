@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -105,7 +106,10 @@ public class QuestionPaperAppService(
     public async Task DeletePaperAsync(Guid id)
     {
         var paper = await GetPaperEntityAsync(id);
-        if (paper.Status is QuestionPaperStatus.Published or QuestionPaperStatus.Locked)
+        var usageCount = await usageRepository.CountAsync(x =>
+            x.Source == QuestionUsageSource.QuestionPaper &&
+            x.SourceEntityId == paper.Id);
+        if (usageCount > 0 || paper.IsLocked || paper.Status is QuestionPaperStatus.Submitted or QuestionPaperStatus.Approved or QuestionPaperStatus.Published or QuestionPaperStatus.Locked)
         {
             paper.Status = QuestionPaperStatus.Archived;
             await paperRepository.UpdateAsync(paper, autoSave: true);
@@ -115,10 +119,10 @@ public class QuestionPaperAppService(
         await paperRepository.DeleteAsync(paper, autoSave: true);
     }
 
-    public Task<QuestionPaperDto> SubmitAsync(Guid id) => ChangeStatusAsync(id, QuestionPaperStatus.Submitted);
-    public Task<QuestionPaperDto> ApproveAsync(Guid id, PaperReviewDto input) => ChangeStatusAsync(id, QuestionPaperStatus.Approved);
-    public Task<QuestionPaperDto> RejectAsync(Guid id, PaperReviewDto input) => ChangeStatusAsync(id, QuestionPaperStatus.Rejected);
-    public Task<QuestionPaperDto> ArchiveAsync(Guid id) => ChangeStatusAsync(id, QuestionPaperStatus.Archived);
+    public Task<QuestionPaperDto> SubmitAsync(Guid id) => ChangeStatusAsync(id, QuestionPaperStatus.Submitted, null);
+    public Task<QuestionPaperDto> ApproveAsync(Guid id, PaperReviewDto input) => ChangeStatusAsync(id, QuestionPaperStatus.Approved, input);
+    public Task<QuestionPaperDto> RejectAsync(Guid id, PaperReviewDto input) => ChangeStatusAsync(id, QuestionPaperStatus.Rejected, input);
+    public Task<QuestionPaperDto> ArchiveAsync(Guid id) => ChangeStatusAsync(id, QuestionPaperStatus.Archived, null);
 
     public async Task<QuestionPaperDto> PublishAsync(Guid id)
     {
@@ -128,7 +132,8 @@ public class QuestionPaperAppService(
             throw new BusinessException("ShikshaMitra.QuestionPapers:OnlyApprovedCanPublish");
         }
 
-        await ValidatePaperMarksAsync(paper);
+        await ValidatePaperMarksAsync(paper, requireQuestions: true);
+        await ValidateBlueprintIfEnabledAsync(paper);
         paper.Status = QuestionPaperStatus.Published;
 
         var existingLogs = await usageRepository.GetListAsync(x => x.Source == QuestionUsageSource.QuestionPaper && x.SourceEntityId == paper.Id);
@@ -154,6 +159,11 @@ public class QuestionPaperAppService(
     public async Task<QuestionPaperDto> LockAsync(Guid id)
     {
         var paper = await GetPaperEntityAsync(id);
+        if (paper.Status is not (QuestionPaperStatus.Approved or QuestionPaperStatus.Published))
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:OnlyApprovedOrPublishedCanLock");
+        }
+
         paper.IsLocked = true;
         paper.Status = QuestionPaperStatus.Locked;
         await paperRepository.UpdateAsync(paper, autoSave: true);
@@ -206,7 +216,12 @@ public class QuestionPaperAppService(
     public async Task<BlueprintValidationResultDto> ValidateBlueprintAsync(Guid paperId)
     {
         var paper = await GetPaperEntityAsync(paperId);
-        var blueprint = (await GetBlueprintEntityAsync(paperId, true))!;
+        var blueprint = await GetBlueprintEntityAsync(paperId, true);
+        if (blueprint == null)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:BlueprintRequired");
+        }
+
         var questionMarks = paper.Questions.Sum(x => x.Marks);
         var result = new BlueprintValidationResultDto
         {
@@ -265,10 +280,14 @@ public class QuestionPaperAppService(
             x.SubjectId == paper.SubjectId &&
             x.Status == QuestionStatus.Approved &&
             !x.IsArchived);
+        var setting = await GetSettingsEntityAsync(paper.AcademicYearId);
+        var approvedQuestionIds = approvedQuestions.Select(x => x.Id).ToList();
+        var recentlyUsedQuestionIds = await GetRecentlyUsedQuestionIdsAsync(setting, approvedQuestionIds);
 
         var selected = blueprint.ChapterRules.Count > 0
             ? approvedQuestions.Where(q => q.ChapterId.HasValue && blueprint.ChapterRules.Any(r => r.ChapterId == q.ChapterId.Value)).ToList()
             : approvedQuestions;
+        selected = selected.Where(q => !recentlyUsedQuestionIds.Contains(q.Id)).ToList();
 
         if (selected.Count == 0)
         {
@@ -312,9 +331,40 @@ public class QuestionPaperAppService(
         EnsureEditable(paper);
         var question = await questionRepository.FindAsync(input.QuestionBankItemId) ?? throw new BusinessException("ShikshaMitra.QuestionBank:NotFound");
         var setting = await GetSettingsEntityAsync(paper.AcademicYearId);
+        if (input.QuestionPaperSectionId == Guid.Empty ||
+            paper.Sections.All(x => x.Id != input.QuestionPaperSectionId))
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:SectionNotFound");
+        }
+
+        if (input.Marks <= 0)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:InvalidQuestionMarks");
+        }
+
+        if (paper.Questions.Any(x => x.QuestionBankItemId == input.QuestionBankItemId))
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:DuplicateQuestionInPaper");
+        }
+
+        if (question.IsArchived ||
+            question.AcademicYearId != paper.AcademicYearId ||
+            question.StandardId != paper.StandardId ||
+            question.SubjectId != paper.SubjectId)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:QuestionNotEligibleForPaper");
+        }
+
         if (setting.RequireApprovedQuestions && question.Status != QuestionStatus.Approved)
         {
             throw new BusinessException("ShikshaMitra.QuestionPapers:OnlyApprovedQuestionsAllowed");
+        }
+
+        await EnsureQuestionIsNotRecentlyUsedAsync(setting, question.Id);
+
+        if (paper.Questions.Sum(x => x.Marks) + input.Marks > paper.TotalMarks)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:QuestionMarksExceedPaperTotal");
         }
 
         paper.Questions.Add(new QuestionPaperQuestion(GuidGenerator.Create(), paper.Id, input.QuestionPaperSectionId, input.QuestionBankItemId, input.QuestionNumber, input.Marks, input.SortOrder, input.ChoiceGroupCode));
@@ -390,19 +440,70 @@ public class QuestionPaperAppService(
         };
     }
 
-    private async Task<QuestionPaperDto> ChangeStatusAsync(Guid id, QuestionPaperStatus status)
+    private async Task<QuestionPaperDto> ChangeStatusAsync(Guid id, QuestionPaperStatus status, PaperReviewDto? input)
     {
         var paper = await GetPaperEntityAsync(id);
-        if (status == QuestionPaperStatus.Submitted) await ValidatePaperMarksAsync(paper);
+        switch (status)
+        {
+            case QuestionPaperStatus.Submitted:
+                if (paper.Status is not (QuestionPaperStatus.Draft or QuestionPaperStatus.Generated or QuestionPaperStatus.Rejected))
+                {
+                    throw new BusinessException("ShikshaMitra.QuestionPapers:CannotSubmit");
+                }
+
+                await ValidatePaperMarksAsync(paper, requireQuestions: true);
+                await ValidateBlueprintIfEnabledAsync(paper);
+                break;
+            case QuestionPaperStatus.Approved:
+            case QuestionPaperStatus.Rejected:
+                if (paper.Status != QuestionPaperStatus.Submitted)
+                {
+                    throw new BusinessException("ShikshaMitra.QuestionPapers:OnlySubmittedCanReview");
+                }
+
+                EnsureCanReview(paper);
+                if (status == QuestionPaperStatus.Rejected && string.IsNullOrWhiteSpace(input?.Comment))
+                {
+                    throw new BusinessException("ShikshaMitra.QuestionPapers:RejectCommentRequired");
+                }
+
+                break;
+            case QuestionPaperStatus.Archived:
+                break;
+            default:
+                throw new BusinessException("ShikshaMitra.QuestionPapers:InvalidStatusTransition");
+        }
+
         paper.Status = status;
         await paperRepository.UpdateAsync(paper, autoSave: true);
         return Map(paper);
     }
 
-    private async Task ValidatePaperMarksAsync(QuestionPaper paper)
+    private async Task ValidateBlueprintIfEnabledAsync(QuestionPaper paper)
+    {
+        var setting = await GetSettingsEntityAsync(paper.AcademicYearId);
+        if (!setting.EnableBlueprintValidation)
+        {
+            return;
+        }
+
+        var validation = await ValidateBlueprintAsync(paper.Id);
+        if (!validation.IsValid)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:InvalidBlueprint")
+                .WithData("Errors", string.Join("; ", validation.Errors));
+        }
+    }
+
+    private async Task ValidatePaperMarksAsync(QuestionPaper paper, bool requireQuestions = false)
     {
         var sectionMarks = paper.Sections.Sum(x => x.Marks);
         var questionMarks = paper.Questions.Sum(x => x.Marks);
+        if (requireQuestions && paper.Questions.Count == 0)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:QuestionsRequired");
+        }
+
         if (paper.Sections.Count > 0 && sectionMarks != paper.TotalMarks)
         {
             throw new BusinessException("ShikshaMitra.QuestionPapers:SectionMarksMismatch");
@@ -468,7 +569,7 @@ public class QuestionPaperAppService(
 
     private static void EnsureEditable(QuestionPaper paper)
     {
-        if (paper.IsLocked || paper.Status is QuestionPaperStatus.Published or QuestionPaperStatus.Locked)
+        if (paper.IsLocked || paper.Status is QuestionPaperStatus.Submitted or QuestionPaperStatus.Approved or QuestionPaperStatus.Published or QuestionPaperStatus.Locked or QuestionPaperStatus.Archived)
         {
             throw new BusinessException("ShikshaMitra.QuestionPapers:PaperLocked");
         }
@@ -476,12 +577,49 @@ public class QuestionPaperAppService(
 
     private static void ValidatePaperInput(CreateUpdateQuestionPaperDto input)
     {
+        if (input.AcademicYearId == Guid.Empty) throw new BusinessException("ShikshaMitra.QuestionPapers:AcademicYearRequired");
         if (input.StandardId == Guid.Empty) throw new BusinessException("ShikshaMitra.QuestionPapers:StandardRequired");
         if (input.SubjectId == Guid.Empty) throw new BusinessException("ShikshaMitra.QuestionPapers:SubjectRequired");
         if (string.IsNullOrWhiteSpace(input.PaperTitle)) throw new BusinessException("ShikshaMitra.QuestionPapers:TitleRequired");
         if (input.TotalMarks <= 0) throw new BusinessException("ShikshaMitra.QuestionPapers:InvalidMarks");
         if (input.DurationMinutes <= 0) throw new BusinessException("ShikshaMitra.QuestionPapers:InvalidDuration");
+        if (input.Sections.Any(x => string.IsNullOrWhiteSpace(x.SectionName))) throw new BusinessException("ShikshaMitra.QuestionPapers:SectionNameRequired");
+        if (input.Sections.Any(x => x.Marks <= 0)) throw new BusinessException("ShikshaMitra.QuestionPapers:InvalidSectionMarks");
         if (input.Sections.Count > 0 && input.Sections.Sum(x => x.Marks) != input.TotalMarks) throw new BusinessException("ShikshaMitra.QuestionPapers:SectionMarksMismatch");
+    }
+
+    private async Task<HashSet<Guid>> GetRecentlyUsedQuestionIdsAsync(QuestionPaperSetting setting, List<Guid> questionIds)
+    {
+        if (!setting.EnableRecentQuestionBlock || questionIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var days = Math.Clamp(setting.RecentQuestionBlockDays, 1, 365);
+        var cutoff = Clock.Now.ToUniversalTime().AddDays(-days);
+        var recentUsage = await usageRepository.GetListAsync(x =>
+            questionIds.Contains(x.QuestionBankItemId) &&
+            x.Source == QuestionUsageSource.QuestionPaper &&
+            x.UsedAt >= cutoff);
+
+        return recentUsage.Select(x => x.QuestionBankItemId).ToHashSet();
+    }
+
+    private async Task EnsureQuestionIsNotRecentlyUsedAsync(QuestionPaperSetting setting, Guid questionId)
+    {
+        var recentlyUsedQuestionIds = await GetRecentlyUsedQuestionIdsAsync(setting, new List<Guid> { questionId });
+        if (recentlyUsedQuestionIds.Contains(questionId))
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:QuestionRecentlyUsed");
+        }
+    }
+
+    private void EnsureCanReview(QuestionPaper paper)
+    {
+        if (CurrentUser.Id.HasValue && paper.CreatorId == CurrentUser.Id.Value)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:CannotReviewOwnPaper");
+        }
     }
 
     private static IQueryable<QuestionPaper> ApplySearch(IQueryable<QuestionPaper> query, QuestionPaperSearchInput input)

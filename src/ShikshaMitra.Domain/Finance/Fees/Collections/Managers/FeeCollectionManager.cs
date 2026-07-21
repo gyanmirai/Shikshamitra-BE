@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
@@ -27,6 +29,7 @@ public class FeeCollectionManager(
 	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
 	IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
 	IDueFeeRepository dueFeeRepository,
+	IRepository<FeeHead, Guid> feeHeadRepository,
 	IFeePaymentReceiptRepository feePaymentReceiptRepository,
 	FeeReceiptManager feeReceiptManager,
 	IReceiptNumberSequenceRepository receiptNumberSequenceRepository,
@@ -101,14 +104,33 @@ public class FeeCollectionManager(
 			var dueFees = await ApplyDueFeeAllocationsAsync(command.DueFeeAllocations);
 			await dueFeeRepository.UpdateManyAsync(dueFees, autoSave: false);
 
-			var allocationRows = command.DueFeeAllocations
-				.Select(a => new FeeCollectionDueFeeAllocation(
+			var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
+			var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
+			var feeHeadNames = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
+			var dueFeeMap = dueFees.ToDictionary(d => d.Id);
+
+			var allocationRows = command.DueFeeAllocations.Select(a =>
+			{
+				var row = new FeeCollectionDueFeeAllocation(
 					GuidGenerator.Create(),
 					currentTenant.Id,
 					metadata.Id,
 					a.DueFeeId,
-					a.Amount))
-				.ToList();
+					a.Amount);
+
+				if (dueFeeMap.TryGetValue(a.DueFeeId, out var dueFee))
+				{
+					row.SetScheduleSnapshot(
+						feeHeadNames.GetValueOrDefault(dueFee.FeeHeadId),
+						dueFee.GetDisplayInstallmentLabel(),
+						dueFee.CoverageStartDate,
+						dueFee.CoverageEndDate,
+						dueFee.ScheduleDueDate,
+						dueFee.ScheduleSource);
+				}
+
+				return row;
+			}).ToList();
 			await dueFeeAllocationRepository.InsertManyAsync(allocationRows, autoSave: false);
 		}
 

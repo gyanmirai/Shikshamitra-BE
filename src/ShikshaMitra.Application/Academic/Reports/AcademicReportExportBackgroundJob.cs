@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Reports;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.DependencyInjection;
@@ -28,12 +29,26 @@ public class AcademicReportExportBackgroundJob(
         using (currentTenant.Change(args.TenantId))
         {
             var job = await exportJobRepository.GetAsync(args.JobId);
+            if (job.Status == HrReportExportStatus.Cancelled)
+            {
+                logger.LogInformation("Skipping cancelled Academic report export {JobId}", args.JobId);
+                return;
+            }
+
             job.MarkRunning(DateTime.UtcNow);
             await exportJobRepository.UpdateAsync(job, autoSave: true);
 
             try
             {
+                args.Request = reportGenerator.NormalizeAndValidateRequest(args.Request, exportAllRows: true);
                 var report = await reportGenerator.GenerateAsync(args.Request, args.UserId, args.TenantId, exportAllRows: true);
+
+                job = await exportJobRepository.GetAsync(args.JobId);
+                if (job.Status == HrReportExportStatus.Cancelled)
+                {
+                    logger.LogInformation("Academic report export {JobId} was cancelled before file save", args.JobId);
+                    return;
+                }
 
                 var format = string.Equals(args.Request.Format, AcademicReportFormat.Pdf, StringComparison.OrdinalIgnoreCase)
                     ? AcademicReportFormat.Pdf
@@ -49,6 +64,13 @@ public class AcademicReportExportBackgroundJob(
 
                 await blobContainer.SaveAsync(blobName, bytes, overrideExisting: true);
 
+                job = await exportJobRepository.GetAsync(args.JobId);
+                if (job.Status == HrReportExportStatus.Cancelled)
+                {
+                    logger.LogInformation("Academic report export {JobId} was cancelled before completion update", args.JobId);
+                    return;
+                }
+
                 job.MarkCompleted(blobName, DateTime.UtcNow, report.TotalCount, bytes.LongLength);
                 await exportJobRepository.UpdateAsync(job, autoSave: true);
 
@@ -57,8 +79,12 @@ public class AcademicReportExportBackgroundJob(
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to execute Academic report export {JobId}", args.JobId);
-                job.MarkFailed(ex.Message, DateTime.UtcNow);
-                await exportJobRepository.UpdateAsync(job, autoSave: true);
+                job = await exportJobRepository.GetAsync(args.JobId);
+                if (job.Status != HrReportExportStatus.Cancelled)
+                {
+                    job.MarkFailed(ex.Message, DateTime.UtcNow);
+                    await exportJobRepository.UpdateAsync(job, autoSave: true);
+                }
             }
         }
     }

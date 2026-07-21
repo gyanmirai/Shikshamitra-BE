@@ -41,7 +41,7 @@ public class SubjectManager(
 			// Check for duplicate subject name within the same education medium
 			var normalizedName = name.Trim().ToUpperInvariant();
 			var existingByName = await subjectRepository.FindAsync(s =>
-				s.Name.ToUpper() == normalizedName && s.EducationMediumId == educationMediumId && s.Status != SubjectMasterStatus.Archived);
+				s.Name.ToUpper() == normalizedName && s.EducationMediumId == educationMediumId);
 			if (existingByName != null)
 			{
 				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectName)
@@ -101,8 +101,7 @@ public class SubjectManager(
 			var duplicateName = await subjectRepository.FindAsync(s =>
 				s.Name.ToUpper() == normalizedName
 				&& s.EducationMediumId == existingSubject.EducationMediumId
-				&& s.Id != id
-				&& s.Status != SubjectMasterStatus.Archived);
+				&& s.Id != id);
 			if (duplicateName != null)
 			{
 				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectName)

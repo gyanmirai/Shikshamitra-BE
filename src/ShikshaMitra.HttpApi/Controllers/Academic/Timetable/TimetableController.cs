@@ -34,6 +34,17 @@ public class TimetableController(
         return Ok(new { message = "Timetable saved successfully" });
     }
 
+    [HttpPost("by-standard/{standardId}/division/{divisionId}/validate")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
+    public async Task<IActionResult> ValidateAsync(
+        [FromRoute] Guid standardId,
+        [FromRoute] Guid divisionId,
+        [FromBody] SaveTimetableDto input)
+    {
+        await timetableAppService.ValidateAsync(standardId, divisionId, input);
+        return Ok(new { message = "Timetable validation passed" });
+    }
+
     [HttpPost("assign-teachers")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public async Task<IActionResult> AssignTeachersAsync([FromBody] AssignTeachersDto input)

@@ -63,6 +63,11 @@ public class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoomListDto
 			query = query.Where(r => r.BuildingId == input.BuildingId.Value);
 		}
 
+		if (input.FloorId.HasValue)
+		{
+			query = query.Where(r => r.FloorId == input.FloorId.Value);
+		}
+
 		if (input.RoomTypeId.HasValue)
 		{
 			query = query.Where(r => r.RoomTypeId == input.RoomTypeId.Value);

@@ -64,6 +64,11 @@ public class HomeworkManager : DomainService
 		}
 
 		var divisionIds = divisions.Select(d => d.DivisionId).ToList();
+		if (divisionIds.Distinct().Count() != divisionIds.Count)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:DuplicateDivisionSchedule");
+		}
+
 		var divisionEntities = await _divisionRepository.GetListAsync(d =>
 			divisionIds.Contains(d.Id)
 		);
@@ -184,6 +189,22 @@ public class HomeworkManager : DomainService
 	public async Task<HomeworkAssignmentEntity> ValidateCanPublishAsync(Guid homeworkId)
 	{
 		var homework = await _repository.GetAsync(homeworkId, includeDetails: true);
+
+		if (homework.DivisionSchedules == null || !homework.DivisionSchedules.Any())
+		{
+			throw new BusinessException("ShikshaMitra.Homework:DivisionScheduleRequired").WithData(
+				"HomeworkId",
+				homeworkId
+			);
+		}
+
+		if (homework.Status == HomeworkStatus.Closed)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:CannotPublishClosed").WithData(
+				"HomeworkId",
+				homeworkId
+			);
+		}
 
 		if (homework.AllDivisionsPublished)
 		{

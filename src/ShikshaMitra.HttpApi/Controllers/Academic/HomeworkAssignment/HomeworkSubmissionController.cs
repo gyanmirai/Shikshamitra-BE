@@ -4,9 +4,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Common.Files;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
-using Volo.Abp.BlobStoring;
 
 namespace ShikshaMitra.Controllers.Academic.HomeworkAssignment;
 
@@ -15,7 +15,7 @@ namespace ShikshaMitra.Controllers.Academic.HomeworkAssignment;
 [Route("api/academic/homework-submissions")]
 public class HomeworkSubmissionController(
     IStudentSubmissionAppService service,
-    IBlobContainer blobContainer
+    IFileStorageAppService fileStorageAppService
 ) : AbpControllerBase
 {
     /// <summary>
@@ -27,25 +27,53 @@ public class HomeworkSubmissionController(
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
     [ProducesResponseType(409)]
+    [Consumes("multipart/form-data")]
+    [DisableRequestSizeLimit]
+    [RequestFormLimits(MultipartBodyLengthLimit = 104857600)]
     public async Task<IActionResult> UploadHomeworkSubmission(
         [FromForm] UploadHomeworkSubmissionDto input,
-        IFormFile file
+        [FromForm] IFormFile? file
     )
     {
-        var blobName = await UploadFileAsync(file, "homework-submission");
-        var result = await service.UploadHomeworkSubmissionAsync(input, blobName, file.FileName);
+        var uploadedFile = await ResolveUploadedFileAsync(input, file);
+        var result = await service.UploadHomeworkSubmissionAsync(
+            input,
+            uploadedFile.FileName,
+            uploadedFile.OriginalFileName
+        );
         return StatusCode(201, result);
     }
 
-    private async Task<string> UploadFileAsync(IFormFile file, string prefix)
+    private async Task<(string FileName, string? OriginalFileName)> ResolveUploadedFileAsync(
+        UploadHomeworkSubmissionDto input,
+        IFormFile? file)
     {
-        const long maxSize = 10 * 1024 * 1024;
-        if (file.Length > maxSize)
-            throw new BusinessException($"ShikshaMitra.{prefix}:FileTooLarge");
+        if (file == null)
+        {
+            return (RequireUploadedFileName(input.FileName), input.OriginalFileName);
+        }
 
-        var blobName = $"{prefix}/{System.Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
-        await using var stream = file.OpenReadStream();
-        await blobContainer.SaveAsync(blobName, stream, overrideExisting: true);
-        return blobName;
+        if (file.Length == 0)
+        {
+            throw new UserFriendlyException("Uploaded file cannot be empty.");
+        }
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+
+        var fileName = await fileStorageAppService.UploadAsync(file.FileName, ms.ToArray());
+        var originalFileName = string.IsNullOrWhiteSpace(input.OriginalFileName)
+            ? file.FileName
+            : input.OriginalFileName;
+
+        return (fileName, originalFileName);
+    }
+
+    private static string RequireUploadedFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            throw new UserFriendlyException("Uploaded file name is required.");
+
+        return fileName;
     }
 }

@@ -13,6 +13,8 @@ public class RoomAvailabilityFilterDto
     public Guid? FloorId { get; set; }
     public Guid? RoomTypeId { get; set; }
     public int? MinimumCapacity { get; set; }
+    public Guid? StandardId { get; set; }
+    public Guid? DivisionId { get; set; }
     public bool IncludeOccupied { get; set; } = true;
     public string? Search { get; set; }
 }

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
@@ -22,6 +23,7 @@ public class LectureSlotAppService(
     ITimetableRepository timetableRepository,
     IRepository<Standard, Guid> standardRepository,
     IRepository<Room, Guid> roomRepository,
+    IRepository<ShiftManagement, Guid> shiftRepository,
     IWeeklyLectureSlotRepository weeklyLectureSlotRepository
 ) : ApplicationService, ILectureSlotAppService
 {
@@ -61,12 +63,14 @@ public class LectureSlotAppService(
             .ToList();
 
         var standardsDict = allStandards.ToDictionary(s => s.Id, s => s.Name);
+        var shiftInfos = await LoadClassShiftInfosAsync(allStandards);
         var roomNames = await LoadRoomNamesAsync(pagedConfigs);
         var requiredLecturesDict = await LoadRequiredWeeklyLecturesAsync(standardIds);
 
         var items = pagedConfigs.Select(config => MapToListDto(
             config,
             standardsDict.GetValueOrDefault(config.StandardId, string.Empty),
+            shiftInfos.GetValueOrDefault(config.StandardId),
             roomNames,
             requiredLecturesDict.GetValueOrDefault(config.StandardId, 0))).ToList();
 
@@ -78,10 +82,11 @@ public class LectureSlotAppService(
     {
         var config = await lectureSlotConfigRepository.GetAsync(id);
         var standard = await standardRepository.GetAsync(config.StandardId);
+        var shiftInfo = await LoadClassShiftInfoAsync(standard);
         var roomNames = await LoadRoomNamesAsync([config]);
         var weeklyLectureSlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(config.StandardId);
 
-        return MapToDto(config, standard.Name, roomNames, weeklyLectureSlot?.GetTotalLectures() ?? 0);
+        return MapToDto(config, standard.Name, shiftInfo, roomNames, weeklyLectureSlot?.GetTotalLectures() ?? 0);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
@@ -94,6 +99,9 @@ public class LectureSlotAppService(
         }
 
         await EnsureRoomsExistAsync(input.SlotConfigurations);
+        var standard = await standardRepository.GetAsync(input.StandardId);
+        var shiftInfo = await RequireClassShiftAsync(standard);
+        EnsureSlotConfigurationsWithinShift(input.StandardId, input.SlotConfigurations, shiftInfo);
 
         var config = new LectureSlotConfig(
             GuidGenerator.Create(),
@@ -106,10 +114,9 @@ public class LectureSlotAppService(
 
         await lectureSlotConfigRepository.InsertAsync(config);
 
-        var standard = await standardRepository.GetAsync(config.StandardId);
         var roomNames = await LoadRoomNamesAsync([config]);
         var weeklyLectureSlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(config.StandardId);
-        return MapToDto(config, standard.Name, roomNames, weeklyLectureSlot?.GetTotalLectures() ?? 0);
+        return MapToDto(config, standard.Name, shiftInfo, roomNames, weeklyLectureSlot?.GetTotalLectures() ?? 0);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
@@ -120,6 +127,9 @@ public class LectureSlotAppService(
         await ValidateActiveAssignmentsNotModifiedAsync(config.StandardId, input.SlotConfigurations);
 
         await EnsureRoomsExistAsync(input.SlotConfigurations);
+        var standard = await standardRepository.GetAsync(config.StandardId);
+        var shiftInfo = await RequireClassShiftAsync(standard);
+        EnsureSlotConfigurationsWithinShift(config.StandardId, input.SlotConfigurations, shiftInfo);
 
         config.SetSchoolHours(input.SchoolHours);
         config.SetPreviousStandardId(input.PreviousStandardId);
@@ -128,10 +138,9 @@ public class LectureSlotAppService(
 
         await lectureSlotConfigRepository.UpdateAsync(config);
 
-        var standard = await standardRepository.GetAsync(config.StandardId);
         var roomNames = await LoadRoomNamesAsync([config]);
         var weeklyLectureSlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(config.StandardId);
-        return MapToDto(config, standard.Name, roomNames, weeklyLectureSlot?.GetTotalLectures() ?? 0);
+        return MapToDto(config, standard.Name, shiftInfo, roomNames, weeklyLectureSlot?.GetTotalLectures() ?? 0);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.Add)]
@@ -141,6 +150,10 @@ public class LectureSlotAppService(
 
         foreach (var standardId in input.SelectedStandardIds)
         {
+            var targetStandard = await standardRepository.GetAsync(standardId);
+            var shiftInfo = await RequireClassShiftAsync(targetStandard);
+            EnsureSlotConfigWithinShift(standardId, source, shiftInfo);
+
             await ValidateActiveAssignmentsCompatibleWithSourceAsync(standardId, source);
 
             var existing = await lectureSlotConfigRepository.FindByStandardIdAsync(standardId);
@@ -363,6 +376,116 @@ public class LectureSlotAppService(
         }
     }
 
+    private async Task<Dictionary<Guid, ClassShiftInfo>> LoadClassShiftInfosAsync(List<Standard> standards)
+    {
+        var shiftIds = standards
+            .Where(standard => standard.ShiftId.HasValue)
+            .Select(standard => standard.ShiftId!.Value)
+            .Distinct()
+            .ToList();
+
+        var shifts = shiftIds.Count == 0
+            ? new Dictionary<Guid, ShiftManagement>()
+            : (await AsyncExecuter.ToListAsync(
+                (await shiftRepository.GetQueryableAsync()).Where(shift => shiftIds.Contains(shift.Id))))
+                .ToDictionary(shift => shift.Id);
+
+        return standards.ToDictionary(
+            standard => standard.Id,
+            standard => ResolveClassShiftInfo(
+                standard,
+                shifts.GetValueOrDefault(standard.ShiftId ?? Guid.Empty)));
+    }
+
+    private async Task<ClassShiftInfo> LoadClassShiftInfoAsync(Standard standard)
+    {
+        if (!standard.ShiftId.HasValue)
+        {
+            return ResolveClassShiftInfo(standard, null);
+        }
+
+        var shift = await shiftRepository.FindAsync(standard.ShiftId.Value);
+        return ResolveClassShiftInfo(standard, shift);
+    }
+
+    private async Task<ClassShiftInfo> RequireClassShiftAsync(Standard standard)
+    {
+        var shiftInfo = await LoadClassShiftInfoAsync(standard);
+        if (!shiftInfo.HasClassShift)
+        {
+            throw new BusinessException(TimetableErrorCodes.LectureSlotClassShiftNotAssigned)
+                .WithData("StandardId", standard.Id)
+                .WithData("message", "Please assign the school shift to this class before configuring lecture slots.");
+        }
+
+        return shiftInfo;
+    }
+
+    private static ClassShiftInfo ResolveClassShiftInfo(Standard standard, ShiftManagement? shift)
+    {
+        var hasShift = standard.ShiftId.HasValue && shift != null;
+        return new ClassShiftInfo(
+            standard.ShiftId,
+            shift?.ShiftName,
+            shift?.StartTime,
+            shift?.EndTime,
+            hasShift ? $"{shift!.ShiftName} ({shift.StartTime:HH:mm} - {shift.EndTime:HH:mm})" : null,
+            hasShift);
+    }
+
+    private static void EnsureSlotConfigurationsWithinShift(
+        Guid standardId,
+        List<SlotConfigurationDto> configurations,
+        ClassShiftInfo shiftInfo)
+    {
+        foreach (var slotConfig in configurations)
+        {
+            foreach (var slot in slotConfig.TimeSlots)
+            {
+                EnsureSlotWithinShift(standardId, slot.StartTime, slot.EndTime, shiftInfo);
+            }
+        }
+    }
+
+    private static void EnsureSlotConfigWithinShift(
+        Guid standardId,
+        LectureSlotConfig config,
+        ClassShiftInfo shiftInfo)
+    {
+        foreach (var group in config.SlotGroups)
+        {
+            foreach (var slot in group.TimeSlots)
+            {
+                EnsureSlotWithinShift(standardId, slot.StartTime, slot.EndTime, shiftInfo);
+            }
+        }
+    }
+
+    private static void EnsureSlotWithinShift(
+        Guid standardId,
+        TimeOnly startTime,
+        TimeOnly endTime,
+        ClassShiftInfo shiftInfo)
+    {
+        if (!shiftInfo.ShiftStartTime.HasValue || !shiftInfo.ShiftEndTime.HasValue)
+        {
+            throw new BusinessException(TimetableErrorCodes.LectureSlotClassShiftNotAssigned)
+                .WithData("StandardId", standardId)
+                .WithData("message", "Please assign the school shift to this class before configuring lecture slots.");
+        }
+
+        if (startTime < shiftInfo.ShiftStartTime.Value || endTime > shiftInfo.ShiftEndTime.Value)
+        {
+            throw new BusinessException(TimetableErrorCodes.LectureSlotOutsideClassShift)
+                .WithData("StandardId", standardId)
+                .WithData("StartTime", startTime.ToString("HH:mm"))
+                .WithData("EndTime", endTime.ToString("HH:mm"))
+                .WithData("ShiftStartTime", shiftInfo.ShiftStartTime.Value.ToString("HH:mm"))
+                .WithData("ShiftEndTime", shiftInfo.ShiftEndTime.Value.ToString("HH:mm"))
+                .WithData("message", $"Lecture slot timing must be within the class shift timing {shiftInfo.ShiftStartTime.Value:HH:mm} - {shiftInfo.ShiftEndTime.Value:HH:mm}.");
+        }
+    }
+
     private async Task<Dictionary<Guid, string>> LoadRoomNamesAsync(IEnumerable<LectureSlotConfig> configs)
     {
         var roomIds = configs
@@ -424,7 +547,7 @@ public class LectureSlotAppService(
     }
 
     private static LectureSlotDto MapToDto(
-        LectureSlotConfig config, string standardName, IReadOnlyDictionary<Guid, string> roomNames, int requiredWeeklyLectures)
+        LectureSlotConfig config, string standardName, ClassShiftInfo shiftInfo, IReadOnlyDictionary<Guid, string> roomNames, int requiredWeeklyLectures)
     {
         var stats = ComputeCapacityStats(config, requiredWeeklyLectures);
 
@@ -433,6 +556,12 @@ public class LectureSlotAppService(
             Id = config.Id,
             StandardId = config.StandardId,
             StandardName = standardName,
+            ShiftId = shiftInfo.ShiftId,
+            ShiftName = shiftInfo.ShiftName,
+            ShiftStartTime = shiftInfo.ShiftStartTime,
+            ShiftEndTime = shiftInfo.ShiftEndTime,
+            ShiftTimingLabel = shiftInfo.ShiftTimingLabel,
+            HasClassShift = shiftInfo.HasClassShift,
             SchoolHours = config.SchoolHours,
             PreviousStandardId = config.PreviousStandardId,
             CreatedAt = config.CreationTime,
@@ -467,7 +596,7 @@ public class LectureSlotAppService(
     }
 
     private static LectureSlotListDto MapToListDto(
-        LectureSlotConfig config, string standardName, IReadOnlyDictionary<Guid, string> roomNames, int requiredWeeklyLectures)
+        LectureSlotConfig config, string standardName, ClassShiftInfo shiftInfo, IReadOnlyDictionary<Guid, string> roomNames, int requiredWeeklyLectures)
     {
         var stats = ComputeCapacityStats(config, requiredWeeklyLectures);
 
@@ -476,6 +605,12 @@ public class LectureSlotAppService(
             Id = config.Id,
             StandardId = config.StandardId,
             StandardName = standardName,
+            ShiftId = shiftInfo.ShiftId,
+            ShiftName = shiftInfo.ShiftName,
+            ShiftStartTime = shiftInfo.ShiftStartTime,
+            ShiftEndTime = shiftInfo.ShiftEndTime,
+            ShiftTimingLabel = shiftInfo.ShiftTimingLabel,
+            HasClassShift = shiftInfo.HasClassShift,
             SlotConfigurations = config.SlotGroups
                 .OrderBy(g => g.TimeSlots.Count > 0 ? g.TimeSlots.Min(ts => ts.StartTime) : TimeOnly.MaxValue)
                 .Select(g => new SlotConfigurationSummaryDto
@@ -505,4 +640,12 @@ public class LectureSlotAppService(
             Status = stats.Status
         };
     }
+
+    private sealed record ClassShiftInfo(
+        Guid? ShiftId,
+        string? ShiftName,
+        TimeOnly? ShiftStartTime,
+        TimeOnly? ShiftEndTime,
+        string? ShiftTimingLabel,
+        bool HasClassShift);
 }

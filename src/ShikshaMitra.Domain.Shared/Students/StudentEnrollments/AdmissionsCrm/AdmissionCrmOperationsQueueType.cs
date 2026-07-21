@@ -22,5 +22,6 @@ public enum AdmissionCrmOperationsQueueType
 	ReturningIdentityMatch = 17,
 	CancellationReview = 18,
 	RouteAppealReview = 19,
-	ServiceHandoffException = 20
+	ServiceHandoffException = 20,
+	RegistrationInvitationPending = 21
 }

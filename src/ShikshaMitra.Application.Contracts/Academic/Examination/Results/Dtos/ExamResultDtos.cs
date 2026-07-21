@@ -11,7 +11,8 @@ public class GenerateResultRequestDto
     public Guid DivisionId { get; set; }
 
     /// <summary>
-    /// When true, allows regeneration even if a result is already Frozen.
+    /// When true, allows regeneration while the result is still in Generated draft status.
+    /// Published and frozen results require a dedicated unlock or correction workflow.
     /// </summary>
     public bool ForceRegenerate { get; set; } = false;
 }

@@ -23,6 +23,9 @@ public class AdminAcademicDashboardDto
     public List<AcademicDashboardActivityDto> RecentActivities { get; set; } = [];
     public List<AcademicDashboardConfigItemDto> ConfigurationStatus { get; set; } = [];
     public List<AcademicDashboardOperationItemDto> OperationalStatus { get; set; } = [];
+    public List<AcademicDashboardReadinessItemDto> ReadinessItems { get; set; } = [];
+    public List<AcademicDashboardActionCenterItemDto> ActionCenterItems { get; set; } = [];
+    public List<AcademicDashboardDataHealthItemDto> DataHealthItems { get; set; } = [];
     public AcademicDashboardPassFailChartDto SubjectPassFailChart { get; set; } = new();
     public AcademicDashboardPlannedVsActualChartDto PlannedVsActualProgressChart { get; set; } = new();
 }
@@ -46,6 +49,9 @@ public class PrincipalAcademicDashboardDto
     public string EvaluationLag { get; set; } = string.Empty;
     public int UpcomingExams { get; set; }
     public List<AcademicDashboardInsightDto> Insights { get; set; } = [];
+    public List<AcademicDashboardReadinessItemDto> ReadinessItems { get; set; } = [];
+    public List<AcademicDashboardActionCenterItemDto> ActionCenterItems { get; set; } = [];
+    public List<AcademicDashboardDataHealthItemDto> DataHealthItems { get; set; } = [];
     public AcademicDashboardChapterCompletionChartDto ChapterCompletionChart { get; set; } = new();
     public AcademicDashboardPassFailChartDto SubjectPassFailChart { get; set; } = new();
     public List<AcademicDashboardTeacherPerformanceDto> TeacherPerformanceComparison { get; set; } = [];
@@ -70,6 +76,9 @@ public class TeacherAcademicDashboardDto
     public int UpcomingExams { get; set; }
     public int StudentsAttentionCount { get; set; }
     public List<AcademicDashboardInsightDto> Insights { get; set; } = [];
+    public List<AcademicDashboardReadinessItemDto> ReadinessItems { get; set; } = [];
+    public List<AcademicDashboardActionCenterItemDto> ActionCenterItems { get; set; } = [];
+    public List<AcademicDashboardDataHealthItemDto> DataHealthItems { get; set; } = [];
     public List<AcademicDashboardLectureDto> TodaySchedule { get; set; } = [];
     public List<AcademicDashboardPendingTaskDto> PendingTasks { get; set; } = [];
     public List<AcademicDashboardAttentionStudentDto> StudentsAttention { get; set; } = [];
@@ -122,6 +131,42 @@ public class AcademicDashboardOperationItemDto
     public string Level { get; set; } = string.Empty;
     public int Progress { get; set; }
     public string Icon { get; set; } = string.Empty;
+}
+
+public class AcademicDashboardReadinessItemDto
+{
+    public string Key { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Status { get; set; } = "missing";
+    public string Severity { get; set; } = "warning";
+    public int CompletedCount { get; set; }
+    public int TotalCount { get; set; }
+    public int MissingCount { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public string ActionLabel { get; set; } = string.Empty;
+    public string ActionHref { get; set; } = string.Empty;
+}
+
+public class AcademicDashboardActionCenterItemDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public string Severity { get; set; } = "info";
+    public string Source { get; set; } = string.Empty;
+    public int Count { get; set; }
+    public string ActionLabel { get; set; } = string.Empty;
+    public string ActionHref { get; set; } = string.Empty;
+}
+
+public class AcademicDashboardDataHealthItemDto
+{
+    public string Key { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Status { get; set; } = "healthy";
+    public string Severity { get; set; } = "info";
+    public string Detail { get; set; } = string.Empty;
+    public string ActionHref { get; set; } = string.Empty;
 }
 
 public class AcademicDashboardPassFailChartDto

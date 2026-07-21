@@ -54,17 +54,23 @@ public partial class FeeAdjustmentAppService
                 {
                     DueFeeId = l.DueFeeId, FeeHeadId = l.FeeHeadId,
                     FeeHeadName = feeHeadMap.GetValueOrDefault(l.FeeHeadId, string.Empty),
-                    InstallmentLabel = FormatMonthLabel(l.Month, l.Year), Month = l.Month, Year = l.Year,
+                    InstallmentLabel = df?.GetDisplayInstallmentLabel() ?? FormatMonthLabel(l.Month, l.Year),
+                    Month = l.Month, Year = l.Year,
                     PaidAmount = df?.PaidAmount ?? 0, AdjustableAmount = df?.AdjustableBalance ?? 0,
                     RequestedAmount = l.Amount,
                 };
             }).ToList(),
-            TargetAllocations = request.TargetAllocations.Select(a => new FeeAdjustmentTargetAllocationDto
+            TargetAllocations = request.TargetAllocations.Select(a =>
             {
-                DueFeeId = a.DueFeeId, FeeHeadId = a.FeeHeadId,
-                FeeHeadName = feeHeadMap.GetValueOrDefault(a.FeeHeadId, string.Empty),
-                InstallmentLabel = FormatMonthLabel(a.Month, a.Year), Month = a.Month, Year = a.Year,
-                Amount = a.Amount, ApplyBatchNumber = a.ApplyBatchNumber, AppliedOn = a.AppliedOn,
+                dueFeeMap.TryGetValue(a.DueFeeId, out var targetDue);
+                return new FeeAdjustmentTargetAllocationDto
+                {
+                    DueFeeId = a.DueFeeId, FeeHeadId = a.FeeHeadId,
+                    FeeHeadName = feeHeadMap.GetValueOrDefault(a.FeeHeadId, string.Empty),
+                    InstallmentLabel = targetDue?.GetDisplayInstallmentLabel() ?? FormatMonthLabel(a.Month, a.Year),
+                    Month = a.Month, Year = a.Year,
+                    Amount = a.Amount, ApplyBatchNumber = a.ApplyBatchNumber, AppliedOn = a.AppliedOn,
+                };
             }).ToList(),
         };
     }

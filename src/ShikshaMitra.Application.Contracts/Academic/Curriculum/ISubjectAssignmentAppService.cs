@@ -27,11 +27,15 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <param name="classId">Standard/Class ID</param>
 	/// <param name="page">Page number (0-indexed)</param>
 	/// <param name="pageSize">Items per page</param>
+	/// <param name="status">Optional assignment status filter. Defaults to Published when omitted.</param>
+	/// <param name="includeArchived">Return every status, including archived, when no status filter is supplied.</param>
 	/// <returns>Paginated list of assignment groups</returns>
 	Task<SubjectAssignmentPagedResponse> GetListAsync(
 		Guid classId,
 		int page,
-		int pageSize
+		int pageSize,
+		SubjectStatus? status = null,
+		bool includeArchived = false
 	);
 
 	/// <summary>
@@ -104,4 +108,9 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// Archives a subject assignment (sets status to Archived without deleting)
 	/// </summary>
 	Task ArchiveAsync(Guid assignmentId);
+
+	/// <summary>
+	/// Restores an archived subject assignment as Draft after conflict checks
+	/// </summary>
+	Task RestoreAsync(Guid assignmentId);
 }

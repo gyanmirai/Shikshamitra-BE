@@ -19,6 +19,7 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
 
     public TimeSpan? StartTime { get; private set; }
     public TimeSpan? EndTime { get; private set; }
+    public bool AutoScanImpacts { get; private set; }
 
     public CalendarDayStatus Status { get; private set; }
     public string? ChangeReason { get; private set; }
@@ -41,7 +42,8 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
         Guid? divisionId = null,
         HolidayCategory? holidayCategory = null,
         TimeSpan? startTime = null,
-        TimeSpan? endTime = null)
+        TimeSpan? endTime = null,
+        bool autoScanImpacts = true)
         : base(id)
     {
         TenantId = tenantId;
@@ -56,11 +58,13 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
         HolidayCategory = holidayCategory;
         StartTime = startTime;
         EndTime = endTime;
+        AutoScanImpacts = autoScanImpacts;
 
         Status = CalendarDayStatus.Active;
     }
 
     public void Update(
+        DateTime date,
         DayType dayType,
         string title,
         string? description,
@@ -70,8 +74,10 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
         HolidayCategory? holidayCategory,
         TimeSpan? startTime,
         TimeSpan? endTime,
-        string? changeReason)
+        string? changeReason,
+        bool? autoScanImpacts = null)
     {
+        Date = date.Date;
         DayType = dayType;
         Title = title;
         Description = description;
@@ -81,6 +87,10 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
         HolidayCategory = holidayCategory;
         StartTime = startTime;
         EndTime = endTime;
+        if (autoScanImpacts.HasValue)
+        {
+            AutoScanImpacts = autoScanImpacts.Value;
+        }
 
         ChangeReason = changeReason;
     }

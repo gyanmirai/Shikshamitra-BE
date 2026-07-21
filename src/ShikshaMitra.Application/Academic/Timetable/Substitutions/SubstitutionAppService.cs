@@ -56,7 +56,7 @@ public class SubstitutionAppService(
         return new PagedResultDto<SubstitutionDto>(total, dtoRows);
     }
 
-    public async Task<SubstitutionDashboardDto> GetDashboardAsync(DateTime date, Guid? academicYearId = null)
+    public async Task<SubstitutionDashboardDto> GetDashboardAsync(DateTimeOffset date, Guid? academicYearId = null)
     {
         var target = NormalizeDate(date);
         await teacherAvailabilitySyncService.SyncDateRangeAsync(target, target);
@@ -104,6 +104,7 @@ public class SubstitutionAppService(
         {
             throw new UserFriendlyException("End time must be after start time.");
         }
+        EnsureSubstitutionWindowNotFinished(date, end, "Cannot create a substitution after the period has ended.");
 
         var employees = await employeeRepository.GetListAsync();
         var originalTeacher = ResolveEmployeeByTeacherReference(
@@ -165,17 +166,37 @@ public class SubstitutionAppService(
         await substitutionRepository.InsertAsync(entity, autoSave: true);
         await WriteAuditAsync(entity.Id, "Created", "Substitution request created.");
 
-        if (!string.IsNullOrWhiteSpace(input.SubstituteTeacherName))
+        if (input.SubstituteTeacherId.HasValue || !string.IsNullOrWhiteSpace(input.SubstituteTeacherName))
         {
-            entity.Assign(
+            var selected = await EnsureSubstituteCanBeAssignedAsync(
+                date,
+                start,
+                end,
+                input.StandardId,
+                input.SubjectId,
+                originalTeacherId,
+                originalTeacherName,
+                input.SubjectName,
                 input.SubstituteTeacherId,
                 input.SubstituteTeacherName,
+                null);
+            await EnsureAssignedRoomAvailableAsync(
+                date,
+                start,
+                end,
+                input.AssignedRoomId ?? input.OriginalRoomId,
+                input.TimetableSlotId,
+                entity.Id);
+
+            entity.Assign(
+                input.SubstituteTeacherId ?? selected.TeacherId,
+                string.IsNullOrWhiteSpace(input.SubstituteTeacherName) ? selected.TeacherName : input.SubstituteTeacherName,
                 input.AssignedRoomId,
                 input.AssignedRoomName,
-                null,
-                "Low",
-                SubstitutionConflictStatus.Clear,
-                null,
+                selected.Score,
+                selected.LoadStatus,
+                ParseConflict(selected.ConflictSeverity),
+                selected.ConflictReason,
                 input.SendNotification);
             entity.MarkNotificationSent();
             await substitutionRepository.UpdateAsync(entity, autoSave: true);
@@ -200,6 +221,7 @@ public class SubstitutionAppService(
         {
             throw new UserFriendlyException("End time must be after start time.");
         }
+        EnsureSubstitutionWindowNotFinished(date, end, "Cannot update a substitution after the period has ended.");
 
         var duplicate = await substitutionRepository.FirstOrDefaultAsync(x =>
             x.Id != id &&
@@ -214,6 +236,29 @@ public class SubstitutionAppService(
         if (duplicate != null)
         {
             throw new UserFriendlyException("This slot time already has an active substitution assignment.");
+        }
+
+        if (entity.SubstituteTeacherId.HasValue || !string.IsNullOrWhiteSpace(entity.SubstituteTeacherName))
+        {
+            await EnsureSubstituteCanBeAssignedAsync(
+                date,
+                start,
+                end,
+                input.StandardId,
+                input.SubjectId,
+                input.OriginalTeacherId,
+                input.OriginalTeacherName,
+                input.SubjectName,
+                entity.SubstituteTeacherId,
+                entity.SubstituteTeacherName,
+                id);
+            await EnsureAssignedRoomAvailableAsync(
+                date,
+                start,
+                end,
+                entity.AssignedRoomId ?? input.OriginalRoomId,
+                input.TimetableSlotId,
+                id);
         }
 
         entity.UpdateDetails(
@@ -255,10 +300,31 @@ public class SubstitutionAppService(
         }
 
         var entity = await substitutionRepository.GetAsync(id);
+        EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot assign a substitute after the period has ended.");
         var suggestions = await GetSuggestedTeachersAsync(id);
         var selected = suggestions.FirstOrDefault(x =>
             (input.SubstituteTeacherId.HasValue && x.TeacherId == input.SubstituteTeacherId) ||
             string.Equals(x.TeacherName, input.SubstituteTeacherName, StringComparison.OrdinalIgnoreCase));
+
+        selected = await EnsureSubstituteCanBeAssignedAsync(
+            entity.Date,
+            entity.StartTime,
+            entity.EndTime,
+            entity.StandardId,
+            entity.SubjectId,
+            entity.OriginalTeacherId,
+            entity.OriginalTeacherName,
+            entity.DepartmentName,
+            input.SubstituteTeacherId,
+            input.SubstituteTeacherName,
+            id);
+        await EnsureAssignedRoomAvailableAsync(
+            entity.Date,
+            entity.StartTime,
+            entity.EndTime,
+            input.AssignedRoomId ?? entity.OriginalRoomId,
+            entity.TimetableSlotId,
+            id);
 
         if (selected?.HasConflict == true && selected.ConflictSeverity == "Hard Block")
         {
@@ -286,6 +352,7 @@ public class SubstitutionAppService(
     public async Task<SubstitutionDto> SendReminderAsync(Guid id)
     {
         var entity = await substitutionRepository.GetAsync(id);
+        EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot send a reminder after the period has ended.");
         if (string.IsNullOrWhiteSpace(entity.SubstituteTeacherName))
         {
             throw new UserFriendlyException("Assign a substitute teacher before sending a reminder.");
@@ -301,6 +368,17 @@ public class SubstitutionAppService(
     public async Task<SubstitutionDto> CompleteAsync(Guid id)
     {
         var entity = await substitutionRepository.GetAsync(id);
+        EnsureSubstitutionWindowStarted(entity.Date, entity.StartTime, "Substitution duty can be completed only after the period has started.");
+        if (string.IsNullOrWhiteSpace(entity.SubstituteTeacherName) && !entity.SubstituteTeacherId.HasValue)
+        {
+            throw new UserFriendlyException("Assign a substitute teacher before completing the duty.");
+        }
+
+        if (entity.Status is not (SubstitutionStatus.Assigned or SubstitutionStatus.Acknowledged))
+        {
+            throw new UserFriendlyException("Only assigned or acknowledged substitution duties can be completed.");
+        }
+
         entity.Complete();
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Completed", "Substitution marked completed.");
@@ -324,6 +402,7 @@ public class SubstitutionAppService(
     public async Task<SubstitutionDto> AcknowledgeAsync(Guid id)
     {
         var entity = await substitutionRepository.GetAsync(id);
+        EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot acknowledge a substitution after the period has ended.");
         entity.Acknowledge();
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Acknowledged", "Duty accepted.");
@@ -338,6 +417,7 @@ public class SubstitutionAppService(
         }
 
         var entity = await substitutionRepository.GetAsync(id);
+        EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot request changes after the period has ended.");
         entity.RequestChange(input.Reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Change Requested", input.Reason);
@@ -352,6 +432,7 @@ public class SubstitutionAppService(
         }
 
         var entity = await substitutionRepository.GetAsync(id);
+        EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot reject a substitution after the period has ended.");
         entity.Reject(input.Reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Rejected", input.Reason);
@@ -466,7 +547,10 @@ public class SubstitutionAppService(
             return [];
         }
 
-        var timetableDay = ToTimetableDay(input.Date == default ? DateTime.Today.DayOfWeek : input.Date.DayOfWeek);
+        var tz = GetInstitutionTimeZone();
+        var lectureDate = input.Date == default ? DateTimeOffset.Now : input.Date;
+        var localLectureDate = TimeZoneInfo.ConvertTime(lectureDate, tz);
+        var timetableDay = ToTimetableDay(localLectureDate.DayOfWeek);
         if (!timetableDay.HasValue)
         {
             return [];
@@ -521,7 +605,7 @@ public class SubstitutionAppService(
 
     public async Task<List<SuggestedTeacherDto>> GetSuggestedTeachersAsync(SuggestedTeacherInput input)
     {
-        var date = NormalizeDate(input.Date == default ? DateTime.Today : input.Date);
+        var date = NormalizeDate(input.Date == default ? DateTimeOffset.Now : input.Date);
         var start = string.IsNullOrWhiteSpace(input.StartTime)
             ? TimeOnly.MinValue
             : ParseTime(input.StartTime, "startTime");
@@ -543,6 +627,105 @@ public class SubstitutionAppService(
             input.OriginalTeacherName,
             input.DepartmentName ?? input.SubjectName,
             null);
+    }
+
+    private async Task<SuggestedTeacherDto> EnsureSubstituteCanBeAssignedAsync(
+        DateTime date,
+        TimeOnly startTime,
+        TimeOnly endTime,
+        Guid? standardId,
+        Guid? subjectId,
+        Guid? originalTeacherId,
+        string? originalTeacherName,
+        string? departmentName,
+        Guid? substituteTeacherId,
+        string? substituteTeacherName,
+        Guid? currentSubstitutionId)
+    {
+        var suggestions = await BuildSuggestedTeachersAsync(
+            date,
+            startTime,
+            endTime,
+            standardId,
+            subjectId,
+            originalTeacherId,
+            originalTeacherName,
+            departmentName,
+            currentSubstitutionId);
+
+        var selected = suggestions.FirstOrDefault(x =>
+            (substituteTeacherId.HasValue && x.TeacherId == substituteTeacherId) ||
+            (!string.IsNullOrWhiteSpace(substituteTeacherName) &&
+             string.Equals(x.TeacherName, substituteTeacherName, StringComparison.OrdinalIgnoreCase)));
+
+        if (selected == null)
+        {
+            throw new UserFriendlyException("Selected substitute teacher is inactive, unavailable, or not found.");
+        }
+
+        if (selected.HasConflict && selected.ConflictSeverity == "Hard Block")
+        {
+            throw new UserFriendlyException(selected.ConflictReason ?? "The selected teacher has a hard conflict.");
+        }
+
+        return selected;
+    }
+
+    private async Task EnsureAssignedRoomAvailableAsync(
+        DateTime date,
+        TimeOnly startTime,
+        TimeOnly endTime,
+        Guid? assignedRoomId,
+        Guid? currentTimetableSlotId,
+        Guid? currentSubstitutionId)
+    {
+        if (!assignedRoomId.HasValue)
+        {
+            return;
+        }
+
+        var activeStatuses = new[]
+        {
+            SubstitutionStatus.Pending,
+            SubstitutionStatus.Assigned,
+            SubstitutionStatus.WaitingAck,
+            SubstitutionStatus.Acknowledged,
+            SubstitutionStatus.Conflict
+        };
+
+        var duplicateSubstitution = await substitutionRepository.FirstOrDefaultAsync(x =>
+            (!currentSubstitutionId.HasValue || x.Id != currentSubstitutionId.Value) &&
+            x.Date == date &&
+            activeStatuses.Contains(x.Status) &&
+            (x.AssignedRoomId == assignedRoomId.Value || x.OriginalRoomId == assignedRoomId.Value) &&
+            x.StartTime < endTime &&
+            x.EndTime > startTime);
+        if (duplicateSubstitution != null)
+        {
+            throw new UserFriendlyException("Selected room already has an active substitution during this time.");
+        }
+
+        var timetableDay = ToTimetableDay(date.DayOfWeek);
+        if (!timetableDay.HasValue)
+        {
+            return;
+        }
+
+        var publishedTimetables = await timetableRepository.GetListAsync(x => x.Status == TimetableStatus.Published);
+        var roomConflict = publishedTimetables
+            .SelectMany(x => x.Slots)
+            .Where(slot =>
+                (!currentTimetableSlotId.HasValue || slot.Id != currentTimetableSlotId.Value) &&
+                slot.Day == timetableDay.Value &&
+                slot.SlotType == SlotType.Period &&
+                HasOverlap(slot.StartTime, slot.EndTime, startTime, endTime))
+            .SelectMany(slot => slot.Subjects)
+            .Any(subject => subject.RoomId == assignedRoomId.Value);
+
+        if (roomConflict)
+        {
+            throw new UserFriendlyException("Selected room is already booked in a published timetable during this time.");
+        }
     }
 
     private async Task<List<SuggestedTeacherDto>> BuildSuggestedTeachersAsync(
@@ -698,8 +881,8 @@ public class SubstitutionAppService(
 
     public async Task<SubstitutionDailySheetDto> GetDailySheetAsync(SubstitutionDailySheetInput input)
     {
-        var date = NormalizeDate(input.Date ?? input.FromDate ?? DateTime.Today);
-        input.Date = date;
+        var date = NormalizeDate(input.Date ?? input.FromDate ?? DateTimeOffset.Now);
+        input.Date = new DateTimeOffset(date, TimeSpan.Zero);
         input.FromDate = null;
         input.ToDate = null;
         input.MaxResultCount = input.MaxResultCount <= 0 ? 500 : input.MaxResultCount;
@@ -1092,8 +1275,51 @@ public class SubstitutionAppService(
         return parsed;
     }
 
-    private static DateTime NormalizeDate(DateTime value) =>
-        DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
+    private static TimeZoneInfo GetInstitutionTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+        }
+    }
+
+    private static DateTime NormalizeDate(DateTime value)
+    {
+        var tz = GetInstitutionTimeZone();
+        var utcTime = value.Kind == DateTimeKind.Utc ? value : TimeZoneInfo.ConvertTimeToUtc(value);
+        var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime, tz);
+        return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
+    }
+
+    private static DateTime NormalizeDate(DateTimeOffset value)
+    {
+        var tz = GetInstitutionTimeZone();
+        var localTime = TimeZoneInfo.ConvertTime(value, tz);
+        return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
+    }
+
+    private static DateTime CombineDateAndTime(DateTime date, TimeOnly time) =>
+        DateTime.SpecifyKind(date.Date.Add(time.ToTimeSpan()), DateTimeKind.Utc);
+
+    private static void EnsureSubstitutionWindowNotFinished(DateTime date, TimeOnly endTime, string message)
+    {
+        if (DateTime.UtcNow > CombineDateAndTime(date, endTime))
+        {
+            throw new UserFriendlyException(message);
+        }
+    }
+
+    private static void EnsureSubstitutionWindowStarted(DateTime date, TimeOnly startTime, string message)
+    {
+        if (DateTime.UtcNow < CombineDateAndTime(date, startTime))
+        {
+            throw new UserFriendlyException(message);
+        }
+    }
 
     private static TimetableDayOfWeek? ToTimetableDay(DayOfWeek dayOfWeek) => dayOfWeek switch
     {

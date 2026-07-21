@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -9,6 +10,7 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Enrollment;
+using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
@@ -87,6 +89,12 @@ public abstract class ShikshaMitraApiTestBase
 		response.EnsureSuccessStatusCode();
 		return await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions)
 			?? throw new InvalidOperationException($"Null body from GET {url}");
+	}
+
+	protected Task<List<AdmissionCrmStaffLookupDto>> GetEligibleCrmOwnersAsync()
+	{
+		return GetAndReadAsync<List<AdmissionCrmStaffLookupDto>>(
+			$"/api/student-enrollment/admissions-crm/workspace/staff?academicYearId={Factory.SeededAcademicYearId}&ownerOnly=true&maxResultCount=25");
 	}
 
 	protected async Task EnsureDefaultTestUserHasTenantWideScopeAsync()

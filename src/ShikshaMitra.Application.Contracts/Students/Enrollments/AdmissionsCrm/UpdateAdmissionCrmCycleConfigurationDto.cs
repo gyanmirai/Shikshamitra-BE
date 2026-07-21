@@ -11,6 +11,7 @@ public class UpdateAdmissionCrmCycleConfigurationDto
 
 	public bool IsActive { get; set; } = true;
 	public bool RegistrationFormRequiredBeforeExam { get; set; }
+	public bool EntranceExamRequired { get; set; } = true;
 
 	[Range(1, 365)]
 	public int StaleAfterDays { get; set; } = 30;

@@ -102,16 +102,32 @@ public class ChapterProgressAppService(
 			var totalChapters = subjectChapters.Count;
 			var completedChapters = 0;
 			var progressSum = 0;
+			var expectedProgressSum = 0;
+			DateTime? lastUpdatedAt = null;
+			var subjectRiskRank = 0;
 
 			foreach (var chapter in subjectChapters)
 			{
-				if (!progressLookup.TryGetValue(chapter.Id, out var progress))
+				progressLookup.TryGetValue(chapter.Id, out var progress);
+
+				var expectedProgress = CalculateExpectedProgress(
+					chapter.ChapterStartTime == default ? null : chapter.ChapterStartTime.UtcDateTime,
+					chapter.ChapterEndTime == default ? null : chapter.ChapterEndTime.UtcDateTime
+				);
+				var currentProgress = progress?.Progress ?? 0;
+				var riskLevel = CalculateRiskLevel(currentProgress, expectedProgress, progress?.LastModificationTime ?? progress?.CreationTime);
+
+				expectedProgressSum += expectedProgress;
+				progressSum += currentProgress;
+				subjectRiskRank = Math.Max(subjectRiskRank, GetRiskRank(riskLevel));
+
+				var progressUpdatedAt = progress?.LastModificationTime ?? progress?.CreationTime;
+				if (progressUpdatedAt.HasValue && (!lastUpdatedAt.HasValue || progressUpdatedAt.Value > lastUpdatedAt.Value))
 				{
-					continue;
+					lastUpdatedAt = progressUpdatedAt;
 				}
 
-				progressSum += progress.Progress;
-				if (progress.Progress == 100)
+				if (currentProgress == 100)
 				{
 					completedChapters++;
 				}
@@ -120,6 +136,11 @@ public class ChapterProgressAppService(
 			var progressPercentage = totalChapters > 0
 				? (int) Math.Round(progressSum / (double) totalChapters)
 				: 0;
+			var expectedProgressPercentage = totalChapters > 0
+				? (int) Math.Round(expectedProgressSum / (double) totalChapters)
+				: 0;
+			var variancePercentage = progressPercentage - expectedProgressPercentage;
+			var scheduleStatus = CalculateScheduleStatus(progressPercentage, expectedProgressPercentage, completedChapters == totalChapters && totalChapters > 0);
 
 			result.Add(new ClassDivisionSubjectDto
 			{
@@ -129,7 +150,12 @@ public class ChapterProgressAppService(
 				SubjectColor = subject.Color,
 				TotalChapters = totalChapters,
 				CompletedChapters = completedChapters,
-				ProgressPercentage = progressPercentage
+				ProgressPercentage = progressPercentage,
+				ExpectedProgressPercentage = expectedProgressPercentage,
+				VariancePercentage = variancePercentage,
+				ScheduleStatus = scheduleStatus,
+				RiskLevel = GetRiskLevelFromRank(subjectRiskRank),
+				LastUpdatedAt = lastUpdatedAt
 			});
 		}
 
@@ -223,6 +249,17 @@ public class ChapterProgressAppService(
 			Records = chapters.Select(chapter =>
 			{
 				progressLookup.TryGetValue(chapter.Id, out var progress);
+				var expectedProgress = CalculateExpectedProgress(
+					chapter.ChapterStartTime == default ? null : chapter.ChapterStartTime.UtcDateTime,
+					chapter.ChapterEndTime == default ? null : chapter.ChapterEndTime.UtcDateTime
+				);
+				var currentProgress = progress?.Progress ?? 0;
+				var lastUpdatedAt = progress?.LastModificationTime ?? progress?.CreationTime;
+				var status = CalculateChapterStatus(
+					currentProgress,
+					chapter.ChapterStartTime == default ? null : chapter.ChapterStartTime.UtcDateTime,
+					chapter.ChapterEndTime == default ? null : chapter.ChapterEndTime.UtcDateTime
+				);
 
 				return new ChapterProgressRecordDto
 				{
@@ -231,7 +268,16 @@ public class ChapterProgressAppService(
 					ChapterName = chapter.ChapterName,
 					StartDate = chapter.ChapterStartTime == default ? null : chapter.ChapterStartTime.UtcDateTime,
 					EndDate = chapter.ChapterEndTime == default ? null : chapter.ChapterEndTime.UtcDateTime,
-					Progress = progress?.Progress ?? 0
+					Progress = currentProgress,
+					ActualStartDate = progress?.StartDate,
+					ActualEndDate = progress?.CompletionDate,
+					ExpectedProgress = expectedProgress,
+					Variance = currentProgress - expectedProgress,
+					Status = status,
+					ScheduleStatus = CalculateScheduleStatus(currentProgress, expectedProgress, currentProgress == 100),
+					RiskLevel = CalculateRiskLevel(currentProgress, expectedProgress, lastUpdatedAt),
+					LastUpdatedBy = null,
+					LastUpdatedAt = lastUpdatedAt
 				};
 			}).ToList()
 		};
@@ -244,6 +290,23 @@ public class ChapterProgressAppService(
 		UpdateChapterProgressDto input
 	)
 	{
+		if (chapterId == Guid.Empty)
+		{
+			throw new BusinessException("ClassManagement:ChapterRequired");
+		}
+
+		if (input.DivisionId == Guid.Empty)
+		{
+			throw new BusinessException("ClassManagement:DivisionRequired");
+		}
+
+		var chapterExists = await chapterRepository.AnyAsync(chapter => chapter.Id == chapterId);
+		if (!chapterExists)
+		{
+			throw new BusinessException("ClassManagement:ChapterNotFound")
+				.WithData("ChapterId", chapterId);
+		}
+
 		logger.LogInformation(
 			"Updating progress for chapter {ChapterId} in division {DivisionId} to {Progress}%",
 			chapterId, input.DivisionId, input.Progress
@@ -267,6 +330,9 @@ public class ChapterProgressAppService(
 
 					if (progress != null)
 					{
+						EnsureProgressUpdateAllowed(progress.Progress, input.Progress, input.Description);
+						var previousProgress = progress.Progress;
+
 						// Update existing record
 						progress.UpdateProgress(input.Progress, input.Description);
 						await progressRepository.UpdateAsync(progress);
@@ -275,9 +341,13 @@ public class ChapterProgressAppService(
 							"Updated existing progress for chapter {ChapterId}, division {DivisionId}",
 							chapterId, input.DivisionId
 						);
+
+						await InsertProgressLogAsync(chapterId, input.DivisionId, previousProgress, input);
 					}
 					else
 					{
+						EnsureProgressUpdateAllowed(0, input.Progress, input.Description);
+
 						// Create new progress record
 						var newProgress = new Syllabus.ChapterProgress(
 							guidGenerator.Create(),
@@ -291,17 +361,9 @@ public class ChapterProgressAppService(
 							"Created new progress for chapter {ChapterId}, division {DivisionId}",
 							chapterId, input.DivisionId
 						);
-					}
 
-					// Insert audit log entry for this change
-					var log = new ChapterProgressLog(
-						guidGenerator.Create(),
-						chapterId,
-						input.DivisionId,
-						input.Progress,
-						GetCurrentUserDisplayName()
-					);
-					await progressLogRepository.InsertAsync(log);
+						await InsertProgressLogAsync(chapterId, input.DivisionId, 0, input);
+					}
 
 					break; // Success - exit retry loop
 				}
@@ -357,6 +419,324 @@ public class ChapterProgressAppService(
 	/// Determines if the exception is a duplicate key/unique constraint violation.
 	/// Handles database-specific exception types using type checking, error codes, and message patterns.
 	/// </summary>
+	private static void EnsureProgressUpdateAllowed(int currentProgress, int requestedProgress, string? description)
+	{
+		if (requestedProgress == currentProgress)
+		{
+			throw new BusinessException("ClassManagement:ProgressNoChange")
+				.WithData("CurrentProgress", currentProgress)
+				.WithData("RequestedProgress", requestedProgress);
+		}
+
+		if (requestedProgress < currentProgress && string.IsNullOrWhiteSpace(description))
+		{
+			throw new BusinessException("ClassManagement:ProgressDecreaseReasonRequired")
+				.WithData("CurrentProgress", currentProgress)
+				.WithData("RequestedProgress", requestedProgress);
+		}
+
+		if (requestedProgress == 100 && string.IsNullOrWhiteSpace(description))
+		{
+			throw new BusinessException("ClassManagement:CompletionEvidenceRequired")
+				.WithData("RequestedProgress", requestedProgress);
+		}
+
+		if (string.IsNullOrWhiteSpace(description))
+		{
+			throw new BusinessException("ClassManagement:ProgressReasonRequired")
+				.WithData("CurrentProgress", currentProgress)
+				.WithData("RequestedProgress", requestedProgress);
+		}
+	}
+
+	private async Task InsertProgressLogAsync(
+		Guid chapterId,
+		Guid divisionId,
+		int previousProgress,
+		UpdateChapterProgressDto input)
+	{
+		var log = new ChapterProgressLog(
+			guidGenerator.Create(),
+			chapterId,
+			divisionId,
+			input.Progress,
+			BuildProgressLogActorSummary(previousProgress, input)
+		);
+		await progressLogRepository.InsertAsync(log);
+	}
+
+	private string BuildProgressLogActorSummary(int previousProgress, UpdateChapterProgressDto input)
+	{
+		var displayName = GetCurrentUserDisplayName();
+		var fields = new List<string>
+		{
+			displayName,
+			$"Previous: {previousProgress}",
+			$"New: {input.Progress}",
+			$"Reason: {NormalizeLogValue(input.Description)}"
+		};
+
+		AddLogField(fields, "Status", input.Status);
+		AddLogField(fields, "Delay", input.DelayReason);
+		AddLogField(fields, "Delay Detail", input.DelayDescription);
+		AddLogField(fields, "Revised", input.RevisedEndDate?.ToString("yyyy-MM-dd"));
+		AddLogField(fields, "Lectures", input.ConductedLectures?.ToString());
+		AddLogField(fields, "Topic", input.CurrentTopic);
+		AddLogField(fields, "Method", input.TeachingMethod);
+		AddLogField(fields, "Understanding", input.StudentUnderstanding);
+		AddLogField(fields, "Escalation", input.EscalationRequired?.ToString());
+
+		return string.Join(" | ", fields);
+	}
+
+	private static void AddLogField(List<string> fields, string label, string? value)
+	{
+		if (!string.IsNullOrWhiteSpace(value))
+		{
+			fields.Add($"{label}: {NormalizeLogValue(value)}");
+		}
+	}
+
+	private static string NormalizeLogValue(string? value)
+	{
+		return string.Join(' ', (value ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+	}
+
+	private static int CalculateExpectedProgress(DateTime? plannedStartDate, DateTime? plannedEndDate)
+	{
+		if (!plannedStartDate.HasValue || !plannedEndDate.HasValue)
+		{
+			return 0;
+		}
+
+		var start = plannedStartDate.Value.Date;
+		var end = plannedEndDate.Value.Date;
+		var today = DateTime.UtcNow.Date;
+
+		if (end < start)
+		{
+			return 0;
+		}
+
+		if (today < start)
+		{
+			return 0;
+		}
+
+		if (today >= end)
+		{
+			return 100;
+		}
+
+		var totalWorkingDays = CountWorkingDays(start, end);
+		var elapsedWorkingDays = CountWorkingDays(start, today);
+
+		if (totalWorkingDays <= 0)
+		{
+			return 0;
+		}
+
+		return Math.Clamp((int)Math.Round(elapsedWorkingDays * 100d / totalWorkingDays), 0, 100);
+	}
+
+	private static int CountWorkingDays(DateTime startDate, DateTime endDate)
+	{
+		if (endDate < startDate)
+		{
+			return 0;
+		}
+
+		var count = 0;
+		for (var date = startDate.Date; date <= endDate.Date; date = date.AddDays(1))
+		{
+			if (date.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday)
+			{
+				count++;
+			}
+		}
+
+		return count;
+	}
+
+	private static string CalculateChapterStatus(int progress, DateTime? plannedStartDate, DateTime? plannedEndDate)
+	{
+		var today = DateTime.UtcNow.Date;
+
+		if (progress >= 100)
+		{
+			return "Completed";
+		}
+
+		if (plannedEndDate.HasValue && plannedEndDate.Value.Date < today)
+		{
+			return "Delayed";
+		}
+
+		if (progress > 0)
+		{
+			return "In Progress";
+		}
+
+		if (plannedStartDate.HasValue && plannedStartDate.Value.Date <= today)
+		{
+			return "Due To Start";
+		}
+
+		return "Not Started";
+	}
+
+	private static string CalculateScheduleStatus(int progress, int expectedProgress, bool isCompleted)
+	{
+		if (isCompleted)
+		{
+			return "Completed";
+		}
+
+		var variance = progress - expectedProgress;
+		return variance switch
+		{
+			>= 0 => "On Track",
+			>= -10 => "Slightly Behind",
+			>= -25 => "Delayed",
+			_ => "Critically Delayed"
+		};
+	}
+
+	private static string CalculateRiskLevel(int progress, int expectedProgress, DateTime? lastUpdatedAt)
+	{
+		if (progress >= 100)
+		{
+			return "Low";
+		}
+
+		var variance = progress - expectedProgress;
+		if (variance <= -30)
+		{
+			return "Critical";
+		}
+
+		if (variance <= -15)
+		{
+			return "High";
+		}
+
+		if (variance < 0)
+		{
+			return "Medium";
+		}
+
+		if (lastUpdatedAt.HasValue && lastUpdatedAt.Value.Date <= DateTime.UtcNow.Date.AddDays(-14))
+		{
+			return "Medium";
+		}
+
+		return "Low";
+	}
+
+	private static int GetRiskRank(string riskLevel)
+	{
+		return riskLevel switch
+		{
+			"Critical" => 4,
+			"High" => 3,
+			"Medium" => 2,
+			"Low" => 1,
+			_ => 0
+		};
+	}
+
+	private static string GetRiskLevelFromRank(int rank)
+	{
+		return rank switch
+		{
+			>= 4 => "Critical",
+			3 => "High",
+			2 => "Medium",
+			1 => "Low",
+			_ => "Low"
+		};
+	}
+
+	private static ChapterProgressLogDto MapProgressLog(ChapterProgressLog log)
+	{
+		var fields = ParseProgressLogFields(log.ChangedByName);
+		var changedByName = fields.TryGetValue("actor", out var actor) ? actor : log.ChangedByName;
+		var previousProgress = TryParseInt(fields, "Previous");
+		var newProgress = TryParseInt(fields, "New") ?? log.Progress;
+
+		if (!previousProgress.HasValue && fields.TryGetValue("legacyChange", out var legacyChange))
+		{
+			var parts = legacyChange.Split("->", StringSplitOptions.TrimEntries);
+			if (parts.Length == 2)
+			{
+				previousProgress = ParsePercentage(parts[0]);
+				newProgress = ParsePercentage(parts[1]) ?? log.Progress;
+			}
+		}
+
+		return new ChapterProgressLogDto
+		{
+			ChangedByName = changedByName,
+			Progress = newProgress,
+			PreviousProgress = previousProgress,
+			ChangeAmount = previousProgress.HasValue ? newProgress - previousProgress.Value : 0,
+			Description = fields.TryGetValue("Reason", out var reason) ? reason : null,
+			Status = fields.TryGetValue("Status", out var status) ? status : null,
+			DelayReason = fields.TryGetValue("Delay", out var delay) ? delay : null,
+			RevisedEndDate = fields.TryGetValue("Revised", out var revised) && DateTime.TryParse(revised, out var revisedEndDate)
+				? revisedEndDate
+				: null,
+			ChangedAt = log.CreationTime
+		};
+	}
+
+	private static Dictionary<string, string> ParseProgressLogFields(string? summary)
+	{
+		var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		if (string.IsNullOrWhiteSpace(summary))
+		{
+			return result;
+		}
+
+		var parts = summary.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+		if (parts.Length == 0)
+		{
+			return result;
+		}
+
+		result["actor"] = parts[0];
+
+		foreach (var part in parts.Skip(1))
+		{
+			var separatorIndex = part.IndexOf(':');
+			if (separatorIndex > 0)
+			{
+				result[part[..separatorIndex].Trim()] = part[(separatorIndex + 1)..].Trim();
+				continue;
+			}
+
+			if (part.Contains("->", StringComparison.OrdinalIgnoreCase))
+			{
+				result["legacyChange"] = part;
+			}
+		}
+
+		return result;
+	}
+
+	private static int? TryParseInt(IReadOnlyDictionary<string, string> fields, string key)
+	{
+		return fields.TryGetValue(key, out var value) && int.TryParse(value, out var parsed)
+			? parsed
+			: null;
+	}
+
+	private static int? ParsePercentage(string value)
+	{
+		var normalized = value.Replace("%", string.Empty).Trim();
+		return int.TryParse(normalized, out var parsed) ? parsed : null;
+	}
+
 	private string GetCurrentUserDisplayName()
 	{
 		if (!string.IsNullOrWhiteSpace(CurrentUser.Name))
@@ -452,12 +832,7 @@ public class ChapterProgressAppService(
 
 		return logs
 			.OrderByDescending(l => l.CreationTime)
-			.Select(l => new ChapterProgressLogDto
-			{
-				ChangedByName = l.ChangedByName,
-				Progress = l.Progress,
-				ChangedAt = l.CreationTime
-			})
+			.Select(MapProgressLog)
 			.ToList();
 	}
 

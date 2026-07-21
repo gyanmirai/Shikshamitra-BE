@@ -40,6 +40,7 @@ public class AcademicCalendarDayDto : EntityDto<Guid>
     public Guid? DivisionId { get; set; }
     public TimeSpan? StartTime { get; set; }
     public TimeSpan? EndTime { get; set; }
+    public bool AutoScanImpacts { get; set; }
 
     public CalendarDayStatus Status { get; set; }
     public string? ChangeReason { get; set; }
@@ -50,6 +51,8 @@ public class EmergencyClosureListItemDto : EntityDto<Guid>
     public Guid AcademicCalendarId { get; set; }
     public string CalendarName { get; set; }
     public DateTime Date { get; set; }
+    public TimeSpan? StartTime { get; set; }
+    public TimeSpan? EndTime { get; set; }
     public string Title { get; set; }
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
@@ -57,6 +60,7 @@ public class EmergencyClosureListItemDto : EntityDto<Guid>
     public Guid? DivisionId { get; set; }
     public CalendarDayStatus Status { get; set; }
     public string? ChangeReason { get; set; }
+    public bool AutoScanImpacts { get; set; }
     public int ImpactCount { get; set; }
     public int PendingImpactCount { get; set; }
 }
@@ -212,6 +216,7 @@ public class UpdateCalendarDto
 public class CreateCalendarDayDto
 {
     public DateTimeOffset Date { get; set; }
+    public DateTimeOffset? EndDate { get; set; }
     public DayType DayType { get; set; }
     public HolidayCategory? HolidayCategory { get; set; }
     public string Title { get; set; }
@@ -235,6 +240,10 @@ public class CreateCalendarDaysBulkDto
 public class CreateEmergencyClosureDto
 {
     public DateTimeOffset Date { get; set; }
+    public DateTimeOffset? StartDate { get; set; }
+    public DateTimeOffset? EndDate { get; set; }
+    public TimeSpan? StartTime { get; set; }
+    public TimeSpan? EndTime { get; set; }
     public string Title { get; set; }
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
@@ -244,7 +253,7 @@ public class CreateEmergencyClosureDto
     public bool NotifyTeachers { get; set; }
     public bool NotifyStudents { get; set; }
     public bool NotifyStaff { get; set; }
-    public bool AutoScanImpacts { get; set; }
+    public bool AutoScanImpacts { get; set; } = true;
 }
 
 public class ResolveImpactLogDto

@@ -28,7 +28,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<Subject, Guid> _subjectRepository;
-	private readonly StudentSubmissionManager _submissionManager;
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
 
 	public HomeworkFeedbackAppService(
@@ -37,7 +36,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		IRepository<Student, Guid> studentRepository,
 		IRepository<Standard, Guid> standardRepository,
 		IRepository<Subject, Guid> subjectRepository,
-		StudentSubmissionManager submissionManager,
 		IAsyncQueryableExecuter asyncExecuter
 	)
 	{
@@ -46,7 +44,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		_studentRepository = studentRepository;
 		_standardRepository = standardRepository;
 		_subjectRepository = subjectRepository;
-		_submissionManager = submissionManager;
 		_asyncExecuter = asyncExecuter;
 	}
 
@@ -111,8 +108,14 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			filter.DivisionId
 		);
 
-		// Create a dictionary for quick lookup
-		var submissionDict = submissions.ToDictionary(s => s.StudentId);
+		// Use the latest row if legacy data already contains duplicate submissions.
+		var submissionDict = submissions
+			.GroupBy(s => s.StudentId)
+			.ToDictionary(
+				g => g.Key,
+				g => g.OrderByDescending(s => s.SubmissionDate ?? DateTimeOffset.MinValue)
+					.ThenByDescending(s => s.CreationTime)
+					.First());
 
 		// 5. Resolve homework type name: prefer new HomeworkType, fall back to legacy HomeworkAssignmentType
 		var homeworkTypeName = homework.HomeworkType?.Name
@@ -143,15 +146,15 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				DueDate = homework.DueDate?.ToString("dd-MM-yyyy")
 					?? homework.DivisionSchedules.FirstOrDefault(ds => ds.DivisionId == filter.DivisionId)?.DueDate.ToString("dd-MM-yyyy")
 					?? string.Empty,
-				Marks = submission?.Marks,
-				TotalMarks = submission?.TotalMarks,
+				Marks = null,
+				TotalMarks = null,
 				Feedback = submission?.Feedback,
 				Remarks = submission?.Remarks,
 				Status = (int) (submission?.Status ?? SubmissionStatus.NotSubmitted),
 				SubmissionStatusLabel = GetSubmissionStatusLabel(submission?.Status ?? SubmissionStatus.NotSubmitted),
-				EvaluationStatus = GetEvaluationStatus(submission?.Status, submission?.Marks, submission?.Feedback),
+				EvaluationStatus = GetEvaluationStatus(submission?.Status, submission?.Feedback),
 				FeedbackStatus = string.IsNullOrWhiteSpace(submission?.Feedback) ? "Feedback Pending" : "Feedback Added",
-				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks),
+				Percentage = null,
 				SubmittedContent = submission?.SubmittedContent,
 				SubmittedDocumentUrl = submission?.SubmittedDocumentUrl,
 				OriginalFileName = submission?.OriginalFileName
@@ -184,8 +187,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 	private static EvaluationWorkspaceSummaryDto BuildSummary(List<HomeworkSubmissionDto> submissions)
 	{
-		var reviewedRows = submissions.Where(s => s.Marks.HasValue && s.TotalMarks.HasValue).ToList();
-
 		return new EvaluationWorkspaceSummaryDto
 		{
 			TotalStudents = submissions.Count,
@@ -194,24 +195,29 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			Reviewed = submissions.Count(s => s.Status == (int)SubmissionStatus.Reviewed),
 			NeedsReview = submissions.Count(s => s.Status is (int)SubmissionStatus.Submitted or (int)SubmissionStatus.Late or (int)SubmissionStatus.NeedsReview),
 			Late = submissions.Count(s => s.Status == (int)SubmissionStatus.Late),
-			TotalMarks = reviewedRows.Select(s => s.TotalMarks).FirstOrDefault(x => x.HasValue),
-			AverageMarks = reviewedRows.Count == 0 ? null : Math.Round(reviewedRows.Average(s => s.Marks!.Value), 2)
+			TotalMarks = null,
+			AverageMarks = null
 		};
 	}
 
-	private static string GetEvaluationStatus(SubmissionStatus? status, decimal? marks, string? feedback)
+	private static string GetEvaluationStatus(SubmissionStatus? status, string? feedback)
 	{
 		if (status == SubmissionStatus.Reviewed)
 		{
 			return "Reviewed";
 		}
 
-		if (marks.HasValue || !string.IsNullOrWhiteSpace(feedback))
+		if (status == SubmissionStatus.NeedsReview)
 		{
-			return "Draft";
+			return "Needs Review";
 		}
 
-		return status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview
+		if (!string.IsNullOrWhiteSpace(feedback))
+		{
+			return "Reviewed";
+		}
+
+		return status is SubmissionStatus.Submitted or SubmissionStatus.Late
 			? "Needs Review"
 			: "Not Started";
 	}
@@ -224,13 +230,6 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			SubmissionStatus.NeedsReview => "Needs Review",
 			_ => status.ToString()
 		};
-	}
-
-	private static decimal? CalculatePercentage(decimal? marks, decimal? totalMarks)
-	{
-		return marks.HasValue && totalMarks.HasValue && totalMarks.Value > 0
-			? Math.Round(marks.Value / totalMarks.Value * 100, 2)
-			: null;
 	}
 
 	/// <summary>
@@ -255,12 +254,13 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			throw new BusinessException("ShikshaMitra.Homework:NotFound")
 				.WithData("HomeworkId", homeworkId);
 		}
+		EnsureHomeworkOpenForEvaluation(homework);
 
 		// 2. Validate student exists
 		var student = await _studentRepository.GetAsync(studentId);
 
 		// 3. Validate feedback data
-		_submissionManager.ValidateFeedback(input.Marks, input.TotalMarks);
+		EnsureFeedbackStatusAllowed(input);
 
 		// 4. Get or create submission
 		var submission = await _submissionRepository.GetSubmissionByStudentAndHomeworkAsync(
@@ -270,49 +270,17 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		if (submission == null)
 		{
-			// Resolve divisionId and dueDate — V1 uses entity fields, V2 uses DivisionSchedules
-			Guid divisionId;
-			DateTime dueDate;
-
-			if (homework.DivisionId.HasValue && homework.DueDate.HasValue)
-			{
-				// V1 homework
-				divisionId = homework.DivisionId.Value;
-				dueDate = homework.DueDate.Value;
-			}
-			else
-			{
-				// V2 homework — look up the schedule for the student's division
-				var studentDivisionId = student.DivisionId
-					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
-						.WithData("Message", "Student has no division assigned");
-
-				var schedule = homework.DivisionSchedules
-					?.FirstOrDefault(s => s.DivisionId == studentDivisionId)
-					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
-						.WithData("Message", "Homework is not assigned to the student's division");
-
-				divisionId = schedule.DivisionId;
-				dueDate = schedule.DueDate;
-			}
-
-			// Create new submission
-			submission = await _submissionManager.CreateOrGetSubmissionAsync(
-				homeworkId,
-				studentId,
-				divisionId,
-				dueDate,
-				CurrentTenant.Id
-			);
+			throw new BusinessException("ShikshaMitra.Submission:CannotEvaluateMissingSubmission")
+				.WithData("StudentId", studentId)
+				.WithData("HomeworkId", homeworkId);
 		}
 
-		// Set SubmissionDate if not yet recorded (InPersonSubmission / OnlineText paths)
-		submission.SubmissionDate ??= DateTimeOffset.UtcNow;
+		EnsureSubmissionCanBeEvaluated(submission);
 
 		// 5. Update feedback
 		submission.UpdateFeedback(
-			input.Marks,
-			input.TotalMarks,
+			null,
+			null,
 			input.Feedback,
 			input.Remarks,
 			input.Status,
@@ -330,8 +298,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			{
 				StudentId = studentId.ToString(),
 				HomeworkId = homeworkId.ToString(),
-				Marks = input.Marks,
-				TotalMarks = input.TotalMarks,
+				Marks = null,
+				TotalMarks = null,
 				Feedback = input.Feedback,
 				Remarks = input.Remarks,
 				Status = input.Status.ToString()
@@ -361,6 +329,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			throw new BusinessException("ShikshaMitra.Homework:NotFound")
 				.WithData("HomeworkId", homeworkId);
 		}
+		EnsureHomeworkOpenForEvaluation(homework);
 
 		// 2. Get student to resolve division for V2 homeworks
 		var student = await _studentRepository.GetAsync(studentId);
@@ -373,44 +342,12 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		if (submission == null)
 		{
-			// Resolve divisionId and dueDate — V1 uses entity fields, V2 uses DivisionSchedules
-			Guid divisionId;
-			DateTime dueDate;
-
-			if (homework.DivisionId.HasValue && homework.DueDate.HasValue)
-			{
-				// V1 homework
-				divisionId = homework.DivisionId.Value;
-				dueDate = homework.DueDate.Value;
-			}
-			else
-			{
-				// V2 homework — look up the schedule for the student's division
-				var studentDivisionId = student.DivisionId
-					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
-						.WithData("Message", "Student has no division assigned");
-
-				var schedule = homework.DivisionSchedules
-					?.FirstOrDefault(s => s.DivisionId == studentDivisionId)
-					?? throw new BusinessException("ShikshaMitra.Homework:InvalidHomework")
-						.WithData("Message", "Homework is not assigned to the student's division");
-
-				divisionId = schedule.DivisionId;
-				dueDate = schedule.DueDate;
-			}
-
-			// Create new submission
-			submission = await _submissionManager.CreateOrGetSubmissionAsync(
-				homeworkId,
-				studentId,
-				divisionId,
-				dueDate,
-				CurrentTenant.Id
-			);
+			throw new BusinessException("ShikshaMitra.Submission:CannotUpdateMissingSubmission")
+				.WithData("StudentId", studentId)
+				.WithData("HomeworkId", homeworkId);
 		}
 
-		// Set SubmissionDate if not yet recorded (InPersonSubmission / OnlineText paths)
-		submission.SubmissionDate ??= DateTimeOffset.UtcNow;
+		EnsureStatusTransitionAllowed(submission, input.Status);
 
 		// 3. Update status
 		submission.UpdateStatus(input.Status);
@@ -423,5 +360,66 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		{
 			Message = L["ShikshaMitra.Homework:StatusUpdatedSuccessfully"]
 		};
+	}
+
+	private static void EnsureHomeworkOpenForEvaluation(HomeworkAssignmentEntity homework)
+	{
+		var published = homework.Status == HomeworkStatus.Published || homework.IsPublished || homework.HasPublishedDivisions;
+		if (!published)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:NotPublished");
+		}
+
+		if (homework.Status == HomeworkStatus.Closed)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:Closed");
+		}
+	}
+
+	private static void EnsureFeedbackStatusAllowed(GiveFeedbackDto input)
+	{
+		if (input.Status == SubmissionStatus.Reviewed && string.IsNullOrWhiteSpace(input.Feedback))
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ReviewRequiresFeedback");
+		}
+
+		if (input.Status == SubmissionStatus.NeedsReview && string.IsNullOrWhiteSpace(input.Remarks))
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ReviewChangeReasonRequired");
+		}
+
+		if (input.Status == SubmissionStatus.Excused && string.IsNullOrWhiteSpace(input.Remarks))
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ExcuseReasonRequired");
+		}
+	}
+
+	private static void EnsureSubmissionCanBeEvaluated(StudentSubmissionEntity submission)
+	{
+		if (submission.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:NotSubmittedYet")
+				.WithData("SubmissionId", submission.Id);
+		}
+	}
+
+	private static void EnsureStatusTransitionAllowed(StudentSubmissionEntity submission, SubmissionStatus requestedStatus)
+	{
+		if (submission.Status == SubmissionStatus.Reviewed && requestedStatus != SubmissionStatus.Reviewed)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:ReviewedSubmissionLocked")
+				.WithData("SubmissionId", submission.Id);
+		}
+
+		if (requestedStatus == SubmissionStatus.Reviewed)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:UseFeedbackToReview");
+		}
+
+		if (requestedStatus == SubmissionStatus.NotSubmitted && submission.SubmissionDate.HasValue)
+		{
+			throw new BusinessException("ShikshaMitra.Submission:CannotMarkSubmittedWorkNotSubmitted")
+				.WithData("SubmissionId", submission.Id);
+		}
 	}
 }

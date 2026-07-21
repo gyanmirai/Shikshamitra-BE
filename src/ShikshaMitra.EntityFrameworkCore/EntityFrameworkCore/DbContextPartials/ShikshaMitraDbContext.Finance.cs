@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Finance.Accounts.Incomes;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.FeeCollection;
@@ -29,6 +30,10 @@ public partial class ShikshaMitraDbContext
 	public DbSet<FeeStructureMetadata> FeeStructureMetadatas { get; set; }
 	public DbSet<FeeStructure> FeeStructures { get; set; }
 	public DbSet<FeeStructureDetail> FeeStructureDetails { get; set; }
+	public DbSet<PaymentTerm> PaymentTerms { get; set; }
+	public DbSet<PaymentTermVersion> PaymentTermVersions { get; set; }
+	public DbSet<PaymentTermInstallment> PaymentTermInstallments { get; set; }
+	public DbSet<FeeStructureDetailScheduleOverride> FeeStructureDetailScheduleOverrides { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Concession Requests

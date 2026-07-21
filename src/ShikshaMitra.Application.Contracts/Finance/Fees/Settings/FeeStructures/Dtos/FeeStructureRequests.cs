@@ -1,4 +1,6 @@
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -29,4 +31,16 @@ public class FeeHeadAssignmentRequest
 	public bool IsOptional { get; set; }
 	public MonthEnum PayableMonth { get; set; }
 	public int PayableYear { get; set; }
+
+	/// <summary>Optional Payment Term master attached to this fee head.</summary>
+	public Guid? PaymentTermId { get; set; }
+
+	/// <summary>Specific published/draft version used for demand generation.</summary>
+	public Guid? PaymentTermVersionId { get; set; }
+
+	/// <summary>Inherited master schedule vs structure-specific overrides.</summary>
+	public ScheduleMode ScheduleMode { get; set; } = ScheduleMode.Inherited;
+
+	/// <summary>Structure-specific installment overrides when ScheduleMode is Customized.</summary>
+	public List<ScheduleOverrideDto> InstallmentOverrides { get; set; } = new();
 }

@@ -174,6 +174,11 @@ public class TeacherAvailabilityAppService(
         {
             foreach (var lecture in affected.Items.Where(x => x.CanCreateSubstitution))
             {
+                if (IsPastWindow(availabilityDate, ParseTime(lecture.EndTime, "endTime")))
+                {
+                    continue;
+                }
+
                 var duplicate = lecture.ExistingSubstitutionId.HasValue ||
                     await substitutionRepository.AnyAsync(x =>
                         x.Date == availabilityDate &&
@@ -248,7 +253,8 @@ public class TeacherAvailabilityAppService(
             return new AffectedLectureResultDto();
         }
 
-        var timetableDay = ToTimetableDay(input.AvailabilityDate.DayOfWeek);
+        var availabilityDate = NormalizeDate(input.AvailabilityDate);
+        var timetableDay = ToTimetableDay(availabilityDate.DayOfWeek);
         if (!timetableDay.HasValue)
         {
             return new AffectedLectureResultDto();
@@ -256,7 +262,6 @@ public class TeacherAvailabilityAppService(
 
         var start = ParseTime(input.StartTime, "startTime");
         var end = ParseTime(input.EndTime, "endTime");
-        var availabilityDate = NormalizeDate(input.AvailabilityDate);
         var timetableQuery = await timetableRepository.WithDetailsAsync();
         var timetables = await AsyncExecuter.ToListAsync(timetableQuery.Where(x => x.Status == TimetableStatus.Published));
         var standards = await standardRepository.GetListAsync();
@@ -288,7 +293,8 @@ public class TeacherAvailabilityAppService(
                         subjects,
                         rooms,
                         employees,
-                        existing))))
+                        existing,
+                        availabilityDate))))
             .OrderBy(x => x.StartTime)
             .ToList();
 
@@ -328,6 +334,11 @@ public class TeacherAvailabilityAppService(
         var created = 0;
         foreach (var lecture in affected.Items.Where(x => x.CanCreateSubstitution))
         {
+            if (IsPastWindow(entity.AvailabilityDate, ParseTime(lecture.EndTime, "endTime")))
+            {
+                continue;
+            }
+
             var request = new SubstitutionRequest(
                 GuidGenerator.Create(),
                 CurrentTenant.Id,
@@ -371,7 +382,8 @@ public class TeacherAvailabilityAppService(
         List<Subject> subjects,
         List<Room> rooms,
         List<Employee> employees,
-        List<SubstitutionRequest> existing)
+        List<SubstitutionRequest> existing,
+        DateTime availabilityDate)
     {
         var subject = subjects.FirstOrDefault(x => x.Id == slotSubject.SubjectId);
         var standard = standards.FirstOrDefault(x => x.Id == timetable.StandardId);
@@ -400,7 +412,7 @@ public class TeacherAvailabilityAppService(
             TeacherId = teacher?.Id ?? slotSubject.TeacherId,
             TeacherName = teacher?.EmployeeName ?? string.Empty,
             ExistingSubstitutionId = existingRow?.Id,
-            CanCreateSubstitution = existingRow == null
+            CanCreateSubstitution = existingRow == null && !IsPastWindow(availabilityDate, slot.EndTime)
         };
     }
 
@@ -512,8 +524,31 @@ public class TeacherAvailabilityAppService(
         return parsed;
     }
 
-    private static DateTime NormalizeDate(DateTime value) =>
-        DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
+    private static TimeZoneInfo GetInstitutionTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+        }
+    }
+
+    private static DateTime NormalizeDate(DateTime value)
+    {
+        var tz = GetInstitutionTimeZone();
+        var utcTime = value.Kind == DateTimeKind.Utc ? value : TimeZoneInfo.ConvertTimeToUtc(value);
+        var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime, tz);
+        return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
+    }
+
+    private static DateTime CombineDateAndTime(DateTime date, TimeOnly time) =>
+        DateTime.SpecifyKind(date.Date.Add(time.ToTimeSpan()), DateTimeKind.Utc);
+
+    private static bool IsPastWindow(DateTime date, TimeOnly endTime) =>
+        DateTime.UtcNow > CombineDateAndTime(date, endTime);
 
     private static SubstitutionSource MapAvailabilitySourceToSubstitutionSource(
         TeacherAvailabilitySource sourceType) => sourceType switch

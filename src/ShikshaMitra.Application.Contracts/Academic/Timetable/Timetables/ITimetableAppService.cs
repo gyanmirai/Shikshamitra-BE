@@ -9,6 +9,8 @@ public interface ITimetableAppService
 
     Task SaveAsync(Guid standardId, Guid divisionId, SaveTimetableDto input);
 
+    Task ValidateAsync(Guid standardId, Guid divisionId, SaveTimetableDto input);
+
     Task<TimetableManagementResponseDto> GetManagementByStandardAsync(
         Guid standardId, GetTimetableManagementInput input);
 

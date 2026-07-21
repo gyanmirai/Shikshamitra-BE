@@ -1,62 +1,82 @@
-﻿//using Microsoft.AspNetCore.Mvc;
-//using System;
-//using System.Collections.Generic;
-//using System.Threading.Tasks;
-//using Volo.Abp;
-//using Volo.Abp.AspNetCore.Mvc;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Academic.Syllabus;
+using Volo.Abp.AspNetCore.Mvc;
 
-//namespace ShikshaMitra.Controllers.Academic.Syllabus;
+namespace ShikshaMitra.Controllers.Academic.Syllabus;
 
-//[RemoteService]
-//[Area("Academic")]
-//[Route("api/academic/learning-resources")]
-//public class LearningResourceController(ILearningResource) : AbpController
-//{
-//	[HttpPost]
-//	public Task<LearningResourceDto> CreateAsync([FromBody] CreateUpdateLearningResourceDto input)
-//	{
-//		return learningResourceAppService.CreateAsync(input);
-//	}
+[Authorize]
+[ApiController]
+[Route("api/academic/learning-resources")]
+public class LearningResourceController(ILearningResourceAppService learningResourceAppService) : AbpController
+{
+	[HttpPost]
+	[ProducesResponseType(typeof(LearningResourceDto), 200)]
+	public Task<LearningResourceDto> CreateAsync([FromBody] CreateUpdateLearningResourceDto input)
+	{
+		return learningResourceAppService.CreateAsync(input);
+	}
 
-//	[HttpGet("/standards/{standardId}/subjects/{subjectId}/learning-resources")]
-//	public Task<List<LearningResourceDto>> GetByStandardSubjectIdAsync(Guid standardId, Guid subjectId)
-//	{
-//		return learningResourceAppService.GetByStandardSubjectIdAsync(standardId, subjectId);
-//	}
+	[HttpGet]
+	[ProducesResponseType(typeof(List<LearningResourceDto>), 200)]
+	public Task<List<LearningResourceDto>> GetListAsync([FromQuery] GetLearningResourcesInput input)
+	{
+		return learningResourceAppService.GetListAsync(input);
+	}
 
-//	[HttpPut("{id}")]
-//	public Task<LearningResourceDto> UpdateAsync(Guid id, [FromBody] CreateUpdateLearningResourceDto input)
-//	{
-//		return learningResourceAppService.UpdateAsync(id, input);
-//	}
+	[HttpGet("{id:guid}")]
+	[ProducesResponseType(typeof(LearningResourceDto), 200)]
+	[ProducesResponseType(404)]
+	public Task<LearningResourceDto> GetAsync(Guid id)
+	{
+		return learningResourceAppService.GetAsync(id);
+	}
 
-//	[HttpDelete("{id}")]
-//	public Task DeleteAsync(Guid id)
-//	{
-//		return learningResourceAppService.DeleteAsync(id);
-//	}
+	[HttpPut("{id:guid}")]
+	[ProducesResponseType(typeof(LearningResourceDto), 200)]
+	[ProducesResponseType(404)]
+	public Task<LearningResourceDto> UpdateAsync(Guid id, [FromBody] CreateUpdateLearningResourceDto input)
+	{
+		return learningResourceAppService.UpdateAsync(id, input);
+	}
 
-//	[HttpPost("resource-types")]
-//	public Task<ResourceTypeDto> CreateResourceTypeAsync([FromBody] CreateUpdateResourceTypeDto input)
-//	{
-//		return learningResourceAppService.CreateResourceTypeAsync(input);
-//	}
+	[HttpPost("{id:guid}/submit")]
+	public Task SubmitAsync(Guid id)
+	{
+		return learningResourceAppService.SubmitAsync(id);
+	}
 
-//	[HttpGet("resource-types")]
-//	public Task<List<ResourceTypeDto>> GetResourceTypesAsync()
-//	{
-//		return learningResourceAppService.GetResourceTypesAsync();
-//	}
+	[HttpPost("{id:guid}/publish")]
+	public Task PublishAsync(Guid id, [FromBody] LearningResourceReviewDto input)
+	{
+		return learningResourceAppService.PublishAsync(id, input);
+	}
 
-//	[HttpPut("resource-types/{id}")]
-//	public Task<ResourceTypeDto> UpdateResourceTypeAsync(Guid id, [FromBody] CreateUpdateResourceTypeDto input)
-//	{
-//		return learningResourceAppService.UpdateResourceTypeAsync(id, input);
-//	}
+	[HttpPost("{id:guid}/reject")]
+	public Task RejectAsync(Guid id, [FromBody] LearningResourceReviewDto input)
+	{
+		return learningResourceAppService.RejectAsync(id, input);
+	}
 
-//	[HttpDelete("resource-types/{id}")]
-//	public Task DeleteResourceTypeAsync(Guid id)
-//	{
-//		return learningResourceAppService.DeleteResourceTypeAsync(id);
-//	}
-//}
+	[HttpPost("{id:guid}/archive")]
+	public Task ArchiveAsync(Guid id, [FromBody] LearningResourceArchiveDto input)
+	{
+		return learningResourceAppService.ArchiveAsync(id, input);
+	}
+
+	[HttpPost("{id:guid}/restore")]
+	public Task RestoreAsync(Guid id)
+	{
+		return learningResourceAppService.RestoreAsync(id);
+	}
+
+	[HttpGet("health")]
+	[ProducesResponseType(typeof(LearningResourceHealthDto), 200)]
+	public Task<LearningResourceHealthDto> GetHealthAsync([FromQuery] GetLearningResourcesInput input)
+	{
+		return learningResourceAppService.GetHealthAsync(input);
+	}
+}

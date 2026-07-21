@@ -30,6 +30,7 @@ public class LessonPlanAppService(
     IRepository<Standard, Guid> standardRepository,
     IRepository<Division, Guid> divisionRepository,
     IRepository<Subject, Guid> subjectRepository,
+    IRepository<AssignedSubject, Guid> assignedSubjectRepository,
     IRepository<AssignedSubjectChapter, Guid> chapterRepository,
     IRepository<Employee, Guid> employeeRepository,
     IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
@@ -146,13 +147,11 @@ public class LessonPlanAppService(
 
     public async Task<LessonPlanDto> CreateAsync(CreateLessonPlanDto input)
     {
-        var chapterExists = await chapterRepository.AnyAsync(x => x.Id == input.ChapterId);
-        if (!chapterExists)
-        {
-            throw new UserFriendlyException("Selected chapter is invalid.");
-        }
+        EnsureOwnTeacherRecord(input.TeacherId, "create");
+        await EnsureChapterMatchesPlanTargetAsync(input.ChapterId, input.StandardId, input.SubjectId);
 
-        await EnsureUniqueLessonPlanTopicAsync(input.TeacherId, input.PlannedDate, input.Topic);
+        await EnsureLessonPlanCanBeCreatedForDateAsync(input.TeacherId, input.PlannedDate, input.StandardId, input.DivisionId);
+        await EnsureUniqueLessonPlanAsync(input.TeacherId, input.PlannedDate, input.Topic, input.TimetableSlotId);
 
         var lessonPlan = new LessonPlan(
             GuidGenerator.Create(),
@@ -187,11 +186,14 @@ public class LessonPlanAppService(
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         EnsureOwnTeacherRecord(lessonPlan.TeacherId, "modify");
+        EnsureLessonPlanEditable(lessonPlan);
+        await EnsureChapterMatchesPlanTargetAsync(input.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
 
-        await EnsureUniqueLessonPlanTopicAsync(
+        await EnsureUniqueLessonPlanAsync(
             lessonPlan.TeacherId,
             lessonPlan.PlannedDate,
             input.Topic,
+            lessonPlan.TimetableSlotId,
             lessonPlan.Id
         );
 
@@ -212,6 +214,10 @@ public class LessonPlanAppService(
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         EnsureOwnTeacherRecord(lessonPlan.TeacherId, "submit");
+        EnsureLessonPlanSubmittable(lessonPlan);
+        await EnsureChapterMatchesPlanTargetAsync(lessonPlan.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
+        await EnsureLessonPlanCanBeCreatedForDateAsync(lessonPlan.TeacherId, lessonPlan.PlannedDate, lessonPlan.StandardId, lessonPlan.DivisionId);
+        await EnsureUniqueLessonPlanAsync(lessonPlan.TeacherId, lessonPlan.PlannedDate, lessonPlan.Topic, lessonPlan.TimetableSlotId, lessonPlan.Id);
 
         lessonPlan.Submit();
         await lessonPlanRepository.UpdateAsync(lessonPlan);
@@ -224,6 +230,10 @@ public class LessonPlanAppService(
         {
             var plan = await lessonPlanRepository.GetAsync(id);
             EnsureOwnTeacherRecord(plan.TeacherId, "submit");
+            EnsureLessonPlanSubmittable(plan);
+            await EnsureChapterMatchesPlanTargetAsync(plan.ChapterId, plan.StandardId, plan.SubjectId);
+            await EnsureLessonPlanCanBeCreatedForDateAsync(plan.TeacherId, plan.PlannedDate, plan.StandardId, plan.DivisionId);
+            await EnsureUniqueLessonPlanAsync(plan.TeacherId, plan.PlannedDate, plan.Topic, plan.TimetableSlotId, plan.Id);
             plan.Submit();
             await lessonPlanRepository.UpdateAsync(plan);
         }
@@ -233,6 +243,8 @@ public class LessonPlanAppService(
     {
         EnsureCanReviewLessonPlans();
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
+        await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
+        EnsurePlanIsAwaitingReview(lessonPlan);
         lessonPlan.Approve(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
         return await GetAsync(id);
@@ -241,7 +253,10 @@ public class LessonPlanAppService(
     public async Task<LessonPlanDto> RejectAsync(Guid id, ReviewRemarksDto input)
     {
         EnsureCanReviewLessonPlans();
+        EnsureReviewCommentPresent(input, "reject");
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
+        await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
+        EnsurePlanIsAwaitingReview(lessonPlan);
         lessonPlan.Reject(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
         return await GetAsync(id);
@@ -250,7 +265,10 @@ public class LessonPlanAppService(
     public async Task<LessonPlanDto> RequestChangesAsync(Guid id, ReviewRemarksDto input)
     {
         EnsureCanReviewLessonPlans();
+        EnsureReviewCommentPresent(input, "request changes for");
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
+        await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
+        EnsurePlanIsAwaitingReview(lessonPlan);
         lessonPlan.RequestChanges(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
         return await GetAsync(id);
@@ -341,6 +359,7 @@ public class LessonPlanAppService(
     {
         var plan = await lessonPlanRepository.GetAsync(input.LessonPlanId);
         EnsureOwnTeacherRecord(plan.TeacherId, "create a diary for");
+        await EnsureTeacherDiaryAllowedAsync(plan, input);
 
         var existing = await teacherDiaryRepository.FirstOrDefaultAsync(x => x.LessonPlanId == input.LessonPlanId);
         if (existing != null)
@@ -360,6 +379,18 @@ public class LessonPlanAppService(
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
         EnsureOwnTeacherRecord(diary.TeacherId, "modify");
+        if (diary.Status == TeacherDiaryStatus.Submitted)
+        {
+            throw new UserFriendlyException("Submitted teacher diaries cannot be edited. Use an authorized correction workflow.");
+        }
+
+        if (input.LessonPlanId != diary.LessonPlanId)
+        {
+            throw new UserFriendlyException("Teacher diary cannot be moved to a different lesson plan.");
+        }
+
+        var plan = await lessonPlanRepository.GetAsync(input.LessonPlanId);
+        await EnsureTeacherDiaryAllowedAsync(plan, input);
         ApplyDiaryInput(diary, input);
         diary.Submit();
 
@@ -528,33 +559,158 @@ public class LessonPlanAppService(
         }
     }
 
-    private async Task EnsureUniqueLessonPlanTopicAsync(
+    private async Task EnsureReviewerIsNotPlanOwnerAsync(LessonPlan lessonPlan)
+    {
+        var currentUserId = CurrentUser.GetId();
+        if (lessonPlan.TeacherId == currentUserId)
+        {
+            throw new AbpAuthorizationException("You cannot review your own lesson plan.");
+        }
+
+        var teacher = await employeeRepository.FirstOrDefaultAsync(x => x.Id == lessonPlan.TeacherId);
+        if (teacher?.UserId == currentUserId)
+        {
+            throw new AbpAuthorizationException("You cannot review your own lesson plan.");
+        }
+    }
+
+    private static void EnsurePlanIsAwaitingReview(LessonPlan lessonPlan)
+    {
+        if (lessonPlan.Status != LessonPlanStatus.Submitted)
+        {
+            throw new UserFriendlyException("Only submitted lesson plans can be approved, rejected, or sent back for changes.");
+        }
+    }
+
+    private static void EnsureLessonPlanEditable(LessonPlan lessonPlan)
+    {
+        if (lessonPlan.Status is not (LessonPlanStatus.Draft or LessonPlanStatus.Rejected or LessonPlanStatus.NeedsChanges))
+        {
+            throw new UserFriendlyException("Lesson plans can be edited only while draft, rejected, or changes requested.");
+        }
+    }
+
+    private static void EnsureLessonPlanSubmittable(LessonPlan lessonPlan)
+    {
+        if (lessonPlan.Status is not (LessonPlanStatus.Draft or LessonPlanStatus.Rejected or LessonPlanStatus.NeedsChanges))
+        {
+            throw new UserFriendlyException("Only draft, rejected, or changes-requested lesson plans can be submitted.");
+        }
+    }
+
+    private static void EnsureReviewCommentPresent(ReviewRemarksDto input, string action)
+    {
+        if (string.IsNullOrWhiteSpace(input.Comment))
+        {
+            throw new UserFriendlyException($"Please add a reason to {action} this lesson plan.");
+        }
+    }
+
+    private async Task EnsureLessonPlanCanBeCreatedForDateAsync(
+        Guid teacherId,
+        DateTime plannedDate,
+        Guid standardId,
+        Guid divisionId)
+    {
+        var insight = await ResolveLessonPlanInsightAsync(teacherId, plannedDate.Date, standardId, divisionId);
+        if (insight.BlocksPlanCreation)
+        {
+            throw new UserFriendlyException(insight.Message ?? "Lesson plan creation is blocked for this date.");
+        }
+    }
+
+    private async Task EnsureTeacherDiaryAllowedAsync(LessonPlan plan, CreateUpdateTeacherDiaryDto input)
+    {
+        if (plan.Status != LessonPlanStatus.Approved)
+        {
+            throw new UserFriendlyException("Teacher diary can be submitted only against an approved lesson plan.");
+        }
+
+        if (input.LessonPlanId != plan.Id)
+        {
+            throw new UserFriendlyException("Teacher diary lesson plan does not match the selected plan.");
+        }
+
+        if (input.IsBackdated && string.IsNullOrWhiteSpace(input.BackdatedReason))
+        {
+            throw new UserFriendlyException("Backdated teacher diary requires a reason.");
+        }
+
+        if (!input.ClassConducted && string.IsNullOrWhiteSpace(input.MissedReason))
+        {
+            throw new UserFriendlyException("Missed reason is required when class was not conducted.");
+        }
+
+        if (input.ClassConducted && string.IsNullOrWhiteSpace(input.ActualTopicCovered))
+        {
+            throw new UserFriendlyException("Actual topic covered is required when class was conducted.");
+        }
+
+        var calendarInsight = await ResolveLessonPlanInsightAsync(plan.TeacherId, input.ActualDate.Date, plan.StandardId, plan.DivisionId);
+        if (calendarInsight.BlocksPlanCreation && !input.IsBackdated)
+        {
+            throw new UserFriendlyException(calendarInsight.Message ?? "Teacher diary cannot be submitted for this date.");
+        }
+    }
+
+    private async Task EnsureUniqueLessonPlanAsync(
         Guid teacherId,
         DateTime plannedDate,
         string topic,
+        Guid? timetableSlotId,
         Guid? excludedLessonPlanId = null)
     {
-        var normalizedTopic = topic?.Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(normalizedTopic))
-        {
-            return;
-        }
-
+        var normalizedTopic = NormalizeLessonTopic(topic);
         var query = await lessonPlanRepository.GetQueryableAsync();
-        var duplicateExists = await AsyncExecuter.AnyAsync(
+        var sameDayPlans = await AsyncExecuter.ToListAsync(
             query.Where(plan =>
                 plan.TeacherId == teacherId &&
                 plan.PlannedDate.Date == plannedDate.Date &&
-                plan.Topic != null &&
-                plan.Topic.ToLower() == normalizedTopic &&
                 (!excludedLessonPlanId.HasValue || plan.Id != excludedLessonPlanId.Value))
         );
 
-        if (duplicateExists)
+        var duplicateTopicExists = !string.IsNullOrWhiteSpace(normalizedTopic) &&
+            sameDayPlans.Any(plan => NormalizeLessonTopic(plan.Topic) == normalizedTopic);
+
+        if (duplicateTopicExists)
         {
             throw new UserFriendlyException(
                 "A lesson plan with the same topic already exists for this teacher on this date.");
         }
+
+        if (timetableSlotId.HasValue && timetableSlotId.Value != Guid.Empty)
+        {
+            var duplicateSlotExists = sameDayPlans.Any(plan => plan.TimetableSlotId == timetableSlotId.Value);
+            if (duplicateSlotExists)
+            {
+                throw new UserFriendlyException(
+                    "A lesson plan already exists for this teacher and timetable period on this date.");
+            }
+        }
+    }
+
+    private async Task EnsureChapterMatchesPlanTargetAsync(Guid chapterId, Guid standardId, Guid subjectId)
+    {
+        var chapter = await chapterRepository.FindAsync(chapterId)
+            ?? throw new UserFriendlyException("Selected chapter is invalid.");
+
+        var assignedSubject = await assignedSubjectRepository.FindAsync(chapter.AssignedSubjectId);
+        if (assignedSubject == null ||
+            assignedSubject.StandardId != standardId ||
+            assignedSubject.SubjectId != subjectId)
+        {
+            throw new UserFriendlyException("Selected chapter does not belong to the selected class and subject.");
+        }
+    }
+
+    private static string NormalizeLessonTopic(string? topic)
+    {
+        if (string.IsNullOrWhiteSpace(topic))
+        {
+            return string.Empty;
+        }
+
+        return string.Join(' ', topic.Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
     private static TimetableDayOfWeek? ToTimetableDay(DayOfWeek dayOfWeek) => dayOfWeek switch
@@ -613,16 +769,17 @@ public class LessonPlanAppService(
         }
 
         var type = calendarDay.DayType.ToString();
+        var blocksPlanCreation = CalendarDayBlockingRules.BlocksLessonPlan(calendarDay.DayType);
         var message = calendarDay.DayType switch
         {
-            DayType.Holiday => $"Holiday: {calendarDay.Title}. You can still create the lesson plan, but this date is marked as a holiday.",
-            DayType.Vacation => $"Vacation: {calendarDay.Title}. You can still create the lesson plan, but verify the academic schedule.",
+            DayType.Holiday => $"Holiday: {calendarDay.Title}. Lesson plan creation is blocked for this date.",
+            DayType.Vacation => $"Vacation: {calendarDay.Title}. Lesson plan creation is blocked for this date.",
             DayType.HalfDay => $"Half day: {calendarDay.Title}. Check whether this period falls inside working hours before planning.",
-            DayType.EmergencyClosure => $"Emergency closure: {calendarDay.Title}. Verify before creating a lesson plan.",
+            DayType.EmergencyClosure => $"Emergency closure: {calendarDay.Title}. Lesson plan creation is blocked for this date.",
             _ => $"{type}: {calendarDay.Title}. Review this calendar insight before creating the lesson plan."
         };
 
-        return new LessonPlanInsight(type, "warning", message, false);
+        return new LessonPlanInsight(type, blocksPlanCreation ? "error" : "warning", message, blocksPlanCreation);
     }
 
     private static string BuildDefaultHomeworkDescription(LessonPlan lessonPlan)

@@ -56,6 +56,21 @@ public class FeeLedgerLineDto
     public Guid FeeHeadId { get; set; }
     public string FeeHeadName { get; set; } = string.Empty;
 
+    /// <summary>Payment Term installment label when available, otherwise month/year.</summary>
+    public string InstallmentLabel { get; set; } = string.Empty;
+
+    /// <summary>Authoritative due date from the Payment Term schedule, when available.</summary>
+    public DateTime? DueDate { get; set; }
+
+    /// <summary>Installment coverage start (Payment Term schedules only).</summary>
+    public DateTime? CoverageStartDate { get; set; }
+
+    /// <summary>Installment coverage end (Payment Term schedules only).</summary>
+    public DateTime? CoverageEndDate { get; set; }
+
+    /// <summary><c>PaymentTerm</c> or <c>Legacy</c>.</summary>
+    public string ScheduleSource { get; set; } = "Legacy";
+
     /// <summary>Original fee amount for this month.</summary>
     public double Total { get; set; }
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Academic.QuestionPapers;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -18,6 +19,7 @@ public class QuestionBankAppService(
     IRepository<QuestionOption, Guid> optionRepository,
     IRepository<QuestionTag, Guid> tagRepository,
     IRepository<QuestionUsageLog, Guid> usageRepository,
+    IRepository<QuestionPaperQuestion, Guid> paperQuestionRepository,
     IAsyncQueryableExecuter asyncExecuter
 ) : ApplicationService, IQuestionBankAppService
 {
@@ -79,7 +81,7 @@ public class QuestionBankAppService(
     public async Task<QuestionBankItemDto> GetQuestionAsync(Guid id)
     {
         var question = await GetQuestionEntityAsync(id);
-        var usageCount = await usageRepository.CountAsync(x => x.QuestionBankItemId == id);
+        var usageCount = await GetQuestionUsageCountAsync(id);
         return Map(question, usageCount);
     }
 
@@ -118,7 +120,7 @@ public class QuestionBankAppService(
         var setting = await GetSettingsEntityAsync(input.AcademicYearId);
         await ValidateQuestionAsync(input, setting, id);
 
-        var usageCount = await usageRepository.CountAsync(x => x.QuestionBankItemId == id);
+        var usageCount = await GetQuestionUsageCountAsync(id);
         if (usageCount > 0 && setting.EnableQuestionVersioning)
         {
             question.IsLocked = true;
@@ -157,8 +159,8 @@ public class QuestionBankAppService(
     public async Task DeleteQuestionAsync(Guid id)
     {
         var question = await GetQuestionEntityAsync(id);
-        var usageCount = await usageRepository.CountAsync(x => x.QuestionBankItemId == id);
-        if (usageCount > 0)
+        var usageCount = await GetQuestionUsageCountAsync(id);
+        if (usageCount > 0 || question.IsLocked || question.Status is QuestionStatus.Submitted or QuestionStatus.Approved)
         {
             question.IsArchived = true;
             question.Status = QuestionStatus.Archived;
@@ -172,6 +174,11 @@ public class QuestionBankAppService(
     public async Task<QuestionBankItemDto> SubmitQuestionAsync(Guid id)
     {
         var question = await GetQuestionEntityAsync(id);
+        if (question.IsArchived || question.IsLocked)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionBank:QuestionLocked");
+        }
+
         if (question.Status != QuestionStatus.Draft && question.Status != QuestionStatus.Rejected)
         {
             throw new BusinessException("ShikshaMitra.QuestionBank:CannotSubmit");
@@ -180,7 +187,7 @@ public class QuestionBankAppService(
         var setting = await GetSettingsEntityAsync(question.AcademicYearId);
         question.Status = setting.ApprovalMode == QuestionApprovalMode.NoApproval ? QuestionStatus.Approved : QuestionStatus.Submitted;
         await questionRepository.UpdateAsync(question, autoSave: true);
-        return Map(question, await usageRepository.CountAsync(x => x.QuestionBankItemId == id));
+        return Map(question, await GetQuestionUsageCountAsync(id));
     }
 
     public Task<QuestionBankItemDto> ApproveQuestionAsync(Guid id, QuestionReviewDto input) => ReviewAsync(id, QuestionStatus.Approved, input.Comment);
@@ -192,12 +199,17 @@ public class QuestionBankAppService(
         question.IsArchived = true;
         question.Status = QuestionStatus.Archived;
         await questionRepository.UpdateAsync(question, autoSave: true);
-        return Map(question, await usageRepository.CountAsync(x => x.QuestionBankItemId == id));
+        return Map(question, await GetQuestionUsageCountAsync(id));
     }
 
     public async Task<QuestionBankItemDto> DuplicateQuestionAsync(Guid id)
     {
         var question = await GetQuestionEntityAsync(id);
+        if (question.IsArchived)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionBank:ArchivedQuestionCannotDuplicate");
+        }
+
         var copy = new CreateUpdateQuestionDto
         {
             AcademicYearId = question.AcademicYearId,
@@ -271,7 +283,12 @@ public class QuestionBankAppService(
         return new DuplicateQuestionResultDto
         {
             HasDuplicate = matches.Count > 0,
-            IsBlocked = matches.Count > 0 && setting.EnableDuplicateCheck && setting.DuplicateQuestionAction != DuplicateQuestionAction.AllowWithWarning,
+            IsBlocked = setting.EnableDuplicateCheck && setting.DuplicateQuestionAction switch
+            {
+                DuplicateQuestionAction.BlockExactDuplicate => exactMatches.Count > 0,
+                DuplicateQuestionAction.BlockSimilarDuplicate => matches.Count > 0,
+                _ => false
+            },
             Message = matches.Count > 0 ? "A matching or similar question already exists for this class and subject." : null,
             HighestSimilarity = highestSimilarity,
             Matches = matches.Select(x => Map(x, 0)).ToList()
@@ -286,7 +303,11 @@ public class QuestionBankAppService(
         var rows = await questionRepository.GetListAsync(x => x.AcademicYearId == academicYearId && !x.IsArchived);
         var rowIds = rows.Select(r => r.Id).ToList();
         var usageRows = await usageRepository.GetListAsync(x => rowIds.Contains(x.QuestionBankItemId));
-        var usedQuestionIds = usageRows.Select(x => x.QuestionBankItemId).ToHashSet();
+        var paperQuestionRows = await paperQuestionRepository.GetListAsync(x => rowIds.Contains(x.QuestionBankItemId));
+        var usedQuestionIds = usageRows
+            .Select(x => x.QuestionBankItemId)
+            .Concat(paperQuestionRows.Select(x => x.QuestionBankItemId))
+            .ToHashSet();
         var duplicateIds = GetDuplicateQuestionIds(rows);
         return new QuestionBankDashboardDto
         {
@@ -304,16 +325,23 @@ public class QuestionBankAppService(
     private async Task<QuestionBankItemDto> ReviewAsync(Guid id, QuestionStatus status, string? comment)
     {
         var question = await GetQuestionEntityAsync(id);
+        EnsureCanReview(question);
         question.SetReview(status, CurrentUser.Id ?? Guid.Empty, comment);
         await questionRepository.UpdateAsync(question, autoSave: true);
-        return Map(question, await usageRepository.CountAsync(x => x.QuestionBankItemId == id));
+        return Map(question, await GetQuestionUsageCountAsync(id));
     }
 
     private async Task<BulkQuestionWorkflowResultDto> BulkReviewAsync(BulkQuestionReviewDto input, QuestionStatus status)
     {
         var rows = await questionRepository.GetListAsync(x => input.QuestionIds.Contains(x.Id));
+        if (rows.Count != input.QuestionIds.Distinct().Count())
+        {
+            throw new BusinessException("ShikshaMitra.QuestionBank:NotFound");
+        }
+
         foreach (var row in rows)
         {
+            EnsureCanReview(row);
             row.SetReview(status, CurrentUser.Id ?? Guid.Empty, input.Comment);
         }
 
@@ -336,8 +364,12 @@ public class QuestionBankAppService(
 
     private async Task ValidateQuestionAsync(CreateUpdateQuestionDto input, QuestionBankSetting setting, Guid? excludeId)
     {
+        if (input.AcademicYearId == Guid.Empty) throw new BusinessException("ShikshaMitra.QuestionBank:AcademicYearRequired");
         if (input.StandardId == Guid.Empty) throw new BusinessException("ShikshaMitra.QuestionBank:StandardRequired");
         if (input.SubjectId == Guid.Empty) throw new BusinessException("ShikshaMitra.QuestionBank:SubjectRequired");
+        if (string.IsNullOrWhiteSpace(input.QuestionText)) throw new BusinessException("ShikshaMitra.QuestionBank:QuestionTextRequired");
+        if (!Enum.IsDefined(input.QuestionType)) throw new BusinessException("ShikshaMitra.QuestionBank:InvalidQuestionType");
+        if (!Enum.IsDefined(input.DifficultyLevel)) throw new BusinessException("ShikshaMitra.QuestionBank:InvalidDifficulty");
         if (setting.RequireChapter && !input.ChapterId.HasValue) throw new BusinessException("ShikshaMitra.QuestionBank:ChapterRequired");
         if (setting.RequireTopic && !input.TopicId.HasValue) throw new BusinessException("ShikshaMitra.QuestionBank:TopicRequired");
         if (setting.RequireBloomLevel && !input.BloomLevel.HasValue) throw new BusinessException("ShikshaMitra.QuestionBank:BloomRequired");
@@ -347,9 +379,23 @@ public class QuestionBankAppService(
         if (!setting.AllowDecimalMarks && input.Marks != Math.Truncate(input.Marks)) throw new BusinessException("ShikshaMitra.QuestionBank:DecimalMarksNotAllowed");
         if (input.NegativeMarks.HasValue && (!setting.EnableNegativeMarking || input.NegativeMarks.Value > input.Marks)) throw new BusinessException("ShikshaMitra.QuestionBank:InvalidNegativeMarks");
 
+        if ((input.QuestionType == QuestionType.McqSingleCorrect && !setting.EnableMcq) ||
+            (input.QuestionType == QuestionType.McqMultipleCorrect && !setting.EnableMcq) ||
+            (input.QuestionType == QuestionType.TrueFalse && !setting.EnableTrueFalse) ||
+            (input.QuestionType == QuestionType.FillInTheBlank && !setting.EnableFillInTheBlank) ||
+            ((input.QuestionType is QuestionType.ShortAnswer or QuestionType.LongAnswer) && !setting.EnableSubjective) ||
+            (input.QuestionType == QuestionType.MatchTheFollowing && !setting.EnableMatchTheFollowing) ||
+            (input.QuestionType == QuestionType.AssertionReason && !setting.EnableAssertionReason) ||
+            (input.QuestionType == QuestionType.CaseStudy && !setting.EnableCaseStudy) ||
+            (input.QuestionType == QuestionType.DiagramBased && !setting.EnableDiagramBased))
+        {
+            throw new BusinessException("ShikshaMitra.QuestionBank:QuestionTypeDisabled");
+        }
+
         if (input.QuestionType is QuestionType.McqSingleCorrect or QuestionType.McqMultipleCorrect)
         {
             if (input.Options.Count < 2) throw new BusinessException("ShikshaMitra.QuestionBank:McqOptionsRequired");
+            if (input.Options.Any(x => string.IsNullOrWhiteSpace(x.OptionText))) throw new BusinessException("ShikshaMitra.QuestionBank:OptionTextRequired");
             var correctCount = input.Options.Count(x => x.IsCorrect);
             if (input.QuestionType == QuestionType.McqSingleCorrect && correctCount != 1) throw new BusinessException("ShikshaMitra.QuestionBank:SingleCorrectRequired");
             if (input.QuestionType == QuestionType.McqMultipleCorrect && correctCount < 1) throw new BusinessException("ShikshaMitra.QuestionBank:CorrectOptionRequired");
@@ -370,6 +416,19 @@ public class QuestionBankAppService(
             {
                 throw new BusinessException("ShikshaMitra.QuestionBank:DuplicateQuestion");
             }
+        }
+    }
+
+    private void EnsureCanReview(QuestionBankItem question)
+    {
+        if (question.Status != QuestionStatus.Submitted)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionBank:OnlySubmittedCanReview");
+        }
+
+        if (CurrentUser.Id.HasValue && question.CreatedByTeacherId == CurrentUser.Id.Value)
+        {
+            throw new BusinessException("ShikshaMitra.QuestionBank:CannotReviewOwnQuestion");
         }
     }
 
@@ -400,7 +459,21 @@ public class QuestionBankAppService(
     {
         if (questionIds.Count == 0) return new Dictionary<Guid, int>();
         var rows = await usageRepository.GetListAsync(x => questionIds.Contains(x.QuestionBankItemId));
-        return rows.GroupBy(x => x.QuestionBankItemId).ToDictionary(x => x.Key, x => x.Count());
+        var paperQuestionRows = await paperQuestionRepository.GetListAsync(x => questionIds.Contains(x.QuestionBankItemId));
+        return rows.Select(x => new { x.QuestionBankItemId, Source = $"{x.Source}:{x.SourceEntityId}" })
+            .Concat(paperQuestionRows.Select(x => new { x.QuestionBankItemId, Source = $"QuestionPaper:{x.QuestionPaperId}" }))
+            .GroupBy(x => x.QuestionBankItemId)
+            .ToDictionary(x => x.Key, x => x.Select(row => row.Source).Distinct().Count());
+    }
+
+    private async Task<int> GetQuestionUsageCountAsync(Guid questionId)
+    {
+        var rows = await usageRepository.GetListAsync(x => x.QuestionBankItemId == questionId);
+        var paperQuestionRows = await paperQuestionRepository.GetListAsync(x => x.QuestionBankItemId == questionId);
+        return rows.Select(x => $"{x.Source}:{x.SourceEntityId}")
+            .Concat(paperQuestionRows.Select(x => $"QuestionPaper:{x.QuestionPaperId}"))
+            .Distinct()
+            .Count();
     }
 
     private static HashSet<Guid> GetDuplicateQuestionIds(IEnumerable<QuestionBankItem> questions)

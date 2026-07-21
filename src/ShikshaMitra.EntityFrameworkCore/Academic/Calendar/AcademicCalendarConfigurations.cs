@@ -34,6 +34,7 @@ public class AcademicCalendarDayConfiguration : IEntityTypeConfiguration<Academi
         builder.Property(x => x.Title).IsRequired().HasMaxLength(256);
         builder.Property(x => x.Description).HasMaxLength(1024);
         builder.Property(x => x.ChangeReason).HasMaxLength(1024);
+        builder.Property(x => x.AutoScanImpacts).IsRequired().HasDefaultValue(true);
         
         // Non-unique: a multi-class marker stores one row per class on the same date;
         // duplicate protection (per class / applies-to-all) is enforced in the app service.

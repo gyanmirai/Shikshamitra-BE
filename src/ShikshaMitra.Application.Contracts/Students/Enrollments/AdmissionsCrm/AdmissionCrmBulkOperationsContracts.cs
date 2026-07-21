@@ -23,11 +23,18 @@ public class AdmissionCrmBulkCreateTasksDto
 	public string? Notes { get; set; }
 }
 
+public class AdmissionCrmBulkExamAttendanceDto
+{
+	public IReadOnlyList<Guid> ExamRecordIds { get; set; } = [];
+	public AdmissionCrmExamAttendanceStatus AttendanceStatus { get; set; }
+}
+
 public class AdmissionCrmBulkChangeStageDto
 {
 	public IReadOnlyList<Guid> LeadIds { get; set; } = [];
 	public AdmissionInquiryStage Stage { get; set; }
 	public string Reason { get; set; } = string.Empty;
+	public bool OverrideProtectedStages { get; set; }
 }
 
 public class AdmissionCrmBulkArchiveDto

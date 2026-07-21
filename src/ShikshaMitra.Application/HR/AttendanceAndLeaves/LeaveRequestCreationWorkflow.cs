@@ -83,7 +83,9 @@ public class LeaveRequestCreationWorkflow(
 			new DateTimeOffset(input.StartDate),
 			new DateTimeOffset(input.EndDate),
 			input.Reason,
-			input.HalfDay);
+			input.HalfDay,
+			autoApprove: !resolved.Rule.RequiresApproval,
+			approvedLeaveUnits: resolved.RequestedUnits);
 
 		if (attachmentBytes is { Length: > 0 })
 		{
@@ -96,7 +98,7 @@ public class LeaveRequestCreationWorkflow(
 		{
 			Id = leave.Id,
 			PublicId = leave.PublicId,
-			Status = "PENDING"
+			Status = leave.Status == EmployeeLeaveStatusType.Approved ? "APPROVED" : "PENDING"
 		};
 	}
 }

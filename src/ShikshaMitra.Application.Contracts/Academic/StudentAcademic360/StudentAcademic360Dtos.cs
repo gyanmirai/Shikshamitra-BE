@@ -17,11 +17,12 @@ public class StudentAcademic360Input
 
 public class StudentAcademic360Dto
 {
+    public DateTime GeneratedAtUtc { get; set; }
     public StudentDto Student { get; set; } = null!;
     public StudentAcademic360HealthDto? AcademicHealth { get; set; }
     public List<StudentAcademic360KpiDto> Kpis { get; set; } = [];
     public StudentAcademic360AttendanceDto Attendance { get; set; } = new();
-    public TimetableResponseDto? Timetable { get; set; }
+    public TimetableResponseDto Timetable { get; set; } = new();
     public StudentAcademic360LearningTaskSummaryDto LearningTasks { get; set; } = new();
     public List<StudentAcademic360ExamResultDto> Exams { get; set; } = [];
     public List<StudentAcademic360SubjectPerformanceDto> SubjectPerformance { get; set; } = [];
@@ -32,6 +33,7 @@ public class StudentAcademic360Dto
     public List<StudentAcademic360InterventionDto> Interventions { get; set; } = [];
     public StudentAcademic360DataCompletenessDto DataCompleteness { get; set; } = new();
     public StudentAcademic360PermissionsDto Permissions { get; set; } = new();
+    public List<StudentAcademic360SourceSnapshotDto> SourceSnapshot { get; set; } = [];
 }
 
 public class StudentAcademic360HealthDto
@@ -178,6 +180,14 @@ public class StudentAcademic360DataCompletenessDto
     public string Status { get; set; } = "Partial data";
     public List<string> MissingItems { get; set; } = [];
     public List<string> AvailableItems { get; set; } = [];
+}
+
+public class StudentAcademic360SourceSnapshotDto
+{
+    public string Source { get; set; } = string.Empty;
+    public string Status { get; set; } = "No data";
+    public int Count { get; set; }
+    public DateTime? LastUpdatedAtUtc { get; set; }
 }
 
 public class StudentAcademic360PermissionsDto

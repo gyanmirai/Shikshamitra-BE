@@ -87,6 +87,10 @@ public partial class ShikshaMitraDbContext
     public DbSet<AdmissionCrmWorkDelegation> AdmissionCrmWorkDelegations { get; set; }
     public DbSet<AdmissionCrmOperationsSavedView> AdmissionCrmOperationsSavedViews { get; set; }
     public DbSet<AdmissionCrmSlaHold> AdmissionCrmSlaHolds { get; set; }
+    public DbSet<AdmissionCrmSettingsAccessPolicy> AdmissionCrmSettingsAccessPolicies { get; set; }
+    public DbSet<AdmissionCrmPlatformSupportSession> AdmissionCrmPlatformSupportSessions { get; set; }
+    public DbSet<AdmissionCrmPlatformPreset> AdmissionCrmPlatformPresets { get; set; }
+    public DbSet<AdmissionCrmPresetAdoption> AdmissionCrmPresetAdoptions { get; set; }
 
     // ───────────────────────────────────────────────
     // Students — Enrollment Settings

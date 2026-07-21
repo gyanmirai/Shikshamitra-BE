@@ -77,7 +77,10 @@ public partial class StudentFeeDetailsQueryService(
 		{
 			var dueFeeQ = await dueFeeRepository.GetQueryableAsync();
 			var dueFees = dueFeeQ.Where(d => d.StudentId == studentId)
-				.OrderBy(d => d.Year).ThenBy(d => d.Month).ToList();
+				.OrderBy(d => d.ScheduleDueDate ?? new DateTime(d.Year, (int)d.Month + 1, 1))
+				.ThenBy(d => d.InstallmentSequence ?? 0)
+				.ThenBy(d => d.Year).ThenBy(d => d.Month)
+				.ToList();
 
 			var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
 			var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));

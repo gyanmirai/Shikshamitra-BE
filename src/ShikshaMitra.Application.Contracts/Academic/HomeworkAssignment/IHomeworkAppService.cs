@@ -33,4 +33,16 @@ public interface IHomeworkAppService : IApplicationService
         Guid homeworkId,
         HomeworkStatusUpdateDto input
     );
+
+    Task<LearningTaskDashboardDto> GetDashboardAsync(
+        Guid academicMediumId,
+        LearningTaskDashboardFilterDto input
+    );
+
+    Task<LearningTaskReminderResponseDto> SendReminderAsync(
+        Guid homeworkId,
+        LearningTaskReminderRequestDto input
+    );
+
+    Task<LearningTaskHistoryDto> GetHistoryAsync(Guid homeworkId);
 }

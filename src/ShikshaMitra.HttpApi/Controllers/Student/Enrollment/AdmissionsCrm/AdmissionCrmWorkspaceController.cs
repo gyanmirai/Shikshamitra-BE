@@ -14,8 +14,10 @@ public class AdmissionCrmWorkspaceController(IAdmissionCrmWorkspaceAppService ap
 	public Task<IReadOnlyList<AdmissionCrmStaffLookupDto>> GetStaffAsync(
 		[FromQuery] string? filter = null,
 		[FromQuery] string? ids = null,
-		[FromQuery] int maxResultCount = 20) =>
-		appService.GetStaffAsync(filter, ids, maxResultCount);
+		[FromQuery] int maxResultCount = 20,
+		[FromQuery] Guid? academicYearId = null,
+		[FromQuery] bool ownerOnly = false) =>
+		appService.GetStaffAsync(filter, ids, maxResultCount, academicYearId, ownerOnly);
 
 	[HttpGet("{academicYearId}/workspace/integration-capabilities")]
 	public Task<IReadOnlyList<AdmissionCrmIntegrationCapabilityDto>> GetIntegrationCapabilitiesAsync(Guid academicYearId) =>

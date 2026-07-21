@@ -31,4 +31,16 @@ public interface IAssignmentV2AppService : IApplicationService
         Guid assignmentId,
         AssignmentStatusUpdateDto input
     );
+
+    Task<LearningTaskDashboardDto> GetDashboardAsync(
+        Guid academicMediumId,
+        LearningTaskDashboardFilterDto input
+    );
+
+    Task<LearningTaskReminderResponseDto> SendReminderAsync(
+        Guid assignmentId,
+        LearningTaskReminderRequestDto input
+    );
+
+    Task<LearningTaskHistoryDto> GetHistoryAsync(Guid assignmentId);
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
@@ -20,7 +21,8 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 public class FeeStructureAppService(
     IRepository<FeeStructure, Guid> feeStructureRepository,
     IStandardRepository standardRepository,
-    IAcademicYearRepository academicYearRepository
+    IAcademicYearRepository academicYearRepository,
+    IRepository<PaymentTerm, Guid> paymentTermRepository
 ) : ApplicationService, IFeeStructureAppService
 {
     public async Task<FeeStructureCreateResponse> CreateAsync(Guid feeStructureMetadataId, StandardFeeStructureSaveRequest input)
@@ -49,7 +51,7 @@ public class FeeStructureAppService(
             
             foreach (var feeHead in structureRequest.FeeHeads)
             {
-                feeStructure.AddDetail(new FeeStructureDetail(
+                var detail = new FeeStructureDetail(
                     GuidGenerator.Create(),
                     CurrentTenant.Id,
                     feeStructure.Id,
@@ -59,7 +61,41 @@ public class FeeStructureAppService(
                     feeHead.IsOptional,
 					feeHead.PayableMonth,
 					feeHead.PayableYear
-				));
+				);
+
+                // Attach Payment Term if provided
+                if (feeHead.PaymentTermId.HasValue && feeHead.PaymentTermVersionId.HasValue)
+                {
+                    if (feeHead.InstallmentOverrides != null && feeHead.InstallmentOverrides.Count > 0)
+                    {
+                        var overrides = feeHead.InstallmentOverrides.Select(o => new FeeStructureDetailScheduleOverride(
+                            GuidGenerator.Create(),
+                            CurrentTenant.Id,
+                            detail.Id,
+                            o.SourcePaymentTermInstallmentId,
+                            o.Sequence,
+                            o.Name,
+                            o.CoverageStartDate,
+                            o.CoverageEndDate,
+                            o.DemandDate,
+                            o.DueDate,
+                            o.AllocationPercentage
+                        )).ToList();
+
+                        detail.AttachPaymentTermWithOverrides(
+                            feeHead.PaymentTermId.Value,
+                            feeHead.PaymentTermVersionId.Value,
+                            overrides);
+                    }
+                    else
+                    {
+                        detail.AttachPaymentTerm(
+                            feeHead.PaymentTermId.Value,
+                            feeHead.PaymentTermVersionId.Value);
+                    }
+                }
+
+                feeStructure.AddDetail(detail);
             }
         }
 
@@ -83,7 +119,7 @@ public class FeeStructureAppService(
         {
             foreach (var feeHead in input.FeeHeads)
             {
-                feeStructure.AddDetail(new FeeStructureDetail(
+                var detail = new FeeStructureDetail(
                     GuidGenerator.Create(),
                     CurrentTenant.Id,
                     feeStructure.Id,
@@ -93,7 +129,41 @@ public class FeeStructureAppService(
                     feeHead.IsOptional,
 					feeHead.PayableMonth,
 					feeHead.PayableYear
-				));
+				);
+
+                // Attach Payment Term if provided
+                if (feeHead.PaymentTermId.HasValue && feeHead.PaymentTermVersionId.HasValue)
+                {
+                    if (feeHead.InstallmentOverrides != null && feeHead.InstallmentOverrides.Count > 0)
+                    {
+                        var overrides = feeHead.InstallmentOverrides.Select(o => new FeeStructureDetailScheduleOverride(
+                            GuidGenerator.Create(),
+                            CurrentTenant.Id,
+                            detail.Id,
+                            o.SourcePaymentTermInstallmentId,
+                            o.Sequence,
+                            o.Name,
+                            o.CoverageStartDate,
+                            o.CoverageEndDate,
+                            o.DemandDate,
+                            o.DueDate,
+                            o.AllocationPercentage
+                        )).ToList();
+
+                        detail.AttachPaymentTermWithOverrides(
+                            feeHead.PaymentTermId.Value,
+                            feeHead.PaymentTermVersionId.Value,
+                            overrides);
+                    }
+                    else
+                    {
+                        detail.AttachPaymentTerm(
+                            feeHead.PaymentTermId.Value,
+                            feeHead.PaymentTermVersionId.Value);
+                    }
+                }
+
+                feeStructure.AddDetail(detail);
             }
         }
 
@@ -126,6 +196,19 @@ public class FeeStructureAppService(
 
         var feeStructures = await feeStructureRepository.GetListAsync(x => x.StandardId == standardId);
 
+        // Preload payment terms for display
+        var allTermIds = feeStructures
+            .SelectMany(fs => fs.FeeStructureDetails)
+            .Where(d => d.PaymentTermId.HasValue)
+            .Select(d => d.PaymentTermId!.Value)
+            .Distinct()
+            .ToList();
+
+        var terms = allTermIds.Count > 0
+            ? (await paymentTermRepository.GetListAsync(t => allTermIds.Contains(t.Id)))
+                .ToDictionary(t => t.Id)
+            : new Dictionary<Guid, PaymentTerm>();
+
         return new StandardFeeStructureResponse
         {
             StandardId = standard.Id,
@@ -138,16 +221,40 @@ public class FeeStructureAppService(
 				CollectionPolicyId = fs.CollectionPolicyId,
 				FeeHeads = fs.FeeStructureDetails.Select(d => new FeeHeadAssignmentResponse
                 {
-                    FeeHeadId = d.FeeHeadId,
-                    FeeHeadName = d.FeeHead?.Name,
-                    CategoryName = d.FeeHead?.FeeCategory?.Name,
-                    Amount = d.Amount,
-                    IsOneTime = d.IsOneTime,
-                    IsOptional = d.IsOptional,
-					PayableMonth = d.IsOneTime ? d.PayableMonth : null,
-					PayableYear = d.IsOneTime ? d.PayableYear : null
-				}).ToList()
-            })        };
+                    var response = new FeeHeadAssignmentResponse
+                    {
+                        FeeHeadId = d.FeeHeadId,
+                        FeeHeadName = d.FeeHead?.Name,
+                        CategoryName = d.FeeHead?.FeeCategory?.Name,
+                        Amount = d.Amount,
+                        IsOneTime = d.IsOneTime,
+                        IsOptional = d.IsOptional,
+						PayableMonth = d.IsOneTime ? d.PayableMonth : null,
+						PayableYear = d.IsOneTime ? d.PayableYear : null,
+                        PaymentTermId = d.PaymentTermId,
+                        PaymentTermVersionId = d.PaymentTermVersionId,
+                        ScheduleMode = d.ScheduleMode
+                    };
+
+                    // Populate Payment Term display fields
+                    if (d.PaymentTermId.HasValue && terms.TryGetValue(d.PaymentTermId.Value, out var term))
+                    {
+                        response.PaymentTermName = term.Name;
+                        var currentVersion = term.GetCurrentVersion();
+                        response.PaymentTermVersionNumber = currentVersion?.VersionNumber;
+
+                        // Check if a newer version is available
+                        if (d.PaymentTermVersionId.HasValue && currentVersion != null &&
+                            d.PaymentTermVersionId.Value != currentVersion.Id)
+                        {
+                            response.HasNewVersionAvailable = true;
+                        }
+                    }
+
+                    return response;
+                }).ToList()
+            })
+        };
     }
 
     public async Task LockAsync(Guid id)

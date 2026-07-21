@@ -7,6 +7,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
 public interface IAdmissionCrmOperationsAppService : IApplicationService
 {
+	Task<AdmissionCrmEnrollmentOverviewDto> GetOverviewAsync(Guid academicYearId);
+	Task<AdmissionCrmMyWorkDto> GetMyWorkAsync(Guid academicYearId, GetAdmissionCrmMyWorkInput input);
 	Task<AdmissionCrmOperationsQueueSummaryDto> GetQueueSummaryAsync(Guid academicYearId);
 	Task<AdmissionCrmOperationsQueueDto> GetQueueAsync(Guid academicYearId, AdmissionCrmOperationsQueueType queueType, GetAdmissionCrmOperationsQueueInput input);
 	Task<AdmissionCrmOperationsSavedViewDto> CreateSavedViewAsync(Guid academicYearId, CreateAdmissionCrmOperationsSavedViewDto input);

@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.GeneralSetting.FeeHead;
@@ -19,6 +19,22 @@ public class FinanceMapperProfile : Profile
 		CreateMap<ChargeCategory, ChargeCategoryResponse>();
 
 		#endregion
+		#endregion
+
+		#region FeeCategory
+
+		CreateMap<FeeCategory, FeeCategoryResponse>()
+			.ForMember(d => d.CreatedAt, o => o.MapFrom(s => s.CreationTime))
+			.ForMember(d => d.UpdatedAt, o => o.MapFrom(s => s.LastModificationTime))
+			.ForMember(d => d.FeeHeads, o => o.Ignore())
+			.ForMember(d => d.IsUsedInDownstream, o => o.Ignore());
+
+		CreateMap<FeeHead, FeeHeadResponse>()
+			.ForMember(d => d.CreatedAt, o => o.MapFrom(s => s.CreationTime))
+			.ForMember(d => d.UpdatedAt, o => o.MapFrom(s => s.LastModificationTime))
+			.ForMember(d => d.FeeCategoryName, o => o.Ignore())
+			.ForMember(d => d.IsUsedInDownstream, o => o.Ignore());
+
 		#endregion
 		#endregion
 

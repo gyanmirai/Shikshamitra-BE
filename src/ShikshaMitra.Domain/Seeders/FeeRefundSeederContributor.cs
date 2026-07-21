@@ -8,6 +8,7 @@ using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
+using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -202,12 +203,14 @@ public class FeeRefundSeederContributor : BaseSeederContributor
 
         var created = await _feeHeadRepository.InsertAsync(
             new FeeHead(
-                id:             GuidGenerator.Create(),
-                tenantId:       CurrentTenant.Id,
-                academicYearId: academicYearId,
-                feeCategoryId:  categoryId,
-                name:           FeeHeadName,
-                description:    "Auto-created by seed data contributor for fee-refund testing."),
+                id:                  GuidGenerator.Create(),
+                tenantId:            CurrentTenant.Id,
+                academicYearId:      academicYearId,
+                feeCategoryId:       categoryId,
+                name:                FeeHeadName,
+                module:              FeeHeadModule.Finance,
+                isConcessionApplied: false,
+                description:         "Auto-created by seed data contributor for fee-refund testing."),
             autoSave: false);
 
         _logger.LogDebug("[FeeRefundSeeder] Created FeeHead: {Id} – {Name}", created.Id, created.Name);

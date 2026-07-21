@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -8,6 +8,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings.Managers;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 
@@ -16,38 +17,28 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 public class FeeHeadAppService(
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<FeeCategory, Guid> feeCategoryRepository,
-	IRepository<FeeStructure, Guid> feeStructureRepository
+	IRepository<FeeStructure, Guid> feeStructureRepository,
+	FeeCategoryManager feeCategoryManager
 ) : ApplicationService, IFeeHeadAppService
 {
-	public async Task<MessageResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input)
+	public async Task<FeeHeadResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input)
     {
-		// validation to ensure no duplicate fee head name exists under the same fee category for the same academic year
-		var existingFeeHead = await feeHeadRepository.FirstOrDefaultAsync(x =>
-			x.AcademicYearId == academicYearId &&
-			x.FeeCategoryId == input.FeeCategoryId &&
-			x.Name == input.Name
-		);
-
-		if (existingFeeHead != null)
-		{
-			throw new BusinessException("A fee head with the same name already exists under this fee category for the selected academic year.");
-		}
+		await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(academicYearId, input.FeeCategoryId, input.Name);
 
 		var feeHead = new FeeHead(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             academicYearId,
             input.FeeCategoryId,
-            input.Name,
+            input.Name.Trim(),
+            input.Module,
+            input.IsConcessionApplied,
             input.Description
         );
 
         await feeHeadRepository.InsertAsync(feeHead);
 
-        return new MessageResponse
-        {
-            Message = "Fee head created successfully"
-        };
+        return await MapToResponseAsync(feeHead);
     }
 
     public async Task<FeeHeadListResponse> GetListAsync(Guid academicYearId, Guid? feeCategoryId = null, string search = null, int page = 1, int pageSize = 10)
@@ -74,39 +65,19 @@ public class FeeHeadAppService(
 
         var items = await feeHeadRepository.AsyncExecuter.ToListAsync(query);
 
-        // Fetch fee category names
         var categoryIds = items.Select(x => x.FeeCategoryId).Distinct().ToList();
         var categories = await feeCategoryRepository.GetListAsync(x => categoryIds.Contains(x.Id));
         var categoryDict = categories.ToDictionary(x => x.Id, x => x.Name);
 
-        var dtos = items.Select(x => new FeeHeadResponse
+		var usedFeeHeadIds = await GetUsedFeeHeadIdsAsync(items.Select(x => x.Id).ToList());
+
+        var dtos = items.Select(x =>
         {
-            Id = x.Id,
-            AcademicYearId = x.AcademicYearId,
-            FeeCategoryId = x.FeeCategoryId,
-            FeeCategoryName = categoryDict.ContainsKey(x.FeeCategoryId) ? categoryDict[x.FeeCategoryId] : null,
-            Name = x.Name,
-            Description = x.Description,
-            IsActive = x.IsActive,
-            CreatedAt = x.CreationTime,
-            UpdatedAt = x.LastModificationTime
+            var response = ObjectMapper.Map<FeeHead, FeeHeadResponse>(x);
+            response.FeeCategoryName = categoryDict.GetValueOrDefault(x.FeeCategoryId);
+            response.IsUsedInDownstream = usedFeeHeadIds.Contains(x.Id);
+            return response;
         }).ToList();
-
-		var structureQuery = await feeStructureRepository.GetQueryableAsync();
-		var itemIds = dtos.Select(x => x.Id).ToList();
-		var usedFeeHeadIds = new HashSet<Guid>(
-			await feeStructureRepository.AsyncExecuter.ToListAsync(
-				structureQuery.SelectMany(fs => fs.FeeStructureDetails)
-							  .Where(fsd => itemIds.Contains(fsd.FeeHeadId))
-							  .Select(fsd => fsd.FeeHeadId)
-							  .Distinct()
-			)
-		);
-
-		foreach (var item in dtos)
-		{
-			item.IsUsedInDownstream = usedFeeHeadIds.Contains(item.Id);
-		}
 
         return new FeeHeadListResponse
         {
@@ -118,41 +89,31 @@ public class FeeHeadAppService(
         };
     }
 
-    public async Task<MessageResponse> UpdateAsync(Guid feeHeadId, FeeHeadUpdateRequest input)
+	public async Task<FeeHeadResponse> GetByIdAsync(Guid id)
+	{
+		var feeHead = await feeHeadRepository.GetAsync(id);
+		return await MapToResponseAsync(feeHead);
+	}
+
+    public async Task<FeeHeadResponse> UpdateAsync(Guid feeHeadId, FeeHeadUpdateRequest input)
     {
 		var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
 
-		// validation to ensure no duplicate fee head name exists under the same fee category for the same academic year
-		var existingFeeHead = await feeHeadRepository.FirstOrDefaultAsync(x =>
-			x.Id != feeHeadId &&
-			x.AcademicYearId == feeHead.AcademicYearId &&
-			x.FeeCategoryId == input.FeeCategoryId &&
-			x.Name == input.Name
-		);
+		await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(
+			feeHead.AcademicYearId, input.FeeCategoryId, input.Name, feeHeadId);
 
-		if (existingFeeHead != null)
-		{
-			throw new BusinessException("A fee head with the same name already exists under this fee category for the selected academic year.");
-		}
-
-		feeHead.Update(input.FeeCategoryId, input.Name, input.Description);
+		feeHead.Update(input.FeeCategoryId, input.Name.Trim(), input.Module, input.IsConcessionApplied, input.Description);
 
 		await feeHeadRepository.UpdateAsync(feeHead);
 
-        return new MessageResponse
-        {
-            Message = "Fee head updated successfully"
-        };
+        return await MapToResponseAsync(feeHead);
     }
 
     public async Task<MessageResponse> DeleteAsync(Guid feeHeadId)
     {
-		// check if fee head is associated with any fee structure details before deleting
-		var isAssociatedWithFeeStructure = await feeStructureRepository.AnyAsync(fs => fs.FeeStructureDetails.Any(fsd => fsd.FeeHeadId == feeHeadId) && fs.IsLocked);
-
-		if (isAssociatedWithFeeStructure)
+		if ((await GetUsedFeeHeadIdsAsync([feeHeadId])).Count > 0)
 		{
-			throw new BusinessException("Cannot delete fee head as it is associated with existing fee structures.");
+			throw new BusinessException(FinanceFeeHeadErrorCodes.CannotDeleteInUse);
 		}
 
 		await feeHeadRepository.DeleteAsync(feeHeadId);
@@ -163,27 +124,49 @@ public class FeeHeadAppService(
         };
     }
 
-    public async Task<MessageResponse> UpdateStatusAsync(Guid feeHeadId, FeeHeadStatusUpdateRequest input)
+    public async Task<FeeHeadResponse> UpdateStatusAsync(Guid feeHeadId, FeeHeadStatusUpdateRequest input)
     {
         var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
 
-        feeHead.SetActiveStatus(input.IsActive);
-
-		// if deactivating the fee head, check if it is associated with any fee structure details before updating status
-		if (!input.IsActive)
+		if (!input.IsActive && (await GetUsedFeeHeadIdsAsync([feeHeadId])).Count > 0)
 		{
-			var isAssociatedWithFeeStructure = await feeStructureRepository.AnyAsync(fs => fs.FeeStructureDetails.Any(fsd => fsd.FeeHeadId == feeHeadId) && fs.IsLocked);
-			if (isAssociatedWithFeeStructure)
-			{
-				throw new BusinessException("Cannot deactivate fee head as it is associated with existing fee structures.");
-			}
+			throw new BusinessException(FinanceFeeHeadErrorCodes.CannotDeactivateInUse);
 		}
+
+		feeHead.SetActiveStatus(input.IsActive, input.DeactivationReason);
 
 		await feeHeadRepository.UpdateAsync(feeHead);
 
-        return new MessageResponse
-        {
-            Message = "Fee head status updated successfully"
-        };
+        return await MapToResponseAsync(feeHead);
     }
+
+	private async Task<HashSet<Guid>> GetUsedFeeHeadIdsAsync(List<Guid> feeHeadIds)
+	{
+		if (feeHeadIds.Count == 0)
+		{
+			return [];
+		}
+
+		var structureQuery = await feeStructureRepository.GetQueryableAsync();
+		var usedIds = await feeStructureRepository.AsyncExecuter.ToListAsync(
+			structureQuery.Where(fs => fs.IsLocked)
+						  .SelectMany(fs => fs.FeeStructureDetails)
+						  .Where(fsd => feeHeadIds.Contains(fsd.FeeHeadId))
+						  .Select(fsd => fsd.FeeHeadId)
+						  .Distinct()
+		);
+
+		return [.. usedIds];
+	}
+
+	private async Task<FeeHeadResponse> MapToResponseAsync(FeeHead feeHead)
+	{
+		var response = ObjectMapper.Map<FeeHead, FeeHeadResponse>(feeHead);
+
+		var category = await feeCategoryRepository.FindAsync(feeHead.FeeCategoryId);
+		response.FeeCategoryName = category?.Name;
+		response.IsUsedInDownstream = (await GetUsedFeeHeadIdsAsync([feeHead.Id])).Count > 0;
+
+		return response;
+	}
 }

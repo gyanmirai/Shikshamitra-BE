@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
@@ -7,8 +7,10 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 public interface IFeeCategoryAppService : IApplicationService
 {
-    Task<MessageResponse> CreateAsync(Guid academicYearId, FeeCategoryCreateRequest input);
+    Task<FeeCategoryResponse> CreateAsync(Guid academicYearId, FeeCategoryCreateRequest input);
     Task<FeeCategoryListResponse> GetListAsync(Guid academicYearId, string search = null, int page = 1, int pageSize = 10);
-    Task<MessageResponse> UpdateAsync(Guid feeCategoryId, FeeCategoryUpdateRequest input);
-    Task<MessageResponse> DeleteAsync(Guid feeCategoryId);
+    Task<FeeCategoryResponse> GetByIdAsync(Guid id);
+    Task<FeeCategoryResponse> UpdateAsync(Guid id, FeeCategoryUpdateRequest input);
+    Task<MessageResponse> DeleteAsync(Guid id);
+    Task<FeeCategoryResponse> UpdateStatusAsync(Guid id, FeeCategoryStatusUpdateRequest input);
 }

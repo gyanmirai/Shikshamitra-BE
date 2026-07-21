@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Onboarding.AcademicYears;
@@ -375,12 +376,14 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
 
         var created = await _feeHeadRepository.InsertAsync(
             new FeeHead(
-                id:             GuidGenerator.Create(),
-                tenantId:       CurrentTenant.Id,
-                academicYearId: academicYearId,
-                feeCategoryId:  categoryId,
-                name:           name,
-                description:    description),
+                id:                  GuidGenerator.Create(),
+                tenantId:            CurrentTenant.Id,
+                academicYearId:      academicYearId,
+                feeCategoryId:       categoryId,
+                name:                name,
+                module:              FeeHeadModule.Finance,
+                isConcessionApplied: false,
+                description:         description),
             autoSave: false);
 
         _logger.LogDebug("[FeeCollectionSeeder] Created FeeHead: {Name}", created.Name);

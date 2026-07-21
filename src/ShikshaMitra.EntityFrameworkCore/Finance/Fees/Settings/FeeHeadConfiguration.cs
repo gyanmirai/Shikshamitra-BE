@@ -12,6 +12,11 @@ public class FeeHeadConfiguration : IEntityTypeConfiguration<FeeHead>
 		builder.ToTable("Finance_FeeHeads", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
+		builder.Property(x => x.Name).HasMaxLength(40).IsRequired();
+		builder.Property(x => x.Module).HasConversion<string>().HasMaxLength(50);
+		builder.Property(x => x.Description).HasMaxLength(500);
+		builder.Property(x => x.DeactivationReason).HasMaxLength(500);
+
 		// add navigation for fee category
 		builder.HasOne(fh => fh.FeeCategory)
 			.WithMany()
@@ -20,5 +25,7 @@ public class FeeHeadConfiguration : IEntityTypeConfiguration<FeeHead>
 
 		builder.Navigation(fh => fh.FeeCategory)
 			.AutoInclude();
+
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.FeeCategoryId, x.Name });
 	}
 }

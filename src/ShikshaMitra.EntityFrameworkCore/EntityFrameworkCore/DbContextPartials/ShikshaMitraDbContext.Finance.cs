@@ -14,6 +14,7 @@ using ShikshaMitra.Students.Fees;
 using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Entities;
+using ShikshaMitra.Domain.Finance.Policies;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -75,6 +76,8 @@ public partial class ShikshaMitraDbContext
 	public DbSet<FeePaymentReceipt> FeePaymentReceipts { get; set; }
 	public DbSet<FeeCollectionDueFeeAllocation> FeeCollectionDueFeeAllocations { get; set; }
 	public DbSet<ReceiptNumberSequence> ReceiptNumberSequences { get; set; }
+	public DbSet<LateFeeCollectionAllocation> LateFeeCollectionAllocations { get; set; }
+	public DbSet<LateFeeWaiverApplication> LateFeeWaiverApplications { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Fee Refunds
@@ -92,4 +95,12 @@ public partial class ShikshaMitraDbContext
 	// Finance — Audit Trail
 	// ───────────────────────────────────────────────
 	public DbSet<FinanceAuditEvent> FinanceAuditEvents { get; set; }
+
+	// ───────────────────────────────────────────────
+	// Finance — Policies
+	// ───────────────────────────────────────────────
+	public DbSet<CollectionPolicy> CollectionPolicies { get; set; }
+	public DbSet<FinancePolicyVersion> FinancePolicyVersions { get; set; }
+	public DbSet<StudentFeePolicyOverride> StudentFeePolicyOverrides { get; set; }
+	public DbSet<CollectionPolicyExceptionWindow> CollectionPolicyExceptionWindows { get; set; }
 }

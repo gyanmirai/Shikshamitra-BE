@@ -87,6 +87,15 @@ public class CollectFeeInput
     /// <summary>Flat list of charge payments.</summary>
     public List<ChargePaymentDto> ChargePayments { get; set; } = [];
 
+    /// <summary>
+    /// Late fee amount actually being collected per due line — optional, empty by default so
+    /// existing callers that don't yet send this are unaffected. The cashier's UI computes
+    /// each amount from GET .../collect-form's FeeLedgerLineDto.LateFeeAmount (already net of
+    /// any applied waiver), and may reduce it further at collection time. Not required to equal
+    /// the computed amount — a cashier can still collect less if a waiver is applied inline.
+    /// </summary>
+    public List<LateFeePaymentDto> LateFeePayments { get; set; } = [];
+
     /// <summary>Split payment details by payment method (1–5 items).</summary>
     [Required]
     [MinLength(1)]
@@ -101,6 +110,16 @@ public class DueFeePaymentDto
 
     [Required]
     public Guid FeeHeadId { get; set; }
+
+    [Range(0.01, double.MaxValue)]
+    public double Amount { get; set; }
+}
+
+/// <summary>Late fee amount being collected against a specific due line.</summary>
+public class LateFeePaymentDto
+{
+    [Required]
+    public Guid DueFeeId { get; set; }
 
     [Range(0.01, double.MaxValue)]
     public double Amount { get; set; }

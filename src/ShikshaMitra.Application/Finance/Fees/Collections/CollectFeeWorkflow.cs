@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Audit;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Events;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -32,6 +34,11 @@ public partial class CollectFeeWorkflow(
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
+	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
+	LateFeeWaiverLookupService waiverLookupService,
+	CollectionPolicyResolver policyResolver,
+	LateFeeCalculationService lateFeeCalculationService,
+	ExceptionWindowResolver exceptionWindowResolver,
 	FeeCollectionManager feeCollectionManager,
 	FinanceAuditWriter financeAuditWriter,
 	FinanceScopeAccessService financeScopeAccessService,
@@ -47,9 +54,11 @@ public partial class CollectFeeWorkflow(
 		var (student, academicYear) = await ValidateAndLoadStudentForCollectionAsync(input);
 		var dueFeeContext = await LoadAndValidateDueFeesContextAsync(input);
 		var chargeContext = await LoadAndValidateChargesContextAsync(input);
+		await ValidateLateFeePaymentsAsync(input);
 
 		var paymentMethods = input.Payments.Select(p => p.PaymentMethod).ToList();
-		var received = input.DueFeePayments.Sum(dfp => dfp.Amount) + input.ChargePayments.Sum(cp => cp.Amount);
+		var received = input.DueFeePayments.Sum(dfp => dfp.Amount) + input.ChargePayments.Sum(cp => cp.Amount)
+			+ input.LateFeePayments.Sum(lfp => lfp.Amount);
 		var status = DetermineCollectionStatus(
 			input.DueFeePayments, dueFeeContext.DueFeeMap,
 			input.ChargePayments, chargeContext.PendingChargeMap,
@@ -72,7 +81,8 @@ public partial class CollectFeeWorkflow(
 				Status: status, ReceivedAmount: received, Notes: input.Notes,
 				BankReceiptConfirmed: input.PaymentConfirmed, FeeHeadGroups: feeHeadGroups,
 				ChargePayments: input.ChargePayments.Select(cp => (cp.ChargeId, cp.Amount)).ToList(),
-				DueFeeAllocations: allAllocations, Payments: paymentRows));
+				DueFeeAllocations: allAllocations, Payments: paymentRows,
+				LateFeeAllocations: input.LateFeePayments.Select(lfp => (lfp.DueFeeId, lfp.Amount)).ToList()));
 
 		await GenerateAndStoreReceiptPdfsAsync(transaction.Receipts, student, academicYear);
 
@@ -113,6 +123,12 @@ public partial class CollectFeeWorkflow(
 			PaidDueFees = input.DueFeePayments.Select(dfp => new PaidDueFeeInfoDto
 			{
 				DueFeeId = dfp.DueFeeId, FeeHeadId = dfp.FeeHeadId, AmountPaid = dfp.Amount,
+			}).ToList(),
+			PaidLateFees = input.LateFeePayments.Select(lfp => new PaidDueFeeInfoDto
+			{
+				DueFeeId = lfp.DueFeeId,
+				FeeHeadId = dueFeeContext.DueFeeMap.GetValueOrDefault(lfp.DueFeeId)?.FeeHeadId ?? Guid.Empty,
+				AmountPaid = lfp.Amount,
 			}).ToList(),
 			PaidFeeHeads = transaction.FeeCollectionRecords.Select(r => new PaidFeeHeadInfoDto
 			{

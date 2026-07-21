@@ -21,6 +21,14 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public MonthEnum Month { get; private set; }
 	public int Year { get; private set; }
 	public bool IsOneTime { get; private set; }
+
+	/// <summary>
+	/// The date this obligation becomes overdue — feeds LateFeeCalculationService's daysLate
+	/// input (Finance/Policies). No per-school "due day of month" setting exists yet, so this
+	/// is computed by the caller (DueFeeManager) using DueFeeManager.DefaultDueDayOfMonth; a
+	/// real per-school configuration is a documented follow-up, not silently assumed elsewhere.
+	/// </summary>
+	public DateTime DueDate { get; private set; }
 	public double OriginalAmount { get; private set; }
 	public double NetAmount { get; private set; }
 	public double PaidAmount { get; private set; }
@@ -44,7 +52,8 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MonthEnum month,
 		int year,
 		bool isOneTime,
-		double amount)
+		double amount,
+		DateTime dueDate)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -53,6 +62,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Month = month;
 		Year = year;
 		IsOneTime = isOneTime;
+		DueDate = dueDate;
 		OriginalAmount = amount;
 		NetAmount = 0;
 		PaidAmount = 0;

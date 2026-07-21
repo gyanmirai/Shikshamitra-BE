@@ -332,7 +332,8 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             month: MonthEnum.June,
             year: 2025,
             isOneTime: false,
-            amount: 2000d); // 2000d so sequential payments of 1000d both work
+            amount: 2000d, // 2000d so sequential payments of 1000d both work
+            dueDate: new DateTime(2025, 6, 10));
         var dueFeeRepo = GetRequiredService<IDueFeeRepository>();
         await dueFeeRepo.InsertAsync(dueFee, autoSave: true);
 

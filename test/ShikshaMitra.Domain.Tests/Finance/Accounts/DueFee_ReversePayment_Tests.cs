@@ -22,7 +22,8 @@ public class DueFee_ReversePayment_Tests
             month: MonthEnum.June,
             year: 2026,
             isOneTime: false,
-            amount: originalAmount);
+            amount: originalAmount,
+            dueDate: new DateTime(2026, 6, 10));
 
         df.ApplyPayment(paidAmount);
         return df;

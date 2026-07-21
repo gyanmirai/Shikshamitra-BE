@@ -1,4 +1,5 @@
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Cache;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -45,6 +46,10 @@ public partial class StudentFeeDetailsQueryService(
 	IConcessionRequestRepository concessionRequestRepository,
 	FinanceScopeAccessService financeScopeAccessService,
 	FinanceReferenceCacheService referenceCache,
+	LateFeeWaiverLookupService waiverLookupService,
+	CollectionPolicyResolver policyResolver,
+	LateFeeCalculationService lateFeeCalculationService,
+	ExceptionWindowResolver exceptionWindowResolver,
 	IClock clock
 ) : ApplicationService, ITransientDependency
 {
@@ -66,6 +71,7 @@ public partial class StudentFeeDetailsQueryService(
 
 		var ledger = new List<FeeLedgerMonthDto>();
 		var feeSummary = new FeeSummaryDto();
+		var allowOnlineCollection = true;
 
 		if (feeStructureAssignment != null)
 		{
@@ -86,19 +92,41 @@ public partial class StudentFeeDetailsQueryService(
 
 			var refundByDueFee = await GetRefundsByDueFeeAsync(studentId);
 
+			// ── Collection Policy resolution + late fee (Phase 3) ──────────────
+			// One resolution for the whole collect-form call, not per due line — the policy
+			// doesn't vary by fee head today (per-fee-head override is Phase 4a, not yet built).
+			var effectiveRules = await policyResolver.ResolveEffectiveRulesForStudentAsync(
+				studentId, feeStructureAssignment.FeeStructureStandardId);
+			allowOnlineCollection = effectiveRules.Policy?.AllowOnlineCollection ?? true;
+
+			var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(dueFees.Select(d => d.Id).ToList());
+			var today = clock.Now.Date;
+
+			// Resolved once for the whole collect-form call, same rationale as the policy
+			// resolution above — an exception window doesn't vary by fee head/due line.
+			var activeWindow = await exceptionWindowResolver.ResolveActiveWindowAsync(
+				academicYearId, feeStructureAssignment.FeeStructureStandardId, today);
+
 			foreach (var group in grouped)
 			{
-				var lines = group.Select(d => new FeeLedgerLineDto
+				var lines = group.Select(d =>
 				{
-					DueFeeId = d.Id, FeeHeadId = d.FeeHeadId,
-					FeeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty),
-					Total = d.OriginalAmount, Paid = d.PaidAmount, Due = d.OutstandingAmount,
-					//ConcessionAmount = concessions.Where(c => c.DueFeeId == d.Id).Sum(c => c.Amount),
-					ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
-					RefundAmount = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Amount,
-					RefundDescription = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Description,
-					Status = d.OutstandingAmount <= 0d ? FeeCollectionStatus.Paid
-						: (d.PaidAmount > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
+					var lateFee = ComputeLateFeeForLine(effectiveRules, d, today, waivedByDueFee, activeWindow);
+					return new FeeLedgerLineDto
+					{
+						DueFeeId = d.Id, FeeHeadId = d.FeeHeadId,
+						FeeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty),
+						Total = d.OriginalAmount, Paid = d.PaidAmount, Due = d.OutstandingAmount,
+						//ConcessionAmount = concessions.Where(c => c.DueFeeId == d.Id).Sum(c => c.Amount),
+						ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
+						RefundAmount = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Amount,
+						RefundDescription = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Description,
+						Status = d.OutstandingAmount <= 0d ? FeeCollectionStatus.Paid
+							: (d.PaidAmount > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
+						LateFeeAmount = lateFee.Amount,
+						LateFeeExplanation = lateFee.Explanation,
+						LateFeeWaivedAmount = lateFee.WaivedAmount,
+					};
 				}).ToList();
 
 				ledger.Add(new FeeLedgerMonthDto
@@ -165,6 +193,7 @@ public partial class StudentFeeDetailsQueryService(
 		{
 			Student = BuildStudentInfo(student),
 			Summary = feeSummary, Ledger = ledger, Charges = chargeDtos,
+			AllowOnlineCollection = allowOnlineCollection,
 		};
 	}
 
@@ -177,5 +206,33 @@ public partial class StudentFeeDetailsQueryService(
 				Amount: g.Sum(x => x.Amount),
 				Description: string.Join("; ", g.Select(x => x.Reason).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct())
 			));
+	}
+
+	private (double Amount, string Explanation, double WaivedAmount) ComputeLateFeeForLine(
+		EffectiveCollectionRules effectiveRules, DueFee dueFee, DateTime today, Dictionary<Guid, decimal> waivedByDueFee,
+		ActiveExceptionWindow? activeWindow)
+	{
+		if (effectiveRules.Policy is null || dueFee.OutstandingAmount <= 0)
+		{
+			return (0, string.Empty, 0);
+		}
+
+		var daysLate = (today - dueFee.DueDate.Date).Days;
+		var result = lateFeeCalculationService.Calculate(effectiveRules.Policy, new LateFeeCalculationInput(
+			daysLate,
+			(decimal)dueFee.OutstandingAmount,
+			(decimal)dueFee.OriginalAmount,
+			(decimal)dueFee.OutstandingAmount,
+			dueFee.FeeHeadId,
+			effectiveRules.IsLateFeeExempt,
+			effectiveRules.CustomGracePeriodDays,
+			activeWindow?.Effect,
+			activeWindow?.ExtensionDays,
+			activeWindow?.Label));
+
+		var waived = waivedByDueFee.GetValueOrDefault(dueFee.Id, 0m);
+		var net = Math.Max(0, result.LateFee - waived);
+
+		return ((double)net, net > 0 ? result.Explanation : string.Empty, (double)waived);
 	}
 }

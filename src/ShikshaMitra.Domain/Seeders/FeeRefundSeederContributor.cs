@@ -245,7 +245,8 @@ public class FeeRefundSeederContributor : BaseSeederContributor
                 month:     month,
                 year:      calendarYear,
                 isOneTime: false,
-                amount:    amount);
+                amount:    amount,
+                dueDate:   DueFeeManager.ComputeDefaultDueDate(month, calendarYear));
 
             // Simulate that the student has fully paid this month's fee
             dueFee.ApplyPayment(amount);

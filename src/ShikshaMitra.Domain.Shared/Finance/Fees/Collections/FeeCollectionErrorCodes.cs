@@ -12,4 +12,5 @@ public static class FeeCollectionErrorCodes
     public const string AmountExceedsOutstanding = Prefix + "AmountExceedsOutstanding";
     public const string StudentAcademicYearMismatch = Prefix + "StudentAcademicYearMismatch";
     public const string InvalidDueFee = Prefix + "InvalidDueFee";
+    public const string LateFeeAmountExceedsComputed = Prefix + "LateFeeAmountExceedsComputed";
 }

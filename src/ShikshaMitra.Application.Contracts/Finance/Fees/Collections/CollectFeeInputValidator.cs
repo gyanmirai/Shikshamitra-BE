@@ -74,6 +74,18 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
             cp.RuleFor(x => x.Amount).GreaterThan(0).WithMessage("Charge payment amount must be greater than zero.");
         });
 
+        RuleFor(x => x.LateFeePayments)
+            .Must(x => x.Count <= 200)
+            .WithMessage("Maximum 200 late fee lines allowed per transaction.")
+            .Must(list => list.Select(lfp => lfp.DueFeeId).Distinct().Count() == list.Count)
+            .WithMessage("Duplicate dueFeeId in LateFeePayments is not allowed.");
+
+        RuleForEach(x => x.LateFeePayments).ChildRules(lfp =>
+        {
+            lfp.RuleFor(x => x.DueFeeId).NotEmpty();
+            lfp.RuleFor(x => x.Amount).GreaterThan(0).WithMessage("Late fee payment amount must be greater than zero.");
+        });
+
         // ── Payments ──────────────────────────────────────────────────────────
         RuleFor(x => x.Payments)
             .NotEmpty().WithMessage("At least one payment method is required.")
@@ -105,7 +117,8 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
             .Must(x =>
             {
                 var paymentsTotal = x.Payments.Sum(p => p.Amount);
-                var linesTotal = x.DueFeePayments.Sum(dfp => dfp.Amount) + x.ChargePayments.Sum(cp => cp.Amount);
+                var linesTotal = x.DueFeePayments.Sum(dfp => dfp.Amount) + x.ChargePayments.Sum(cp => cp.Amount)
+                    + x.LateFeePayments.Sum(lfp => lfp.Amount);
                 return Math.Abs(paymentsTotal - linesTotal) < 0.01;
             })
             .WithMessage("Sum of payment amounts must equal the total fee and charge payments.");

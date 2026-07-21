@@ -48,6 +48,7 @@ public class StandardFeeStructureResponseItem : EntityDto<Guid>
     public string Name { get; set; }
 	public FeeStructureStatus Status { get; set; }
 	public List<FeeHeadAssignmentResponse> FeeHeads { get; set; }
+	public Guid? CollectionPolicyId { get; set; }
 }
 
 public class FeeHeadAssignmentResponse

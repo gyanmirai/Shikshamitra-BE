@@ -15,4 +15,5 @@ public static class FinanceAuditActions
 	public const string RemoveCharge = "remove_charge";
 	public const string Verify = "verify";
 	public const string Reverse = "reverse";
+	public const string Waive = "waive";
 }

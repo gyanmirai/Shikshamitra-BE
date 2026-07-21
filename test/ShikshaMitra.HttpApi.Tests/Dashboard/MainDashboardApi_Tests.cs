@@ -2482,7 +2482,8 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 				MonthEnum.May,
 				2026,
 				false,
-				amount);
+				amount,
+				new DateTime(2026, 5, 10));
 			await dueFeeRepository.InsertAsync(dueFee, autoSave: false);
 			await uow.CompleteAsync();
 		}

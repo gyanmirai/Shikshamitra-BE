@@ -61,6 +61,9 @@ public class CollectFeeOutput
 
     public List<PaidDueFeeInfoDto> PaidDueFees { get; set; } = [];
 
+    /// <summary>Late fee amounts collected per due line in this transaction (empty when none).</summary>
+    public List<PaidDueFeeInfoDto> PaidLateFees { get; set; } = [];
+
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>Groups all audit events written for this collection action.</summary>

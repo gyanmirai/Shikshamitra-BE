@@ -18,6 +18,15 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public ICollection<FeeStructureDetail> FeeStructureDetails { get; private set; } = new List<FeeStructureDetail>();
 	public bool IsLocked { get; private set; }
 
+	/// <summary>
+	/// The Collection Policy attached to this Fee Structure — the resolution point
+	/// CollectionPolicyResolver reads from (falls back to the academic year's
+	/// isDefault Collection Policy when null). Added alongside the Collection
+	/// Policy backend build; previously this attachment existed only as a
+	/// frontend-only field with nothing on the backend to resolve against.
+	/// </summary>
+	public Guid? CollectionPolicyId { get; private set; }
+
 	protected FeeStructure()
 	{
 	}
@@ -40,6 +49,11 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void ChangeName(string name)
 	{
 		Name = name;
+	}
+
+	public void AttachCollectionPolicy(Guid? collectionPolicyId)
+	{
+		CollectionPolicyId = collectionPolicyId;
 	}
 
 	public void AddDetail(FeeStructureDetail detail)

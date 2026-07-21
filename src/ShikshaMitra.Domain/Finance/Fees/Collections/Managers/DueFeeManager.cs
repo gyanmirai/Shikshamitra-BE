@@ -18,6 +18,23 @@ public class DueFeeManager(
 	PaymentTermScheduleResolver scheduleResolver
 ) : DomainService
 {
+	/// <summary>
+	/// Day-of-month a fee obligation becomes due, absent any real per-school configuration
+	/// (none exists yet — see collection-policy-implementation-plan.md Open Questions). Kept
+	/// as one named constant so every DueFee-creation call site computes the same convention;
+	/// changing this later is a one-line edit, not a hunt across the codebase.
+	/// </summary>
+	public const int DefaultDueDayOfMonth = 10;
+
+	/// <summary>
+	/// Computes the due date for a fee obligation covering <paramref name="month"/>/<paramref name="year"/>,
+	/// using <see cref="DefaultDueDayOfMonth"/>. The single canonical place this is computed —
+	/// DueFeeManager.GenerateForStudentAsync and every seeder that hand-builds DueFee rows call
+	/// this rather than each picking their own convention.
+	/// </summary>
+	public static DateTime ComputeDefaultDueDate(MonthEnum month, int year) =>
+		new DateTime(year, (int)month + 1, 1).AddDays(DefaultDueDayOfMonth - 1);
+
 	public async Task<IReadOnlyList<DueFee>> GenerateForStudentAsync(
 		Guid studentId,
 		FeeStructure feeStructure,
@@ -109,6 +126,7 @@ public class DueFeeManager(
 				year: year,
 				isOneTime: installmentCount == 1,
 				amount: amount,
+				dueDate: dueDate,
 				feeStructureDetailId: detail.Id,
 				paymentTermId: schedule.PaymentTermId,
 				paymentTermVersionId: schedule.PaymentTermVersionId,
@@ -241,17 +259,7 @@ public class DueFeeManager(
 			year: year,
 			isOneTime: detail.IsOneTime,
 			amount: amount,
-			feeStructureDetailId: detail.Id,
-			paymentTermId: null,
-			paymentTermVersionId: null,
-			paymentTermInstallmentId: null,
-			installmentSequence: null,
-			installmentName: null,
-			coverageStartDate: null,
-			coverageEndDate: null,
-			demandDate: null,
-			scheduleDueDate: null,
-			scheduleSource: ScheduleSource.Legacy);
+			dueDate: ComputeDefaultDueDate(month, year));
 
 	private static List<(MonthEnum Month, int Year)> ComputeMonthRange(AcademicYear academicYear)
 	{

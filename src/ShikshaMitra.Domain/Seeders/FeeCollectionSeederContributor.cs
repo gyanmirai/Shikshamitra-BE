@@ -248,7 +248,8 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 month:     mr.Month,
                 year:      mr.Year,
                 isOneTime: false,
-                amount:    monthlyAmount)).ToList();
+                amount:    monthlyAmount,
+                dueDate:   DueFeeManager.ComputeDefaultDueDate(mr.Month, mr.Year))).ToList();
 
             // One-time development fee (due in first month of academic year)
             dueFees.Add(new DueFee(
@@ -259,7 +260,8 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 month:     monthRange[0].Month,
                 year:      monthRange[0].Year,
                 isOneTime: true,
-                amount:    DevFeeAmount));
+                amount:    DevFeeAmount,
+                dueDate:   DueFeeManager.ComputeDefaultDueDate(monthRange[0].Month, monthRange[0].Year)));
 
             dueFeesToInsert.AddRange(dueFees);
             studentsWithExistingDueFees.Add(student.Id);

@@ -12,4 +12,7 @@ public static class FinanceAuditEntityTypes
 	public const string BankReconciliation = "bank_reconciliation";
 	public const string IncomeEntry = "income_entry";
 	public const string ExpenseEntry = "expense_entry";
+	public const string LateFeeWaiver = "late_fee_waiver";
+	public const string CollectionPolicyExceptionWindow = "collection_policy_exception_window";
+	public const string BulkWaiverRequest = "bulk_waiver_request";
 }

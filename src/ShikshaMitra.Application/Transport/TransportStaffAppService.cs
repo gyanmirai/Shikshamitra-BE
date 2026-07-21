@@ -45,9 +45,9 @@ public class TransportStaffAppService(
 			query = query.Where(row => row.Staff.Role == input.Role.Value);
 		}
 
-		if (input.Status.HasValue)
+		if (input.StaffStatus.HasValue)
 		{
-			query = query.Where(row => row.Staff.Status == input.Status.Value);
+			query = query.Where(row => row.Staff.Status == input.StaffStatus.Value);
 		}
 
 		if (!string.IsNullOrWhiteSpace(input.Search))

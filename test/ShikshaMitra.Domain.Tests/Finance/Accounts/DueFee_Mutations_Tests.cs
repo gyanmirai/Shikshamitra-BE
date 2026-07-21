@@ -21,7 +21,8 @@ public class DueFee_Mutations_Tests
             month: MonthEnum.June,
             year: 2026,
             isOneTime: false,
-            amount: amount);
+            amount: amount,
+            dueDate: new DateTime(2026, 6, 10));
         return df;
     }
 

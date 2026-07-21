@@ -84,7 +84,8 @@ public static class FeeCollectionTestHelper
                 month: MonthEnum.June,
                 year: 2025,
                 isOneTime: false,
-                amount: amount);
+                amount: amount,
+                dueDate: new DateTime(2025, 6, 10));
 
             await dueFeeRepo.InsertAsync(dueFee, autoSave: true);
             await uow.CompleteAsync();

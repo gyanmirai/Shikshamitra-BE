@@ -27,6 +27,7 @@ public class FeeCollectionManager(
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
 	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
 	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
+	IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
 	IDueFeeRepository dueFeeRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IFeePaymentReceiptRepository feePaymentReceiptRepository,
@@ -49,7 +50,8 @@ public class FeeCollectionManager(
 		IReadOnlyList<(Guid FeeHeadId, double Amount)> FeeHeadGroups,
 		IReadOnlyList<(Guid ChargeId, double Amount)> ChargePayments,
 		IReadOnlyList<(Guid DueFeeId, double Amount)> DueFeeAllocations,
-		IReadOnlyList<(PaymentMethodEnum Method, double Amount, PaymentDetails? Details)> Payments);
+		IReadOnlyList<(PaymentMethodEnum Method, double Amount, PaymentDetails? Details)> Payments,
+		IReadOnlyList<(Guid DueFeeId, double Amount)>? LateFeeAllocations = null);
 
 	public sealed record CollectFeeTransactionResult(
 		FeeRecordMetadata Metadata,
@@ -58,7 +60,8 @@ public class FeeCollectionManager(
 		List<ChargeCollectionRecord> ChargeCollectionRecords,
 		List<FeePaymentReceipt> Receipts,
 		double FeeLinesTotal,
-		double ChargeLinesTotal);
+		double ChargeLinesTotal,
+		double LateFeeLinesTotal = 0);
 
 	public async Task<CollectFeeTransactionResult> ExecuteCollectionTransactionAsync(CollectFeeTransactionCommand command)
 	{
@@ -131,16 +134,38 @@ public class FeeCollectionManager(
 			await dueFeeAllocationRepository.InsertManyAsync(allocationRows, autoSave: false);
 		}
 
+		var lateFeeAllocations = command.LateFeeAllocations ?? [];
+		if (lateFeeAllocations.Count > 0)
+		{
+			// Deliberately does not call DueFee.ApplyPayment — late fee is not part of
+			// DueFee.OutstandingAmount (see LateFeeCollectionAllocation's class doc). This
+			// only records that the amount was collected, for income-booking and audit.
+			var lateFeeRows = lateFeeAllocations
+				.Select(a => new LateFeeCollectionAllocation(
+					GuidGenerator.Create(),
+					currentTenant.Id,
+					metadata.Id,
+					a.DueFeeId,
+					a.Amount))
+				.ToList();
+			await lateFeeAllocationRepository.InsertManyAsync(lateFeeRows, autoSave: false);
+		}
+
 		var feeLinesTotal = feeCollectionRecords.Sum(r => r.Amount);
 		var chargeLinesTotal = chargeCollectionRecords.Sum(r => r.Amount);
+		var lateFeeLinesTotal = lateFeeAllocations.Sum(a => a.Amount);
 
+		// Known gap (implementation plan Phase 3): late fee is folded into the fee receipt's
+		// total rather than itemized as its own line — a separate PDF line item requires
+		// touching FeeReceiptManager's template, deferred to keep this session's change to the
+		// live collection transaction as small and additive as possible.
 		var receipts = await feeReceiptManager.CreateReceiptsForTransactionAsync(
 			feeCollectionTransactionId: metadata.Id,
 			studentId: command.StudentId,
 			academicYearId: command.AcademicYearId,
 			boardId: command.BoardId,
 			educationMediumId: command.EducationMediumId,
-			feeLinesTotal: feeLinesTotal,
+			feeLinesTotal: feeLinesTotal + lateFeeLinesTotal,
 			chargeLinesTotal: chargeLinesTotal,
 			paymentMethods: command.Payments.Select(p => p.Method).ToList(),
 			bankReceiptConfirmed: command.BankReceiptConfirmed,
@@ -156,7 +181,8 @@ public class FeeCollectionManager(
 			chargeCollectionRecords,
 			receipts,
 			feeLinesTotal,
-			chargeLinesTotal);
+			chargeLinesTotal,
+			lateFeeLinesTotal);
 	}
 
 	/// <summary>

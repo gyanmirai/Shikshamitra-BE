@@ -19,6 +19,14 @@ public class FeeCollectFormDto
 
     /// <summary>Approved charges that have not yet been fully paid.</summary>
     public List<ChargeDetailDto> Charges { get; set; } = [];
+
+    /// <summary>
+    /// Resolved from the student's Collection Policy (Finance/Policies) — null when no policy
+    /// resolves for this student's fee structure, in which case online collection is treated
+    /// as allowed by default (matches collection-policy-flow.md §7.10 "No Collection Policy
+    /// Attached"). The staff collect form and the payment-method selector both read this.
+    /// </summary>
+    public bool AllowOnlineCollection { get; set; } = true;
 }
 
 /// <summary>All fee obligations grouped under one calendar month.</summary>
@@ -85,6 +93,20 @@ public class FeeLedgerLineDto
     public string? RefundDescription { get; set; }
 
 	public FeeCollectionStatus Status { get; set; }
+
+	/// <summary>
+	/// Computed via LateFeeCalculationService (Finance/Policies), net of any Applied
+	/// LateFeeWaiverApplication rows for this due line — this is what's actually collectible,
+	/// not the raw formula output. Zero when no Collection Policy resolves, the student is
+	/// exempt, or the line isn't yet overdue.
+	/// </summary>
+	public double LateFeeAmount { get; set; }
+
+	/// <summary>One-line breakdown from LateFeeCalculationResult.Explanation, e.g. "₹20/day × 15 days late = ₹300 (capped by maximumLateFeeAmount)". Empty when LateFeeAmount is 0.</summary>
+	public string LateFeeExplanation { get; set; } = string.Empty;
+
+	/// <summary>Sum of Applied waivers against this due line's late fee — shown so the cashier can see a waiver was already granted, not just a smaller number.</summary>
+	public double LateFeeWaivedAmount { get; set; }
 }
 
 /// <summary>Query parameters for the collect-form endpoint.</summary>

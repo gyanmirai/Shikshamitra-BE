@@ -71,6 +71,12 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Finance.AuditTrail", new SubmoduleInfo(AuditTrail.All, AuditTrail.DisplayNames) },
 			{ "Finance.Auditing", new SubmoduleInfo(Auditing.All, Auditing.DisplayNames) },
 			{ "Finance.Adjustments", new SubmoduleInfo(Adjustments.All, Adjustments.DisplayNames) },
+
+			// Policies submodules
+			{ "Finance.Policies.ConcessionPolicy", new SubmoduleInfo(Policies_ConcessionPolicy.All, Policies_ConcessionPolicy.DisplayNames) },
+			{ "Finance.Policies.RefundPolicy", new SubmoduleInfo(Policies_RefundPolicy.All, Policies_RefundPolicy.DisplayNames) },
+			{ "Finance.Policies.CollectionPolicy", new SubmoduleInfo(Policies_CollectionPolicy.All, Policies_CollectionPolicy.DisplayNames) },
+			{ "Finance.Policies.ProrationPolicy", new SubmoduleInfo(Policies_ProrationPolicy.All, Policies_ProrationPolicy.DisplayNames) }
 		};
 	}
 }

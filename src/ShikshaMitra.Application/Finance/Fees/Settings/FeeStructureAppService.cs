@@ -43,6 +43,8 @@ public class FeeStructureAppService(
             input.StandardFeeStructures?.Name ?? string.Empty
         );
 
+		feeStructure.AttachCollectionPolicy(input.StandardFeeStructures?.CollectionPolicyId);
+
         if (input.StandardFeeStructures != null)
         {
             var structureRequest = input.StandardFeeStructures;
@@ -166,6 +168,7 @@ public class FeeStructureAppService(
         }
 
 		feeStructure.ChangeName(input.Name);
+		feeStructure.AttachCollectionPolicy(input.CollectionPolicyId);
 
 		// validation to ensure no duplicate fee structure name exists for the same standard
 		var existingStructure = await feeStructureRepository.AnyAsync(x => x.StandardId == feeStructure.StandardId && x.Name == feeStructure.Name && x.Id != feeStructure.Id);
@@ -215,6 +218,7 @@ public class FeeStructureAppService(
                 Id = fs.Id,
                 Name = fs.Name,
 				Status = fs.IsLocked ? FeeStructureStatus.Locked : FeeStructureStatus.Unlocked,
+				CollectionPolicyId = fs.CollectionPolicyId,
 				FeeHeads = fs.FeeStructureDetails.Select(d =>
                 {
                     var response = new FeeHeadAssignmentResponse

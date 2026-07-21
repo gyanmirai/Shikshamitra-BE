@@ -1,4 +1,5 @@
 ﻿using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
@@ -59,6 +60,29 @@ public class FeeHeadAssignmentResponse
     public bool IsOptional { get; set; }
 	public MonthEnum? PayableMonth { get; set; }
 	public int? PayableYear { get; set; }
+
+    // ── Payment Term attachment (new) ──────────────────────────────────────────
+
+    /// <summary>The Payment Term attached to this fee head.</summary>
+    public Guid? PaymentTermId { get; set; }
+
+    /// <summary>The specific Payment Term version snapshot used for demand generation.</summary>
+    public Guid? PaymentTermVersionId { get; set; }
+
+    /// <summary>How this fee head uses the attached Payment Term.</summary>
+    public ScheduleMode ScheduleMode { get; set; }
+
+    /// <summary>The Payment Term name (for display).</summary>
+    public string? PaymentTermName { get; set; }
+
+    /// <summary>Current version number of the attached term.</summary>
+    public int? PaymentTermVersionNumber { get; set; }
+
+    /// <summary>Whether a new version is available for adoption.</summary>
+    public bool HasNewVersionAvailable { get; set; }
+
+    /// <summary>Whether the schedule is locked by issued dues.</summary>
+    public bool IsScheduleLocked { get; set; }
 }
 
 public class AcademicYearMonthItem

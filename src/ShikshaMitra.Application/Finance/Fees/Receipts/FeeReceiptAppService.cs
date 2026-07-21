@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Common;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts.Dtos;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -32,7 +33,9 @@ public partial class FeeReceiptAppService(
     IReadOnlyRepository<EducationBoard, Guid> boardRepository,
     IReadOnlyRepository<EducationMedium, Guid> mediumRepository,
     IReadOnlyRepository<Standard, Guid> standardRepository,
-    IReadOnlyRepository<Division, Guid> divisionRepository
+    IReadOnlyRepository<Division, Guid> divisionRepository,
+    IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
+    IDueFeeRepository dueFeeRepository
 ) : ApplicationService, IFeeReceiptAppService
 {
     public async Task<PagedResultDto<FeeReceiptListItemDto>> GetListAsync(
@@ -143,6 +146,54 @@ public partial class FeeReceiptAppService(
             division = div?.Name;
         }
 
+        var allocationDetails = new List<FeeReceiptAllocationLineDto>();
+        var paidFeeHeads = new List<FeeReceiptPaidHeadDto>();
+
+        if (receipt.ReceiptScope == FeeReceiptScope.Fee)
+        {
+            var allocations = await dueFeeAllocationRepository.GetListAsync(
+                a => a.FeeRecordMetadataId == receipt.FeeCollectionTransactionId,
+                cancellationToken: cancellationToken);
+
+            var dueFeeIds = allocations.Select(a => a.DueFeeId).Distinct().ToList();
+            var dueFees = dueFeeIds.Count == 0
+                ? new List<DueFee>()
+                : await dueFeeRepository.GetListAsync(d => dueFeeIds.Contains(d.Id), cancellationToken: cancellationToken);
+            var dueFeeMap = dueFees.ToDictionary(d => d.Id);
+
+            allocationDetails = allocations.Select(a =>
+            {
+                dueFeeMap.TryGetValue(a.DueFeeId, out var dueFee);
+                return new FeeReceiptAllocationLineDto
+                {
+                    DueFeeId = a.DueFeeId,
+                    FeeHeadId = dueFee?.FeeHeadId,
+                    FeeHeadName = a.FeeHeadName ?? string.Empty,
+                    InstallmentLabel = a.InstallmentLabel
+                        ?? dueFee?.GetDisplayInstallmentLabel()
+                        ?? string.Empty,
+                    CoverageStartDate = a.CoverageStartDate ?? dueFee?.CoverageStartDate,
+                    CoverageEndDate = a.CoverageEndDate ?? dueFee?.CoverageEndDate,
+                    DueDate = a.DueDate ?? dueFee?.ScheduleDueDate,
+                    AmountPaid = a.Amount,
+                    ScheduleSource = (a.InstallmentLabel != null || dueFee != null)
+                        ? (a.ScheduleSource != default
+                            ? a.ScheduleSource.ToString()
+                            : dueFee?.ScheduleSource.ToString() ?? "Legacy")
+                        : "Legacy",
+                };
+            }).ToList();
+
+            paidFeeHeads = allocationDetails
+                .GroupBy(a => new { a.FeeHeadId, a.FeeHeadName })
+                .Select(g => new FeeReceiptPaidHeadDto
+                {
+                    FeeHeadId = g.Key.FeeHeadId ?? Guid.Empty,
+                    FeeHeadName = g.Key.FeeHeadName,
+                    AmountPaid = g.Sum(x => x.AmountPaid),
+                }).ToList();
+        }
+
         return new FeeReceiptDetailDto
         {
             Id                             = receipt.Id,
@@ -176,6 +227,8 @@ public partial class FeeReceiptAppService(
             FeeCollectionTransactionId     = receipt.FeeCollectionTransactionId,
             SiblingReceiptNumber           = siblings.FirstOrDefault()?.ReceiptNumber,
             Remarks                        = receipt.Remarks,
+            PaidFeeHeads                   = paidFeeHeads,
+            AllocationDetails              = allocationDetails,
         };
     }
 }

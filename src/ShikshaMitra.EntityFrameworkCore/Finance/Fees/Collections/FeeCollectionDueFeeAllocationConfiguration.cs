@@ -17,6 +17,10 @@ public class FeeCollectionDueFeeAllocationConfiguration
             .HasColumnType("numeric(18,2)")
             .IsRequired();
 
+        builder.Property(x => x.FeeHeadName).HasMaxLength(200);
+        builder.Property(x => x.InstallmentLabel).HasMaxLength(100);
+        builder.Property(x => x.ScheduleSource).HasConversion<int>();
+
         builder.HasIndex(x => x.FeeRecordMetadataId)
             .HasDatabaseName("IX_FeeCollectionDueFeeAllocations_FeeRecordMetadataId");
 

@@ -1,0 +1,201 @@
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
+using System;
+using System.Collections.Generic;
+using Volo.Abp.Application.Dtos;
+
+namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
+
+// ── Installment DTOs ──────────────────────────────────────────────────────────
+
+public class PaymentTermInstallmentDto : EntityDto<Guid>
+{
+	public int Sequence { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public DateTime CoverageStartDate { get; set; }
+	public DateTime CoverageEndDate { get; set; }
+	public DateTime DemandDate { get; set; }
+	public DateTime DueDate { get; set; }
+	public decimal AllocationPercentage { get; set; }
+	public bool DemandEnabled { get; set; }
+	public bool ReminderEnabled { get; set; }
+	public DateTime? ReminderDate { get; set; }
+	public bool? AllowPartialOverride { get; set; }
+	public int? GracePeriodDaysOverride { get; set; }
+}
+
+public class CreatePaymentTermInstallmentDto
+{
+	public int Sequence { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public DateTime CoverageStartDate { get; set; }
+	public DateTime CoverageEndDate { get; set; }
+	public DateTime DemandDate { get; set; }
+	public DateTime DueDate { get; set; }
+	public decimal AllocationPercentage { get; set; }
+	public bool DemandEnabled { get; set; }
+	public bool ReminderEnabled { get; set; }
+	public DateTime? ReminderDate { get; set; }
+	public bool? AllowPartialOverride { get; set; }
+	public int? GracePeriodDaysOverride { get; set; }
+}
+
+// ── Version DTOs ──────────────────────────────────────────────────────────────
+
+public class PaymentTermVersionDto : EntityDto<Guid>
+{
+	public int VersionNumber { get; set; }
+	public PaymentTermVersionStatus Status { get; set; }
+	public DateTime? EffectiveFrom { get; set; }
+	public DateTime? EffectiveTo { get; set; }
+	public DateTime? PublishedAt { get; set; }
+	public string? ChangeReason { get; set; }
+	public List<PaymentTermInstallmentDto> Installments { get; set; } = new();
+}
+
+// ── Master DTOs ───────────────────────────────────────────────────────────────
+
+public class PaymentTermDto : EntityDto<Guid>
+{
+	public Guid AcademicYearId { get; set; }
+	public string? AcademicYearName { get; set; }
+	public Guid BoardId { get; set; }
+	public string? BoardName { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public string Code { get; set; } = string.Empty;
+	public string? Description { get; set; }
+	public PaymentTermStatus Status { get; set; }
+	public bool IsDefault { get; set; }
+
+	public HolidayShiftingMethod HolidayShiftingMethod { get; set; }
+	public DemandGenerationRule DemandGenerationRule { get; set; }
+	public int? DemandOffsetDays { get; set; }
+	public InitialDemandStatus InitialDemandStatus { get; set; }
+
+	public Guid? CurrentVersionId { get; set; }
+	public DateTime? ArchivedAt { get; set; }
+
+	public int TotalInstallments { get; set; }
+	public int VersionCount { get; set; }
+	public bool IsUsedInFeeStructures { get; set; }
+	public bool CanDirectEdit { get; set; }
+
+	public List<PaymentTermVersionDto> Versions { get; set; } = new();
+}
+
+public class PaymentTermListDto : EntityDto<Guid>
+{
+	public string Name { get; set; } = string.Empty;
+	public string Code { get; set; } = string.Empty;
+	public Guid AcademicYearId { get; set; }
+	public Guid BoardId { get; set; }
+	public PaymentTermStatus Status { get; set; }
+	public bool IsDefault { get; set; }
+	public int CurrentVersionNumber { get; set; }
+	public int InstallmentCount { get; set; }
+	public int ReferencedStructureCount { get; set; }
+	public bool CanDirectEdit { get; set; }
+}
+
+// ── Request DTOs ──────────────────────────────────────────────────────────────
+
+public class CreatePaymentTermDto
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid BoardId { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public string Code { get; set; } = string.Empty;
+	public string? Description { get; set; }
+	public bool IsDefault { get; set; }
+
+	public HolidayShiftingMethod HolidayShiftingMethod { get; set; } = HolidayShiftingMethod.None;
+	public DemandGenerationRule DemandGenerationRule { get; set; } = DemandGenerationRule.Immediately;
+	public int? DemandOffsetDays { get; set; }
+	public InitialDemandStatus InitialDemandStatus { get; set; }
+
+	public List<CreatePaymentTermInstallmentDto> Installments { get; set; } = new();
+}
+
+public class UpdatePaymentTermDraftDto
+{
+	public string Name { get; set; } = string.Empty;
+	public string Code { get; set; } = string.Empty;
+	public string? Description { get; set; }
+
+	public HolidayShiftingMethod HolidayShiftingMethod { get; set; }
+	public DemandGenerationRule DemandGenerationRule { get; set; }
+	public int? DemandOffsetDays { get; set; }
+	public InitialDemandStatus InitialDemandStatus { get; set; }
+
+	public List<CreatePaymentTermInstallmentDto> Installments { get; set; } = new();
+}
+
+public class CreateRevisionDto
+{
+	public string ChangeReason { get; set; } = string.Empty;
+	public Guid? SourceVersionId { get; set; }
+}
+
+public class PublishVersionDto
+{
+	public DateTime EffectiveFrom { get; set; }
+}
+
+public class ClonePaymentTermsDto
+{
+	public Guid SourceAcademicYearId { get; set; }
+	public Guid TargetAcademicYearId { get; set; }
+	public List<Guid> PaymentTermIds { get; set; } = new();
+}
+
+public class ArchivePaymentTermDto
+{
+	public string Reason { get; set; } = string.Empty;
+}
+
+// ── Response DTOs ─────────────────────────────────────────────────────────────
+
+public class ClonePaymentTermsResultDto
+{
+	public List<Guid> ClonedTermIds { get; set; } = new();
+	public List<string> ConflictedCodes { get; set; } = new();
+	public List<string> DateRangesRequiringReview { get; set; } = new();
+}
+
+public class ImpactPreviewDto
+{
+	public int AffectedStructures { get; set; }
+	public int AffectedStudents { get; set; }
+	public int ExistingIssuedDueCount { get; set; }
+	public int FutureUngeneratedInstanceCount { get; set; }
+	public decimal ProjectedTotalAmount { get; set; }
+	public List<ImpactPreviewStructureDto> Structures { get; set; } = new();
+}
+
+public class ImpactPreviewStructureDto
+{
+	public Guid FeeStructureId { get; set; }
+	public string FeeStructureName { get; set; } = string.Empty;
+	public int StudentCount { get; set; }
+	public int IssuedDueCount { get; set; }
+	public int FutureInstanceCount { get; set; }
+	public decimal ProjectedAmount { get; set; }
+}
+
+public class PublishResultDto
+{
+	public Guid VersionId { get; set; }
+	public int VersionNumber { get; set; }
+	public List<string> ValidationWarnings { get; set; } = new();
+	public ImpactPreviewDto? ImpactPreview { get; set; }
+}
+
+// ── Query DTOs ────────────────────────────────────────────────────────────────
+
+public class PaymentTermGetListInput : PagedAndSortedResultRequestDto
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid? BoardId { get; set; }
+	public PaymentTermStatus? Status { get; set; }
+	public string? Search { get; set; }
+	public bool IncludeArchived { get; set; }
+}

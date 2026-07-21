@@ -115,6 +115,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Academics.HomeworkAndAssignment.Reports", new SubmoduleInfo(HomeworkAndAssignment_Reports.All, HomeworkAndAssignment_Reports.DisplayNames) },
 			{ "Academics.HomeworkAndAssignment.Settings.HomeworkTypes", new SubmoduleInfo(HomeworkAndAssignment_SettingsHomeworkTypes.All, HomeworkAndAssignment_SettingsHomeworkTypes.DisplayNames) },
 			{ "Academics.HomeworkAndAssignment.Settings.AssignmentTypes", new SubmoduleInfo(HomeworkAndAssignment_SettingsAssignmentTypes.All, HomeworkAndAssignment_SettingsAssignmentTypes.DisplayNames) },
+			{ "Academics.HomeworkAndAssignment.Settings.RubricConfig", new SubmoduleInfo(HomeworkAndAssignment_SettingsRubricConfig.All, HomeworkAndAssignment_SettingsRubricConfig.DisplayNames) },
 
 			// Examination submodules (defined in Academics.Examination.cs)
 			{ "Academics.Examination.ScheduleExam", new SubmoduleInfo(Examination_ScheduleExam.All, Examination_ScheduleExam.DisplayNames) },

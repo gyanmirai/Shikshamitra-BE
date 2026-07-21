@@ -60,6 +60,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
+                    b.Property<string>("EvaluationInstructions")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -2881,14 +2885,29 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<Guid>("StandardId")
+                    b.Property<string>("PerformanceLevelsJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ScoringModel")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<Guid?>("StandardId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("SubjectId")
+                    b.Property<string>("StudentInstructions")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid?>("SubjectId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("TagsJson")
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
@@ -2908,15 +2927,24 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(1);
 
+                    b.Property<int>("Visibility")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3);
+
                     b.HasKey("Id");
 
                     b.HasIndex("AssignmentId");
 
                     b.HasIndex("HomeworkId");
 
+                    b.HasIndex("ScoringModel");
+
                     b.HasIndex("Status");
 
                     b.HasIndex("StandardId", "SubjectId");
+
+                    b.HasIndex("Visibility");
 
                     b.ToTable("AppAssessmentRubrics", (string)null);
                 });

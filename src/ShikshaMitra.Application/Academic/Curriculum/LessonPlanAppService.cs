@@ -178,6 +178,11 @@ public class LessonPlanAppService(
             input.PlannedCompletionPercentage
         );
 
+        if (input.Status == LessonPlanStatus.Submitted)
+        {
+            lessonPlan.Submit();
+        }
+
         var inserted = await lessonPlanRepository.InsertAsync(lessonPlan, autoSave: true);
         return (await MapLessonPlansAsync(new[] { inserted })).Single();
     }

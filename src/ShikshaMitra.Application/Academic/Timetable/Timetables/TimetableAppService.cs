@@ -367,10 +367,6 @@ public class TimetableAppService(
                 standardId,
                 divisionId);
         }
-        else
-        {
-            EnsureTimetableEditable(timetable);
-        }
 
         ReplaceSlotsFromInput(timetable, input);
 

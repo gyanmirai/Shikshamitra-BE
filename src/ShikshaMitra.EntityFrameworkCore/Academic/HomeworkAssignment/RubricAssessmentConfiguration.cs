@@ -14,10 +14,18 @@ public class AssessmentRubricConfiguration : IEntityTypeConfiguration<Assessment
 		);
 		builder.ConfigureByConvention();
 
-		builder.Property(x => x.StandardId).IsRequired();
-		builder.Property(x => x.SubjectId).IsRequired();
+		builder.Property(x => x.StandardId).IsRequired(false);
+		builder.Property(x => x.SubjectId).IsRequired(false);
+		builder.Property(x => x.IsTemplate).IsRequired().HasDefaultValue(false);
+		builder.Property(x => x.AppliesToWorkType).HasConversion<int>().IsRequired(false);
+		builder.Property(x => x.ScoringModel).HasConversion<int>().IsRequired().HasDefaultValue(RubricScoringModel.PointsBased);
+		builder.Property(x => x.Visibility).HasConversion<int>().IsRequired().HasDefaultValue(RubricVisibility.Institution);
 		builder.Property(x => x.Title).IsRequired().HasMaxLength(256);
 		builder.Property(x => x.Description).HasMaxLength(1024);
+		builder.Property(x => x.EvaluationInstructions).HasMaxLength(2048);
+		builder.Property(x => x.StudentInstructions).HasMaxLength(2048);
+		builder.Property(x => x.TagsJson);
+		builder.Property(x => x.PerformanceLevelsJson);
 		builder.Property(x => x.TotalMarks).HasPrecision(10, 2);
 		builder.Property(x => x.Version).IsRequired().HasDefaultValue(1);
 		builder.Property(x => x.Status).HasConversion<int>().IsRequired();
@@ -29,8 +37,15 @@ public class AssessmentRubricConfiguration : IEntityTypeConfiguration<Assessment
 			.OnDelete(DeleteBehavior.Cascade);
 
 		builder.HasIndex(x => new { x.StandardId, x.SubjectId });
+		builder.HasIndex(x => x.AcademicMediumId);
 		builder.HasIndex(x => x.HomeworkId);
 		builder.HasIndex(x => x.AssignmentId);
+		builder.HasIndex(x => x.HomeworkTypeId);
+		builder.HasIndex(x => x.AssignmentTypeId);
+		builder.HasIndex(x => x.SourceTemplateId);
+		builder.HasIndex(x => x.IsTemplate);
+		builder.HasIndex(x => x.ScoringModel);
+		builder.HasIndex(x => x.Visibility);
 		builder.HasIndex(x => x.Status);
 	}
 }

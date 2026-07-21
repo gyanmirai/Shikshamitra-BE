@@ -20621,11 +20621,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<int>("ExamReadinessFields")
-                        .HasColumnType("integer");
-
                     b.Property<bool>("EntranceExamRequired")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("ExamReadinessFields")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -20641,10 +20641,9 @@ namespace ShikshaMitra.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
 
-                    b.Property<string>("JourneyRulesJson")
-                        .IsRequired()
-                        .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
+                    b.Property<string>("JourneyLockReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<bool>("JourneyLocked")
                         .HasColumnType("boolean");
@@ -20655,9 +20654,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("JourneyLockedByUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("JourneyLockReason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+                    b.Property<string>("JourneyRulesJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
@@ -23062,15 +23062,15 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("SlaTargetHours")
                         .HasColumnType("integer");
 
+                    b.Property<string>("StageKey")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("StageName")
                         .IsRequired()
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
-
-                    b.Property<string>("StageKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("SystemStage")
                         .HasColumnType("integer");

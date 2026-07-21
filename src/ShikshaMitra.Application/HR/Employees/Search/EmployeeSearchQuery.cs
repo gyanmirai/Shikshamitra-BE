@@ -17,6 +17,11 @@ public static class EmployeeSearchQuery
 			Enum.TryParse<EmployeeStatusType>(input.Status, true, out var statusType))
 		{
 			queryable = queryable.Where(e => e.EmployeeStatusType == statusType);
+			if (statusType == EmployeeStatusType.Active)
+			{
+				var today = DateOnly.FromDateTime(DateTime.UtcNow);
+				queryable = queryable.Where(e => e.DateOfJoining == null || e.DateOfJoining <= today);
+			}
 		}
 
 		if (input.IsTeaching.HasValue)

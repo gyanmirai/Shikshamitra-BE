@@ -8,6 +8,12 @@ public class LectureSlotListDto : EntityDto<Guid>
 {
     public Guid StandardId { get; set; }
     public string StandardName { get; set; } = string.Empty;
+    public Guid? ShiftId { get; set; }
+    public string? ShiftName { get; set; }
+    public TimeOnly? ShiftStartTime { get; set; }
+    public TimeOnly? ShiftEndTime { get; set; }
+    public string? ShiftTimingLabel { get; set; }
+    public bool HasClassShift { get; set; }
     public List<SlotConfigurationSummaryDto> SlotConfigurations { get; set; } = [];
 
     public int TotalSlotsPerDay { get; set; }

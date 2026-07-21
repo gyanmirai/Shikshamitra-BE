@@ -15,7 +15,6 @@ public class RubricAssessmentAppService(
 	IRepository<AssessmentRubricCriterion, Guid> criterionRepository,
 	IRepository<RubricEvaluation, Guid> evaluationRepository,
 	IRepository<RubricCriterionScore, Guid> scoreRepository,
-	IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
 	IRepository<AssignmentEntity, Guid> assignmentRepository,
 	IRepository<StudentSubmissionEntity, Guid> submissionRepository
 ) : ApplicationService, IRubricAssessmentAppService
@@ -42,10 +41,15 @@ public class RubricAssessmentAppService(
 
 	public async Task<List<AssessmentRubricDto>> GetListAsync(GetRubricsInput input)
 	{
+		if (input.HomeworkId.HasValue)
+		{
+			return [];
+		}
+
 		var rubrics = await rubricRepository.GetListAsync(r =>
 			(!input.StandardId.HasValue || r.StandardId == input.StandardId.Value) &&
 			(!input.SubjectId.HasValue || r.SubjectId == input.SubjectId.Value) &&
-			(!input.HomeworkId.HasValue || r.HomeworkId == input.HomeworkId.Value) &&
+			!r.HomeworkId.HasValue &&
 			(!input.AssignmentId.HasValue || r.AssignmentId == input.AssignmentId.Value) &&
 			(!input.Status.HasValue || r.Status == input.Status.Value));
 
@@ -117,6 +121,7 @@ public class RubricAssessmentAppService(
 		{
 			throw new BusinessException("AssessmentRubric:RubricMustBePublished");
 		}
+		EnsureRubricIsNotLinkedToHomework(rubric);
 
 		var submission = await submissionRepository.GetAsync(input.StudentSubmissionId);
 		EnsureSubmissionMatchesRubric(rubric, submission, input.StudentId);
@@ -189,6 +194,7 @@ public class RubricAssessmentAppService(
 		var evaluation = await evaluationRepository.GetAsync(evaluationId);
 		await LoadScoresAsync([evaluation]);
 		var rubric = await rubricRepository.GetAsync(evaluation.RubricId);
+		EnsureRubricIsNotLinkedToHomework(rubric);
 		var submission = await submissionRepository.GetAsync(evaluation.StudentSubmissionId);
 
 		evaluation.Approve();
@@ -213,11 +219,7 @@ public class RubricAssessmentAppService(
 
 		if (input.HomeworkId.HasValue)
 		{
-			var homework = await homeworkRepository.GetAsync(input.HomeworkId.Value);
-			if (homework.StandardId != input.StandardId || homework.SubjectId != input.SubjectId)
-			{
-				throw new BusinessException("AssessmentRubric:TaskDoesNotMatchSubject");
-			}
+			throw new BusinessException("AssessmentRubric:HomeworkRubricNotAllowed");
 		}
 
 		if (input.AssignmentId.HasValue)
@@ -227,6 +229,14 @@ public class RubricAssessmentAppService(
 			{
 				throw new BusinessException("AssessmentRubric:TaskDoesNotMatchSubject");
 			}
+		}
+	}
+
+	private static void EnsureRubricIsNotLinkedToHomework(AssessmentRubric rubric)
+	{
+		if (rubric.HomeworkId.HasValue)
+		{
+			throw new BusinessException("AssessmentRubric:HomeworkRubricNotAllowed");
 		}
 	}
 

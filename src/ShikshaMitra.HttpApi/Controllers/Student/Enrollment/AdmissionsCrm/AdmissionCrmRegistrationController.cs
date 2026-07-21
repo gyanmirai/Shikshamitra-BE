@@ -10,8 +10,15 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [RemoteService(Name = "Default")]
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmRegistrationController(
-	IAdmissionCrmRegistrationAppService registrationAppService) : AbpControllerBase
+	IAdmissionCrmRegistrationAppService registrationAppService,
+	IAdmissionCrmLeadAppService leadAppService) : AbpControllerBase
 {
+	[HttpPost("{academicYearId}/registrations/direct")]
+	public Task<AdmissionCrmDirectRegistrationResultDto> CreateDirectRegistrationAsync(
+		Guid academicYearId,
+		[FromBody] CreateDirectAdmissionCrmRegistrationDto input) =>
+		leadAppService.CreateDirectRegistrationAsync(academicYearId, input);
+
 	[HttpGet("{academicYearId}/configuration/registration-templates")]
 	public Task<PagedResultDto<AdmissionCrmRegistrationTemplateDto>> GetTemplatesAsync(
 		Guid academicYearId,
@@ -75,6 +82,18 @@ public class AdmissionCrmRegistrationController(
 	[HttpGet("leads/{leadId}/registrations/current")]
 	public Task<AdmissionCrmRegistrationApplicationDto> GetCurrentApplicationByLeadAsync(Guid leadId) =>
 		registrationAppService.GetCurrentApplicationByLeadAsync(leadId);
+
+	[HttpPut("registrations/{id}/staff-responses")]
+	public Task<AdmissionCrmRegistrationApplicationDto> SaveStaffResponsesAsync(
+		Guid id,
+		[FromBody] SaveAdmissionCrmRegistrationResponsesDto input) =>
+		registrationAppService.SaveStaffResponsesAsync(id, input);
+
+	[HttpPost("registrations/{id}/staff-submit")]
+	public Task<AdmissionCrmRegistrationApplicationDto> SubmitStaffResponsesAsync(
+		Guid id,
+		[FromBody] SaveAdmissionCrmRegistrationResponsesDto input) =>
+		registrationAppService.SubmitStaffResponsesAsync(id, input);
 
 	[HttpPost("registrations/{id}/return-for-correction")]
 	public Task<AdmissionCrmRegistrationApplicationDto> ReturnForCorrectionAsync(

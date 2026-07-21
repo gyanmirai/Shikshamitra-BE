@@ -29,7 +29,9 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 		DateTimeOffset startDate,
 		DateTimeOffset endDate,
 		string description,
-		bool halfDay = false)
+		bool halfDay = false,
+		bool autoApprove = false,
+		decimal approvedLeaveUnits = 0m)
 	{
 		var leaveId = guidGenerator.Create();
 		var tenantId = CurrentTenant.Id;
@@ -45,6 +47,12 @@ public class EmployeeLeaveManager(IEmployeeLeaveRepository employeeLeaveReposito
 			endDate,
 			description,
 			halfDay);
+
+		if (autoApprove)
+		{
+			leave.SetApprovalPayrollSnapshot(paidType, approvedLeaveUnits);
+			leave.UpdateLeaveStatus(EmployeeLeaveStatusType.Approved, null);
+		}
 
 		return Task.FromResult(leave);
 	}

@@ -23,7 +23,7 @@ public class AdmissionCrmBulkOperationsApi_Tests : ShikshaMitraApiTestBase
 	{
 		var lead = await CreateLeadAsync();
 		var missingLeadId = Guid.NewGuid();
-		var ownerId = Guid.NewGuid();
+		var ownerId = (await GetEligibleCrmOwnersAsync())[0].Id;
 		var response = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/bulk/lead-owners",
 			new AdmissionCrmBulkAssignOwnersDto
@@ -64,6 +64,39 @@ public class AdmissionCrmBulkOperationsApi_Tests : ShikshaMitraApiTestBase
 			new AdmissionCrmBulkArchiveDto { LeadIds = oversized, Reason = "Capacity guard test." }, JsonOptions);
 		oversizedResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		(await oversizedResponse.Content.ReadAsStringAsync()).ShouldContain("AdmissionCrm:InvalidBulkBatch");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Validate_And_Isolate_Bulk_Exam_Attendance_Items()
+	{
+		var invalidStatusResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/bulk/exams/attendance",
+			new AdmissionCrmBulkExamAttendanceDto
+			{
+				ExamRecordIds = [Guid.NewGuid()],
+				AttendanceStatus = AdmissionCrmExamAttendanceStatus.NotMarked
+			}, JsonOptions);
+		invalidStatusResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await invalidStatusResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:InvalidBulkExamAttendanceStatus");
+
+		var missingExamId = Guid.NewGuid();
+		var missingExamResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/bulk/exams/attendance",
+			new AdmissionCrmBulkExamAttendanceDto
+			{
+				ExamRecordIds = [missingExamId],
+				AttendanceStatus = AdmissionCrmExamAttendanceStatus.Present
+			}, JsonOptions);
+		missingExamResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await missingExamResponse.Content.ReadAsStringAsync());
+		var result = (await missingExamResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmBulkOperationResultDto>(JsonOptions))!;
+		result.RequestedCount.ShouldBe(1);
+		result.SucceededCount.ShouldBe(0);
+		result.FailedCount.ShouldBe(1);
+		result.Items.Single().EntityId.ShouldBe(missingExamId);
+		result.Items.Single().Success.ShouldBeFalse();
 	}
 
 	private async Task<AdmissionCrmLeadDto> CreateLeadAsync()

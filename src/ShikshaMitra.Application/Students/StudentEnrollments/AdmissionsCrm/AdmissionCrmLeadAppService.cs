@@ -6,10 +6,15 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
@@ -37,6 +42,10 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 	private readonly IAdmissionCrmRegistrationAppService _registrationAppService;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 	private readonly StudentEnrollmentManager _studentEnrollmentManager;
+	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
+	private readonly IRepository<Standard, Guid> _standardRepository;
+	private readonly IRepository<EducationMediumStage, Guid> _mediumStageRepository;
+	private readonly IRepository<EducationMedium, Guid> _mediumRepository;
 
 	public AdmissionCrmLeadAppService(
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
@@ -52,7 +61,11 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		IAdmissionCrmCommunicationAppService communicationAppService,
 		IAdmissionCrmRegistrationAppService registrationAppService,
 		StudentScopeAccessService studentScopeAccessService,
-		StudentEnrollmentManager studentEnrollmentManager)
+		StudentEnrollmentManager studentEnrollmentManager,
+		AdmissionCrmStaffEligibilityService staffEligibilityService,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<EducationMediumStage, Guid> mediumStageRepository,
+		IRepository<EducationMedium, Guid> mediumRepository)
 	{
 		_leadRepository = leadRepository;
 		_inquirySourceRepository = inquirySourceRepository;
@@ -68,6 +81,10 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		_registrationAppService = registrationAppService;
 		_studentScopeAccessService = studentScopeAccessService;
 		_studentEnrollmentManager = studentEnrollmentManager;
+		_staffEligibilityService = staffEligibilityService;
+		_standardRepository = standardRepository;
+		_mediumStageRepository = mediumStageRepository;
+		_mediumRepository = mediumRepository;
 	}
 
 	public async Task<AdmissionCrmLeadDto> CreateAsync(Guid academicYearId, CreateAdmissionCrmLeadDto input)
@@ -75,6 +92,13 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
 			academicYearId,
 			nameof(CreateAsync));
+		if (input.TargetStandardId.HasValue)
+		{
+			await _studentScopeAccessService.EnsureCanAccessStandardAsync(
+				input.TargetStandardId.Value,
+				nameof(CreateAsync));
+			await EnsureAcademicPlacementAsync(input);
+		}
 		var configuration = await GetCycleConfigurationOrDefaultAsync(academicYearId);
 		var channelSetting = AdmissionCrmChannelSettingsSerializer.GetChannelSetting(
 			configuration.ChannelSettingsJson,
@@ -116,7 +140,8 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			input.TargetStandardId,
 			input.DesiredClassName,
 			input.Notes,
-			Clock.Now);
+			Clock.Now,
+			input.IntendedRouteType);
 		lead.UpdateScore(AdmissionCrmLeadScoreCalculator.Calculate(lead, scoringRules));
 		IReadOnlyCollection<AdmissionInquiryLead> existingLeads = Array.Empty<AdmissionInquiryLead>();
 		if (routingSettings.IsEnabled && routingSettings.OwnerPoolUserIds.Count > 0)
@@ -131,9 +156,14 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			lead,
 			routingSettings,
 			existingLeads) ?? channelSetting.DefaultOwnerUserId;
-		if (routedOwnerUserId.HasValue)
+		if (routedOwnerUserId.HasValue &&
+			await _staffEligibilityService.IsOwnerEligibleAsync(routedOwnerUserId.Value, academicYearId))
 		{
 			lead.AssignOwner(routedOwnerUserId.Value);
+		}
+		else
+		{
+			routedOwnerUserId = null;
 		}
 
 		await _leadRepository.InsertAsync(lead, autoSave: true);
@@ -183,6 +213,37 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			});
 
 		return ToDto(lead, duplicates);
+	}
+
+	[UnitOfWork]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add)]
+	public async Task<AdmissionCrmDirectRegistrationResultDto> CreateDirectRegistrationAsync(
+		Guid academicYearId,
+		CreateDirectAdmissionCrmRegistrationDto input)
+	{
+		await AuthorizationService.CheckAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm);
+
+		input.Applicant.Channel = AdmissionInquiryChannel.ManualBackOffice;
+		var created = await CreateAsync(academicYearId, input.Applicant);
+		var lead = await GetLeadForCurrentTenantAsync(created.Id, nameof(CreateDirectRegistrationAsync));
+		lead.ChangeStage(AdmissionInquiryStage.Eligible);
+		await _leadRepository.UpdateAsync(lead, autoSave: false);
+		await AddTimelineEventAsync(
+			lead,
+			AdmissionCrmTimelineEventType.StageChanged,
+			"Direct registration started",
+			"The applicant entered Enrollment at registration through an authorized staff workflow.",
+			lead.Id);
+
+		var registration = await _registrationAppService.IssueAsync(lead.Id, input.Registration);
+		await CurrentUnitOfWork!.SaveChangesAsync();
+
+		return new AdmissionCrmDirectRegistrationResultDto
+		{
+			Applicant = ToDto(lead, created.LikelyDuplicates),
+			Registration = registration
+		};
 	}
 
 	public async Task<AdmissionCrmLeadDto> GetAsync(Guid id)
@@ -243,6 +304,31 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		{
 			query = query.Where(x => x.Priority == input.Priority.Value);
 		}
+		if (input.IntendedRouteType.HasValue)
+		{
+			query = query.Where(x => x.IntendedRouteType == input.IntendedRouteType.Value);
+		}
+		if (!string.IsNullOrWhiteSpace(input.DesiredClassName))
+		{
+			var desiredClass = input.DesiredClassName.Trim().ToLowerInvariant();
+			query = query.Where(x => x.DesiredClassName != null && x.DesiredClassName.ToLower().Contains(desiredClass));
+		}
+
+		if (input.AcademicMediumId.HasValue)
+		{
+			await _studentScopeAccessService.EnsureCanAccessMediumAsync(
+				input.AcademicMediumId.Value,
+				nameof(GetListAsync));
+			var stageQueryable = await _mediumStageRepository.GetQueryableAsync();
+			var stageIds = stageQueryable
+				.Where(x => x.EducationMediumId == input.AcademicMediumId.Value)
+				.Select(x => x.Id);
+			var standardQueryable = await _standardRepository.GetQueryableAsync();
+			var standardIds = standardQueryable
+				.Where(x => stageIds.Contains(x.EducationMediumStageId))
+				.Select(x => x.Id);
+			query = query.Where(x => !x.TargetStandardId.HasValue || standardIds.Contains(x.TargetStandardId.Value));
+		}
 
 		if (!string.IsNullOrWhiteSpace(input.FilterText))
 		{
@@ -257,11 +343,28 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 				 x.NormalizedPrimaryContactNo != null &&
 				 x.NormalizedPrimaryContactNo.Contains(normalizedPhone)));
 		}
+		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
+		{
+			var applicant = input.ApplicantSearch.Trim().ToLowerInvariant();
+			query = query.Where(x =>
+				(x.FirstName != null && x.FirstName.ToLower().Contains(applicant)) ||
+				(x.LastName != null && x.LastName.ToLower().Contains(applicant)) ||
+				(x.ParentGuardianName != null && x.ParentGuardianName.ToLower().Contains(applicant)));
+		}
+		if (!string.IsNullOrWhiteSpace(input.RegistrationFormNumber))
+		{
+			var formNumber = input.RegistrationFormNumber.Trim().ToLowerInvariant();
+			query = query.Where(x => x.RegistrationFormNumber != null &&
+				x.RegistrationFormNumber.ToLower().Contains(formNumber));
+		}
+		if (input.LastActivityFrom.HasValue)
+			query = query.Where(x => x.LastActivityTime >= input.LastActivityFrom.Value);
+		if (input.LastActivityUntil.HasValue)
+			query = query.Where(x => x.LastActivityTime < input.LastActivityUntil.Value.AddDays(1));
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var leads = await AsyncExecuter.ToListAsync(
-			query
-				.OrderByDescending(x => x.CreationTime)
+			ApplyLeadSorting(query, input.Sorting)
 				.Skip(input.SkipCount)
 				.Take(input.MaxResultCount));
 		var duplicatesByLeadId = await FindDuplicatesForLeadsAsync(academicYearId, leads);
@@ -295,6 +398,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 	public async Task<AdmissionCrmLeadDto> AssignOwnerAsync(Guid leadId, AssignAdmissionCrmLeadOwnerDto input)
 	{
 		var lead = await GetLeadForCurrentTenantAsync(leadId, nameof(AssignOwnerAsync));
+		await _staffEligibilityService.EnsureOwnerEligibleAsync(input.OwnerUserId, lead.AcademicYearId);
 		lead.AssignOwner(input.OwnerUserId);
 		await _leadRepository.UpdateAsync(lead, autoSave: true);
 		await AddTimelineEventAsync(
@@ -366,7 +470,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			input.Reason,
 			nameof(input.Reason),
 			maxLength: AdmissionCrmConsts.MaxNotesLength);
-		if (lead.Stage is AdmissionInquiryStage.ExamScheduled
+		if (!input.OverrideWorkflowGuards && lead.Stage is AdmissionInquiryStage.ExamScheduled
 		    or AdmissionInquiryStage.ExamCompleted
 		    or AdmissionInquiryStage.Eligible
 		    or AdmissionInquiryStage.Waitlisted
@@ -377,7 +481,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 				.WithData("CurrentStage", lead.Stage);
 		}
 
-		if (input.Stage is AdmissionInquiryStage.ExamScheduled
+		if (!input.OverrideWorkflowGuards && input.Stage is AdmissionInquiryStage.ExamScheduled
 		    or AdmissionInquiryStage.ExamCompleted
 		    or AdmissionInquiryStage.Eligible
 		    or AdmissionInquiryStage.Waitlisted
@@ -1050,6 +1154,8 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		CreateAdmissionCrmFollowUpTaskDto input)
 	{
 		var lead = await GetLeadForCurrentTenantAsync(leadId, nameof(CreateTaskAsync));
+		var assignedUserId = input.AssignedUserId ?? lead.OwnerUserId;
+		await _staffEligibilityService.EnsureTaskAssigneeEligibleAsync(assignedUserId);
 		var task = new AdmissionCrmFollowUpTask(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
@@ -1057,7 +1163,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			lead.AcademicYearId,
 			input.Title,
 			input.DueAt,
-			input.AssignedUserId ?? lead.OwnerUserId,
+			assignedUserId,
 			input.Notes);
 
 		await _taskRepository.InsertAsync(task, autoSave: true);
@@ -1287,6 +1393,13 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		CompleteAdmissionCrmFollowUpTaskDto input)
 	{
 		var task = await GetTaskForCurrentTenantAsync(taskId, nameof(CompleteTaskAsync));
+		var currentUserId = CurrentUser.Id ?? throw new AbpAuthorizationException("Authenticated user required.");
+		var canSupervise = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageOperationsQueues);
+		if (task.AssignedUserId != currentUserId && !canSupervise)
+		{
+			throw new AbpAuthorizationException("Only the assigned staff member or an operations supervisor can complete this task.");
+		}
 		task.Complete(Clock.Now, input.CompletionNotes);
 		await _taskRepository.UpdateAsync(task, autoSave: true);
 		await AddTimelineEventAsync(
@@ -1344,6 +1457,23 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			CurrentTenant.Id,
 			academicYearId,
 			"Default Admission Cycle");
+	}
+
+	private async Task EnsureAcademicPlacementAsync(CreateAdmissionCrmLeadDto input)
+	{
+		if (!input.TargetStandardId.HasValue) return;
+
+		var standard = await _standardRepository.GetAsync(input.TargetStandardId.Value);
+		var stage = await _mediumStageRepository.GetAsync(standard.EducationMediumStageId);
+		var medium = await _mediumRepository.GetAsync(stage.EducationMediumId);
+		if ((input.AcademicMediumId.HasValue && input.AcademicMediumId.Value != medium.Id) ||
+			(input.AcademicBoardId.HasValue && input.AcademicBoardId.Value != medium.EducationBoardId))
+		{
+			throw new BusinessException("AdmissionCrm:AcademicPlacementMismatch")
+				.WithData("TargetStandardId", standard.Id)
+				.WithData("AcademicMediumId", input.AcademicMediumId)
+				.WithData("AcademicBoardId", input.AcademicBoardId);
+		}
 	}
 
 	private async Task<IReadOnlyList<AdmissionCrmApplicantChecklistProgressDto>> BuildApplicantChecklistProgressDtosAsync(
@@ -1743,6 +1873,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			PrimaryContactNo = lead.PrimaryContactNo,
 			Email = lead.Email,
 			AdmissionIntent = lead.AdmissionIntent,
+			IntendedRouteType = lead.IntendedRouteType,
 			TargetStandardId = lead.TargetStandardId,
 			DesiredClassName = lead.DesiredClassName,
 			Stage = lead.Stage,
@@ -2105,6 +2236,40 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 				.Trim()
 				.ToLowerInvariant()
 				.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+	}
+
+	private static IOrderedQueryable<AdmissionInquiryLead> ApplyLeadSorting(
+		IQueryable<AdmissionInquiryLead> query,
+		string? sorting)
+	{
+		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return field switch
+		{
+			"applicantname" => descending
+				? query.OrderByDescending(x => x.FirstName).ThenByDescending(x => x.LastName)
+				: query.OrderBy(x => x.FirstName).ThenBy(x => x.LastName),
+			"stage" => descending ? query.OrderByDescending(x => x.Stage) : query.OrderBy(x => x.Stage),
+			"registrationformnumber" => descending
+				? query.OrderByDescending(x => x.RegistrationFormNumber)
+				: query.OrderBy(x => x.RegistrationFormNumber),
+			"channel" => descending ? query.OrderByDescending(x => x.Channel) : query.OrderBy(x => x.Channel),
+			"desiredclassname" => descending
+				? query.OrderByDescending(x => x.DesiredClassName)
+				: query.OrderBy(x => x.DesiredClassName),
+			"intendedroutetype" => descending
+				? query.OrderByDescending(x => x.IntendedRouteType)
+				: query.OrderBy(x => x.IntendedRouteType),
+			"owneruserid" => descending
+				? query.OrderByDescending(x => x.OwnerUserId)
+				: query.OrderBy(x => x.OwnerUserId),
+			"priority" => descending ? query.OrderByDescending(x => x.Priority) : query.OrderBy(x => x.Priority),
+			"leadscore" => descending ? query.OrderByDescending(x => x.LeadScore) : query.OrderBy(x => x.LeadScore),
+			"lastactivitytime" => descending
+				? query.OrderByDescending(x => x.LastActivityTime)
+				: query.OrderBy(x => x.LastActivityTime),
+			_ => query.OrderByDescending(x => x.LastActivityTime).ThenBy(x => x.Id)
+		};
 	}
 
 	private static string? NormalizePhone(string? value)

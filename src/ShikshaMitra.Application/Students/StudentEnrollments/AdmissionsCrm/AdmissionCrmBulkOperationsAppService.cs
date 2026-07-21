@@ -20,23 +20,32 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	private readonly IAdmissionCrmLeadAppService _leadService;
 	private readonly IAdmissionCrmFinalAdmissionAppService _finalAdmissionService;
 	private readonly IAdmissionCrmActivationAppService _activationService;
+	private readonly IAdmissionCrmEntranceExamAppService _entranceExamService;
 	private readonly IAdmissionCrmCommunicationAppService _communicationService;
 	private readonly IRepository<AdmissionCrmActivation, Guid> _activationRepository;
+	private readonly IRepository<AdmissionCrmEntranceExamRecord, Guid> _entranceExamRepository;
+	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
 	private readonly StudentScopeAccessService _scopeAccess;
 
 	public AdmissionCrmBulkOperationsAppService(
 		IAdmissionCrmLeadAppService leadService,
 		IAdmissionCrmFinalAdmissionAppService finalAdmissionService,
 		IAdmissionCrmActivationAppService activationService,
+		IAdmissionCrmEntranceExamAppService entranceExamService,
 		IAdmissionCrmCommunicationAppService communicationService,
 		IRepository<AdmissionCrmActivation, Guid> activationRepository,
+		IRepository<AdmissionCrmEntranceExamRecord, Guid> entranceExamRepository,
+		IRepository<AdmissionInquiryLead, Guid> leadRepository,
 		StudentScopeAccessService scopeAccess)
 	{
 		_leadService = leadService;
 		_finalAdmissionService = finalAdmissionService;
 		_activationService = activationService;
+		_entranceExamService = entranceExamService;
 		_communicationService = communicationService;
 		_activationRepository = activationRepository;
+		_entranceExamRepository = entranceExamRepository;
+		_leadRepository = leadRepository;
 		_scopeAccess = scopeAccess;
 	}
 
@@ -66,12 +75,53 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	}
 
 	[UnitOfWork(IsDisabled = true)]
+	public async Task<AdmissionCrmBulkOperationResultDto> MarkExamAttendanceAsync(
+		Guid academicYearId,
+		AdmissionCrmBulkExamAttendanceDto input)
+	{
+		await EnsureBatchAsync(academicYearId, input.ExamRecordIds, nameof(MarkExamAttendanceAsync));
+		if (!Enum.IsDefined(input.AttendanceStatus) || input.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked)
+			throw new BusinessException("AdmissionCrm:InvalidBulkExamAttendanceStatus");
+		return await RunAsync(input.ExamRecordIds.Distinct().ToList(), x => x, async examRecordId =>
+		{
+			var exam = await _entranceExamRepository.GetAsync(examRecordId);
+			if (exam.AcademicYearId != academicYearId)
+				throw new BusinessException("AdmissionCrm:BulkAcademicYearMismatch");
+			var result = await _entranceExamService.MarkAttendanceAsync(
+				examRecordId,
+				new MarkAdmissionCrmExamAttendanceDto { AttendanceStatus = input.AttendanceStatus });
+			return result.Id.ToString();
+		});
+	}
+
+	[UnitOfWork(IsDisabled = true)]
 	public async Task<AdmissionCrmBulkOperationResultDto> ChangeStageAsync(Guid academicYearId, AdmissionCrmBulkChangeStageDto input)
 	{
 		await EnsureBatchAsync(academicYearId, input.LeadIds, nameof(ChangeStageAsync));
+		if (input.OverrideProtectedStages && string.IsNullOrWhiteSpace(input.Reason))
+		{
+			throw new BusinessException("AdmissionCrm:BulkProtectedStageOverrideReasonRequired");
+		}
 		return await RunAsync(input.LeadIds.Distinct().ToList(), x => x, async leadId =>
 		{
-			var result = await _leadService.ChangeStageAsync(leadId, new ChangeAdmissionCrmLeadStageDto { Stage = input.Stage, Reason = input.Reason });
+			var lead = await _leadRepository.GetAsync(leadId);
+			if (lead.TenantId != CurrentTenant.Id || lead.AcademicYearId != academicYearId)
+			{
+				throw new BusinessException("AdmissionCrm:BulkAcademicYearMismatch");
+			}
+			if (!input.OverrideProtectedStages && IsProtectedBulkStage(lead.Stage))
+			{
+				throw new BusinessException("AdmissionCrm:BulkProtectedStage")
+					.WithData("Stage", lead.Stage);
+			}
+			var result = await _leadService.ChangeStageAsync(
+				leadId,
+				new ChangeAdmissionCrmLeadStageDto
+				{
+					Stage = input.Stage,
+					Reason = input.Reason,
+					OverrideWorkflowGuards = input.OverrideProtectedStages
+				});
 			return result.Id.ToString();
 		});
 	}
@@ -233,4 +283,13 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		FailedCount = items.Count(x => !x.Success),
 		Items = items
 	};
+
+	private static bool IsProtectedBulkStage(AdmissionInquiryStage stage) =>
+		stage is AdmissionInquiryStage.ExamReady
+			or AdmissionInquiryStage.ExamScheduled
+			or AdmissionInquiryStage.ExamCompleted
+			or AdmissionInquiryStage.Eligible
+			or AdmissionInquiryStage.Waitlisted
+			or AdmissionInquiryStage.Rejected
+			or AdmissionInquiryStage.Archived;
 }

@@ -23,19 +23,22 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 	private readonly IRepository<AdmissionInquiryFormTemplate, Guid> _formTemplateRepository;
 	private readonly IRepository<AdmissionCrmMessageTemplate, Guid> _messageTemplateRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
+	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
 
 	public AdmissionCrmConfigurationAppService(
 		IRepository<AdmissionCrmCycleConfiguration, Guid> cycleRepository,
 		IRepository<AdmissionCrmPipelineStage, Guid> stageRepository,
 		IRepository<AdmissionInquiryFormTemplate, Guid> formTemplateRepository,
 		IRepository<AdmissionCrmMessageTemplate, Guid> messageTemplateRepository,
-		StudentScopeAccessService studentScopeAccessService)
+		StudentScopeAccessService studentScopeAccessService,
+		AdmissionCrmStaffEligibilityService staffEligibilityService)
 	{
 		_cycleRepository = cycleRepository;
 		_stageRepository = stageRepository;
 		_formTemplateRepository = formTemplateRepository;
 		_messageTemplateRepository = messageTemplateRepository;
 		_studentScopeAccessService = studentScopeAccessService;
+		_staffEligibilityService = staffEligibilityService;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
@@ -50,11 +53,17 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmCycleConfigurationDto input)
 	{
 		ValidateSlaPolicy(input.SlaPolicy);
+		await _staffEligibilityService.ValidateConfigurationStaffAsync(
+			input.LeadRoutingSettings,
+			input.ChannelSettings,
+			input.JourneyRules,
+			input.SlaPolicy);
 		var configuration = await EnsureSchoolDefaultCycleConfigurationAsync();
 		configuration.Update(
 			input.CycleName,
 			input.IsActive,
 			input.RegistrationFormRequiredBeforeExam,
+			input.EntranceExamRequired,
 			input.StaleAfterDays,
 			input.ArchiveAfterDays,
 			input.DefaultLeadSlaHours,
@@ -87,11 +96,20 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmCycleConfigurationDto input)
 	{
 		ValidateSlaPolicy(input.SlaPolicy);
+		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+			academicYearId,
+			nameof(UpdateCycleConfigurationAsync));
+		await _staffEligibilityService.ValidateConfigurationStaffAsync(
+			input.LeadRoutingSettings,
+			input.ChannelSettings,
+			input.JourneyRules,
+			input.SlaPolicy);
 		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
 		configuration.Update(
 			input.CycleName,
 			input.IsActive,
 			input.RegistrationFormRequiredBeforeExam,
+			input.EntranceExamRequired,
 			input.StaleAfterDays,
 			input.ArchiveAfterDays,
 			input.DefaultLeadSlaHours,
@@ -114,14 +132,40 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public async Task<PagedResultDto<AdmissionCrmPipelineStageDto>> GetPipelineStagesAsync(Guid academicYearId)
 	{
+		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
 		var stages = await EnsurePipelineStagesAsync(academicYearId);
 		var ordered = stages
 			.OrderBy(x => x.DisplayOrder)
 			.ThenBy(x => x.SystemStage)
-			.Select(ToDto)
+			.Select(x => ToDto(x, configuration.JourneyLocked))
 			.ToList();
 
 		return new PagedResultDto<AdmissionCrmPipelineStageDto>(ordered.Count, ordered);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmPipelineStageDto> CreatePipelineStageAsync(
+		Guid academicYearId,
+		CreateAdmissionCrmPipelineStageDto input)
+	{
+		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
+		EnsureJourneyStructureEditable(configuration);
+		await EnsureUniqueStageKeyAsync(academicYearId, input.StageKey, excludeId: null);
+		var allowedNextStagesJson = SerializeAllowedNextStages(input.AllowedNextStages ?? []);
+		var stage = AdmissionCrmPipelineStage.CreateCustom(
+			GuidGenerator.Create(),
+			CurrentTenant.Id,
+			academicYearId,
+			input.StageKey,
+			input.BaseSystemStage,
+			input.StageName,
+			input.DisplayOrder,
+			input.ColorHex,
+			input.SlaTargetHours,
+			input.OwnerResponsibility,
+			allowedNextStagesJson);
+		await _stageRepository.InsertAsync(stage, autoSave: true);
+		return ToDto(stage, configuration.JourneyLocked);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
@@ -130,6 +174,15 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmPipelineStageDto input)
 	{
 		var stage = await GetStageForCurrentTenantAsync(stageId, nameof(UpdatePipelineStageAsync));
+		var configuration = await EnsureCycleConfigurationAsync(stage.AcademicYearId);
+		if (configuration.JourneyLocked &&
+		    (input.StageName != stage.StageName ||
+		     input.DisplayOrder != stage.DisplayOrder ||
+		     input.IsEnabled != stage.IsEnabled ||
+		     input.AllowedNextStages != null))
+		{
+			throw new BusinessException("AdmissionCrm:JourneyLocked");
+		}
 		var allowedNextStagesJson = input.AllowedNextStages is null
 			? stage.AllowedNextStagesJson
 			: SerializeAllowedNextStages(input.AllowedNextStages);
@@ -143,7 +196,29 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 			input.OwnerResponsibility ?? stage.OwnerResponsibility,
 			allowedNextStagesJson);
 		await _stageRepository.UpdateAsync(stage, autoSave: true);
-		return ToDto(stage);
+		return ToDto(stage, configuration.JourneyLocked);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmCycleConfigurationDto> LockJourneyAsync(Guid academicYearId, AdmissionCrmJourneyLockDto input)
+	{
+		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
+		configuration.LockJourney(CurrentUser.Id, Clock.Now, input.Reason);
+		await _cycleRepository.UpdateAsync(configuration, autoSave: true);
+		return ToDto(configuration);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmCycleConfigurationDto> UnlockJourneyAsync(Guid academicYearId, AdmissionCrmJourneyLockDto input)
+	{
+		if (string.IsNullOrWhiteSpace(input.Reason))
+		{
+			throw new BusinessException("AdmissionCrm:JourneyUnlockReasonRequired");
+		}
+		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
+		configuration.UnlockJourney();
+		await _cycleRepository.UpdateAsync(configuration, autoSave: true);
+		return ToDto(configuration);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
@@ -498,6 +573,29 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		return stage;
 	}
 
+	private async Task EnsureUniqueStageKeyAsync(Guid academicYearId, string stageKey, Guid? excludeId)
+	{
+		var normalized = stageKey.Trim().ToUpperInvariant();
+		var queryable = await _stageRepository.GetQueryableAsync();
+		if (await AsyncExecuter.AnyAsync(queryable.Where(x =>
+			    x.TenantId == CurrentTenant.Id &&
+			    x.AcademicYearId == academicYearId &&
+			    x.StageKey == normalized &&
+			    (!excludeId.HasValue || x.Id != excludeId.Value))))
+		{
+			throw new BusinessException("AdmissionCrm:DuplicatePipelineStageKey")
+				.WithData("StageKey", normalized);
+		}
+	}
+
+	private static void EnsureJourneyStructureEditable(AdmissionCrmCycleConfiguration configuration)
+	{
+		if (configuration.JourneyLocked)
+		{
+			throw new BusinessException("AdmissionCrm:JourneyLocked");
+		}
+	}
+
 	private async Task<AdmissionInquiryFormTemplate> GetFormTemplateForCurrentTenantAsync(Guid id, string operation)
 	{
 		var template = await _formTemplateRepository.GetAsync(id);
@@ -631,6 +729,11 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 			CycleName = configuration.CycleName,
 			IsActive = configuration.IsActive,
 			RegistrationFormRequiredBeforeExam = configuration.RegistrationFormRequiredBeforeExam,
+			EntranceExamRequired = configuration.EntranceExamRequired,
+			JourneyLocked = configuration.JourneyLocked,
+			JourneyLockedAt = configuration.JourneyLockedAt,
+			JourneyLockedByUserId = configuration.JourneyLockedByUserId,
+			JourneyLockReason = configuration.JourneyLockReason,
 			StaleAfterDays = configuration.StaleAfterDays,
 			ArchiveAfterDays = configuration.ArchiveAfterDays,
 			DefaultLeadSlaHours = configuration.DefaultLeadSlaHours,
@@ -687,17 +790,20 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		}
 	}
 
-	private static AdmissionCrmPipelineStageDto ToDto(AdmissionCrmPipelineStage stage)
+	private static AdmissionCrmPipelineStageDto ToDto(AdmissionCrmPipelineStage stage, bool journeyLocked)
 	{
 		return new AdmissionCrmPipelineStageDto
 		{
 			Id = stage.Id,
 			AcademicYearId = stage.AcademicYearId,
 			SystemStage = stage.SystemStage,
+			StageKey = stage.StageKey,
+			BaseSystemStage = stage.BaseSystemStage,
 			StageName = stage.StageName,
 			DisplayOrder = stage.DisplayOrder,
 			IsEnabled = stage.IsEnabled,
 			IsSystem = stage.IsSystem,
+			StructureLocked = journeyLocked,
 			ColorHex = stage.ColorHex,
 			SlaTargetHours = stage.SlaTargetHours,
 			OwnerResponsibility = stage.OwnerResponsibility,

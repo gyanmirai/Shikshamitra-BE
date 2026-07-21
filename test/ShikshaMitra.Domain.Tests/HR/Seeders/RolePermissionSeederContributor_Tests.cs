@@ -10,6 +10,13 @@ namespace ShikshaMitra.HR.Seeders;
 
 public class RolePermissionSeederContributor_Tests
 {
+	private const string UserScopeDefault = "ShikshaMitra.UserScope";
+	private const string UserScopeAssign = "ShikshaMitra.UserScope.Assign";
+	private const string UserScopeRevoke = "ShikshaMitra.UserScope.Revoke";
+	private const string UserScopeView = "ShikshaMitra.UserScope.View";
+	private const string UserScopeBulkAssign = "ShikshaMitra.UserScope.BulkAssign";
+	private const string UserScopeManage = "ShikshaMitra.UserScope.Manage";
+
 	[Fact]
 	public void HR_Manager_Should_Have_Read_Only_Role_List_Access()
 	{
@@ -23,6 +30,20 @@ public class RolePermissionSeederContributor_Tests
 		hrManagerPermissions
 			.Where(permission => permission.StartsWith("AbpPermissionManagement.", StringComparison.OrdinalIgnoreCase))
 			.ShouldBeEmpty();
+	}
+
+	[Fact]
+	public void HR_Manager_Should_Have_Academic_Permission_Assignment_Access_Without_Global_Management()
+	{
+		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
+		var hrManagerPermissions = rolePermissions["HR Manager"];
+
+		hrManagerPermissions.ShouldContain(UserScopeDefault);
+		hrManagerPermissions.ShouldContain(UserScopeView);
+		hrManagerPermissions.ShouldContain(UserScopeAssign);
+		hrManagerPermissions.ShouldContain(UserScopeRevoke);
+		hrManagerPermissions.ShouldContain(UserScopeBulkAssign);
+		hrManagerPermissions.ShouldNotContain(UserScopeManage);
 	}
 
 	[Fact]

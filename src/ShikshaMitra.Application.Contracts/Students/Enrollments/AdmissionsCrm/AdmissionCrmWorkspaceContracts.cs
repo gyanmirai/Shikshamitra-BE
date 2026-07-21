@@ -15,9 +15,12 @@ public enum AdmissionCrmIntegrationCapabilityState
 public class AdmissionCrmStaffLookupDto
 {
 	public Guid Id { get; set; }
+	public Guid EmployeeId { get; set; }
+	public string EmployeeCode { get; set; } = string.Empty;
 	public string DisplayName { get; set; } = string.Empty;
 	public string UserName { get; set; } = string.Empty;
 	public string? Email { get; set; }
+	public bool IsOwnerEligible { get; set; }
 }
 
 public class AdmissionCrmIntegrationCapabilityDto
@@ -31,6 +34,11 @@ public class AdmissionCrmIntegrationCapabilityDto
 
 public interface IAdmissionCrmWorkspaceAppService : IApplicationService
 {
-	Task<IReadOnlyList<AdmissionCrmStaffLookupDto>> GetStaffAsync(string? filter = null, string? ids = null, int maxResultCount = 20);
+	Task<IReadOnlyList<AdmissionCrmStaffLookupDto>> GetStaffAsync(
+		string? filter = null,
+		string? ids = null,
+		int maxResultCount = 20,
+		Guid? academicYearId = null,
+		bool ownerOnly = false);
 	Task<IReadOnlyList<AdmissionCrmIntegrationCapabilityDto>> GetIntegrationCapabilitiesAsync(Guid academicYearId);
 }

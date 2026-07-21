@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using System.ComponentModel.DataAnnotations;
+using System.IO;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -58,6 +61,32 @@ public class AdmissionCrmDocumentController(
 		[FromBody] ReviewAdmissionCrmApplicantDocumentDto input) =>
 		documentAppService.ReviewAsync(documentId, input);
 
+	[HttpPost("registrations/{registrationApplicationId}/documents")]
+	[Consumes("multipart/form-data")]
+	public async Task<AdmissionCrmApplicantDocumentChecklistDto> UploadFromStaffAsync(
+		Guid registrationApplicationId,
+		[FromForm] AdmissionCrmStaffDocumentUploadRequest request)
+	{
+		const long maximumBytes = 25L * 1024 * 1024;
+		if (request.File == null || request.File.Length == 0 || request.File.Length > maximumBytes)
+			throw new BusinessException("AdmissionCrm:InvalidDocumentContent");
+		await using var stream = request.File.OpenReadStream();
+		await using var memory = new MemoryStream((int)Math.Min(request.File.Length, 1024 * 1024));
+		await stream.CopyToAsync(memory, HttpContext.RequestAborted);
+		if (memory.Length > maximumBytes) throw new BusinessException("AdmissionCrm:DocumentFileSizeExceeded");
+		return await documentAppService.UploadFromStaffAsync(
+			registrationApplicationId,
+			new ProcessedAdmissionCrmApplicantDocumentUploadDto
+			{
+				RequirementKey = request.RequirementKey,
+				FileName = request.File.FileName,
+				ContentType = request.File.ContentType,
+				Size = request.File.Length,
+				Content = memory.ToArray(),
+				ValidUntil = request.ValidUntil
+			});
+	}
+
 	[HttpPost("document-checklists/{assignmentId}/requirements/{requirementKey}/waive")]
 	public Task<AdmissionCrmApplicantDocumentDto> WaiveAsync(
 		Guid assignmentId,
@@ -81,4 +110,13 @@ public class AdmissionCrmDocumentController(
 		var document = await documentAppService.DownloadAsync(documentId);
 		return File(document.Content, document.ContentType, document.FileName);
 	}
+}
+
+public class AdmissionCrmStaffDocumentUploadRequest
+{
+	[Required]
+	public string RequirementKey { get; set; } = string.Empty;
+	public DateTime? ValidUntil { get; set; }
+	[Required]
+	public IFormFile? File { get; set; }
 }

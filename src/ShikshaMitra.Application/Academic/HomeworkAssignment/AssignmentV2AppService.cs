@@ -103,13 +103,18 @@ public class AssignmentV2AppService(
             a => a.AssignmentType
         );
 
+        var today = Clock.Now.Date;
+
         query = query
             .Where(a => a.EducationMediumId == academicMediumId)
             .Where(a => a.StandardId == filter.StandardId)
             .Where(a => a.SubjectId == filter.SubjectId)
             .Where(a => a.DivisionSchedules.Any(s =>
                 s.DivisionId == filter.DivisionId
-                && (!filter.AssignmentDate.HasValue || !s.PublishDate.HasValue || s.PublishDate.Value <= filter.AssignmentDate.Value)));
+                && s.DueDate.Date >= today
+                && (!filter.AssignmentDate.HasValue ||
+                    ((!s.PublishDate.HasValue || s.PublishDate.Value <= filter.AssignmentDate.Value)
+                    && s.DueDate >= filter.AssignmentDate.Value))));
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {

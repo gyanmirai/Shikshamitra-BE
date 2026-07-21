@@ -6,7 +6,9 @@ using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceRegister;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
@@ -19,6 +21,8 @@ public class AttendanceRegisterLookupReader(
 	IRepository<SalarySlip, Guid> salarySlipRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
 	IRepository<Holiday, Guid> holidayRepository,
+	IRepository<WorkCalendarHoliday, Guid> workCalendarHolidayRepository,
+	HrPolicyResolver policyResolver,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
@@ -64,6 +68,71 @@ public class AttendanceRegisterLookupReader(
 		}
 
 		return lookup;
+	}
+
+	internal async Task<Dictionary<(Guid EmployeeId, DateOnly Date), HolidayInfo>> BuildEmployeeHolidayLookupAsync(
+		IEnumerable<Guid> employeeIds,
+		IEnumerable<DateOnly> dates)
+	{
+		var distinctEmployeeIds = employeeIds.Distinct().ToList();
+		var dateList = dates.Distinct().OrderBy(x => x).ToList();
+		if (distinctEmployeeIds.Count == 0 || dateList.Count == 0)
+		{
+			return new Dictionary<(Guid EmployeeId, DateOnly Date), HolidayInfo>();
+		}
+
+		var result = new Dictionary<(Guid EmployeeId, DateOnly Date), HolidayInfo>();
+		var start = dateList.First();
+		var end = dateList.Last();
+		var requestedDates = dateList.ToHashSet();
+		var centralHolidayLookup = await BuildHolidayLookupAsync(dateList);
+		var query = await workCalendarHolidayRepository.GetQueryableAsync();
+
+		foreach (var employeeId in distinctEmployeeIds)
+		{
+			var holidaysByCalendar = new Dictionary<Guid, List<WorkCalendarHoliday>>();
+			foreach (var date in dateList)
+			{
+				HrResolvedPolicies resolved;
+				try
+				{
+					resolved = await policyResolver.ResolveAsync(employeeId, date.ToDateTime(TimeOnly.MinValue));
+				}
+				catch (BusinessException)
+				{
+					if (centralHolidayLookup.TryGetValue(date, out var fallbackHoliday))
+					{
+						result.TryAdd((employeeId, date), fallbackHoliday);
+					}
+					continue;
+				}
+
+				var calendarId = resolved.AttendanceWorkCalendarPolicy.Id;
+				if (!holidaysByCalendar.TryGetValue(calendarId, out var holidays))
+				{
+					holidays = await asyncExecuter.ToListAsync(query.Where(x =>
+						x.WorkCalendarPolicyId == calendarId &&
+						x.IsIncluded &&
+						x.ToDate >= start &&
+						x.FromDate <= end));
+					holidaysByCalendar[calendarId] = holidays;
+				}
+
+				foreach (var holiday in holidays.OrderBy(x => x.FromDate).ThenBy(x => x.HolidayName))
+				{
+					for (var holidayDate = holiday.FromDate; holidayDate <= holiday.ToDate; holidayDate = holidayDate.AddDays(1))
+					{
+						if (requestedDates.Contains(holidayDate) && holidayDate == date)
+						{
+							result.TryAdd((employeeId, date), new HolidayInfo(holiday.HolidayName));
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		return result;
 	}
 
 	internal async Task<Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo>> BuildLockLookupAsync(

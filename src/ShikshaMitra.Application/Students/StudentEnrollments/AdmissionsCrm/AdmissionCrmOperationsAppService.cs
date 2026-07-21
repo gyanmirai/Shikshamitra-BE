@@ -6,10 +6,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
@@ -39,6 +42,10 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 	private readonly IRepository<AdmissionCrmSeatPool, Guid> _seatPoolRepository;
 	private readonly IRepository<AdmissionCrmOperationsSavedView, Guid> _savedViewRepository;
 	private readonly IRepository<AdmissionCrmWorkDelegation, Guid> _delegationRepository;
+	private readonly IRepository<AdmissionCrmFollowUpTask, Guid> _taskRepository;
+	private readonly IRepository<IdentityUser, Guid> _userRepository;
+	private readonly IRepository<Standard, Guid> _standardRepository;
+	private readonly IRepository<EducationMediumStage, Guid> _mediumStageRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 
 	public AdmissionCrmOperationsAppService(
@@ -60,6 +67,10 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		IRepository<AdmissionCrmSeatPool, Guid> seatPoolRepository,
 		IRepository<AdmissionCrmOperationsSavedView, Guid> savedViewRepository,
 		IRepository<AdmissionCrmWorkDelegation, Guid> delegationRepository,
+		IRepository<AdmissionCrmFollowUpTask, Guid> taskRepository,
+		IRepository<IdentityUser, Guid> userRepository,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<EducationMediumStage, Guid> mediumStageRepository,
 		StudentScopeAccessService studentScopeAccessService)
 	{
 		_leadRepository = leadRepository;
@@ -80,7 +91,140 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		_seatPoolRepository = seatPoolRepository;
 		_savedViewRepository = savedViewRepository;
 		_delegationRepository = delegationRepository;
+		_taskRepository = taskRepository;
+		_userRepository = userRepository;
+		_standardRepository = standardRepository;
+		_mediumStageRepository = mediumStageRepository;
 		_studentScopeAccessService = studentScopeAccessService;
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
+	public async Task<AdmissionCrmMyWorkDto> GetMyWorkAsync(
+		Guid academicYearId,
+		GetAdmissionCrmMyWorkInput input)
+	{
+		var userId = CurrentUser.Id ?? throw new AbpAuthorizationException("Authenticated user required.");
+		var data = await LoadDataAsync(academicYearId, nameof(GetMyWorkAsync));
+		var leads = data.Leads.ToDictionary(x => x.Id);
+		var workItems = new List<AdmissionCrmMyWorkItemDto>();
+
+		var taskQueryable = await _taskRepository.GetQueryableAsync();
+		var tasks = await AsyncExecuter.ToListAsync(taskQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId &&
+			x.Status == AdmissionCrmTaskStatus.Pending &&
+			x.AssignedUserId == userId));
+		foreach (var task in tasks.Where(x => leads.ContainsKey(x.LeadId)))
+		{
+			var lead = leads[task.LeadId];
+			workItems.Add(CreateTaskWorkItem(task, lead, userId, data.Now));
+		}
+
+		foreach (var queueType in await GetPermittedQueueTypesAsync())
+		{
+			var delegatedOwners = await GetDelegatedOwnersAsync(academicYearId, queueType, userId);
+			foreach (var queueItem in BuildQueueItems(data, queueType).Where(x =>
+				x.OwnerUserId == userId ||
+				(x.OwnerUserId.HasValue && delegatedOwners.Contains(x.OwnerUserId.Value))))
+			{
+				if (!leads.TryGetValue(queueItem.LeadId, out var lead)) continue;
+				workItems.Add(CreateBlockerWorkItem(queueType, queueItem, lead, userId, data.Now));
+			}
+		}
+
+		if (input.AcademicMediumId.HasValue)
+		{
+			await _studentScopeAccessService.EnsureCanAccessMediumAsync(
+				input.AcademicMediumId.Value,
+				nameof(GetMyWorkAsync));
+			var stageQueryable = await _mediumStageRepository.GetQueryableAsync();
+			var stageIds = await AsyncExecuter.ToListAsync(stageQueryable
+				.Where(x => x.EducationMediumId == input.AcademicMediumId.Value)
+				.Select(x => x.Id));
+			var standardQueryable = await _standardRepository.GetQueryableAsync();
+			var standardIds = await AsyncExecuter.ToListAsync(standardQueryable
+				.Where(x => stageIds.Contains(x.EducationMediumStageId))
+				.Select(x => x.Id));
+			workItems = workItems
+				.Where(x => !x.TargetStandardId.HasValue || standardIds.Contains(x.TargetStandardId.Value))
+				.ToList();
+		}
+
+		var userIds = workItems
+			.SelectMany(x => new[] { x.OwnerUserId, x.AssignedUserId })
+			.Where(x => x.HasValue)
+			.Select(x => x!.Value)
+			.Distinct()
+			.ToList();
+		var userQueryable = await _userRepository.GetQueryableAsync();
+		var users = userIds.Count == 0
+			? []
+			: await AsyncExecuter.ToListAsync(userQueryable.Where(x => userIds.Contains(x.Id)));
+		var userNames = users.ToDictionary(x => x.Id, GetUserDisplayName);
+		foreach (var item in workItems)
+		{
+			item.OwnerDisplayName = item.OwnerUserId.HasValue
+				? userNames.GetValueOrDefault(item.OwnerUserId.Value)
+				: null;
+			item.AssignedDisplayName = item.AssignedUserId.HasValue
+				? userNames.GetValueOrDefault(item.AssignedUserId.Value)
+				: null;
+		}
+
+		var assignedTotal = workItems.Count;
+		var overdueCount = workItems.Count(x => x.Urgency == AdmissionCrmWorkUrgency.Overdue);
+		var dueTodayCount = workItems.Count(x => x.Urgency == AdmissionCrmWorkUrgency.DueToday);
+		var urgentBlockerCount = workItems.Count(x =>
+			x.WorkType == AdmissionCrmMyWorkType.OperationalBlocker &&
+			(x.IsUrgent || x.Urgency >= AdmissionCrmWorkUrgency.DueToday));
+
+		IEnumerable<AdmissionCrmMyWorkItemDto> filtered = workItems;
+		if (!string.IsNullOrWhiteSpace(input.Search))
+		{
+			var search = input.Search.Trim();
+			filtered = filtered.Where(x =>
+				x.ApplicantName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+				x.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+				(x.Details?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+		}
+		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
+		{
+			var applicantSearch = input.ApplicantSearch.Trim();
+			filtered = filtered.Where(x => x.ApplicantName.Contains(applicantSearch, StringComparison.OrdinalIgnoreCase));
+		}
+		if (!string.IsNullOrWhiteSpace(input.TargetClassSearch))
+		{
+			var targetClassSearch = input.TargetClassSearch.Trim();
+			filtered = filtered.Where(x => x.TargetClassName?.Contains(targetClassSearch, StringComparison.OrdinalIgnoreCase) == true);
+		}
+		if (!string.IsNullOrWhiteSpace(input.AssignedSearch))
+		{
+			var assignedSearch = input.AssignedSearch.Trim();
+			filtered = filtered.Where(x => x.AssignedDisplayName?.Contains(assignedSearch, StringComparison.OrdinalIgnoreCase) == true);
+		}
+		if (input.WorkType.HasValue) filtered = filtered.Where(x => x.WorkType == input.WorkType.Value);
+		if (input.QueueType.HasValue) filtered = filtered.Where(x => x.QueueType == input.QueueType.Value);
+		if (input.Stage.HasValue) filtered = filtered.Where(x => x.Stage == input.Stage.Value);
+		if (input.TargetStandardId.HasValue) filtered = filtered.Where(x => x.TargetStandardId == input.TargetStandardId.Value);
+		if (input.Priority.HasValue) filtered = filtered.Where(x => x.Priority == input.Priority.Value);
+		if (input.Urgency.HasValue) filtered = filtered.Where(x => x.Urgency == input.Urgency.Value);
+
+		filtered = ApplyMyWorkSorting(filtered, input.Sorting);
+		var filteredItems = filtered.ToList();
+		return new AdmissionCrmMyWorkDto
+		{
+			AcademicYearId = academicYearId,
+			GeneratedAt = data.Now,
+			AssignedTotal = assignedTotal,
+			OverdueCount = overdueCount,
+			DueTodayCount = dueTodayCount,
+			UrgentBlockerCount = urgentBlockerCount,
+			TotalCount = filteredItems.Count,
+			Items = filteredItems
+				.Skip(input.SkipCount)
+				.Take(Math.Clamp(input.MaxResultCount, 1, 200))
+				.ToList()
+		};
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
@@ -183,6 +327,17 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 				x.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
 				(x.Details?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
 		}
+		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
+		{
+			var applicantSearch = input.ApplicantSearch.Trim();
+			items = items.Where(x => x.ApplicantName.Contains(applicantSearch, StringComparison.OrdinalIgnoreCase));
+		}
+		if (!string.IsNullOrWhiteSpace(input.ActionSearch))
+		{
+			var actionSearch = input.ActionSearch.Trim();
+			items = items.Where(x => x.Title.Contains(actionSearch, StringComparison.OrdinalIgnoreCase) ||
+				(x.Details?.Contains(actionSearch, StringComparison.OrdinalIgnoreCase) ?? false));
+		}
 		if (input.OwnerUserId.HasValue) items = items.Where(x => x.OwnerUserId == input.OwnerUserId);
 		if (input.UrgentOnly == true) items = items.Where(x => x.IsUrgent);
 		if (input.MinimumAgeDays.HasValue) items = items.Where(x => x.AgeDays >= input.MinimumAgeDays.Value);
@@ -194,12 +349,37 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		if (input.SeatPoolId.HasValue) items = items.Where(x => x.Offer?.SeatPoolId == input.SeatPoolId);
 		if (input.ActivationStatus.HasValue) items = items.Where(x => x.Activation?.Status == input.ActivationStatus);
 		if (input.ServiceHandoffStatus.HasValue) items = items.Where(x => x.Operation?.ServiceHandoffStatus == input.ServiceHandoffStatus);
+		if (input.RegistrationLinkExpiresFrom.HasValue)
+			items = items.Where(x => x.Registration?.LinkExpiresAt >= input.RegistrationLinkExpiresFrom.Value);
+		if (input.RegistrationLinkExpiresUntil.HasValue)
+			items = items.Where(x => x.Registration?.LinkExpiresAt < input.RegistrationLinkExpiresUntil.Value.AddDays(1));
+		if (input.OfferExpiresFrom.HasValue)
+			items = items.Where(x => x.Offer?.OfferExpiresAt >= input.OfferExpiresFrom.Value);
+		if (input.OfferExpiresUntil.HasValue)
+			items = items.Where(x => x.Offer?.OfferExpiresAt < input.OfferExpiresUntil.Value.AddDays(1));
+		if (input.PaymentGateSatisfied.HasValue)
+			items = items.Where(x => x.Offer?.PaymentGateSatisfied == input.PaymentGateSatisfied.Value);
+		if (input.PlacementConfigured.HasValue)
+			items = items.Where(x => x.Activation?.PlacementConfigured == input.PlacementConfigured.Value);
+		if (input.AccountProvisioningPending.HasValue)
+		{
+			items = items.Where(x => x.Activation != null &&
+				(x.Activation.RequireStudentAccount || x.Activation.RequireGuardianAccount) &&
+				(input.AccountProvisioningPending.Value ? !x.Activation.StudentId.HasValue : x.Activation.StudentId.HasValue));
+		}
+		if (!string.IsNullOrWhiteSpace(input.RepairSearch))
+		{
+			var repairSearch = input.RepairSearch.Trim();
+			items = items.Where(x =>
+				(x.Activation?.RepairStep?.Contains(repairSearch, StringComparison.OrdinalIgnoreCase) ?? false) ||
+				(x.Activation?.RepairReason?.Contains(repairSearch, StringComparison.OrdinalIgnoreCase) ?? false));
+		}
 		if (input.AssignedToUserId.HasValue)
 		{
 			var delegatedOwners = await GetDelegatedOwnersAsync(academicYearId, queueType, input.AssignedToUserId.Value);
 			items = items.Where(x => x.OwnerUserId == input.AssignedToUserId || (x.OwnerUserId.HasValue && delegatedOwners.Contains(x.OwnerUserId.Value)));
 		}
-		var filtered = items.ToList();
+		var filtered = ApplyQueueSorting(items, input.Sorting).ToList();
 		return new AdmissionCrmOperationsQueueDto
 		{
 			AcademicYearId = academicYearId,
@@ -513,7 +693,8 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		IReadOnlyDictionary<Guid, AdmissionInquiryLead> leads)
 	{
 		return data.Exams
-			.Where(x => x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent ||
+			.Where(x => (x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent &&
+			             x.EligibilityDecision == AdmissionCrmEligibilityDecision.Pending) ||
 			            (x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked && x.ExamEndTime.UtcDateTime < data.Now))
 			.Where(x => leads.ContainsKey(x.LeadId))
 			.Select(exam => CreateItem(
@@ -903,6 +1084,212 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		AdmissionCrmOperationsQueueType.ActivationRepair or
 		AdmissionCrmOperationsQueueType.CancellationReview or
 		AdmissionCrmOperationsQueueType.ServiceHandoffException;
+
+	private static AdmissionCrmMyWorkItemDto CreateTaskWorkItem(
+		AdmissionCrmFollowUpTask task,
+		AdmissionInquiryLead lead,
+		Guid assignedUserId,
+		DateTime now)
+	{
+		var dueAt = ToOffset(task.DueAt);
+		return new AdmissionCrmMyWorkItemDto
+		{
+			Key = $"task:{task.Id}",
+			WorkType = AdmissionCrmMyWorkType.Task,
+			TaskId = task.Id,
+			LeadId = lead.Id,
+			ApplicantName = GetApplicantName(lead),
+			Contact = lead.PrimaryContactNo ?? lead.Email,
+			TargetStandardId = lead.TargetStandardId,
+			TargetClassName = lead.DesiredClassName,
+			Stage = lead.Stage,
+			Priority = lead.Priority,
+			Title = task.Title,
+			Details = task.Notes,
+			DueAt = dueAt,
+			Urgency = GetUrgency(dueAt, now),
+			IsUrgent = false,
+			OwnerUserId = lead.OwnerUserId,
+			AssignedUserId = assignedUserId,
+			RecommendedAction = AdmissionCrmRecommendedAction.CompleteTask,
+			RecommendedSection = GetSectionForStage(lead.Stage),
+			AllowedActions = [AdmissionCrmRecommendedAction.CompleteTask, AdmissionCrmRecommendedAction.OpenApplicant]
+		};
+	}
+
+	private static AdmissionCrmMyWorkItemDto CreateBlockerWorkItem(
+		AdmissionCrmOperationsQueueType queueType,
+		AdmissionCrmOperationsQueueItemDto item,
+		AdmissionInquiryLead lead,
+		Guid assignedUserId,
+		DateTime now)
+	{
+		var action = GetRecommendedAction(queueType, item);
+		return new AdmissionCrmMyWorkItemDto
+		{
+			Key = $"queue:{(int)queueType}:{item.Key}",
+			WorkType = AdmissionCrmMyWorkType.OperationalBlocker,
+			QueueType = queueType,
+			LeadId = lead.Id,
+			ExamRecordId = item.ExamRecordId,
+			ApplicantName = item.ApplicantName,
+			Contact = lead.PrimaryContactNo ?? lead.Email,
+			TargetStandardId = lead.TargetStandardId,
+			TargetClassName = lead.DesiredClassName,
+			Stage = lead.Stage,
+			Priority = lead.Priority,
+			Title = item.Title,
+			Details = item.Details,
+			DueAt = item.DueAt,
+			Urgency = GetUrgency(item.DueAt, now),
+			IsUrgent = item.IsUrgent,
+			OwnerUserId = lead.OwnerUserId,
+			AssignedUserId = assignedUserId,
+			RecommendedAction = action,
+			RecommendedSection = GetSectionForQueue(queueType),
+			AllowedActions = action == AdmissionCrmRecommendedAction.RescheduleExam
+				? [AdmissionCrmRecommendedAction.RescheduleExam, AdmissionCrmRecommendedAction.DecideEligibility, AdmissionCrmRecommendedAction.OpenApplicant]
+				: [action, AdmissionCrmRecommendedAction.OpenApplicant]
+		};
+	}
+
+	private static AdmissionCrmRecommendedAction GetRecommendedAction(
+		AdmissionCrmOperationsQueueType queueType,
+		AdmissionCrmOperationsQueueItemDto item) => queueType switch
+	{
+		AdmissionCrmOperationsQueueType.UnassignedExam => AdmissionCrmRecommendedAction.ScheduleExam,
+		AdmissionCrmOperationsQueueType.NoShow when item.Status == AdmissionCrmExamAttendanceStatus.Absent.ToString() => AdmissionCrmRecommendedAction.RescheduleExam,
+		AdmissionCrmOperationsQueueType.NoShow => AdmissionCrmRecommendedAction.RecordAttendance,
+		AdmissionCrmOperationsQueueType.CapacityConflict => AdmissionCrmRecommendedAction.RescheduleExam,
+		AdmissionCrmOperationsQueueType.RegistrationInvitationPending or
+		AdmissionCrmOperationsQueueType.ExpiringRegistrationLink or
+		AdmissionCrmOperationsQueueType.IncompleteRegistration => AdmissionCrmRecommendedAction.ReviewRegistration,
+		AdmissionCrmOperationsQueueType.RejectedDocument or
+		AdmissionCrmOperationsQueueType.DocumentVerificationBacklog => AdmissionCrmRecommendedAction.ReviewDocuments,
+		AdmissionCrmOperationsQueueType.ActivationRepair or
+		AdmissionCrmOperationsQueueType.ServiceHandoffException => AdmissionCrmRecommendedAction.RepairActivation,
+		AdmissionCrmOperationsQueueType.FinalApproval or
+		AdmissionCrmOperationsQueueType.PolicyException or
+		AdmissionCrmOperationsQueueType.PaymentCondition => AdmissionCrmRecommendedAction.ReviewOffer,
+		_ => AdmissionCrmRecommendedAction.OpenApplicant
+	};
+
+	private static AdmissionCrmWorkspaceSection GetSectionForQueue(AdmissionCrmOperationsQueueType queueType)
+	{
+		if (IsExamQueue(queueType)) return AdmissionCrmWorkspaceSection.EntranceExam;
+		if (IsRegistrationQueue(queueType)) return AdmissionCrmWorkspaceSection.Registration;
+		if (IsOfferQueue(queueType)) return AdmissionCrmWorkspaceSection.Offer;
+		if (IsActivationQueue(queueType)) return AdmissionCrmWorkspaceSection.Activation;
+		return AdmissionCrmWorkspaceSection.Governance;
+	}
+
+	private static AdmissionCrmWorkspaceSection GetSectionForStage(AdmissionInquiryStage stage)
+	{
+		if (stage is AdmissionInquiryStage.ExamReady or AdmissionInquiryStage.ExamScheduled or AdmissionInquiryStage.ExamCompleted)
+			return AdmissionCrmWorkspaceSection.EntranceExam;
+		return AdmissionCrmWorkspaceSection.Overview;
+	}
+
+	private static AdmissionCrmWorkUrgency GetUrgency(DateTimeOffset? dueAt, DateTime now)
+	{
+		if (!dueAt.HasValue) return AdmissionCrmWorkUrgency.Normal;
+		var dueDate = dueAt.Value.UtcDateTime.Date;
+		var today = now.ToUniversalTime().Date;
+		if (dueDate < today) return AdmissionCrmWorkUrgency.Overdue;
+		if (dueDate == today) return AdmissionCrmWorkUrgency.DueToday;
+		if (dueDate <= today.AddDays(3)) return AdmissionCrmWorkUrgency.DueSoon;
+		return AdmissionCrmWorkUrgency.Normal;
+	}
+
+	private static IEnumerable<AdmissionCrmMyWorkItemDto> ApplyMyWorkSorting(
+		IEnumerable<AdmissionCrmMyWorkItemDto> items,
+		string? sorting)
+	{
+		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return field switch
+		{
+			"applicantname" => descending ? items.OrderByDescending(x => x.ApplicantName) : items.OrderBy(x => x.ApplicantName),
+			"priority" => descending
+				? items.OrderByDescending(x => GetPriorityRank(x.Priority))
+				: items.OrderBy(x => GetPriorityRank(x.Priority)),
+			"dueat" => descending
+				? items.OrderByDescending(x => x.DueAt ?? DateTimeOffset.MinValue)
+				: items.OrderBy(x => x.DueAt ?? DateTimeOffset.MaxValue),
+			_ => items.OrderByDescending(x => x.Urgency)
+				.ThenBy(x => x.DueAt ?? DateTimeOffset.MaxValue)
+				.ThenBy(x => GetPriorityRank(x.Priority))
+				.ThenBy(x => x.ApplicantName)
+		};
+	}
+
+	private static IEnumerable<AdmissionCrmOperationsQueueItemDto> ApplyQueueSorting(
+		IEnumerable<AdmissionCrmOperationsQueueItemDto> items,
+		string? sorting)
+	{
+		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return field switch
+		{
+			"applicantname" => descending ? items.OrderByDescending(x => x.ApplicantName) : items.OrderBy(x => x.ApplicantName),
+			"title" => descending ? items.OrderByDescending(x => x.Title) : items.OrderBy(x => x.Title),
+			"status" => descending ? items.OrderByDescending(x => x.Status) : items.OrderBy(x => x.Status),
+			"owneruserid" => descending ? items.OrderByDescending(x => x.OwnerUserId) : items.OrderBy(x => x.OwnerUserId),
+			"dueat" => descending
+				? items.OrderByDescending(x => x.DueAt ?? DateTimeOffset.MinValue)
+				: items.OrderBy(x => x.DueAt ?? DateTimeOffset.MaxValue),
+			"agedays" => descending ? items.OrderByDescending(x => x.AgeDays) : items.OrderBy(x => x.AgeDays),
+			"isurgent" => descending ? items.OrderByDescending(x => x.IsUrgent) : items.OrderBy(x => x.IsUrgent),
+			"registrationstatus" => descending
+				? items.OrderByDescending(x => x.Registration?.Status)
+				: items.OrderBy(x => x.Registration?.Status),
+			"completionpercentage" => descending
+				? items.OrderByDescending(x => x.Registration?.CompletionPercentage)
+				: items.OrderBy(x => x.Registration?.CompletionPercentage),
+			"documentpendingcount" => descending
+				? items.OrderByDescending(x => x.Registration?.DocumentPendingCount)
+				: items.OrderBy(x => x.Registration?.DocumentPendingCount),
+			"linkexpiresat" => descending
+				? items.OrderByDescending(x => x.Registration?.LinkExpiresAt)
+				: items.OrderBy(x => x.Registration?.LinkExpiresAt),
+			"routetype" => descending ? items.OrderByDescending(x => x.Offer?.RouteType) : items.OrderBy(x => x.Offer?.RouteType),
+			"offerstatus" => descending ? items.OrderByDescending(x => x.Offer?.OfferStatus) : items.OrderBy(x => x.Offer?.OfferStatus),
+			"seatpoolname" => descending ? items.OrderByDescending(x => x.Offer?.SeatPoolName) : items.OrderBy(x => x.Offer?.SeatPoolName),
+			"paymentgatesatisfied" => descending
+				? items.OrderByDescending(x => x.Offer?.PaymentGateSatisfied)
+				: items.OrderBy(x => x.Offer?.PaymentGateSatisfied),
+			"offerexpiresat" => descending
+				? items.OrderByDescending(x => x.Offer?.OfferExpiresAt)
+				: items.OrderBy(x => x.Offer?.OfferExpiresAt),
+			"activationstatus" => descending
+				? items.OrderByDescending(x => x.Activation?.Status)
+				: items.OrderBy(x => x.Activation?.Status),
+			"placementconfigured" => descending
+				? items.OrderByDescending(x => x.Activation?.PlacementConfigured)
+				: items.OrderBy(x => x.Activation?.PlacementConfigured),
+			"servicehandoffstatus" => descending
+				? items.OrderByDescending(x => x.Operation?.ServiceHandoffStatus)
+				: items.OrderBy(x => x.Operation?.ServiceHandoffStatus),
+			_ => items.OrderByDescending(x => x.IsUrgent)
+				.ThenBy(x => x.DueAt ?? DateTimeOffset.MaxValue)
+				.ThenBy(x => x.ApplicantName)
+		};
+	}
+
+	private static int GetPriorityRank(AdmissionCrmLeadPriority priority) => priority switch
+	{
+		AdmissionCrmLeadPriority.Hot => 0,
+		AdmissionCrmLeadPriority.Warm => 1,
+		AdmissionCrmLeadPriority.Cold => 2,
+		AdmissionCrmLeadPriority.Low => 3,
+		_ => 4
+	};
+
+	private static string GetUserDisplayName(IdentityUser user)
+	{
+		var fullName = string.Join(" ", new[] { user.Name, user.Surname }.Where(x => !string.IsNullOrWhiteSpace(x)));
+		return string.IsNullOrWhiteSpace(fullName) ? user.UserName : fullName;
+	}
 
 	private async Task<IReadOnlyList<AdmissionCrmOperationsQueueType>> GetPermittedQueueTypesAsync()
 	{

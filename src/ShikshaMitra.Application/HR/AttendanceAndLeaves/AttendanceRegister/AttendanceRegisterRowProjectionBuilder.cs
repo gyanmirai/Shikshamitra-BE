@@ -17,7 +17,7 @@ public class AttendanceRegisterRowProjectionBuilder : ITransientDependency
 		DateOnly endDate,
 		List<EmployeeProjection> employees,
 		Dictionary<(Guid EmployeeId, DateOnly Date), EmployeeAttendance> attendanceByEmployeeDate,
-		Dictionary<DateOnly, HolidayInfo> holidayLookup,
+		Dictionary<(Guid EmployeeId, DateOnly Date), HolidayInfo> holidayLookup,
 		Dictionary<(Guid EmployeeId, DateOnly Date), AttendanceCaptureMode> captureModeLookup)
 	{
 		var rows = new List<RegisterProjection>();
@@ -44,7 +44,7 @@ public class AttendanceRegisterRowProjectionBuilder : ITransientDependency
 		DateOnly endDate,
 		EmployeeProjection employee,
 		Dictionary<(Guid EmployeeId, DateOnly Date), EmployeeAttendance> attendanceByEmployeeDate,
-		Dictionary<DateOnly, HolidayInfo> holidayLookup,
+		Dictionary<(Guid EmployeeId, DateOnly Date), HolidayInfo> holidayLookup,
 		Dictionary<(Guid EmployeeId, DateOnly Date), AttendanceCaptureMode> captureModeLookup)
 	{
 		for (var date = startDate; date <= endDate; date = date.AddDays(1))
@@ -60,7 +60,7 @@ public class AttendanceRegisterRowProjectionBuilder : ITransientDependency
 				continue;
 			}
 
-			holidayLookup.TryGetValue(date, out var holiday);
+			holidayLookup.TryGetValue((employee.EmployeeId, date), out var holiday);
 			var captureMode = captureModeLookup.GetValueOrDefault((employee.EmployeeId, date), AttendanceCaptureMode.Integrated);
 			rows.Add(BuildRow(employee, date, attendance, holiday, captureMode));
 		}

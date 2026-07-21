@@ -56,7 +56,7 @@ public class SubstitutionAppService(
         return new PagedResultDto<SubstitutionDto>(total, dtoRows);
     }
 
-    public async Task<SubstitutionDashboardDto> GetDashboardAsync(DateTime date, Guid? academicYearId = null)
+    public async Task<SubstitutionDashboardDto> GetDashboardAsync(DateTimeOffset date, Guid? academicYearId = null)
     {
         var target = NormalizeDate(date);
         await teacherAvailabilitySyncService.SyncDateRangeAsync(target, target);
@@ -547,7 +547,10 @@ public class SubstitutionAppService(
             return [];
         }
 
-        var timetableDay = ToTimetableDay(input.Date == default ? DateTime.Today.DayOfWeek : input.Date.DayOfWeek);
+        var tz = GetInstitutionTimeZone();
+        var lectureDate = input.Date == default ? DateTimeOffset.Now : input.Date;
+        var localLectureDate = TimeZoneInfo.ConvertTime(lectureDate, tz);
+        var timetableDay = ToTimetableDay(localLectureDate.DayOfWeek);
         if (!timetableDay.HasValue)
         {
             return [];
@@ -602,7 +605,7 @@ public class SubstitutionAppService(
 
     public async Task<List<SuggestedTeacherDto>> GetSuggestedTeachersAsync(SuggestedTeacherInput input)
     {
-        var date = NormalizeDate(input.Date == default ? DateTime.Today : input.Date);
+        var date = NormalizeDate(input.Date == default ? DateTimeOffset.Now : input.Date);
         var start = string.IsNullOrWhiteSpace(input.StartTime)
             ? TimeOnly.MinValue
             : ParseTime(input.StartTime, "startTime");
@@ -878,8 +881,8 @@ public class SubstitutionAppService(
 
     public async Task<SubstitutionDailySheetDto> GetDailySheetAsync(SubstitutionDailySheetInput input)
     {
-        var date = NormalizeDate(input.Date ?? input.FromDate ?? DateTime.Today);
-        input.Date = date;
+        var date = NormalizeDate(input.Date ?? input.FromDate ?? DateTimeOffset.Now);
+        input.Date = new DateTimeOffset(date, TimeSpan.Zero);
         input.FromDate = null;
         input.ToDate = null;
         input.MaxResultCount = input.MaxResultCount <= 0 ? 500 : input.MaxResultCount;
@@ -1272,8 +1275,32 @@ public class SubstitutionAppService(
         return parsed;
     }
 
-    private static DateTime NormalizeDate(DateTime value) =>
-        DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
+    private static TimeZoneInfo GetInstitutionTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+        }
+    }
+
+    private static DateTime NormalizeDate(DateTime value)
+    {
+        var tz = GetInstitutionTimeZone();
+        var utcTime = value.Kind == DateTimeKind.Utc ? value : TimeZoneInfo.ConvertTimeToUtc(value);
+        var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime, tz);
+        return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
+    }
+
+    private static DateTime NormalizeDate(DateTimeOffset value)
+    {
+        var tz = GetInstitutionTimeZone();
+        var localTime = TimeZoneInfo.ConvertTime(value, tz);
+        return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
+    }
 
     private static DateTime CombineDateAndTime(DateTime date, TimeOnly time) =>
         DateTime.SpecifyKind(date.Date.Add(time.ToTimeSpan()), DateTimeKind.Utc);

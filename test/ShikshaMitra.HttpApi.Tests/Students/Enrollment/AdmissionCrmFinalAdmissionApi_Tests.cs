@@ -319,6 +319,18 @@ public class AdmissionCrmFinalAdmissionApi_Tests : ShikshaMitraApiTestBase
 		blockedAcceptance.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		(await blockedAcceptance.Content.ReadAsStringAsync()).ShouldContain("AdmissionCrm:PaymentGateNotSatisfied");
 
+		var blockedReadinessResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/financial/readiness");
+		blockedReadinessResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await blockedReadinessResponse.Content.ReadAsStringAsync());
+		var blockedReadiness = await blockedReadinessResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmFinancialReadinessDto>(JsonOptions);
+		blockedReadiness.ShouldNotBeNull();
+		blockedReadiness.CanAcceptOffer.ShouldBeFalse();
+		blockedReadiness.CanApproveAdmission.ShouldBeFalse();
+		blockedReadiness.CanActivateStudent.ShouldBeFalse();
+
 		var financeResponse = await Client.PutAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/financial/quotations/{quotation.Id}/finance-state",
 			new RecordAdmissionCrmFinanceStateDto

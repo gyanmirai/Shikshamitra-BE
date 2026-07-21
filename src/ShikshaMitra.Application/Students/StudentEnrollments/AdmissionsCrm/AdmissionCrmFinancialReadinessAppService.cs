@@ -346,7 +346,7 @@ public class AdmissionCrmFinancialReadinessAppService : ApplicationService, IAdm
 
 	private static bool CanPass(
 		AdmissionCrmAdmissionQuotation? quotation, AdmissionCrmPaymentGateMilestone milestone, bool satisfied) =>
-		quotation == null || quotation.GateMilestone != milestone || satisfied;
+		quotation == null || quotation.GateMilestone > milestone || satisfied;
 
 	private Guid GetCurrentUserId() => CurrentUser.Id ??
 		throw new BusinessException("AdmissionCrm:AuthenticatedUserRequired");

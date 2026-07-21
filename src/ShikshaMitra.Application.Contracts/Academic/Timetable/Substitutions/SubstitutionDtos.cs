@@ -7,9 +7,9 @@ namespace ShikshaMitra.Academic.Timetable.Substitutions;
 public class GetSubstitutionsInput : PagedAndSortedResultRequestDto
 {
     public Guid? AcademicYearId { get; set; }
-    public DateTime? FromDate { get; set; }
-    public DateTime? ToDate { get; set; }
-    public DateTime? Date { get; set; }
+    public DateTimeOffset? FromDate { get; set; }
+    public DateTimeOffset? ToDate { get; set; }
+    public DateTimeOffset? Date { get; set; }
     public Guid? StandardId { get; set; }
     public Guid? DivisionId { get; set; }
     public Guid? SubjectId { get; set; }
@@ -74,7 +74,7 @@ public class SubstitutionDto : EntityDto<Guid>
 public class CreateSubstitutionDto
 {
     public Guid? AcademicYearId { get; set; }
-    public DateTime Date { get; set; }
+    public DateTimeOffset Date { get; set; }
     public Guid? StandardId { get; set; }
     public string? ClassName { get; set; }
     public Guid? DivisionId { get; set; }
@@ -154,7 +154,7 @@ public class SuggestedTeacherDto
 
 public class SuggestedTeacherInput
 {
-    public DateTime Date { get; set; }
+    public DateTimeOffset Date { get; set; }
     public Guid? StandardId { get; set; }
     public Guid? SubjectId { get; set; }
     public Guid? OriginalTeacherId { get; set; }
@@ -200,7 +200,7 @@ public class SubstitutionTeacherOptionDto : SubstitutionLookupOptionDto
 
 public class SubstitutionLectureLookupInput
 {
-    public DateTime Date { get; set; }
+    public DateTimeOffset Date { get; set; }
     public Guid StandardId { get; set; }
     public Guid DivisionId { get; set; }
 }
@@ -259,8 +259,8 @@ public class SubstitutionDailySheetDto
 public class SubstitutionAnalyticsInput
 {
     public Guid? AcademicYearId { get; set; }
-    public DateTime? FromDate { get; set; }
-    public DateTime? ToDate { get; set; }
+    public DateTimeOffset? FromDate { get; set; }
+    public DateTimeOffset? ToDate { get; set; }
     public Guid? StandardId { get; set; }
     public Guid? DivisionId { get; set; }
     public Guid? TeacherId { get; set; }

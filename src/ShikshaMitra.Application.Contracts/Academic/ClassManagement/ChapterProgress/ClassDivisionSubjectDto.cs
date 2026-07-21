@@ -11,4 +11,9 @@ public class ClassDivisionSubjectDto
 	public int TotalChapters { get; set; }
 	public int CompletedChapters { get; set; }
 	public int ProgressPercentage { get; set; }
+	public int ExpectedProgressPercentage { get; set; }
+	public int VariancePercentage { get; set; }
+	public string ScheduleStatus { get; set; } = string.Empty;
+	public string RiskLevel { get; set; } = string.Empty;
+	public DateTime? LastUpdatedAt { get; set; }
 }

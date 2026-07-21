@@ -29,9 +29,11 @@ public class AdmissionCrmOperationsQueueDto
 	public IReadOnlyList<AdmissionCrmOperationsQueueItemDto> Items { get; set; } = [];
 }
 
-public class GetAdmissionCrmOperationsQueueInput : PagedResultRequestDto
+public class GetAdmissionCrmOperationsQueueInput : PagedAndSortedResultRequestDto
 {
 	public string? Search { get; set; }
+	public string? ApplicantSearch { get; set; }
+	public string? ActionSearch { get; set; }
 	public Guid? OwnerUserId { get; set; }
 	public Guid? AssignedToUserId { get; set; }
 	public bool? UrgentOnly { get; set; }
@@ -44,6 +46,14 @@ public class GetAdmissionCrmOperationsQueueInput : PagedResultRequestDto
 	public Guid? SeatPoolId { get; set; }
 	public AdmissionCrmActivationStatus? ActivationStatus { get; set; }
 	public AdmissionCrmServiceHandoffStatus? ServiceHandoffStatus { get; set; }
+	public DateTime? RegistrationLinkExpiresFrom { get; set; }
+	public DateTime? RegistrationLinkExpiresUntil { get; set; }
+	public DateTime? OfferExpiresFrom { get; set; }
+	public DateTime? OfferExpiresUntil { get; set; }
+	public bool? PaymentGateSatisfied { get; set; }
+	public bool? PlacementConfigured { get; set; }
+	public bool? AccountProvisioningPending { get; set; }
+	public string? RepairSearch { get; set; }
 }
 
 public class CreateAdmissionCrmOperationsSavedViewDto
@@ -162,6 +172,100 @@ public class AdmissionCrmEnrollmentOverviewItemDto
 	public string Workspace { get; set; } = string.Empty;
 	public AdmissionCrmOperationsQueueType QueueType { get; set; }
 	public AdmissionCrmOperationsQueueItemDto Item { get; set; } = new();
+}
+
+public enum AdmissionCrmMyWorkType
+{
+	Task = 0,
+	OperationalBlocker = 1
+}
+
+public enum AdmissionCrmWorkUrgency
+{
+	Normal = 0,
+	DueSoon = 1,
+	DueToday = 2,
+	Overdue = 3
+}
+
+public enum AdmissionCrmRecommendedAction
+{
+	OpenApplicant = 0,
+	CompleteTask = 1,
+	ScheduleExam = 2,
+	RecordAttendance = 3,
+	RescheduleExam = 4,
+	RecordResult = 5,
+	DecideEligibility = 6,
+	ReviewRegistration = 7,
+	ReviewDocuments = 8,
+	ReviewOffer = 9,
+	RepairActivation = 10
+}
+
+public enum AdmissionCrmWorkspaceSection
+{
+	Overview = 0,
+	EntranceExam = 1,
+	Registration = 2,
+	Offer = 3,
+	Activation = 4,
+	Governance = 5
+}
+
+public class GetAdmissionCrmMyWorkInput : PagedAndSortedResultRequestDto
+{
+	public string? Search { get; set; }
+	public string? ApplicantSearch { get; set; }
+	public string? TargetClassSearch { get; set; }
+	public string? AssignedSearch { get; set; }
+	public AdmissionCrmMyWorkType? WorkType { get; set; }
+	public AdmissionCrmOperationsQueueType? QueueType { get; set; }
+	public AdmissionInquiryStage? Stage { get; set; }
+	public Guid? TargetStandardId { get; set; }
+	public Guid? AcademicMediumId { get; set; }
+	public AdmissionCrmLeadPriority? Priority { get; set; }
+	public AdmissionCrmWorkUrgency? Urgency { get; set; }
+}
+
+public class AdmissionCrmMyWorkDto
+{
+	public Guid AcademicYearId { get; set; }
+	public DateTime GeneratedAt { get; set; }
+	public int AssignedTotal { get; set; }
+	public int OverdueCount { get; set; }
+	public int DueTodayCount { get; set; }
+	public int UrgentBlockerCount { get; set; }
+	public long TotalCount { get; set; }
+	public IReadOnlyList<AdmissionCrmMyWorkItemDto> Items { get; set; } = [];
+}
+
+public class AdmissionCrmMyWorkItemDto
+{
+	public string Key { get; set; } = string.Empty;
+	public AdmissionCrmMyWorkType WorkType { get; set; }
+	public Guid? TaskId { get; set; }
+	public AdmissionCrmOperationsQueueType? QueueType { get; set; }
+	public Guid LeadId { get; set; }
+	public Guid? ExamRecordId { get; set; }
+	public string ApplicantName { get; set; } = string.Empty;
+	public string? Contact { get; set; }
+	public Guid? TargetStandardId { get; set; }
+	public string? TargetClassName { get; set; }
+	public AdmissionInquiryStage Stage { get; set; }
+	public AdmissionCrmLeadPriority Priority { get; set; }
+	public string Title { get; set; } = string.Empty;
+	public string? Details { get; set; }
+	public DateTimeOffset? DueAt { get; set; }
+	public AdmissionCrmWorkUrgency Urgency { get; set; }
+	public bool IsUrgent { get; set; }
+	public Guid? OwnerUserId { get; set; }
+	public string? OwnerDisplayName { get; set; }
+	public Guid? AssignedUserId { get; set; }
+	public string? AssignedDisplayName { get; set; }
+	public AdmissionCrmRecommendedAction RecommendedAction { get; set; }
+	public AdmissionCrmWorkspaceSection RecommendedSection { get; set; }
+	public IReadOnlyList<AdmissionCrmRecommendedAction> AllowedActions { get; set; } = [];
 }
 
 public class AdmissionCrmAdmissionHandoffPackageDto

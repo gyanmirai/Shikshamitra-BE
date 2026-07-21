@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
@@ -8,6 +9,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceRegister;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
+using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
@@ -67,6 +69,44 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		row.LockReason.ShouldNotBeNull();
 		row.LockReason.ShouldContain("Holiday:");
 		payload.Summary.Holiday.ShouldBeGreaterThanOrEqualTo(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Register_Should_Not_Block_Removed_WorkCalendar_Holiday()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var marker = $"RegRemovedHoliday{Guid.NewGuid():N}";
+		var holidayDate = new DateOnly(2026, 5, 10);
+		var snapshots = await SetDefaultAttendanceCalendarHolidayIncludedAsync(holidayDate, isIncluded: false);
+		snapshots.ShouldNotBeEmpty("The seeded default attendance calendar must contain the holiday snapshot being removed.");
+
+		try
+		{
+			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+				Client,
+				marker,
+				dateOfJoining: holidayDate.ToDateTime(TimeOnly.MinValue).AddDays(-1));
+
+			var response = await Client.GetAsync(
+				$"{RegisterUrl}?startDate=2026-05-10&endDate=2026-05-10&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
+			response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+			var payload = await response.Content.ReadFromJsonAsync<AttendanceRegisterResponse>(JsonOptions)
+				?? throw new InvalidOperationException("Failed to deserialize register response.");
+			var row = payload.Items.Single(x => x.EmployeeId == employee.Id);
+
+			row.IsHoliday.ShouldBeFalse();
+			row.HolidayName.ShouldBeNull();
+			row.CanEdit.ShouldBeTrue();
+			(row.LockReason ?? string.Empty).ShouldNotContain("Holiday:");
+			payload.Summary.Holiday.ShouldBe(0);
+		}
+		finally
+		{
+			await RestoreWorkCalendarHolidaySnapshotsAsync(snapshots);
+		}
 	}
 
 	[Fact]
@@ -1113,4 +1153,115 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		Guid AcademicYearId,
 		Guid CurrentYearStageId,
 		Guid OtherYearStageId);
+
+	private async Task<List<WorkCalendarHolidaySnapshotState>> SetDefaultAttendanceCalendarHolidayIncludedAsync(
+		DateOnly date,
+		bool isIncluded)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider.GetRequiredService<IAcademicYearRepository>();
+		var attendancePolicyRepository = scope.ServiceProvider.GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		var holidayRepository = scope.ServiceProvider.GetRequiredService<IRepository<WorkCalendarHoliday, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var targetDate = date.ToDateTime(TimeOnly.MinValue);
+			var academicYearQuery = await academicYearRepository.GetQueryableAsync();
+			var academicYear = academicYearQuery.Single(x => x.StartDate <= targetDate && x.EndDate >= targetDate);
+			var attendanceQuery = await attendancePolicyRepository.GetQueryableAsync();
+			var attendancePolicy = attendanceQuery.Single(x =>
+				x.AcademicYearId == academicYear.Id &&
+				x.Status == HrPolicyStatus.Active &&
+				x.IsDefault);
+			var holidayQuery = await holidayRepository.GetQueryableAsync();
+			var holidays = holidayQuery
+				.Where(x =>
+					x.WorkCalendarPolicyId == attendancePolicy.WorkCalendarPolicyId &&
+					x.FromDate <= date &&
+					x.ToDate >= date)
+				.ToList();
+			var snapshots = holidays
+				.Select(WorkCalendarHolidaySnapshotState.From)
+				.ToList();
+
+			foreach (var holiday in holidays)
+			{
+				holiday.Update(
+					holiday.AcademicYearId,
+					holiday.WorkCalendarPolicyId,
+					holiday.FromDate,
+					holiday.ToDate,
+					holiday.HolidayName,
+					holiday.Source,
+					holiday.CalendarHolidayId,
+					isIncluded,
+					holiday.Notes);
+				await holidayRepository.UpdateAsync(holiday, autoSave: false);
+			}
+
+			await uow.CompleteAsync();
+			return snapshots;
+		}
+	}
+
+	private async Task RestoreWorkCalendarHolidaySnapshotsAsync(List<WorkCalendarHolidaySnapshotState> snapshots)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var holidayRepository = scope.ServiceProvider.GetRequiredService<IRepository<WorkCalendarHoliday, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			foreach (var snapshot in snapshots)
+			{
+				var holiday = await holidayRepository.GetAsync(snapshot.Id);
+				holiday.Update(
+					snapshot.AcademicYearId,
+					snapshot.WorkCalendarPolicyId,
+					snapshot.FromDate,
+					snapshot.ToDate,
+					snapshot.HolidayName,
+					snapshot.Source,
+					snapshot.CalendarHolidayId,
+					snapshot.IsIncluded,
+					snapshot.Notes);
+				await holidayRepository.UpdateAsync(holiday, autoSave: false);
+			}
+
+			await uow.CompleteAsync();
+		}
+	}
+
+	private sealed record WorkCalendarHolidaySnapshotState(
+		Guid Id,
+		Guid AcademicYearId,
+		Guid WorkCalendarPolicyId,
+		DateOnly FromDate,
+		DateOnly ToDate,
+		string HolidayName,
+		WorkCalendarHolidaySource Source,
+		Guid? CalendarHolidayId,
+		bool IsIncluded,
+		string? Notes)
+	{
+		public static WorkCalendarHolidaySnapshotState From(WorkCalendarHoliday holiday) =>
+			new(
+				holiday.Id,
+				holiday.AcademicYearId,
+				holiday.WorkCalendarPolicyId,
+				holiday.FromDate,
+				holiday.ToDate,
+				holiday.HolidayName,
+				holiday.Source,
+				holiday.CalendarHolidayId,
+				holiday.IsIncluded,
+				holiday.Notes);
+	}
 }

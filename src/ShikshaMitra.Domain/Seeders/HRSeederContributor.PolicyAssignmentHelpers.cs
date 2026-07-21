@@ -1,4 +1,5 @@
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using System.Threading.Tasks;
@@ -15,6 +16,7 @@ public partial class HRSeederContributor
 		string targetDisplayName,
 		PayrollPolicy payrollPolicy,
 		AttendancePolicy attendancePolicy,
+		LeavePolicy leavePolicy,
 		int priority,
 		string reason)
 	{
@@ -32,6 +34,7 @@ public partial class HRSeederContributor
 			var needsUpdate =
 				existing.AttendancePolicyId != attendancePolicy.Id ||
 				existing.PayrollPolicyId != payrollPolicy.Id ||
+				existing.LeavePolicyId != leavePolicy.Id ||
 				existing.Priority != priority ||
 				!existing.IsActive ||
 				!string.Equals(existing.AssignmentReason, reason, StringComparison.Ordinal) ||
@@ -42,7 +45,7 @@ public partial class HRSeederContributor
 				existing.Update(
 					attendancePolicy.Id,
 					payrollPolicy.Id,
-					null,
+					leavePolicy.Id,
 					effectiveFrom,
 					effectiveTo,
 					true,
@@ -63,7 +66,7 @@ public partial class HRSeederContributor
 			targetDisplayName,
 			attendancePolicy.Id,
 			payrollPolicy.Id,
-			null,
+			leavePolicy.Id,
 			effectiveFrom,
 			effectiveTo,
 			true,

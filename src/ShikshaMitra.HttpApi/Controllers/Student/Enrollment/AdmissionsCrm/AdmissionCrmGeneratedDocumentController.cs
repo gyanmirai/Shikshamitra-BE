@@ -29,4 +29,8 @@ public class AdmissionCrmGeneratedDocumentController(
 	[HttpGet("leads/{leadId}/documents/history")]
 	public Task<IReadOnlyList<AdmissionCrmGeneratedDocumentHistoryDto>> GetHistoryAsync(Guid leadId) =>
 		appService.GetHistoryAsync(leadId);
+
+	[HttpGet("leads/{leadId}/documents/availability")]
+	public Task<IReadOnlyList<AdmissionCrmGeneratedDocumentAvailabilityDto>> GetAvailabilityAsync(Guid leadId) =>
+		appService.GetAvailabilityAsync(leadId);
 }

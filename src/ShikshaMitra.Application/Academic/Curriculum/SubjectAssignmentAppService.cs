@@ -173,12 +173,22 @@ public class SubjectAssignmentAppService(
 	public async Task<SubjectAssignmentPagedResponse> GetListAsync(
 		Guid classId,
 		int page,
-		int pageSize
+		int pageSize,
+		SubjectStatus? status = null,
+		bool includeArchived = false
 	)
 	{
 		var query = await assignmentRepository.WithDetailsAsync(a => a.Chapters, a => a.Teachers);
 
 		query = query.Where(a => a.StandardId == classId);
+		if (status.HasValue)
+		{
+			query = query.Where(a => a.Status == status.Value);
+		}
+		else if (!includeArchived)
+		{
+			query = query.Where(a => a.Status == SubjectStatus.Published);
+		}
 
 		// Non-admin users only see subjects they are personally assigned to teach.
 		if (!await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
@@ -251,6 +261,11 @@ public class SubjectAssignmentAppService(
 			var totalSlots = weeklyLecturesBySubject.GetValueOrDefault(coreAssignment.SubjectId, 0);
 			var occupiedSlots = occupiedBySubject.GetValueOrDefault(coreAssignment.SubjectId, 0);
 			var primaryTeacherEntry = coreAssignment.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
+			var usageParts = await GetAssignmentUsagePartsAsync(
+				coreAssignment.StandardId,
+				new[] { coreAssignment.SubjectId },
+				coreAssignment.ElectiveGroupId,
+				coreAssignment.Chapters.Count);
 
 			groupedAssignments.Add(new SubjectAssignmentGroupDto
 			{
@@ -271,6 +286,10 @@ public class SubjectAssignmentAppService(
 				LastUpdatedAt = coreAssignment.LastModificationTime ?? coreAssignment.CreationTime,
 				IsAiSuggested = coreAssignment.IsAiSuggested,
 				IsCopiedFromPreviousYear = coreAssignment.IsCopiedFromPreviousYear,
+				CanDelete = usageParts.Count == 0,
+				DeleteDisabledReason = usageParts.Count == 0
+					? null
+					: $"This subject is already used in {string.Join(", ", usageParts)}.",
 				Subjects = new List<SubjectLiteDto>
 				{
 					new SubjectLiteDto
@@ -293,6 +312,12 @@ public class SubjectAssignmentAppService(
 			var electiveOccupiedSlots = group.Sum(a => occupiedBySubject.GetValueOrDefault(a.SubjectId, 0));
 			var avgHealth = group.Any() ? (int)group.Average(a => a.SetupHealthScore) : 0;
 			var firstPrimary = first.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
+			var subjectIdsInGroup = group.Select(a => a.SubjectId).ToList();
+			var usageParts = await GetAssignmentUsagePartsAsync(
+				first.StandardId,
+				subjectIdsInGroup,
+				first.ElectiveGroupId,
+				group.Sum(a => a.Chapters.Count));
 
 			groupedAssignments.Add(new SubjectAssignmentGroupDto
 			{
@@ -315,6 +340,10 @@ public class SubjectAssignmentAppService(
 				LastUpdatedAt = first.LastModificationTime ?? first.CreationTime,
 				IsAiSuggested = first.IsAiSuggested,
 				IsCopiedFromPreviousYear = first.IsCopiedFromPreviousYear,
+				CanDelete = usageParts.Count == 0,
+				DeleteDisabledReason = usageParts.Count == 0
+					? null
+					: $"This subject group is already used in {string.Join(", ", usageParts)}.",
 				Subjects = group.Select(a =>
 				{
 					subjectsDict.TryGetValue(a.SubjectId, out var subj);
@@ -703,41 +732,11 @@ public class SubjectAssignmentAppService(
 
 		var subjectIds = groupAssignments.Select(a => a.SubjectId).ToList();
 
-		var usageParts = new System.Collections.Generic.List<string>();
-
-		// 1. Timetable Slots
-		var timetables = await timetableRepository.GetByStandardIdAsync(assignment.StandardId);
-		var timetableSlotSubjectsCount = timetables
-			.SelectMany(t => t.Slots)
-			.SelectMany(s => s.Subjects)
-			.Count(ss => subjectIds.Contains(ss.SubjectId));
-		var timetableSlotElectivesCount = assignment.ElectiveGroupId.HasValue
-			? timetables.SelectMany(t => t.Slots).Count(s => s.ElectiveGroupId == assignment.ElectiveGroupId.Value)
-			: 0;
-		var totalTimetableSlots = timetableSlotSubjectsCount + timetableSlotElectivesCount;
-		if (totalTimetableSlots > 0)
-			usageParts.Add($"{totalTimetableSlots} timetable slot(s)");
-
-		// 2. Exams
-		var examCount = await examRepository.CountAsync(e =>
-			e.StandardId == assignment.StandardId &&
-			e.ExamSubjects.Any(es => subjectIds.Contains(es.SubjectId) || (assignment.ElectiveGroupId.HasValue && es.SubjectId == assignment.ElectiveGroupId.Value)));
-		if (examCount > 0)
-			usageParts.Add($"{examCount} exam(s)");
-
-		// 3. Homeworks
-		var homeworkCount = await homeworkRepository.CountAsync(h =>
-			h.StandardId == assignment.StandardId &&
-			subjectIds.Contains(h.SubjectId));
-		if (homeworkCount > 0)
-			usageParts.Add($"{homeworkCount} homework(s)");
-
-		// 4. Assignments
-		var learningTaskCount = await learningTaskAssignmentRepository.CountAsync(a =>
-			a.StandardId == assignment.StandardId &&
-			subjectIds.Contains(a.SubjectId));
-		if (learningTaskCount > 0)
-			usageParts.Add($"{learningTaskCount} assignment(s)");
+		var usageParts = await GetAssignmentUsagePartsAsync(
+			assignment.StandardId,
+			subjectIds,
+			assignment.ElectiveGroupId,
+			groupAssignments.Sum(a => a.Chapters.Count));
 
 		if (usageParts.Count > 0)
 		{
@@ -778,10 +777,10 @@ public class SubjectAssignmentAppService(
 		try
 		{
 			var coreSubjects = await subjectRepository.GetListAsync(s =>
-				s.EducationMediumId == academicMediumId
+				s.EducationMediumId == academicMediumId && s.Status == SubjectMasterStatus.Active
 			);
 			var electiveGroups = await electiveGroupRepository.GetListAsync(eg =>
-				eg.AcademicMediumId == academicMediumId
+				eg.AcademicMediumId == academicMediumId && eg.Status == SubjectMasterStatus.Active
 			);
 
 			var result = new List<CoreElectiveSubjectResponseDto>();
@@ -806,12 +805,14 @@ public class SubjectAssignmentAppService(
 					Name = electiveGroup.Name,
 					SubjectType = SubjectType.Elective,
 					Color = electiveGroup.Color,
-					Subjects = electiveGroup.Subjects.Select(es => new CoreElectiveSubjectDetailDto
-					{
-						Id = es.SubjectId,
-						Name = es.Subject.Name,
-						Color = es.Subject.Color,
-					}).ToList()
+					Subjects = electiveGroup.Subjects
+						.Where(es => es.Subject.Status == SubjectMasterStatus.Active)
+						.Select(es => new CoreElectiveSubjectDetailDto
+						{
+							Id = es.SubjectId,
+							Name = es.Subject.Name,
+							Color = es.Subject.Color,
+						}).ToList()
 				};
 				result.Add(subjectDto);
 			}
@@ -976,9 +977,18 @@ public class SubjectAssignmentAppService(
 	public async Task ArchiveAsync(Guid assignmentId)
 	{
 		var assignment = await assignmentRepository.GetAsync(assignmentId);
-		await EnsureAssignmentRemovalAllowedAsync(assignment);
-		assignment.ChangeStatus(SubjectStatus.Archived);
-		await assignmentRepository.UpdateAsync(assignment, autoSave: true);
+		var groupAssignments = assignment.ElectiveGroupId.HasValue
+			? await assignmentRepository.GetListAsync(a =>
+				a.ElectiveGroupId == assignment.ElectiveGroupId &&
+				a.StandardId == assignment.StandardId)
+			: new List<AssignedSubject> { assignment };
+
+		foreach (var groupAssignment in groupAssignments)
+		{
+			groupAssignment.ChangeStatus(SubjectStatus.Archived);
+		}
+
+		await assignmentRepository.UpdateManyAsync(groupAssignments, autoSave: true);
 	}
 
 	public async Task RestoreAsync(Guid assignmentId)
@@ -1081,6 +1091,61 @@ public class SubjectAssignmentAppService(
 				.WithData("ClassId", classId)
 				.WithData("SubjectIds", JsonSerializer.Serialize(requestedSubjectIds));
 		}
+	}
+
+	private async Task<List<string>> GetAssignmentUsagePartsAsync(
+		Guid standardId,
+		IReadOnlyCollection<Guid> subjectIds,
+		Guid? electiveGroupId,
+		int chapterCount = 0)
+	{
+		var usageParts = new List<string>();
+
+		if (chapterCount > 0)
+		{
+			usageParts.Add($"{chapterCount} syllabus chapter(s)");
+		}
+
+		var timetables = await timetableRepository.GetByStandardIdAsync(standardId);
+		var timetableSlotSubjectsCount = timetables
+			.SelectMany(t => t.Slots)
+			.SelectMany(s => s.Subjects)
+			.Count(ss => subjectIds.Contains(ss.SubjectId));
+		var timetableSlotElectivesCount = electiveGroupId.HasValue
+			? timetables.SelectMany(t => t.Slots).Count(s => s.ElectiveGroupId == electiveGroupId.Value)
+			: 0;
+		var totalTimetableSlots = timetableSlotSubjectsCount + timetableSlotElectivesCount;
+		if (totalTimetableSlots > 0)
+		{
+			usageParts.Add($"{totalTimetableSlots} timetable slot(s)");
+		}
+
+		var examCount = await examRepository.CountAsync(e =>
+			e.StandardId == standardId &&
+			e.ExamSubjects.Any(es => subjectIds.Contains(es.SubjectId) ||
+				(electiveGroupId.HasValue && es.SubjectId == electiveGroupId.Value)));
+		if (examCount > 0)
+		{
+			usageParts.Add($"{examCount} exam(s)");
+		}
+
+		var homeworkCount = await homeworkRepository.CountAsync(h =>
+			h.StandardId == standardId &&
+			subjectIds.Contains(h.SubjectId));
+		if (homeworkCount > 0)
+		{
+			usageParts.Add($"{homeworkCount} homework(s)");
+		}
+
+		var learningTaskCount = await learningTaskAssignmentRepository.CountAsync(a =>
+			a.StandardId == standardId &&
+			subjectIds.Contains(a.SubjectId));
+		if (learningTaskCount > 0)
+		{
+			usageParts.Add($"{learningTaskCount} assignment(s)");
+		}
+
+		return usageParts;
 	}
 
 	private async Task EnsureTeacherRemovalAllowedAsync(
@@ -1204,10 +1269,6 @@ public class SubjectAssignmentAppService(
 		var blockers = new List<string>();
 		if (string.IsNullOrWhiteSpace(assignment.SubjectCode)) blockers.Add("Subject code is missing.");
 		if (!assignment.Teachers.Any(t => t.TeacherType == SubjectTeacherType.Primary)) blockers.Add("Primary teacher is missing.");
-		if (string.IsNullOrWhiteSpace(assignment.LearningGoals)) blockers.Add("Learning goals are missing.");
-		if (string.IsNullOrWhiteSpace(assignment.Description)) blockers.Add("Description is missing.");
-		if (assignment.Chapters.Count == 0) blockers.Add("No syllabus chapters added.");
-		if (assignment.WeeklyPeriods <= 0) blockers.Add("Weekly periods are not configured.");
 
 		if (blockers.Count > 0)
 		{

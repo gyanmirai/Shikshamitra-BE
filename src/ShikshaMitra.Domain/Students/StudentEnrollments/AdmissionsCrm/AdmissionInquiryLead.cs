@@ -27,6 +27,7 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? Email { get; private set; }
 	public string? NormalizedEmail { get; private set; }
 	public string AdmissionIntent { get; private set; } = string.Empty;
+	public AdmissionCrmRouteType? IntendedRouteType { get; private set; }
 	public Guid? TargetStandardId { get; private set; }
 	public string? DesiredClassName { get; private set; }
 	public AdmissionInquiryStage Stage { get; private set; }
@@ -74,7 +75,8 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? targetStandardId,
 		string? desiredClassName,
 		string? notes,
-		DateTimeOffset createdAt)
+		DateTimeOffset createdAt,
+		AdmissionCrmRouteType? intendedRouteType = null)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -85,8 +87,10 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetApplicantName(firstName, middleName, lastName, dateOfBirth, parentGuardianName);
 		SetContact(primaryContactNo, email);
 		SetIntent(admissionIntent, targetStandardId, desiredClassName);
+		IntendedRouteType = intendedRouteType;
 		SetNotes(notes);
 		Stage = AdmissionInquiryStage.NewInquiry;
+		Priority = AdmissionCrmLeadPriority.Warm;
 		LastActivityTime = createdAt;
 	}
 

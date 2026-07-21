@@ -19,6 +19,13 @@ public class AdmissionCrmOperationsController(
 	public Task<AdmissionCrmEnrollmentOverviewDto> GetOverviewAsync(Guid academicYearId) =>
 		operationsAppService.GetOverviewAsync(academicYearId);
 
+	[HttpGet("{academicYearId}/operations/my-work")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
+	public Task<AdmissionCrmMyWorkDto> GetMyWorkAsync(
+		Guid academicYearId,
+		[FromQuery] GetAdmissionCrmMyWorkInput input) =>
+		operationsAppService.GetMyWorkAsync(academicYearId, input);
+
 	[HttpGet("{academicYearId}/operations/queues/summary")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
 	public Task<AdmissionCrmOperationsQueueSummaryDto> GetQueueSummaryAsync(Guid academicYearId) =>

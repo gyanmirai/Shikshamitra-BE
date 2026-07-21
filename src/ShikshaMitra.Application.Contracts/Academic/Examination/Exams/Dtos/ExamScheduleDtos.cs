@@ -10,6 +10,8 @@ public class ExamScheduleRequestDto
     [Required]
     [MinLength(1)]
     public List<ExamSubjectScheduleDto> Subjects { get; set; } = new();
+
+    public bool SyncToAcademicCalendar { get; set; }
 }
 
 public class ExamSubjectScheduleDto

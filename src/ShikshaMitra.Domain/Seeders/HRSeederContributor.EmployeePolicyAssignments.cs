@@ -61,9 +61,19 @@ public partial class HRSeederContributor
 			var partTimeAttendance = await _attendancePolicyRepository.FirstOrDefaultAsync(x =>
 				x.AcademicYearId == academicYear.Id &&
 				x.Name == "Part-Time Attendance Policy");
+			var teachingLeave = await _leavePolicyRepository.FindByPolicyNameAsync(
+				academicYear.Id,
+				"Teaching Staff Leave Policy");
+			var adminLeave = await _leavePolicyRepository.FindByPolicyNameAsync(
+				academicYear.Id,
+				"Admin Staff Leave Policy");
+			var contractLeave = await _leavePolicyRepository.FindByPolicyNameAsync(
+				academicYear.Id,
+				"Contract Staff Leave Policy");
 
 			if (standardPayroll == null || operationsPayroll == null || partTimePayroll == null ||
-			    standardAttendance == null || operationsAttendance == null || partTimeAttendance == null)
+			    standardAttendance == null || operationsAttendance == null || partTimeAttendance == null ||
+			    teachingLeave == null || adminLeave == null || contractLeave == null)
 			{
 				continue;
 			}
@@ -82,6 +92,7 @@ public partial class HRSeederContributor
 				teachingGroup.Name,
 				standardPayroll,
 				standardAttendance,
+				teachingLeave,
 				priority: 10,
 				"Default seeded teaching staff policy.");
 
@@ -99,6 +110,7 @@ public partial class HRSeederContributor
 				nonTeachingGroup.Name,
 				operationsPayroll,
 				operationsAttendance,
+				adminLeave,
 				priority: 10,
 				"Default seeded non-teaching operations policy.");
 
@@ -116,6 +128,7 @@ public partial class HRSeederContributor
 				administrationGroup.Name,
 				operationsPayroll,
 				operationsAttendance,
+				adminLeave,
 				priority: 30,
 				"Administration department uses operations payroll and attendance rules.");
 
@@ -135,6 +148,7 @@ public partial class HRSeederContributor
 					teacherRoleGroup.Name,
 					standardPayroll,
 					standardAttendance,
+					teachingLeave,
 					priority: 20,
 					"Teacher role seeded policy example.");
 			}
@@ -157,6 +171,7 @@ public partial class HRSeederContributor
 					morningShiftGroup.Name,
 					partTimePayroll,
 					partTimeAttendance,
+					contractLeave,
 					priority: 40,
 					"Morning shift seeded part-time policy example.");
 			}
@@ -173,6 +188,7 @@ public partial class HRSeederContributor
 					$"{directEmployee.FirstName} {directEmployee.LastName}".Trim(),
 					partTimePayroll,
 					partTimeAttendance,
+					contractLeave,
 					priority: 100,
 					"Seeded direct employee override for policy precedence testing.");
 			}

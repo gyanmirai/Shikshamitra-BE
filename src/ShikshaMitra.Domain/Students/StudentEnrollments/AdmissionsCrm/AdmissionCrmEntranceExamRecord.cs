@@ -56,6 +56,10 @@ public class AdmissionCrmEntranceExamRecord : FullAuditedAggregateRoot<Guid>, IM
 		AttendanceStatus = AdmissionCrmExamAttendanceStatus.NotMarked;
 		ExamStatus = EntranceExamStatusEnum.Pending;
 		EligibilityDecision = AdmissionCrmEligibilityDecision.Pending;
+		EligibilityDecisionReason = null;
+		EligibilityOverrideUsed = false;
+		EligibilityOverrideReason = null;
+		EligibilityDecidedAt = null;
 		ApplySlot(slot, capacityOverrideUsed, capacityOverrideReason);
 	}
 
@@ -77,6 +81,10 @@ public class AdmissionCrmEntranceExamRecord : FullAuditedAggregateRoot<Guid>, IM
 		AttendanceMarkedAt = null;
 		ExamStatus = EntranceExamStatusEnum.Pending;
 		EligibilityDecision = AdmissionCrmEligibilityDecision.Pending;
+		EligibilityDecisionReason = null;
+		EligibilityOverrideUsed = false;
+		EligibilityOverrideReason = null;
+		EligibilityDecidedAt = null;
 	}
 
 	public void MarkAttendance(AdmissionCrmExamAttendanceStatus attendanceStatus, DateTime markedAt)
@@ -98,15 +106,19 @@ public class AdmissionCrmEntranceExamRecord : FullAuditedAggregateRoot<Guid>, IM
 		if (attendanceStatus == AdmissionCrmExamAttendanceStatus.Absent)
 		{
 			ExamStatus = EntranceExamStatusEnum.Absent;
-			EligibilityDecision = AdmissionCrmEligibilityDecision.Rejected;
-			EligibilityDecisionReason = "Applicant was absent for the entrance exam.";
-			EligibilityDecidedAt = markedAt;
+			EligibilityDecision = AdmissionCrmEligibilityDecision.Pending;
+			EligibilityDecisionReason = null;
+			EligibilityOverrideUsed = false;
+			EligibilityOverrideReason = null;
+			EligibilityDecidedAt = null;
 		}
 		else
 		{
 			ExamStatus = EntranceExamStatusEnum.Pending;
 			EligibilityDecision = AdmissionCrmEligibilityDecision.Pending;
 			EligibilityDecisionReason = null;
+			EligibilityOverrideUsed = false;
+			EligibilityOverrideReason = null;
 			EligibilityDecidedAt = null;
 		}
 	}

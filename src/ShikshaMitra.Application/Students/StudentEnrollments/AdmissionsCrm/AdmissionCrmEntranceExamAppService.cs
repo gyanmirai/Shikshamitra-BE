@@ -77,6 +77,10 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 	{
 		var lead = await GetLeadForCurrentTenantAsync(leadId, nameof(ScheduleAsync));
 		var cycleConfiguration = await GetCycleConfigurationOrDefaultAsync(lead.AcademicYearId);
+		if (cycleConfiguration?.EntranceExamRequired == false)
+		{
+			throw new BusinessException("AdmissionCrm:EntranceExamDisabled");
+		}
 		await EnsureRegistrationFormReadyAsync(
 			lead,
 			cycleConfiguration?.RegistrationFormRequiredBeforeExam == true);
@@ -181,6 +185,24 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 				matchingLeadIds.Contains(x.LeadId) ||
 				(x.SlotNameSnapshot != null && x.SlotNameSnapshot.ToLower().Contains(filter)));
 		}
+		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
+		{
+			var applicant = input.ApplicantSearch.Trim().ToLowerInvariant();
+			var matchingLeadIds = leadQueryable
+				.Where(x =>
+					x.TenantId == CurrentTenant.Id &&
+					x.AcademicYearId == academicYearId &&
+					((x.FirstName != null && x.FirstName.ToLower().Contains(applicant)) ||
+					 (x.MiddleName != null && x.MiddleName.ToLower().Contains(applicant)) ||
+					 (x.LastName != null && x.LastName.ToLower().Contains(applicant)) ||
+					 (x.ParentGuardianName != null && x.ParentGuardianName.ToLower().Contains(applicant))))
+				.Select(x => x.Id);
+			query = query.Where(x => matchingLeadIds.Contains(x.LeadId));
+		}
+		if (input.ExamStartFrom.HasValue)
+			query = query.Where(x => x.ExamStartTime >= input.ExamStartFrom.Value);
+		if (input.ExamStartUntil.HasValue)
+			query = query.Where(x => x.ExamStartTime < input.ExamStartUntil.Value.AddDays(1));
 
 		if (input.AttendanceStatus.HasValue)
 		{
@@ -198,9 +220,7 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		var sortedQuery = string.IsNullOrWhiteSpace(input.FilterText)
-			? query.OrderBy(x => x.ExamStartTime).ThenBy(x => x.LeadId)
-			: query.OrderByDescending(x => x.ScheduledAt).ThenBy(x => x.LeadId);
+		var sortedQuery = ApplyExamSorting(query, leadQueryable, input.Sorting);
 		var exams = await AsyncExecuter.ToListAsync(
 			sortedQuery
 				.Skip(input.SkipCount)
@@ -730,6 +750,31 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 			EligibilityOverrideReason = exam.EligibilityOverrideReason,
 			ResultRecordedAt = exam.ResultRecordedAt,
 			EligibilityDecidedAt = exam.EligibilityDecidedAt
+		};
+	}
+
+	private static IOrderedQueryable<AdmissionCrmEntranceExamRecord> ApplyExamSorting(
+		IQueryable<AdmissionCrmEntranceExamRecord> query,
+		IQueryable<AdmissionInquiryLead> leads,
+		string? sorting)
+	{
+		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return field switch
+		{
+			"applicantname" => descending
+				? query.OrderByDescending(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.FirstName).FirstOrDefault())
+					.ThenByDescending(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.LastName).FirstOrDefault())
+				: query.OrderBy(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.FirstName).FirstOrDefault())
+					.ThenBy(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.LastName).FirstOrDefault()),
+			"examstarttime" => descending ? query.OrderByDescending(x => x.ExamStartTime) : query.OrderBy(x => x.ExamStartTime),
+			"attendancestatus" => descending ? query.OrderByDescending(x => x.AttendanceStatus) : query.OrderBy(x => x.AttendanceStatus),
+			"examstatus" => descending ? query.OrderByDescending(x => x.ExamStatus) : query.OrderBy(x => x.ExamStatus),
+			"obtainedmarks" => descending ? query.OrderByDescending(x => x.ObtainedMarks) : query.OrderBy(x => x.ObtainedMarks),
+			"eligibilitydecision" => descending
+				? query.OrderByDescending(x => x.EligibilityDecision)
+				: query.OrderBy(x => x.EligibilityDecision),
+			_ => query.OrderBy(x => x.ExamStartTime).ThenBy(x => x.LeadId)
 		};
 	}
 

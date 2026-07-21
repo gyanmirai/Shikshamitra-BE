@@ -190,11 +190,10 @@ public class AttendanceRegisterRowReader(
 		var attendanceByEmployeeDate = attendanceRows
 			.GroupBy(x => (x.EmployeeId, x.AttendanceDate))
 			.ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.LastModificationTime ?? y.CreationTime).First());
-		var holidayLookup = await lookupReader.BuildHolidayLookupAsync(Enumerable.Range(0, endDate.DayNumber - startDate.DayNumber + 1)
-			.Select(offset => startDate.AddDays(offset)));
 		var dates = Enumerable.Range(0, endDate.DayNumber - startDate.DayNumber + 1)
 			.Select(offset => startDate.AddDays(offset))
 			.ToList();
+		var holidayLookup = await lookupReader.BuildEmployeeHolidayLookupAsync(employeeIds, dates);
 		var captureModeLookup = await captureModeLookupResolver.ResolveForDatesOrDefaultAsync(employeeIds, dates);
 
 		return rowProjectionBuilder.Build(

@@ -93,6 +93,32 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Block_Activating_Left_Employee_Before_Payroll_Guard()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusLeftNoReactivate");
+		var toLeft = new EmployeeStatusUpdateRequest
+		{
+			EmployeeStatusType = 2,
+			Remarks = "Employee left",
+			EffectiveDate = TestEffectiveDate
+		};
+		(await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toLeft, JsonOptions))
+			.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var toActive = new EmployeeStatusUpdateRequest
+		{
+			EmployeeStatusType = 0,
+			Remarks = "Try reactivate",
+		};
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toActive, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var body = await response.Content.ReadAsStringAsync();
+		body.ShouldContain("HR:Employee:010025");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Employee_Status_With_Empty_Remarks_String()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusEmptyRemarks");

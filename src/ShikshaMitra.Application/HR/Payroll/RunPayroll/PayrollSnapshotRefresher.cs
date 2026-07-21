@@ -34,6 +34,7 @@ public class PayrollSnapshotRefresher(
 	PayrollRunSnapshotStore snapshotStore,
 	PayrollBasisPreviewResolver basisPreviewResolver,
 	PayrollSnapshotRefreshLookupReader lookupReader,
+	PayrollProvidentFundComponentBuilder providentFundComponentBuilder,
 	ILogger<PayrollSnapshotRefresher> logger)
 	: ITransientDependency
 {
@@ -175,7 +176,7 @@ public class PayrollSnapshotRefresher(
 					employee,
 					attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
 					payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-					GetResolvedComponents(resolvedComponentsByEmployee, employee.Id, year, month),
+					await GetPayrollComponentsAsync(payrollDetailsByEmployee, resolvedComponentsByEmployee, employee.Id, year, month),
 					adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
 					year,
 					month,
@@ -217,7 +218,7 @@ public class PayrollSnapshotRefresher(
 				employee,
 				attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
 				payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-				GetResolvedComponents(resolvedComponentsByEmployee, employee.Id, year, month),
+				await GetPayrollComponentsAsync(payrollDetailsByEmployee, resolvedComponentsByEmployee, employee.Id, year, month),
 				adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
 				payrollContext.Basis,
 				year,
@@ -244,6 +245,21 @@ public class PayrollSnapshotRefresher(
 		int year,
 		int month) =>
 		PayrollComponentMonthScope.FilterForMonth(resolvedComponentsByEmployee[employeeId], year, month);
+
+	private async Task<List<EmployeePayrollComponent>> GetPayrollComponentsAsync(
+		IReadOnlyDictionary<Guid, EmployeePayrollDetails> payrollDetailsByEmployee,
+		ILookup<Guid, EmployeePayrollComponent> resolvedComponentsByEmployee,
+		Guid employeeId,
+		int year,
+		int month)
+	{
+		var components = GetResolvedComponents(resolvedComponentsByEmployee, employeeId, year, month);
+		return await providentFundComponentBuilder.AddProvidentFundDeductionAsync(
+			payrollDetailsByEmployee.GetValueOrDefault(employeeId),
+			components,
+			year,
+			month);
+	}
 
 	private async Task<Dictionary<Guid, ShiftManagement>> GetShiftsByIdAsync(IEnumerable<Employee> employees)
 	{

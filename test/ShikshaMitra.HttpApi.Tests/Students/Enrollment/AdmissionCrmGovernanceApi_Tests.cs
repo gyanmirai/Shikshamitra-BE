@@ -101,8 +101,9 @@ public class AdmissionCrmGovernanceApi_Tests : ShikshaMitraApiTestBase
 			string.Join("; ", scheduleRun.FailureDetails.Select(x => $"{x.Key}: {x.Value}")));
 		scheduleRun.ExportIds.Count.ShouldBe(1);
 
-		var delegator = Guid.NewGuid();
-		var delegateUser = Guid.NewGuid();
+		var owners = await GetEligibleCrmOwnersAsync();
+		var delegator = owners[0].Id;
+		var delegateUser = owners[1].Id;
 		var delegationResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/{yearId}/operations/delegations",
 			new CreateAdmissionCrmWorkDelegationDto

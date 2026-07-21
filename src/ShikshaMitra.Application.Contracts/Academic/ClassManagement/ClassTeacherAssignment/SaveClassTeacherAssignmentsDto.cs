@@ -12,4 +12,6 @@ public class SaveClassTeacherAssignmentsDto
 	[Required]
 	[MinLength(1, ErrorMessage = "At least one assignment is required")]
 	public List<ClassTeacherAssignmentUpdateDto> Assignments { get; set; } = new();
+
+	public bool SaveAsDraft { get; set; }
 }

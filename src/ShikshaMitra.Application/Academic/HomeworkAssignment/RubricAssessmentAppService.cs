@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
@@ -15,6 +16,7 @@ public class RubricAssessmentAppService(
 	IRepository<AssessmentRubricCriterion, Guid> criterionRepository,
 	IRepository<RubricEvaluation, Guid> evaluationRepository,
 	IRepository<RubricCriterionScore, Guid> scoreRepository,
+	IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
 	IRepository<AssignmentEntity, Guid> assignmentRepository,
 	IRepository<StudentSubmissionEntity, Guid> submissionRepository
 ) : ApplicationService, IRubricAssessmentAppService
@@ -29,10 +31,22 @@ public class RubricAssessmentAppService(
 			CurrentTenant.Id,
 			input.StandardId,
 			input.SubjectId,
+			input.AcademicMediumId,
 			input.HomeworkId,
 			input.AssignmentId,
+			input.HomeworkTypeId,
+			input.AssignmentTypeId,
+			null,
+			input.IsTemplate,
+			input.AppliesToWorkType,
+			input.ScoringModel,
+			input.Visibility,
 			input.Title,
-			input.Description);
+			input.Description,
+			input.EvaluationInstructions,
+			input.StudentInstructions,
+			SerializeList(input.Tags),
+			SerializeList(input.PerformanceLevels));
 
 		rubric.ReplaceCriteria(BuildCriteria(rubric.Id, input.Criteria));
 		await rubricRepository.InsertAsync(rubric, autoSave: true);
@@ -41,16 +55,16 @@ public class RubricAssessmentAppService(
 
 	public async Task<List<AssessmentRubricDto>> GetListAsync(GetRubricsInput input)
 	{
-		if (input.HomeworkId.HasValue)
-		{
-			return [];
-		}
-
 		var rubrics = await rubricRepository.GetListAsync(r =>
 			(!input.StandardId.HasValue || r.StandardId == input.StandardId.Value) &&
 			(!input.SubjectId.HasValue || r.SubjectId == input.SubjectId.Value) &&
-			!r.HomeworkId.HasValue &&
+			(!input.AcademicMediumId.HasValue || !r.AcademicMediumId.HasValue || r.AcademicMediumId == input.AcademicMediumId.Value) &&
+			(!input.HomeworkId.HasValue || r.HomeworkId == input.HomeworkId.Value) &&
 			(!input.AssignmentId.HasValue || r.AssignmentId == input.AssignmentId.Value) &&
+			(!input.HomeworkTypeId.HasValue || r.HomeworkTypeId == input.HomeworkTypeId.Value) &&
+			(!input.AssignmentTypeId.HasValue || r.AssignmentTypeId == input.AssignmentTypeId.Value) &&
+			(!input.IsTemplate.HasValue || r.IsTemplate == input.IsTemplate.Value) &&
+			(!input.AppliesToWorkType.HasValue || !r.AppliesToWorkType.HasValue || r.AppliesToWorkType == input.AppliesToWorkType.Value) &&
 			(!input.Status.HasValue || r.Status == input.Status.Value));
 
 		if (!string.IsNullOrWhiteSpace(input.Search))
@@ -82,10 +96,22 @@ public class RubricAssessmentAppService(
 		rubric.UpdateDetails(
 			input.StandardId,
 			input.SubjectId,
+			input.AcademicMediumId,
 			input.HomeworkId,
 			input.AssignmentId,
+			input.HomeworkTypeId,
+			input.AssignmentTypeId,
+			rubric.SourceTemplateId,
+			input.IsTemplate,
+			input.AppliesToWorkType,
+			input.ScoringModel,
+			input.Visibility,
 			input.Title,
-			input.Description);
+			input.Description,
+			input.EvaluationInstructions,
+			input.StudentInstructions,
+			SerializeList(input.Tags),
+			SerializeList(input.PerformanceLevels));
 
 		var oldCriteria = await criterionRepository.GetListAsync(c => c.RubricId == id);
 		foreach (var criterion in oldCriteria)
@@ -98,10 +124,90 @@ public class RubricAssessmentAppService(
 		return MapRubric(rubric);
 	}
 
+	public async Task<AssessmentRubricDto> CreateFromTemplateAsync(Guid templateId, CreateRubricFromTemplateDto input)
+	{
+		var template = await rubricRepository.GetAsync(templateId);
+		if (!template.IsTemplate)
+		{
+			throw new BusinessException("AssessmentRubric:TemplateRequired");
+		}
+
+		if (template.Status != RubricStatus.Published)
+		{
+			throw new BusinessException("AssessmentRubric:TemplateMustBePublished");
+		}
+
+		await LoadCriteriaAsync([template]);
+		var targetWorkType = input.HomeworkId.HasValue ? WorkType.Homework : WorkType.Assignment;
+		if (template.AppliesToWorkType.HasValue && template.AppliesToWorkType.Value != targetWorkType)
+		{
+			throw new BusinessException("AssessmentRubric:TemplateWorkTypeMismatch");
+		}
+
+		var cloneInput = new CreateUpdateRubricDto
+		{
+			StandardId = input.StandardId,
+			SubjectId = input.SubjectId,
+			AcademicMediumId = template.AcademicMediumId,
+			HomeworkId = input.HomeworkId,
+			AssignmentId = input.AssignmentId,
+			IsTemplate = false,
+			AppliesToWorkType = targetWorkType,
+			ScoringModel = template.ScoringModel,
+			Visibility = template.Visibility,
+			Title = string.IsNullOrWhiteSpace(input.Title) ? template.Title : input.Title!,
+			Description = string.IsNullOrWhiteSpace(input.Description) ? template.Description : input.Description,
+			EvaluationInstructions = template.EvaluationInstructions,
+			StudentInstructions = template.StudentInstructions,
+			Tags = DeserializeList<string>(template.TagsJson),
+			PerformanceLevels = DeserializeList<RubricPerformanceLevelDto>(template.PerformanceLevelsJson),
+			Criteria = template.Criteria
+				.OrderBy(c => c.DisplayOrder)
+				.Select(c => new RubricCriterionInputDto
+				{
+					Title = c.Title,
+					Description = c.Description,
+					MaxMarks = c.MaxMarks,
+					DisplayOrder = c.DisplayOrder
+				})
+				.ToList()
+		};
+
+		await EnsureTaskLinkIsValidAsync(cloneInput);
+		var rubric = new AssessmentRubric(
+			GuidGenerator.Create(),
+			CurrentTenant.Id,
+			cloneInput.StandardId,
+			cloneInput.SubjectId,
+			cloneInput.AcademicMediumId,
+			cloneInput.HomeworkId,
+			cloneInput.AssignmentId,
+			null,
+			null,
+			template.Id,
+			false,
+			cloneInput.AppliesToWorkType,
+			cloneInput.ScoringModel,
+			cloneInput.Visibility,
+			cloneInput.Title,
+			cloneInput.Description,
+			cloneInput.EvaluationInstructions,
+			cloneInput.StudentInstructions,
+			SerializeList(cloneInput.Tags),
+			SerializeList(cloneInput.PerformanceLevels));
+
+		rubric.ReplaceCriteria(BuildCriteria(rubric.Id, cloneInput.Criteria));
+		rubric.Publish();
+		await rubricRepository.InsertAsync(rubric, autoSave: true);
+		await LoadCriteriaAsync([rubric]);
+		return MapRubric(rubric);
+	}
+
 	public async Task PublishAsync(Guid id)
 	{
 		var rubric = await rubricRepository.GetAsync(id);
 		await LoadCriteriaAsync([rubric]);
+		EnsureRubricCanBePublished(rubric);
 		rubric.Publish();
 		await rubricRepository.UpdateAsync(rubric, autoSave: true);
 	}
@@ -121,7 +227,6 @@ public class RubricAssessmentAppService(
 		{
 			throw new BusinessException("AssessmentRubric:RubricMustBePublished");
 		}
-		EnsureRubricIsNotLinkedToHomework(rubric);
 
 		var submission = await submissionRepository.GetAsync(input.StudentSubmissionId);
 		EnsureSubmissionMatchesRubric(rubric, submission, input.StudentId);
@@ -194,7 +299,6 @@ public class RubricAssessmentAppService(
 		var evaluation = await evaluationRepository.GetAsync(evaluationId);
 		await LoadScoresAsync([evaluation]);
 		var rubric = await rubricRepository.GetAsync(evaluation.RubricId);
-		EnsureRubricIsNotLinkedToHomework(rubric);
 		var submission = await submissionRepository.GetAsync(evaluation.StudentSubmissionId);
 
 		evaluation.Approve();
@@ -217,26 +321,29 @@ public class RubricAssessmentAppService(
 			throw new BusinessException("AssessmentRubric:OnlyOneTaskLinkAllowed");
 		}
 
+		if ((input.HomeworkId.HasValue || input.AssignmentId.HasValue) &&
+			(!input.StandardId.HasValue || input.StandardId.Value == Guid.Empty ||
+			!input.SubjectId.HasValue || input.SubjectId.Value == Guid.Empty))
+		{
+			throw new BusinessException("AssessmentRubric:RequiredFieldMissing");
+		}
+
 		if (input.HomeworkId.HasValue)
 		{
-			throw new BusinessException("AssessmentRubric:HomeworkRubricNotAllowed");
+			var homework = await homeworkRepository.GetAsync(input.HomeworkId.Value);
+			if (homework.StandardId != input.StandardId!.Value || homework.SubjectId != input.SubjectId!.Value)
+			{
+				throw new BusinessException("AssessmentRubric:TaskDoesNotMatchSubject");
+			}
 		}
 
 		if (input.AssignmentId.HasValue)
 		{
 			var assignment = await assignmentRepository.GetAsync(input.AssignmentId.Value);
-			if (assignment.StandardId != input.StandardId || assignment.SubjectId != input.SubjectId)
+			if (assignment.StandardId != input.StandardId!.Value || assignment.SubjectId != input.SubjectId!.Value)
 			{
 				throw new BusinessException("AssessmentRubric:TaskDoesNotMatchSubject");
 			}
-		}
-	}
-
-	private static void EnsureRubricIsNotLinkedToHomework(AssessmentRubric rubric)
-	{
-		if (rubric.HomeworkId.HasValue)
-		{
-			throw new BusinessException("AssessmentRubric:HomeworkRubricNotAllowed");
 		}
 	}
 
@@ -250,6 +357,37 @@ public class RubricAssessmentAppService(
 		if (criteria.Any(c => string.IsNullOrWhiteSpace(c.Title) || c.MaxMarks <= 0))
 		{
 			throw new BusinessException("AssessmentRubric:InvalidCriteria");
+		}
+	}
+
+	private static void EnsureRubricCanBePublished(AssessmentRubric rubric)
+	{
+		if (rubric.ScoringModel == RubricScoringModel.WeightedPercentage && rubric.TotalMarks != 100)
+		{
+			throw new BusinessException("AssessmentRubric:WeightMustEqual100");
+		}
+
+		if (rubric.ScoringModel == RubricScoringModel.PerformanceLevels)
+		{
+			EnsurePerformanceLevelsAreValid(DeserializeList<RubricPerformanceLevelDto>(rubric.PerformanceLevelsJson));
+		}
+	}
+
+	private static void EnsurePerformanceLevelsAreValid(IReadOnlyCollection<RubricPerformanceLevelDto> levels)
+	{
+		if (levels.Count < 2)
+		{
+			throw new BusinessException("AssessmentRubric:PerformanceLevelsRequired");
+		}
+
+		if (levels.Any(level => string.IsNullOrWhiteSpace(level.Label) || level.Score < 0))
+		{
+			throw new BusinessException("AssessmentRubric:InvalidPerformanceLevel");
+		}
+
+		if (levels.GroupBy(level => level.Label.Trim().ToUpperInvariant()).Any(group => group.Count() > 1))
+		{
+			throw new BusinessException("AssessmentRubric:DuplicatePerformanceLevel");
 		}
 	}
 
@@ -342,13 +480,27 @@ public class RubricAssessmentAppService(
 			Id = rubric.Id,
 			StandardId = rubric.StandardId,
 			SubjectId = rubric.SubjectId,
+			AcademicMediumId = rubric.AcademicMediumId,
 			HomeworkId = rubric.HomeworkId,
 			AssignmentId = rubric.AssignmentId,
+			HomeworkTypeId = rubric.HomeworkTypeId,
+			AssignmentTypeId = rubric.AssignmentTypeId,
+			SourceTemplateId = rubric.SourceTemplateId,
+			IsTemplate = rubric.IsTemplate,
+			AppliesToWorkType = rubric.AppliesToWorkType,
+			ScoringModel = rubric.ScoringModel,
+			Visibility = rubric.Visibility,
 			Title = rubric.Title,
 			Description = rubric.Description,
+			EvaluationInstructions = rubric.EvaluationInstructions,
+			StudentInstructions = rubric.StudentInstructions,
+			Tags = DeserializeList<string>(rubric.TagsJson),
+			PerformanceLevels = DeserializeList<RubricPerformanceLevelDto>(rubric.PerformanceLevelsJson),
 			TotalMarks = rubric.TotalMarks,
 			Version = rubric.Version,
 			Status = rubric.Status,
+			CreationTime = rubric.CreationTime,
+			LastModificationTime = rubric.LastModificationTime,
 			Criteria = rubric.Criteria
 				.OrderBy(c => c.DisplayOrder)
 				.Select(c => new AssessmentRubricCriterionDto
@@ -385,5 +537,20 @@ public class RubricAssessmentAppService(
 				Comments = s.Comments
 			}).ToList()
 		};
+	}
+
+	private static string? SerializeList<T>(IReadOnlyCollection<T>? items)
+	{
+		return items == null || items.Count == 0 ? null : JsonSerializer.Serialize(items);
+	}
+
+	private static List<T> DeserializeList<T>(string? json)
+	{
+		if (string.IsNullOrWhiteSpace(json))
+		{
+			return [];
+		}
+
+		return JsonSerializer.Deserialize<List<T>>(json) ?? [];
 	}
 }

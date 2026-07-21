@@ -261,7 +261,7 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
             new() { Module = "Homework Evaluation", Status = $"{pendingEvaluations} Pending", Level = pendingEvaluations > 0 ? "warning" : "success", Progress = pendingEvaluations > 0 ? 0 : 100, Icon = "solar:notebook-bold" }
         };
 
-        var results = await _examResultDetailRepository.GetListAsync();
+        var results = await GetDashboardResultDetailsAsync();
         AcademicDashboardPassFailChartDto passFailChart;
         if (exams.Count > 0)
         {
@@ -394,7 +394,7 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
 
         var exams = await _examRepository.GetListAsync();
 
-        var results = await _examResultDetailRepository.GetListAsync();
+        var results = await GetDashboardResultDetailsAsync();
         var schoolPerformanceIndex = results.Count > 0
             ? (int)Math.Round(results.Average(r => r.Percentage))
             : 0;
@@ -712,13 +712,15 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
             exams = [];
         }
 
-        var results = await _examResultDetailRepository.GetListAsync();
         var students = await _studentRepository.GetListAsync();
         var divisions = await _divisionRepository.GetListAsync();
         var teacherDivisions = hasTeacherScope
             ? divisions.Where(d => teacherStandardIds.Contains(d.StandardId)).ToList()
             : [];
         var teacherDivisionIds = teacherDivisions.Select(d => d.Id).Distinct().ToList();
+        var results = hasTeacherScope && teacherDivisionIds.Count > 0
+            ? await GetDashboardResultDetailsAsync(divisionIds: teacherDivisionIds)
+            : await GetDashboardResultDetailsAsync();
 
         var submissions = await _submissionRepository.GetListAsync();
         if (hasTeacherScope)
@@ -1021,7 +1023,7 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         IReadOnlyCollection<QuestionPaper> questionPapers,
         IReadOnlyCollection<ExamSeatingPlan> seatingPlans,
         IReadOnlyCollection<ExamSeatAllocation> seatAllocations,
-        IReadOnlyCollection<ExamResultDetail> results,
+        IReadOnlyCollection<DashboardResultDetail> results,
         int roomCount)
     {
         var publishedTimetables = timetables.Count(t => t.Status == TimetableStatus.Published);
@@ -1356,11 +1358,11 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         }
 
         var examIds = exams.Select(e => e.Id).ToList();
-        var results = await _examResultDetailRepository.GetListAsync(r => examIds.Contains(r.ExamId) && r.DivisionId == divisionId);
+        var results = await GetDashboardResultDetailsAsync(examIds, [divisionId]);
 
         if (results.Count == 0 && examIds.Count > 0)
         {
-            results = await _examResultDetailRepository.GetListAsync(r => examIds.Contains(r.ExamId));
+            results = await GetDashboardResultDetailsAsync(examIds);
         }
 
         int passed = results.Count(r => r.ResultStatus == ExamStudentResultStatus.Pass);
@@ -1417,4 +1419,38 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
 
         return result;
     }
+
+    private async Task<List<DashboardResultDetail>> GetDashboardResultDetailsAsync(
+        IReadOnlyCollection<Guid>? examIds = null,
+        IReadOnlyCollection<Guid>? divisionIds = null)
+    {
+        var query = await _examResultDetailRepository.GetQueryableAsync();
+
+        if (examIds is { Count: > 0 })
+        {
+            query = query.Where(result => examIds.Contains(result.ExamId));
+        }
+
+        if (divisionIds is { Count: > 0 })
+        {
+            query = query.Where(result => divisionIds.Contains(result.DivisionId));
+        }
+
+        return await AsyncExecuter.ToListAsync(
+            query.Select(result => new DashboardResultDetail(
+                result.Id,
+                result.ExamId,
+                result.StudentId,
+                result.DivisionId,
+                result.Percentage,
+                result.ResultStatus)));
+    }
+
+    private sealed record DashboardResultDetail(
+        Guid Id,
+        Guid ExamId,
+        Guid StudentId,
+        Guid DivisionId,
+        double Percentage,
+        ExamStudentResultStatus ResultStatus);
 }

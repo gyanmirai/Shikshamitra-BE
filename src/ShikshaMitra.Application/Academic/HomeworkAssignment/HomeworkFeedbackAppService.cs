@@ -25,6 +25,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 {
 	private readonly IRepository<HomeworkAssignmentEntity, Guid> _homeworkRepository;
 	private readonly IStudentSubmissionRepository _submissionRepository;
+	private readonly IRepository<AssessmentRubric, Guid> _rubricRepository;
 	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<Subject, Guid> _subjectRepository;
@@ -33,6 +34,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	public HomeworkFeedbackAppService(
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
 		IStudentSubmissionRepository submissionRepository,
+		IRepository<AssessmentRubric, Guid> rubricRepository,
 		IRepository<Student, Guid> studentRepository,
 		IRepository<Standard, Guid> standardRepository,
 		IRepository<Subject, Guid> subjectRepository,
@@ -41,6 +43,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	{
 		_homeworkRepository = homeworkRepository;
 		_submissionRepository = submissionRepository;
+		_rubricRepository = rubricRepository;
 		_studentRepository = studentRepository;
 		_standardRepository = standardRepository;
 		_subjectRepository = subjectRepository;
@@ -121,6 +124,12 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		var homeworkTypeName = homework.HomeworkType?.Name
 			?? homework.HomeworkAssignmentType?.Name
 			?? "Homework";
+		var taskRubric = (await _rubricRepository.GetListAsync(r =>
+				r.HomeworkId == homework.Id &&
+				!r.IsTemplate &&
+				r.Status != RubricStatus.Archived))
+			.OrderByDescending(r => r.CreationTime)
+			.FirstOrDefault();
 
 		// 6. Build response - Left join students with submissions
 		var submissionDtos = new List<HomeworkSubmissionDto>();
@@ -146,15 +155,15 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				DueDate = homework.DueDate?.ToString("dd-MM-yyyy")
 					?? homework.DivisionSchedules.FirstOrDefault(ds => ds.DivisionId == filter.DivisionId)?.DueDate.ToString("dd-MM-yyyy")
 					?? string.Empty,
-				Marks = null,
-				TotalMarks = null,
+				Marks = submission?.Marks,
+				TotalMarks = submission?.TotalMarks ?? taskRubric?.TotalMarks,
 				Feedback = submission?.Feedback,
 				Remarks = submission?.Remarks,
 				Status = (int) (submission?.Status ?? SubmissionStatus.NotSubmitted),
 				SubmissionStatusLabel = GetSubmissionStatusLabel(submission?.Status ?? SubmissionStatus.NotSubmitted),
 				EvaluationStatus = GetEvaluationStatus(submission?.Status, submission?.Feedback),
 				FeedbackStatus = string.IsNullOrWhiteSpace(submission?.Feedback) ? "Feedback Pending" : "Feedback Added",
-				Percentage = null,
+				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks ?? taskRubric?.TotalMarks),
 				SubmittedContent = submission?.SubmittedContent,
 				SubmittedDocumentUrl = submission?.SubmittedDocumentUrl,
 				OriginalFileName = submission?.OriginalFileName
@@ -187,6 +196,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 	private static EvaluationWorkspaceSummaryDto BuildSummary(List<HomeworkSubmissionDto> submissions)
 	{
+		var reviewedRows = submissions.Where(s => s.Marks.HasValue && s.TotalMarks.HasValue).ToList();
+
 		return new EvaluationWorkspaceSummaryDto
 		{
 			TotalStudents = submissions.Count,
@@ -195,9 +206,16 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			Reviewed = submissions.Count(s => s.Status == (int)SubmissionStatus.Reviewed),
 			NeedsReview = submissions.Count(s => s.Status is (int)SubmissionStatus.Submitted or (int)SubmissionStatus.Late or (int)SubmissionStatus.NeedsReview),
 			Late = submissions.Count(s => s.Status == (int)SubmissionStatus.Late),
-			TotalMarks = null,
-			AverageMarks = null
+			TotalMarks = reviewedRows.Select(s => s.TotalMarks).FirstOrDefault(x => x.HasValue),
+			AverageMarks = reviewedRows.Count == 0 ? null : Math.Round(reviewedRows.Average(s => s.Marks!.Value), 2)
 		};
+	}
+
+	private static decimal? CalculatePercentage(decimal? marks, decimal? totalMarks)
+	{
+		return marks.HasValue && totalMarks.HasValue && totalMarks.Value > 0
+			? Math.Round(marks.Value / totalMarks.Value * 100, 2)
+			: null;
 	}
 
 	private static string GetEvaluationStatus(SubmissionStatus? status, string? feedback)

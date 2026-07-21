@@ -98,5 +98,23 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
+
+		public static class HomeworkAndAssignment_SettingsRubricConfig
+		{
+			private const string SubmoduleName = $"{ModuleName}.HomeworkAndAssignment.Settings.RubricConfig";
+			private const string SubmoduleDisplayName = $"{DisplayName}.HomeworkAndAssignment.Settings.RubricConfig";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
 	}
 }

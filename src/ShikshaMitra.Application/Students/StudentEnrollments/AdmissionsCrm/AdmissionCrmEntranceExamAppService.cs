@@ -220,11 +220,7 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		var sortedQuery = ApplyExamSorting(query, leadQueryable, input.Sorting);
-		var exams = await AsyncExecuter.ToListAsync(
-			sortedQuery
-				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount));
+		var exams = await GetSortedExamPageAsync(query, leadQueryable, input);
 		var leadIds = exams.Select(x => x.LeadId).Distinct().ToList();
 		var leads = await AsyncExecuter.ToListAsync(
 			leadQueryable.Where(x =>
@@ -775,6 +771,53 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 				? query.OrderByDescending(x => x.EligibilityDecision)
 				: query.OrderBy(x => x.EligibilityDecision),
 			_ => query.OrderBy(x => x.ExamStartTime).ThenBy(x => x.LeadId)
+		};
+	}
+
+	private async Task<List<AdmissionCrmEntranceExamRecord>> GetSortedExamPageAsync(
+		IQueryable<AdmissionCrmEntranceExamRecord> query,
+		IQueryable<AdmissionInquiryLead> leadQueryable,
+		GetAdmissionCrmEntranceExamListInput input)
+	{
+		try
+		{
+			return await AsyncExecuter.ToListAsync(
+				ApplyExamSorting(query, leadQueryable, input.Sorting)
+					.Skip(input.SkipCount)
+					.Take(input.MaxResultCount));
+		}
+		catch (NotSupportedException ex) when (IsDateTimeOffsetOrderingNotSupported(ex) && UsesExamStartTimeSorting(input.Sorting))
+		{
+			var exams = await AsyncExecuter.ToListAsync(query);
+			return ApplyExamSortingInMemory(exams, input.Sorting)
+				.Skip(input.SkipCount)
+				.Take(input.MaxResultCount)
+				.ToList();
+		}
+	}
+
+	private static bool UsesExamStartTimeSorting(string? sorting)
+	{
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return string.IsNullOrWhiteSpace(field) || field == "examstarttime";
+	}
+
+	private static bool IsDateTimeOffsetOrderingNotSupported(NotSupportedException ex) =>
+		ex.Message.Contains("DateTimeOffset", StringComparison.OrdinalIgnoreCase) &&
+		ex.Message.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase);
+
+	private static IOrderedEnumerable<AdmissionCrmEntranceExamRecord> ApplyExamSortingInMemory(
+		IEnumerable<AdmissionCrmEntranceExamRecord> exams,
+		string? sorting)
+	{
+		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
+		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+		return field switch
+		{
+			"examstarttime" => descending
+				? exams.OrderByDescending(x => x.ExamStartTime).ThenBy(x => x.LeadId)
+				: exams.OrderBy(x => x.ExamStartTime).ThenBy(x => x.LeadId),
+			_ => exams.OrderBy(x => x.ExamStartTime).ThenBy(x => x.LeadId)
 		};
 	}
 

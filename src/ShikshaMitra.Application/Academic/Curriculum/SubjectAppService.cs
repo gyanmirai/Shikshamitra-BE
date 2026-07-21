@@ -206,6 +206,31 @@ public class SubjectAppService(
 
 			await subjectRepository.UpdateAsync(subject);
 
+			if (updateSubjectDto.Status == SubjectMasterStatus.Active)
+			{
+				var assignments = await assignedSubjectRepository.GetListAsync(a => a.SubjectId == id && a.Status == SubjectStatus.Inactive);
+				if (assignments.Count > 0)
+				{
+					foreach (var assignment in assignments)
+					{
+						assignment.ChangeStatus(SubjectStatus.Draft);
+					}
+					await assignedSubjectRepository.UpdateManyAsync(assignments);
+				}
+			}
+			else if (updateSubjectDto.Status == SubjectMasterStatus.Inactive)
+			{
+				var assignments = await assignedSubjectRepository.GetListAsync(a => a.SubjectId == id && a.Status != SubjectStatus.Inactive && a.Status != SubjectStatus.Archived);
+				if (assignments.Count > 0)
+				{
+					foreach (var assignment in assignments)
+					{
+						assignment.ChangeStatus(SubjectStatus.Inactive);
+					}
+					await assignedSubjectRepository.UpdateManyAsync(assignments);
+				}
+			}
+
 			return await MapSubjectAsync(subject);
 		}
 		catch (BusinessException)
@@ -248,6 +273,17 @@ public class SubjectAppService(
 
 		subject.Restore();
 		await subjectRepository.UpdateAsync(subject);
+
+		var assignments = await assignedSubjectRepository.GetListAsync(a => a.SubjectId == id && a.Status == SubjectStatus.Inactive);
+		if (assignments.Count > 0)
+		{
+			foreach (var assignment in assignments)
+			{
+				assignment.ChangeStatus(SubjectStatus.Draft);
+			}
+			await assignedSubjectRepository.UpdateManyAsync(assignments);
+		}
+
 		return await MapSubjectAsync(subject);
 	}
 

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Academic.HomeworkAssignment;
@@ -14,6 +15,7 @@ namespace ShikshaMitra.Controllers.Academic.HomeworkAssignment;
 public class RubricAssessmentController(IRubricAssessmentAppService service) : AbpControllerBase
 {
 	[HttpPost]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsRubricConfig.Add)]
 	[ProducesResponseType(typeof(AssessmentRubricDto), 200)]
 	public Task<AssessmentRubricDto> CreateAsync([FromBody] CreateUpdateRubricDto input)
 	{
@@ -21,6 +23,7 @@ public class RubricAssessmentController(IRubricAssessmentAppService service) : A
 	}
 
 	[HttpGet]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsRubricConfig.View)]
 	[ProducesResponseType(typeof(List<AssessmentRubricDto>), 200)]
 	public Task<List<AssessmentRubricDto>> GetListAsync([FromQuery] GetRubricsInput input)
 	{
@@ -28,6 +31,7 @@ public class RubricAssessmentController(IRubricAssessmentAppService service) : A
 	}
 
 	[HttpGet("{id:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsRubricConfig.View)]
 	[ProducesResponseType(typeof(AssessmentRubricDto), 200)]
 	public Task<AssessmentRubricDto> GetAsync(Guid id)
 	{
@@ -35,25 +39,39 @@ public class RubricAssessmentController(IRubricAssessmentAppService service) : A
 	}
 
 	[HttpPut("{id:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsRubricConfig.Add)]
 	[ProducesResponseType(typeof(AssessmentRubricDto), 200)]
 	public Task<AssessmentRubricDto> UpdateAsync(Guid id, [FromBody] CreateUpdateRubricDto input)
 	{
 		return service.UpdateAsync(id, input);
 	}
 
+	[HttpPost("{id:guid}/copy-to-task")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.Add)]
+	[ProducesResponseType(typeof(AssessmentRubricDto), 200)]
+	public Task<AssessmentRubricDto> CreateFromTemplateAsync(
+		Guid id,
+		[FromBody] CreateRubricFromTemplateDto input)
+	{
+		return service.CreateFromTemplateAsync(id, input);
+	}
+
 	[HttpPost("{id:guid}/publish")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsRubricConfig.Add)]
 	public Task PublishAsync(Guid id)
 	{
 		return service.PublishAsync(id);
 	}
 
 	[HttpPost("{id:guid}/archive")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsRubricConfig.Delete)]
 	public Task ArchiveAsync(Guid id)
 	{
 		return service.ArchiveAsync(id);
 	}
 
 	[HttpPost("{id:guid}/evaluations")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
 	[ProducesResponseType(typeof(RubricEvaluationDto), 200)]
 	public Task<RubricEvaluationDto> UpsertEvaluationAsync(
 		Guid id,
@@ -63,6 +81,7 @@ public class RubricAssessmentController(IRubricAssessmentAppService service) : A
 	}
 
 	[HttpGet("{id:guid}/evaluations")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
 	[ProducesResponseType(typeof(List<RubricEvaluationDto>), 200)]
 	public Task<List<RubricEvaluationDto>> GetEvaluationsAsync(Guid id)
 	{
@@ -70,12 +89,14 @@ public class RubricAssessmentController(IRubricAssessmentAppService service) : A
 	}
 
 	[HttpPost("evaluations/{evaluationId:guid}/submit")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
 	public Task SubmitEvaluationAsync(Guid evaluationId)
 	{
 		return service.SubmitEvaluationAsync(evaluationId);
 	}
 
 	[HttpPost("evaluations/{evaluationId:guid}/approve")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
 	public Task ApproveEvaluationAsync(Guid evaluationId)
 	{
 		return service.ApproveEvaluationAsync(evaluationId);

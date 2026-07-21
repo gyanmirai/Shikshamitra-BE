@@ -10,12 +10,24 @@ namespace ShikshaMitra.Academic.HomeworkAssignment;
 public class AssessmentRubric : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public Guid StandardId { get; private set; }
-	public Guid SubjectId { get; private set; }
+	public Guid? StandardId { get; private set; }
+	public Guid? SubjectId { get; private set; }
+	public Guid? AcademicMediumId { get; private set; }
 	public Guid? HomeworkId { get; private set; }
 	public Guid? AssignmentId { get; private set; }
+	public Guid? HomeworkTypeId { get; private set; }
+	public Guid? AssignmentTypeId { get; private set; }
+	public Guid? SourceTemplateId { get; private set; }
+	public bool IsTemplate { get; private set; }
+	public WorkType? AppliesToWorkType { get; private set; }
+	public RubricScoringModel ScoringModel { get; private set; }
+	public RubricVisibility Visibility { get; private set; }
 	public string Title { get; private set; } = string.Empty;
 	public string? Description { get; private set; }
+	public string? EvaluationInstructions { get; private set; }
+	public string? StudentInstructions { get; private set; }
+	public string? TagsJson { get; private set; }
+	public string? PerformanceLevelsJson { get; private set; }
 	public decimal TotalMarks { get; private set; }
 	public int Version { get; private set; }
 	public RubricStatus Status { get; private set; }
@@ -23,7 +35,7 @@ public class AssessmentRubric : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private AssessmentRubric() { }
 
-	public AssessmentRubric(Guid id, Guid? tenantId, Guid standardId, Guid subjectId, Guid? homeworkId, Guid? assignmentId, string title, string? description)
+	public AssessmentRubric(Guid id, Guid? tenantId, Guid? standardId, Guid? subjectId, Guid? homeworkId, Guid? assignmentId, string title, string? description)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -32,7 +44,95 @@ public class AssessmentRubric : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Status = RubricStatus.Draft;
 	}
 
-	public void UpdateDetails(Guid standardId, Guid subjectId, Guid? homeworkId, Guid? assignmentId, string title, string? description)
+	public AssessmentRubric(
+		Guid id,
+		Guid? tenantId,
+		Guid? standardId,
+		Guid? subjectId,
+		Guid? academicMediumId,
+		Guid? homeworkId,
+		Guid? assignmentId,
+		Guid? homeworkTypeId,
+		Guid? assignmentTypeId,
+		Guid? sourceTemplateId,
+		bool isTemplate,
+		WorkType? appliesToWorkType,
+		RubricScoringModel scoringModel,
+		RubricVisibility visibility,
+		string title,
+		string? description,
+		string? evaluationInstructions,
+		string? studentInstructions,
+		string? tagsJson,
+		string? performanceLevelsJson)
+		: base(id)
+	{
+		TenantId = tenantId;
+		UpdateDetails(
+			standardId,
+			subjectId,
+			academicMediumId,
+			homeworkId,
+			assignmentId,
+			homeworkTypeId,
+			assignmentTypeId,
+			sourceTemplateId,
+			isTemplate,
+			appliesToWorkType,
+			scoringModel,
+			visibility,
+			title,
+			description,
+			evaluationInstructions,
+			studentInstructions,
+			tagsJson,
+			performanceLevelsJson);
+		Version = 1;
+		Status = RubricStatus.Draft;
+	}
+
+	public void UpdateDetails(Guid? standardId, Guid? subjectId, Guid? homeworkId, Guid? assignmentId, string title, string? description)
+	{
+		UpdateDetails(
+			standardId,
+			subjectId,
+			AcademicMediumId,
+			homeworkId,
+			assignmentId,
+			HomeworkTypeId,
+			AssignmentTypeId,
+			SourceTemplateId,
+			IsTemplate,
+			AppliesToWorkType,
+			ScoringModel,
+			Visibility,
+			title,
+			description,
+			EvaluationInstructions,
+			StudentInstructions,
+			TagsJson,
+			PerformanceLevelsJson);
+	}
+
+	public void UpdateDetails(
+		Guid? standardId,
+		Guid? subjectId,
+		Guid? academicMediumId,
+		Guid? homeworkId,
+		Guid? assignmentId,
+		Guid? homeworkTypeId,
+		Guid? assignmentTypeId,
+		Guid? sourceTemplateId,
+		bool isTemplate,
+		WorkType? appliesToWorkType,
+		RubricScoringModel scoringModel,
+		RubricVisibility visibility,
+		string title,
+		string? description,
+		string? evaluationInstructions,
+		string? studentInstructions,
+		string? tagsJson,
+		string? performanceLevelsJson)
 	{
 		if (Status == RubricStatus.Published)
 		{
@@ -44,12 +144,39 @@ public class AssessmentRubric : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException("AssessmentRubric:OnlyOneTaskLinkAllowed");
 		}
 
-		StandardId = standardId == Guid.Empty ? throw new BusinessException("AssessmentRubric:RequiredFieldMissing") : standardId;
-		SubjectId = subjectId == Guid.Empty ? throw new BusinessException("AssessmentRubric:RequiredFieldMissing") : subjectId;
+		if (isTemplate && (homeworkId.HasValue || assignmentId.HasValue))
+		{
+			throw new BusinessException("AssessmentRubric:TemplateCannotBeTaskLinked");
+		}
+
+		if (homeworkTypeId.HasValue && assignmentTypeId.HasValue)
+		{
+			throw new BusinessException("AssessmentRubric:OnlyOneTypeLinkAllowed");
+		}
+
+		if (!isTemplate && (!standardId.HasValue || standardId.Value == Guid.Empty ||
+			!subjectId.HasValue || subjectId.Value == Guid.Empty))
+		{
+			throw new BusinessException("AssessmentRubric:RequiredFieldMissing");
+		}
+		StandardId = standardId.HasValue && standardId.Value != Guid.Empty ? standardId.Value : null;
+		SubjectId = subjectId;
+		AcademicMediumId = academicMediumId;
 		HomeworkId = homeworkId;
 		AssignmentId = assignmentId;
+		HomeworkTypeId = homeworkTypeId;
+		AssignmentTypeId = assignmentTypeId;
+		SourceTemplateId = sourceTemplateId;
+		IsTemplate = isTemplate;
+		AppliesToWorkType = appliesToWorkType;
+		ScoringModel = scoringModel;
+		Visibility = visibility;
 		Title = Normalize(title, 256);
 		Description = NormalizeNullable(description, 1024);
+		EvaluationInstructions = NormalizeNullable(evaluationInstructions, 2048);
+		StudentInstructions = NormalizeNullable(studentInstructions, 2048);
+		TagsJson = NormalizeNullable(tagsJson, 4096);
+		PerformanceLevelsJson = NormalizeNullable(performanceLevelsJson, 8192);
 	}
 
 	public void ReplaceCriteria(IEnumerable<AssessmentRubricCriterion> criteria)

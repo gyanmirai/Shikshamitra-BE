@@ -45,4 +45,6 @@ public class CreateLessonPlanDto
     public int PlannedCompletionPercentage { get; set; }
 
     public bool IsAiGenerated { get; set; }
+
+    public LessonPlanStatus Status { get; set; } = LessonPlanStatus.Draft;
 }

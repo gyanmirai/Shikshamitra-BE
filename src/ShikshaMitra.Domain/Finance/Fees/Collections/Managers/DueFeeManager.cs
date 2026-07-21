@@ -126,6 +126,7 @@ public class DueFeeManager(
 				year: year,
 				isOneTime: installmentCount == 1,
 				amount: amount,
+				dueDate: dueDate,
 				feeStructureDetailId: detail.Id,
 				paymentTermId: schedule.PaymentTermId,
 				paymentTermVersionId: schedule.PaymentTermVersionId,

@@ -74,7 +74,18 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		int year,
 		bool isOneTime,
 		double amount,
-		DateTime dueDate)
+		DateTime dueDate,
+		Guid? feeStructureDetailId = null,
+		Guid? paymentTermId = null,
+		Guid? paymentTermVersionId = null,
+		Guid? paymentTermInstallmentId = null,
+		int? installmentSequence = null,
+		string? installmentName = null,
+		DateTime? coverageStartDate = null,
+		DateTime? coverageEndDate = null,
+		DateTime? demandDate = null,
+		DateTime? scheduleDueDate = null,
+		ScheduleSource scheduleSource = ScheduleSource.Legacy)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -180,7 +191,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("Amount", amount);
 
 		if (amount > PaidAmount)
-			throw new BusinessException(DueFeeErrorCodes.ReverseExceedsPaidAmount)
+			throw new BusinessException(DueFeeErrorCodes.ReverseAmountMustBePositive)
 				.WithData("Requested", amount)
 				.WithData("PaidAmount", PaidAmount);
 

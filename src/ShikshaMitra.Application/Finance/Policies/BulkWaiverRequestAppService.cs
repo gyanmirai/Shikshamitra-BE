@@ -271,14 +271,14 @@ public class BulkWaiverRequestAppService(
 
 		foreach (var dueFee in dueFees)
 		{
-			var feeStructureId = assignmentMap[dueFee.StudentId];
-			var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId, feeStructureId);
+			var structureId = assignmentMap[dueFee.StudentId];
+			var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId, structureId);
 			if (effective.Policy is null || !effective.Policy.EnableWaiver || effective.IsLateFeeExempt)
 			{
 				continue;
 			}
 
-			var activeWindow = await exceptionWindowResolver.ResolveActiveWindowAsync(academicYearId, feeStructureId, today);
+			var activeWindow = await exceptionWindowResolver.ResolveActiveWindowAsync(academicYearId, structureId, today);
 			var daysLate = (today - dueFee.DueDate.Date).Days;
 			var lateFeeResult = lateFeeCalculationService.Calculate(effective.Policy, new LateFeeCalculationInput(
 				Math.Max(0, daysLate),

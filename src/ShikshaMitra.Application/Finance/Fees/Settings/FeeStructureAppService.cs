@@ -219,7 +219,7 @@ public class FeeStructureAppService(
                 Name = fs.Name,
 				Status = fs.IsLocked ? FeeStructureStatus.Locked : FeeStructureStatus.Unlocked,
 				CollectionPolicyId = fs.CollectionPolicyId,
-				FeeHeads = fs.FeeStructureDetails.Select(d => new FeeHeadAssignmentResponse
+				FeeHeads = fs.FeeStructureDetails.Select(d =>
                 {
                     var response = new FeeHeadAssignmentResponse
                     {

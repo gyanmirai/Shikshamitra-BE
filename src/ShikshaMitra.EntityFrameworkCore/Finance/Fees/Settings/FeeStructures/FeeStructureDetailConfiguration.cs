@@ -17,5 +17,17 @@ public class FeeStructureDetailConfiguration : IEntityTypeConfiguration<FeeStruc
 			.HasForeignKey(x => x.FeeHeadId)
 			.OnDelete(DeleteBehavior.Restrict);
 		builder.Navigation(x => x.FeeHead).AutoInclude();
+
+		// Payment Term attachment fields
+		builder.Property(x => x.ScheduleMode).HasConversion<int>();
+		builder.Property(x => x.PaymentTermId);
+		builder.Property(x => x.PaymentTermVersionId);
+
+		// Schedule overrides navigation (child entity)
+		builder.HasMany(x => x.ScheduleOverrides)
+			.WithOne()
+			.HasForeignKey(x => x.FeeStructureDetailId)
+			.OnDelete(DeleteBehavior.Cascade);
+		builder.Navigation(x => x.ScheduleOverrides).AutoInclude();
 	}
 }

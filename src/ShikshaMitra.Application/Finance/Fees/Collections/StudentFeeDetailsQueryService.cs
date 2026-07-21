@@ -71,7 +71,10 @@ public partial class StudentFeeDetailsQueryService(
 		{
 			var dueFeeQ = await dueFeeRepository.GetQueryableAsync();
 			var dueFees = dueFeeQ.Where(d => d.StudentId == studentId)
-				.OrderBy(d => d.Year).ThenBy(d => d.Month).ToList();
+				.OrderBy(d => d.ScheduleDueDate ?? new DateTime(d.Year, (int)d.Month + 1, 1))
+				.ThenBy(d => d.InstallmentSequence ?? 0)
+				.ThenBy(d => d.Year).ThenBy(d => d.Month)
+				.ToList();
 
 			var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
 			var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
@@ -90,10 +93,17 @@ public partial class StudentFeeDetailsQueryService(
 			{
 				var lines = group.Select(d => new FeeLedgerLineDto
 				{
-					DueFeeId = d.Id, FeeHeadId = d.FeeHeadId,
+					DueFeeId = d.Id,
+					FeeHeadId = d.FeeHeadId,
 					FeeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty),
-					Total = d.OriginalAmount, Paid = d.PaidAmount, Due = d.OutstandingAmount,
-					//ConcessionAmount = concessions.Where(c => c.DueFeeId == d.Id).Sum(c => c.Amount),
+					InstallmentLabel = d.GetDisplayInstallmentLabel(),
+					DueDate = d.ScheduleDueDate,
+					CoverageStartDate = d.CoverageStartDate,
+					CoverageEndDate = d.CoverageEndDate,
+					ScheduleSource = d.ScheduleSource.ToString(),
+					Total = d.OriginalAmount,
+					Paid = d.PaidAmount,
+					Due = d.OutstandingAmount,
 					ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
 					RefundAmount = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Amount,
 					RefundDescription = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Description,

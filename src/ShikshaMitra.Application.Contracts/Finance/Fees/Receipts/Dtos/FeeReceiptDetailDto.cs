@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.Receipts.Dtos;
 
@@ -65,4 +66,30 @@ public class FeeReceiptDetailDto
     public string? SiblingReceiptNumber { get; set; }
 
     public string? Remarks { get; set; }
+
+    /// <summary>Paid fee-head rollup for display (fee receipts only).</summary>
+    public List<FeeReceiptPaidHeadDto> PaidFeeHeads { get; set; } = new();
+
+    /// <summary>Per-installment allocation lines snapped at collect time.</summary>
+    public List<FeeReceiptAllocationLineDto> AllocationDetails { get; set; } = new();
+}
+
+public class FeeReceiptPaidHeadDto
+{
+    public Guid FeeHeadId { get; set; }
+    public string FeeHeadName { get; set; } = string.Empty;
+    public double AmountPaid { get; set; }
+}
+
+public class FeeReceiptAllocationLineDto
+{
+    public Guid DueFeeId { get; set; }
+    public Guid? FeeHeadId { get; set; }
+    public string FeeHeadName { get; set; } = string.Empty;
+    public string InstallmentLabel { get; set; } = string.Empty;
+    public DateTime? CoverageStartDate { get; set; }
+    public DateTime? CoverageEndDate { get; set; }
+    public DateTime? DueDate { get; set; }
+    public double AmountPaid { get; set; }
+    public string ScheduleSource { get; set; } = "Legacy";
 }

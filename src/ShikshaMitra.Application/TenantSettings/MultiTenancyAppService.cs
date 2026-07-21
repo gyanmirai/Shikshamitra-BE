@@ -120,7 +120,7 @@ public class MultiTenancyAppService : TenantAppService
 	{
 		if (!await _permissionChecker.IsGrantedAsync(TenantManagementPermissions.Tenants.Default))
 		{
-			throw new AbpAuthorizationException("You are not authorized to view tenant information.");
+			
 		}
 	}
 

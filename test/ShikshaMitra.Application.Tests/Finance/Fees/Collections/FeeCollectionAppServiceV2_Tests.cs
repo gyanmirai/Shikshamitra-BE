@@ -8,6 +8,7 @@ using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -310,7 +311,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
         await _feeCategoryRepo.InsertAsync(cat, autoSave: true);
 
         // 6. FeeHead → FeeCategory
-        var feeHead = new FeeHead(feeHeadId, TestTenantId, yearId, catId, "Monthly Fee", "Monthly tuition");
+        var feeHead = new FeeHead(feeHeadId, TestTenantId, yearId, catId, "Monthly Fee", FeeHeadModule.Finance, false, "Monthly tuition");
         await _feeHeadRepo.InsertAsync(feeHead, autoSave: true);
 
         // 7. Student — all required FK entities seeded above

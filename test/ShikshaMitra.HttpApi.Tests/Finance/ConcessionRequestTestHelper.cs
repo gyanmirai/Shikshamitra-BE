@@ -101,7 +101,21 @@ public static class ConcessionRequestTestHelper
 	public static async Task<Guid> CreateFeeCategoryAsync(HttpClient client)
 	{
 		var name = TestDataHelper.UniqueName("FeeCat");
-		var request = new FeeCategoryCreateRequest { Name = name, Description = "Test fee category" };
+		var request = new FeeCategoryCreateRequest
+		{
+			Name = name,
+			Description = "Test fee category",
+			FeeHeads = new List<FeeHeadItemRequest>
+			{
+				new()
+				{
+					Name = TestDataHelper.UniqueName("Head"),
+					Module = ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Finance,
+					IsConcessionApplied = false,
+					Description = "Seed fee head"
+				}
+			}
+		};
 
 		var createResponse = await client.PostAsJsonAsync(
 			$"{FeeCategoryUrl}?academicYearId={DefaultAcademicYearId}", request, JsonOptions);

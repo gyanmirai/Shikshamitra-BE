@@ -11,5 +11,11 @@ public class FeeCategoryConfiguration : IEntityTypeConfiguration<FeeCategory>
 	{
 		builder.ToTable("Finance_FeeCategories", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+
+		builder.Property(x => x.Name).HasMaxLength(100).IsRequired();
+		builder.Property(x => x.Description).HasMaxLength(500);
+		builder.Property(x => x.DeactivationReason).HasMaxLength(500);
+
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Name });
 	}
 }

@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using System;
+using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -18,7 +20,7 @@ public class FeeHeadController(
 {
     [HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.Add)]
-	public Task<MessageResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] FeeHeadCreateRequest input)
+	public Task<FeeHeadResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] FeeHeadCreateRequest input)
     {
         return feeHeadAppService.CreateAsync(academicYearId, input);
     }
@@ -35,9 +37,16 @@ public class FeeHeadController(
         return feeHeadAppService.GetListAsync(academicYearId, feeCategoryId, search, page, pageSize);
     }
 
+    [HttpGet("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.View)]
+    public Task<FeeHeadResponse> GetByIdAsync(Guid id)
+    {
+        return feeHeadAppService.GetByIdAsync(id);
+    }
+
     [HttpPut("{feeHeadId}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.Add)]
-	public Task<MessageResponse> UpdateAsync(Guid feeHeadId, [FromBody] FeeHeadUpdateRequest input)
+	public Task<FeeHeadResponse> UpdateAsync(Guid feeHeadId, [FromBody] FeeHeadUpdateRequest input)
     {
         return feeHeadAppService.UpdateAsync(feeHeadId, input);
     }
@@ -51,7 +60,7 @@ public class FeeHeadController(
 
     [HttpPatch("{feeHeadId}/status")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.Add)]
-	public Task<MessageResponse> UpdateStatusAsync(Guid feeHeadId, [FromBody] FeeHeadStatusUpdateRequest input)
+	public Task<FeeHeadResponse> UpdateStatusAsync(Guid feeHeadId, [FromBody] FeeHeadStatusUpdateRequest input)
     {
         return feeHeadAppService.UpdateStatusAsync(feeHeadId, input);
     }

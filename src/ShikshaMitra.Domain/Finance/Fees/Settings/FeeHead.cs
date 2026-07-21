@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
+using ShikshaMitra.Finance.Fees.Settings;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -16,33 +17,53 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
     [Required]
     public string Name { get; private set; }
 
-    public string Description { get; private set; }
+    public FeeHeadModule Module { get; private set; }
+
+    public bool IsConcessionApplied { get; private set; }
+
+    public string? Description { get; private set; }
 
     public bool IsActive { get; private set; }
+
+    public string? DeactivationReason { get; private set; }
 
 	public FeeCategory FeeCategory { get; private set; }
 
     protected FeeHead() { }
 
-    public FeeHead(Guid id, Guid? tenantId, Guid academicYearId, Guid feeCategoryId, string name, string description, bool isActive = true) : base(id)
+    public FeeHead(
+        Guid id,
+        Guid? tenantId,
+        Guid academicYearId,
+        Guid feeCategoryId,
+        string name,
+        FeeHeadModule module,
+        bool isConcessionApplied,
+        string? description,
+        bool isActive = true) : base(id)
     {
         TenantId = tenantId;
         AcademicYearId = academicYearId;
         FeeCategoryId = feeCategoryId;
         Name = name;
+        Module = module;
+        IsConcessionApplied = isConcessionApplied;
         Description = description;
         IsActive = isActive;
     }
 
-    public void Update(Guid feeCategoryId, string name, string description)
+    public void Update(Guid feeCategoryId, string name, FeeHeadModule module, bool isConcessionApplied, string? description)
     {
         FeeCategoryId = feeCategoryId;
         Name = name;
+        Module = module;
+        IsConcessionApplied = isConcessionApplied;
         Description = description;
     }
 
-    public void SetActiveStatus(bool isActive)
+    public void SetActiveStatus(bool isActive, string? deactivationReason)
     {
         IsActive = isActive;
+        DeactivationReason = isActive ? null : deactivationReason;
     }
 }

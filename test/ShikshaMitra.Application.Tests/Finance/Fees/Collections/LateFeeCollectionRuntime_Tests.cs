@@ -3,6 +3,7 @@ using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students;
@@ -133,7 +134,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		var cat = new FeeCategory(catId, TestTenantId, yearId, "Tuition", "Tuition fees");
 		await _feeCategoryRepo.InsertAsync(cat, autoSave: true);
 
-		var feeHead = new FeeHead(feeHeadId, TestTenantId, yearId, catId, "Monthly Fee", "Monthly tuition");
+		var feeHead = new FeeHead(feeHeadId, TestTenantId, yearId, catId, "Monthly Fee", FeeHeadModule.Finance, false, "Monthly tuition");
 		await _feeHeadRepo.InsertAsync(feeHead, autoSave: true);
 
 		var student = new Student(

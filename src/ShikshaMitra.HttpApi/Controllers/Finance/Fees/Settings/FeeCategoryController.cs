@@ -20,7 +20,7 @@ public class FeeCategoryController(
 {
     [HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Add)]
-	public Task<MessageResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] FeeCategoryCreateRequest input)
+	public Task<FeeCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] FeeCategoryCreateRequest input)
     {
         return feeCategoryAppService.CreateAsync(academicYearId, input);
     }
@@ -32,17 +32,31 @@ public class FeeCategoryController(
         return feeCategoryAppService.GetListAsync(academicYearId, search, page, pageSize);
     }
 
-    [HttpPut("{feeCategoryId}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Add)]
-    public Task<MessageResponse> UpdateAsync(Guid feeCategoryId, [FromBody] FeeCategoryUpdateRequest input)
+    [HttpGet("{id}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.View)]
+    public Task<FeeCategoryResponse> GetByIdAsync(Guid id)
     {
-        return feeCategoryAppService.UpdateAsync(feeCategoryId, input);
+        return feeCategoryAppService.GetByIdAsync(id);
     }
 
-    [HttpDelete("{feeCategoryId}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Delete)]
-	public Task<MessageResponse> DeleteAsync(Guid feeCategoryId)
+    [HttpPut("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Add)]
+    public Task<FeeCategoryResponse> UpdateAsync(Guid id, [FromBody] FeeCategoryUpdateRequest input)
     {
-        return feeCategoryAppService.DeleteAsync(feeCategoryId);
+        return feeCategoryAppService.UpdateAsync(id, input);
+    }
+
+    [HttpDelete("{id}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Delete)]
+	public Task<MessageResponse> DeleteAsync(Guid id)
+    {
+        return feeCategoryAppService.DeleteAsync(id);
+    }
+
+    [HttpPatch("{id}/status")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Add)]
+    public Task<FeeCategoryResponse> UpdateStatusAsync(Guid id, [FromBody] FeeCategoryStatusUpdateRequest input)
+    {
+        return feeCategoryAppService.UpdateStatusAsync(id, input);
     }
 }

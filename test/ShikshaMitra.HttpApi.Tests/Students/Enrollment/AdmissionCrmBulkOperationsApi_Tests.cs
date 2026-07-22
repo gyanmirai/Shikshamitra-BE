@@ -99,6 +99,44 @@ public class AdmissionCrmBulkOperationsApi_Tests : ShikshaMitraApiTestBase
 		result.Items.Single().Success.ShouldBeFalse();
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Isolate_Bulk_Exam_Result_Items()
+	{
+		var missingExamId = Guid.NewGuid();
+		var response = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/bulk/exam-results",
+			new AdmissionCrmBulkExamResultsDto
+			{
+				Items =
+				[
+					new AdmissionCrmBulkExamResultItemDto
+					{
+						ExamRecordId = missingExamId,
+						TotalMarks = 100,
+						PassingMarks = 40,
+						ObtainedMarks = 71,
+						MeritRank = 2
+					},
+					new AdmissionCrmBulkExamResultItemDto
+					{
+						ExamRecordId = missingExamId,
+						TotalMarks = 100,
+						PassingMarks = 40,
+						ObtainedMarks = 72,
+						MeritRank = 3
+					}
+				]
+			}, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var result = (await response.Content.ReadFromJsonAsync<AdmissionCrmBulkOperationResultDto>(JsonOptions))!;
+		result.RequestedCount.ShouldBe(1);
+		result.SucceededCount.ShouldBe(0);
+		result.FailedCount.ShouldBe(1);
+		result.Items.Single().EntityId.ShouldBe(missingExamId);
+		result.Items.Single().Success.ShouldBeFalse();
+	}
+
 	private async Task<AdmissionCrmLeadDto> CreateLeadAsync()
 	{
 		var response = await Client.PostAsJsonAsync(

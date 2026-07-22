@@ -29,6 +29,20 @@ public class AdmissionCrmBulkExamAttendanceDto
 	public AdmissionCrmExamAttendanceStatus AttendanceStatus { get; set; }
 }
 
+public class AdmissionCrmBulkExamResultItemDto
+{
+	public Guid ExamRecordId { get; set; }
+	public double TotalMarks { get; set; }
+	public double PassingMarks { get; set; }
+	public double ObtainedMarks { get; set; }
+	public int? MeritRank { get; set; }
+}
+
+public class AdmissionCrmBulkExamResultsDto
+{
+	public IReadOnlyList<AdmissionCrmBulkExamResultItemDto> Items { get; set; } = [];
+}
+
 public class AdmissionCrmBulkChangeStageDto
 {
 	public IReadOnlyList<Guid> LeadIds { get; set; } = [];

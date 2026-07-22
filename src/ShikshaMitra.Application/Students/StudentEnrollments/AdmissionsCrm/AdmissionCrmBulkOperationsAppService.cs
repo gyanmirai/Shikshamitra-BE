@@ -95,6 +95,34 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	}
 
 	[UnitOfWork(IsDisabled = true)]
+	public async Task<AdmissionCrmBulkOperationResultDto> UploadExamResultsAsync(
+		Guid academicYearId,
+		AdmissionCrmBulkExamResultsDto input)
+	{
+		var items = input.Items
+			.GroupBy(x => x.ExamRecordId)
+			.Select(x => x.Last())
+			.ToList();
+		await EnsureBatchAsync(academicYearId, items.Select(x => x.ExamRecordId), nameof(UploadExamResultsAsync));
+		return await RunAsync(items, x => x.ExamRecordId, async item =>
+		{
+			var exam = await _entranceExamRepository.GetAsync(item.ExamRecordId);
+			if (exam.AcademicYearId != academicYearId)
+				throw new BusinessException("AdmissionCrm:BulkAcademicYearMismatch");
+			var result = await _entranceExamService.UploadResultAsync(
+				item.ExamRecordId,
+				new UploadAdmissionCrmEntranceExamResultDto
+				{
+					TotalMarks = item.TotalMarks,
+					PassingMarks = item.PassingMarks,
+					ObtainedMarks = item.ObtainedMarks,
+					MeritRank = item.MeritRank
+				});
+			return result.Id.ToString();
+		});
+	}
+
+	[UnitOfWork(IsDisabled = true)]
 	public async Task<AdmissionCrmBulkOperationResultDto> ChangeStageAsync(Guid academicYearId, AdmissionCrmBulkChangeStageDto input)
 	{
 		await EnsureBatchAsync(academicYearId, input.LeadIds, nameof(ChangeStageAsync));

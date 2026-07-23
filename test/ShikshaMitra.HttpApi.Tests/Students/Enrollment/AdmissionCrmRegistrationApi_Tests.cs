@@ -248,6 +248,12 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 						RequiresOriginal = true,
 						MaximumSizeMb = 2,
 						AcceptedExtensions = ["pdf"],
+						UploadInstructions = "Upload one clear PDF with all pages in order.",
+						RejectionReasons =
+						[
+							"Document is unreadable.",
+							"Details do not match the registration form."
+						],
 						DisplayOrder = 10
 					}
 				]
@@ -270,6 +276,11 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		assignedChecklist.ShouldNotBeNull();
 		assignedChecklist.AdmissionReady.ShouldBeFalse();
 		assignedChecklist.BlockingReasons.ShouldContain(x => x.Contains("Birth certificate"));
+		var assignedBirthCertificate = assignedChecklist.Documents.Single(x =>
+			x.RequirementKey == "birth-certificate");
+		assignedBirthCertificate.UploadInstructions.ShouldBe(
+			"Upload one clear PDF with all pages in order.");
+		assignedBirthCertificate.RejectionReasons.ShouldContain("Document is unreadable.");
 
 		var firstUpload = await UploadDocumentAsync(tenantId, token, status.AccessSessionToken!, "birth-certificate", "birth.pdf", "first-version");
 		firstUpload.StatusCode.ShouldBe(HttpStatusCode.OK, await firstUpload.Content.ReadAsStringAsync());

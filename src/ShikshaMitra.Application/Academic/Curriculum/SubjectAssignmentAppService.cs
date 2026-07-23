@@ -175,7 +175,8 @@ public class SubjectAssignmentAppService(
 		int page,
 		int pageSize,
 		SubjectStatus? status = null,
-		bool includeArchived = false
+		bool includeArchived = false,
+		string? teacherSearch = null
 	)
 	{
 		var query = await assignmentRepository.WithDetailsAsync(a => a.Chapters, a => a.Teachers);
@@ -357,6 +358,16 @@ public class SubjectAssignmentAppService(
 					};
 				}).ToList()
 			});
+		}
+
+		var normalizedTeacherSearch = teacherSearch?.Trim();
+		if (!string.IsNullOrWhiteSpace(normalizedTeacherSearch))
+		{
+			groupedAssignments = groupedAssignments
+				.Where(a =>
+					!string.IsNullOrWhiteSpace(a.PrimaryTeacherName) &&
+					a.PrimaryTeacherName.Contains(normalizedTeacherSearch, StringComparison.OrdinalIgnoreCase))
+				.ToList();
 		}
 
 		// Pagination

@@ -21,6 +21,7 @@ public class ChapterAppService(
 	IRepository<Syllabus.ChapterProgress, Guid> progressRepository,
 	IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
 	IRepository<AssignmentEntity, Guid> assignmentRepository,
+	IRepository<AssessmentRubric, Guid> rubricRepository,
 	IRepository<LessonPlan, Guid> lessonPlanRepository,
 	IRepository<QuestionBankItem, Guid> questionBankRepository,
 	IRepository<QuestionPaperBlueprintChapterRule, Guid> blueprintChapterRuleRepository
@@ -79,6 +80,9 @@ public class ChapterAppService(
 			dto.StandardId = assignedSubject.StandardId;
 			dto.SubjectId = assignedSubject.SubjectId;
 		}
+
+		await EnrichLinkedPlanningStatusesAsync(assignedSubject, dtos);
+
 		return dtos;
 	}
 
@@ -139,6 +143,7 @@ public class ChapterAppService(
 		var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
 		dto.StandardId = assignedSubject.StandardId;
 		dto.SubjectId = assignedSubject.SubjectId;
+		await EnrichLinkedPlanningStatusesAsync(assignedSubject, new List<ChapterDto> { dto });
 		return dto;
 	}
 
@@ -291,5 +296,148 @@ public class ChapterAppService(
 			dto.DependencyChapterIds,
 			dto.VersionLabel
 		);
+	}
+
+	private async Task EnrichLinkedPlanningStatusesAsync(AssignedSubject assignedSubject, List<ChapterDto> dtos)
+	{
+		if (dtos.Count == 0)
+		{
+			return;
+		}
+
+		var chapterIds = dtos.Select(dto => dto.Id).ToList();
+		var linkedByChapter = chapterIds.ToDictionary(id => id, _ => new ChapterLinkSummary());
+
+		var lessonPlans = await lessonPlanRepository.GetListAsync(lp =>
+			lp.StandardId == assignedSubject.StandardId &&
+			lp.SubjectId == assignedSubject.SubjectId &&
+			chapterIds.Contains(lp.ChapterId) &&
+			lp.Status != LessonPlanStatus.Rejected);
+		foreach (var lessonPlan in lessonPlans)
+		{
+			linkedByChapter[lessonPlan.ChapterId].LessonPlans++;
+		}
+
+		var homeworks = await homeworkRepository.GetListAsync(hw =>
+			hw.StandardId == assignedSubject.StandardId &&
+			hw.SubjectId == assignedSubject.SubjectId);
+		var homeworkChapterLinks = new Dictionary<Guid, List<Guid>>();
+		foreach (var homework in homeworks)
+		{
+			foreach (var chapterId in chapterIds.Where(chapterId => IsLinkedToChapter(homework.ChapterId, homework.ChapterIdsJson, chapterId)))
+			{
+				linkedByChapter[chapterId].Homeworks++;
+				AddLinkedTask(homeworkChapterLinks, homework.Id, chapterId);
+			}
+		}
+
+		var assignments = await assignmentRepository.GetListAsync(assignment =>
+			assignment.StandardId == assignedSubject.StandardId &&
+			assignment.SubjectId == assignedSubject.SubjectId);
+		var assignmentChapterLinks = new Dictionary<Guid, List<Guid>>();
+		foreach (var assignment in assignments)
+		{
+			foreach (var chapterId in chapterIds.Where(chapterId => IsLinkedToChapter(null, assignment.ChapterIdsJson, chapterId)))
+			{
+				linkedByChapter[chapterId].Assessments++;
+				AddLinkedTask(assignmentChapterLinks, assignment.Id, chapterId);
+			}
+		}
+
+		var questions = await questionBankRepository.GetListAsync(question =>
+			question.StandardId == assignedSubject.StandardId &&
+			question.SubjectId == assignedSubject.SubjectId &&
+			question.ChapterId.HasValue &&
+			chapterIds.Contains(question.ChapterId.Value) &&
+			!question.IsArchived);
+		foreach (var questionGroup in questions.GroupBy(question => question.ChapterId!.Value))
+		{
+			linkedByChapter[questionGroup.Key].Questions += questionGroup.Count();
+			linkedByChapter[questionGroup.Key].Assessments++;
+		}
+
+		var blueprintRules = await blueprintChapterRuleRepository.GetListAsync(rule => chapterIds.Contains(rule.ChapterId));
+		foreach (var chapterId in blueprintRules.Select(rule => rule.ChapterId).Distinct())
+		{
+			linkedByChapter[chapterId].Assessments++;
+		}
+
+		await AddRubricAssessmentLinksAsync(homeworkChapterLinks, assignmentChapterLinks, linkedByChapter);
+
+		foreach (var dto in dtos)
+		{
+			var summary = linkedByChapter[dto.Id];
+			dto.LessonPlanStatus = summary.LessonPlans > 0 ? "Linked" : DefaultStatus(dto.LessonPlanStatus, "Not Linked");
+			dto.HomeworkStatus = summary.Homeworks > 0 ? "Mapped" : DefaultStatus(dto.HomeworkStatus, "Not Mapped");
+			dto.AssessmentStatus = summary.Assessments > 0 ? "Mapped" : DefaultStatus(dto.AssessmentStatus, "Not Mapped");
+			dto.QuestionCount = summary.Questions > 0 ? summary.Questions : dto.QuestionCount;
+		}
+	}
+
+	private async Task AddRubricAssessmentLinksAsync(
+		Dictionary<Guid, List<Guid>> homeworkChapterLinks,
+		Dictionary<Guid, List<Guid>> assignmentChapterLinks,
+		Dictionary<Guid, ChapterLinkSummary> linkedByChapter)
+	{
+		var homeworkIds = homeworkChapterLinks.Keys.ToList();
+		var assignmentIds = assignmentChapterLinks.Keys.ToList();
+		if (homeworkIds.Count == 0 && assignmentIds.Count == 0)
+		{
+			return;
+		}
+
+		var rubrics = await rubricRepository.GetListAsync(rubric =>
+			!rubric.IsTemplate &&
+			rubric.Status != RubricStatus.Archived &&
+			((rubric.HomeworkId.HasValue && homeworkIds.Contains(rubric.HomeworkId.Value)) ||
+			 (rubric.AssignmentId.HasValue && assignmentIds.Contains(rubric.AssignmentId.Value))));
+
+		foreach (var rubric in rubrics)
+		{
+			if (rubric.HomeworkId.HasValue && homeworkChapterLinks.TryGetValue(rubric.HomeworkId.Value, out var homeworkChapterIds))
+			{
+				foreach (var chapterId in homeworkChapterIds)
+				{
+					linkedByChapter[chapterId].Assessments++;
+				}
+			}
+
+			if (rubric.AssignmentId.HasValue && assignmentChapterLinks.TryGetValue(rubric.AssignmentId.Value, out var assignmentChapterIds))
+			{
+				foreach (var chapterId in assignmentChapterIds)
+				{
+					linkedByChapter[chapterId].Assessments++;
+				}
+			}
+		}
+	}
+
+	private static void AddLinkedTask(Dictionary<Guid, List<Guid>> taskChapterLinks, Guid taskId, Guid chapterId)
+	{
+		if (!taskChapterLinks.TryGetValue(taskId, out var chapterIds))
+		{
+			chapterIds = new List<Guid>();
+			taskChapterLinks[taskId] = chapterIds;
+		}
+
+		chapterIds.Add(chapterId);
+	}
+
+	private static bool IsLinkedToChapter(Guid? legacyChapterId, string? chapterIdsJson, Guid chapterId)
+	{
+		return legacyChapterId == chapterId ||
+			(!string.IsNullOrWhiteSpace(chapterIdsJson) &&
+			 chapterIdsJson.Contains(chapterId.ToString(), StringComparison.OrdinalIgnoreCase));
+	}
+
+	private static string DefaultStatus(string? currentStatus, string fallback) =>
+		string.IsNullOrWhiteSpace(currentStatus) ? fallback : currentStatus;
+
+	private sealed class ChapterLinkSummary
+	{
+		public int LessonPlans { get; set; }
+		public int Homeworks { get; set; }
+		public int Assessments { get; set; }
+		public int Questions { get; set; }
 	}
 }

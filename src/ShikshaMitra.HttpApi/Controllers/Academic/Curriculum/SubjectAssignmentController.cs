@@ -47,6 +47,7 @@ public class SubjectAssignmentController(
 	/// <param name="pageSize">Page size (default 10)</param>
 	/// <param name="status">Optional assignment status filter. Defaults to Published when omitted.</param>
 	/// <param name="includeArchived">Return every status, including archived, when no status filter is supplied.</param>
+	/// <param name="teacherSearch">Optional primary teacher name search.</param>
 	/// <returns>Paginated list of assignment groups</returns>
 	/// <response code="200">Subject assignments fetched</response>
 	[HttpGet("{standardId}/subject-assignments")]
@@ -56,7 +57,8 @@ public class SubjectAssignmentController(
 		[FromQuery] int page = 0,
 		[FromQuery] int pageSize = 10,
 		[FromQuery] SubjectStatus? status = null,
-		[FromQuery] bool includeArchived = false
+		[FromQuery] bool includeArchived = false,
+		[FromQuery] string? teacherSearch = null
 	)
 	{
 		var result = await subjectAssignmentAppService.GetListAsync(
@@ -64,7 +66,8 @@ public class SubjectAssignmentController(
 			page,
 			pageSize,
 			status,
-			includeArchived
+			includeArchived,
+			teacherSearch
 		);
 
 		return Result.Success(result);

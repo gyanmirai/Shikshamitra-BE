@@ -30,6 +30,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<Subject, Guid> _subjectRepository;
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
+	private readonly StudentSubmissionManager _submissionManager;
 
 	public HomeworkFeedbackAppService(
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
@@ -38,7 +39,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		IRepository<Student, Guid> studentRepository,
 		IRepository<Standard, Guid> standardRepository,
 		IRepository<Subject, Guid> subjectRepository,
-		IAsyncQueryableExecuter asyncExecuter
+		IAsyncQueryableExecuter asyncExecuter,
+		StudentSubmissionManager submissionManager
 	)
 	{
 		_homeworkRepository = homeworkRepository;
@@ -48,6 +50,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		_standardRepository = standardRepository;
 		_subjectRepository = subjectRepository;
 		_asyncExecuter = asyncExecuter;
+		_submissionManager = submissionManager;
 	}
 
 	/// <summary>
@@ -150,7 +153,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 					$"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
 				Homework = homework.Title,
 				HomeworkType = homeworkTypeName,
-				SubmissionType = homework.SubmissionType.ToString(),
+				SubmissionType = (int) homework.SubmissionType,
 				SubmissionDate = submission?.SubmissionDate?.ToString("dd-MM-yyyy"),
 				DueDate = homework.DueDate?.ToString("dd-MM-yyyy")
 					?? homework.DivisionSchedules.FirstOrDefault(ds => ds.DivisionId == filter.DivisionId)?.DueDate.ToString("dd-MM-yyyy")
@@ -288,9 +291,25 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		if (submission == null)
 		{
-			throw new BusinessException("ShikshaMitra.Submission:CannotEvaluateMissingSubmission")
-				.WithData("StudentId", studentId)
-				.WithData("HomeworkId", homeworkId);
+			if (homework.SubmissionType != SubmissionType.InPersonSubmission)
+			{
+				throw new BusinessException("ShikshaMitra.Submission:CannotEvaluateMissingSubmission")
+					.WithData("StudentId", studentId)
+					.WithData("HomeworkId", homeworkId);
+			}
+
+			var divisionId = ResolveStudentDivisionForHomework(student, homework);
+			var dueDate = homework.DivisionSchedules.FirstOrDefault(ds => ds.DivisionId == divisionId)?.DueDate
+				?? homework.DueDate
+				?? DateTime.UtcNow;
+
+			submission = await _submissionManager.CreateOrGetSubmissionAsync(
+				homeworkId,
+				studentId,
+				divisionId,
+				dueDate,
+				CurrentTenant.Id
+			);
 		}
 
 		EnsureSubmissionCanBeEvaluated(submission);
@@ -314,6 +333,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			Message = L["ShikshaMitra.Homework:FeedbackUpdatedSuccessfully"],
 			Data = new FeedbackDataDto
 			{
+				SubmissionId = submission.Id.ToString(),
 				StudentId = studentId.ToString(),
 				HomeworkId = homeworkId.ToString(),
 				Marks = null,
@@ -419,6 +439,30 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			throw new BusinessException("ShikshaMitra.Submission:NotSubmittedYet")
 				.WithData("SubmissionId", submission.Id);
 		}
+	}
+
+	private static Guid ResolveStudentDivisionForHomework(Student student, HomeworkAssignmentEntity homework)
+	{
+		var divisionId = student.DivisionId
+			?? throw new BusinessException("ShikshaMitra.Homework:StudentDivisionRequired")
+				.WithData("StudentId", student.Id);
+
+		if (homework.DivisionId.HasValue && homework.DivisionId.Value != divisionId)
+		{
+			throw new BusinessException("ShikshaMitra.Homework:StudentNotInAssignedDivision")
+				.WithData("StudentId", student.Id)
+				.WithData("DivisionId", divisionId);
+		}
+
+		if (homework.DivisionSchedules.Any() &&
+			homework.DivisionSchedules.All(ds => ds.DivisionId != divisionId))
+		{
+			throw new BusinessException("ShikshaMitra.Homework:StudentNotInAssignedDivision")
+				.WithData("StudentId", student.Id)
+				.WithData("DivisionId", divisionId);
+		}
+
+		return divisionId;
 	}
 
 	private static void EnsureStatusTransitionAllowed(StudentSubmissionEntity submission, SubmissionStatus requestedStatus)

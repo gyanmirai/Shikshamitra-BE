@@ -77,6 +77,8 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 			x.TenantId == tenantId && x.AcademicYearId == academicYearId));
 
 		var now = Clock.Now;
+		var expiringDocumentLeadIds =
+			AdmissionCrmDocumentExpiryReminderPolicy.GetExpiringLeadIds(checklists, documents, now);
 		var triggers = new Dictionary<AdmissionCrmJourneyTrigger, HashSet<Guid>>
 		{
 			[AdmissionCrmJourneyTrigger.RegistrationIssued] = registrations
@@ -107,6 +109,7 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 				.Where(x => x.Status is AdmissionCrmApplicantDocumentStatus.Uploaded or AdmissionCrmApplicantDocumentStatus.UnderReview &&
 				            (now - x.UploadedAt).TotalDays >= 2)
 				.Select(x => x.LeadId).ToHashSet(),
+			[AdmissionCrmJourneyTrigger.DocumentExpiring] = expiringDocumentLeadIds,
 			[AdmissionCrmJourneyTrigger.ExamNoShow] = exams
 				.Where(x => x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent ||
 				            x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked && x.ExamEndTime.UtcDateTime < now)

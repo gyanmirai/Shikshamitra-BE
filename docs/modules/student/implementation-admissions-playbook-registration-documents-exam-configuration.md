@@ -3,7 +3,7 @@ module: student
 domain: implementation-plan
 content_type: Reference
 status: current
-updated_on: 2026-07-16
+updated_on: 2026-07-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -35,6 +35,13 @@ Each exam definition now records whether hall tickets are enabled.
 Older stored exam definitions remain hall-ticket enabled for compatibility, while new quick setups default hall tickets off.
 Hall-ticket preview and issuance require a scheduled exam, respect the resolved playbook setting, and include the scheduled date, time, and venue.
 The Exam and Eligibility page provides a quick setup for a written exam, student interaction, or no entrance assessment while retaining the advanced versioned playbook editor.
+Exam outcome routing remains fixed and auditable in the current runtime: pass routes to Eligible, fail routes to Rejected, and waitlist requires an eligibility decision.
+Custom display stages do not replace those persisted exam outcome states in this release.
+Document requirements now carry family upload instructions, up to eight normalized reviewer rejection reasons, and an optional one-to-365-day expiry reminder window inside the versioned checklist snapshot.
+The lifecycle runner raises `DocumentExpiring` only for a current, non-rejected, non-waived document inside its configured window.
+Schools connect `DocumentRejected` or `DocumentExpiring` journey rules to an approved WhatsApp, SMS, or email template or to a deduplicated staff task.
+Admission fee policy setup now presents supported quick starts, a live INR parent quotation preview, friendly Finance-owned payment conditions, and progressive school-specific filters without changing the authoritative financial contract.
+An installment schedule is not represented as a quick template because the current Enrollment fee-policy contract does not own installment dates or Finance ledger schedules.
 Finance remains a manual confirmation placeholder until the Finance integration is connected.
 An issued unsatisfied payment gate now blocks its configured milestone and every later milestone.
 Activation readiness is recalculated at approval and execution so an expired, reversed, disputed, or newly introduced gate cannot be bypassed by an older readiness snapshot.
@@ -93,7 +100,7 @@ Phase acceptance requires:
 
 Status: complete.
 
-Deliver versioned document checklist templates, conditional requirements, upload constraints, undertakings, verification, correction requests, replacements, expiry, waivers, original-seen evidence, reviewer queues, readiness calculation, override approval, and the admission handoff package.
+Deliver versioned document checklist templates, conditional requirements, upload constraints, family instructions, normalized rejection reasons, configurable expiry reminder windows, undertakings, verification, correction requests, replacements, expiry, waivers, original-seen evidence, reviewer queues, readiness calculation, override approval, and the admission handoff package.
 Reuse current document types as the document catalog while adding applicant-specific requirements and verification history.
 Add permissions for checklist publication, document review, waiver, original-seen confirmation, readiness confirmation, and readiness override.
 
@@ -110,7 +117,7 @@ Phase acceptance requires:
 
 Status: complete.
 
-Deliver staff exception queues, unified timeline coverage, bulk-action previews, rule execution evidence, deadline reminders, escalation, applicant-safe status details, and playbook, exam, registration, document, readiness, and yield analytics.
+Deliver staff exception queues, unified timeline coverage, bulk-action previews, rule execution evidence, registration and document-expiry reminders, escalation, applicant-safe status details, and playbook, exam, registration, document, readiness, and yield analytics.
 Extend existing CRM journeys and generic communication dispatch instead of creating a separate messaging engine.
 Add operational metrics only when they can be reproduced from persisted configuration, state, and timeline evidence.
 

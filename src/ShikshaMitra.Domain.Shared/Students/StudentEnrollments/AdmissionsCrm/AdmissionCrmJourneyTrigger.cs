@@ -19,5 +19,6 @@ public enum AdmissionCrmJourneyTrigger
 	DocumentRejected = 14,
 	DocumentPending = 15,
 	ExamNoShow = 16,
-	AdmissionReady = 17
+	AdmissionReady = 17,
+	DocumentExpiring = 18
 }

@@ -20,6 +20,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 [RemoteService(false)]
 public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmDocumentAppService
 {
+	private const int MaxRejectionReasonCount = 8;
+	private const int MaxRejectionReasonLength = 160;
+
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 	private readonly IRepository<AdmissionCrmDocumentChecklistTemplate, Guid> _templateRepository;
 	private readonly IRepository<AdmissionCrmDocumentChecklistAssignment, Guid> _assignmentRepository;
@@ -378,10 +381,28 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 			if (!keys.Add(requirement.Key)) throw new BusinessException("AdmissionCrm:DuplicateDocumentRequirementKey");
 			if (requirement.RequirementLevel == AdmissionCrmDocumentRequirementLevel.Conditional && string.IsNullOrWhiteSpace(requirement.ConditionalFieldKey))
 				throw new BusinessException("AdmissionCrm:ConditionalDocumentRequirementNeedsField");
+			if (requirement.ExpiryReminderDaysBefore.HasValue && !requirement.ValidityDateRequired)
+				throw new BusinessException("AdmissionCrm:DocumentExpiryReminderRequiresValidityDate")
+					.WithData("RequirementKey", requirement.Key);
 			var extensions = requirement.AcceptedExtensions.Select(x => x.Trim().TrimStart('.').ToLowerInvariant()).Where(x => x.Length > 0).Distinct().ToList();
 			if (extensions.Count == 0 || extensions.Any(x => x.Any(character => !char.IsLetterOrDigit(character))))
 				throw new BusinessException("AdmissionCrm:InvalidDocumentExtensions");
 			requirement.AcceptedExtensions = extensions;
+			requirement.UploadInstructions = string.IsNullOrWhiteSpace(requirement.UploadInstructions)
+				? null
+				: requirement.UploadInstructions.Trim();
+			var rejectionReasons = (requirement.RejectionReasons ?? [])
+				.Select(x => x.Trim())
+				.Where(x => x.Length > 0)
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToList();
+			if (rejectionReasons.Count > MaxRejectionReasonCount ||
+			    rejectionReasons.Any(x => x.Length > MaxRejectionReasonLength))
+				throw new BusinessException("AdmissionCrm:InvalidDocumentRejectionReasons")
+					.WithData("RequirementKey", requirement.Key)
+					.WithData("MaximumCount", MaxRejectionReasonCount)
+					.WithData("MaximumLength", MaxRejectionReasonLength);
+			requirement.RejectionReasons = rejectionReasons;
 			if (requirement.DocumentTypeId.HasValue)
 			{
 				var type = await _documentTypeRepository.GetAsync(requirement.DocumentTypeId.Value);
@@ -457,13 +478,15 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 			RequirementLevel = requirement.RequirementLevel, IsCurrentlyRequired = required,
 			BlocksAdmissionReadiness = requirement.BlocksAdmissionReadiness, RequiresOriginal = requirement.RequiresOriginal,
 			ValidityDateRequired = requirement.ValidityDateRequired,
+			ExpiryReminderDaysBefore = requirement.ExpiryReminderDaysBefore,
 			OriginalSeen = document?.OriginalSeenAt.HasValue == true || document?.Status == AdmissionCrmApplicantDocumentStatus.OriginalSeen,
 			Status = document?.ValidUntil < DateTime.UtcNow ? AdmissionCrmApplicantDocumentStatus.Expired : document?.Status,
 			Version = document?.Version ?? 0, FileName = document?.FileName, ContentType = document?.ContentType,
 			FileSize = document?.FileSize, ValidUntil = document?.ValidUntil, UploadedAt = document?.UploadedAt,
 			DecisionReason = document?.DecisionReason, DecisionAt = document?.DecisionAt,
 			AcceptedExtensions = requirement.AcceptedExtensions, MaximumSizeMb = requirement.MaximumSizeMb,
-			UploadInstructions = requirement.UploadInstructions
+			UploadInstructions = requirement.UploadInstructions,
+			RejectionReasons = requirement.RejectionReasons
 		};
 	}
 

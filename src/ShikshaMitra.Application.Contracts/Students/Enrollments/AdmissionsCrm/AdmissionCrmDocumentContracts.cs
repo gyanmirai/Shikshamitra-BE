@@ -20,11 +20,14 @@ public class AdmissionCrmDocumentRequirementDto
 	public bool BlocksAdmissionReadiness { get; set; } = true;
 	public bool RequiresOriginal { get; set; }
 	public bool ValidityDateRequired { get; set; }
+	[Range(1, 365)]
+	public int? ExpiryReminderDaysBefore { get; set; }
 	[Range(0.1, 25)]
 	public decimal MaximumSizeMb { get; set; } = 5;
 	public IReadOnlyList<string> AcceptedExtensions { get; set; } = ["pdf", "jpg", "jpeg", "png"];
 	[MaxLength(500)]
 	public string? UploadInstructions { get; set; }
+	public IReadOnlyList<string> RejectionReasons { get; set; } = [];
 	public int DisplayOrder { get; set; }
 }
 
@@ -73,6 +76,7 @@ public class AdmissionCrmApplicantDocumentDto
 	public bool BlocksAdmissionReadiness { get; set; }
 	public bool RequiresOriginal { get; set; }
 	public bool ValidityDateRequired { get; set; }
+	public int? ExpiryReminderDaysBefore { get; set; }
 	public bool OriginalSeen { get; set; }
 	public AdmissionCrmApplicantDocumentStatus? Status { get; set; }
 	public int Version { get; set; }
@@ -86,6 +90,7 @@ public class AdmissionCrmApplicantDocumentDto
 	public IReadOnlyList<string> AcceptedExtensions { get; set; } = [];
 	public decimal MaximumSizeMb { get; set; }
 	public string? UploadInstructions { get; set; }
+	public IReadOnlyList<string> RejectionReasons { get; set; } = [];
 }
 
 public class AdmissionCrmApplicantDocumentChecklistDto

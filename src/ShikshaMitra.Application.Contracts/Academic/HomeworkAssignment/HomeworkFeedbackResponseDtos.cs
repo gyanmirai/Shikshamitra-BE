@@ -43,6 +43,7 @@ public class FeedbackResponseDto
 /// </summary>
 public class FeedbackDataDto
 {
+	public string SubmissionId { get; set; } = string.Empty;
 	public string StudentId { get; set; } = string.Empty;
 	public string HomeworkId { get; set; } = string.Empty;
 	public decimal? Marks { get; set; }

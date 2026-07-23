@@ -29,13 +29,15 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <param name="pageSize">Items per page</param>
 	/// <param name="status">Optional assignment status filter. Defaults to Published when omitted.</param>
 	/// <param name="includeArchived">Return every status, including archived, when no status filter is supplied.</param>
+	/// <param name="teacherSearch">Optional primary teacher name search.</param>
 	/// <returns>Paginated list of assignment groups</returns>
 	Task<SubjectAssignmentPagedResponse> GetListAsync(
 		Guid classId,
 		int page,
 		int pageSize,
 		SubjectStatus? status = null,
-		bool includeArchived = false
+		bool includeArchived = false,
+		string? teacherSearch = null
 	);
 
 	/// <summary>

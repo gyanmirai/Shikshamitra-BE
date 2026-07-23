@@ -14,7 +14,7 @@ public class HomeworkSubmissionDto
 	public string StudentName { get; set; } = string.Empty;
 	public string Homework { get; set; } = string.Empty;
 	public string HomeworkType { get; set; } = string.Empty;
-	public string SubmissionType { get; set; } = string.Empty;
+	public int SubmissionType { get; set; }
 	public string? SubmissionDate { get; set; }
 	public string DueDate { get; set; } = string.Empty;
 	public decimal? Marks { get; set; }

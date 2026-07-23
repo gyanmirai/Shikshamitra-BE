@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Constants.Permissions;
@@ -21,7 +22,8 @@ public class WeeklyLectureSlotAppService(
     IRepository<Standard, Guid> standardRepository,
     IRepository<Subject, Guid> subjectRepository,
     IRepository<ElectiveGroup, Guid> electiveGroupRepository,
-    ILectureSlotConfigRepository lectureSlotConfigRepository
+    ILectureSlotConfigRepository lectureSlotConfigRepository,
+    IRepository<AssignedSubject, Guid> assignedSubjectRepository
 ) : ApplicationService, IWeeklyLectureSlotAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsWeeklyLectures.View)]
@@ -62,10 +64,12 @@ public class WeeklyLectureSlotAppService(
         var electiveGroupQueryable = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
         var electiveGroups = await AsyncExecuter.ToListAsync(electiveGroupQueryable);
         var capacityDict = await LoadAvailableCapacityAsync(standardIds);
+        var publishedScopes = await LoadPublishedSubjectAssignmentScopesAsync(pagedSlots.Select(slot => slot.StandardId));
 
         var items = pagedSlots.Select(slot =>
         {
-            var totalLectures = slot.GetTotalLectures();
+            var publishedSlotSubjects = GetPublishedWeeklyLectureSubjects(slot, publishedScopes);
+            var totalLectures = publishedSlotSubjects.Sum(subject => subject.WeeklyLectures);
             var hasCapacity = capacityDict.TryGetValue(slot.StandardId, out var availableCapacity);
             var difference = TimetableCapacityCalculator.GetCapacityDifference(availableCapacity, totalLectures);
             var status = TimetableCapacityCalculator.GetStatus(
@@ -83,7 +87,7 @@ public class WeeklyLectureSlotAppService(
                 AvailableTeachingCapacity = availableCapacity,
                 Difference = difference,
                 Status = status,
-                Subjects = slot.Subjects.Select(sub =>
+                Subjects = publishedSlotSubjects.Select(sub =>
                 {
                     var eg = sub.ElectiveGroupId.HasValue
                         ? electiveGroups.FirstOrDefault(x => x.Id == sub.ElectiveGroupId.Value) : null;
@@ -136,8 +140,10 @@ public class WeeklyLectureSlotAppService(
         var electiveGroupQueryable = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
         var electiveGroups = await AsyncExecuter.ToListAsync(electiveGroupQueryable);
         var capacityDict = await LoadAvailableCapacityAsync([slot.StandardId]);
+        var publishedScopes = await LoadPublishedSubjectAssignmentScopesAsync([slot.StandardId]);
+        var publishedSlotSubjects = GetPublishedWeeklyLectureSubjects(slot, publishedScopes);
 
-        var totalLectures = slot.GetTotalLectures();
+        var totalLectures = publishedSlotSubjects.Sum(subject => subject.WeeklyLectures);
         var hasCapacity = capacityDict.TryGetValue(slot.StandardId, out var availableCapacity);
         var difference = TimetableCapacityCalculator.GetCapacityDifference(availableCapacity, totalLectures);
         var status = TimetableCapacityCalculator.GetStatus(
@@ -155,7 +161,7 @@ public class WeeklyLectureSlotAppService(
             AvailableTeachingCapacity = availableCapacity,
             Difference = difference,
             Status = status,
-            Subjects = slot.Subjects.Select(sub =>
+            Subjects = publishedSlotSubjects.Select(sub =>
             {
                 var subject = sub.SubjectId.HasValue
                     ? subjects.FirstOrDefault(s => s.Id == sub.SubjectId.Value) : null;
@@ -222,4 +228,57 @@ public class WeeklyLectureSlotAppService(
 
         return await GetAsync(slot.Id);
     }
+
+    private async Task<Dictionary<Guid, PublishedSubjectAssignmentScope>> LoadPublishedSubjectAssignmentScopesAsync(
+        IEnumerable<Guid> standardIds)
+    {
+        var distinctStandardIds = standardIds.Distinct().ToList();
+        if (distinctStandardIds.Count == 0)
+        {
+            return new Dictionary<Guid, PublishedSubjectAssignmentScope>();
+        }
+
+        var assignments = await assignedSubjectRepository.GetListAsync(a =>
+            distinctStandardIds.Contains(a.StandardId) &&
+            a.Status == SubjectStatus.Published);
+
+        return distinctStandardIds.ToDictionary(
+            standardId => standardId,
+            standardId =>
+            {
+                var standardAssignments = assignments
+                    .Where(a => a.StandardId == standardId)
+                    .ToList();
+
+                return new PublishedSubjectAssignmentScope(
+                    standardAssignments
+                        .Where(a => !a.ElectiveGroupId.HasValue)
+                        .Select(a => a.SubjectId)
+                        .ToHashSet(),
+                    standardAssignments
+                        .Where(a => a.ElectiveGroupId.HasValue)
+                        .Select(a => a.ElectiveGroupId!.Value)
+                        .ToHashSet());
+            });
+    }
+
+    private static List<WeeklyLectureSlotSubject> GetPublishedWeeklyLectureSubjects(
+        WeeklyLectureSlot slot,
+        IReadOnlyDictionary<Guid, PublishedSubjectAssignmentScope> publishedScopes)
+    {
+        if (!publishedScopes.TryGetValue(slot.StandardId, out var scope))
+        {
+            return [];
+        }
+
+        return slot.Subjects
+            .Where(subject =>
+                (subject.SubjectId.HasValue && scope.SubjectIds.Contains(subject.SubjectId.Value)) ||
+                (subject.ElectiveGroupId.HasValue && scope.ElectiveGroupIds.Contains(subject.ElectiveGroupId.Value)))
+            .ToList();
+    }
+
+    private sealed record PublishedSubjectAssignmentScope(
+        HashSet<Guid> SubjectIds,
+        HashSet<Guid> ElectiveGroupIds);
 }

@@ -133,7 +133,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 					$"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
 				Homework = assignment.Title,
 				HomeworkType = assignmentTypeName,
-				SubmissionType = assignment.SubmissionType.ToString(),
+				SubmissionType = (int) assignment.SubmissionType,
 				SubmissionDate = submission?.SubmissionDate?.ToString("dd-MM-yyyy"),
 				DueDate = divisionSchedule.DueDate.ToString("dd-MM-yyyy"), // Division-specific due date
 				Marks = submission?.Marks,
@@ -281,9 +281,20 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 
 		if (submission == null)
 		{
-			throw new BusinessException("ShikshaMitra.Submission:CannotEvaluateMissingSubmission")
-				.WithData("StudentId", studentId)
-				.WithData("AssignmentId", assignmentId);
+			if (assignment.SubmissionType != SubmissionType.InPersonSubmission)
+			{
+				throw new BusinessException("ShikshaMitra.Submission:CannotEvaluateMissingSubmission")
+					.WithData("StudentId", studentId)
+					.WithData("AssignmentId", assignmentId);
+			}
+
+			submission = await _submissionManager.CreateOrGetSubmissionForAssignmentAsync(
+				assignmentId,
+				studentId,
+				divisionSchedule.DivisionId,
+				divisionSchedule.DueDate,
+				CurrentTenant.Id
+			);
 		}
 
 		EnsureSubmissionCanBeEvaluated(submission);
@@ -307,6 +318,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			Message = L["ShikshaMitra.Assignment:FeedbackUpdatedSuccessfully"],
 			Data = new FeedbackDataDto
 			{
+				SubmissionId = submission.Id.ToString(),
 				StudentId = studentId.ToString(),
 				HomeworkId = assignmentId.ToString(),
 				Marks = input.Marks,

@@ -270,7 +270,7 @@ public class ClassTeacherAssignmentAppService(
 
 					if (assignment != null && employeesById.TryGetValue(assignment.TeacherId, out var employee))
 					{
-						assignedTeacher = BuildAssignedTeacher(employee, context);
+						assignedTeacher = BuildAssignedTeacher(employee, context, standard.Id, division.Id);
 						issues.AddRange(BuildTeacherIssues(employee, context, standard.Id, division.Id));
 					}
 					else
@@ -398,10 +398,12 @@ public class ClassTeacherAssignmentAppService(
 
 	private AssignedTeacherDto BuildAssignedTeacher(
 		Employee employee,
-		ClassTeacherAssignmentContext context
+		ClassTeacherAssignmentContext context,
+		Guid? excludeClassId = null,
+		Guid? excludeDivisionId = null
 	)
 	{
-		var eligibleTeacher = BuildEligibleTeacher(employee, context);
+		var eligibleTeacher = BuildEligibleTeacher(employee, context, excludeClassId, excludeDivisionId);
 
 		return new AssignedTeacherDto
 		{
@@ -421,10 +423,17 @@ public class ClassTeacherAssignmentAppService(
 
 	private ClassTeacherEligibleTeacherDto BuildEligibleTeacher(
 		Employee employee,
-		ClassTeacherAssignmentContext context
+		ClassTeacherAssignmentContext context,
+		Guid? excludeClassId = null,
+		Guid? excludeDivisionId = null
 	)
 	{
-		var classTeacherCount = context.ClassTeachers.Count(assignment => assignment.TeacherId == employee.Id);
+		var classTeacherCount = context.ClassTeachers.Count(assignment =>
+			assignment.TeacherId == employee.Id &&
+			!(excludeClassId.HasValue && excludeDivisionId.HasValue &&
+			  assignment.StandardId == excludeClassId.Value &&
+			  assignment.DivisionId == excludeDivisionId.Value)
+		);
 		var isActive = (employee.EmployeeStatusType ?? EmployeeStatusType.Active) == EmployeeStatusType.Active;
 		var isOverLimit = classTeacherCount >= MaximumClassTeacherAssignments;
 		var reasons = new List<string>();
@@ -593,7 +602,12 @@ public class ClassTeacherAssignmentAppService(
 	{
 		var issues = new List<ClassTeacherValidationIssueDto>();
 		var isActive = (employee.EmployeeStatusType ?? EmployeeStatusType.Active) == EmployeeStatusType.Active;
-		var classTeacherCount = context.ClassTeachers.Count(assignment => assignment.TeacherId == employee.Id);
+		// Exclude the current assignment so a teacher is not flagged for having the
+		// assignment that already belongs to this class-division.
+		var classTeacherCount = context.ClassTeachers.Count(assignment =>
+			assignment.TeacherId == employee.Id &&
+			!(assignment.StandardId == classId && assignment.DivisionId == divisionId)
+		);
 
 		if (!isActive)
 		{

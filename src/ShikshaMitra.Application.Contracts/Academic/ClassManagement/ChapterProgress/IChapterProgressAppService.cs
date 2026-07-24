@@ -28,4 +28,10 @@ public interface IChapterProgressAppService
 	Task<List<SubjectForChaptersDto>> GetSubjectsForStandardAsync(Guid standardId);
 
 	Task<List<ChapterProgressLogDto>> GetChapterProgressLogsAsync(Guid chapterId, Guid divisionId);
+
+	Task<List<EmployeeClassDto>> GetClassesByEmployeeAsync(Guid employeeId);
+
+	Task<List<EmployeeDivisionDto>> GetDivisionsByEmployeeAndClassAsync(Guid employeeId, Guid classId);
+
+	Task<List<ClassDivisionSubjectDto>> GetSubjectsProgressByEmployeeAsync(Guid employeeId, Guid classId, Guid divisionId);
 }

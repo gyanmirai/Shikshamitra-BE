@@ -30,6 +30,11 @@ public class CreateAssignmentV2Dto
     [Range(0, 2)]
     public int SubmissionType { get; set; }
 
+    /// <summary>
+    /// Optional chapter IDs to link this assignment to the Syllabus Assessment status.
+    /// </summary>
+    public List<Guid>? ChapterIds { get; set; }
+
     [Required]
     [MinLength(1)]
     public List<CreateAssignmentV2DivisionScheduleDto> DivisionSchedules { get; set; } = new();

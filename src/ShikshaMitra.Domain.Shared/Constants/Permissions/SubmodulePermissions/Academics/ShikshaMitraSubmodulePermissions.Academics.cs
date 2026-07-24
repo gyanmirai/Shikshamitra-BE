@@ -87,6 +87,29 @@ public static partial class ShikshaMitraSubmodulePermissions
 		}
 
 		/// <summary>
+		/// Academics audit trail permissions
+		/// </summary>
+		public static class Audits
+		{
+			private const string SubmoduleName = $"{ModuleName}.Audits";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Audits";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Export = $"{SubmoduleName}.Export";
+			public const string ViewSensitiveMetadata = $"{SubmoduleName}.ViewSensitiveMetadata";
+
+			public static readonly string[] All = { View, Export, ViewSensitiveMetadata };
+
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Export, $"{SubmoduleDisplayName}.Export" },
+				{ ViewSensitiveMetadata, $"{SubmoduleDisplayName}.ViewSensitiveMetadata" }
+			};
+		}
+
+		/// <summary>
 		/// Helper to get all submodules.
 		/// This registry is populated across multiple partial files.
 		/// </summary>
@@ -147,6 +170,9 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			// Notification
 			{ "Academics.Notification", new SubmoduleInfo(Notification.All, Notification.DisplayNames) },
+
+			// Academic audits
+			{ "Academics.Audits", new SubmoduleInfo(Audits.All, Audits.DisplayNames) },
 
 			// Academic Calendar
 			{ "Academics.AcademicCalendar", new SubmoduleInfo(Academics_AcademicCalendar.All, Academics_AcademicCalendar.DisplayNames) }

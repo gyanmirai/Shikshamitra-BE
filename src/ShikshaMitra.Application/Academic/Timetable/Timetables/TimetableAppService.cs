@@ -355,6 +355,149 @@ public class TimetableAppService(
         return response;
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
+    public async Task<EmployeeTimetableResponseDto> GetByEmployeeAsync(Guid employeeId, Guid? academicYearId = null)
+    {
+        var employee = await employeeRepository.FindAsync(employeeId);
+        var timetables = await timetableRepository.GetByEmployeeIdAsync(employeeId, academicYearId);
+
+        var standardIds = timetables.Select(t => t.StandardId).Distinct().ToList();
+        var divisionIds = timetables.Select(t => t.DivisionId).Distinct().ToList();
+        var subjectIds = timetables
+            .SelectMany(t => t.Slots)
+            .SelectMany(s => s.Subjects)
+            .Where(s => s.TeacherId == employeeId)
+            .Select(s => s.SubjectId)
+            .Distinct()
+            .ToList();
+        var roomIds = timetables
+            .SelectMany(t => t.Slots)
+            .SelectMany(s => s.Subjects)
+            .Where(s => s.TeacherId == employeeId && s.RoomId.HasValue)
+            .Select(s => s.RoomId!.Value)
+            .Distinct()
+            .ToList();
+        var electiveGroupIds = timetables
+            .SelectMany(t => t.Slots)
+            .Where(s => s.ElectiveGroupId.HasValue && s.Subjects.Any(subject => subject.TeacherId == employeeId))
+            .Select(s => s.ElectiveGroupId!.Value)
+            .Distinct()
+            .ToList();
+
+        var standards = standardIds.Count > 0
+            ? await standardRepository.GetListAsync(s => standardIds.Contains(s.Id))
+            : [];
+        var divisions = divisionIds.Count > 0
+            ? await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id))
+            : [];
+        var subjects = subjectIds.Count > 0
+            ? await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id))
+            : [];
+        var rooms = roomIds.Count > 0
+            ? await roomRepository.GetListAsync(r => roomIds.Contains(r.Id))
+            : [];
+        var electiveGroups = electiveGroupIds.Count > 0
+            ? await electiveGroupRepository.GetListAsync(g => electiveGroupIds.Contains(g.Id))
+            : [];
+        var assignedSubjects = subjectIds.Count > 0 && standardIds.Count > 0
+            ? await assignedSubjectRepository.GetListAsync(a =>
+                standardIds.Contains(a.StandardId) &&
+                subjectIds.Contains(a.SubjectId) &&
+                a.Status == SubjectStatus.Published)
+            : [];
+
+        var response = new EmployeeTimetableResponseDto
+        {
+            EmployeeId = employeeId,
+            EmployeeName = employee?.EmployeeName,
+            AcademicYearId = academicYearId
+        };
+
+        foreach (var day in Enum.GetValues<TimetableDayOfWeek>())
+        {
+            var dayName = day.ToString().ToUpperInvariant();
+            response.Days[dayName] = [];
+        }
+
+        foreach (var timetable in timetables)
+        {
+            var standard = standards.FirstOrDefault(s => s.Id == timetable.StandardId);
+            var division = divisions.FirstOrDefault(d => d.Id == timetable.DivisionId);
+
+            foreach (var slot in timetable.Slots
+                .Where(s => s.Subjects.Any(subject => subject.TeacherId == employeeId))
+                .OrderBy(s => s.Day)
+                .ThenBy(s => s.Sequence)
+                .ThenBy(s => s.StartTime))
+            {
+                var dayName = slot.Day.ToString().ToUpperInvariant();
+                var electiveGroup = slot.ElectiveGroupId.HasValue
+                    ? electiveGroups.FirstOrDefault(g => g.Id == slot.ElectiveGroupId.Value)
+                    : null;
+
+                foreach (var slotSubject in slot.Subjects.Where(s => s.TeacherId == employeeId))
+                {
+                    var subject = subjects.FirstOrDefault(s => s.Id == slotSubject.SubjectId);
+                    var room = slotSubject.RoomId.HasValue
+                        ? rooms.FirstOrDefault(r => r.Id == slotSubject.RoomId.Value)
+                        : null;
+                    var assignedSubject = assignedSubjects.FirstOrDefault(a =>
+                        a.StandardId == timetable.StandardId &&
+                        a.SubjectId == slotSubject.SubjectId);
+
+                    response.Days[dayName].Add(new EmployeeTimetableSlotResponseDto
+                    {
+                        TimetableId = timetable.Id,
+                        TimetableSlotId = slot.Id,
+                        StandardId = timetable.StandardId,
+                        StandardName = standard?.Name ?? string.Empty,
+                        DivisionId = timetable.DivisionId,
+                        DivisionName = division?.Name ?? string.Empty,
+                        Sequence = slot.Sequence,
+                        StartTime = slot.StartTime.ToString("HH:mm"),
+                        EndTime = slot.EndTime.ToString("HH:mm"),
+                        Type = slot.SlotType,
+                        BreakType = slot.BreakType,
+                        SubjectType = slot.SubjectType,
+                        ElectiveGroupId = slot.ElectiveGroupId,
+                        ElectiveGroupName = electiveGroup?.Name,
+                        ElectiveGroupColor = electiveGroup?.Color,
+                        SubjectAssignmentId = assignedSubject?.Id ?? Guid.Empty,
+                        SubjectId = slotSubject.SubjectId,
+                        SubjectName = subject?.Name ?? string.Empty,
+                        SubjectCode = assignedSubject?.SubjectCode,
+                        SubjectColor = subject?.Color,
+                        RoomId = slotSubject.RoomId,
+                        RoomName = room?.RoomName
+                    });
+                }
+            }
+        }
+
+        foreach (var daySlots in response.Days.Values)
+        {
+            daySlots.Sort((left, right) =>
+            {
+                var timeCompare = string.Compare(left.StartTime, right.StartTime, StringComparison.Ordinal);
+                if (timeCompare != 0)
+                {
+                    return timeCompare;
+                }
+
+                var sequenceCompare = left.Sequence.CompareTo(right.Sequence);
+                if (sequenceCompare != 0)
+                {
+                    return sequenceCompare;
+                }
+
+                return string.Compare(left.StandardName, right.StandardName, StringComparison.Ordinal);
+            });
+        }
+
+        response.TotalSlots = response.Days.Values.Sum(slots => slots.Count);
+        return response;
+    }
+
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public async Task SaveAsync(Guid standardId, Guid divisionId, SaveTimetableDto input)
     {

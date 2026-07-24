@@ -23,6 +23,15 @@ public class TimetableController(
         return await timetableAppService.GetByStandardAndDivisionAsync(standardId, divisionId);
     }
 
+    [HttpGet("by-employee/{employeeId}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
+    public async Task<EmployeeTimetableResponseDto> GetByEmployeeAsync(
+        [FromRoute] Guid employeeId,
+        [FromQuery] Guid? academicYearId = null)
+    {
+        return await timetableAppService.GetByEmployeeAsync(employeeId, academicYearId);
+    }
+
     [HttpPost("by-standard/{standardId}/division/{divisionId}")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public async Task<IActionResult> SaveAsync(

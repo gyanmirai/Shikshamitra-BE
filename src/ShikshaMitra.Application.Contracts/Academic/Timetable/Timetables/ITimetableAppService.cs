@@ -7,6 +7,8 @@ public interface ITimetableAppService
 {
     Task<TimetableResponseDto> GetByStandardAndDivisionAsync(Guid standardId, Guid divisionId);
 
+    Task<EmployeeTimetableResponseDto> GetByEmployeeAsync(Guid employeeId, Guid? academicYearId = null);
+
     Task SaveAsync(Guid standardId, Guid divisionId, SaveTimetableDto input);
 
     Task ValidateAsync(Guid standardId, Guid divisionId, SaveTimetableDto input);

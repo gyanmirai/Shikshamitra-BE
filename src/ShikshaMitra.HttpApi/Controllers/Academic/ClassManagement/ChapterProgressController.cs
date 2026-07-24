@@ -154,4 +154,74 @@ public class ChapterProgressController(
 		var result = await appService.GetChapterProgressLogsAsync(chapterId, divisionId);
 		return Ok(result);
 	}
+
+	[HttpGet]
+	[Route("api/class-management/chapter-progress/employee/{employeeId}/classes")]
+	[ProducesResponseType(typeof(List<EmployeeClassDto>), 200)]
+	[ProducesResponseType(400)]
+	[ProducesResponseType(401)]
+	public async Task<IActionResult> GetClassesByEmployeeAsync([FromRoute] Guid employeeId)
+	{
+		if (employeeId == Guid.Empty)
+		{
+			return BadRequest(new { error = "employeeId is required" });
+		}
+
+		var result = await appService.GetClassesByEmployeeAsync(employeeId);
+		return Ok(result);
+	}
+
+	[HttpGet]
+	[Route("api/class-management/chapter-progress/employee/{employeeId}/divisions")]
+	[ProducesResponseType(typeof(List<EmployeeDivisionDto>), 200)]
+	[ProducesResponseType(400)]
+	[ProducesResponseType(401)]
+	public async Task<IActionResult> GetDivisionsByEmployeeAndClassAsync(
+		[FromRoute] Guid employeeId,
+		[FromQuery] Guid classId
+	)
+	{
+		if (employeeId == Guid.Empty)
+		{
+			return BadRequest(new { error = "employeeId is required" });
+		}
+
+		if (classId == Guid.Empty)
+		{
+			return BadRequest(new { error = "classId is required" });
+		}
+
+		var result = await appService.GetDivisionsByEmployeeAndClassAsync(employeeId, classId);
+		return Ok(result);
+	}
+
+	[HttpGet]
+	[Route("api/class-management/chapter-progress/employee/{employeeId}/subjects-progress")]
+	[ProducesResponseType(typeof(List<ClassDivisionSubjectDto>), 200)]
+	[ProducesResponseType(400)]
+	[ProducesResponseType(401)]
+	public async Task<IActionResult> GetSubjectsProgressByEmployeeAsync(
+		[FromRoute] Guid employeeId,
+		[FromQuery] Guid classId,
+		[FromQuery] Guid divisionId
+	)
+	{
+		if (employeeId == Guid.Empty)
+		{
+			return BadRequest(new { error = "employeeId is required" });
+		}
+
+		if (classId == Guid.Empty)
+		{
+			return BadRequest(new { error = "classId is required" });
+		}
+
+		if (divisionId == Guid.Empty)
+		{
+			return BadRequest(new { error = "divisionId is required" });
+		}
+
+		var result = await appService.GetSubjectsProgressByEmployeeAsync(employeeId, classId, divisionId);
+		return Ok(result);
+	}
 }

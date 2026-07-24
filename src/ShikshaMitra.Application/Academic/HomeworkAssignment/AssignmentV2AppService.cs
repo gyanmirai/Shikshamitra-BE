@@ -78,6 +78,9 @@ public class AssignmentV2AppService(
             ));
         }
 
+        if (input.ChapterIds != null && input.ChapterIds.Count > 0)
+            assignment.ChapterIdsJson = System.Text.Json.JsonSerializer.Serialize(input.ChapterIds);
+
         await assignmentRepository.InsertAsync(assignment, autoSave: true);
 
         var dto = await MapToAssignmentDtoAsync(assignment, academicMediumId);
@@ -230,6 +233,9 @@ public class AssignmentV2AppService(
         assignment.SubjectId = input.SubjectId;
         assignment.AssignmentTypeId = input.AssignmentTypeId;
         assignment.SubmissionType = (SubmissionType) input.SubmissionType;
+        assignment.ChapterIdsJson = input.ChapterIds != null && input.ChapterIds.Count > 0
+            ? System.Text.Json.JsonSerializer.Serialize(input.ChapterIds)
+            : null;
 
         // Replace division schedules
         var existing = assignment.DivisionSchedules.ToList();
@@ -297,7 +303,7 @@ public class AssignmentV2AppService(
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
 
         var previousStatus = assignment.Status;
-        var newStatus = (AssignmentStatus)input.Status;
+        var newStatus = (AssignmentStatus) input.Status;
         if (newStatus == AssignmentStatus.Published)
         {
             await ValidateExistingAssignmentScheduleDatesAsync(assignment);
@@ -361,7 +367,7 @@ public class AssignmentV2AppService(
         {
             TotalTasks = rows.Count,
             PendingPublish = rows
-                .Where(r => r.Status == (int)AssignmentStatus.Draft || r.PublishedDivisionCount < r.TotalDivisionCount)
+                .Where(r => r.Status == (int) AssignmentStatus.Draft || r.PublishedDivisionCount < r.TotalDivisionCount)
                 .OrderBy(r => r.NextPublishAt ?? DateTime.MaxValue)
                 .Take(20)
                 .ToList(),
@@ -371,7 +377,7 @@ public class AssignmentV2AppService(
                 .Take(20)
                 .ToList(),
             Overdue = rows
-                .Where(r => r.NextDueAt.HasValue && r.NextDueAt.Value.Date < asOfDate && r.Status != (int)AssignmentStatus.Closed)
+                .Where(r => r.NextDueAt.HasValue && r.NextDueAt.Value.Date < asOfDate && r.Status != (int) AssignmentStatus.Closed)
                 .OrderBy(r => r.NextDueAt)
                 .Take(20)
                 .ToList(),
@@ -382,9 +388,9 @@ public class AssignmentV2AppService(
                 .ToList()
         };
 
-        dashboard.PendingPublishCount = rows.Count(r => r.Status == (int)AssignmentStatus.Draft || r.PublishedDivisionCount < r.TotalDivisionCount);
+        dashboard.PendingPublishCount = rows.Count(r => r.Status == (int) AssignmentStatus.Draft || r.PublishedDivisionCount < r.TotalDivisionCount);
         dashboard.DueTodayCount = rows.Count(r => r.NextDueAt.HasValue && r.NextDueAt.Value.Date == asOfDate);
-        dashboard.OverdueCount = rows.Count(r => r.NextDueAt.HasValue && r.NextDueAt.Value.Date < asOfDate && r.Status != (int)AssignmentStatus.Closed);
+        dashboard.OverdueCount = rows.Count(r => r.NextDueAt.HasValue && r.NextDueAt.Value.Date < asOfDate && r.Status != (int) AssignmentStatus.Closed);
         dashboard.EvaluationPendingCount = rows.Count(r => r.EvaluationPendingCount > 0);
         return dashboard;
     }
@@ -522,7 +528,7 @@ public class AssignmentV2AppService(
             var schedules = assignment.DivisionSchedules.ToList();
             var dueAt = schedules
                 .Where(s => s.IsPublished)
-                .Select(s => (DateTime?)s.DueDate)
+                .Select(s => (DateTime?) s.DueDate)
                 .OrderBy(d => d)
                 .FirstOrDefault();
             var publishAt = schedules
@@ -541,7 +547,7 @@ public class AssignmentV2AppService(
                 StandardName = standardLookup.GetValueOrDefault(assignment.StandardId, string.Empty),
                 SubjectId = assignment.SubjectId,
                 SubjectName = subjectLookup.GetValueOrDefault(assignment.SubjectId, string.Empty),
-                Status = (int)assignment.Status,
+                Status = (int) assignment.Status,
                 StatusLabel = assignment.Status.ToString(),
                 NextPublishAt = publishAt,
                 NextDueAt = dueAt,

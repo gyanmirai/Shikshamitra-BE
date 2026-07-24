@@ -69,7 +69,7 @@ public class ConflictCheckResultDto
     public ValidationPassDto ClassAvailability { get; set; } = new(true);
     public ValidationPassDto MaintenanceCheck { get; set; } = new(true);
     public ValidationPassDto HolidayCalendar { get; set; } = new(true);
-    
+
     public string OverallSeverity { get; set; } = "none";
     public bool CanSave { get; set; } = true;
     public bool RequiresApproval { get; set; } = false;
@@ -160,6 +160,8 @@ public class RoomReservationDto
 {
     public Guid Id { get; set; }
     public Guid RoomId { get; set; }
+    public string RoomName { get; set; } = string.Empty;
+    public string BuildingName { get; set; } = string.Empty;
     public DateTime Date { get; set; }
     public TimeSpan StartTime { get; set; }
     public TimeSpan EndTime { get; set; }
@@ -171,6 +173,7 @@ public class RoomReservationDto
     public DateTime? RecurringUntilDate { get; set; }
     public string? Remarks { get; set; }
     public DateTime CreationTime { get; set; }
+    public string RequestedBy { get; set; } = string.Empty;
 }
 
 public class RoomMaintenanceBlockDto

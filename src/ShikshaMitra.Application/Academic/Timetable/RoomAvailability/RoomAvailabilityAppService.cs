@@ -73,9 +73,9 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         foreach (var room in rooms)
         {
             var conflictCheck = await _conflictService.CheckConflictsAsync(
-                room.Id, 
-                input.Date, 
-                timeStart, 
+                room.Id,
+                input.Date,
+                timeStart,
                 timeEnd,
                 standardId: input.StandardId,
                 divisionId: input.DivisionId
@@ -271,6 +271,20 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
         await _reservationRepository.InsertAsync(mainReservation);
 
+        var creationAuditLog = new RoomAuditLog(
+            GuidGenerator.Create(),
+            CurrentTenant.Id,
+            input.RoomId,
+            mainReservation.Id,
+            "Room Reserved",
+            CurrentUser.Id ?? Guid.Empty,
+            CurrentUser.UserName ?? "System",
+            null,
+            null,
+            $"Room reserved for '{input.Purpose}'."
+        );
+        await _auditLogRepository.InsertAsync(creationAuditLog);
+
         return ObjectMapper.Map<RoomReservation, RoomReservationDto>(mainReservation);
     }
 
@@ -292,7 +306,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             while (current.AddDays(1) <= config.UntilDate)
             {
                 current = current.AddDays(1);
-                var abpDayOfWeekIndex = (int)current.DayOfWeek;
+                var abpDayOfWeekIndex = (int) current.DayOfWeek;
                 if (config.RepeatDays.Contains(abpDayOfWeekIndex))
                 {
                     dates.Add(current);
@@ -305,9 +319,49 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
     public async Task<List<RoomReservationDto>> GetReservationsAsync()
     {
-        var reservations = await _reservationRepository.GetListAsync(r => 
+        var reservations = await _reservationRepository.GetListAsync(r =>
             !r.RecurringConfigId.HasValue || r.IsRecurring);
         var dtos = ObjectMapper.Map<List<RoomReservation>, List<RoomReservationDto>>(reservations);
+
+        // Enrich with room names and building names
+        var roomIds = dtos.Select(d => d.RoomId).Distinct().ToList();
+        if (roomIds.Count > 0)
+        {
+            var rooms = await _roomRepository.GetListAsync(r => roomIds.Contains(r.Id));
+            var buildings = await _buildingRepository.GetListAsync();
+            var buildingLookup = buildings.ToDictionary(b => b.Id, b => b.BuildingName);
+            var roomLookup = rooms.ToDictionary(r => r.Id, r => (r.RoomName, r.BuildingId));
+            foreach (var dto in dtos)
+            {
+                if (roomLookup.TryGetValue(dto.RoomId, out var roomInfo))
+                {
+                    dto.RoomName = roomInfo.RoomName;
+                    dto.BuildingName = buildingLookup.TryGetValue(roomInfo.BuildingId, out var bName)
+                        ? bName
+                        : string.Empty;
+                }
+            }
+        }
+
+        // Enrich with requester name from creation audit logs
+        var reservationIds = dtos.Select(d => d.Id).ToList();
+        if (reservationIds.Count > 0)
+        {
+            var createLogs = await _auditLogRepository.GetListAsync(l =>
+                l.ReservationId.HasValue &&
+                reservationIds.Contains(l.ReservationId.Value) &&
+                l.Action == "Room Reserved");
+            var creatorByReservationId = createLogs
+                .GroupBy(l => l.ReservationId!.Value)
+                .ToDictionary(g => g.Key, g => g.First().UserName);
+            foreach (var dto in dtos)
+            {
+                if (creatorByReservationId.TryGetValue(dto.Id, out var creatorName))
+                {
+                    dto.RequestedBy = creatorName;
+                }
+            }
+        }
 
         var configIds = dtos.Where(d => d.RecurringConfigId.HasValue).Select(d => d.RecurringConfigId.Value).Distinct().ToList();
         if (configIds.Any())
@@ -329,7 +383,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     public async Task<RoomReservationDto> UpdateReservationAsync(Guid id, CreateRoomReservationDto input)
     {
         var reservation = await _reservationRepository.GetAsync(id);
-        
+
         var conflicts = await _conflictService.CheckConflictsAsync(
             input.RoomId, input.Date, input.StartTime, input.EndTime, id,
             input.TeacherId, input.StandardId, input.DivisionId
@@ -389,8 +443,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
         if (reservation.IsRecurring && reservation.RecurringConfigId.HasValue)
         {
-            var children = await _reservationRepository.GetListAsync(r => 
-                r.RecurringConfigId == reservation.RecurringConfigId.Value && 
+            var children = await _reservationRepository.GetListAsync(r =>
+                r.RecurringConfigId == reservation.RecurringConfigId.Value &&
                 !r.IsRecurring);
             foreach (var child in children)
             {
@@ -428,8 +482,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
         if (reservation.IsRecurring && reservation.RecurringConfigId.HasValue)
         {
-            var children = await _reservationRepository.GetListAsync(r => 
-                r.RecurringConfigId == reservation.RecurringConfigId.Value && 
+            var children = await _reservationRepository.GetListAsync(r =>
+                r.RecurringConfigId == reservation.RecurringConfigId.Value &&
                 !r.IsRecurring);
             foreach (var child in children)
             {
@@ -503,8 +557,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
         if (reservation.IsRecurring && reservation.RecurringConfigId.HasValue)
         {
-            var children = await _reservationRepository.GetListAsync(r => 
-                r.RecurringConfigId == reservation.RecurringConfigId.Value && 
+            var children = await _reservationRepository.GetListAsync(r =>
+                r.RecurringConfigId == reservation.RecurringConfigId.Value &&
                 !r.IsRecurring);
             foreach (var child in children)
             {
@@ -615,9 +669,9 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     public async Task<RoomScheduleDto> GetRoomScheduleAsync(Guid roomId, DateTime date)
     {
         var room = await _roomRepository.GetAsync(roomId);
-        var reservations = await _reservationRepository.GetListAsync(r => 
-            r.RoomId == roomId && 
-            r.Date == date.Date && 
+        var reservations = await _reservationRepository.GetListAsync(r =>
+            r.RoomId == roomId &&
+            r.Date == date.Date &&
             (r.Status == RoomReservationStatus.Approved || r.Status == RoomReservationStatus.Active || r.Status == RoomReservationStatus.CheckedIn || r.Status == RoomReservationStatus.PendingApproval));
 
         var schedule = new RoomScheduleDto

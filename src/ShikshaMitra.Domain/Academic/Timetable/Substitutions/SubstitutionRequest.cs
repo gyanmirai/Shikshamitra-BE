@@ -223,7 +223,7 @@ public class SubstitutionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public void Reject(string reason)
     {
         AcknowledgementStatus = SubstitutionAcknowledgementStatus.Rejected;
-        Status = SubstitutionStatus.Pending;
+        Status = SubstitutionStatus.Rejected;
         SubstituteTeacherId = null;
         SubstituteTeacherName = null;
         ConflictReason = reason;

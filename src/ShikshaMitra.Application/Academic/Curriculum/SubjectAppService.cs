@@ -429,8 +429,7 @@ public class SubjectAppService(
 
 	public async Task<List<SubjectAuditLogDto>> GetAuditLogsAsync(Guid id)
 	{
-		var subject = await subjectRepository.GetAsync(id);
-		var logs = new List<SubjectAuditLogDto>
+		var subject = await subjectRepository.GetAsync(id); var logs = new List<SubjectAuditLogDto>
 		{
 			new()
 			{

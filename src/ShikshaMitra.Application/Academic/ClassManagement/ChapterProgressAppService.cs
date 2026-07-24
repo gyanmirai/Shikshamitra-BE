@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -20,6 +22,9 @@ public class ChapterProgressAppService(
 	IRepository<Syllabus.ChapterProgress, Guid> progressRepository,
 	IRepository<ChapterProgressLog, Guid> progressLogRepository,
 	IRepository<Subject, Guid> subjectRepository,
+	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<Division, Guid> divisionRepository,
 	IGuidGenerator guidGenerator,
 	ILogger<ChapterProgressAppService> logger
 ) : ApplicationService, IChapterProgressAppService
@@ -536,7 +541,7 @@ public class ChapterProgressAppService(
 			return 0;
 		}
 
-		return Math.Clamp((int)Math.Round(elapsedWorkingDays * 100d / totalWorkingDays), 0, 100);
+		return Math.Clamp((int) Math.Round(elapsedWorkingDays * 100d / totalWorkingDays), 0, 100);
 	}
 
 	private static int CountWorkingDays(DateTime startDate, DateTime endDate)
@@ -861,5 +866,225 @@ public class ChapterProgressAppService(
 				SubjectCode = a.SubjectCode ?? string.Empty
 			})
 			.ToList();
+	}
+
+	public async Task<List<EmployeeClassDto>> GetClassesByEmployeeAsync(Guid employeeId)
+	{
+		if (employeeId == Guid.Empty)
+		{
+			throw new ArgumentException("Employee ID cannot be empty", nameof(employeeId));
+		}
+
+		logger.LogInformation("Getting classes for employee {EmployeeId}", employeeId);
+
+		var allocationQuery = await teacherSubjectAllocationRepository.GetQueryableAsync();
+		var standardIds = await AsyncExecuter.ToListAsync(
+			allocationQuery
+				.Where(a => a.Teachers.Any(t => t.TeacherId == employeeId))
+				.Select(a => a.StandardId)
+				.Distinct()
+		);
+
+		if (!standardIds.Any())
+		{
+			return new List<EmployeeClassDto>();
+		}
+
+		var standards = await standardRepository.GetListAsync(s => standardIds.Contains(s.Id));
+
+		return standards
+			.OrderBy(s => s.Name)
+			.Select(s => new EmployeeClassDto { Id = s.Id, Name = s.Name })
+			.ToList();
+	}
+
+	public async Task<List<EmployeeDivisionDto>> GetDivisionsByEmployeeAndClassAsync(Guid employeeId, Guid classId)
+	{
+		if (employeeId == Guid.Empty)
+		{
+			throw new ArgumentException("Employee ID cannot be empty", nameof(employeeId));
+		}
+
+		if (classId == Guid.Empty)
+		{
+			throw new ArgumentException("Class ID cannot be empty", nameof(classId));
+		}
+
+		logger.LogInformation(
+			"Getting divisions for employee {EmployeeId} and class {ClassId}",
+			employeeId, classId
+		);
+
+		var allocationQuery = await teacherSubjectAllocationRepository.GetQueryableAsync();
+		var divisionIds = await AsyncExecuter.ToListAsync(
+			allocationQuery
+				.Where(a => a.StandardId == classId && a.Teachers.Any(t => t.TeacherId == employeeId))
+				.Select(a => a.DivisionId)
+				.Distinct()
+		);
+
+		if (!divisionIds.Any())
+		{
+			return new List<EmployeeDivisionDto>();
+		}
+
+		var divisions = await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id));
+
+		return divisions
+			.OrderBy(d => d.Name)
+			.Select(d => new EmployeeDivisionDto { Id = d.Id, Name = d.Name })
+			.ToList();
+	}
+
+	public async Task<List<ClassDivisionSubjectDto>> GetSubjectsProgressByEmployeeAsync(
+		Guid employeeId,
+		Guid classId,
+		Guid divisionId
+	)
+	{
+		if (employeeId == Guid.Empty)
+		{
+			throw new ArgumentException("Employee ID cannot be empty", nameof(employeeId));
+		}
+
+		if (classId == Guid.Empty)
+		{
+			throw new ArgumentException("Class ID cannot be empty", nameof(classId));
+		}
+
+		if (divisionId == Guid.Empty)
+		{
+			throw new ArgumentException("Division ID cannot be empty", nameof(divisionId));
+		}
+
+		logger.LogInformation(
+			"Getting subject progress for employee {EmployeeId}, class {ClassId}, division {DivisionId}",
+			employeeId, classId, divisionId
+		);
+
+		// Find the subject IDs this employee is allocated to for this class+division
+		var allocationQuery = await teacherSubjectAllocationRepository.GetQueryableAsync();
+		var allocatedSubjectIds = await AsyncExecuter.ToListAsync(
+			allocationQuery
+				.Where(a =>
+					a.StandardId == classId &&
+					a.DivisionId == divisionId &&
+					a.Teachers.Any(t => t.TeacherId == employeeId))
+				.Select(a => a.SubjectId)
+				.Distinct()
+		);
+
+		if (!allocatedSubjectIds.Any())
+		{
+			return new List<ClassDivisionSubjectDto>();
+		}
+
+		// Get subject assignments for this class, filtered to employee's subjects only
+		var assignments = await subjectAssignmentRepository.GetListAsync(a =>
+			a.StandardId == classId && allocatedSubjectIds.Contains(a.SubjectId)
+		);
+
+		var result = new List<ClassDivisionSubjectDto>();
+		if (!assignments.Any())
+		{
+			return result;
+		}
+
+		var subjectIds = assignments.Select(a => a.SubjectId).Distinct().ToList();
+		var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
+		var subjectLookup = subjects.ToDictionary(s => s.Id);
+
+		var assignmentIds = assignments.Select(a => a.Id).Distinct().ToList();
+		var chapters = await chapterRepository.GetListAsync(c => assignmentIds.Contains(c.AssignedSubjectId));
+		var chaptersByAssignment = chapters
+			.GroupBy(c => c.AssignedSubjectId)
+			.ToDictionary(g => g.Key, g => g.ToList());
+		var chapterIds = chapters.Select(c => c.Id).ToList();
+		var progresses = chapterIds.Count == 0
+			? new List<Syllabus.ChapterProgress>()
+			: await progressRepository.GetListAsync(p =>
+				chapterIds.Contains(p.ChapterId) &&
+				p.DivisionId == divisionId
+			);
+		var progressLookup = progresses
+			.GroupBy(p => p.ChapterId)
+			.ToDictionary(
+				g => g.Key,
+				g => g.OrderByDescending(p => p.CreationTime).First()
+			);
+
+		foreach (var assignment in assignments)
+		{
+			if (!subjectLookup.TryGetValue(assignment.SubjectId, out var subject))
+			{
+				continue;
+			}
+
+			if (!chaptersByAssignment.TryGetValue(assignment.Id, out var subjectChapters))
+			{
+				subjectChapters = new List<AssignedSubjectChapter>();
+			}
+
+			var totalChapters = subjectChapters.Count;
+			var completedChapters = 0;
+			var progressSum = 0;
+			var expectedProgressSum = 0;
+			DateTime? lastUpdatedAt = null;
+			var subjectRiskRank = 0;
+
+			foreach (var chapter in subjectChapters)
+			{
+				progressLookup.TryGetValue(chapter.Id, out var progress);
+
+				var expectedProgress = CalculateExpectedProgress(
+					chapter.ChapterStartTime == default ? null : chapter.ChapterStartTime.UtcDateTime,
+					chapter.ChapterEndTime == default ? null : chapter.ChapterEndTime.UtcDateTime
+				);
+				var currentProgress = progress?.Progress ?? 0;
+				var riskLevel = CalculateRiskLevel(currentProgress, expectedProgress, progress?.LastModificationTime ?? progress?.CreationTime);
+
+				expectedProgressSum += expectedProgress;
+				progressSum += currentProgress;
+				subjectRiskRank = Math.Max(subjectRiskRank, GetRiskRank(riskLevel));
+
+				var progressUpdatedAt = progress?.LastModificationTime ?? progress?.CreationTime;
+				if (progressUpdatedAt.HasValue && (!lastUpdatedAt.HasValue || progressUpdatedAt.Value > lastUpdatedAt.Value))
+				{
+					lastUpdatedAt = progressUpdatedAt;
+				}
+
+				if (currentProgress == 100)
+				{
+					completedChapters++;
+				}
+			}
+
+			var progressPercentage = totalChapters > 0
+				? (int) Math.Round(progressSum / (double) totalChapters)
+				: 0;
+			var expectedProgressPercentage = totalChapters > 0
+				? (int) Math.Round(expectedProgressSum / (double) totalChapters)
+				: 0;
+			var variancePercentage = progressPercentage - expectedProgressPercentage;
+			var scheduleStatus = CalculateScheduleStatus(progressPercentage, expectedProgressPercentage, completedChapters == totalChapters && totalChapters > 0);
+
+			result.Add(new ClassDivisionSubjectDto
+			{
+				SubjectId = subject.Id,
+				SubjectName = subject.Name,
+				SubjectCode = assignment.SubjectCode,
+				SubjectColor = subject.Color,
+				TotalChapters = totalChapters,
+				CompletedChapters = completedChapters,
+				ProgressPercentage = progressPercentage,
+				ExpectedProgressPercentage = expectedProgressPercentage,
+				VariancePercentage = variancePercentage,
+				ScheduleStatus = scheduleStatus,
+				RiskLevel = GetRiskLevelFromRank(subjectRiskRank),
+				LastUpdatedAt = lastUpdatedAt
+			});
+		}
+
+		return result;
 	}
 }

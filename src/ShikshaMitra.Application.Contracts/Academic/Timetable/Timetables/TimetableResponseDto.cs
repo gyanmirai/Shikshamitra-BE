@@ -13,6 +13,41 @@ public class TimetableResponseDto
     public int UnoccupiedSlots { get; set; }
 }
 
+public class EmployeeTimetableResponseDto
+{
+    public Guid EmployeeId { get; set; }
+    public string? EmployeeName { get; set; }
+    public Guid? AcademicYearId { get; set; }
+    public Dictionary<string, List<EmployeeTimetableSlotResponseDto>> Days { get; set; } = [];
+    public int TotalSlots { get; set; }
+}
+
+public class EmployeeTimetableSlotResponseDto
+{
+    public Guid TimetableId { get; set; }
+    public Guid TimetableSlotId { get; set; }
+    public Guid StandardId { get; set; }
+    public string StandardName { get; set; } = string.Empty;
+    public Guid DivisionId { get; set; }
+    public string DivisionName { get; set; } = string.Empty;
+    public int Sequence { get; set; }
+    public string StartTime { get; set; } = string.Empty;
+    public string EndTime { get; set; } = string.Empty;
+    public SlotType Type { get; set; }
+    public BreakType? BreakType { get; set; }
+    public Curriculum.SubjectType? SubjectType { get; set; }
+    public Guid? ElectiveGroupId { get; set; }
+    public string? ElectiveGroupName { get; set; }
+    public string? ElectiveGroupColor { get; set; }
+    public Guid SubjectAssignmentId { get; set; }
+    public Guid SubjectId { get; set; }
+    public string SubjectName { get; set; } = string.Empty;
+    public string? SubjectCode { get; set; }
+    public string? SubjectColor { get; set; }
+    public Guid? RoomId { get; set; }
+    public string? RoomName { get; set; }
+}
+
 public class TimetableSubjectSummaryDto
 {
     public Guid Id { get; set; }

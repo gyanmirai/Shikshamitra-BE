@@ -9,6 +9,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -24,6 +25,8 @@ public class AcademicOrganizationScopeAccessService(
 	IUserScopeAccessService userScopeAccessService,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<EducationMediumStage, Guid> stageRepository,
+	IRepository<EducationMedium, Guid> mediumRepository,
+	IRepository<EducationBoard, Guid> boardRepository,
 	IRepository<Room, Guid> roomRepository)
 	: ApplicationService, ITransientDependency
 {
@@ -124,10 +127,48 @@ public class AcademicOrganizationScopeAccessService(
 			return standards;
 		}
 
+		var hierarchyByStage = new Dictionary<Guid, StandardHierarchyRow>();
+		var hasAncestorWildcard =
+			scope.WildcardStandardMediumStageIds.Count > 0
+			|| scope.WildcardMediumStageMediumIds.Count > 0
+			|| scope.WildcardMediumBoardIds.Count > 0
+			|| scope.WildcardBoardAcademicYearIds.Count > 0;
+
+		if (hasAncestorWildcard && standards.Count > 0)
+		{
+			var stageIds = standards
+				.Select(standard => standard.EducationMediumStageId)
+				.Distinct()
+				.ToList();
+			var stageQuery = await stageRepository.GetQueryableAsync();
+			var mediumQuery = await mediumRepository.GetQueryableAsync();
+			var boardQuery = await boardRepository.GetQueryableAsync();
+			var hierarchyRows = await AsyncExecuter.ToListAsync(
+				from stage in stageQuery
+				join medium in mediumQuery on stage.EducationMediumId equals medium.Id
+				join board in boardQuery on medium.EducationBoardId equals board.Id
+				where stageIds.Contains(stage.Id)
+				select new StandardHierarchyRow(
+					stage.Id,
+					medium.Id,
+					board.Id,
+					board.AcademicYearId));
+
+			hierarchyByStage = hierarchyRows.ToDictionary(row => row.StageId);
+		}
+
 		return standards
 			.Where(standard =>
 			{
-				var standardFullAccess = scope.WildcardDivisionStandardIds.Contains(standard.Id);
+				var hasAncestorFullAccess =
+					hierarchyByStage.TryGetValue(standard.EducationMediumStageId, out var hierarchy)
+					&& (scope.WildcardStandardMediumStageIds.Contains(hierarchy.StageId)
+						|| scope.WildcardMediumStageMediumIds.Contains(hierarchy.MediumId)
+						|| scope.WildcardMediumBoardIds.Contains(hierarchy.BoardId)
+						|| scope.WildcardBoardAcademicYearIds.Contains(hierarchy.AcademicYearId));
+				var standardFullAccess =
+					hasAncestorFullAccess
+					|| scope.WildcardDivisionStandardIds.Contains(standard.Id);
 				var standardVisible =
 					standardFullAccess ||
 					scope.StandardIds.Contains(standard.Id) ||
@@ -149,6 +190,12 @@ public class AcademicOrganizationScopeAccessService(
 			})
 			.ToList();
 	}
+
+	private sealed record StandardHierarchyRow(
+		Guid StageId,
+		Guid MediumId,
+		Guid BoardId,
+		Guid AcademicYearId);
 
 	public async Task<bool> CanAccessMediumStageAsync(
 		Guid stageId,

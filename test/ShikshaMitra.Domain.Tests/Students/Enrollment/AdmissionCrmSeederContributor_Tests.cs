@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using Shouldly;
@@ -41,6 +42,77 @@ public class AdmissionCrmSeederContributor_Tests
 		]);
 		leads.Single(item => item.Key == "rte-allotment").RouteType.ShouldBe(AdmissionCrmRouteType.RteEws);
 		leads.Single(item => item.Key == "activation-repair").Priority.ShouldBe(AdmissionCrmLeadPriority.Hot);
+	}
+
+	[Fact]
+	public void Default_Route_Catalog_Should_Cover_Routine_Quick_Inquiry_Pathways()
+	{
+		var routes = AdmissionCrmSeederContributor.DefaultRouteSpecs();
+
+		routes.Select(item => item.RouteType).ShouldBe(
+		[
+			AdmissionCrmRouteType.Fresh,
+			AdmissionCrmRouteType.SiblingPriority,
+			AdmissionCrmRouteType.Lateral
+		]);
+		routes.Select(item => item.Code).Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(routes.Count);
+		routes.Select(item => item.Name).ShouldBe(["Fresh admission", "Sibling priority", "Lateral entry"]);
+
+		using var freshConfiguration = JsonDocument.Parse(routes[0].ConfigurationJson);
+		freshConfiguration.RootElement.GetProperty("requiresPolicyEvaluation").GetBoolean().ShouldBeFalse();
+		using var siblingConfiguration = JsonDocument.Parse(routes[1].ConfigurationJson);
+		siblingConfiguration.RootElement
+			.GetProperty("requiredEvidenceCodes")
+			.EnumerateArray()
+			.Select(item => item.GetString())
+			.ShouldContain("SIBLING_RELATIONSHIP");
+	}
+
+	[Fact]
+	public void Default_Routes_Should_Be_Effective_During_Pre_Opening_Inquiry_Capture()
+	{
+		var now = new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc);
+		var (effectiveFrom, effectiveUntil) = AdmissionCrmSeederContributor.DefaultRouteEffectivePeriod(
+			new DateTime(2026, 6, 1),
+			new DateTime(2027, 5, 31),
+			now);
+		var definition = new AdmissionCrmRouteDefinition(
+			Guid.NewGuid(),
+			Guid.NewGuid(),
+			Guid.NewGuid(),
+			"FRESH",
+			"Fresh admission",
+			AdmissionCrmRouteType.Fresh,
+			1,
+			"{}",
+			effectiveFrom,
+			effectiveUntil);
+		definition.Submit(Guid.NewGuid());
+		definition.Publish(Guid.NewGuid());
+
+		effectiveFrom.ShouldBe(now.Date);
+		effectiveUntil.ShouldBe(new DateTime(2027, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+		definition.IsEffectiveAt(now).ShouldBeTrue();
+	}
+
+	[Fact]
+	public void Default_Route_Publication_Should_Use_Only_Explicit_Authorized_Personas()
+	{
+		var makerUserId = Guid.NewGuid();
+		var approverUserId = Guid.NewGuid();
+		var arbitraryUserId = Guid.NewGuid();
+		var users = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase)
+		{
+			["admissions-counselor@ddvs.com"] = makerUserId,
+			["admissions-approver@ddvs.com"] = approverUserId,
+			["unrelated-admin@ddvs.com"] = arbitraryUserId
+		};
+
+		AdmissionCrmSeederContributor.ResolveRoutePublicationUserIds(users)
+			.ShouldBe([makerUserId, approverUserId]);
+
+		users.Remove("admissions-counselor@ddvs.com");
+		AdmissionCrmSeederContributor.ResolveRoutePublicationUserIds(users).ShouldBeEmpty();
 	}
 
 	[Fact]

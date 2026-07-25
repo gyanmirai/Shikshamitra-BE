@@ -5,9 +5,11 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
@@ -22,6 +24,7 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 	private readonly IRepository<AdmissionCrmPipelineStage, Guid> _stageRepository;
 	private readonly IRepository<AdmissionInquiryFormTemplate, Guid> _formTemplateRepository;
 	private readonly IRepository<AdmissionCrmMessageTemplate, Guid> _messageTemplateRepository;
+	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
 
@@ -30,6 +33,7 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		IRepository<AdmissionCrmPipelineStage, Guid> stageRepository,
 		IRepository<AdmissionInquiryFormTemplate, Guid> formTemplateRepository,
 		IRepository<AdmissionCrmMessageTemplate, Guid> messageTemplateRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
 		StudentScopeAccessService studentScopeAccessService,
 		AdmissionCrmStaffEligibilityService staffEligibilityService)
 	{
@@ -37,6 +41,7 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		_stageRepository = stageRepository;
 		_formTemplateRepository = formTemplateRepository;
 		_messageTemplateRepository = messageTemplateRepository;
+		_academicYearRepository = academicYearRepository;
 		_studentScopeAccessService = studentScopeAccessService;
 		_staffEligibilityService = staffEligibilityService;
 	}
@@ -129,9 +134,10 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		return ToDto(configuration);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	[Authorize]
 	public async Task<PagedResultDto<AdmissionCrmPipelineStageDto>> GetPipelineStagesAsync(Guid academicYearId)
 	{
+		await EnsureCanReadOperationalPipelineAsync();
 		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
 		var stages = await EnsurePipelineStagesAsync(academicYearId);
 		var ordered = stages
@@ -141,6 +147,21 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 			.ToList();
 
 		return new PagedResultDto<AdmissionCrmPipelineStageDto>(ordered.Count, ordered);
+	}
+
+	private async Task EnsureCanReadOperationalPipelineAsync()
+	{
+		var canView = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View);
+		var canAdd = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add);
+		var canManageConfiguration = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration);
+		if (!canView && !canAdd && !canManageConfiguration)
+		{
+			throw new AbpAuthorizationException(
+				"Admission CRM View, Add, or Manage Configuration permission is required to read pipeline stages.");
+		}
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
@@ -471,6 +492,7 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 
 	private async Task<AdmissionCrmCycleConfiguration> EnsureCycleConfigurationAsync(Guid academicYearId)
 	{
+		await EnsureAcademicYearExistsAsync(academicYearId);
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
 			academicYearId,
 			nameof(EnsureCycleConfigurationAsync));
@@ -499,6 +521,19 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 
 		await _cycleRepository.InsertAsync(configuration, autoSave: true);
 		return configuration;
+	}
+
+	private async Task EnsureAcademicYearExistsAsync(Guid academicYearId)
+	{
+		var queryable = await _academicYearRepository.GetQueryableAsync();
+		var exists = await AsyncExecuter.AnyAsync(queryable.Where(year =>
+			year.Id == academicYearId &&
+			year.TenantId == CurrentTenant.Id));
+		if (!exists)
+		{
+			throw new BusinessException("AdmissionCrm:AcademicYearNotFound")
+				.WithData("AcademicYearId", academicYearId);
+		}
 	}
 
 	private async Task<AdmissionCrmCycleConfiguration> EnsureSchoolDefaultCycleConfigurationAsync()

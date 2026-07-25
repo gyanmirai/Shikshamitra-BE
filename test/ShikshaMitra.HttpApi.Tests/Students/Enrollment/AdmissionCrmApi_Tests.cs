@@ -50,6 +50,354 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Allow_Admissions_Receptionist_To_Load_Pipeline_And_Create_Open_Quick_Inquiry()
+	{
+		using var receptionistClient = CreateClientForCrmRole("Admissions Receptionist");
+		var academicYearId = Factory.SeededAcademicYearId;
+
+		var stagesResponse = await receptionistClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/configuration/pipeline-stages");
+		stagesResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await stagesResponse.Content.ReadAsStringAsync());
+		var stages = await stagesResponse.Content
+			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmPipelineStageDto>>(JsonOptions);
+		stages.ShouldNotBeNull();
+		stages.Items.ShouldContain(stage => stage.SystemStage == AdmissionInquiryStage.NewInquiry);
+
+		var optionsResponse = await receptionistClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/quick-inquiry-options");
+		optionsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await optionsResponse.Content.ReadAsStringAsync());
+		var options = await optionsResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmQuickInquiryOptionsDto>(JsonOptions);
+		options.ShouldNotBeNull();
+		options.AcademicYearId.ShouldBe(academicYearId);
+		options.CycleName.ShouldNotBeNullOrWhiteSpace();
+		options.Channels.ShouldNotBeEmpty();
+		options.Channels.Select(channel => channel.DisplayOrder)
+			.ShouldBe(options.Channels.Select(channel => channel.DisplayOrder).OrderBy(order => order));
+
+		var fullConfigurationResponse = await receptionistClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/configuration/cycle");
+		fullConfigurationResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		var createResponse = await receptionistClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/leads",
+			new CreateAdmissionCrmLeadDto
+			{
+				AdmissionIntent = "Reception quick inquiry for Grade 1",
+				Channel = options.Channels.FirstOrDefault(channel => channel.IsDefault)?.Channel
+				          ?? options.Channels[0].Channel,
+				FirstName = "Aarav",
+				MiddleName = "Kumar",
+				LastName = "Patel",
+				ParentGuardianName = "Nisha Patel",
+				PrimaryContactNo = "9876543201",
+				Email = "reception.parent@example.com",
+				TargetStandardId = Factory.SeededStandardId,
+				AcademicBoardId = Factory.SeededBoardId,
+				AcademicMediumId = Factory.SeededMediumId,
+				AcademicMediumStageId = Factory.SeededMediumStageId,
+				DesiredClassName = "Untrusted client class label"
+			},
+			JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+		var created = await createResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
+		created.ShouldNotBeNull();
+		created.Stage.ShouldBe(AdmissionInquiryStage.NewInquiry);
+		created.FirstName.ShouldBe("Aarav");
+		created.MiddleName.ShouldBe("Kumar");
+		created.LastName.ShouldBe("Patel");
+		created.DesiredClassName.ShouldNotBe("Untrusted client class label");
+		created.DesiredClassName.ShouldNotBeNullOrWhiteSpace();
+
+		var openResponse = await receptionistClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{created.Id}");
+		openResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await openResponse.Content.ReadAsStringAsync());
+		var opened = await openResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
+		opened.ShouldNotBeNull();
+		opened.Id.ShouldBe(created.Id);
+		opened.Stage.ShouldBe(AdmissionInquiryStage.NewInquiry);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Phantom_Academic_Year_Before_Initializing_Pipeline_Configuration()
+	{
+		var missingAcademicYearId = Guid.NewGuid();
+		var response = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{missingAcademicYearId}/configuration/pipeline-stages");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await response.Content.ReadAsStringAsync()).ShouldContain("AdmissionCrm:AcademicYearNotFound");
+
+		var optionsResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{missingAcademicYearId}/quick-inquiry-options");
+		optionsResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await optionsResponse.Content.ReadAsStringAsync()).ShouldContain("AdmissionCrm:AcademicYearNotFound");
+
+		var createResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{missingAcademicYearId}/leads",
+			new CreateAdmissionCrmLeadDto
+			{
+				AdmissionIntent = "Phantom academic year guard",
+				Channel = AdmissionInquiryChannel.QuickCallEntry,
+				FirstName = "Guard",
+				PrimaryContactNo = "9876500000"
+			},
+			JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await createResponse.Content.ReadAsStringAsync()).ShouldContain("AdmissionCrm:AcademicYearNotFound");
+
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var cycleRepository = scope.ServiceProvider
+				.GetRequiredService<IRepository<AdmissionCrmCycleConfiguration, Guid>>();
+			var stageRepository = scope.ServiceProvider
+				.GetRequiredService<IRepository<AdmissionCrmPipelineStage, Guid>>();
+			var leadRepository = scope.ServiceProvider
+				.GetRequiredService<IRepository<AdmissionInquiryLead, Guid>>();
+			(await cycleRepository.AnyAsync(item => item.AcademicYearId == missingAcademicYearId))
+				.ShouldBeFalse();
+			(await stageRepository.AnyAsync(item => item.AcademicYearId == missingAcademicYearId))
+				.ShouldBeFalse();
+			(await leadRepository.AnyAsync(item => item.AcademicYearId == missingAcademicYearId))
+				.ShouldBeFalse();
+			await uow.CompleteAsync();
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Expose_Operational_Metadata_With_Either_Add_Or_View_Permission()
+	{
+		foreach (var permission in new[]
+		         {
+			         ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add,
+			         ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View
+		         })
+		{
+			using var client = CreateClientWithCrmPermissions(permission);
+			var optionsResponse = await client.GetAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/quick-inquiry-options");
+			optionsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await optionsResponse.Content.ReadAsStringAsync());
+
+			var stagesResponse = await client.GetAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/pipeline-stages");
+			stagesResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await stagesResponse.Content.ReadAsStringAsync());
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Return_Only_Enabled_Ordered_Channels_And_Effective_Published_Routes()
+	{
+		var originalCycle = await GetCrmCycleConfigurationAsync();
+		var channelSettings = originalCycle.ChannelSettings
+			.Select(setting => new AdmissionCrmChannelSettingDto
+			{
+				Channel = setting.Channel,
+				IsEnabled = setting.Channel != AdmissionInquiryChannel.WhatsAppInquiry,
+				DefaultInquirySourceId = setting.DefaultInquirySourceId,
+				DefaultFormTemplateId = setting.DefaultFormTemplateId,
+				DefaultOwnerUserId = setting.DefaultOwnerUserId,
+				DefaultAcknowledgementTemplateId = setting.DefaultAcknowledgementTemplateId,
+				DisplayOrder = setting.Channel switch
+				{
+					AdmissionInquiryChannel.WalkInReception => 5,
+					AdmissionInquiryChannel.QuickCallEntry => 10,
+					_ => setting.DisplayOrder + 20
+				}
+			})
+			.ToList();
+		var activeRoute = await CreateRouteDefinitionAsync(
+			AdmissionCrmRouteType.Fresh,
+			DateTime.UtcNow.AddDays(-1),
+			DateTime.UtcNow.AddDays(1),
+			publish: true);
+		var futureRoute = await CreateRouteDefinitionAsync(
+			AdmissionCrmRouteType.SiblingPriority,
+			DateTime.UtcNow.AddDays(1),
+			DateTime.UtcNow.AddDays(2),
+			publish: true);
+		var draftRoute = await CreateRouteDefinitionAsync(
+			AdmissionCrmRouteType.Lateral,
+			DateTime.UtcNow.AddDays(-1),
+			DateTime.UtcNow.AddDays(1),
+			publish: false);
+
+		await UpdateCrmCycleConfigurationAsync(
+			originalCycle,
+			originalCycle.ExamReadinessFields,
+			channelSettings: channelSettings);
+
+		try
+		{
+			using var viewClient = CreateClientWithCrmPermissions(
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View);
+			var optionsResponse = await viewClient.GetAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/quick-inquiry-options");
+			optionsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await optionsResponse.Content.ReadAsStringAsync());
+			var options = await optionsResponse.Content
+				.ReadFromJsonAsync<AdmissionCrmQuickInquiryOptionsDto>(JsonOptions);
+			options.ShouldNotBeNull();
+			options.Channels.Select(channel => channel.Channel)
+				.ShouldNotContain(AdmissionInquiryChannel.WhatsAppInquiry);
+			options.Channels.Select(channel => channel.Channel).Take(2)
+				.ShouldBe(new[]
+				{
+					AdmissionInquiryChannel.WalkInReception,
+					AdmissionInquiryChannel.QuickCallEntry
+				});
+			options.Channels.ShouldAllBe(channel => !string.IsNullOrWhiteSpace(channel.Label));
+			options.Channels.Count(channel => channel.IsDefault).ShouldBe(1);
+			options.Routes.Select(route => route.RouteDefinitionId).ShouldContain(activeRoute.Id);
+			options.Routes.Select(route => route.RouteDefinitionId).ShouldNotContain(futureRoute.Id);
+			options.Routes.Select(route => route.RouteDefinitionId).ShouldNotContain(draftRoute.Id);
+			options.Routes.Single(route => route.IsDefault).RouteDefinitionId.ShouldBe(
+				options.Routes.First(route => route.RouteType == AdmissionCrmRouteType.Fresh).RouteDefinitionId);
+
+			var createResponse = await Client.PostAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+				new CreateAdmissionCrmLeadDto
+				{
+					AdmissionIntent = "Fresh admission pathway snapshot",
+					Channel = AdmissionInquiryChannel.QuickCallEntry,
+					FirstName = "Route",
+					PrimaryContactNo = "9876543202",
+					IntendedRouteDefinitionId = activeRoute.Id
+				},
+				JsonOptions);
+			createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+			var created = await createResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
+			created.ShouldNotBeNull();
+			created.IntendedRouteType.ShouldBe(AdmissionCrmRouteType.Fresh);
+			created.IntendedRouteDefinitionId.ShouldBe(activeRoute.Id);
+			created.IntendedRouteDefinitionVersion.ShouldBe(activeRoute.Version);
+			created.IntendedRouteNameSnapshot.ShouldBe(activeRoute.Name);
+
+			var futureCreateResponse = await Client.PostAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+				new CreateAdmissionCrmLeadDto
+				{
+					AdmissionIntent = "Future route must not be assignable",
+					Channel = AdmissionInquiryChannel.QuickCallEntry,
+					FirstName = "Future",
+					PrimaryContactNo = "9876543203",
+					IntendedRouteDefinitionId = futureRoute.Id
+				},
+				JsonOptions);
+			futureCreateResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+			(await futureCreateResponse.Content.ReadAsStringAsync())
+				.ShouldContain("AdmissionCrm:PublishedRouteDefinitionRequired");
+
+			var mismatchResponse = await Client.PostAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+				new CreateAdmissionCrmLeadDto
+				{
+					AdmissionIntent = "Route type mismatch must be rejected",
+					Channel = AdmissionInquiryChannel.QuickCallEntry,
+					FirstName = "Mismatch",
+					PrimaryContactNo = "9876543204",
+					IntendedRouteDefinitionId = activeRoute.Id,
+					IntendedRouteType = AdmissionCrmRouteType.Lateral
+				},
+				JsonOptions);
+			mismatchResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+			(await mismatchResponse.Content.ReadAsStringAsync())
+				.ShouldContain("AdmissionCrm:IntendedRouteMismatch");
+
+			var arbitraryEnumResponse = await Client.PostAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+				new CreateAdmissionCrmLeadDto
+				{
+					AdmissionIntent = "An enum alone must not create a pathway snapshot",
+					Channel = AdmissionInquiryChannel.QuickCallEntry,
+					FirstName = "Enum",
+					PrimaryContactNo = "9876543207",
+					IntendedRouteType = AdmissionCrmRouteType.Lateral
+				},
+				JsonOptions);
+			arbitraryEnumResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+			(await arbitraryEnumResponse.Content.ReadAsStringAsync())
+				.ShouldContain("AdmissionCrm:PublishedRouteDefinitionRequired");
+
+			var missingFirstNameResponse = await Client.PostAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+				new CreateAdmissionCrmLeadDto
+				{
+					AdmissionIntent = "Staff-assisted capture requires applicant identity",
+					Channel = AdmissionInquiryChannel.QuickCallEntry,
+					PrimaryContactNo = "9876543208",
+					IntendedRouteDefinitionId = activeRoute.Id
+				},
+				JsonOptions);
+			missingFirstNameResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+			(await missingFirstNameResponse.Content.ReadAsStringAsync())
+				.ShouldContain("AdmissionCrm:FirstNameRequired");
+
+			var externalChannelBypassResponse = await Client.PostAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+				new CreateAdmissionCrmLeadDto
+				{
+					AdmissionIntent = "An authenticated staff endpoint cannot impersonate a public form",
+					Channel = AdmissionInquiryChannel.SchoolWebsiteForm,
+					PrimaryContactNo = "9876543209",
+					IntendedRouteDefinitionId = activeRoute.Id
+				},
+				JsonOptions);
+			externalChannelBypassResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+			(await externalChannelBypassResponse.Content.ReadAsStringAsync())
+				.ShouldContain("AdmissionCrm:FirstNameRequired");
+		}
+		finally
+		{
+			await RetireRouteDefinitionAsync(activeRoute.Id);
+			await UpdateCrmCycleConfigurationAsync(
+				originalCycle,
+				originalCycle.ExamReadinessFields,
+				channelSettings: originalCycle.ChannelSettings);
+		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Malformed_Email_And_Standard_From_Another_Academic_Year()
+	{
+		var invalidEmailResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+			new CreateAdmissionCrmLeadDto
+			{
+				AdmissionIntent = "Invalid email inquiry",
+				Channel = AdmissionInquiryChannel.QuickCallEntry,
+				FirstName = "Invalid",
+				PrimaryContactNo = "9876543205",
+				Email = "parent.example.com"
+			},
+			JsonOptions);
+		invalidEmailResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+		var otherAcademicYearId = await CreateAcademicYearAsync();
+		var academicMismatchResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{otherAcademicYearId}/leads",
+			new CreateAdmissionCrmLeadDto
+			{
+				AdmissionIntent = "Cross-year placement must be rejected",
+				Channel = AdmissionInquiryChannel.QuickCallEntry,
+				FirstName = "Crossyear",
+				PrimaryContactNo = "9876543206",
+				TargetStandardId = Factory.SeededStandardId
+			},
+			JsonOptions);
+		academicMismatchResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await academicMismatchResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:AcademicPlacementMismatch");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Return_Only_Configured_Hr_Employee_Owners()
 	{
 		var originalCycle = await GetCrmCycleConfigurationAsync();
@@ -343,6 +691,10 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 		await AssertForbiddenAsync(client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/{academicYearId}/leads"));
+		await AssertForbiddenAsync(client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/quick-inquiry-options"));
+		await AssertForbiddenAsync(client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/configuration/pipeline-stages"));
 		await AssertForbiddenAsync(client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/{academicYearId}/leads",
 			new CreateAdmissionCrmLeadDto
@@ -446,6 +798,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		var input = new CreateAdmissionCrmLeadDto
 		{
 			AdmissionIntent = "Admission inquiry for LKG",
+			FirstName = "List",
 			Email = "parent.crm@example.com",
 			Channel = AdmissionInquiryChannel.SchoolWebsiteForm,
 			ParentGuardianName = "Meera Shah"
@@ -696,6 +1049,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				new CreateAdmissionCrmLeadDto
 				{
 					AdmissionIntent = "Disabled WhatsApp channel inquiry",
+					FirstName = "Disabled",
 					PrimaryContactNo = "96666" + Random.Shared.Next(10000, 99999),
 					Channel = AdmissionInquiryChannel.WhatsAppInquiry
 				},
@@ -925,6 +1279,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				new CreateAdmissionCrmLeadDto
 				{
 					AdmissionIntent = "Routing inquiry for Grade 2",
+					FirstName = "Routing",
 					PrimaryContactNo = "98888" + Random.Shared.Next(10000, 99999),
 					Channel = AdmissionInquiryChannel.QuickCallEntry,
 					DesiredClassName = "Grade 2"
@@ -1252,6 +1607,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				new CreateAdmissionCrmLeadDto
 				{
 					AdmissionIntent = "Routing inquiry for North campus",
+					FirstName = "North",
 					PrimaryContactNo = "98753" + Random.Shared.Next(10000, 99999),
 					Channel = AdmissionInquiryChannel.SchoolWebsiteForm,
 					CampusBranchName = "North Campus",
@@ -1272,6 +1628,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				new CreateAdmissionCrmLeadDto
 				{
 					AdmissionIntent = "Routing inquiry for South campus",
+					FirstName = "South",
 					PrimaryContactNo = "98754" + Random.Shared.Next(10000, 99999),
 					Channel = AdmissionInquiryChannel.SchoolWebsiteForm,
 					CampusBranchName = "South Campus",
@@ -1328,6 +1685,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				new CreateAdmissionCrmLeadDto
 				{
 					AdmissionIntent = "Routing inquiry for seeded standard",
+					FirstName = "Seeded",
 					PrimaryContactNo = "98751" + Random.Shared.Next(10000, 99999),
 					Channel = AdmissionInquiryChannel.ManualBackOffice,
 					TargetStandardId = Factory.SeededStandardId,
@@ -1345,6 +1703,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				new CreateAdmissionCrmLeadDto
 				{
 					AdmissionIntent = "Routing inquiry for another standard",
+					FirstName = "Another",
 					PrimaryContactNo = "98752" + Random.Shared.Next(10000, 99999),
 					Channel = AdmissionInquiryChannel.ManualBackOffice,
 					DesiredClassName = "Another standard"
@@ -3625,6 +3984,11 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		eventTypes.ShouldContain(AdmissionCrmTimelineEventType.TaskCompleted);
 		eventTypes.ShouldContain(AdmissionCrmTimelineEventType.ExamScheduled);
 
+		var leadCreatedEvent = timeline.Items.Single(x => x.EventType == AdmissionCrmTimelineEventType.LeadCreated);
+		leadCreatedEvent.Details.ShouldNotBeNull();
+		leadCreatedEvent.Details.ShouldContain("Channel: Walk-in");
+		leadCreatedEvent.Details.ShouldNotContain(nameof(AdmissionInquiryChannel.WalkInReception));
+
 		var scheduleEvent = timeline.Items.Single(x => x.EventType == AdmissionCrmTimelineEventType.ExamScheduled);
 		scheduleEvent.Title.ShouldBe("Entrance exam scheduled");
 		scheduleEvent.RelatedEntityId.ShouldNotBeNull();
@@ -4157,6 +4521,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			new CreateAdmissionCrmLeadDto
 			{
 				AdmissionIntent = "Admission inquiry with incomplete admission handoff details",
+				FirstName = "Incomplete",
 				PrimaryContactNo = "989898" + Random.Shared.Next(1000, 9999),
 				Channel = AdmissionInquiryChannel.QuickCallEntry,
 				DesiredClassName = "Grade 4"
@@ -4165,7 +4530,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		leadResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await leadResponse.Content.ReadAsStringAsync());
 		var lead = await leadResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
 		lead.ShouldNotBeNull();
-		lead.FirstName.ShouldBeNull();
+		lead.FirstName.ShouldBe("Incomplete");
 		lead.ParentGuardianName.ShouldBeNull();
 
 		var slot = await CreateAdmissionCrmExamSlotAsync("Handoff Missing", studentLimit: 2);
@@ -4705,6 +5070,89 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			AlwaysGrantPermissionChecker.TestPermissionsHeader,
 			permissions.Length == 0 ? "__none__" : string.Join(",", permissions));
 		return client;
+	}
+
+	private HttpClient CreateClientForCrmRole(string roleName)
+	{
+		var permissions = roleName == "Admissions Receptionist"
+			? new[]
+			{
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View,
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add,
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.AssignOwner,
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeStage,
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageTasks,
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ArchiveReopen,
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm,
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageRegistrationLinks
+			}
+			: throw new ArgumentOutOfRangeException(nameof(roleName), roleName, "Unsupported CRM role.");
+		var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestTenantIdHeader, TestAuthHandler.TestTenantId);
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, roleName);
+		client.DefaultRequestHeaders.Add(
+			AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			string.Join(",", permissions));
+		return client;
+	}
+
+	private async Task<AdmissionCrmRouteDefinition> CreateRouteDefinitionAsync(
+		AdmissionCrmRouteType routeType,
+		DateTime effectiveFrom,
+		DateTime? effectiveUntil,
+		bool publish)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmRouteDefinition, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var suffix = Guid.NewGuid().ToString("N")[..8];
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var route = new AdmissionCrmRouteDefinition(
+				Guid.NewGuid(),
+				tenantId,
+				Factory.SeededAcademicYearId,
+				$"QI-{suffix}",
+				$"Quick inquiry {routeType} {suffix}",
+				routeType,
+				version: 1,
+				configurationJson: "{}",
+				effectiveFrom,
+				effectiveUntil);
+			if (publish)
+			{
+				route.Submit(Guid.NewGuid());
+				route.Publish(Guid.NewGuid());
+			}
+
+			await repository.InsertAsync(route);
+			await uow.CompleteAsync();
+			return route;
+		}
+	}
+
+	private async Task RetireRouteDefinitionAsync(Guid id)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmRouteDefinition, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var route = await repository.GetAsync(id);
+			route.Retire();
+			await repository.UpdateAsync(route);
+			await uow.CompleteAsync();
+		}
 	}
 
 	private static async Task AssertForbiddenAsync(Task<HttpResponseMessage> request)

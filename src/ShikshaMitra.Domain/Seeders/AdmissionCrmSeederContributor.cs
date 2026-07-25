@@ -40,6 +40,8 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		"admissions-counselor@ddvs.com",
 		"admissions-approver@ddvs.com"
 	];
+	private const string RoutePublicationMakerEmail = "admissions-counselor@ddvs.com";
+	private const string RoutePublicationApproverEmail = "admissions-approver@ddvs.com";
 
 	public AdmissionCrmSeederContributor(
 		ICurrentTenant currentTenant,
@@ -86,6 +88,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		await RepairCycleAsync(tenantId, academicYear.Id, academicYear.Name, ownerUserIds);
 		await RepairStagesAsync(tenantId, academicYear.Id);
 		await RepairSourcesAsync(tenantId, academicYear.Id);
+		await RepairRouteDefinitionsAsync(tenantId, academicYear, ownerUserIds);
 		await RepairSlotsAsync(tenantId, academicYear.Id, academicYear.Name);
 		await RepairDocumentTypesAsync(tenantId, academicYear.Id);
 		await RepairExtendedConfigurationAsync(tenantId, academicYear.Id, academicYear.Name);
@@ -324,6 +327,104 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		return result;
 	}
 
+	private async Task RepairRouteDefinitionsAsync(
+		Guid tenantId,
+		AcademicYear academicYear,
+		IReadOnlyDictionary<string, Guid> ownerUserIds)
+	{
+		var repository = Repository<AdmissionCrmRouteDefinition>();
+		var existing = await repository.GetListAsync(item => item.AcademicYearId == academicYear.Id);
+		var publicationUserIds = ResolveRoutePublicationUserIds(ownerUserIds);
+		if (publicationUserIds.Count < 2)
+		{
+			_logger.LogWarning(
+				"[AdmissionCrmSeeder] Default admission routes were not published for tenant {TenantId}, academic year {AcademicYearId}; active employee-linked users {MakerEmail} and {ApproverEmail}, assigned the Admissions Counselor and Admissions Approver roles respectively, are required for maker-checker attribution.",
+				tenantId,
+				academicYear.Id,
+				RoutePublicationMakerEmail,
+				RoutePublicationApproverEmail);
+			return;
+		}
+
+		var (effectiveFrom, effectiveUntil) = DefaultRouteEffectivePeriod(
+			academicYear.StartDate,
+			academicYear.EndDate,
+			DateTime.UtcNow);
+		foreach (var spec in DefaultRouteSpecs())
+		{
+			if (existing.Any(item => item.Code.Equals(spec.Code, StringComparison.OrdinalIgnoreCase)))
+			{
+				continue;
+			}
+
+			var definition = new AdmissionCrmRouteDefinition(
+				StableId(tenantId, $"route-definition:{academicYear.Id:N}:{spec.Code}"),
+				tenantId,
+				academicYear.Id,
+				spec.Code,
+				spec.Name,
+				spec.RouteType,
+				1,
+				spec.ConfigurationJson,
+				effectiveFrom,
+				effectiveUntil);
+			definition.Submit(publicationUserIds[0]);
+			definition.Publish(publicationUserIds[1]);
+			await repository.InsertAsync(definition);
+		}
+	}
+
+	internal static IReadOnlyList<Guid> ResolveRoutePublicationUserIds(
+		IReadOnlyDictionary<string, Guid> ownerUserIds)
+	{
+		if (!ownerUserIds.TryGetValue(RoutePublicationMakerEmail, out var makerUserId) ||
+		    !ownerUserIds.TryGetValue(RoutePublicationApproverEmail, out var approverUserId) ||
+		    makerUserId == Guid.Empty ||
+		    approverUserId == Guid.Empty ||
+		    makerUserId == approverUserId)
+		{
+			return [];
+		}
+
+		return [makerUserId, approverUserId];
+	}
+
+	internal static IReadOnlyList<DefaultRouteSpec> DefaultRouteSpecs() =>
+	[
+		new(
+			"FRESH",
+			"Fresh admission",
+			AdmissionCrmRouteType.Fresh,
+			"{\"requiresPolicyEvaluation\":false,\"requiresDistinctApproval\":false,\"requiredEvidenceCodes\":[]}"),
+		new(
+			"SIBLING",
+			"Sibling priority",
+			AdmissionCrmRouteType.SiblingPriority,
+			"{\"requiresPolicyEvaluation\":true,\"requiresDistinctApproval\":true,\"requiredEvidenceCodes\":[\"SIBLING_RELATIONSHIP\"]}"),
+		new(
+			"LATERAL",
+			"Lateral entry",
+			AdmissionCrmRouteType.Lateral,
+			"{\"requiresPolicyEvaluation\":true,\"requiresDistinctApproval\":true,\"requiredEvidenceCodes\":[\"PREVIOUS_SCHOOL_RECORD\",\"TRANSFER_CERTIFICATE\"]}")
+	];
+
+	internal static (DateTime EffectiveFrom, DateTime EffectiveUntil) DefaultRouteEffectivePeriod(
+		DateTime academicStart,
+		DateTime academicEnd,
+		DateTime utcNow)
+	{
+		var start = DateTime.SpecifyKind(academicStart.Date, DateTimeKind.Utc);
+		var until = DateTime.SpecifyKind(academicEnd.Date.AddDays(1), DateTimeKind.Utc);
+		var today = utcNow.ToUniversalTime().Date;
+		var effectiveFrom = today < start ? today : start;
+		if (effectiveFrom >= until)
+		{
+			effectiveFrom = start;
+		}
+
+		return (effectiveFrom, until);
+	}
+
 	private async Task<IReadOnlyList<AdmissionCrmExamSlot>> RepairSlotsAsync(
 		Guid tenantId,
 		Guid academicYearId,
@@ -484,6 +585,11 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 	private sealed record SourceSpec(string Code, string Name, AdmissionInquiryChannel Channel, int Order);
 	private sealed record SlotSpec(string Name, DateTimeOffset Start, DateTimeOffset End, string Campus, string Hall, int Capacity, int RoomNo);
 	private sealed record DocumentSpec(string Code, string Name, bool RequiresOriginal, bool ValidityRequired, int Order);
+	internal sealed record DefaultRouteSpec(
+		string Code,
+		string Name,
+		AdmissionCrmRouteType RouteType,
+		string ConfigurationJson);
 	internal sealed record LeadSpec(
 		string Key,
 		string FirstName,

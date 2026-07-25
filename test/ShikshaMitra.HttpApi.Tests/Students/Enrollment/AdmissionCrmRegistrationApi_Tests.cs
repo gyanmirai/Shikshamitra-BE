@@ -432,8 +432,7 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 				FirstName = "Riya",
 				ParentGuardianName = "Kavita Patel",
 				PrimaryContactNo = "96" + Random.Shared.NextInt64(10000000, 99999999),
-				AdmissionIntent = "RTE admission",
-				IntendedRouteType = AdmissionCrmRouteType.RteEws,
+				AdmissionIntent = "Direct admission",
 				TargetStandardId = Factory.SeededStandardId,
 				AcademicBoardId = Factory.SeededBoardId,
 				AcademicMediumId = Factory.SeededMediumId,
@@ -480,7 +479,16 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		direct.ShouldNotBeNull();
 		direct.Applicant.Stage.ShouldBe(AdmissionInquiryStage.Eligible);
 		direct.Applicant.Channel.ShouldBe(AdmissionInquiryChannel.ManualBackOffice);
+		direct.Applicant.IntendedRouteType.ShouldBe(AdmissionCrmRouteType.Fresh);
+		direct.Applicant.IntendedRouteDefinitionId.ShouldNotBeNull();
+		direct.Applicant.IntendedRouteNameSnapshot.ShouldBe("Fresh admission");
 		direct.Registration.Status.ShouldBe(AdmissionCrmRegistrationStatus.Issued);
+		direct.Registration.Prefill["admissionRoute"].GetString()
+			.ShouldBe(direct.Applicant.IntendedRouteNameSnapshot);
+		direct.Registration.Prefill["admissionRouteDefinitionId"].GetGuid()
+			.ShouldBe(direct.Applicant.IntendedRouteDefinitionId.Value);
+		direct.Registration.Prefill["admissionRouteDefinitionVersion"].GetInt32()
+			.ShouldBe(direct.Applicant.IntendedRouteDefinitionVersion.Value);
 
 		var responses = new SaveAdmissionCrmRegistrationResponsesDto
 		{

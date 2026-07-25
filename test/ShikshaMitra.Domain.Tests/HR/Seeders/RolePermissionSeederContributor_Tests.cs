@@ -18,6 +18,14 @@ public class RolePermissionSeederContributor_Tests
 	private const string UserScopeManage = "ShikshaMitra.UserScope.Manage";
 
 	[Fact]
+	public void Permission_Grant_Changes_Should_Use_The_Current_Seeder_Marker_Version()
+	{
+		RolePermissionSeederContributor.StepName.ShouldBe("RolePermissionSeeder");
+		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v11");
+		RolePermissionSeederContributor.StepOrder.ShouldBe(120);
+	}
+
+	[Fact]
 	public void HR_Manager_Should_Have_Read_Only_Role_List_Access()
 	{
 		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
@@ -90,19 +98,25 @@ public class RolePermissionSeederContributor_Tests
 		var counselor = rolePermissions["Admissions Counselor"];
 		var approver = rolePermissions["Admissions Approver"];
 
+		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View);
 		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add);
 		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.AssignOwner);
+		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration);
 		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult);
 		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveOffers);
 
 		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ScheduleExam);
 		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ReviewDocuments);
+		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageAdmissionRoutes);
+		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.AssignAdmissionRoute);
 		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideExamResult);
 		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation);
 
 		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveOffers);
 		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation);
 		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideExamResult);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveAdmissionRoutes);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.EvaluateAdmissionRoute);
 		approver.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration);
 		approver.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add);
 	}

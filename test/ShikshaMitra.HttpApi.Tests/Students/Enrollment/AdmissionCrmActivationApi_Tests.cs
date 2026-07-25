@@ -25,6 +25,84 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Require_Evaluated_Route_Assignment_For_Governed_Intake_Pathway()
+	{
+		var lateralRoute = await CreatePublishedRouteDefinitionAsync(AdmissionCrmRouteType.Lateral);
+
+		var placementResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/activation/placement-options");
+		placementResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await placementResponse.Content.ReadAsStringAsync());
+		var placement = (await placementResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmPlacementOptionDto[]>(JsonOptions))!.First();
+
+		var leadResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+			new CreateAdmissionCrmLeadDto
+			{
+				AdmissionIntent = "Lateral admission requiring governed review",
+				Channel = AdmissionInquiryChannel.QuickCallEntry,
+				FirstName = "Lateral",
+				PrimaryContactNo = "9" + Random.Shared.NextInt64(100000000, 999999999),
+				DateOfBirth = DateTimeOffset.UtcNow.AddYears(-8),
+				TargetStandardId = placement.StandardId,
+				DesiredClassName = placement.StandardName,
+				IntendedRouteDefinitionId = lateralRoute.RouteDefinitionId
+			},
+			JsonOptions);
+		leadResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await leadResponse.Content.ReadAsStringAsync());
+		var lead = (await leadResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions))!;
+
+		var previewInput = new PreviewAdmissionCrmActivationDto
+		{
+			EducationBoardId = placement.EducationBoardId,
+			AcademicMediumId = placement.AcademicMediumId,
+			AcademicMediumStageId = placement.AcademicMediumStageId,
+			StandardId = placement.StandardId,
+			DivisionId = placement.DivisionId,
+			GrNumberSeriesId = Guid.NewGuid(),
+			RequireStudentAccount = false,
+			RequireGuardianAccount = false
+		};
+		var blockedResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/activation/preview",
+			previewInput,
+			JsonOptions);
+		blockedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await blockedResponse.Content.ReadAsStringAsync());
+		var blocked = (await blockedResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmActivationPreviewDto>(JsonOptions))!;
+		var blockedRoute = blocked.Items.Single(item => item.Key == "admission_route");
+		blockedRoute.Status.ShouldBe(AdmissionCrmActivationStepStatus.Failed);
+		blockedRoute.Detail.ShouldContain("requires an evaluated route assignment");
+
+		var unrelatedRoute = await CreatePublishedRouteDefinitionAsync(AdmissionCrmRouteType.Transfer);
+		await RecordUnrelatedEligibleRouteChangeAsync(lead, unrelatedRoute);
+		var unrelatedResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/activation/preview",
+			previewInput,
+			JsonOptions);
+		unrelatedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await unrelatedResponse.Content.ReadAsStringAsync());
+		var unrelated = (await unrelatedResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmActivationPreviewDto>(JsonOptions))!;
+		var unrelatedRouteItem = unrelated.Items.Single(item => item.Key == "admission_route");
+		unrelatedRouteItem.Status.ShouldBe(AdmissionCrmActivationStepStatus.Failed);
+		unrelatedRouteItem.Detail.ShouldContain("does not correspond to the selected pathway");
+
+		await RecordEligibleRouteAssignmentAsync(lead, lateralRoute);
+
+		var evaluatedResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/activation/preview",
+			previewInput,
+			JsonOptions);
+		evaluatedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await evaluatedResponse.Content.ReadAsStringAsync());
+		var evaluated = (await evaluatedResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmActivationPreviewDto>(JsonOptions))!;
+		var evaluatedRoute = evaluated.Items.Single(item => item.Key == "admission_route");
+		evaluatedRoute.Status.ShouldBe(AdmissionCrmActivationStepStatus.Completed);
+		evaluatedRoute.Detail.ShouldContain("evaluated eligible route assignment");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Preview_Activate_And_Return_Idempotent_First_Day_Ready_Student()
 	{
 		var placementResponse = await Client.GetAsync($"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/activation/placement-options");
@@ -223,6 +301,135 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 		{
 			var entity = await repository.GetAsync(id); entity.Submit(Guid.NewGuid()); entity.Publish(Guid.NewGuid());
 			await repository.UpdateAsync(entity); await uow.CompleteAsync();
+		}
+	}
+
+	private async Task RecordEligibleRouteAssignmentAsync(
+		AdmissionCrmLeadDto lead,
+		AdmissionCrmQuickInquiryRouteOptionDto route)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmRouteAssignment, Guid>>();
+		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var queryable = await repository.GetQueryableAsync();
+			var current = await queryable.FirstOrDefaultAsync(assignment =>
+				assignment.TenantId == Guid.Parse(TestAuthHandler.TestTenantId) &&
+				assignment.LeadId == lead.Id &&
+				assignment.IsPrimary);
+			current?.Supersede();
+			if (current != null)
+			{
+				await repository.UpdateAsync(current);
+			}
+
+			var assignedBy = Guid.NewGuid();
+			var assignment = new AdmissionCrmRouteAssignment(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				lead.AcademicYearId,
+				lead.Id,
+				route.RouteDefinitionId,
+				route.Version,
+				route.RouteType,
+				"{\"previousSchool\":\"Previous School\",\"previousBoard\":\"State Board\",\"lastClassCompleted\":\"Class 3\"}",
+				"[\"PREVIOUS_SCHOOL_RECORD:PSR-1\",\"TRANSFER_CERTIFICATE:TC-1\"]",
+				current?.Id,
+				"Validated lateral-entry evidence.",
+				assignedBy,
+				DateTime.UtcNow);
+			assignment.Evaluate(
+				AdmissionCrmRouteEligibilityStatus.Eligible,
+				"Transfer history and evidence verified.",
+				Guid.NewGuid(),
+				DateTime.UtcNow);
+			await repository.InsertAsync(assignment);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task RecordUnrelatedEligibleRouteChangeAsync(
+		AdmissionCrmLeadDto lead,
+		AdmissionCrmQuickInquiryRouteOptionDto route)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmRouteAssignment, Guid>>();
+		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			AdmissionCrmRouteAssignment Create(Guid? previousAssignmentId)
+			{
+				var assignment = new AdmissionCrmRouteAssignment(
+					Guid.NewGuid(),
+					Guid.Parse(TestAuthHandler.TestTenantId),
+					lead.AcademicYearId,
+					lead.Id,
+					route.RouteDefinitionId,
+					route.Version,
+					route.RouteType,
+					"{\"previousSchool\":\"Unrelated School\",\"previousBoard\":\"Other Board\",\"lastClassCompleted\":\"Class 3\"}",
+					"[\"TRANSFER_RECORD:UNRELATED-1\"]",
+					previousAssignmentId,
+					"Unrelated route history must not satisfy the captured pathway.",
+					Guid.NewGuid(),
+					DateTime.UtcNow);
+				assignment.Evaluate(
+					AdmissionCrmRouteEligibilityStatus.Eligible,
+					"Unrelated route evaluated.",
+					Guid.NewGuid(),
+					DateTime.UtcNow);
+				return assignment;
+			}
+
+			var previous = Create(null);
+			previous.Supersede();
+			var current = Create(previous.Id);
+			await repository.InsertManyAsync([previous, current]);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<AdmissionCrmQuickInquiryRouteOptionDto> CreatePublishedRouteDefinitionAsync(
+		AdmissionCrmRouteType routeType)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmRouteDefinition, Guid>>();
+		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var suffix = Guid.NewGuid().ToString("N")[..8];
+			var definition = new AdmissionCrmRouteDefinition(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				Factory.SeededAcademicYearId,
+				$"ACT-{suffix}",
+				$"Activation {routeType} {suffix}",
+				routeType,
+				1,
+				"{\"requiresPolicyEvaluation\":true,\"requiresDistinctApproval\":true,\"requiredEvidenceCodes\":[]}",
+				DateTime.UtcNow.AddDays(-1),
+				DateTime.UtcNow.AddDays(1));
+			definition.Submit(Guid.NewGuid());
+			definition.Publish(Guid.NewGuid());
+			await repository.InsertAsync(definition);
+			await uow.CompleteAsync();
+			return new AdmissionCrmQuickInquiryRouteOptionDto
+			{
+				RouteDefinitionId = definition.Id,
+				Name = definition.Name,
+				RouteType = definition.RouteType,
+				Version = definition.Version
+			};
 		}
 	}
 

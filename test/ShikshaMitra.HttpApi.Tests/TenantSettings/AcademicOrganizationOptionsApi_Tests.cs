@@ -10,9 +10,11 @@ using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
@@ -81,6 +83,52 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Standards_Should_Honor_Stage_And_Board_Wildcard_Scope()
+	{
+		var seeded = await SeedAcademicOrganizationsAsync();
+
+		var stageScopedUserId = Guid.NewGuid();
+		await EnsureUserHasStageScopeAsync(
+			stageScopedUserId,
+			seeded.GsebGujaratiPrimaryStageId);
+		var stageScopedClient = CreateClientAs(stageScopedUserId);
+
+		var stageResponse = await stageScopedClient.GetAsync(
+			$"/api/education-medium/{seeded.GsebGujaratiMediumId:D}/standards");
+		stageResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await stageResponse.Content.ReadAsStringAsync());
+		var stageStandards = await stageResponse.Content.ReadFromJsonAsync<StandardResponse[]>(
+			JsonOptions) ?? [];
+		stageStandards.Select(x => x.Id).ShouldBe([seeded.GsebPrimaryStandardId]);
+
+		var restrictedStageResponse = await stageScopedClient.GetAsync(
+			$"/api/education-medium/{seeded.CbseEnglishMediumId:D}/standards");
+		restrictedStageResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var restrictedStageStandards =
+			await restrictedStageResponse.Content.ReadFromJsonAsync<StandardResponse[]>(JsonOptions)
+			?? [];
+		restrictedStageStandards.ShouldBeEmpty();
+
+		var boardScopedUserId = Guid.NewGuid();
+		await EnsureUserHasBoardScopeAsync(
+			boardScopedUserId,
+			seeded.AcademicYearId,
+			seeded.CbseBoardId);
+		var boardScopedClient = CreateClientAs(boardScopedUserId);
+
+		var boardResponse = await boardScopedClient.GetAsync(
+			$"/api/education-medium/{seeded.CbseEnglishMediumId:D}/standards");
+		boardResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await boardResponse.Content.ReadAsStringAsync());
+		var boardStandards = await boardResponse.Content.ReadFromJsonAsync<StandardResponse[]>(
+			JsonOptions) ?? [];
+		boardStandards.Select(x => x.Id).ShouldBe([seeded.CbseSecondaryStandardId]);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Options_Should_Not_Return_Restricted_Boards_For_Board_Scoped_User()
 	{
 		var seeded = await SeedAcademicOrganizationsAsync();
@@ -122,10 +170,12 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 			var boardRepository = scope.ServiceProvider.GetRequiredService<IEducationBoardRepository>();
 			var mediumRepository = scope.ServiceProvider.GetRequiredService<IEducationMediumRepository>();
 			var stageRepository = scope.ServiceProvider.GetRequiredService<IEducationMediumStageRepository>();
+			var standardRepository = scope.ServiceProvider.GetRequiredService<IStandardRepository>();
 			var academicYearManager = scope.ServiceProvider.GetRequiredService<AcademicYearManager>();
 			var boardManager = scope.ServiceProvider.GetRequiredService<EducationBoardManager>();
 			var mediumManager = scope.ServiceProvider.GetRequiredService<EducationMediumManager>();
 			var stageManager = scope.ServiceProvider.GetRequiredService<EducationMediumStageManager>();
+			var standardManager = scope.ServiceProvider.GetRequiredService<StandardManager>();
 
 			var suffix = Guid.NewGuid().ToString("N")[..8];
 			var academicYear = await academicYearManager.CreateAsync(
@@ -161,14 +211,31 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 			var otherYearStage = await stageManager.CreateAsync(otherYearMedium.Id, "Primary");
 			await stageRepository.InsertAsync(otherYearStage, autoSave: false);
 
+			var primaryStandard = await standardManager.CreateAsync(
+				primary.Id,
+				"Class 4",
+				9,
+				shiftId: null);
+			await standardRepository.InsertAsync(primaryStandard, autoSave: false);
+			var secondaryStandard = await standardManager.CreateAsync(
+				secondary.Id,
+				"Class 8",
+				13,
+				shiftId: null);
+			await standardRepository.InsertAsync(secondaryStandard, autoSave: false);
+
 			await uow.CompleteAsync();
 
 			return new SeededAcademicOrganizations(
 				academicYear.Id,
 				gseb.Id,
 				cbse.Id,
+				gujarati.Id,
+				english.Id,
 				primary.Id,
 				secondary.Id,
+				primaryStandard.Id,
+				secondaryStandard.Id,
 				otherYearStage.Id);
 		}
 	}
@@ -228,8 +295,12 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 		Guid AcademicYearId,
 		Guid GsebBoardId,
 		Guid CbseBoardId,
+		Guid GsebGujaratiMediumId,
+		Guid CbseEnglishMediumId,
 		Guid GsebGujaratiPrimaryStageId,
 		Guid CbseEnglishSecondaryStageId,
+		Guid GsebPrimaryStandardId,
+		Guid CbseSecondaryStandardId,
 		Guid OtherYearStageId);
 
 	private sealed class AcademicOrganizationOptionsResponse
@@ -247,5 +318,12 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 		public Guid BoardId { get; set; }
 		public string BoardName { get; set; } = string.Empty;
 		public Guid AcademicYearId { get; set; }
+	}
+
+	private sealed class StandardResponse
+	{
+		public Guid Id { get; set; }
+		public Guid EducationMediumStageId { get; set; }
+		public string Name { get; set; } = string.Empty;
 	}
 }

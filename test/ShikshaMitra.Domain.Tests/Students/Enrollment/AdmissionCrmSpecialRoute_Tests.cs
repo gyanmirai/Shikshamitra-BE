@@ -17,6 +17,22 @@ public class AdmissionCrmSpecialRoute_Tests
 	}
 
 	[Fact]
+	public void Published_route_definition_is_assignable_only_during_its_effective_window()
+	{
+		var now = DateTime.UtcNow;
+		var active = CreateDefinition(now.AddDays(-1), now.AddDays(1));
+		active.Submit(Guid.NewGuid());
+		active.Publish(Guid.NewGuid());
+
+		var future = CreateDefinition(now.AddDays(1), now.AddDays(2));
+		future.Submit(Guid.NewGuid());
+		future.Publish(Guid.NewGuid());
+
+		active.IsEffectiveAt(now).ShouldBeTrue();
+		future.IsEffectiveAt(now).ShouldBeFalse();
+	}
+
+	[Fact]
 	public void Route_change_supersedes_prior_assignment_without_erasing_history()
 	{
 		var prior = CreateAssignment(null); prior.Supersede();
@@ -48,9 +64,13 @@ public class AdmissionCrmSpecialRoute_Tests
 		appeal.OriginalStatus.ShouldBe(AdmissionCrmRouteEligibilityStatus.Ineligible);
 	}
 
-	private static AdmissionCrmRouteDefinition CreateDefinition() => new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
-		"SIBLING", "Sibling priority", AdmissionCrmRouteType.SiblingPriority, 1, "{\"requiresPolicyEvaluation\":true}",
-		DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddYears(1));
+	private static AdmissionCrmRouteDefinition CreateDefinition() =>
+		CreateDefinition(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddYears(1));
+
+	private static AdmissionCrmRouteDefinition CreateDefinition(DateTime effectiveFrom, DateTime? effectiveUntil) =>
+		new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+			"SIBLING", "Sibling priority", AdmissionCrmRouteType.SiblingPriority, 1,
+			"{\"requiresPolicyEvaluation\":true}", effectiveFrom, effectiveUntil);
 
 	private static AdmissionCrmRouteAssignment CreateAssignment(Guid? previousId) => new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
 		Guid.NewGuid(), Guid.NewGuid(), 1, AdmissionCrmRouteType.SiblingPriority,

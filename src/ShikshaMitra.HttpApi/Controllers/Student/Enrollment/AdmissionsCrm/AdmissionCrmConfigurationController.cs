@@ -46,7 +46,6 @@ public class AdmissionCrmConfigurationController(
 	}
 
 	[HttpGet("{academicYearId}/configuration/pipeline-stages")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public async Task<PagedResultDto<AdmissionCrmPipelineStageDto>> GetPipelineStagesAsync(
 		[FromRoute] Guid academicYearId)
 	{

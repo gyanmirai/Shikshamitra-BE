@@ -92,11 +92,14 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 	{
 		var lead = await GetLeadAsync(leadId, nameof(AssignAsync));
 		var definition = await GetDefinitionAsync(input.RouteDefinitionId);
-		if (definition.AcademicYearId != lead.AcademicYearId || definition.Status != AdmissionCrmRouteDefinitionStatus.Published)
-			throw new BusinessException("AdmissionCrm:PublishedRouteDefinitionRequired");
-		await ValidateRouteDataAsync(definition.RouteType, input.RouteData);
 		var queryable = await _assignmentRepository.GetQueryableAsync();
-		var current = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id && x.LeadId == lead.Id && x.IsPrimary));
+		var current = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.LeadId == lead.Id &&
+			x.IsPrimary));
+		EnsureDefinitionCanBeAssigned(definition, lead);
+		await ValidateRouteDataAsync(definition.RouteType, input.RouteData, lead);
+		AdmissionCrmRouteEvidenceValidator.EnsureValid(definition, input.EvidenceReferences);
 		if (current != null && string.IsNullOrWhiteSpace(input.Reason)) throw new BusinessException("AdmissionCrm:RouteChangeReasonRequired");
 		current?.Supersede();
 		if (current != null) await _assignmentRepository.UpdateAsync(current);
@@ -114,13 +117,15 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 	{
 		var lead = await GetLeadAsync(leadId, nameof(PreviewAssignmentAsync));
 		var definition = await GetDefinitionAsync(input.RouteDefinitionId);
-		if (definition.AcademicYearId != lead.AcademicYearId || definition.Status != AdmissionCrmRouteDefinitionStatus.Published)
-			throw new BusinessException("AdmissionCrm:PublishedRouteDefinitionRequired");
-		await ValidateRouteDataAsync(definition.RouteType, input.RouteData);
-
 		var assignmentQuery = await _assignmentRepository.GetQueryableAsync();
 		var current = await AsyncExecuter.FirstOrDefaultAsync(assignmentQuery.Where(x =>
-			x.TenantId == CurrentTenant.Id && x.LeadId == leadId && x.IsPrimary));
+			x.TenantId == CurrentTenant.Id &&
+			x.LeadId == leadId &&
+			x.IsPrimary));
+		EnsureDefinitionCanBeAssigned(definition, lead);
+		await ValidateRouteDataAsync(definition.RouteType, input.RouteData, lead);
+		AdmissionCrmRouteEvidenceValidator.EnsureValid(definition, input.EvidenceReferences);
+
 		var impacts = new List<AdmissionCrmRouteImpactItemDto>();
 		void Impact(string area, string detail, bool blocking = false) => impacts.Add(new()
 			{ Area = area, Impact = detail, RequiresResolution = blocking });
@@ -171,6 +176,18 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 	{
 		var entity = await _assignmentRepository.GetAsync(id);
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, nameof(EvaluateAsync));
+		var definition = await GetDefinitionAsync(entity.RouteDefinitionId);
+		if (definition.AcademicYearId != entity.AcademicYearId ||
+		    definition.Version != entity.RouteDefinitionVersion ||
+		    definition.RouteType != entity.RouteType)
+		{
+			throw new BusinessException("AdmissionCrm:RouteDefinitionSnapshotMismatch")
+				.WithData("RouteAssignmentId", entity.Id)
+				.WithData("RouteDefinitionId", definition.Id);
+		}
+		AdmissionCrmRouteEvidenceValidator.EnsureValid(
+			definition,
+			Deserialize<IReadOnlyList<string>>(entity.EvidenceJson) ?? []);
 		if (entity.AssignedByUserId == GetCurrentUserId() && input.Status is AdmissionCrmRouteEligibilityStatus.Eligible or AdmissionCrmRouteEligibilityStatus.ExceptionApproved)
 			throw new BusinessException("AdmissionCrm:DistinctRouteEligibilityApproverRequired");
 		entity.Evaluate(input.Status, input.Reason, GetCurrentUserId(), Clock.Now);
@@ -211,9 +228,9 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 				var definition = await GetDefinitionAsync(row.RouteDefinitionId);
 				if (definition.AcademicYearId != academicYearId || definition.RouteType != AdmissionCrmRouteType.RteEws)
 					throw new BusinessException("AdmissionCrm:RteRouteDefinitionRequired");
-				if (definition.Status != AdmissionCrmRouteDefinitionStatus.Published)
-					throw new BusinessException("AdmissionCrm:RouteDefinitionNotPublished");
-				await ValidateRouteDataAsync(definition.RouteType, row.RouteData);
+				EnsureDefinitionCanBeAssigned(definition, lead);
+				await ValidateRouteDataAsync(definition.RouteType, row.RouteData, lead);
+				AdmissionCrmRouteEvidenceValidator.EnsureValid(definition, row.EvidenceReferences);
 				item.Success = true;
 			}
 			catch (BusinessException exception)
@@ -318,13 +335,22 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 		return entities.OrderByDescending(x => x.RequestedAt).Select(MapAppeal).ToList();
 	}
 
-	private async Task ValidateRouteDataAsync(AdmissionCrmRouteType type, AdmissionCrmSpecialRouteDataDto data)
+	private async Task ValidateRouteDataAsync(
+		AdmissionCrmRouteType type,
+		AdmissionCrmSpecialRouteDataDto data,
+		AdmissionInquiryLead lead)
 	{
 		if (type == AdmissionCrmRouteType.SiblingPriority && !data.RelatedStudentId.HasValue)
 			throw new BusinessException("AdmissionCrm:VerifiedSiblingStudentRequired");
 		if (type == AdmissionCrmRouteType.ReturningStudent && !data.FormerStudentId.HasValue)
 			throw new BusinessException("AdmissionCrm:FormerStudentRequired");
-		if (data.RelatedStudentId.HasValue) await _studentRepository.GetAsync(data.RelatedStudentId.Value);
+		if (data.RelatedStudentId.HasValue)
+		{
+			if (type == AdmissionCrmRouteType.SiblingPriority)
+				await EnsureSiblingRelationshipCanBeVerifiedAsync(lead, data.RelatedStudentId.Value);
+			else
+				await _studentRepository.GetAsync(data.RelatedStudentId.Value);
+		}
 		if (data.FormerStudentId.HasValue) await _studentRepository.GetAsync(data.FormerStudentId.Value);
 		if (type == AdmissionCrmRouteType.StaffChild && string.IsNullOrWhiteSpace(data.AuthoritativeReference))
 			throw new BusinessException("AdmissionCrm:AuthoritativeStaffReferenceRequired");
@@ -347,11 +373,90 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 			throw new BusinessException("AdmissionCrm:OverseasEquivalenceDetailsRequired");
 	}
 
+	private async Task EnsureSiblingRelationshipCanBeVerifiedAsync(
+		AdmissionInquiryLead lead,
+		Guid relatedStudentId)
+	{
+		if (lead.StudentId == relatedStudentId)
+		{
+			throw new BusinessException("AdmissionCrm:SiblingRelationshipNotVerified")
+				.WithData("RelatedStudentId", relatedStudentId);
+		}
+
+		var relatedStudent = await _studentRepository.GetInquiryForUpdateAsync(relatedStudentId);
+		if (relatedStudent == null || relatedStudent.TenantId != CurrentTenant.Id)
+		{
+			throw new BusinessException("AdmissionCrm:VerifiedSiblingStudentRequired")
+				.WithData("RelatedStudentId", relatedStudentId);
+		}
+
+		var leadPhone = NormalizeContact(lead.PrimaryContactNo);
+		var leadEmail = NormalizeEmail(lead.Email);
+		var relatedPhones = new[]
+			{
+				relatedStudent.ContactDetail?.PrimaryContactNo,
+				relatedStudent.ContactDetail?.SecondaryContactNo,
+				relatedStudent.FamilyDetail?.FatherDetails?.ContactNo,
+				relatedStudent.FamilyDetail?.MotherDetails?.ContactNo,
+				relatedStudent.FamilyDetail?.GuardianDetails?.ContactNo
+			}
+			.Select(NormalizeContact)
+			.Where(value => value != null)
+			.ToHashSet(StringComparer.Ordinal);
+		var relatedEmails = new[]
+			{
+				relatedStudent.ContactDetail?.Email,
+				relatedStudent.FamilyDetail?.FatherDetails?.Email,
+				relatedStudent.FamilyDetail?.MotherDetails?.Email,
+				relatedStudent.FamilyDetail?.GuardianDetails?.Email
+			}
+			.Select(NormalizeEmail)
+			.Where(value => value != null)
+			.ToHashSet(StringComparer.OrdinalIgnoreCase);
+		if ((leadPhone == null || !relatedPhones.Contains(leadPhone)) &&
+		    (leadEmail == null || !relatedEmails.Contains(leadEmail)))
+		{
+			throw new BusinessException("AdmissionCrm:SiblingRelationshipNotVerified")
+				.WithData("RelatedStudentId", relatedStudentId);
+		}
+	}
+
+	private static string? NormalizeContact(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			return null;
+		}
+
+		var digits = new string(value.Where(char.IsDigit).ToArray());
+		return digits.Length == 0 ? null : digits;
+	}
+
+	private static string? NormalizeEmail(string? value) =>
+		string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
+
 	private async Task<AdmissionCrmRouteDefinition> GetDefinitionAsync(Guid id)
 	{
 		var entity = await _definitionRepository.GetAsync(id);
 		if (entity.TenantId != CurrentTenant.Id) throw new AbpAuthorizationException("Route definition belongs to another tenant.");
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, nameof(GetDefinitionAsync)); return entity;
+	}
+
+	private void EnsureDefinitionCanBeAssigned(
+		AdmissionCrmRouteDefinition definition,
+		AdmissionInquiryLead lead)
+	{
+		var capturedDefinitionCanComplete = lead.IntendedRouteDefinitionId == definition.Id &&
+		                                   lead.IntendedRouteDefinitionVersion == definition.Version &&
+		                                   definition.Status is AdmissionCrmRouteDefinitionStatus.Published
+			                                   or AdmissionCrmRouteDefinitionStatus.Retired;
+		if (definition.AcademicYearId != lead.AcademicYearId ||
+		    (!definition.IsEffectiveAt(Clock.Now) && !capturedDefinitionCanComplete))
+		{
+			throw new BusinessException("AdmissionCrm:PublishedRouteDefinitionRequired")
+				.WithData("RouteDefinitionId", definition.Id)
+				.WithData("AcademicYearId", lead.AcademicYearId);
+		}
 	}
 
 	private async Task<AdmissionInquiryLead> GetLeadAsync(Guid id, string operation)
@@ -376,7 +481,7 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 		}
 
 		var normalizedContact = new string(reference.Where(char.IsDigit).ToArray());
-		var normalizedEmail = reference.ToUpperInvariant();
+		var normalizedEmail = reference.ToLowerInvariant();
 		var queryable = await _leadRepository.GetQueryableAsync();
 		var candidates = await AsyncExecuter.ToListAsync(queryable.Where(lead =>
 			lead.TenantId == CurrentTenant.Id &&

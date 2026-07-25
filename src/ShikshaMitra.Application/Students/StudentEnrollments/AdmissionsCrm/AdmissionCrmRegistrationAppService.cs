@@ -724,14 +724,17 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		};
 	}
 
-	private static Dictionary<string, object?> BuildPrefill(AdmissionInquiryLead lead)
+	internal static Dictionary<string, object?> BuildPrefill(AdmissionInquiryLead lead)
 	{
 		return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
 		{
 			["firstName"] = lead.FirstName, ["middleName"] = lead.MiddleName, ["lastName"] = lead.LastName,
 			["dateOfBirth"] = lead.DateOfBirth?.ToString("yyyy-MM-dd"), ["parentGuardianName"] = lead.ParentGuardianName,
 			["primaryContactNo"] = lead.PrimaryContactNo, ["email"] = lead.Email, ["desiredClassName"] = lead.DesiredClassName,
-			["campus"] = lead.CampusBranchName, ["admissionRoute"] = lead.IntendedRouteType?.ToString()
+			["campus"] = lead.CampusBranchName,
+			["admissionRoute"] = lead.IntendedRouteNameSnapshot ?? lead.IntendedRouteType?.ToString(),
+			["admissionRouteDefinitionId"] = lead.IntendedRouteDefinitionId,
+			["admissionRouteDefinitionVersion"] = lead.IntendedRouteDefinitionVersion
 		};
 	}
 

@@ -54,4 +54,12 @@ public class AdmissionCrmRouteDefinition : FullAuditedAggregateRoot<Guid>, IMult
 	}
 
 	public void Retire() => Status = AdmissionCrmRouteDefinitionStatus.Retired;
+
+	public bool IsEffectiveAt(DateTime at)
+	{
+		var utc = at.ToUniversalTime();
+		return Status == AdmissionCrmRouteDefinitionStatus.Published &&
+		       EffectiveFrom <= utc &&
+		       (!EffectiveUntil.HasValue || utc < EffectiveUntil.Value);
+	}
 }

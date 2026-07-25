@@ -26748,6 +26748,16 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid?>("IntendedRouteDefinitionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("IntendedRouteDefinitionVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IntendedRouteNameSnapshot")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<int?>("IntendedRouteType")
                         .HasColumnType("integer");
 
@@ -26852,6 +26862,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("InquirySourceId");
+
+                    b.HasIndex("IntendedRouteDefinitionId");
 
                     b.HasIndex("TenantId", "MergedIntoLeadId");
 
@@ -34671,6 +34683,11 @@ namespace ShikshaMitra.Migrations
                     b.HasOne("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionCrmInquirySource", "InquirySource")
                         .WithMany()
                         .HasForeignKey("InquirySourceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionCrmRouteDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("IntendedRouteDefinitionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("InquirySource");

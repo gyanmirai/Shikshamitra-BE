@@ -3,7 +3,7 @@ module: student
 domain: implementation-plan
 content_type: Reference
 status: draft
-updated_on: 2026-07-10
+updated_on: 2026-07-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -69,6 +69,7 @@ Remove obsolete Enrollment inquiry, Inquiry Preference, registration workflow, e
 | `GET /api/student-enrollment/admissions-crm/leads/{leadId}/applicant-checklist` | List cycle-configured applicant checklist items merged with lead-specific progress |
 | `PUT /api/student-enrollment/admissions-crm/leads/{leadId}/applicant-checklist/{key}` | Update one lead-specific applicant checklist item with progress and internal notes |
 | `POST /api/student-enrollment/admissions-crm/leads/{leadId}/notes` | Add a staff lead note or call note to the CRM timeline |
+| `GET /api/student-enrollment/admissions-crm/{academicYearId}/quick-inquiry-options` | Return safe cycle flags, enabled ordered channels, and effective published admission routes for operational inquiry capture |
 | `POST /api/student-enrollment/admissions-crm/tasks/{taskId}/complete` | Complete one follow-up task |
 | `GET /api/student-enrollment/admissions-crm/{academicYearId}/exams` | List CRM entrance exam records for an academic year |
 | `GET /api/student-enrollment/admissions-crm/leads/{leadId}/exam` | Get the CRM entrance exam record for one lead |
@@ -125,6 +126,7 @@ Status: implemented for the current CRM scope.
 This milestone adds school-level admission cycle defaults, per-academic-year cycle overrides, inquiry channel enablement and defaults, exam readiness fields, merit ranking mode, applicant checklist items, lead scoring rules, lead routing rules, condition-aware journey rules, owner-pool routing strategies, fixed pipeline milestones, configurable display names, form templates, public-form consent validation, and configuration APIs.
 New academic-year cycle configurations copy the school defaults once and then remain independently editable.
 Inquiry channel settings now control enabled intake channels and default Inquiry Source, public form template, owner, acknowledgement template, and display order per cycle.
+Staff with CRM Add or View permission can read safe quick-inquiry options and pipeline metadata without receiving the full Manage Configuration payload.
 Default acknowledgement templates now create consent-aware CRM delivery logs for staff and public inquiries through the same provider, opt-out, and timeline pipeline as other template sends.
 Message template configuration now supports WhatsApp, SMS, and email templates with variables, approval status, active state, and preview rendering before approval.
 Communication provider settings now support channel enablement, provider name, sender identifier, settings JSON, and webhook URL for Phase 2 setup.
@@ -141,6 +143,22 @@ Public inquiry rendering now groups visible fields by configured section, applie
 The frontend inquiry route now supports CRM quick-entry, duplicate preview with confidence and matched-field evidence before staff save, duplicate merge from warning leads, board view, list view, and exam view.
 The frontend public routes now render dynamic inquiry forms and OTP-protected applicant status with resend, cooldown, expired, invalid, and locked OTP states.
 Staff-created duplicate continuation now requires a reason in the quick inquiry dialog, and the backend records that reason when a duplicate is present.
+Every authenticated staff lead-creation request requires a nonblank first name regardless of the caller-supplied channel, while anonymous public-form submission remains a separate contract.
+Staff quick inquiry preserves structured applicant names and the selected admission-route definition version and name snapshot.
+The backend rejects malformed email, inactive or future admission-route definitions, route-type mismatches, arbitrary route enums without definitions, and standards that do not belong to the requested academic year.
+When staff omits a route definition for compatibility, the backend resolves exactly one effective published Fresh definition.
+A route-neutral legacy staff inquiry remains valid only when that academic year has no route catalog; once any route definition is configured, omission without exactly one effective Fresh fallback is rejected.
+The backend derives the desired-class snapshot from the validated Standard name and carries the immutable route definition ID, version, and name into registration prefill.
+Registration prefill falls back to the legacy intended-route enum name only for older leads that have no route-definition name snapshot.
+Pipeline-stage, quick-inquiry-option, and lead-creation requests validate the tenant academic year before reading defaults, initializing configuration, or persisting a lead.
+The idempotent enrollment seed publishes Fresh admission, Sibling priority, and Lateral entry defaults when those route codes are absent, while school-defined route codes remain untouched.
+Default route publication requires the active employee-linked `admissions-counselor@ddvs.com` maker with Admissions Counselor route-management permission and the distinct `admissions-approver@ddvs.com` checker with Admissions Approver route-approval permission.
+The seed skips default route publication and logs the missing prerequisites instead of attributing approval to arbitrary tenant users.
+Fresh admission remains an ordinary intake intent, while every non-Fresh intended pathway blocks activation until a corresponding governed route assignment is explicitly evaluated as Eligible or Exception Approved.
+Configured special-route evidence codes must be present as well-formed `CODE:REFERENCE` entries during preview and assignment, are rechecked before eligibility approval, and block activation if the captured evidence is invalid or incomplete.
+Sibling-priority assignment matches the related student against normalized contact identity recorded on the student or guardian profile instead of treating any tenant student ID as proof of relationship.
+Assignment and evidence correction may continue against the exact immutable route version captured while it was published even if that version later expires or is retired.
+An audited route change satisfies the captured intent only when its previous-assignment chain actually reaches that captured definition and version.
 Public form submission now triggers configured LeadCreated journeys after the CRM lead and status token are persisted.
 Status OTP issue is protected by a resend cooldown, and repeated invalid verification attempts lock the active OTP challenge.
 Status OTP delivery now uses configured CRM SMS, WhatsApp, or email providers based on consented contact channels.

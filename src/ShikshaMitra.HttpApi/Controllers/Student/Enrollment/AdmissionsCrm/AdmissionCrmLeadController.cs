@@ -12,6 +12,11 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrmLeadAppService) : AbpControllerBase
 {
+	[HttpGet("{academicYearId}/quick-inquiry-options")]
+	public Task<AdmissionCrmQuickInquiryOptionsDto> GetQuickInquiryOptionsAsync(
+		[FromRoute] Guid academicYearId) =>
+		admissionCrmLeadAppService.GetQuickInquiryOptionsAsync(academicYearId);
+
 	[HttpPost("{academicYearId}/leads")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add)]
 	public async Task<AdmissionCrmLeadDto> CreateAsync(

@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-07-10
+updated_on: 2026-07-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -62,10 +62,21 @@ The CRM route family is `api/student-enrollment/admissions-crm`.
 Use it for future-state inquiry leads, CRM configuration, and entrance exam CRM behavior.
 Keep legacy inquiry and entrance exam routes stable until their consumers are fully migrated.
 CRM inquiry lead payloads support optional applicant DOB for duplicate review and eligibility handoff context without making DOB required for quick inquiry creation.
+Every authenticated staff lead-creation payload requires a nonblank first name regardless of its selected channel, while anonymous public forms continue through their separate dynamic-form contract.
+Quick inquiry payloads preserve separate first, middle, and last name fields, validate email on the server, and snapshot the selected effective admission-route definition.
+An effective published Fresh definition is the compatibility fallback when a staff client omits the route definition.
+An academic year with no route catalog can still accept a route-neutral legacy staff inquiry, while a configured catalog without exactly one effective Fresh fallback rejects the omission.
+A supplied route enum without a definition is always rejected.
+When `TargetStandardId` is supplied, the backend validates its academic-year hierarchy and derives `DesiredClassName` from the authoritative Standard name.
+Registration prefill uses the immutable route definition ID, version, and name snapshot, with the legacy route enum name only as a fallback for records created before route-definition snapshots existed.
+Special-route evidence references use `CODE:REFERENCE` format and must cover every evidence code required by the captured route-definition version before assignment, eligibility approval, or activation.
+Sibling-priority assignment also requires the referenced tenant student to share a normalized contact identifier recorded on the student or guardian profile with the applicant rather than accepting an arbitrary student ID.
+An applicant may continue assignment work against an exact route version captured while published after that version expires or is retired, and later route changes must retain an unbroken assignment lineage to the captured intent.
 
 | Route pattern | Purpose |
 |---|---|
-| `/{academicYearId}/leads` | Create and list lightweight CRM inquiry leads |
+| `/{academicYearId}/leads` | Create and list lightweight CRM inquiry leads after validating that the tenant academic year exists |
+| `/{academicYearId}/quick-inquiry-options` | Return safe operational cycle flags, enabled ordered labeled channels, and currently effective published admission routes for staff with CRM Add or View permission after validating that the tenant academic year exists |
 | `/{academicYearId}/leads/duplicate-preview` | Preview likely duplicate CRM leads |
 | `/leads/{leadId}/duplicates/merge` | Merge one duplicate lead into the surviving CRM lead with reason |
 | `/leads/{leadId}/owner` | Assign or clear a CRM lead owner |
@@ -93,7 +104,7 @@ CRM inquiry lead payloads support optional applicant DOB for duplicate review an
 | `/exams/{examRecordId}/eligibility-handoff` | Return read-only lead and exam context for admission handoff |
 | `/{academicYearId}/analytics/summary` | Return funnel, lead-level conversion rates, stage-configured first-response SLA, follow-up SLA miss, source, campaign, date-range trend, staff workload, task, duplicate, automation run, automation failure, exam, class-wise exam, and exam governance analytics |
 | `/{academicYearId}/configuration/cycle` | Get or update CRM cycle defaults, inquiry channel enablement and defaults, exam readiness fields, merit ranking mode, lead scoring rules, routing strategy, owner pool, routing rules, and condition-aware journey rules |
-| `/{academicYearId}/configuration/pipeline-stages` | Get fixed CRM pipeline milestones with color, SLA target, owner responsibility, and allowed next-stage metadata |
+| `/{academicYearId}/configuration/pipeline-stages` | Get fixed CRM pipeline milestones with color, SLA target, owner responsibility, and allowed next-stage metadata for staff with CRM Add, View, or Manage Configuration permission after validating that the tenant academic year exists |
 | `/configuration/pipeline-stages/{stageId}` | Update one CRM pipeline stage display and governance configuration used by manual transition enforcement |
 | `/{academicYearId}/configuration/form-templates` | Create and list inquiry form templates |
 | `/configuration/form-templates/{id}` | Get or update one inquiry form template |

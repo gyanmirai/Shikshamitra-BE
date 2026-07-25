@@ -14,6 +14,9 @@ namespace ShikshaMitra.Seeders;
 
 public class RolePermissionSeederContributor : BaseSeederContributor
 {
+	internal const string StepName = "RolePermissionSeeder";
+	internal const string StepVersion = "RolePermissionSeeder:v11";
+	internal const int StepOrder = 120;
 	private const string RoleProviderName = "R";
 
 	private readonly IIdentityRoleRepository _roleRepository;
@@ -133,7 +136,10 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.VerifyRegistration,
 			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ReviewDocuments,
 			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ConfirmOriginalSeen,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ConfirmAdmissionReadiness);
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ConfirmAdmissionReadiness,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewAdmissionRoutes,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageAdmissionRoutes,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.AssignAdmissionRoute);
 		var admissionsApproverPermissions = AdmissionCrmPermissions(
 			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View,
 			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Analytics,
@@ -154,7 +160,10 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.PreviewActivation,
 			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveActivation,
 			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.RepairActivation);
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.RepairActivation,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewAdmissionRoutes,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveAdmissionRoutes,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.EvaluateAdmissionRoute);
 
 		// Seed baseline access for deterministic staff personas. Tenant admins can still adjust
 		// grants through the Security module; this only inserts missing grants.

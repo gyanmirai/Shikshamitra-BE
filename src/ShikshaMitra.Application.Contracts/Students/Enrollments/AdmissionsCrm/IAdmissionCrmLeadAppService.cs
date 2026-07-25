@@ -8,6 +8,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
 public interface IAdmissionCrmLeadAppService : IApplicationService
 {
+	Task<AdmissionCrmQuickInquiryOptionsDto> GetQuickInquiryOptionsAsync(Guid academicYearId);
 	Task<AdmissionCrmLeadDto> CreateAsync(Guid academicYearId, CreateAdmissionCrmLeadDto input);
 	Task<AdmissionCrmDirectRegistrationResultDto> CreateDirectRegistrationAsync(
 		Guid academicYearId,

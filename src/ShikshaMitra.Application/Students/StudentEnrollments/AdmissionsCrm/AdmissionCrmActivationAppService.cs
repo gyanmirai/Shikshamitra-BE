@@ -43,6 +43,7 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	private readonly IRepository<AdmissionCrmPolicyPack, Guid> _policyPackRepository;
 	private readonly IRepository<AdmissionCrmPolicyEvaluation, Guid> _policyEvaluationRepository;
 	private readonly IRepository<AdmissionCrmRouteAssignment, Guid> _routeAssignmentRepository;
+	private readonly IRepository<AdmissionCrmRouteDefinition, Guid> _routeDefinitionRepository;
 	private readonly IRepository<EducationBoard, Guid> _boardRepository;
 	private readonly IRepository<EducationMedium, Guid> _mediumRepository;
 	private readonly IRepository<EducationMediumStage, Guid> _stageRepository;
@@ -73,6 +74,7 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 		IRepository<AdmissionCrmPolicyPack, Guid> policyPackRepository,
 		IRepository<AdmissionCrmPolicyEvaluation, Guid> policyEvaluationRepository,
 		IRepository<AdmissionCrmRouteAssignment, Guid> routeAssignmentRepository,
+		IRepository<AdmissionCrmRouteDefinition, Guid> routeDefinitionRepository,
 		IRepository<EducationBoard, Guid> boardRepository,
 		IRepository<EducationMedium, Guid> mediumRepository,
 		IRepository<EducationMediumStage, Guid> stageRepository,
@@ -95,6 +97,7 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 		_documentRepository = documentRepository; _policyAdoptionRepository = policyAdoptionRepository;
 		_policyPackRepository = policyPackRepository; _policyEvaluationRepository = policyEvaluationRepository;
 		_routeAssignmentRepository = routeAssignmentRepository;
+		_routeDefinitionRepository = routeDefinitionRepository;
 		_boardRepository = boardRepository; _mediumRepository = mediumRepository; _stageRepository = stageRepository;
 		_standardRepository = standardRepository; _divisionRepository = divisionRepository;
 		_attendanceRepository = attendanceRepository; _dueFeeRepository = dueFeeRepository;
@@ -563,9 +566,23 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 		var policyReady = await IsPolicyReadyAsync(lead);
 		Item("policy", "Policy evaluation", policyReady, policyReady ? "Applicable policy rules are satisfied." : "Blocking policy rules are missing or unresolved.");
 		var routeQuery = await _routeAssignmentRepository.GetQueryableAsync();
-		var route = await AsyncExecuter.FirstOrDefaultAsync(routeQuery.Where(x => x.TenantId == CurrentTenant.Id && x.LeadId == lead.Id && x.IsPrimary));
-		var routeReady = route == null || route.Status is AdmissionCrmRouteEligibilityStatus.Eligible or AdmissionCrmRouteEligibilityStatus.ExceptionApproved;
-		Item("admission_route", "Admission route eligibility", routeReady, routeReady ? "Admission route is eligible or not route-specific." : "The assigned admission route is not eligible.");
+		var routeHistory = await AsyncExecuter.ToListAsync(routeQuery.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.LeadId == lead.Id));
+		var route = routeHistory.FirstOrDefault(x => x.IsPrimary);
+		var routeDefinition = route == null
+			? null
+			: await _routeDefinitionRepository.FindAsync(route.RouteDefinitionId);
+		var routeReadiness = EvaluateAdmissionRouteReadiness(
+			lead,
+			route,
+			routeHistory,
+			routeDefinition);
+		Item(
+			"admission_route",
+			"Admission route eligibility",
+			routeReadiness.Ready,
+			routeReadiness.Detail);
 
 		var placement = await ValidatePlacementAsync(lead, input);
 		Item("placement", "Academic placement", placement.Valid, placement.Detail);
@@ -591,6 +608,97 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 			GrNumberPreview = series == null ? string.Empty : $"{series.Prefix}{series.NextSequence.ToString().PadLeft(series.Padding, '0')}{series.Suffix}",
 			DivisionStrength = placement.Strength, DivisionOccupancy = placement.Occupancy
 		};
+	}
+
+	private static (bool Ready, string Detail) EvaluateAdmissionRouteReadiness(
+		AdmissionInquiryLead lead,
+		AdmissionCrmRouteAssignment? assignment,
+		IReadOnlyCollection<AdmissionCrmRouteAssignment> history,
+		AdmissionCrmRouteDefinition? definition)
+	{
+		var governedIntent = lead.IntendedRouteType.HasValue &&
+		                     lead.IntendedRouteType.Value != AdmissionCrmRouteType.Fresh;
+		if (assignment == null)
+		{
+			return governedIntent
+				? (false, $"The selected {lead.IntendedRouteNameSnapshot ?? lead.IntendedRouteType!.Value.ToString()} pathway requires an evaluated route assignment.")
+				: (true, lead.IntendedRouteType == AdmissionCrmRouteType.Fresh
+					? "Fresh admission is an ordinary intake intent and does not require a governed route assignment."
+					: "No governed admission route applies.");
+		}
+
+		if (governedIntent)
+		{
+			var correspondsToIntent = RouteHistoryCorrespondsToIntent(lead, assignment, history);
+			if (!correspondsToIntent)
+			{
+				return (false, "The evaluated route assignment does not correspond to the selected pathway.");
+			}
+		}
+
+		if (definition == null ||
+		    definition.TenantId != lead.TenantId ||
+		    definition.AcademicYearId != assignment.AcademicYearId ||
+		    definition.Version != assignment.RouteDefinitionVersion ||
+		    definition.RouteType != assignment.RouteType)
+		{
+			return (false, "The assigned admission route definition snapshot is unavailable or inconsistent.");
+		}
+
+		var evidence = AdmissionCrmRouteEvidenceValidator.Validate(
+			definition.ConfigurationJson,
+			assignment.EvidenceJson);
+		if (!evidence.IsValid)
+		{
+			var detail = evidence.MissingCodes.Count > 0
+				? $"Required route evidence is missing: {string.Join(", ", evidence.MissingCodes)}."
+				: "The assigned admission route contains invalid evidence references.";
+			return (false, detail);
+		}
+
+		var eligible = assignment.EvaluatedAt.HasValue &&
+		               assignment.Status is AdmissionCrmRouteEligibilityStatus.Eligible
+			               or AdmissionCrmRouteEligibilityStatus.ExceptionApproved;
+		return eligible
+			? (true, governedIntent
+				? "The selected pathway has an evaluated eligible route assignment."
+				: "The assigned admission route is eligible.")
+			: (false, "The assigned admission route is not evaluated as eligible.");
+	}
+
+	private static bool RouteHistoryCorrespondsToIntent(
+		AdmissionInquiryLead lead,
+		AdmissionCrmRouteAssignment current,
+		IReadOnlyCollection<AdmissionCrmRouteAssignment> history)
+	{
+		var byId = history.ToDictionary(assignment => assignment.Id);
+		var visited = new HashSet<Guid>();
+		AdmissionCrmRouteAssignment? candidate = current;
+		while (candidate != null && visited.Add(candidate.Id))
+		{
+			if (candidate.Id != current.Id &&
+			    (candidate.IsPrimary ||
+			     candidate.Status != AdmissionCrmRouteEligibilityStatus.Superseded))
+			{
+				return false;
+			}
+
+			var corresponds = lead.IntendedRouteDefinitionId.HasValue
+				? candidate.RouteDefinitionId == lead.IntendedRouteDefinitionId.Value &&
+				  candidate.RouteDefinitionVersion == lead.IntendedRouteDefinitionVersion
+				: candidate.RouteType == lead.IntendedRouteType;
+			if (corresponds)
+			{
+				return true;
+			}
+
+			candidate = candidate.PreviousAssignmentId.HasValue &&
+			            byId.TryGetValue(candidate.PreviousAssignmentId.Value, out var previous)
+				? previous
+				: null;
+		}
+
+		return false;
 	}
 
 	private async Task EnsureCurrentReadinessAsync(

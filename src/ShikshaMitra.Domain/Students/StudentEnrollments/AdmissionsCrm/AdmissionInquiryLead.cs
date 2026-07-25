@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net.Mail;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -28,6 +29,9 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? NormalizedEmail { get; private set; }
 	public string AdmissionIntent { get; private set; } = string.Empty;
 	public AdmissionCrmRouteType? IntendedRouteType { get; private set; }
+	public Guid? IntendedRouteDefinitionId { get; private set; }
+	public int? IntendedRouteDefinitionVersion { get; private set; }
+	public string? IntendedRouteNameSnapshot { get; private set; }
 	public Guid? TargetStandardId { get; private set; }
 	public string? DesiredClassName { get; private set; }
 	public AdmissionInquiryStage Stage { get; private set; }
@@ -76,7 +80,10 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? desiredClassName,
 		string? notes,
 		DateTimeOffset createdAt,
-		AdmissionCrmRouteType? intendedRouteType = null)
+		AdmissionCrmRouteType? intendedRouteType = null,
+		Guid? intendedRouteDefinitionId = null,
+		int? intendedRouteDefinitionVersion = null,
+		string? intendedRouteNameSnapshot = null)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -87,7 +94,11 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetApplicantName(firstName, middleName, lastName, dateOfBirth, parentGuardianName);
 		SetContact(primaryContactNo, email);
 		SetIntent(admissionIntent, targetStandardId, desiredClassName);
-		IntendedRouteType = intendedRouteType;
+		SetIntendedRoute(
+			intendedRouteType,
+			intendedRouteDefinitionId,
+			intendedRouteDefinitionVersion,
+			intendedRouteNameSnapshot);
 		SetNotes(notes);
 		Stage = AdmissionInquiryStage.NewInquiry;
 		Priority = AdmissionCrmLeadPriority.Warm;
@@ -303,7 +314,7 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			primaryContactNo,
 			nameof(primaryContactNo),
 			AdmissionCrmConsts.MaxContactLength);
-		Email = NormalizeOptional(email, nameof(email), AdmissionCrmConsts.MaxEmailLength);
+		Email = NormalizeEmail(email);
 		NormalizedPrimaryContactNo = NormalizePhone(PrimaryContactNo);
 		NormalizedEmail = Email?.ToLowerInvariant();
 
@@ -312,6 +323,43 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			throw new BusinessException("AdmissionCrm:ContactRequired");
 		}
+	}
+
+	private void SetIntendedRoute(
+		AdmissionCrmRouteType? intendedRouteType,
+		Guid? intendedRouteDefinitionId,
+		int? intendedRouteDefinitionVersion,
+		string? intendedRouteNameSnapshot)
+	{
+		if (intendedRouteType.HasValue && !Enum.IsDefined(intendedRouteType.Value))
+		{
+			throw new BusinessException("AdmissionCrm:InvalidIntendedRouteType")
+				.WithData("IntendedRouteType", intendedRouteType.Value);
+		}
+
+		if (intendedRouteDefinitionId.HasValue &&
+		    (!intendedRouteType.HasValue ||
+		     !intendedRouteDefinitionVersion.HasValue ||
+		     intendedRouteDefinitionVersion.Value <= 0 ||
+		     string.IsNullOrWhiteSpace(intendedRouteNameSnapshot)))
+		{
+			throw new BusinessException("AdmissionCrm:InvalidIntendedRouteDefinition")
+				.WithData("IntendedRouteDefinitionId", intendedRouteDefinitionId.Value);
+		}
+
+		if (!intendedRouteDefinitionId.HasValue &&
+		    (intendedRouteDefinitionVersion.HasValue || !string.IsNullOrWhiteSpace(intendedRouteNameSnapshot)))
+		{
+			throw new BusinessException("AdmissionCrm:InvalidIntendedRouteDefinition");
+		}
+
+		IntendedRouteType = intendedRouteType;
+		IntendedRouteDefinitionId = intendedRouteDefinitionId;
+		IntendedRouteDefinitionVersion = intendedRouteDefinitionVersion;
+		IntendedRouteNameSnapshot = NormalizeOptional(
+			intendedRouteNameSnapshot,
+			nameof(intendedRouteNameSnapshot),
+			AdmissionCrmConsts.MaxNameLength);
 	}
 
 	private void SetIntent(string admissionIntent, Guid? targetStandardId, string? desiredClassName)
@@ -353,6 +401,24 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		var digits = new string(value.Where(char.IsDigit).ToArray());
 		return string.IsNullOrWhiteSpace(digits) ? null : digits;
+	}
+
+	private static string? NormalizeEmail(string? value)
+	{
+		var normalized = NormalizeOptional(value, nameof(value), AdmissionCrmConsts.MaxEmailLength);
+		if (normalized == null)
+		{
+			return null;
+		}
+
+		if (!MailAddress.TryCreate(normalized, out var parsed) ||
+		    !string.Equals(parsed.Address, normalized, StringComparison.OrdinalIgnoreCase))
+		{
+			throw new BusinessException("AdmissionCrm:InvalidEmail")
+				.WithData("Email", normalized);
+		}
+
+		return normalized;
 	}
 
 	private static bool IsValidRegistrationFormNumber(string formNumber)

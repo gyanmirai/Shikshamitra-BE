@@ -43,6 +43,8 @@ public class AdmissionInquiryLeadConfiguration : IEntityTypeConfiguration<Admiss
 		builder.Property(x => x.AdmissionIntent)
 			.HasMaxLength(AdmissionCrmConsts.MaxIntentLength)
 			.IsRequired();
+		builder.Property(x => x.IntendedRouteNameSnapshot)
+			.HasMaxLength(AdmissionCrmConsts.MaxNameLength);
 		builder.Property(x => x.DesiredClassName)
 			.HasMaxLength(AdmissionCrmConsts.MaxNameLength);
 		builder.Property(x => x.Notes)
@@ -70,6 +72,10 @@ public class AdmissionInquiryLeadConfiguration : IEntityTypeConfiguration<Admiss
 		builder.HasOne(x => x.InquirySource)
 			.WithMany()
 			.HasForeignKey(x => x.InquirySourceId)
+			.OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<AdmissionCrmRouteDefinition>()
+			.WithMany()
+			.HasForeignKey(x => x.IntendedRouteDefinitionId)
 			.OnDelete(DeleteBehavior.Restrict);
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Stage });

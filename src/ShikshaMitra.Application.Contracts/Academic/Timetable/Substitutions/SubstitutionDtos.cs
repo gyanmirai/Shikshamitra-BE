@@ -235,6 +235,7 @@ public class SubstitutionDashboardDto
     public int Conflict { get; set; }
     public int TeacherUnavailable { get; set; }
     public int Uncovered { get; set; }
+    public int ChangeRequested { get; set; }
     public SubstitutionDto? NextRisk { get; set; }
     public List<string> RiskAlerts { get; set; } = new();
     public List<SuggestedTeacherDto> WorkloadSnapshot { get; set; } = new();

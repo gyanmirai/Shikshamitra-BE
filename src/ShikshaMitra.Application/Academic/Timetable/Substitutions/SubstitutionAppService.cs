@@ -76,13 +76,18 @@ public class SubstitutionAppService(
         return new SubstitutionDashboardDto
         {
             Pending = substitutions.Count(x => x.Status == SubstitutionStatus.Pending),
-            Assigned = substitutions.Count(x => x.Status == SubstitutionStatus.Assigned),
+            Assigned = substitutions.Count(x =>
+                x.Status == SubstitutionStatus.Assigned ||
+                x.Status == SubstitutionStatus.WaitingAck ||
+                x.Status == SubstitutionStatus.Acknowledged),
             WaitingAck = substitutions.Count(x => x.Status == SubstitutionStatus.WaitingAck),
             Acknowledged = substitutions.Count(x => x.Status == SubstitutionStatus.Acknowledged),
             Completed = substitutions.Count(x => x.Status == SubstitutionStatus.Completed),
             Conflict = substitutions.Count(x => x.Status == SubstitutionStatus.Conflict),
             TeacherUnavailable = availability.Count,
             Uncovered = substitutions.Count(x => x.Status is SubstitutionStatus.Pending or SubstitutionStatus.Conflict),
+            ChangeRequested = substitutions.Count(x =>
+                x.AcknowledgementStatus == SubstitutionAcknowledgementStatus.ChangeRequested),
             NextRisk = nextRisk == null ? null : await MapAsync(nextRisk, await GetAuditLogsAsync(nextRisk.Id)),
             RiskAlerts = BuildRiskAlerts(substitutions),
             WorkloadSnapshot = await BuildWorkloadSnapshotAsync(target)
@@ -964,7 +969,7 @@ public class SubstitutionAppService(
             Completed = list.Count(x => x.Status == SubstitutionStatus.Completed),
             Rejected = list.Count(x => x.AcknowledgementStatus == SubstitutionAcknowledgementStatus.Rejected),
             Conflicts = list.Count(x => x.ConflictStatus == SubstitutionConflictStatus.HardBlock || x.Status == SubstitutionStatus.Conflict),
-            CoverageRate = total == 0 ? 0 : Math.Round((decimal)covered * 100 / total, 2),
+            CoverageRate = total == 0 ? 0 : Math.Round((decimal) covered * 100 / total, 2),
             AverageAcknowledgementMinutes = acknowledgedRows.Count == 0
                 ? 0
                 : Math.Round(acknowledgedRows.Average(x => (x.AcknowledgedAt!.Value - x.CreationTime).TotalMinutes).ToDecimalSafe(), 2),
@@ -1222,7 +1227,7 @@ public class SubstitutionAppService(
         firstStart < secondEnd && firstEnd > secondStart;
 
     private static int GetMinutes(TimeOnly start, TimeOnly end) =>
-        (int)(end.ToTimeSpan() - start.ToTimeSpan()).TotalMinutes;
+        (int) (end.ToTimeSpan() - start.ToTimeSpan()).TotalMinutes;
 
     private static List<(TimeOnly Start, TimeOnly End)> GetFreeSegments(
         TimeOnly requestedStart,

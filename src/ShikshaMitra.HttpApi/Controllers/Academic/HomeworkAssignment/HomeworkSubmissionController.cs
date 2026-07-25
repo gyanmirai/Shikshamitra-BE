@@ -32,7 +32,7 @@ public class HomeworkSubmissionController(
     [RequestFormLimits(MultipartBodyLengthLimit = 104857600)]
     public async Task<IActionResult> UploadHomeworkSubmission(
         [FromForm] UploadHomeworkSubmissionDto input,
-        [FromForm] IFormFile? file
+        IFormFile? file
     )
     {
         var uploadedFile = await ResolveUploadedFileAsync(input, file);

@@ -26,19 +26,22 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 	private readonly IRepository<AdmissionCrmPlatformPreset, Guid> _presetRepository;
 	private readonly IRepository<AdmissionCrmPresetAdoption, Guid> _adoptionRepository;
 	private readonly IAdmissionCrmConfigurationAppService _configurationService;
+	private readonly AdmissionCrmConfigurationSafetyAppService _configurationSafety;
 
 	public AdmissionCrmSetupAppService(
 		IRepository<AdmissionCrmSettingsAccessPolicy, Guid> accessRepository,
 		IRepository<AdmissionCrmPlatformSupportSession, Guid> sessionRepository,
 		IRepository<AdmissionCrmPlatformPreset, Guid> presetRepository,
 		IRepository<AdmissionCrmPresetAdoption, Guid> adoptionRepository,
-		IAdmissionCrmConfigurationAppService configurationService)
+		IAdmissionCrmConfigurationAppService configurationService,
+		AdmissionCrmConfigurationSafetyAppService configurationSafety)
 	{
 		_accessRepository = accessRepository;
 		_sessionRepository = sessionRepository;
 		_presetRepository = presetRepository;
 		_adoptionRepository = adoptionRepository;
 		_configurationService = configurationService;
+		_configurationSafety = configurationSafety;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
@@ -187,7 +190,15 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		var currentHash = Hash(previousJson);
 		if (!string.IsNullOrWhiteSpace(input.ExpectedSnapshotHash) && !string.Equals(input.ExpectedSnapshotHash, currentHash, StringComparison.Ordinal)) throw new BusinessException("AdmissionCrm:PresetApplyConcurrencyConflict");
 		var configuration = JsonSerializer.Deserialize<UpdateAdmissionCrmCycleConfigurationDto>(preset.ConfigurationJson, JsonOptions) ?? throw new BusinessException("AdmissionCrm:InvalidPlatformPresetConfiguration");
-		using (CurrentTenant.Change(input.TenantId)) await _configurationService.UpdateCycleConfigurationAsync(input.AcademicYearId, configuration);
+		using (CurrentTenant.Change(input.TenantId))
+		{
+			configuration.ImpactPreviewFingerprint =
+				await _configurationSafety.CreateCycleImpactFingerprintAsync(
+					input.AcademicYearId,
+					configuration,
+					nameof(ApplyPresetAsync));
+			await _configurationService.UpdateCycleConfigurationAsync(input.AcademicYearId, configuration);
+		}
 		var adoption = new AdmissionCrmPresetAdoption(GuidGenerator.Create(), input.TenantId, input.AcademicYearId, preset.Id, preset.Version, Hash(preset.ConfigurationJson), previousJson, Clock.Now);
 		using (CurrentTenant.Change(input.TenantId)) await _adoptionRepository.InsertAsync(adoption, autoSave: true);
 		await UpdateAccessPolicyCoreAsync(input.TenantId, JsonSerializer.Deserialize<List<UpdateAdmissionCrmSettingsAccessDto>>(preset.AccessPolicyJson, JsonOptions) ?? []);
@@ -205,6 +216,11 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		var previous = JsonSerializer.Deserialize<UpdateAdmissionCrmCycleConfigurationDto>(adoption.PreviousConfigurationJson, JsonOptions) ?? throw new BusinessException("AdmissionCrm:InvalidRollbackSnapshot");
 		using (CurrentTenant.Change(adoption.TenantId))
 		{
+			previous.ImpactPreviewFingerprint =
+				await _configurationSafety.CreateCycleImpactFingerprintAsync(
+					adoption.AcademicYearId,
+					previous,
+					nameof(RollbackPresetAsync));
 			await _configurationService.UpdateCycleConfigurationAsync(adoption.AcademicYearId, previous);
 			adoption.MarkRolledBack(Clock.Now);
 			await _adoptionRepository.UpdateAsync(adoption, autoSave: true);

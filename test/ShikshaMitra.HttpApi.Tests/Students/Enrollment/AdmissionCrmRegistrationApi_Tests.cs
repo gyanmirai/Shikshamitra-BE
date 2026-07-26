@@ -30,6 +30,299 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Preserve_Registration_Template_Localizations()
+	{
+		var input = CreateTemplateInput("Localized registration " + Guid.NewGuid().ToString("N")[..8]);
+		var section = input.Sections.Single();
+		section.LocalizedTitles = new Dictionary<string, string>
+		{
+			["GU"] = "કુટુંબ અને ઘોષણા",
+			["Hi"] = "परिवार और घोषणा"
+		};
+		var field = section.Fields.Single(item => item.Key == "studentFirstName");
+		field.LocalizedLabels = new Dictionary<string, string>
+		{
+			["GU"] = "વિદ્યાર્થીનું નામ",
+			["Hi"] = "विद्यार्थी का नाम"
+		};
+		var optionField = section.Fields.Single(item => item.Key == "parentOccupation");
+		optionField.FieldType = AdmissionCrmFormFieldType.Select;
+		optionField.MinimumLength = null;
+		optionField.Options = ["Service", "Business"];
+		optionField.LocalizedOptions = new Dictionary<string, IReadOnlyList<string>>
+		{
+			["HI"] = ["नौकरी", "व्यवसाय"]
+		};
+
+		var response = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/registration-templates",
+			input,
+			JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var template = await response.Content.ReadFromJsonAsync<AdmissionCrmRegistrationTemplateDto>(JsonOptions);
+		template.ShouldNotBeNull();
+		template.Sections.Single().LocalizedTitles.Keys.ShouldBe(["gu", "hi"], ignoreOrder: true);
+		template.Sections.Single().LocalizedTitles["gu"].ShouldBe("કુટુંબ અને ઘોષણા");
+		var localizedLabels = template.Sections.Single().Fields
+			.Single(item => item.Key == "studentFirstName")
+			.LocalizedLabels;
+		localizedLabels.Keys.ShouldBe(["gu", "hi"], ignoreOrder: true);
+		localizedLabels["hi"].ShouldBe("विद्यार्थी का नाम");
+		var localizedOptions = template.Sections.Single().Fields
+			.Single(item => item.Key == "parentOccupation")
+			.LocalizedOptions;
+		localizedOptions.Keys.ShouldBe(["hi"]);
+		localizedOptions["hi"].ShouldBe(["नौकरी", "व्यवसाय"]);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Invalid_Registration_Field_Type_And_Options()
+	{
+		var invalidType = CreateTemplateInput("Invalid type " + Guid.NewGuid().ToString("N")[..8]);
+		invalidType.Sections.Single().Fields[0].FieldType = (AdmissionCrmFormFieldType)999;
+		var invalidTypeResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/registration-templates",
+			invalidType,
+			JsonOptions);
+		invalidTypeResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+		var missingOptions = CreateTemplateInput("Missing options " + Guid.NewGuid().ToString("N")[..8]);
+		missingOptions.Sections.Single().Fields[0].FieldType = AdmissionCrmFormFieldType.Select;
+		missingOptions.Sections.Single().Fields[0].Options = [];
+		var missingOptionsResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/registration-templates",
+			missingOptions,
+			JsonOptions);
+		missingOptionsResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Require_Owner_And_Follow_Up_Before_Standard_Registration()
+	{
+		var resources = await CreatePublishedRegistrationResourcesAsync("Gate owner");
+		var playbookId = await CreatePublishedRegistrationPlaybookAsync(
+			AdmissionCrmRegistrationPath.RegistrationBeforeExam);
+		var lead = await CreateRegistrationLeadAsync("GateOwner");
+		await SetLeadWorkflowStateAsync(lead.Id, AdmissionInquiryStage.NewInquiry, ownerUserId: null);
+
+		var unassignedResponse = await IssueRegistrationAsync(lead.Id, resources, playbookId);
+		unassignedResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await unassignedResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:RegistrationOwnerRequired");
+		var legacyUnassignedResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registration-form",
+			new IssueAdmissionCrmRegistrationFormDto
+			{
+				FormNumber = "LEGACY-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
+				Amount = 1
+			},
+			JsonOptions);
+		legacyUnassignedResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await legacyUnassignedResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:RegistrationOwnerRequired");
+
+		await SetLeadWorkflowStateAsync(lead.Id, AdmissionInquiryStage.NewInquiry, Guid.NewGuid());
+		var inquiryResponse = await IssueRegistrationAsync(lead.Id, resources, playbookId);
+		inquiryResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await inquiryResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:RegistrationFollowUpRequired");
+
+		await SetLeadWorkflowStateAsync(lead.Id, AdmissionInquiryStage.FollowUp, Guid.NewGuid());
+		var followUpResponse = await IssueRegistrationAsync(lead.Id, resources, playbookId);
+		followUpResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await followUpResponse.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Enforce_Before_And_After_Exam_Registration_Paths()
+	{
+		var resources = await CreatePublishedRegistrationResourcesAsync("Gate sequence");
+		var beforeExamPlaybookId = await CreatePublishedRegistrationPlaybookAsync(
+			AdmissionCrmRegistrationPath.RegistrationBeforeExam);
+		var lateLead = await CreateRegistrationLeadAsync("GateLate");
+		await SetLeadWorkflowStateAsync(
+			lateLead.Id,
+			AdmissionInquiryStage.ExamScheduled,
+			Guid.NewGuid());
+
+		var lateResponse = await IssueRegistrationAsync(
+			lateLead.Id,
+			resources,
+			beforeExamPlaybookId);
+		lateResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await lateResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:RegistrationMustBeIssuedBeforeExam");
+
+		var afterExamPlaybookId = await CreatePublishedRegistrationPlaybookAsync(
+			AdmissionCrmRegistrationPath.RegistrationAfterExam);
+		var resultLead = await CreateRegistrationLeadAsync("GateResult");
+		await SetLeadWorkflowStateAsync(
+			resultLead.Id,
+			AdmissionInquiryStage.Eligible,
+			Guid.NewGuid());
+
+		var missingResultResponse = await IssueRegistrationAsync(
+			resultLead.Id,
+			resources,
+			afterExamPlaybookId);
+		missingResultResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await missingResultResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:RegistrationRequiresEligibleExamResult");
+
+		await AddEligibleExamResultAsync(resultLead.Id);
+		var eligibleResponse = await IssueRegistrationAsync(
+			resultLead.Id,
+			resources,
+			afterExamPlaybookId);
+		eligibleResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await eligibleResponse.Content.ReadAsStringAsync());
+	}
+
+	[Theory]
+	[InlineData(AdmissionInquiryStage.Rejected)]
+	[InlineData(AdmissionInquiryStage.Stale)]
+	[InlineData(AdmissionInquiryStage.Archived)]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Registration_For_Terminal_Lead(
+		AdmissionInquiryStage terminalStage)
+	{
+		var resources = await CreatePublishedRegistrationResourcesAsync(
+			"Gate terminal " + terminalStage);
+		var playbookId = await CreatePublishedRegistrationPlaybookAsync(
+			AdmissionCrmRegistrationPath.ExamWaived);
+		var lead = await CreateRegistrationLeadAsync("Gate" + terminalStage);
+		await SetLeadWorkflowStateAsync(lead.Id, terminalStage, Guid.NewGuid());
+
+		var response = await IssueRegistrationAsync(lead.Id, resources, playbookId);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await response.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:RegistrationNotAllowedForTerminalLead");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reserve_Direct_Registration_Path_For_Direct_Endpoint()
+	{
+		var resources = await CreatePublishedRegistrationResourcesAsync("Gate direct");
+		var directPlaybookId = await CreatePublishedRegistrationPlaybookAsync(
+			AdmissionCrmRegistrationPath.DirectRegistration);
+		var lead = await CreateRegistrationLeadAsync("GateDirect");
+		await SetLeadWorkflowStateAsync(
+			lead.Id,
+			AdmissionInquiryStage.FollowUp,
+			Guid.NewGuid());
+
+		var response = await IssueRegistrationAsync(lead.Id, resources, directPlaybookId);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await response.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:DirectRegistrationPathRequiresDirectEndpoint");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Require_Waiver_Permission_For_Standard_And_Direct_Issuance()
+	{
+		var resources = await CreatePublishedRegistrationResourcesAsync("Waiver gate");
+		var playbookId = await CreatePublishedRegistrationPlaybookAsync(
+			AdmissionCrmRegistrationPath.ExamWaived);
+		var lead = await CreateRegistrationLeadAsync("WaiverGate");
+		await SetLeadWorkflowStateAsync(
+			lead.Id,
+			AdmissionInquiryStage.FollowUp,
+			Guid.NewGuid());
+		var waiverInput = new IssueAdmissionCrmRegistrationApplicationDto
+		{
+			RegistrationTemplateId = resources.TemplateId,
+			FormNumberSeriesId = resources.SeriesId,
+			PlaybookId = playbookId,
+			WaiveFee = true,
+			WaiverReason = "Approved hardship waiver."
+		};
+
+		using var issueOnlyClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm);
+		var deniedStandardResponse = await issueOnlyClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/issue",
+			waiverInput,
+			JsonOptions);
+		deniedStandardResponse.StatusCode.ShouldBe(
+			HttpStatusCode.Forbidden,
+			await deniedStandardResponse.Content.ReadAsStringAsync());
+
+		using var waiverClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.WaiveRegistrationFee);
+		var allowedStandardResponse = await waiverClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/issue",
+			waiverInput,
+			JsonOptions);
+		allowedStandardResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await allowedStandardResponse.Content.ReadAsStringAsync());
+		var standardRegistration = await allowedStandardResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		standardRegistration.ShouldNotBeNull();
+		standardRegistration.FeeStatus.ShouldBe(AdmissionCrmRegistrationFeeStatus.Waived);
+
+		CreateDirectAdmissionCrmRegistrationDto BuildDirectInput(string firstName) =>
+			new()
+			{
+				Applicant = new CreateAdmissionCrmLeadDto
+				{
+					FirstName = firstName,
+					ParentGuardianName = "Waiver Parent",
+					PrimaryContactNo = "94" + Random.Shared.NextInt64(10000000, 99999999),
+					AdmissionIntent = "Direct registration waiver",
+					TargetStandardId = Factory.SeededStandardId,
+					AcademicBoardId = Factory.SeededBoardId,
+					AcademicMediumId = Factory.SeededMediumId,
+					DesiredClassName = "Grade 1"
+				},
+				Registration = new IssueAdmissionCrmRegistrationApplicationDto
+				{
+					RegistrationTemplateId = resources.TemplateId,
+					FormNumberSeriesId = resources.SeriesId,
+					WaiveFee = true,
+					WaiverReason = "Approved direct-registration hardship waiver."
+				}
+			};
+
+		using var directWithoutWaiverClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm);
+		var deniedDirectResponse = await directWithoutWaiverClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/registrations/direct",
+			BuildDirectInput("DeniedDirectWaiver"),
+			JsonOptions);
+		deniedDirectResponse.StatusCode.ShouldBe(
+			HttpStatusCode.Forbidden,
+			await deniedDirectResponse.Content.ReadAsStringAsync());
+
+		using var directWaiverClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.WaiveRegistrationFee);
+		var allowedDirectResponse = await directWaiverClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/registrations/direct",
+			BuildDirectInput("AllowedDirectWaiver"),
+			JsonOptions);
+		allowedDirectResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await allowedDirectResponse.Content.ReadAsStringAsync());
+		var directRegistration = await allowedDirectResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmDirectRegistrationResultDto>(JsonOptions);
+		directRegistration.ShouldNotBeNull();
+		directRegistration.Registration.FeeStatus.ShouldBe(AdmissionCrmRegistrationFeeStatus.Waived);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Complete_Secure_Versioned_Registration_Workflow()
 	{
@@ -99,13 +392,20 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		leadResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await leadResponse.Content.ReadAsStringAsync());
 		var lead = await leadResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
 		lead.ShouldNotBeNull();
+		await SetLeadWorkflowStateAsync(
+			lead.Id,
+			AdmissionInquiryStage.FollowUp,
+			Guid.NewGuid());
+		var registrationPlaybookId = await CreatePublishedRegistrationPlaybookAsync(
+			AdmissionCrmRegistrationPath.RegistrationBeforeExam);
 
 		var issueResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/issue",
 			new IssueAdmissionCrmRegistrationApplicationDto
 			{
 				RegistrationTemplateId = published.Id,
-				FormNumberSeriesId = series.Id
+				FormNumberSeriesId = series.Id,
+				PlaybookId = registrationPlaybookId
 			},
 			JsonOptions);
 		issueResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await issueResponse.Content.ReadAsStringAsync());
@@ -134,8 +434,51 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		var currentRegistration = await currentRegistrationResponse.Content.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
 		currentRegistration.ShouldNotBeNull();
 		currentRegistration.Id.ShouldBe(issued.Id);
+		currentRegistration.ApplicantStatusPath.ShouldBe(issued.ApplicantStatusPath);
 
-		var statusParts = issued.ApplicantStatusPath!.Split('/', StringSplitOptions.RemoveEmptyEntries);
+		var applicationResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/registrations/{issued.Id}");
+		applicationResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await applicationResponse.Content.ReadAsStringAsync());
+		var application = await applicationResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		application.ShouldNotBeNull();
+		application.ApplicantStatusPath.ShouldBe(issued.ApplicantStatusPath);
+
+		var repeatedCurrentResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/current");
+		repeatedCurrentResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await repeatedCurrentResponse.Content.ReadAsStringAsync());
+		var repeatedCurrent = await repeatedCurrentResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		repeatedCurrent.ShouldNotBeNull();
+		repeatedCurrent.ApplicantStatusPath.ShouldBe(currentRegistration.ApplicantStatusPath);
+
+		using var viewOnlyClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View);
+		var viewOnlyCurrentResponse = await viewOnlyClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/current");
+		viewOnlyCurrentResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await viewOnlyCurrentResponse.Content.ReadAsStringAsync());
+		var viewOnlyCurrent = await viewOnlyCurrentResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		viewOnlyCurrent.ShouldNotBeNull();
+		viewOnlyCurrent.ApplicantStatusPath.ShouldBeNull();
+
+		var viewOnlyApplicationResponse = await viewOnlyClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/registrations/{issued.Id}");
+		viewOnlyApplicationResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await viewOnlyApplicationResponse.Content.ReadAsStringAsync());
+		var viewOnlyApplication = await viewOnlyApplicationResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		viewOnlyApplication.ShouldNotBeNull();
+		viewOnlyApplication.ApplicantStatusPath.ShouldBeNull();
+
+		var statusParts = repeatedCurrent.ApplicantStatusPath!.Split('/', StringSplitOptions.RemoveEmptyEntries);
 		var tenantId = Guid.Parse(statusParts[^2]);
 		var token = statusParts[^1];
 		var otpResponse = await Client.PostAsync(
@@ -571,15 +914,31 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		leadResponse.EnsureSuccessStatusCode();
 		var lead = await leadResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
 		lead.ShouldNotBeNull();
-
-		var stageResponse = await Client.PostAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/stage",
-			new ChangeAdmissionCrmLeadStageDto
-			{
-				Stage = AdmissionInquiryStage.ExamReady,
-				Reason = "Applicant confirmed interest and exam readiness."
-			},
-			JsonOptions);
+		await SetLeadWorkflowStateAsync(
+			lead.Id,
+			AdmissionInquiryStage.FollowUp,
+			Guid.NewGuid());
+		var originalSequence = await UpdateCycleRegistrationSequenceAsync(
+			registrationFormRequiredBeforeExam: true,
+			entranceExamRequired: true);
+		HttpResponseMessage stageResponse;
+		try
+		{
+			stageResponse = await Client.PostAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/stage",
+				new ChangeAdmissionCrmLeadStageDto
+				{
+					Stage = AdmissionInquiryStage.ExamReady,
+					Reason = "Applicant confirmed interest and exam readiness."
+				},
+				JsonOptions);
+		}
+		finally
+		{
+			await UpdateCycleRegistrationSequenceAsync(
+				originalSequence.RegistrationFormRequiredBeforeExam,
+				originalSequence.EntranceExamRequired);
+		}
 		stageResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await stageResponse.Content.ReadAsStringAsync());
 		var updatedLead = await stageResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
 		updatedLead.ShouldNotBeNull();
@@ -700,6 +1059,255 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			}
 		]
 	};
+
+	private HttpClient CreateClientWithCrmPermissions(params string[] permissions)
+	{
+		var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(
+			TestAuthHandler.TestTenantIdHeader,
+			TestAuthHandler.TestTenantId);
+		client.DefaultRequestHeaders.Add(
+			AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			permissions.Length == 0 ? "__none__" : string.Join(",", permissions));
+		return client;
+	}
+
+	private async Task<PublishedRegistrationResources> CreatePublishedRegistrationResourcesAsync(
+		string name)
+	{
+		var unique = Guid.NewGuid().ToString("N")[..8];
+		var templateInput = CreateTemplateInput($"{name} {unique}");
+		templateInput.IsFallback = false;
+		templateInput.Applicability = new AdmissionCrmPlaybookApplicabilityDto
+		{
+			Campus = $"registration-gate-{unique}"
+		};
+		var templateResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/registration-templates",
+			templateInput,
+			JsonOptions);
+		templateResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await templateResponse.Content.ReadAsStringAsync());
+		var template = await templateResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationTemplateDto>(JsonOptions);
+		template.ShouldNotBeNull();
+		var publishResponse = await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/configuration/registration-templates/{template.Id}/publish",
+			null);
+		publishResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await publishResponse.Content.ReadAsStringAsync());
+
+		var seriesResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/form-number-series",
+			new AdmissionCrmFormNumberSeriesUpsertDto
+			{
+				Name = $"{name} series {unique}",
+				Prefix = $"G-{unique.ToUpperInvariant()}-",
+				Padding = 4,
+				NextNumber = 1,
+				IsActive = true
+			},
+			JsonOptions);
+		seriesResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await seriesResponse.Content.ReadAsStringAsync());
+		var series = await seriesResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmFormNumberSeriesDto>(JsonOptions);
+		series.ShouldNotBeNull();
+
+		return new PublishedRegistrationResources(template.Id, series.Id);
+	}
+
+	private async Task<AdmissionCrmLeadDto> CreateRegistrationLeadAsync(string suffix)
+	{
+		var response = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
+			new CreateAdmissionCrmLeadDto
+			{
+				AdmissionIntent = "Registration gate validation",
+				PrimaryContactNo = "95" + Random.Shared.NextInt64(10000000, 99999999),
+				Channel = AdmissionInquiryChannel.QuickCallEntry,
+				FirstName = suffix
+			},
+			JsonOptions);
+		response.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await response.Content.ReadAsStringAsync());
+		return (await response.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions))!;
+	}
+
+	private Task<HttpResponseMessage> IssueRegistrationAsync(
+		Guid leadId,
+		PublishedRegistrationResources resources,
+		Guid playbookId)
+	{
+		return Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{leadId}/registrations/issue",
+			new IssueAdmissionCrmRegistrationApplicationDto
+			{
+				RegistrationTemplateId = resources.TemplateId,
+				FormNumberSeriesId = resources.SeriesId,
+				PlaybookId = playbookId
+			},
+			JsonOptions);
+	}
+
+	private async Task<Guid> CreatePublishedRegistrationPlaybookAsync(
+		AdmissionCrmRegistrationPath registrationPath)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider.GetRequiredService<IRepository<AdmissionCrmPlaybook, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var unique = Guid.NewGuid().ToString("N");
+			var playbook = new AdmissionCrmPlaybook(
+				Guid.NewGuid(),
+				tenantId,
+				Factory.SeededAcademicYearId,
+				"Registration gate " + unique[..8],
+				1,
+				false,
+				registrationPath,
+				$"{{\"campus\":\"gate-{unique}\"}}",
+				"[]",
+				"[]",
+				"[]",
+				"[]",
+				"[]",
+				"[]",
+				"Registration path API test.");
+			playbook.Publish(DateTime.UtcNow);
+			await repository.InsertAsync(playbook);
+			await uow.CompleteAsync();
+			return playbook.Id;
+		}
+	}
+
+	private async Task SetLeadWorkflowStateAsync(
+		Guid leadId,
+		AdmissionInquiryStage stage,
+		Guid? ownerUserId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider.GetRequiredService<IRepository<AdmissionInquiryLead, Guid>>();
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var lead = await repository.GetAsync(leadId);
+			lead.AssignOwner(ownerUserId);
+			lead.ChangeStage(stage);
+			await repository.UpdateAsync(lead);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<CycleRegistrationSequence> UpdateCycleRegistrationSequenceAsync(
+		bool registrationFormRequiredBeforeExam,
+		bool entranceExamRequired)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmCycleConfiguration, Guid>>();
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var queryable = await repository.GetQueryableAsync();
+			var configuration = queryable.FirstOrDefault(x =>
+				x.AcademicYearId == Factory.SeededAcademicYearId);
+			if (configuration == null)
+			{
+				configuration = new AdmissionCrmCycleConfiguration(
+					Guid.NewGuid(),
+					Guid.Parse(TestAuthHandler.TestTenantId),
+					Factory.SeededAcademicYearId,
+					"Registration gate test cycle");
+				await repository.InsertAsync(configuration);
+			}
+			var original = new CycleRegistrationSequence(
+				configuration.RegistrationFormRequiredBeforeExam,
+				configuration.EntranceExamRequired);
+			configuration.Update(
+				configuration.CycleName,
+				configuration.IsActive,
+				registrationFormRequiredBeforeExam,
+				entranceExamRequired,
+				configuration.StaleAfterDays,
+				configuration.ArchiveAfterDays,
+				configuration.DefaultLeadSlaHours,
+				configuration.ActivationCancellationWindowDays,
+				configuration.DefaultExamPassingPercentage,
+				configuration.MeritRankingMode,
+				configuration.ExamReadinessFields,
+				configuration.LeadScoringRulesJson,
+				configuration.LeadRoutingRulesJson,
+				configuration.JourneyRulesJson,
+				configuration.ApplicantChecklistJson,
+				configuration.ChannelSettingsJson,
+				configuration.SlaPolicyJson,
+				configuration.Notes);
+			await repository.UpdateAsync(configuration);
+			await uow.CompleteAsync();
+			return original;
+		}
+	}
+
+	private async Task AddEligibleExamResultAsync(Guid leadId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var slotRepository = scope.ServiceProvider.GetRequiredService<IRepository<AdmissionCrmExamSlot, Guid>>();
+		var examRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmEntranceExamRecord, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var now = DateTimeOffset.UtcNow;
+			var slot = new AdmissionCrmExamSlot(
+				Guid.NewGuid(),
+				tenantId,
+				Factory.SeededAcademicYearId,
+				null,
+				null,
+				null,
+				"Registration gate exam",
+				null,
+				null,
+				now.AddDays(-2),
+				now.AddDays(-2).AddHours(2),
+				20,
+				1);
+			await slotRepository.InsertAsync(slot);
+			var exam = new AdmissionCrmEntranceExamRecord(
+				Guid.NewGuid(),
+				tenantId,
+				Factory.SeededAcademicYearId,
+				leadId,
+				slot,
+				false,
+				null,
+				now.AddDays(-3).UtcDateTime);
+			exam.RecordResult(100, 40, 75, null, now.AddDays(-2).UtcDateTime);
+			await examRepository.InsertAsync(exam);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private sealed record PublishedRegistrationResources(Guid TemplateId, Guid SeriesId);
+	private sealed record CycleRegistrationSequence(
+		bool RegistrationFormRequiredBeforeExam,
+		bool EntranceExamRequired);
 
 	private async Task SetLeadStageAsync(Guid leadId, AdmissionInquiryStage stage)
 	{

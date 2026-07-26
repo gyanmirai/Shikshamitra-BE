@@ -5,6 +5,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
 public class UpdateAdmissionCrmCycleConfigurationDto
 {
+	[MaxLength(64)]
+	public string? ImpactPreviewFingerprint { get; set; }
+
 	[Required]
 	[MaxLength(AdmissionCrmConsts.MaxCycleNameLength)]
 	public required string CycleName { get; set; }

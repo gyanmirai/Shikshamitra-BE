@@ -46,18 +46,26 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 	public async Task<AdmissionCrmLifecycleAutomationResultDto> RunAsync(Guid academicYearId)
 	{
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(RunAsync));
-		return await RunCoreAsync(academicYearId);
+		return await RunCoreAsync(academicYearId, enforceUserScope: true);
 	}
 
 	public Task<AdmissionCrmLifecycleAutomationResultDto> RunFromAutomationAsync(Guid academicYearId) =>
-		RunCoreAsync(academicYearId);
+		RunCoreAsync(academicYearId, enforceUserScope: false);
 
-	private async Task<AdmissionCrmLifecycleAutomationResultDto> RunCoreAsync(Guid academicYearId)
+	private async Task<AdmissionCrmLifecycleAutomationResultDto> RunCoreAsync(
+		Guid academicYearId,
+		bool enforceUserScope)
 	{
 		var tenantId = CurrentTenant.Id;
 		var leadQueryable = await _leadRepository.GetQueryableAsync();
-		var leads = await AsyncExecuter.ToListAsync(leadQueryable.Where(x =>
-			x.TenantId == tenantId && x.AcademicYearId == academicYearId));
+		var leadQuery = leadQueryable.Where(x =>
+			x.TenantId == tenantId && x.AcademicYearId == academicYearId);
+		if (enforceUserScope)
+		{
+			leadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(leadQuery);
+		}
+		var leads = await AsyncExecuter.ToListAsync(leadQuery);
+		var scopedLeadIds = leads.Select(x => x.Id).ToHashSet();
 		var activeLeadIds = leads
 			.Where(x => x.Stage is not AdmissionInquiryStage.Archived and not AdmissionInquiryStage.Rejected)
 			.Select(x => x.Id)
@@ -65,16 +73,24 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 
 		var registrationQueryable = await _registrationRepository.GetQueryableAsync();
 		var registrations = await AsyncExecuter.ToListAsync(registrationQueryable.Where(x =>
-			x.TenantId == tenantId && x.AcademicYearId == academicYearId));
+			x.TenantId == tenantId &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId)));
 		var documentQueryable = await _documentRepository.GetQueryableAsync();
 		var documents = await AsyncExecuter.ToListAsync(documentQueryable.Where(x =>
-			x.TenantId == tenantId && x.AcademicYearId == academicYearId));
+			x.TenantId == tenantId &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId)));
 		var checklistQueryable = await _checklistRepository.GetQueryableAsync();
 		var checklists = await AsyncExecuter.ToListAsync(checklistQueryable.Where(x =>
-			x.TenantId == tenantId && x.AcademicYearId == academicYearId));
+			x.TenantId == tenantId &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId)));
 		var examQueryable = await _examRepository.GetQueryableAsync();
 		var exams = await AsyncExecuter.ToListAsync(examQueryable.Where(x =>
-			x.TenantId == tenantId && x.AcademicYearId == academicYearId));
+			x.TenantId == tenantId &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId)));
 
 		var now = Clock.Now;
 		var expiringDocumentLeadIds =
@@ -130,9 +146,10 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 		{
 			foreach (var leadId in leadIds.Where(activeLeadIds.Contains))
 			{
-				var journey = await _leadAppService.RunJourneyRulesFromAutomationAsync(
-					academicYearId,
-					new RunAdmissionCrmJourneyRulesDto { Trigger = trigger, LeadId = leadId });
+				var input = new RunAdmissionCrmJourneyRulesDto { Trigger = trigger, LeadId = leadId };
+				var journey = enforceUserScope
+					? await _leadAppService.RunJourneyRulesAsync(academicYearId, input)
+					: await _leadAppService.RunJourneyRulesFromAutomationAsync(academicYearId, input);
 				result.CreatedTaskCount += journey.CreatedTaskCount;
 				result.SentMessageCount += journey.SentMessageCount;
 				triggeredLeadIds.Add(leadId);
@@ -141,7 +158,9 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 		}
 		result.TriggeredLeadCount = triggeredLeadIds.Count;
 		result.TriggerCounts = counts;
-		var expiry = await _finalAdmissionAppService.RunOfferExpiryFromAutomationAsync(academicYearId);
+		var expiry = enforceUserScope
+			? await _finalAdmissionAppService.RunOfferExpiryAsync(academicYearId)
+			: await _finalAdmissionAppService.RunOfferExpiryFromAutomationAsync(academicYearId);
 		result.ExpiredOfferCount = expiry.ExpiredCount;
 		result.OfferExpiryFailureCount = expiry.FailedCount;
 		return result;

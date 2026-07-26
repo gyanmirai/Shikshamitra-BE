@@ -18,6 +18,10 @@ public interface IAdmissionCrmRegistrationAppService : IApplicationService
 	Task<AdmissionCrmFormNumberSeriesDto> CreateFormNumberSeriesAsync(Guid academicYearId, AdmissionCrmFormNumberSeriesUpsertDto input);
 	Task<AdmissionCrmFormNumberSeriesDto> UpdateFormNumberSeriesAsync(Guid id, AdmissionCrmFormNumberSeriesUpsertDto input);
 	Task<AdmissionCrmRegistrationApplicationDto> IssueAsync(Guid leadId, IssueAdmissionCrmRegistrationApplicationDto input);
+	Task<AdmissionCrmRegistrationApplicationDto> IssueDirectAsync(
+		Guid leadId,
+		IssueAdmissionCrmRegistrationApplicationDto input);
+	Task EnsureStandardIssuanceEligibleAsync(Guid leadId, Guid? playbookId = null);
 	Task<bool> IssueApplicableFromAutomationAsync(Guid leadId, AdmissionInquiryStage stage);
 	Task<AdmissionCrmRegistrationApplicationDto> GetApplicationAsync(Guid id);
 	Task<AdmissionCrmRegistrationApplicationDto> GetCurrentApplicationByLeadAsync(Guid leadId);

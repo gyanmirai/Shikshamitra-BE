@@ -75,6 +75,17 @@ public class HRSeederContributor_Tests
 	}
 
 	[Fact]
+	public void Academic_Year_Wide_Test_Login_Scope_Should_Be_Limited_To_Enrollment_Principal()
+	{
+		var academicYearWideLogins = TestLoginSeederContributor.BuildAcademicYearWideScopeLoginEmails();
+
+		academicYearWideLogins.ShouldBe(["principal-gseb@ddvs.com"]);
+		academicYearWideLogins.ShouldNotContain("principal-cbse@ddvs.com");
+		academicYearWideLogins.ShouldNotContain("admissions-reception@ddvs.com");
+		academicYearWideLogins.ShouldNotContain("student-crm-denied@ddvs.com");
+	}
+
+	[Fact]
 	public void Seeded_Login_Employee_Profiles_Should_Be_Protected_From_Inactive_Distribution()
 	{
 		var protectedEmails = HRSeederContributor.BuildSeededLoginEmployeeEmails();

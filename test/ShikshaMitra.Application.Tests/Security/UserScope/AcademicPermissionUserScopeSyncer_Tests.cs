@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -38,6 +39,7 @@ public class AcademicPermissionUserScopeSyncer_Tests
 	private readonly IRepository<EducationMediumStage, Guid> _stageRepository;
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<Division, Guid> _divisionRepository;
+	private readonly IRepository<AcademicYearPermission, Guid> _academicYearPermissionRepository;
 	private readonly IRepository<EducationMediumStagePermission, Guid> _stagePermissionRepository;
 	private readonly IRepository<TenantSettings.AcademicSetups.Divisions.DivisionPermission, Guid> _divisionPermissionRepository;
 	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
@@ -60,11 +62,37 @@ public class AcademicPermissionUserScopeSyncer_Tests
 		_stageRepository = GetRequiredService<IRepository<EducationMediumStage, Guid>>();
 		_standardRepository = GetRequiredService<IRepository<Standard, Guid>>();
 		_divisionRepository = GetRequiredService<IRepository<Division, Guid>>();
+		_academicYearPermissionRepository = GetRequiredService<IRepository<AcademicYearPermission, Guid>>();
 		_stagePermissionRepository = GetRequiredService<IRepository<EducationMediumStagePermission, Guid>>();
 		_divisionPermissionRepository =
 			GetRequiredService<IRepository<TenantSettings.AcademicSetups.Divisions.DivisionPermission, Guid>>();
 		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
+	}
+
+	[Fact]
+	public async Task SyncAsync_Should_Create_Academic_Year_Wide_Scope_From_Academic_Year_Permission()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var user = await CreateUserAsync();
+			var hierarchy = await CreateAcademicHierarchyAsync();
+			await InsertAcademicYearPermissionAsync(user.Id, hierarchy.AcademicYearId);
+
+			var firstInserted = await WithUnitOfWorkAsync(() => _syncer.SyncAsync());
+			var secondInserted = await WithUnitOfWorkAsync(() => _syncer.SyncAsync());
+
+			firstInserted.ShouldBe(1);
+			secondInserted.ShouldBe(0);
+			var scope = (await _scopeRepository.GetListAsync(x => x.UserId == user.Id)).Single();
+			scope.AcademicYearId.ShouldBe(hierarchy.AcademicYearId);
+			scope.EducationBoardId.ShouldBeNull();
+			scope.EducationMediumId.ShouldBeNull();
+			scope.EducationMediumStageId.ShouldBeNull();
+			scope.StandardId.ShouldBeNull();
+			scope.DivisionId.ShouldBeNull();
+			scope.GrantsAllBoardsInAcademicYear().ShouldBeTrue();
+		}
 	}
 
 	[Fact]
@@ -212,6 +240,16 @@ public class AcademicPermissionUserScopeSyncer_Tests
 				stage.Id,
 				standard.Id,
 				division.Id);
+		});
+	}
+
+	private async Task InsertAcademicYearPermissionAsync(Guid userId, Guid academicYearId)
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			await _academicYearPermissionRepository.InsertManyAsync(
+				_permissionManager.CreateAcademicYearPermissions(userId, [academicYearId]),
+				autoSave: true);
 		});
 	}
 

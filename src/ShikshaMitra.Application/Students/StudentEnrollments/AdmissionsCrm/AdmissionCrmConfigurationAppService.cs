@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -26,7 +27,9 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 	private readonly IRepository<AdmissionCrmMessageTemplate, Guid> _messageTemplateRepository;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
+	private readonly IUserScopeAccessService _userScopeAccessService;
 	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
+	private readonly AdmissionCrmConfigurationSafetyAppService _configurationSafety;
 
 	public AdmissionCrmConfigurationAppService(
 		IRepository<AdmissionCrmCycleConfiguration, Guid> cycleRepository,
@@ -35,7 +38,9 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		IRepository<AdmissionCrmMessageTemplate, Guid> messageTemplateRepository,
 		IRepository<AcademicYear, Guid> academicYearRepository,
 		StudentScopeAccessService studentScopeAccessService,
-		AdmissionCrmStaffEligibilityService staffEligibilityService)
+		IUserScopeAccessService userScopeAccessService,
+		AdmissionCrmStaffEligibilityService staffEligibilityService,
+		AdmissionCrmConfigurationSafetyAppService configurationSafety)
 	{
 		_cycleRepository = cycleRepository;
 		_stageRepository = stageRepository;
@@ -43,7 +48,9 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		_messageTemplateRepository = messageTemplateRepository;
 		_academicYearRepository = academicYearRepository;
 		_studentScopeAccessService = studentScopeAccessService;
+		_userScopeAccessService = userScopeAccessService;
 		_staffEligibilityService = staffEligibilityService;
+		_configurationSafety = configurationSafety;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
@@ -57,6 +64,7 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 	public async Task<AdmissionCrmCycleConfigurationDto> UpdateSchoolDefaultCycleConfigurationAsync(
 		UpdateAdmissionCrmCycleConfigurationDto input)
 	{
+		await EnsureTenantWideMutationAccessAsync(nameof(UpdateSchoolDefaultCycleConfigurationAsync));
 		ValidateSlaPolicy(input.SlaPolicy);
 		await _staffEligibilityService.ValidateConfigurationStaffAsync(
 			input.LeadRoutingSettings,
@@ -101,15 +109,24 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmCycleConfigurationDto input)
 	{
 		ValidateSlaPolicy(input.SlaPolicy);
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+		await EnsureAcademicYearWideMutationAccessAsync(
 			academicYearId,
 			nameof(UpdateCycleConfigurationAsync));
+		await _configurationSafety.EnsureImpactFingerprintAsync(
+			academicYearId,
+			new PreviewAdmissionCrmConfigurationImpactDto
+			{
+				ProposedCycleConfiguration = input
+			},
+			input.ImpactPreviewFingerprint,
+			nameof(UpdateCycleConfigurationAsync));
+		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
+		EnsureJourneyStructureEditable(configuration);
 		await _staffEligibilityService.ValidateConfigurationStaffAsync(
 			input.LeadRoutingSettings,
 			input.ChannelSettings,
 			input.JourneyRules,
 			input.SlaPolicy);
-		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
 		configuration.Update(
 			input.CycleName,
 			input.IsActive,
@@ -169,6 +186,9 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		Guid academicYearId,
 		CreateAdmissionCrmPipelineStageDto input)
 	{
+		await EnsureAcademicYearWideMutationAccessAsync(
+			academicYearId,
+			nameof(CreatePipelineStageAsync));
 		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
 		EnsureJourneyStructureEditable(configuration);
 		await EnsureUniqueStageKeyAsync(academicYearId, input.StageKey, excludeId: null);
@@ -195,6 +215,18 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmPipelineStageDto input)
 	{
 		var stage = await GetStageForCurrentTenantAsync(stageId, nameof(UpdatePipelineStageAsync));
+		await EnsureAcademicYearWideMutationAccessAsync(
+			stage.AcademicYearId,
+			nameof(UpdatePipelineStageAsync));
+		await _configurationSafety.EnsureImpactFingerprintAsync(
+			stage.AcademicYearId,
+			new PreviewAdmissionCrmConfigurationImpactDto
+			{
+				PipelineStageId = stage.Id,
+				ProposedPipelineStage = input
+			},
+			input.ImpactPreviewFingerprint,
+			nameof(UpdatePipelineStageAsync));
 		var configuration = await EnsureCycleConfigurationAsync(stage.AcademicYearId);
 		if (configuration.JourneyLocked &&
 		    (input.StageName != stage.StageName ||
@@ -223,6 +255,7 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public async Task<AdmissionCrmCycleConfigurationDto> LockJourneyAsync(Guid academicYearId, AdmissionCrmJourneyLockDto input)
 	{
+		await EnsureAcademicYearWideMutationAccessAsync(academicYearId, nameof(LockJourneyAsync));
 		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
 		configuration.LockJourney(CurrentUser.Id, Clock.Now, input.Reason);
 		await _cycleRepository.UpdateAsync(configuration, autoSave: true);
@@ -236,6 +269,7 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		{
 			throw new BusinessException("AdmissionCrm:JourneyUnlockReasonRequired");
 		}
+		await EnsureAcademicYearWideMutationAccessAsync(academicYearId, nameof(UnlockJourneyAsync));
 		var configuration = await EnsureCycleConfigurationAsync(academicYearId);
 		configuration.UnlockJourney();
 		await _cycleRepository.UpdateAsync(configuration, autoSave: true);
@@ -247,7 +281,7 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		Guid academicYearId,
 		CreateAdmissionCrmFormTemplateDto input)
 	{
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+		await EnsureAcademicYearWideMutationAccessAsync(
 			academicYearId,
 			nameof(CreateFormTemplateAsync));
 		await EnsureTemplateNameIsUniqueAsync(academicYearId, input.TemplateName, excludeId: null);
@@ -263,8 +297,9 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 			input.IsPublic,
 			input.ConsentText,
 			input.PrivacyNoticeUrl,
-				fieldsJson,
-				JsonSerializer.Serialize(input.Localizations));
+			fieldsJson,
+			JsonSerializer.Serialize(input.Localizations),
+			input.IsActive);
 
 		await _formTemplateRepository.InsertAsync(template, autoSave: true);
 		return ToDto(template);
@@ -332,6 +367,9 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmFormTemplateDto input)
 	{
 		var template = await GetFormTemplateForCurrentTenantAsync(id, nameof(UpdateFormTemplateAsync));
+		await EnsureAcademicYearWideMutationAccessAsync(
+			template.AcademicYearId,
+			nameof(UpdateFormTemplateAsync));
 		await EnsureTemplateNameIsUniqueAsync(template.AcademicYearId, input.TemplateName, excludeId: template.Id);
 
 		template.Update(
@@ -354,6 +392,9 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmFormTemplateStatusDto input)
 	{
 		var template = await GetFormTemplateForCurrentTenantAsync(id, nameof(UpdateFormTemplateStatusAsync));
+		await EnsureAcademicYearWideMutationAccessAsync(
+			template.AcademicYearId,
+			nameof(UpdateFormTemplateStatusAsync));
 		if (input.IsActive)
 		{
 			template.Activate();
@@ -372,7 +413,7 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		Guid academicYearId,
 		CreateAdmissionCrmMessageTemplateDto input)
 	{
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+		await EnsureAcademicYearWideMutationAccessAsync(
 			academicYearId,
 			nameof(CreateMessageTemplateAsync));
 		await EnsureMessageTemplateNameIsUniqueAsync(
@@ -461,6 +502,9 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmMessageTemplateDto input)
 	{
 		var template = await GetMessageTemplateForCurrentTenantAsync(id, nameof(UpdateMessageTemplateAsync));
+		await EnsureAcademicYearWideMutationAccessAsync(
+			template.AcademicYearId,
+			nameof(UpdateMessageTemplateAsync));
 		await EnsureMessageTemplateNameIsUniqueAsync(
 			template.AcademicYearId,
 			input.Channel,
@@ -485,6 +529,9 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		UpdateAdmissionCrmMessageTemplateStatusDto input)
 	{
 		var template = await GetMessageTemplateForCurrentTenantAsync(id, nameof(UpdateMessageTemplateStatusAsync));
+		await EnsureAcademicYearWideMutationAccessAsync(
+			template.AcademicYearId,
+			nameof(UpdateMessageTemplateStatusAsync));
 		template.UpdateStatus(input.Status, input.IsActive);
 		await _messageTemplateRepository.UpdateAsync(template, autoSave: true);
 		return ToDto(template);
@@ -606,6 +653,30 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(stage.AcademicYearId, operation);
 		return stage;
+	}
+
+	private async Task EnsureAcademicYearWideMutationAccessAsync(
+		Guid academicYearId,
+		string operation)
+	{
+		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, operation);
+		if (!await _studentScopeAccessService.CurrentUserHasAcademicYearWideScopeAsync(academicYearId))
+		{
+			throw new BusinessException("AdmissionCrm:AcademicYearWideScopeRequired")
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("Operation", operation);
+		}
+	}
+
+	private async Task EnsureTenantWideMutationAccessAsync(string operation)
+	{
+		if (await _userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
+		{
+			return;
+		}
+
+		throw new BusinessException("AdmissionCrm:TenantWideScopeRequired")
+			.WithData("Operation", operation);
 	}
 
 	private async Task EnsureUniqueStageKeyAsync(Guid academicYearId, string stageKey, Guid? excludeId)

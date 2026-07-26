@@ -71,6 +71,86 @@ public class StudentScopeAccessService(
 			(s.AcademicBoardId.HasValue && scope.BoardIds.Contains(s.AcademicBoardId.Value)));
 	}
 
+	public async Task<IQueryable<AdmissionInquiryLead>> ApplyCurrentUserAdmissionLeadScopeAsync(
+		IQueryable<AdmissionInquiryLead> query)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+
+		if (scope.IsAdmin || scope.HasWildcardAcademicYear)
+		{
+			return query;
+		}
+
+		if (!scope.HasAnyAccess)
+		{
+			return query.Where(_ => false);
+		}
+
+		var academicYearWideIds = scope.WildcardBoardAcademicYearIds
+			.Distinct()
+			.ToList();
+		var scopedAcademicYearIds = scope.AcademicYearIds
+			.Concat(academicYearWideIds)
+			.Distinct()
+			.ToList();
+		var accessibleStandardIds = await GetAccessibleAdmissionLeadStandardIdsAsync(scope);
+
+		return query.Where(lead =>
+			academicYearWideIds.Contains(lead.AcademicYearId) ||
+			(scopedAcademicYearIds.Contains(lead.AcademicYearId) &&
+			 lead.TargetStandardId.HasValue &&
+			 accessibleStandardIds.Contains(lead.TargetStandardId.Value)));
+	}
+
+	public async Task EnsureCanAccessAdmissionLeadAsync(
+		AdmissionInquiryLead lead,
+		string operation)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		if (lead.TargetStandardId.HasValue)
+		{
+			var leadScope = await BuildStandardScopeAsync(lead.TargetStandardId.Value);
+			if (leadScope.AcademicYearId != lead.AcademicYearId)
+			{
+				throw CreateAdmissionLeadAccessDeniedException(lead, operation);
+			}
+
+			if (scope.IsAdmin ||
+			    scope.HasWildcardAcademicYear ||
+			    scope.WildcardBoardAcademicYearIds.Contains(lead.AcademicYearId))
+			{
+				return;
+			}
+
+			var accessibleStandardIds = await GetAccessibleAdmissionLeadStandardIdsAsync(scope);
+			if (accessibleStandardIds.Contains(lead.TargetStandardId.Value))
+			{
+				return;
+			}
+		}
+		else
+		{
+			// A lead without a target standard cannot be safely attributed below
+			// academic-year scope, so only academic-year-wide or tenant-wide users pass.
+			if (scope.IsAdmin ||
+			    scope.HasWildcardAcademicYear ||
+			    scope.WildcardBoardAcademicYearIds.Contains(lead.AcademicYearId))
+			{
+				return;
+			}
+		}
+
+		throw CreateAdmissionLeadAccessDeniedException(lead, operation);
+	}
+
+	public async Task<bool> CurrentUserHasAcademicYearWideScopeAsync(Guid academicYearId)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		return scope.IsAdmin ||
+		       scope.HasWildcardAcademicYear ||
+		       scope.WildcardBoardAcademicYearIds.Contains(academicYearId);
+	}
+
 	public async Task<IQueryable<AttendanceDay>> ApplyCurrentUserAttendanceDayScopeAsync(IQueryable<AttendanceDay> query)
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
@@ -288,6 +368,51 @@ public class StudentScopeAccessService(
 		userScopeAccessService.EnsureCanAccess(divisionScope, scope, operation: operation);
 	}
 
+	public async Task<IQueryable<Division>> ApplyCurrentUserDivisionScopeAsync(
+		IQueryable<Division> query,
+		Guid academicYearId)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		var standards = await standardRepository.GetQueryableAsync();
+		var mediumStages = await educationMediumStageRepository.GetQueryableAsync();
+		var mediums = await educationMediumRepository.GetQueryableAsync();
+		var boards = await educationBoardRepository.GetQueryableAsync();
+
+		var hierarchyQuery =
+			from division in query
+			join standard in standards on division.StandardId equals standard.Id
+			join stage in mediumStages on standard.EducationMediumStageId equals stage.Id
+			join medium in mediums on stage.EducationMediumId equals medium.Id
+			join board in boards on medium.EducationBoardId equals board.Id
+			where board.AcademicYearId == academicYearId
+			select new { Division = division, Standard = standard, Stage = stage, Medium = medium, Board = board };
+
+		if (scope.IsAdmin ||
+		    scope.HasWildcardAcademicYear ||
+		    scope.WildcardBoardAcademicYearIds.Contains(academicYearId))
+		{
+			return hierarchyQuery.Select(x => x.Division);
+		}
+
+		if (!CanAccessAcademicYear(scope, academicYearId))
+		{
+			return query.Where(_ => false);
+		}
+
+		return hierarchyQuery
+			.Where(x =>
+				scope.DivisionIds.Contains(x.Division.Id) ||
+				(scope.HasWildcardDivision &&
+				 scope.WildcardDivisionStandardIds.Contains(x.Standard.Id)) ||
+				(scope.HasWildcardStandard &&
+				 scope.WildcardStandardMediumStageIds.Contains(x.Stage.Id)) ||
+				(scope.HasWildcardMediumStage &&
+				 scope.WildcardMediumStageMediumIds.Contains(x.Medium.Id)) ||
+				(scope.HasWildcardMedium &&
+				 scope.WildcardMediumBoardIds.Contains(x.Board.Id)))
+			.Select(x => x.Division);
+	}
+
 	public async Task EnsureCanAccessAttendanceScopeAsync(
 		Guid academicYearId,
 		Guid standardId,
@@ -346,6 +471,50 @@ public class StudentScopeAccessService(
 			stage.Id,
 			standard.Id,
 			null);
+	}
+
+	private async Task<List<Guid>> GetAccessibleAdmissionLeadStandardIdsAsync(UserScopeContext scope)
+	{
+		var standards = await standardRepository.GetQueryableAsync();
+		var mediumStages = await educationMediumStageRepository.GetQueryableAsync();
+		var mediums = await educationMediumRepository.GetQueryableAsync();
+		var boards = await educationBoardRepository.GetQueryableAsync();
+		var scopedAcademicYearIds = scope.AcademicYearIds
+			.Concat(scope.WildcardBoardAcademicYearIds)
+			.Distinct()
+			.ToList();
+
+		var query =
+			from standard in standards
+			join stage in mediumStages on standard.EducationMediumStageId equals stage.Id
+			join medium in mediums on stage.EducationMediumId equals medium.Id
+			join board in boards on medium.EducationBoardId equals board.Id
+			where scopedAcademicYearIds.Contains(board.AcademicYearId) &&
+			      (scope.WildcardBoardAcademicYearIds.Contains(board.AcademicYearId) ||
+			       scope.WildcardMediumBoardIds.Contains(board.Id) ||
+			       scope.WildcardMediumStageMediumIds.Contains(medium.Id) ||
+			       scope.WildcardStandardMediumStageIds.Contains(stage.Id) ||
+			       scope.WildcardDivisionStandardIds.Contains(standard.Id))
+			select standard.Id;
+
+		return await AsyncExecuter.ToListAsync(query.Distinct());
+	}
+
+	private static BusinessException CreateAdmissionLeadAccessDeniedException(
+		AdmissionInquiryLead lead,
+		string operation)
+	{
+		var exception = new BusinessException(UserScopeErrorCodes.AccessDenied)
+			.WithData("LeadId", lead.Id)
+			.WithData("AcademicYearId", lead.AcademicYearId)
+			.WithData("Operation", operation);
+
+		if (lead.TargetStandardId.HasValue)
+		{
+			exception.WithData("TargetStandardId", lead.TargetStandardId.Value);
+		}
+
+		return exception;
 	}
 
 	private async Task<AcademicOrganizationScopeRow> BuildMediumScopeAsync(Guid mediumId)

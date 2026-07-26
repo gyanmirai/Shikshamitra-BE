@@ -45,6 +45,23 @@ public class AdmissionCrmSeederContributor_Tests
 	}
 
 	[Fact]
+	public void Default_Registration_Template_Should_Use_Semantic_Field_Types()
+	{
+		using var document = JsonDocument.Parse(AdmissionCrmSeederContributor.DefaultRegistrationSectionsJson());
+		var fieldTypes = document.RootElement
+			.EnumerateArray()
+			.SelectMany(section => section.GetProperty("fields").EnumerateArray())
+			.ToDictionary(
+				field => field.GetProperty("key").GetString()!,
+				field => (AdmissionCrmFormFieldType)field.GetProperty("fieldType").GetInt32());
+
+		fieldTypes["firstName"].ShouldBe(AdmissionCrmFormFieldType.Text);
+		fieldTypes["dateOfBirth"].ShouldBe(AdmissionCrmFormFieldType.Date);
+		fieldTypes["parentName"].ShouldBe(AdmissionCrmFormFieldType.Text);
+		fieldTypes["phone"].ShouldBe(AdmissionCrmFormFieldType.Phone);
+	}
+
+	[Fact]
 	public void Default_Route_Catalog_Should_Cover_Routine_Quick_Inquiry_Pathways()
 	{
 		var routes = AdmissionCrmSeederContributor.DefaultRouteSpecs();

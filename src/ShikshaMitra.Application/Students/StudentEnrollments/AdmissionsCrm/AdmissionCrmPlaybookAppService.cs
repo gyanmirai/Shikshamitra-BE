@@ -51,7 +51,9 @@ public class AdmissionCrmPlaybookAppService : ApplicationService, IAdmissionCrmP
 		Guid academicYearId,
 		CreateAdmissionCrmPlaybookDto input)
 	{
-		await EnsureAcademicYearAccessAsync(academicYearId, nameof(CreateAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(CreateAsync));
 		NormalizeAndValidate(input);
 
 		var playbook = CreateAggregate(academicYearId, 1, input);
@@ -105,6 +107,9 @@ public class AdmissionCrmPlaybookAppService : ApplicationService, IAdmissionCrmP
 		UpdateAdmissionCrmPlaybookDto input)
 	{
 		var playbook = await GetForCurrentTenantAsync(id, nameof(UpdateAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			playbook.AcademicYearId,
+			nameof(UpdateAsync));
 		NormalizeAndValidate(input);
 		ApplyUpdate(playbook, input);
 		await _playbookRepository.UpdateAsync(playbook, autoSave: true);
@@ -115,6 +120,9 @@ public class AdmissionCrmPlaybookAppService : ApplicationService, IAdmissionCrmP
 	public async Task<AdmissionCrmPlaybookDto> PublishAsync(Guid id)
 	{
 		var playbook = await GetForCurrentTenantAsync(id, nameof(PublishAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			playbook.AcademicYearId,
+			nameof(PublishAsync));
 		var validationInput = ToUpsertDto(playbook);
 		NormalizeAndValidate(validationInput);
 		await EnsureNoPublishedConflictAsync(playbook, validationInput.Applicability);
@@ -127,6 +135,9 @@ public class AdmissionCrmPlaybookAppService : ApplicationService, IAdmissionCrmP
 	public async Task<AdmissionCrmPlaybookDto> CreateNewVersionAsync(Guid id)
 	{
 		var source = await GetForCurrentTenantAsync(id, nameof(CreateNewVersionAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			source.AcademicYearId,
+			nameof(CreateNewVersionAsync));
 		if (source.Status == AdmissionCrmPlaybookStatus.Draft)
 		{
 			throw new BusinessException("AdmissionCrm:DraftPlaybookAlreadyEditable")
@@ -164,6 +175,9 @@ public class AdmissionCrmPlaybookAppService : ApplicationService, IAdmissionCrmP
 	public async Task<AdmissionCrmPlaybookDto> RetireAsync(Guid id)
 	{
 		var playbook = await GetForCurrentTenantAsync(id, nameof(RetireAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			playbook.AcademicYearId,
+			nameof(RetireAsync));
 		playbook.Retire(Clock.Now);
 		await _playbookRepository.UpdateAsync(playbook, autoSave: true);
 		return ToDto(playbook);
@@ -227,6 +241,9 @@ public class AdmissionCrmPlaybookAppService : ApplicationService, IAdmissionCrmP
 		GenerateAdmissionCrmPlaybookSlotsDto input)
 	{
 		var playbook = await GetForCurrentTenantAsync(id, nameof(GenerateSlotsAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			playbook.AcademicYearId,
+			nameof(GenerateSlotsAsync));
 		EnsurePublished(playbook);
 		var fromDate = input.FromDate.Date;
 		var toDate = input.ToDate.Date;

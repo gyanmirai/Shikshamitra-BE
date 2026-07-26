@@ -1,14 +1,20 @@
 using System;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
@@ -103,6 +109,123 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Allow_Year_Wide_Placement_For_Legacy_Lead_Without_Target_Standard()
+	{
+		var placementResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/activation/placement-options");
+		placementResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await placementResponse.Content.ReadAsStringAsync());
+		var placement = (await placementResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmPlacementOptionDto[]>(JsonOptions))!.First();
+		var lead = await CreateLeadAsync(
+			$"legacy-activation-{Guid.NewGuid():N}@example.test",
+			placement.StandardName,
+			standardId: null);
+
+		var previewResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/activation/preview",
+			new PreviewAdmissionCrmActivationDto
+			{
+				EducationBoardId = placement.EducationBoardId,
+				AcademicMediumId = placement.AcademicMediumId,
+				AcademicMediumStageId = placement.AcademicMediumStageId,
+				StandardId = placement.StandardId,
+				DivisionId = placement.DivisionId,
+				GrNumberSeriesId = Guid.NewGuid()
+			},
+			JsonOptions);
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await previewResponse.Content.ReadAsStringAsync());
+		var preview = (await previewResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmActivationPreviewDto>(JsonOptions))!;
+		var placementCheck = preview.Items.Single(item => item.Key == "placement");
+		placementCheck.Status.ShouldBe(AdmissionCrmActivationStepStatus.Completed);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Scope_Placement_Options_And_Reject_Sibling_Standard_For_Request_And_Execute()
+	{
+		var placementResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/activation/placement-options");
+		placementResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await placementResponse.Content.ReadAsStringAsync());
+		var allowedPlacement = (await placementResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmPlacementOptionDto[]>(JsonOptions))!.First();
+		var siblingPlacement = await CreateSiblingPlacementAsync(allowedPlacement);
+
+		using var scopedClient = await CreateStandardScopedClientAsync(
+			allowedPlacement.StandardId,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewActivation,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.RequestActivation,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation);
+		var scopedOptionsResponse = await scopedClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/activation/placement-options");
+		scopedOptionsResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await scopedOptionsResponse.Content.ReadAsStringAsync());
+		var scopedOptions = (await scopedOptionsResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmPlacementOptionDto[]>(JsonOptions))!;
+		scopedOptions.ShouldNotBeEmpty();
+		scopedOptions.ShouldAllBe(option => option.StandardId == allowedPlacement.StandardId);
+		scopedOptions.ShouldNotContain(option =>
+			option.StandardId == siblingPlacement.StandardId ||
+			option.DivisionId == siblingPlacement.DivisionId);
+
+		var lead = await CreateLeadAsync(
+			$"activation-scope-{Guid.NewGuid():N}@example.test",
+			allowedPlacement.StandardName,
+			allowedPlacement.StandardId);
+		var siblingInput = new RequestAdmissionCrmActivationDto
+		{
+			EducationBoardId = siblingPlacement.EducationBoardId,
+			AcademicMediumId = siblingPlacement.AcademicMediumId,
+			AcademicMediumStageId = siblingPlacement.AcademicMediumStageId,
+			StandardId = siblingPlacement.StandardId,
+			DivisionId = siblingPlacement.DivisionId,
+			GrNumberSeriesId = Guid.NewGuid(),
+			Gender = GenderEnum.Female,
+			RequireStudentAccount = false,
+			RequireGuardianAccount = false
+		};
+
+		var mismatchPreviewResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/activation/preview",
+			siblingInput,
+			JsonOptions);
+		mismatchPreviewResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await mismatchPreviewResponse.Content.ReadAsStringAsync());
+		var mismatchPreview = (await mismatchPreviewResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmActivationPreviewDto>(JsonOptions))!;
+		var placementCheck = mismatchPreview.Items.Single(item => item.Key == "placement");
+		placementCheck.Status.ShouldBe(AdmissionCrmActivationStepStatus.Failed);
+		placementCheck.Detail.ShouldContain("must match the applicant's target standard");
+
+		var mismatchRequestResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/activation",
+			siblingInput,
+			JsonOptions);
+		var mismatchRequestBody = await mismatchRequestResponse.Content.ReadAsStringAsync();
+		mismatchRequestResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest, mismatchRequestBody);
+		mismatchRequestBody.ShouldContain("AdmissionCrm:ActivationReadinessFailed");
+		mismatchRequestBody.ShouldContain("placement");
+		await AssertNoActivationAsync(lead.Id);
+
+		var scopedRequestResponse = await scopedClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/activation",
+			siblingInput,
+			JsonOptions);
+		await ShouldBeScopeDeniedAsync(scopedRequestResponse);
+		await AssertNoActivationAsync(lead.Id);
+
+		var tamperedActivationId = await InsertTamperedActivationAsync(lead.Id, siblingInput);
+		var scopedExecuteResponse = await scopedClient.PostAsync(
+			$"/api/student-enrollment/admissions-crm/activation/{tamperedActivationId}/execute",
+			null);
+		await ShouldBeScopeDeniedAsync(scopedExecuteResponse);
+		await AssertActivationUnchangedAsync(tamperedActivationId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Preview_Activate_And_Return_Idempotent_First_Day_Ready_Student()
 	{
 		var placementResponse = await Client.GetAsync($"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/activation/placement-options");
@@ -125,7 +248,7 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 
 		// Reuse the seeded identity so this API test validates account linking without invoking an external email provider.
 		var email = TestAuthHandler.TestEmail;
-		var lead = await CreateLeadAsync(email, placement.StandardName);
+		var lead = await CreateLeadAsync(email, placement.StandardName, placement.StandardId);
 		var decisionResponse = await Client.PutAsJsonAsync($"/api/student-enrollment/admissions-crm/leads/{lead.Id}/final-admission/decision",
 			new RecordAdmissionCrmAdmissionDecisionDto
 			{
@@ -221,6 +344,25 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 		var quotation = (await quotationResponse.Content.ReadFromJsonAsync<AdmissionCrmAdmissionQuotationDto>(JsonOptions))!;
 
 		await ApproveActivationAsDifferentUserAsync(activation.Id);
+		using var repairOnlyClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.RepairActivation);
+		var repairPermissionCannotExecuteResponse = await repairOnlyClient.PostAsync(
+			$"/api/student-enrollment/admissions-crm/activation/{activation.Id}/execute",
+			null);
+		repairPermissionCannotExecuteResponse.StatusCode.ShouldBe(
+			HttpStatusCode.Forbidden,
+			await repairPermissionCannotExecuteResponse.Content.ReadAsStringAsync());
+
+		await MarkActivationRepairRequiredAsync(activation.Id);
+		using var executeOnlyClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation);
+		var executePermissionCannotRepairResponse = await executeOnlyClient.PostAsync(
+			$"/api/student-enrollment/admissions-crm/activation/{activation.Id}/execute",
+			null);
+		executePermissionCannotRepairResponse.StatusCode.ShouldBe(
+			HttpStatusCode.Forbidden,
+			await executePermissionCannotRepairResponse.Content.ReadAsStringAsync());
+
 		var blockedExecute = await Client.PostAsync(
 			$"/api/student-enrollment/admissions-crm/activation/{activation.Id}/execute",
 			null);
@@ -288,6 +430,204 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 		cancelled.CancelledAt.ShouldNotBeNull();
 		cancelled.Identifiers.ShouldHaveSingleItem().Status.ShouldBe(AdmissionCrmIdentifierStatus.Void);
 		(await GetStudentStatusAsync(cancelled.StudentId!.Value)).ShouldBe(StudentLifeCycleStatusEnum.InActive);
+	}
+
+	private async Task<AdmissionCrmPlacementOptionDto> CreateSiblingPlacementAsync(
+		AdmissionCrmPlacementOptionDto reference)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var standardManager = scope.ServiceProvider.GetRequiredService<StandardManager>();
+		var divisionManager = scope.ServiceProvider.GetRequiredService<DivisionManager>();
+		var standardRepository = scope.ServiceProvider.GetRequiredService<IRepository<Standard, Guid>>();
+		var divisionRepository = scope.ServiceProvider.GetRequiredService<IRepository<Division, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (tenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var suffix = Guid.NewGuid().ToString("N")[..8];
+			var standard = await standardManager.CreateAsync(
+				reference.AcademicMediumStageId,
+				$"Sibling {suffix}",
+				7,
+				shiftId: null);
+			await standardRepository.InsertAsync(standard, autoSave: false);
+			var division = await divisionManager.CreateAsync(
+				standard.Id,
+				$"Scope {suffix}",
+				30,
+				$"S-{suffix[..4]}");
+			await divisionRepository.InsertAsync(division, autoSave: false);
+			await uow.CompleteAsync();
+
+			return new AdmissionCrmPlacementOptionDto
+			{
+				EducationBoardId = reference.EducationBoardId,
+				BoardName = reference.BoardName,
+				AcademicMediumId = reference.AcademicMediumId,
+				MediumName = reference.MediumName,
+				AcademicMediumStageId = reference.AcademicMediumStageId,
+				StageName = reference.StageName,
+				StandardId = standard.Id,
+				StandardName = standard.Name,
+				DivisionId = division.Id,
+				DivisionName = division.Name,
+				DivisionStrength = division.Strength
+			};
+		}
+	}
+
+	private async Task<HttpClient> CreateStandardScopedClientAsync(
+		Guid standardId,
+		params string[] permissions)
+	{
+		var userId = Guid.NewGuid();
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var scopeRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		var userScopeService = scope.ServiceProvider.GetRequiredService<IUserScopeService>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (tenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await scopeRepository.InsertAsync(
+				new UserScopeAssignment(
+					Guid.NewGuid(),
+					tenantId,
+					userId: userId,
+					academicYearId: Factory.SeededAcademicYearId,
+					standardId: standardId,
+					description: "Admissions activation standard-only scope regression."),
+				autoSave: false);
+			await userScopeService.InvalidateUserScopeCacheAsync(userId);
+			await uow.CompleteAsync();
+		}
+
+		var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestTenantIdHeader, TestAuthHandler.TestTenantId);
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, userId.ToString("D"));
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "teacher");
+		client.DefaultRequestHeaders.Add(
+			AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			permissions.Length == 0 ? "__none__" : string.Join(",", permissions));
+		return client;
+	}
+
+	private async Task AssertNoActivationAsync(Guid leadId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmActivation, Guid>>();
+		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var queryable = await repository.GetQueryableAsync();
+			(await queryable.AnyAsync(entity => entity.LeadId == leadId)).ShouldBeFalse();
+			await uow.CompleteAsync();
+		}
+	}
+
+	private static async Task ShouldBeScopeDeniedAsync(HttpResponseMessage response)
+	{
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBeOneOf(
+			new[] { HttpStatusCode.BadRequest, HttpStatusCode.Forbidden },
+			body);
+		body.ShouldContain("UserScope:AccessDenied");
+	}
+
+	private async Task<Guid> InsertTamperedActivationAsync(
+		Guid leadId,
+		RequestAdmissionCrmActivationDto input)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmActivation, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (tenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var id = Guid.NewGuid();
+			await repository.InsertAsync(
+				new AdmissionCrmActivation(
+					id,
+					tenantId,
+					Factory.SeededAcademicYearId,
+					leadId,
+					$"ACT-TAMPER-{Guid.NewGuid():N}"[..32],
+					input.EducationBoardId,
+					input.AcademicMediumId,
+					input.AcademicMediumStageId,
+					input.StandardId,
+					input.DivisionId,
+					input.GrNumberSeriesId,
+					input.RollNumber,
+					input.Gender,
+					"{}",
+					"[]",
+					requireStudentAccount: false,
+					requireGuardianAccount: false,
+					requestedByUserId: Guid.NewGuid(),
+					requestedAt: DateTime.UtcNow),
+				autoSave: false);
+			await uow.CompleteAsync();
+			return id;
+		}
+	}
+
+	private async Task AssertActivationUnchangedAsync(Guid activationId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmActivation, Guid>>();
+		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var activation = await repository.GetAsync(activationId);
+			activation.Status.ShouldBe(AdmissionCrmActivationStatus.ApprovalPending);
+			activation.AttemptCount.ShouldBe(0);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task MarkActivationRepairRequiredAsync(Guid activationId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmActivation, Guid>>();
+		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var activation = await repository.GetAsync(activationId);
+			activation.RequireRepair(
+				"permission-gate",
+				"Controlled repair state used to verify the dedicated repair permission.");
+			await repository.UpdateAsync(activation);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private HttpClient CreateClientWithCrmPermissions(params string[] permissions)
+	{
+		var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(
+			TestAuthHandler.TestTenantIdHeader,
+			TestAuthHandler.TestTenantId);
+		client.DefaultRequestHeaders.Add(
+			AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			permissions.Length == 0 ? "__none__" : string.Join(",", permissions));
+		return client;
 	}
 
 	private async Task PublishSeriesAsDifferentMakerAsync(Guid id)
@@ -493,14 +833,18 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	private async Task<AdmissionCrmLeadDto> CreateLeadAsync(string email, string standardName)
+	private async Task<AdmissionCrmLeadDto> CreateLeadAsync(
+		string email,
+		string standardName,
+		Guid? standardId)
 	{
 		var response = await Client.PostAsJsonAsync($"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
 			new CreateAdmissionCrmLeadDto
 			{
 				AdmissionIntent = "Final activation", DesiredClassName = standardName, DateOfBirth = DateTimeOffset.UtcNow.AddYears(-7),
 				PrimaryContactNo = "9" + Random.Shared.NextInt64(100000000, 999999999), Email = email,
-				Channel = AdmissionInquiryChannel.QuickCallEntry, FirstName = "Activate" + Guid.NewGuid().ToString("N")[..6], LastName = "Student"
+				Channel = AdmissionInquiryChannel.QuickCallEntry, FirstName = "Activate" + Guid.NewGuid().ToString("N")[..6], LastName = "Student",
+				TargetStandardId = standardId
 			}, JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		return (await response.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions))!;

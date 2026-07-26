@@ -41,7 +41,9 @@ public class AdmissionCrmFinancialReadinessAppService : ApplicationService, IAdm
 	public async Task<AdmissionCrmFeePolicyDto> CreateFeePolicyAsync(
 		Guid academicYearId, CreateAdmissionCrmFeePolicyDto input)
 	{
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(CreateFeePolicyAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(CreateFeePolicyAsync));
 		ValidateComponents(input.Components);
 		var normalizedCode = input.Code.Trim().ToUpperInvariant();
 		var queryable = await _policyRepository.GetQueryableAsync();
@@ -87,6 +89,9 @@ public class AdmissionCrmFinancialReadinessAppService : ApplicationService, IAdm
 	public async Task<AdmissionCrmFeePolicyDto> SubmitFeePolicyAsync(Guid id)
 	{
 		var policy = await GetPolicyAsync(id, nameof(SubmitFeePolicyAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			policy.AcademicYearId,
+			nameof(SubmitFeePolicyAsync));
 		policy.Submit(GetCurrentUserId(), Clock.Now);
 		await _policyRepository.UpdateAsync(policy, autoSave: true);
 		return MapPolicy(policy);
@@ -96,6 +101,9 @@ public class AdmissionCrmFinancialReadinessAppService : ApplicationService, IAdm
 	public async Task<AdmissionCrmFeePolicyDto> ApproveFeePolicyAsync(Guid id)
 	{
 		var policy = await GetPolicyAsync(id, nameof(ApproveFeePolicyAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			policy.AcademicYearId,
+			nameof(ApproveFeePolicyAsync));
 		policy.Approve(GetCurrentUserId(), Clock.Now);
 		await _policyRepository.UpdateAsync(policy, autoSave: true);
 		return MapPolicy(policy);
@@ -105,6 +113,9 @@ public class AdmissionCrmFinancialReadinessAppService : ApplicationService, IAdm
 	public async Task<AdmissionCrmFeePolicyDto> PublishFeePolicyAsync(Guid id)
 	{
 		var policy = await GetPolicyAsync(id, nameof(PublishFeePolicyAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			policy.AcademicYearId,
+			nameof(PublishFeePolicyAsync));
 		policy.Publish(Clock.Now);
 		await _policyRepository.UpdateAsync(policy, autoSave: true);
 		return MapPolicy(policy);
@@ -273,7 +284,7 @@ public class AdmissionCrmFinancialReadinessAppService : ApplicationService, IAdm
 		{
 			throw new BusinessException("AdmissionCrm:LeadNotFound");
 		}
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return lead;
 	}
 
@@ -295,7 +306,8 @@ public class AdmissionCrmFinancialReadinessAppService : ApplicationService, IAdm
 		{
 			throw new BusinessException("AdmissionCrm:QuotationNotFound");
 		}
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(quotation.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(quotation.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return quotation;
 	}
 
@@ -306,7 +318,8 @@ public class AdmissionCrmFinancialReadinessAppService : ApplicationService, IAdm
 		{
 			throw new BusinessException("AdmissionCrm:ConcessionNotFound");
 		}
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(request.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(request.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return request;
 	}
 

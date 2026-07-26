@@ -72,7 +72,9 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageSeatPlans)]
 	public async Task<AdmissionCrmSeatPoolDto> CreateSeatPoolAsync(Guid academicYearId, UpsertAdmissionCrmSeatPoolDto input)
 	{
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(CreateSeatPoolAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(CreateSeatPoolAsync));
 		var poolQueryable = await _seatPoolRepository.GetQueryableAsync();
 		if (await AsyncExecuter.AnyAsync(poolQueryable.Where(x =>
 			x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId && x.Code == input.Code.Trim())))
@@ -100,6 +102,9 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 	public async Task<AdmissionCrmSeatPoolDto> UpdateSeatPoolAsync(Guid id, UpsertAdmissionCrmSeatPoolDto input)
 	{
 		var pool = await GetSeatPoolEntityAsync(id, nameof(UpdateSeatPoolAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			pool.AcademicYearId,
+			nameof(UpdateSeatPoolAsync));
 		if (!string.IsNullOrWhiteSpace(input.ConcurrencyStamp) &&
 			!string.Equals(pool.ConcurrencyStamp, input.ConcurrencyStamp, StringComparison.Ordinal))
 		{
@@ -230,8 +235,17 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 		Guid academicYearId, GetAdmissionCrmSeatOfferListInput input)
 	{
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(GetOffersAsync));
+		var leadQueryable = await _leadRepository.GetQueryableAsync();
+		var scopedLeadQuery = leadQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId);
+		scopedLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(scopedLeadQuery);
+		var scopedLeadIds = scopedLeadQuery.Select(x => x.Id);
 		var queryable = await _offerRepository.GetQueryableAsync();
-		var query = queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId);
+		var query = queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId));
 		if (input.LeadId.HasValue)
 		{
 			query = query.Where(x => x.LeadId == input.LeadId.Value);
@@ -442,19 +456,32 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 	public async Task<AdmissionCrmOfferExpiryRunResultDto> RunOfferExpiryAsync(Guid academicYearId)
 	{
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(RunOfferExpiryAsync));
-		return await RunOfferExpiryCoreAsync(academicYearId);
+		return await RunOfferExpiryCoreAsync(academicYearId, enforceUserScope: true);
 	}
 
 	public Task<AdmissionCrmOfferExpiryRunResultDto> RunOfferExpiryFromAutomationAsync(Guid academicYearId) =>
-		RunOfferExpiryCoreAsync(academicYearId);
+		RunOfferExpiryCoreAsync(academicYearId, enforceUserScope: false);
 
-	private async Task<AdmissionCrmOfferExpiryRunResultDto> RunOfferExpiryCoreAsync(Guid academicYearId)
+	private async Task<AdmissionCrmOfferExpiryRunResultDto> RunOfferExpiryCoreAsync(
+		Guid academicYearId,
+		bool enforceUserScope)
 	{
 		var queryable = await _offerRepository.GetQueryableAsync();
-		var overdue = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id &&
+		var overdueQuery = queryable.Where(x => x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId &&
 			(x.Status == AdmissionCrmSeatOfferStatus.Issued || x.Status == AdmissionCrmSeatOfferStatus.Opened) &&
-			x.ValidUntil <= Clock.Now));
+			x.ValidUntil <= Clock.Now);
+		if (enforceUserScope)
+		{
+			var leadQueryable = await _leadRepository.GetQueryableAsync();
+			var scopedLeadQuery = leadQueryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.AcademicYearId == academicYearId);
+			scopedLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(scopedLeadQuery);
+			var scopedLeadIds = scopedLeadQuery.Select(x => x.Id);
+			overdueQuery = overdueQuery.Where(x => scopedLeadIds.Contains(x.LeadId));
+		}
+		var overdue = await AsyncExecuter.ToListAsync(overdueQuery);
 		var failed = new List<Guid>();
 		var expired = 0;
 		foreach (var offer in overdue)
@@ -532,9 +559,16 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 	public async Task<IReadOnlyList<AdmissionCrmWaitlistEntryDto>> GetWaitlistAsync(Guid seatPoolId)
 	{
 		await GetSeatPoolEntityAsync(seatPoolId, nameof(GetWaitlistAsync));
+		var leadQueryable = await _leadRepository.GetQueryableAsync();
+		var scopedLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(
+			leadQueryable.Where(x => x.TenantId == CurrentTenant.Id));
+		var scopedLeadIds = scopedLeadQuery.Select(x => x.Id);
 		var queryable = await _waitlistRepository.GetQueryableAsync();
 		var entries = await AsyncExecuter.ToListAsync(queryable
-			.Where(x => x.TenantId == CurrentTenant.Id && x.SeatPoolId == seatPoolId)
+			.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.SeatPoolId == seatPoolId &&
+				scopedLeadIds.Contains(x.LeadId))
 			.OrderBy(x => x.Status == AdmissionCrmWaitlistStatus.Active ? 0 : 1)
 			.ThenByDescending(x => x.PriorityScore)
 			.ThenBy(x => x.PositionSequence));
@@ -651,9 +685,18 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 		var pool = await GetSeatPoolEntityAsync(input.SeatPoolId, nameof(RunWaitlistPromotionAsync));
 		if (pool.AcademicYearId != academicYearId || input.Offer.SeatPoolId != pool.Id)
 			throw new BusinessException("AdmissionCrm:WaitlistSeatPoolMismatch");
+		var leadQueryable = await _leadRepository.GetQueryableAsync();
+		var scopedLeadQuery = leadQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId);
+		scopedLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(scopedLeadQuery);
+		var scopedLeadIds = await AsyncExecuter.ToListAsync(scopedLeadQuery.Select(x => x.Id));
 		var queryable = await _waitlistRepository.GetQueryableAsync();
 		var entries = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id &&
-			x.SeatPoolId == pool.Id && x.Status == AdmissionCrmWaitlistStatus.Active && !x.PromotionPaused));
+			x.SeatPoolId == pool.Id &&
+			scopedLeadIds.Contains(x.LeadId) &&
+			x.Status == AdmissionCrmWaitlistStatus.Active &&
+			!x.PromotionPaused));
 		var offerQueryable = await _offerRepository.GetQueryableAsync();
 		var openLeadIds = (await AsyncExecuter.ToListAsync(offerQueryable.Where(x => x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId && OpenOfferStatuses.Contains(x.Status)))).Select(x => x.LeadId).ToHashSet();
@@ -908,7 +951,7 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 		{
 			throw new BusinessException("AdmissionCrm:LeadNotFound");
 		}
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return lead;
 	}
 
@@ -934,7 +977,8 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 		{
 			throw new BusinessException("AdmissionCrm:SeatOfferNotFound");
 		}
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(offer.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(offer.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return offer;
 	}
 
@@ -955,7 +999,8 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 		{
 			throw new BusinessException("AdmissionCrm:WaitlistEntryNotFound");
 		}
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(entry.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(entry.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return entry;
 	}
 
@@ -1029,6 +1074,8 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 
 	private async Task<AdmissionCrmSeatOfferDto> MapOfferAsync(AdmissionCrmSeatOffer offer)
 	{
+		var lead = await _leadRepository.GetAsync(offer.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, nameof(MapOfferAsync));
 		AdmissionCrmSeatReservationDto? reservationDto = null;
 		if (offer.ReservationId.HasValue)
 		{
@@ -1086,7 +1133,8 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 	private async Task<AdmissionCrmWaitlistEntryDto> MapWaitlistEntryAsync(
 		AdmissionCrmWaitlistEntry entry, int currentPosition)
 	{
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(entry.AcademicYearId, nameof(MapWaitlistEntryAsync));
+		var lead = await _leadRepository.GetAsync(entry.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, nameof(MapWaitlistEntryAsync));
 		return new AdmissionCrmWaitlistEntryDto
 		{
 			Id = entry.Id,

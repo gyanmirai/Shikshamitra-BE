@@ -108,7 +108,9 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageNumberSeries)]
 	public async Task<AdmissionCrmNumberSeriesDto> CreateNumberSeriesAsync(Guid academicYearId, CreateAdmissionCrmNumberSeriesDto input)
 	{
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(CreateNumberSeriesAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(CreateNumberSeriesAsync));
 		var queryable = await _seriesRepository.GetQueryableAsync();
 		if (await AsyncExecuter.AnyAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId && x.Code == input.Code.ToUpper())))
 			throw new BusinessException("AdmissionCrm:NumberSeriesCodeAlreadyExists");
@@ -150,8 +152,10 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 			.Where(x => x.TenantId == CurrentTenant.Id)
 			.Select(x => new { x.Id, x.EducationMediumStageId, x.Name }));
 		var divisionQuery = await _divisionRepository.GetQueryableAsync();
+		divisionQuery = await _studentScopeAccessService.ApplyCurrentUserDivisionScopeAsync(
+			divisionQuery.Where(x => x.TenantId == CurrentTenant.Id),
+			academicYearId);
 		var divisions = await AsyncExecuter.ToListAsync(divisionQuery
-			.Where(x => x.TenantId == CurrentTenant.Id)
 			.Select(x => new { x.Id, x.StandardId, x.Name, x.Strength }));
 		return (from board in boards
 			join medium in mediums on board.Id equals medium.EducationBoardId
@@ -172,6 +176,9 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	public async Task<AdmissionCrmNumberSeriesDto> SubmitNumberSeriesAsync(Guid id)
 	{
 		var entity = await GetSeriesAsync(id);
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			entity.AcademicYearId,
+			nameof(SubmitNumberSeriesAsync));
 		entity.Submit(GetCurrentUserId());
 		await _seriesRepository.UpdateAsync(entity, autoSave: true);
 		return MapSeries(entity);
@@ -181,6 +188,9 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	public async Task<AdmissionCrmNumberSeriesDto> PublishNumberSeriesAsync(Guid id)
 	{
 		var entity = await GetSeriesAsync(id);
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			entity.AcademicYearId,
+			nameof(PublishNumberSeriesAsync));
 		var queryable = await _seriesRepository.GetQueryableAsync();
 		var overlapping = await AsyncExecuter.AnyAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == entity.AcademicYearId && x.Id != entity.Id &&
@@ -236,9 +246,16 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 		if (series.AcademicYearId != academicYearId)
 			throw new BusinessException("AdmissionCrm:NumberSeriesAcademicYearMismatch");
 		var queryable = await _identifierRepository.GetQueryableAsync();
-		var allocations = await AsyncExecuter.ToListAsync(queryable.Where(x =>
+		var allAllocations = await AsyncExecuter.ToListAsync(queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id && x.NumberSeriesId == numberSeriesId));
-		var used = allocations.Select(x => x.Sequence).ToHashSet();
+		var leadQueryable = await _leadRepository.GetQueryableAsync();
+		var scopedLeadQuery = leadQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId);
+		scopedLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(scopedLeadQuery);
+		var scopedLeadIds = (await AsyncExecuter.ToListAsync(scopedLeadQuery.Select(x => x.Id))).ToHashSet();
+		var allocations = allAllocations.Where(x => scopedLeadIds.Contains(x.LeadId)).ToList();
+		var used = allAllocations.Select(x => x.Sequence).ToHashSet();
 		var gapCount = Math.Max(0, series.NextSequence - series.StartingSequence - used.Count(x =>
 			x >= series.StartingSequence && x < series.NextSequence));
 		var gaps = Enumerable.Range(0, (int)Math.Min(series.NextSequence - series.StartingSequence, 100_000))
@@ -261,7 +278,7 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	public async Task<AdmissionCrmActivationPreviewDto> PreviewAsync(Guid leadId, PreviewAdmissionCrmActivationDto input)
 	{
 		var lead = await GetLeadAsync(leadId, nameof(PreviewAsync));
-		return await BuildPreviewAsync(lead, input);
+		return await BuildPreviewAsync(lead, input, nameof(PreviewAsync));
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.RequestActivation)]
@@ -270,7 +287,7 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 		var lead = await GetLeadAsync(leadId, nameof(RequestAsync));
 		var existing = await FindActivationAsync(leadId);
 		if (existing != null) return await MapActivationAsync(existing);
-		var preview = await BuildPreviewAsync(lead, input);
+		var preview = await BuildPreviewAsync(lead, input, nameof(RequestAsync));
 		if (!preview.IsReady) throw new BusinessException("AdmissionCrm:ActivationReadinessFailed")
 			.WithData("BlockingItems", string.Join(",", preview.Items.Where(x => x.Blocking && x.Status == AdmissionCrmActivationStepStatus.Failed).Select(x => x.Key)));
 		var reference = $"ACT-{Clock.Now:yyyyMMdd}-{Guid.NewGuid():N}"[..32].ToUpperInvariant();
@@ -290,7 +307,7 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	{
 		var entity = await GetActivationAsync(id, nameof(ApproveAsync));
 		var lead = await GetLeadAsync(entity.LeadId, nameof(ApproveAsync));
-		await EnsureCurrentReadinessAsync(entity, lead);
+		await EnsureCurrentReadinessAsync(entity, lead, nameof(ApproveAsync));
 		entity.Approve(GetCurrentUserId(), Clock.Now);
 		await _activationRepository.UpdateAsync(entity, autoSave: true);
 		await AddTimelineAsync(lead, AdmissionCrmTimelineEventType.ActivationApproved,
@@ -298,13 +315,17 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 		return await MapActivationAsync(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation)]
+	[Authorize]
 	public async Task<AdmissionCrmActivationDto> ExecuteAsync(Guid id)
 	{
 		var activation = await GetActivationAsync(id, nameof(ExecuteAsync));
+		await AuthorizationService.CheckAsync(
+			activation.Status == AdmissionCrmActivationStatus.RepairRequired
+				? ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.RepairActivation
+				: ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation);
 		if (activation.Status == AdmissionCrmActivationStatus.FirstDayReady) return await MapActivationAsync(activation);
 		var lead = await GetLeadAsync(activation.LeadId, nameof(ExecuteAsync));
-		await EnsureCurrentReadinessAsync(activation, lead);
+		await EnsureCurrentReadinessAsync(activation, lead, nameof(ExecuteAsync));
 		activation.StartAttempt();
 		var steps = Deserialize<List<AdmissionCrmActivationStepDto>>(activation.StepsJson) ?? [];
 		try
@@ -496,7 +517,7 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 		Guid id, UpdateAdmissionCrmServiceHandoffDto input)
 	{
 		var entity = await _serviceHandoffRepository.GetAsync(id);
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, nameof(UpdateServiceHandoffAsync));
+		var lead = await GetLeadAsync(entity.LeadId, nameof(UpdateServiceHandoffAsync));
 		switch (input.Status)
 		{
 			case AdmissionCrmServiceHandoffStatus.Dispatched:
@@ -515,13 +536,15 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 				throw new BusinessException("AdmissionCrm:InvalidServiceHandoffTransition");
 		}
 		await _serviceHandoffRepository.UpdateAsync(entity, autoSave: true);
-		var lead = await GetLeadAsync(entity.LeadId, nameof(UpdateServiceHandoffAsync));
 		await AddTimelineAsync(lead, AdmissionCrmTimelineEventType.ServiceHandoffChanged,
 			$"{entity.Type} handoff {entity.Status}", input.Reason ?? input.ExternalReference ?? entity.Status.ToString(), entity.Id);
 		return MapServiceHandoff(entity);
 	}
 
-	private async Task<AdmissionCrmActivationPreviewDto> BuildPreviewAsync(AdmissionInquiryLead lead, PreviewAdmissionCrmActivationDto input)
+	private async Task<AdmissionCrmActivationPreviewDto> BuildPreviewAsync(
+		AdmissionInquiryLead lead,
+		PreviewAdmissionCrmActivationDto input,
+		string operation)
 	{
 		var items = new List<AdmissionCrmActivationReadinessItemDto>();
 		void Item(string key, string label, bool passed, string detail, bool blocking = true) => items.Add(new()
@@ -584,7 +607,7 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 			routeReadiness.Ready,
 			routeReadiness.Detail);
 
-		var placement = await ValidatePlacementAsync(lead, input);
+		var placement = await ValidatePlacementAsync(lead, input, operation);
 		Item("placement", "Academic placement", placement.Valid, placement.Detail);
 		var series = await _seriesRepository.FindAsync(input.GrNumberSeriesId);
 		var seriesReady = series != null && series.TenantId == CurrentTenant.Id && series.AcademicYearId == lead.AcademicYearId &&
@@ -703,7 +726,8 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 
 	private async Task EnsureCurrentReadinessAsync(
 		AdmissionCrmActivation activation,
-		AdmissionInquiryLead lead)
+		AdmissionInquiryLead lead,
+		string operation)
 	{
 		var input = new PreviewAdmissionCrmActivationDto
 		{
@@ -719,7 +743,7 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 			ServiceHandoffs = Deserialize<List<AdmissionCrmServiceHandoffRequestDto>>(
 				activation.ServiceHandoffRequestsJson) ?? []
 		};
-		var preview = await BuildPreviewAsync(lead, input);
+		var preview = await BuildPreviewAsync(lead, input, operation);
 		if (!preview.IsReady)
 		{
 			throw new BusinessException("AdmissionCrm:ActivationReadinessChanged")
@@ -779,8 +803,22 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	}
 
 	private async Task<(bool Valid, string Detail, int Strength, int Occupancy)> ValidatePlacementAsync(
-		AdmissionInquiryLead lead, PreviewAdmissionCrmActivationDto input)
+		AdmissionInquiryLead lead,
+		PreviewAdmissionCrmActivationDto input,
+		string operation)
 	{
+		await _studentScopeAccessService.EnsureCanAccessStandardAsync(input.StandardId, operation);
+		await _studentScopeAccessService.EnsureCanAccessDivisionAsync(input.DivisionId, operation);
+		if (lead.TargetStandardId.HasValue &&
+		    lead.TargetStandardId.Value != input.StandardId)
+		{
+			return (
+				false,
+				"The activation placement must match the applicant's target standard.",
+				0,
+				0);
+		}
+
 		var board = await _boardRepository.FindAsync(input.EducationBoardId);
 		var medium = await _mediumRepository.FindAsync(input.AcademicMediumId);
 		var stage = await _stageRepository.FindAsync(input.AcademicMediumStageId);
@@ -850,7 +888,7 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	private async Task<AdmissionInquiryLead> GetLeadAsync(Guid id, string operation)
 	{
 		var lead = await _leadRepository.GetAsync(id);
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return lead;
 	}
 
@@ -865,7 +903,8 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 	private async Task<AdmissionCrmActivation> GetActivationAsync(Guid id, string operation)
 	{
 		var entity = await _activationRepository.GetAsync(id);
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(entity.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return entity;
 	}
 
@@ -877,6 +916,8 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 
 	private async Task<AdmissionCrmActivationDto> MapActivationAsync(AdmissionCrmActivation x)
 	{
+		var lead = await _leadRepository.GetAsync(x.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, nameof(MapActivationAsync));
 		var queryable = await _identifierRepository.GetQueryableAsync();
 		var allocations = await AsyncExecuter.ToListAsync(queryable.Where(y => y.TenantId == CurrentTenant.Id && y.ActivationId == x.Id));
 		var handoffQueryable = await _serviceHandoffRepository.GetQueryableAsync();

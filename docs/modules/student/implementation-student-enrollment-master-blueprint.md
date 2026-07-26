@@ -3,7 +3,7 @@ module: student
 domain: implementation
 content_type: Reference
 status: canonical
-updated_on: 2026-07-12
+updated_on: 2026-07-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -34,6 +34,18 @@ Active Student profile entities, academic placement, account provisioning, and F
 | Operations and governance | Complete for current scope | Command-center queues, saved views, delegation, server-side bulk actions, audit search, data-quality issues, retention policies, privacy requests, traceable expiring exports, scheduled reports, SLA escalation, protected analytics permissions, and advisory forecasts |
 | Parent and applicant experience | Complete for current scope | English, Gujarati, and Hindi inquiry and status surfaces, canonical option values with localized labels, OTP access, registration, documents, offer response, exam information, pending actions, correction requests, expiry states, and applicant-safe activity |
 | Communication foundation | Complete for generic provider baseline | Templates, variables, preview, approval, consent and opt-out checks, generic webhook and manual queue adapters, delivery logs, callbacks, retry, failure state, and triggered journeys |
+
+## Enrollment readiness hardening
+
+The 2026-07-25 hardening delivery adds multilingual registration templates and public rendering with English fallback.
+Inquiry-form settings now support inactive deep-copy duplication, English, Gujarati, or Hindi desktop and mobile parent preview, and QR download for active public forms.
+Entrance Exams now supports first-time inline marks, distinct bulk marks, CSV, XLS, XLSX, and OMR-scanner spreadsheet imports.
+Bulk result replacements require a correction reason and `Students.Enrollment.AdmissionsCrm.OverrideExamResult`, while duplicate exam IDs reject the batch.
+CRM lead reads and mutations now enforce effective lower academic scope through the lead's target standard and fail out-of-scope access with `UserScope:AccessDenied`.
+Journey locking now protects cycle configuration and custom pipeline structure through the shared `AdmissionCrm:JourneyLocked` error.
+Frontend actions follow the exact backend permissions for offer, waitlist, decision, financial, registration, document, government-readiness, activation, identifier, and service-handoff operations.
+Configuration Safety now exposes authoritative Stage, Round, Exam, Seat Plan, and Route references plus deterministic impact previews.
+Academic-year cloning now uses a server preview and fingerprint confirmation, requires an empty target, recreates approval-controlled configuration as drafts, remaps known IDs, resets counters, and supports idempotent replay.
 
 ## Release constraints
 

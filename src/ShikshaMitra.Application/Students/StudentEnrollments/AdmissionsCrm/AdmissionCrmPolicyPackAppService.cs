@@ -145,7 +145,9 @@ public class AdmissionCrmPolicyPackAppService : ApplicationService, IAdmissionCr
 	public async Task<AdmissionCrmPolicyAdoptionDto> AdoptPolicyPackAsync(
 		Guid academicYearId, Guid policyPackId, AdoptAdmissionCrmPolicyPackDto input)
 	{
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(AdoptPolicyPackAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(AdoptPolicyPackAsync));
 		var pack = await GetPackAsync(policyPackId);
 		if (pack.Status != AdmissionCrmPolicyPackStatus.Published)
 			throw new BusinessException("AdmissionCrm:PublishedPolicyPackRequired");
@@ -459,14 +461,15 @@ public class AdmissionCrmPolicyPackAppService : ApplicationService, IAdmissionCr
 	private async Task<AdmissionInquiryLead> GetLeadAsync(Guid id, string operation)
 	{
 		var lead = await _leadRepository.GetAsync(id);
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return lead;
 	}
 
 	private async Task<AdmissionCrmPolicyEvaluation> GetEvaluationAsync(Guid id)
 	{
 		var evaluation = await _evaluationRepository.GetAsync(id);
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(evaluation.AcademicYearId, nameof(GetEvaluationAsync));
+		var lead = await _leadRepository.GetAsync(evaluation.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, nameof(GetEvaluationAsync));
 		return evaluation;
 	}
 

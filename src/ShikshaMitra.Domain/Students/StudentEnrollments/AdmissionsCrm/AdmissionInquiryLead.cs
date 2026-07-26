@@ -120,6 +120,13 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("RequestedStage", stage);
 		}
 
+		if (Stage == AdmissionInquiryStage.Stale && stage != AdmissionInquiryStage.Stale)
+		{
+			throw new BusinessException("AdmissionCrm:StaleLeadRequiresReopen")
+				.WithData("LeadId", Id)
+				.WithData("RequestedStage", stage);
+		}
+
 		Stage = stage;
 		Touch();
 	}

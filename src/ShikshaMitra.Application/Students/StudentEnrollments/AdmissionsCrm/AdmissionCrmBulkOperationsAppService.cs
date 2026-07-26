@@ -95,21 +95,31 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	}
 
 	[UnitOfWork(IsDisabled = true)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult)]
 	public async Task<AdmissionCrmBulkOperationResultDto> UploadExamResultsAsync(
 		Guid academicYearId,
 		AdmissionCrmBulkExamResultsDto input)
 	{
-		var items = input.Items
+		var duplicateExamRecordIds = input.Items
 			.GroupBy(x => x.ExamRecordId)
-			.Select(x => x.Last())
+			.Where(x => x.Count() > 1)
+			.Select(x => x.Key)
+			.OrderBy(x => x)
 			.ToList();
+		if (duplicateExamRecordIds.Count > 0)
+		{
+			throw new BusinessException("AdmissionCrm:DuplicateBulkExamResultItems")
+				.WithData("ExamRecordIds", string.Join(",", duplicateExamRecordIds));
+		}
+
+		var items = input.Items.ToList();
 		await EnsureBatchAsync(academicYearId, items.Select(x => x.ExamRecordId), nameof(UploadExamResultsAsync));
 		return await RunAsync(items, x => x.ExamRecordId, async item =>
 		{
 			var exam = await _entranceExamRepository.GetAsync(item.ExamRecordId);
 			if (exam.AcademicYearId != academicYearId)
 				throw new BusinessException("AdmissionCrm:BulkAcademicYearMismatch");
-			var result = await _entranceExamService.UploadResultAsync(
+			var result = await _entranceExamService.UploadResultFromBulkAsync(
 				item.ExamRecordId,
 				new UploadAdmissionCrmEntranceExamResultDto
 				{
@@ -117,7 +127,8 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 					PassingMarks = item.PassingMarks,
 					ObtainedMarks = item.ObtainedMarks,
 					MeritRank = item.MeritRank
-				});
+				},
+				item.CorrectionReason);
 			return result.Id.ToString();
 		});
 	}
@@ -137,6 +148,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 			{
 				throw new BusinessException("AdmissionCrm:BulkAcademicYearMismatch");
 			}
+			await _scopeAccess.EnsureCanAccessAdmissionLeadAsync(lead, nameof(ChangeStageAsync));
 			if (!input.OverrideProtectedStages && IsProtectedBulkStage(lead.Stage))
 			{
 				throw new BusinessException("AdmissionCrm:BulkProtectedStage")

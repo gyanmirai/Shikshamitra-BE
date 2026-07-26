@@ -115,7 +115,7 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void FinalizeSlip()
 	{
-		if (Status == SalarySlipStatus.Finalized)
+		if (IsImmutable())
 			throw new InvalidOperationException("Salary slip is already finalized");
 
 		Status = SalarySlipStatus.Finalized;

@@ -46,8 +46,11 @@ public static partial class HRErrorCodes
 	public const string DuplicateManualMonthDays = "ShikshaMitra:DuplicateManualMonthDays";
 	public const string DuplicatePayrollHolidayOverride = "ShikshaMitra:DuplicatePayrollHolidayOverride";
 	public const string InvalidCustomWeeklyOff = "ShikshaMitra:InvalidCustomWeeklyOff";
+	public const string WorkCalendarRequiresWorkingDay = "ShikshaMitra:WorkCalendarRequiresWorkingDay";
 	public const string PolicyEffectiveFromRequired = "ShikshaMitra:PolicyEffectiveFromRequired";
 	public const string PolicyEffectiveRangeInvalid = "ShikshaMitra:PolicyEffectiveRangeInvalid";
+	public const string PolicyDateOutsideSupportedRange = "ShikshaMitra:PolicyDateOutsideSupportedRange";
+	public const string PolicyNameAlreadyExists = "ShikshaMitra:PolicyNameAlreadyExists";
 	public const string PolicyAssignmentRangeInvalid = "ShikshaMitra:PolicyAssignmentRangeInvalid";
 	public const string PolicyAssignmentPriorityInvalid = "ShikshaMitra:PolicyAssignmentPriorityInvalid";
 	public const string PolicyAssignmentTargetRequired = "ShikshaMitra:PolicyAssignmentTargetRequired";

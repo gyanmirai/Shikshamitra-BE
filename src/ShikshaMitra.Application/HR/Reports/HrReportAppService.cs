@@ -61,8 +61,8 @@ public class HrReportAppService(
 	public Task<HrReportExportCreateResponseDto> CreateExportAsync(HrReportRequestDto input) =>
 		exportService.CreateExportAsync(input);
 
-	public Task<List<HrReportExportJobDto>> GetExportsAsync() =>
-		exportService.GetExportsAsync();
+	public Task<List<HrReportExportJobDto>> GetExportsAsync(HrReportExportListRequestDto input) =>
+		exportService.GetExportsAsync(input);
 
 	public Task<HrReportExportJobDto> GetExportAsync(Guid jobId) =>
 		exportService.GetExportAsync(jobId);
@@ -70,6 +70,10 @@ public class HrReportAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
 	public Task<HrReportExportJobDto> CancelExportAsync(Guid jobId) =>
 		exportService.CancelExportAsync(jobId);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Delete)]
+	public Task DeleteFailedExportAsync(Guid jobId) =>
+		exportService.DeleteFailedExportAsync(jobId);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
 	public Task<HrReportExportCreateResponseDto> RetryExportAsync(Guid jobId) =>
@@ -120,4 +124,6 @@ public class HrReportExportJobArgs
 	public Guid? TenantId { get; set; }
 	public Guid UserId { get; set; }
 	public HrReportRequestDto Request { get; set; } = new();
+	public HrReportExportScopeSnapshot? ScopeSnapshot { get; set; }
+	public Guid GenerationId { get; set; }
 }

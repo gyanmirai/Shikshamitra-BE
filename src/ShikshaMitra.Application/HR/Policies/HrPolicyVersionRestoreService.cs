@@ -16,6 +16,7 @@ public class HrPolicyVersionRestoreService(
 	IRepository<AttendancePolicy, Guid> attendancePolicyRepository,
 	WorkCalendarHolidaySnapshotService holidaySnapshotService,
 	HrPolicyWorkCalendarValidator workCalendarValidator,
+	HrPolicyNameUniquenessService nameUniquenessService,
 	HrPolicyVersionCaptureService captureService,
 	HrAuditWriter auditWriter)
 	: ApplicationService, ITransientDependency
@@ -49,19 +50,25 @@ public class HrPolicyVersionRestoreService(
 	{
 		var snapshot = Deserialize<WorkCalendarPolicyDto>(version.SnapshotJson);
 		EnsureSnapshotAcademicYearMatchesVersion(snapshot.AcademicYearId, version.AcademicYearId);
+		var weeklyOffPattern = HrPolicyMapping.ParseWeeklyOffPattern(snapshot.WeeklyOffPattern);
+		var holidaySyncMode = HrPolicyMapping.ParseHolidaySyncMode(snapshot.HolidaySyncMode);
 		await holidaySnapshotService.ValidateHolidaysAsync(snapshot.AcademicYearId, snapshot.Holidays);
+		var restoredName = BuildRestoredName(input.Name, snapshot.Name, snapshot.Version);
+		await nameUniquenessService.EnsureWorkCalendarAvailableAsync(snapshot.AcademicYearId, restoredName);
 		var entity = new WorkCalendarPolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			snapshot.AcademicYearId,
-			BuildRestoredName(input.Name, snapshot.Name, snapshot.Version),
+			restoredName,
 			HrPolicyStatus.Draft,
 			input.EffectiveFrom?.Date ?? snapshot.EffectiveFrom,
 			snapshot.EffectiveTo,
-			HrPolicyMapping.ParseWeeklyOffPattern(snapshot.WeeklyOffPattern),
+			weeklyOffPattern,
 			snapshot.CustomWeeklyOffs,
-			HrPolicyMapping.ParseHolidaySyncMode(snapshot.HolidaySyncMode));
-		await workCalendarRepository.InsertAsync(entity, autoSave: true);
+			holidaySyncMode);
+		await nameUniquenessService.ExecuteWorkCalendarWriteAsync(
+			entity.Name,
+			() => workCalendarRepository.InsertAsync(entity, autoSave: true));
 		await holidaySnapshotService.ReplaceHolidaysAsync(entity.Id, snapshot.AcademicYearId, snapshot.Holidays);
 		var dto = HrPolicyMapping.ToDto(entity);
 		dto.Holidays = await holidaySnapshotService.GetHolidaysAsync(entity.Id);
@@ -74,21 +81,29 @@ public class HrPolicyVersionRestoreService(
 	{
 		var snapshot = Deserialize<PayrollPolicyDto>(version.SnapshotJson);
 		EnsureSnapshotAcademicYearMatchesVersion(snapshot.AcademicYearId, version.AcademicYearId);
+		var dayCalculationType = HrPolicyMapping.ParseDayCalculationType(snapshot.DayCalculationType);
+		var manualMonthDays = HrPolicyMapping.ToManualMonths(snapshot.ManualMonthDays);
+		var saturdayWorkPolicy = HrPolicyMapping.ParseSaturdayWorkPolicy(snapshot.SaturdayWorkPolicy);
+		var holidayOverrides = HrPolicyMapping.ToHolidayOverrides(snapshot.HolidayOverrides);
 		await workCalendarValidator.EnsureUsableAsync(snapshot.WorkCalendarPolicyId, snapshot.AcademicYearId, HrPolicyStatus.Draft);
+		var restoredName = BuildRestoredName(input.Name, snapshot.Name, snapshot.Version);
+		await nameUniquenessService.EnsurePayrollAvailableAsync(snapshot.AcademicYearId, restoredName);
 		var entity = new PayrollPolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			snapshot.AcademicYearId,
 			snapshot.WorkCalendarPolicyId,
-			BuildRestoredName(input.Name, snapshot.Name, snapshot.Version),
+			restoredName,
 			HrPolicyStatus.Draft,
 			false,
-			HrPolicyMapping.ParseDayCalculationType(snapshot.DayCalculationType),
+			dayCalculationType,
 			snapshot.ManualDays,
-			HrPolicyMapping.ToManualMonths(snapshot.ManualMonthDays),
-			HrPolicyMapping.ParseSaturdayWorkPolicy(snapshot.SaturdayWorkPolicy),
-			HrPolicyMapping.ToHolidayOverrides(snapshot.HolidayOverrides));
-		await payrollPolicyRepository.InsertAsync(entity, autoSave: true);
+			manualMonthDays,
+			saturdayWorkPolicy,
+			holidayOverrides);
+		await nameUniquenessService.ExecutePayrollWriteAsync(
+			entity.Name,
+			() => payrollPolicyRepository.InsertAsync(entity, autoSave: true));
 		await captureService.CaptureAsync("payroll", HrPolicyMapping.ToDto(entity), "restore-draft", input.ChangeReason);
 		return entity;
 	}
@@ -97,34 +112,43 @@ public class HrPolicyVersionRestoreService(
 	{
 		var snapshot = Deserialize<AttendancePolicyDto>(version.SnapshotJson);
 		EnsureSnapshotAcademicYearMatchesVersion(snapshot.AcademicYearId, version.AcademicYearId);
+		var captureMode = HrPolicyMapping.ParseCaptureMode(snapshot.CaptureMode);
+		var missingPunchBehavior = HrPolicyMapping.ParseMissingPunchBehavior(snapshot.MissingPunchBehavior);
+		var penaltyType = HrPolicyMapping.ParsePenaltyType(snapshot.PenaltyType);
+		var overtimeRate = HrPolicyMapping.ParseOvertimeRate(snapshot.OvertimeRate);
+		var holidayWorkBehavior = HrPolicyMapping.ParseHolidayWorkBehavior(snapshot.HolidayWorkBehavior);
 		await workCalendarValidator.EnsureUsableAsync(snapshot.WorkCalendarPolicyId, snapshot.AcademicYearId, HrPolicyStatus.Draft);
+		var restoredName = BuildRestoredName(input.Name, snapshot.Name, snapshot.Version);
+		await nameUniquenessService.EnsureAttendanceAvailableAsync(snapshot.AcademicYearId, restoredName);
 		var entity = new AttendancePolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			snapshot.AcademicYearId,
 			snapshot.WorkCalendarPolicyId,
-			BuildRestoredName(input.Name, snapshot.Name, snapshot.Version),
+			restoredName,
 			HrPolicyStatus.Draft,
 			false,
-			HrPolicyMapping.ParseCaptureMode(snapshot.CaptureMode),
+			captureMode,
 			snapshot.FullDayThresholdPercentage,
 			snapshot.HalfDayThresholdPercentage,
 			snapshot.AbsentThresholdPercentage,
-			HrPolicyMapping.ParseMissingPunchBehavior(snapshot.MissingPunchBehavior),
+			missingPunchBehavior,
 			snapshot.ManualCorrectionAllowed,
 			snapshot.GraceTime,
 			snapshot.MaxLateAllowedPerMonth,
-			HrPolicyMapping.ParsePenaltyType(snapshot.PenaltyType),
+			penaltyType,
 			snapshot.PenaltyCountThreshold,
 			snapshot.EarlyExitEnabled,
 			snapshot.EarlyExitGraceTime,
 			snapshot.OvertimeEnabled,
-			HrPolicyMapping.ParseOvertimeRate(snapshot.OvertimeRate),
+			overtimeRate,
 			snapshot.MinOvertimeMinutes,
-			HrPolicyMapping.ParseHolidayWorkBehavior(snapshot.HolidayWorkBehavior),
+			holidayWorkBehavior,
 			snapshot.PayrollPreviewEnabled,
 			snapshot.PenaltyDeductionAmount);
-		await attendancePolicyRepository.InsertAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecuteAttendanceWriteAsync(
+			entity.Name,
+			() => attendancePolicyRepository.InsertAsync(entity, autoSave: true));
 		await captureService.CaptureAsync("attendance", HrPolicyMapping.ToDto(entity), "restore-draft", input.ChangeReason);
 		return entity;
 	}

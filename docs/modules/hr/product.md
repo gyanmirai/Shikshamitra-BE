@@ -42,9 +42,11 @@ Treat these rules as critical because HR feeds payroll and staff records:
 | Employee status changes require valid transitions | Left or retired employees cannot silently become active through unrelated updates |
 | Attendance locks protect payroll basis | Locked days or batches must block or control edits |
 | Leave policies separate paid and unpaid rules | Payroll impact depends on paid type and policy resolution |
+| Salary component rows are the salary-structure source of truth | Optional payroll profile metadata must not create a false missing-structure blocker |
+| Earning component dependencies are tenant-scoped and acyclic | A percentage component cannot reference itself, another tenant, an inactive target, or a dependency chain that returns to itself |
 | Payroll preview and lock use the same policy basis | Salary slips must match the locked payroll snapshot |
 | Policy assignments resolve by specificity and date | Employee overrides beat group assignments, and defaults are fallback only |
-| Reports must be reproducible | Exports must use the same filters and source data as previews |
+| Reports must be reproducible and scope-safe | Exports must use the same filters and source data as previews, and recipients must cover the complete tenant UserScope captured at generation |
 
 ## Product behavior by area
 

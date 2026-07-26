@@ -14,8 +14,10 @@ namespace ShikshaMitra.Controllers.HR.Reports;
 [RemoteService(Name = "Default")]
 [Route("api/hr/reports")]
 [Authorize]
-public class HrReportController(IHrReportAppService reportAppService) : AbpControllerBase
+public partial class HrReportController(IHrReportAppService reportAppService) : AbpControllerBase
 {
+	private IHrReportAppService ReportAppService => reportAppService;
+
 	[HttpGet("sources")]
 	[ProducesResponseType(typeof(HrReportSourcesDto), StatusCodes.Status200OK)]
 	public Task<HrReportSourcesDto> GetSourcesAsync()
@@ -102,10 +104,8 @@ public class HrReportController(IHrReportAppService reportAppService) : AbpContr
 
 	[HttpGet("exports")]
 	[ProducesResponseType(typeof(List<HrReportExportJobDto>), StatusCodes.Status200OK)]
-	public Task<List<HrReportExportJobDto>> GetExportsAsync()
-	{
-		return reportAppService.GetExportsAsync();
-	}
+	public Task<List<HrReportExportJobDto>> GetExportsAsync([FromQuery] HrReportExportListRequestDto input) =>
+		reportAppService.GetExportsAsync(input);
 
 	[HttpGet("exports/{jobId:guid}")]
 	[ProducesResponseType(typeof(HrReportExportJobDto), StatusCodes.Status200OK)]

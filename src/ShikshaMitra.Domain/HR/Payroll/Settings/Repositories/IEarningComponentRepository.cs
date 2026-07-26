@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
 
@@ -21,4 +22,15 @@ public interface IEarningComponentRepository : IRepository<EarningComponent, Gui
 	/// Get earning component by name (case-insensitive)
 	/// </summary>
 	Task<EarningComponent?> FindByNameAsync(string name);
+
+	/// <summary>
+	/// Serializes dependency-graph mutations for one tenant across the mutation boundary.
+	/// Transactional implementations must retain serialization through unit-of-work disposal,
+	/// even when the returned method-scoped lease is disposed first.
+	/// PostgreSQL implementations must also hold a transaction-scoped database lock so the
+	/// invariant remains safe across application instances.
+	/// </summary>
+	Task<IAsyncDisposable> AcquireDependencyGraphMutationLockAsync(
+		Guid? tenantId,
+		CancellationToken cancellationToken = default);
 }

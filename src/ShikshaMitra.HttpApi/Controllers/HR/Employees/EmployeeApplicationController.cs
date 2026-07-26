@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -83,6 +81,8 @@ public class EmployeeApplicationController(IEmployeeApplicationAppService appSer
 		return await appService.FinalizeAsync(id, new FinalizeEmployeeApplicationDto
 		{
 			PersonalInfo = PersonalInfoContractMapper.ToCreateDto(request.PersonalInfo),
+			AcademicYearId = request.AcademicYearId,
+			AcademicScopes = request.AcademicScopes,
 			FamilyInfo = request.FamilyInfo,
 			AdditionalInfo = request.AdditionalInfo,
 			WorkExperiences = request.WorkExperiences,
@@ -140,6 +140,9 @@ public class EmployeeApplicationController(IEmployeeApplicationAppService appSer
 [AllowAnonymous]
 public class PublicEmployeeApplicationController(IEmployeeApplicationAppService appService) : AbpControllerBase
 {
+	private const long ResumeMaxBytes = 10 * 1024 * 1024;
+	private const long PhotoMaxBytes = 5 * 1024 * 1024;
+	private const long MultipartMaxBytes = 20 * 1024 * 1024;
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
 	[HttpGet("{token}")]
@@ -151,19 +154,29 @@ public class PublicEmployeeApplicationController(IEmployeeApplicationAppService 
 
 	[HttpPost("{token}/submit")]
 	[Consumes("multipart/form-data")]
+	[RequestFormLimits(MultipartBodyLengthLimit = MultipartMaxBytes)]
 	[ProducesResponseType(typeof(EmployeeApplicationDto), StatusCodes.Status200OK)]
 	public async Task<EmployeeApplicationDto> SubmitAsync(
 		[FromRoute, Required] string token,
 		[FromForm] PublicEmployeeApplicationSubmitRequest request)
 	{
 		var input = DeserializeSubmitData(request.Data);
-		ValidateSubmitRequest(input);
 
 		return await appService.SubmitPublicAsync(
 			token,
 			input,
-			await ToFileInputAsync(request.Resume),
-			await ToFileInputAsync(request.Photo));
+			await PublicEmployeeApplicationUploadReader.ToFileInputAsync(
+				request.Resume,
+				ResumeMaxBytes,
+				EmployeeApplicationUploadKind.Resume,
+				nameof(PublicEmployeeApplicationSubmitRequest.Resume),
+				"Resume must be 10MB or smaller."),
+			await PublicEmployeeApplicationUploadReader.ToFileInputAsync(
+				request.Photo,
+				PhotoMaxBytes,
+				EmployeeApplicationUploadKind.Photo,
+				nameof(PublicEmployeeApplicationSubmitRequest.Photo),
+				"Photo must be 5MB or smaller."));
 	}
 
 	private static PublicEmployeeApplicationSubmitDto DeserializeSubmitData(string data)
@@ -185,30 +198,4 @@ public class PublicEmployeeApplicationController(IEmployeeApplicationAppService 
 		}
 	}
 
-	private static void ValidateSubmitRequest(PublicEmployeeApplicationSubmitDto input)
-	{
-		var validationResults = PublicEmployeeApplicationSubmitValidation.Validate(input, DateTime.UtcNow);
-		if (validationResults.Count > 0)
-		{
-			throw new AbpValidationException("Employee application validation failed.", validationResults.ToList());
-		}
-	}
-
-	private static async Task<EmployeeApplicationFileInput?> ToFileInputAsync(IFormFile? file)
-	{
-		if (file == null || file.Length == 0)
-		{
-			return null;
-		}
-
-		await using var memoryStream = new MemoryStream();
-		await file.CopyToAsync(memoryStream);
-		return new EmployeeApplicationFileInput
-		{
-			FileName = file.FileName,
-			ContentType = file.ContentType,
-			Content = memoryStream.ToArray(),
-			Size = file.Length
-		};
-	}
 }

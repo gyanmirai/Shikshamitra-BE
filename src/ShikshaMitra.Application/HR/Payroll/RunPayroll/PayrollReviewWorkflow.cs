@@ -141,7 +141,7 @@ public class PayrollReviewWorkflow(
 	{
 		var existingSlips = await salarySlipRepository.GetByMonthAsync(internalMonthYear);
 		var lockedIds = existingSlips
-			.Where(x => x.Status == SalarySlipStatus.Finalized)
+			.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			.Select(x => x.EmployeeId)
 			.ToHashSet();
 		var lockedRequestedIds = targetEmployees

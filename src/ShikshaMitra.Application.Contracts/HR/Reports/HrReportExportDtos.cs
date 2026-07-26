@@ -36,6 +36,25 @@ public class HrReportExportJobDto
 	public DateTime ExpiresAt { get; set; }
 }
 
+public class HrReportExportListRequestDto
+{
+	public DateTime? RequestedFrom { get; set; }
+	public DateTime? RequestedTo { get; set; }
+}
+
+public class HrReportExportListRequestDtoValidator : AbstractValidator<HrReportExportListRequestDto>
+{
+	public HrReportExportListRequestDtoValidator()
+	{
+		RuleFor(x => x)
+			.Must(input =>
+				!input.RequestedFrom.HasValue ||
+				!input.RequestedTo.HasValue ||
+				input.RequestedTo.Value > input.RequestedFrom.Value)
+			.WithMessage("Requested to must be after requested from.");
+	}
+}
+
 public class HrReportShareExportRequestDto
 {
 	public List<Guid> UserIds { get; set; } = new();

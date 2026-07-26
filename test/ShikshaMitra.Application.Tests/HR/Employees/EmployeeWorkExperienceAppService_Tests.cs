@@ -183,8 +183,11 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 			AdharNo = UniqueAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1992, 3, 10)),
 			GenderType = GenderType.Male,
+			CastType = CastType.General,
+			FamilyCaste = "General",
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
+			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
 			ShiftId = shiftId
 		};
@@ -196,17 +199,11 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 
 	private async Task<Guid> EnsureRoleExistsAsync()
 	{
-		var roles = await _roleRepository.GetListAsync();
-		var existing = roles.FirstOrDefault();
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var id = _guidGenerator.Create();
-		var role = new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id);
-		await _roleRepository.InsertAsync(role, autoSave: true);
-		return id;
+		return await EmployeeRoleTestHelper.EnsureAssignableRoleAsync(
+			_roleRepository,
+			_guidGenerator,
+			_currentTenant.Id,
+			"EmployeeWorkExperienceRole");
 	}
 
 	private async Task<Guid> EnsureShiftExistsAsync()

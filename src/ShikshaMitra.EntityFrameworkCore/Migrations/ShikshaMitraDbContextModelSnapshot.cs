@@ -11547,6 +11547,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<string>("NormalizedPolicyName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("PolicyName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -11566,9 +11571,10 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "AcademicYearId", "IsActive")
                         .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_IsActive");
 
-                    b.HasIndex("TenantId", "AcademicYearId", "PolicyName")
+                    b.HasIndex("TenantId", "AcademicYearId", "NormalizedPolicyName")
                         .IsUnique()
-                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_PolicyName");
+                        .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_PolicyName")
+                        .HasFilter("\"Status\" <> 2");
 
                     b.HasIndex("TenantId", "AcademicYearId", "Status")
                         .HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_Status");
@@ -15242,7 +15248,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "AcademicYearId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("IX_HR_AttendancePolicies_Tenant_AcademicYear_Name");
+                        .HasDatabaseName("IX_HR_AttendancePolicies_Tenant_AcademicYear_Name")
+                        .HasFilter("\"Status\" <> 2");
 
                     b.ToTable("HR_AttendancePolicies", (string)null);
                 });
@@ -15539,7 +15546,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "AcademicYearId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("IX_HR_PayrollPolicies_Tenant_AcademicYear_Name");
+                        .HasDatabaseName("IX_HR_PayrollPolicies_Tenant_AcademicYear_Name")
+                        .HasFilter("\"Status\" <> 2");
 
                     b.ToTable("HR_PayrollPolicies", (string)null);
                 });
@@ -15726,7 +15734,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "AcademicYearId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("IX_HR_WorkCalendarPolicies_Tenant_AcademicYear_Name");
+                        .HasDatabaseName("IX_HR_WorkCalendarPolicies_Tenant_AcademicYear_Name")
+                        .HasFilter("\"Status\" <> 2");
 
                     b.ToTable("HR_WorkCalendarPolicies", (string)null);
                 });

@@ -41,7 +41,6 @@ public class SalarySlipWorkflow(
 			var existingSalarySlip = await salarySlipRepository.GetByEmployeeAndMonthAsync(
 				employeeId,
 				normalizedMonthYear);
-			var hadExistingSalarySlip = existingSalarySlip != null;
 
 			if (existingSalarySlip?.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			{
@@ -49,17 +48,11 @@ public class SalarySlipWorkflow(
 				return await salarySlipDtoMapper.ToDtoAsync(existingSalarySlip, existingEmployee);
 			}
 
-			if (existingSalarySlip != null &&
-			    draftFreshnessService.ShouldKeepExistingDraft(existingSalarySlip, hadExistingSalarySlip))
-			{
-				var existingEmployee = await employeeRepository.GetAsync(existingSalarySlip.EmployeeId, includeDetails: false);
-				return await salarySlipDtoMapper.ToDtoAsync(existingSalarySlip, existingEmployee);
-			}
-
-			var salarySlip = await snapshotGenerationService.GenerateOrGetFromSnapshotAsync(
-				employeeId,
-				normalizedMonthYear);
-			salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip, hadExistingSalarySlip);
+			var salarySlip = existingSalarySlip == null
+				? await snapshotGenerationService.GenerateOrGetFromSnapshotAsync(
+					employeeId,
+					normalizedMonthYear)
+				: await draftFreshnessService.EnsureFreshAsync(existingSalarySlip);
 
 			var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 			var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);
@@ -162,6 +155,7 @@ public class SalarySlipWorkflow(
 		var salarySlip = await salarySlipRepository.GetAsync(id);
 		await accessService.EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
 
+		salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip);
 		salarySlip.FinalizeSlip();
 
 		await salarySlipRepository.UpdateAsync(salarySlip);
@@ -182,7 +176,7 @@ public class SalarySlipWorkflow(
 		var salarySlip = await salarySlipRepository.GetAsync(id);
 		await accessService.EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
 
-		if (salarySlip.Status == SalarySlipStatus.Finalized)
+		if (salarySlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 		{
 			throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
 		}

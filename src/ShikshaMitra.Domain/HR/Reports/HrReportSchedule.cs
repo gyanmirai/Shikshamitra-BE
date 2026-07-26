@@ -73,6 +73,11 @@ public class HrReportSchedule : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		NextRunAt = nextRunAt;
 	}
 
+	public void DeferRetry(DateTime nextRunAt)
+	{
+		NextRunAt = nextRunAt;
+	}
+
 	public IReadOnlyList<Guid> GetRecipientUserIds()
 	{
 		try

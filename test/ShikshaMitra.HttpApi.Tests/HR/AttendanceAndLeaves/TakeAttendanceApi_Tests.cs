@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Academic.Timetable.Substitutions;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
@@ -33,6 +34,37 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 	private const string BaseUrl = "/api/hr/attendance/take-attendance";
 
 	public TakeAttendanceApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Take_Attendance_Endpoints_When_Permissions_Are_Missing()
+	{
+		var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(
+			AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			"__none__");
+
+		var readResponse = await client.GetAsync(
+			$"{BaseUrl}/day?attendanceDate=2026-05-23");
+		var saveResponse = await client.PostAsJsonAsync(
+			$"{BaseUrl}/day/save",
+			new TakeAttendanceSaveInput
+			{
+				AttendanceDate = "2026-05-23",
+				Entries = []
+			},
+			JsonOptions);
+		var lockResponse = await client.PostAsync(
+			$"{BaseUrl}/day/lock?attendanceDate=2026-05-23",
+			content: null);
+		var unlockResponse = await client.DeleteAsync(
+			$"{BaseUrl}/day/lock?attendanceDate=2026-05-23");
+
+		readResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		saveResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		lockResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		unlockResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -208,6 +240,55 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		var body = await response.Content.ReadAsStringAsync();
 		response.StatusCode.ShouldBe(HttpStatusCode.Conflict, body);
 		body.ShouldContain(HRErrorCodes.TakeAttendanceApprovedLeaveMutationNotAllowed);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Approved_Leave_Should_Remain_OnLeave_After_Rejected_Save_RoundTrip()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 11);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"OnLeaveRoundTrip{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		var leaveId = await InsertLeaveForAttendanceAsync(
+			employee.Id,
+			attendanceDate,
+			attendanceDate,
+			EmployeeLeaveStatusType.Approved);
+		var dayUrl =
+			$"{BaseUrl}/day?attendanceDate={attendanceDate:dd-MM-yyyy}&skipCount=0&maxResultCount=20&search={Uri.EscapeDataString(employee.FirstName)}";
+
+		var initial = await Client.GetFromJsonAsync<TakeAttendanceDayResponse>(dayUrl, JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize initial leave attendance");
+		initial.Items.Single(x => x.EmployeeId == employee.Id).Status.ShouldBe(TakeAttendanceStatus.OnLeave);
+
+		var saveResponse = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		{
+			AttendanceDate = attendanceDate.ToString("dd-MM-yyyy"),
+			Entries =
+			[
+				new TakeAttendanceSaveEntryDto
+				{
+					EmployeeId = employee.Id,
+					StatusWire = "PRESENT",
+					InTime = "09:00",
+					OutTime = "17:00",
+					Remarks = "Rejected override must not change approved leave"
+				}
+			]
+		}, JsonOptions);
+		saveResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+		var afterRejectedSave = await Client.GetFromJsonAsync<TakeAttendanceDayResponse>(dayUrl, JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize leave attendance after rejected save");
+		var row = afterRejectedSave.Items.Single(x => x.EmployeeId == employee.Id);
+		row.Status.ShouldBe(TakeAttendanceStatus.OnLeave);
+		row.IsApprovedLeave.ShouldBeTrue();
+		row.ApprovedLeaveId.ShouldBe(leaveId);
+		row.Source.ShouldBe("approved_leave");
 	}
 
 	[Fact]
@@ -628,6 +709,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		attendance.TimeOut.ShouldNotBeNull();
 		attendance.TimeIn.Value.TimeOfDay.ShouldBe(TimeSpan.Zero);
 		attendance.TimeOut.Value.TimeOfDay.ShouldBe(TimeSpan.Zero);
+		await AssertAttendanceAvailabilityAsync(employee.Id, attendanceDateOnly);
 	}
 
 	[Fact]
@@ -908,6 +990,34 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				x.EmployeeId == employeeId &&
 				x.AttendanceDate == attendanceDate);
 			attendance.EducationMediumStageId.ShouldBe(expectedStageId);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task AssertAttendanceAvailabilityAsync(Guid employeeId, DateOnly attendanceDate)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var availabilityRepository =
+			scope.ServiceProvider.GetRequiredService<IRepository<TeacherAvailability, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var availabilityDate = DateTime.SpecifyKind(
+			attendanceDate.ToDateTime(TimeOnly.MinValue),
+			DateTimeKind.Utc);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var rows = await availabilityRepository.GetListAsync(x =>
+				x.TeacherId == employeeId &&
+				x.AvailabilityDate == availabilityDate &&
+				x.SourceType == TeacherAvailabilitySource.Attendance &&
+				!x.IsCancelled);
+
+			var availability = rows.ShouldHaveSingleItem();
+			availability.AutoCreateSubstitutions.ShouldBeTrue();
+			availability.AffectedLectureCount.ShouldBe(0);
 			await uow.CompleteAsync();
 		}
 	}

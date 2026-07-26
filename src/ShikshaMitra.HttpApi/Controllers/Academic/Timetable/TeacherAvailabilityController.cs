@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Timetable.Substitutions;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Controllers.Academic.Timetable;
@@ -14,24 +15,28 @@ public class TeacherAvailabilityController(ITeacherAvailabilityAppService teache
     : ShikshaMitraController
 {
     [HttpGet]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public Task<PagedResultDto<TeacherAvailabilityDto>> GetListAsync([FromQuery] GetTeacherAvailabilityInput input)
     {
         return teacherAvailabilityAppService.GetListAsync(input);
     }
 
     [HttpPost]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public Task<TeacherAvailabilityDto> CreateAsync([FromBody] CreateTeacherAvailabilityDto input)
     {
         return teacherAvailabilityAppService.CreateAsync(input);
     }
 
     [HttpPost("affected-lectures")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public Task<AffectedLectureResultDto> GetAffectedLecturesAsync([FromBody] CreateTeacherAvailabilityDto input)
     {
         return teacherAvailabilityAppService.GetAffectedLecturesAsync(input);
     }
 
     [HttpGet("affected-lectures")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public Task<AffectedLectureResultDto> GetAffectedLecturesFromQueryAsync(
         [FromQuery] string? teacherId,
         [FromQuery] string? teacherName,
@@ -64,12 +69,14 @@ public class TeacherAvailabilityController(ITeacherAvailabilityAppService teache
     }
 
     [HttpPost("{id:guid}/create-substitutions")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public Task<int> CreateSubstitutionsAsync([FromRoute] Guid id)
     {
         return teacherAvailabilityAppService.CreateSubstitutionsAsync(id);
     }
 
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Delete)]
     public Task CancelAsync([FromRoute] Guid id)
     {
         return teacherAvailabilityAppService.CancelAsync(id);

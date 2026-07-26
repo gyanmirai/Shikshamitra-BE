@@ -265,8 +265,11 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 			AdharNo = "123456789012",
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 1, 1)),
 			GenderType = GenderType.Male,
+			CastType = CastType.General,
+			FamilyCaste = "General",
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
+			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
 			ShiftId = shiftId
 		});
@@ -274,16 +277,11 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 
 	private async Task<Guid> EnsureRoleExistsAsync()
 	{
-		var roles = await _roleRepository.GetListAsync();
-		var existing = roles.FirstOrDefault();
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var id = _guidGenerator.Create();
-		await _roleRepository.InsertAsync(new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id), autoSave: true);
-		return id;
+		return await EmployeeRoleTestHelper.EnsureAssignableRoleAsync(
+			_roleRepository,
+			_guidGenerator,
+			_currentTenant.Id,
+			"EmployeeICardRole");
 	}
 
 	private async Task<Guid> EnsureShiftExistsAsync()

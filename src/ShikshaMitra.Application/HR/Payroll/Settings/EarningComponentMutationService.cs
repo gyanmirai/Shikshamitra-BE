@@ -6,16 +6,17 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Caching;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 using static ShikshaMitra.HR.Payroll.Settings.PayrollComponentMutationRules;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
 [RemoteService(false)]
 public class EarningComponentMutationService(
-	IRepository<EarningComponent, Guid> repository,
+	IEarningComponentRepository repository,
 	EarningComponentManager earningComponentManager,
 	IRepository<PayrollComponentVersion, Guid> componentVersionRepository,
-	PayrollComponentImpactPreviewReader impactPreviewReader,
+	EarningComponentImpactService impactService,
 	PayrollComponentEmployeeSyncService employeeSyncService,
 	IDistributedCache<PagedResultDto<EarningComponentDto>> cache) : ApplicationService, ITransientDependency
 {
@@ -23,9 +24,12 @@ public class EarningComponentMutationService(
 	private const string NameIndexName = "IX_EarningComponents_TenantId_Name";
 	private const string TableHint = "AppEarningComponents";
 
-	public async Task<EarningComponentDto> CreateAsync(CreateEarningComponentDto input)
+	[UnitOfWork]
+	public virtual async Task<EarningComponentDto> CreateAsync(CreateEarningComponentDto input)
 	{
 		ArgumentNullException.ThrowIfNull(input);
+		await using var dependencyGraphLock =
+			await repository.AcquireDependencyGraphMutationLockAsync(CurrentTenant.Id);
 
 		var earningComponent = await earningComponentManager.CreateAsync(
 			input.Name,
@@ -59,9 +63,12 @@ public class EarningComponentMutationService(
 		return ObjectMapper.Map<EarningComponent, EarningComponentDto>(earningComponent);
 	}
 
-	public async Task<EarningComponentDto> UpdateAsync(Guid id, UpdateEarningComponentDto input)
+	[UnitOfWork]
+	public virtual async Task<EarningComponentDto> UpdateAsync(Guid id, UpdateEarningComponentDto input)
 	{
 		ArgumentNullException.ThrowIfNull(input);
+		await using var dependencyGraphLock =
+			await repository.AcquireDependencyGraphMutationLockAsync(CurrentTenant.Id);
 
 		var earningComponent = await repository.GetAsync(id);
 		EnsureActive(earningComponent.IsActive);
@@ -112,56 +119,31 @@ public class EarningComponentMutationService(
 		UpdateEarningComponentDto input,
 		bool includeEmployees = false,
 		int skipCount = 0,
-		int maxResultCount = 20)
-	{
-		ArgumentNullException.ThrowIfNull(input);
-
-		var earningComponent = await repository.GetAsync(id);
-		EnsureActive(earningComponent.IsActive);
-		return await impactPreviewReader.BuildUpdatePreviewAsync(
+		int maxResultCount = 20) =>
+		await impactService.PreviewUpdateImpactAsync(
 			id,
-			isEarning: true,
-			input.EffectiveMonth,
-			(effectiveMonth, syncedCount, overrideCount, finalizedSlipCount, draftSlipCount) =>
-				PayrollComponentPreviewHashBuilder.BuildPreviewHash(
-					id,
-					input,
-					effectiveMonth,
-					syncedCount,
-					overrideCount,
-					finalizedSlipCount,
-					draftSlipCount),
+			input,
 			includeEmployees,
 			skipCount,
 			maxResultCount);
-	}
 
 	public async Task<PayrollComponentUpdateImpactPreviewDto> PreviewDeleteImpactAsync(
 		Guid id,
 		bool includeEmployees = false,
 		int skipCount = 0,
-		int maxResultCount = 20)
-	{
-		await repository.GetAsync(id);
-		return await impactPreviewReader.BuildDeletePreviewAsync(
+		int maxResultCount = 20) =>
+		await impactService.PreviewDeleteImpactAsync(
 			id,
-			isEarning: true,
-			(employeeIds, syncedCount, overrideCount, finalizedSlipCount, draftSlipCount) =>
-				PayrollComponentPreviewHashBuilder.BuildDeletePreviewHash(
-					id,
-					employeeIds,
-					syncedCount,
-					overrideCount,
-					finalizedSlipCount,
-					draftSlipCount),
 			includeEmployees,
 			skipCount,
 			maxResultCount);
-	}
 
-	public async Task DeleteConfirmedAsync(Guid id, string previewHash)
+	[UnitOfWork]
+	public virtual async Task DeleteConfirmedAsync(Guid id, string previewHash)
 	{
 		EnsureDeletePreviewHashProvided(previewHash);
+		await using var dependencyGraphLock =
+			await repository.AcquireDependencyGraphMutationLockAsync(CurrentTenant.Id);
 
 		var currentPreview = await PreviewDeleteImpactAsync(id);
 		if (!string.Equals(currentPreview.PreviewHash, previewHash, StringComparison.Ordinal))
@@ -172,23 +154,35 @@ public class EarningComponentMutationService(
 
 		var earningComponent = await repository.GetAsync(id);
 		earningComponent.Deactivate();
-		await repository.UpdateAsync(earningComponent, autoSave: false);
+		await repository.UpdateAsync(earningComponent, autoSave: true);
 
 		await ClearCacheAsync();
 		await employeeSyncService.DeleteLinkedRowsAsync(id, isEarning: true);
 	}
 
-	public async Task ActivateAsync(Guid id)
+	[UnitOfWork]
+	public virtual async Task ActivateAsync(Guid id)
 	{
+		await using var dependencyGraphLock =
+			await repository.AcquireDependencyGraphMutationLockAsync(CurrentTenant.Id);
 		var earningComponent = await repository.GetAsync(id);
+		await earningComponentManager.ValidateDependencyAsync(
+			earningComponent.Id,
+			earningComponent.CalculationType,
+			earningComponent.SelectedEarningComponentId,
+			earningComponent.DependOn);
 		earningComponent.Activate();
 		await repository.UpdateAsync(earningComponent, autoSave: true);
 		await ClearCacheAsync();
 	}
 
-	public async Task DeactivateAsync(Guid id)
+	[UnitOfWork]
+	public virtual async Task DeactivateAsync(Guid id)
 	{
+		await using var dependencyGraphLock =
+			await repository.AcquireDependencyGraphMutationLockAsync(CurrentTenant.Id);
 		var earningComponent = await repository.GetAsync(id);
+		await earningComponentManager.EnsureCanRetireAsync(id);
 		earningComponent.Deactivate();
 		await repository.UpdateAsync(earningComponent, autoSave: true);
 		await ClearCacheAsync();

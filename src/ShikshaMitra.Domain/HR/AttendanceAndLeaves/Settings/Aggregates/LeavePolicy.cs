@@ -25,6 +25,7 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// Name of the policy (e.g., "Sick Leave Policy")
 	/// </summary>
 	public string PolicyName { get; protected set; } = string.Empty;
+	public string NormalizedPolicyName { get; protected set; } = string.Empty;
 
 	public string? Description { get; protected set; }
 	public HrPolicyStatus Status { get; protected set; }
@@ -90,6 +91,13 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		IsDefault = false;
 	}
 
+	public void Unarchive()
+	{
+		Status = HrPolicyStatus.Draft;
+		IsActive = false;
+		IsDefault = false;
+	}
+
 	public void SetDefault(bool isDefault)
 	{
 		if (isDefault && Status != HrPolicyStatus.Active)
@@ -104,7 +112,7 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		Check.NotNull(rules, nameof(rules));
 		var nextRules = rules.ToList();
-		EnsureRequiredActiveRules(nextRules);
+		LeavePolicyRuleSetGuard.EnsureRequiredActiveRules(nextRules);
 
 		Rules = nextRules;
 	}
@@ -113,7 +121,7 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		Check.NotNull(rules, nameof(rules));
 		var nextRules = rules.ToList();
-		EnsureRequiredActiveRules(nextRules);
+		LeavePolicyRuleSetGuard.EnsureRequiredActiveRules(nextRules);
 
 		var nextPaidTypes = nextRules.Select(rule => rule.PaidType).ToHashSet();
 		foreach (var existing in Rules.Where(rule => rule.IsActive && !nextPaidTypes.Contains(rule.PaidType)))
@@ -148,34 +156,17 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public LeavePolicyRule? FindActiveRule(LeavePaidType paidType) =>
 		Rules.FirstOrDefault(rule => rule.PaidType == paidType && rule.IsActive);
 
-	private static void EnsureRequiredActiveRules(IEnumerable<LeavePolicyRule> rules)
-	{
-		var activeRules = rules.Where(rule => rule.IsActive).ToList();
-		var duplicate = activeRules
-			.Where(rule => rule.IsActive)
-			.GroupBy(rule => rule.PaidType)
-			.FirstOrDefault(group => group.Count() > 1);
-		if (duplicate != null)
-		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyDuplicatePaidTypeRule)
-				.WithData("paidType", duplicate.Key);
-		}
-
-		if (activeRules.Count != 2 ||
-		    activeRules.All(rule => rule.PaidType != LeavePaidType.Paid) ||
-		    activeRules.All(rule => rule.PaidType != LeavePaidType.Unpaid))
-		{
-			throw new BusinessException(HRErrorCodes.LeavePolicyPaidUnpaidRulesRequired);
-		}
-	}
-
 	private void SetPolicyName(string policyName)
 	{
 		Check.NotNullOrWhiteSpace(policyName, nameof(policyName));
 		policyName = policyName.Trim();
 		Check.Length(policyName, nameof(policyName), LeavePolicyConsts.MaxPolicyNameLength);
 		PolicyName = policyName;
+		NormalizedPolicyName = NormalizePolicyName(policyName);
 	}
+
+	public static string NormalizePolicyName(string policyName) =>
+		policyName.Trim().ToUpperInvariant();
 
 	private void SetEffectiveRange(DateTime effectiveFrom, DateTime? effectiveTo)
 	{

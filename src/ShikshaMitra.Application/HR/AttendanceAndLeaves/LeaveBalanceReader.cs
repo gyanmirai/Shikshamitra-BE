@@ -26,8 +26,6 @@ public class LeaveBalanceReader(
 {
 	public async Task<LeaveBalanceListDto> GetBalancesAsync(Guid academicYearId, Guid? forEmployeeId)
 	{
-		var academicYear = await academicYearRepository.GetAsync(academicYearId);
-
 		var actorContext = await leaveActorAccessService.ResolveContextAsync();
 		var targetId = forEmployeeId ?? actorContext.ActorEmployeeId;
 		if (!targetId.HasValue)
@@ -36,10 +34,23 @@ public class LeaveBalanceReader(
 		}
 
 		await leaveActorAccessService.EnsureActorCanAccessEmployeeAsync(targetId.Value);
-		var targetEmployee = await employeeRepository.GetAsync(targetId.Value);
+		return await GetBalancesForAuthorizedEmployeeAsync(academicYearId, targetId.Value);
+	}
+
+	/// <summary>
+	/// Calculates balances after the calling workflow has authorized access to the employee.
+	/// Keep public leave endpoints on <see cref="GetBalancesAsync"/> so their actor hierarchy rules remain enforced.
+	/// </summary>
+	internal async Task<LeaveBalanceListDto> GetBalancesForAuthorizedEmployeeAsync(
+		Guid academicYearId,
+		Guid employeeId)
+	{
+		var academicYear = await academicYearRepository.GetAsync(academicYearId);
+		var targetId = employeeId;
+		var targetEmployee = await employeeRepository.GetAsync(targetId);
 
 		var resolved = await hrPolicyResolver.ResolveAsync(
-			targetId.Value,
+			targetId,
 			academicYear.StartDate.Date,
 			academicYearId);
 		var policy = resolved.LeavePolicy
@@ -49,11 +60,11 @@ public class LeaveBalanceReader(
 			.Where(rule => rule.IsActive)
 			.ToList();
 		var unitsByPaidType = await leaveBalanceUnitService.GetBalanceUnitsByPolicyAndPaidTypeAsync(
-			targetId.Value,
+			targetId,
 			policy.Id,
 			activeRules.Select(rule => rule.PaidType).ToList());
 		var carryInByRule = await carryForwardBalanceReader.GetCarryInByRuleAsync(
-			targetId.Value,
+			targetId,
 			academicYearId,
 			activeRules.Select(rule => rule.Id).ToList());
 

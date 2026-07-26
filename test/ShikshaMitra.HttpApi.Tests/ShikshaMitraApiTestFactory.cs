@@ -261,7 +261,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			department: "Quality Assurance",
 			designation: "API Test Operator",
 			dateOfJoining: new DateOnly(2020, 1, 1),
-			employeeGroup: EmployeeGroupType.NonTeaching);
+			employeeGroup: EmployeeGroupType.Teaching);
 		await employeeRepository.InsertAsync(employee, autoSave: true);
 	}
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using ShikshaMitra.Audit;
 
@@ -9,6 +10,16 @@ namespace ShikshaMitra.HR.Audit;
 public static class HrAuditTrailProjection
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+	private static readonly HashSet<string> SemanticDateFields = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"effectiveFrom",
+		"effectiveTo"
+	};
+	private static readonly HashSet<string> SemanticTimestampFields = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"timeIn",
+		"timeOut"
+	};
 
 	public static HrAuditEventDto ToDto(HrAuditEvent entity)
 	{
@@ -46,12 +57,47 @@ public static class HrAuditTrailProjection
 		}
 		try
 		{
-			return JsonSerializer.Deserialize<List<HrAuditChangedFieldDto>>(json, JsonOptions) ?? [];
+			return (JsonSerializer.Deserialize<List<HrAuditChangedFieldDto>>(json, JsonOptions) ?? [])
+				.Where(change => !AreEquivalent(change.Field, change.OldValue, change.NewValue))
+				.ToList();
 		}
 		catch (JsonException)
 		{
 			return [];
 		}
+	}
+
+	private static bool AreEquivalent(string field, string? oldValue, string? newValue)
+	{
+		var left = oldValue?.Trim().Trim('"');
+		var right = newValue?.Trim().Trim('"');
+		if (string.Equals(left, right, StringComparison.Ordinal))
+		{
+			return true;
+		}
+
+		if (SemanticDateFields.Contains(field))
+		{
+			return TryParseCalendarDate(left, out var leftDate) &&
+				TryParseCalendarDate(right, out var rightDate) &&
+				leftDate == rightDate;
+		}
+
+		return SemanticTimestampFields.Contains(field) &&
+			DateTimeOffset.TryParse(left, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var leftTimestamp) &&
+			DateTimeOffset.TryParse(right, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var rightTimestamp) &&
+			leftTimestamp.Equals(rightTimestamp);
+	}
+
+	private static bool TryParseCalendarDate(string? value, out DateOnly date)
+	{
+		date = default;
+		return DateTimeOffset.TryParse(
+				value,
+				CultureInfo.InvariantCulture,
+				DateTimeStyles.AssumeUniversal,
+				out var timestamp) &&
+			(date = DateOnly.FromDateTime(timestamp.DateTime)) != default;
 	}
 
 	private static string ToLabel(string value) =>

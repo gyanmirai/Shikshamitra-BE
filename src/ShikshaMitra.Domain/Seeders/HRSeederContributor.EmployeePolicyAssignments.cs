@@ -45,22 +45,22 @@ public partial class HRSeederContributor
 		{
 			var standardPayroll = await _payrollPolicyRepository.FirstOrDefaultAsync(x =>
 				x.AcademicYearId == academicYear.Id &&
-				x.Name == "Standard Payroll Policy");
+				x.Status == HrPolicyStatus.Active && x.Name == "Standard Payroll Policy");
 			var operationsPayroll = await _payrollPolicyRepository.FirstOrDefaultAsync(x =>
 				x.AcademicYearId == academicYear.Id &&
-				x.Name == "Operations Payroll Policy");
+				x.Status == HrPolicyStatus.Active && x.Name == "Operations Payroll Policy");
 			var partTimePayroll = await _payrollPolicyRepository.FirstOrDefaultAsync(x =>
 				x.AcademicYearId == academicYear.Id &&
-				x.Name == "Part-Time Payroll Policy");
+				x.Status == HrPolicyStatus.Active && x.Name == "Part-Time Payroll Policy");
 			var standardAttendance = await _attendancePolicyRepository.FirstOrDefaultAsync(x =>
 				x.AcademicYearId == academicYear.Id &&
-				x.Name == "Standard Attendance Policy");
+				x.Status == HrPolicyStatus.Active && x.Name == "Standard Attendance Policy");
 			var operationsAttendance = await _attendancePolicyRepository.FirstOrDefaultAsync(x =>
 				x.AcademicYearId == academicYear.Id &&
-				x.Name == "Operations Attendance Policy");
+				x.Status == HrPolicyStatus.Active && x.Name == "Operations Attendance Policy");
 			var partTimeAttendance = await _attendancePolicyRepository.FirstOrDefaultAsync(x =>
 				x.AcademicYearId == academicYear.Id &&
-				x.Name == "Part-Time Attendance Policy");
+				x.Status == HrPolicyStatus.Active && x.Name == "Part-Time Attendance Policy");
 			var teachingLeave = await _leavePolicyRepository.FindByPolicyNameAsync(
 				academicYear.Id,
 				"Teaching Staff Leave Policy");

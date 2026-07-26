@@ -19,6 +19,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Timetable.Substitutions;
 
+[RemoteService(IsEnabled = false)]
 public class SubstitutionAppService(
     IRepository<SubstitutionRequest, Guid> substitutionRepository,
     IRepository<SubstitutionAuditLog, Guid> auditRepository,

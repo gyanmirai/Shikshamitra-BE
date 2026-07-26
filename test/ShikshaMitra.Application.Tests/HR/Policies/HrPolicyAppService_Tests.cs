@@ -20,6 +20,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
@@ -1174,6 +1175,29 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		restoredPayroll.Status.ShouldBe("draft");
 		restoredPayroll.IsDefault.ShouldBeFalse();
 		restoredPayroll.DayCalculationType.ShouldBe("manual-days");
+	}
+
+	[Fact]
+	public async Task Policy_Restore_Draft_Should_Reject_A_Current_Name_Collision()
+	{
+		var context = await CreatePolicyContextAsync();
+		var versions = await _policyVersions.GetListAsync(
+			"work_calendar",
+			context.WorkCalendar.Id,
+			new Volo.Abp.Application.Dtos.PagedAndSortedResultRequestDto { MaxResultCount = 10 });
+
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
+			_policyVersions.RestoreDraftAsync(
+				"work_calendar",
+				context.WorkCalendar.Id,
+				versions.Items.Single().Id,
+				new HrPolicyRestoreDraftRequestDto
+				{
+					Name = context.WorkCalendar.Name,
+					ChangeReason = "Duplicate restore regression"
+				}));
+
+		exception.Code.ShouldBe(HRErrorCodes.PolicyNameAlreadyExists);
 	}
 
 	[Fact]
@@ -3933,6 +3957,102 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
+	public async Task WorkCalendar_List_Should_Filter_Current_And_Archived_Before_Paging()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var archived = await CreateWorkCalendarAsync(academicYearId, "ArchivePage");
+		await ArchiveCalendarDirectlyAsync(archived.Id);
+		var current = await _workCalendars.CreateAsync(new CreateUpdateWorkCalendarPolicyDto
+		{
+			AcademicYearId = academicYearId,
+			Name = archived.Name,
+			Status = "draft",
+			EffectiveFrom = new DateTime(2026, 4, 1),
+			EffectiveTo = new DateTime(2027, 3, 31),
+			WeeklyOffPattern = "saturday_sunday",
+			HolidaySyncMode = "linked_with_overrides"
+		});
+
+		var currentPage = await _workCalendars.GetListAsync(new PolicyListRequestDto
+		{
+			AcademicYearId = academicYearId,
+			Search = archived.Name,
+			IsArchived = false,
+			MaxResultCount = 1
+		});
+		currentPage.TotalCount.ShouldBe(1);
+		currentPage.Items.Single().Id.ShouldBe(current.Id);
+
+		var archivedPage = await _workCalendars.GetListAsync(new PolicyListRequestDto
+		{
+			AcademicYearId = academicYearId,
+			Search = archived.Name,
+			IsArchived = true,
+			MaxResultCount = 1
+		});
+		archivedPage.TotalCount.ShouldBe(1);
+		archivedPage.Items.Single().Id.ShouldBe(archived.Id);
+	}
+
+	[Fact]
+	public async Task Policy_Name_Unique_Constraint_Races_Should_Return_Stable_Business_Errors()
+	{
+		var service = GetRequiredService<HrPolicyNameUniquenessService>();
+
+		var policyException = await Should.ThrowAsync<BusinessException>(() =>
+			service.ExecuteWorkCalendarWriteAsync(
+				"Duplicate calendar",
+				() => Task.FromException(new InvalidOperationException(
+					"duplicate key violates constraint IX_HR_WorkCalendarPolicies_Tenant_AcademicYear_Name"))));
+		policyException.Code.ShouldBe(HRErrorCodes.PolicyNameAlreadyExists);
+		policyException.Data["policyName"].ShouldBe("Duplicate calendar");
+
+		var leaveException = await Should.ThrowAsync<BusinessException>(() =>
+			service.ExecuteLeaveWriteAsync(
+				"Duplicate leave",
+				() => Task.FromException(new InvalidOperationException(
+					"duplicate key violates constraint IX_EmployeeLeavePolicies_TenantId_AcademicYearId_PolicyName"))));
+		leaveException.Code.ShouldBe(HRErrorCodes.LeavePolicyNameAlreadyExists);
+		leaveException.Data["policyName"].ShouldBe("Duplicate leave");
+	}
+
+	[Fact]
+	public async Task Attendance_Work_Calendar_Resolver_Should_Ignore_Unrelated_Missing_Policies()
+	{
+		var context = await CreatePolicyContextAsync();
+		var employee = await CreateEmployeeAsync();
+		var assignmentRepository = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		await assignmentRepository.InsertAsync(new HrPolicyAssignment(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			context.AcademicYearId,
+			HrPolicyAssignmentTargetType.Employee,
+			employee.Id.ToString("D").ToLowerInvariant(),
+			employee.FullName,
+			context.AttendancePolicy.Id,
+			Guid.NewGuid(),
+			Guid.NewGuid(),
+			new DateTime(2026, 4, 1),
+			null,
+			true,
+			priority: 100,
+			assignmentReason: "Attendance-only resolution regression"), autoSave: true);
+
+		using var scope = ServiceProvider.CreateScope();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		using var uow = uowManager.Begin(requiresNew: true);
+		var resolver = scope.ServiceProvider.GetRequiredService<HrAttendanceWorkCalendarResolver>();
+
+		var workCalendar = await resolver.ResolveAsync(
+			employee.Id,
+			new DateTime(2026, 5, 15),
+			context.AcademicYearId);
+
+		workCalendar.Id.ShouldBe(context.WorkCalendar.Id);
+		await uow.CompleteAsync();
+	}
+
+	[Fact]
 	public async Task EmployeeOverride_Upsert_Should_Move_Selected_Assignment_To_New_Range()
 	{
 		var context = await CreatePolicyContextAsync();
@@ -5617,8 +5737,11 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 			AdharNo = UniqueAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1992, 3, 10)),
 			GenderType = GenderType.Male,
+			CastType = CastType.General,
+			FamilyCaste = "General",
 			DateOfJoining = DateOnly.FromDateTime(new DateTime(2026, 4, 1)),
 			EmployeeStatusType = EmployeeStatusType.Active,
+			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = resolvedRoleId,
 			ShiftId = shiftId
 		});
@@ -5958,21 +6081,21 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 
 	private async Task<Guid> EnsureRoleExistsAsync()
 	{
-		var existing = (await _roleRepository.GetListAsync()).FirstOrDefault();
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var id = _guidGenerator.Create();
-		await _roleRepository.InsertAsync(new IdentityRole(id, $"PolicyImpactRole-{id:N}", _currentTenant.Id), autoSave: true);
-		return id;
+		return await Employees.EmployeeRoleTestHelper.EnsureAssignableRoleAsync(
+			_roleRepository,
+			_guidGenerator,
+			_currentTenant.Id,
+			"PolicyImpactRole");
 	}
 
 	private async Task<Guid> CreateUniqueRoleAsync()
 	{
 		var id = _guidGenerator.Create();
-		await _roleRepository.InsertAsync(new IdentityRole(id, $"PolicyImpactRole-{id:N}", _currentTenant.Id), autoSave: true);
+		var role = new IdentityRole(id, $"PolicyImpactRole-{id:N}", _currentTenant.Id);
+		role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
+		role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, EmployeeGroupAudience.Both);
+		role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);
+		await _roleRepository.InsertAsync(role, autoSave: true);
 		return id;
 	}
 

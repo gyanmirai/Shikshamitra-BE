@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.Reports;
 using Volo.Abp.BackgroundWorkers;
 using Volo.Abp.Threading;
-using Volo.Abp.Uow;
 
 namespace ShikshaMitra.BackgroundWorkers;
 
@@ -21,13 +20,10 @@ public class HrReportScheduleWorker : AsyncPeriodicBackgroundWorkerBase
 	{
 		var logger = workerContext.ServiceProvider.GetRequiredService<ILogger<HrReportScheduleWorker>>();
 		var scheduleService = workerContext.ServiceProvider.GetRequiredService<HrReportScheduleService>();
-		var unitOfWorkManager = workerContext.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 
 		try
 		{
-			using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
 			var processedCount = await scheduleService.ProcessDueSchedulesAsync();
-			await uow.CompleteAsync();
 
 			if (processedCount > 0)
 			{

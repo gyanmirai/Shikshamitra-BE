@@ -45,7 +45,9 @@ internal static class HrReportProjection
 			TemplateId = request.TemplateId,
 			TemplateName = request.TemplateName,
 			FileName = job.Status == HrReportExportStatus.Completed ? BuildFileName(job.ReportType, format) : null,
-			ErrorMessage = job.ErrorMessage,
+			ErrorMessage = job.Status == HrReportExportStatus.Failed
+				? HrReportExportErrorFormatter.NormalizePersistedMessage(job.ErrorMessage, format)
+				: null,
 			ProgressPercent = job.ProgressPercent,
 			RowCount = job.RowCount,
 			FileSizeBytes = job.FileSizeBytes,
@@ -62,21 +64,10 @@ internal static class HrReportProjection
 
 	private static HrReportRequestDto DeserializeRequest(HrReportExportJob job)
 	{
-		try
+		var request = HrReportStoredExportRequestSerializer.DeserializeRequest(job.RequestJson);
+		if (request != null)
 		{
-			var request = JsonSerializer.Deserialize<HrReportRequestDto>(job.RequestJson, new JsonSerializerOptions
-			{
-				PropertyNameCaseInsensitive = true
-			});
-
-			if (request != null)
-			{
-				return request;
-			}
-		}
-		catch (JsonException)
-		{
-			// Legacy rows can contain malformed snapshots; the export list should still render.
+			return request;
 		}
 
 		return new HrReportRequestDto

@@ -15,7 +15,7 @@ public static class PublicEmployeeApplicationSubmitValidation
 
 	public static IReadOnlyList<ValidationResult> Validate(
 		PublicEmployeeApplicationSubmitDto? input,
-		DateTime now)
+		DateOnly currentDate)
 	{
 		var results = new List<ValidationResult>();
 		if (input == null)
@@ -24,17 +24,17 @@ public static class PublicEmployeeApplicationSubmitValidation
 			return results;
 		}
 
-		ValidatePersonalInfo(input.PersonalInfo, now, results);
+		ValidatePersonalInfo(input.PersonalInfo, currentDate, results);
 		ValidateFamilyInfo(input.FamilyInfo, results);
 		ValidateAdditionalInfo(input.AdditionalInfo, results);
-		ValidateWorkExperiences(input.WorkExperiences, results);
+		ValidateWorkExperiences(input.WorkExperiences, currentDate, results);
 
 		return results;
 	}
 
 	private static void ValidatePersonalInfo(
 		EmployeeApplicationPersonalInfoDto? personalInfo,
-		DateTime now,
+		DateOnly currentDate,
 		List<ValidationResult> results)
 	{
 		if (personalInfo == null)
@@ -73,13 +73,12 @@ public static class PublicEmployeeApplicationSubmitValidation
 		}
 		else
 		{
-			var dob = personalInfo.DateOfBirth.Value.Date;
-			var today = now.Date;
-			if (dob >= today)
+			var dob = DateOnly.FromDateTime(personalInfo.DateOfBirth.Value);
+			if (dob >= currentDate)
 			{
 				Add(results, "Date of birth must be in the past.", "personalInfo.dateOfBirth");
 			}
-			else if (CalculateAge(dob, today) < 18)
+			else if (CalculateAge(dob, currentDate) < 18)
 			{
 				Add(results, "Applicant must be at least 18 years old.", "personalInfo.dateOfBirth");
 			}
@@ -91,6 +90,7 @@ public static class PublicEmployeeApplicationSubmitValidation
 		OptionalEnum(results, personalInfo.BloodGroup, 1, 8, "personalInfo.bloodGroup", "Blood group");
 		Required(results, personalInfo.Religion, "personalInfo.religion", "Religion is required.");
 		Max(results, personalInfo.Religion, 128, "personalInfo.religion", "Religion");
+		Required(results, personalInfo.FamilyCaste, "personalInfo.familyCaste", "Family caste is required.");
 		Max(results, personalInfo.FamilyCaste, 128, "personalInfo.familyCaste", "Family caste");
 		Max(results, personalInfo.Department, 256, "personalInfo.department", "Department");
 		Max(results, personalInfo.Designation, 256, "personalInfo.designation", "Designation");
@@ -167,6 +167,7 @@ public static class PublicEmployeeApplicationSubmitValidation
 
 	private static void ValidateWorkExperiences(
 		IReadOnlyList<EmployeeApplicationWorkExperienceDto>? workExperiences,
+		DateOnly currentDate,
 		List<ValidationResult> results)
 	{
 		if (workExperiences == null)
@@ -190,18 +191,12 @@ public static class PublicEmployeeApplicationSubmitValidation
 			Max(results, workExperience.Designation, 256, $"{path}.designation", "Designation");
 			Max(results, workExperience.Department, 256, $"{path}.department", "Department");
 			Max(results, workExperience.City, 128, $"{path}.city", "City");
-			if (!workExperience.StartDate.HasValue)
-			{
-				Add(results, "Start date is required.", $"{path}.startDate");
-			}
-
-			if (workExperience.StartDate.HasValue &&
-			    workExperience.EndDate.HasValue &&
-			    workExperience.EndDate.Value.Date < workExperience.StartDate.Value.Date)
-			{
-				Add(results, "End date must be on or after start date.", $"{path}.endDate");
-			}
-
+			EmployeeApplicationDateRules.ValidateWorkExperience(
+				workExperience.StartDate,
+				workExperience.EndDate,
+				currentDate,
+				path,
+				results);
 			ValidateLocation(results, workExperience.Country, $"{path}.country", "Country", required: false, CountryIsoCodeMaxLength);
 			ValidateLocation(results, workExperience.State, $"{path}.state", "State", required: false, StateIsoCodeMaxLength);
 		}
@@ -350,10 +345,13 @@ public static class PublicEmployeeApplicationSubmitValidation
 	private static string NormalizeDigits(string? value) =>
 		value == null ? string.Empty : new string(value.Where(char.IsDigit).ToArray());
 
-	private static int CalculateAge(DateTime dateOfBirth, DateTime referenceDate)
+	public static DateOnly GetInstitutionDate(DateTime value) =>
+		EmployeeApplicationInstitutionClock.GetDate(value);
+
+	private static int CalculateAge(DateOnly dateOfBirth, DateOnly referenceDate)
 	{
 		var age = referenceDate.Year - dateOfBirth.Year;
-		if (referenceDate.Date < dateOfBirth.Date.AddYears(age))
+		if (referenceDate < dateOfBirth.AddYears(age))
 		{
 			age--;
 		}

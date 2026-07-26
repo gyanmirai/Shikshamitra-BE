@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.Infrastructure.Data;
@@ -39,6 +40,7 @@ public static class EmployeeTestHelper
 	{
 		var personalInfo = BuildPersonalInfoRequest(firstNameSuffix);
 		personalInfo.IsTeaching = isTeaching;
+		personalInfo.RoleId = await ResolveCompatibleRoleIdAsync(client, isTeaching);
 		if (dateOfJoining.HasValue)
 		{
 			personalInfo.Doj = dateOfJoining.Value;
@@ -63,6 +65,61 @@ public static class EmployeeTestHelper
 		await AssignDefaultAcademicPermissionAsync(client, employee);
 		return employee;
 	}
+
+	private static async Task<Guid> ResolveCompatibleRoleIdAsync(HttpClient client, bool isTeaching)
+	{
+		if (isTeaching)
+		{
+			return DefaultRoleId;
+		}
+
+		using var response = await client.GetAsync("/api/identity/roles?skipCount=0&maxResultCount=1000");
+		response.EnsureSuccessStatusCode();
+		using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+		Guid? bothGroupsRoleId = null;
+		foreach (var role in document.RootElement.GetProperty("items").EnumerateArray())
+		{
+			var roleName = ReadString(role, "name");
+			var extraProperties = role.GetProperty("extraProperties");
+			var roleAudience = ReadString(extraProperties, EmployeeRoleAudience.ExtraPropertyName);
+			if (!string.Equals(roleAudience, EmployeeRoleAudience.Employee, StringComparison.Ordinal) ||
+				!ReadBoolean(extraProperties, EmployeeOnboardingRoleAssignment.ExtraPropertyName) ||
+				EmployeeOnboardingRoleAssignment.IsReservedSystemRole(roleName))
+			{
+				continue;
+			}
+
+			var groupAudience = ReadString(extraProperties, EmployeeGroupAudience.ExtraPropertyName);
+			if (!EmployeeGroupAudience.IsAssignableTo(groupAudience, EmployeeGroupType.NonTeaching))
+			{
+				continue;
+			}
+
+			var roleId = role.GetProperty("id").GetGuid();
+			if (string.Equals(
+				    EmployeeGroupAudience.ResolveOrDefault(groupAudience),
+				    EmployeeGroupAudience.NonTeaching,
+				    StringComparison.Ordinal))
+			{
+				return roleId;
+			}
+
+			bothGroupsRoleId ??= roleId;
+		}
+
+		return bothGroupsRoleId
+			?? throw new InvalidOperationException("No employee role is available for the non-teaching group.");
+	}
+
+	private static string? ReadString(JsonElement element, string propertyName) =>
+		element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+			? property.GetString()
+			: null;
+
+	private static bool ReadBoolean(JsonElement element, string propertyName) =>
+		element.TryGetProperty(propertyName, out var property) &&
+		property.ValueKind is JsonValueKind.True;
 
 	/// <summary>
 	/// Creates an employee with a profile picture attached as multipart/form-data.
@@ -148,6 +205,8 @@ public static class EmployeeTestHelper
 			PanNo = TestDataHelper.UniquePan(),
 			AdharNo = TestDataHelper.UniqueAdhar(),
 			Gender = 1,
+			CasteType = 0,
+			FamilyCaste = "General",
 		};
 	}
 

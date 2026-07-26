@@ -167,6 +167,61 @@ public class EarningComponentApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Update_Preview_Should_Reject_Self_Reference()
+	{
+		var component = await CreateComponentAsync("SelfReference");
+		var input = new EarningComponentUpdateRequestDto
+		{
+			EarningComponentName = TestDataHelper.UniqueName("SelfReferenceUpdate"),
+			EarningType = "FIXED",
+			CalculationType = "PERCENTAGE",
+			Percentage = 10m,
+			SelectedEarningComponentId = component.Id,
+			VisibleInPayslip = true
+		};
+
+		var response = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/{component.Id}/update-impact-preview",
+			input,
+			JsonOptions);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.IsSuccessStatusCode.ShouldBeFalse();
+		body.ShouldContain(HRErrorCodes.PayrollComponentSelfReference);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Update_Preview_Should_Reject_Indirect_Dependency_Cycle()
+	{
+		var baseComponent = await CreateComponentAsync("CycleBase");
+		var dependent = await PayrollTestHelper.CreatePercentageEarningComponentAsync(
+			Client,
+			baseComponent.Id,
+			10m,
+			"CycleDependent");
+		var input = new EarningComponentUpdateRequestDto
+		{
+			EarningComponentName = TestDataHelper.UniqueName("CycleBaseUpdate"),
+			EarningType = "FIXED",
+			CalculationType = "PERCENTAGE",
+			Percentage = 15m,
+			SelectedEarningComponentId = dependent.Id,
+			VisibleInPayslip = true
+		};
+
+		var response = await Client.PostAsJsonAsync(
+			$"{BaseUrl}/{baseComponent.Id}/update-impact-preview",
+			input,
+			JsonOptions);
+		var body = await response.Content.ReadAsStringAsync();
+
+		response.IsSuccessStatusCode.ShouldBeFalse();
+		body.ShouldContain(HRErrorCodes.PayrollComponentDependencyCycle);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Return_Field_Level_Validation_Errors_For_Invalid_Enum_Input()
 	{

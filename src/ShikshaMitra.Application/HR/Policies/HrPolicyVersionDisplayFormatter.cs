@@ -136,11 +136,31 @@ internal static class HrPolicyVersionDisplayFormatter
 
 	private static string FormatObjectValue(string field, JsonElement value, HrPolicyVersionDisplayContext displayContext)
 	{
+		if (field.Equals("holidaySummary", StringComparison.OrdinalIgnoreCase))
+		{
+			return FormatHolidaySummary(value);
+		}
 		if (Guid.TryParse(value.ToString(), out var id))
 		{
 			return ResolveGuidDisplay(field, id, displayContext);
 		}
 		return "Changed";
+	}
+
+	private static string FormatHolidaySummary(JsonElement value)
+	{
+		static int Read(JsonElement element, string property) =>
+			element.TryGetProperty(property, out var result) && result.TryGetInt32(out var number)
+				? number
+				: 0;
+
+		return string.Join(
+			" · ",
+			$"Total: {Read(value, "totalCount")}",
+			$"Included: {Read(value, "includedCount")}",
+			$"Removed: {Read(value, "removedCount")}",
+			$"Central: {Read(value, "centralCount")}",
+			$"Manual: {Read(value, "manualCount")}");
 	}
 
 	private static string FormatManualMonth(JsonElement value)

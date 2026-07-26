@@ -22,6 +22,12 @@ public class CreateUpdateWorkCalendarPolicyDtoValidator : AbstractValidator<Crea
 			.NotNull()
 			.When(x => IsActive(x.Status))
 			.WithMessage("Effective from is required for active policies.");
+		RuleFor(x => x.EffectiveFrom)
+			.Must(date => !date.HasValue || HrPolicyDateLimits.IsSupportedYear(date.Value.Year))
+			.WithMessage($"Please enter a valid year between {HrPolicyDateLimits.MinimumYear} and {HrPolicyDateLimits.MaximumYear}.");
+		RuleFor(x => x.EffectiveTo)
+			.Must(date => !date.HasValue || HrPolicyDateLimits.IsSupportedYear(date.Value.Year))
+			.WithMessage($"Please enter a valid year between {HrPolicyDateLimits.MinimumYear} and {HrPolicyDateLimits.MaximumYear}.");
 		RuleFor(x => x)
 			.Must(x => !x.EffectiveFrom.HasValue || !x.EffectiveTo.HasValue || x.EffectiveTo.Value.Date >= x.EffectiveFrom.Value.Date)
 			.WithMessage("Effective to must be on or after effective from.");
@@ -31,6 +37,11 @@ public class CreateUpdateWorkCalendarPolicyDtoValidator : AbstractValidator<Crea
 		RuleFor(x => x.CustomWeeklyOffs)
 			.Must((input, days) => !IsCustomWeeklyOffPattern(input.WeeklyOffPattern) || (days?.Count ?? 0) > 0)
 			.WithMessage("Select at least one custom weekly off day when weekly off pattern is custom.");
+		RuleFor(x => x.CustomWeeklyOffs)
+			.Must((input, days) =>
+				!IsCustomWeeklyOffPattern(input.WeeklyOffPattern) ||
+				(days?.Distinct().Count() ?? 0) < 7)
+			.WithMessage("Select at least one working day. A work calendar cannot mark all seven days as weekly offs.");
 	}
 }
 
@@ -160,35 +171,5 @@ public class HrPolicyImpactPreviewRequestDtoValidator : AbstractValidator<HrPoli
 		RuleFor(x => x.AttendancePolicy)
 			.SetValidator(new CreateUpdateAttendancePolicyDtoValidator()!)
 			.When(x => x.AttendancePolicy != null);
-	}
-}
-
-public class HrPolicyAssignmentImpactPreviewRequestDtoValidator : AbstractValidator<HrPolicyAssignmentImpactPreviewRequestDto>
-{
-	public HrPolicyAssignmentImpactPreviewRequestDtoValidator()
-	{
-		RuleFor(x => x.Action).NotEmpty().MaximumLength(50);
-		RuleFor(x => x.Assignment).NotNull().SetValidator(new CreateUpdateHrPolicyAssignmentDtoValidator());
-	}
-}
-
-public class PolicyAssignmentPreviewRequestDtoValidator : AbstractValidator<PolicyAssignmentPreviewRequestDto>
-{
-	public PolicyAssignmentPreviewRequestDtoValidator()
-	{
-		RuleFor(x => x.AcademicYearId).NotEmpty();
-		RuleFor(x => x.Date).Must(date => date != default).WithMessage("Preview date is required.");
-		RuleFor(x => x)
-			.Must(x => x.EmployeeId.HasValue || x.GroupId.HasValue)
-			.WithMessage("Employee or group is required for policy assignment preview.");
-	}
-}
-
-public class HrPolicyRestoreDraftRequestDtoValidator : AbstractValidator<HrPolicyRestoreDraftRequestDto>
-{
-	public HrPolicyRestoreDraftRequestDtoValidator()
-	{
-		RuleFor(x => x.Name).MaximumLength(200);
-		RuleFor(x => x.ChangeReason).MaximumLength(500);
 	}
 }

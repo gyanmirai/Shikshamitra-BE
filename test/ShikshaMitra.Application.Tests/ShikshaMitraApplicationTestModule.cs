@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Onboarding;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
@@ -78,6 +79,35 @@ internal sealed class FakeEmployeeLeaveRepository(
 }
 
 public sealed record SentEmployeeOnboardingInvitation(Guid ApplicationId, string? Email, string PublicPath);
+
+public sealed record SentEmployeeWelcomeEmail(
+    string Email,
+    string FullName,
+    string Username);
+
+public sealed class FakeEmployeeEmailService : IEmployeeEmailService
+{
+    private readonly ConcurrentQueue<SentEmployeeWelcomeEmail> _sent = new();
+
+    public IReadOnlyCollection<SentEmployeeWelcomeEmail> Sent => _sent.ToList();
+
+    public Task SendWelcomeEmailAsync(
+        string employeeEmail,
+        string employeeName,
+        string username,
+        string password)
+    {
+        _sent.Enqueue(new(employeeEmail, employeeName, username));
+        return Task.CompletedTask;
+    }
+
+    public void Reset()
+    {
+        while (_sent.TryDequeue(out _))
+        {
+        }
+    }
+}
 
 public sealed class FakeEmployeeOnboardingInvitationEmailService : IEmployeeOnboardingInvitationEmailService
 {
@@ -147,6 +177,9 @@ public class ShikshaMitraApplicationTestModule : AbpModule
         // so that application tests using SQLite don't fail on PostgreSQL-only SQL syntax.
         context.Services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
         context.Services.AddTransient<IEmployeeLeaveRepository, FakeEmployeeLeaveRepository>();
+        context.Services.AddSingleton<FakeEmployeeEmailService>();
+        context.Services.Replace(ServiceDescriptor.Singleton<IEmployeeEmailService>(sp =>
+            sp.GetRequiredService<FakeEmployeeEmailService>()));
         context.Services.AddSingleton<FakeEmployeeOnboardingInvitationEmailService>();
         context.Services.Replace(ServiceDescriptor.Singleton<IEmployeeOnboardingInvitationEmailService>(sp =>
             sp.GetRequiredService<FakeEmployeeOnboardingInvitationEmailService>()));

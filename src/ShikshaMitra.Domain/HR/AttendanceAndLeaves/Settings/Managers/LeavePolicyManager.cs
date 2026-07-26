@@ -31,7 +31,7 @@ public class LeavePolicyManager : DomainService
 		IEnumerable<LeavePolicyRuleInput> rules,
 		string? description = null)
 	{
-		await CheckPolicyNameAvailabilityAsync(academicYearId, policyName);
+		await EnsurePolicyNameAvailableAsync(academicYearId, policyName);
 		var defaultAfterCreate = await ResolveDefaultAfterCreateAsync(academicYearId, status, isDefault);
 		if (defaultAfterCreate)
 		{
@@ -64,9 +64,9 @@ public class LeavePolicyManager : DomainService
 		IEnumerable<LeavePolicyRuleInput> rules,
 		string? description)
 	{
-		if (!string.Equals(leavePolicy.PolicyName, policyName, StringComparison.OrdinalIgnoreCase))
+		if (!string.Equals(leavePolicy.PolicyName, policyName, StringComparison.OrdinalIgnoreCase) || (leavePolicy.Status == HrPolicyStatus.Archived && status != HrPolicyStatus.Archived))
 		{
-			await CheckPolicyNameAvailabilityAsync(leavePolicy.AcademicYearId, policyName, leavePolicy.Id);
+			await EnsurePolicyNameAvailableAsync(leavePolicy.AcademicYearId, policyName, leavePolicy.Id);
 		}
 
 		await EnsureDefaultCanChangeAsync(leavePolicy, isDefault, status);
@@ -105,7 +105,7 @@ public class LeavePolicyManager : DomainService
 		leavePolicy.SetDefault(true);
 	}
 
-	private async Task CheckPolicyNameAvailabilityAsync(Guid academicYearId, string policyName, Guid? excludeId = null)
+	public async Task EnsurePolicyNameAvailableAsync(Guid academicYearId, string policyName, Guid? excludeId = null)
 	{
 		if (await _leavePolicyRepository.IsPolicyNameExistsAsync(academicYearId, policyName, excludeId))
 		{

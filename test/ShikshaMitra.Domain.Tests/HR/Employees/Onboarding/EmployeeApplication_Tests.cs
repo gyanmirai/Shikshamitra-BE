@@ -32,6 +32,46 @@ public class EmployeeApplication_Tests
 		Assert.Equal(HRErrorCodes.EmployeeApplicationTokenExpired, exception.Code);
 	}
 
+	[Fact]
+	public void RegenerateInvitationToken_Allows_Expired_Unsubmitted_Invitation()
+	{
+		var issuedAt = new DateTime(2026, 5, 1, 10, 0, 0, DateTimeKind.Utc);
+		var application = CreateApplication(issuedAt);
+		var regeneratedAt = issuedAt.AddDays(31);
+
+		application.RegenerateInvitationToken(
+			"replacement-hash",
+			"replacement-token",
+			regeneratedAt.AddDays(30),
+			regeneratedAt);
+
+		Assert.Equal("replacement-hash", application.TokenHash);
+		Assert.Equal(EmployeeApplicationStatus.InvitationSent, application.Status);
+		Assert.Null(application.SubmittedAt);
+	}
+
+	[Fact]
+	public void RegenerateInvitationToken_Rejects_Submitted_Application_Without_Mutating_It()
+	{
+		var now = new DateTime(2026, 6, 12, 10, 0, 0, DateTimeKind.Utc);
+		var application = CreateApplication(now);
+		Submit(application, now.AddMinutes(1));
+		var originalHash = application.TokenHash;
+		var originalSubmittedAt = application.SubmittedAt;
+
+		var exception = Assert.Throws<BusinessException>(() =>
+			application.RegenerateInvitationToken(
+				"replacement-hash",
+				"replacement-token",
+				now.AddDays(30),
+				now.AddMinutes(2)));
+
+		Assert.Equal(HRErrorCodes.EmployeeApplicationInvalidStatusTransition, exception.Code);
+		Assert.Equal(originalHash, application.TokenHash);
+		Assert.Equal(originalSubmittedAt, application.SubmittedAt);
+		Assert.Equal(EmployeeApplicationStatus.Applied, application.Status);
+	}
+
 	[Theory]
 	[InlineData(EmployeeApplicationStatus.Rejected)]
 	[InlineData(EmployeeApplicationStatus.Withdrawn)]
@@ -57,6 +97,90 @@ public class EmployeeApplication_Tests
 			application.ChangeStatus(EmployeeApplicationStatus.Finalized, null));
 
 		Assert.Equal(HRErrorCodes.EmployeeApplicationInvalidStatusTransition, exception.Code);
+	}
+
+	[Theory]
+	[InlineData(EmployeeApplicationStatus.Screening, EmployeeApplicationStatus.Applied)]
+	[InlineData(EmployeeApplicationStatus.Interviewing, EmployeeApplicationStatus.Screening)]
+	[InlineData(EmployeeApplicationStatus.Offered, EmployeeApplicationStatus.Interviewing)]
+	[InlineData(EmployeeApplicationStatus.ReadyForOnboarding, EmployeeApplicationStatus.Offered)]
+	public void ChangeStatus_Rejects_Backward_Workflow_Transitions(
+		EmployeeApplicationStatus current,
+		EmployeeApplicationStatus target)
+	{
+		var now = new DateTime(2026, 6, 12, 10, 0, 0, DateTimeKind.Utc);
+		var application = CreateApplication(now);
+		Submit(application, now);
+		AdvanceTo(application, current);
+
+		var exception = Assert.Throws<BusinessException>(() =>
+			application.ChangeStatus(target, "Move backward"));
+
+		Assert.Equal(HRErrorCodes.EmployeeApplicationInvalidStatusTransition, exception.Code);
+		Assert.Equal(current, application.Status);
+	}
+
+	[Theory]
+	[InlineData(EmployeeApplicationStatus.Rejected)]
+	[InlineData(EmployeeApplicationStatus.Withdrawn)]
+	public void ChangeStatus_Closed_Statuses_Are_Terminal(EmployeeApplicationStatus terminalStatus)
+	{
+		var now = new DateTime(2026, 6, 12, 10, 0, 0, DateTimeKind.Utc);
+		var application = CreateApplication(now);
+		Submit(application, now);
+		application.ChangeStatus(terminalStatus, "Closed");
+
+		var exception = Assert.Throws<BusinessException>(() =>
+			application.ChangeStatus(EmployeeApplicationStatus.Screening, "Reopen"));
+
+		Assert.Equal(HRErrorCodes.EmployeeApplicationInvalidStatusTransition, exception.Code);
+		Assert.Equal(terminalStatus, application.Status);
+	}
+
+	[Theory]
+	[InlineData(EmployeeApplicationStatus.Applied)]
+	[InlineData(EmployeeApplicationStatus.Screening)]
+	[InlineData(EmployeeApplicationStatus.Interviewing)]
+	[InlineData(EmployeeApplicationStatus.Offered)]
+	[InlineData(EmployeeApplicationStatus.ReadyForOnboarding)]
+	public void ChangeStatus_Rejects_Workflow_Progress_Before_Candidate_Submission(
+		EmployeeApplicationStatus status)
+	{
+		var now = new DateTime(2026, 6, 12, 10, 0, 0, DateTimeKind.Utc);
+		var application = CreateApplication(now);
+
+		var exception = Assert.Throws<BusinessException>(() =>
+			application.ChangeStatus(status, "Advanced by HR"));
+
+		Assert.Equal(HRErrorCodes.EmployeeApplicationSubmissionRequired, exception.Code);
+		Assert.Contains("must submit", exception.Message, StringComparison.OrdinalIgnoreCase);
+		Assert.Equal(EmployeeApplicationStatus.InvitationSent, application.Status);
+	}
+
+	[Theory]
+	[InlineData(EmployeeApplicationStatus.Rejected)]
+	[InlineData(EmployeeApplicationStatus.Withdrawn)]
+	public void ChangeStatus_Allows_Closing_Unsubmitted_Application(EmployeeApplicationStatus status)
+	{
+		var now = new DateTime(2026, 6, 12, 10, 0, 0, DateTimeKind.Utc);
+		var application = CreateApplication(now);
+
+		application.ChangeStatus(status, "Closed by HR");
+
+		Assert.Equal(status, application.Status);
+	}
+
+	[Fact]
+	public void MarkFinalized_Rejects_Unsubmitted_Application()
+	{
+		var now = new DateTime(2026, 6, 12, 10, 0, 0, DateTimeKind.Utc);
+		var application = CreateApplication(now);
+
+		var exception = Assert.Throws<BusinessException>(() =>
+			application.MarkFinalized(Guid.NewGuid(), now.AddDays(1)));
+
+		Assert.Equal(HRErrorCodes.EmployeeApplicationSubmissionRequired, exception.Code);
+		Assert.Null(application.FinalizedEmployeeId);
 	}
 
 	[Fact]
@@ -127,4 +251,23 @@ public class EmployeeApplication_Tests
 			new List<WorkExperience>(),
 			null,
 			null);
+
+	private static void AdvanceTo(EmployeeApplication application, EmployeeApplicationStatus target)
+	{
+		foreach (var status in new[]
+		         {
+			         EmployeeApplicationStatus.Screening,
+			         EmployeeApplicationStatus.Interviewing,
+			         EmployeeApplicationStatus.Offered,
+			         EmployeeApplicationStatus.ReadyForOnboarding
+		         })
+		{
+			if (status > target)
+			{
+				return;
+			}
+
+			application.ChangeStatus(status, "Advance");
+		}
+	}
 }

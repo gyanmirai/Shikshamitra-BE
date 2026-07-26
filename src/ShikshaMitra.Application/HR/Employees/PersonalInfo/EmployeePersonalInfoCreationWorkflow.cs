@@ -3,16 +3,11 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using ShikshaMitra.HR;
-using ShikshaMitra.HR.Policies;
 using ShikshaMitra.TenantSettings;
 using Volo.Abp;
-using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
-using Volo.Abp.EventBus.Distributed;
 using Volo.Abp.MultiTenancy;
-using Volo.Abp.Timing;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
@@ -20,28 +15,55 @@ namespace ShikshaMitra.HR.Employees.PersonalInfo;
 public class EmployeePersonalInfoCreationWorkflow(
 	IEmployeeRepository employeeRepository,
 	EmployeeManager employeeManager,
-	EmployeeDocumentManager employeeDocumentManager,
-	IEmployeeEmailService emailService,
-	IDistributedEventBus distributedEventBus,
-	IHrPolicyAssignmentAppService policyAssignmentAppService,
 	EmployeeIdentityUniquenessChecker identityUniquenessChecker,
 	EmployeePersonalInfoUserAccountCreator userAccountCreator,
 	EmployeePersonalInfoProjection personalInfoProjection,
+	EmployeePersonalInfoPostCommitEffects postCommitEffects,
+	EmployeePersonalInfoPolicyOverrideWriter policyOverrideWriter,
 	EmployeeCreationContactGuard contactGuard,
 	ShiftReferenceValidator shiftReferenceValidator,
 	ICurrentTenant currentTenant,
 	IUnitOfWorkManager unitOfWorkManager,
-	IClock clock,
 	ILogger<EmployeePersonalInfoCreationWorkflow> logger) : ITransientDependency
 {
 	private const int MaxEmployeeCodeInsertAttempts = 5;
-	private const string OnboardingDefaultPolicyConfirmationTokenMarker = "__employee_onboarding_default_policy_assignment__";
 	private static readonly ConcurrentDictionary<string, SemaphoreSlim> CreationLocks = new();
 
 	public async Task<EmployeePersonalInfoDto> CreateAsync(
 		CreateEmployeePersonalInfoDto input,
 		string? profilePictureFileName,
 		byte[]? profilePictureContent)
+	{
+		return await CreateAsync(
+			input,
+			profilePictureFileName,
+			profilePictureContent,
+			useCurrentUnitOfWork: false);
+	}
+
+	public async Task<EmployeePersonalInfoDto> CreateInCurrentUnitOfWorkAsync(
+		CreateEmployeePersonalInfoDto input,
+		string? profilePictureFileName,
+		byte[]? profilePictureContent)
+	{
+		if (unitOfWorkManager.Current is null)
+		{
+			throw new InvalidOperationException(
+				"Atomic employee creation requires an active unit of work.");
+		}
+
+		return await CreateAsync(
+			input,
+			profilePictureFileName,
+			profilePictureContent,
+			useCurrentUnitOfWork: true);
+	}
+
+	private async Task<EmployeePersonalInfoDto> CreateAsync(
+		CreateEmployeePersonalInfoDto input,
+		string? profilePictureFileName,
+		byte[]? profilePictureContent,
+		bool useCurrentUnitOfWork)
 	{
 		var contact = contactGuard.RequireContactDetails(input.Email, input.MobileNo);
 		input.Email = contact.Email;
@@ -57,7 +79,9 @@ public class EmployeePersonalInfoCreationWorkflow(
 		try
 		{
 			userAccount = await userAccountCreator.CreateAsync(input);
-			employee = await CreateAndInsertEmployeeWithRetryAsync(userAccount.User.Id, input);
+			employee = useCurrentUnitOfWork
+				? await CreateAndInsertEmployeeAsync(userAccount.User.Id, input)
+				: await CreateAndInsertEmployeeWithRetryAsync(userAccount.User.Id, input);
 		}
 		catch
 		{
@@ -72,28 +96,26 @@ public class EmployeePersonalInfoCreationWorkflow(
 			creationLock.Release();
 		}
 
-		if (profilePictureContent != null && !string.IsNullOrWhiteSpace(profilePictureFileName))
+		if (useCurrentUnitOfWork)
 		{
-			await employeeDocumentManager.UploadProfilePictureAsync(
-				employee.Id, profilePictureFileName, profilePictureContent);
+			var employeeDto = await personalInfoProjection.ToPersonalInfoDtoAsync(
+				await employeeRepository.GetAsync(employee.Id));
+			postCommitEffects.Register(
+				employee,
+				employeeDto,
+				input,
+				userAccount,
+				profilePictureFileName,
+				profilePictureContent);
+			return employeeDto;
 		}
 
-		logger.LogInformation(
-			"Employee created: EmployeeId={EmployeeId}, Code={EmployeeCode}, Email={Email}",
-			employee.Id, employee.EmployeeCode, input.Email);
-
-		await distributedEventBus.PublishAsync(new HR.Events.EmployeeCreatedEto
-		{
-			EmployeeId = employee.Id,
-			EmployeeCode = employee.EmployeeCode,
-			FullName = $"{input.FirstName} {input.LastName}".Trim(),
-			Email = input.Email,
-			TenantId = currentTenant.Id,
-			CreatedAt = clock.Now
-		});
-
-		var fullName = $"{input.FirstName} {input.LastName}".Trim();
-		await emailService.SendWelcomeEmailAsync(input.Email, fullName, userAccount.Username, userAccount.Password);
+		await postCommitEffects.ExecuteAsync(
+			employee,
+			input,
+			userAccount,
+			profilePictureFileName,
+			profilePictureContent);
 
 		return await personalInfoProjection.ToPersonalInfoDtoAsync(await employeeRepository.GetAsync(employee.Id));
 	}
@@ -113,31 +135,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 			try
 			{
 				using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });
-
-				var employee = await employeeManager.CreateEmployeeAsync(
-					userId: userId, roleId: input.RoleId,
-					firstName: input.FirstName, lastName: input.LastName,
-					middleName: input.MiddleName, shortName: input.ShortName!,
-					employeeStatusType: input.EmployeeStatusType, dateOfBirth: input.DateOfBirth,
-					familyCast: input.FamilyCaste, castType: input.CastType,
-					genderType: input.GenderType, religion: input.Religion,
-					maritalStatus: input.MaritalStatus, bloodGroup: input.BloodGroup,
-					mobileNo: input.MobileNo, secondaryMobileNo: input.SecondaryMobileNo,
-					email: input.Email, panNo: input.PanNo, adharNo: input.AdharNo,
-					address1: input.Address1, address2: input.Address2,
-					address3: input.Address3, department: input.Department,
-					designation: input.Designation, dateOfJoining: input.DateOfJoining,
-					employeeGroup: input.EmployeeGroup, qualification: input.Qualification,
-					identificationMark1: input.IdentificationMark1, city: input.City,
-					state: input.State, country: input.Country, pinCode: input.Pincode,
-					shiftId: input.ShiftId);
-
-				employee = await employeeRepository.InsertAsync(employee, autoSave: true);
-				if (input.PolicyOverride != null)
-				{
-					await CreateDirectPolicyOverrideAsync(employee, input.PolicyOverride);
-				}
-
+				var employee = await CreateAndInsertEmployeeAsync(userId, input);
 				await uow.CompleteAsync();
 				return employee;
 			}
@@ -155,63 +153,35 @@ public class EmployeePersonalInfoCreationWorkflow(
 		throw new InvalidOperationException("Employee creation retry loop exited unexpectedly.");
 	}
 
-	private async Task CreateDirectPolicyOverrideAsync(Employee employee, CreateEmployeePolicyOverrideDto input)
+	private async Task<Employee> CreateAndInsertEmployeeAsync(
+		Guid userId,
+		CreateEmployeePersonalInfoDto input)
 	{
-		var overrideInput = new UpsertEmployeePolicyOverrideDto
-		{
-			EmployeeId = employee.Id,
-			AcademicYearId = input.AcademicYearId,
-			AttendancePolicyId = input.AttendancePolicyId,
-			PayrollPolicyId = input.PayrollPolicyId,
-			LeavePolicyId = input.LeavePolicyId,
-			EffectiveFrom = input.EffectiveFrom,
-			EffectiveTo = input.EffectiveTo,
-			AssignmentReason = input.AssignmentReason ?? "Employee creation override",
-			ConfirmationToken = input.ConfirmationToken
-		};
+		var employee = await employeeManager.CreateEmployeeAsync(
+			userId: userId, roleId: input.RoleId,
+			firstName: input.FirstName, lastName: input.LastName,
+			middleName: input.MiddleName, shortName: input.ShortName!,
+			employeeStatusType: input.EmployeeStatusType, dateOfBirth: input.DateOfBirth,
+			familyCast: input.FamilyCaste, castType: input.CastType,
+			genderType: input.GenderType, religion: input.Religion,
+			maritalStatus: input.MaritalStatus, bloodGroup: input.BloodGroup,
+			mobileNo: input.MobileNo, secondaryMobileNo: input.SecondaryMobileNo,
+			email: input.Email, panNo: input.PanNo, adharNo: input.AdharNo,
+			address1: input.Address1, address2: input.Address2,
+			address3: input.Address3, department: input.Department,
+			designation: input.Designation, dateOfJoining: input.DateOfJoining,
+			employeeGroup: input.EmployeeGroup, qualification: input.Qualification,
+			identificationMark1: input.IdentificationMark1, city: input.City,
+			state: input.State, country: input.Country, pinCode: input.Pincode,
+			shiftId: input.ShiftId);
 
-		await EnsureOnboardingDefaultPolicyOverrideConfirmedAsync(employee, overrideInput);
-		await policyAssignmentAppService.UpsertEmployeeOverrideAsync(overrideInput);
-	}
-
-	private async Task EnsureOnboardingDefaultPolicyOverrideConfirmedAsync(
-		Employee employee,
-		UpsertEmployeePolicyOverrideDto input)
-	{
-		if (!string.Equals(
-			    input.ConfirmationToken,
-			    OnboardingDefaultPolicyConfirmationTokenMarker,
-			    StringComparison.Ordinal))
+		employee = await employeeRepository.InsertAsync(employee, autoSave: true);
+		if (input.PolicyOverride != null)
 		{
-			return;
+			await policyOverrideWriter.ApplyAsync(employee, input.PolicyOverride);
 		}
 
-		var targetKey = HrPolicyAssignment.NormalizeTargetKey(
-			HrPolicyAssignmentTargetType.Employee,
-			employee.Id.ToString("D"));
-		var preview = await policyAssignmentAppService.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
-		{
-			Action = HrPolicyAssignmentImpactService.EmployeeOverrideUpsertAction,
-			Assignment = new CreateUpdateHrPolicyAssignmentDto
-			{
-				AcademicYearId = input.AcademicYearId,
-				TargetType = HrPolicyMapping.MapAssignmentTargetType(HrPolicyAssignmentTargetType.Employee),
-				TargetKey = targetKey,
-				TargetDisplayName = employee.EmployeeName,
-				AttendancePolicyId = input.AttendancePolicyId,
-				PayrollPolicyId = input.PayrollPolicyId,
-				LeavePolicyId = input.LeavePolicyId,
-				EffectiveFrom = input.EffectiveFrom.Date,
-				EffectiveTo = input.EffectiveTo?.Date,
-				IsActive = true,
-				Priority = 100,
-				AssignmentReason = input.AssignmentReason
-			}
-		});
-
-		input.ConfirmationToken = preview.RequiresConfirmation
-			? preview.ConfirmationToken
-			: null;
+		return employee;
 	}
 
 	private static bool IsEmployeeCodeUniqueConstraintViolation(Exception exception)

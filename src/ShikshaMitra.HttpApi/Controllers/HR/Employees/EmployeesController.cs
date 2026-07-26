@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Dashboard;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.Search;
 using Volo.Abp;
@@ -30,17 +31,20 @@ public class EmployeesController : AbpControllerBase
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IEmployeeAuthorizationService _authorizationService;
 	private readonly ICurrentEmployeeProfileAppService _currentEmployeeProfileAppService;
+	private readonly IEmployeeDashboardAppService _employeeDashboardAppService;
 
 	public EmployeesController(
 		IEmployeeSearchAppService searchAppService,
 		IEmployeePersonalInfoAppService personalInfoAppService,
 		IEmployeeAuthorizationService authorizationService,
-		ICurrentEmployeeProfileAppService currentEmployeeProfileAppService)
+		ICurrentEmployeeProfileAppService currentEmployeeProfileAppService,
+		IEmployeeDashboardAppService employeeDashboardAppService)
 	{
 		_searchAppService = searchAppService;
 		_personalInfoAppService = personalInfoAppService;
 		_authorizationService = authorizationService;
 		_currentEmployeeProfileAppService = currentEmployeeProfileAppService;
+		_employeeDashboardAppService = employeeDashboardAppService;
 	}
 
 	/// <summary>
@@ -90,6 +94,20 @@ public class EmployeesController : AbpControllerBase
 
 		var employee = await _currentEmployeeProfileAppService.GetCurrentAsync();
 		return MapToEmployeeDetails(employee);
+	}
+
+	/// <summary>
+	/// Get the real attendance, leave, and holiday overview for an accessible employee.
+	/// </summary>
+	[HttpGet("{employeeId}/dashboard")]
+	[ProducesResponseType(typeof(EmployeeDashboardDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<EmployeeDashboardDto> GetEmployeeDashboardAsync(
+		Guid employeeId,
+		[FromQuery] DateTime? date = null)
+	{
+		return await _employeeDashboardAppService.GetAsync(employeeId, date);
 	}
 
 	/// <summary>

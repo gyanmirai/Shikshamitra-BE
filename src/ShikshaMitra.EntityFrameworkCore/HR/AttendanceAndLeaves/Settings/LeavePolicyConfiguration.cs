@@ -19,6 +19,10 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 			.IsRequired()
 			.HasMaxLength(LeavePolicyConsts.MaxPolicyNameLength);
 
+		builder.Property(x => x.NormalizedPolicyName)
+			.IsRequired()
+			.HasMaxLength(LeavePolicyConsts.MaxPolicyNameLength);
+
 		builder.Property(x => x.Description)
 			.HasMaxLength(LeavePolicyConsts.MaxDescriptionLength);
 
@@ -46,8 +50,9 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 			.HasForeignKey(x => x.LeavePolicyId)
 			.OnDelete(DeleteBehavior.Cascade);
 
-		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.PolicyName })
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.NormalizedPolicyName })
 			.IsUnique()
+			.HasFilter("\"Status\" <> 2")
 			.HasDatabaseName("IX_EmployeeLeavePolicies_TenantId_AcademicYearId_PolicyName");
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsActive })

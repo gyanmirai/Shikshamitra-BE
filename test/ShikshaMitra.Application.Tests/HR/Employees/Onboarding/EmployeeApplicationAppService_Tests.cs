@@ -9,11 +9,14 @@ using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.BlobStoring;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
@@ -30,6 +33,9 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IRepository<EmployeeApplication, Guid> _applicationRepository;
 	private readonly FakeEmployeeOnboardingInvitationEmailService _emailService;
+	private readonly FakeEmployeeEmailService _welcomeEmailService;
+	private readonly IBlobContainer _blobContainer;
+	private readonly EmployeeDocumentManager _employeeDocumentManager;
 	private readonly IRepository<HrPolicyAssignment, Guid> _assignmentRepository;
 	private readonly IWorkCalendarPolicyAppService _workCalendars;
 	private readonly IPayrollPolicyAppService _payrollPolicies;
@@ -40,6 +46,8 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	private readonly AcademicYearManager _academicYearManager;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+	private readonly IEmployeeRepository _employeeRepository;
+	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IUnitOfWorkManager _unitOfWorkManager;
 	private readonly IGuidGenerator _guidGenerator;
@@ -50,6 +58,9 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_applicationRepository = GetRequiredService<IRepository<EmployeeApplication, Guid>>();
 		_emailService = GetRequiredService<FakeEmployeeOnboardingInvitationEmailService>();
+		_welcomeEmailService = GetRequiredService<FakeEmployeeEmailService>();
+		_blobContainer = GetRequiredService<IBlobContainer>();
+		_employeeDocumentManager = GetRequiredService<EmployeeDocumentManager>();
 		_assignmentRepository = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
 		_workCalendars = GetRequiredService<IWorkCalendarPolicyAppService>();
 		_payrollPolicies = GetRequiredService<IPayrollPolicyAppService>();
@@ -60,6 +71,8 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		_academicYearManager = GetRequiredService<AcademicYearManager>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+		_employeeRepository = GetRequiredService<IEmployeeRepository>();
+		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_unitOfWorkManager = GetRequiredService<IUnitOfWorkManager>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
@@ -110,6 +123,27 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 
 		var persisted = await _applicationRepository.GetAsync(invite.Application.Id);
 		persisted.EncryptedToken.ShouldNotBeNullOrWhiteSpace();
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Create_Unique_Application_Numbers_Within_The_Same_Second()
+	{
+		_emailService.Reset();
+		var invitations = new List<EmployeeApplicationInviteDto>();
+		for (var index = 0; index < 8; index++)
+		{
+			invitations.Add(await CreateInviteAsync(
+				$"onboarding.number.{index}.{Guid.NewGuid():N}@test.com"));
+		}
+
+		invitations
+			.Select(invitation => invitation.Application.ApplicationNumber)
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Count()
+			.ShouldBe(invitations.Count);
+		invitations.Select(invitation => invitation.Token).Distinct().Count()
+			.ShouldBe(invitations.Count);
+		_emailService.Sent.Count.ShouldBe(invitations.Count);
 	}
 
 	[Fact]
@@ -241,6 +275,22 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	}
 
 	[Fact]
+	public async Task RegenerateLinkAsync_Should_Reject_Submitted_Application_Without_Mutating_Submission()
+	{
+		var submitted = await CreateSubmittedApplicationAsync("regen-submitted");
+		var before = await _applicationRepository.GetAsync(submitted.Id);
+
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
+			_applications.RegenerateLinkAsync(submitted.Id));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeApplicationInvalidStatusTransition);
+		var after = await _applicationRepository.GetAsync(submitted.Id);
+		after.Status.ShouldBe(EmployeeApplicationStatus.Applied);
+		after.SubmittedAt.ShouldBe(before.SubmittedAt);
+		after.TokenHash.ShouldBe(before.TokenHash);
+	}
+
+	[Fact]
 	public async Task FinalizeAsync_Should_Create_Default_Policy_Assignment_When_Override_Is_Missing()
 	{
 		await CreateDefaultPoliciesAsync();
@@ -272,9 +322,11 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 				Size = BuildMinimalPng().Length
 			});
 
+		var personalInfo = await BuildPersonalInfoAsync();
+		personalInfo.EmployeeGroup = EmployeeGroupType.NonTeaching;
 		var result = await _applications.FinalizeAsync(submitted.Id, new FinalizeEmployeeApplicationDto
 		{
-			PersonalInfo = await BuildPersonalInfoAsync()
+			PersonalInfo = personalInfo
 		});
 
 		var assignments = await _assignmentRepository.GetListAsync(x =>
@@ -289,6 +341,178 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			x.LeavePolicyId.HasValue &&
 			x.LeavePolicyId.Value != Guid.Empty &&
 			x.EffectiveFrom == new DateTime(2026, 4, 1));
+		(await _scopeRepository.GetListAsync(x => x.UserId == result.Employee.UserId)).ShouldBeEmpty();
+	}
+
+	[Fact]
+	public async Task FinalizeAsync_Should_Create_Teaching_Scope_In_The_Finalization_Transaction()
+	{
+		var academicYearId = await CreateDefaultPoliciesAsync();
+		var submitted = await CreateSubmittedApplicationAsync("teaching-scope");
+		var personalInfo = await BuildPersonalInfoAsync();
+		personalInfo.EmployeeGroup = EmployeeGroupType.Teaching;
+
+		var result = await _applications.FinalizeAsync(submitted.Id, new FinalizeEmployeeApplicationDto
+		{
+			PersonalInfo = personalInfo,
+			AcademicYearId = academicYearId,
+			AcademicScopes = [new EmployeeApplicationAcademicScopeDto()]
+		});
+
+		result.Application.Status.ShouldBe(EmployeeApplicationStatus.Finalized);
+		result.Employee.UserId.ShouldNotBeNull();
+		var scopes = await _scopeRepository.GetListAsync(x =>
+			x.UserId == result.Employee.UserId &&
+			x.AcademicYearId == academicYearId);
+		scopes.Count.ShouldBe(1);
+		scopes[0].Description.ShouldBe("Employee onboarding academic permission");
+	}
+
+	[Fact]
+	public async Task FinalizeAsync_Should_Roll_Back_Employee_When_Teaching_Scope_Is_Invalid()
+	{
+		await CreateDefaultPoliciesAsync();
+		var submitted = await CreateSubmittedApplicationAsync("invalid-teaching-scope");
+		var personalInfo = await BuildPersonalInfoAsync();
+		personalInfo.EmployeeGroup = EmployeeGroupType.Teaching;
+		var employeeEmail = personalInfo.Email!;
+
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
+			_applications.FinalizeAsync(submitted.Id, new FinalizeEmployeeApplicationDto
+			{
+				PersonalInfo = personalInfo,
+				AcademicYearId = Guid.NewGuid(),
+				AcademicScopes = [new EmployeeApplicationAcademicScopeDto()]
+			}));
+		exception.Code.ShouldBe(UserScopeErrorCodes.InvalidReferences);
+
+		using var verificationUow = _unitOfWorkManager.Begin(requiresNew: true);
+		var application = await _applicationRepository.GetAsync(submitted.Id);
+		application.Status.ShouldBe(EmployeeApplicationStatus.Applied);
+		application.FinalizedEmployeeId.ShouldBeNull();
+		var employees = await _employeeRepository.GetListAsync(x => x.Email == employeeEmail);
+		employees.ShouldBeEmpty();
+		await verificationUow.CompleteAsync();
+	}
+
+	[Theory]
+	[InlineData(null)]
+	[InlineData("")]
+	[InlineData("application/octet-stream")]
+	public async Task GetResumeAsync_Should_Serve_Legacy_Content_Type_After_Content_Validation(
+		string? storedContentType)
+	{
+		var submitted = await CreateSubmittedApplicationAsync(
+			$"legacy-resume-{Guid.NewGuid():N}");
+		var content = ValidPdfContent();
+		await SetLegacyResumeAsync(submitted.Id, content, storedContentType);
+
+		var resume = await _applications.GetResumeAsync(submitted.Id);
+
+		resume.ShouldNotBeNull();
+		resume!.FileName.ShouldBe("resume.pdf");
+		resume.ContentType.ShouldBe("application/pdf");
+		resume.Content.ShouldBe(content);
+	}
+
+	[Fact]
+	public async Task FinalizeAsync_Should_Attach_Legacy_Generic_Content_Type_Resume()
+	{
+		_welcomeEmailService.Reset();
+		await CreateDefaultPoliciesAsync();
+		var submitted = await CreateSubmittedApplicationAsync("legacy-finalize-resume");
+		await SetLegacyResumeAsync(
+			submitted.Id,
+			ValidPdfContent(),
+			"application/octet-stream");
+
+		var result = await _applications.FinalizeAsync(
+			submitted.Id,
+			new FinalizeEmployeeApplicationDto
+			{
+				PersonalInfo = await BuildPersonalInfoAsync(),
+				AttachResumeAsDocument = true,
+				UseSubmittedPhoto = true
+			});
+
+		result.Application.Status.ShouldBe(EmployeeApplicationStatus.Finalized);
+		var documents = await _employeeDocumentManager.GetDocumentsAsync(result.Employee.Id);
+		documents.Single().DocumentName.ShouldBe("resume.pdf");
+		documents.Single().ContentType.ShouldBe("application/pdf");
+		_welcomeEmailService.Sent.Single().Email.ShouldBe(result.Employee.Email);
+		result.Employee.ProfilePictureBlobName.ShouldNotBeNullOrWhiteSpace();
+		(await _blobContainer.ExistsAsync(result.Employee.ProfilePictureBlobName!))
+			.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task FinalizeAsync_Should_Not_Run_PostCommit_Effects_When_Late_Upload_Validation_Fails()
+	{
+		_welcomeEmailService.Reset();
+		await CreateDefaultPoliciesAsync();
+		var submitted = await CreateSubmittedApplicationAsync("rollback-external-effects");
+		await SetLegacyResumeAsync(
+			submitted.Id,
+			Encoding.UTF8.GetBytes("<html><script>alert(1)</script></html>"),
+			"application/octet-stream");
+		var personalInfo = await BuildPersonalInfoAsync();
+		var employeeEmail = personalInfo.Email!;
+
+		await Should.ThrowAsync<BusinessException>(() =>
+			_applications.FinalizeAsync(
+				submitted.Id,
+				new FinalizeEmployeeApplicationDto
+				{
+					PersonalInfo = personalInfo,
+					AttachResumeAsDocument = true,
+					UseSubmittedPhoto = true
+				}));
+
+		_welcomeEmailService.Sent.ShouldBeEmpty();
+		// This shared SQLite fixture disables database transactions, so use its
+		// retained employee only to prove the post-commit profile effect did not run.
+		var testFixtureEmployee = (await _employeeRepository.GetListAsync(
+			employee => employee.Email == employeeEmail)).Single();
+		testFixtureEmployee.ProfilePictureBlobName.ShouldBeNull();
+		(await _applicationRepository.GetAsync(submitted.Id)).Status
+			.ShouldBe(EmployeeApplicationStatus.Applied);
+	}
+
+	[Theory]
+	[InlineData("missing-category")]
+	[InlineData("invalid-category")]
+	[InlineData("missing-family-caste")]
+	[InlineData("missing-employee-group")]
+	public async Task FinalizeAsync_Should_Reject_Invalid_Personal_Info_Before_Employee_Creation(string scenario)
+	{
+		await CreateDefaultPoliciesAsync();
+		var submitted = await CreateSubmittedApplicationAsync(scenario);
+		var personalInfo = await BuildPersonalInfoAsync();
+		var employeeEmail = personalInfo.Email!;
+		switch (scenario)
+		{
+			case "missing-category":
+				personalInfo.CastType = null;
+				break;
+			case "invalid-category":
+				personalInfo.CastType = (CastType)99;
+				break;
+			case "missing-family-caste":
+				personalInfo.FamilyCaste = " ";
+				break;
+			case "missing-employee-group":
+				personalInfo.EmployeeGroup = null;
+				break;
+		}
+
+		await Should.ThrowAsync<AbpValidationException>(() =>
+			_applications.FinalizeAsync(submitted.Id, new FinalizeEmployeeApplicationDto
+			{
+				PersonalInfo = personalInfo
+			}));
+
+		(await _employeeRepository.GetListAsync(x => x.Email == employeeEmail)).ShouldBeEmpty();
+		(await _applicationRepository.GetAsync(submitted.Id)).Status.ShouldBe(EmployeeApplicationStatus.Applied);
 	}
 
 	[Fact]
@@ -299,16 +523,30 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		var input = BuildSubmitDto($"onboarding.invalid.submit.{Guid.NewGuid():N}@test.com");
 		input.PersonalInfo.MobileNo = "20938740982304";
 		input.PersonalInfo.DateOfBirth = new DateTime(2026, 6, 13);
+		input.PersonalInfo.FamilyCaste = " ";
 		input.PersonalInfo.State = new EmployeeApplicationLocationInfo
 		{
 			Name = "guyjuart",
 			IsoCode = "32423"
 		};
+		input.WorkExperiences =
+		[
+			new EmployeeApplicationWorkExperienceDto
+			{
+				MediumStageName = "Future School",
+				Designation = "Teacher",
+				StartDate = new DateTime(2026, 6, 14),
+				EndDate = new DateTime(2026, 6, 15)
+			}
+		];
 
-		var validationResults = PublicEmployeeApplicationSubmitValidation.Validate(input, new DateTime(2026, 6, 13));
+		var validationResults = PublicEmployeeApplicationSubmitValidation.Validate(input, new DateOnly(2026, 6, 13));
 		validationResults.ShouldContain(x => HasValidationMember(x, "personalInfo.mobileNo"));
 		validationResults.ShouldContain(x => HasValidationMember(x, "personalInfo.dateOfBirth"));
+		validationResults.ShouldContain(x => HasValidationMember(x, "personalInfo.familyCaste"));
 		validationResults.ShouldContain(x => HasValidationMember(x, "personalInfo.state.isoCode"));
+		validationResults.ShouldContain(x => HasValidationMember(x, "workExperiences[0].startDate"));
+		validationResults.ShouldContain(x => HasValidationMember(x, "workExperiences[0].endDate"));
 
 		var exception = await Should.ThrowAsync<AbpValidationException>(() =>
 			_applications.SubmitPublicAsync(invite.Token, input, null, null));
@@ -317,6 +555,56 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		var application = await _applicationRepository.GetAsync(invite.Application.Id);
 		application.SubmittedAt.ShouldBeNull();
 		application.Status.ShouldBe(EmployeeApplicationStatus.InvitationSent);
+	}
+
+	[Fact]
+	public async Task SubmitPublicAsync_Should_Reject_Mismatched_Resume_Content_Type()
+	{
+		var invite = await CreateInviteAsync($"onboarding.mime.{Guid.NewGuid():N}@test.com");
+		var input = BuildSubmitDto($"onboarding.mime.submit.{Guid.NewGuid():N}@test.com");
+
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
+			_applications.SubmitPublicAsync(
+				invite.Token,
+				input,
+				new EmployeeApplicationFileInput
+				{
+					FileName = "resume.pdf",
+					ContentType = "text/html",
+					Content = BuildMinimalPdf(),
+					Size = BuildMinimalPdf().Length
+				},
+				new EmployeeApplicationFileInput
+				{
+					FileName = "photo.png",
+					ContentType = "image/png",
+					Content = BuildMinimalPng(),
+					Size = BuildMinimalPng().Length
+				}));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeApplicationInvalidUpload);
+		var application = await _applicationRepository.GetAsync(invite.Application.Id);
+		application.Status.ShouldBe(EmployeeApplicationStatus.InvitationSent);
+		application.SubmittedAt.ShouldBeNull();
+	}
+
+	[Theory]
+	[InlineData(2026, 7, 25, 18, 29, 2026, 7, 25)]
+	[InlineData(2026, 7, 25, 18, 30, 2026, 7, 26)]
+	public void Institution_Date_Should_Use_India_Midnight(
+		int year,
+		int month,
+		int day,
+		int hour,
+		int minute,
+		int expectedYear,
+		int expectedMonth,
+		int expectedDay)
+	{
+		var utc = new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Utc);
+
+		PublicEmployeeApplicationSubmitValidation.GetInstitutionDate(utc)
+			.ShouldBe(new DateOnly(expectedYear, expectedMonth, expectedDay));
 	}
 
 	private static bool HasValidationMember(System.ComponentModel.DataAnnotations.ValidationResult validationResult, string memberName) =>
@@ -335,8 +623,11 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			AdharNo = UniqueAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
 			GenderType = GenderType.Female,
+			CastType = CastType.General,
+			FamilyCaste = "General",
 			DateOfJoining = new DateOnly(2026, 4, 1),
 			EmployeeStatusType = EmployeeStatusType.Active,
+			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = await EnsureRoleExistsAsync(),
 			ShiftId = await EnsureShiftExistsAsync()
 		};
@@ -379,7 +670,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			}
 		};
 
-	private async Task CreateDefaultPoliciesAsync()
+	private async Task<Guid> CreateDefaultPoliciesAsync()
 	{
 		var academicYearId = await CreateAcademicYearAsync();
 		var calendar = await _workCalendars.CreateAsync(new CreateUpdateWorkCalendarPolicyDto
@@ -460,6 +751,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			],
 			"Default leave policy for onboarding finalization tests");
 		await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: true);
+		return academicYearId;
 	}
 
 	private async Task<Guid> CreateAcademicYearAsync()
@@ -477,11 +769,24 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	private async Task<Guid> EnsureRoleExistsAsync()
 	{
 		var roles = await _roleRepository.GetListAsync();
-		var existing = roles.FirstOrDefault();
+		var existing = roles.FirstOrDefault(role =>
+			string.Equals(
+				role.GetProperty<string>(EmployeeRoleAudience.ExtraPropertyName),
+				EmployeeRoleAudience.Employee,
+				StringComparison.Ordinal) &&
+			role.GetProperty<bool>(EmployeeOnboardingRoleAssignment.ExtraPropertyName) &&
+			string.Equals(
+				EmployeeGroupAudience.ResolveOrDefault(
+					role.GetProperty<string>(EmployeeGroupAudience.ExtraPropertyName)),
+				EmployeeGroupAudience.Both,
+				StringComparison.Ordinal));
 		if (existing != null) return existing.Id;
 
 		var id = _guidGenerator.Create();
 		var role = new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id);
+		role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
+		role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, EmployeeGroupAudience.Both);
+		role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);
 		await _roleRepository.InsertAsync(role, autoSave: true);
 		return id;
 	}
@@ -501,6 +806,38 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		await _shiftRepository.InsertAsync(shift, autoSave: true);
 		return shift.Id;
 	}
+
+	private async Task SetLegacyResumeAsync(
+		Guid applicationId,
+		byte[] content,
+		string? storedContentType)
+	{
+		var blobName = $"employee-applications/{applicationId}/resume/legacy-resume.pdf";
+		await _blobContainer.SaveAsync(blobName, content, overrideExisting: true);
+		var application = await _applicationRepository.GetAsync(applicationId);
+		SetPrivateProperty(application, nameof(EmployeeApplication.ResumeBlobName), blobName);
+		SetPrivateProperty(application, nameof(EmployeeApplication.ResumeFileName), "resume.pdf");
+		SetPrivateProperty(application, nameof(EmployeeApplication.ResumeContentType), storedContentType);
+		SetPrivateProperty(
+			application,
+			nameof(EmployeeApplication.ResumeSize),
+			(long?)content.Length);
+		await _applicationRepository.UpdateAsync(application, autoSave: true);
+	}
+
+	private static void SetPrivateProperty<T>(
+		EmployeeApplication application,
+		string propertyName,
+		T value)
+	{
+		typeof(EmployeeApplication)
+			.GetProperty(propertyName)!
+			.SetValue(application, value);
+	}
+
+	private static byte[] ValidPdfContent() =>
+		Encoding.UTF8.GetBytes(
+			"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF");
 
 	private static byte[] BuildMinimalPdf() =>
 		[
@@ -531,6 +868,33 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			PositionAppliedFor = "Teacher",
 			DepartmentAppliedFor = "Primary"
 		});
+
+	private async Task<EmployeeApplicationDto> CreateSubmittedApplicationAsync(string prefix)
+	{
+		var invite = await CreateInviteAsync($"onboarding.{prefix}.{Guid.NewGuid():N}@test.com");
+		var input = BuildSubmitDto($"onboarding.{prefix}.submitted.{Guid.NewGuid():N}@test.com");
+		PublicEmployeeApplicationSubmitValidation.Validate(
+				input,
+				PublicEmployeeApplicationSubmitValidation.GetInstitutionDate(DateTime.UtcNow))
+			.ShouldBeEmpty();
+		return await _applications.SubmitPublicAsync(
+			invite.Token,
+			input,
+			new EmployeeApplicationFileInput
+			{
+				FileName = "resume.pdf",
+				ContentType = "application/pdf",
+				Content = BuildMinimalPdf(),
+				Size = BuildMinimalPdf().Length
+			},
+			new EmployeeApplicationFileInput
+			{
+				FileName = "photo.png",
+				ContentType = "image/png",
+				Content = BuildMinimalPng(),
+				Size = BuildMinimalPng().Length
+			});
+	}
 
 	private static string HashTokenForTest(string token)
 	{

@@ -21,11 +21,12 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 
 	public async Task<bool> IsPolicyNameExistsAsync(Guid academicYearId, string policyName, Guid? excludeId = null)
 	{
-		var normalizedPolicyName = policyName.ToLowerInvariant();
+		var normalizedPolicyName = LeavePolicy.NormalizePolicyName(policyName);
 		var dbSet = await GetDbSetAsync();
 		var query = dbSet.Where(x =>
 			x.AcademicYearId == academicYearId &&
-			x.PolicyName.ToLower() == normalizedPolicyName);
+			x.Status != HrPolicyStatus.Archived &&
+			x.NormalizedPolicyName == normalizedPolicyName);
 
 		if (excludeId.HasValue)
 		{
@@ -37,10 +38,15 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 
 	public async Task<LeavePolicy?> FindByPolicyNameAsync(Guid academicYearId, string policyName)
 	{
-		var normalizedPolicyName = policyName.ToLowerInvariant();
+		var normalizedPolicyName = LeavePolicy.NormalizePolicyName(policyName);
 		var dbSet = await GetDbSetAsync();
 		return await IncludeRules(dbSet)
-			.Where(x => x.AcademicYearId == academicYearId && x.PolicyName.ToLower() == normalizedPolicyName)
+			.Where(x =>
+				x.AcademicYearId == academicYearId &&
+				x.Status == HrPolicyStatus.Active &&
+				x.IsActive &&
+				x.NormalizedPolicyName == normalizedPolicyName)
+			.OrderBy(x => x.Id)
 			.FirstOrDefaultAsync();
 	}
 
@@ -51,13 +57,14 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 		string? sorting = null,
 		string? search = null,
 		bool includeInactive = false,
+		bool? archivedOnly = null,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
 		IQueryable<LeavePolicy> query = IncludeRules(dbSet)
 			.Where(x => x.AcademicYearId == academicYearId);
 
-		query = ApplyActiveFilter(query, includeInactive);
+		query = ApplyPolicyStateFilter(query, includeInactive, archivedOnly);
 		query = ApplySearch(query, search);
 
 		query = !string.IsNullOrWhiteSpace(sorting)
@@ -71,11 +78,12 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 		Guid academicYearId,
 		string? search = null,
 		bool includeInactive = false,
+		bool? archivedOnly = null,
 		CancellationToken cancellationToken = default)
 	{
 		var dbSet = await GetDbSetAsync();
 		IQueryable<LeavePolicy> query = dbSet.Where(x => x.AcademicYearId == academicYearId);
-		query = ApplyActiveFilter(query, includeInactive);
+		query = ApplyPolicyStateFilter(query, includeInactive, archivedOnly);
 		query = ApplySearch(query, search);
 
 		return await query.LongCountAsync(cancellationToken);
@@ -149,8 +157,20 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 	private static IQueryable<LeavePolicy> IncludeRules(IQueryable<LeavePolicy> query) =>
 		query.Include(x => x.Rules);
 
-	private static IQueryable<LeavePolicy> ApplyActiveFilter(IQueryable<LeavePolicy> query, bool includeInactive) =>
-		includeInactive ? query : query.Where(x => x.IsActive);
+	private static IQueryable<LeavePolicy> ApplyPolicyStateFilter(
+		IQueryable<LeavePolicy> query,
+		bool includeInactive,
+		bool? archivedOnly)
+	{
+		if (archivedOnly.HasValue)
+		{
+			return archivedOnly.Value
+				? query.Where(x => x.Status == HrPolicyStatus.Archived)
+				: query.Where(x => x.Status != HrPolicyStatus.Archived);
+		}
+
+		return includeInactive ? query : query.Where(x => x.IsActive);
+	}
 
 	private static IQueryable<LeavePolicy> ApplySearch(IQueryable<LeavePolicy> query, string? search)
 	{

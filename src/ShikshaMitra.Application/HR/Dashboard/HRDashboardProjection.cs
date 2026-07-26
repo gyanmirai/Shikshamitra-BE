@@ -12,17 +12,26 @@ internal static class HRDashboardProjection
 		HRDashboardPreviewProjection.BuildPayrollPreview(summary);
 
 	public static HRDashboardAttendanceTodayDto BuildAttendanceToday(
-		IReadOnlyCollection<AttendanceStatusCount> attendanceCounts,
+		IReadOnlyCollection<AttendanceTrendRow> attendanceRows,
+		IReadOnlyCollection<LeaveTrendRow> approvedLeaves,
 		DateOnly today,
 		int activeStaffCount) =>
-		HRDashboardAttendanceProjection.BuildAttendanceToday(attendanceCounts, today, activeStaffCount);
+		HRDashboardAttendanceProjection.BuildAttendanceToday(
+			attendanceRows,
+			approvedLeaves,
+			today,
+			activeStaffCount);
 
 	public static List<HRDashboardAttendanceTrendPointDto> BuildAttendanceTrend(
-		IReadOnlyCollection<AttendanceStatusCount> attendanceCounts,
+		IReadOnlyCollection<AttendanceTrendRow> attendanceRows,
 		IReadOnlyCollection<LeaveTrendRow> approvedLeaves,
 		DateOnly trendStart,
 		DateOnly trendEnd) =>
-		HRDashboardAttendanceProjection.BuildAttendanceTrend(attendanceCounts, approvedLeaves, trendStart, trendEnd);
+		HRDashboardAttendanceProjection.BuildAttendanceTrend(
+			attendanceRows,
+			approvedLeaves,
+			trendStart,
+			trendEnd);
 
 	public static HRDashboardCelebrationsDto BuildCelebrations(
 		IReadOnlyCollection<ActiveEmployeeDashboardRow> employees,

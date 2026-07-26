@@ -15,7 +15,7 @@ public static class PayrollLockPreconditionGuard
 		string month)
 	{
 		var finalizedEmployeeIds = existingSlips
-			.Where(x => x.Status == SalarySlipStatus.Finalized)
+			.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			.Select(x => x.EmployeeId)
 			.ToHashSet();
 		var alreadyFinalizedIds = employeeIds

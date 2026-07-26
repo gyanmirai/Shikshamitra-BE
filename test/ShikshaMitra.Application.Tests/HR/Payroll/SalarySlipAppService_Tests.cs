@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
@@ -50,6 +51,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	private readonly IRepository<EmployeeOrganizationAssignment, Guid> _employeeOrganizationAssignmentRepository;
 	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
 	private readonly IRepository<PayrollRunItemSnapshot, Guid> _payrollRunItemSnapshotRepository;
+	private readonly ISalarySlipRepository _salarySlipRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IdentityUserManager _userManager;
 	private readonly IUserScopeService _userScopeService;
@@ -82,6 +84,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		_employeeOrganizationAssignmentRepository = GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
 		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		_payrollRunItemSnapshotRepository = GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
+		_salarySlipRepository = GetRequiredService<ISalarySlipRepository>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_userManager = GetRequiredService<IdentityUserManager>();
 		_userScopeService = GetRequiredService<IUserScopeService>();
@@ -392,6 +395,10 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		var deduction = await CreateDeductionComponentAsync($"Historical Deduction {Guid.NewGuid():N}", 3100m);
 		await SaveSalaryComponentsAsync(employee.Id, [basic], [deduction]);
 		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
+		var snapshot = await GetPayrollSnapshotAsync(employee.Id, monthYear);
+		snapshot.ShouldNotBeNull();
+		snapshot.MarkLocked();
+		await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: true);
 
 		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
 		var original = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
@@ -423,6 +430,10 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		var allowance = await CreateEarningComponentAsync($"Historical Allowance {Guid.NewGuid():N}", 6200m);
 		await SaveSalaryComponentsAsync(employee.Id, [basic, allowance], []);
 		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
+		var snapshot = await GetPayrollSnapshotAsync(employee.Id, monthYear);
+		snapshot.ShouldNotBeNull();
+		snapshot.MarkLocked();
+		await _payrollRunItemSnapshotRepository.UpdateAsync(snapshot, autoSave: true);
 
 		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
 		var original = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
@@ -443,7 +454,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	}
 
 	[Fact]
-	public async Task GetSalarySlipAsync_Should_Not_Refresh_Historical_Draft_From_Unlocked_Snapshot()
+	public async Task GetSalarySlipAsync_Should_Refresh_Historical_Draft_From_Authoritative_Unlocked_Snapshot()
 	{
 		var monthYear = HistoricalPayrollMonth();
 		var context = await CreatePayrollPolicyContextAsync(PayrollYear(monthYear));
@@ -473,19 +484,121 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		snapshot.IsLocked.ShouldBeFalse();
 
 		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.WorkingDaysPayroll.Id);
-		await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput
+		var refreshedPreview = await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput
 		{
 			Month = monthYear,
 			Page = 0,
 			PageSize = 50,
 			ForceRefresh = true
 		});
+		var payrollRow = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
 
 		var refreshedSlip = await _salarySlipAppService.GetSalarySlipAsync(employee.Id, monthYear);
 
-		refreshedSlip.PayrollDayCalculationMode.ShouldBe("total-month-days");
-		refreshedSlip.PayrollBasisDays.ShouldBe(oldSlip.PayrollBasisDays);
-		refreshedSlip.NetSalary.ShouldBe(oldSlip.NetSalary);
+		// Drafts are projections of the authoritative snapshot regardless of period.
+		// Finalized and paid slips are the immutable accounting boundary.
+		refreshedSlip.PayrollDayCalculationMode.ShouldBe("working-days");
+		refreshedSlip.PayrollBasisDays.ShouldBe((decimal)payrollRow.BasisDays);
+		refreshedSlip.PayableDays.ShouldBe((decimal)payrollRow.PayableDays);
+		refreshedSlip.NetSalary.ShouldBe((decimal)payrollRow.NetPay);
+	}
+
+	[Fact]
+	public async Task GetSalarySlipAsync_Should_Fail_Closed_When_Historical_Draft_Snapshot_Is_Missing()
+	{
+		var monthYear = HistoricalPayrollMonth();
+		var context = await CreatePayrollPolicyContextAsync(PayrollYear(monthYear));
+		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear));
+		await SeedAttendanceScopeAsync(employee.Id, context.OrganizationId, monthYear);
+		await SaveSalaryComponentsAsync(employee.Id);
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.TotalMonthPayroll.Id);
+		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
+
+		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
+		await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
+		{
+			EmployeeId = employee.Id,
+			MonthYear = monthYear
+		});
+
+		var snapshot = await GetPayrollSnapshotAsync(employee.Id, monthYear);
+		snapshot.ShouldNotBeNull();
+		await _payrollRunItemSnapshotRepository.DeleteAsync(snapshot, autoSave: true);
+
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
+			_salarySlipAppService.GetSalarySlipAsync(employee.Id, monthYear));
+
+		exception.Code.ShouldBe(HRErrorCodes.PayrollSnapshotRequiredForSalarySlip);
+	}
+
+	[Fact]
+	public async Task FinalizeAsync_Should_Reconcile_Draft_With_Authoritative_Snapshot()
+	{
+		var monthYear = CurrentPayrollMonth();
+		var context = await CreatePayrollPolicyContextAsync(PayrollYear(monthYear));
+		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear));
+		await SeedAttendanceScopeAsync(employee.Id, context.OrganizationId, monthYear);
+		await SaveSalaryComponentsAsync(employee.Id);
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.TotalMonthPayroll.Id);
+		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
+
+		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
+		var draft = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
+		{
+			EmployeeId = employee.Id,
+			MonthYear = monthYear
+		});
+		draft.PayrollDayCalculationMode.ShouldBe("total-month-days");
+
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.WorkingDaysPayroll.Id);
+		var refreshedPreview = await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput
+		{
+			Month = monthYear,
+			Page = 0,
+			PageSize = 50,
+			ForceRefresh = true
+		});
+		var payrollRow = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
+
+		var finalized = await _salarySlipAppService.FinalizeAsync(draft.Id);
+
+		finalized.Status.ShouldBe(SalarySlipStatus.Finalized);
+		finalized.PayrollDayCalculationMode.ShouldBe("working-days");
+		finalized.PayrollBasisDays.ShouldBe((decimal)payrollRow.BasisDays);
+		finalized.PayableDays.ShouldBe((decimal)payrollRow.PayableDays);
+		finalized.NetSalary.ShouldBe((decimal)payrollRow.NetPay);
+	}
+
+	[Fact]
+	public async Task Paid_Salary_Slip_Should_Not_Be_Finalized_Or_Deleted()
+	{
+		var monthYear = CurrentPayrollMonth();
+		var context = await CreatePayrollPolicyContextAsync(PayrollYear(monthYear));
+		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear));
+		await SeedAttendanceScopeAsync(employee.Id, context.OrganizationId, monthYear);
+		await SaveSalaryComponentsAsync(employee.Id);
+		await UpsertEmployeePayrollPolicyAsync(context, employee.Id, context.TotalMonthPayroll.Id);
+		await EnsurePayrollSnapshotAsync(employee.Id, monthYear);
+
+		using var adminPrincipal = await ChangeToAdminPrincipalAsync();
+		var draft = await _salarySlipAppService.GenerateSalarySlipAsync(new GenerateSalarySlipInput
+		{
+			EmployeeId = employee.Id,
+			MonthYear = monthYear
+		});
+		var salarySlip = await _salarySlipRepository.GetAsync(draft.Id);
+		typeof(SalarySlip)
+			.GetProperty(nameof(SalarySlip.Status), BindingFlags.Instance | BindingFlags.Public)!
+			.SetValue(salarySlip, SalarySlipStatus.Paid);
+		await _salarySlipRepository.UpdateAsync(salarySlip, autoSave: true);
+
+		await Should.ThrowAsync<InvalidOperationException>(() =>
+			_salarySlipAppService.FinalizeAsync(draft.Id));
+		var deleteException = await Should.ThrowAsync<BusinessException>(() =>
+			_salarySlipAppService.DeleteAsync(draft.Id));
+
+		deleteException.Code.ShouldBe(HRErrorCodes.SalarySlipAlreadyFinalized);
+		(await _salarySlipRepository.FindAsync(draft.Id)).ShouldNotBeNull();
 	}
 
 	[Fact]
@@ -725,8 +838,11 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			AdharNo = UniqueEmployeeAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1992, 3, 10)),
 			GenderType = GenderType.Male,
+			CastType = CastType.General,
+			FamilyCaste = "General",
 			DateOfJoining = dateOfJoining ?? DateOnly.FromDateTime(new DateTime(2026, 1, 1)),
 			EmployeeStatusType = EmployeeStatusType.Active,
+			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
 			ShiftId = resolvedShiftId
 		});
@@ -1046,15 +1162,11 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 
 	private async Task<Guid> EnsureRoleExistsAsync()
 	{
-		var existing = (await _roleRepository.GetListAsync()).FirstOrDefault();
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var id = _guidGenerator.Create();
-		await _roleRepository.InsertAsync(new IdentityRole(id, $"SalarySlipRole-{id:N}", _currentTenant.Id), autoSave: true);
-		return id;
+		return await Employees.EmployeeRoleTestHelper.EnsureAssignableRoleAsync(
+			_roleRepository,
+			_guidGenerator,
+			_currentTenant.Id,
+			"SalarySlipRole");
 	}
 
 	private async Task<Guid> EnsureShiftExistsAsync()

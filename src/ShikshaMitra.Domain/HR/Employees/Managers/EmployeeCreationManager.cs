@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using System;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.HR.Employees;
@@ -48,6 +49,13 @@ public class EmployeeCreationManager(
 		Guid? shiftId = null
 	)
 	{
+		if (!employeeGroup.HasValue)
+		{
+			throw new BusinessException(
+				HRErrorCodes.EmployeeGroupRequired,
+				"Employee group is required.");
+		}
+
 		logger.LogDebug(
 			"[EmployeeManager] Creating employee: UserId={UserId}, RoleId={RoleId}, Name={FirstName} {LastName}",
 			userId,
@@ -56,7 +64,7 @@ public class EmployeeCreationManager(
 			lastName
 		);
 
-		var role = await userRoleManager.EnsureUserInRoleAsync(userId, roleId);
+		var role = await userRoleManager.EnsureUserInRoleAsync(userId, roleId, employeeGroup);
 		logger.LogDebug("[EmployeeManager] User validated: UserId={UserId}", userId);
 
 		var employeeCode = await employeeCodeGenerator.GenerateAsync(

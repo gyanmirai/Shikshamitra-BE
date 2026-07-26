@@ -6,10 +6,14 @@ using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.TenantSettings;
 using Shouldly;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Timing;
+using Volo.Abp.Uow;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.HR.Employees;
@@ -22,9 +26,11 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	private readonly IIdentityRoleRepository _roleRepository;
 	private readonly IIdentityUserRepository _userRepository;
 	private readonly IdentityUserManager _userManager;
+	private readonly EmployeeManager _employeeManager;
 	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
+	private readonly IUnitOfWorkManager _unitOfWorkManager;
 
 	public EmployeePersonalInfoAppService_Tests()
 	{
@@ -34,9 +40,11 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
 		_userRepository = GetRequiredService<IIdentityUserRepository>();
 		_userManager = GetRequiredService<IdentityUserManager>();
+		_employeeManager = GetRequiredService<EmployeeManager>();
 		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
+		_unitOfWorkManager = GetRequiredService<IUnitOfWorkManager>();
 	}
 
 	[Fact]
@@ -224,6 +232,185 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		inRole.ShouldBeTrue();
 	}
 
+	[Theory]
+	[InlineData("Student")]
+	[InlineData("Parent")]
+	[InlineData(" parent ")]
+	public async Task CreateAsync_Should_Reject_Reserved_NonEmployee_Roles(string roleName)
+	{
+		var normalizedRoleName = roleName.Trim();
+		var existingRole = (await _roleRepository.GetListAsync()).FirstOrDefault(role =>
+			string.Equals(role.Name?.Trim(), normalizedRoleName, StringComparison.OrdinalIgnoreCase));
+		var roleId = existingRole?.Id ?? _guidGenerator.Create();
+		if (existingRole == null)
+		{
+			await _roleRepository.InsertAsync(
+				new IdentityRole(roleId, roleName, _currentTenant.Id),
+				autoSave: true);
+		}
+
+		var input = await BuildCreateDtoAsync($"role.reserved.{Guid.NewGuid():N}@test.com");
+		input.RoleId = roleId;
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_personalInfoAppService.CreateAsync(input));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeRoleNotAllowed);
+		exception.Message.ShouldContain("Employee audience");
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Renamed_NonEmployee_Role_By_Audience()
+	{
+		var role = new IdentityRole(
+			_guidGenerator.Create(),
+			$"Learner Support {Guid.NewGuid():N}",
+			_currentTenant.Id);
+		role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Student);
+		await _roleRepository.InsertAsync(role, autoSave: true);
+
+		var input = await BuildCreateDtoAsync($"role.audience.{Guid.NewGuid():N}@test.com");
+		input.RoleId = role.Id;
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_personalInfoAppService.CreateAsync(input));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeRoleNotAllowed);
+		exception.Data["roleAudience"].ShouldBe(EmployeeRoleAudience.Student);
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Employee_Role_Without_Explicit_Onboarding_Approval()
+	{
+		var role = new IdentityRole(
+			_guidGenerator.Create(),
+			$"Unapproved Employee Role {Guid.NewGuid():N}",
+			_currentTenant.Id);
+		role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
+		role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, EmployeeGroupAudience.Both);
+		await _roleRepository.InsertAsync(role, autoSave: true);
+		var input = await BuildCreateDtoAsync($"role.unapproved.{Guid.NewGuid():N}@test.com");
+		input.RoleId = role.Id;
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_personalInfoAppService.CreateAsync(input));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeRoleAssignmentNotAllowed);
+		exception.Data["roleId"].ShouldBe(role.Id);
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Approved_Role_Without_Explicit_Employee_Audience()
+	{
+		var role = new IdentityRole(
+			_guidGenerator.Create(),
+			$"Missing Audience Role {Guid.NewGuid():N}",
+			_currentTenant.Id);
+		role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, EmployeeGroupAudience.Both);
+		role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);
+		await _roleRepository.InsertAsync(role, autoSave: true);
+		var input = await BuildCreateDtoAsync($"role.missing.audience.{Guid.NewGuid():N}@test.com");
+		input.RoleId = role.Id;
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_personalInfoAppService.CreateAsync(input));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeRoleNotAllowed);
+	}
+
+	[Theory]
+	[InlineData("admin")]
+	[InlineData("super-admin")]
+	public async Task CreateAsync_Should_Reject_Reserved_System_Role_Even_With_Stale_Approval(
+		string roleName)
+	{
+		var role = (await _roleRepository.GetListAsync()).FirstOrDefault(role =>
+			string.Equals(role.Name, roleName, StringComparison.OrdinalIgnoreCase));
+		var isNewRole = role == null;
+		role ??= new IdentityRole(_guidGenerator.Create(), roleName, _currentTenant.Id);
+		role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
+		role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, EmployeeGroupAudience.NonTeaching);
+		role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);
+		if (isNewRole)
+		{
+			await _roleRepository.InsertAsync(role, autoSave: true);
+		}
+		else
+		{
+			await _roleRepository.UpdateAsync(role, autoSave: true);
+		}
+		var input = await BuildCreateDtoAsync($"role.reserved.system.{Guid.NewGuid():N}@test.com");
+		input.RoleId = role.Id;
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_personalInfoAppService.CreateAsync(input));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeRoleAssignmentNotAllowed);
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Missing_Employee_Group()
+	{
+		var input = await BuildCreateDtoAsync($"role.group.required.{Guid.NewGuid():N}@test.com");
+		input.EmployeeGroup = null;
+
+		var exception = await Should.ThrowAsync<AbpValidationException>(() =>
+			_personalInfoAppService.CreateAsync(input));
+
+		exception.ValidationErrors.ShouldContain(error =>
+			error.MemberNames.Contains(nameof(CreateEmployeePersonalInfoDto.EmployeeGroup)) &&
+			error.ErrorMessage != null &&
+			error.ErrorMessage.Contains(
+				"Employee group is required.",
+				StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public async Task Employee_Manager_Should_Reject_Missing_Employee_Group_When_Validation_Is_Bypassed()
+	{
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_employeeManager.CreateEmployeeAsync(
+				userId: Guid.NewGuid(),
+				roleId: Guid.NewGuid(),
+				firstName: "Missing",
+				lastName: "Group",
+				middleName: null,
+				shortName: "MG",
+				employeeStatusType: EmployeeStatusType.Active,
+				dateOfBirth: new DateOnly(1990, 1, 1)));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeGroupRequired);
+		exception.Message.ShouldBe("Employee group is required.");
+	}
+
+	[Fact]
+	public void Basic_Info_Create_Contract_Should_Reject_Missing_Employee_Group()
+	{
+		var validator = new CreateEmployeeBasicInfoDtoValidator(GetRequiredService<IClock>());
+
+		var result = validator.Validate(new CreateEmployeeBasicInfoDto());
+
+		result.Errors.ShouldContain(error =>
+			error.PropertyName == nameof(CreateEmployeeBasicInfoDto.EmployeeGroup) &&
+			error.ErrorMessage == "Employee group is required.");
+	}
+
+	[Fact]
+	public async Task CreateAsync_Should_Reject_Role_For_A_Different_Employee_Group()
+	{
+		var teachingRole = await CreateEmployeeRoleAsync(EmployeeGroupAudience.Teaching);
+		var input = await BuildCreateDtoAsync($"role.group.create.{Guid.NewGuid():N}@test.com");
+		input.RoleId = teachingRole.Id;
+		input.EmployeeGroup = EmployeeGroupType.NonTeaching;
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_personalInfoAppService.CreateAsync(input));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeRoleGroupNotAllowed);
+		exception.Data["employeeGroup"].ShouldBe(EmployeeGroupType.NonTeaching);
+		exception.Data["employeeGroupAudience"].ShouldBe(EmployeeGroupAudience.Teaching);
+	}
+
 	[Fact]
 	public async Task UpdateAsync_Should_Update_Basic_Info_Without_Requiring_Payroll_Structure()
 	{
@@ -250,6 +437,154 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		result.PanNo.ShouldBe(created.PanNo);
 		result.AdharNo.ShouldBe(created.AdharNo);
 		result.EmployeeStatusType.ShouldBe(EmployeeStatusType.Active);
+		result.EmployeeGroup.ShouldBe(created.EmployeeGroup);
+	}
+
+	[Fact]
+	public async Task UpdateAsync_Should_Reject_Reserved_Role_Before_Removing_Current_Role()
+	{
+		var created = await _personalInfoAppService.CreateAsync(
+			await BuildCreateDtoAsync($"role.update.reserved.{Guid.NewGuid():N}@test.com"));
+		var parentRole = (await _roleRepository.GetListAsync()).FirstOrDefault(role =>
+			string.Equals(role.Name?.Trim(), "Parent", StringComparison.OrdinalIgnoreCase));
+		if (parentRole == null)
+		{
+			parentRole = await _roleRepository.InsertAsync(
+				new IdentityRole(_guidGenerator.Create(), "Parent", _currentTenant.Id),
+				autoSave: true);
+		}
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
+			{
+				FirstName = created.FirstName,
+				LastName = created.LastName,
+				MobileNo = created.MobileNo,
+				Email = created.Email,
+				PanNo = created.PanNo,
+				AdharNo = created.AdharNo,
+				DateOfBirth = created.DateOfBirth,
+				GenderType = created.GenderType,
+				DateOfJoining = created.DateOfJoining,
+				EmployeeStatusType = EmployeeStatusType.Active,
+				RoleId = parentRole.Id,
+				ShiftId = created.ShiftId
+			}));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeRoleNotAllowed);
+		var user = await _userRepository.GetAsync(created.UserId!.Value);
+		var originalRole = await _roleRepository.GetAsync(created.RoleId);
+		(await _userManager.IsInRoleAsync(user, originalRole.Name!)).ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task UpdateAsync_Should_Reject_A_Group_Incompatible_Role_Before_Removing_Current_Role()
+	{
+		var currentRole = await CreateEmployeeRoleAsync(EmployeeGroupAudience.Teaching);
+		var input = await BuildCreateDtoAsync($"role.group.swap.{Guid.NewGuid():N}@test.com");
+		input.RoleId = currentRole.Id;
+		input.EmployeeGroup = EmployeeGroupType.Teaching;
+		var created = await _personalInfoAppService.CreateAsync(input);
+		var nonTeachingRole = await CreateEmployeeRoleAsync(EmployeeGroupAudience.NonTeaching);
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
+			{
+				FirstName = created.FirstName,
+				LastName = created.LastName,
+				MobileNo = created.MobileNo,
+				Email = created.Email,
+				PanNo = created.PanNo,
+				AdharNo = created.AdharNo,
+				DateOfBirth = created.DateOfBirth,
+				GenderType = created.GenderType,
+				DateOfJoining = created.DateOfJoining,
+				EmployeeGroup = EmployeeGroupType.Teaching,
+				EmployeeStatusType = EmployeeStatusType.Active,
+				RoleId = nonTeachingRole.Id,
+				ShiftId = created.ShiftId
+			}));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeRoleGroupNotAllowed);
+		var user = await _userRepository.GetAsync(created.UserId!.Value);
+		(await _userManager.IsInRoleAsync(user, currentRole.Name!)).ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task UpdateAsync_Should_Preserve_An_Unchanged_Legacy_Custom_Role()
+	{
+		var legacyRole = await CreateEmployeeRoleAsync(EmployeeGroupAudience.Both);
+		var input = await BuildCreateDtoAsync($"role.legacy.retention.{Guid.NewGuid():N}@test.com");
+		input.RoleId = legacyRole.Id;
+		var created = await _personalInfoAppService.CreateAsync(input);
+		using (var metadataUow = _unitOfWorkManager.Begin(requiresNew: true))
+		{
+			var persistedLegacyRole = await _roleRepository.GetAsync(legacyRole.Id);
+			persistedLegacyRole.ExtraProperties.Remove(EmployeeRoleAudience.ExtraPropertyName);
+			persistedLegacyRole.ExtraProperties.Remove(
+				EmployeeOnboardingRoleAssignment.ExtraPropertyName);
+			await _roleRepository.UpdateAsync(persistedLegacyRole, autoSave: true);
+			await metadataUow.CompleteAsync();
+		}
+
+		EmployeePersonalInfoDto updated;
+		using (var updateUow = _unitOfWorkManager.Begin(requiresNew: true))
+		{
+			updated = await _personalInfoAppService.UpdateAsync(
+				created.Id,
+				new UpdateEmployeePersonalInfoDto
+				{
+					FirstName = "Legacy",
+					LastName = created.LastName,
+					MobileNo = created.MobileNo,
+					Email = created.Email,
+					PanNo = created.PanNo,
+					AdharNo = created.AdharNo,
+					DateOfBirth = created.DateOfBirth,
+					GenderType = created.GenderType,
+					DateOfJoining = created.DateOfJoining,
+					EmployeeGroup = created.EmployeeGroup,
+					EmployeeStatusType = EmployeeStatusType.Active,
+					RoleId = legacyRole.Id,
+					ShiftId = created.ShiftId
+				});
+			await updateUow.CompleteAsync();
+		}
+
+		updated.FirstName.ShouldBe("Legacy");
+		updated.RoleId.ShouldBe(legacyRole.Id);
+	}
+
+	[Fact]
+	public async Task UpdateAsync_Should_Reject_Group_Change_When_The_Current_Role_Is_Incompatible()
+	{
+		var teachingRole = await CreateEmployeeRoleAsync(EmployeeGroupAudience.Teaching);
+		var input = await BuildCreateDtoAsync($"role.group.update.{Guid.NewGuid():N}@test.com");
+		input.RoleId = teachingRole.Id;
+		input.EmployeeGroup = EmployeeGroupType.Teaching;
+		var created = await _personalInfoAppService.CreateAsync(input);
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			_personalInfoAppService.UpdateAsync(created.Id, new UpdateEmployeePersonalInfoDto
+			{
+				FirstName = created.FirstName,
+				LastName = created.LastName,
+				MobileNo = created.MobileNo,
+				Email = created.Email,
+				PanNo = created.PanNo,
+				AdharNo = created.AdharNo,
+				DateOfBirth = created.DateOfBirth,
+				GenderType = created.GenderType,
+				DateOfJoining = created.DateOfJoining,
+				EmployeeGroup = EmployeeGroupType.NonTeaching,
+				EmployeeStatusType = EmployeeStatusType.Active,
+				RoleId = teachingRole.Id,
+				ShiftId = created.ShiftId
+			}));
+
+		exception.Code.ShouldBe(HRErrorCodes.EmployeeRoleGroupNotAllowed);
+		var unchanged = await _personalInfoAppService.GetAsync(created.Id);
+		unchanged.EmployeeGroup.ShouldBe(EmployeeGroupType.Teaching);
 	}
 
 	[Fact]
@@ -423,8 +758,11 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 			AdharNo = UniqueAdhar(),
 			DateOfBirth = DateOnly.FromDateTime(new DateTime(1990, 5, 15)),
 			GenderType = GenderType.Male,
+			CastType = CastType.General,
+			FamilyCaste = "General",
 			DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.Date),
 			EmployeeStatusType = EmployeeStatusType.Active,
+			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
 			ShiftId = shiftId
 		};
@@ -440,13 +778,38 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	private async Task<Guid> EnsureRoleExistsAsync()
 	{
 		var roles = await _roleRepository.GetListAsync();
-		var existing = roles.FirstOrDefault();
+		var existing = roles.FirstOrDefault(role =>
+			string.Equals(
+				role.GetProperty<string>(EmployeeRoleAudience.ExtraPropertyName),
+				EmployeeRoleAudience.Employee,
+				StringComparison.Ordinal) &&
+			role.GetProperty<bool>(EmployeeOnboardingRoleAssignment.ExtraPropertyName) &&
+			string.Equals(
+				EmployeeGroupAudience.ResolveOrDefault(
+					role.GetProperty<string>(EmployeeGroupAudience.ExtraPropertyName)),
+				EmployeeGroupAudience.Both,
+				StringComparison.Ordinal));
 		if (existing != null) return existing.Id;
 
 		var id = _guidGenerator.Create();
 		var role = new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id);
+		role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
+		role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, EmployeeGroupAudience.Both);
+		role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);
 		await _roleRepository.InsertAsync(role, autoSave: true);
 		return id;
+	}
+
+	private async Task<IdentityRole> CreateEmployeeRoleAsync(string employeeGroupAudience)
+	{
+		var role = new IdentityRole(
+			_guidGenerator.Create(),
+			$"Employee Role {Guid.NewGuid():N}",
+			_currentTenant.Id);
+		role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
+		role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, employeeGroupAudience);
+		role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);
+		return await _roleRepository.InsertAsync(role, autoSave: true);
 	}
 
 	private async Task<Guid> EnsureShiftExistsAsync()

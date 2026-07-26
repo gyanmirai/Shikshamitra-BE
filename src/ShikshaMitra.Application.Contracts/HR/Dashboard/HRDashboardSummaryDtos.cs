@@ -25,6 +25,7 @@ public class HRDashboardWorkforceDto
 	public int NewJoinersThisMonth { get; set; }
 	public int InactiveStaff { get; set; }
 	public List<HRDashboardEmployeeSnapshotDto> RecentEmployees { get; set; } = [];
+	public List<HRDashboardEmployeeSnapshotDto> NewJoiners { get; set; } = [];
 }
 
 public class HRDashboardEmployeeSnapshotDto
@@ -35,6 +36,7 @@ public class HRDashboardEmployeeSnapshotDto
 	public string? RoleName { get; set; }
 	public string? Department { get; set; }
 	public bool IsTeaching { get; set; }
+	public DateOnly? DateOfJoining { get; set; }
 }
 
 public class HRDashboardAttendanceTodayDto

@@ -300,7 +300,9 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 			]
 		}, JsonOptions);
 
-		saveResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		saveResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await saveResponse.Content.ReadAsStringAsync());
 		var saved = await saveResponse.Content.ReadFromJsonAsync<AttendanceImportRowsSaveOutput>(JsonOptions);
 		saved.ShouldNotBeNull();
 		saved.UpsertedCount.ShouldBe(1);
@@ -385,7 +387,9 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 			]
 		}, JsonOptions);
 
-		saveResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		saveResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await saveResponse.Content.ReadAsStringAsync());
 		var refreshedRow = (await GetRowsAsync(importId)).Items[0];
 		refreshedRow.StatusCode.ShouldBe(AttendanceImportRowStatusCode.Present);
 		refreshedRow.TimeIn.ShouldBe("09:00");
@@ -516,14 +520,24 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 		invalidStatusResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}
 
-	[Fact]
+	[Theory]
+	[InlineData(SalarySlipStatus.Finalized)]
+	[InlineData(SalarySlipStatus.Paid)]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Reject_Import_Row_Save_When_Payroll_Month_Is_Finalized()
+	public async Task Should_Reject_Import_Row_Save_When_Payroll_Month_Is_Immutable(
+		SalarySlipStatus status)
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ImportRowPayrollLocked");
 		var fileName = $"row-payroll-locked-{Guid.NewGuid():N}.csv";
-		var attendanceDateValue = DateTime.UtcNow.AddDays(-1);
+		var attendanceDateValue = new DateTime(
+			DateTime.UtcNow.Year,
+			DateTime.UtcNow.Month,
+			1,
+			0,
+			0,
+			0,
+			DateTimeKind.Utc).AddDays(-1);
 		var attendanceDate = attendanceDateValue.ToString("dd-MM-yyyy");
 		using var upload = BuildCsvUploadWithFileName(
 			fileName,
@@ -531,23 +545,49 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 
 		var importId = await UploadConfirmAndFindImportAsync(fileName, upload);
 		var row = (await GetRowsAsync(importId)).Items[0];
-		await SeedFinalizedSalarySlipAsync(employee.Id, attendanceDateValue.ToString("yyyy-MM"));
+		var salarySlipId = await SeedImmutableSalarySlipAsync(
+			employee.Id,
+			attendanceDateValue.ToString("yyyy-MM"),
+			status);
 
-		var saveResponse = await Client.PostAsJsonAsync($"{HrAutomatedRunsUrl}/{importId}/rows/save", new AttendanceImportRowsSaveInput
+		try
 		{
-			Entries =
-			[
-				new AttendanceImportRowsSaveEntryDto
-				{
-					RowId = row.Id,
-					EmployeeId = row.EmployeeId!.Value,
-					AttendanceDate = row.AttendanceDate,
-					StatusWire = "Absent"
-				}
-			]
-		}, JsonOptions);
+			var saveResponse = await Client.PostAsJsonAsync($"{HrAutomatedRunsUrl}/{importId}/rows/save", new AttendanceImportRowsSaveInput
+			{
+				Entries =
+				[
+					new AttendanceImportRowsSaveEntryDto
+					{
+						RowId = row.Id,
+						EmployeeId = row.EmployeeId!.Value,
+						AttendanceDate = row.AttendanceDate,
+						StatusWire = "Absent"
+					}
+				]
+			}, JsonOptions);
 
-		saveResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+			saveResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		}
+		finally
+		{
+			await DeleteSalarySlipAsync(salarySlipId);
+		}
+	}
+
+	private async Task DeleteSalarySlipAsync(Guid salarySlipId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var salarySlipRepository = scope.ServiceProvider.GetRequiredService<IRepository<SalarySlip, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await salarySlipRepository.DeleteAsync(salarySlipId, autoSave: false);
+			await uow.CompleteAsync();
+		}
 	}
 
 	[Fact]
@@ -613,7 +653,10 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 		return rows;
 	}
 
-	private async Task SeedFinalizedSalarySlipAsync(Guid employeeId, string monthYear)
+	private async Task<Guid> SeedImmutableSalarySlipAsync(
+		Guid employeeId,
+		string monthYear,
+		SalarySlipStatus status)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -621,14 +664,24 @@ public class AttendanceImportLogsApi_Tests : ShikshaMitraApiTestBase
 		var salarySlipRepository = scope.ServiceProvider.GetRequiredService<IRepository<SalarySlip, Guid>>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
+		var salarySlip = CreateSalarySlip(tenantId, employeeId, monthYear);
 		using (currentTenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
-			var salarySlip = CreateSalarySlip(tenantId, employeeId, monthYear);
-			salarySlip.FinalizeSlip();
+			if (status == SalarySlipStatus.Finalized)
+			{
+				salarySlip.FinalizeSlip();
+			}
+			else
+			{
+				typeof(SalarySlip)
+					.GetProperty(nameof(SalarySlip.Status))!
+					.SetValue(salarySlip, status);
+			}
 			await salarySlipRepository.InsertAsync(salarySlip, autoSave: false);
 			await uow.CompleteAsync();
 		}
+		return salarySlip.Id;
 	}
 
 	private async Task<EmployeeAttendance> GetAttendanceAsync(Guid employeeId, DateOnly attendanceDate)

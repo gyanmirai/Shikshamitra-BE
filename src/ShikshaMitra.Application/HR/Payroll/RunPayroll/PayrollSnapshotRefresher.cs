@@ -107,11 +107,11 @@ public class PayrollSnapshotRefresher(
 		var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
 		var existingSlips = await salarySlipRepository.GetByMonthAsync(internalMonthYear);
 		var finalizedEmployeeIds = existingSlips
-			.Where(x => x.Status == SalarySlipStatus.Finalized)
+			.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			.Select(x => x.EmployeeId)
 			.ToHashSet();
 		var previousMonthNetPayByEmployee = (await salarySlipRepository.GetByMonthAsync(PayrollRunRules.GetPreviousMonth(internalMonthYear)))
-			.Where(x => x.Status == SalarySlipStatus.Finalized)
+			.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			.GroupBy(x => x.EmployeeId)
 			.ToDictionary(g => g.Key, g => (decimal?)g.OrderByDescending(x => x.ProcessedDate).First().NetSalary);
 		var reviewByEmployee = await lookupReader.GetReviewsByEmployeeAsync(internalMonthYear);

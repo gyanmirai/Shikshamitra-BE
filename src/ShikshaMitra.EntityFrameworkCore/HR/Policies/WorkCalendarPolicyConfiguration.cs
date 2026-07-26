@@ -22,6 +22,7 @@ public class WorkCalendarPolicyConfiguration : IEntityTypeConfiguration<WorkCale
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Name })
 			.IsUnique()
+			.HasFilter("\"Status\" <> 2")
 			.HasDatabaseName("IX_HR_WorkCalendarPolicies_Tenant_AcademicYear_Name");
 	}
 }

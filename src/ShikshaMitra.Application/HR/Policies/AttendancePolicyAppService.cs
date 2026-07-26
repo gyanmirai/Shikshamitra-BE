@@ -22,6 +22,12 @@ public class AttendancePolicyAppService(
 	{
 		var query = await repository.GetQueryableAsync();
 		query = query.Where(x => x.AcademicYearId == input.AcademicYearId);
+		if (input.IsArchived.HasValue)
+		{
+			query = input.IsArchived.Value
+				? query.Where(x => x.Status == HrPolicyStatus.Archived)
+				: query.Where(x => x.Status != HrPolicyStatus.Archived);
+		}
 		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
 			var search = input.Search.Trim().ToLower();

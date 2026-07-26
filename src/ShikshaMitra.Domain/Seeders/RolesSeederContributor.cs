@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp.Data;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
@@ -10,10 +11,13 @@ namespace ShikshaMitra.Seeders;
 
 public class RolesSeederContributor : BaseSeederContributor
 {
-	private const string AdminRoleName = "admin";
-	private const string SuperAdminRoleName = "super-admin";
+	internal const string StepName = "RolesSeeder";
+	internal const string StepVersion = "RolesSeeder:v4";
+	internal const int StepOrder = 110;
+	internal const string AdminRoleName = "admin";
+	internal const string SuperAdminRoleName = "super-admin";
 	private const string HeadOfDepartmentRoleName = "Head of Department";
-	private const string HodRoleName = "HOD";
+	internal const string HodRoleName = "HOD";
 
 	private readonly IIdentityRoleRepository _roleRepository;
 
@@ -86,9 +90,57 @@ public class RolesSeederContributor : BaseSeederContributor
 			var existingRole = await _roleRepository.FindByNormalizedNameAsync(role.NormalizedName);
 			if (existingRole != null)
 			{
+				var changed = false;
 				if (string.IsNullOrEmpty(existingRole.GetProperty<string>("color")) && DefaultRoleColors.TryGetValue(existingRole.Name, out var col))
 				{
 					existingRole.SetProperty("color", col);
+					changed = true;
+				}
+
+				var existingAudience = existingRole.GetProperty<string>(
+					EmployeeRoleAudience.ExtraPropertyName);
+				if (string.IsNullOrWhiteSpace(existingAudience))
+				{
+					existingRole.SetProperty(
+						EmployeeRoleAudience.ExtraPropertyName,
+						RoleEmployeeAudienceDefaults.ResolveRoleAudience(
+							existingRole.Name,
+							existingAudience));
+					changed = true;
+				}
+
+				var existingEmployeeGroupAudience = existingRole.GetProperty<string>(
+					EmployeeGroupAudience.ExtraPropertyName);
+				if (string.IsNullOrWhiteSpace(existingEmployeeGroupAudience))
+				{
+					existingRole.SetProperty(
+						EmployeeGroupAudience.ExtraPropertyName,
+						RoleEmployeeAudienceDefaults.ResolveEmployeeGroupAudience(
+							existingRole.Name,
+							existingEmployeeGroupAudience));
+					changed = true;
+				}
+
+				var hasEmployeeOnboardingMarker = existingRole.ExtraProperties.ContainsKey(
+					EmployeeOnboardingRoleAssignment.ExtraPropertyName);
+				bool? existingEmployeeOnboardingMarker = hasEmployeeOnboardingMarker
+					? existingRole.GetProperty<bool>(EmployeeOnboardingRoleAssignment.ExtraPropertyName)
+					: null;
+				var employeeOnboardingAssignable =
+					RoleEmployeeAudienceDefaults.ResolveEmployeeOnboardingAssignable(
+						existingRole.Name,
+						existingEmployeeOnboardingMarker);
+				if (!hasEmployeeOnboardingMarker ||
+					existingEmployeeOnboardingMarker != employeeOnboardingAssignable)
+				{
+					existingRole.SetProperty(
+						EmployeeOnboardingRoleAssignment.ExtraPropertyName,
+						employeeOnboardingAssignable);
+					changed = true;
+				}
+
+				if (changed)
+				{
 					await _roleRepository.UpdateAsync(existingRole);
 				}
 				continue;
@@ -98,11 +150,57 @@ public class RolesSeederContributor : BaseSeederContributor
 			{
 				role.SetProperty("color", color);
 			}
+			role.SetProperty(
+				EmployeeRoleAudience.ExtraPropertyName,
+				EmployeeRoleAudience.ForRoleName(role.Name));
+			role.SetProperty(
+				EmployeeGroupAudience.ExtraPropertyName,
+				RoleEmployeeAudienceDefaults.ResolveEmployeeGroupAudience(role.Name, null));
+			role.SetProperty(
+				EmployeeOnboardingRoleAssignment.ExtraPropertyName,
+				RoleEmployeeAudienceDefaults.ResolveEmployeeOnboardingAssignable(role.Name, null));
 
 			await _roleRepository.InsertAsync(role);
 		}
 
+		await BackfillCustomEmployeeRoleGroupAudiencesAsync();
 		await CurrentUnitOfWork.SaveChangesAsync();
+	}
+
+	private async Task BackfillCustomEmployeeRoleGroupAudiencesAsync()
+	{
+		var roles = await _roleRepository.GetListAsync();
+		foreach (var role in roles)
+		{
+			if (!role.ExtraProperties.ContainsKey(
+				EmployeeOnboardingRoleAssignment.ExtraPropertyName))
+			{
+				role.SetProperty(
+					EmployeeOnboardingRoleAssignment.ExtraPropertyName,
+					RoleEmployeeAudienceDefaults.ResolveEmployeeOnboardingAssignable(
+						role.Name,
+						null));
+				await _roleRepository.UpdateAsync(role);
+			}
+
+			var existingGroupAudience = role.GetProperty<string>(
+				EmployeeGroupAudience.ExtraPropertyName);
+			if (!string.IsNullOrWhiteSpace(existingGroupAudience))
+			{
+				continue;
+			}
+
+			var roleAudience = role.GetProperty<string>(EmployeeRoleAudience.ExtraPropertyName);
+			if (!EmployeeRoleAudience.IsEmployeeAssignable(roleAudience, role.Name))
+			{
+				continue;
+			}
+
+			role.SetProperty(
+				EmployeeGroupAudience.ExtraPropertyName,
+				EmployeeGroupAudience.Both);
+			await _roleRepository.UpdateAsync(role);
+		}
 	}
 
 	private async Task RenameHeadOfDepartmentRoleAsync()

@@ -13,7 +13,9 @@ public class AttendancePolicyMutationService(
 	AttendancePolicyDefaultService defaultService,
 	HrPolicyArchiveAssignmentRepairService archiveAssignmentRepairService,
 	HrPolicyWorkCalendarValidator workCalendarValidator,
-	AttendancePolicyHistoryWriter historyWriter)
+	AttendancePolicyCloneService cloneService,
+	AttendancePolicyHistoryWriter historyWriter,
+	HrPolicyNameUniquenessService nameUniquenessService)
 	: ApplicationService
 {
 	public async Task<AttendancePolicyDto> CreateAsync(CreateUpdateAttendancePolicyDto input)
@@ -21,6 +23,7 @@ public class AttendancePolicyMutationService(
 		var entity = AttendancePolicyModelBuilder.Build(GuidGenerator.Create(), CurrentTenant.Id, input);
 		HrPolicyStatusGuard.EnsureArchiveUsesArchiveWorkflow(entity.Status);
 		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, input.AcademicYearId, entity.Status);
+		await nameUniquenessService.EnsureAttendanceAvailableAsync(input.AcademicYearId, input.Name);
 		if (entity.IsDefault)
 		{
 			HrPolicyStatusGuard.EnsureDefaultIsActive(entity.Status);
@@ -28,7 +31,9 @@ public class AttendancePolicyMutationService(
 			await defaultService.ClearDefaultsAsync(entity.AcademicYearId);
 		}
 
-		await repository.InsertAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecuteAttendanceWriteAsync(
+			entity.Name,
+			() => repository.InsertAsync(entity, autoSave: true));
 		var dto = HrPolicyMapping.ToDto(entity);
 		await historyWriter.CreatedAsync(dto);
 		return dto;
@@ -62,6 +67,7 @@ public class AttendancePolicyMutationService(
 			return before;
 		}
 
+		await nameUniquenessService.EnsureAttendanceAvailableAsync(entity.AcademicYearId, input.Name, entity.Id);
 		if (entity.Status != HrPolicyStatus.Draft || status != HrPolicyStatus.Draft)
 		{
 			await impactGuard.EnsureUpdateConfirmedAsync(id, entity.AcademicYearId, input);
@@ -101,7 +107,9 @@ public class AttendancePolicyMutationService(
 			await defaultService.ClearDefaultsAsync(entity.AcademicYearId, entity.Id);
 		}
 
-		await repository.UpdateAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecuteAttendanceWriteAsync(
+			entity.Name,
+			() => repository.UpdateAsync(entity, autoSave: true));
 		var dto = HrPolicyMapping.ToDto(entity);
 		await historyWriter.EditedAsync(before, dto);
 		return dto;
@@ -109,39 +117,7 @@ public class AttendancePolicyMutationService(
 
 	public async Task<AttendancePolicyDto> CloneAsync(Guid id, HrPolicyCloneRequestDto input)
 	{
-		var source = await repository.GetAsync(id);
-		await workCalendarValidator.EnsureUsableAsync(source.WorkCalendarPolicyId, source.AcademicYearId, HrPolicyStatus.Draft);
-		var entity = new AttendancePolicy(
-			GuidGenerator.Create(),
-			CurrentTenant.Id,
-			source.AcademicYearId,
-			source.WorkCalendarPolicyId,
-			string.IsNullOrWhiteSpace(input.Name) ? $"{source.Name} Copy" : input.Name!,
-			HrPolicyStatus.Draft,
-			false,
-			source.CaptureMode,
-			source.FullDayThresholdPercentage,
-			source.HalfDayThresholdPercentage,
-			source.AbsentThresholdPercentage,
-			source.MissingPunchBehavior,
-			source.ManualCorrectionAllowed,
-			source.GraceTime,
-			source.MaxLateAllowedPerMonth,
-			source.PenaltyType,
-			source.PenaltyCountThreshold,
-			source.EarlyExitEnabled,
-			source.EarlyExitGraceTime,
-			source.OvertimeEnabled,
-			source.OvertimeRate,
-			source.MinOvertimeMinutes,
-			source.HolidayWorkBehavior,
-			source.PayrollPreviewEnabled,
-			source.PenaltyDeductionAmount);
-
-		await repository.InsertAsync(entity, autoSave: true);
-		var dto = HrPolicyMapping.ToDto(entity);
-		await historyWriter.ClonedAsync(dto, source);
-		return dto;
+		return await cloneService.CloneAsync(id, input);
 	}
 
 	public async Task DeleteAsync(Guid id)
@@ -156,7 +132,9 @@ public class AttendancePolicyMutationService(
 		await impactGuard.EnsureArchiveConfirmedAsync(id, entity.AcademicYearId);
 		await archiveAssignmentRepairService.ReassignAttendanceReferencesToDefaultAsync(entity);
 		entity.Archive();
-		await repository.UpdateAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecuteAttendanceWriteAsync(
+			entity.Name,
+			() => repository.UpdateAsync(entity, autoSave: true));
 		await historyWriter.ArchivedAsync(HrPolicyMapping.ToDto(entity));
 	}
 
@@ -168,8 +146,11 @@ public class AttendancePolicyMutationService(
 			return HrPolicyMapping.ToDto(entity);
 		}
 
+		await nameUniquenessService.EnsureAttendanceAvailableAsync(entity.AcademicYearId, entity.Name, entity.Id);
 		entity.Unarchive();
-		await repository.UpdateAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecuteAttendanceWriteAsync(
+			entity.Name,
+			() => repository.UpdateAsync(entity, autoSave: true));
 		var dto = HrPolicyMapping.ToDto(entity);
 		await historyWriter.UnarchivedAsync(dto);
 		return dto;

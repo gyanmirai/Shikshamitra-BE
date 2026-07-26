@@ -44,12 +44,27 @@ internal static class AttendanceRegisterAdjustmentMapper
 			_ => throw new BusinessException(HRErrorCodes.TakeAttendanceInvalidStatusWire)
 		};
 
-	public static DateTimeOffset? ParseOptionalTime(string? value) =>
-		string.IsNullOrWhiteSpace(value)
-			? null
-			: DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
-				? parsed
-				: null;
+	public static DateTimeOffset? ParseOptionalTime(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			return null;
+		}
+
+		var trimmed = value.Trim();
+		if (TimeOnly.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedTime))
+		{
+			return new DateTimeOffset(DateOnly.MinValue.ToDateTime(parsedTime), TimeSpan.Zero);
+		}
+
+		return DateTimeOffset.TryParse(
+			trimmed,
+			CultureInfo.InvariantCulture,
+			DateTimeStyles.RoundtripKind,
+			out var parsedOffset)
+			? parsedOffset
+			: null;
+	}
 
 	public static DateOnly ParseAdjustmentDate(string? value)
 	{

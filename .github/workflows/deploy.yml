@@ -36,21 +36,31 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release
 
-    # ⭐ Run Critical API Tests before deployment
-    # - name: Run Critical API Tests
-    #   run: >
-    #     dotnet test test/ShikshaMitra.HttpApi.Tests
-    #     --configuration Release
-    #     --no-build
-    #     --filter "Tier=Critical"
+    - name: Run HR deployment regression gates
+      run: |
+        dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests \
+          --configuration Release \
+          --no-build \
+          --filter "FullyQualifiedName~LegacyMigrationBaselineBridge_Tests"
+        dotnet test test/ShikshaMitra.Domain.Tests \
+          --configuration Release \
+          --no-build \
+          --filter "FullyQualifiedName~EmployeeApplication_Tests|FullyQualifiedName~PayrollLockPreconditionGuard_Tests|FullyQualifiedName~PolicyAggregateRequiredIds_Tests|FullyQualifiedName~RolesSeederContributor_Tests"
+        dotnet test test/ShikshaMitra.Application.Tests \
+          --configuration Release \
+          --no-build \
+          --filter "FullyQualifiedName~AttendanceRegisterAdjustmentMapper_Tests|FullyQualifiedName~EmployeeApplicationAppService_Tests|FullyQualifiedName~EmployeeDashboardProjection_Tests|FullyQualifiedName~EarningComponentAppService_Tests|FullyQualifiedName~HrPolicyAppService_Tests|FullyQualifiedName~PayrollRunItemPreview_Tests|FullyQualifiedName~PolicyReportRegression_Tests"
+        dotnet test test/ShikshaMitra.HttpApi.Tests \
+          --configuration Release \
+          --no-build \
+          --filter "FullyQualifiedName~EmployeeApplicationPublicApi_Tests|FullyQualifiedName~EmployeeListApi_Tests|FullyQualifiedName~EarningComponentApi_Tests|FullyQualifiedName~RunPayrollApi_Tests|FullyQualifiedName~HrEndpointContractSnapshotGuard_Tests"
 
-    # ⭐ Run ABP DbMigrator
-    # - name: Run DbMigrator
-    #   env:
-    #     ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
-    #   run: |
-    #     cd src/ShikshaMitra.DbMigrator
-    #     dotnet run --configuration Release --no-launch-profile
+    - name: Apply database migrations and seed updates
+      env:
+        ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
+      run: |
+        cd src/ShikshaMitra.DbMigrator
+        dotnet run --configuration Release --no-build --no-launch-profile
 
     # ⭐ Publish Host App
     - name: Publish

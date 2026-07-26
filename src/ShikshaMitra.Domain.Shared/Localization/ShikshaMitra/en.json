@@ -269,6 +269,7 @@
     "HR:Employee:010032": "This employee is a reporting manager for {ActiveDirectReportCount} active employee(s). Reassign them before changing status.",
     "HR:Employee:010033": "Effective date is required when changing an employee to inactive, left, or retired.",
     "HR:Employee:010034": "Employee email cannot be changed after employee creation.",
+    "HR:Employee:010409": "An employee or open onboarding application already uses this email address.",
     "HR:Leave:020001": "Invalid month value.",
     "HR:Leave:020002": "Invalid year value.",
     "HR:Leave:020003": "Invalid page number. Page must be at least 1.",

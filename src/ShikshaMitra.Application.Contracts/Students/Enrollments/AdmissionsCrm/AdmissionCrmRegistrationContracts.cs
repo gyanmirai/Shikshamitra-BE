@@ -35,6 +35,12 @@ public class AdmissionCrmRegistrationFieldDto
 	public decimal? MinimumValue { get; set; }
 	public decimal? MaximumValue { get; set; }
 	public IReadOnlyList<string> Options { get; set; } = [];
+	public IReadOnlyDictionary<string, string> LocalizedLabels { get; set; } =
+		new Dictionary<string, string>();
+	public IReadOnlyDictionary<string, string> LocalizedHelpTexts { get; set; } =
+		new Dictionary<string, string>();
+	public IReadOnlyDictionary<string, IReadOnlyList<string>> LocalizedOptions { get; set; } =
+		new Dictionary<string, IReadOnlyList<string>>();
 }
 
 public class AdmissionCrmRegistrationSectionDto
@@ -48,6 +54,10 @@ public class AdmissionCrmRegistrationSectionDto
 	public int DisplayOrder { get; set; }
 	public bool ParentVisible { get; set; } = true;
 	public IReadOnlyList<AdmissionCrmRegistrationFieldDto> Fields { get; set; } = [];
+	public IReadOnlyDictionary<string, string> LocalizedTitles { get; set; } =
+		new Dictionary<string, string>();
+	public IReadOnlyDictionary<string, string> LocalizedDescriptions { get; set; } =
+		new Dictionary<string, string>();
 }
 
 public class AdmissionCrmRegistrationTemplateUpsertDto

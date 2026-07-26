@@ -9,6 +9,7 @@ using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
@@ -91,11 +92,16 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
 			academicYearId,
 			nameof(GetOptOutsAsync));
+		var hasAcademicYearWideScope =
+			await _studentScopeAccessService.CurrentUserHasAcademicYearWideScopeAsync(academicYearId);
+		var scopedLeadIds = await GetScopedLeadIdsAsync(academicYearId);
 
 		var queryable = await _optOutRepository.GetQueryableAsync();
 		var query = queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
-			x.AcademicYearId == academicYearId);
+			x.AcademicYearId == academicYearId &&
+			(hasAcademicYearWideScope ||
+			 (x.LeadId.HasValue && scopedLeadIds.Contains(x.LeadId.Value))));
 
 		if (input.LeadId.HasValue)
 		{
@@ -319,11 +325,16 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
 			academicYearId,
 			nameof(GetDeliveryLogsAsync));
+		var hasAcademicYearWideScope =
+			await _studentScopeAccessService.CurrentUserHasAcademicYearWideScopeAsync(academicYearId);
+		var scopedLeadIds = await GetScopedLeadIdsAsync(academicYearId);
 
 		var queryable = await _deliveryLogRepository.GetQueryableAsync();
 		var query = queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
-			x.AcademicYearId == academicYearId);
+			x.AcademicYearId == academicYearId &&
+			(hasAcademicYearWideScope ||
+			 (x.LeadId.HasValue && scopedLeadIds.Contains(x.LeadId.Value))));
 
 		if (input.LeadId.HasValue)
 		{
@@ -491,7 +502,7 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 
 		if (enforceUserScope)
 		{
-			await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation);
+			await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		}
 
 		return lead;
@@ -550,7 +561,7 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 				.WithData("DeliveryLogId", deliveryLogId);
 		}
 
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(log.AcademicYearId, operation);
+		await EnsureLeadBelongsToAcademicYearAsync(log.LeadId, log.AcademicYearId, operation);
 		return log;
 	}
 
@@ -558,7 +569,12 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 	{
 		if (!leadId.HasValue)
 		{
-			return;
+			if (await _studentScopeAccessService.CurrentUserHasAcademicYearWideScopeAsync(academicYearId))
+			{
+				return;
+			}
+
+			throw new AbpAuthorizationException("An unassigned communication record requires academic-year-wide scope.");
 		}
 
 		var lead = await GetLeadForCurrentTenantAsync(leadId.Value, operation);
@@ -568,6 +584,16 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 				.WithData("LeadId", leadId.Value)
 				.WithData("AcademicYearId", academicYearId);
 		}
+	}
+
+	private async Task<List<Guid>> GetScopedLeadIdsAsync(Guid academicYearId)
+	{
+		var queryable = await _leadRepository.GetQueryableAsync();
+		var query = queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId);
+		query = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(query);
+		return await AsyncExecuter.ToListAsync(query.Select(x => x.Id));
 	}
 
 	private async Task AddTimelineEventAsync(

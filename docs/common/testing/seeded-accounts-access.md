@@ -37,7 +37,7 @@ These are seeded only for the DDVS tenant when `SeedTestLogins=true`.
 |---|---|---|
 | `admin-ddvs@ddvs.com` | admin | Seeded all application/platform permissions; tenant-bound to DDVS. |
 | `admin-ops@ddvs.com` | admin | Seeded all application/platform permissions; tenant-bound to DDVS. |
-| `principal-gseb@ddvs.com` | Principal | Principal module permissions; GSEB board data scope only. |
+| `principal-gseb@ddvs.com` | Principal | Principal module permissions; GSEB academic permissions plus demo-only academic-year-wide scope for Student Enrollment E2E and global configuration. |
 | `principal-cbse@ddvs.com` | Principal | Principal module permissions; CBSE board data scope only. |
 | `teacher-gseb@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
 | `clerk-office@ddvs.com` | Clerk | Dashboard, Students, HR, Communication, Calendar, Institute Setup; full organization data scope. |
@@ -92,7 +92,8 @@ These are seeded only for the DDVS tenant when `SeedHrManualTestData=true`.
 
 - `admin` users receive seeded permissions for setup, troubleshooting, and permission-management screens; they do not bypass tenant isolation.
 - Principal users can use permission-management APIs only when the role/user has the relevant ABP permission-management grants.
-- `principal-gseb@ddvs.com` and `principal-demo-gseb@ddvs.com` are intended for GSEB-only testing.
+- `principal-demo-gseb@ddvs.com` is intended for GSEB-only testing.
+- `principal-gseb@ddvs.com` retains GSEB-specific academic permissions, and `SeedTestLogins=true` additionally gives this exact DDVS demo persona academic-year-wide scope for Student Enrollment E2E and global configuration.
 - `principal-cbse@ddvs.com` is intended for CBSE-only testing.
 - HR manual test users are designed for HR payroll, attendance, leave, and reporting workflows.
 - Director seeded employee accounts are full-access tenant staff accounts and are linked to employee records, so `/api/employees/me` resolves for them.

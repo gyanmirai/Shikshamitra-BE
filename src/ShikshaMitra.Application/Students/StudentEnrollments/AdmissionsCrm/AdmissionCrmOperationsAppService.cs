@@ -478,6 +478,9 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		{
 			throw new BusinessException("AdmissionCrm:LeadNotFound");
 		}
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(
+			lead,
+			nameof(GetAdmissionHandoffPackageAsync));
 
 		var examQueryable = await _examRepository.GetQueryableAsync();
 		var exam = await AsyncExecuter.FirstOrDefaultAsync(examQueryable.Where(x =>
@@ -555,23 +558,29 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		var decisionQueryable = await _decisionRepository.GetQueryableAsync();
 		var offerQueryable = await _offerRepository.GetQueryableAsync();
 		var seatPoolQueryable = await _seatPoolRepository.GetQueryableAsync();
+		var scopedLeadQuery = leadQueryable.Where(x =>
+			x.TenantId == tenantId &&
+			x.AcademicYearId == academicYearId);
+		scopedLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(scopedLeadQuery);
+		var leads = await AsyncExecuter.ToListAsync(scopedLeadQuery);
+		var leadIds = leads.Select(x => x.Id).ToList();
 
 		return new OperationsData(
-			await AsyncExecuter.ToListAsync(leadQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(examQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
+			leads,
+			await AsyncExecuter.ToListAsync(examQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
 			await AsyncExecuter.ToListAsync(slotQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(registrationQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(checklistQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(documentQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(routeQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(routeAppealQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(activationQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(serviceHandoffQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(policyExceptionQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(quotationQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(identityProfileQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(decisionQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
-			await AsyncExecuter.ToListAsync(offerQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
+			await AsyncExecuter.ToListAsync(registrationQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(checklistQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(documentQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(routeQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(routeAppealQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(activationQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(serviceHandoffQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(policyExceptionQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(quotationQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(identityProfileQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(decisionQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
+			await AsyncExecuter.ToListAsync(offerQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId && leadIds.Contains(x.LeadId))),
 			await AsyncExecuter.ToListAsync(seatPoolQueryable.Where(x => x.TenantId == tenantId && x.AcademicYearId == academicYearId)),
 			Clock.Now);
 	}

@@ -14,6 +14,7 @@ public class CreateAdmissionCrmFormTemplateDto
 
 	public AdmissionInquiryChannel Channel { get; set; } = AdmissionInquiryChannel.SchoolWebsiteForm;
 	public bool IsPublic { get; set; }
+	public bool IsActive { get; set; } = true;
 
 	[MaxLength(AdmissionCrmConsts.MaxConsentTextLength)]
 	public string? ConsentText { get; set; }

@@ -777,6 +777,114 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Require_Bulk_Operations_Permission_To_Override_Protected_Stage_Guards()
+	{
+		var lead = await CreateCrmLeadAsync("Protected stage override permission inquiry");
+		var readyResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/stage",
+			new ChangeAdmissionCrmLeadStageDto
+			{
+				Stage = AdmissionInquiryStage.ExamReady,
+				Reason = "Applicant is ready for exam scheduling."
+			},
+			JsonOptions);
+		readyResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await readyResponse.Content.ReadAsStringAsync());
+
+		using var changeStageOnlyClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeStage);
+		var forbiddenResponse = await changeStageOnlyClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/stage",
+			new ChangeAdmissionCrmLeadStageDto
+			{
+				Stage = AdmissionInquiryStage.ExamScheduled,
+				Reason = "Attempted protected workflow override.",
+				OverrideWorkflowGuards = true
+			},
+			JsonOptions);
+		forbiddenResponse.StatusCode.ShouldBe(
+			HttpStatusCode.Forbidden,
+			await forbiddenResponse.Content.ReadAsStringAsync());
+
+		using var authorizedOverrideClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeStage,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.BulkOperations);
+		var allowedResponse = await authorizedOverrideClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/stage",
+			new ChangeAdmissionCrmLeadStageDto
+			{
+				Stage = AdmissionInquiryStage.ExamScheduled,
+				Reason = "Admissions supervisor approved the protected workflow override.",
+				OverrideWorkflowGuards = true
+			},
+			JsonOptions);
+		allowedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await allowedResponse.Content.ReadAsStringAsync());
+		var changed = await allowedResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
+		changed.ShouldNotBeNull();
+		changed.Stage.ShouldBe(AdmissionInquiryStage.ExamScheduled);
+
+		var timeline = await GetCrmTimelineAsync(lead.Id);
+		timeline.Items.ShouldContain(x =>
+			x.EventType == AdmissionCrmTimelineEventType.StageChanged &&
+			x.Details != null &&
+			x.Details.Contains("Workflow guards overridden."));
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Require_Dedicated_Reopen_Permission_And_Audit_For_Stale_Lead()
+	{
+		var lead = await CreateCrmLeadAsync("Stale lead dedicated reopen permission inquiry");
+		await MarkCrmLeadStaleAsync(lead.Id);
+
+		using var overrideClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeStage,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.BulkOperations);
+		var bypassResponse = await overrideClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/stage",
+			new ChangeAdmissionCrmLeadStageDto
+			{
+				Stage = AdmissionInquiryStage.FollowUp,
+				Reason = "Attempted to bypass the dedicated reopen workflow.",
+				OverrideWorkflowGuards = true
+			},
+			JsonOptions);
+		bypassResponse.StatusCode.ShouldBe(
+			HttpStatusCode.BadRequest,
+			await bypassResponse.Content.ReadAsStringAsync());
+		var bypassBody = await bypassResponse.Content.ReadAsStringAsync();
+		bypassBody.ShouldContain("AdmissionCrm:StaleLeadRequiresReopen");
+
+		using var changeStageOnlyClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeStage);
+		var forbiddenReopenResponse = await changeStageOnlyClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/reopen",
+			new ReopenAdmissionCrmLeadDto { Reason = "Attempted without reopen permission." },
+			JsonOptions);
+		forbiddenReopenResponse.StatusCode.ShouldBe(
+			HttpStatusCode.Forbidden,
+			await forbiddenReopenResponse.Content.ReadAsStringAsync());
+
+		using var reopenClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ArchiveReopen);
+		var reopenResponse = await reopenClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/reopen",
+			new ReopenAdmissionCrmLeadDto { Reason = "Parent resumed the admission inquiry." },
+			JsonOptions);
+		reopenResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await reopenResponse.Content.ReadAsStringAsync());
+		var reopened = await reopenResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
+		reopened.ShouldNotBeNull();
+		reopened.Stage.ShouldBe(AdmissionInquiryStage.FollowUp);
+		reopened.ReopenedAt.ShouldNotBeNull();
+		reopened.ReopenReason.ShouldBe("Parent resumed the admission inquiry.");
+
+		var timeline = await GetCrmTimelineAsync(lead.Id);
+		timeline.Items.ShouldContain(x =>
+			x.EventType == AdmissionCrmTimelineEventType.Reopened &&
+			x.Details == "Parent resumed the admission inquiry.");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Not_Expose_Crm_Lead_To_Another_Tenant()
 	{
 		var lead = await CreateCrmLeadAsync("Tenant isolation inquiry");
@@ -887,6 +995,61 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		configuration.ChannelSettings.ShouldAllBe(x => x.IsEnabled);
 		configuration.ChannelSettings.Select(x => x.Channel).Distinct().Count()
 			.ShouldBe(configuration.ChannelSettings.Count);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Cycle_Configuration_Update_After_Journey_Is_Locked()
+	{
+		var academicYearId = await CreateAcademicYearAsync();
+		var cycleResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/configuration/cycle");
+		cycleResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await cycleResponse.Content.ReadAsStringAsync());
+		var cycle = await cycleResponse.Content.ReadFromJsonAsync<AdmissionCrmCycleConfigurationDto>(JsonOptions);
+		cycle.ShouldNotBeNull();
+
+		var lockResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/configuration/journey/lock",
+			new AdmissionCrmJourneyLockDto { Reason = "Regression test for immutable admission journeys." },
+			JsonOptions);
+		lockResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await lockResponse.Content.ReadAsStringAsync());
+		var lockedCycle = await lockResponse.Content.ReadFromJsonAsync<AdmissionCrmCycleConfigurationDto>(JsonOptions);
+		lockedCycle.ShouldNotBeNull();
+		lockedCycle.JourneyLocked.ShouldBeTrue();
+
+		var cycleUpdate = new UpdateAdmissionCrmCycleConfigurationDto
+		{
+				CycleName = cycle.CycleName,
+				IsActive = cycle.IsActive,
+				RegistrationFormRequiredBeforeExam = cycle.RegistrationFormRequiredBeforeExam,
+				EntranceExamRequired = cycle.EntranceExamRequired,
+				StaleAfterDays = cycle.StaleAfterDays,
+				ArchiveAfterDays = cycle.ArchiveAfterDays,
+				DefaultLeadSlaHours = cycle.DefaultLeadSlaHours,
+				SlaPolicy = cycle.SlaPolicy,
+				ActivationCancellationWindowDays = cycle.ActivationCancellationWindowDays,
+				DefaultExamPassingPercentage = cycle.DefaultExamPassingPercentage,
+				MeritRankingMode = cycle.MeritRankingMode,
+				ExamReadinessFields = cycle.ExamReadinessFields,
+				LeadScoringRules = cycle.LeadScoringRules,
+				LeadRoutingSettings = cycle.LeadRoutingSettings,
+				JourneyRules = cycle.JourneyRules,
+				ApplicantChecklist = cycle.ApplicantChecklist,
+				ChannelSettings = cycle.ChannelSettings,
+				Notes = "This update must not bypass the journey lock."
+		};
+		var updateResponse = await PutCycleConfigurationWithImpactAsync(academicYearId, cycleUpdate);
+
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await updateResponse.Content.ReadAsStringAsync());
+		(await updateResponse.Content.ReadAsStringAsync()).ShouldContain("AdmissionCrm:JourneyLocked");
+
+		var persistedResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/configuration/cycle");
+		persistedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await persistedResponse.Content.ReadAsStringAsync());
+		var persisted = await persistedResponse.Content.ReadFromJsonAsync<AdmissionCrmCycleConfigurationDto>(JsonOptions);
+		persisted.ShouldNotBeNull();
+		persisted.JourneyLocked.ShouldBeTrue();
+		persisted.Notes.ShouldBe(cycle.Notes);
 	}
 
 	[Fact]
@@ -1330,8 +1493,9 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 		try
 		{
-			var updateResponse = await Client.PutAsJsonAsync(
-				$"/api/student-enrollment/admissions-crm/configuration/pipeline-stages/{newInquiryStage.Id}",
+			var updateResponse = await PutPipelineStageWithImpactAsync(
+				Factory.SeededAcademicYearId,
+				newInquiryStage.Id,
 				new UpdateAdmissionCrmPipelineStageDto
 				{
 					StageName = newInquiryStage.StageName,
@@ -1341,8 +1505,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 					SlaTargetHours = newInquiryStage.SlaTargetHours,
 					OwnerResponsibility = newInquiryStage.OwnerResponsibility,
 					AllowedNextStages = [AdmissionInquiryStage.FollowUp]
-				},
-				JsonOptions);
+				});
 			updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateResponse.Content.ReadAsStringAsync());
 
 			var lead = await CreateCrmLeadAsync("Restricted transition inquiry for Grade 3");
@@ -1361,10 +1524,10 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		}
 		finally
 		{
-			await Client.PutAsJsonAsync(
-				$"/api/student-enrollment/admissions-crm/configuration/pipeline-stages/{newInquiryStage.Id}",
-				originalStage,
-				JsonOptions);
+			await PutPipelineStageWithImpactAsync(
+				Factory.SeededAcademicYearId,
+				newInquiryStage.Id,
+				originalStage);
 		}
 	}
 
@@ -1764,8 +1927,9 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 		try
 		{
-			var updateResponse = await Client.PutAsJsonAsync(
-				$"/api/student-enrollment/admissions-crm/configuration/pipeline-stages/{newInquiryStage.Id}",
+			var updateResponse = await PutPipelineStageWithImpactAsync(
+				Factory.SeededAcademicYearId,
+				newInquiryStage.Id,
 				new UpdateAdmissionCrmPipelineStageDto
 				{
 					StageName = "New Lead",
@@ -1779,8 +1943,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 						AdmissionInquiryStage.FollowUp,
 						AdmissionInquiryStage.ExamReady
 					]
-				},
-				JsonOptions);
+				});
 
 			updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateResponse.Content.ReadAsStringAsync());
 			var updatedStage = await updateResponse.Content
@@ -1796,10 +1959,10 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		}
 		finally
 		{
-			await Client.PutAsJsonAsync(
-				$"/api/student-enrollment/admissions-crm/configuration/pipeline-stages/{newInquiryStage.Id}",
-				originalStage,
-				JsonOptions);
+			await PutPipelineStageWithImpactAsync(
+				Factory.SeededAcademicYearId,
+				newInquiryStage.Id,
+				originalStage);
 		}
 	}
 
@@ -1892,6 +2055,54 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		var templates = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<AdmissionCrmFormTemplateDto>>(JsonOptions);
 		templates.ShouldNotBeNull();
 		templates.Items.Select(x => x.Id).ShouldContain(template.Id);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Create_Inactive_Public_Form_Template_Draft_Atomically()
+	{
+		var templateName = "Inactive public inquiry " + Guid.NewGuid().ToString("N")[..8];
+		var input = new CreateAdmissionCrmFormTemplateDto
+		{
+			TemplateName = templateName,
+			Description = "Inactive duplicate draft for review",
+			Channel = AdmissionInquiryChannel.SchoolWebsiteForm,
+			IsPublic = true,
+			IsActive = false,
+			ConsentText = "I agree that the school may contact me about this admission inquiry.",
+			PrivacyNoticeUrl = "https://school.example/privacy",
+			Fields =
+			[
+				new AdmissionCrmFormFieldDto
+				{
+					Key = "parentPhone",
+					Label = "Parent phone",
+					FieldType = AdmissionCrmFormFieldType.Phone,
+					SystemField = "PrimaryContactNo",
+					Required = true,
+					DisplayOrder = 10
+				}
+			]
+		};
+
+		var createResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/form-templates",
+			input,
+			JsonOptions);
+
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+		var template = await createResponse.Content.ReadFromJsonAsync<AdmissionCrmFormTemplateDto>(JsonOptions);
+		template.ShouldNotBeNull();
+		template.TemplateName.ShouldBe(templateName);
+		template.IsPublic.ShouldBeTrue();
+		template.IsActive.ShouldBeFalse();
+
+		var listResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/form-templates?filterText={Uri.EscapeDataString(templateName)}&isActive=false");
+		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await listResponse.Content.ReadAsStringAsync());
+		var templates = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<AdmissionCrmFormTemplateDto>>(JsonOptions);
+		templates.ShouldNotBeNull();
+		templates.Items.ShouldContain(item => item.Id == template.Id && !item.IsActive);
 	}
 
 	[Fact]
@@ -3720,8 +3931,9 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 		try
 		{
-			var updateStageResponse = await Client.PutAsJsonAsync(
-				$"/api/student-enrollment/admissions-crm/configuration/pipeline-stages/{newInquiryStage.Id}",
+			var updateStageResponse = await PutPipelineStageWithImpactAsync(
+				Factory.SeededAcademicYearId,
+				newInquiryStage.Id,
 				new UpdateAdmissionCrmPipelineStageDto
 				{
 					StageName = newInquiryStage.StageName,
@@ -3731,8 +3943,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 					SlaTargetHours = 8,
 					OwnerResponsibility = newInquiryStage.OwnerResponsibility,
 					AllowedNextStages = [.. newInquiryStage.AllowedNextStages]
-				},
-				JsonOptions);
+				});
 			updateStageResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateStageResponse.Content.ReadAsStringAsync());
 
 			var lead = await CreateCrmLeadAsync("Stage SLA inquiry for Grade 5");
@@ -3760,10 +3971,10 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		}
 		finally
 		{
-			await Client.PutAsJsonAsync(
-				$"/api/student-enrollment/admissions-crm/configuration/pipeline-stages/{newInquiryStage.Id}",
-				originalStage,
-				JsonOptions);
+			await PutPipelineStageWithImpactAsync(
+				Factory.SeededAcademicYearId,
+				newInquiryStage.Id,
+				originalStage);
 		}
 	}
 
@@ -4420,6 +4631,88 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		eligibilityOverrideResponse.StatusCode.ShouldBe(
 			HttpStatusCode.Forbidden,
 			await eligibilityOverrideResponse.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Govern_Individual_Crm_Exam_Result_Corrections()
+	{
+		var lead = await CreateCrmLeadAsync("Individual result correction governance");
+		var slot = await CreateAdmissionCrmExamSlotAsync(
+			"Individual result correction governance",
+			studentLimit: 1);
+		var exam = await ScheduleCrmEntranceExamAsync(lead.Id, slot.Id);
+		var initialResult = new UploadAdmissionCrmEntranceExamResultDto
+		{
+			TotalMarks = 100,
+			PassingMarks = 40,
+			ObtainedMarks = 68
+		};
+		var initialResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/exams/{exam.Id}/result",
+			initialResult,
+			JsonOptions);
+		initialResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await initialResponse.Content.ReadAsStringAsync());
+
+		using var resultOnlyClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult);
+		var identicalRetryResponse = await resultOnlyClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/exams/{exam.Id}/result",
+			initialResult,
+			JsonOptions);
+		identicalRetryResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await identicalRetryResponse.Content.ReadAsStringAsync());
+
+		var missingReasonResponse = await resultOnlyClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/exams/{exam.Id}/result",
+			new UploadAdmissionCrmEntranceExamResultDto
+			{
+				TotalMarks = 100,
+				PassingMarks = 40,
+				ObtainedMarks = 72
+			},
+			JsonOptions);
+		missingReasonResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await missingReasonResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:ExamResultCorrectionReasonRequired");
+
+		var missingOverridePermissionResponse = await resultOnlyClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/exams/{exam.Id}/result",
+			new UploadAdmissionCrmEntranceExamResultDto
+			{
+				TotalMarks = 100,
+				PassingMarks = 40,
+				ObtainedMarks = 72,
+				CorrectionReason = "Marks rechecked against the signed answer sheet."
+			},
+			JsonOptions);
+		missingOverridePermissionResponse.StatusCode.ShouldBe(
+			HttpStatusCode.Forbidden,
+			await missingOverridePermissionResponse.Content.ReadAsStringAsync());
+
+		using var overrideClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideExamResult);
+		var correctionResponse = await overrideClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/exams/{exam.Id}/result",
+			new UploadAdmissionCrmEntranceExamResultDto
+			{
+				TotalMarks = 100,
+				PassingMarks = 40,
+				ObtainedMarks = 72,
+				CorrectionReason = "Marks rechecked against the signed answer sheet."
+			},
+			JsonOptions);
+		correctionResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await correctionResponse.Content.ReadAsStringAsync());
+		var corrected = await correctionResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmEntranceExamDto>(JsonOptions);
+		corrected.ShouldNotBeNull();
+		corrected.ObtainedMarks.ShouldBe(72);
 	}
 
 	[Fact]
@@ -5340,6 +5633,24 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
+	private async Task MarkCrmLeadStaleAsync(Guid leadId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var leadRepository = scope.ServiceProvider.GetRequiredService<IRepository<AdmissionInquiryLead, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var lead = await leadRepository.GetAsync(leadId);
+			lead.MarkStale();
+			await leadRepository.UpdateAsync(lead);
+			await uow.CompleteAsync();
+		}
+	}
+
 	private async Task AgeCrmLeadCreationAsync(Guid leadId, DateTime creationTime)
 	{
 		using var scope = Factory.Services.CreateScope();
@@ -5461,10 +5772,8 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		IReadOnlyList<AdmissionCrmChannelSettingDto>? channelSettings = null,
 		bool? registrationFormRequiredBeforeExam = null)
 	{
-		var response = await Client.PutAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/cycle",
-			new UpdateAdmissionCrmCycleConfigurationDto
-			{
+		var input = new UpdateAdmissionCrmCycleConfigurationDto
+		{
 				CycleName = currentCycle.CycleName,
 				IsActive = currentCycle.IsActive,
 				RegistrationFormRequiredBeforeExam =
@@ -5481,13 +5790,67 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				ApplicantChecklist = (applicantChecklist ?? currentCycle.ApplicantChecklist).ToList(),
 				ChannelSettings = (channelSettings ?? currentCycle.ChannelSettings).ToList(),
 				Notes = currentCycle.Notes
-			},
-			JsonOptions);
+		};
+		var response = await PutCycleConfigurationWithImpactAsync(
+			Factory.SeededAcademicYearId,
+			input);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var updated = await response.Content.ReadFromJsonAsync<AdmissionCrmCycleConfigurationDto>(JsonOptions);
 		updated.ShouldNotBeNull();
 		return updated;
+	}
+
+	private async Task<HttpResponseMessage> PutCycleConfigurationWithImpactAsync(
+		Guid academicYearId,
+		UpdateAdmissionCrmCycleConfigurationDto input)
+	{
+		var previewResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/configuration-safety/impact-preview",
+			new PreviewAdmissionCrmConfigurationImpactDto
+			{
+				ProposedCycleConfiguration = input
+			},
+			JsonOptions);
+		previewResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await previewResponse.Content.ReadAsStringAsync());
+		var preview = await previewResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmConfigurationImpactPreviewDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		input.ImpactPreviewFingerprint = preview.Fingerprint;
+
+		return await Client.PutAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/configuration/cycle",
+			input,
+			JsonOptions);
+	}
+
+	private async Task<HttpResponseMessage> PutPipelineStageWithImpactAsync(
+		Guid academicYearId,
+		Guid stageId,
+		UpdateAdmissionCrmPipelineStageDto input)
+	{
+		var previewResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/configuration-safety/impact-preview",
+			new PreviewAdmissionCrmConfigurationImpactDto
+			{
+				PipelineStageId = stageId,
+				ProposedPipelineStage = input
+			},
+			JsonOptions);
+		previewResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await previewResponse.Content.ReadAsStringAsync());
+		var preview = await previewResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmConfigurationImpactPreviewDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		input.ImpactPreviewFingerprint = preview.Fingerprint;
+
+		return await Client.PutAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/configuration/pipeline-stages/{stageId}",
+			input,
+			JsonOptions);
 	}
 
 	private async Task<AdmissionCrmEntranceExamDto> GetCrmEntranceExamByLeadAsync(Guid leadId)

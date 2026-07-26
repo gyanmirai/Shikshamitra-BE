@@ -29,6 +29,26 @@ public class AdmissionInquiryLead_Tests
 		lead.NormalizedEmail.ShouldBe("parent.contact@example.com");
 	}
 
+	[Fact]
+	public void Stale_lead_requires_the_dedicated_reopen_workflow()
+	{
+		var lead = CreateLead("stale.parent@example.com");
+		lead.MarkStale();
+
+		var exception = Should.Throw<BusinessException>(() =>
+			lead.ChangeStage(AdmissionInquiryStage.FollowUp));
+
+		exception.Code.ShouldBe("AdmissionCrm:StaleLeadRequiresReopen");
+		lead.Stage.ShouldBe(AdmissionInquiryStage.Stale);
+
+		var reopenedAt = DateTime.UtcNow;
+		lead.Reopen("Parent resumed the admission inquiry.", reopenedAt);
+
+		lead.Stage.ShouldBe(AdmissionInquiryStage.FollowUp);
+		lead.ReopenedAt.ShouldBe(reopenedAt);
+		lead.ReopenReason.ShouldBe("Parent resumed the admission inquiry.");
+	}
+
 	private static AdmissionInquiryLead CreateLead(string email)
 	{
 		return new AdmissionInquiryLead(

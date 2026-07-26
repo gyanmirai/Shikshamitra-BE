@@ -78,7 +78,9 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 		Guid academicYearId,
 		AdmissionCrmDocumentChecklistTemplateUpsertDto input)
 	{
-		await EnsureYearAccessAsync(academicYearId, nameof(CreateTemplateAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(CreateTemplateAsync));
 		await NormalizeAndValidateTemplateAsync(input);
 		var queryable = await _templateRepository.GetQueryableAsync();
 		var versions = await AsyncExecuter.ToListAsync(queryable.Where(x =>
@@ -94,6 +96,9 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 		AdmissionCrmDocumentChecklistTemplateUpsertDto input)
 	{
 		var template = await GetTemplateAsync(id, nameof(UpdateTemplateAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			template.AcademicYearId,
+			nameof(UpdateTemplateAsync));
 		await NormalizeAndValidateTemplateAsync(input);
 		template.Update(input.Name, input.IsFallback, Serialize(input.Applicability), Serialize(input.Requirements), input.ReadinessApprovalCount, input.Notes);
 		await _templateRepository.UpdateAsync(template, autoSave: true);
@@ -104,6 +109,9 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 	public async Task<AdmissionCrmDocumentChecklistTemplateDto> PublishTemplateAsync(Guid id)
 	{
 		var template = await GetTemplateAsync(id, nameof(PublishTemplateAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			template.AcademicYearId,
+			nameof(PublishTemplateAsync));
 		await NormalizeAndValidateTemplateAsync(ToTemplateUpsert(template));
 		await EnsureNoPublishedConflictAsync(template);
 		template.Publish(Clock.Now);
@@ -115,6 +123,9 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 	public async Task<AdmissionCrmDocumentChecklistTemplateDto> CreateTemplateVersionAsync(Guid id)
 	{
 		var source = await GetTemplateAsync(id, nameof(CreateTemplateVersionAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			source.AcademicYearId,
+			nameof(CreateTemplateVersionAsync));
 		var queryable = await _templateRepository.GetQueryableAsync();
 		var versions = await AsyncExecuter.ToListAsync(queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id && x.AcademicYearId == source.AcademicYearId && x.Name == source.Name));
@@ -127,6 +138,9 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 	public async Task<AdmissionCrmDocumentChecklistTemplateDto> RetireTemplateAsync(Guid id)
 	{
 		var template = await GetTemplateAsync(id, nameof(RetireTemplateAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			template.AcademicYearId,
+			nameof(RetireTemplateAsync));
 		template.Retire(Clock.Now);
 		await _templateRepository.UpdateAsync(template, autoSave: true);
 		return ToTemplateDto(template);
@@ -550,7 +564,8 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 	{
 		var assignment = await _assignmentRepository.GetAsync(id);
 		if (assignment.TenantId != CurrentTenant.Id) throw new BusinessException("AdmissionCrm:DocumentChecklistAssignmentNotFound");
-		await EnsureYearAccessAsync(assignment.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(assignment.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return assignment;
 	}
 
@@ -558,7 +573,8 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 	{
 		var application = await _applicationRepository.GetAsync(id);
 		if (application.TenantId != CurrentTenant.Id) throw new BusinessException("AdmissionCrm:RegistrationApplicationNotFound");
-		await EnsureYearAccessAsync(application.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(application.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return application;
 	}
 
@@ -574,7 +590,8 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 	{
 		var document = await _documentRepository.GetAsync(id);
 		if (document.TenantId != CurrentTenant.Id || document.SupersededAt.HasValue) throw new BusinessException("AdmissionCrm:ApplicantDocumentNotFound");
-		await EnsureYearAccessAsync(document.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(document.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return document;
 	}
 

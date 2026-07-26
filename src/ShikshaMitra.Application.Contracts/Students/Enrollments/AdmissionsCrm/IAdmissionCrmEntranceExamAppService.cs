@@ -16,6 +16,10 @@ public interface IAdmissionCrmEntranceExamAppService : IApplicationService
 	Task<AdmissionCrmEntranceExamDto> ScheduleFromApplicantAsync(Guid leadId, Guid entranceExamSlotId);
 	Task<AdmissionCrmEntranceExamDto> MarkAttendanceAsync(Guid examRecordId, MarkAdmissionCrmExamAttendanceDto input);
 	Task<AdmissionCrmEntranceExamDto> UploadResultAsync(Guid examRecordId, UploadAdmissionCrmEntranceExamResultDto input);
+	Task<AdmissionCrmEntranceExamDto> UploadResultFromBulkAsync(
+		Guid examRecordId,
+		UploadAdmissionCrmEntranceExamResultDto input,
+		string? correctionReason);
 	Task<AdmissionCrmEntranceExamDto> DecideEligibilityAsync(
 		Guid examRecordId,
 		UpdateAdmissionCrmEligibilityDecisionDto input);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -57,7 +58,7 @@ public partial class AdmissionCrmSeederContributor
 		{
 			registrationTemplate = new AdmissionCrmRegistrationTemplate(
 				registrationTemplateId, tenantId, academicYearId, "DDVS registration form", 1, true, "{}",
-				"[{\"key\":\"student\",\"title\":\"Student details\",\"displayOrder\":10,\"parentVisible\":true,\"fields\":[{\"key\":\"firstName\",\"label\":\"First name\",\"fieldType\":0,\"systemField\":\"FirstName\",\"required\":true,\"parentEditable\":true,\"displayOrder\":10,\"options\":[]},{\"key\":\"dateOfBirth\",\"label\":\"Date of birth\",\"fieldType\":4,\"systemField\":\"DateOfBirth\",\"required\":true,\"parentEditable\":true,\"displayOrder\":20,\"options\":[]}]},{\"key\":\"family\",\"title\":\"Family and communication\",\"displayOrder\":20,\"parentVisible\":true,\"fields\":[{\"key\":\"parentName\",\"label\":\"Parent or guardian\",\"fieldType\":0,\"systemField\":\"ParentGuardianName\",\"required\":true,\"parentEditable\":true,\"displayOrder\":10,\"options\":[]},{\"key\":\"phone\",\"label\":\"Mobile number\",\"fieldType\":2,\"systemField\":\"PrimaryContactNo\",\"required\":true,\"parentEditable\":true,\"displayOrder\":20,\"options\":[]}]}]",
+				DefaultRegistrationSectionsJson(),
 				14, true, false, 0, AdmissionInquiryStage.Eligible,
 				"English, Gujarati, and Hindi labels are supplied through the applicant surface.");
 			registrationTemplate.Publish(SeededAt);
@@ -583,6 +584,77 @@ public partial class AdmissionCrmSeederContributor
 			await repository.DeleteAsync(entity, autoSave: false);
 		}
 	}
+
+	internal static string DefaultRegistrationSectionsJson() =>
+		JsonSerializer.Serialize(
+			new[]
+			{
+				new
+				{
+					key = "student",
+					title = "Student details",
+					displayOrder = 10,
+					parentVisible = true,
+					fields = new[]
+					{
+						new
+						{
+							key = "firstName",
+							label = "First name",
+							fieldType = AdmissionCrmFormFieldType.Text,
+							systemField = "FirstName",
+							required = true,
+							parentEditable = true,
+							displayOrder = 10,
+							options = Array.Empty<string>()
+						},
+						new
+						{
+							key = "dateOfBirth",
+							label = "Date of birth",
+							fieldType = AdmissionCrmFormFieldType.Date,
+							systemField = "DateOfBirth",
+							required = true,
+							parentEditable = true,
+							displayOrder = 20,
+							options = Array.Empty<string>()
+						}
+					}
+				},
+				new
+				{
+					key = "family",
+					title = "Family and communication",
+					displayOrder = 20,
+					parentVisible = true,
+					fields = new[]
+					{
+						new
+						{
+							key = "parentName",
+							label = "Parent or guardian",
+							fieldType = AdmissionCrmFormFieldType.Text,
+							systemField = "ParentGuardianName",
+							required = true,
+							parentEditable = true,
+							displayOrder = 10,
+							options = Array.Empty<string>()
+						},
+						new
+						{
+							key = "phone",
+							label = "Mobile number",
+							fieldType = AdmissionCrmFormFieldType.Phone,
+							systemField = "PrimaryContactNo",
+							required = true,
+							parentEditable = true,
+							displayOrder = 20,
+							options = Array.Empty<string>()
+						}
+					}
+				}
+			},
+			new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
 	internal static IReadOnlyList<string> LegacyDemoLeadKeys() =>
 	[

@@ -50,7 +50,7 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public async Task<AdmissionCrmInquirySourceDto> CreateInquirySourceAsync(Guid academicYearId, AdmissionCrmInquirySourceUpsertDto input)
 	{
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(CreateInquirySourceAsync));
+		await EnsureAcademicYearWideMutationAccessAsync(academicYearId, nameof(CreateInquirySourceAsync));
 		await EnsureUniqueSourceCodeAsync(academicYearId, input.Code, null);
 		var entity = new AdmissionCrmInquirySource(GuidGenerator.Create(), CurrentTenant.Id, academicYearId,
 			input.Code, input.DisplayName, input.Description, input.AllowedChannels, input.DisplayOrder, input.IsRoutingEligible);
@@ -98,7 +98,7 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageExamConfiguration)]
 	public async Task<AdmissionCrmExamSlotDto> CreateExamSlotAsync(Guid academicYearId, AdmissionCrmExamSlotUpsertDto input)
 	{
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(CreateExamSlotAsync));
+		await EnsureAcademicYearWideMutationAccessAsync(academicYearId, nameof(CreateExamSlotAsync));
 		var entity = await _slotManager.CreateAsync(academicYearId,
 			input.PlaybookId, input.SlotTemplateCode, input.ExamDefinitionCode, input.SlotName, input.Campus,
 			input.RoomOrHall, input.StartDate, input.EndDate, input.StudentLimit, input.RoomNo);
@@ -138,7 +138,7 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageDocumentConfiguration)]
 	public async Task<AdmissionCrmDocumentTypeDto> CreateDocumentTypeAsync(Guid academicYearId, AdmissionCrmDocumentTypeUpsertDto input)
 	{
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(CreateDocumentTypeAsync));
+		await EnsureAcademicYearWideMutationAccessAsync(academicYearId, nameof(CreateDocumentTypeAsync));
 		await EnsureUniqueDocumentCodeAsync(academicYearId, input.Code, null);
 		var entity = new AdmissionCrmDocumentType(GuidGenerator.Create(), CurrentTenant.Id, academicYearId,
 			input.Code, input.Name, input.MaximumSizeMb, input.AcceptedExtensions, input.RequiresOriginal,
@@ -170,7 +170,7 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 	private async Task<AdmissionCrmInquirySource> GetSourceAsync(Guid id, string operation)
 	{
 		var entity = await _sourceRepository.GetAsync(id);
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, operation);
+		await EnsureAcademicYearWideMutationAccessAsync(entity.AcademicYearId, operation);
 		if (entity.TenantId != CurrentTenant.Id) throw new BusinessException("AdmissionCrm:InquirySourceNotFound");
 		return entity;
 	}
@@ -178,7 +178,7 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 	private async Task<AdmissionCrmExamSlot> GetSlotAsync(Guid id, string operation)
 	{
 		var entity = await _slotRepository.GetAsync(id);
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, operation);
+		await EnsureAcademicYearWideMutationAccessAsync(entity.AcademicYearId, operation);
 		if (entity.TenantId != CurrentTenant.Id) throw new BusinessException("AdmissionCrm:ExamSlotNotFound");
 		return entity;
 	}
@@ -186,9 +186,20 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 	private async Task<AdmissionCrmDocumentType> GetDocumentTypeAsync(Guid id, string operation)
 	{
 		var entity = await _documentTypeRepository.GetAsync(id);
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, operation);
+		await EnsureAcademicYearWideMutationAccessAsync(entity.AcademicYearId, operation);
 		if (entity.TenantId != CurrentTenant.Id) throw new BusinessException("AdmissionCrm:DocumentTypeNotFound");
 		return entity;
+	}
+
+	private async Task EnsureAcademicYearWideMutationAccessAsync(Guid academicYearId, string operation)
+	{
+		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, operation);
+		if (!await _scopeAccess.CurrentUserHasAcademicYearWideScopeAsync(academicYearId))
+		{
+			throw new BusinessException("AdmissionCrm:AcademicYearWideScopeRequired")
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("Operation", operation);
+		}
 	}
 
 	private async Task EnsureUniqueSourceCodeAsync(Guid academicYearId, string code, Guid? excludingId)

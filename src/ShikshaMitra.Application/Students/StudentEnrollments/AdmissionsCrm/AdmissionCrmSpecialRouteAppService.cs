@@ -50,7 +50,9 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageAdmissionRoutes)]
 	public async Task<AdmissionCrmRouteDefinitionDto> CreateDefinitionAsync(Guid academicYearId, CreateAdmissionCrmRouteDefinitionDto input)
 	{
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(CreateDefinitionAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(CreateDefinitionAsync));
 		var queryable = await _definitionRepository.GetQueryableAsync();
 		var existing = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId && x.Code == input.Code.ToUpper()));
 		var version = existing.Count == 0 ? 1 : existing.Max(x => x.Version) + 1;
@@ -72,14 +74,22 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageAdmissionRoutes)]
 	public async Task<AdmissionCrmRouteDefinitionDto> SubmitDefinitionAsync(Guid id)
 	{
-		var entity = await GetDefinitionAsync(id); entity.Submit(GetCurrentUserId());
+		var entity = await GetDefinitionAsync(id);
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			entity.AcademicYearId,
+			nameof(SubmitDefinitionAsync));
+		entity.Submit(GetCurrentUserId());
 		await _definitionRepository.UpdateAsync(entity, autoSave: true); return MapDefinition(entity);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveAdmissionRoutes)]
 	public async Task<AdmissionCrmRouteDefinitionDto> PublishDefinitionAsync(Guid id)
 	{
-		var entity = await GetDefinitionAsync(id); entity.Publish(GetCurrentUserId());
+		var entity = await GetDefinitionAsync(id);
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			entity.AcademicYearId,
+			nameof(PublishDefinitionAsync));
+		entity.Publish(GetCurrentUserId());
 		var queryable = await _definitionRepository.GetQueryableAsync();
 		var prior = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == entity.AcademicYearId && x.Code == entity.Code && x.Id != entity.Id && x.Status == AdmissionCrmRouteDefinitionStatus.Published));
@@ -175,7 +185,7 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 	public async Task<AdmissionCrmRouteAssignmentDto> EvaluateAsync(Guid id, EvaluateAdmissionCrmSpecialRouteDto input)
 	{
 		var entity = await _assignmentRepository.GetAsync(id);
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, nameof(EvaluateAsync));
+		var lead = await GetLeadAsync(entity.LeadId, nameof(EvaluateAsync));
 		var definition = await GetDefinitionAsync(entity.RouteDefinitionId);
 		if (definition.AcademicYearId != entity.AcademicYearId ||
 		    definition.Version != entity.RouteDefinitionVersion ||
@@ -192,7 +202,6 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 			throw new BusinessException("AdmissionCrm:DistinctRouteEligibilityApproverRequired");
 		entity.Evaluate(input.Status, input.Reason, GetCurrentUserId(), Clock.Now);
 		await _assignmentRepository.UpdateAsync(entity, autoSave: true);
-		var lead = await GetLeadAsync(entity.LeadId, nameof(EvaluateAsync));
 		await AddTimelineAsync(lead, AdmissionCrmTimelineEventType.AdmissionRouteEvaluated,
 			"Admission route evaluated", $"{input.Status}: {input.Reason}", entity.Id);
 		return MapAssignment(entity);
@@ -298,7 +307,7 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 	public async Task<AdmissionCrmRouteAppealDto> RequestAppealAsync(Guid assignmentId, RequestAdmissionCrmRouteAppealDto input)
 	{
 		var assignment = await _assignmentRepository.GetAsync(assignmentId);
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(assignment.AcademicYearId, nameof(RequestAppealAsync));
+		var lead = await GetLeadAsync(assignment.LeadId, nameof(RequestAppealAsync));
 		var appealQuery = await _appealRepository.GetQueryableAsync();
 		if (await AsyncExecuter.AnyAsync(appealQuery.Where(x => x.TenantId == CurrentTenant.Id &&
 			x.RouteAssignmentId == assignmentId && (x.Status == AdmissionCrmRouteAppealStatus.Requested || x.Status == AdmissionCrmRouteAppealStatus.UnderReview))))
@@ -307,7 +316,6 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 			assignment.LeadId, assignment.Id, assignment.Status, input.RequestedStatus, input.Reason,
 			Serialize(input.EvidenceReferences), GetCurrentUserId(), Clock.Now);
 		await _appealRepository.InsertAsync(entity, autoSave: true);
-		var lead = await GetLeadAsync(assignment.LeadId, nameof(RequestAppealAsync));
 		await AddTimelineAsync(lead, AdmissionCrmTimelineEventType.AdmissionRouteAppealed,
 			"Admission route appeal requested", input.Reason, entity.Id);
 		return MapAppeal(entity);
@@ -317,10 +325,9 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 	public async Task<AdmissionCrmRouteAppealDto> DecideAppealAsync(Guid appealId, DecideAdmissionCrmRouteAppealDto input)
 	{
 		var entity = await _appealRepository.GetAsync(appealId);
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, nameof(DecideAppealAsync));
+		var lead = await GetLeadAsync(entity.LeadId, nameof(DecideAppealAsync));
 		entity.Decide(input.Approved, input.Reason, GetCurrentUserId(), Clock.Now);
 		await _appealRepository.UpdateAsync(entity, autoSave: true);
-		var lead = await GetLeadAsync(entity.LeadId, nameof(DecideAppealAsync));
 		await AddTimelineAsync(lead, AdmissionCrmTimelineEventType.AdmissionRouteAppealDecided,
 			"Admission route appeal decided", $"{entity.Status}: {input.Reason}", entity.Id);
 		return MapAppeal(entity);
@@ -461,7 +468,7 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 
 	private async Task<AdmissionInquiryLead> GetLeadAsync(Guid id, string operation)
 	{
-		var lead = await _leadRepository.GetAsync(id); await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation); return lead;
+		var lead = await _leadRepository.GetAsync(id); await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation); return lead;
 	}
 
 	private async Task<AdmissionInquiryLead> ResolveImportLeadAsync(
@@ -483,12 +490,14 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 		var normalizedContact = new string(reference.Where(char.IsDigit).ToArray());
 		var normalizedEmail = reference.ToLowerInvariant();
 		var queryable = await _leadRepository.GetQueryableAsync();
-		var candidates = await AsyncExecuter.ToListAsync(queryable.Where(lead =>
+		var query = queryable.Where(lead =>
 			lead.TenantId == CurrentTenant.Id &&
 			lead.AcademicYearId == academicYearId &&
 			(lead.RegistrationFormNumber == reference ||
 			 lead.NormalizedEmail == normalizedEmail ||
-			 (normalizedContact.Length >= 7 && lead.NormalizedPrimaryContactNo == normalizedContact))));
+			 (normalizedContact.Length >= 7 && lead.NormalizedPrimaryContactNo == normalizedContact)));
+		query = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(query);
+		var candidates = await AsyncExecuter.ToListAsync(query);
 		if (candidates.Count == 0)
 		{
 			throw new BusinessException("AdmissionCrm:RteApplicantReferenceNotFound");
@@ -498,7 +507,7 @@ public class AdmissionCrmSpecialRouteAppService : ApplicationService, IAdmission
 			throw new BusinessException("AdmissionCrm:RteApplicantReferenceAmbiguous");
 		}
 
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(candidates[0].AcademicYearId, operation);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(candidates[0], operation);
 		return candidates[0];
 	}
 

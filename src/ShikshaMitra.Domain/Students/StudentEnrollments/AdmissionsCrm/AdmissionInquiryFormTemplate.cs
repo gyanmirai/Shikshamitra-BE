@@ -35,12 +35,13 @@ public class AdmissionInquiryFormTemplate : FullAuditedAggregateRoot<Guid>, IMul
 		string? consentText,
 		string? privacyNoticeUrl,
 		string fieldsJson,
-		string localizationsJson)
+		string localizationsJson,
+		bool isActive = true)
 		: base(id)
 	{
 		TenantId = tenantId;
 		AcademicYearId = academicYearId;
-		IsActive = true;
+		IsActive = isActive;
 		Update(templateName, description, channel, isPublic, consentText, privacyNoticeUrl, fieldsJson, localizationsJson);
 	}
 

@@ -1,17 +1,26 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Security.Claims;
 using Volo.Abp.Uow;
 using Xunit;
 
@@ -21,6 +30,8 @@ namespace ShikshaMitra.Students.Enrollments;
 [TestModule(TestTraits.Modules.Students)]
 public class AdmissionCrmGovernanceApi_Tests : ShikshaMitraApiTestBase
 {
+	private static int _academicYearSequence;
+
 	public AdmissionCrmGovernanceApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
 	[Fact]
@@ -93,13 +104,22 @@ public class AdmissionCrmGovernanceApi_Tests : ShikshaMitraApiTestBase
 				NextRunAt = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc)
 			}, JsonOptions);
 		scheduleResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await scheduleResponse.Content.ReadAsStringAsync());
+		var createdSchedule = (await scheduleResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmReportScheduleDto>(JsonOptions))!;
 		var runScheduleResponse = await Client.PostAsync(
 			$"/api/student-enrollment/admissions-crm/{yearId}/governance/report-schedules/run-due", null);
 		runScheduleResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await runScheduleResponse.Content.ReadAsStringAsync());
 		var scheduleRun = (await runScheduleResponse.Content.ReadFromJsonAsync<AdmissionCrmReportScheduleRunResultDto>(JsonOptions))!;
-		scheduleRun.GeneratedCount.ShouldBe(1,
+		scheduleRun.GeneratedCount.ShouldBeGreaterThanOrEqualTo(1,
 			string.Join("; ", scheduleRun.FailureDetails.Select(x => $"{x.Key}: {x.Value}")));
-		scheduleRun.ExportIds.Count.ShouldBe(1);
+		scheduleRun.ExportIds.Count.ShouldBe(scheduleRun.GeneratedCount);
+		scheduleRun.FailedScheduleIds.ShouldNotContain(createdSchedule.Id);
+		var schedulesResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{yearId}/governance/report-schedules");
+		schedulesResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await schedulesResponse.Content.ReadAsStringAsync());
+		var schedules = (await schedulesResponse.Content
+			.ReadFromJsonAsync<IReadOnlyList<AdmissionCrmReportScheduleDto>>(JsonOptions))!;
+		schedules.Single(x => x.Id == createdSchedule.Id).LastRunAt.ShouldNotBeNull();
 
 		var owners = await GetEligibleCrmOwnersAsync();
 		var delegator = owners[0].Id;
@@ -152,6 +172,111 @@ public class AdmissionCrmGovernanceApi_Tests : ShikshaMitraApiTestBase
 		forecast.Limitations.ShouldContain(x => x.Contains("cannot make or change an admission decision"));
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Require_Academic_Year_Wide_Scope_For_Retention_Policy_Mutations()
+	{
+		using var standardScopedClient = await CreateStandardScopedClientAsync();
+		var yearId = Factory.SeededAcademicYearId;
+		var deniedCreateResponse = await standardScopedClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{yearId}/governance/retention-policies",
+			new CreateAdmissionCrmRetentionPolicyDto
+			{
+				Code = "DENIED-" + Guid.NewGuid().ToString("N")[..6],
+				Name = "Denied standard-scoped retention policy",
+				Category = AdmissionCrmRetentionCategory.UnsuccessfulApplicant,
+				Action = AdmissionCrmRetentionAction.Anonymize,
+				RetainDays = 365,
+				AuthorityNote = "Standard-scoped users cannot govern the full academic year."
+			},
+			JsonOptions);
+		deniedCreateResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await deniedCreateResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:AcademicYearWideScopeRequired");
+
+		var createResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{yearId}/governance/retention-policies",
+			new CreateAdmissionCrmRetentionPolicyDto
+			{
+				Code = "SCOPE-" + Guid.NewGuid().ToString("N")[..6],
+				Name = "Academic-year retention policy",
+				Category = AdmissionCrmRetentionCategory.UnsuccessfulApplicant,
+				Action = AdmissionCrmRetentionAction.Anonymize,
+				RetainDays = 365,
+				AuthorityNote = "Academic-year governance regression coverage."
+			},
+			JsonOptions);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+		var policy = await createResponse.Content.ReadFromJsonAsync<AdmissionCrmRetentionPolicyDto>(JsonOptions);
+		policy.ShouldNotBeNull();
+
+		var deniedSubmitResponse = await standardScopedClient.PostAsync(
+			$"/api/student-enrollment/admissions-crm/governance/retention-policies/{policy.Id}/submit",
+			content: null);
+		deniedSubmitResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await deniedSubmitResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:AcademicYearWideScopeRequired");
+
+		var submitResponse = await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/governance/retention-policies/{policy.Id}/submit",
+			content: null);
+		submitResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await submitResponse.Content.ReadAsStringAsync());
+
+		var deniedPublishResponse = await standardScopedClient.PostAsync(
+			$"/api/student-enrollment/admissions-crm/governance/retention-policies/{policy.Id}/publish",
+			content: null);
+		deniedPublishResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await deniedPublishResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:AcademicYearWideScopeRequired");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Run_Scheduled_Report_Automation_Without_A_User_And_Reject_Cross_Tenant_Year()
+	{
+		var yearId = Factory.SeededAcademicYearId;
+		var scheduleResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{yearId}/governance/report-schedules",
+			new CreateAdmissionCrmReportScheduleDto
+			{
+				Name = "No-user automation " + Guid.NewGuid().ToString("N")[..8],
+				ReportType = AdmissionCrmExportReportType.GovernmentReadiness,
+				Frequency = AdmissionCrmReportFrequency.Daily,
+				Destination = "manual:secure-export-queue",
+				NextRunAt = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+			},
+			JsonOptions);
+		scheduleResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await scheduleResponse.Content.ReadAsStringAsync());
+		var schedule = await scheduleResponse.Content.ReadFromJsonAsync<AdmissionCrmReportScheduleDto>(JsonOptions);
+		schedule.ShouldNotBeNull();
+		var otherTenantYearId = await CreateAcademicYearAsync(Guid.NewGuid());
+
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var currentPrincipalAccessor = scope.ServiceProvider.GetRequiredService<ICurrentPrincipalAccessor>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var governanceService = scope.ServiceProvider.GetRequiredService<IAdmissionCrmGovernanceAppService>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (currentPrincipalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity())))
+		using (currentTenant.Change(tenantId))
+		{
+			using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+			{
+				var result = await governanceService.RunDueReportSchedulesFromAutomationAsync(yearId);
+				result.GeneratedCount.ShouldBeGreaterThanOrEqualTo(1);
+				result.FailedScheduleIds.ShouldNotContain(schedule.Id);
+				await uow.CompleteAsync();
+			}
+
+			using (uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+			{
+				var exception = await Should.ThrowAsync<BusinessException>(() =>
+					governanceService.RunDueReportSchedulesFromAutomationAsync(otherTenantYearId));
+				exception.Code.ShouldBe("AdmissionCrm:AcademicYearNotFound");
+			}
+		}
+	}
+
 	private async Task<AdmissionCrmLeadDto> CreateLeadAsync()
 	{
 		var response = await Client.PostAsJsonAsync(
@@ -181,6 +306,63 @@ public class AdmissionCrmGovernanceApi_Tests : ShikshaMitraApiTestBase
 			item.Publish(Guid.NewGuid(), DateTime.UtcNow);
 			await repository.UpdateAsync(item);
 			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<HttpClient> CreateStandardScopedClientAsync()
+	{
+		var userId = Guid.NewGuid();
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var scopeRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		var userScopeService = scope.ServiceProvider.GetRequiredService<IUserScopeService>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await scopeRepository.InsertAsync(
+				new UserScopeAssignment(
+					Guid.NewGuid(),
+					tenantId,
+					userId: userId,
+					academicYearId: Factory.SeededAcademicYearId,
+					standardId: Factory.SeededStandardId,
+					description: "Admissions retention standard-only scope regression."),
+				autoSave: false);
+			await userScopeService.InvalidateUserScopeCacheAsync(userId);
+			await uow.CompleteAsync();
+		}
+
+		var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, userId.ToString("D"));
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "teacher");
+		return client;
+	}
+
+	private async Task<Guid> CreateAcademicYearAsync(Guid tenantId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var academicYearRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AcademicYear, Guid>>();
+		var academicYearManager = scope.ServiceProvider.GetRequiredService<AcademicYearManager>();
+		var year = 3000 + Interlocked.Increment(ref _academicYearSequence) * 2;
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var tenantToken = tenantId.ToString("N")[..12];
+			var academicYearName = $"CRM Governance {tenantToken} {year}";
+			var academicYear = await academicYearManager.CreateAsync(
+				academicYearName,
+				new DateTime(year, 4, 1),
+				new DateTime(year + 1, 3, 31));
+			await academicYearRepository.InsertAsync(academicYear, autoSave: false);
+			await uow.CompleteAsync();
+			return academicYear.Id;
 		}
 	}
 }

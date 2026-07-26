@@ -5,6 +5,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
 public class UpdateAdmissionCrmPipelineStageDto
 {
+	[MaxLength(64)]
+	public string? ImpactPreviewFingerprint { get; set; }
+
 	[Required]
 	[MaxLength(AdmissionCrmConsts.MaxStageNameLength)]
 	public required string StageName { get; set; }

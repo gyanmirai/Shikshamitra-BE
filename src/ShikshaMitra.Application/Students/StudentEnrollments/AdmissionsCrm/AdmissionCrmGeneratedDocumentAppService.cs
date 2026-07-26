@@ -119,7 +119,7 @@ public class AdmissionCrmGeneratedDocumentAppService(
 			throw new EntityNotFoundException(typeof(AdmissionInquiryLead), leadId);
 		}
 
-		await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation);
+		await studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return lead;
 	}
 

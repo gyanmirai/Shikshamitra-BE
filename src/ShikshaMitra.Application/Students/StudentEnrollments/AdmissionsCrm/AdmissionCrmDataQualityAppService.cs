@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -63,8 +64,20 @@ public class AdmissionCrmDataQualityAppService : ApplicationService, IAdmissionC
 	public async Task<PagedResultDto<AdmissionCrmDataQualityIssueDto>> GetListAsync(Guid academicYearId, GetAdmissionCrmDataQualityIssuesInput input)
 	{
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(GetListAsync));
+		var hasAcademicYearWideScope =
+			await _studentScopeAccessService.CurrentUserHasAcademicYearWideScopeAsync(academicYearId);
+		var leadQueryable = await _leadRepository.GetQueryableAsync();
+		var scopedLeadQuery = leadQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId);
+		scopedLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(scopedLeadQuery);
+		var scopedLeadIds = await AsyncExecuter.ToListAsync(scopedLeadQuery.Select(x => x.Id));
 		var queryable = await _issueRepository.GetQueryableAsync();
-		var query = queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId);
+		var query = queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId &&
+			(hasAcademicYearWideScope ||
+			 (x.LeadId.HasValue && scopedLeadIds.Contains(x.LeadId.Value))));
 		if (input.Status.HasValue) query = query.Where(x => x.Status == input.Status.Value);
 		if (input.MinimumSeverity.HasValue) query = query.Where(x => x.Severity >= input.MinimumSeverity.Value);
 		if (input.IssueType.HasValue) query = query.Where(x => x.IssueType == input.IssueType.Value);
@@ -79,6 +92,12 @@ public class AdmissionCrmDataQualityAppService : ApplicationService, IAdmissionC
 	public async Task<AdmissionCrmReconciliationResultDto> RunAsync(Guid academicYearId)
 	{
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(RunAsync));
+		if (!await _studentScopeAccessService.CurrentUserHasAcademicYearWideScopeAsync(academicYearId))
+		{
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("Operation", nameof(RunAsync));
+		}
 		var now = Clock.Now;
 		var detections = await DetectAsync(academicYearId, now);
 		var issueQueryable = await _issueRepository.GetQueryableAsync();
@@ -259,7 +278,17 @@ public class AdmissionCrmDataQualityAppService : ApplicationService, IAdmissionC
 	private async Task<AdmissionCrmDataQualityIssue> GetIssueAsync(Guid id, string operation)
 	{
 		var issue = await _issueRepository.GetAsync(id);
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(issue.AcademicYearId, operation);
+		if (issue.LeadId.HasValue)
+		{
+			var lead = await _leadRepository.GetAsync(issue.LeadId.Value);
+			await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
+		}
+		else if (!await _studentScopeAccessService.CurrentUserHasAcademicYearWideScopeAsync(issue.AcademicYearId))
+		{
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+				.WithData("AcademicYearId", issue.AcademicYearId)
+				.WithData("Operation", operation);
+		}
 		return issue;
 	}
 

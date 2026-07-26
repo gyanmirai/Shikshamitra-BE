@@ -251,6 +251,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			intendedRouteDefinition?.Id,
 			intendedRouteDefinition?.Version,
 			intendedRouteDefinition?.Name);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, nameof(CreateAsync));
 		lead.UpdateScore(AdmissionCrmLeadScoreCalculator.Calculate(lead, scoringRules));
 		IReadOnlyCollection<AdmissionInquiryLead> existingLeads = Array.Empty<AdmissionInquiryLead>();
 		if (routingSettings.IsEnabled && routingSettings.OwnerPoolUserIds.Count > 0)
@@ -348,7 +349,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			"The applicant entered Enrollment at registration through an authorized staff workflow.",
 			lead.Id);
 
-		var registration = await _registrationAppService.IssueAsync(lead.Id, input.Registration);
+		var registration = await _registrationAppService.IssueDirectAsync(lead.Id, input.Registration);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
 		return new AdmissionCrmDirectRegistrationResultDto
@@ -383,6 +384,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		var query = queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId);
+		query = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(query);
 
 		if (input.Stage.HasValue)
 		{
@@ -550,6 +552,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		IssueAdmissionCrmRegistrationFormDto input)
 	{
 		var lead = await GetLeadForCurrentTenantAsync(leadId, nameof(IssueRegistrationFormAsync));
+		await _registrationAppService.EnsureStandardIssuanceEligibleAsync(leadId);
 		var formNumber = input.FormNumber.Trim();
 		await _studentEnrollmentManager.ValidateFormNumberUniqueAsync(
 			formNumber,
@@ -574,6 +577,12 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeStage)]
 	public async Task<AdmissionCrmLeadDto> ChangeStageAsync(Guid leadId, ChangeAdmissionCrmLeadStageDto input)
 	{
+		if (input.OverrideWorkflowGuards)
+		{
+			await AuthorizationService.CheckAsync(
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.BulkOperations);
+		}
+
 		var lead = await GetLeadForCurrentTenantAsync(leadId, nameof(ChangeStageAsync));
 		var reason = Check.NotNullOrWhiteSpace(
 			input.Reason,
@@ -610,7 +619,8 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			lead,
 			AdmissionCrmTimelineEventType.StageChanged,
 			"Pipeline stage changed",
-			$"{previousStage} -> {input.Stage}. Reason: {reason}",
+			$"{previousStage} -> {input.Stage}. Reason: {reason}" +
+			(input.OverrideWorkflowGuards ? " Workflow guards overridden." : string.Empty),
 			relatedEntityId: lead.Id);
 
 		if (previousStage != lead.Stage)
@@ -795,16 +805,18 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			academicYearId,
 			nameof(RunStaleArchiveRulesAsync));
 
-		return await RunStaleArchiveRulesCoreAsync(academicYearId);
+		return await RunStaleArchiveRulesCoreAsync(academicYearId, enforceUserScope: true);
 	}
 
 	[AllowAnonymous]
 	public async Task<AdmissionCrmStaleArchiveRunResultDto> RunStaleArchiveRulesFromAutomationAsync(Guid academicYearId)
 	{
-		return await RunStaleArchiveRulesCoreAsync(academicYearId);
+		return await RunStaleArchiveRulesCoreAsync(academicYearId, enforceUserScope: false);
 	}
 
-	private async Task<AdmissionCrmStaleArchiveRunResultDto> RunStaleArchiveRulesCoreAsync(Guid academicYearId)
+	private async Task<AdmissionCrmStaleArchiveRunResultDto> RunStaleArchiveRulesCoreAsync(
+		Guid academicYearId,
+		bool enforceUserScope)
 	{
 		var configuration = await GetCycleConfigurationOrDefaultAsync(academicYearId);
 		var startedAt = new DateTimeOffset(Clock.Now);
@@ -813,12 +825,17 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		var archiveBefore = now.AddDays(-configuration.ArchiveAfterDays);
 
 		var queryable = await _leadRepository.GetQueryableAsync();
-		var activeLeads = await AsyncExecuter.ToListAsync(queryable.Where(x =>
+		var activeLeadQuery = queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId &&
 			x.Stage != AdmissionInquiryStage.Archived &&
 			x.Stage != AdmissionInquiryStage.Eligible &&
-			x.Stage != AdmissionInquiryStage.Rejected));
+			x.Stage != AdmissionInquiryStage.Rejected);
+		if (enforceUserScope)
+		{
+			activeLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(activeLeadQuery);
+		}
+		var activeLeads = await AsyncExecuter.ToListAsync(activeLeadQuery);
 		var candidates = activeLeads
 			.Where(x => x.LastActivityTime <= staleBefore)
 			.ToList();
@@ -923,7 +940,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			academicYearId,
 			nameof(RunSlaReminderRulesAsync));
 
-		return await RunSlaReminderRulesCoreAsync(academicYearId);
+		return await RunSlaReminderRulesCoreAsync(academicYearId, enforceUserScope: true);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageOperationsQueues)]
@@ -963,10 +980,12 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 	[AllowAnonymous]
 	public async Task<AdmissionCrmSlaReminderRunResultDto> RunSlaReminderRulesFromAutomationAsync(Guid academicYearId)
 	{
-		return await RunSlaReminderRulesCoreAsync(academicYearId);
+		return await RunSlaReminderRulesCoreAsync(academicYearId, enforceUserScope: false);
 	}
 
-	private async Task<AdmissionCrmSlaReminderRunResultDto> RunSlaReminderRulesCoreAsync(Guid academicYearId)
+	private async Task<AdmissionCrmSlaReminderRunResultDto> RunSlaReminderRulesCoreAsync(
+		Guid academicYearId,
+		bool enforceUserScope)
 	{
 		var configuration = await GetCycleConfigurationOrDefaultAsync(academicYearId);
 		var startedAt = new DateTimeOffset(Clock.Now);
@@ -982,14 +1001,24 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		var slaPolicy = JsonSerializer.Deserialize<AdmissionCrmSlaPolicyDto>(configuration.SlaPolicyJson) ?? new AdmissionCrmSlaPolicyDto();
 
 		var queryable = await _leadRepository.GetQueryableAsync();
-		var activeLeads = await AsyncExecuter.ToListAsync(queryable.Where(x =>
+		var activeLeadQuery = queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId &&
 			x.Stage != AdmissionInquiryStage.Archived &&
 			x.Stage != AdmissionInquiryStage.Eligible &&
-			x.Stage != AdmissionInquiryStage.Rejected));
+			x.Stage != AdmissionInquiryStage.Rejected);
+		if (enforceUserScope)
+		{
+			activeLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(activeLeadQuery);
+		}
+		var activeLeads = await AsyncExecuter.ToListAsync(activeLeadQuery);
+		var activeLeadIds = activeLeads.Select(x => x.Id).ToHashSet();
 		var holdQueryable = await _slaHoldRepository.GetQueryableAsync();
-		var holds = await AsyncExecuter.ToListAsync(holdQueryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
+		var holds = (await AsyncExecuter.ToListAsync(holdQueryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.AcademicYearId == academicYearId)))
+			.Where(x => activeLeadIds.Contains(x.LeadId))
+			.ToList();
 		var activeHoldLeadIds = holds.Where(x => x.IsActive).Select(x => x.LeadId).ToHashSet();
 		result.PausedLeadCount = activeHoldLeadIds.Count;
 		var candidateThresholds = activeLeads
@@ -1088,7 +1117,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			academicYearId,
 			nameof(RunJourneyRulesAsync));
 
-		return await RunJourneyRulesCoreAsync(academicYearId, input);
+		return await RunJourneyRulesCoreAsync(academicYearId, input, enforceUserScope: true);
 	}
 
 	[AllowAnonymous]
@@ -1096,7 +1125,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		Guid academicYearId,
 		RunAdmissionCrmJourneyRulesDto input)
 	{
-		return await RunJourneyRulesCoreAsync(academicYearId, input);
+		return await RunJourneyRulesCoreAsync(academicYearId, input, enforceUserScope: false);
 	}
 
 	public async Task TrySendAcknowledgementFromAutomationAsync(
@@ -1141,7 +1170,8 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 
 	private async Task<AdmissionCrmJourneyRunResultDto> RunJourneyRulesCoreAsync(
 		Guid academicYearId,
-		RunAdmissionCrmJourneyRulesDto input)
+		RunAdmissionCrmJourneyRulesDto input,
+		bool enforceUserScope = false)
 	{
 		var startedAt = new DateTimeOffset(Clock.Now);
 		var configuration = await GetCycleConfigurationOrDefaultAsync(academicYearId);
@@ -1167,7 +1197,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			return result;
 		}
 
-		var leads = await GetJourneyCandidateLeadsAsync(academicYearId, input);
+		var leads = await GetJourneyCandidateLeadsAsync(academicYearId, input, enforceUserScope);
 		result.EvaluatedLeadCount = leads.Count;
 		if (leads.Count == 0)
 		{
@@ -1535,7 +1565,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 
 		if (enforceScope)
 		{
-			await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation);
+			await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		}
 
 		return lead;
@@ -1550,7 +1580,8 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 				.WithData("TaskId", id);
 		}
 
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(task.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(task.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return task;
 	}
 
@@ -1714,13 +1745,18 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 
 	private async Task<IReadOnlyList<AdmissionInquiryLead>> GetJourneyCandidateLeadsAsync(
 		Guid academicYearId,
-		RunAdmissionCrmJourneyRulesDto input)
+		RunAdmissionCrmJourneyRulesDto input,
+		bool enforceUserScope)
 	{
 		var queryable = await _leadRepository.GetQueryableAsync();
 		var query = queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId &&
 			x.MergedIntoLeadId == null);
+		if (enforceUserScope)
+		{
+			query = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(query);
+		}
 
 		if (input.LeadId.HasValue)
 		{
@@ -1953,6 +1989,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			   (profile.DesiredClassName != null &&
 			    x.DesiredClassName != null &&
 			    x.DesiredClassName.ToLower() == profile.DesiredClassName)))));
+		query = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(query);
 
 		var matches = await AsyncExecuter.ToListAsync(
 			query
@@ -2008,7 +2045,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			.ToList();
 		var hasProfileCriteria = profileProbes.Count > 0;
 		var queryable = await _leadRepository.GetQueryableAsync();
-		var candidates = await AsyncExecuter.ToListAsync(queryable.Where(x =>
+		var candidateQuery = queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId &&
 			x.MergedIntoLeadId == null &&
@@ -2019,7 +2056,9 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			  profileFirstNames.Contains(x.FirstName.ToLower()) &&
 			  (x.ParentGuardianName != null || x.DateOfBirth.HasValue) &&
 			  ((x.TargetStandardId.HasValue && profileTargetStandardIds.Contains(x.TargetStandardId.Value)) ||
-			   (x.DesiredClassName != null && profileClassNames.Contains(x.DesiredClassName.ToLower())))))));
+			   (x.DesiredClassName != null && profileClassNames.Contains(x.DesiredClassName.ToLower()))))));
+		candidateQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(candidateQuery);
+		var candidates = await AsyncExecuter.ToListAsync(candidateQuery);
 
 		return leads.ToDictionary(
 			lead => lead.Id,

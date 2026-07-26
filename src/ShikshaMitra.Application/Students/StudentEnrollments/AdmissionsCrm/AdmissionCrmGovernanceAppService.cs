@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -34,6 +36,7 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	private readonly IRepository<AdmissionCrmPerson, Guid> _personRepository;
 	private readonly IRepository<AdmissionCrmDataQualityIssue, Guid> _dataQualityRepository;
 	private readonly IRepository<AdmissionCrmTimelineEvent, Guid> _timelineRepository;
+	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 	private readonly StudentScopeAccessService _scopeAccess;
 
 	public AdmissionCrmGovernanceAppService(
@@ -51,6 +54,7 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 		IRepository<AdmissionCrmPerson, Guid> personRepository,
 		IRepository<AdmissionCrmDataQualityIssue, Guid> dataQualityRepository,
 		IRepository<AdmissionCrmTimelineEvent, Guid> timelineRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
 		StudentScopeAccessService scopeAccess)
 	{
 		_retentionRepository = retentionRepository; _privacyRepository = privacyRepository;
@@ -60,6 +64,7 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 		_quotationRepository = quotationRepository; _routeRepository = routeRepository;
 		_identityProfileRepository = identityProfileRepository; _personRepository = personRepository;
 		_dataQualityRepository = dataQualityRepository; _timelineRepository = timelineRepository;
+		_academicYearRepository = academicYearRepository;
 		_scopeAccess = scopeAccess;
 	}
 
@@ -67,7 +72,9 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	public async Task<AdmissionCrmRetentionPolicyDto> CreateRetentionPolicyAsync(
 		Guid academicYearId, CreateAdmissionCrmRetentionPolicyDto input)
 	{
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(CreateRetentionPolicyAsync));
+		await EnsureAcademicYearWideRetentionMutationAccessAsync(
+			academicYearId,
+			nameof(CreateRetentionPolicyAsync));
 		var queryable = await _retentionRepository.GetQueryableAsync();
 		if (await AsyncExecuter.AnyAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId && x.Code == input.Code.ToUpper())))
@@ -91,14 +98,16 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageRetention)]
 	public async Task<AdmissionCrmRetentionPolicyDto> SubmitRetentionPolicyAsync(Guid id)
 	{
-		var entity = await GetRetentionAsync(id); entity.Submit(UserId());
+		var entity = await GetRetentionForMutationAsync(id, nameof(SubmitRetentionPolicyAsync));
+		entity.Submit(UserId());
 		await _retentionRepository.UpdateAsync(entity, autoSave: true); return MapRetention(entity);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageRetention)]
 	public async Task<AdmissionCrmRetentionPolicyDto> PublishRetentionPolicyAsync(Guid id)
 	{
-		var entity = await GetRetentionAsync(id); entity.Publish(UserId(), Clock.Now);
+		var entity = await GetRetentionForMutationAsync(id, nameof(PublishRetentionPolicyAsync));
+		entity.Publish(UserId(), Clock.Now);
 		await _retentionRepository.UpdateAsync(entity, autoSave: true); return MapRetention(entity);
 	}
 
@@ -167,8 +176,12 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	public async Task<IReadOnlyList<AdmissionCrmPrivacyRequestDto>> GetPrivacyRequestsAsync(Guid academicYearId)
 	{
 		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(GetPrivacyRequestsAsync));
+		var scopedLeadIds = await GetScopedLeadIdsAsync(academicYearId);
 		var queryable = await _privacyRepository.GetQueryableAsync();
-		var items = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
+		var items = await AsyncExecuter.ToListAsync(queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId)));
 		return items.OrderByDescending(x => x.RequestedAt).Select(MapPrivacy).ToList();
 	}
 
@@ -177,7 +190,7 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	{
 		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(RequestExportAsync));
 		if (input.ExpiresInHours is < 1 or > 168) throw new BusinessException("AdmissionCrm:InvalidExportExpiry");
-		var now = Clock.Now; var content = await BuildExportContentAsync(academicYearId, input, now);
+		var now = Clock.Now; var content = await BuildExportContentAsync(academicYearId, input, now, enforceUserScope: true);
 		var id = GuidGenerator.Create();
 		var entity = new AdmissionCrmExportRequest(id, CurrentTenant.Id, academicYearId, input.ReportType,
 			Serialize(input.Filters), $"admissions-{input.ReportType.ToString().ToLowerInvariant()}-{now:yyyyMMddHHmm}-{id:N}.csv",
@@ -191,7 +204,13 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	{
 		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(GetExportsAsync));
 		var queryable = await _exportRepository.GetQueryableAsync();
-		var items = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
+		var query = queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId);
+		if (!await _scopeAccess.CurrentUserHasAcademicYearWideScopeAsync(academicYearId))
+		{
+			var currentUserId = UserId();
+			query = query.Where(x => x.RequestedByUserId == currentUserId);
+		}
+		var items = await AsyncExecuter.ToListAsync(query);
 		var expired = items.Where(x => x.ExpireContent(Clock.Now)).ToList();
 		if (expired.Count > 0) await _exportRepository.UpdateManyAsync(expired, autoSave: true);
 		return items.OrderByDescending(x => x.RequestedAt).Take(200).Select(MapExport).ToList();
@@ -202,6 +221,11 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	{
 		var entity = await _exportRepository.GetAsync(id);
 		await _scopeAccess.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, nameof(DownloadExportAsync));
+		if (!await _scopeAccess.CurrentUserHasAcademicYearWideScopeAsync(entity.AcademicYearId) &&
+		    entity.RequestedByUserId != UserId())
+		{
+			throw new AbpAuthorizationException("The export belongs to a different admissions scope.");
+		}
 		entity.RegisterDownload(UserId(), Clock.Now); await _exportRepository.UpdateAsync(entity, autoSave: true);
 		return new AdmissionCrmExportDownloadDto
 		{
@@ -213,7 +237,9 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageScheduledReports)]
 	public async Task<AdmissionCrmReportScheduleDto> CreateReportScheduleAsync(Guid academicYearId, CreateAdmissionCrmReportScheduleDto input)
 	{
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(CreateReportScheduleAsync));
+		await EnsureCanManageAcademicYearWideReportScheduleAsync(
+			academicYearId,
+			nameof(CreateReportScheduleAsync));
 		if (!input.Destination.StartsWith("manual:", StringComparison.OrdinalIgnoreCase))
 			throw new BusinessException("AdmissionCrm:ApprovedReportDestinationRequired");
 		var entity = new AdmissionCrmReportSchedule(GuidGenerator.Create(), CurrentTenant.Id, academicYearId,
@@ -224,7 +250,9 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageScheduledReports)]
 	public async Task<IReadOnlyList<AdmissionCrmReportScheduleDto>> GetReportSchedulesAsync(Guid academicYearId)
 	{
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(GetReportSchedulesAsync));
+		await EnsureCanManageAcademicYearWideReportScheduleAsync(
+			academicYearId,
+			nameof(GetReportSchedulesAsync));
 		var queryable = await _scheduleRepository.GetQueryableAsync();
 		var items = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
 		return items.OrderBy(x => x.NextRunAt).Select(MapSchedule).ToList();
@@ -234,21 +262,36 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	public async Task<AdmissionCrmReportScheduleDto> SetReportScheduleActiveAsync(Guid id, bool active)
 	{
 		var entity = await _scheduleRepository.GetAsync(id);
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, nameof(SetReportScheduleActiveAsync));
+		await EnsureCanManageAcademicYearWideReportScheduleAsync(
+			entity.AcademicYearId,
+			nameof(SetReportScheduleActiveAsync));
 		entity.SetActive(active); await _scheduleRepository.UpdateAsync(entity, autoSave: true); return MapSchedule(entity);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageScheduledReports)]
 	public Task<AdmissionCrmReportScheduleRunResultDto> RunDueReportSchedulesAsync(Guid academicYearId) =>
-		RunDueReportSchedulesCoreAsync(academicYearId);
+		RunDueReportSchedulesCoreAsync(academicYearId, enforceUserScope: true);
 
 	[AllowAnonymous]
 	public Task<AdmissionCrmReportScheduleRunResultDto> RunDueReportSchedulesFromAutomationAsync(Guid academicYearId) =>
-		RunDueReportSchedulesCoreAsync(academicYearId);
+		RunDueReportSchedulesCoreAsync(academicYearId, enforceUserScope: false);
 
-	private async Task<AdmissionCrmReportScheduleRunResultDto> RunDueReportSchedulesCoreAsync(Guid academicYearId)
+	private async Task<AdmissionCrmReportScheduleRunResultDto> RunDueReportSchedulesCoreAsync(
+		Guid academicYearId,
+		bool enforceUserScope)
 	{
-		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(RunDueReportSchedulesCoreAsync));
+		if (enforceUserScope)
+		{
+			await EnsureCanManageAcademicYearWideReportScheduleAsync(
+				academicYearId,
+				nameof(RunDueReportSchedulesCoreAsync));
+		}
+		else
+		{
+			await EnsureAutomationAcademicYearBelongsToCurrentTenantAsync(
+				academicYearId,
+				nameof(RunDueReportSchedulesCoreAsync));
+		}
 		var now = Clock.Now;
 		var queryable = await _scheduleRepository.GetQueryableAsync();
 		var due = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id &&
@@ -266,7 +309,7 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 					Filters = Deserialize<Dictionary<string, string?>>(schedule.FiltersJson) ?? new Dictionary<string, string?>(),
 					ExpiresInHours = 24
 				};
-				var content = await BuildExportContentAsync(academicYearId, request, now);
+				var content = await BuildExportContentAsync(academicYearId, request, now, enforceUserScope);
 				var exportId = GuidGenerator.Create();
 				await _exportRepository.InsertAsync(new AdmissionCrmExportRequest(
 					exportId, CurrentTenant.Id, academicYearId, request.ReportType, schedule.FiltersJson,
@@ -328,8 +371,12 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	public async Task<PagedResultDto<AdmissionCrmTimelineEventDto>> SearchAuditAsync(GetAdmissionCrmAuditInput input)
 	{
 		await _scopeAccess.EnsureCanAccessAcademicYearAsync(input.AcademicYearId, nameof(SearchAuditAsync));
+		var scopedLeadIds = await GetScopedLeadIdsAsync(input.AcademicYearId);
 		var queryable = await _timelineRepository.GetQueryableAsync();
-		var query = queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == input.AcademicYearId);
+		var query = queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == input.AcademicYearId &&
+			scopedLeadIds.Contains(x.LeadId));
 		if (input.LeadId.HasValue) query = query.Where(x => x.LeadId == input.LeadId);
 		if (input.ActorUserId.HasValue) query = query.Where(x => x.ActorUserId == input.ActorUserId);
 		if (input.EventType.HasValue) query = query.Where(x => x.EventType == input.EventType);
@@ -349,11 +396,20 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	{
 		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, nameof(GetAdvisoryForecastAsync));
 		var leadQuery = await _leadRepository.GetQueryableAsync();
-		var leads = await AsyncExecuter.ToListAsync(leadQuery.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
+		var scopedLeadQuery = leadQuery.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId);
+		scopedLeadQuery = await _scopeAccess.ApplyCurrentUserAdmissionLeadScopeAsync(scopedLeadQuery);
+		var leads = await AsyncExecuter.ToListAsync(scopedLeadQuery);
+		var scopedLeadIds = leads.Select(x => x.Id).ToList();
 		var offerQuery = await _offerRepository.GetQueryableAsync();
-		var offers = await AsyncExecuter.ToListAsync(offerQuery.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
+		var offers = await AsyncExecuter.ToListAsync(offerQuery.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId)));
 		var activationQuery = await _activationRepository.GetQueryableAsync();
-		var activations = await AsyncExecuter.ToListAsync(activationQuery.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
+		var activations = await AsyncExecuter.ToListAsync(activationQuery.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId)));
 		var responded = offers.Count(x => x.Status is AdmissionCrmSeatOfferStatus.Accepted or AdmissionCrmSeatOfferStatus.Declined);
 		var accepted = offers.Count(x => x.Status == AdmissionCrmSeatOfferStatus.Accepted);
 		var offerRate = responded == 0 ? 0m : (decimal)accepted / responded;
@@ -375,8 +431,17 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 		};
 	}
 
-	private async Task<string> BuildExportContentAsync(Guid academicYearId, RequestAdmissionCrmExportDto input, DateTime at)
+	private async Task<string> BuildExportContentAsync(
+		Guid academicYearId,
+		RequestAdmissionCrmExportDto input,
+		DateTime at,
+		bool enforceUserScope)
 	{
+		var scopedLeadIds = enforceUserScope
+			? await GetScopedLeadIdsAsync(academicYearId)
+			: null;
+		var hasAcademicYearWideScope = !enforceUserScope ||
+			await _scopeAccess.CurrentUserHasAcademicYearWideScopeAsync(academicYearId);
 		var rows = new List<string[]>
 		{
 			new[] { "Report", input.ReportType.ToString() },
@@ -391,7 +456,10 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 		{
 			rows.Add(["LeadId", "EventType", "Title", "ActorUserId", "OccurredAt", "Details"]);
 			var queryable = await _timelineRepository.GetQueryableAsync();
-			var persistedItems = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
+			var persistedItems = await AsyncExecuter.ToListAsync(queryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.AcademicYearId == academicYearId &&
+				(scopedLeadIds == null || scopedLeadIds.Contains(x.LeadId))));
 			var items = persistedItems.OrderByDescending(x => x.OccurredAt).ThenByDescending(x => x.Id).Take(10_000);
 			rows.AddRange(items.Select(x => new[] { x.LeadId.ToString(), x.EventType.ToString(), x.Title, x.ActorUserId?.ToString() ?? "", x.OccurredAt.ToString("O"), x.Details ?? "" }));
 		}
@@ -399,14 +467,22 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 		{
 			rows.Add(["IssueId", "Severity", "Status", "IssueType", "LeadId", "DetectedAt", "Summary"]);
 			var queryable = await _dataQualityRepository.GetQueryableAsync();
-			var items = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId).Take(10_000));
+			var items = await AsyncExecuter.ToListAsync(queryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.AcademicYearId == academicYearId &&
+				(hasAcademicYearWideScope ||
+				 (x.LeadId.HasValue && scopedLeadIds != null && scopedLeadIds.Contains(x.LeadId.Value))))
+				.Take(10_000));
 			rows.AddRange(items.Select(x => new[] { x.Id.ToString(), x.Severity.ToString(), x.Status.ToString(), x.IssueType.ToString(), x.LeadId?.ToString() ?? "", x.LastDetectedAt.ToString("O"), x.Title }));
 		}
 		else if (input.ReportType == AdmissionCrmExportReportType.GovernmentReadiness)
 		{
 			rows.Add(["LeadId", "ApplicantPersonId", "ApplicantName", "DateOfBirth", "DesiredClass", "RouteType", "RouteStatus", "IdentityResolution", "CoreIdentityVerified", "PEN", "PENStatus", "APAAR", "APAARConsentStatus", "APAARStatus", "UDISEStudentCode", "UDISEStatus", "DataProvenance"]);
 			var profileQueryable = await _identityProfileRepository.GetQueryableAsync();
-			var profiles = await AsyncExecuter.ToListAsync(profileQueryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
+			var profiles = await AsyncExecuter.ToListAsync(profileQueryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.AcademicYearId == academicYearId &&
+				(scopedLeadIds == null || scopedLeadIds.Contains(x.LeadId))));
 			var personIds = profiles.Select(x => x.ApplicantPersonId).Distinct().ToList();
 			var personQueryable = await _personRepository.GetQueryableAsync();
 			var people = (await AsyncExecuter.ToListAsync(personQueryable.Where(x => x.TenantId == CurrentTenant.Id && personIds.Contains(x.Id)))).ToDictionary(x => x.Id);
@@ -434,7 +510,12 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 		{
 			rows.Add(["LeadId", "Stage", "Source", "DesiredClass", "OwnerUserId", "CreatedAt", "LastActivityAt"]);
 			var queryable = await _leadRepository.GetQueryableAsync();
-			var items = await AsyncExecuter.ToListAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId)
+			var query = queryable.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId);
+			if (enforceUserScope)
+			{
+				query = await _scopeAccess.ApplyCurrentUserAdmissionLeadScopeAsync(query);
+			}
+			var items = await AsyncExecuter.ToListAsync(query
 				.OrderBy(x => x.CreationTime).Take(10_000));
 			rows.AddRange(items.Select(x => new[] { x.Id.ToString(), x.Stage.ToString(), x.InquirySourceSnapshot ?? "", x.DesiredClassName ?? "", x.OwnerUserId?.ToString() ?? "", x.CreationTime.ToString("O"), x.LastActivityTime.ToString("O") }));
 		}
@@ -445,16 +526,87 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	private Guid UserId() => CurrentUser.Id ?? throw new AbpAuthorizationException("Authenticated user required.");
 	private async Task<AdmissionInquiryLead> GetLeadAsync(Guid id, string operation)
 	{
-		var lead = await _leadRepository.GetAsync(id); await _scopeAccess.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation); return lead;
+		var lead = await _leadRepository.GetAsync(id); await _scopeAccess.EnsureCanAccessAdmissionLeadAsync(lead, operation); return lead;
 	}
-	private async Task<AdmissionCrmRetentionPolicy> GetRetentionAsync(Guid id)
+	private async Task<AdmissionCrmRetentionPolicy> GetRetentionForMutationAsync(
+		Guid id,
+		string operation)
 	{
-		var entity = await _retentionRepository.GetAsync(id); await _scopeAccess.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, nameof(GetRetentionAsync)); return entity;
+		var entity = await _retentionRepository.GetAsync(id);
+		await EnsureAcademicYearWideRetentionMutationAccessAsync(entity.AcademicYearId, operation);
+		return entity;
 	}
 	private async Task<AdmissionCrmPrivacyRequest> GetPrivacyAsync(Guid id)
 	{
-		var entity = await _privacyRepository.GetAsync(id); await _scopeAccess.EnsureCanAccessAcademicYearAsync(entity.AcademicYearId, nameof(GetPrivacyAsync)); return entity;
+		var entity = await _privacyRepository.GetAsync(id);
+		await GetLeadAsync(entity.LeadId, nameof(GetPrivacyAsync));
+		return entity;
 	}
+
+	private async Task<List<Guid>> GetScopedLeadIdsAsync(Guid academicYearId)
+	{
+		var queryable = await _leadRepository.GetQueryableAsync();
+		var query = queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId);
+		query = await _scopeAccess.ApplyCurrentUserAdmissionLeadScopeAsync(query);
+		return await AsyncExecuter.ToListAsync(query.Select(x => x.Id));
+	}
+
+	private async Task EnsureCanManageAcademicYearWideReportScheduleAsync(
+		Guid academicYearId,
+		string operation)
+	{
+		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, operation);
+		if (await _scopeAccess.CurrentUserHasAcademicYearWideScopeAsync(academicYearId))
+		{
+			return;
+		}
+
+		throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+			.WithData("AcademicYearId", academicYearId)
+			.WithData("Operation", operation);
+	}
+
+	private async Task EnsureAcademicYearWideRetentionMutationAccessAsync(
+		Guid academicYearId,
+		string operation)
+	{
+		await _scopeAccess.EnsureCanAccessAcademicYearAsync(academicYearId, operation);
+		if (await _scopeAccess.CurrentUserHasAcademicYearWideScopeAsync(academicYearId))
+		{
+			return;
+		}
+
+		throw new BusinessException("AdmissionCrm:AcademicYearWideScopeRequired")
+			.WithData("AcademicYearId", academicYearId)
+			.WithData("Operation", operation);
+	}
+
+	private async Task EnsureAutomationAcademicYearBelongsToCurrentTenantAsync(
+		Guid academicYearId,
+		string operation)
+	{
+		var tenantId = CurrentTenant.Id;
+		if (!tenantId.HasValue || academicYearId == Guid.Empty)
+		{
+			throw new BusinessException("AdmissionCrm:AcademicYearNotFound")
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("Operation", operation);
+		}
+
+		var queryable = await _academicYearRepository.GetQueryableAsync();
+		var exists = await AsyncExecuter.AnyAsync(queryable.Where(x =>
+			x.Id == academicYearId &&
+			x.TenantId == tenantId));
+		if (!exists)
+		{
+			throw new BusinessException("AdmissionCrm:AcademicYearNotFound")
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("Operation", operation);
+		}
+	}
+
 	private Task TimelineAsync(AdmissionInquiryLead lead, AdmissionCrmTimelineEventType type, string title, string detail, Guid relatedId) =>
 		_timelineRepository.InsertAsync(new AdmissionCrmTimelineEvent(GuidGenerator.Create(), CurrentTenant.Id, lead.Id, lead.AcademicYearId, type, title, detail, relatedId, CurrentUser.Id, Clock.Now), autoSave: true);
 	private static string Serialize<T>(T value) => JsonSerializer.Serialize(value, JsonOptions);

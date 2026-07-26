@@ -17,6 +17,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 [RemoteService(false)]
 public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmissionCrmEntranceExamAppService
 {
+	private const int MaximumResultCorrectionReasonLength =
+		AdmissionCrmConsts.MaxTimelineDetailsLength - 250;
 	private const AdmissionCrmExamReadinessField DefaultExamReadinessFields =
 		AdmissionCrmExamReadinessField.Contact |
 		AdmissionCrmExamReadinessField.AdmissionIntent |
@@ -163,23 +165,27 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 
 		var queryable = await _examRepository.GetQueryableAsync();
 		var leadQueryable = await _leadRepository.GetQueryableAsync();
-		var query = queryable.Where(x =>
+		leadQueryable = leadQueryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId);
+		leadQueryable = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(leadQueryable);
+		var scopedLeadIds = leadQueryable.Select(x => x.Id);
+		var query = queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId));
 
 		if (!string.IsNullOrWhiteSpace(input.FilterText))
 		{
 			var filter = input.FilterText.Trim().ToLowerInvariant();
 			var matchingLeadIds = leadQueryable
 				.Where(x =>
-					x.TenantId == CurrentTenant.Id &&
-					x.AcademicYearId == academicYearId &&
-					((x.FirstName != null && x.FirstName.ToLower().Contains(filter)) ||
+					(x.FirstName != null && x.FirstName.ToLower().Contains(filter)) ||
 					 (x.MiddleName != null && x.MiddleName.ToLower().Contains(filter)) ||
 					 (x.LastName != null && x.LastName.ToLower().Contains(filter)) ||
 					 (x.ParentGuardianName != null && x.ParentGuardianName.ToLower().Contains(filter)) ||
 					 (x.PrimaryContactNo != null && x.PrimaryContactNo.Contains(filter)) ||
-					 (x.Email != null && x.Email.ToLower().Contains(filter))))
+					 (x.Email != null && x.Email.ToLower().Contains(filter)))
 				.Select(x => x.Id);
 			query = query.Where(x =>
 				matchingLeadIds.Contains(x.LeadId) ||
@@ -190,12 +196,10 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 			var applicant = input.ApplicantSearch.Trim().ToLowerInvariant();
 			var matchingLeadIds = leadQueryable
 				.Where(x =>
-					x.TenantId == CurrentTenant.Id &&
-					x.AcademicYearId == academicYearId &&
-					((x.FirstName != null && x.FirstName.ToLower().Contains(applicant)) ||
+					(x.FirstName != null && x.FirstName.ToLower().Contains(applicant)) ||
 					 (x.MiddleName != null && x.MiddleName.ToLower().Contains(applicant)) ||
 					 (x.LastName != null && x.LastName.ToLower().Contains(applicant)) ||
-					 (x.ParentGuardianName != null && x.ParentGuardianName.ToLower().Contains(applicant))))
+					 (x.ParentGuardianName != null && x.ParentGuardianName.ToLower().Contains(applicant)))
 				.Select(x => x.Id);
 			query = query.Where(x => matchingLeadIds.Contains(x.LeadId));
 		}
@@ -223,10 +227,7 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		var exams = await GetSortedExamPageAsync(query, leadQueryable, input);
 		var leadIds = exams.Select(x => x.LeadId).Distinct().ToList();
 		var leads = await AsyncExecuter.ToListAsync(
-			leadQueryable.Where(x =>
-				x.TenantId == CurrentTenant.Id &&
-				x.AcademicYearId == academicYearId &&
-				leadIds.Contains(x.Id)));
+			leadQueryable.Where(x => leadIds.Contains(x.Id)));
 		var leadsById = leads.ToDictionary(x => x.Id);
 
 		return new PagedResultDto<AdmissionCrmEntranceExamDto>(
@@ -276,12 +277,71 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult)]
-	public async Task<AdmissionCrmEntranceExamDto> UploadResultAsync(
+	public Task<AdmissionCrmEntranceExamDto> UploadResultAsync(
 		Guid examRecordId,
 		UploadAdmissionCrmEntranceExamResultDto input)
 	{
+		return UploadResultCoreAsync(
+			examRecordId,
+			input,
+			enforceCorrectionGovernance: true,
+			input.CorrectionReason);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult)]
+	public Task<AdmissionCrmEntranceExamDto> UploadResultFromBulkAsync(
+		Guid examRecordId,
+		UploadAdmissionCrmEntranceExamResultDto input,
+		string? correctionReason)
+	{
+		return UploadResultCoreAsync(
+			examRecordId,
+			input,
+			enforceCorrectionGovernance: true,
+			correctionReason);
+	}
+
+	private async Task<AdmissionCrmEntranceExamDto> UploadResultCoreAsync(
+		Guid examRecordId,
+		UploadAdmissionCrmEntranceExamResultDto input,
+		bool enforceCorrectionGovernance,
+		string? correctionReason)
+	{
 		var exam = await GetExamForCurrentTenantAsync(examRecordId, nameof(UploadResultAsync));
 		var lead = await GetLeadForCurrentTenantAsync(exam.LeadId, nameof(UploadResultAsync));
+		var isCorrection = exam.ResultRecordedAt.HasValue;
+		if (isCorrection && IsSameResult(exam, input))
+		{
+			return ToDto(exam, lead);
+		}
+
+		var normalizedCorrectionReason = string.IsNullOrWhiteSpace(correctionReason)
+			? null
+			: correctionReason.Trim();
+		if (normalizedCorrectionReason?.Length > MaximumResultCorrectionReasonLength)
+		{
+			throw new BusinessException("AdmissionCrm:ExamResultCorrectionReasonTooLong")
+				.WithData("MaximumLength", MaximumResultCorrectionReasonLength);
+		}
+
+		if (isCorrection && enforceCorrectionGovernance)
+		{
+			if (normalizedCorrectionReason == null)
+			{
+				throw new BusinessException("AdmissionCrm:ExamResultCorrectionReasonRequired")
+					.WithData("ExamRecordId", exam.Id);
+			}
+
+			await EnsureExamResultOverridePermissionAsync();
+		}
+
+		var previousResultEvidence = isCorrection
+			? FormatResultEvidence(
+				exam.TotalMarks,
+				exam.PassingMarks,
+				exam.ObtainedMarks,
+				exam.MeritRank)
+			: null;
 		var cycleConfiguration = await GetCycleConfigurationOrDefaultAsync(lead.AcademicYearId);
 		var previousStage = lead.Stage;
 
@@ -308,13 +368,34 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		await AddTimelineEventAsync(
 			lead,
 			AdmissionCrmTimelineEventType.ExamResultRecorded,
-			"Exam result recorded",
-			$"{input.ObtainedMarks}/{input.TotalMarks}",
+			isCorrection ? "Exam result corrected" : "Exam result recorded",
+			isCorrection
+				? $"Previous: {previousResultEvidence}. New: {FormatResultEvidence(exam.TotalMarks, exam.PassingMarks, exam.ObtainedMarks, exam.MeritRank)}. Correction reason: {normalizedCorrectionReason}"
+				: FormatResultEvidence(exam.TotalMarks, exam.PassingMarks, exam.ObtainedMarks, exam.MeritRank),
 			exam.Id);
 		await _leadRepository.UpdateAsync(lead, autoSave: true);
 		await RunJourneyAutomationAsync(lead, AdmissionCrmJourneyTrigger.ExamCompleted);
 		await RunStageReachedJourneyIfChangedAsync(lead, previousStage);
 		return ToDto(exam, lead);
+	}
+
+	private static bool IsSameResult(
+		AdmissionCrmEntranceExamRecord exam,
+		UploadAdmissionCrmEntranceExamResultDto input)
+	{
+		return exam.TotalMarks == input.TotalMarks &&
+		       exam.PassingMarks == input.PassingMarks &&
+		       exam.ObtainedMarks == input.ObtainedMarks &&
+		       (!input.MeritRank.HasValue || exam.MeritRank == input.MeritRank);
+	}
+
+	private static string FormatResultEvidence(
+		double? totalMarks,
+		double? passingMarks,
+		double? obtainedMarks,
+		int? meritRank)
+	{
+		return $"obtained {obtainedMarks:0.##}/{totalMarks:0.##}, passing {passingMarks:0.##}, merit rank {(meritRank.HasValue ? meritRank.Value.ToString() : "automatic")}";
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult)]
@@ -387,7 +468,7 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 				.WithData("LeadId", id);
 		}
 
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return lead;
 	}
 
@@ -400,7 +481,8 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 				.WithData("ExamRecordId", id);
 		}
 
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(exam.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(exam.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return exam;
 	}
 
@@ -459,6 +541,15 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 			    ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideEligibility))
 		{
 			throw new AbpAuthorizationException("Eligibility override permission is required.");
+		}
+	}
+
+	private async Task EnsureExamResultOverridePermissionAsync()
+	{
+		if (!await AuthorizationService.IsGrantedAsync(
+			    ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideExamResult))
+		{
+			throw new AbpAuthorizationException("Exam result override permission is required.");
 		}
 	}
 

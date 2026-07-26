@@ -127,11 +127,15 @@ public class AdmissionCrmAnalyticsAppService : ApplicationService, IAdmissionCrm
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
 			academicYearId,
 			nameof(GetSummaryAsync));
+		var hasAcademicYearWideScope =
+			await _studentScopeAccessService.CurrentUserHasAcademicYearWideScopeAsync(academicYearId);
 
 		var leadsQueryable = await _leadRepository.GetQueryableAsync();
-		var allLeads = await AsyncExecuter.ToListAsync(leadsQueryable.Where(x =>
+		var leadQuery = leadsQueryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
-			x.AcademicYearId == academicYearId));
+			x.AcademicYearId == academicYearId);
+		leadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(leadQuery);
+		var allLeads = await AsyncExecuter.ToListAsync(leadQuery);
 		var dimensionLeads = ApplyDimensionFilters(allLeads, input).ToList();
 		var dimensionLeadIds = dimensionLeads.Select(x => x.Id).ToHashSet();
 		var leads = ApplyLeadDateFilter(dimensionLeads, input).ToList();
@@ -277,8 +281,8 @@ public class AdmissionCrmAnalyticsAppService : ApplicationService, IAdmissionCrm
 			x.AcademicYearId == academicYearId));
 		var automationRuns = ApplyAutomationRunDateFilter(
 				allAutomationRuns.Where(x =>
-					!x.LeadId.HasValue ||
-					dimensionLeadIds.Contains(x.LeadId.Value)),
+					(x.LeadId.HasValue && dimensionLeadIds.Contains(x.LeadId.Value)) ||
+					(!x.LeadId.HasValue && hasAcademicYearWideScope)),
 				input)
 			.ToList();
 		var cycleConfigurationQueryable = await _cycleConfigurationRepository.GetQueryableAsync();

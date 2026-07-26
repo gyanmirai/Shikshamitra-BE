@@ -33,6 +33,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 	private readonly IRepository<AdmissionCrmFormNumberSeries, Guid> _seriesRepository;
 	private readonly IRepository<AdmissionCrmRegistrationApplication, Guid> _applicationRepository;
 	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
+	private readonly IRepository<AdmissionCrmCycleConfiguration, Guid> _cycleRepository;
+	private readonly IRepository<AdmissionCrmPlaybook, Guid> _playbookRepository;
+	private readonly IRepository<AdmissionCrmEntranceExamRecord, Guid> _examRepository;
 	private readonly IRepository<AdmissionApplicantStatusAccess, Guid> _statusAccessRepository;
 	private readonly IRepository<AdmissionCrmTimelineEvent, Guid> _timelineRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
@@ -45,6 +48,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		IRepository<AdmissionCrmFormNumberSeries, Guid> seriesRepository,
 		IRepository<AdmissionCrmRegistrationApplication, Guid> applicationRepository,
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
+		IRepository<AdmissionCrmCycleConfiguration, Guid> cycleRepository,
+		IRepository<AdmissionCrmPlaybook, Guid> playbookRepository,
+		IRepository<AdmissionCrmEntranceExamRecord, Guid> examRepository,
 		IRepository<AdmissionApplicantStatusAccess, Guid> statusAccessRepository,
 		IRepository<AdmissionCrmTimelineEvent, Guid> timelineRepository,
 		StudentScopeAccessService studentScopeAccessService,
@@ -56,6 +62,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		_seriesRepository = seriesRepository;
 		_applicationRepository = applicationRepository;
 		_leadRepository = leadRepository;
+		_cycleRepository = cycleRepository;
+		_playbookRepository = playbookRepository;
+		_examRepository = examRepository;
 		_statusAccessRepository = statusAccessRepository;
 		_timelineRepository = timelineRepository;
 		_studentScopeAccessService = studentScopeAccessService;
@@ -93,7 +102,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		Guid academicYearId,
 		CreateAdmissionCrmRegistrationTemplateDto input)
 	{
-		await EnsureYearAccessAsync(academicYearId, nameof(CreateTemplateAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(CreateTemplateAsync));
 		NormalizeAndValidate(input);
 		var queryable = await _templateRepository.GetQueryableAsync();
 		var existing = await AsyncExecuter.ToListAsync(queryable.Where(x =>
@@ -110,6 +121,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		UpdateAdmissionCrmRegistrationTemplateDto input)
 	{
 		var template = await GetTemplateForTenantAsync(id, nameof(UpdateTemplateAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			template.AcademicYearId,
+			nameof(UpdateTemplateAsync));
 		NormalizeAndValidate(input);
 		ApplyTemplateUpdate(template, input);
 		await _templateRepository.UpdateAsync(template, autoSave: true);
@@ -120,6 +134,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 	public async Task<AdmissionCrmRegistrationTemplateDto> PublishTemplateAsync(Guid id)
 	{
 		var template = await GetTemplateForTenantAsync(id, nameof(PublishTemplateAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			template.AcademicYearId,
+			nameof(PublishTemplateAsync));
 		var input = ToTemplateUpsert(template);
 		NormalizeAndValidate(input);
 		await EnsureNoAmbiguousPublishedTemplateAsync(template);
@@ -132,6 +149,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 	public async Task<AdmissionCrmRegistrationTemplateDto> CreateTemplateVersionAsync(Guid id)
 	{
 		var source = await GetTemplateForTenantAsync(id, nameof(CreateTemplateVersionAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			source.AcademicYearId,
+			nameof(CreateTemplateVersionAsync));
 		var queryable = await _templateRepository.GetQueryableAsync();
 		var versions = await AsyncExecuter.ToListAsync(queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id && x.AcademicYearId == source.AcademicYearId && x.Name == source.Name));
@@ -144,6 +164,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 	public async Task<AdmissionCrmRegistrationTemplateDto> RetireTemplateAsync(Guid id)
 	{
 		var template = await GetTemplateForTenantAsync(id, nameof(RetireTemplateAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			template.AcademicYearId,
+			nameof(RetireTemplateAsync));
 		template.Retire(Clock.Now);
 		await _templateRepository.UpdateAsync(template, autoSave: true);
 		return ToTemplateDto(template);
@@ -164,7 +187,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		Guid academicYearId,
 		AdmissionCrmFormNumberSeriesUpsertDto input)
 	{
-		await EnsureYearAccessAsync(academicYearId, nameof(CreateFormNumberSeriesAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(CreateFormNumberSeriesAsync));
 		var series = new AdmissionCrmFormNumberSeries(
 			GuidGenerator.Create(), CurrentTenant.Id, academicYearId, input.Name, input.Prefix, input.Suffix,
 			input.Padding, input.NextNumber, Serialize(input.Applicability), input.IsActive);
@@ -178,6 +203,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		AdmissionCrmFormNumberSeriesUpsertDto input)
 	{
 		var series = await GetSeriesForTenantAsync(id, nameof(UpdateFormNumberSeriesAsync));
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
+			series.AcademicYearId,
+			nameof(UpdateFormNumberSeriesAsync));
 		series.Update(input.Name, input.Prefix, input.Suffix, input.Padding, input.NextNumber, Serialize(input.Applicability), input.IsActive);
 		await _seriesRepository.UpdateAsync(series, autoSave: true);
 		return ToSeriesDto(series);
@@ -188,12 +216,52 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		Guid leadId,
 		IssueAdmissionCrmRegistrationApplicationDto input)
 	{
+		return await IssueCoreAsync(leadId, input, isDirectRegistration: false);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm)]
+	public async Task<AdmissionCrmRegistrationApplicationDto> IssueDirectAsync(
+		Guid leadId,
+		IssueAdmissionCrmRegistrationApplicationDto input)
+	{
+		return await IssueCoreAsync(leadId, input, isDirectRegistration: true);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm)]
+	public async Task EnsureStandardIssuanceEligibleAsync(Guid leadId, Guid? playbookId = null)
+	{
+		var lead = await GetLeadForTenantAsync(
+			leadId,
+			nameof(EnsureStandardIssuanceEligibleAsync));
+		var registrationPath = await ResolveRegistrationPathAsync(lead, playbookId);
+		await EnsureIssuanceEligibleAsync(
+			lead,
+			registrationPath,
+			isDirectRegistration: false);
+	}
+
+	private async Task<AdmissionCrmRegistrationApplicationDto> IssueCoreAsync(
+		Guid leadId,
+		IssueAdmissionCrmRegistrationApplicationDto input,
+		bool isDirectRegistration)
+	{
+		if (input.WaiveFee)
+		{
+			await AuthorizationService.CheckAsync(
+				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.WaiveRegistrationFee);
+		}
+
 		var lead = await GetLeadForTenantAsync(leadId, nameof(IssueAsync));
 		var template = await GetTemplateForTenantAsync(input.RegistrationTemplateId, nameof(IssueAsync));
 		if (template.AcademicYearId != lead.AcademicYearId || template.Status != AdmissionCrmRegistrationTemplateStatus.Published)
 		{
 			throw new BusinessException("AdmissionCrm:PublishedRegistrationTemplateRequired");
 		}
+
+		var registrationPath = isDirectRegistration && !input.PlaybookId.HasValue
+			? AdmissionCrmRegistrationPath.DirectRegistration
+			: await ResolveRegistrationPathAsync(lead, input.PlaybookId);
+		await EnsureIssuanceEligibleAsync(lead, registrationPath, isDirectRegistration);
 
 		var applicationQueryable = await _applicationRepository.GetQueryableAsync();
 		var existing = await AsyncExecuter.FirstOrDefaultAsync(applicationQueryable.Where(x =>
@@ -276,17 +344,20 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 			return false;
 		}
 
-		await IssueAsync(leadId, new IssueAdmissionCrmRegistrationApplicationDto
+		await IssueCoreAsync(leadId, new IssueAdmissionCrmRegistrationApplicationDto
 		{
 			RegistrationTemplateId = template.Id
-		});
+		}, isDirectRegistration: false);
 		return true;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
 	public async Task<AdmissionCrmRegistrationApplicationDto> GetApplicationAsync(Guid id)
 	{
-		return ToApplicationDto(await GetApplicationForTenantAsync(id, nameof(GetApplicationAsync)));
+		var application = await GetApplicationForTenantAsync(id, nameof(GetApplicationAsync));
+		var dto = ToApplicationDto(application);
+		dto.ApplicantStatusPath = await GetExistingApplicantStatusPathAsync(application.LeadId);
+		return dto;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
@@ -302,7 +373,9 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 			.FirstOrDefault();
 		if (application == null)
 			throw new BusinessException("AdmissionCrm:RegistrationApplicationNotFound");
-		return ToApplicationDto(application);
+		var dto = ToApplicationDto(application);
+		dto.ApplicantStatusPath = await GetExistingApplicantStatusPathAsync(application.LeadId);
+		return dto;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm)]
@@ -470,6 +543,8 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		{
 			section.Key = Check.NotNullOrWhiteSpace(section.Key, nameof(section.Key), 80).Trim();
 			section.Title = Check.NotNullOrWhiteSpace(section.Title, nameof(section.Title), 120).Trim();
+			section.LocalizedTitles = NormalizeLocalizations(section.LocalizedTitles, 120);
+			section.LocalizedDescriptions = NormalizeLocalizations(section.LocalizedDescriptions, 500);
 			if (!sectionKeys.Add(section.Key) || section.Fields.Count == 0)
 			{
 				throw new BusinessException("AdmissionCrm:InvalidRegistrationTemplateSection").WithData("SectionKey", section.Key);
@@ -486,6 +561,20 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 				{
 					throw new BusinessException("AdmissionCrm:UnsupportedRegistrationSystemField").WithData("SystemField", field.SystemField);
 				}
+				if (!Enum.IsDefined(field.FieldType))
+				{
+					throw new BusinessException("AdmissionCrm:InvalidRegistrationFieldType").WithData("FieldKey", field.Key);
+				}
+				var requiresOptions =
+					field.FieldType is AdmissionCrmFormFieldType.Select or AdmissionCrmFormFieldType.MultiSelect;
+				if ((requiresOptions && field.Options.Count == 0) ||
+				    (!requiresOptions && field.Options.Count > 0))
+				{
+					throw new BusinessException("AdmissionCrm:InvalidRegistrationFieldOptions").WithData("FieldKey", field.Key);
+				}
+				field.LocalizedLabels = NormalizeLocalizations(field.LocalizedLabels, 120);
+				field.LocalizedHelpTexts = NormalizeLocalizations(field.LocalizedHelpTexts, 300);
+				field.LocalizedOptions = NormalizeLocalizedOptions(field);
 				if (!string.IsNullOrWhiteSpace(field.ValidationPattern))
 				{
 					try { _ = new Regex(field.ValidationPattern, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250)); }
@@ -505,6 +594,47 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 				throw new BusinessException("AdmissionCrm:RegistrationFieldConditionTargetNotFound").WithData("FieldKey", field.Key);
 			}
 		}
+	}
+
+	private static IReadOnlyDictionary<string, string> NormalizeLocalizations(
+		IReadOnlyDictionary<string, string> values,
+		int maximumValueLength)
+	{
+		var normalized = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var (language, value) in values)
+		{
+			var normalizedLanguage = Check.NotNullOrWhiteSpace(language, nameof(language), 16)
+				.Trim()
+				.ToLowerInvariant();
+			var normalizedValue = Check.NotNullOrWhiteSpace(value, nameof(value), maximumValueLength).Trim();
+			normalized[normalizedLanguage] = normalizedValue;
+		}
+
+		return normalized;
+	}
+
+	private static IReadOnlyDictionary<string, IReadOnlyList<string>> NormalizeLocalizedOptions(
+		AdmissionCrmRegistrationFieldDto field)
+	{
+		var normalized = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+		foreach (var (language, values) in field.LocalizedOptions)
+		{
+			var normalizedLanguage = Check.NotNullOrWhiteSpace(language, nameof(language), 16)
+				.Trim()
+				.ToLowerInvariant();
+			var normalizedValues = values
+				.Select(value => Check.NotNullOrWhiteSpace(value, nameof(value), 160).Trim())
+				.ToList();
+			if (normalizedValues.Count != field.Options.Count)
+			{
+				throw new BusinessException("AdmissionCrm:RegistrationLocalizedOptionsCountMismatch")
+					.WithData("FieldKey", field.Key)
+					.WithData("Language", normalizedLanguage);
+			}
+			normalized[normalizedLanguage] = normalizedValues;
+		}
+
+		return normalized;
 	}
 
 	private async Task<string> ResolveFormNumberAsync(AdmissionInquiryLead lead, IssueAdmissionCrmRegistrationApplicationDto input)
@@ -573,6 +703,30 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		return $"/student/admissions/status/{CurrentTenant.Id:D}/{rawToken}";
 	}
 
+	private async Task<string?> GetExistingApplicantStatusPathAsync(Guid leadId)
+	{
+		if (!await AuthorizationService.IsGrantedAsync(
+			    ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageRegistrationLinks))
+		{
+			return null;
+		}
+
+		var queryable = await _statusAccessRepository.GetQueryableAsync();
+		var access = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id && x.LeadId == leadId));
+		if (access == null ||
+		    access.TokenExpiresAt <= Clock.Now ||
+		    string.IsNullOrWhiteSpace(access.EncryptedToken))
+		{
+			return null;
+		}
+
+		var rawToken = _stringEncryptionService.Decrypt(access.EncryptedToken);
+		return string.IsNullOrWhiteSpace(rawToken)
+			? null
+			: $"/student/admissions/status/{CurrentTenant.Id:D}/{rawToken}";
+	}
+
 	private async Task<string> ForceReissueApplicantStatusLinkAsync(AdmissionInquiryLead lead, DateTime expiresAt)
 	{
 		var queryable = await _statusAccessRepository.GetQueryableAsync();
@@ -615,6 +769,138 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		}
 	}
 
+	private async Task<AdmissionCrmRegistrationPath> ResolveRegistrationPathAsync(
+		AdmissionInquiryLead lead,
+		Guid? playbookId)
+	{
+		if (playbookId.HasValue)
+		{
+			var playbook = await _playbookRepository.FindAsync(playbookId.Value);
+			if (playbook == null || playbook.TenantId != CurrentTenant.Id)
+			{
+				throw new BusinessException("AdmissionCrm:PlaybookNotFound")
+					.WithData("PlaybookId", playbookId.Value);
+			}
+
+			if (playbook.AcademicYearId != lead.AcademicYearId)
+			{
+				throw new BusinessException("AdmissionCrm:PlaybookAcademicYearMismatch")
+					.WithData("PlaybookId", playbook.Id)
+					.WithData("LeadAcademicYearId", lead.AcademicYearId)
+					.WithData("PlaybookAcademicYearId", playbook.AcademicYearId);
+			}
+
+			if (playbook.Status != AdmissionCrmPlaybookStatus.Published)
+			{
+				throw new BusinessException("AdmissionCrm:PublishedPlaybookRequired")
+					.WithData("PlaybookId", playbook.Id);
+			}
+
+			return playbook.RegistrationPath;
+		}
+
+		var cycleQueryable = await _cycleRepository.GetQueryableAsync();
+		var configuration = await AsyncExecuter.FirstOrDefaultAsync(cycleQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == lead.AcademicYearId));
+		if (configuration?.EntranceExamRequired == false)
+		{
+			return AdmissionCrmRegistrationPath.ExamWaived;
+		}
+
+		return configuration?.RegistrationFormRequiredBeforeExam == true
+			? AdmissionCrmRegistrationPath.RegistrationBeforeExam
+			: AdmissionCrmRegistrationPath.RegistrationAfterExam;
+	}
+
+	private async Task EnsureIssuanceEligibleAsync(
+		AdmissionInquiryLead lead,
+		AdmissionCrmRegistrationPath registrationPath,
+		bool isDirectRegistration)
+	{
+		if (isDirectRegistration)
+		{
+			if (registrationPath != AdmissionCrmRegistrationPath.DirectRegistration)
+			{
+				throw new BusinessException("AdmissionCrm:DirectRegistrationPlaybookRequired")
+					.WithData("LeadId", lead.Id)
+					.WithData("RegistrationPath", registrationPath);
+			}
+
+			return;
+		}
+
+		if (registrationPath == AdmissionCrmRegistrationPath.DirectRegistration)
+		{
+			throw new BusinessException("AdmissionCrm:DirectRegistrationPathRequiresDirectEndpoint")
+				.WithData("LeadId", lead.Id);
+		}
+
+		if (!lead.OwnerUserId.HasValue)
+		{
+			throw new BusinessException("AdmissionCrm:RegistrationOwnerRequired")
+				.WithData("LeadId", lead.Id);
+		}
+
+		if (lead.Stage is AdmissionInquiryStage.Rejected
+		    or AdmissionInquiryStage.Stale
+		    or AdmissionInquiryStage.Archived)
+		{
+			throw new BusinessException("AdmissionCrm:RegistrationNotAllowedForTerminalLead")
+				.WithData("LeadId", lead.Id)
+				.WithData("Stage", lead.Stage);
+		}
+
+		if (lead.Stage == AdmissionInquiryStage.NewInquiry)
+		{
+			throw new BusinessException("AdmissionCrm:RegistrationFollowUpRequired")
+				.WithData("LeadId", lead.Id);
+		}
+
+		switch (registrationPath)
+		{
+			case AdmissionCrmRegistrationPath.RegistrationBeforeExam:
+				if (lead.Stage is not (AdmissionInquiryStage.FollowUp or AdmissionInquiryStage.ExamReady))
+				{
+					throw new BusinessException("AdmissionCrm:RegistrationMustBeIssuedBeforeExam")
+						.WithData("LeadId", lead.Id)
+						.WithData("Stage", lead.Stage);
+				}
+				return;
+
+			case AdmissionCrmRegistrationPath.RegistrationAfterExam:
+				var examQueryable = await _examRepository.GetQueryableAsync();
+				var hasEligibleExamResult = await AsyncExecuter.AnyAsync(examQueryable.Where(x =>
+					x.TenantId == CurrentTenant.Id &&
+					x.AcademicYearId == lead.AcademicYearId &&
+					x.LeadId == lead.Id &&
+					x.ResultRecordedAt.HasValue &&
+					x.EligibilityDecision == AdmissionCrmEligibilityDecision.Eligible));
+				if (!hasEligibleExamResult || lead.Stage != AdmissionInquiryStage.Eligible)
+				{
+					throw new BusinessException("AdmissionCrm:RegistrationRequiresEligibleExamResult")
+						.WithData("LeadId", lead.Id)
+						.WithData("Stage", lead.Stage);
+				}
+				return;
+
+			case AdmissionCrmRegistrationPath.ExamWaived:
+				if (lead.Stage is not (AdmissionInquiryStage.FollowUp
+				    or AdmissionInquiryStage.ExamReady
+				    or AdmissionInquiryStage.Eligible))
+				{
+					throw new BusinessException("AdmissionCrm:RegistrationStageNotEligible")
+						.WithData("LeadId", lead.Id)
+						.WithData("Stage", lead.Stage);
+				}
+				return;
+
+			default:
+				throw new BusinessException("AdmissionCrm:InvalidRegistrationPath")
+					.WithData("RegistrationPath", registrationPath);
+		}
+	}
+
 	private async Task EnsureYearAccessAsync(Guid academicYearId, string operation)
 	{
 		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId, operation);
@@ -640,7 +926,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 	{
 		var lead = await _leadRepository.GetAsync(id);
 		if (lead.TenantId != CurrentTenant.Id) throw new BusinessException("AdmissionCrm:LeadNotFound");
-		await EnsureYearAccessAsync(lead.AcademicYearId, operation);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return lead;
 	}
 
@@ -648,7 +934,8 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 	{
 		var application = await _applicationRepository.GetAsync(id);
 		if (application.TenantId != CurrentTenant.Id) throw new BusinessException("AdmissionCrm:RegistrationApplicationNotFound");
-		await EnsureYearAccessAsync(application.AcademicYearId, operation);
+		var lead = await _leadRepository.GetAsync(application.LeadId);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return application;
 	}
 

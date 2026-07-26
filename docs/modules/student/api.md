@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-07-23
+updated_on: 2026-07-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -100,6 +100,7 @@ An applicant may continue assignment work against an exact route version capture
 | `/leads/{leadId}/exam/schedule` | Schedule or reschedule a CRM lead into an entrance exam slot after cycle readiness checks |
 | `/exams/{examRecordId}/attendance` | Mark CRM entrance exam attendance |
 | `/exams/{examRecordId}/result` | Record CRM entrance exam marks and manual or class-wise merit rank |
+| `/{academicYearId}/bulk/exam-results` | Record distinct results for up to 100 exam records and return per-item success or failure |
 | `/exams/{examRecordId}/eligibility` | Set eligibility, waitlist, or rejection decision |
 | `/exams/{examRecordId}/eligibility-handoff` | Return read-only lead and exam context for admission handoff |
 | `/{academicYearId}/analytics/summary` | Return funnel, lead-level conversion rates, stage-configured first-response SLA, follow-up SLA miss, source, campaign, date-range trend, staff workload, task, duplicate, automation run, automation failure, exam, class-wise exam, and exam governance analytics |
@@ -109,6 +110,10 @@ An applicant may continue assignment work against an exact route version capture
 | `/{academicYearId}/configuration/form-templates` | Create and list inquiry form templates |
 | `/configuration/form-templates/{id}` | Get or update one inquiry form template |
 | `/configuration/form-templates/{id}/status` | Activate or deactivate one inquiry form template |
+| `/{academicYearId}/configuration-safety/references` | Return authoritative Stage, Round, Exam, Seat Plan, or Route reference counts and sample IDs for one normalized code |
+| `/{academicYearId}/configuration-safety/impact-preview` | Return changed fields, affected applicant count, references, warnings, and a SHA-256 preview fingerprint |
+| `/configuration-safety/clone/preview` | Preview source-to-target academic-year clone families, conflicts, warnings, and confirmation fingerprint |
+| `/configuration-safety/clone/confirm` | Confirm the unchanged clone preview with its fingerprint and report idempotent replay |
 | `/{academicYearId}/configuration/message-templates` | Create and list WhatsApp, SMS, and email message templates |
 | `/configuration/message-templates/{id}` | Get or update one message template |
 | `/configuration/message-templates/{id}/status` | Update message template approval status and active state |
@@ -120,6 +125,66 @@ An applicant may continue assignment work against an exact route version capture
 | `/leads/{leadId}/messages/send-template` | Render one approved template, apply opt-out and provider checks, optionally dispatch to provider webhook, and create a communication delivery log |
 | `/{academicYearId}/communication/delivery-logs` | List communication delivery logs with provider message ID evidence and provider ID filtering |
 | `/communication/delivery-logs/{deliveryLogId}/retry` | Queue a delivery retry after provider and opt-out checks |
+
+## Registration localization contract
+
+Registration sections support `localizedTitles` and `localizedDescriptions`.
+Registration fields support `localizedLabels`, `localizedHelpTexts`, and `localizedOptions`.
+Localized option arrays must have the same item count as their canonical option arrays so submitted values remain language-neutral.
+
+## Result correction governance
+
+`POST /api/student-enrollment/admissions-crm/{academicYearId}/bulk/exam-results` requires `Students.Enrollment.AdmissionsCrm.BulkOperations` and `Students.Enrollment.AdmissionsCrm.ChangeExamResult`.
+Duplicate `examRecordId` values reject the batch with `AdmissionCrm:DuplicateBulkExamResultItems`.
+Replacing an existing result through either the individual or bulk endpoint requires a nonblank `correctionReason` and `Students.Enrollment.AdmissionsCrm.OverrideExamResult`.
+Missing correction evidence rejects with `AdmissionCrm:ExamResultCorrectionReasonRequired`.
+An unchanged retry is idempotent and returns the existing result without a second correction.
+Individual and bulk result evidence records previous values, new values, and the correction reason in the applicant timeline.
+
+## Granular action permissions
+
+| Action family | Required permissions |
+|---|---|
+| Exam results | `Students.Enrollment.AdmissionsCrm.ChangeExamResult`, plus `Students.Enrollment.AdmissionsCrm.BulkOperations` for bulk entry and `Students.Enrollment.AdmissionsCrm.OverrideExamResult` for replacement |
+| Offers and capacity | `Students.Enrollment.AdmissionsCrm.ManageOffers`, `Students.Enrollment.AdmissionsCrm.ApproveOffers`, and `Students.Enrollment.AdmissionsCrm.OverrideSeatCapacity` according to the action |
+| Waitlist and decision | `Students.Enrollment.AdmissionsCrm.ManageWaitlist` and `Students.Enrollment.AdmissionsCrm.MakeAdmissionDecision` |
+| Registration | `Students.Enrollment.AdmissionsCrm.IssueRegistrationForm`, `Students.Enrollment.AdmissionsCrm.ManageRegistrationLinks`, `Students.Enrollment.AdmissionsCrm.VerifyRegistration`, or `Students.Enrollment.AdmissionsCrm.WaiveRegistrationFee` according to the action |
+| Documents and readiness | `Students.Enrollment.AdmissionsCrm.ManageDocumentConfiguration`, `Students.Enrollment.AdmissionsCrm.ReviewDocuments`, `Students.Enrollment.AdmissionsCrm.WaiveDocuments`, `Students.Enrollment.AdmissionsCrm.ConfirmOriginalSeen`, or `Students.Enrollment.AdmissionsCrm.ConfirmAdmissionReadiness` according to the action |
+| Government readiness | `Students.Enrollment.AdmissionsCrm.ManageGovernmentReadiness` |
+| Financial readiness | `Students.Enrollment.AdmissionsCrm.IssueQuotations`, `Students.Enrollment.AdmissionsCrm.RecordFinanceStatus`, `Students.Enrollment.AdmissionsCrm.RequestConcession`, `Students.Enrollment.AdmissionsCrm.ApproveConcession`, or `Students.Enrollment.AdmissionsCrm.OverridePaymentGates` according to the action |
+| Activation | `Students.Enrollment.AdmissionsCrm.PreviewActivation`, `Students.Enrollment.AdmissionsCrm.RequestActivation`, `Students.Enrollment.AdmissionsCrm.ApproveActivation`, `Students.Enrollment.AdmissionsCrm.ExecuteActivation`, or `Students.Enrollment.AdmissionsCrm.RepairActivation` according to the action |
+| Activation identifiers and handoffs | `Students.Enrollment.AdmissionsCrm.AssignManualIdentifier` and `Students.Enrollment.AdmissionsCrm.ManageServiceHandoffs` |
+| Admission cancellation | `Students.Enrollment.AdmissionsCrm.CancelAdmission` |
+| Configuration safety | `Students.Enrollment.AdmissionsCrm.ManageConfiguration` |
+
+Standard and direct registration issuance also require `Students.Enrollment.AdmissionsCrm.WaiveRegistrationFee` whenever `waiveFee` is true.
+Changing a protected pipeline stage with `overrideWorkflowGuards` requires both `Students.Enrollment.AdmissionsCrm.ChangeStage` and `Students.Enrollment.AdmissionsCrm.BulkOperations`, and the override is recorded in the applicant timeline.
+Activation placement options and preview, request, approval, and execution paths apply the current user's academic scope.
+When an applicant has `TargetStandardId`, activation placement must use that standard.
+
+## Configuration safety contract
+
+All configuration-safety routes require `Students.Enrollment.AdmissionsCrm.ManageConfiguration` and academic-year-wide user scope for every referenced year.
+Lower academic scope rejects configuration safety with `AdmissionCrm:AcademicYearWideScopeRequired`.
+Reference `kind` and `code` must be supplied together or the preview rejects with `AdmissionCrm:ConfigurationReferenceKindAndCodeRequiredTogether`.
+Clone preview rejects identical source and target years with `AdmissionCrm:ConfigurationCloneDistinctYearsRequired`.
+Clone confirm rejects a changed preview with `AdmissionCrm:ConfigurationCloneFingerprintMismatch`.
+Clone confirm rejects a target with applicant activity or existing admission configuration with `AdmissionCrm:ConfigurationCloneTargetNotEmpty`.
+Cycle and pipeline-stage updates require the exact `impactPreviewFingerprint` returned for their proposed payload and current configuration snapshot.
+Missing or stale update evidence rejects with `AdmissionCrm:ConfigurationImpactPreviewRequired` or `AdmissionCrm:ConfigurationImpactFingerprintMismatch`.
+Clone confirmation is serialized per tenant and target academic year, blocks unmapped source hierarchy identifiers, and remaps equivalent Board, Medium, Medium Stage, Standard, and Division identifiers.
+Successful cloning copies cycle settings unlocked, remaps configuration and academic hierarchy IDs, recreates approval-controlled artifacts as drafts, resets counters and occupancy, shifts effective dates, and reuses global policy packs.
+
+## Academic scope and journey lock
+
+CRM lead lists and lead-backed reads apply the current user's Board, Medium, Stage, Standard, and Division scope through `TargetStandardId`.
+A lead without `TargetStandardId` is visible only to tenant-wide or academic-year-wide users because it cannot be attributed safely to a lower scope.
+Out-of-scope lead access rejects with `UserScope:AccessDenied`.
+Academic-year-wide configuration mutations reject lower Board, Medium, Stage, Standard, or Division scope with `AdmissionCrm:AcademicYearWideScopeRequired`.
+Tenant-global school-default mutations reject lower user scope with `AdmissionCrm:TenantWideScopeRequired`.
+Retention-policy create, submit, and publish operations require academic-year-wide user scope.
+After a journey is locked, cycle-structure and pipeline-structure mutations reject with `AdmissionCrm:JourneyLocked`.
+Scheduled-report automation validates the tenant-owned academic year without requiring an interactive current user.
 
 ## Public Admissions CRM API
 

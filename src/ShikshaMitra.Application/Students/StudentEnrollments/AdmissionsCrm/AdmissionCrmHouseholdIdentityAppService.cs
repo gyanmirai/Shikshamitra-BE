@@ -433,7 +433,7 @@ public class AdmissionCrmHouseholdIdentityAppService : ApplicationService, IAdmi
 		{
 			throw new BusinessException("AdmissionCrm:LeadNotFound");
 		}
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(lead.AcademicYearId, operation);
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(lead, operation);
 		return lead;
 	}
 

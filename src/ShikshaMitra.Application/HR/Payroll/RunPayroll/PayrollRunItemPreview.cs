@@ -189,8 +189,13 @@ internal sealed record PayrollRunItemPreview(
 			.Sum(a =>
 			{
 				var timeOut = a.TimeOut!.Value;
-				var shiftEnd = new DateTimeOffset(a.AttendanceDate.ToDateTime(shiftEndTime), timeOut.Offset);
-				return Math.Max(0m, (decimal)(timeOut - shiftEnd).TotalMinutes);
+				var utcTimeOut = timeOut.UtcDateTime;
+				var utcTimeOutDate = DateOnly.FromDateTime(utcTimeOut);
+				var dayOffset = utcTimeOutDate.DayNumber - a.AttendanceDate.DayNumber;
+				var minutesAfterShiftEnd =
+					dayOffset * 24m * 60m +
+					(decimal)(utcTimeOut.TimeOfDay - shiftEndTime.ToTimeSpan()).TotalMinutes;
+				return Math.Max(0m, minutesAfterShiftEnd);
 			});
 	}
 }

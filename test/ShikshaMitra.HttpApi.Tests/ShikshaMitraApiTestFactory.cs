@@ -20,6 +20,7 @@ using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Onboarding;
 using ShikshaMitra.Infrastructure;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
@@ -322,6 +323,10 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			AddTestAuthentication(services);
 			RemoveAbpIdentityDataSeedContributor(services);
 			services.AddTransient<StudentSeederContributor, NoOpStudentSeeder>();
+			services.Replace(ServiceDescriptor.Singleton<IEmployeeEmailService, NoOpEmployeeEmailService>());
+			services.Replace(ServiceDescriptor.Singleton<
+				IEmployeeOnboardingInvitationEmailService,
+				NoOpEmployeeOnboardingInvitationEmailService>());
 			// Replace the PostgreSQL-specific receipt number repo with an in-memory fake
 			// so SQLite doesn't receive the INSERT … ON CONFLICT … RETURNING syntax.
 			services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
@@ -424,6 +429,30 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		foreach (var descriptor in descriptors)
 		{
 			services.Remove(descriptor);
+		}
+	}
+
+	private sealed class NoOpEmployeeEmailService : IEmployeeEmailService
+	{
+		public Task SendWelcomeEmailAsync(
+			string employeeEmail,
+			string employeeName,
+			string username,
+			string password)
+		{
+			return Task.CompletedTask;
+		}
+	}
+
+	private sealed class NoOpEmployeeOnboardingInvitationEmailService
+		: IEmployeeOnboardingInvitationEmailService
+	{
+		public Task<EmployeeOnboardingInvitationEmailResult> SendInvitationAsync(
+			EmployeeApplication application,
+			string publicPath)
+		{
+			return Task.FromResult(
+				new EmployeeOnboardingInvitationEmailResult(true, "Invite email suppressed by API tests."));
 		}
 	}
 

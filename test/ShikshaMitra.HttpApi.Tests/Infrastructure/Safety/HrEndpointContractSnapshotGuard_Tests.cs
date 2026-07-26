@@ -70,14 +70,14 @@ public class HrEndpointContractSnapshotGuard_Tests
 			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "GetAsync", "View"),
 			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "GetHolidaysAsync", "View"),
 			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "GetHolidayImportPreviewAsync", "View"),
-			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "CreateAsync", "Create"),
+			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "CreateAsync", "Add"),
 			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "UpdateAsync", "Edit"),
 			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "CloneAsync", "Clone"),
 			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "DeleteAsync", "Archive"),
 			new PolicyPermissionExpectation("WorkCalendarPolicyAppService.cs", "UnarchiveAsync", "Archive"),
 			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "GetListAsync", "View"),
 			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "GetAsync", "View"),
-			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "CreateAsync", "Create"),
+			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "CreateAsync", "Add"),
 			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "UpdateAsync", "Edit"),
 			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "CloneAsync", "Clone"),
 			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "DeleteAsync", "Archive"),
@@ -85,7 +85,7 @@ public class HrEndpointContractSnapshotGuard_Tests
 			new PolicyPermissionExpectation("PayrollPolicyAppService.cs", "SetDefaultAsync", "SetDefault"),
 			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "GetListAsync", "View"),
 			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "GetAsync", "View"),
-			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "CreateAsync", "Create"),
+			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "CreateAsync", "Add"),
 			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "UpdateAsync", "Edit"),
 			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "CloneAsync", "Clone"),
 			new PolicyPermissionExpectation("AttendancePolicyAppService.cs", "DeleteAsync", "Archive"),
@@ -139,7 +139,7 @@ public class HrEndpointContractSnapshotGuard_Tests
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public void Default_Leave_Policy_Migration_Should_Use_Null_Safe_Tenant_Index()
+	public void Default_Leave_Policy_Uniqueness_Migration_Should_Be_Guarded_And_Null_Safe()
 	{
 		var repoRoot = FindRepositoryRoot();
 		var migrationPath = Path.Combine(
@@ -147,54 +147,77 @@ public class HrEndpointContractSnapshotGuard_Tests
 			"src",
 			"ShikshaMitra.EntityFrameworkCore",
 			"Migrations",
-			"20260611173000_AddDefaultLeavePolicyAssignment.cs");
+			"20260726193000_ReinstateDefaultLeavePolicyUniqueness.cs");
 		var text = File.ReadAllText(migrationPath);
 
-		text.ShouldContain("ADD COLUMN IF NOT EXISTS \"IsDefault\"");
+		text.ShouldContain("HAVING COUNT(*) > 1");
+		text.ShouldContain("duplicate defaults already exist");
 		text.ShouldContain("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_EmployeeLeavePolicies_TenantId_AcademicYearId_Default\"");
 		text.ShouldContain("COALESCE(\"TenantId\", '00000000-0000-0000-0000-000000000000'::uuid)");
 		text.ShouldContain("WHERE \"IsDefault\" = true");
-		text.ShouldContain("[Migration(\"20260611173000_AddDefaultLeavePolicyAssignment\")]");
+		text.ShouldContain("[DbContext(typeof(ShikshaMitraDbContext))]");
+		text.ShouldContain("[Migration(\"20260726193000_ReinstateDefaultLeavePolicyUniqueness\")]");
+		text.ShouldContain("DROP INDEX IF EXISTS \"IX_EmployeeLeavePolicies_TenantId_AcademicYearId_Default\"");
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public void Attendance_Import_Metadata_Migration_Should_Be_Idempotent()
+	public void Attendance_Import_Metadata_Should_Remain_In_Current_Model()
 	{
 		var repoRoot = FindRepositoryRoot();
-		var migrationPath = Path.Combine(
+		var configurationPath = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.EntityFrameworkCore",
+			"HR",
+			"Payroll",
+			"AttendanceImports",
+			"AttendanceImportBatchConfiguration.cs");
+		var baselinePath = Path.Combine(
 			repoRoot,
 			"src",
 			"ShikshaMitra.EntityFrameworkCore",
 			"Migrations",
-			"20260611120000_AddAttendanceImportOriginalFileMetadata.cs");
-		var text = File.ReadAllText(migrationPath);
+			"20260721060936_v1.cs");
+		var snapshotPath = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.EntityFrameworkCore",
+			"Migrations",
+			"ShikshaMitraDbContextModelSnapshot.cs");
 
-		text.ShouldContain("ADD COLUMN IF NOT EXISTS \"OriginalFileBlobName\"");
-		text.ShouldContain("ADD COLUMN IF NOT EXISTS \"OriginalFileContentType\"");
-		text.ShouldContain("DROP COLUMN IF EXISTS \"OriginalFileBlobName\"");
-		text.ShouldContain("DROP COLUMN IF EXISTS \"OriginalFileContentType\"");
+		foreach (var text in new[]
+		         {
+			         File.ReadAllText(configurationPath),
+			         File.ReadAllText(baselinePath),
+			         File.ReadAllText(snapshotPath)
+		         })
+		{
+			text.ShouldContain("OriginalFileBlobName");
+			text.ShouldContain("OriginalFileContentType");
+		}
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public void Leave_Policy_Backfill_Migration_Should_Be_Discoverable_And_Idempotent()
+	public void Leave_Policy_Seeder_Should_Cover_Each_Academic_Year_Idempotently()
 	{
 		var repoRoot = FindRepositoryRoot();
-		var migrationPath = Path.Combine(
+		var seederPath = Path.Combine(
 			repoRoot,
 			"src",
-			"ShikshaMitra.EntityFrameworkCore",
-			"Migrations",
-			"20260612120500_BackfillAcademicYearLeavePolicies.cs");
-		var text = File.ReadAllText(migrationPath);
+			"ShikshaMitra.Domain",
+			"Seeders",
+			"HRSeederContributor.PolicyCatalog.cs");
+		var text = File.ReadAllText(seederPath);
 
-		text.ShouldContain("[Migration(\"20260612120500_BackfillAcademicYearLeavePolicies\")]");
-		text.ShouldContain("NOT EXISTS");
-		text.ShouldContain("\"AppAcademicYears\"");
+		text.ShouldContain("foreach (var academicYear in academicYears)");
+		text.ShouldContain("SeedLeavePoliciesAsync(academicYear.Id)");
+		text.ShouldContain("_leavePolicyRepository.AnyAsync(x => x.AcademicYearId == academicYearId)");
 		text.ShouldContain("Teaching Staff Leave Policy");
-		text.ShouldContain("\"IsDefault\"");
-		text.ShouldContain("md5('leave-policy:");
+		text.ShouldContain("Admin Staff Leave Policy");
+		text.ShouldContain("Contract Staff Leave Policy");
+		text.ShouldContain("HasActiveDefaultAsync(academicYearId)");
 	}
 
 	[Fact]
@@ -221,7 +244,7 @@ public class HrEndpointContractSnapshotGuard_Tests
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public void Hand_Written_Ef_Migrations_Should_Be_Discoverable()
+	public void Current_Hr_Migrations_Should_Be_Discoverable()
 	{
 		var repoRoot = FindRepositoryRoot();
 		var migrationsRoot = Path.Combine(
@@ -229,20 +252,24 @@ public class HrEndpointContractSnapshotGuard_Tests
 			"src",
 			"ShikshaMitra.EntityFrameworkCore",
 			"Migrations");
-		var migrationFiles = new[]
+		var generatedMigrationIds = new[]
 		{
-			"20260611120000_AddAttendanceImportOriginalFileMetadata.cs",
-			"20260611173000_AddDefaultLeavePolicyAssignment.cs",
-			"20260612120500_BackfillAcademicYearLeavePolicies.cs"
+			"20260726082832_AllowArchivedHrPolicyNameReuse",
+			"20260726091409_EnforceNormalizedLeavePolicyNames"
 		};
 
-		foreach (var migrationFile in migrationFiles)
+		foreach (var migrationId in generatedMigrationIds)
 		{
-			var migrationId = Path.GetFileNameWithoutExtension(migrationFile);
-			var text = File.ReadAllText(Path.Combine(migrationsRoot, migrationFile));
-			text.ShouldContain("[DbContext(typeof(ShikshaMitraDbContext))]");
-			text.ShouldContain($"[Migration(\"{migrationId}\")]");
+			File.Exists(Path.Combine(migrationsRoot, $"{migrationId}.cs")).ShouldBeTrue();
+			var designer = File.ReadAllText(Path.Combine(migrationsRoot, $"{migrationId}.Designer.cs"));
+			designer.ShouldContain("[DbContext(typeof(ShikshaMitraDbContext))]");
+			designer.ShouldContain($"[Migration(\"{migrationId}\")]");
 		}
+
+		var invariantMigration = File.ReadAllText(
+			Path.Combine(migrationsRoot, "20260726193000_ReinstateDefaultLeavePolicyUniqueness.cs"));
+		invariantMigration.ShouldContain("[DbContext(typeof(ShikshaMitraDbContext))]");
+		invariantMigration.ShouldContain("[Migration(\"20260726193000_ReinstateDefaultLeavePolicyUniqueness\")]");
 	}
 
 	private static List<string> BuildEndpointInventory(string controllersRoot)

@@ -78,6 +78,17 @@ $env:E2E_HR_FULL_CYCLE='1'
 npx playwright test e2e/hr/hr-module-full-cycle.spec.ts --project=chromium --reporter=list
 ```
 
+## Deployment regression gate
+
+The backend deployment workflow builds Release binaries, runs focused HR domain, application, HTTP, and migration-history regression suites, and then runs `ShikshaMitra.DbMigrator` before publishing the host.
+Deployment must stop if an unknown non-empty migration history cannot be reconciled with the current baseline.
+The migration bridge accepts only the validated legacy baseline and verifies the required baseline tables and folded admission fields before adding the current baseline alias.
+The default leave-policy migration fails if duplicate active defaults already exist and then installs the tenant-and-academic-year uniqueness guard.
+
+Attendance time-only values are stored as a stable zero-offset wall clock.
+Payroll overtime calculations use the canonical UTC wall-clock projection so the result cannot change with the host machine time zone or daylight-saving offset.
+`AttendanceRegisterAdjustmentMapper_Tests` and `PayrollRunItemPreview_Tests` are mandatory deployment tests for this contract.
+
 ## Acceptance gates
 
 Each HR change should satisfy these gates:

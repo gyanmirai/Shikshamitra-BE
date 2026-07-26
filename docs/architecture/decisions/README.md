@@ -8,6 +8,7 @@ Concise records of significant technical decisions. Each ADR is **append-only**:
 | [002](002-employee-caching-strategy.md) | Employee distributed caching |
 | [003](003-payroll-two-tier-architecture.md) | Payroll two-tier architecture (master vs employee data) |
 | [004](004-dashboard-command-center-contract.md) | Dashboard command center contract |
+| [005](005-earning-component-dependency-serialization.md) | Earning-component dependency graph serialization |
 
 **Related**
 

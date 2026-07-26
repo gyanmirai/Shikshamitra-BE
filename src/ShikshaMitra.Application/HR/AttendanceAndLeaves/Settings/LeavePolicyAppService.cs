@@ -56,8 +56,9 @@ public class LeavePolicyAppService(
 		int page,
 		int pageSize,
 		string? search = null,
+		bool? archivedOnly = null,
 		CancellationToken cancellationToken = default) =>
-		readService.GetListByAcademicYearIdAsync(academicYearId, page, pageSize, search, cancellationToken);
+		readService.GetListByAcademicYearIdAsync(academicYearId, page, pageSize, search, archivedOnly, cancellationToken);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.Create)]
 	public Task<LeavePolicyResponse> CreateLeavePolicyAsync(Guid academicYearId, LeavePolicyCreateRequest input) =>
@@ -74,6 +75,10 @@ public class LeavePolicyAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.SetDefault)]
 	public Task<LeavePolicyDetailResponse> SetDefaultAsync(Guid policyId) =>
 		mutationWorkflow.SetDefaultAsync(policyId);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.Archive)]
+	public Task<LeavePolicyDetailResponse> UnarchiveAsync(Guid policyId) =>
+		mutationWorkflow.UnarchiveAsync(policyId);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.LeaveManagement_SettingLeavePolicy.Archive)]
 	public Task<LeavePolicyDeleteResponse> DeleteLeavePolicyAsync(Guid policyId) =>

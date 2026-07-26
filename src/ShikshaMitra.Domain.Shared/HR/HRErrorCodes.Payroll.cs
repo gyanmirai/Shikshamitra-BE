@@ -44,4 +44,8 @@ public static partial class HRErrorCodes
 	public const string PayrollComponentInvalidAmount = "ShikshaMitra:InvalidAmount";
 	public const string PayrollComponentInvalidPercentage = "ShikshaMitra:InvalidPercentage";
 	public const string PayrollComponentMissingSelectedComponent = "ShikshaMitra:MissingSelectedComponent";
+	public const string PayrollComponentSelfReference = "HR:Payroll:030035";
+	public const string PayrollComponentDependencyCycle = "HR:Payroll:030036";
+	public const string PayrollComponentDependencyTargetInvalid = "HR:Payroll:030037";
+	public const string PayrollComponentDependencyInUse = "HR:Payroll:030038";
 }

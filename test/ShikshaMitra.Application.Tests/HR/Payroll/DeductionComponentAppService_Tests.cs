@@ -1649,8 +1649,11 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             AdharNo = UniqueAdhar(),
             DateOfBirth = new DateOnly(1990, 5, 15),
             GenderType = GenderType.Male,
+            CastType = CastType.General,
+            FamilyCaste = "General",
             DateOfJoining = new DateOnly(2024, 1, 1),
             EmployeeStatusType = EmployeeStatusType.Active,
+            EmployeeGroup = EmployeeGroupType.NonTeaching,
             RoleId = roleId,
             ShiftId = shiftId
         });
@@ -1658,15 +1661,11 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
 
     private async Task<Guid> EnsureRoleExistsAsync()
     {
-        var existing = (await _roleRepository.GetListAsync()).FirstOrDefault();
-        if (existing != null)
-        {
-            return existing.Id;
-        }
-
-        var id = _guidGenerator.Create();
-        await _roleRepository.InsertAsync(new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id), autoSave: true);
-        return id;
+        return await Employees.EmployeeRoleTestHelper.EnsureAssignableRoleAsync(
+            _roleRepository,
+            _guidGenerator,
+            _currentTenant.Id,
+            "DeductionComponentRole");
     }
 
     private async Task<Guid> EnsureShiftExistsAsync()

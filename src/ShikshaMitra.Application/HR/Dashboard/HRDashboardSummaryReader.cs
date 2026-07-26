@@ -87,27 +87,40 @@ public class HRDashboardSummaryReader(
 			activeEmployeeStats?.Teaching ?? 0,
 			activeEmployeeStats?.NonTeaching ?? 0,
 			activeEmployeeStats?.NewJoiners ?? 0,
-			scopedEmployeeCounts.GetValueOrDefault("inactive"));
-		var attendanceCountRows = await AsyncExecuter.ToListAsync(
+			scopedEmployeeCounts.GetValueOrDefault("inactive"),
+			selectedMonthStart,
+			selectedNextMonthStart);
+		var attendanceRows = await AsyncExecuter.ToListAsync(
 			attendanceQuery.Where(a =>
 				a.AttendanceDate >= trendStart &&
 				a.AttendanceDate <= trendEnd &&
 				activeEmployeeIds.Contains(a.EmployeeId))
-				.GroupBy(a => new { a.AttendanceDate, a.StatusType })
-				.Select(g => new { g.Key.AttendanceDate, g.Key.StatusType, Count = g.Count() }));
-		var attendanceCounts = attendanceCountRows
-			.Select(x => new AttendanceStatusCount(x.AttendanceDate, x.StatusType, x.Count))
-			.ToList();
+				.Select(a => new AttendanceTrendRow(
+					a.EmployeeId,
+					a.AttendanceDate,
+					a.StatusType)));
 		var leaveTrendRows = await AsyncExecuter.ToListAsync(
 			leaveQuery.Where(l =>
 				l.Status == EmployeeLeaveStatusType.Approved &&
 				l.StartDateOnly <= trendEnd &&
 				l.EndDateOnly >= trendStart &&
 				activeEmployeeIds.Contains(l.EmployeeId))
-				.Select(l => new LeaveTrendRow(l.EmployeeId, l.StartDateOnly, l.EndDateOnly)));
+				.Select(l => new LeaveTrendRow(
+					l.EmployeeId,
+					l.StartDateOnly,
+					l.EndDateOnly,
+					l.HalfDay)));
 
-		var attendanceToday = HRDashboardProjection.BuildAttendanceToday(attendanceCounts, todayDateOnly, activeEmployeeIds.Count);
-		var attendanceTrend = HRDashboardProjection.BuildAttendanceTrend(attendanceCounts, leaveTrendRows, trendStart, trendEnd);
+		var attendanceToday = HRDashboardProjection.BuildAttendanceToday(
+			attendanceRows,
+			leaveTrendRows,
+			todayDateOnly,
+			activeEmployeeIds.Count);
+		var attendanceTrend = HRDashboardProjection.BuildAttendanceTrend(
+			attendanceRows,
+			leaveTrendRows,
+			trendStart,
+			trendEnd);
 		var leave = await leaveReader.BuildLeaveAsync(
 			leaveQuery,
 			leavePolicyQuery,

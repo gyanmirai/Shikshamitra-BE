@@ -47,10 +47,25 @@ public class EmployeeUpdateManager(
 	)
 	{
 		Employee employee = await employeeLookupReader.GetRequiredAsync(employeeId);
+		var targetRoleId = roleId ?? employee.RoleId;
+		var targetEmployeeGroup = employeeGroup ?? employee.EmployeeGroup;
+		var roleChanged = employee.RoleId != targetRoleId;
 
-		if (roleId.HasValue && employee.RoleId != roleId.Value && employee.UserId != null)
+		if (roleChanged && employee.UserId != null)
 		{
-			await userRoleManager.SwapRoleAsync(employee.UserId.Value, employee.RoleId, roleId.Value);
+			await userRoleManager.SwapRoleAsync(
+				employee.UserId.Value,
+				employee.RoleId,
+				targetRoleId,
+				targetEmployeeGroup);
+		}
+		else if (roleChanged)
+		{
+			await userRoleManager.EnsureRoleIsAssignableAsync(targetRoleId, targetEmployeeGroup);
+		}
+		else
+		{
+			await userRoleManager.EnsureExistingRoleIsCompatibleAsync(targetRoleId, targetEmployeeGroup);
 		}
 
 		employee.UpdateBasicInfo(new EmployeeBasicInfo(
@@ -78,9 +93,9 @@ public class EmployeeUpdateManager(
 			Department: department,
 			Designation: designation,
 			DateOfJoining: dateOfJoining,
-			EmployeeGroup: employeeGroup,
+			EmployeeGroup: targetEmployeeGroup,
 			Qualification: qualification,
-			RoleId: roleId,
+			RoleId: targetRoleId,
 			IdentificationMark1: identificationMark1,
 			City: city,
 			State: state,

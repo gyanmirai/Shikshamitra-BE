@@ -11,5 +11,7 @@ public interface IHrReportExportJobRepository : IRepository<HrReportExportJob, G
 	Task<List<HrReportExportJob>> GetRecentAuthorizedJobsAsync(
 		Guid userId,
 		int maxResultCount,
+		DateTime? requestedFrom = null,
+		DateTime? requestedTo = null,
 		CancellationToken cancellationToken = default);
 }

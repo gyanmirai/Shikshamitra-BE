@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -15,12 +17,15 @@ public class TakeAttendanceAppService(
 	TakeAttendanceHolidayReader holidayReader)
 	: ApplicationService, ITakeAttendanceAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_MarkAttendance.View)]
 	public Task<TakeAttendanceDayResponse> GetDayAsync(GetTakeAttendanceDayInput input) =>
 		dayReader.GetDayAsync(input);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_MarkAttendance.Add)]
 	public Task<TakeAttendanceSaveOutput> SaveDayAsync(TakeAttendanceSaveInput input) =>
 		saveWorkflow.SaveDayAsync(input);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_MarkAttendance.Delete)]
 	public async Task LockDayAsync(string attendanceDate)
 	{
 		var date = TakeAttendanceDateParser.ParseDate(attendanceDate).Date;
@@ -50,6 +55,7 @@ public class TakeAttendanceAppService(
 		await staffAttendanceDayLockRepository.InsertAsync(entity, autoSave: true);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_MarkAttendance.Delete)]
 	public async Task UnlockDayAsync(string attendanceDate)
 	{
 		var date = TakeAttendanceDateParser.ParseDate(attendanceDate).Date;

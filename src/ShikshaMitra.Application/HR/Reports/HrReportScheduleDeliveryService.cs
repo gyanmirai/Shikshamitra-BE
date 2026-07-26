@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Emailing;
 using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Reports;
 
@@ -15,11 +17,20 @@ public class HrReportScheduleDeliveryService(
 	IIdentityUserRepository userRepository,
 	IEmailSender emailSender,
 	IConfiguration configuration,
+	ICurrentTenant currentTenant,
+	IUnitOfWorkManager unitOfWorkManager,
 	ILogger<HrReportScheduleDeliveryService> logger) : ITransientDependency
 {
-	public async Task SendDeliveryEmailsAsync(HrReportSchedule schedule, Guid jobId, IReadOnlyCollection<Guid> recipientIds)
+	public async Task SendDeliveryEmailsAsync(
+		Guid scheduleId,
+		string scheduleName,
+		Guid? tenantId,
+		Guid jobId,
+		IReadOnlyCollection<Guid> recipientIds)
 	{
 		var reportLink = BuildReportLink(jobId);
+		using var tenantScope = currentTenant.Change(tenantId);
+		using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
 		foreach (var recipientId in recipientIds.Where(x => x != Guid.Empty).Distinct())
 		{
 			try
@@ -32,15 +43,16 @@ public class HrReportScheduleDeliveryService(
 
 				await emailSender.SendAsync(
 					user.Email,
-					$"Scheduled HR report ready: {schedule.Name}",
-					BuildEmailBody(schedule.Name, reportLink),
+					$"Scheduled HR report ready: {scheduleName}",
+					BuildEmailBody(scheduleName, reportLink),
 					isBodyHtml: true);
 			}
 			catch (Exception ex)
 			{
-				logger.LogWarning(ex, "Failed to send scheduled HR report email for schedule {ScheduleId} to user {UserId}.", schedule.Id, recipientId);
+				logger.LogWarning(ex, "Failed to send scheduled HR report email for schedule {ScheduleId} to user {UserId}.", scheduleId, recipientId);
 			}
 		}
+		await unitOfWork.CompleteAsync();
 	}
 
 	private string BuildReportLink(Guid jobId)

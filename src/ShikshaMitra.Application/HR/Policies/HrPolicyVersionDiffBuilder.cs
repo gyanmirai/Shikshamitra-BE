@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static ShikshaMitra.HR.Policies.HrPolicyVersionDisplayFormatter;
@@ -19,7 +20,10 @@ internal static class HrPolicyVersionDiffBuilder
 		var fromProps = fromDoc.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone());
 		var toProps = toDoc.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone());
 		return fromProps.Keys.Union(toProps.Keys)
-			.Where(field => !JsonValuesEqual(fromProps.GetValueOrDefault(field), toProps.GetValueOrDefault(field)))
+			.Where(field => !JsonValuesEqual(
+				field,
+				fromProps.GetValueOrDefault(field),
+				toProps.GetValueOrDefault(field)))
 			.Select(field => new HrPolicyVersionDifferenceDto
 			{
 				Field = field,
@@ -78,8 +82,52 @@ internal static class HrPolicyVersionDiffBuilder
 		}
 	}
 
-	private static bool JsonValuesEqual(JsonElement left, JsonElement right) =>
-		string.Equals(GetRawValue(left), GetRawValue(right), StringComparison.Ordinal);
+	private static bool JsonValuesEqual(string field, JsonElement left, JsonElement right)
+	{
+		if (string.Equals(GetRawValue(left), GetRawValue(right), StringComparison.Ordinal))
+		{
+			return true;
+		}
+
+		if (!field.Equals("effectiveFrom", StringComparison.OrdinalIgnoreCase) &&
+			!field.Equals("effectiveTo", StringComparison.OrdinalIgnoreCase))
+		{
+			return false;
+		}
+
+		return TryReadDate(left, out var leftDate) &&
+			TryReadDate(right, out var rightDate) &&
+			leftDate == rightDate;
+	}
+
+	private static bool TryReadDate(JsonElement element, out DateOnly date)
+	{
+		date = default;
+		if (element.ValueKind != JsonValueKind.String)
+		{
+			return false;
+		}
+
+		var value = element.GetString()?.Trim();
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			return false;
+		}
+
+		if (value.Length >= 8 &&
+			value.Take(8).All(char.IsDigit) &&
+			DateOnly.TryParseExact(value[..8], "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+		{
+			return true;
+		}
+
+		return DateTimeOffset.TryParse(
+			value,
+			CultureInfo.InvariantCulture,
+			DateTimeStyles.AssumeUniversal,
+			out var timestamp) &&
+			(date = DateOnly.FromDateTime(timestamp.Date)) != default;
+	}
 
 	private static string? GetRawValue(JsonElement value) =>
 		value.ValueKind == JsonValueKind.Undefined ? null : value.GetRawText();

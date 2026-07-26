@@ -3,7 +3,9 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
@@ -52,6 +54,27 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		body.FirstName.ShouldContain("CreateTest");
 		body.PanNo.ShouldBe(personalInfo.PanNo);
 		body.AdharNo.ShouldBe(personalInfo.AdharNo);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_EmployeeGroup_Null_Payload_For_A_Restricted_Role()
+	{
+		var personalInfo = EmployeeTestHelper.BuildPersonalInfoRequest("NullEmployeeGroup");
+		var payload = JsonNode.Parse(JsonSerializer.Serialize(personalInfo, JsonOptions))!.AsObject();
+		payload.Remove("isTeaching");
+		payload["employeeGroup"] = null;
+
+		using var content = new MultipartFormDataContent();
+		content.Add(
+			new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json"),
+			"data");
+
+		var response = await Client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+		(await response.Content.ReadAsStringAsync())
+			.ShouldContain(HRErrorCodes.EmployeeRoleGroupNotAllowed);
 	}
 
 	[Fact]
@@ -107,7 +130,10 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Personal_Info()
 	{
-		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "UpdatePI");
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			"UpdatePI",
+			isTeaching: false);
 
 		var updateRequest = new PersonalInfoRequest
 		{
@@ -116,7 +142,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			MobileNo = TestDataHelper.UniquePhone(),
 			Doj = DateTime.UtcNow.AddMonths(-3),
 			IsTeaching = false,
-			RoleId = EmployeeTestHelper.DefaultRoleId,
+			RoleId = created.RoleId,
 			ShiftId = EmployeeTestHelper.DefaultShiftId,
 			Email = created.Email,
 			PanNo = TestDataHelper.UniquePan(),

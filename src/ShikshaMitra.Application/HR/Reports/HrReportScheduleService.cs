@@ -1,30 +1,26 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Audit;
-using Volo.Abp.Data;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
-using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Reports;
 
 public class HrReportScheduleService(
 	IRepository<HrReportSchedule, Guid> scheduleRepository,
-	IDataFilter<IMultiTenant> multiTenantFilter,
 	IGuidGenerator guidGenerator,
 	HrReportScheduleRecipientValidator recipientValidator,
 	HrReportRequestValidationService requestValidationService,
 	HrReportScheduleRunner scheduleRunner,
+	HrReportScheduleBatchProcessor batchProcessor,
 	HrAuditWriter auditWriter) : ApplicationService, ITransientDependency
 {
-	private const int MaxDueSchedulesPerRun = 25;
-
 	public async Task<HrReportScheduleListDto> GetSchedulesAsync()
 	{
 		var userId = GetRequiredUserId();
@@ -109,32 +105,9 @@ public class HrReportScheduleService(
 		};
 	}
 
-	public async Task<int> ProcessDueSchedulesAsync(DateTime? dueAt = null)
-	{
-		var now = dueAt ?? Clock.Now;
-		List<HrReportSchedule> dueSchedules;
-		using (multiTenantFilter.Disable())
-		{
-			var query = await scheduleRepository.GetQueryableAsync();
-			dueSchedules = await AsyncExecuter.ToListAsync(
-				query
-					.Where(x => x.Status == HrReportScheduleStatus.Active && x.NextRunAt <= now)
-					.OrderBy(x => x.NextRunAt)
-					.Take(MaxDueSchedulesPerRun));
-		}
-
-		var processed = 0;
-		foreach (var schedule in dueSchedules)
-		{
-			using (CurrentTenant.Change(schedule.TenantId))
-			{
-				await scheduleRunner.RunScheduleAsync(schedule, "schedule_auto_run", advanceNextRun: true);
-				processed++;
-			}
-		}
-
-		return processed;
-	}
+	[UnitOfWork(IsDisabled = true)]
+	public Task<int> ProcessDueSchedulesAsync(DateTime? dueAt = null) =>
+		batchProcessor.ProcessAsync(dueAt ?? Clock.Now);
 
 	public async Task DeleteScheduleAsync(Guid id)
 	{

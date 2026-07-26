@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-26
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,8 +19,8 @@ Employee workflows create and maintain staff records:
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
-| Employee onboarding | Create identity user, create employee aggregate, assign role, assign academic scope, and persist profile data | Required fields, duplicate contact data, role existence, tenant scope, and generated employee code |
-| Employee profile update | Update personal, family, additional, work experience, payroll, reporting, and academic data | Round-trip persistence, date validation, bank validation, and manager validity |
+| Employee onboarding | Validate the submitted application, create the identity user and employee aggregate, assign an explicitly onboarding-approved Employee-audience role compatible with the employee group, apply policy defaults and teaching scope, finalize in one unit of work, and run profile, event, and welcome-email effects after commit | Terminal application status, Category and Family Caste, duplicate contact data, role approval and employee-group audiences, BulkAssign permission for teaching scope, tenant scope, academic hierarchy, rollback, generated employee code, and deferred effects |
+| Employee profile update | Update personal, family, additional, work experience, payroll, reporting, and academic data | Round-trip persistence, date validation, bank validation, manager validity, and role compatibility when the role or employee group changes |
 | Employee status change | Submit target status and remarks, then persist transition and audit metadata | Required remarks, blocked transitions, idempotent same-status behavior, and payroll or attendance eligibility impact |
 | Employee documents | Upload, list, download, replace, and delete configured document types | File size, file type, magic bytes, blob storage, and tenant scope |
 
@@ -52,11 +52,13 @@ Payroll workflows depend on employee, attendance, leave, and policy data:
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
-| Payroll setup | Create earning, deduction, provident fund, pay element, and payroll policy records | Academic year, active status, component dependency, and destructive-change impact |
+| Payroll setup | Create earning, deduction, provident fund, pay element, and payroll policy records | Academic year, active status, same-tenant active dependency targets, acyclic earning dependencies, and destructive-change impact |
 | Salary structure | Assign fixed and temporary earning or deduction lines to employees | Active components, amount ranges, temporary month ranges, and reload consistency |
-| Payroll preview | Resolve policy, read attendance and leave facts, compute basis days, and calculate gross, deductions, and net pay | Month format, readiness blockers, policy basis, proration, and cached preview freshness |
+| Payroll preview | Resolve policy, read attendance and leave facts, compute basis days, and calculate gross, deductions, and net pay | Month format, saved component rows as the salary-structure readiness source, policy basis, proration, and cached preview freshness |
 | Payroll review | Mark rows reviewed and add adjustments before lock | Permission checks, row state, audit, and adjustment totals |
 | Payroll lock | Finalize selected rows and create salary slip snapshots | Idempotency, already locked rows, snapshot basis, and error reporting |
+
+Finalized and Paid salary slips are both immutable payroll facts and both block attendance, policy, component, preview-refresh, and month-lock changes that would invalidate their snapshots.
 | Salary slip | Read slip data or PDF for employee and month | Locked snapshot existence, totals, policy basis, and PDF access |
 
 ## Policy workflows
@@ -65,11 +67,16 @@ Policy workflows resolve effective behavior for employees:
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
-| Work calendar policy | Define academic-year calendar and weekly-off behavior | Date bounds, holiday sync mode, and default behavior |
+| Work calendar policy | Define academic-year calendar and weekly-off behavior | Years 1900 through 2100, at least one working day, holiday sync mode, and default behavior |
 | Attendance policy | Define punch, missing punch, late, early, overtime, and holiday work rules | Evaluation results and holiday behavior |
 | Payroll policy | Define day calculation, Saturday units, manual month days, and payroll holiday overrides | Payroll basis days and locked-month safety |
 | Policy assignment | Assign policy to employee or group with effective dates and priority | Overlap detection, specificity, priority, and preview explanation |
-| Policy versioning | Compare, restore, clone, archive, and audit policy versions | Immutable snapshots and restore-as-draft behavior |
+| Policy versioning | Compare, restore, clone, archive, and audit policy versions | Immutable snapshots, semantic holiday changes, readable weekly-off days, and restore-as-draft behavior |
+
+Archived work-calendar, attendance, payroll, and leave policies release their name for reuse while active and draft records remain protected by tenant- and academic-year-scoped unique indexes.
+Current and archived policy workspaces use independent server-side search, count, and pagination so accumulated history cannot hide live policies.
+Leave policies are restored as drafts, and restoration stops with the standard duplicate-name error if a current policy has reused the archived name.
+Normal leave-policy create and update calls reject Archived status, and only the separately authorized archive workflow may archive a current policy.
 
 ## Reports and notifications
 
@@ -78,8 +85,20 @@ Reports and notifications expose HR data outside operational screens:
 | Workflow | Main steps | Validation focus |
 |---|---|---|
 | HR report preview | Select source, options, template, and filters | Filter correctness and tenant isolation |
-| HR report export | Generate PDF or Excel export and track history | Export parity with preview and audit metadata |
+| HR report export | Generate PDF or Excel export, filter history by requested date, and remove an owned failed job | Export parity with preview, wide-PDF layout, owner and tenant scope, soft deletion, and audit metadata |
 | HR notifications | Configure employee, attendance, leave, and event notification rules | Channel settings, permission checks, and history visibility |
+
+When an export is queued, retried, regenerated, or run from a schedule, the Reports Center clears the history date filter before highlighting the new job.
+An inverted custom history range does not issue an unfiltered export-history request.
+PDF history metadata reports the capped row count and the document tells the user to choose Excel for the complete result.
+Direct sharing and schedules reject a recipient unless the recipient has report-view permission and a current tenant UserScope that covers the export owner's complete generation scope.
+Schedule execution rechecks the owner's report-view permission and every recipient's permission and scope before generating or distributing an export.
+The schedule worker processes each due schedule in an independent transaction, pauses permanent authorization or validation failures, defers transient failures with bounded retry delay, and continues with later schedules.
+Email delivery begins only after the export and schedule transaction commits, then uses a fresh tenant-scoped read unit of work and contains delivery failures as best-effort notifications.
+Every owner or shared-recipient export read, share, or download repeats the scope check so later permission or scope changes cannot expose a previously generated artifact.
+Export workers load the current persisted request and generation-scope snapshot instead of trusting queued argument copies, so a stale cancelled invocation cannot bypass a narrower retry scope.
+Each retry receives a new generation identity and generation-specific blob name, and only the still-active generation may publish bytes or change the job outcome.
+The worker persists a current owner-scope snapshot before generating any legacy queued job that predates snapshot storage.
 
 ## Partial workflow rule
 

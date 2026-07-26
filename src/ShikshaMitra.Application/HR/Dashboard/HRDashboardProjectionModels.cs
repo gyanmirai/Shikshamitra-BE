@@ -13,15 +13,16 @@ internal sealed record ActiveEmployeeDashboardRow(
 	DateOnly? DateOfJoining,
 	DateOnly? DateOfBirth);
 
-internal sealed record AttendanceStatusCount(
+internal sealed record AttendanceTrendRow(
+	Guid EmployeeId,
 	DateOnly AttendanceDate,
-	EmployeeAttendanceStatusType StatusType,
-	int Count);
+	EmployeeAttendanceStatusType StatusType);
 
 internal sealed record LeaveTrendRow(
 	Guid EmployeeId,
 	DateOnly StartDate,
-	DateOnly EndDate);
+	DateOnly EndDate,
+	bool HalfDay = false);
 
 internal sealed record LeaveDashboardRow(
 	Guid Id,

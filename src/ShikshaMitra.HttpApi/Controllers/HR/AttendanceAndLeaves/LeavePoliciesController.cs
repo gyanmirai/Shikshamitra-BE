@@ -32,10 +32,11 @@ public class LeavePoliciesController : AbpControllerBase
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
 		[FromQuery, Range(1, 500)] int pageSize = 10,
 		[FromQuery] string? search = null,
+		[FromQuery] bool? archivedOnly = null,
 		CancellationToken cancellationToken = default)
 	{
 		return await _leavePolicyAppService.GetListByAcademicYearIdAsync(
-			academicYearId, page, pageSize, search, cancellationToken);
+			academicYearId, page, pageSize, search, archivedOnly, cancellationToken);
 	}
 
 	[HttpGet("{id}")]
@@ -76,6 +77,13 @@ public class LeavePoliciesController : AbpControllerBase
 	{
 		return await _leavePolicyAppService.SetDefaultAsync(id);
 	}
+
+	[HttpPost("{id}/unarchive")]
+	[ProducesResponseType(typeof(LeavePolicyDetailResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual Task<LeavePolicyDetailResponse> UnarchiveAsync([FromRoute, Required] Guid id) =>
+		_leavePolicyAppService.UnarchiveAsync(id);
 
 	[HttpDelete("{id}")]
 	[ProducesResponseType(typeof(LeavePolicyDeleteResponse), StatusCodes.Status200OK)]

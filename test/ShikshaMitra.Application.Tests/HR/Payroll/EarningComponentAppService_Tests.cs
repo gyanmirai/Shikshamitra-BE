@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -383,6 +384,92 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
         result.Amount.ShouldBeNull();
         result.VisibleInPayslip.ShouldBeFalse();
         result.DisplayOrder.ShouldBe(10);
+    }
+
+    [Fact]
+    public async Task Update_Preview_Should_Reject_Self_Reference()
+    {
+        var component = await CreateTestEarningComponentAsync($"Self Reference {Guid.NewGuid():N}");
+        var input = new UpdateEarningComponentDto
+        {
+            Name = component.Name,
+            Description = component.Description,
+            ComponentType = component.ComponentType,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 10m,
+            SelectedEarningComponentId = component.Id,
+            DependOn = ComponentDependency.CustomComponent,
+            VisibleInPayslip = component.VisibleInPayslip,
+            DisplayOrder = component.DisplayOrder
+        };
+
+        var exception = await Should.ThrowAsync<BusinessException>(
+            () => _earningComponentAppService.PreviewUpdateImpactAsync(component.Id, input));
+
+        exception.Code.ShouldBe(HRErrorCodes.PayrollComponentSelfReference);
+    }
+
+    [Fact]
+    public async Task Update_Preview_Should_Reject_Indirect_Dependency_Cycle()
+    {
+        var baseComponent = await CreateTestEarningComponentAsync($"Cycle Base {Guid.NewGuid():N}");
+        var dependent = await _earningComponentAppService.CreateAsync(new CreateEarningComponentDto
+        {
+            Name = $"Cycle Dependent {Guid.NewGuid():N}",
+            Description = "Depends on the base component",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 10m,
+            SelectedEarningComponentId = baseComponent.Id,
+            DependOn = ComponentDependency.CustomComponent,
+            VisibleInPayslip = true
+        });
+        var input = new UpdateEarningComponentDto
+        {
+            Name = baseComponent.Name,
+            Description = baseComponent.Description,
+            ComponentType = baseComponent.ComponentType,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 15m,
+            SelectedEarningComponentId = dependent.Id,
+            DependOn = ComponentDependency.CustomComponent,
+            VisibleInPayslip = baseComponent.VisibleInPayslip,
+            DisplayOrder = baseComponent.DisplayOrder
+        };
+
+        var exception = await Should.ThrowAsync<BusinessException>(
+            () => _earningComponentAppService.PreviewUpdateImpactAsync(baseComponent.Id, input));
+
+        exception.Code.ShouldBe(HRErrorCodes.PayrollComponentDependencyCycle);
+    }
+
+    [Fact]
+    public async Task Create_Should_Reject_Dependency_Target_From_Another_Tenant()
+    {
+        var otherTenantId = Guid.NewGuid();
+        Guid otherTenantComponentId;
+        using (_currentTenant.Change(otherTenantId))
+        {
+            otherTenantComponentId = (await CreateTestEarningComponentAsync(
+                $"Other Tenant Base {Guid.NewGuid():N}")).Id;
+        }
+
+        var input = new CreateEarningComponentDto
+        {
+            Name = $"Current Tenant Percentage {Guid.NewGuid():N}",
+            Description = "Must not reference another tenant",
+            ComponentType = EarningComponentType.Fixed,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 10m,
+            SelectedEarningComponentId = otherTenantComponentId,
+            DependOn = ComponentDependency.CustomComponent,
+            VisibleInPayslip = true
+        };
+
+        var exception = await Should.ThrowAsync<BusinessException>(
+            () => _earningComponentAppService.CreateAsync(input));
+
+        exception.Code.ShouldBe(HRErrorCodes.PayrollComponentDependencyTargetInvalid);
     }
 
     [Fact]
@@ -910,6 +997,82 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     }
 
     [Fact]
+    public async Task Deactivate_And_Delete_Should_Reject_Component_With_Active_Dependent()
+    {
+        var baseComponent = await CreateTestEarningComponentAsync(
+            $"Lifecycle Base {Guid.NewGuid():N}");
+        await _earningComponentAppService.CreateAsync(new CreateEarningComponentDto
+        {
+            Name = $"Lifecycle Dependent {Guid.NewGuid():N}",
+            Description = "Depends on an active base component",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 10m,
+            SelectedEarningComponentId = baseComponent.Id,
+            DependOn = ComponentDependency.CustomComponent,
+            VisibleInPayslip = true
+        });
+
+        var deactivateError = await Should.ThrowAsync<BusinessException>(
+            () => _earningComponentAppService.DeactivateAsync(baseComponent.Id));
+        deactivateError.Code.ShouldBe(HRErrorCodes.PayrollComponentDependencyInUse);
+
+        var deletePreviewError = await Should.ThrowAsync<BusinessException>(
+            () => _earningComponentAppService.PreviewDeleteImpactAsync(baseComponent.Id));
+        deletePreviewError.Code.ShouldBe(HRErrorCodes.PayrollComponentDependencyInUse);
+
+        (await _earningComponentAppService.GetAsync(baseComponent.Id)).IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Deactivate_Should_Ignore_Selected_Component_For_Non_Custom_Percentage_Base()
+    {
+        var selectedComponent = await CreateTestEarningComponentAsync(
+            $"Ignored Selected Base {Guid.NewGuid():N}");
+        await _earningComponentAppService.CreateAsync(new CreateEarningComponentDto
+        {
+            Name = $"Basic Percentage {Guid.NewGuid():N}",
+            Description = "Uses the runtime basic-salary base, not the selected component",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 10m,
+            SelectedEarningComponentId = selectedComponent.Id,
+            DependOn = ComponentDependency.Basic,
+            VisibleInPayslip = true
+        });
+
+        await _earningComponentAppService.DeactivateAsync(selectedComponent.Id);
+
+        (await _earningComponentAppService.GetAsync(selectedComponent.Id)).IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Activate_Should_Revalidate_Dependency_Target()
+    {
+        var baseComponent = await CreateTestEarningComponentAsync(
+            $"Reactivation Base {Guid.NewGuid():N}");
+        var dependent = await _earningComponentAppService.CreateAsync(new CreateEarningComponentDto
+        {
+            Name = $"Reactivation Dependent {Guid.NewGuid():N}",
+            Description = "Dependency must remain active",
+            ComponentType = EarningComponentType.Variable,
+            CalculationType = CalculationType.Percentage,
+            Percentage = 10m,
+            SelectedEarningComponentId = baseComponent.Id,
+            DependOn = ComponentDependency.CustomComponent,
+            VisibleInPayslip = true
+        });
+        await _earningComponentAppService.DeactivateAsync(dependent.Id);
+        await _earningComponentAppService.DeactivateAsync(baseComponent.Id);
+
+        var activateError = await Should.ThrowAsync<BusinessException>(
+            () => _earningComponentAppService.ActivateAsync(dependent.Id));
+
+        activateError.Code.ShouldBe(HRErrorCodes.PayrollComponentDependencyTargetInvalid);
+        (await _earningComponentAppService.GetAsync(dependent.Id)).IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Deactivated_Components_Should_Not_Appear_In_Active_List()
     {
         // Arrange
@@ -1169,7 +1332,9 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             new(),
             new(),
             DateTime.UtcNow);
-        currentSlip.FinalizeSlip();
+        typeof(SalarySlip)
+            .GetProperty(nameof(SalarySlip.Status), BindingFlags.Instance | BindingFlags.Public)!
+            .SetValue(currentSlip, SalarySlipStatus.Paid);
         await _salarySlipRepository.InsertAsync(currentSlip, autoSave: true);
 
         using (_currentTenant.Change(otherTenantId))
@@ -1853,8 +2018,11 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             AdharNo = UniqueAdhar(),
             DateOfBirth = new DateOnly(1990, 5, 15),
             GenderType = GenderType.Male,
+            CastType = CastType.General,
+            FamilyCaste = "General",
             DateOfJoining = new DateOnly(2024, 1, 1),
             EmployeeStatusType = EmployeeStatusType.Active,
+            EmployeeGroup = EmployeeGroupType.NonTeaching,
             RoleId = roleId,
             ShiftId = shiftId
         });
@@ -1862,15 +2030,11 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
 
     private async Task<Guid> EnsureRoleExistsAsync()
     {
-        var existing = (await _roleRepository.GetListAsync()).FirstOrDefault();
-        if (existing != null)
-        {
-            return existing.Id;
-        }
-
-        var id = _guidGenerator.Create();
-        await _roleRepository.InsertAsync(new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id), autoSave: true);
-        return id;
+        return await Employees.EmployeeRoleTestHelper.EnsureAssignableRoleAsync(
+            _roleRepository,
+            _guidGenerator,
+            _currentTenant.Id,
+            "EarningComponentRole");
     }
 
     private async Task<Guid> EnsureShiftExistsAsync()

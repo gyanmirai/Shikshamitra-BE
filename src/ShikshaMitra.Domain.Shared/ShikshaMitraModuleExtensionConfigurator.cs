@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp.Identity;
 using Volo.Abp.ObjectExtending;
 using Volo.Abp.TenantManagement;
@@ -204,6 +205,29 @@ public static class ShikshaMitraModuleExtensionConfigurator
 						{
 							property.Attributes.Add(new StringLengthAttribute(32));
 						}
+					);
+					role.AddOrUpdateProperty<string>(
+						EmployeeRoleAudience.ExtraPropertyName,
+						property =>
+						{
+							property.Attributes.Add(new StringLengthAttribute(16));
+							property.Attributes.Add(
+								new RegularExpressionAttribute("^(Employee|Student|Parent)$")
+							);
+						}
+					);
+					role.AddOrUpdateProperty<string>(
+						EmployeeGroupAudience.ExtraPropertyName,
+						property =>
+						{
+							property.Attributes.Add(new StringLengthAttribute(16));
+							property.Attributes.Add(
+								new RegularExpressionAttribute("^(Teaching|NonTeaching|Both)$")
+							);
+						}
+					);
+					role.AddOrUpdateProperty<bool>(
+						EmployeeOnboardingRoleAssignment.ExtraPropertyName
 					);
 				});
 			});

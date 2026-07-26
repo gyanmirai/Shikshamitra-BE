@@ -23,9 +23,18 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 			.Matches(@"^[6-9]\d{9}$").WithMessage("Invalid mobile number. Must be 10 digits starting with 6-9.");
 		RuleFor(x => x.DateOfJoining).NotEmpty().WithMessage("Date of joining is required.");
 		RuleFor(x => x.RoleId).NotEmpty().WithMessage("Role is required.");
+		RuleFor(x => x.EmployeeGroup)
+			.NotNull().WithMessage("Employee group is required.")
+			.IsInEnum().WithMessage("Employee group is invalid.");
 		RuleFor(x => x.MiddleName).MaximumLength(256);
 		RuleFor(x => x.ShortName).MaximumLength(128);
-		RuleFor(x => x.FamilyCaste).MaximumLength(128);
+		RuleFor(x => x.CastType)
+			.NotNull().WithMessage("Category is required.")
+			.IsInEnum().WithMessage("Category is invalid.");
+		RuleFor(x => x.FamilyCaste)
+			.Must(value => !string.IsNullOrWhiteSpace(value))
+			.WithMessage("Family caste is required.")
+			.MaximumLength(128);
 		RuleFor(x => x.Religion).MaximumLength(128);
 		RuleFor(x => x.BloodGroup).MaximumLength(10);
 		RuleFor(x => x.SecondaryMobileNo)

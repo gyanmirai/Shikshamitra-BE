@@ -118,7 +118,8 @@ public class PayrollPreviewWorkflow(
 				var items = preview.Snapshots.Select(PayrollRunProjection.ToItem).ToList();
 				var existingSlips = await salarySlipRepository.GetByMonthAsync(internalMonthYear);
 				var lockedCount = existingSlips.Count(x =>
-					x.Status == SalarySlipStatus.Finalized && preview.ScopedEmployeeIds.Contains(x.EmployeeId));
+					(x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid) &&
+					preview.ScopedEmployeeIds.Contains(x.EmployeeId));
 
 				return PayrollReadinessProjector.BuildSummary(
 					internalMonthYear,
@@ -153,7 +154,7 @@ public class PayrollPreviewWorkflow(
 
 		var existingSlips = await salarySlipRepository.GetByMonthAsync(internalMonthYear);
 		var finalizedEmployeeIds = existingSlips
-			.Where(x => x.Status == SalarySlipStatus.Finalized)
+			.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			.Select(x => x.EmployeeId)
 			.ToHashSet();
 

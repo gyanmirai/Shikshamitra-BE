@@ -17,13 +17,16 @@ public class PayrollPolicyWorkflow(
 	PayrollPolicyDefaultService defaultService,
 	HrPolicyArchiveAssignmentRepairService archiveAssignmentRepairService,
 	HrPolicyWorkCalendarValidator workCalendarValidator,
-	HrAuditWriter auditWriter) : ApplicationService, ITransientDependency
+	PayrollPolicyCloneService cloneService,
+	HrAuditWriter auditWriter,
+	HrPolicyNameUniquenessService nameUniquenessService) : ApplicationService, ITransientDependency
 {
 	public async Task<PayrollPolicyDto> CreateAsync(CreateUpdatePayrollPolicyDto input)
 	{
 		var entity = PayrollPolicyModelBuilder.Build(GuidGenerator.Create(), CurrentTenant.Id, input);
 		HrPolicyStatusGuard.EnsureArchiveUsesArchiveWorkflow(entity.Status);
 		await workCalendarValidator.EnsureUsableAsync(input.WorkCalendarPolicyId, input.AcademicYearId, entity.Status);
+		await nameUniquenessService.EnsurePayrollAvailableAsync(input.AcademicYearId, input.Name);
 
 		if (entity.IsDefault)
 		{
@@ -32,7 +35,9 @@ public class PayrollPolicyWorkflow(
 			await defaultService.ClearDefaultsAsync(entity.AcademicYearId);
 		}
 
-		await repository.InsertAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecutePayrollWriteAsync(
+			entity.Name,
+			() => repository.InsertAsync(entity, autoSave: true));
 		var dto = HrPolicyMapping.ToDto(entity);
 		await versionAppService.CaptureAsync("payroll", dto, "created");
 		await auditWriter.WriteAsync(dto.AcademicYearId, "payroll_policy", dto.Id, dto.Name, "created", $"Created payroll policy {dto.Name}");
@@ -58,6 +63,7 @@ public class PayrollPolicyWorkflow(
 			return before;
 		}
 
+		await nameUniquenessService.EnsurePayrollAvailableAsync(entity.AcademicYearId, input.Name, entity.Id);
 		if (entity.Status != HrPolicyStatus.Draft || status != HrPolicyStatus.Draft)
 		{
 			var preview = await policySafetyAppService.PreviewPolicyImpactAsync(new HrPolicyImpactPreviewRequestDto
@@ -92,7 +98,9 @@ public class PayrollPolicyWorkflow(
 			await defaultService.ClearDefaultsAsync(entity.AcademicYearId, entity.Id);
 		}
 
-		await repository.UpdateAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecutePayrollWriteAsync(
+			entity.Name,
+			() => repository.UpdateAsync(entity, autoSave: true));
 		var dto = HrPolicyMapping.ToDto(entity);
 		await versionAppService.CaptureAsync("payroll", dto, "edited");
 		await auditWriter.WriteAsync(dto.AcademicYearId, "payroll_policy", dto.Id, dto.Name, "edited", $"Edited payroll policy {dto.Name}", changedFields: HrAuditWriter.Diff(before, dto, "lastModificationTime", "lastModifierId"));
@@ -101,28 +109,7 @@ public class PayrollPolicyWorkflow(
 
 	public async Task<PayrollPolicyDto> CloneAsync(Guid id, HrPolicyCloneRequestDto input)
 	{
-		var source = await repository.GetAsync(id);
-		await workCalendarValidator.EnsureUsableAsync(source.WorkCalendarPolicyId, source.AcademicYearId, HrPolicyStatus.Draft);
-		var entity = new PayrollPolicy(
-			GuidGenerator.Create(),
-			CurrentTenant.Id,
-			source.AcademicYearId,
-			source.WorkCalendarPolicyId,
-			string.IsNullOrWhiteSpace(input.Name) ? $"{source.Name} Copy" : input.Name!,
-			HrPolicyStatus.Draft,
-			false,
-			source.DayCalculationType,
-			source.ManualDays,
-			source.GetManualMonthDays(),
-			source.SaturdayWorkPolicy,
-			source.GetHolidayOverrides(),
-			source.GetLockedMonthSettings());
-
-		await repository.InsertAsync(entity, autoSave: true);
-		var dto = HrPolicyMapping.ToDto(entity);
-		await versionAppService.CaptureAsync("payroll", dto, "cloned");
-		await auditWriter.WriteAsync(dto.AcademicYearId, "payroll_policy", dto.Id, dto.Name, "cloned", $"Cloned payroll policy from {source.Name}", context: new { sourcePolicyId = source.Id });
-		return dto;
+		return await cloneService.CloneAsync(id, input);
 	}
 
 	private async Task EnsureCreateDefaultConfirmedAsync(CreateUpdatePayrollPolicyDto input)
@@ -156,7 +143,9 @@ public class PayrollPolicyWorkflow(
 		await confirmationService.EnsureConfirmedAsync(preview);
 		await archiveAssignmentRepairService.ReassignPayrollReferencesToDefaultAsync(entity);
 		entity.Archive();
-		await repository.UpdateAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecutePayrollWriteAsync(
+			entity.Name,
+			() => repository.UpdateAsync(entity, autoSave: true));
 		var archivedDto = HrPolicyMapping.ToDto(entity);
 		await versionAppService.CaptureAsync("payroll", archivedDto, "archived");
 		await auditWriter.WriteAsync(archivedDto.AcademicYearId, "payroll_policy", archivedDto.Id, archivedDto.Name, "archived", $"Archived payroll policy {archivedDto.Name}");
@@ -170,8 +159,11 @@ public class PayrollPolicyWorkflow(
 			return HrPolicyMapping.ToDto(entity);
 		}
 
+		await nameUniquenessService.EnsurePayrollAvailableAsync(entity.AcademicYearId, entity.Name, entity.Id);
 		entity.Unarchive();
-		await repository.UpdateAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecutePayrollWriteAsync(
+			entity.Name,
+			() => repository.UpdateAsync(entity, autoSave: true));
 		var dto = HrPolicyMapping.ToDto(entity);
 		await versionAppService.CaptureAsync("payroll", dto, "unarchived");
 		await auditWriter.WriteAsync(dto.AcademicYearId, "payroll_policy", dto.Id, dto.Name, "unarchived", $"Unarchived payroll policy {dto.Name} as draft.");

@@ -19,7 +19,14 @@ public class PersonalInfoRequestValidator : AbstractValidator<PersonalInfoReques
 
 		RuleFor(x => x.ShortName).MaximumLength(128);
 		RuleFor(x => x.Religion).MaximumLength(128);
-		RuleFor(x => x.FamilyCaste).MaximumLength(128);
+		RuleFor(x => x.CasteType)
+			.NotNull()
+			.InclusiveBetween(0, 3)
+			.WithMessage("Category is required and must be between 0 and 3.");
+		RuleFor(x => x.FamilyCaste)
+			.Must(value => !string.IsNullOrWhiteSpace(value))
+			.WithMessage("Family caste is required.")
+			.MaximumLength(128);
 
 		RuleFor(x => x.Email)
 			.EmailAddress()

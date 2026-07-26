@@ -22,7 +22,7 @@ public class AttendanceRegisterLookupReader(
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
 	IRepository<Holiday, Guid> holidayRepository,
 	IRepository<WorkCalendarHoliday, Guid> workCalendarHolidayRepository,
-	HrPolicyResolver policyResolver,
+	HrAttendanceWorkCalendarResolver attendanceWorkCalendarResolver,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
@@ -93,12 +93,12 @@ public class AttendanceRegisterLookupReader(
 			var holidaysByCalendar = new Dictionary<Guid, List<WorkCalendarHoliday>>();
 			foreach (var date in dateList)
 			{
-				HrResolvedPolicies resolved;
+				WorkCalendarPolicy workCalendar;
 				try
 				{
-					resolved = await policyResolver.ResolveAsync(employeeId, date.ToDateTime(TimeOnly.MinValue));
+					workCalendar = await attendanceWorkCalendarResolver.ResolveAsync(employeeId, date.ToDateTime(TimeOnly.MinValue));
 				}
-				catch (BusinessException)
+				catch (Exception exception) when (exception is BusinessException or Volo.Abp.Domain.Entities.EntityNotFoundException)
 				{
 					if (centralHolidayLookup.TryGetValue(date, out var fallbackHoliday))
 					{
@@ -107,7 +107,7 @@ public class AttendanceRegisterLookupReader(
 					continue;
 				}
 
-				var calendarId = resolved.AttendanceWorkCalendarPolicy.Id;
+				var calendarId = workCalendar.Id;
 				if (!holidaysByCalendar.TryGetValue(calendarId, out var holidays))
 				{
 					holidays = await asyncExecuter.ToListAsync(query.Where(x =>
@@ -154,7 +154,7 @@ public class AttendanceRegisterLookupReader(
 			slipQuery.Where(x =>
 				employeeIds.Contains(x.EmployeeId) &&
 				months.Contains(x.MonthYear) &&
-				x.Status == SalarySlipStatus.Finalized)
+				(x.Status == SalarySlipStatus.Finalized || x.Status == SalarySlipStatus.Paid))
 			.Select(x => new { x.EmployeeId, x.MonthYear }));
 		foreach (var slip in finalizedSlips)
 		{

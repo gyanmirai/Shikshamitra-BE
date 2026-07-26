@@ -66,6 +66,9 @@ public class CreateEmployeeBasicInfoDtoValidator : AbstractValidator<CreateEmplo
 		RuleFor(x => x.Qualification).MaximumLength(512);
 
 		RuleFor(x => x.RoleId).NotEmpty();
+		RuleFor(x => x.EmployeeGroup)
+			.NotNull().WithMessage("Employee group is required.")
+			.IsInEnum().WithMessage("Employee group is invalid.");
 
 		RuleFor(x => x.IdentificationMark1).MaximumLength(256);
 		RuleFor(x => x.City).MaximumLength(128);

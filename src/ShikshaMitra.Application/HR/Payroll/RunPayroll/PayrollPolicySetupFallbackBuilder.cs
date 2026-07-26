@@ -89,7 +89,8 @@ public class PayrollPolicySetupFallbackBuilder(
 
 		var existingSlips = await salarySlipRepository.GetByMonthAsync(internalMonthYear);
 		var lockedCount = existingSlips.Count(x =>
-			x.Status == SalarySlipStatus.Finalized && scopedEmployeeIds.Contains(x.EmployeeId));
+			(x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid) &&
+			scopedEmployeeIds.Contains(x.EmployeeId));
 
 		return new PolicySetupFallbackItems(
 			itemsByEmployee.Values.OrderBy(x => x.EmployeeName).ToList(),

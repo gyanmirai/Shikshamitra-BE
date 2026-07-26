@@ -1,29 +1,19 @@
-using System;
 using System.Threading.Tasks;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
-using Volo.Abp.Timing;
 using static ShikshaMitra.HR.Payroll.SalarySlips.SalarySlipSnapshotMatcher;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 public class SalarySlipDraftFreshnessService(
 	SalarySlipManager salarySlipManager,
-	SalarySlipSnapshotReader snapshotReader,
-	IClock clock) : ITransientDependency
+	SalarySlipSnapshotReader snapshotReader) : ITransientDependency
 {
-	public async Task<SalarySlip> EnsureFreshAsync(
-		SalarySlip salarySlip,
-		bool hadExistingSalarySlip)
+	public async Task<SalarySlip> EnsureFreshAsync(SalarySlip salarySlip)
 	{
 		if (salarySlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
-		{
-			return salarySlip;
-		}
-
-		if (ShouldKeepExistingDraft(salarySlip, hadExistingSalarySlip))
 		{
 			return salarySlip;
 		}
@@ -38,6 +28,7 @@ public class SalarySlipDraftFreshnessService(
 
 		var snapshotEarnings = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EarningComponentsJson);
 		var snapshotDeductions = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.DeductionComponentsJson);
+		PayrollSnapshotTotalGuard.EnsureMatchesLineItems(snapshot, snapshotEarnings, snapshotDeductions);
 
 		return SalarySlipMatchesSnapshot(salarySlip, snapshot, snapshotEarnings, snapshotDeductions)
 			? salarySlip
@@ -46,15 +37,5 @@ public class SalarySlipDraftFreshnessService(
 				snapshotEarnings,
 				snapshotDeductions,
 				ParseDayCalculationMode(snapshot.DayCalculationMode));
-	}
-
-	internal bool ShouldKeepExistingDraft(SalarySlip salarySlip, bool hadExistingSalarySlip) =>
-		hadExistingSalarySlip && IsHistoricalMonth(salarySlip.MonthYear);
-
-	private bool IsHistoricalMonth(string monthYear)
-	{
-		var (year, month, _) = PayrollRunRules.ParseMonth(monthYear);
-		var current = clock.Now;
-		return year < current.Year || (year == current.Year && month < current.Month);
 	}
 }

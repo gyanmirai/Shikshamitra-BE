@@ -3,7 +3,7 @@ module: hr
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-07-26
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -53,8 +53,17 @@ Follow these rules when changing HR:
 | Enforce permissions on the backend | Hidden UI controls do not secure APIs |
 | Preserve tenant isolation | HR data must not leak across schools |
 | Use transactions for coupled writes | Employee, attendance, leave, and payroll updates must not partially apply |
+| Serialize earning-component dependency mutations | A tenant-level PostgreSQL transaction advisory lock protects the active acyclic graph across application instances |
 | Keep payroll snapshots auditable | Salary slips must explain the policy basis used at lock time |
+| Isolate scheduled report runs | Each due schedule commits or fails independently so one invalid schedule cannot roll back or starve another |
+| Defer scheduled report delivery | Email delivery runs after the export and schedule transaction commits so a failed commit cannot send a dead link or trigger duplicate retry mail |
 | Update docs with behavior changes | HR docs are part of the handoff contract |
+
+## Payroll dependency graph
+
+Active earning-component dependencies are a tenant-scoped acyclic graph.
+Create, update, activate, deactivate, and confirmed delete operations serialize graph validation and persistence with one PostgreSQL transaction advisory lock per tenant.
+Read [ADR-005](../../architecture/decisions/005-earning-component-dependency-serialization.md) before changing earning-component dependency validation or mutation boundaries.
 
 ## Policy architecture
 

@@ -20,11 +20,13 @@ public interface ILeavePolicyAppService : ICrudAppService<
 		int page,
 		int pageSize,
 		string? search = null,
+		bool? archivedOnly = null,
 		CancellationToken cancellationToken = default);
 
 	Task<LeavePolicyResponse> CreateLeavePolicyAsync(Guid academicYearId, LeavePolicyCreateRequest input);
 	Task<LeavePolicyDetailResponse> GetLeavePolicyByIdAsync(Guid policyId);
 	Task<LeavePolicyDetailResponse> UpdateLeavePolicyAsync(Guid policyId, LeavePolicyUpdateRequest input);
 	Task<LeavePolicyDetailResponse> SetDefaultAsync(Guid policyId);
+	Task<LeavePolicyDetailResponse> UnarchiveAsync(Guid policyId);
 	Task<LeavePolicyDeleteResponse> DeleteLeavePolicyAsync(Guid policyId);
 }

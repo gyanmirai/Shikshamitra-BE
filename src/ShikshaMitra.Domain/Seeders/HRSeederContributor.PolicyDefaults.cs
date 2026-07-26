@@ -138,6 +138,7 @@ public partial class HRSeederContributor
 	{
 		var existing = await _workCalendarPolicyRepository.FirstOrDefaultAsync(x =>
 			x.AcademicYearId == academicYear.Id &&
+			x.Status != HrPolicyStatus.Archived &&
 			x.Name == name);
 		if (existing != null)
 		{

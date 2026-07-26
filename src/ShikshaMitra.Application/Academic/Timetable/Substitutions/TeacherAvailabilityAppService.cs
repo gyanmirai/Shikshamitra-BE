@@ -16,6 +16,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Timetable.Substitutions;
 
+[RemoteService(IsEnabled = false)]
 public class TeacherAvailabilityAppService(
     IRepository<TeacherAvailability, Guid> availabilityRepository,
     IRepository<SubstitutionRequest, Guid> substitutionRepository,
@@ -241,10 +242,9 @@ public class TeacherAvailabilityAppService(
     public async Task<AffectedLectureResultDto> GetAffectedLecturesAsync(CreateTeacherAvailabilityDto input)
     {
         var teacherId = input.TeacherId;
-        Employee? employee = null;
-        if (!teacherId.HasValue && !string.IsNullOrWhiteSpace(input.TeacherName))
+        var employee = await FindTeacherEmployeeAsync(teacherId, input.TeacherName);
+        if (!teacherId.HasValue)
         {
-            employee = await employeeRepository.FirstOrDefaultAsync(x => x.EmployeeName == input.TeacherName);
             teacherId = employee?.Id;
         }
 
@@ -262,15 +262,54 @@ public class TeacherAvailabilityAppService(
 
         var start = ParseTime(input.StartTime, "startTime");
         var end = ParseTime(input.EndTime, "endTime");
-        var timetableQuery = await timetableRepository.WithDetailsAsync();
-        var timetables = await AsyncExecuter.ToListAsync(timetableQuery.Where(x => x.Status == TimetableStatus.Published));
-        var standards = await standardRepository.GetListAsync();
-        var divisions = await divisionRepository.GetListAsync();
-        var subjects = await subjectRepository.GetListAsync();
-        var rooms = await roomRepository.GetListAsync();
-        var employees = await employeeRepository.GetListAsync();
-        employee ??= ResolveEmployeeByTeacherReference(employees, teacherId, input.TeacherName);
         var teacherReferenceIds = GetTeacherReferenceIds(employee, teacherId);
+        var timetables = new List<Timetables.Timetable>();
+        foreach (var teacherReferenceId in teacherReferenceIds)
+        {
+            timetables.AddRange(await timetableRepository.GetByEmployeeIdAsync(
+                teacherReferenceId,
+                input.AcademicYearId));
+        }
+
+        timetables = timetables
+            .Where(x => x.Status == TimetableStatus.Published)
+            .GroupBy(x => x.Id)
+            .Select(x => x.First())
+            .ToList();
+
+        var lectureRows = timetables
+            .SelectMany(timetable => timetable.Slots
+                .Where(slot => slot.Day == timetableDay.Value && slot.StartTime < end && slot.EndTime > start)
+                .SelectMany(slot => slot.Subjects
+                    .Where(subject => subject.TeacherId.HasValue && teacherReferenceIds.Contains(subject.TeacherId.Value))
+                    .Select(subject => new
+                    {
+                        Timetable = timetable,
+                        Slot = slot,
+                        Subject = subject
+                    })))
+            .ToList();
+
+        if (lectureRows.Count == 0)
+        {
+            return new AffectedLectureResultDto();
+        }
+
+        var standardIds = lectureRows.Select(x => x.Timetable.StandardId).Distinct().ToList();
+        var divisionIds = lectureRows.Select(x => x.Timetable.DivisionId).Distinct().ToList();
+        var subjectIds = lectureRows.Select(x => x.Subject.SubjectId).Distinct().ToList();
+        var roomIds = lectureRows
+            .Where(x => x.Subject.RoomId.HasValue)
+            .Select(x => x.Subject.RoomId!.Value)
+            .Distinct()
+            .ToList();
+        var standards = await standardRepository.GetListAsync(x => standardIds.Contains(x.Id));
+        var divisions = await divisionRepository.GetListAsync(x => divisionIds.Contains(x.Id));
+        var subjects = await subjectRepository.GetListAsync(x => subjectIds.Contains(x.Id));
+        var rooms = roomIds.Count == 0
+            ? []
+            : await roomRepository.GetListAsync(x => roomIds.Contains(x.Id));
+        var employees = employee == null ? [] : new List<Employee> { employee };
         var existing = await substitutionRepository.GetListAsync(x =>
             x.Date == availabilityDate &&
             x.OriginalTeacherId.HasValue &&
@@ -279,26 +318,39 @@ public class TeacherAvailabilityAppService(
             x.Status != SubstitutionStatus.Rejected &&
             x.Status != SubstitutionStatus.Expired);
 
-        var items = timetables
-            .SelectMany(timetable => timetable.Slots
-                .Where(slot => slot.Day == timetableDay.Value && slot.StartTime < end && slot.EndTime > start)
-                .SelectMany(slot => slot.Subjects
-                    .Where(subject => subject.TeacherId.HasValue && teacherReferenceIds.Contains(subject.TeacherId.Value))
-                    .Select(slotSubject => BuildAffectedLecture(
-                        timetable,
-                        slot,
-                        slotSubject,
-                        standards,
-                        divisions,
-                        subjects,
-                        rooms,
-                        employees,
-                        existing,
-                        availabilityDate))))
+        var items = lectureRows
+            .Select(row => BuildAffectedLecture(
+                row.Timetable,
+                row.Slot,
+                row.Subject,
+                standards,
+                divisions,
+                subjects,
+                rooms,
+                employees,
+                existing,
+                availabilityDate))
             .OrderBy(x => x.StartTime)
             .ToList();
 
         return new AffectedLectureResultDto { Items = items };
+    }
+
+    private async Task<Employee?> FindTeacherEmployeeAsync(Guid? teacherId, string? teacherName)
+    {
+        if (teacherId.HasValue)
+        {
+            var employee = await employeeRepository.FirstOrDefaultAsync(x =>
+                x.Id == teacherId.Value || x.UserId == teacherId.Value);
+            if (employee != null)
+            {
+                return employee;
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(teacherName)
+            ? null
+            : await employeeRepository.FirstOrDefaultAsync(x => x.EmployeeName == teacherName);
     }
 
     public async Task CancelAsync(Guid id)

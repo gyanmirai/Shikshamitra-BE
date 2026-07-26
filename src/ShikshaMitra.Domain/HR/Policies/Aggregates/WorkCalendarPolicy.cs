@@ -77,10 +77,25 @@ public class WorkCalendarPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(HRErrorCodes.PolicyEffectiveRangeInvalid);
 		}
 
+		if ((effectiveFrom.HasValue && !HrPolicyDateLimits.IsSupportedYear(effectiveFrom.Value.Year)) ||
+			(effectiveTo.HasValue && !HrPolicyDateLimits.IsSupportedYear(effectiveTo.Value.Year)))
+		{
+			throw new BusinessException(HRErrorCodes.PolicyDateOutsideSupportedRange)
+				.WithData("minimumYear", HrPolicyDateLimits.MinimumYear)
+				.WithData("maximumYear", HrPolicyDateLimits.MaximumYear);
+		}
+
 		if (weeklyOffPattern == AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.Custom &&
 			(customWeeklyOffs is null || customWeeklyOffs.Count == 0))
 		{
 			throw new BusinessException(HRErrorCodes.InvalidCustomWeeklyOff);
+		}
+
+		var normalizedCustomWeeklyOffs = NormalizeCustomWeeklyOffs(customWeeklyOffs);
+		if (weeklyOffPattern == AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.Custom &&
+			customWeeklyOffs!.Distinct().Count() >= 7)
+		{
+			throw new BusinessException(HRErrorCodes.WorkCalendarRequiresWorkingDay);
 		}
 
 		Name = name.Trim();
@@ -88,7 +103,7 @@ public class WorkCalendarPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EffectiveFrom = effectiveFrom?.Date;
 		EffectiveTo = effectiveTo?.Date;
 		WeeklyOffPattern = weeklyOffPattern;
-		CustomWeeklyOffsJson = NormalizeCustomWeeklyOffs(customWeeklyOffs);
+		CustomWeeklyOffsJson = normalizedCustomWeeklyOffs;
 		HolidaySyncMode = holidaySyncMode;
 		Version++;
 	}

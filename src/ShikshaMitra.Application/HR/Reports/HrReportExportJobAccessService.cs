@@ -8,25 +8,44 @@ using Volo.Abp.DependencyInjection;
 namespace ShikshaMitra.HR.Reports;
 
 public class HrReportExportJobAccessService(
-	IHrReportExportJobRepository exportJobRepository)
+	IHrReportExportJobRepository exportJobRepository,
+	HrReportExportScopeAuthorizationService scopeAuthorizationService)
 	: ITransientDependency
 {
-	public async Task<List<HrReportExportJobDto>> GetRecentJobsAsync(Guid userId, DateTime now)
+	public async Task<List<HrReportExportJobDto>> GetRecentJobsAsync(
+		Guid userId,
+		DateTime now,
+		HrReportExportListRequestDto input)
 	{
-		var jobs = await exportJobRepository.GetRecentAuthorizedJobsAsync(userId, 50);
-		return jobs
-			.Select(job => HrReportProjection.ToJobDto(job, now))
-			.ToList();
+		var jobs = await exportJobRepository.GetRecentAuthorizedJobsAsync(
+			userId,
+			50,
+			input.RequestedFrom,
+			input.RequestedTo);
+		var resolvedUserScope = await scopeAuthorizationService.ResolveCurrentScopeAsync(userId);
+		var authorizedJobs = new List<HrReportExportJobDto>();
+		foreach (var job in jobs)
+		{
+			if (resolvedUserScope != null &&
+				scopeAuthorizationService.CanResolvedScopeAccessExport(job, resolvedUserScope))
+			{
+				authorizedJobs.Add(HrReportProjection.ToJobDto(job, now));
+			}
+		}
+
+		return authorizedJobs;
 	}
 
 	public async Task<HrReportExportJob> GetAuthorizedJobAsync(Guid jobId, Guid userId)
 	{
 		var job = await exportJobRepository.GetAsync(jobId);
-		if (job.RequestedByUserId != userId && !job.GetSharedUserIds().Contains(userId))
+		if (job.RequestedByUserId != userId &&
+			!job.GetSharedUserIds().Contains(userId))
 		{
 			throw new AbpAuthorizationException("Access denied: HR report export is not shared with this user.");
 		}
 
+		await scopeAuthorizationService.EnsureRecipientCanAccessExportAsync(job, userId);
 		return job;
 	}
 

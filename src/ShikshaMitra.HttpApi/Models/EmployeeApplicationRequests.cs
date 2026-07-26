@@ -24,6 +24,8 @@ public class EmployeeApplicationFinalizeRequest
 	[Required]
 	public PersonalInfoRequest PersonalInfo { get; set; } = new();
 
+	public System.Guid? AcademicYearId { get; set; }
+	public List<EmployeeApplicationAcademicScopeDto> AcademicScopes { get; set; } = [];
 	public EmployeeApplicationFamilyInfoDto? FamilyInfo { get; set; }
 	public EmployeeApplicationAdditionalInfoDto? AdditionalInfo { get; set; }
 	public List<EmployeeApplicationWorkExperienceDto> WorkExperiences { get; set; } = [];

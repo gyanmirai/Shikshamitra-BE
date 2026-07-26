@@ -98,18 +98,26 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public bool HasResume => !string.IsNullOrWhiteSpace(ResumeBlobName);
 	public bool HasPhoto => !string.IsNullOrWhiteSpace(PhotoBlobName);
 
-	public void SetToken(string tokenHash, string? encryptedToken, DateTime tokenExpiresAt, DateTime issuedAt)
+	private void SetToken(string tokenHash, string? encryptedToken, DateTime tokenExpiresAt, DateTime issuedAt)
 	{
-		EnsureNotFinalized();
 		TokenHash = Check.NotNullOrWhiteSpace(tokenHash, nameof(tokenHash));
 		EncryptedToken = string.IsNullOrWhiteSpace(encryptedToken) ? null : encryptedToken;
 		TokenExpiresAt = tokenExpiresAt;
 		LinkLastIssuedAt = issuedAt;
-		SubmittedAt = null;
-		if (Status != EmployeeApplicationStatus.Rejected && Status != EmployeeApplicationStatus.Withdrawn)
+	}
+
+	public void RegenerateInvitationToken(
+		string tokenHash,
+		string? encryptedToken,
+		DateTime tokenExpiresAt,
+		DateTime issuedAt)
+	{
+		if (Status != EmployeeApplicationStatus.InvitationSent || SubmittedAt.HasValue)
 		{
-			Status = EmployeeApplicationStatus.InvitationSent;
+			throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidStatusTransition);
 		}
+
+		SetToken(tokenHash, encryptedToken, tokenExpiresAt, issuedAt);
 	}
 
 	public void Submit(
@@ -198,7 +206,13 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidStatusTransition);
 		}
 
-		if (!AllowedNextStatuses(Status).Contains(status))
+		if (!SubmittedAt.HasValue &&
+		    status is not EmployeeApplicationStatus.Rejected and not EmployeeApplicationStatus.Withdrawn)
+		{
+			throw SubmissionRequired();
+		}
+
+		if (!EmployeeApplicationStatusTransitions.AllowedNextStatuses(Status).Contains(status))
 		{
 			throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidStatusTransition);
 		}
@@ -215,6 +229,11 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void MarkFinalized(Guid employeeId, DateTime finalizedAt)
 	{
 		EnsureNotFinalized();
+		if (!SubmittedAt.HasValue)
+		{
+			throw SubmissionRequired();
+		}
+
 		if (Status is EmployeeApplicationStatus.Rejected or EmployeeApplicationStatus.Withdrawn)
 		{
 			throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidStatusTransition);
@@ -252,6 +271,11 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
+	private static BusinessException SubmissionRequired() =>
+		new(
+			HRErrorCodes.EmployeeApplicationSubmissionRequired,
+			"The candidate must submit the onboarding application before HR can advance its status.");
+
 	private void SetCandidateIdentity(
 		string? firstName,
 		string? middleName,
@@ -270,62 +294,6 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SecondaryMobileNo = secondaryMobileNo?.Trim();
 		PositionAppliedFor = positionAppliedFor?.Trim();
 		DepartmentAppliedFor = departmentAppliedFor?.Trim();
-	}
-
-	private static EmployeeApplicationStatus[] AllowedNextStatuses(EmployeeApplicationStatus current)
-	{
-		return current switch
-		{
-			EmployeeApplicationStatus.InvitationSent => [
-				EmployeeApplicationStatus.Screening,
-				EmployeeApplicationStatus.Interviewing,
-				EmployeeApplicationStatus.Offered,
-				EmployeeApplicationStatus.ReadyForOnboarding,
-				EmployeeApplicationStatus.Rejected,
-				EmployeeApplicationStatus.Withdrawn
-			],
-			EmployeeApplicationStatus.Applied => [
-				EmployeeApplicationStatus.Screening,
-				EmployeeApplicationStatus.Interviewing,
-				EmployeeApplicationStatus.Offered,
-				EmployeeApplicationStatus.ReadyForOnboarding,
-				EmployeeApplicationStatus.Rejected,
-				EmployeeApplicationStatus.Withdrawn
-			],
-			EmployeeApplicationStatus.Screening => [
-				EmployeeApplicationStatus.Applied,
-				EmployeeApplicationStatus.Interviewing,
-				EmployeeApplicationStatus.Offered,
-				EmployeeApplicationStatus.ReadyForOnboarding,
-				EmployeeApplicationStatus.Rejected,
-				EmployeeApplicationStatus.Withdrawn
-			],
-			EmployeeApplicationStatus.Interviewing => [
-				EmployeeApplicationStatus.Screening,
-				EmployeeApplicationStatus.Offered,
-				EmployeeApplicationStatus.ReadyForOnboarding,
-				EmployeeApplicationStatus.Rejected,
-				EmployeeApplicationStatus.Withdrawn
-			],
-			EmployeeApplicationStatus.Offered => [
-				EmployeeApplicationStatus.Interviewing,
-				EmployeeApplicationStatus.ReadyForOnboarding,
-				EmployeeApplicationStatus.Rejected,
-				EmployeeApplicationStatus.Withdrawn
-			],
-			EmployeeApplicationStatus.ReadyForOnboarding => [
-				EmployeeApplicationStatus.Offered,
-				EmployeeApplicationStatus.Rejected,
-				EmployeeApplicationStatus.Withdrawn
-			],
-			EmployeeApplicationStatus.Rejected or EmployeeApplicationStatus.Withdrawn => [
-				EmployeeApplicationStatus.Screening,
-				EmployeeApplicationStatus.Interviewing,
-				EmployeeApplicationStatus.Offered,
-				EmployeeApplicationStatus.ReadyForOnboarding
-			],
-			_ => []
-		};
 	}
 
 	private static State? Clone(State? state) =>

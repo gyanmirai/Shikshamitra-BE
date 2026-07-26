@@ -47,6 +47,64 @@ public class PolicyAggregateRequiredIds_Tests
 	}
 
 	[Fact]
+	public void WorkCalendarPolicy_Should_Reject_All_Seven_Custom_Weekly_Off_Days()
+	{
+		var ex = Should.Throw<BusinessException>(() => new WorkCalendarPolicy(
+			Guid.NewGuid(),
+			Guid.NewGuid(),
+			Guid.NewGuid(),
+			"Calendar",
+			HrPolicyStatus.Draft,
+			null,
+			null,
+			AttendanceWeeklyOffPattern.Custom,
+			[0, 1, 2, 3, 4, 5, 6],
+			WorkCalendarHolidaySyncMode.LinkedWithOverrides));
+
+		ex.Code.ShouldBe(HRErrorCodes.WorkCalendarRequiresWorkingDay);
+	}
+
+	[Fact]
+	public void WorkCalendarPolicy_Should_Reject_Out_Of_Range_Day_Before_Working_Day_Count()
+	{
+		var ex = Should.Throw<BusinessException>(() => new WorkCalendarPolicy(
+			Guid.NewGuid(),
+			Guid.NewGuid(),
+			Guid.NewGuid(),
+			"Invalid weekday calendar",
+			HrPolicyStatus.Draft,
+			new DateTime(2026, 4, 1),
+			null,
+			AttendanceWeeklyOffPattern.Custom,
+			[0, 1, 2, 3, 4, 5, 7],
+			WorkCalendarHolidaySyncMode.LinkedWithOverrides));
+
+		ex.Code.ShouldBe(HRErrorCodes.InvalidCustomWeeklyOff);
+	}
+
+	[Theory]
+	[InlineData(1899)]
+	[InlineData(2101)]
+	public void WorkCalendarPolicy_Should_Reject_Dates_Outside_Supported_Years(int year)
+	{
+		var ex = Should.Throw<BusinessException>(() => new WorkCalendarPolicy(
+			Guid.NewGuid(),
+			Guid.NewGuid(),
+			Guid.NewGuid(),
+			"Calendar",
+			HrPolicyStatus.Draft,
+			new DateTime(year, 1, 1),
+			null,
+			AttendanceWeeklyOffPattern.SaturdaySunday,
+			[],
+			WorkCalendarHolidaySyncMode.LinkedWithOverrides));
+
+		ex.Code.ShouldBe(HRErrorCodes.PolicyDateOutsideSupportedRange);
+		ex.Data["minimumYear"].ShouldBe(HrPolicyDateLimits.MinimumYear);
+		ex.Data["maximumYear"].ShouldBe(HrPolicyDateLimits.MaximumYear);
+	}
+
+	[Fact]
 	public void PayrollPolicy_Should_Reject_Missing_Required_Ids()
 	{
 		var missingAcademicYear = Should.Throw<BusinessException>(() => CreatePayrollPolicy(academicYearId: Guid.Empty));

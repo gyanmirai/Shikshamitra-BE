@@ -22,7 +22,8 @@ public class HrReportExportService(
 	IBlobContainer blobContainer,
 	IGuidGenerator guidGenerator,
 	HrReportExportJobAccessService jobAccessService,
-	HrReportRecipientLookupService recipientLookupService,
+	HrReportExportRecipientService recipientService,
+	HrReportExportScopeAuthorizationService scopeAuthorizationService,
 	HrReportRequestValidationService requestValidationService,
 	HrAuditWriter auditWriter) : ApplicationService, ITransientDependency
 {
@@ -45,7 +46,14 @@ public class HrReportExportService(
 		requestValidationService.Validate(input);
 		input.SourceAction = string.IsNullOrWhiteSpace(sourceAction) ? "manualExport" : sourceAction;
 		input.ParentJobId = parentJobId;
-		var requestJson = JsonSerializer.Serialize(input, JsonOptions);
+		var scopeSnapshot = await scopeAuthorizationService.CaptureAsync(userId, tenantId);
+		var recipientUserIds = recipientService.Normalize(sharedUserIds, userId);
+		await recipientService.ValidateAsync(recipientUserIds, scopeSnapshot);
+		var generationId = guidGenerator.Create();
+		var requestJson = HrReportStoredExportRequestSerializer.Serialize(
+			input,
+			scopeSnapshot,
+			generationId);
 		var job = new HrReportExportJob(
 			guidGenerator.Create(),
 			tenantId,
@@ -55,9 +63,9 @@ public class HrReportExportService(
 			JsonSerializer.Serialize(input.Filters ?? new HrReportFilterDto(), JsonOptions),
 			requestJson,
 			Clock.Now.AddDays(7));
-		if (sharedUserIds is { Count: > 0 })
+		if (recipientUserIds.Count > 0)
 		{
-			job.ShareWith(sharedUserIds.Where(x => x != Guid.Empty && x != userId).Distinct().ToList());
+			job.ShareWith(recipientUserIds);
 		}
 
 		await exportJobRepository.InsertAsync(job, autoSave: true);
@@ -66,7 +74,9 @@ public class HrReportExportService(
 			JobId = job.Id,
 			TenantId = tenantId,
 			UserId = userId,
-			Request = input
+			Request = input,
+			ScopeSnapshot = scopeSnapshot,
+			GenerationId = generationId
 		});
 		await WriteAuditAsync(job.Id, "export_queued", $"Queued HR report export {job.ReportType}", new
 		{
@@ -83,10 +93,10 @@ public class HrReportExportService(
 		};
 	}
 
-	public async Task<List<HrReportExportJobDto>> GetExportsAsync()
+	public async Task<List<HrReportExportJobDto>> GetExportsAsync(HrReportExportListRequestDto input)
 	{
 		var userId = GetRequiredUserId();
-		return await jobAccessService.GetRecentJobsAsync(userId, Clock.Now);
+		return await jobAccessService.GetRecentJobsAsync(userId, Clock.Now, input);
 	}
 
 	public async Task<HrReportExportJobDto> GetExportAsync(Guid jobId) =>
@@ -103,6 +113,18 @@ public class HrReportExportService(
 		return HrReportProjection.ToJobDto(job, Clock.Now);
 	}
 
+	public async Task DeleteFailedExportAsync(Guid jobId)
+	{
+		var job = await jobAccessService.GetOwnedJobAsync(jobId, GetRequiredUserId());
+		EnsureExportStatus(job, "delete", HrReportExportStatus.Failed);
+		await exportJobRepository.DeleteAsync(job, autoSave: true);
+		await WriteAuditAsync(
+			job.Id,
+			"export_deleted",
+			$"Deleted failed HR report export {job.ReportType}",
+			new { job.ReportType, job.Format, job.Status });
+	}
+
 	public async Task<HrReportExportCreateResponseDto> RetryExportAsync(Guid jobId)
 	{
 		var job = await jobAccessService.GetOwnedJobAsync(jobId, GetRequiredUserId());
@@ -110,17 +132,26 @@ public class HrReportExportService(
 		var request = DeserializeRequest(job);
 		request.SourceAction = "retry";
 		request.ParentJobId = job.Id;
+		var scopeSnapshot = await scopeAuthorizationService.CaptureAsync(
+			job.RequestedByUserId,
+			job.TenantId);
+		await recipientService.ValidateAsync(
+			job.GetSharedUserIds(),
+			scopeSnapshot);
+		var generationId = guidGenerator.Create();
 		job.MarkQueued(Clock.Now.AddDays(7));
 		job.UpdateRequest(
 			JsonSerializer.Serialize(request.Filters ?? new HrReportFilterDto(), JsonOptions),
-			JsonSerializer.Serialize(request, JsonOptions));
+			HrReportStoredExportRequestSerializer.Serialize(request, scopeSnapshot, generationId));
 		await exportJobRepository.UpdateAsync(job, autoSave: true);
 		await backgroundJobManager.EnqueueAsync(new HrReportExportJobArgs
 		{
 			JobId = job.Id,
 			TenantId = job.TenantId,
 			UserId = job.RequestedByUserId,
-			Request = request
+			Request = request,
+			ScopeSnapshot = scopeSnapshot,
+			GenerationId = generationId
 		});
 		await WriteAuditAsync(job.Id, "export_retried", $"Retried HR report export {job.ReportType}", new { job.ReportType, job.Format });
 
@@ -148,24 +179,10 @@ public class HrReportExportService(
 	{
 		var ownerUserId = GetRequiredUserId();
 		var job = await jobAccessService.GetOwnedJobAsync(jobId, ownerUserId);
-		var existingUserIds = job.GetSharedUserIds()
-			.Where(x => x != Guid.Empty && x != ownerUserId)
-			.Distinct()
-			.ToList();
-		var requestedUserIds = NormalizeSharedRecipientIds(input.UserIds, ownerUserId);
-		var newUserIds = requestedUserIds
-			.Where(userId => !existingUserIds.Contains(userId))
-			.ToList();
-		if (existingUserIds.Count == 0 && newUserIds.Count == 0)
-		{
-			throw EmptySharedRecipientException();
-		}
-
-		await ValidateSharedRecipientIdsAsync(newUserIds);
-		var userIds = existingUserIds
-			.Concat(newUserIds)
-			.Distinct()
-			.ToList();
+		var userIds = await recipientService.ResolveShareRecipientsAsync(
+			job,
+			ownerUserId,
+			input.UserIds);
 		job.ShareWith(userIds);
 		await exportJobRepository.UpdateAsync(job, autoSave: true);
 		await WriteAuditAsync(job.Id, "export_shared", $"Shared HR report export {job.ReportType}", new { job.ReportType, SharedUserIds = userIds });
@@ -204,7 +221,7 @@ public class HrReportExportService(
 	{
 		try
 		{
-			var request = JsonSerializer.Deserialize<HrReportRequestDto>(job.RequestJson, JsonOptions);
+			var request = HrReportStoredExportRequestSerializer.DeserializeRequest(job.RequestJson);
 			if (request != null)
 			{
 				return request;
@@ -212,7 +229,7 @@ public class HrReportExportService(
 		}
 		catch (JsonException)
 		{
-			// Fall back to the legacy filter payload so retry/regenerate still has a usable request.
+			// Fall back to the earlier filter payload so retry/regenerate still has a usable request.
 		}
 
 		var filters = JsonSerializer.Deserialize<HrReportFilterDto>(job.FilterJson, JsonOptions) ?? new HrReportFilterDto();
@@ -243,28 +260,6 @@ public class HrReportExportService(
 				.WithData("status", job.Status);
 		}
 	}
-
-	private static List<Guid> NormalizeSharedRecipientIds(IEnumerable<Guid>? requestedUserIds, Guid ownerUserId) =>
-		(requestedUserIds ?? [])
-			.Where(x => x != Guid.Empty && x != ownerUserId)
-			.Distinct()
-			.ToList();
-
-	private async Task ValidateSharedRecipientIdsAsync(IEnumerable<Guid> userIds)
-	{
-		foreach (var userId in userIds)
-		{
-			if (!await recipientLookupService.HasReportViewPermissionAsync(userId))
-			{
-				throw new BusinessException(HRErrorCodes.ReportAccessDenied)
-					.WithData("recipientUserId", userId);
-			}
-		}
-	}
-
-	private static BusinessException EmptySharedRecipientException() =>
-		new BusinessException(HRErrorCodes.ReportAccessDenied)
-			.WithData("reason", "At least one eligible HR report recipient must be selected.");
 
 	private Task WriteAuditAsync(Guid entityId, string action, string summary, object? context) =>
 		auditWriter.WriteAsync(

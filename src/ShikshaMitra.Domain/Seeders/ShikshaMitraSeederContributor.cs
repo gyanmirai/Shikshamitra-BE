@@ -130,7 +130,12 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 	private static IReadOnlyList<Seeders.IShikshaMitraSeederStep> BuildTenantSteps(IServiceProvider serviceProvider) =>
 	[
 		TenantStep<Seeders.EventTypeSeederContributor>(serviceProvider, "EventTypeSeeder", "EventTypeSeeder:v1", 100, Seeders.ShikshaMitraSeederProfile.All),
-		TenantStep<Seeders.RolesSeederContributor>(serviceProvider, "RolesSeeder", "RolesSeeder:v3", 110, Seeders.ShikshaMitraSeederProfile.All),
+		TenantStep<Seeders.RolesSeederContributor>(
+			serviceProvider,
+			Seeders.RolesSeederContributor.StepName,
+			Seeders.RolesSeederContributor.StepVersion,
+			Seeders.RolesSeederContributor.StepOrder,
+			Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.RolePermissionSeederContributor>(
 			serviceProvider,
 			Seeders.RolePermissionSeederContributor.StepName,

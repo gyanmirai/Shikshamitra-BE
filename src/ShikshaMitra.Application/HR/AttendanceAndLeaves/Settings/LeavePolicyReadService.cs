@@ -37,7 +37,7 @@ public class LeavePolicyReadService(
 
 	public async Task<PagedResultDto<LeavePolicyDto>> GetAllActiveAsync(PagedResultRequestDto input)
 	{
-		var activeCacheKey = cacheService.GetActiveCacheKey(input.SkipCount, input.MaxResultCount);
+		var activeCacheKey = await cacheService.GetActiveCacheKeyAsync(input.SkipCount, input.MaxResultCount);
 		var cached = await cacheService.GetActiveAsync(activeCacheKey);
 		if (cached != null)
 		{
@@ -64,15 +64,22 @@ public class LeavePolicyReadService(
 		int page,
 		int pageSize,
 		string? search = null,
+		bool? archivedOnly = null,
 		CancellationToken cancellationToken = default)
 	{
 		Check.NotNull(academicYearId, nameof(academicYearId));
 		Check.Range(page, nameof(page), 1, int.MaxValue);
 		Check.Range(pageSize, nameof(pageSize), 1, MaxContractPageSize);
 
-		var cacheKey = cacheService.GetContractCacheKey(academicYearId, page, pageSize, search);
+		var cacheKey = await cacheService.GetContractCacheKeyAsync(
+			academicYearId,
+			page,
+			pageSize,
+			search,
+			archivedOnly,
+			cancellationToken);
 		var cached = await cacheService.GetContractAsync(cacheKey, cancellationToken);
-		if (cached != null)
+		if (cached is not null)
 		{
 			return cached;
 		}
@@ -84,13 +91,15 @@ public class LeavePolicyReadService(
 			pageSize,
 			sorting: "PolicyName ASC",
 			search: search,
-			includeInactive: false,
+			includeInactive: archivedOnly.HasValue,
+			archivedOnly: archivedOnly,
 			cancellationToken: cancellationToken);
 
 		var totalCount = await leavePolicyRepository.GetCountByAcademicYearIdAsync(
 			academicYearId,
 			search: search,
-			includeInactive: false,
+			includeInactive: archivedOnly.HasValue,
+			archivedOnly: archivedOnly,
 			cancellationToken: cancellationToken);
 
 		var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);

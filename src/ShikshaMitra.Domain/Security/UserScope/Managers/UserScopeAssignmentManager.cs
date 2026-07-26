@@ -127,6 +127,25 @@ public class UserScopeAssignmentManager : DomainService
 		}
 	}
 
+	public Task ValidateAcademicHierarchyAsync(
+		Guid? academicYearId = null,
+		Guid? educationBoardId = null,
+		Guid? educationMediumId = null,
+		Guid? educationMediumStageId = null,
+		Guid? standardId = null,
+		Guid? divisionId = null,
+		CancellationToken cancellationToken = default)
+	{
+		return ValidateHierarchyAsync(
+			academicYearId,
+			educationBoardId,
+			educationMediumId,
+			educationMediumStageId,
+			standardId,
+			divisionId,
+			cancellationToken);
+	}
+
 	private async Task ValidateTargetAsync(Guid? userId, string? roleName, CancellationToken cancellationToken)
 	{
 		if ((userId.HasValue && !string.IsNullOrWhiteSpace(roleName)) ||

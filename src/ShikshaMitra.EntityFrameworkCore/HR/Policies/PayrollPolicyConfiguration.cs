@@ -26,6 +26,7 @@ public class PayrollPolicyConfiguration : IEntityTypeConfiguration<PayrollPolicy
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Name })
 			.IsUnique()
+			.HasFilter("\"Status\" <> 2")
 			.HasDatabaseName("IX_HR_PayrollPolicies_Tenant_AcademicYear_Name");
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsDefault })

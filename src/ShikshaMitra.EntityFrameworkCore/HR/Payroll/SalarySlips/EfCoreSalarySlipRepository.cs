@@ -42,7 +42,8 @@ public class EfCoreSalarySlipRepository
 		return await dbSet
 			.AsNoTracking()
 			.Where(x => x.MonthYear == monthYear &&
-			            x.Status == SalarySlipStatus.Finalized)
+			            (x.Status == SalarySlipStatus.Finalized ||
+			             x.Status == SalarySlipStatus.Paid))
 			.AnyAsync(cancellationToken);
 	}
 
@@ -75,7 +76,9 @@ public class EfCoreSalarySlipRepository
 			.ToListAsync(cancellationToken);
 
 		return (
-			statusCounts.FirstOrDefault(x => x.Status == SalarySlipStatus.Finalized)?.Count ?? 0,
+			statusCounts
+				.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
+				.Sum(x => x.Count),
 			statusCounts.FirstOrDefault(x => x.Status == SalarySlipStatus.Draft)?.Count ?? 0);
 	}
 }

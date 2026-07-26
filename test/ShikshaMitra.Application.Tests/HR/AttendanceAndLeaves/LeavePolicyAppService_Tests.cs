@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
+using ShikshaMitra.HR.Policies;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Validation;
 using Volo.Abp.Uow;
 using Xunit;
@@ -15,6 +17,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private readonly ILeavePolicyAppService _leavePolicyAppService;
+	private readonly ILeavePolicyRepository _leavePolicyRepository;
 	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly AcademicYearManager _academicYearManager;
 	private readonly IUnitOfWorkManager _unitOfWorkManager;
@@ -22,6 +25,7 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 	public LeavePolicyAppService_Tests()
 	{
 		_leavePolicyAppService = GetRequiredService<ILeavePolicyAppService>();
+		_leavePolicyRepository = GetRequiredService<ILeavePolicyRepository>();
 		_academicYearRepository = GetRequiredService<IAcademicYearRepository>();
 		_academicYearManager = GetRequiredService<AcademicYearManager>();
 		_unitOfWorkManager = GetRequiredService<IUnitOfWorkManager>();
@@ -111,6 +115,211 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 
 		list.PageSize.ShouldBe(500);
 		list.Items.ShouldContain(x => x.PolicyTitle == marker);
+	}
+
+	[Fact]
+	public async Task Should_Page_Current_And_Archived_Policies_Separately_And_Restore_As_Draft()
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		var marker = $"ArchivePolicy-{Guid.NewGuid():N}";
+		var created = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = marker,
+			Status = "Draft",
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = DefaultRules()
+		});
+
+		var current = await _leavePolicyAppService.GetListByAcademicYearIdAsync(
+			academicYearId,
+			page: 1,
+			pageSize: 10,
+			search: marker,
+			archivedOnly: false);
+		current.Items.ShouldContain(x => x.Id == created.Id);
+
+		await _leavePolicyAppService.DeleteLeavePolicyAsync(created.Id);
+
+		current = await _leavePolicyAppService.GetListByAcademicYearIdAsync(
+			academicYearId,
+			page: 1,
+			pageSize: 10,
+			search: marker,
+			archivedOnly: false);
+		current.Items.ShouldNotContain(x => x.Id == created.Id);
+
+		var archived = await _leavePolicyAppService.GetListByAcademicYearIdAsync(
+			academicYearId,
+			page: 1,
+			pageSize: 10,
+			search: marker,
+			archivedOnly: true);
+		archived.Items.ShouldContain(x => x.Id == created.Id && x.Status == "Archived");
+
+		var restored = await _leavePolicyAppService.UnarchiveAsync(created.Id);
+		restored.Status.ShouldBe("Draft");
+
+		archived = await _leavePolicyAppService.GetListByAcademicYearIdAsync(
+			academicYearId,
+			page: 1,
+			pageSize: 10,
+			search: marker,
+			archivedOnly: true);
+		archived.Items.ShouldNotContain(x => x.Id == created.Id);
+	}
+
+	[Fact]
+	public async Task Should_Reject_Case_Insensitive_Leave_Policy_Name_Duplicates()
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		var marker = $"CasePolicy-{Guid.NewGuid():N}";
+
+		await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = marker,
+			Status = "Draft",
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = DefaultRules()
+		});
+
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
+			_leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+			{
+				PolicyTitle = marker.ToLowerInvariant(),
+				Status = "Draft",
+				EffectiveFrom = DateTime.UtcNow.Date,
+				Rules = DefaultRules()
+			}));
+
+		exception.Code.ShouldBe(HRErrorCodes.LeavePolicyNameAlreadyExists);
+	}
+
+	[Fact]
+	public async Task Normal_Create_And_Update_Should_Require_The_Dedicated_Archive_Workflow()
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		var createException = await Should.ThrowAsync<BusinessException>(() =>
+			_leavePolicyAppService.CreateLeavePolicyAsync(
+				academicYearId,
+				new LeavePolicyCreateRequest
+				{
+					PolicyTitle = $"ArchivedCreate-{Guid.NewGuid():N}",
+					Status = "Archived",
+					EffectiveFrom = DateTime.UtcNow.Date,
+					Rules = DefaultRules()
+				}));
+		createException.Code.ShouldBe(HRErrorCodes.PolicyArchiveRequiresArchiveWorkflow);
+
+		var created = await _leavePolicyAppService.CreateLeavePolicyAsync(
+			academicYearId,
+			new LeavePolicyCreateRequest
+			{
+				PolicyTitle = $"ArchivedUpdate-{Guid.NewGuid():N}",
+				Status = "Draft",
+				EffectiveFrom = DateTime.UtcNow.Date,
+				Rules = DefaultRules()
+			});
+		var updateException = await Should.ThrowAsync<BusinessException>(() =>
+			_leavePolicyAppService.UpdateLeavePolicyAsync(
+				created.Id,
+				new LeavePolicyUpdateRequest
+				{
+					PolicyTitle = created.PolicyTitle,
+					Status = "Archived",
+					EffectiveFrom = created.EffectiveFrom,
+					Rules = DefaultRules()
+				}));
+
+		updateException.Code.ShouldBe(HRErrorCodes.PolicyArchiveRequiresArchiveWorkflow);
+		(await _leavePolicyAppService.GetLeavePolicyByIdAsync(created.Id))
+			.Status.ShouldBe("Draft");
+	}
+
+	[Fact]
+	public async Task Normal_Update_Should_Not_Bypass_The_Dedicated_Unarchive_Workflow()
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		var created = await _leavePolicyAppService.CreateLeavePolicyAsync(
+			academicYearId,
+			new LeavePolicyCreateRequest
+			{
+				PolicyTitle = $"UnarchiveBypass-{Guid.NewGuid():N}",
+				Status = "Draft",
+				EffectiveFrom = DateTime.UtcNow.Date,
+				Rules = DefaultRules()
+			});
+		await _leavePolicyAppService.DeleteLeavePolicyAsync(created.Id);
+
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
+			_leavePolicyAppService.UpdateLeavePolicyAsync(
+				created.Id,
+				new LeavePolicyUpdateRequest
+				{
+					PolicyTitle = created.PolicyTitle,
+					Status = "Draft",
+					EffectiveFrom = created.EffectiveFrom,
+					Rules = DefaultRules()
+				}));
+
+		exception.Code.ShouldBe(HRErrorCodes.ArchivedPolicyCannotBeEdited);
+	}
+
+	[Fact]
+	public async Task Should_Reject_Unarchive_When_Current_Name_Is_Already_In_Use()
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		var marker = $"ReusePolicy-{Guid.NewGuid():N}";
+		var archived = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = marker,
+			Status = "Draft",
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = DefaultRules()
+		});
+		await _leavePolicyAppService.DeleteLeavePolicyAsync(archived.Id);
+
+		await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = marker.ToLowerInvariant(),
+			Status = "Draft",
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = DefaultRules()
+		});
+
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
+			_leavePolicyAppService.UnarchiveAsync(archived.Id));
+
+		exception.Code.ShouldBe(HRErrorCodes.LeavePolicyNameAlreadyExists);
+	}
+
+	[Fact]
+	public async Task Name_Lookup_For_Seed_Assignments_Should_Return_Only_The_Active_Current_Policy()
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		var marker = $"SeedLookupPolicy-{Guid.NewGuid():N}";
+		var archived = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = marker,
+			Status = "Draft",
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = DefaultRules()
+		});
+		await _leavePolicyAppService.DeleteLeavePolicyAsync(archived.Id);
+
+		var current = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = marker.ToLowerInvariant(),
+			Status = "Active",
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = DefaultRules()
+		});
+
+		var found = await _leavePolicyRepository.FindByPolicyNameAsync(academicYearId, marker);
+
+		found.ShouldNotBeNull();
+		found!.Id.ShouldBe(current.Id);
+		found.Status.ShouldBe(HrPolicyStatus.Active);
+		found.IsActive.ShouldBeTrue();
 	}
 
 	[Fact]

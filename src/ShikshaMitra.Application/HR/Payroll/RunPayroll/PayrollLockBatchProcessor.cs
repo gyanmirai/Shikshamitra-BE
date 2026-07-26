@@ -78,10 +78,10 @@ public class PayrollLockBatchProcessor(
 				deductionLineItems,
 				dayCalculationMode);
 
-			if (salarySlip.Status == SalarySlipStatus.Finalized)
+			if (salarySlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			{
 				logger.LogDebug(
-					"Salary slip for employee {EmployeeCode} is already finalized, skipping",
+					"Salary slip for employee {EmployeeCode} is already immutable, skipping",
 					employee.EmployeeCode);
 				result.RecordSkipped();
 				snapshot.MarkLocked();

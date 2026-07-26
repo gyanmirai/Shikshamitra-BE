@@ -1,83 +1,161 @@
-using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
-using ShikshaMitra.Common.PDF;
-using ShikshaMitra.Common.PDF.Elements;
-using System.Collections.Generic;
+using System;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
 using Volo.Abp.DependencyInjection;
-using IElement = ShikshaMitra.Common.PDF.Elements.IElement;
 
 namespace ShikshaMitra.HR.Reports;
 
-public class HRPdfService(IPdfService pdfService) : ITransientDependency
+public class HRPdfService : ITransientDependency
 {
-	public async Task<byte[]> GenerateReportPdf(HrReportPreviewDto report)
+	public const int MaxPdfRows = 500;
+
+	public static int GetIncludedRowCount(HrReportPreviewDto report) =>
+		Math.Min(report.Rows.Count, MaxPdfRows);
+
+	public Task<byte[]> GenerateReportPdf(HrReportPreviewDto report)
 	{
-		var header = new RowElement
+		QuestPDF.Settings.License = LicenseType.Community;
+		var columnCount = Math.Max(report.Columns.Count, 1);
+		var fontSize = columnCount switch
 		{
-			Elements = report.Columns.Select(column => (IElement)new TextElement
-			{
-				Text = column.Label,
-				FontWeight = FontWeight.Bold,
-				Padding = 4,
-				PaddingUnit = Unit.Point
-			}).ToList(),
-			Spacing = 8
+			<= 6 => 8.5f,
+			<= 12 => 7f,
+			<= 20 => 6f,
+			_ => 5f
 		};
+		var pageSize = columnCount > 12
+			? PageSizes.A3.Landscape()
+			: PageSizes.A4.Landscape();
 
-		var rows = report.Rows.Take(500).Select(row => (IElement)new RowElement
+		var bytes = Document.Create(container =>
 		{
-			Elements = report.Columns.Select(column => {
-                var value = row.TryGetValue(column.Id, out var v) ? v ?? string.Empty : string.Empty;
-                if (!string.IsNullOrEmpty(value))
-                {
-                    if (value.Contains("<") && value.Contains(">"))
-                    {
-                        value = Regex.Replace(value, "<[^>]*>", string.Empty);
-                    }
-                    if (value.Contains("&"))
-                    {
-                        value = WebUtility.HtmlDecode(value);
-                    }
-                }
-                return (IElement)new TextElement
-                {
-                    Text = value,
-                    Padding = 4,
-                    PaddingUnit = Unit.Point
-                };
-            }).ToList(),
-			Spacing = 8
-		});
+			container.Page(page =>
+			{
+				page.Size(pageSize);
+				page.Margin(columnCount > 12 ? 12 : 20);
+				page.PageColor(Colors.White);
+				page.DefaultTextStyle(style => style.FontSize(fontSize).FontColor(Colors.Grey.Darken4));
+				page.Header().PaddingBottom(8).Column(column =>
+				{
+					column.Item()
+						.Text(report.ReportType)
+						.FontSize(16)
+						.SemiBold()
+						.FontColor("#1E3A5F");
 
-		var document = new PDFDocument
+					var includedRowCount = GetIncludedRowCount(report);
+					if (report.TotalCount > includedRowCount || report.Rows.Count > includedRowCount)
+					{
+						column.Item()
+							.PaddingTop(2)
+							.Text($"Showing the first {includedRowCount:N0} of {report.TotalCount:N0} rows. Use Excel to export the complete result.")
+							.FontSize(8)
+							.FontColor(Colors.Orange.Darken3);
+					}
+				});
+				page.Content().Element(content => ComposeTable(content, report, fontSize));
+				page.Footer().AlignRight().Text(text =>
+				{
+					text.Span("Page ").FontSize(7);
+					text.CurrentPageNumber().FontSize(7);
+					text.Span(" of ").FontSize(7);
+					text.TotalPages().FontSize(7);
+				});
+			});
+		}).GeneratePdf();
+
+		return Task.FromResult(bytes);
+	}
+
+	private static void ComposeTable(
+		QuestPDF.Infrastructure.IContainer container,
+		HrReportPreviewDto report,
+		float fontSize)
+	{
+		if (report.Columns.Count == 0)
 		{
-			Page = new PageSpecs
+			container
+				.Background("#F8FAFC")
+				.Padding(20)
+				.AlignCenter()
+				.Text("No columns were selected for this report.");
+			return;
+		}
+
+		if (report.Rows.Count == 0)
+		{
+			container
+				.Background("#F8FAFC")
+				.Padding(20)
+				.AlignCenter()
+				.Text("No records found for the selected filters.");
+			return;
+		}
+
+		container.Table(table =>
+		{
+			table.ColumnsDefinition(columns =>
 			{
-				BackgroundColor = "#ffffff",
-				Margin = 20,
-				MarginUnit = Unit.Point
-			},
-			Header = new TextElement
+				foreach (var _ in report.Columns)
+				{
+					columns.RelativeColumn();
+				}
+			});
+
+			table.Header(header =>
 			{
-				Text = report.ReportType,
-				FontSize = 20,
-				FontWeight = FontWeight.Bold,
-				Alignment = TextAlignment.Center,
-				Padding = 10,
-				PaddingUnit = Unit.Point
-			},
-			Content = new ColumnElement
+				foreach (var column in report.Columns)
+				{
+					header.Cell()
+						.Background("#1E3A5F")
+						.PaddingHorizontal(2)
+						.PaddingVertical(3)
+						.Text(Sanitize(column.Label))
+						.FontSize(fontSize)
+						.SemiBold()
+						.FontColor(Colors.White);
+				}
+			});
+
+			var rowIndex = 0;
+			foreach (var reportRow in report.Rows.Take(MaxPdfRows))
 			{
-				Elements = new[] { (IElement)header }.Concat(rows).ToList(),
-				Spacing = 12
+				var background = rowIndex % 2 == 0 ? "#FFFFFF" : "#F8FAFC";
+				foreach (var column in report.Columns)
+				{
+					reportRow.TryGetValue(column.Id, out var value);
+					table.Cell()
+						.Background(background)
+						.BorderBottom(0.5f)
+						.BorderColor("#CBD5E1")
+						.PaddingHorizontal(2)
+						.PaddingVertical(2)
+						.Text(Sanitize(value ?? string.Empty))
+						.FontSize(fontSize);
+				}
+
+				rowIndex++;
 			}
-		};
+		});
+	}
 
-		return await pdfService.GeneratePdfAsBytes(document);
+	private static string Sanitize(string value)
+	{
+		if (string.IsNullOrEmpty(value))
+		{
+			return string.Empty;
+		}
+
+		var withoutMarkup = value.Contains('<') && value.Contains('>')
+			? Regex.Replace(value, "<[^>]*>", string.Empty)
+			: value;
+		return withoutMarkup.Contains('&')
+			? WebUtility.HtmlDecode(withoutMarkup)
+			: withoutMarkup;
 	}
 }

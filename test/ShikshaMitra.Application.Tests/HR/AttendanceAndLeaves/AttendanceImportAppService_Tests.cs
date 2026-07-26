@@ -34,6 +34,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
+	private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 	private readonly IAttendanceImportAppService _attendanceImportAppService;
 	private readonly IEmployeePersonalInfoAppService _employeePersonalInfoAppService;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
@@ -45,6 +46,8 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	private readonly IRepository<WorkCalendarPolicy, Guid> _workCalendarPolicyRepository;
 	private readonly IRepository<PayrollPolicy, Guid> _payrollPolicyRepository;
 	private readonly IRepository<AttendancePolicy, Guid> _attendancePolicyRepository;
+	private readonly ILeavePolicyRepository _leavePolicyRepository;
+	private readonly IRepository<LeavePolicyRule, Guid> _leavePolicyRuleRepository;
 	private readonly IEducationBoardRepository _educationBoardRepository;
 	private readonly IEducationMediumRepository _educationMediumRepository;
 	private readonly IEducationMediumStageRepository _educationMediumStageRepository;
@@ -53,6 +56,7 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	private readonly EducationMediumStageManager _educationMediumStageManager;
 	private readonly IGuidGenerator _guidGenerator;
 	private readonly ICurrentTenant _currentTenant;
+	private readonly IDisposable _tenantScope;
 
 	public AttendanceImportAppService_Tests()
 	{
@@ -67,6 +71,8 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		_workCalendarPolicyRepository = GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
 		_payrollPolicyRepository = GetRequiredService<IRepository<PayrollPolicy, Guid>>();
 		_attendancePolicyRepository = GetRequiredService<IRepository<AttendancePolicy, Guid>>();
+		_leavePolicyRepository = GetRequiredService<ILeavePolicyRepository>();
+		_leavePolicyRuleRepository = GetRequiredService<IRepository<LeavePolicyRule, Guid>>();
 		_educationBoardRepository = GetRequiredService<IEducationBoardRepository>();
 		_educationMediumRepository = GetRequiredService<IEducationMediumRepository>();
 		_educationMediumStageRepository = GetRequiredService<IEducationMediumStageRepository>();
@@ -75,6 +81,13 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 		_educationMediumStageManager = GetRequiredService<EducationMediumStageManager>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
+		_tenantScope = _currentTenant.Change(TestTenantId);
+	}
+
+	public override void Dispose()
+	{
+		_tenantScope.Dispose();
+		base.Dispose();
 	}
 
 	[Fact]
@@ -865,8 +878,11 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 			AdharNo = UniqueAdhar(),
 			DateOfBirth = new DateOnly(1990, 5, 15),
 			GenderType = GenderType.Male,
+			CastType = CastType.General,
+			FamilyCaste = "General",
 			DateOfJoining = new DateOnly(2024, 1, 1),
 			EmployeeStatusType = EmployeeStatusType.Active,
+			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
 			ShiftId = shiftId
 		});
@@ -918,15 +934,11 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 
 	private async Task<Guid> EnsureRoleExistsAsync()
 	{
-		var existing = (await _roleRepository.GetListAsync()).FirstOrDefault();
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var id = _guidGenerator.Create();
-		await _roleRepository.InsertAsync(new IdentityRole(id, $"TestRole-{id:N}", _currentTenant.Id), autoSave: true);
-		return id;
+		return await Employees.EmployeeRoleTestHelper.EnsureAssignableRoleAsync(
+			_roleRepository,
+			_guidGenerator,
+			_currentTenant.Id,
+			"AttendanceImportRole");
 	}
 
 	private async Task<Guid> EnsureShiftExistsAsync()
@@ -1064,84 +1076,174 @@ public class AttendanceImportAppService_Tests : ShikshaMitraApplicationTestBase<
 	private async Task<AcademicYear> EnsurePolicyBaselineAsync()
 	{
 		const string academicYearName = "Attendance Import Policy Test 2026";
-		var existing = (await _academicYearRepository.GetListAsync())
+		var academicYear = (await _academicYearRepository.GetListAsync())
 			.FirstOrDefault(x => x.Name == academicYearName);
-		if (existing != null)
+		if (academicYear == null)
 		{
-			return existing;
+			academicYear = (AcademicYear)Activator.CreateInstance(
+				typeof(AcademicYear),
+				System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+				binder: null,
+				args:
+				[
+					_guidGenerator.Create(),
+					_currentTenant.Id,
+					academicYearName,
+					new DateTime(2026, 1, 1),
+					new DateTime(2026, 12, 31)
+				],
+				culture: null)!;
+			await _academicYearRepository.InsertAsync(academicYear, autoSave: true);
 		}
 
-		var academicYear = (AcademicYear)Activator.CreateInstance(
-			typeof(AcademicYear),
-			System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-			binder: null,
-			args:
-			[
+		const string calendarName = "Attendance Import Test Calendar";
+		var calendar = (await _workCalendarPolicyRepository.GetListAsync(
+				x => x.AcademicYearId == academicYear.Id))
+			.FirstOrDefault(x => x.Name == calendarName);
+		if (calendar == null)
+		{
+			calendar = new WorkCalendarPolicy(
 				_guidGenerator.Create(),
 				_currentTenant.Id,
-				academicYearName,
-				new DateTime(2026, 1, 1),
-				new DateTime(2026, 12, 31)
-			],
-			culture: null)!;
-		await _academicYearRepository.InsertAsync(academicYear, autoSave: true);
+				academicYear.Id,
+				calendarName,
+				HrPolicyStatus.Active,
+				academicYear.StartDate,
+				academicYear.EndDate,
+				AttendanceWeeklyOffPattern.Sunday,
+				[],
+				WorkCalendarHolidaySyncMode.Snapshot);
+			await _workCalendarPolicyRepository.InsertAsync(calendar, autoSave: true);
+		}
 
-		var calendar = new WorkCalendarPolicy(
-			_guidGenerator.Create(),
-			_currentTenant.Id,
-			academicYear.Id,
-			"Attendance Import Test Calendar",
-			HrPolicyStatus.Active,
-			academicYear.StartDate,
-			academicYear.EndDate,
-			AttendanceWeeklyOffPattern.Sunday,
-			[],
-			WorkCalendarHolidaySyncMode.Snapshot);
-		await _workCalendarPolicyRepository.InsertAsync(calendar, autoSave: true);
+		const string payrollPolicyName = "Attendance Import Test Payroll";
+		var payrollPolicyExists = (await _payrollPolicyRepository.GetListAsync(
+				x => x.AcademicYearId == academicYear.Id))
+			.Any(x => x.Name == payrollPolicyName);
+		if (!payrollPolicyExists)
+		{
+			await _payrollPolicyRepository.InsertAsync(new PayrollPolicy(
+				_guidGenerator.Create(),
+				_currentTenant.Id,
+				academicYear.Id,
+				calendar.Id,
+				payrollPolicyName,
+				HrPolicyStatus.Active,
+				isDefault: true,
+				DayCalculationType.WorkingDays,
+				manualDays: null,
+				manualMonthDays: [],
+				SaturdayWorkPolicy.FullDay,
+				holidayOverrides: [],
+				lockedMonthSettings: []), autoSave: true);
+		}
 
-		await _payrollPolicyRepository.InsertAsync(new PayrollPolicy(
-			_guidGenerator.Create(),
-			_currentTenant.Id,
-			academicYear.Id,
-			calendar.Id,
-			"Attendance Import Test Payroll",
-			HrPolicyStatus.Active,
-			isDefault: true,
-			DayCalculationType.WorkingDays,
-			manualDays: null,
-			manualMonthDays: [],
-			SaturdayWorkPolicy.FullDay,
-			holidayOverrides: [],
-			lockedMonthSettings: []), autoSave: true);
+		const string attendancePolicyName = "Attendance Import Test Attendance";
+		var attendancePolicyExists = (await _attendancePolicyRepository.GetListAsync(
+				x => x.AcademicYearId == academicYear.Id))
+			.Any(x => x.Name == attendancePolicyName);
+		if (!attendancePolicyExists)
+		{
+			await _attendancePolicyRepository.InsertAsync(new AttendancePolicy(
+				_guidGenerator.Create(),
+				_currentTenant.Id,
+				academicYear.Id,
+				calendar.Id,
+				attendancePolicyName,
+				HrPolicyStatus.Active,
+				true,
+				AttendanceCaptureMode.Integrated,
+				75,
+				50,
+				0,
+				AttendanceMissingPunchBehavior.RequiresReview,
+				true,
+				0,
+				0,
+				AttendancePenaltyType.None,
+				0,
+				false,
+				0,
+				false,
+				null,
+				null,
+				AttendanceHolidayWorkBehavior.CompOff,
+				true), autoSave: true);
+		}
 
-		await _attendancePolicyRepository.InsertAsync(new AttendancePolicy(
-			_guidGenerator.Create(),
-			_currentTenant.Id,
+		const string leavePolicyName = "Attendance Import Test Leave";
+		var leavePolicy = await _leavePolicyRepository.FindByPolicyNameAsync(
 			academicYear.Id,
-			calendar.Id,
-			"Attendance Import Test Attendance",
-			HrPolicyStatus.Active,
-			true,
-			AttendanceCaptureMode.Integrated,
-			75,
-			50,
-			0,
-			AttendanceMissingPunchBehavior.RequiresReview,
-			true,
-			0,
-			0,
-			AttendancePenaltyType.None,
-			0,
-			false,
-			0,
-			false,
-			null,
-			null,
-			AttendanceHolidayWorkBehavior.CompOff,
-			true), autoSave: true);
+			leavePolicyName);
+		if (leavePolicy == null)
+		{
+			leavePolicy = new LeavePolicy(
+				_guidGenerator.Create(),
+				_currentTenant.Id,
+				academicYear.Id,
+				leavePolicyName,
+				academicYear.StartDate,
+				academicYear.EndDate,
+				HrPolicyStatus.Active,
+				isDefault: true);
+			await _leavePolicyRepository.InsertAsync(leavePolicy, autoSave: true);
+		}
+		else if (!leavePolicy.IsActive || !leavePolicy.IsDefault)
+		{
+			leavePolicy.Update(
+				leavePolicyName,
+				academicYear.StartDate,
+				academicYear.EndDate,
+				HrPolicyStatus.Active,
+				isDefault: true,
+				description: null);
+			await _leavePolicyRepository.UpdateAsync(leavePolicy, autoSave: true);
+		}
+
+		var leavePolicyWithRules = await _leavePolicyRepository.GetWithRulesAsync(leavePolicy.Id);
+		var activePaidTypes = leavePolicyWithRules?.Rules
+			.Where(x => x.IsActive)
+			.Select(x => x.PaidType)
+			.ToHashSet() ?? [];
+		if (!activePaidTypes.Contains(LeavePaidType.Paid))
+		{
+			await _leavePolicyRuleRepository.InsertAsync(CreateLeavePolicyRule(
+				leavePolicy.Id,
+				LeavePaidType.Paid), autoSave: true);
+		}
+
+		if (!activePaidTypes.Contains(LeavePaidType.Unpaid))
+		{
+			await _leavePolicyRuleRepository.InsertAsync(CreateLeavePolicyRule(
+				leavePolicy.Id,
+				LeavePaidType.Unpaid), autoSave: true);
+		}
 
 		return academicYear;
 	}
+
+	private LeavePolicyRule CreateLeavePolicyRule(Guid leavePolicyId, LeavePaidType paidType) =>
+		new(
+			_guidGenerator.Create(),
+			_currentTenant.Id,
+			leavePolicyId,
+			paidType,
+			paidType == LeavePaidType.Paid
+				? LeaveEntitlementMode.Limited
+				: LeaveEntitlementMode.Unlimited,
+			LeaveAccrualPolicyType.Yearly,
+			paidType == LeavePaidType.Paid ? 30 : null,
+			carryForward: false,
+			carryForwardLimit: null,
+			encashable: false,
+			encashmentTiming: null,
+			requiresApproval: true,
+			minNoticeDays: 0,
+			maxDaysPerRequest: 30,
+			allowHalfDay: true,
+			attachmentRequiredAfterDays: null,
+			allowNegativeBalance: false,
+			isActive: true);
 
 	private static string BuildPhoneNumber() => $"90{Random.Shared.Next(10000000, 99999999)}";
 

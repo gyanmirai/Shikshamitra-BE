@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-07-08
+updated_on: 2026-07-26
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -47,12 +47,19 @@ Use this table to pick focused tests:
 | Change area | First backend tests |
 |---|---|
 | Employee profile, family, documents, status, or reporting | `EmployeeListApi_Tests`, `EmployeePersonalInfoApi_Tests`, `FamilyInfoApi_Tests`, `EmployeeDocumentApi_Tests`, `EmployeeStatusApi_Tests` |
-| Payroll settings | `EarningComponentApi_Tests`, `DeductionComponentApi_Tests`, `PfRuleApi_Tests`, `PayElementApi_Tests`, `HrPolicyApi_Tests` |
+| Employee profile dashboard | `EmployeeDashboardProjection_Tests`, `EmployeeListApi_Tests.Should_Get_Employee_Dashboard_From_Stored_HR_Data`, and the attendance-only resolver regression in `HrPolicyAppService_Tests` |
+| Employee onboarding and public submission | `EmployeeApplication_Tests` for the forward-only terminal state graph and token regeneration, `EmployeeApplicationAppService_Tests` for validation, unique invitation numbers, legacy uploads, atomic scope changes, and deferred effects, `EmployeeOnboardingAcademicScopeAssigner_Tests` for the BulkAssign gate, `EmployeeApplicationUploadPolicy_Tests` for strict-new and legacy-stored MIME behavior, `EmployeePersonalInfoAppService_Tests` for explicit role approval and employee-group audiences, `RolesSeederContributor_Tests` for stable role metadata, `EfCoreSampleAppServiceTests` for identity-role metadata round trips, and `EmployeeApplicationPublicApi_Tests` for multipart validation and upload limits |
+| Payroll settings | `EarningComponentAppService_Tests` dependency lifecycle tests, `EarningComponentDependencyConcurrency_Tests` two-transaction graph races, `EarningComponentApi_Tests`, `DeductionComponentApi_Tests`, `PfRuleApi_Tests`, `PayElementApi_Tests`, `HrPolicyApi_Tests` |
 | Payroll preview, review, lock, or slips | `RunPayrollApi_Tests`, `SalarySlipApi_Tests`, `AttendanceImportLogsApi_Tests` |
-| Attendance and imports | `AttendanceTrackingApi_Tests`, `AttendanceImportLogsApi_Tests`, `AttendancePolicyEvaluationApi_Tests` |
-| Leave policies and requests | `LeavePolicyApi_Tests`, `LeaveManagementApi_Tests` |
+| Attendance and imports | `TakeAttendanceApi_Tests`, `AttendanceTrackingApi_Tests`, `AttendanceImportLogsApi_Tests`, `AttendancePolicyEvaluationApi_Tests` |
+| Leave policies and requests | `LeavePolicyApi_Tests`, `LeavePolicyAppService_Tests`, `LeaveManagementApi_Tests` |
 | Calendar events and holidays | `EventApi_Tests`, `HolidayApi_Tests`, `EventTypeApi_Tests`, `HolidayTypeApi_Tests`, `CalendarViewApi_Tests` |
-| Reports | `EmployeeReportApi_Tests` |
+| Policy rules and audit | `PolicyAggregateRequiredIds_Tests`, `HrPolicyAppService_Tests`, `PolicyReportRegression_Tests` |
+| Reports | `HrReportApi_Tests`, `PolicyReportRegression_Tests`, `EfCoreHrReportExportJobRepository_Tests` |
+
+Policy regression coverage must prove semantic manual-holiday audit comparison, restore-name collisions, archived/current filtering before paging, leave-policy restore conflicts, normal-workflow archive rejection, and stable unique-constraint errors.
+Report regression coverage must prove PDF row-cap metadata, inverted-date request suppression, newly queued export visibility, failed-export deletion wiring, UTC PostgreSQL timestamp boundaries, broad-owner to narrow-recipient rejection, compatible recipient access, cross-tenant rejection, owner and recipient scope revocation, schedule-owner permission revocation, invalid-first schedule isolation, legacy queued-snapshot capture, fail-closed legacy generation without an effective owner scope, retry generation fencing, and stale queued-snapshot rejection by the export worker.
+Scheduled-delivery coverage must prove that delivery waits for unit-of-work completion, still runs without an ambient unit of work, and cannot fail an already committed schedule.
 
 ## Frontend integration checks
 

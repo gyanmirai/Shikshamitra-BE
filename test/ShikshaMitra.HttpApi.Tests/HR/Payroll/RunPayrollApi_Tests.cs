@@ -57,6 +57,64 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_Register_Should_Recognize_Saved_Components_Without_Payroll_Metadata()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"SavedStructureOnly{Guid.NewGuid():N}",
+			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+		var earning = await PayrollTestHelper.CreateEarningComponentAsync(
+			Client,
+			$"SavedStructureEarn{Guid.NewGuid():N}");
+		var deduction = await PayrollTestHelper.CreateDeductionComponentAsync(
+			Client,
+			$"SavedStructureDed{Guid.NewGuid():N}");
+
+		var structureResponse = await Client.PutAsJsonAsync(
+			$"/api/payroll/employees/{employee.Id}/salary-structure",
+			new UpdateSalaryStructureDto
+			{
+				EarningComponents =
+				[
+					new SalaryComponentDto
+					{
+						ComponentId = earning.Id,
+						Name = earning.Name,
+						Amount = 25000m,
+						IsFixed = true,
+						IsTemp = false,
+						ApplicableMonth = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)
+					}
+				],
+				DeductionComponents =
+				[
+					new SalaryComponentDto
+					{
+						ComponentId = deduction.Id,
+						Name = deduction.Name,
+						Amount = 1000m,
+						IsFixed = true,
+						IsTemp = false,
+						ApplicableMonth = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc)
+					}
+				]
+			},
+			JsonOptions);
+		var structureBody = await structureResponse.Content.ReadAsStringAsync();
+		structureResponse.StatusCode.ShouldBe(HttpStatusCode.OK, structureBody);
+
+		var preview = await GetAndReadAsync<RunPayrollResponse>(
+			$"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=true");
+		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
+
+		item.EarningComponents.ShouldNotBeEmpty();
+		item.IssueCodes.ShouldNotContain(IssueCodes.MissingSalaryStructure);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Ignore_Holiday_Attendance_For_Selected_Academic_Year()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();

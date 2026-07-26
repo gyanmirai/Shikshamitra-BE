@@ -8,4 +8,5 @@ public class PolicyListRequestDto : PagedAndSortedResultRequestDto
 	public Guid AcademicYearId { get; set; }
 	public string? Search { get; set; }
 	public string? TargetType { get; set; }
+	public bool? IsArchived { get; set; }
 }

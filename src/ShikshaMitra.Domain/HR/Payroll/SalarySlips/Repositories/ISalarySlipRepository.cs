@@ -24,11 +24,11 @@ public interface ISalarySlipRepository : IRepository<SalarySlip, Guid>
 		CancellationToken cancellationToken = default);
 
 	/// <summary>
-	/// Checks if any finalized salary slip exists for a specific month
+	/// Checks if any immutable (finalized or paid) salary slip exists for a specific month
 	/// </summary>
 	/// <param name="monthYear">Month and year in YYYY-MM format</param>
 	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>True if any finalized slip exists, false otherwise</returns>
+	/// <returns>True if any immutable slip exists, false otherwise</returns>
 	Task<bool> HasFinalizedSlipsForMonthAsync(
 		string monthYear,
 		CancellationToken cancellationToken = default);

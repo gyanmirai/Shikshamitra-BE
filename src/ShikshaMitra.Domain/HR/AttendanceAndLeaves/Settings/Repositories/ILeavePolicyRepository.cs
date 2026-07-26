@@ -19,12 +19,14 @@ public interface ILeavePolicyRepository : IRepository<LeavePolicy, Guid>
 		string? sorting = null,
 		string? search = null,
 		bool includeInactive = false,
+		bool? archivedOnly = null,
 		CancellationToken cancellationToken = default);
 
 	Task<long> GetCountByAcademicYearIdAsync(
 		Guid academicYearId,
 		string? search = null,
 		bool includeInactive = false,
+		bool? archivedOnly = null,
 		CancellationToken cancellationToken = default);
 
 	Task<LeavePolicy?> FindWithoutDetailsAsync(Guid id, CancellationToken cancellationToken = default);

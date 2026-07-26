@@ -27,6 +27,7 @@ public class AttendancePolicyConfiguration : IEntityTypeConfiguration<Attendance
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Name })
 			.IsUnique()
+			.HasFilter("\"Status\" <> 2")
 			.HasDatabaseName("IX_HR_AttendancePolicies_Tenant_AcademicYear_Name");
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsDefault })

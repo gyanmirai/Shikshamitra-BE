@@ -169,18 +169,6 @@ public class EmployeeApplicationPersonalInfoDto
 	public string? Pincode { get; set; }
 }
 
-public class FinalizeEmployeeApplicationDto
-{
-	[Required]
-	public CreateEmployeePersonalInfoDto PersonalInfo { get; set; } = new();
-
-	public EmployeeApplicationFamilyInfoDto? FamilyInfo { get; set; }
-	public EmployeeApplicationAdditionalInfoDto? AdditionalInfo { get; set; }
-	public List<EmployeeApplicationWorkExperienceDto> WorkExperiences { get; set; } = [];
-	public bool UseSubmittedPhoto { get; set; } = true;
-	public bool AttachResumeAsDocument { get; set; } = true;
-}
-
 public class EmployeeApplicationFinalizeResultDto
 {
 	public EmployeeApplicationDto Application { get; set; } = new();

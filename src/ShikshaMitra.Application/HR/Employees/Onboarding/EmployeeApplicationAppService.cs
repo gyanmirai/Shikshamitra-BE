@@ -21,6 +21,7 @@ using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Encryption;
+using Volo.Abp.Uow;
 using Volo.Abp.Validation;
 
 namespace ShikshaMitra.HR.Employees.Onboarding;
@@ -37,14 +38,16 @@ public class EmployeeApplicationAppService(
 	IAcademicYearRepository academicYearRepository,
 	IBlobContainer blobContainer,
 	IDataFilter dataFilter,
+	IUnitOfWorkManager unitOfWorkManager,
 	IStringEncryptionService stringEncryptionService,
-	IEmployeeOnboardingInvitationEmailService invitationEmailService)
+	IEmployeeOnboardingInvitationEmailService invitationEmailService,
+	EmployeeOnboardingAcademicScopeAssigner academicScopeAssigner)
 	: ApplicationService, IEmployeeApplicationAppService
 {
 	private const int TokenExpiryDays = 30;
+	private const int MaxApplicationNumberInsertAttempts = 5;
 	private const string DefaultPolicyAssignmentReason = "Employee onboarding default policy assignment";
 	private const string DefaultPolicyConfirmationTokenMarker = "__employee_onboarding_default_policy_assignment__";
-	private static readonly string[] ResumeExtensions = [".pdf", ".doc", ".docx"];
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.View)]
 	public async Task<PagedResultDto<EmployeeApplicationListItemDto>> GetListAsync(GetEmployeeApplicationListInput input)
@@ -89,25 +92,57 @@ public class EmployeeApplicationAppService(
 		var token = CreateRawToken();
 		var now = Clock.Now;
 		var publicPath = CreatePublicPath(token);
-		var application = new EmployeeApplication(
-			GuidGenerator.Create(),
-			CurrentTenant.Id,
-			CreateApplicationNumber(now),
-			HashToken(token),
-			stringEncryptionService.Encrypt(token),
-			now.AddDays(TokenExpiryDays),
-			now,
-			input.FirstName,
-			input.MiddleName,
-			input.LastName,
-			input.Email,
-			input.MobileNo,
-			input.PositionAppliedFor,
-			input.DepartmentAppliedFor);
-
-		application = await applicationRepository.InsertAsync(application, autoSave: true);
+		var application = await InsertInvitationWithRetryAsync(input, token, now);
 		var emailResult = await invitationEmailService.SendInvitationAsync(application, publicPath);
 		return CreateInviteResponse(application, token, emailResult);
+	}
+
+	private async Task<EmployeeApplication> InsertInvitationWithRetryAsync(
+		CreateEmployeeApplicationInviteDto input,
+		string token,
+		DateTime now)
+	{
+		for (var attempt = 1; attempt <= MaxApplicationNumberInsertAttempts; attempt++)
+		{
+			var application = new EmployeeApplication(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				CreateApplicationNumber(now),
+				HashToken(token),
+				stringEncryptionService.Encrypt(token),
+				now.AddDays(TokenExpiryDays),
+				now,
+				input.FirstName,
+				input.MiddleName,
+				input.LastName,
+				input.Email,
+				input.MobileNo,
+				input.PositionAppliedFor,
+				input.DepartmentAppliedFor);
+
+			try
+			{
+				using var insertionUnitOfWork = unitOfWorkManager.Begin(
+					new AbpUnitOfWorkOptions { IsTransactional = true },
+					requiresNew: true);
+				application = await applicationRepository.InsertAsync(application, autoSave: true);
+				await insertionUnitOfWork.CompleteAsync();
+				return application;
+			}
+			catch (Exception ex) when (
+				IsApplicationNumberUniqueConstraintViolation(ex) &&
+				attempt < MaxApplicationNumberInsertAttempts)
+			{
+				Logger.LogWarning(
+					ex,
+					"Employee application number collision detected. Retrying invitation creation (attempt {Attempt}/{MaxAttempts}).",
+					attempt + 1,
+					MaxApplicationNumberInsertAttempts);
+			}
+		}
+
+		throw new InvalidOperationException(
+			"Employee application invitation retry loop exited unexpectedly.");
 	}
 
 	private async Task EnsureInviteEmailAvailableAsync(string email)
@@ -164,7 +199,11 @@ public class EmployeeApplicationAppService(
 		var token = CreateRawToken();
 		var now = Clock.Now;
 		var publicPath = CreatePublicPath(token);
-		application.SetToken(HashToken(token), stringEncryptionService.Encrypt(token), now.AddDays(TokenExpiryDays), now);
+		application.RegenerateInvitationToken(
+			HashToken(token),
+			stringEncryptionService.Encrypt(token),
+			now.AddDays(TokenExpiryDays),
+			now);
 		application = await applicationRepository.UpdateAsync(application, autoSave: true);
 		var emailResult = await invitationEmailService.SendInvitationAsync(application, publicPath);
 		return CreateInviteResponse(application, token, emailResult);
@@ -173,10 +212,15 @@ public class EmployeeApplicationAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.Finalize)]
 	public async Task<EmployeeApplicationFinalizeResultDto> FinalizeAsync(Guid id, FinalizeEmployeeApplicationDto input)
 	{
+		using var finalizationUnitOfWork = unitOfWorkManager.Begin(
+			new AbpUnitOfWorkOptions { IsTransactional = true },
+			requiresNew: true);
 		var application = await GetApplicationAsync(id);
 		if (!application.SubmittedAt.HasValue)
 		{
-			throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidStatusTransition);
+			throw new BusinessException(
+				HRErrorCodes.EmployeeApplicationSubmissionRequired,
+				"The candidate must submit the onboarding application before HR can finalize it.");
 		}
 
 		if (application.Status is EmployeeApplicationStatus.Rejected or EmployeeApplicationStatus.Withdrawn)
@@ -186,16 +230,50 @@ public class EmployeeApplicationAppService(
 
 		await EnsureFinalizationPolicyOverrideAsync(input.PersonalInfo);
 
+		var isTeachingEmployee = input.PersonalInfo.EmployeeGroup == EmployeeGroupType.Teaching;
+		if (isTeachingEmployee)
+		{
+			if (!input.AcademicYearId.HasValue ||
+			    input.AcademicYearId.Value == Guid.Empty ||
+			    input.AcademicScopes is not { Count: > 0 })
+			{
+				throw new AbpValidationException(
+					"Teaching employee academic permission validation failed.");
+			}
+
+			await academicScopeAssigner.ValidateAsync(
+				input.AcademicYearId.Value,
+				input.AcademicScopes);
+		}
+
 		var (photoFileName, photoContent) = await ReadProfilePhotoForFinalizationAsync(application, input.UseSubmittedPhoto);
-		var employee = await personalInfoCreationWorkflow.CreateAsync(
+		var employee = await personalInfoCreationWorkflow.CreateInCurrentUnitOfWorkAsync(
 			input.PersonalInfo,
 			photoFileName,
 			photoContent);
 
+		if (isTeachingEmployee)
+		{
+			if (!employee.UserId.HasValue ||
+			    !input.AcademicYearId.HasValue ||
+			    input.AcademicScopes is not { Count: > 0 })
+			{
+				throw new AbpValidationException(
+					"Teaching employee academic permission validation failed.");
+			}
+
+			await academicScopeAssigner.AssignAsync(
+				employee.UserId.Value,
+				input.AcademicYearId.Value,
+				input.AcademicScopes);
+		}
+
 		var workExperiences = (input.WorkExperiences.Count > 0
 				? input.WorkExperiences
-				: application.WorkExperiences.Select(MapToWorkExperienceDto).ToList())
-			.Select(MapToWorkExperience)
+				: application.WorkExperiences
+					.Select(EmployeeApplicationFormMapper.ToWorkExperienceDto)
+					.ToList())
+			.Select(EmployeeApplicationFormMapper.ToWorkExperience)
 			.ToList();
 
 		if (workExperiences.Count > 0)
@@ -204,8 +282,12 @@ public class EmployeeApplicationAppService(
 			await employeeRepository.UpdateAsync(updatedEmployee, autoSave: true);
 		}
 
-		await ApplyFamilyInfoAsync(employee.Id, input.FamilyInfo ?? MapToFamilyInfoDto(application.FamilyInfo));
-		await ApplyAdditionalInfoAsync(employee.Id, input.AdditionalInfo ?? MapToAdditionalInfoDto(application.AdditionalInfo));
+		await ApplyFamilyInfoAsync(
+			employee.Id,
+			input.FamilyInfo ?? EmployeeApplicationFormMapper.ToFamilyInfoDto(application.FamilyInfo));
+		await ApplyAdditionalInfoAsync(
+			employee.Id,
+			input.AdditionalInfo ?? EmployeeApplicationFormMapper.ToAdditionalInfoDto(application.AdditionalInfo));
 
 		if (input.AttachResumeAsDocument)
 		{
@@ -215,11 +297,13 @@ public class EmployeeApplicationAppService(
 		application.MarkFinalized(employee.Id, Clock.Now);
 		application = await applicationRepository.UpdateAsync(application, autoSave: true);
 
-		return new EmployeeApplicationFinalizeResultDto
+		var result = new EmployeeApplicationFinalizeResultDto
 		{
 			Application = MapToDto(application, includePublicPath: true),
 			Employee = employee
 		};
+		await finalizationUnitOfWork.CompleteAsync();
+		return result;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.View)]
@@ -231,11 +315,21 @@ public class EmployeeApplicationAppService(
 			return null;
 		}
 
+		var fileName = application.ResumeFileName ?? "resume.pdf";
+		var (safeFileName, canonicalContentType) = NormalizeStoredUploadMetadata(
+			fileName,
+			application.ResumeContentType,
+			EmployeeApplicationUploadKind.Resume);
+		var content = await ReadBlobAsync(application.ResumeBlobName);
+		FileValidationService.ValidateDocumentUpload(
+			safeFileName,
+			content,
+			application.ResumeSize ?? content.Length);
 		return new EmployeeApplicationFileDto
 		{
-			FileName = application.ResumeFileName ?? "resume",
-			ContentType = application.ResumeContentType ?? "application/octet-stream",
-			Content = await ReadBlobAsync(application.ResumeBlobName)
+			FileName = safeFileName,
+			ContentType = canonicalContentType,
+			Content = content
 		};
 	}
 
@@ -248,11 +342,18 @@ public class EmployeeApplicationAppService(
 			return null;
 		}
 
+		var fileName = application.PhotoFileName ?? "photo.png";
+		var (safeFileName, canonicalContentType) = NormalizeStoredUploadMetadata(
+			fileName,
+			application.PhotoContentType,
+			EmployeeApplicationUploadKind.Photo);
+		var content = await ReadBlobAsync(application.PhotoBlobName);
+		FileValidationService.ValidateProfilePictureUpload(safeFileName, content);
 		return new EmployeeApplicationFileDto
 		{
-			FileName = application.PhotoFileName ?? "photo",
-			ContentType = application.PhotoContentType ?? "application/octet-stream",
-			Content = await ReadBlobAsync(application.PhotoBlobName)
+			FileName = safeFileName,
+			ContentType = canonicalContentType,
+			Content = content
 		};
 	}
 
@@ -293,10 +394,12 @@ public class EmployeeApplicationAppService(
 			ValidatePublicSubmitInput(input, now);
 			ValidateUploadInputs(resume, photo);
 
-			var personalInfo = MapToPersonalInfoSnapshot(input.PersonalInfo);
-			var familyInfo = MapToFamilyInfoSnapshot(input.FamilyInfo);
-			var additionalInfo = MapToAdditionalInfoSnapshot(input.AdditionalInfo);
-			var workExperiences = input.WorkExperiences.Select(MapToWorkExperience).ToList();
+			var personalInfo = EmployeeApplicationSnapshotMapper.ToPersonalInfo(input.PersonalInfo);
+			var familyInfo = EmployeeApplicationSnapshotMapper.ToFamilyInfo(input.FamilyInfo);
+			var additionalInfo = EmployeeApplicationSnapshotMapper.ToAdditionalInfo(input.AdditionalInfo);
+			var workExperiences = input.WorkExperiences
+				.Select(EmployeeApplicationFormMapper.ToWorkExperience)
+				.ToList();
 
 			var resumeMetadata = await SaveResumeAsync(application.Id, resume);
 			var photoMetadata = await SavePhotoAsync(application.Id, photo);
@@ -317,7 +420,9 @@ public class EmployeeApplicationAppService(
 
 	private static void ValidatePublicSubmitInput(PublicEmployeeApplicationSubmitDto input, DateTime now)
 	{
-		var validationResults = PublicEmployeeApplicationSubmitValidation.Validate(input, now);
+		var validationResults = PublicEmployeeApplicationSubmitValidation.Validate(
+			input,
+			PublicEmployeeApplicationSubmitValidation.GetInstitutionDate(now));
 		if (validationResults.Count > 0)
 		{
 			throw new AbpValidationException("Employee application validation failed.", validationResults.ToList());
@@ -330,101 +435,22 @@ public class EmployeeApplicationAppService(
 	{
 		if (resume != null && resume.Content.Length > 0)
 		{
-			var fileName = EnsureSafeFileName(resume.FileName);
-			var extension = Path.GetExtension(fileName).ToLowerInvariant();
-			if (!ResumeExtensions.Contains(extension))
-			{
-				throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidUpload)
-					.WithData("allowedExtensions", string.Join(", ", ResumeExtensions));
-			}
-
+			var (fileName, _) = NormalizeUploadMetadata(
+				resume.FileName,
+				resume.ContentType,
+				EmployeeApplicationUploadKind.Resume);
 			FileValidationService.ValidateDocumentUpload(fileName, resume.Content, resume.Size);
 		}
 
 		if (photo != null && photo.Content.Length > 0)
 		{
-			var fileName = EnsureSafeFileName(photo.FileName);
+			var (fileName, _) = NormalizeUploadMetadata(
+				photo.FileName,
+				photo.ContentType,
+				EmployeeApplicationUploadKind.Photo);
 			FileValidationService.ValidateProfilePictureUpload(fileName, photo.Content);
 		}
 	}
-
-	private static EmployeeApplicationPersonalInfoSnapshot MapToPersonalInfoSnapshot(
-		EmployeeApplicationPersonalInfoDto input) =>
-		new(
-			input.FirstName,
-			input.MiddleName,
-			input.ShortName,
-			input.LastName,
-			input.Email,
-			input.MobileNo,
-			input.SecondaryMobileNo,
-			input.DateOfBirth.HasValue ? DateOnly.FromDateTime(input.DateOfBirth.Value) : null,
-			input.Gender,
-			input.Religion,
-			input.CasteType,
-			input.FamilyCaste,
-			input.MaritalStatus,
-			input.BloodGroup,
-			input.IsTeaching,
-			input.Department,
-			input.Designation,
-			input.Qualification,
-			input.IdentificationMark1,
-			input.Address1,
-			input.Address2,
-			input.Address3,
-			MapToLocationSnapshot(input.Country),
-			MapToLocationSnapshot(input.State),
-			input.City,
-			input.Pincode);
-
-	private static EmployeeApplicationFamilyInfoSnapshot? MapToFamilyInfoSnapshot(
-		EmployeeApplicationFamilyInfoDto? input)
-	{
-		if (input == null)
-		{
-			return null;
-		}
-
-		var father = MapToFamilyMemberSnapshot(input.FatherDetails);
-		var mother = MapToFamilyMemberSnapshot(input.MotherDetails);
-		var spouse = MapToFamilyMemberSnapshot(input.SpouseDetails);
-		return father == null && mother == null && spouse == null
-			? null
-			: new EmployeeApplicationFamilyInfoSnapshot(father, mother, spouse);
-	}
-
-	private static EmployeeApplicationFamilyMemberSnapshot? MapToFamilyMemberSnapshot(
-		EmployeeApplicationFamilyMemberDto? input) =>
-		input == null || IsEmptyFamilyMember(input)
-			? null
-			: new EmployeeApplicationFamilyMemberSnapshot(
-				input.Name,
-				input.Occupation,
-				input.MobileNo,
-				input.Address1,
-				input.Address2,
-				input.Address3,
-				MapToLocationSnapshot(input.Country),
-				MapToLocationSnapshot(input.State),
-				input.City,
-				input.Pincode);
-
-	private static EmployeeApplicationAdditionalInfoSnapshot? MapToAdditionalInfoSnapshot(
-		EmployeeApplicationAdditionalInfoDto? input) =>
-		input == null || !HasAdditionalInfo(input)
-			? null
-			: new EmployeeApplicationAdditionalInfoSnapshot(
-				input.PersonWithDisability,
-				input.SecondLanguage,
-				input.IsLibraryMember,
-				input.IsTransportMember);
-
-	private static EmployeeApplicationLocationSnapshot? MapToLocationSnapshot(
-		EmployeeApplicationLocationInfo? input) =>
-		input == null || string.IsNullOrWhiteSpace(input.Name)
-			? null
-			: new EmployeeApplicationLocationSnapshot(input.Name, input.IsoCode);
 
 	private async Task ApplyFamilyInfoAsync(Guid employeeId, EmployeeApplicationFamilyInfoDto? familyInfo)
 	{
@@ -549,9 +575,13 @@ public class EmployeeApplicationAppService(
 			return (null, null);
 		}
 
-		return (
-			application.PhotoFileName ?? "profile-picture",
-			await ReadBlobAsync(application.PhotoBlobName));
+		var (fileName, _) = NormalizeStoredUploadMetadata(
+			application.PhotoFileName ?? "photo.png",
+			application.PhotoContentType,
+			EmployeeApplicationUploadKind.Photo);
+		var content = await ReadBlobAsync(application.PhotoBlobName);
+		FileValidationService.ValidateProfilePictureUpload(fileName, content);
+		return (fileName, content);
 	}
 
 	private async Task AttachResumeAsync(Guid employeeId, EmployeeApplication application)
@@ -562,11 +592,19 @@ public class EmployeeApplicationAppService(
 		}
 
 		var content = await ReadBlobAsync(application.ResumeBlobName);
+		var (fileName, canonicalContentType) = NormalizeStoredUploadMetadata(
+			application.ResumeFileName ?? "resume.pdf",
+			application.ResumeContentType,
+			EmployeeApplicationUploadKind.Resume);
+		FileValidationService.ValidateDocumentUpload(
+			fileName,
+			content,
+			application.ResumeSize ?? content.Length);
 		await employeeDocumentManager.AddDocumentsAsync(employeeId, [
 			new EmployeeDocumentData
 			{
-				FileName = application.ResumeFileName ?? "resume.pdf",
-				ContentType = application.ResumeContentType ?? "application/octet-stream",
+				FileName = fileName,
+				ContentType = canonicalContentType,
 				Content = content,
 				Size = application.ResumeSize ?? content.Length
 			}
@@ -582,14 +620,10 @@ public class EmployeeApplicationAppService(
 			return null;
 		}
 
-		var fileName = EnsureSafeFileName(file.FileName);
-		var extension = Path.GetExtension(fileName).ToLowerInvariant();
-		if (!ResumeExtensions.Contains(extension))
-		{
-			throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidUpload)
-				.WithData("allowedExtensions", string.Join(", ", ResumeExtensions));
-		}
-
+		var (fileName, canonicalContentType) = NormalizeUploadMetadata(
+			file.FileName,
+			file.ContentType,
+			EmployeeApplicationUploadKind.Resume);
 		FileValidationService.ValidateDocumentUpload(fileName, file.Content, file.Size);
 
 		var blobName = $"employee-applications/{applicationId}/resume/{GuidGenerator.Create():N}_{fileName}";
@@ -598,7 +632,7 @@ public class EmployeeApplicationAppService(
 		{
 			BlobName = blobName,
 			FileName = fileName,
-			ContentType = file.ContentType,
+			ContentType = canonicalContentType,
 			Size = file.Size
 		};
 	}
@@ -612,7 +646,10 @@ public class EmployeeApplicationAppService(
 			return null;
 		}
 
-		var fileName = EnsureSafeFileName(file.FileName);
+		var (fileName, canonicalContentType) = NormalizeUploadMetadata(
+			file.FileName,
+			file.ContentType,
+			EmployeeApplicationUploadKind.Photo);
 		FileValidationService.ValidateProfilePictureUpload(fileName, file.Content);
 
 		var blobName = $"employee-applications/{applicationId}/photo/{GuidGenerator.Create():N}_{fileName}";
@@ -621,7 +658,7 @@ public class EmployeeApplicationAppService(
 		{
 			BlobName = blobName,
 			FileName = fileName,
-			ContentType = file.ContentType,
+			ContentType = canonicalContentType,
 			Size = file.Size
 		};
 	}
@@ -634,20 +671,50 @@ public class EmployeeApplicationAppService(
 		return memoryStream.ToArray();
 	}
 
-	private static string EnsureSafeFileName(string fileName)
+	private static (string FileName, string ContentType) NormalizeUploadMetadata(
+		string? fileName,
+		string? contentType,
+		EmployeeApplicationUploadKind kind)
 	{
-		if (string.IsNullOrWhiteSpace(fileName))
+		if (!EmployeeApplicationUploadPolicy.TryNormalize(
+			    fileName,
+			    contentType,
+			    kind,
+			    out var safeFileName,
+			    out var canonicalContentType))
 		{
-			throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidUpload);
+			throw new BusinessException(
+					HRErrorCodes.EmployeeApplicationInvalidUpload,
+					"The upload filename, extension, or content type is not allowed.")
+				.WithData(
+					"allowedExtensions",
+					EmployeeApplicationUploadPolicy.GetAllowedExtensions(kind));
 		}
 
-		var sanitized = Path.GetFileName(fileName);
-		if (sanitized != fileName)
+		return (safeFileName, canonicalContentType);
+	}
+
+	private static (string FileName, string ContentType) NormalizeStoredUploadMetadata(
+		string? fileName,
+		string? contentType,
+		EmployeeApplicationUploadKind kind)
+	{
+		if (!EmployeeApplicationUploadPolicy.TryNormalizeStored(
+			    fileName,
+			    contentType,
+			    kind,
+			    out var safeFileName,
+			    out var canonicalContentType))
 		{
-			throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidUpload);
+			throw new BusinessException(
+					HRErrorCodes.EmployeeApplicationInvalidUpload,
+					"The stored upload filename, extension, or content type is not allowed.")
+				.WithData(
+					"allowedExtensions",
+					EmployeeApplicationUploadPolicy.GetAllowedExtensions(kind));
 		}
 
-		return sanitized;
+		return (safeFileName, canonicalContentType);
 	}
 
 	private EmployeeApplicationInviteDto CreateInviteResponse(
@@ -684,7 +751,26 @@ public class EmployeeApplicationAppService(
 	}
 
 	private string CreateApplicationNumber(DateTime now) =>
-		$"EA-{now:yyyyMMddHHmmss}-{GuidGenerator.Create().ToString("N")[..6].ToUpperInvariant()}";
+		$"EA-{now:yyyyMMddHHmmss}-{GuidGenerator.Create().ToString("N")[^10..].ToUpperInvariant()}";
+
+	private static bool IsApplicationNumberUniqueConstraintViolation(Exception exception)
+	{
+		for (var current = exception; current != null; current = current.InnerException)
+		{
+			var message = current.Message;
+			if (message.Contains(
+				    "IX_EmployeeApplications_TenantId_ApplicationNumber",
+				    StringComparison.OrdinalIgnoreCase) ||
+			    message.Contains(
+				    "AppEmployeeApplications.TenantId, AppEmployeeApplications.ApplicationNumber",
+				    StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
 
 	private static EmployeeApplicationListItemDto MapToListItemDto(EmployeeApplication application) =>
 		new()
@@ -736,14 +822,16 @@ public class EmployeeApplicationAppService(
 			Address1 = application.Address1,
 			Address2 = application.Address2,
 			Address3 = application.Address3,
-			Country = MapToLocation(application.Country),
-			State = MapToLocation(application.State),
+			Country = EmployeeApplicationFormMapper.ToLocation(application.Country),
+			State = EmployeeApplicationFormMapper.ToLocation(application.State),
 			City = application.City,
 			PinCode = application.PinCode,
-			PersonalInfo = MapToPersonalInfoDto(application.PersonalInfo),
-			FamilyInfo = MapToFamilyInfoDto(application.FamilyInfo),
-			AdditionalInfo = MapToAdditionalInfoDto(application.AdditionalInfo),
-			WorkExperiences = application.WorkExperiences.Select(MapToWorkExperienceDto).ToList(),
+			PersonalInfo = EmployeeApplicationFormMapper.ToPersonalInfoDto(application.PersonalInfo),
+			FamilyInfo = EmployeeApplicationFormMapper.ToFamilyInfoDto(application.FamilyInfo),
+			AdditionalInfo = EmployeeApplicationFormMapper.ToAdditionalInfoDto(application.AdditionalInfo),
+			WorkExperiences = application.WorkExperiences
+				.Select(EmployeeApplicationFormMapper.ToWorkExperienceDto)
+				.ToList(),
 			TokenExpiresAt = application.TokenExpiresAt,
 			LinkLastIssuedAt = application.LinkLastIssuedAt,
 			SubmittedAt = application.SubmittedAt,
@@ -850,192 +938,4 @@ public class EmployeeApplicationAppService(
 		};
 	}
 
-	private static EmployeeApplicationLocationInfo? MapToLocation(Country? value) =>
-		value == null ? null : new EmployeeApplicationLocationInfo { Name = value.Name, IsoCode = value.IsoCode };
-
-	private static EmployeeApplicationLocationInfo? MapToLocation(State? value) =>
-		value == null ? null : new EmployeeApplicationLocationInfo { Name = value.Name, IsoCode = value.IsoCode };
-
-	private static EmployeeApplicationLocationInfo? MapToLocation(EmployeeApplicationLocationSnapshot? value) =>
-		value == null ? null : new EmployeeApplicationLocationInfo { Name = value.Name, IsoCode = value.IsoCode };
-
-	private static EmployeeApplicationPersonalInfoDto? MapToPersonalInfoDto(
-		EmployeeApplicationPersonalInfoSnapshot? value) =>
-		value == null
-			? null
-			: new EmployeeApplicationPersonalInfoDto
-			{
-				FirstName = value.FirstName,
-				MiddleName = value.MiddleName,
-				ShortName = value.ShortName,
-				LastName = value.LastName,
-				Email = value.Email,
-				MobileNo = value.MobileNo,
-				SecondaryMobileNo = value.SecondaryMobileNo,
-				DateOfBirth = value.DateOfBirth?.ToDateTime(TimeOnly.MinValue),
-				Gender = value.Gender,
-				Religion = value.Religion,
-				CasteType = value.CasteType,
-				FamilyCaste = value.FamilyCaste,
-				MaritalStatus = value.MaritalStatus,
-				BloodGroup = value.BloodGroup,
-				IsTeaching = value.IsTeaching,
-				Department = value.Department,
-				Designation = value.Designation,
-				Qualification = value.Qualification,
-				IdentificationMark1 = value.IdentificationMark1,
-				Address1 = value.Address1,
-				Address2 = value.Address2,
-				Address3 = value.Address3,
-				Country = MapToLocation(value.Country),
-				State = MapToLocation(value.State),
-				City = value.City,
-				Pincode = value.Pincode
-			};
-
-	private static EmployeeApplicationFamilyInfoDto? MapToFamilyInfoDto(
-		EmployeeApplicationFamilyInfoSnapshot? value) =>
-		value == null
-			? null
-			: new EmployeeApplicationFamilyInfoDto
-			{
-				FatherDetails = MapToFamilyMemberDto(value.FatherDetails),
-				MotherDetails = MapToFamilyMemberDto(value.MotherDetails),
-				SpouseDetails = MapToFamilyMemberDto(value.SpouseDetails)
-			};
-
-	private static EmployeeApplicationFamilyMemberDto? MapToFamilyMemberDto(
-		EmployeeApplicationFamilyMemberSnapshot? value) =>
-		value == null
-			? null
-			: new EmployeeApplicationFamilyMemberDto
-			{
-				Name = value.Name,
-				Occupation = value.Occupation,
-				MobileNo = value.MobileNo,
-				Address1 = value.Address1,
-				Address2 = value.Address2,
-				Address3 = value.Address3,
-				Country = MapToLocation(value.Country),
-				State = MapToLocation(value.State),
-				City = value.City,
-				Pincode = value.Pincode
-			};
-
-	private static EmployeeApplicationAdditionalInfoDto? MapToAdditionalInfoDto(
-		EmployeeApplicationAdditionalInfoSnapshot? value) =>
-		value == null
-			? null
-			: new EmployeeApplicationAdditionalInfoDto
-			{
-				PersonWithDisability = value.PersonWithDisability,
-				SecondLanguage = value.SecondLanguage,
-				IsLibraryMember = value.IsLibraryMember,
-				IsTransportMember = value.IsTransportMember
-			};
-
-	private static Country? MapToCountry(EmployeeApplicationLocationInfo? value) =>
-		value == null || string.IsNullOrWhiteSpace(value.Name)
-			? null
-			: new Country(value.Name, value.IsoCode);
-
-	private static State? MapToState(EmployeeApplicationLocationInfo? value) =>
-		value == null || string.IsNullOrWhiteSpace(value.Name)
-			? null
-			: new State(value.Name, value.IsoCode);
-
-	private static EmployeeApplicationWorkExperienceDto MapToWorkExperienceDto(WorkExperience experience)
-	{
-		var (city, state, country) = ParseWorkExperienceAddress(experience.OrganizationAddress);
-		return new EmployeeApplicationWorkExperienceDto
-		{
-			MediumStageName = experience.OrganizationName,
-			Designation = experience.Designation,
-			Department = experience.Department,
-			City = city,
-			State = state,
-			Country = country,
-			StartDate = experience.FromDate?.ToDateTime(TimeOnly.MinValue),
-			EndDate = experience.ToDate?.ToDateTime(TimeOnly.MinValue)
-		};
-	}
-
-	private static WorkExperience MapToWorkExperience(EmployeeApplicationWorkExperienceDto input)
-	{
-		return new WorkExperience(
-			input.MediumStageName,
-			BuildAddress(input),
-			input.StartDate.HasValue ? DateOnly.FromDateTime(input.StartDate.Value) : null,
-			input.EndDate.HasValue ? DateOnly.FromDateTime(input.EndDate.Value) : null,
-			input.Department,
-			input.Designation,
-			null,
-			null);
-	}
-
-	private static string? BuildAddress(EmployeeApplicationWorkExperienceDto input)
-	{
-		var parts = new List<string>();
-		if (!string.IsNullOrWhiteSpace(input.City))
-		{
-			parts.Add(input.City);
-		}
-
-		if (!string.IsNullOrWhiteSpace(input.State?.Name))
-		{
-			parts.Add(FormatLocation(input.State));
-		}
-
-		if (!string.IsNullOrWhiteSpace(input.Country?.Name))
-		{
-			parts.Add(FormatLocation(input.Country));
-		}
-
-		return parts.Count == 0 ? null : string.Join(", ", parts);
-	}
-
-	private static string FormatLocation(EmployeeApplicationLocationInfo location) =>
-		string.IsNullOrWhiteSpace(location.IsoCode)
-			? location.Name
-			: $"{location.Name} ({location.IsoCode})";
-
-	private static (string? city, EmployeeApplicationLocationInfo? state, EmployeeApplicationLocationInfo? country)
-		ParseWorkExperienceAddress(string? address)
-	{
-		if (string.IsNullOrWhiteSpace(address))
-		{
-			return (null, null, null);
-		}
-
-		var parts = address.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-		var city = parts.Length > 0 ? parts[0] : null;
-		var state = parts.Length > 1 ? ParseLocationPart(parts[1]) : null;
-		var country = parts.Length > 2 ? ParseLocationPart(parts[2]) : null;
-		return (city, state, country);
-	}
-
-	private static EmployeeApplicationLocationInfo? ParseLocationPart(string? part)
-	{
-		if (string.IsNullOrWhiteSpace(part))
-		{
-			return null;
-		}
-
-		var openParen = part.LastIndexOf('(');
-		var closeParen = part.LastIndexOf(')');
-		if (openParen > 0 && closeParen > openParen)
-		{
-			return new EmployeeApplicationLocationInfo
-			{
-				Name = part[..openParen].Trim(),
-				IsoCode = part[(openParen + 1)..closeParen].Trim()
-			};
-		}
-
-		return new EmployeeApplicationLocationInfo
-		{
-			Name = part.Trim(),
-			IsoCode = string.Empty
-		};
-	}
 }

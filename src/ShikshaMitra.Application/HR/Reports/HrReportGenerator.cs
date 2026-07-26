@@ -7,17 +7,58 @@ using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Timing;
 
 namespace ShikshaMitra.HR.Reports;
 
 public class HrReportGenerator(
 	IUserScopeService userScopeService,
+	HrUserScopeAccessService hrScopeAccessService,
 	HrReportEmployeeQueryService employeeQueryService,
 	HrReportRowSourceReader rowSourceReader,
 	HrReportRequestValidationService requestValidationService,
 	ICurrentTenant currentTenant,
-	IAsyncQueryableExecuter asyncExecuter) : ITransientDependency
+	IAsyncQueryableExecuter asyncExecuter,
+	IClock clock) : ITransientDependency
 {
+	public async Task<HrReportExportScopeSnapshot?> ResolveExportScopeAsync(
+		Guid userId,
+		Guid? tenantId)
+	{
+		using (currentTenant.Change(tenantId))
+		{
+			var scope = await userScopeService.GetUserScopeAsync(userId);
+			if (scope.TenantId != tenantId)
+			{
+				return null;
+			}
+
+			if (HrUserScopeAccess.HasHrWideAccess(scope))
+			{
+				return new HrReportExportScopeSnapshot
+				{
+					TenantId = tenantId,
+					HasTenantWideAccess = true
+				};
+			}
+
+			if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
+			{
+				return new HrReportExportScopeSnapshot
+				{
+					TenantId = tenantId
+				};
+			}
+
+			var mediumStageIds = await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope);
+			return new HrReportExportScopeSnapshot
+			{
+				TenantId = tenantId,
+				MediumStageIds = mediumStageIds.Distinct().OrderBy(x => x).ToList()
+			};
+		}
+	}
+
 	public Task<HrReportSourcesDto> GetSourcesAsync()
 	{
 		return Task.FromResult(new HrReportSourcesDto
@@ -39,34 +80,35 @@ public class HrReportGenerator(
 		using (currentTenant.Change(tenantId))
 		{
 			var scope = await userScopeService.GetUserScopeAsync(userId);
-			var source = ResolveSource(input);
-			var rowResult = await rowSourceReader.BuildRowsResultAsync(source, input, scope, exportAllRows);
-			var rows = rowResult.IsDatabaseBacked
-				? rowResult.Rows
-				: HrReportRequestProcessor.ShapeRows(rowResult.Rows, input);
+			return await GenerateForScopeAsync(input, scope, exportAllRows);
+		}
+	}
 
-			var totalCount = rowResult.IsDatabaseBacked ? rowResult.TotalCount : rows.Count;
-			var columns = HrReportCatalog.ResolveColumns(source, input, rows);
-			var pageRows = exportAllRows
-				? rows.Take(HrReportRequestProcessor.MaxExportRows).ToList()
-				: rowResult.IsDatabaseBacked
-					? rows
-					: rows.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToList();
-			var warnings = HrReportPreviewPresentation.BuildWarnings(source, input, exportAllRows, totalCount, rowResult.IsDatabaseBacked);
+	public async Task<HrReportPreviewDto> GenerateExportAsync(
+		HrReportRequestDto input,
+		Guid userId,
+		Guid? tenantId,
+		HrReportExportScopeSnapshot scopeSnapshot)
+	{
+		if (scopeSnapshot.TenantId != tenantId)
+		{
+			throw new InvalidOperationException("The HR report export scope tenant does not match the job tenant.");
+		}
 
-			return new HrReportPreviewDto
+		requestValidationService.Validate(input);
+		HrReportRequestProcessor.Normalize(input, exportAllRows: true);
+		using (currentTenant.Change(tenantId))
+		{
+			var scope = new UserScopeContext
 			{
-				DataSource = source,
-				ReportType = string.IsNullOrWhiteSpace(input.ReportType) ? HrReportCatalog.GetSource(source).Label : input.ReportType,
-				TotalCount = totalCount,
-				Page = input.Page,
-				PageSize = input.PageSize,
-				Columns = columns,
-				Rows = pageRows.Select(row => columns.ToDictionary(column => column.Id, column => row.GetValueOrDefault(column.Id))).ToList(),
-				NormalizedFilters = input.Filters,
-				QueryWarnings = warnings,
-				Chart = HrReportPreviewPresentation.BuildChartPreview(input, rows)
+				UserId = userId,
+				TenantId = tenantId,
+				IsAdmin = scopeSnapshot.HasTenantWideAccess,
+				HasWildcardAcademicYear = scopeSnapshot.HasTenantWideAccess,
+				MediumStageIds = [.. scopeSnapshot.MediumStageIds],
+				CalculatedAt = clock.Now
 			};
+			return await GenerateForScopeAsync(input, scope, exportAllRows: true);
 		}
 	}
 
@@ -87,7 +129,7 @@ public class HrReportGenerator(
 			{
 				ReportTypes = (await GetSourcesAsync()).Sources.Select(x => new HrReportOptionDto { Id = x.Id, Label = x.Label }).ToList(),
 				Departments = departments.Select(x => new HrReportOptionDto { Id = x, Label = x }).ToList(),
-				Statuses = Enum.GetValues<EmployeeStatusType>().Select(x => new HrReportOptionDto { Id = ((int)x).ToString(), Label = x.ToString() }).ToList()
+				Statuses = Enum.GetValues<EmployeeStatusType>().Select(x => new HrReportOptionDto { Id = ((int) x).ToString(), Label = x.ToString() }).ToList()
 			};
 		}
 	}
@@ -105,6 +147,46 @@ public class HrReportGenerator(
 				or HrReportTypes.AllowanceReport or HrReportTypes.DeductionReport or HrReportTypes.PayrollReconciliationReport
 				or HrReportTypes.LeaveEncashmentReport or HrReportTypes.FinalSettlementReport => HrReportDataSources.Payroll,
 			_ => HrReportDataSources.Employee
+		};
+	}
+
+	private async Task<HrReportPreviewDto> GenerateForScopeAsync(
+		HrReportRequestDto input,
+		UserScopeContext scope,
+		bool exportAllRows)
+	{
+		var source = ResolveSource(input);
+		var rowResult = await rowSourceReader.BuildRowsResultAsync(source, input, scope, exportAllRows);
+		var rows = rowResult.IsDatabaseBacked
+			? rowResult.Rows
+			: HrReportRequestProcessor.ShapeRows(rowResult.Rows, input);
+
+		var totalCount = rowResult.IsDatabaseBacked ? rowResult.TotalCount : rows.Count;
+		var columns = HrReportCatalog.ResolveColumns(source, input, rows);
+		var pageRows = exportAllRows
+			? rows.Take(HrReportRequestProcessor.MaxExportRows).ToList()
+			: rowResult.IsDatabaseBacked
+				? rows
+				: rows.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToList();
+		var warnings = HrReportPreviewPresentation.BuildWarnings(
+			source,
+			input,
+			exportAllRows,
+			totalCount,
+			rowResult.IsDatabaseBacked);
+
+		return new HrReportPreviewDto
+		{
+			DataSource = source,
+			ReportType = string.IsNullOrWhiteSpace(input.ReportType) ? HrReportCatalog.GetSource(source).Label : input.ReportType,
+			TotalCount = totalCount,
+			Page = input.Page,
+			PageSize = input.PageSize,
+			Columns = columns,
+			Rows = pageRows.Select(row => columns.ToDictionary(column => column.Id, column => row.GetValueOrDefault(column.Id))).ToList(),
+			NormalizedFilters = input.Filters,
+			QueryWarnings = warnings,
+			Chart = HrReportPreviewPresentation.BuildChartPreview(input, rows)
 		};
 	}
 

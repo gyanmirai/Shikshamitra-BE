@@ -21,7 +21,7 @@ internal static class PayrollIssueCodeBuilder
 	{
 		var issues = new List<string>();
 
-		if (payrollDetails == null || components.Count == 0)
+		if (components.Count == 0)
 		{
 			issues.Add(IssueCodes.MissingSalaryStructure);
 		}

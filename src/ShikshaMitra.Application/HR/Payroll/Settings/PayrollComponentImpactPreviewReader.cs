@@ -33,7 +33,8 @@ public class PayrollComponentImpactPreviewReader(
 		var effectiveMonth = PayrollComponentImpactProjection.ResolveEffectiveMonth(requestedEffectiveMonth, clock.Now);
 		var slips = await salarySlipRepository.GetByMonthAsync(effectiveMonth);
 		var linkedSlipRows = slips.Where(x => employeeIds.Contains(x.EmployeeId)).ToList();
-		var finalizedSlipCount = linkedSlipRows.Count(x => x.Status == SalarySlipStatus.Finalized);
+		var finalizedSlipCount = linkedSlipRows.Count(
+			x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid);
 		var draftSlipCount = linkedSlipRows.Count(x => x.Status == SalarySlipStatus.Draft);
 
 		return await BuildPreviewAsync(

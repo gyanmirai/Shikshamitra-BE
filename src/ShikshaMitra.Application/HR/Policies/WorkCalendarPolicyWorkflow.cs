@@ -16,7 +16,8 @@ public class WorkCalendarPolicyWorkflow(
 	HrPolicyImpactConfirmationService confirmationService,
 	HrPolicyVersionAppService versionAppService,
 	HrAuditWriter auditWriter,
-	WorkCalendarPolicyReader reader)
+	WorkCalendarPolicyReader reader,
+	HrPolicyNameUniquenessService nameUniquenessService)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<WorkCalendarPolicyDto> CreateAsync(CreateUpdateWorkCalendarPolicyDto input)
@@ -24,6 +25,7 @@ public class WorkCalendarPolicyWorkflow(
 		var status = HrPolicyMapping.ParsePolicyStatus(input.Status);
 		HrPolicyStatusGuard.EnsureArchiveUsesArchiveWorkflow(status);
 		await holidaySnapshotService.ValidateHolidaysAsync(input.AcademicYearId, input.Holidays);
+		await nameUniquenessService.EnsureWorkCalendarAvailableAsync(input.AcademicYearId, input.Name);
 
 		var entity = new WorkCalendarPolicy(
 			GuidGenerator.Create(),
@@ -37,7 +39,9 @@ public class WorkCalendarPolicyWorkflow(
 			input.CustomWeeklyOffs,
 			HrPolicyMapping.ParseHolidaySyncMode(input.HolidaySyncMode));
 
-		await repository.InsertAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecuteWorkCalendarWriteAsync(
+			entity.Name,
+			() => repository.InsertAsync(entity, autoSave: true));
 		await holidaySnapshotService.ReplaceHolidaysAsync(entity.Id, input.AcademicYearId, input.Holidays);
 		var dto = await BuildDtoAsync(entity);
 		await versionAppService.CaptureAsync("work_calendar", dto, "created");
@@ -56,13 +60,14 @@ public class WorkCalendarPolicyWorkflow(
 		var weeklyOffPattern = HrPolicyMapping.ParseWeeklyOffPattern(input.WeeklyOffPattern);
 		var holidaySyncMode = HrPolicyMapping.ParseHolidaySyncMode(input.HolidaySyncMode);
 		var existingHolidays = await reader.GetHolidaysAsync(entity.Id);
+		before.Holidays = existingHolidays;
+		before.HolidaySummary = HrPolicyMapping.BuildHolidaySummary(existingHolidays);
 		if (WorkCalendarPolicyChangeDetector.IsUnchanged(entity, input, existingHolidays, status, weeklyOffPattern, holidaySyncMode))
 		{
-			before.Holidays = existingHolidays;
-			before.HolidaySummary = HrPolicyMapping.BuildHolidaySummary(existingHolidays);
 			return before;
 		}
 
+		await nameUniquenessService.EnsureWorkCalendarAvailableAsync(entity.AcademicYearId, input.Name, entity.Id);
 		await holidaySnapshotService.ValidateHolidaysAsync(input.AcademicYearId, input.Holidays);
 		if (entity.Status != HrPolicyStatus.Draft || status != HrPolicyStatus.Draft)
 		{
@@ -85,22 +90,33 @@ public class WorkCalendarPolicyWorkflow(
 			input.CustomWeeklyOffs,
 			holidaySyncMode);
 
-		await repository.UpdateAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecuteWorkCalendarWriteAsync(
+			entity.Name,
+			() => repository.UpdateAsync(entity, autoSave: true));
 		await holidaySnapshotService.ReplaceHolidaysAsync(entity.Id, input.AcademicYearId, input.Holidays);
 		var dto = await BuildDtoAsync(entity);
 		await versionAppService.CaptureAsync("work_calendar", dto, "edited");
-		await auditWriter.WriteAsync(dto.AcademicYearId, "work_calendar_policy", dto.Id, dto.Name, "edited", $"Edited work calendar policy {dto.Name}", changedFields: HrAuditWriter.Diff(before, dto, "lastModificationTime", "lastModifierId"));
+		await auditWriter.WriteAsync(
+			dto.AcademicYearId,
+			"work_calendar_policy",
+			dto.Id,
+			dto.Name,
+			"edited",
+			$"Edited work calendar policy {dto.Name}",
+			changedFields: WorkCalendarPolicyAuditChangeBuilder.Build(before, dto));
 		return dto;
 	}
 
 	public async Task<WorkCalendarPolicyDto> CloneAsync(Guid id, HrPolicyCloneRequestDto input)
 	{
 		var source = await repository.GetAsync(id);
+		var cloneName = string.IsNullOrWhiteSpace(input.Name) ? $"{source.Name} Copy" : input.Name!;
+		await nameUniquenessService.EnsureWorkCalendarAvailableAsync(source.AcademicYearId, cloneName);
 		var entity = new WorkCalendarPolicy(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			source.AcademicYearId,
-			string.IsNullOrWhiteSpace(input.Name) ? $"{source.Name} Copy" : input.Name!,
+			cloneName,
 			HrPolicyStatus.Draft,
 			input.EffectiveFrom?.Date ?? source.EffectiveFrom,
 			source.EffectiveTo,
@@ -108,7 +124,9 @@ public class WorkCalendarPolicyWorkflow(
 			source.GetCustomWeeklyOffs(),
 			source.HolidaySyncMode);
 
-		await repository.InsertAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecuteWorkCalendarWriteAsync(
+			entity.Name,
+			() => repository.InsertAsync(entity, autoSave: true));
 		var sourceHolidays = await reader.GetHolidaysAsync(source.Id);
 		await holidaySnapshotService.ReplaceHolidaysAsync(entity.Id, source.AcademicYearId, sourceHolidays);
 		var dto = await BuildDtoAsync(entity);
@@ -134,7 +152,9 @@ public class WorkCalendarPolicyWorkflow(
 		});
 		await confirmationService.EnsureConfirmedAsync(preview);
 		entity.Archive();
-		await repository.UpdateAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecuteWorkCalendarWriteAsync(
+			entity.Name,
+			() => repository.UpdateAsync(entity, autoSave: true));
 		var dto = HrPolicyMapping.ToDto(entity);
 		await versionAppService.CaptureAsync("work_calendar", dto, "archived");
 		await auditWriter.WriteAsync(dto.AcademicYearId, "work_calendar_policy", dto.Id, dto.Name, "archived", $"Archived work calendar policy {dto.Name}");
@@ -147,8 +167,11 @@ public class WorkCalendarPolicyWorkflow(
 		{
 			return await BuildDtoAsync(entity);
 		}
+		await nameUniquenessService.EnsureWorkCalendarAvailableAsync(entity.AcademicYearId, entity.Name, entity.Id);
 		entity.Unarchive();
-		await repository.UpdateAsync(entity, autoSave: true);
+		await nameUniquenessService.ExecuteWorkCalendarWriteAsync(
+			entity.Name,
+			() => repository.UpdateAsync(entity, autoSave: true));
 		var dto = await BuildDtoAsync(entity);
 		await versionAppService.CaptureAsync("work_calendar", dto, "unarchived");
 		await auditWriter.WriteAsync(dto.AcademicYearId, "work_calendar_policy", dto.Id, dto.Name, "unarchived", $"Unarchived work calendar policy {dto.Name} as draft.");

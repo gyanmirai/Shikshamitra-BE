@@ -562,6 +562,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	public override async Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
 	{
 		OnApplicationInitialization(context);
+		await context.AddBackgroundWorkerAsync<AssignmentScheduledPublicationWorker>();
 		await context.AddBackgroundWorkerAsync<ExamAutoCompleteWorker>();
 		await context.AddBackgroundWorkerAsync<AdmissionCrmAutomationWorker>();
 		await context.AddBackgroundWorkerAsync<HrDashboardPreviewRefreshWorker>();

@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -20,6 +22,7 @@ public class StudentSubmissionAppService(
     IStudentSubmissionRepository submissionRepository,
     StudentSubmissionManager submissionManager,
     IStudentRepository studentRepository,
+    IUserScopeService userScopeService,
     IAsyncQueryableExecuter asyncExecuter
 ) : ApplicationService, IStudentSubmissionAppService
 {
@@ -76,6 +79,7 @@ public class StudentSubmissionAppService(
         };
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
     public async Task<SubmissionUploadResponseDto> UploadAssignmentSubmissionAsync(
         UploadAssignmentSubmissionDto input,
         string blobName,
@@ -92,7 +96,6 @@ public class StudentSubmissionAppService(
                 .WithData("Expected", SubmissionType.FileUpload)
                 .WithData("Actual", assignment.SubmissionType);
 
-        EnsureAssignmentOpenForSubmission(assignment);
         var student = await studentRepository.GetAsync(input.StudentId);
         var divisionId = student.DivisionId
             ?? throw new BusinessException("ShikshaMitra.Assignment:StudentDivisionRequired")
@@ -101,6 +104,8 @@ public class StudentSubmissionAppService(
             ?? throw new BusinessException("ShikshaMitra.Assignment:StudentNotInAssignedDivision")
                 .WithData("StudentId", input.StudentId)
                 .WithData("DivisionId", divisionId);
+        await EnsureCurrentUserCanAccessDivisionAsync(assignment, divisionId, nameof(UploadAssignmentSubmissionAsync));
+        EnsureAssignmentOpenForSubmission(assignment, schedule);
         var dueDate = schedule.DueDate;
 
         var submission = await submissionManager.CreateOrGetSubmissionForAssignmentAsync(
@@ -201,6 +206,7 @@ public class StudentSubmissionAppService(
         };
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
     public async Task<AssessmentListDto<AssignmentAssessmentItemDto>> GetAssignmentAssessmentsAsync(
         Guid assignmentId,
         GetAssessmentsInput input)
@@ -210,8 +216,24 @@ public class StudentSubmissionAppService(
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound")
                 .WithData("AssignmentId", assignmentId);
 
-        var schedule = assignment.DivisionSchedules.FirstOrDefault(s => s.DivisionId == input.DivisionId);
-        var dueAt = schedule?.DueDate ?? DateTime.UtcNow;
+        var evaluation = AssignmentEvaluationResolver.Resolve(assignment, assignment.AssignmentType);
+        if (!evaluation.IsRequired)
+        {
+            return new AssessmentListDto<AssignmentAssessmentItemDto>
+            {
+                CurrentPage = input.Page,
+                PageSize = input.PageSize,
+                TotalCount = 0,
+                TotalPages = 0,
+                Items = []
+            };
+        }
+
+        var schedule = assignment.DivisionSchedules.FirstOrDefault(s => s.DivisionId == input.DivisionId)
+            ?? throw new BusinessException("ShikshaMitra.Assignment:NotAssignedToDivision")
+                .WithData("DivisionId", input.DivisionId);
+        await EnsureCurrentUserCanAccessDivisionAsync(assignment, input.DivisionId, nameof(GetAssignmentAssessmentsAsync));
+        var dueAt = schedule.DueDate;
 
         var students = await studentRepository.GetListAsync(
             s => s.DivisionId == input.DivisionId && s.StandardId == input.StandardId);
@@ -285,6 +307,28 @@ public class StudentSubmissionAppService(
         };
     }
 
+    private async Task EnsureCurrentUserCanAccessDivisionAsync(
+        AssignmentEntity assignment,
+        Guid divisionId,
+        string operation)
+    {
+        if (!CurrentUser.Id.HasValue)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
+        }
+
+        // Student records currently have no identity-user link. Treat this endpoint as the explicit
+        // staff submission path and require both the assessment permission and division scope.
+        var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+        if (!AssignmentScopePolicy.CanAccessDivision(scope, assignment, divisionId))
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied)
+                .WithData("AssignmentId", assignment.Id)
+                .WithData("DivisionId", divisionId)
+                .WithData("Operation", operation);
+        }
+    }
+
     private static void EnsureHomeworkOpenForSubmission(HomeworkAssignmentEntity homework)
     {
         var published = homework.Status == HomeworkStatus.Published || homework.IsPublished || homework.HasPublishedDivisions;
@@ -299,9 +343,18 @@ public class StudentSubmissionAppService(
         }
     }
 
-    private static void EnsureAssignmentOpenForSubmission(AssignmentEntity assignment)
+    private static void EnsureAssignmentOpenForSubmission(
+        AssignmentEntity assignment,
+        AssignmentDivisionSchedule schedule)
     {
-        var published = assignment.Status == AssignmentStatus.Published || assignment.HasPublishedDivisions;
+        if (assignment.SubmissionType == SubmissionType.NoSubmissionRequired)
+        {
+            throw new BusinessException("ShikshaMitra.Assignment:SubmissionNotRequired");
+        }
+
+        var now = DateTime.UtcNow;
+        var published = assignment.Status == AssignmentStatus.Published &&
+            (schedule.IsPublished || !schedule.PublishDate.HasValue || schedule.PublishDate.Value <= now);
         if (!published)
         {
             throw new BusinessException("ShikshaMitra.Assignment:NotPublished");

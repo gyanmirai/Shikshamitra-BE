@@ -76,11 +76,15 @@ public class AssignmentDivisionSchedule : Entity<Guid>, IMultiTenant
 	/// <summary>
 	/// Publish this division's assignment
 	/// </summary>
-	public void Publish()
+	public void Publish(DateTime? publishedAt = null)
 	{
+		if (IsPublished)
+		{
+			return;
+		}
+
 		IsPublished = true;
-		PublishedAt = DateTime.UtcNow;
-		PublishDate = DateTime.UtcNow;
+		PublishedAt = publishedAt ?? DateTime.UtcNow;
 	}
 
 	/// <summary>

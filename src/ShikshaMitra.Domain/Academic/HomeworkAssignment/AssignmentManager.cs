@@ -121,7 +121,8 @@ public class AssignmentManager : DomainService
 			}
 
 			// Due Date validation
-			if (division.PublishDate.HasValue && division.DueDate < division.PublishDate)
+				if (division.PublishDate.HasValue && division.DueDate <= division.PublishDate)
+
 			{
 				throw new BusinessException("ShikshaMitra.Assignment:DueDateBeforePublishDate")
 					.WithData("PublishDate", division.PublishDate)
@@ -147,7 +148,9 @@ public class AssignmentManager : DomainService
 	/// <summary>
 	/// Validate assignment type exists
 	/// </summary>
-	public async Task ValidateAssignmentTypeAsync(Guid assignmentTypeId)
+	public async Task<AssignmentType> ValidateAssignmentTypeAsync(
+		Guid assignmentTypeId,
+		Guid? academicMediumId = null)
 	{
 		var assignmentType = await _assignmentTypeRepository.FindAsync(assignmentTypeId);
 		if (assignmentType == null)
@@ -165,6 +168,15 @@ public class AssignmentManager : DomainService
 				assignmentTypeId
 			);
 		}
+
+		if (academicMediumId.HasValue && assignmentType.AcademicMediumId != academicMediumId.Value)
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidAcademicHierarchy)
+				.WithData("AssignmentTypeId", assignmentTypeId)
+				.WithData("AcademicMediumId", academicMediumId.Value);
+		}
+
+		return assignmentType;
 	}
 
 	/// <summary>

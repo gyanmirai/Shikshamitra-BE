@@ -7,6 +7,7 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
@@ -28,8 +29,10 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<Subject, Guid> _subjectRepository;
 	private readonly IAssignmentTypeRepository _assignmentTypeRepository;
-	private readonly StudentSubmissionManager _submissionManager;
-	private readonly IAsyncQueryableExecuter _asyncExecuter;
+		private readonly StudentSubmissionManager _submissionManager;
+		private readonly IUserScopeService _userScopeService;
+		private readonly IAsyncQueryableExecuter _asyncExecuter;
+
 
 	public AssignmentFeedbackAppService(
 		IRepository<AssignmentEntity, Guid> assignmentRepository,
@@ -37,9 +40,11 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		IRepository<Student, Guid> studentRepository,
 		IRepository<Standard, Guid> standardRepository,
 		IRepository<Subject, Guid> subjectRepository,
-		IAssignmentTypeRepository assignmentTypeRepository,
-		StudentSubmissionManager submissionManager,
-		IAsyncQueryableExecuter asyncExecuter
+			IAssignmentTypeRepository assignmentTypeRepository,
+			StudentSubmissionManager submissionManager,
+			IUserScopeService userScopeService,
+			IAsyncQueryableExecuter asyncExecuter
+
 	)
 	{
 		_assignmentRepository = assignmentRepository;
@@ -48,14 +53,16 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		_standardRepository = standardRepository;
 		_subjectRepository = subjectRepository;
 		_assignmentTypeRepository = assignmentTypeRepository;
-		_submissionManager = submissionManager;
-		_asyncExecuter = asyncExecuter;
+			_submissionManager = submissionManager;
+			_userScopeService = userScopeService;
+			_asyncExecuter = asyncExecuter;
+
 	}
 
 	/// <summary>
 	/// Gets all submissions for an assignment - shows ALL students in division
 	/// </summary>
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
 	public async Task<AssignmentSubmissionsResponseDto> GetSubmissionsAsync(
 		Guid academicMediumId,
 		GetAssignmentSubmissionsFilterDto filter
@@ -73,7 +80,10 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				.WithData("AssignmentId", filter.AssignmentId);
 		}
 
-		// 2. Validate requested division is in assignment.DivisionSchedules
+			EnsureEvaluationRequired(assignment);
+			await EnsureCurrentUserCanAccessDivisionAsync(assignment, filter.DivisionId, nameof(GetSubmissionsAsync));
+			// 2. Validate requested division is in assignment.DivisionSchedules
+
 		var divisionSchedule = assignment.DivisionSchedules
 			.FirstOrDefault(d => d.DivisionId == filter.DivisionId);
 
@@ -140,8 +150,14 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				TotalMarks = submission?.TotalMarks ?? assignment.TotalMarks,
 				Feedback = submission?.Feedback,
 				Remarks = submission?.Remarks,
-				Status = (int) (submission?.Status ?? SubmissionStatus.NotSubmitted),
-				SubmissionStatusLabel = GetSubmissionStatusLabel(submission?.Status ?? SubmissionStatus.NotSubmitted),
+					Status = (int) (submission?.Status ??
+						(assignment.SubmissionType == SubmissionType.NoSubmissionRequired
+							? SubmissionStatus.Submitted
+							: SubmissionStatus.NotSubmitted)),
+					SubmissionStatusLabel = assignment.SubmissionType == SubmissionType.NoSubmissionRequired && submission == null
+						? "No Submission Required"
+						: GetSubmissionStatusLabel(submission?.Status ?? SubmissionStatus.NotSubmitted),
+
 				EvaluationStatus = GetEvaluationStatus(submission?.Status, submission?.Marks, submission?.Feedback),
 				FeedbackStatus = string.IsNullOrWhiteSpace(submission?.Feedback) ? "Feedback Pending" : "Feedback Added",
 				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks ?? assignment.TotalMarks),
@@ -234,7 +250,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 	/// <summary>
 	/// Gives or updates feedback for a student's assignment
 	/// </summary>
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
 	public async Task<FeedbackResponseDto> GiveFeedbackAsync(
 		Guid assignmentId,
 		Guid studentId,
@@ -262,16 +278,20 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		var divisionSchedule = assignment.DivisionSchedules
 			.FirstOrDefault(d => d.DivisionId == student.DivisionId);
 
-		if (divisionSchedule == null)
-		{
-			throw new BusinessException("ShikshaMitra.Assignment:StudentNotInAssignedDivision")
-				.WithData("StudentId", studentId)
-				.WithData("DivisionId", student.DivisionId);
-		}
+			if (divisionSchedule == null)
+			{
+				throw new BusinessException("ShikshaMitra.Assignment:StudentNotInAssignedDivision")
+					.WithData("StudentId", studentId)
+					.WithData("DivisionId", student.DivisionId);
+			}
+			await EnsureCurrentUserCanAccessDivisionAsync(assignment, divisionSchedule.DivisionId, nameof(GiveFeedbackAsync));
 
-		// 4. Validate feedback data
-		_submissionManager.ValidateFeedback(input.Marks, input.TotalMarks);
-		EnsureFeedbackStatusAllowed(input);
+			// 4. Validate feedback data
+			var evaluation = AssignmentEvaluationResolver.Resolve(assignment, assignment.AssignmentType);
+			EnsureFeedbackMatchesEvaluation(input, evaluation);
+			_submissionManager.ValidateFeedback(input.Marks, input.TotalMarks);
+			EnsureFeedbackStatusAllowed(input, evaluation);
+
 
 		// 5. Get or create submission
 		var submission = await _submissionRepository.GetSubmissionByStudentAndAssignmentAsync(
@@ -279,9 +299,10 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			assignmentId
 		);
 
-		if (submission == null)
-		{
-			if (assignment.SubmissionType != SubmissionType.InPersonSubmission)
+			if (submission == null)
+			{
+				if (assignment.SubmissionType is not (SubmissionType.InPersonSubmission or SubmissionType.NoSubmissionRequired))
+
 			{
 				throw new BusinessException("ShikshaMitra.Submission:CannotEvaluateMissingSubmission")
 					.WithData("StudentId", studentId)
@@ -333,7 +354,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 	/// <summary>
 	/// Updates submission status only
 	/// </summary>
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
 	public async Task<MessageResponseDto> UpdateStatusAsync(
 		Guid assignmentId,
 		Guid studentId,
@@ -361,13 +382,15 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		var divisionSchedule = assignment.DivisionSchedules
 			.FirstOrDefault(d => d.DivisionId == student.DivisionId);
 
-		if (divisionSchedule == null)
-		{
-			throw new BusinessException("ShikshaMitra.Assignment:StudentNotInAssignedDivision")
-				.WithData("StudentId", studentId);
-		}
+			if (divisionSchedule == null)
+			{
+				throw new BusinessException("ShikshaMitra.Assignment:StudentNotInAssignedDivision")
+					.WithData("StudentId", studentId);
+			}
+			await EnsureCurrentUserCanAccessDivisionAsync(assignment, divisionSchedule.DivisionId, nameof(UpdateStatusAsync));
 
-		// 4. Get or create submission
+			// 4. Get or create submission
+
 		var submission = await _submissionRepository.GetSubmissionByStudentAndAssignmentAsync(
 			studentId,
 			assignmentId
@@ -395,8 +418,39 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		};
 	}
 
+		private static void EnsureEvaluationRequired(AssignmentEntity assignment)
+		{
+			if (!AssignmentEvaluationResolver.Resolve(assignment, assignment.AssignmentType).IsRequired)
+			{
+				throw new BusinessException("ShikshaMitra.Assignment:EvaluationNotRequired")
+					.WithData("AssignmentId", assignment.Id);
+			}
+		}
+
+		private async Task EnsureCurrentUserCanAccessDivisionAsync(
+			AssignmentEntity assignment,
+			Guid divisionId,
+			string operation)
+		{
+			if (!CurrentUser.Id.HasValue)
+			{
+				throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
+			}
+
+			var scope = await _userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+			if (!AssignmentScopePolicy.CanAccessDivision(scope, assignment, divisionId))
+			{
+				throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied)
+					.WithData("AssignmentId", assignment.Id)
+					.WithData("DivisionId", divisionId)
+					.WithData("Operation", operation);
+			}
+		}
+
+
 	private static void EnsureAssignmentOpenForEvaluation(AssignmentEntity assignment)
 	{
+		EnsureEvaluationRequired(assignment);
 		var published = assignment.Status == AssignmentStatus.Published || assignment.HasPublishedDivisions;
 		if (!published)
 		{
@@ -409,13 +463,30 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		}
 	}
 
-	private static void EnsureFeedbackStatusAllowed(GiveFeedbackDto input)
-	{
-		if (input.Status == SubmissionStatus.Reviewed &&
-			(!input.Marks.HasValue || !input.TotalMarks.HasValue || string.IsNullOrWhiteSpace(input.Feedback)))
+		private static void EnsureFeedbackMatchesEvaluation(
+			GiveFeedbackDto input,
+			EffectiveAssignmentEvaluation evaluation)
 		{
-			throw new BusinessException("ShikshaMitra.Submission:ReviewRequiresMarksAndFeedback");
+			if (evaluation.Method != EvaluationMethod.Marks &&
+				(input.Marks.HasValue || input.TotalMarks.HasValue))
+			{
+				throw new BusinessException(HomeworkAssignmentErrorCodes.IncompatibleEvaluationMarks)
+					.WithData("EvaluationMethod", evaluation.Method);
+			}
 		}
+
+		private static void EnsureFeedbackStatusAllowed(
+			GiveFeedbackDto input,
+			EffectiveAssignmentEvaluation evaluation)
+		{
+			if (input.Status == SubmissionStatus.Reviewed &&
+				(string.IsNullOrWhiteSpace(input.Feedback) ||
+				 (evaluation.Method == EvaluationMethod.Marks &&
+				  (!input.Marks.HasValue || !input.TotalMarks.HasValue))))
+			{
+				throw new BusinessException("ShikshaMitra.Submission:ReviewRequiresMarksAndFeedback");
+			}
+
 
 		if (input.Status == SubmissionStatus.NeedsReview && string.IsNullOrWhiteSpace(input.Remarks))
 		{

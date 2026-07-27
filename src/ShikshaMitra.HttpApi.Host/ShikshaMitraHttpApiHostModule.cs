@@ -19,6 +19,7 @@ using ShikshaMitra.Extensions;
 using ShikshaMitra.HealthChecks;
 using ShikshaMitra.MultiTenancy;
 using ShikshaMitra.BackgroundWorkers;
+using ShikshaMitra.Security;
 using System;
 using Volo.Abp.BackgroundWorkers;
 using System.Collections.Generic;
@@ -26,7 +27,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -457,63 +457,20 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	}
 	private X509Certificate2 GetEncryptionCertificate(IWebHostEnvironment environment, IConfiguration config)
 	{
-		var fileName = "encryption-certificate.pfx";
-		var password = config["MyAppCertificate:X590:Password"];
-		var file = Path.Combine(environment.ContentRootPath, fileName);
-
-		if (File.Exists(file))
-		{
-			var created = File.GetCreationTime(file);
-			if ((DateTime.Now - created).TotalDays <= 180)
-			{
-				// Fix: Added EphemeralKeySet to avoid "Access Denied" on restricted environments
-				return new X509Certificate2(file, password,
-					X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
-			}
-			File.Delete(file);
-		}
-
-		using var algorithm = RSA.Create(2048);
-		var subject = new X500DistinguishedName("CN=ShikshaMitra Encryption");
-		var request = new CertificateRequest(subject, algorithm, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyEncipherment, true));
-
-		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddYears(2));
-		var pfxData = certificate.Export(X509ContentType.Pfx, password);
-		File.WriteAllBytes(file, pfxData);
-
-		return new X509Certificate2(pfxData, password,
-			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
+		return OpenIddictCertificateStore.GetOrCreate(
+			Path.Combine(environment.ContentRootPath, "encryption-certificate.pfx"),
+			config["MyAppCertificate:X590:Password"],
+			"CN=ShikshaMitra Encryption",
+			X509KeyUsageFlags.KeyEncipherment);
 	}
 
 	private X509Certificate2 GetSigningCertificate(IWebHostEnvironment environment, IConfiguration config)
 	{
-		var fileName = "signing-certificate.pfx";
-		var password = config["MyAppCertificate:X590:Password"];
-		var file = Path.Combine(environment.ContentRootPath, fileName);
-
-		if (File.Exists(file))
-		{
-			var created = File.GetCreationTime(file);
-			if ((DateTime.Now - created).TotalDays <= 180)
-			{
-				return new X509Certificate2(file, password,
-					X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
-			}
-			File.Delete(file);
-		}
-
-		using var algorithm = RSA.Create(2048);
-		var subject = new X500DistinguishedName("CN=ShikshaMitra Signing");
-		var request = new CertificateRequest(subject, algorithm, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
-
-		var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddYears(2));
-		var pfxData = certificate.Export(X509ContentType.Pfx, password);
-		File.WriteAllBytes(file, pfxData);
-
-		return new X509Certificate2(pfxData, password,
-			X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet);
+		return OpenIddictCertificateStore.GetOrCreate(
+			Path.Combine(environment.ContentRootPath, "signing-certificate.pfx"),
+			config["MyAppCertificate:X590:Password"],
+			"CN=ShikshaMitra Signing",
+			X509KeyUsageFlags.DigitalSignature);
 	}
 
 	public override void OnApplicationInitialization(ApplicationInitializationContext context)

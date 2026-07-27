@@ -61,7 +61,7 @@ jobs:
         dotnet test test/ShikshaMitra.HttpApi.Tests \
           --configuration Release \
           --no-build \
-          --filter "FullyQualifiedName~EmployeeApplicationPublicApi_Tests|FullyQualifiedName~EmployeeListApi_Tests|FullyQualifiedName~EarningComponentApi_Tests|FullyQualifiedName~RunPayrollApi_Tests|FullyQualifiedName~HrEndpointContractSnapshotGuard_Tests"
+          --filter "FullyQualifiedName~EmployeeApplicationPublicApi_Tests|FullyQualifiedName~EmployeeListApi_Tests|FullyQualifiedName~EarningComponentApi_Tests|FullyQualifiedName~RunPayrollApi_Tests|FullyQualifiedName~HrEndpointContractSnapshotGuard_Tests|FullyQualifiedName~OpenIddictCertificateStore_Tests"
 
     - name: Apply database migrations and seed updates
       env:

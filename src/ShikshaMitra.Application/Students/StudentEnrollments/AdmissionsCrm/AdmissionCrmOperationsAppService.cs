@@ -252,6 +252,12 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			.Take(12)
 			.ToList();
 		var now = Clock.Now;
+		var canViewOffers = permittedQueueTypes.Any(IsOfferQueue);
+		var expiringOfferCount = canViewOffers
+			? data.Offers.Count(x =>
+				x.Status is AdmissionCrmSeatOfferStatus.Issued or AdmissionCrmSeatOfferStatus.Opened &&
+				x.ValidUntil <= now.AddDays(3))
+			: 0;
 
 		return new AdmissionCrmEnrollmentOverviewDto
 		{
@@ -263,10 +269,17 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 					x.ExamStartTime.UtcDateTime <= now.AddDays(7) &&
 					x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked)
 				: 0,
+			ExamNoShowCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.NoShow),
+			PendingPaperEntryCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.PendingPaperEntry),
 			ExpiringRegistrationCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.ExpiringRegistrationLink),
+			DocumentFollowUpCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.RejectedDocument) +
+				GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.DocumentVerificationBacklog),
+			FeeFollowUpCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.PaymentCondition),
 			PendingApprovalCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.FinalApproval) +
 				GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.PolicyException) +
 				GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.RouteAppealReview),
+			ExpiringOfferCount = expiringOfferCount,
+			ClassPlacementRiskCount = canViewOffers ? data.SeatPools.Count(x => x.IsOverCapacity) : 0,
 			ActivationFailureCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.ActivationRepair),
 			HandoffBlockerCount = GetQueueCount(queueItems, AdmissionCrmOperationsQueueType.ServiceHandoffException),
 			UrgentCount = queueCounts.Sum(x => x.UrgentCount),

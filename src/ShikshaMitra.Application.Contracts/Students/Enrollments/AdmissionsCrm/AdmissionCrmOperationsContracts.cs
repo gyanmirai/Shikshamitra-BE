@@ -162,8 +162,14 @@ public class AdmissionCrmEnrollmentOverviewDto
 	public DateTime GeneratedAt { get; set; }
 	public int UnassignedLeadCount { get; set; }
 	public int UpcomingExamCount { get; set; }
+	public int ExamNoShowCount { get; set; }
+	public int PendingPaperEntryCount { get; set; }
 	public int ExpiringRegistrationCount { get; set; }
+	public int DocumentFollowUpCount { get; set; }
+	public int FeeFollowUpCount { get; set; }
 	public int PendingApprovalCount { get; set; }
+	public int ExpiringOfferCount { get; set; }
+	public int ClassPlacementRiskCount { get; set; }
 	public int ActivationFailureCount { get; set; }
 	public int HandoffBlockerCount { get; set; }
 	public int UrgentCount { get; set; }

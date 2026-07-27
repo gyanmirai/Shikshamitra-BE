@@ -18,6 +18,9 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 	private readonly IRepository<AdmissionCrmApplicantDocument, Guid> _documentRepository;
 	private readonly IRepository<AdmissionCrmDocumentChecklistAssignment, Guid> _checklistRepository;
 	private readonly IRepository<AdmissionCrmEntranceExamRecord, Guid> _examRepository;
+	private readonly IRepository<AdmissionCrmAdmissionQuotation, Guid> _quotationRepository;
+	private readonly IRepository<AdmissionCrmSeatOffer, Guid> _offerRepository;
+	private readonly IRepository<AdmissionCrmActivation, Guid> _activationRepository;
 	private readonly IAdmissionCrmLeadAppService _leadAppService;
 	private readonly IAdmissionCrmFinalAdmissionAppService _finalAdmissionAppService;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
@@ -28,6 +31,9 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 		IRepository<AdmissionCrmApplicantDocument, Guid> documentRepository,
 		IRepository<AdmissionCrmDocumentChecklistAssignment, Guid> checklistRepository,
 		IRepository<AdmissionCrmEntranceExamRecord, Guid> examRepository,
+		IRepository<AdmissionCrmAdmissionQuotation, Guid> quotationRepository,
+		IRepository<AdmissionCrmSeatOffer, Guid> offerRepository,
+		IRepository<AdmissionCrmActivation, Guid> activationRepository,
 		IAdmissionCrmLeadAppService leadAppService,
 		IAdmissionCrmFinalAdmissionAppService finalAdmissionAppService,
 		StudentScopeAccessService studentScopeAccessService)
@@ -37,6 +43,9 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 		_documentRepository = documentRepository;
 		_checklistRepository = checklistRepository;
 		_examRepository = examRepository;
+		_quotationRepository = quotationRepository;
+		_offerRepository = offerRepository;
+		_activationRepository = activationRepository;
 		_leadAppService = leadAppService;
 		_finalAdmissionAppService = finalAdmissionAppService;
 		_studentScopeAccessService = studentScopeAccessService;
@@ -91,6 +100,21 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 			x.TenantId == tenantId &&
 			x.AcademicYearId == academicYearId &&
 			scopedLeadIds.Contains(x.LeadId)));
+		var quotationQueryable = await _quotationRepository.GetQueryableAsync();
+		var quotations = await AsyncExecuter.ToListAsync(quotationQueryable.Where(x =>
+			x.TenantId == tenantId &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId)));
+		var offerQueryable = await _offerRepository.GetQueryableAsync();
+		var offers = await AsyncExecuter.ToListAsync(offerQueryable.Where(x =>
+			x.TenantId == tenantId &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId)));
+		var activationQueryable = await _activationRepository.GetQueryableAsync();
+		var activations = await AsyncExecuter.ToListAsync(activationQueryable.Where(x =>
+			x.TenantId == tenantId &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId)));
 
 		var now = Clock.Now;
 		var expiringDocumentLeadIds =
@@ -126,6 +150,18 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 				            (now - x.UploadedAt).TotalDays >= 2)
 				.Select(x => x.LeadId).ToHashSet(),
 			[AdmissionCrmJourneyTrigger.DocumentExpiring] = expiringDocumentLeadIds,
+			[AdmissionCrmJourneyTrigger.FeeFollowUp] = quotations
+				.Where(x => x.Status == AdmissionCrmQuotationStatus.Issued && !x.IsGateSatisfiedAt(now))
+				.Select(x => x.LeadId).ToHashSet(),
+			[AdmissionCrmJourneyTrigger.OfferIssued] = offers
+				.Where(x => x.Status is AdmissionCrmSeatOfferStatus.Issued or AdmissionCrmSeatOfferStatus.Opened)
+				.Select(x => x.LeadId).ToHashSet(),
+			[AdmissionCrmJourneyTrigger.OfferAccepted] = offers
+				.Where(x => x.Status == AdmissionCrmSeatOfferStatus.Accepted)
+				.Select(x => x.LeadId).ToHashSet(),
+			[AdmissionCrmJourneyTrigger.ActivationWelcome] = activations
+				.Where(x => x.Status == AdmissionCrmActivationStatus.FirstDayReady)
+				.Select(x => x.LeadId).ToHashSet(),
 			[AdmissionCrmJourneyTrigger.ExamNoShow] = exams
 				.Where(x => x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent ||
 				            x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked && x.ExamEndTime.UtcDateTime < now)

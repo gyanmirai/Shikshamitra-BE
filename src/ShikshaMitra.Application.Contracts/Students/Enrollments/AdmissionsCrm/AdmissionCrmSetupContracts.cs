@@ -86,8 +86,16 @@ public class AdmissionCrmCycleSummaryDto
 {
 	public AdmissionCrmCycleListItemDto Cycle { get; set; } = new();
 	public AdmissionCrmCyclePolicySummaryDto Policy { get; set; } = new();
+	public AdmissionCrmCycleCommunicationSummaryDto Communications { get; set; } = new();
 	public AdmissionCrmSetupStatusDto Readiness { get; set; } = new();
 	public AdmissionCrmApplicationStagePolicyDto ApplicationStagePolicy { get; set; } = new();
+}
+
+public class AdmissionCrmCycleCommunicationSummaryDto
+{
+	public int JourneyRuleCount { get; set; }
+	public int ActiveMessageRuleCount { get; set; }
+	public int TemplateBackedRuleCount { get; set; }
 }
 
 public class AdmissionCrmApplicationStagePolicyDto

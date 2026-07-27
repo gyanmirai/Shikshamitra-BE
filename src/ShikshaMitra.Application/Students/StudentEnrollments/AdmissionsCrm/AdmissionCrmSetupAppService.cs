@@ -151,6 +151,7 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		var year = await GetAcademicYearAsync(academicYearId);
 		var readiness = await GetStatusAsync(academicYearId);
 		var configuration = await _configurationService.GetCycleConfigurationAsync(academicYearId);
+		var journeyRules = configuration.JourneyRules;
 		var applicantCounts = await GetApplicantCountsAsync([academicYearId]);
 		var cycle = BuildCycleListItem(
 			year,
@@ -162,6 +163,12 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		{
 			Cycle = cycle,
 			Readiness = readiness,
+			Communications = new AdmissionCrmCycleCommunicationSummaryDto
+			{
+				JourneyRuleCount = journeyRules.Count,
+				ActiveMessageRuleCount = journeyRules.Count(x => x.IsEnabled && x.SendMessage),
+				TemplateBackedRuleCount = journeyRules.Count(x => x.IsEnabled && x.SendMessage && x.MessageTemplateId.HasValue)
+			},
 			ApplicationStagePolicy = BuildApplicationStagePolicy(
 				await _cycleRepository.GetAsync(configuration.Id),
 				applicantCounts.GetValueOrDefault(academicYearId)),

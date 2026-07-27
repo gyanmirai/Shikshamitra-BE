@@ -596,6 +596,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			AdmissionCrmOperationsQueueType.CapacityConflict => BuildCapacityConflictQueue(data, leads),
 			AdmissionCrmOperationsQueueType.NoShow => BuildNoShowQueue(data, leads),
 			AdmissionCrmOperationsQueueType.RegistrationInvitationPending => BuildRegistrationInvitationPendingQueue(data),
+			AdmissionCrmOperationsQueueType.PendingPaperEntry => BuildPendingPaperEntryQueue(data, leads),
 			AdmissionCrmOperationsQueueType.ExpiringRegistrationLink => BuildExpiringLinkQueue(data, leads),
 			AdmissionCrmOperationsQueueType.IncompleteRegistration => BuildIncompleteRegistrationQueue(data, leads),
 			AdmissionCrmOperationsQueueType.RejectedDocument => BuildDocumentQueue(data, leads, AdmissionCrmApplicantDocumentStatus.Rejected),
@@ -737,6 +738,42 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 				AgeDays(application.IssuedAt, data.Now),
 				application.LinkExpiresAt <= data.Now.AddDays(1),
 				registrationApplicationId: application.Id))
+			.ToList();
+	}
+
+	private static List<AdmissionCrmOperationsQueueItemDto> BuildPendingPaperEntryQueue(
+		OperationsData data,
+		IReadOnlyDictionary<Guid, AdmissionInquiryLead> leads)
+	{
+		return data.Registrations
+			.Where(x => x.Provenance == AdmissionCrmRegistrationProvenance.StaffEnteredFromPaper)
+			.Where(x => x.DataEntryState is AdmissionCrmRegistrationDataEntryState.NotStarted or AdmissionCrmRegistrationDataEntryState.InProgress)
+			.Where(x => x.Status is not (AdmissionCrmRegistrationStatus.Submitted
+				or AdmissionCrmRegistrationStatus.Resubmitted
+				or AdmissionCrmRegistrationStatus.Verified
+				or AdmissionCrmRegistrationStatus.AdmissionReady
+				or AdmissionCrmRegistrationStatus.Revoked
+				or AdmissionCrmRegistrationStatus.Withdrawn))
+			.Where(x => leads.ContainsKey(x.LeadId))
+			.Select(application =>
+			{
+				var received = application.PhysicalFormReceivedDate.HasValue
+					? $" received {application.PhysicalFormReceivedDate.Value:dd MMM yyyy}"
+					: string.Empty;
+				var form = string.IsNullOrWhiteSpace(application.PhysicalFormNumber)
+					? application.FormNumber
+					: application.PhysicalFormNumber;
+				return CreateItem(
+					leads[application.LeadId],
+					$"paper-entry:{application.Id}",
+					"Enter paper registration responses",
+					$"Physical form {form}{received} is waiting for staff data entry.",
+					application.DataEntryState.ToString(),
+					null,
+					AgeDays(application.PhysicalFormReceivedDate ?? application.IssuedAt, data.Now),
+					AgeDays(application.PhysicalFormReceivedDate ?? application.IssuedAt, data.Now) >= RegistrationAbandonmentWarningDays,
+					registrationApplicationId: application.Id);
+			})
 			.ToList();
 	}
 
@@ -1074,6 +1111,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 
 	private static bool IsRegistrationQueue(AdmissionCrmOperationsQueueType queueType) => queueType is
 		AdmissionCrmOperationsQueueType.RegistrationInvitationPending or
+		AdmissionCrmOperationsQueueType.PendingPaperEntry or
 		AdmissionCrmOperationsQueueType.ExpiringRegistrationLink or
 		AdmissionCrmOperationsQueueType.IncompleteRegistration or
 		AdmissionCrmOperationsQueueType.RejectedDocument or
@@ -1175,6 +1213,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		AdmissionCrmOperationsQueueType.NoShow => AdmissionCrmRecommendedAction.RecordAttendance,
 		AdmissionCrmOperationsQueueType.CapacityConflict => AdmissionCrmRecommendedAction.RescheduleExam,
 		AdmissionCrmOperationsQueueType.RegistrationInvitationPending or
+		AdmissionCrmOperationsQueueType.PendingPaperEntry or
 		AdmissionCrmOperationsQueueType.ExpiringRegistrationLink or
 		AdmissionCrmOperationsQueueType.IncompleteRegistration => AdmissionCrmRecommendedAction.ReviewRegistration,
 		AdmissionCrmOperationsQueueType.RejectedDocument or
@@ -1414,6 +1453,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			AdmissionCrmOperationsQueueType.CapacityConflict => "Capacity conflicts",
 			AdmissionCrmOperationsQueueType.NoShow => "No-shows and overdue attendance",
 			AdmissionCrmOperationsQueueType.RegistrationInvitationPending => "Eligible applicants awaiting registration",
+			AdmissionCrmOperationsQueueType.PendingPaperEntry => "Pending paper registration entry",
 			AdmissionCrmOperationsQueueType.ExpiringRegistrationLink => "Expiring registration links",
 			AdmissionCrmOperationsQueueType.IncompleteRegistration => "Incomplete registrations",
 			AdmissionCrmOperationsQueueType.RejectedDocument => "Rejected documents",

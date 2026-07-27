@@ -942,6 +942,20 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		result.Registration.PhysicalFormReceivedByUserId.ShouldNotBeNull();
 		result.Registration.ScannedFormAttachmentReference.ShouldBe(paperInput.ScannedFormAttachmentReference);
 
+		var queueResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/operations/queues/{(int)AdmissionCrmOperationsQueueType.PendingPaperEntry}?maxResultCount=20");
+		queueResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await queueResponse.Content.ReadAsStringAsync());
+		var paperQueue = await queueResponse.Content
+			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmOperationsQueueItemDto>>(JsonOptions);
+		paperQueue.ShouldNotBeNull();
+		var queueItem = paperQueue.Items.Single(x => x.RegistrationApplicationId == result.Registration.Id);
+		queueItem.Title.ShouldBe("Enter paper registration responses");
+		queueItem.Status.ShouldBe(AdmissionCrmRegistrationDataEntryState.InProgress.ToString());
+		queueItem.Registration.ShouldNotBeNull();
+		queueItem.Registration.Provenance.ShouldBe(AdmissionCrmRegistrationProvenance.StaffEnteredFromPaper);
+		queueItem.Registration.DataEntryState.ShouldBe(AdmissionCrmRegistrationDataEntryState.InProgress);
+		queueItem.Registration.PhysicalFormNumber.ShouldBe(physicalFormNumber);
+
 		var timelineResponse = await Client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{result.Applicant.Id}/timeline?maxResultCount=20");
 		timelineResponse.EnsureSuccessStatusCode();

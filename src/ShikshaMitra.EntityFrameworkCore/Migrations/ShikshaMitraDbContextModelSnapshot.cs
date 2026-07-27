@@ -21228,6 +21228,11 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
 
+                    b.Property<string>("ApplicationStagePolicyJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
                     b.Property<int>("ArchiveAfterDays")
                         .HasColumnType("integer");
 

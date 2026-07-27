@@ -83,6 +83,7 @@ An applicant may continue assignment work against an exact route version capture
 | `/leads/{leadId}/priority` | Set manual CRM lead priority with optional reason |
 | `/leads/{leadId}/stage` | Move a CRM lead across operational inquiry stages with reason |
 | `/leads/{leadId}/registration-form` | Issue a CRM-native registration form on one lead before exam scheduling when the cycle requires it |
+| `/{academicYearId}/registrations/from-paper` | Create an inquiry and registration application from a staff-entered physical form with paper provenance and data-entry state |
 | `/leads/{leadId}/score/recalculate` | Recalculate a baseline CRM lead score |
 | `/leads/{leadId}/archive` | Archive one CRM lead with reason |
 | `/leads/{leadId}/reopen` | Reopen one stale or archived CRM lead with reason |
@@ -104,8 +105,11 @@ An applicant may continue assignment work against an exact route version capture
 | `/exams/{examRecordId}/eligibility` | Set eligibility, waitlist, or rejection decision |
 | `/exams/{examRecordId}/eligibility-handoff` | Return read-only lead and exam context for admission handoff |
 | `/{academicYearId}/analytics/summary` | Return funnel, lead-level conversion rates, stage-configured first-response SLA, follow-up SLA miss, source, campaign, date-range trend, staff workload, task, duplicate, automation run, automation failure, exam, class-wise exam, and exam governance analytics |
+| `/{academicYearId}/operations/overview` | Return permission-aware operational insight counts and urgent work items for paper entry, documents, fee follow-up, exams, offers, Class Placement Plan risk, activation, and handoff blockers |
+| `/{academicYearId}/operations/queues/summary` | Return permission-aware admissions operations queue counts and urgent counts |
+| `/{academicYearId}/operations/queues/{queueType}` | Return one permission-aware admissions operations queue with applicant context and supported filters |
 | `/setup/cycles` | List academic-year admission cycles with status, readiness, applicant count, owner placeholder, last-updated metadata, and required actions for staff with Manage Configuration permission |
-| `/setup/cycles/{academicYearId}/summary` | Return the selected admission cycle summary, current policy snapshot, readiness items, and required actions without claiming unsupported live integrations |
+| `/setup/cycles/{academicYearId}/summary` | Return the selected admission cycle summary, current policy snapshot, communication rule counts, readiness items, and required actions without claiming unsupported live integrations |
 | `/setup/{academicYearId}/status` | Return setup readiness for the selected academic-year admission cycle |
 | `/{academicYearId}/configuration/cycle` | Get or update CRM cycle defaults, inquiry channel enablement and defaults, exam readiness fields, merit ranking mode, lead scoring rules, routing strategy, owner pool, routing rules, and condition-aware journey rules |
 | `/{academicYearId}/configuration/pipeline-stages` | Get fixed CRM pipeline milestones with color, SLA target, owner responsibility, and allowed next-stage metadata for staff with CRM Add, View, or Manage Configuration permission after validating that the tenant academic year exists |
@@ -128,6 +132,9 @@ An applicant may continue assignment work against an exact route version capture
 | `/leads/{leadId}/messages/send-template` | Render one approved template, apply opt-out and provider checks, optionally dispatch to provider webhook, and create a communication delivery log |
 | `/{academicYearId}/communication/delivery-logs` | List communication delivery logs with provider message ID evidence and provider ID filtering |
 | `/communication/delivery-logs/{deliveryLogId}/retry` | Queue a delivery retry after provider and opt-out checks |
+
+Journey communication rules can target inquiry acknowledgement, exam, registration, document, fee, offer, admission confirmation, activation, and welcome moments through fixed journey triggers.
+Delivery status must be read from communication delivery logs and provider callbacks rather than inferred from a configured rule.
 
 ## Registration localization contract
 

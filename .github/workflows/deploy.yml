@@ -68,11 +68,90 @@ jobs:
 
     # ⭐ Deploy using Publish Profile
     - name: Deploy to Azure Web App
+      id: deploy
       uses: azure/webapps-deploy@v2
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: ./publish
+
+    - name: Verify deployed API startup
+      id: health
+      shell: pwsh
+      run: |
+        $healthUri = 'https://stage-api.gyanmirai.in/.well-known/openid-configuration'
+        $lastStatus = 'no response'
+
+        foreach ($attempt in 1..24) {
+          try {
+            $response = Invoke-WebRequest `
+              -Uri $healthUri `
+              -Method Get `
+              -TimeoutSec 20 `
+              -SkipHttpErrorCheck
+            $lastStatus = [string]$response.StatusCode
+
+            if ($response.StatusCode -eq 200) {
+              Write-Output "Production API startup check passed on attempt $attempt."
+              exit 0
+            }
+          }
+          catch {
+            $lastStatus = $_.Exception.Message
+          }
+
+          Write-Output "Production API is not ready (attempt $attempt/24; status: $lastStatus)."
+          Start-Sleep -Seconds 10
+        }
+
+        Write-Error "Production API startup check failed after 24 attempts (last status: $lastStatus)."
+
+    - name: Collect Azure startup diagnostics
+      if: failure() && steps.deploy.outcome == 'success'
+      shell: pwsh
+      env:
+        AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+      run: |
+        [xml]$publishData = $env:AZURE_PUBLISH_PROFILE
+        $profile = @(
+          $publishData.publishData.publishProfile |
+            Where-Object { $_.publishMethod -eq 'MSDeploy' }
+        )[0]
+
+        if ($null -eq $profile) {
+          Write-Warning 'No MSDeploy profile was available for startup diagnostics.'
+          exit 0
+        }
+
+        $userName = [string]$profile.userName
+        $password = [string]$profile.userPWD
+        Write-Output "::add-mask::$userName"
+        Write-Output "::add-mask::$password"
+
+        $publishHost = ([string]$profile.publishUrl) -replace ':443$', ''
+        $authorization = [Convert]::ToBase64String(
+          [Text.Encoding]::ASCII.GetBytes("${userName}:${password}")
+        )
+
+        try {
+          Invoke-WebRequest `
+            -Uri "https://${publishHost}/api/dump" `
+            -Headers @{ Authorization = "Basic $authorization" } `
+            -OutFile startup-diagnostics.zip `
+            -TimeoutSec 120
+          Write-Output 'Azure startup diagnostics were captured for private artifact review.'
+        }
+        catch {
+          Write-Warning "Azure startup diagnostics could not be captured: $($_.Exception.Message)"
+        }
+
+    - name: Upload Azure startup diagnostics
+      if: failure() && steps.deploy.outcome == 'success' && hashFiles('startup-diagnostics.zip') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-startup-diagnostics
+        path: startup-diagnostics.zip
+        retention-days: 3
 
     # - name: Ensure App Settings
     #   uses: azure/appservice-settings@v1

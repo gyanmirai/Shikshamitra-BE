@@ -91,5 +91,6 @@ public enum AdmissionCrmTimelineEventType
 	WaitlistAutomationRun = 86,
 	SlaHoldCreated = 87,
 	SlaHoldResumed = 88,
-	GeneratedDocumentIssued = 89
+	GeneratedDocumentIssued = 89,
+	PaperRegistrationEntered = 90
 }

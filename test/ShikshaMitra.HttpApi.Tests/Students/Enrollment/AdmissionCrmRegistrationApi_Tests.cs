@@ -13,6 +13,7 @@ using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using Shouldly;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Encryption;
@@ -826,6 +827,8 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		direct.Applicant.IntendedRouteDefinitionId.ShouldNotBeNull();
 		direct.Applicant.IntendedRouteNameSnapshot.ShouldBe("Fresh admission");
 		direct.Registration.Status.ShouldBe(AdmissionCrmRegistrationStatus.Issued);
+		direct.Registration.Provenance.ShouldBe(AdmissionCrmRegistrationProvenance.StaffAssistedCounter);
+		direct.Registration.DataEntryState.ShouldBe(AdmissionCrmRegistrationDataEntryState.NotStarted);
 		direct.Registration.Prefill["admissionRoute"].GetString()
 			.ShouldBe(direct.Applicant.IntendedRouteNameSnapshot);
 		direct.Registration.Prefill["admissionRouteDefinitionId"].GetGuid()
@@ -862,6 +865,90 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
 		submitted.ShouldNotBeNull();
 		submitted.Status.ShouldBe(AdmissionCrmRegistrationStatus.Submitted);
+		submitted.DataEntryState.ShouldBe(AdmissionCrmRegistrationDataEntryState.Submitted);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Create_Paper_Registration_With_Provenance_And_Timeline()
+	{
+		var unique = Guid.NewGuid().ToString("N")[..8];
+		var desiredClassName = "Paper Grade " + unique;
+		var templateInput = CreateTemplateInput("Paper registration " + unique);
+		templateInput.IsFallback = false;
+		templateInput.Applicability = new AdmissionCrmPlaybookApplicabilityDto
+		{
+			DesiredClass = desiredClassName
+		};
+		var templateResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/registration-templates",
+			templateInput,
+			JsonOptions);
+		templateResponse.EnsureSuccessStatusCode();
+		var template = await templateResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationTemplateDto>(JsonOptions);
+		template.ShouldNotBeNull();
+		(await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/configuration/registration-templates/{template.Id}/publish",
+			null)).EnsureSuccessStatusCode();
+
+		var physicalFormNumber = "PAPER-" + unique.ToUpperInvariant();
+		var paperInput = new CreatePaperAdmissionCrmRegistrationDto
+		{
+			Applicant = new CreateAdmissionCrmLeadDto
+			{
+				FirstName = "Kabir",
+				ParentGuardianName = "Paper Parent",
+				PrimaryContactNo = "95" + Random.Shared.NextInt64(10000000, 99999999),
+				AdmissionIntent = "Paper registration",
+				TargetStandardId = Factory.SeededStandardId,
+				AcademicBoardId = Factory.SeededBoardId,
+				AcademicMediumId = Factory.SeededMediumId,
+				DesiredClassName = desiredClassName
+			},
+			Registration = new IssueAdmissionCrmRegistrationApplicationDto
+			{
+				RegistrationTemplateId = template.Id,
+				ManualFormNumber = physicalFormNumber
+			},
+			PhysicalFormNumber = physicalFormNumber,
+			PhysicalFormReceivedDate = DateTime.UtcNow.Date,
+			ScannedFormAttachmentReference = "counter-scan-" + unique + ".pdf"
+		};
+
+		using var issueOnlyClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm);
+		var deniedResponse = await issueOnlyClient.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/registrations/from-paper",
+			paperInput,
+			JsonOptions);
+		deniedResponse.StatusCode.ShouldBe(
+			HttpStatusCode.Forbidden,
+			await deniedResponse.Content.ReadAsStringAsync());
+
+		var response = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/registrations/from-paper",
+			paperInput,
+			JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var result = await response.Content
+			.ReadFromJsonAsync<AdmissionCrmDirectRegistrationResultDto>(JsonOptions);
+		result.ShouldNotBeNull();
+		result.Applicant.Channel.ShouldBe(AdmissionInquiryChannel.ManualBackOffice);
+		result.Applicant.Stage.ShouldBe(AdmissionInquiryStage.Eligible);
+		result.Registration.Provenance.ShouldBe(AdmissionCrmRegistrationProvenance.StaffEnteredFromPaper);
+		result.Registration.DataEntryState.ShouldBe(AdmissionCrmRegistrationDataEntryState.InProgress);
+		result.Registration.PhysicalFormNumber.ShouldBe(physicalFormNumber);
+		result.Registration.PhysicalFormReceivedByUserId.ShouldNotBeNull();
+		result.Registration.ScannedFormAttachmentReference.ShouldBe(paperInput.ScannedFormAttachmentReference);
+
+		var timelineResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{result.Applicant.Id}/timeline?maxResultCount=20");
+		timelineResponse.EnsureSuccessStatusCode();
+		var timeline = await timelineResponse.Content
+			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmTimelineEventDto>>(JsonOptions);
+		timeline.ShouldNotBeNull();
+		timeline.Items.ShouldContain(x => x.EventType == AdmissionCrmTimelineEventType.PaperRegistrationEntered);
 	}
 
 	[Fact]

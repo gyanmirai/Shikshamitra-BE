@@ -102,6 +102,10 @@ public class AdmissionCrmRegistrationQueueContextDto
 	public Guid? RegistrationApplicationId { get; set; }
 	public AdmissionCrmRegistrationStatus? Status { get; set; }
 	public string? FormNumber { get; set; }
+	public AdmissionCrmRegistrationProvenance? Provenance { get; set; }
+	public AdmissionCrmRegistrationDataEntryState? DataEntryState { get; set; }
+	public string? PhysicalFormNumber { get; set; }
+	public DateTime? PhysicalFormReceivedDate { get; set; }
 	public decimal CompletionPercentage { get; set; }
 	public DateTime? LinkExpiresAt { get; set; }
 	public AdmissionCrmRegistrationFeeStatus? FeeStatus { get; set; }

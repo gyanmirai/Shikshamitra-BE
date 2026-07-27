@@ -216,7 +216,11 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		Guid leadId,
 		IssueAdmissionCrmRegistrationApplicationDto input)
 	{
-		return await IssueCoreAsync(leadId, input, isDirectRegistration: false);
+		return await IssueCoreAsync(
+			leadId,
+			input,
+			isDirectRegistration: false,
+			AdmissionCrmRegistrationProvenance.OnlineParent);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm)]
@@ -224,7 +228,36 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		Guid leadId,
 		IssueAdmissionCrmRegistrationApplicationDto input)
 	{
-		return await IssueCoreAsync(leadId, input, isDirectRegistration: true);
+		return await IssueCoreAsync(
+			leadId,
+			input,
+			isDirectRegistration: true,
+			AdmissionCrmRegistrationProvenance.StaffAssistedCounter);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm)]
+	public async Task<AdmissionCrmRegistrationApplicationDto> IssueFromPaperAsync(
+		Guid leadId,
+		CreatePaperAdmissionCrmRegistrationDto input)
+	{
+		var registration = await IssueCoreAsync(
+			leadId,
+			input.Registration,
+			isDirectRegistration: true,
+			AdmissionCrmRegistrationProvenance.StaffEnteredFromPaper);
+		var application = await GetApplicationForTenantAsync(registration.Id, nameof(IssueFromPaperAsync));
+		application.RecordPaperReceipt(
+			input.PhysicalFormNumber,
+			input.PhysicalFormReceivedDate == default ? Clock.Now.Date : input.PhysicalFormReceivedDate,
+			input.PhysicalFormReceivedByUserId ?? CurrentUser.Id ?? throw new BusinessException("AdmissionCrm:PaperRegistrationRequiresStaffUser"),
+			input.ScannedFormAttachmentReference);
+		await _applicationRepository.UpdateAsync(application, autoSave: true);
+		await AddApplicationTimelineAsync(
+			application,
+			AdmissionCrmTimelineEventType.PaperRegistrationEntered,
+			"Paper registration entered",
+			$"Physical form {application.PhysicalFormNumber} received on {application.PhysicalFormReceivedDate:yyyy-MM-dd}.");
+		return ToApplicationDto(application);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm)]
@@ -243,7 +276,8 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 	private async Task<AdmissionCrmRegistrationApplicationDto> IssueCoreAsync(
 		Guid leadId,
 		IssueAdmissionCrmRegistrationApplicationDto input,
-		bool isDirectRegistration)
+		bool isDirectRegistration,
+		AdmissionCrmRegistrationProvenance provenance)
 	{
 		if (input.WaiveFee)
 		{
@@ -285,7 +319,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		var application = new AdmissionCrmRegistrationApplication(
 			GuidGenerator.Create(), CurrentTenant.Id, lead.AcademicYearId, lead.Id, template.Id, template.Version,
 			input.PlaybookId, formNumber, Serialize(ToTemplateDto(template)), Serialize(prefill), now,
-			now.AddDays(expiryDays), template.FeeRequired ? template.FeeAmount : 0);
+			now.AddDays(expiryDays), template.FeeRequired ? template.FeeAmount : 0, provenance);
 		if (input.WaiveFee)
 		{
 			application.WaiveFee(Check.NotNullOrWhiteSpace(input.WaiverReason, nameof(input.WaiverReason), AdmissionCrmConsts.MaxNotesLength));
@@ -347,7 +381,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		await IssueCoreAsync(leadId, new IssueAdmissionCrmRegistrationApplicationDto
 		{
 			RegistrationTemplateId = template.Id
-		}, isDirectRegistration: false);
+		}, isDirectRegistration: false, AdmissionCrmRegistrationProvenance.OnlineParent);
 		return true;
 	}
 
@@ -1001,6 +1035,10 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 			Id = application.Id, AcademicYearId = application.AcademicYearId, LeadId = application.LeadId,
 			RegistrationTemplateId = application.RegistrationTemplateId, RegistrationTemplateVersion = application.RegistrationTemplateVersion,
 			PlaybookId = application.PlaybookId, FormNumber = application.FormNumber, Status = application.Status, Sections = snapshot.Sections,
+			Provenance = application.Provenance, DataEntryState = application.DataEntryState,
+			PhysicalFormNumber = application.PhysicalFormNumber, PhysicalFormReceivedDate = application.PhysicalFormReceivedDate,
+			PhysicalFormReceivedByUserId = application.PhysicalFormReceivedByUserId,
+			ScannedFormAttachmentReference = application.ScannedFormAttachmentReference,
 			Prefill = Deserialize<Dictionary<string, JsonElement>>(application.PrefillJson),
 			Responses = Deserialize<Dictionary<string, JsonElement>>(application.ResponseJson),
 			CorrectionFieldKeys = Deserialize<List<string>>(application.CorrectionJson), CompletionPercentage = application.CompletionPercentage,

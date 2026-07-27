@@ -44,6 +44,47 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Expose_Admission_Cycles_To_Configuration_Managers()
+	{
+		var cyclesResponse = await Client.GetAsync(
+			"/api/student-enrollment/admissions-crm/setup/cycles?skipCount=0&maxResultCount=10");
+		cyclesResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await cyclesResponse.Content.ReadAsStringAsync());
+		var cycles = await cyclesResponse.Content
+			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmCycleListItemDto>>(JsonOptions);
+		cycles.ShouldNotBeNull();
+		cycles.Items.ShouldContain(cycle => cycle.AcademicYearId == Factory.SeededAcademicYearId);
+		var seededCycle = cycles.Items.Single(cycle => cycle.AcademicYearId == Factory.SeededAcademicYearId);
+		seededCycle.CycleName.ShouldNotBeNullOrWhiteSpace();
+		seededCycle.AcademicYearName.ShouldNotBeNullOrWhiteSpace();
+		seededCycle.ApplicantCount.ShouldBeGreaterThanOrEqualTo(0);
+
+		var summaryResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/summary");
+		summaryResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await summaryResponse.Content.ReadAsStringAsync());
+		var summary = await summaryResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmCycleSummaryDto>(JsonOptions);
+		summary.ShouldNotBeNull();
+		summary.Cycle.AcademicYearId.ShouldBe(Factory.SeededAcademicYearId);
+		summary.Readiness.AcademicYearId.ShouldBe(Factory.SeededAcademicYearId);
+		summary.Policy.DefaultLeadSlaHours.ShouldBeGreaterThan(0);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Admission_Cycle_Setup_For_Receptionist()
+	{
+		using var receptionistClient = CreateClientForCrmRole("Admissions Receptionist");
+		var cyclesResponse = await receptionistClient.GetAsync(
+			"/api/student-enrollment/admissions-crm/setup/cycles?skipCount=0&maxResultCount=10");
+		cyclesResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		var summaryResponse = await receptionistClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/summary");
+		summaryResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
 	public AdmissionCrmApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
 	{
 	}

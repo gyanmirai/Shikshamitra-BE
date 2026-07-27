@@ -12,6 +12,14 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Route("api/student-enrollment/admissions-crm/setup")]
 public class AdmissionCrmSetupController(IAdmissionCrmSetupAppService setupAppService) : AbpControllerBase
 {
+	[HttpGet("cycles")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<PagedResultDto<AdmissionCrmCycleListItemDto>> GetCyclesAsync([FromQuery] PagedResultRequestDto input) => setupAppService.GetCyclesAsync(input);
+
+	[HttpGet("cycles/{academicYearId:guid}/summary")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<AdmissionCrmCycleSummaryDto> GetCycleSummaryAsync(Guid academicYearId) => setupAppService.GetCycleSummaryAsync(academicYearId);
+
 	[HttpGet("{academicYearId:guid}/status")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public Task<AdmissionCrmSetupStatusDto> GetStatusAsync(Guid academicYearId) => setupAppService.GetStatusAsync(academicYearId);

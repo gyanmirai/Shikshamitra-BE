@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -25,6 +27,10 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 	private readonly IRepository<AdmissionCrmPlatformSupportSession, Guid> _sessionRepository;
 	private readonly IRepository<AdmissionCrmPlatformPreset, Guid> _presetRepository;
 	private readonly IRepository<AdmissionCrmPresetAdoption, Guid> _adoptionRepository;
+	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
+	private readonly IRepository<AdmissionCrmCycleConfiguration, Guid> _cycleRepository;
+	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
+	private readonly StudentScopeAccessService _scopeAccess;
 	private readonly IAdmissionCrmConfigurationAppService _configurationService;
 	private readonly AdmissionCrmConfigurationSafetyAppService _configurationSafety;
 
@@ -33,6 +39,10 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		IRepository<AdmissionCrmPlatformSupportSession, Guid> sessionRepository,
 		IRepository<AdmissionCrmPlatformPreset, Guid> presetRepository,
 		IRepository<AdmissionCrmPresetAdoption, Guid> adoptionRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
+		IRepository<AdmissionCrmCycleConfiguration, Guid> cycleRepository,
+		IRepository<AdmissionInquiryLead, Guid> leadRepository,
+		StudentScopeAccessService scopeAccess,
 		IAdmissionCrmConfigurationAppService configurationService,
 		AdmissionCrmConfigurationSafetyAppService configurationSafety)
 	{
@@ -40,6 +50,10 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		_sessionRepository = sessionRepository;
 		_presetRepository = presetRepository;
 		_adoptionRepository = adoptionRepository;
+		_academicYearRepository = academicYearRepository;
+		_cycleRepository = cycleRepository;
+		_leadRepository = leadRepository;
+		_scopeAccess = scopeAccess;
 		_configurationService = configurationService;
 		_configurationSafety = configurationSafety;
 	}
@@ -70,7 +84,7 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 			("inquiry-capture", "Inquiry forms and sources", "/student/enrollment/settings/inquiry-capture"),
 			("entrance-exams", "Exam and eligibility", "/student/enrollment/settings/entrance-exams"),
 			("registration-documents", "Registration and documents", "/student/enrollment/settings/registration-documents"),
-			("offers-seats", "Offers and seats", "/student/enrollment/settings/offers-seats"),
+			("offers-seats", "Class Placement Plan", "/student/enrollment/settings/offers-seats"),
 			("routing-scoring", "Assignment and priority", "/student/enrollment/settings/routing-scoring"),
 			("activation", "Student activation", "/student/enrollment/settings/activation"),
 			("governance", "Policies and compliance", "/student/enrollment/settings/governance"),
@@ -92,6 +106,74 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 				var status = mode == AdmissionCrmSettingsAccessMode.Hidden ? AdmissionCrmSetupReadiness.Locked : adoption is not null ? AdmissionCrmSetupReadiness.Managed : coreReady && index < 2 ? AdmissionCrmSetupReadiness.Ready : AdmissionCrmSetupReadiness.NeedsAttention;
 				return new AdmissionCrmSetupItemDto { Key = item.Item1, Title = item.Item2, Path = item.Item3, AccessMode = mode, Status = status, BlockerCodes = status == AdmissionCrmSetupReadiness.NeedsAttention ? ["EnrollmentSetup:ReviewRequired"] : [] };
 			}).ToList()
+		};
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<PagedResultDto<AdmissionCrmCycleListItemDto>> GetCyclesAsync(PagedResultRequestDto input)
+	{
+		var yearQuery = (await _academicYearRepository.GetQueryableAsync())
+			.Where(year => year.TenantId == CurrentTenant.Id)
+			.OrderByDescending(year => year.StartDate);
+		var total = await AsyncExecuter.CountAsync(yearQuery);
+		var years = await AsyncExecuter.ToListAsync(yearQuery
+			.Skip(input.SkipCount)
+			.Take(input.MaxResultCount));
+		foreach (var year in years)
+		{
+			await _scopeAccess.EnsureAcademicYearWideConfigurationAccessAsync(year.Id, nameof(GetCyclesAsync));
+		}
+
+		var yearIds = years.Select(year => year.Id).ToList();
+		var configurations = yearIds.Count == 0
+			? []
+			: await AsyncExecuter.ToListAsync((await _cycleRepository.GetQueryableAsync())
+				.Where(configuration =>
+					configuration.TenantId == CurrentTenant.Id &&
+					yearIds.Contains(configuration.AcademicYearId)));
+		var applicantCounts = await GetApplicantCountsAsync(yearIds);
+		var rows = years
+			.Select(year => BuildCycleListItem(
+				year,
+				configurations.FirstOrDefault(configuration => configuration.AcademicYearId == year.Id),
+				applicantCounts.GetValueOrDefault(year.Id),
+				null))
+			.ToList();
+		return new PagedResultDto<AdmissionCrmCycleListItemDto>(total, rows);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmCycleSummaryDto> GetCycleSummaryAsync(Guid academicYearId)
+	{
+		await _scopeAccess.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(GetCycleSummaryAsync));
+		var year = await GetAcademicYearAsync(academicYearId);
+		var readiness = await GetStatusAsync(academicYearId);
+		var configuration = await _configurationService.GetCycleConfigurationAsync(academicYearId);
+		var applicantCounts = await GetApplicantCountsAsync([academicYearId]);
+		var cycle = BuildCycleListItem(
+			year,
+			await _cycleRepository.FindAsync(configuration.Id),
+			applicantCounts.GetValueOrDefault(academicYearId),
+			readiness);
+
+		return new AdmissionCrmCycleSummaryDto
+		{
+			Cycle = cycle,
+			Readiness = readiness,
+			Policy = new AdmissionCrmCyclePolicySummaryDto
+			{
+				IsActive = configuration.IsActive,
+				RegistrationFormRequiredBeforeExam = configuration.RegistrationFormRequiredBeforeExam,
+				EntranceExamRequired = configuration.EntranceExamRequired,
+				JourneyLocked = configuration.JourneyLocked,
+				DefaultLeadSlaHours = configuration.DefaultLeadSlaHours,
+				StaleAfterDays = configuration.StaleAfterDays,
+				ArchiveAfterDays = configuration.ArchiveAfterDays,
+				DefaultExamPassingPercentage = configuration.DefaultExamPassingPercentage,
+				MeritRankingMode = configuration.MeritRankingMode
+			}
 		};
 	}
 
@@ -269,6 +351,108 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 	private void EnsureHostContext()
 	{
 		if (CurrentTenant.Id is not null) throw new BusinessException("AdmissionCrm:PlatformOperatorRequiresHostContext");
+	}
+
+	private async Task<AcademicYear> GetAcademicYearAsync(Guid academicYearId)
+	{
+		var year = await _academicYearRepository.FindAsync(academicYearId);
+		if (year is null || year.TenantId != CurrentTenant.Id)
+		{
+			throw new BusinessException("AdmissionCrm:AcademicYearNotFound")
+				.WithData("AcademicYearId", academicYearId);
+		}
+
+		return year;
+	}
+
+	private async Task<Dictionary<Guid, int>> GetApplicantCountsAsync(IReadOnlyList<Guid> academicYearIds)
+	{
+		if (academicYearIds.Count == 0)
+		{
+			return [];
+		}
+
+		var leadQuery = (await _leadRepository.GetQueryableAsync())
+			.Where(lead =>
+				lead.TenantId == CurrentTenant.Id &&
+				academicYearIds.Contains(lead.AcademicYearId));
+		var counts = await AsyncExecuter.ToListAsync(
+			leadQuery.GroupBy(lead => lead.AcademicYearId)
+				.Select(group => new { AcademicYearId = group.Key, Count = group.Count() }));
+		return counts.ToDictionary(item => item.AcademicYearId, item => item.Count);
+	}
+
+	private static AdmissionCrmCycleListItemDto BuildCycleListItem(
+		AcademicYear year,
+		AdmissionCrmCycleConfiguration? configuration,
+		int applicantCount,
+		AdmissionCrmSetupStatusDto? readiness)
+	{
+		var readinessStatus = readiness?.Status ?? GetReadiness(configuration);
+		return new AdmissionCrmCycleListItemDto
+		{
+			AcademicYearId = year.Id,
+			CycleConfigurationId = configuration?.Id,
+			CycleName = configuration?.CycleName ?? $"{year.Name} Admission Cycle",
+			AcademicYearName = year.Name,
+			AcademicYearStartDate = year.StartDate,
+			AcademicYearEndDate = year.EndDate,
+			AdmissionWindowStart = null,
+			AdmissionWindowEnd = null,
+			Status = GetCycleStatus(configuration, readinessStatus),
+			Readiness = readinessStatus,
+			ApplicantCount = applicantCount,
+			OwnerUserId = null,
+			OwnerDisplayName = null,
+			LastUpdatedAt = configuration?.LastModificationTime ?? configuration?.CreationTime,
+			RequiredActions = readiness?.Items
+				.Where(item => item.AccessMode != AdmissionCrmSettingsAccessMode.Hidden &&
+					item.Status == AdmissionCrmSetupReadiness.NeedsAttention)
+				.Select(item => new AdmissionCrmCycleRequiredActionDto
+				{
+					Key = item.Key,
+					Title = item.Title,
+					Path = item.Path,
+					BlockerCodes = item.BlockerCodes
+				})
+				.ToList() ?? []
+		};
+	}
+
+	private static AdmissionCrmSetupReadiness GetReadiness(AdmissionCrmCycleConfiguration? configuration)
+	{
+		if (configuration is null)
+		{
+			return AdmissionCrmSetupReadiness.NotStarted;
+		}
+
+		return !string.IsNullOrWhiteSpace(configuration.CycleName) && configuration.DefaultLeadSlaHours > 0
+			? AdmissionCrmSetupReadiness.Ready
+			: AdmissionCrmSetupReadiness.NeedsAttention;
+	}
+
+	private static AdmissionCrmCycleStatus GetCycleStatus(
+		AdmissionCrmCycleConfiguration? configuration,
+		AdmissionCrmSetupReadiness readiness)
+	{
+		if (configuration is null)
+		{
+			return AdmissionCrmCycleStatus.Draft;
+		}
+
+		if (configuration.JourneyLocked)
+		{
+			return AdmissionCrmCycleStatus.Paused;
+		}
+
+		if (!configuration.IsActive)
+		{
+			return AdmissionCrmCycleStatus.Draft;
+		}
+
+		return readiness is AdmissionCrmSetupReadiness.Ready or AdmissionCrmSetupReadiness.Managed
+			? AdmissionCrmCycleStatus.Open
+			: AdmissionCrmCycleStatus.ReadinessReview;
 	}
 
 	private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));

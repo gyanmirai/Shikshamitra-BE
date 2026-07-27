@@ -104,6 +104,9 @@ An applicant may continue assignment work against an exact route version capture
 | `/exams/{examRecordId}/eligibility` | Set eligibility, waitlist, or rejection decision |
 | `/exams/{examRecordId}/eligibility-handoff` | Return read-only lead and exam context for admission handoff |
 | `/{academicYearId}/analytics/summary` | Return funnel, lead-level conversion rates, stage-configured first-response SLA, follow-up SLA miss, source, campaign, date-range trend, staff workload, task, duplicate, automation run, automation failure, exam, class-wise exam, and exam governance analytics |
+| `/setup/cycles` | List academic-year admission cycles with status, readiness, applicant count, owner placeholder, last-updated metadata, and required actions for staff with Manage Configuration permission |
+| `/setup/cycles/{academicYearId}/summary` | Return the selected admission cycle summary, current policy snapshot, readiness items, and required actions without claiming unsupported live integrations |
+| `/setup/{academicYearId}/status` | Return setup readiness for the selected academic-year admission cycle |
 | `/{academicYearId}/configuration/cycle` | Get or update CRM cycle defaults, inquiry channel enablement and defaults, exam readiness fields, merit ranking mode, lead scoring rules, routing strategy, owner pool, routing rules, and condition-aware journey rules |
 | `/{academicYearId}/configuration/pipeline-stages` | Get fixed CRM pipeline milestones with color, SLA target, owner responsibility, and allowed next-stage metadata for staff with CRM Add, View, or Manage Configuration permission after validating that the tenant academic year exists |
 | `/configuration/pipeline-stages/{stageId}` | Update one CRM pipeline stage display and governance configuration used by manual transition enforcement |

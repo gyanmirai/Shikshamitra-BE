@@ -3120,6 +3120,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("EducationMediumStageId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("EvaluationMethod")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("EvaluationRequired")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")

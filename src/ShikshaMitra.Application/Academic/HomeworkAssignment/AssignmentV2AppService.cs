@@ -4,10 +4,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Calendar;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -18,6 +22,7 @@ using Volo.Abp.Linq;
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
 [Authorize]
+[RemoteService(IsEnabled = false)]
 public class AssignmentV2AppService(
     IRepository<AssignmentEntity, Guid> assignmentRepository,
     IRepository<AssignmentDivisionSchedule, Guid> scheduleRepository,
@@ -30,7 +35,14 @@ public class AssignmentV2AppService(
     AssignmentManager assignmentManager,
     IAsyncQueryableExecuter asyncExecuter,
     IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository,
-    IRepository<AcademicCalendarDay, Guid> calendarDayRepository
+    IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
+    IRepository<AcademicCalendar, Guid> calendarRepository,
+    IRepository<AcademicYear, Guid> academicYearRepository,
+    IRepository<EducationBoard, Guid> boardRepository,
+    IRepository<EducationMedium, Guid> mediumRepository,
+    IRepository<EducationMediumStage, Guid> mediumStageRepository,
+    IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+    IRepository<AssignedSubjectChapter, Guid> chapterRepository
 ) : ApplicationService, IAssignmentV2AppService
 {
 
@@ -48,22 +60,37 @@ public class AssignmentV2AppService(
         if (academicMediumId == Guid.Empty)
             throw new BusinessException("ShikshaMitra.Assignment:InvalidAcademicMedium");
 
-        await assignmentManager.ValidateAssignmentTypeAsync(input.AssignmentTypeId);
-        await ValidateAssignmentScheduleDatesAsync(input.StandardId, input.DivisionSchedules);
+        var assignmentType = await assignmentManager.ValidateAssignmentTypeAsync(
+            input.AssignmentTypeId,
+            academicMediumId);
+        var hierarchy = await ValidateAndResolveHierarchyAsync(academicMediumId, input);
+        await ValidateAssignmentScheduleDatesAsync(
+            hierarchy.AcademicYearId,
+            input.StandardId,
+            input.DivisionSchedules);
+        var settings = ResolveEffectiveSettings(input, assignmentType);
+        await EnsureCurrentUserCanAccessTargetAsync(
+            hierarchy,
+            input.StandardId,
+            input.DivisionSchedules.Select(schedule => schedule.DivisionId));
 
         var assignment = new AssignmentEntity(
             GuidGenerator.Create(),
             input.StandardId,
             input.SubjectId,
-            input.Title,
-            input.Description,
+            input.Title.Trim(),
+            input.Description.Trim(),
             input.AssignmentTypeId,
-            (SubmissionType) input.SubmissionType,
-            input.TotalMarks,
+            settings.SubmissionType,
+            settings.TotalMarks,
             CurrentTenant.Id,
-            academicYearId: null,
-            attachmentsJson: attachmentBlobName,
-            educationMediumId: academicMediumId
+            academicYearId: hierarchy.AcademicYearId,
+            attachmentsJson: AssignmentAttachmentSerializer.Canonicalize(attachmentBlobName),
+            educationBoardId: hierarchy.BoardId,
+            educationMediumId: hierarchy.MediumId,
+            educationMediumStageId: hierarchy.MediumStageId,
+            evaluationRequired: settings.EvaluationRequired,
+            evaluationMethod: settings.EvaluationMethod
         );
 
         foreach (var div in input.DivisionSchedules)
@@ -79,7 +106,7 @@ public class AssignmentV2AppService(
         }
 
         if (input.ChapterIds != null && input.ChapterIds.Count > 0)
-            assignment.ChapterIdsJson = System.Text.Json.JsonSerializer.Serialize(input.ChapterIds);
+            assignment.ChapterIdsJson = System.Text.Json.JsonSerializer.Serialize(input.ChapterIds.Distinct());
 
         await assignmentRepository.InsertAsync(assignment, autoSave: true);
 
@@ -107,6 +134,9 @@ public class AssignmentV2AppService(
         );
 
         var today = Clock.Now.Date;
+        var now = Clock.Now;
+        var scope = await GetCurrentScopeAsync();
+        query = ApplyAssignmentScope(query, scope);
 
         query = query
             .Where(a => a.EducationMediumId == academicMediumId)
@@ -114,6 +144,7 @@ public class AssignmentV2AppService(
             .Where(a => a.SubjectId == filter.SubjectId)
             .Where(a => a.DivisionSchedules.Any(s =>
                 s.DivisionId == filter.DivisionId
+                && s.IsPublished
                 && s.DueDate.Date >= today
                 && (!filter.AssignmentDate.HasValue ||
                     ((!s.PublishDate.HasValue || s.PublishDate.Value <= filter.AssignmentDate.Value)
@@ -200,6 +231,7 @@ public class AssignmentV2AppService(
         if (academicMediumId.HasValue && assignment.EducationMediumId != academicMediumId.Value)
             throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", id);
 
+        await EnsureCurrentUserCanAccessAssignmentAsync(assignment, "get");
         var dto = await MapToAssignmentDtoAsync(assignment, assignment.EducationMediumId ?? Guid.Empty);
         return new AssignmentV2ResponseDto { Data = dto };
     }
@@ -219,22 +251,49 @@ public class AssignmentV2AppService(
         var assignment = await asyncExecuter.FirstOrDefaultAsync(q.Where(a => a.Id == assignmentId))
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
 
+        await EnsureCurrentUserCanAccessAssignmentAsync(assignment, "update");
         if (assignment.Status != AssignmentStatus.Draft)
             throw new BusinessException("ShikshaMitra.Assignment:CannotUpdatePublished")
                 .WithData("AssignmentId", assignmentId);
 
-        await assignmentManager.ValidateAssignmentTypeAsync(input.AssignmentTypeId);
-        await ValidateAssignmentScheduleDatesAsync(input.StandardId, input.DivisionSchedules);
+        var assignmentType = await assignmentManager.ValidateAssignmentTypeAsync(
+            input.AssignmentTypeId,
+            assignment.EducationMediumId);
+        var hierarchy = await ValidateAndResolveHierarchyAsync(
+            assignment.EducationMediumId ?? Guid.Empty,
+            input);
+        await ValidateAssignmentScheduleDatesAsync(
+            hierarchy.AcademicYearId,
+            input.StandardId,
+            input.DivisionSchedules);
+        var settings = ResolveEffectiveSettings(input, assignmentType);
+        await EnsureCurrentUserCanAccessTargetAsync(
+            hierarchy,
+            input.StandardId,
+            input.DivisionSchedules.Select(schedule => schedule.DivisionId));
 
-        var resolvedBlob = attachmentBlobName ?? assignment.AttachmentsJson;
+        var resolvedBlob = input.RemoveAttachment
+            ? null
+            : attachmentBlobName != null
+                ? AssignmentAttachmentSerializer.Canonicalize(attachmentBlobName)
+                : assignment.AttachmentsJson;
 
-        assignment.UpdateBasicInfo(input.Title, input.Description, input.TotalMarks, resolvedBlob);
+        assignment.UpdateBasicInfo(
+            input.Title.Trim(),
+            input.Description.Trim(),
+            settings.TotalMarks,
+            resolvedBlob,
+            settings.EvaluationRequired,
+            settings.EvaluationMethod);
+        assignment.AcademicYearId = hierarchy.AcademicYearId;
+        assignment.EducationBoardId = hierarchy.BoardId;
+        assignment.EducationMediumStageId = hierarchy.MediumStageId;
         assignment.StandardId = input.StandardId;
         assignment.SubjectId = input.SubjectId;
         assignment.AssignmentTypeId = input.AssignmentTypeId;
-        assignment.SubmissionType = (SubmissionType) input.SubmissionType;
+        assignment.SubmissionType = settings.SubmissionType;
         assignment.ChapterIdsJson = input.ChapterIds != null && input.ChapterIds.Count > 0
-            ? System.Text.Json.JsonSerializer.Serialize(input.ChapterIds)
+            ? System.Text.Json.JsonSerializer.Serialize(input.ChapterIds.Distinct())
             : null;
 
         // Replace division schedules
@@ -271,6 +330,7 @@ public class AssignmentV2AppService(
         var assignment = await asyncExecuter.FirstOrDefaultAsync(q.Where(a => a.Id == assignmentId))
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
 
+        await EnsureCurrentUserCanAccessAssignmentAsync(assignment, "delete");
         if (assignment.Status != AssignmentStatus.Draft || assignment.HasPublishedDivisions)
         {
             throw new BusinessException("ShikshaMitra.Assignment:CannotDeletePublished")
@@ -302,6 +362,7 @@ public class AssignmentV2AppService(
         var assignment = await asyncExecuter.FirstOrDefaultAsync(q.Where(a => a.Id == assignmentId))
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
 
+        await EnsureCurrentUserCanAccessAssignmentAsync(assignment, "change-status");
         var previousStatus = assignment.Status;
         var newStatus = (AssignmentStatus) input.Status;
         if (newStatus == AssignmentStatus.Published)
@@ -354,6 +415,7 @@ public class AssignmentV2AppService(
 
         var asOfDate = (input.AsOfDate ?? DateTime.UtcNow).Date;
         var query = await assignmentRepository.WithDetailsAsync(a => a.DivisionSchedules);
+        query = ApplyAssignmentScope(query, await GetCurrentScopeAsync());
         query = query.Where(a => a.EducationMediumId == academicMediumId);
 
         if (input.StandardId.HasValue) query = query.Where(a => a.StandardId == input.StandardId.Value);
@@ -405,6 +467,7 @@ public class AssignmentV2AppService(
         var assignment = await asyncExecuter.FirstOrDefaultAsync(query.Where(a => a.Id == assignmentId))
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
 
+        await EnsureCurrentUserCanAccessAssignmentAsync(assignment, "send-reminder");
         var targetSchedules = assignment.DivisionSchedules
             .Where(s => s.IsPublished)
             .Where(s => !input.DivisionId.HasValue || s.DivisionId == input.DivisionId.Value)
@@ -444,6 +507,7 @@ public class AssignmentV2AppService(
         var assignment = await asyncExecuter.FirstOrDefaultAsync(query.Where(a => a.Id == assignmentId))
             ?? throw new BusinessException("ShikshaMitra.Assignment:NotFound").WithData("Id", assignmentId);
 
+        await EnsureCurrentUserCanAccessAssignmentAsync(assignment, "get-history");
         var items = new List<LearningTaskHistoryItemDto>
         {
             new()
@@ -498,6 +562,90 @@ public class AssignmentV2AppService(
             TaskType = "assignment",
             Items = items.OrderByDescending(i => i.OccurredAt).ToList()
         };
+    }
+
+    private async Task<UserScopeContext> GetCurrentScopeAsync()
+    {
+        if (!CurrentUser.Id.HasValue)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
+        }
+
+        return await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+    }
+
+    private static IQueryable<AssignmentEntity> ApplyAssignmentScope(
+        IQueryable<AssignmentEntity> query,
+        UserScopeContext scope)
+    {
+        if (scope.IsAdmin || scope.HasTenantWideScope())
+        {
+            return query;
+        }
+
+        if (!scope.HasAnyAccess)
+        {
+            return query.Where(_ => false);
+        }
+
+        return query.Where(assignment =>
+            assignment.AcademicYearId.HasValue &&
+            assignment.EducationBoardId.HasValue &&
+            assignment.EducationMediumId.HasValue &&
+            assignment.EducationMediumStageId.HasValue &&
+            (scope.AcademicYearIds.Contains(assignment.AcademicYearId.Value) ||
+             scope.WildcardBoardAcademicYearIds.Contains(assignment.AcademicYearId.Value)) &&
+            (scope.WildcardBoardAcademicYearIds.Contains(assignment.AcademicYearId.Value) ||
+             scope.WildcardMediumBoardIds.Contains(assignment.EducationBoardId.Value) ||
+             scope.WildcardMediumStageMediumIds.Contains(assignment.EducationMediumId.Value) ||
+             scope.WildcardStandardMediumStageIds.Contains(assignment.EducationMediumStageId.Value) ||
+             scope.WildcardDivisionStandardIds.Contains(assignment.StandardId) ||
+             assignment.DivisionSchedules.All(schedule => scope.DivisionIds.Contains(schedule.DivisionId))));
+    }
+
+    private async Task EnsureCurrentUserCanAccessTargetAsync(
+        AssignmentHierarchy hierarchy,
+        Guid standardId,
+        IEnumerable<Guid> divisionIds)
+    {
+        var scope = await GetCurrentScopeAsync();
+        if (scope.IsAdmin || scope.HasTenantWideScope())
+        {
+            return;
+        }
+
+        var accessible = AssignmentScopePolicy.CanAccessAggregate(
+            scope,
+            hierarchy.AcademicYearId,
+            hierarchy.BoardId,
+            hierarchy.MediumId,
+            hierarchy.MediumStageId,
+            standardId,
+            divisionIds);
+
+        if (!accessible)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied)
+                .WithData("Operation", "assignment-target");
+        }
+    }
+
+    private async Task EnsureCurrentUserCanAccessAssignmentAsync(
+        AssignmentEntity assignment,
+        string operation)
+    {
+        var scope = await GetCurrentScopeAsync();
+        if (scope.IsAdmin || scope.HasTenantWideScope())
+        {
+            return;
+        }
+
+        if (!AssignmentScopePolicy.CanAccessAggregate(scope, assignment))
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied)
+                .WithData("AssignmentId", assignment.Id)
+                .WithData("Operation", operation);
+        }
     }
 
     private async Task<List<LearningTaskDashboardItemDto>> BuildAssignmentDashboardRowsAsync(List<AssignmentEntity> assignments)
@@ -555,31 +703,36 @@ public class AssignmentV2AppService(
                 TotalDivisionCount = schedules.Count,
                 SubmittedCount = taskSubmissions.Count(s => s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.Reviewed),
                 LateCount = taskSubmissions.Count(s => s.Status == SubmissionStatus.Late),
-                EvaluationPendingCount = taskSubmissions.Count(s => s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview),
+                EvaluationPendingCount = IsEvaluationRequired(assignment)
+                    ? taskSubmissions.Count(s => s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview)
+                    : 0,
                 DivisionIds = schedules.Select(s => s.DivisionId).Distinct().ToList(),
                 DivisionNames = schedules.Select(s => divisionLookup.GetValueOrDefault(s.DivisionId, string.Empty)).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList()
             };
         }).ToList();
     }
 
+    private static bool IsEvaluationRequired(AssignmentEntity assignment) =>
+        AssignmentEvaluationResolver.Resolve(assignment, assignment.AssignmentType).IsRequired;
+
     private async Task ValidateAssignmentScheduleDatesAsync(
+        Guid academicYearId,
         Guid standardId,
         IEnumerable<CreateAssignmentV2DivisionScheduleDto> schedules)
     {
         var rows = schedules.ToList();
-        if (rows.Count == 0)
-        {
-            throw new BusinessException("ShikshaMitra.Assignment:DivisionScheduleRequired");
-        }
-
-        if (rows.Any(x => x.DivisionId == Guid.Empty))
-        {
-            throw new BusinessException("ShikshaMitra.Assignment:DivisionRequired");
-        }
+        await assignmentManager.ValidateAssignmentAsync(
+            academicYearId,
+            standardId,
+            rows.Select(row => (row.DivisionId, row.PublishAt, row.DueAt)).ToList());
 
         foreach (var row in rows)
         {
-            await EnsureAssignmentDueDateAllowedAsync(standardId, row.DivisionId, row.DueAt);
+            await EnsureAssignmentDueDateAllowedAsync(
+                academicYearId,
+                standardId,
+                row.DivisionId,
+                row.DueAt);
         }
     }
 
@@ -587,12 +740,28 @@ public class AssignmentV2AppService(
     {
         foreach (var row in assignment.DivisionSchedules)
         {
-            await EnsureAssignmentDueDateAllowedAsync(assignment.StandardId, row.DivisionId, row.DueDate);
+            if (!assignment.AcademicYearId.HasValue)
+            {
+                continue;
+            }
+
+            await EnsureAssignmentDueDateAllowedAsync(
+                assignment.AcademicYearId.Value,
+                assignment.StandardId,
+                row.DivisionId,
+                row.DueDate);
         }
     }
 
     private async Task EnsureAssignmentCanCloseAsync(Guid assignmentId)
     {
+        var assignment = await assignmentRepository.GetAsync(assignmentId);
+        if (assignment.SubmissionType == SubmissionType.NoSubmissionRequired ||
+            !IsEvaluationRequired(assignment))
+        {
+            return;
+        }
+
         var pendingCount = await studentSubmissionRepository.CountAsync(s =>
             s.AssignmentId == assignmentId &&
             (s.Status == SubmissionStatus.Submitted ||
@@ -608,15 +777,32 @@ public class AssignmentV2AppService(
         }
     }
 
-    private async Task EnsureAssignmentDueDateAllowedAsync(Guid standardId, Guid divisionId, DateTime dueDate)
+    private async Task EnsureAssignmentDueDateAllowedAsync(
+        Guid academicYearId,
+        Guid standardId,
+        Guid divisionId,
+        DateTime dueDate)
     {
+        var calendars = await calendarRepository.GetListAsync(calendar =>
+            calendar.AcademicYearId == academicYearId &&
+            calendar.Status == CalendarStatus.Published);
+        var applicableCalendar = calendars
+            .OrderByDescending(calendar => calendar.IsDefault)
+            .ThenByDescending(calendar => calendar.PublishedAt ?? DateTime.MinValue)
+            .ThenBy(calendar => calendar.Id)
+            .FirstOrDefault();
+        if (applicableCalendar == null)
+        {
+            return;
+        }
+
         var date = dueDate.Date;
-        var blockedDays = await calendarDayRepository.GetListAsync(day =>
+        var candidateDays = await calendarDayRepository.GetListAsync(day =>
+            day.AcademicCalendarId == applicableCalendar.Id &&
             day.Status == CalendarDayStatus.Active &&
-            day.Date.Date == date &&
-            (day.AppliesToAll ||
-                (day.StandardId.HasValue && day.StandardId.Value == standardId) ||
-                (day.DivisionId.HasValue && day.DivisionId.Value == divisionId)));
+            day.Date.Date == date);
+        var blockedDays = candidateDays.Where(day =>
+            AssignmentCalendarPolicy.AppliesTo(day, standardId, divisionId));
 
         var blockingDay = blockedDays.FirstOrDefault(day => CalendarDayBlockingRules.BlocksHomeworkDueDate(day.DayType));
         if (blockingDay != null)
@@ -627,6 +813,142 @@ public class AssignmentV2AppService(
                 .WithData("DayType", blockingDay.DayType);
         }
     }
+
+    private async Task<AssignmentHierarchy> ValidateAndResolveHierarchyAsync(
+        Guid academicMediumId,
+        CreateAssignmentV2Dto input)
+    {
+        var medium = await mediumRepository.FindAsync(academicMediumId)
+            ?? throw new BusinessException(HomeworkAssignmentErrorCodes.AcademicMediumNotFound)
+                .WithData("AcademicMediumId", academicMediumId);
+        var board = await boardRepository.FindAsync(medium.EducationBoardId)
+            ?? throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidAcademicHierarchy);
+        var academicYearId = input.AcademicYearId ?? board.AcademicYearId;
+        if (academicYearId != board.AcademicYearId ||
+            await academicYearRepository.FindAsync(academicYearId) == null)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidAcademicHierarchy)
+                .WithData("AcademicYearId", academicYearId);
+        }
+
+        var standard = await standardRepository.FindAsync(input.StandardId)
+            ?? throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidAcademicHierarchy)
+                .WithData("StandardId", input.StandardId);
+        var stage = await mediumStageRepository.FindAsync(standard.EducationMediumStageId);
+        if (stage == null || stage.EducationMediumId != academicMediumId)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidAcademicHierarchy)
+                .WithData("StandardId", input.StandardId)
+                .WithData("AcademicMediumId", academicMediumId);
+        }
+
+        var subject = await subjectRepository.FindAsync(input.SubjectId);
+        if (subject == null || subject.EducationMediumId != academicMediumId)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidAcademicHierarchy)
+                .WithData("SubjectId", input.SubjectId)
+                .WithData("AcademicMediumId", academicMediumId);
+        }
+
+        var assignedSubject = await assignedSubjectRepository.FindAsync(row =>
+            row.StandardId == input.StandardId && row.SubjectId == input.SubjectId);
+        if (assignedSubject == null)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidAcademicHierarchy)
+                .WithData("StandardId", input.StandardId)
+                .WithData("SubjectId", input.SubjectId);
+        }
+
+        var chapterIds = input.ChapterIds?.Distinct().ToList() ?? [];
+        if (chapterIds.Count > 0)
+        {
+            var validChapterCount = await chapterRepository.CountAsync(chapter =>
+                chapterIds.Contains(chapter.Id) && chapter.AssignedSubjectId == assignedSubject.Id);
+            if (validChapterCount != chapterIds.Count)
+            {
+                throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidAcademicHierarchy)
+                    .WithData("ChapterIds", string.Join(",", chapterIds));
+            }
+        }
+
+        return new AssignmentHierarchy(
+            academicYearId,
+            board.Id,
+            medium.Id,
+            stage.Id);
+    }
+
+    private static EffectiveAssignmentSettings ResolveEffectiveSettings(
+        CreateAssignmentV2Dto input,
+        AssignmentType assignmentType)
+    {
+        var submissionType = input.SubmissionType.HasValue
+            ? (SubmissionType) input.SubmissionType.Value
+            : assignmentType.DefaultSubmissionType ?? SubmissionType.OnlineText;
+        if (!Enum.IsDefined(submissionType))
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidSubmissionType);
+        }
+
+        var evaluationRequired = input.EvaluationRequired ?? assignmentType.EvaluationRequired;
+        var evaluationMethod = input.EvaluationMethod.HasValue
+            ? (EvaluationMethod?) input.EvaluationMethod.Value
+            : assignmentType.DefaultEvaluationMethod;
+        if (!evaluationRequired)
+        {
+            evaluationMethod = EvaluationMethod.NoEvaluation;
+        }
+        else if (!evaluationMethod.HasValue || evaluationMethod == EvaluationMethod.NoEvaluation)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.EvaluationMethodRequired);
+        }
+        else if (!Enum.IsDefined(evaluationMethod.Value))
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidEvaluationMethod);
+        }
+        else if (evaluationMethod is EvaluationMethod.Grade or EvaluationMethod.Checklist)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.UnsupportedEvaluationPersistence)
+                .WithData("EvaluationMethod", evaluationMethod);
+        }
+
+        if (evaluationMethod != EvaluationMethod.Marks && input.TotalMarks.HasValue)
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.IncompatibleEvaluationMarks)
+                .WithData("EvaluationMethod", evaluationMethod);
+        }
+
+        var totalMarks = input.TotalMarks ?? assignmentType.DefaultMarks ?? 0;
+        if (totalMarks < 0 ||
+            (evaluationRequired && evaluationMethod == EvaluationMethod.Marks && totalMarks <= 0) ||
+            (!evaluationRequired && input.TotalMarks.HasValue))
+        {
+            throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidDefaultMarks);
+        }
+
+        if (!evaluationRequired || evaluationMethod != EvaluationMethod.Marks)
+        {
+            totalMarks = 0;
+        }
+
+        return new EffectiveAssignmentSettings(
+            submissionType,
+            totalMarks,
+            evaluationRequired,
+            evaluationMethod);
+    }
+
+    private sealed record AssignmentHierarchy(
+        Guid AcademicYearId,
+        Guid BoardId,
+        Guid MediumId,
+        Guid MediumStageId);
+
+    private sealed record EffectiveAssignmentSettings(
+        SubmissionType SubmissionType,
+        decimal TotalMarks,
+        bool EvaluationRequired,
+        EvaluationMethod? EvaluationMethod);
 
     private async Task<AssignmentV2Dto> MapToAssignmentDtoAsync(AssignmentEntity a, Guid academicMediumId)
     {
@@ -686,6 +1008,23 @@ public class AssignmentV2AppService(
         a.LastModifierId.HasValue ? userLookup.GetValueOrDefault(a.LastModifierId.Value, string.Empty) : string.Empty
     );
 
+    private static List<Guid> DeserializeChapterIds(string? chapterIdsJson)
+    {
+        if (string.IsNullOrWhiteSpace(chapterIdsJson))
+        {
+            return [];
+        }
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(chapterIdsJson) ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
+    }
+
     private static AssignmentV2Dto BuildAssignmentDto(
         AssignmentEntity a,
         Guid academicMediumId,
@@ -695,9 +1034,13 @@ public class AssignmentV2AppService(
         Dictionary<Guid, string> divisionLookup,
         string createdBy,
         string updatedBy
-    ) => new()
+    )
+    {
+        var evaluation = AssignmentEvaluationResolver.Resolve(a, assignmentType);
+        return new AssignmentV2Dto
     {
         Id = a.Id,
+        AcademicYearId = a.AcademicYearId,
         AcademicMediumId = academicMediumId,
         StandardId = a.StandardId,
         StandardName = standardName,
@@ -709,12 +1052,14 @@ public class AssignmentV2AppService(
         DefaultSubmissionType = assignmentType?.DefaultSubmissionType.HasValue == true ? (int) assignmentType.DefaultSubmissionType.Value : null,
         DefaultMarks = assignmentType?.DefaultMarks,
         DefaultDueDays = assignmentType?.DefaultDueDays,
-        EvaluationRequired = assignmentType?.EvaluationRequired ?? true,
+        EvaluationRequired = evaluation.IsRequired,
+        EvaluationMethod = (int) evaluation.Method,
         DefaultEvaluationMethod = assignmentType?.DefaultEvaluationMethod.HasValue == true ? (int) assignmentType.DefaultEvaluationMethod.Value : null,
         AssignmentTypeStatus = assignmentType != null ? (int) assignmentType.Status : null,
         TotalMarks = a.TotalMarks,
         Description = a.Description,
-        Attachment = a.AttachmentsJson,
+        Attachment = AssignmentAttachmentSerializer.ReadSingle(a.AttachmentsJson),
+        ChapterIds = DeserializeChapterIds(a.ChapterIdsJson),
         SubmissionType = (int) a.SubmissionType,
         Status = (int) a.Status,
         DivisionSchedules = a.DivisionSchedules
@@ -732,4 +1077,5 @@ public class AssignmentV2AppService(
         UpdatedAt = a.LastModificationTime ?? a.CreationTime,
         UpdatedBy = updatedBy,
     };
+    }
 }

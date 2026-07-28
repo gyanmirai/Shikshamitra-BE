@@ -6,6 +6,8 @@ namespace ShikshaMitra.Academic.HomeworkAssignment;
 
 public class CreateAssignmentV2Dto
 {
+    public Guid? AcademicYearId { get; set; }
+
     [Required]
     public Guid StandardId { get; set; }
 
@@ -19,16 +21,19 @@ public class CreateAssignmentV2Dto
     [Required]
     public Guid AssignmentTypeId { get; set; }
 
-    [Required]
-    [Range(0.01, double.MaxValue)]
-    public decimal TotalMarks { get; set; }
+    [Range(0, double.MaxValue)]
+    public decimal? TotalMarks { get; set; }
 
     [Required]
     public string Description { get; set; } = string.Empty;
 
-    [Required]
-    [Range(0, 2)]
-    public int SubmissionType { get; set; }
+    [Range(0, 3)]
+    public int? SubmissionType { get; set; }
+
+    public bool? EvaluationRequired { get; set; }
+
+    [Range(0, 5)]
+    public int? EvaluationMethod { get; set; }
 
     /// <summary>
     /// Optional chapter IDs to link this assignment to the Syllabus Assessment status.

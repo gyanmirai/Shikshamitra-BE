@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -17,8 +19,10 @@ public class RubricAssessmentAppService(
 	IRepository<RubricEvaluation, Guid> evaluationRepository,
 	IRepository<RubricCriterionScore, Guid> scoreRepository,
 	IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
-	IRepository<AssignmentEntity, Guid> assignmentRepository,
-	IRepository<StudentSubmissionEntity, Guid> submissionRepository
+		IRepository<AssignmentEntity, Guid> assignmentRepository,
+		IRepository<StudentSubmissionEntity, Guid> submissionRepository,
+		IUserScopeService userScopeService
+
 ) : ApplicationService, IRubricAssessmentAppService
 {
 	public async Task<AssessmentRubricDto> CreateAsync(CreateUpdateRubricDto input)
@@ -219,6 +223,7 @@ public class RubricAssessmentAppService(
 		await rubricRepository.UpdateAsync(rubric, autoSave: true);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
 	public async Task<RubricEvaluationDto> UpsertEvaluationAsync(Guid rubricId, UpsertRubricEvaluationDto input)
 	{
 		var rubric = await rubricRepository.GetAsync(rubricId);
@@ -230,6 +235,7 @@ public class RubricAssessmentAppService(
 
 		var submission = await submissionRepository.GetAsync(input.StudentSubmissionId);
 		EnsureSubmissionMatchesRubric(rubric, submission, input.StudentId);
+		await EnsureCurrentUserCanAccessSubmissionAsync(submission, nameof(UpsertEvaluationAsync));
 		EnsureScoresAreValid(rubric, input.Scores);
 
 		var existing = await evaluationRepository.FirstOrDefaultAsync(e =>
@@ -274,16 +280,21 @@ public class RubricAssessmentAppService(
 		return MapEvaluation(evaluation);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
 	public async Task<List<RubricEvaluationDto>> GetEvaluationsAsync(Guid rubricId)
 	{
+		var rubric = await rubricRepository.GetAsync(rubricId);
+		await EnsureCurrentUserCanAccessRubricAsync(rubric, nameof(GetEvaluationsAsync));
 		var evaluations = await evaluationRepository.GetListAsync(e => e.RubricId == rubricId);
 		await LoadScoresAsync(evaluations);
 		return evaluations.Select(MapEvaluation).ToList();
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
 	public async Task SubmitEvaluationAsync(Guid evaluationId)
 	{
 		var evaluation = await evaluationRepository.GetAsync(evaluationId);
+		await EnsureCurrentUserCanAccessEvaluationAsync(evaluation, nameof(SubmitEvaluationAsync));
 		await LoadScoresAsync([evaluation]);
 		if (evaluation.Scores.Count == 0)
 		{
@@ -294,9 +305,11 @@ public class RubricAssessmentAppService(
 		await evaluationRepository.UpdateAsync(evaluation, autoSave: true);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
 	public async Task ApproveEvaluationAsync(Guid evaluationId)
 	{
 		var evaluation = await evaluationRepository.GetAsync(evaluationId);
+		await EnsureCurrentUserCanAccessEvaluationAsync(evaluation, nameof(ApproveEvaluationAsync));
 		await LoadScoresAsync([evaluation]);
 		var rubric = await rubricRepository.GetAsync(evaluation.RubricId);
 		var submission = await submissionRepository.GetAsync(evaluation.StudentSubmissionId);
@@ -343,6 +356,13 @@ public class RubricAssessmentAppService(
 			if (assignment.StandardId != input.StandardId!.Value || assignment.SubjectId != input.SubjectId!.Value)
 			{
 				throw new BusinessException("AssessmentRubric:TaskDoesNotMatchSubject");
+			}
+
+			var evaluation = AssignmentEvaluationResolver.Resolve(assignment, assignment.AssignmentType);
+			if (!evaluation.IsRequired || evaluation.Method != EvaluationMethod.Rubric)
+			{
+				throw new BusinessException("AssessmentRubric:AssignmentRequiresRubricEvaluation")
+					.WithData("AssignmentId", assignment.Id);
 			}
 		}
 	}
@@ -439,6 +459,56 @@ public class RubricAssessmentAppService(
 		if (rubric.AssignmentId.HasValue && submission.AssignmentId != rubric.AssignmentId.Value)
 		{
 			throw new BusinessException("AssessmentRubric:SubmissionTaskMismatch");
+		}
+	}
+
+	private async Task EnsureCurrentUserCanAccessRubricAsync(AssessmentRubric rubric, string operation)
+	{
+		if (!rubric.AssignmentId.HasValue)
+		{
+			return;
+		}
+
+		var assignment = await assignmentRepository.GetAsync(rubric.AssignmentId.Value, includeDetails: true);
+		await EnsureCurrentUserCanAccessAssignmentDivisionAsync(assignment, null, operation);
+	}
+
+	private async Task EnsureCurrentUserCanAccessEvaluationAsync(RubricEvaluation evaluation, string operation)
+	{
+		var submission = await submissionRepository.GetAsync(evaluation.StudentSubmissionId);
+		await EnsureCurrentUserCanAccessSubmissionAsync(submission, operation);
+	}
+
+	private async Task EnsureCurrentUserCanAccessSubmissionAsync(StudentSubmissionEntity submission, string operation)
+	{
+		if (!submission.AssignmentId.HasValue)
+		{
+			return;
+		}
+
+		var assignment = await assignmentRepository.GetAsync(submission.AssignmentId.Value, includeDetails: true);
+		await EnsureCurrentUserCanAccessAssignmentDivisionAsync(assignment, submission.DivisionId, operation);
+	}
+
+	private async Task EnsureCurrentUserCanAccessAssignmentDivisionAsync(
+		AssignmentEntity assignment,
+		Guid? divisionId,
+		string operation)
+	{
+		if (!CurrentUser.Id.HasValue)
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
+		}
+
+		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+		var allowed = divisionId.HasValue
+			? AssignmentScopePolicy.CanAccessDivision(scope, assignment, divisionId.Value)
+			: AssignmentScopePolicy.CanAccessAggregate(scope, assignment);
+		if (!allowed)
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied)
+				.WithData("AssignmentId", assignment.Id)
+				.WithData("Operation", operation);
 		}
 	}
 

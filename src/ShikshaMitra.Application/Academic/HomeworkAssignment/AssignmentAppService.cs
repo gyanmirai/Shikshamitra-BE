@@ -419,7 +419,9 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 		// 4. Get earliest publish date
 		var publishedAt = assignment.DivisionSchedules
 			.Where(d => d.PublishedAt.HasValue)
-			.Min(d => d.PublishedAt!.Value);
+			.Select(d => d.PublishedAt!.Value)
+			.DefaultIfEmpty(DateTime.UtcNow)
+			.Min();
 
 		return new AssignmentPublishResponseDto
 		{
@@ -511,7 +513,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 
 		if (!string.IsNullOrEmpty(assignment.AttachmentsJson))
 		{
-			dto.Attachments = JsonSerializer.Deserialize<List<AttachmentDto>>(assignment.AttachmentsJson);
+			dto.Attachments = AssignmentAttachmentSerializer.ReadLegacyList(assignment.AttachmentsJson);
 		}
 
 		// 2. Get Standard name

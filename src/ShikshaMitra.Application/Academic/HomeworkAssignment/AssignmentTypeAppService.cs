@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -15,6 +16,7 @@ namespace ShikshaMitra.Academic.HomeworkAssignment;
 /// Application service for managing assignment types
 /// </summary>
 [Authorize]
+[RemoteService(IsEnabled = false)]
 public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppService
 {
 	private readonly IAssignmentTypeRepository _repository;
@@ -41,6 +43,7 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 	/// <summary>
 	/// Creates a new assignment type
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsAssignmentTypes.Add)]
 	public async Task<AssignmentTypeCreateResponseDto> CreateAsync(
 		Guid academicMediumId,
 		CreateAssignmentTypeDto input
@@ -103,6 +106,7 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 	/// <summary>
 	/// Gets all assignment types for a specific academic medium
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsAssignmentTypes.View)]
 	public async Task<AssignmentTypeListResponseDto> GetAllAsync(Guid academicMediumId)
 	{
 		try
@@ -154,6 +158,7 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 	/// <summary>
 	/// Gets a single assignment type by ID
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsAssignmentTypes.View)]
 	public async Task<AssignmentTypeGetResponseDto> GetAsync(Guid id, Guid academicMediumId)
 	{
 		try
@@ -194,6 +199,7 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 	/// <summary>
 	/// Updates an existing assignment type
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsAssignmentTypes.Add)]
 	public async Task<MessageResponseDto> UpdateAsync(
 		Guid id,
 		Guid academicMediumId,
@@ -261,6 +267,7 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 	/// <summary>
 	/// Deletes an assignment type (soft delete)
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsAssignmentTypes.Delete)]
 	public async Task<MessageResponseDto> DeleteAsync(Guid id, Guid academicMediumId)
 	{
 		try
@@ -348,7 +355,7 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 				correlationId
 			);
 
-			throw new BusinessException("ShikshaMitra:AcademicMediumNotFound")
+			throw new BusinessException(HomeworkAssignmentErrorCodes.AcademicMediumNotFound)
 				.WithData("AcademicMediumId", academicMediumId)
 				.WithData("CorrelationId", correlationId);
 		}

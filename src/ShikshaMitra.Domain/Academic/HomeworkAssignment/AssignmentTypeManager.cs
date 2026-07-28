@@ -50,6 +50,8 @@ public class AssignmentTypeManager : DomainService
 		TaskTypeStatus status = TaskTypeStatus.Active
 	)
 	{
+		var normalizedName = name?.Trim() ?? string.Empty;
+
 		// Validate academic medium exists
 		await ValidateAcademicMediumExistsAsync(academicMediumId);
 
@@ -58,13 +60,13 @@ public class AssignmentTypeManager : DomainService
 		AssignmentType? existing;
 		using (_dataFilter.Disable<ISoftDelete>())
 		{
-			existing = await _repository.FindByNameAndAcademicMediumIdAsync(name, academicMediumId);
+			existing = await _repository.FindByNameAndAcademicMediumIdAsync(normalizedName, academicMediumId);
 		}
 
 		if (existing != null && !existing.IsDeleted)
 		{
 			throw new BusinessException(HomeworkAssignmentErrorCodes.DuplicateAssignmentType)
-				.WithData("Name", name);
+				.WithData("Name", normalizedName);
 		}
 
 		if (existing != null && existing.IsDeleted)
@@ -73,8 +75,9 @@ public class AssignmentTypeManager : DomainService
 			existing.IsDeleted = false;
 			existing.DeletionTime = null;
 			existing.DeleterId = null;
-			existing.UpdateInfo(
-				name,
+				existing.UpdateInfo(
+					normalizedName,
+
 				description,
 				defaultSubmissionType,
 				defaultMarks,
@@ -86,9 +89,10 @@ public class AssignmentTypeManager : DomainService
 			return await _repository.UpdateAsync(existing, autoSave: true);
 		}
 
-		var entity = new AssignmentType(
-			GuidGenerator.Create(),
-			name,
+			var entity = new AssignmentType(
+				GuidGenerator.Create(),
+				normalizedName,
+
 			academicMediumId,
 			CurrentTenant.Id,
 			description,
@@ -118,12 +122,13 @@ public class AssignmentTypeManager : DomainService
 	)
 	{
 		Check.NotNull(assignmentType, nameof(assignmentType));
+		var normalizedName = newName?.Trim() ?? string.Empty;
 
 		// Validate new name doesn't conflict with existing assignment types
-		if (assignmentType.Name != newName)
+		if (!string.Equals(assignmentType.Name, normalizedName, StringComparison.Ordinal))
 		{
 			await ValidateAssignmentTypeAsync(
-				newName,
+				normalizedName,
 				assignmentType.AcademicMediumId,
 				assignmentType.Id
 			);
@@ -146,7 +151,7 @@ public class AssignmentTypeManager : DomainService
 
 		// Update info
 		assignmentType.UpdateInfo(
-			newName,
+			normalizedName,
 			description,
 			defaultSubmissionType,
 			defaultMarks,

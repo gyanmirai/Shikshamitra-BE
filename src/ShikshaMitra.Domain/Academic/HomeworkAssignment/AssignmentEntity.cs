@@ -40,6 +40,8 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 	public Guid AssignmentTypeId { get; set; }
 	public SubmissionType SubmissionType { get; set; }
 	public decimal TotalMarks { get; set; }
+	public bool? EvaluationRequired { get; private set; }
+	public EvaluationMethod? EvaluationMethod { get; private set; }
 
 	/// <summary>
 	/// Lifecycle status of this assignment (Draft → Published → Closed)
@@ -90,7 +92,9 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 		string? attachmentsJson = null,
 		Guid? educationBoardId = null,
 		Guid? educationMediumId = null,
-		Guid? educationMediumStageId = null
+		Guid? educationMediumStageId = null,
+		bool? evaluationRequired = null,
+		EvaluationMethod? evaluationMethod = null
 	)
 		: base(id)
 	{
@@ -107,6 +111,7 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 		EducationBoardId = educationBoardId;
 		EducationMediumId = educationMediumId;
 		EducationMediumStageId = educationMediumStageId;
+		SetEvaluationSettings(evaluationRequired, evaluationMethod);
 		DivisionSchedules = new List<AssignmentDivisionSchedule>();
 		DivisionId = Guid.Empty; // Multi-division model doesn't use single division
 	}
@@ -120,13 +125,40 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 		string title,
 		string description,
 		decimal totalMarks,
-		string? attachmentsJson = null
+		string? attachmentsJson = null,
+		bool? evaluationRequired = null,
+		EvaluationMethod? evaluationMethod = null
 	)
 	{
 		Title = title;
 		Description = description;
 		TotalMarks = totalMarks;
 		AttachmentsJson = attachmentsJson;
+		SetEvaluationSettings(evaluationRequired, evaluationMethod);
+	}
+
+	public void SetEvaluationSettings(bool? evaluationRequired, EvaluationMethod? evaluationMethod)
+	{
+		if (evaluationRequired == false)
+		{
+			EvaluationRequired = false;
+			EvaluationMethod = global::ShikshaMitra.Academic.HomeworkAssignment.EvaluationMethod.NoEvaluation;
+			return;
+		}
+
+		if (evaluationRequired == true &&
+			(!evaluationMethod.HasValue || evaluationMethod == global::ShikshaMitra.Academic.HomeworkAssignment.EvaluationMethod.NoEvaluation))
+		{
+			throw new Volo.Abp.BusinessException(HomeworkAssignmentErrorCodes.EvaluationMethodRequired);
+		}
+
+		if (evaluationMethod.HasValue && !Enum.IsDefined(evaluationMethod.Value))
+		{
+			throw new Volo.Abp.BusinessException(HomeworkAssignmentErrorCodes.InvalidEvaluationMethod);
+		}
+
+		EvaluationRequired = evaluationRequired;
+		EvaluationMethod = evaluationMethod;
 	}
 
 	/// <summary>
@@ -151,15 +183,23 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 	/// <summary>
 	/// Publish all division schedules manually
 	/// </summary>
+	public void PublishDueSchedules(DateTime now)
+	{
+		if (DivisionSchedules == null)
+		{
+			return;
+		}
+
+		foreach (var schedule in DivisionSchedules.Where(s =>
+			!s.IsPublished && (!s.PublishDate.HasValue || s.PublishDate.Value <= now)))
+		{
+			schedule.Publish(now);
+		}
+	}
+
 	public void PublishAll()
 	{
-		if (DivisionSchedules != null)
-		{
-			foreach (var schedule in DivisionSchedules.Where(s => !s.IsPublished))
-			{
-				schedule.Publish();
-			}
-		}
+		PublishDueSchedules(DateTime.UtcNow);
 	}
 
 	/// <summary>

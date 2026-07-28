@@ -301,7 +301,14 @@ public class DemoAcademicAndInstituteSeederContributor : BaseSeederContributor
 					continue;
 				}
 
-				assignmentTypesToInsert.Add(new AssignmentType(GuidGenerator.Create(), name, medium.Id, CurrentTenant.Id));
+				assignmentTypesToInsert.Add(new AssignmentType(
+					GuidGenerator.Create(),
+					name,
+					medium.Id,
+					CurrentTenant.Id,
+					defaultMarks: 100,
+					evaluationRequired: true,
+					defaultEvaluationMethod: EvaluationMethod.Marks));
 			}
 
 			foreach (var (name, type) in HomeworkAssignmentTypeSpecs)

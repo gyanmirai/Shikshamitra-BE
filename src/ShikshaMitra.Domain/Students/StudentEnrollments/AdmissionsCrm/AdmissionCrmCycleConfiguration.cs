@@ -40,6 +40,7 @@ public class AdmissionCrmCycleConfiguration : FullAuditedAggregateRoot<Guid>, IM
 	public string LeadScoringRulesJson { get; private set; } = "{}";
 	public string LeadRoutingRulesJson { get; private set; } = "{}";
 	public string JourneyRulesJson { get; private set; } = "[]";
+	public string ApplicationStagePolicyJson { get; private set; } = "{}";
 	public string ApplicantChecklistJson { get; private set; } = "[]";
 	public string ChannelSettingsJson { get; private set; } = "[]";
 	public string SlaPolicyJson { get; private set; } = "{}";
@@ -123,6 +124,7 @@ public class AdmissionCrmCycleConfiguration : FullAuditedAggregateRoot<Guid>, IM
 			source.ChannelSettingsJson,
 			source.SlaPolicyJson,
 			source.Notes);
+		UpdateApplicationStagePolicy(source.ApplicationStagePolicyJson);
 	}
 
 	private void SetDefaults(string cycleName)
@@ -145,6 +147,7 @@ public class AdmissionCrmCycleConfiguration : FullAuditedAggregateRoot<Guid>, IM
 		LeadScoringRulesJson = "{}";
 		LeadRoutingRulesJson = "{}";
 		JourneyRulesJson = "[]";
+		ApplicationStagePolicyJson = "{}";
 		ApplicantChecklistJson = "[]";
 		ChannelSettingsJson = "[]";
 		SlaPolicyJson = "{\"timeZoneId\":\"Asia/Kolkata\",\"workingDays\":[1,2,3,4,5,6],\"workingDayStartHour\":8,\"workingDayEndHour\":17,\"holidays\":[],\"escalationAfterHours\":24}";
@@ -258,6 +261,14 @@ public class AdmissionCrmCycleConfiguration : FullAuditedAggregateRoot<Guid>, IM
 		JourneyRulesJson = Check.NotNullOrWhiteSpace(
 			journeyRulesJson,
 			nameof(journeyRulesJson),
+			maxLength: AdmissionCrmConsts.MaxRoutingRulesJsonLength);
+	}
+
+	public void UpdateApplicationStagePolicy(string applicationStagePolicyJson)
+	{
+		ApplicationStagePolicyJson = Check.NotNullOrWhiteSpace(
+			applicationStagePolicyJson,
+			nameof(applicationStagePolicyJson),
 			maxLength: AdmissionCrmConsts.MaxRoutingRulesJsonLength);
 	}
 

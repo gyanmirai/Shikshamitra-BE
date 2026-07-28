@@ -12,6 +12,10 @@ public class AdmissionCrmRegistrationApplicationConfiguration : IEntityTypeConfi
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionCrmRegistrationApplications", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 		builder.Property(x => x.FormNumber).HasMaxLength(AdmissionCrmConsts.MaxRegistrationFormNumberLength).IsRequired();
+		builder.Property(x => x.Provenance).HasConversion<int>().IsRequired();
+		builder.Property(x => x.DataEntryState).HasConversion<int>().IsRequired();
+		builder.Property(x => x.PhysicalFormNumber).HasMaxLength(AdmissionCrmConsts.MaxRegistrationFormNumberLength);
+		builder.Property(x => x.ScannedFormAttachmentReference).HasMaxLength(AdmissionCrmConsts.MaxDocumentBlobNameLength);
 		builder.Property(x => x.Status).HasConversion<int>().IsRequired();
 		builder.Property(x => x.TemplateSnapshotJson).HasMaxLength(AdmissionCrmConsts.MaxRegistrationTemplateJsonLength).IsRequired();
 		builder.Property(x => x.PrefillJson).HasMaxLength(AdmissionCrmConsts.MaxRegistrationPrefillJsonLength).IsRequired();

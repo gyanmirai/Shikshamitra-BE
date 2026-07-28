@@ -13,6 +13,9 @@ public interface IAdmissionCrmLeadAppService : IApplicationService
 	Task<AdmissionCrmDirectRegistrationResultDto> CreateDirectRegistrationAsync(
 		Guid academicYearId,
 		CreateDirectAdmissionCrmRegistrationDto input);
+	Task<AdmissionCrmDirectRegistrationResultDto> CreatePaperRegistrationAsync(
+		Guid academicYearId,
+		CreatePaperAdmissionCrmRegistrationDto input);
 	Task<AdmissionCrmLeadDto> GetAsync(Guid id);
 	Task<PagedResultDto<AdmissionCrmLeadDto>> GetListAsync(Guid academicYearId, GetAdmissionCrmLeadListInput input);
 	Task<IReadOnlyList<AdmissionCrmLeadDuplicateDto>> PreviewDuplicatesAsync(

@@ -21,6 +21,9 @@ public interface IAdmissionCrmRegistrationAppService : IApplicationService
 	Task<AdmissionCrmRegistrationApplicationDto> IssueDirectAsync(
 		Guid leadId,
 		IssueAdmissionCrmRegistrationApplicationDto input);
+	Task<AdmissionCrmRegistrationApplicationDto> IssueFromPaperAsync(
+		Guid leadId,
+		CreatePaperAdmissionCrmRegistrationDto input);
 	Task EnsureStandardIssuanceEligibleAsync(Guid leadId, Guid? playbookId = null);
 	Task<bool> IssueApplicableFromAutomationAsync(Guid leadId, AdmissionInquiryStage stage);
 	Task<AdmissionCrmRegistrationApplicationDto> GetApplicationAsync(Guid id);

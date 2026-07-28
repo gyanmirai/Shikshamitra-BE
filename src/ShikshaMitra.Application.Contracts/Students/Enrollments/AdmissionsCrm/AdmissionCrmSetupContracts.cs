@@ -42,6 +42,107 @@ public class AdmissionCrmSetupStatusDto
 	public IReadOnlyList<AdmissionCrmSetupItemDto> Items { get; set; } = [];
 }
 
+public class AdmissionCrmCycleRequiredActionDto
+{
+	public string Key { get; set; } = string.Empty;
+	public string Title { get; set; } = string.Empty;
+	public string Path { get; set; } = string.Empty;
+	public IReadOnlyList<string> BlockerCodes { get; set; } = [];
+}
+
+public class AdmissionCrmCycleListItemDto
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid? CycleConfigurationId { get; set; }
+	public string CycleName { get; set; } = string.Empty;
+	public string AcademicYearName { get; set; } = string.Empty;
+	public DateTime AcademicYearStartDate { get; set; }
+	public DateTime AcademicYearEndDate { get; set; }
+	public DateTime? AdmissionWindowStart { get; set; }
+	public DateTime? AdmissionWindowEnd { get; set; }
+	public AdmissionCrmCycleStatus Status { get; set; }
+	public AdmissionCrmSetupReadiness Readiness { get; set; }
+	public int ApplicantCount { get; set; }
+	public Guid? OwnerUserId { get; set; }
+	public string? OwnerDisplayName { get; set; }
+	public DateTime? LastUpdatedAt { get; set; }
+	public IReadOnlyList<AdmissionCrmCycleRequiredActionDto> RequiredActions { get; set; } = [];
+}
+
+public class AdmissionCrmCyclePolicySummaryDto
+{
+	public bool IsActive { get; set; }
+	public bool RegistrationFormRequiredBeforeExam { get; set; }
+	public bool EntranceExamRequired { get; set; }
+	public bool JourneyLocked { get; set; }
+	public int DefaultLeadSlaHours { get; set; }
+	public int StaleAfterDays { get; set; }
+	public int ArchiveAfterDays { get; set; }
+	public decimal DefaultExamPassingPercentage { get; set; }
+	public AdmissionCrmMeritRankingMode MeritRankingMode { get; set; }
+}
+
+public class AdmissionCrmCycleSummaryDto
+{
+	public AdmissionCrmCycleListItemDto Cycle { get; set; } = new();
+	public AdmissionCrmCyclePolicySummaryDto Policy { get; set; } = new();
+	public AdmissionCrmCycleCommunicationSummaryDto Communications { get; set; } = new();
+	public AdmissionCrmSetupStatusDto Readiness { get; set; } = new();
+	public AdmissionCrmApplicationStagePolicyDto ApplicationStagePolicy { get; set; } = new();
+}
+
+public class AdmissionCrmCycleCommunicationSummaryDto
+{
+	public int JourneyRuleCount { get; set; }
+	public int ActiveMessageRuleCount { get; set; }
+	public int TemplateBackedRuleCount { get; set; }
+}
+
+public class AdmissionCrmApplicationStagePolicyDto
+{
+	public int Version { get; set; } = 1;
+	public bool EntranceExamRequired { get; set; }
+	public bool JourneyLocked { get; set; }
+	public int ApplicantCount { get; set; }
+	public string ImpactFingerprint { get; set; } = string.Empty;
+	public IReadOnlyList<AdmissionCrmApplicationStagePolicyItemDto> Stages { get; set; } = [];
+}
+
+public class AdmissionCrmApplicationStagePolicyItemDto
+{
+	public AdmissionCrmApplicationStageKey StageKey { get; set; }
+	public string DisplayName { get; set; } = string.Empty;
+	public int DisplayOrder { get; set; }
+	public bool IsEnabled { get; set; }
+	public bool IsRequired { get; set; }
+	public bool IsSystemLocked { get; set; }
+	public bool IsExamStage { get; set; }
+	public bool IsOperationallyBacked { get; set; }
+	public IReadOnlyList<AdmissionInquiryStage> SupportedOperationalStages { get; set; } = [];
+	public string ReadinessNote { get; set; } = string.Empty;
+}
+
+public class UpdateAdmissionCrmApplicationStagePolicyDto
+{
+	public IReadOnlyList<UpdateAdmissionCrmApplicationStagePolicyItemDto> Stages { get; set; } = [];
+	public string? ExpectedImpactFingerprint { get; set; }
+}
+
+public class UpdateAdmissionCrmApplicationStagePolicyItemDto
+{
+	public AdmissionCrmApplicationStageKey StageKey { get; set; }
+	public int DisplayOrder { get; set; }
+	public bool IsEnabled { get; set; }
+}
+
+public class AdmissionCrmApplicationStagePolicyImpactDto
+{
+	public int ApplicantCount { get; set; }
+	public string ImpactFingerprint { get; set; } = string.Empty;
+	public bool RequiresConfirmation { get; set; }
+	public IReadOnlyList<string> Warnings { get; set; } = [];
+}
+
 public class StartAdmissionCrmSupportSessionDto
 {
 	public Guid TenantId { get; set; }
@@ -107,6 +208,11 @@ public class AdmissionCrmPresetApplyResultDto
 public interface IAdmissionCrmSetupAppService : IApplicationService
 {
 	Task<AdmissionCrmSetupStatusDto> GetStatusAsync(Guid academicYearId);
+	Task<PagedResultDto<AdmissionCrmCycleListItemDto>> GetCyclesAsync(PagedResultRequestDto input);
+	Task<AdmissionCrmCycleSummaryDto> GetCycleSummaryAsync(Guid academicYearId);
+	Task<AdmissionCrmApplicationStagePolicyDto> GetApplicationStagePolicyAsync(Guid academicYearId);
+	Task<AdmissionCrmApplicationStagePolicyImpactDto> PreviewApplicationStagePolicyAsync(Guid academicYearId, UpdateAdmissionCrmApplicationStagePolicyDto input);
+	Task<AdmissionCrmApplicationStagePolicyDto> UpdateApplicationStagePolicyAsync(Guid academicYearId, UpdateAdmissionCrmApplicationStagePolicyDto input);
 	Task<IReadOnlyList<AdmissionCrmSettingsAccessDto>> GetAccessPolicyAsync();
 	Task<AdmissionCrmSupportSessionDto> StartSupportSessionAsync(StartAdmissionCrmSupportSessionDto input);
 	Task<AdmissionCrmSupportSessionDto> GetSupportSessionAsync(Guid id);

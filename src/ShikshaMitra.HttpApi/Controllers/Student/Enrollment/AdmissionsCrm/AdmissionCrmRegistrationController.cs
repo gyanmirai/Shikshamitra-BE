@@ -19,6 +19,12 @@ public class AdmissionCrmRegistrationController(
 		[FromBody] CreateDirectAdmissionCrmRegistrationDto input) =>
 		leadAppService.CreateDirectRegistrationAsync(academicYearId, input);
 
+	[HttpPost("{academicYearId}/registrations/from-paper")]
+	public Task<AdmissionCrmDirectRegistrationResultDto> CreatePaperRegistrationAsync(
+		Guid academicYearId,
+		[FromBody] CreatePaperAdmissionCrmRegistrationDto input) =>
+		leadAppService.CreatePaperRegistrationAsync(academicYearId, input);
+
 	[HttpGet("{academicYearId}/configuration/registration-templates")]
 	public Task<PagedResultDto<AdmissionCrmRegistrationTemplateDto>> GetTemplatesAsync(
 		Guid academicYearId,

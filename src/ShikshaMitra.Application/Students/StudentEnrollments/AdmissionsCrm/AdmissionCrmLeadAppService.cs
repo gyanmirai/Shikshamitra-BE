@@ -359,6 +359,40 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		};
 	}
 
+	[UnitOfWork]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add)]
+	public async Task<AdmissionCrmDirectRegistrationResultDto> CreatePaperRegistrationAsync(
+		Guid academicYearId,
+		CreatePaperAdmissionCrmRegistrationDto input)
+	{
+		await AuthorizationService.CheckAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm);
+
+		input.Applicant.Channel = AdmissionInquiryChannel.ManualBackOffice;
+		input.Applicant.AdmissionIntent = string.IsNullOrWhiteSpace(input.Applicant.AdmissionIntent)
+			? "Paper registration"
+			: input.Applicant.AdmissionIntent;
+		var created = await CreateAsync(academicYearId, input.Applicant);
+		var lead = await GetLeadForCurrentTenantAsync(created.Id, nameof(CreatePaperRegistrationAsync));
+		lead.ChangeStage(AdmissionInquiryStage.Eligible);
+		await _leadRepository.UpdateAsync(lead, autoSave: false);
+		await AddTimelineEventAsync(
+			lead,
+			AdmissionCrmTimelineEventType.StageChanged,
+			"Paper registration started",
+			"The applicant entered Enrollment from a physical registration form entered by authorized staff.",
+			lead.Id);
+
+		var registration = await _registrationAppService.IssueFromPaperAsync(lead.Id, input);
+		await CurrentUnitOfWork!.SaveChangesAsync();
+
+		return new AdmissionCrmDirectRegistrationResultDto
+		{
+			Applicant = ToDto(lead, created.LikelyDuplicates),
+			Registration = registration
+		};
+	}
+
 	public async Task<AdmissionCrmLeadDto> GetAsync(Guid id)
 	{
 		var lead = await GetLeadForCurrentTenantAsync(id, nameof(GetAsync));

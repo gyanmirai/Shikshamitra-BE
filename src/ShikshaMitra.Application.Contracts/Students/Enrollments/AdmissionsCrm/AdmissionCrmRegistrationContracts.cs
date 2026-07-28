@@ -158,6 +158,42 @@ public class CreateDirectAdmissionCrmRegistrationDto : IValidatableObject
 	}
 }
 
+public class CreatePaperAdmissionCrmRegistrationDto : IValidatableObject
+{
+	[Required]
+	public required CreateAdmissionCrmLeadDto Applicant { get; set; }
+	[Required]
+	public required IssueAdmissionCrmRegistrationApplicationDto Registration { get; set; }
+	[Required, MaxLength(AdmissionCrmConsts.MaxRegistrationFormNumberLength)]
+	public required string PhysicalFormNumber { get; set; }
+	public DateTime PhysicalFormReceivedDate { get; set; }
+	public Guid? PhysicalFormReceivedByUserId { get; set; }
+	[MaxLength(AdmissionCrmConsts.MaxDocumentBlobNameLength)]
+	public string? ScannedFormAttachmentReference { get; set; }
+
+	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+	{
+		if (string.IsNullOrWhiteSpace(Applicant.FirstName))
+		{
+			yield return new ValidationResult(
+				"Student name is required for a paper registration.",
+				[$"{nameof(Applicant)}.{nameof(Applicant.FirstName)}"]);
+		}
+		if (!Applicant.TargetStandardId.HasValue)
+		{
+			yield return new ValidationResult(
+				"Target class is required for a paper registration.",
+				[$"{nameof(Applicant)}.{nameof(Applicant.TargetStandardId)}"]);
+		}
+		if (string.IsNullOrWhiteSpace(PhysicalFormNumber))
+		{
+			yield return new ValidationResult(
+				"Physical form number is required for a paper registration.",
+				[nameof(PhysicalFormNumber)]);
+		}
+	}
+}
+
 public class AdmissionCrmDirectRegistrationResultDto
 {
 	public required AdmissionCrmLeadDto Applicant { get; set; }
@@ -178,6 +214,12 @@ public class AdmissionCrmRegistrationApplicationDto
 	public int RegistrationTemplateVersion { get; set; }
 	public Guid? PlaybookId { get; set; }
 	public string FormNumber { get; set; } = string.Empty;
+	public AdmissionCrmRegistrationProvenance Provenance { get; set; }
+	public AdmissionCrmRegistrationDataEntryState DataEntryState { get; set; }
+	public string? PhysicalFormNumber { get; set; }
+	public DateTime? PhysicalFormReceivedDate { get; set; }
+	public Guid? PhysicalFormReceivedByUserId { get; set; }
+	public string? ScannedFormAttachmentReference { get; set; }
 	public AdmissionCrmRegistrationStatus Status { get; set; }
 	public IReadOnlyList<AdmissionCrmRegistrationSectionDto> Sections { get; set; } = [];
 	public IReadOnlyDictionary<string, JsonElement> Prefill { get; set; } = new Dictionary<string, JsonElement>();

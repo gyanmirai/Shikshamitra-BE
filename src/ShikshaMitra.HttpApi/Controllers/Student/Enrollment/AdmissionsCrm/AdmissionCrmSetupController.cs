@@ -12,6 +12,26 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Route("api/student-enrollment/admissions-crm/setup")]
 public class AdmissionCrmSetupController(IAdmissionCrmSetupAppService setupAppService) : AbpControllerBase
 {
+	[HttpGet("cycles")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<PagedResultDto<AdmissionCrmCycleListItemDto>> GetCyclesAsync([FromQuery] PagedResultRequestDto input) => setupAppService.GetCyclesAsync(input);
+
+	[HttpGet("cycles/{academicYearId:guid}/summary")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<AdmissionCrmCycleSummaryDto> GetCycleSummaryAsync(Guid academicYearId) => setupAppService.GetCycleSummaryAsync(academicYearId);
+
+	[HttpGet("cycles/{academicYearId:guid}/stage-policy")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<AdmissionCrmApplicationStagePolicyDto> GetApplicationStagePolicyAsync(Guid academicYearId) => setupAppService.GetApplicationStagePolicyAsync(academicYearId);
+
+	[HttpPost("cycles/{academicYearId:guid}/stage-policy/preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<AdmissionCrmApplicationStagePolicyImpactDto> PreviewApplicationStagePolicyAsync(Guid academicYearId, [FromBody] UpdateAdmissionCrmApplicationStagePolicyDto input) => setupAppService.PreviewApplicationStagePolicyAsync(academicYearId, input);
+
+	[HttpPut("cycles/{academicYearId:guid}/stage-policy")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<AdmissionCrmApplicationStagePolicyDto> UpdateApplicationStagePolicyAsync(Guid academicYearId, [FromBody] UpdateAdmissionCrmApplicationStagePolicyDto input) => setupAppService.UpdateApplicationStagePolicyAsync(academicYearId, input);
+
 	[HttpGet("{academicYearId:guid}/status")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public Task<AdmissionCrmSetupStatusDto> GetStatusAsync(Guid academicYearId) => setupAppService.GetStatusAsync(academicYearId);

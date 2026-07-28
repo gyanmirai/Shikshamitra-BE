@@ -44,6 +44,138 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Expose_Admission_Cycles_To_Configuration_Managers()
+	{
+		var cyclesResponse = await Client.GetAsync(
+			"/api/student-enrollment/admissions-crm/setup/cycles?skipCount=0&maxResultCount=10");
+		cyclesResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await cyclesResponse.Content.ReadAsStringAsync());
+		var cycles = await cyclesResponse.Content
+			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmCycleListItemDto>>(JsonOptions);
+		cycles.ShouldNotBeNull();
+		cycles.Items.ShouldContain(cycle => cycle.AcademicYearId == Factory.SeededAcademicYearId);
+		var seededCycle = cycles.Items.Single(cycle => cycle.AcademicYearId == Factory.SeededAcademicYearId);
+		seededCycle.CycleName.ShouldNotBeNullOrWhiteSpace();
+		seededCycle.AcademicYearName.ShouldNotBeNullOrWhiteSpace();
+		seededCycle.ApplicantCount.ShouldBeGreaterThanOrEqualTo(0);
+
+		var summaryResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/summary");
+		summaryResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await summaryResponse.Content.ReadAsStringAsync());
+		var summary = await summaryResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmCycleSummaryDto>(JsonOptions);
+		summary.ShouldNotBeNull();
+		summary.Cycle.AcademicYearId.ShouldBe(Factory.SeededAcademicYearId);
+		summary.Readiness.AcademicYearId.ShouldBe(Factory.SeededAcademicYearId);
+		summary.Policy.DefaultLeadSlaHours.ShouldBeGreaterThan(0);
+		summary.ApplicationStagePolicy.Stages.ShouldContain(stage =>
+			stage.StageKey == AdmissionCrmApplicationStageKey.Inquiry &&
+			stage.IsOperationallyBacked);
+		summary.ApplicationStagePolicy.Stages.ShouldContain(stage =>
+			stage.StageKey == AdmissionCrmApplicationStageKey.ClassPlacement &&
+			!stage.IsOperationallyBacked);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Admission_Cycle_Setup_For_Receptionist()
+	{
+		using var receptionistClient = CreateClientForCrmRole("Admissions Receptionist");
+		var cyclesResponse = await receptionistClient.GetAsync(
+			"/api/student-enrollment/admissions-crm/setup/cycles?skipCount=0&maxResultCount=10");
+		cyclesResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		var summaryResponse = await receptionistClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/summary");
+		summaryResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		var stagePolicyResponse = await receptionistClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/stage-policy");
+		stagePolicyResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Update_Application_Stage_Policy_With_Impact_Preview()
+	{
+		var getResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/stage-policy");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await getResponse.Content.ReadAsStringAsync());
+		var policy = await getResponse.Content.ReadFromJsonAsync<AdmissionCrmApplicationStagePolicyDto>(JsonOptions);
+		policy.ShouldNotBeNull();
+		policy.Stages.ShouldContain(stage => stage.StageKey == AdmissionCrmApplicationStageKey.Activation);
+
+		var reordered = policy.Stages
+			.Select(stage => new UpdateAdmissionCrmApplicationStagePolicyItemDto
+			{
+				StageKey = stage.StageKey,
+				DisplayOrder = stage.StageKey == AdmissionCrmApplicationStageKey.Activation
+					? 1
+					: stage.DisplayOrder + 1,
+				IsEnabled = stage.IsEnabled
+			})
+			.OrderBy(stage => stage.DisplayOrder)
+			.ToList();
+		var update = new UpdateAdmissionCrmApplicationStagePolicyDto { Stages = reordered };
+
+		var rejectedResponse = await Client.PutAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/stage-policy",
+			update,
+			JsonOptions);
+		rejectedResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await rejectedResponse.Content.ReadAsStringAsync()).ShouldContain("AdmissionCrm:StagePolicyImpactPreviewRequired");
+
+		var previewResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/stage-policy/preview",
+			update,
+			JsonOptions);
+		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await previewResponse.Content.ReadAsStringAsync());
+		var impact = await previewResponse.Content.ReadFromJsonAsync<AdmissionCrmApplicationStagePolicyImpactDto>(JsonOptions);
+		impact.ShouldNotBeNull();
+		impact.ImpactFingerprint.ShouldNotBeNullOrWhiteSpace();
+
+		update.ExpectedImpactFingerprint = impact.ImpactFingerprint;
+		var updatedResponse = await Client.PutAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/stage-policy",
+			update,
+			JsonOptions);
+		updatedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updatedResponse.Content.ReadAsStringAsync());
+		var updated = await updatedResponse.Content.ReadFromJsonAsync<AdmissionCrmApplicationStagePolicyDto>(JsonOptions);
+		updated.ShouldNotBeNull();
+		updated.Stages.First(stage => stage.StageKey == AdmissionCrmApplicationStageKey.Activation)
+			.DisplayOrder.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reject_Disabling_Required_Application_Stage()
+	{
+		var getResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/stage-policy");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await getResponse.Content.ReadAsStringAsync());
+		var policy = await getResponse.Content.ReadFromJsonAsync<AdmissionCrmApplicationStagePolicyDto>(JsonOptions);
+		policy.ShouldNotBeNull();
+
+		var update = new UpdateAdmissionCrmApplicationStagePolicyDto
+		{
+			Stages = policy.Stages.Select(stage => new UpdateAdmissionCrmApplicationStagePolicyItemDto
+			{
+				StageKey = stage.StageKey,
+				DisplayOrder = stage.DisplayOrder,
+				IsEnabled = stage.StageKey != AdmissionCrmApplicationStageKey.Inquiry && stage.IsEnabled
+			}).ToList(),
+			ExpectedImpactFingerprint = policy.ImpactFingerprint
+		};
+
+		var response = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/setup/cycles/{Factory.SeededAcademicYearId}/stage-policy/preview",
+			update,
+			JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await response.Content.ReadAsStringAsync()).ShouldContain("AdmissionCrm:RequiredApplicationStageDisabled");
+	}
+
 	public AdmissionCrmApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
 	{
 	}

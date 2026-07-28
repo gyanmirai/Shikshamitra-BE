@@ -102,6 +102,10 @@ public class AdmissionCrmRegistrationQueueContextDto
 	public Guid? RegistrationApplicationId { get; set; }
 	public AdmissionCrmRegistrationStatus? Status { get; set; }
 	public string? FormNumber { get; set; }
+	public AdmissionCrmRegistrationProvenance? Provenance { get; set; }
+	public AdmissionCrmRegistrationDataEntryState? DataEntryState { get; set; }
+	public string? PhysicalFormNumber { get; set; }
+	public DateTime? PhysicalFormReceivedDate { get; set; }
 	public decimal CompletionPercentage { get; set; }
 	public DateTime? LinkExpiresAt { get; set; }
 	public AdmissionCrmRegistrationFeeStatus? FeeStatus { get; set; }
@@ -158,8 +162,14 @@ public class AdmissionCrmEnrollmentOverviewDto
 	public DateTime GeneratedAt { get; set; }
 	public int UnassignedLeadCount { get; set; }
 	public int UpcomingExamCount { get; set; }
+	public int ExamNoShowCount { get; set; }
+	public int PendingPaperEntryCount { get; set; }
 	public int ExpiringRegistrationCount { get; set; }
+	public int DocumentFollowUpCount { get; set; }
+	public int FeeFollowUpCount { get; set; }
 	public int PendingApprovalCount { get; set; }
+	public int ExpiringOfferCount { get; set; }
+	public int ClassPlacementRiskCount { get; set; }
 	public int ActivationFailureCount { get; set; }
 	public int HandoffBlockerCount { get; set; }
 	public int UrgentCount { get; set; }

@@ -14,6 +14,12 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 	public int RegistrationTemplateVersion { get; private set; }
 	public Guid? PlaybookId { get; private set; }
 	public string FormNumber { get; private set; } = string.Empty;
+	public AdmissionCrmRegistrationProvenance Provenance { get; private set; }
+	public AdmissionCrmRegistrationDataEntryState DataEntryState { get; private set; }
+	public string? PhysicalFormNumber { get; private set; }
+	public DateTime? PhysicalFormReceivedDate { get; private set; }
+	public Guid? PhysicalFormReceivedByUserId { get; private set; }
+	public string? ScannedFormAttachmentReference { get; private set; }
 	public AdmissionCrmRegistrationStatus Status { get; private set; }
 	public string TemplateSnapshotJson { get; private set; } = "{}";
 	public string PrefillJson { get; private set; } = "{}";
@@ -49,7 +55,8 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 		string prefillJson,
 		DateTime issuedAt,
 		DateTime linkExpiresAt,
-		decimal feeAmount)
+		decimal feeAmount,
+		AdmissionCrmRegistrationProvenance provenance = AdmissionCrmRegistrationProvenance.OnlineParent)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -63,9 +70,34 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 		PrefillJson = Check.Length(prefillJson, nameof(prefillJson), AdmissionCrmConsts.MaxRegistrationPrefillJsonLength);
 		IssuedAt = issuedAt;
 		LinkExpiresAt = linkExpiresAt;
+		Provenance = provenance;
+		DataEntryState = AdmissionCrmRegistrationDataEntryState.NotStarted;
 		Status = AdmissionCrmRegistrationStatus.Issued;
 		FeeAmount = feeAmount;
 		FeeStatus = feeAmount > 0 ? AdmissionCrmRegistrationFeeStatus.Pending : AdmissionCrmRegistrationFeeStatus.NotRequired;
+	}
+
+	public void RecordPaperReceipt(
+		string physicalFormNumber,
+		DateTime receivedDate,
+		Guid receivedByUserId,
+		string? scannedFormAttachmentReference)
+	{
+		if (Provenance != AdmissionCrmRegistrationProvenance.StaffEnteredFromPaper)
+		{
+			throw new BusinessException("AdmissionCrm:PaperReceiptRequiresPaperRegistration");
+		}
+
+		PhysicalFormNumber = Check.NotNullOrWhiteSpace(
+			physicalFormNumber,
+			nameof(physicalFormNumber),
+			AdmissionCrmConsts.MaxRegistrationFormNumberLength).Trim().ToUpperInvariant();
+		PhysicalFormReceivedDate = receivedDate;
+		PhysicalFormReceivedByUserId = receivedByUserId;
+		ScannedFormAttachmentReference = string.IsNullOrWhiteSpace(scannedFormAttachmentReference)
+			? null
+			: Check.Length(scannedFormAttachmentReference.Trim(), nameof(scannedFormAttachmentReference), AdmissionCrmConsts.MaxDocumentBlobNameLength);
+		DataEntryState = AdmissionCrmRegistrationDataEntryState.InProgress;
 	}
 
 	public void MarkOpened(DateTime openedAt)
@@ -89,6 +121,7 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 		CompletionPercentage = Math.Clamp(completionPercentage, 0, 100);
 		LastSavedAt = savedAt;
 		OpenedAt ??= savedAt;
+		DataEntryState = AdmissionCrmRegistrationDataEntryState.InProgress;
 		Status = CompletionPercentage > 0
 			? AdmissionCrmRegistrationStatus.PartiallyCompleted
 			: AdmissionCrmRegistrationStatus.Started;
@@ -106,6 +139,7 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 		LastSavedAt = submittedAt;
 		SubmittedAt = submittedAt;
 		CorrectionJson = "[]";
+		DataEntryState = AdmissionCrmRegistrationDataEntryState.Submitted;
 		Status = isResubmission
 			? AdmissionCrmRegistrationStatus.Resubmitted
 			: AdmissionCrmRegistrationStatus.Submitted;
@@ -129,6 +163,7 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 			throw new BusinessException("AdmissionCrm:RegistrationMustBeSubmittedBeforeVerification");
 		}
 		VerifiedAt = verifiedAt;
+		DataEntryState = AdmissionCrmRegistrationDataEntryState.Verified;
 		Status = AdmissionCrmRegistrationStatus.Verified;
 	}
 

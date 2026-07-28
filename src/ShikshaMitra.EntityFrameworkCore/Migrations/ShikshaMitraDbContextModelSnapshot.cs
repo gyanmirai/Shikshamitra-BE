@@ -21228,6 +21228,11 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
 
+                    b.Property<string>("ApplicationStagePolicyJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
                     b.Property<int>("ArchiveAfterDays")
                         .HasColumnType("integer");
 
@@ -24674,6 +24679,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<int>("DataEntryState")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -24736,6 +24744,16 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<string>("PhysicalFormNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid?>("PhysicalFormReceivedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("PhysicalFormReceivedDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("PlaybookId")
                         .HasColumnType("uuid");
 
@@ -24743,6 +24761,9 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(50000)
                         .HasColumnType("character varying(50000)");
+
+                    b.Property<int>("Provenance")
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("RegistrationTemplateId")
                         .HasColumnType("uuid");
@@ -24757,6 +24778,10 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<DateTime?>("RevokedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ScannedFormAttachmentReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");

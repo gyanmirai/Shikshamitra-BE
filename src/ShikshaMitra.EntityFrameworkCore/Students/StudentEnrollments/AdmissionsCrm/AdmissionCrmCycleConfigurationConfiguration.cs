@@ -37,6 +37,9 @@ public class AdmissionCrmCycleConfigurationConfiguration : IEntityTypeConfigurat
 		builder.Property(x => x.JourneyRulesJson)
 			.HasMaxLength(AdmissionCrmConsts.MaxRoutingRulesJsonLength)
 			.IsRequired();
+		builder.Property(x => x.ApplicationStagePolicyJson)
+			.HasMaxLength(AdmissionCrmConsts.MaxRoutingRulesJsonLength)
+			.IsRequired();
 		builder.Property(x => x.ApplicantChecklistJson)
 			.HasMaxLength(AdmissionCrmConsts.MaxRoutingRulesJsonLength)
 			.IsRequired();

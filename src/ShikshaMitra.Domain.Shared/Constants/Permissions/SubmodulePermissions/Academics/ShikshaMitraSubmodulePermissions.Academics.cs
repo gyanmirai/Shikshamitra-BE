@@ -175,7 +175,13 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Academics.Audits", new SubmoduleInfo(Audits.All, Audits.DisplayNames) },
 
 			// Academic Calendar
-			{ "Academics.AcademicCalendar", new SubmoduleInfo(Academics_AcademicCalendar.All, Academics_AcademicCalendar.DisplayNames) }
+			{ "Academics.AcademicCalendar", new SubmoduleInfo(Academics_AcademicCalendar.All, Academics_AcademicCalendar.DisplayNames) },
+			{ "Academics.AcademicCalendar.Dashboard", new SubmoduleInfo(AcademicCalendar_Dashboard.All, AcademicCalendar_Dashboard.DisplayNames) },
+			{ "Academics.AcademicCalendar.CalendarManagement", new SubmoduleInfo(AcademicCalendar_CalendarManagement.All, AcademicCalendar_CalendarManagement.DisplayNames) },
+			{ "Academics.AcademicCalendar.EmergencyClosure", new SubmoduleInfo(AcademicCalendar_EmergencyClosure.All, AcademicCalendar_EmergencyClosure.DisplayNames) },
+			{ "Academics.AcademicCalendar.ImpactLogs", new SubmoduleInfo(AcademicCalendar_ImpactLogs.All, AcademicCalendar_ImpactLogs.DisplayNames) },
+			{ "Academics.AcademicCalendar.AuditLogs", new SubmoduleInfo(AcademicCalendar_AuditLogs.All, AcademicCalendar_AuditLogs.DisplayNames) },
+			{ "Academics.AcademicCalendar.Settings", new SubmoduleInfo(AcademicCalendar_Settings.All, AcademicCalendar_Settings.DisplayNames) }
 		};
 	}
 }

@@ -28,6 +28,7 @@ public static class ShikshaMitraSubModulePermissions
 	public const string LMS = $"{ShikshaMitraModulePermissions.Academics}.LMS";
 	public const string LMSSettings = $"{ShikshaMitraModulePermissions.Academics}.LMS.Settings";
 	public const string AcademicsNotification = $"{ShikshaMitraModulePermissions.Academics}.Notification";
+	public const string AcademicCalendar = $"{ShikshaMitraModulePermissions.Academics}.AcademicCalendar";
 
 	// Class management module submodules
 	public const string ClassManagementDashboard = $"{ShikshaMitraModulePermissions.ClassManagement}.Dashboard";
@@ -205,6 +206,7 @@ public static class ShikshaMitraSubModulePermissions
 		LMS,
 		LMSSettings,
 		AcademicsNotification,
+		AcademicCalendar,
 		ClassManagementDashboard,
 		ElectiveAssignment,
 		Chapters,
@@ -364,6 +366,7 @@ public static class ShikshaMitraSubModulePermissions
 		{ LMS, $"{DisplayNamePrefix}.LMS" },
 		{ LMSSettings, $"{DisplayNamePrefix}.LMSSettings" },
 		{ AcademicsNotification, $"{DisplayNamePrefix}.AcademicsNotification" },
+		{ AcademicCalendar, $"{DisplayNamePrefix}.AcademicCalendar" },
 
 		// Class Management module submodules
 		{ ClassManagementDashboard, $"{DisplayNamePrefix}.ClassManagementDashboard" },

@@ -25,6 +25,9 @@ public class AdmissionCrmCommunicationProviderSettingsDto
 	public Dictionary<string, string> Headers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 	public Dictionary<string, string> Parameters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 	public string? CallbackSecret { get; set; }
+	public bool HasStoredHeaderValues { get; set; }
+	public bool HasStoredParameterValues { get; set; }
+	public bool HasCallbackSecret { get; set; }
 	public AdmissionCrmCommunicationCallbackMappingsDto CallbackMappings { get; set; } = new();
 }
 

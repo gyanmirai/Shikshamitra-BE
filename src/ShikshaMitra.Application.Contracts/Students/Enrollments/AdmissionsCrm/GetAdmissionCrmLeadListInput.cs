@@ -11,8 +11,10 @@ public class GetAdmissionCrmLeadListInput : PagedAndSortedResultRequestDto
 	public DateTime? LastActivityFrom { get; set; }
 	public DateTime? LastActivityUntil { get; set; }
 	public AdmissionInquiryStage? Stage { get; set; }
+	public AdmissionCrmPipelineColumnKey? PipelineColumn { get; set; }
 	public AdmissionInquiryChannel? Channel { get; set; }
 	public Guid? InquirySourceId { get; set; }
+	public Guid? InquiryTypeId { get; set; }
 	public string? CampaignName { get; set; }
 	public Guid? OwnerUserId { get; set; }
 	public AdmissionCrmLeadPriority? Priority { get; set; }

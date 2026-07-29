@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Emailing;
@@ -13,21 +14,26 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 public class StudentEmailService : IStudentEmailService, ITransientDependency
 {
     private readonly IEmailSender emailSender;
+    private readonly IConfiguration configuration;
     private readonly ILogger<StudentEmailService> logger;
 
     public StudentEmailService(
         IEmailSender emailSender,
+        IConfiguration configuration,
         ILogger<StudentEmailService> logger)
     {
         this.emailSender = emailSender;
+        this.configuration = configuration;
         this.logger = logger;
     }
 
-    public async Task SendAdmissionApprovalEmailAsync(
+    public async Task SendAdmissionAccountSetupEmailAsync(
         string email,
         string studentName,
         string username,
-        string password)
+        Guid userId,
+        string resetToken,
+        Guid? tenantId)
     {
         try
         {
@@ -37,7 +43,8 @@ public class StudentEmailService : IStudentEmailService, ITransientDependency
                 return;
             }
 
-            var htmlBody = BuildAdmissionApprovalEmailBody(studentName, username, password);
+            var setupUrl = BuildAccountSetupUrl(userId, resetToken, tenantId);
+            var htmlBody = BuildAdmissionApprovalEmailBody(studentName, username, setupUrl);
 
             await emailSender.SendAsync(
                 to: email,
@@ -57,10 +64,21 @@ public class StudentEmailService : IStudentEmailService, ITransientDependency
         }
     }
 
-    private string BuildAdmissionApprovalEmailBody(string studentName, string username, string password)
+    private string BuildAccountSetupUrl(Guid userId, string resetToken, Guid? tenantId)
+    {
+        var clientUrl = configuration["App:ClientUrl"]?.TrimEnd('/');
+        var baseUrl = string.IsNullOrWhiteSpace(clientUrl) ? string.Empty : clientUrl;
+        var tenantQuery = tenantId.HasValue
+            ? $"&tenantId={Uri.EscapeDataString(tenantId.Value.ToString())}"
+            : string.Empty;
+        return $"{baseUrl}/account/reset-password?userId={Uri.EscapeDataString(userId.ToString())}" +
+               $"&resetToken={Uri.EscapeDataString(resetToken)}{tenantQuery}";
+    }
+
+    private string BuildAdmissionApprovalEmailBody(string studentName, string username, string setupUrl)
     {
         var encodedUsername = HtmlEncoder.Default.Encode(username);
-        var encodedPassword = HtmlEncoder.Default.Encode(password);
+        var encodedSetupUrl = HtmlEncoder.Default.Encode(setupUrl);
 
         return $@"
         <!DOCTYPE html>
@@ -73,7 +91,7 @@ public class StudentEmailService : IStudentEmailService, ITransientDependency
                 .container {{ max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff; }}
                 .header {{ background-color: #27ae60; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }}
                 .content {{ padding: 30px; border: 1px solid #f0f0f0; border-top: none; }}
-                .credentials {{ background-color: #f1f8f3; padding: 20px; margin: 20px 0; border-left: 5px solid #27ae60; border-radius: 4px; }}
+                .account {{ background-color: #f1f8f3; padding: 20px; margin: 20px 0; border-left: 5px solid #27ae60; border-radius: 4px; }}
                 .label {{ font-weight: bold; display: inline-block; width: 100px; }}
                 .value {{ color: #27ae60; font-family: 'Courier New', monospace; font-weight: bold; font-size: 1.1em; }}
                 .action-box {{ text-align: center; margin-top: 30px; }}
@@ -90,18 +108,17 @@ public class StudentEmailService : IStudentEmailService, ITransientDependency
                     <p>Dear <strong>{HtmlEncoder.Default.Encode(studentName)}</strong>,</p>
                     <p>We are delighted to inform you that your admission to <strong>ShikshaMitra</strong> has been officially approved! We are excited to have you join our academic community.</p>
 
-                    <p>Your student account has been created. You can now access the student portal using the following credentials:</p>
+                    <p>Your portal account has been created. Use the secure link below to choose your password.</p>
 
-                    <div class='credentials'>
+                    <div class='account'>
                         <p style='margin: 5px 0;'><span class='label'>Username:</span> <span class='value'>{encodedUsername}</span></p>
-                        <p style='margin: 5px 0;'><span class='label'>Password:</span> <span class='value'>{encodedPassword}</span></p>
                     </div>
-
-                    <p><strong>Note:</strong> For security reasons, please change your password immediately upon your first login.</p>
 
                     <div class='action-box'>
-                        <a href='#' class='button'>Login to Student Portal</a>
+                        <a href='{encodedSetupUrl}' class='button'>Set up portal password</a>
                     </div>
+                    <p>If the button does not open, copy and paste this link into your browser:</p>
+                    <p>{encodedSetupUrl}</p>
 
                     <p style='margin-top: 30px;'>If you have any questions, please contact the admissions department.</p>
 

@@ -8,10 +8,15 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.DistributedLocking;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Users;
 
@@ -22,6 +27,15 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetupAppService
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+	private static readonly HashSet<string> AdmissionYearStepKeys =
+	[
+		"inquiry",
+		"exam",
+		"registration",
+		"finance",
+		"placement",
+		"activation"
+	];
 	private static readonly string[] SettingsKeys = ["journey", "inquiry-capture", "entrance-exams", "registration-documents", "offers-seats", "routing-scoring", "activation", "governance", "communications", "automation"];
 	private readonly IRepository<AdmissionCrmSettingsAccessPolicy, Guid> _accessRepository;
 	private readonly IRepository<AdmissionCrmPlatformSupportSession, Guid> _sessionRepository;
@@ -29,10 +43,23 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 	private readonly IRepository<AdmissionCrmPresetAdoption, Guid> _adoptionRepository;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 	private readonly IRepository<AdmissionCrmCycleConfiguration, Guid> _cycleRepository;
+	private readonly IRepository<AdmissionCrmAdmissionYearSetup, Guid> _admissionYearRepository;
+	private readonly IRepository<AdmissionCrmInquirySource, Guid> _inquirySourceRepository;
+	private readonly IRepository<AdmissionCrmInquiryType, Guid> _inquiryTypeRepository;
+	private readonly IRepository<AdmissionCrmPlaybook, Guid> _playbookRepository;
+	private readonly IRepository<AdmissionCrmRegistrationTemplate, Guid> _registrationTemplateRepository;
+	private readonly IRepository<AdmissionCrmDocumentChecklistTemplate, Guid> _documentTemplateRepository;
+	private readonly IRepository<AdmissionCrmMessageTemplate, Guid> _messageTemplateRepository;
 	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
+	private readonly IRepository<Standard, Guid> _standardRepository;
+	private readonly IRepository<EducationMediumStage, Guid> _mediumStageRepository;
+	private readonly IRepository<EducationMedium, Guid> _mediumRepository;
+	private readonly IRepository<EducationBoard, Guid> _boardRepository;
 	private readonly StudentScopeAccessService _scopeAccess;
 	private readonly IAdmissionCrmConfigurationAppService _configurationService;
 	private readonly AdmissionCrmConfigurationSafetyAppService _configurationSafety;
+	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
+	private readonly IAbpDistributedLock _distributedLock;
 
 	public AdmissionCrmSetupAppService(
 		IRepository<AdmissionCrmSettingsAccessPolicy, Guid> accessRepository,
@@ -41,10 +68,23 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		IRepository<AdmissionCrmPresetAdoption, Guid> adoptionRepository,
 		IRepository<AcademicYear, Guid> academicYearRepository,
 		IRepository<AdmissionCrmCycleConfiguration, Guid> cycleRepository,
+		IRepository<AdmissionCrmAdmissionYearSetup, Guid> admissionYearRepository,
+		IRepository<AdmissionCrmInquirySource, Guid> inquirySourceRepository,
+		IRepository<AdmissionCrmInquiryType, Guid> inquiryTypeRepository,
+		IRepository<AdmissionCrmPlaybook, Guid> playbookRepository,
+		IRepository<AdmissionCrmRegistrationTemplate, Guid> registrationTemplateRepository,
+		IRepository<AdmissionCrmDocumentChecklistTemplate, Guid> documentTemplateRepository,
+		IRepository<AdmissionCrmMessageTemplate, Guid> messageTemplateRepository,
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<EducationMediumStage, Guid> mediumStageRepository,
+		IRepository<EducationMedium, Guid> mediumRepository,
+		IRepository<EducationBoard, Guid> boardRepository,
 		StudentScopeAccessService scopeAccess,
 		IAdmissionCrmConfigurationAppService configurationService,
-		AdmissionCrmConfigurationSafetyAppService configurationSafety)
+		AdmissionCrmConfigurationSafetyAppService configurationSafety,
+		AdmissionCrmStaffEligibilityService staffEligibilityService,
+		IAbpDistributedLock distributedLock)
 	{
 		_accessRepository = accessRepository;
 		_sessionRepository = sessionRepository;
@@ -52,15 +92,263 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		_adoptionRepository = adoptionRepository;
 		_academicYearRepository = academicYearRepository;
 		_cycleRepository = cycleRepository;
+		_admissionYearRepository = admissionYearRepository;
+		_inquirySourceRepository = inquirySourceRepository;
+		_inquiryTypeRepository = inquiryTypeRepository;
+		_playbookRepository = playbookRepository;
+		_registrationTemplateRepository = registrationTemplateRepository;
+		_documentTemplateRepository = documentTemplateRepository;
+		_messageTemplateRepository = messageTemplateRepository;
 		_leadRepository = leadRepository;
+		_standardRepository = standardRepository;
+		_mediumStageRepository = mediumStageRepository;
+		_mediumRepository = mediumRepository;
+		_boardRepository = boardRepository;
 		_scopeAccess = scopeAccess;
 		_configurationService = configurationService;
 		_configurationSafety = configurationSafety;
+		_staffEligibilityService = staffEligibilityService;
+		_distributedLock = distributedLock;
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<IReadOnlyList<AdmissionCrmAdmissionYearSetupDto>> GetAdmissionYearVersionsAsync(
+		Guid academicYearId)
+	{
+		await _scopeAccess.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(GetAdmissionYearVersionsAsync));
+		await GetAcademicYearAsync(academicYearId);
+		var query = (await _admissionYearRepository.GetQueryableAsync())
+			.Where(setup =>
+				setup.TenantId == CurrentTenant.Id &&
+				setup.AcademicYearId == academicYearId)
+			.OrderByDescending(setup => setup.Version);
+		return (await AsyncExecuter.ToListAsync(query))
+			.Select(ToAdmissionYearDto)
+			.ToList();
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>>
+		GetAdmissionYearStandardOptionsAsync(Guid academicYearId)
+	{
+		await _scopeAccess.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(GetAdmissionYearStandardOptionsAsync));
+		await GetAcademicYearAsync(academicYearId);
+		var rows = await GetAdmissionYearStandardRowsAsync(academicYearId);
+		return rows
+			.OrderBy(row => row.BoardType)
+			.ThenBy(row => row.MediumName)
+			.ThenBy(row => row.MediumStageName)
+			.ThenBy(row => row.StandardName)
+			.Select(row => new AdmissionCrmAdmissionYearStandardOptionDto
+			{
+				StandardId = row.StandardId,
+				StandardName = row.StandardName,
+				MediumStageId = row.MediumStageId,
+				MediumStageName = row.MediumStageName,
+				MediumId = row.MediumId,
+				MediumName = row.MediumName,
+				BoardId = row.BoardId,
+				BoardName = row.BoardType.ToString()
+			})
+			.ToList();
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmAdmissionYearSetupDto> CreateAdmissionYearDraftAsync(
+		Guid academicYearId)
+	{
+		await _scopeAccess.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(CreateAdmissionYearDraftAsync));
+		await using var lockHandle = await _distributedLock.TryAcquireAsync(
+			GetAdmissionYearLockKey(academicYearId),
+			TimeSpan.FromSeconds(15));
+		if (lockHandle is null)
+		{
+			throw new BusinessException("AdmissionCrm:AdmissionYearSetupBusy")
+				.WithData("AcademicYearId", academicYearId);
+		}
+
+		var year = await GetAcademicYearAsync(academicYearId);
+		var existing = await _admissionYearRepository.GetListAsync(setup =>
+			setup.TenantId == CurrentTenant.Id &&
+			setup.AcademicYearId == academicYearId);
+		var currentDraft = existing.FirstOrDefault(setup =>
+			setup.Status == AdmissionCrmAdmissionYearSetupStatus.Draft);
+		if (currentDraft is not null)
+		{
+			return ToAdmissionYearDto(currentDraft);
+		}
+
+		var source = existing
+			.OrderByDescending(setup => setup.Version)
+			.FirstOrDefault();
+		var setup = source is null
+			? new AdmissionCrmAdmissionYearSetup(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				academicYearId,
+				1,
+				year.StartDate.Date.AddMonths(-6),
+				year.StartDate.Date,
+				year.StartDate.Date,
+				year.StartDate.Date,
+				true,
+				false,
+				AdmissionCrmPlacementTiming.StandardBeforeActivation,
+				null,
+				"[]",
+				JsonSerializer.Serialize(new[] { AdmissionCrmRouteType.Fresh }, JsonOptions),
+				"{}")
+			: new AdmissionCrmAdmissionYearSetup(
+				GuidGenerator.Create(),
+				CurrentTenant.Id,
+				academicYearId,
+				source.Version + 1,
+				source.InquiryOpenDate,
+				source.InquiryCloseDate,
+				source.RegistrationCloseDate,
+				source.ActivationTargetDate,
+				source.EntranceExamRequired,
+				source.FinanceVerificationRequired,
+				source.PlacementTiming,
+				source.DefaultOwnerUserId,
+				source.TargetStandardIdsJson,
+				source.RouteTypesJson,
+				source.StepOwnersJson);
+
+		await _admissionYearRepository.InsertAsync(setup, autoSave: true);
+		return ToAdmissionYearDto(setup);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmAdmissionYearSetupDto> UpdateAdmissionYearDraftAsync(
+		Guid id,
+		UpdateAdmissionCrmAdmissionYearSetupDto input)
+	{
+		var setup = await GetAdmissionYearForCurrentTenantAsync(
+			id,
+			nameof(UpdateAdmissionYearDraftAsync));
+		await _scopeAccess.EnsureAcademicYearWideConfigurationAccessAsync(
+			setup.AcademicYearId,
+			nameof(UpdateAdmissionYearDraftAsync));
+		await using var lockHandle = await _distributedLock.TryAcquireAsync(
+			GetAdmissionYearLockKey(setup.AcademicYearId),
+			TimeSpan.FromSeconds(15));
+		if (lockHandle is null)
+		{
+			throw new BusinessException("AdmissionCrm:AdmissionYearSetupBusy")
+				.WithData("AcademicYearId", setup.AcademicYearId);
+		}
+
+		EnsureAdmissionYearConcurrency(setup, input.ConcurrencyStamp);
+
+		await ValidateAdmissionYearInputAsync(setup.AcademicYearId, input);
+		setup.Update(
+			input.InquiryOpenDate,
+			input.InquiryCloseDate,
+			input.RegistrationCloseDate,
+			input.ActivationTargetDate,
+			input.EntranceExamRequired,
+			input.FinanceVerificationRequired,
+			input.PlacementTiming,
+			input.DefaultOwnerUserId,
+			JsonSerializer.Serialize(input.TargetStandardIds.Distinct(), JsonOptions),
+			JsonSerializer.Serialize(input.RouteTypes.Distinct(), JsonOptions),
+			JsonSerializer.Serialize(input.StepOwners, JsonOptions));
+		await _admissionYearRepository.UpdateAsync(setup, autoSave: true);
+		return ToAdmissionYearDto(setup);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmAdmissionYearSetupDto> PublishAdmissionYearAsync(
+		Guid id,
+		PublishAdmissionCrmAdmissionYearSetupDto input)
+	{
+		var setup = await GetAdmissionYearForCurrentTenantAsync(id, nameof(PublishAdmissionYearAsync));
+		await _scopeAccess.EnsureAcademicYearWideConfigurationAccessAsync(
+			setup.AcademicYearId,
+			nameof(PublishAdmissionYearAsync));
+		await using var lockHandle = await _distributedLock.TryAcquireAsync(
+			GetAdmissionYearLockKey(setup.AcademicYearId),
+			TimeSpan.FromSeconds(15));
+		if (lockHandle is null)
+		{
+			throw new BusinessException("AdmissionCrm:AdmissionYearSetupBusy")
+				.WithData("AcademicYearId", setup.AcademicYearId);
+		}
+
+		EnsureAdmissionYearConcurrency(setup, input.ConcurrencyStamp);
+		var candidate = ToAdmissionYearDto(setup);
+		await ValidateAdmissionYearInputAsync(
+			setup.AcademicYearId,
+			new UpdateAdmissionCrmAdmissionYearSetupDto
+			{
+				ConcurrencyStamp = candidate.ConcurrencyStamp,
+				InquiryOpenDate = candidate.InquiryOpenDate,
+				InquiryCloseDate = candidate.InquiryCloseDate,
+				RegistrationCloseDate = candidate.RegistrationCloseDate,
+				ActivationTargetDate = candidate.ActivationTargetDate,
+				EntranceExamRequired = candidate.EntranceExamRequired,
+				FinanceVerificationRequired = candidate.FinanceVerificationRequired,
+				PlacementTiming = candidate.PlacementTiming,
+				DefaultOwnerUserId = candidate.DefaultOwnerUserId,
+				TargetStandardIds = candidate.TargetStandardIds,
+				RouteTypes = candidate.RouteTypes,
+				StepOwners = candidate.StepOwners
+			},
+			requirePublishReady: true);
+
+		var published = await _admissionYearRepository.FirstOrDefaultAsync(existing =>
+			existing.TenantId == CurrentTenant.Id &&
+			existing.AcademicYearId == setup.AcademicYearId &&
+			existing.Status == AdmissionCrmAdmissionYearSetupStatus.Published);
+		if (published is not null && published.Id != setup.Id)
+		{
+			published.Supersede();
+			await _admissionYearRepository.UpdateAsync(published, autoSave: true);
+		}
+
+		var snapshot = JsonSerializer.Serialize(candidate, JsonOptions);
+		setup.Publish(snapshot, CurrentUser.GetId(), Clock.Now);
+		await _admissionYearRepository.UpdateAsync(setup, autoSave: true);
+		return ToAdmissionYearDto(setup);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmAdmissionYearSetupDto> CloseAdmissionYearAsync(
+		Guid id,
+		CloseAdmissionCrmAdmissionYearSetupDto input)
+	{
+		var setup = await GetAdmissionYearForCurrentTenantAsync(id, nameof(CloseAdmissionYearAsync));
+		await _scopeAccess.EnsureAcademicYearWideConfigurationAccessAsync(
+			setup.AcademicYearId,
+			nameof(CloseAdmissionYearAsync));
+		await using var lockHandle = await _distributedLock.TryAcquireAsync(
+			GetAdmissionYearLockKey(setup.AcademicYearId),
+			TimeSpan.FromSeconds(15));
+		if (lockHandle is null)
+		{
+			throw new BusinessException("AdmissionCrm:AdmissionYearSetupBusy")
+				.WithData("AcademicYearId", setup.AcademicYearId);
+		}
+
+		EnsureAdmissionYearConcurrency(setup, input.ConcurrencyStamp);
+		setup.Close(input.Reason, CurrentUser.GetId(), Clock.Now);
+		await _admissionYearRepository.UpdateAsync(setup, autoSave: true);
+		return ToAdmissionYearDto(setup);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public async Task<AdmissionCrmSetupStatusDto> GetStatusAsync(Guid academicYearId)
 	{
+		await _scopeAccess.EnsureAcademicYearWideConfigurationAccessAsync(
+			academicYearId,
+			nameof(GetStatusAsync));
 		var configuration = await _configurationService.GetCycleConfigurationAsync(academicYearId);
 		var policies = await GetAccessPolicyAsync();
 		var adoption = (await _adoptionRepository.GetListAsync(x => x.AcademicYearId == academicYearId && x.RolledBackAt == null))
@@ -75,21 +363,82 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 			}
 		}
 
+		var tenantId = CurrentTenant.Id;
+		var admissionYearQuery = await _admissionYearRepository.GetQueryableAsync();
+		var publishedAdmissionYear = await AsyncExecuter.FirstOrDefaultAsync(
+			admissionYearQuery.Where(setup =>
+				setup.TenantId == tenantId &&
+				setup.AcademicYearId == academicYearId &&
+				setup.Status == AdmissionCrmAdmissionYearSetupStatus.Published));
+		var inquirySourceQuery = await _inquirySourceRepository.GetQueryableAsync();
+		var hasActiveSource = await AsyncExecuter.AnyAsync(inquirySourceQuery.Where(source =>
+			source.TenantId == tenantId &&
+			source.AcademicYearId == academicYearId &&
+			source.IsActive));
+		var inquiryTypeQuery = await _inquiryTypeRepository.GetQueryableAsync();
+		var hasActiveType = await AsyncExecuter.AnyAsync(inquiryTypeQuery.Where(type =>
+			type.TenantId == tenantId &&
+			type.AcademicYearId == academicYearId &&
+			type.IsActive));
+		var playbookQuery = await _playbookRepository.GetQueryableAsync();
+		var hasPublishedExamPolicy = await AsyncExecuter.AnyAsync(playbookQuery.Where(playbook =>
+			playbook.TenantId == tenantId &&
+			playbook.AcademicYearId == academicYearId &&
+			playbook.Status == AdmissionCrmPlaybookStatus.Published &&
+			playbook.ExamDefinitionsJson != "[]"));
+		var registrationQuery = await _registrationTemplateRepository.GetQueryableAsync();
+		var hasPublishedRegistration = await AsyncExecuter.AnyAsync(registrationQuery.Where(template =>
+			template.TenantId == tenantId &&
+			template.AcademicYearId == academicYearId &&
+			template.Status == AdmissionCrmRegistrationTemplateStatus.Published));
+		var documentQuery = await _documentTemplateRepository.GetQueryableAsync();
+		var hasPublishedDocuments = await AsyncExecuter.AnyAsync(documentQuery.Where(template =>
+			template.TenantId == tenantId &&
+			template.AcademicYearId == academicYearId &&
+			template.Status == AdmissionCrmDocumentChecklistTemplateStatus.Published));
+		var messageQuery = await _messageTemplateRepository.GetQueryableAsync();
+		var hasApprovedMessage = await AsyncExecuter.AnyAsync(messageQuery.Where(template =>
+			template.TenantId == tenantId &&
+			template.AcademicYearId == academicYearId &&
+			template.Status == AdmissionCrmMessageTemplateStatus.Approved &&
+			template.IsActive));
+
+		var admissionYearReady = publishedAdmissionYear is not null;
+		var pipelineReady = hasActiveSource && hasActiveType;
+		var examReady = admissionYearReady &&
+			(!publishedAdmissionYear!.EntranceExamRequired || hasPublishedExamPolicy);
+		var registrationReady = hasPublishedRegistration && hasPublishedDocuments;
+		var financeReady = admissionYearReady;
+		var placementReady = admissionYearReady;
+		var activationReady = admissionYearReady;
+		var communicationReady = hasApprovedMessage;
+		var readiness = new[]
+		{
+			admissionYearReady,
+			pipelineReady,
+			examReady,
+			registrationReady,
+			financeReady,
+			placementReady,
+			activationReady,
+			communicationReady
+		};
+		var overall = readiness.All(value => value)
+			? adoption is not null
+				? AdmissionCrmSetupReadiness.Managed
+				: AdmissionCrmSetupReadiness.Ready
+			: AdmissionCrmSetupReadiness.NeedsAttention;
 		var policyByKey = policies.ToDictionary(x => x.SettingsKey, StringComparer.OrdinalIgnoreCase);
-		var coreReady = !string.IsNullOrWhiteSpace(configuration.CycleName) && configuration.DefaultLeadSlaHours > 0;
-		var overall = adoption is not null ? AdmissionCrmSetupReadiness.Managed : coreReady ? AdmissionCrmSetupReadiness.Ready : AdmissionCrmSetupReadiness.NeedsAttention;
 		var definitions = new[]
 		{
-			("journey", "Admission cycle and journey", "/student/enrollment/settings/journey"),
-			("inquiry-capture", "Inquiry forms and sources", "/student/enrollment/settings/inquiry-capture"),
-			("entrance-exams", "Exam and eligibility", "/student/enrollment/settings/entrance-exams"),
-			("registration-documents", "Registration and documents", "/student/enrollment/settings/registration-documents"),
-			("offers-seats", "Class Placement Plan", "/student/enrollment/settings/offers-seats"),
-			("routing-scoring", "Assignment and priority", "/student/enrollment/settings/routing-scoring"),
-			("activation", "Student activation", "/student/enrollment/settings/activation"),
-			("governance", "Policies and compliance", "/student/enrollment/settings/governance"),
-			("communications", "Messages and delivery", "/student/enrollment/settings/communications"),
-			("automation", "Follow-up automation", "/student/enrollment/settings/automation")
+			new SetupDefinition("admission-year", "Admission Year Setup", "/student/enrollment/settings/admission-year", "journey", admissionYearReady, "EnrollmentSetup:PublishedAdmissionYearRequired"),
+			new SetupDefinition("pipeline", "Pipeline Settings", "/student/enrollment/settings/pipeline", "inquiry-capture", pipelineReady, "EnrollmentSetup:InquirySourceAndTypeRequired"),
+			new SetupDefinition("entrance-exam", "Entrance Exam Settings", "/student/enrollment/settings/entrance-exam", "entrance-exams", examReady, "EnrollmentSetup:PublishedExamPolicyRequired"),
+			new SetupDefinition("registration", "Registration Settings", "/student/enrollment/settings/registration", "registration-documents", registrationReady, "EnrollmentSetup:PublishedRegistrationAndDocumentsRequired"),
+			new SetupDefinition("finance-handoff", "Finance Handoff Settings", "/student/enrollment/settings/finance-handoff", "journey", financeReady, "EnrollmentSetup:PublishedAdmissionYearRequired"),
+			new SetupDefinition("class-placement", "Class Placement Settings", "/student/enrollment/settings/class-placement", "offers-seats", placementReady, "EnrollmentSetup:PublishedAdmissionYearRequired"),
+			new SetupDefinition("activation", "Activation Settings", "/student/enrollment/settings/activation", "activation", activationReady, "EnrollmentSetup:PublishedAdmissionYearRequired"),
+			new SetupDefinition("communication", "Communication Settings", "/student/enrollment/settings/communication", "communications", communicationReady, "EnrollmentSetup:ApprovedMessageTemplateRequired")
 		};
 
 		return new AdmissionCrmSetupStatusDto
@@ -99,12 +448,31 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 			Status = overall,
 			AppliedPresetName = preset?.Name,
 			AppliedPresetVersion = adoption?.PresetVersion,
-			LastUpdatedAt = adoption?.AppliedAt,
-			Items = definitions.Select((item, index) =>
+			LastUpdatedAt = publishedAdmissionYear?.LastModificationTime ??
+				publishedAdmissionYear?.CreationTime ??
+				adoption?.AppliedAt,
+			Items = definitions.Select(item =>
 			{
-				var mode = policyByKey.GetValueOrDefault(item.Item1)?.AccessMode ?? AdmissionCrmSettingsAccessMode.Editable;
-				var status = mode == AdmissionCrmSettingsAccessMode.Hidden ? AdmissionCrmSetupReadiness.Locked : adoption is not null ? AdmissionCrmSetupReadiness.Managed : coreReady && index < 2 ? AdmissionCrmSetupReadiness.Ready : AdmissionCrmSetupReadiness.NeedsAttention;
-				return new AdmissionCrmSetupItemDto { Key = item.Item1, Title = item.Item2, Path = item.Item3, AccessMode = mode, Status = status, BlockerCodes = status == AdmissionCrmSetupReadiness.NeedsAttention ? ["EnrollmentSetup:ReviewRequired"] : [] };
+				var mode = policyByKey.GetValueOrDefault(item.PolicyKey)?.AccessMode ??
+					AdmissionCrmSettingsAccessMode.Editable;
+				var status = mode == AdmissionCrmSettingsAccessMode.Hidden
+					? AdmissionCrmSetupReadiness.Locked
+					: item.Ready
+						? adoption is not null
+							? AdmissionCrmSetupReadiness.Managed
+							: AdmissionCrmSetupReadiness.Ready
+						: AdmissionCrmSetupReadiness.NeedsAttention;
+				return new AdmissionCrmSetupItemDto
+				{
+					Key = item.Key,
+					Title = item.Title,
+					Path = item.Path,
+					AccessMode = mode,
+					Status = status,
+					BlockerCodes = status == AdmissionCrmSetupReadiness.NeedsAttention
+						? [item.BlockerCode]
+						: []
+				};
 			}).ToList()
 		};
 	}
@@ -431,6 +799,211 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		return year;
 	}
 
+	private string GetAdmissionYearLockKey(Guid academicYearId) =>
+		$"AdmissionCrm:AdmissionYear:{CurrentTenant.Id?.ToString("D") ?? "host"}:{academicYearId:D}";
+
+	private static void EnsureAdmissionYearConcurrency(
+		AdmissionCrmAdmissionYearSetup setup,
+		string concurrencyStamp)
+	{
+		if (string.Equals(setup.ConcurrencyStamp, concurrencyStamp, StringComparison.Ordinal))
+		{
+			return;
+		}
+
+		throw new BusinessException("AdmissionCrm:AdmissionYearDraftChanged")
+			.WithData("SetupId", setup.Id)
+			.WithData("Version", setup.Version);
+	}
+
+	private async Task<List<AdmissionYearStandardRow>> GetAdmissionYearStandardRowsAsync(
+		Guid academicYearId)
+	{
+		var standards = await _standardRepository.GetQueryableAsync();
+		var stages = await _mediumStageRepository.GetQueryableAsync();
+		var mediums = await _mediumRepository.GetQueryableAsync();
+		var boards = await _boardRepository.GetQueryableAsync();
+		var query =
+			from standard in standards
+			join stage in stages on standard.EducationMediumStageId equals stage.Id
+			join medium in mediums on stage.EducationMediumId equals medium.Id
+			join board in boards on medium.EducationBoardId equals board.Id
+			where board.AcademicYearId == academicYearId
+			select new AdmissionYearStandardRow(
+				standard.Id,
+				standard.Name,
+				stage.Id,
+				stage.Name,
+				medium.Id,
+				medium.Name,
+				board.Id,
+				board.Type);
+		return await AsyncExecuter.ToListAsync(query);
+	}
+
+	private async Task<AdmissionCrmAdmissionYearSetup> GetAdmissionYearForCurrentTenantAsync(
+		Guid id,
+		string operation)
+	{
+		var setup = await _admissionYearRepository.FindAsync(id);
+		if (setup is null || setup.TenantId != CurrentTenant.Id)
+		{
+			throw new BusinessException("AdmissionCrm:AdmissionYearSetupNotFound")
+				.WithData("SetupId", id)
+				.WithData("Operation", operation);
+		}
+
+		return setup;
+	}
+
+	private async Task ValidateAdmissionYearInputAsync(
+		Guid academicYearId,
+		UpdateAdmissionCrmAdmissionYearSetupDto input,
+		bool requirePublishReady = false)
+	{
+		if (!Enum.IsDefined(input.PlacementTiming))
+		{
+			throw new BusinessException("AdmissionCrm:InvalidPlacementTiming")
+				.WithData("PlacementTiming", input.PlacementTiming);
+		}
+
+		if (input.TargetStandardIds.Count != input.TargetStandardIds.Distinct().Count())
+		{
+			throw new BusinessException("AdmissionCrm:DuplicateAdmissionYearStandard");
+		}
+
+		if (input.RouteTypes.Count != input.RouteTypes.Distinct().Count() ||
+			input.RouteTypes.Any(route => !Enum.IsDefined(route)))
+		{
+			throw new BusinessException("AdmissionCrm:InvalidAdmissionYearRoutes");
+		}
+
+		if (requirePublishReady && input.TargetStandardIds.Count == 0)
+		{
+			throw new BusinessException("AdmissionCrm:AdmissionYearStandardsRequired");
+		}
+
+		if (requirePublishReady && input.RouteTypes.Count == 0)
+		{
+			throw new BusinessException("AdmissionCrm:AdmissionYearRoutesRequired");
+		}
+
+		if (requirePublishReady)
+		{
+			var sourceQuery = await _inquirySourceRepository.GetQueryableAsync();
+			var hasActiveSource = await AsyncExecuter.AnyAsync(sourceQuery.Where(source =>
+				source.TenantId == CurrentTenant.Id &&
+				source.AcademicYearId == academicYearId &&
+				source.IsActive));
+			if (!hasActiveSource)
+			{
+				throw new BusinessException("AdmissionCrm:ActiveInquirySourceRequired");
+			}
+
+			var typeQuery = await _inquiryTypeRepository.GetQueryableAsync();
+			var hasActiveType = await AsyncExecuter.AnyAsync(typeQuery.Where(type =>
+				type.TenantId == CurrentTenant.Id &&
+				type.AcademicYearId == academicYearId &&
+				type.IsActive));
+			if (!hasActiveType)
+			{
+				throw new BusinessException("AdmissionCrm:ActiveInquiryTypeRequired");
+			}
+		}
+
+		var standardRows = await GetAdmissionYearStandardRowsAsync(academicYearId);
+		var academicYearStandardIds = standardRows
+			.Select(row => row.StandardId)
+			.ToHashSet();
+		var invalidStandardIds = input.TargetStandardIds
+			.Where(standardId => !academicYearStandardIds.Contains(standardId))
+			.ToList();
+		if (invalidStandardIds.Count > 0)
+		{
+			throw new BusinessException("AdmissionCrm:StandardNotInAdmissionYear")
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("InvalidStandardCount", invalidStandardIds.Count);
+		}
+
+		foreach (var standardId in input.TargetStandardIds)
+		{
+			await _scopeAccess.EnsureCanAccessStandardAsync(
+				standardId,
+				nameof(ValidateAdmissionYearInputAsync));
+		}
+
+		if (input.StepOwners.Keys.Any(key => !AdmissionYearStepKeys.Contains(key)))
+		{
+			throw new BusinessException("AdmissionCrm:InvalidAdmissionYearStepOwner");
+		}
+
+		var ownerIds = input.StepOwners.Values
+			.Append(input.DefaultOwnerUserId)
+			.Where(ownerId => ownerId.HasValue)
+			.Select(ownerId => ownerId!.Value)
+			.Distinct();
+		foreach (var ownerId in ownerIds)
+		{
+			if (!await _staffEligibilityService.IsOwnerEligibleAsync(ownerId, academicYearId))
+			{
+				throw new BusinessException("AdmissionCrm:IneligibleAdmissionYearOwner")
+					.WithData("OwnerUserId", ownerId)
+					.WithData("AcademicYearId", academicYearId);
+			}
+		}
+	}
+
+	private sealed record AdmissionYearStandardRow(
+		Guid StandardId,
+		string StandardName,
+		Guid MediumStageId,
+		string MediumStageName,
+		Guid MediumId,
+		string MediumName,
+		Guid BoardId,
+		EducationBoardType BoardType);
+
+	private sealed record SetupDefinition(
+		string Key,
+		string Title,
+		string Path,
+		string PolicyKey,
+		bool Ready,
+		string BlockerCode);
+
+	private static AdmissionCrmAdmissionYearSetupDto ToAdmissionYearDto(
+		AdmissionCrmAdmissionYearSetup setup)
+	{
+		return new AdmissionCrmAdmissionYearSetupDto
+		{
+			Id = setup.Id,
+			ConcurrencyStamp = setup.ConcurrencyStamp,
+			AcademicYearId = setup.AcademicYearId,
+			Version = setup.Version,
+			Status = setup.Status,
+			InquiryOpenDate = setup.InquiryOpenDate,
+			InquiryCloseDate = setup.InquiryCloseDate,
+			RegistrationCloseDate = setup.RegistrationCloseDate,
+			ActivationTargetDate = setup.ActivationTargetDate,
+			EntranceExamRequired = setup.EntranceExamRequired,
+			FinanceVerificationRequired = setup.FinanceVerificationRequired,
+			PlacementTiming = setup.PlacementTiming,
+			DefaultOwnerUserId = setup.DefaultOwnerUserId,
+			TargetStandardIds =
+				JsonSerializer.Deserialize<List<Guid>>(setup.TargetStandardIdsJson, JsonOptions) ?? [],
+			RouteTypes =
+				JsonSerializer.Deserialize<List<AdmissionCrmRouteType>>(setup.RouteTypesJson, JsonOptions) ?? [],
+			StepOwners =
+				JsonSerializer.Deserialize<Dictionary<string, Guid?>>(setup.StepOwnersJson, JsonOptions) ??
+				new Dictionary<string, Guid?>(),
+			PublishedAt = setup.PublishedAt,
+			PublishedByUserId = setup.PublishedByUserId,
+			ClosedAt = setup.ClosedAt,
+			ClosedByUserId = setup.ClosedByUserId,
+			CloseReason = setup.CloseReason
+		};
+	}
+
 	private async Task<Dictionary<Guid, int>> GetApplicantCountsAsync(IReadOnlyList<Guid> academicYearIds)
 	{
 		if (academicYearIds.Count == 0)
@@ -459,7 +1032,7 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		{
 			AcademicYearId = year.Id,
 			CycleConfigurationId = configuration?.Id,
-			CycleName = configuration?.CycleName ?? $"{year.Name} Admission Cycle",
+			CycleName = configuration?.CycleName ?? $"{year.Name} Admission Year",
 			AcademicYearName = year.Name,
 			AcademicYearStartDate = year.StartDate,
 			AcademicYearEndDate = year.EndDate,
@@ -559,7 +1132,7 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 			stage.IsEnabled &&
 			candidate.Stages.Any(next => next.StageKey == stage.StageKey && !next.IsEnabled)))
 		{
-			warnings.Add("Exam stages will be hidden from the configured journey because this cycle does not require an entrance exam.");
+			warnings.Add("Exam stages will be hidden from the configured journey because this admission year does not require an entrance exam.");
 		}
 
 		if (current.Stages.Any(stage =>
@@ -567,7 +1140,7 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 				next.StageKey == stage.StageKey &&
 				next.DisplayOrder != stage.DisplayOrder)))
 		{
-			warnings.Add("Stage ordering changes how administrators read this cycle journey; it does not migrate applicant history.");
+			warnings.Add("Stage ordering changes how administrators read this admission year journey; it does not migrate applicant history.");
 		}
 
 		return new AdmissionCrmApplicationStagePolicyImpactDto

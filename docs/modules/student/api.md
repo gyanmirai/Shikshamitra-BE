@@ -3,47 +3,43 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-07-25
+updated_on: 2026-07-28
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Use Student backend APIs
 
-TL;DR: use this page to find Student endpoint families and compatibility notes.
+TL;DR: use this page to find Student endpoint families and the refined Enrollment contract boundaries.
 Controller source paths are canonical when route details change.
 
 ## Enrollment API families
 
-| Family | Controller path | Notes |
+| Family | Controller path | Requirement role |
 |---|---|---|
-| Inquiry | `Controllers/Student/Enrollment/InquiryController.cs` | Enrollment inquiry workflows |
-| Registration | `Controllers/Student/Enrollment/RegistrationController.cs` and registration sub-controllers | Multi-section registration data |
-| Admission | `Controllers/Student/Enrollment/AdmissionController.cs` | Admission workflow |
-| Entrance exam | `Controllers/Student/Enrollment/EntranceExamController.cs` | Entrance exam slot and workflow APIs |
-| Notes | `Controllers/Student/Enrollment/NotesController.cs` | Student enrollment notes |
-| Enrollment settings | `Controllers/Student/Enrollment/Settings/**` | Inquiry Source, document type, and entrance exam slot settings |
-| Admissions CRM | `Controllers/Student/Enrollment/AdmissionsCrm/**` | Future inquiry-to-entrance-exam CRM APIs |
+| Admissions CRM | `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/AdmissionsCrm/**` | Pipeline, entrance exam, registration, Finance handoff display, placement review, activation, and communication |
+| Enrollment settings | Admissions CRM catalog and configuration controllers | Compatibility settings such as Inquiry Source where still active |
+| Legacy inquiry and admission | `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/**` | Keep route compatibility only where current consumers still require it |
 
 ## Records API families
 
 | Family | Controller path |
 |---|---|
-| Student list | `Controllers/Student/Records/StudentListController.cs` |
-| Student management | `Controllers/Student/Records/StudentManagementController.cs` |
-| Bulk upload | `Controllers/Student/Records/StudentBulkUploadController.cs` |
-| Dashboard | `Controllers/Student/Records/StudentDashboardController.cs` |
-| Certificates | `Controllers/Student/Records/StudentCertificateController.cs` |
-| House settings | `Controllers/Student/Records/Settings/HouseSettingsController.cs` |
+| Student list | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentListController.cs` |
+| Student management | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentManagementController.cs` |
+| Bulk upload | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentBulkUploadController.cs` |
+| Dashboard | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentDashboardController.cs` |
+| Certificates | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentCertificateController.cs` |
+| House settings | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/Settings/HouseSettingsController.cs` |
 
 ## Attendance, leave, and compliance API families
 
 | Family | Controller path |
 |---|---|
-| Student attendance | `Controllers/Student/Attendance/StudentAttendanceController.cs` |
-| Student leave | `Controllers/Student/Attendance/StudentLeaveController.cs` |
-| Student leave type settings | `Controllers/Student/Attendance/Settings/StudentLeaveTypeController.cs` |
-| Identity compliance | `Controllers/Student/Compliance/StudentIdentityComplianceController.cs` |
+| Student attendance | `src/ShikshaMitra.HttpApi/Controllers/Student/Attendance/StudentAttendanceController.cs` |
+| Student leave | `src/ShikshaMitra.HttpApi/Controllers/Student/Attendance/StudentLeaveController.cs` |
+| Student leave type settings | `src/ShikshaMitra.HttpApi/Controllers/Student/Attendance/Settings/StudentLeaveTypeController.cs` |
+| Identity compliance | Student identity compliance controller source paths |
 
 ## Inquiry Source compatibility
 
@@ -56,164 +52,128 @@ Product copy should say Inquiry Source, while route and DTO names can still use 
 | `/api/student-enrollment/settings/inquiry-preferences/{id}` | Get, update, or delete one source |
 | `/api/student-enrollment/settings/inquiry-preferences/{id}/status` | Activate or deactivate one source |
 
-## Admissions CRM API
+## Refined Admissions CRM contract
 
 The CRM route family is `api/student-enrollment/admissions-crm`.
-Use it for future-state inquiry leads, CRM configuration, and entrance exam CRM behavior.
-Keep legacy inquiry and entrance exam routes stable until their consumers are fully migrated.
-CRM inquiry lead payloads support optional applicant DOB for duplicate review and eligibility handoff context without making DOB required for quick inquiry creation.
-Every authenticated staff lead-creation payload requires a nonblank first name regardless of its selected channel, while anonymous public forms continue through their separate dynamic-form contract.
-Quick inquiry payloads preserve separate first, middle, and last name fields, validate email on the server, and snapshot the selected effective admission-route definition.
-An effective published Fresh definition is the compatibility fallback when a staff client omits the route definition.
-An academic year with no route catalog can still accept a route-neutral legacy staff inquiry, while a configured catalog without exactly one effective Fresh fallback rejects the omission.
-A supplied route enum without a definition is always rejected.
-When `TargetStandardId` is supplied, the backend validates its academic-year hierarchy and derives `DesiredClassName` from the authoritative Standard name.
-Registration prefill uses the immutable route definition ID, version, and name snapshot, with the legacy route enum name only as a fallback for records created before route-definition snapshots existed.
-Special-route evidence references use `CODE:REFERENCE` format and must cover every evidence code required by the captured route-definition version before assignment, eligibility approval, or activation.
-Sibling-priority assignment also requires the referenced tenant student to share a normalized contact identifier recorded on the student or guardian profile with the applicant rather than accepting an arbitrary student ID.
-An applicant may continue assignment work against an exact route version captured while published after that version expires or is retired, and later route changes must retain an unbroken assignment lineage to the captured intent.
+Every authenticated Enrollment workflow must validate tenant and academic scope on the server.
+Frontend route visibility is not authorization.
+Every applicant must have a Pipeline lead before entrance exam, registration, Finance handoff, placement review, or activation.
+
+| Requirement area | Contract expectation |
+|---|---|
+| Admission Year Setup | Read and update admission-specific rules attached to an Institute Setup academic year |
+| Applicant Stepper | Return applicant step status, blockers, skipped steps, and next action |
+| Pipeline | Create and list leads by academic year, source, inquiry type, owner, desired board, medium, standard, and stage |
+| Owner assignment | Assign or clear lead owner with permission and timeline evidence |
+| Follow-up | Create, list, and complete lead tasks |
+| Messaging | Render, send, schedule, and cancel approved simple reminders with consent, duplicate-message protection, and delivery-log state |
+| Entrance exam | Schedule exam, record attendance, enter result, decide eligibility, and preserve result evidence |
+| Registration | Issue, save, submit, correct, verify, and review document checklist |
+| Finance handoff | Request or display Finance-owned verification state without posting money |
+| Placement | Read placement options from academic setup and capacity sources, then record selected timing or division |
+| Activation | Preview, request, approve, execute, and repair activation after required gates pass |
+| Admission Reports | Return lifecycle, source, standard, and closed-outcome counts after tenant, academic-year, UserScope, date, and standard filters |
+| Communication settings | Configure templates, channels, variables, provider mode, write-only provider credentials, and delivery-log behavior |
+
+## Key route patterns
 
 | Route pattern | Purpose |
 |---|---|
-| `/{academicYearId}/leads` | Create and list lightweight CRM inquiry leads after validating that the tenant academic year exists |
-| `/{academicYearId}/quick-inquiry-options` | Return safe operational cycle flags, enabled ordered labeled channels, and currently effective published admission routes for staff with CRM Add or View permission after validating that the tenant academic year exists |
-| `/{academicYearId}/leads/duplicate-preview` | Preview likely duplicate CRM leads |
-| `/leads/{leadId}/duplicates/merge` | Merge one duplicate lead into the surviving CRM lead with reason |
-| `/leads/{leadId}/owner` | Assign or clear a CRM lead owner |
-| `/leads/{leadId}/priority` | Set manual CRM lead priority with optional reason |
-| `/leads/{leadId}/stage` | Move a CRM lead across operational inquiry stages with reason |
-| `/leads/{leadId}/registration-form` | Issue a CRM-native registration form on one lead before exam scheduling when the cycle requires it |
-| `/{academicYearId}/registrations/from-paper` | Create an inquiry and registration application from a staff-entered physical form with paper provenance and data-entry state |
-| `/leads/{leadId}/score/recalculate` | Recalculate a baseline CRM lead score |
-| `/leads/{leadId}/archive` | Archive one CRM lead with reason |
-| `/leads/{leadId}/reopen` | Reopen one stale or archived CRM lead with reason |
-| `/{academicYearId}/automation/stale-archive/run` | Run configured stale and archive thresholds and create internal stale follow-up tasks |
-| `/{academicYearId}/automation/sla-reminders/run` | Create follow-up tasks for CRM leads that missed their stage SLA threshold, with cycle default fallback |
-| `/{academicYearId}/automation/journeys/run` | Run configured condition-aware journey rules for one trigger and create deduplicated follow-up tasks, message delivery logs, or failure evidence |
-| `/leads/{leadId}/tasks` | Create or list follow-up tasks for one CRM lead |
-| `/leads/{leadId}/timeline` | List timeline events for one CRM lead |
-| `/leads/{leadId}/applicant-checklist` | List cycle-configured applicant checklist items merged with lead-specific progress |
-| `/leads/{leadId}/applicant-checklist/{key}` | Update one lead-specific applicant checklist item with progress and internal notes |
-| `/leads/{leadId}/notes` | Add a staff lead note or call note to the CRM timeline |
-| `/tasks/{taskId}/complete` | Complete one follow-up task |
-| `/{academicYearId}/exams` | List CRM entrance exam records |
-| `/leads/{leadId}/exam` | Get the CRM entrance exam record for one lead |
-| `/leads/{leadId}/exam/schedule` | Schedule or reschedule a CRM lead into an entrance exam slot after cycle readiness checks |
-| `/exams/{examRecordId}/attendance` | Mark CRM entrance exam attendance |
-| `/exams/{examRecordId}/result` | Record CRM entrance exam marks and manual or class-wise merit rank |
-| `/{academicYearId}/bulk/exam-results` | Record distinct results for up to 100 exam records and return per-item success or failure |
-| `/exams/{examRecordId}/eligibility` | Set eligibility, waitlist, or rejection decision |
-| `/exams/{examRecordId}/eligibility-handoff` | Return read-only lead and exam context for admission handoff |
-| `/{academicYearId}/analytics/summary` | Return funnel, lead-level conversion rates, stage-configured first-response SLA, follow-up SLA miss, source, campaign, date-range trend, staff workload, task, duplicate, automation run, automation failure, exam, class-wise exam, and exam governance analytics |
-| `/{academicYearId}/operations/overview` | Return permission-aware operational insight counts and urgent work items for paper entry, documents, fee follow-up, exams, offers, Class Placement Plan risk, activation, and handoff blockers |
-| `/{academicYearId}/operations/queues/summary` | Return permission-aware admissions operations queue counts and urgent counts |
-| `/{academicYearId}/operations/queues/{queueType}` | Return one permission-aware admissions operations queue with applicant context and supported filters |
-| `/setup/cycles` | List academic-year admission cycles with status, readiness, applicant count, owner placeholder, last-updated metadata, and required actions for staff with Manage Configuration permission |
-| `/setup/cycles/{academicYearId}/summary` | Return the selected admission cycle summary, current policy snapshot, communication rule counts, readiness items, and required actions without claiming unsupported live integrations |
-| `/setup/{academicYearId}/status` | Return setup readiness for the selected academic-year admission cycle |
-| `/{academicYearId}/configuration/cycle` | Get or update CRM cycle defaults, inquiry channel enablement and defaults, exam readiness fields, merit ranking mode, lead scoring rules, routing strategy, owner pool, routing rules, and condition-aware journey rules |
-| `/{academicYearId}/configuration/pipeline-stages` | Get fixed CRM pipeline milestones with color, SLA target, owner responsibility, and allowed next-stage metadata for staff with CRM Add, View, or Manage Configuration permission after validating that the tenant academic year exists |
-| `/configuration/pipeline-stages/{stageId}` | Update one CRM pipeline stage display and governance configuration used by manual transition enforcement |
-| `/{academicYearId}/configuration/form-templates` | Create and list inquiry form templates |
-| `/configuration/form-templates/{id}` | Get or update one inquiry form template |
-| `/configuration/form-templates/{id}/status` | Activate or deactivate one inquiry form template |
-| `/{academicYearId}/configuration-safety/references` | Return authoritative Stage, Round, Exam, Seat Plan, or Route reference counts and sample IDs for one normalized code |
-| `/{academicYearId}/configuration-safety/impact-preview` | Return changed fields, affected applicant count, references, warnings, and a SHA-256 preview fingerprint |
-| `/configuration-safety/clone/preview` | Preview source-to-target academic-year clone families, conflicts, warnings, and confirmation fingerprint |
-| `/configuration-safety/clone/confirm` | Confirm the unchanged clone preview with its fingerprint and report idempotent replay |
-| `/{academicYearId}/configuration/message-templates` | Create and list WhatsApp, SMS, and email message templates |
-| `/configuration/message-templates/{id}` | Get or update one message template |
-| `/configuration/message-templates/{id}/status` | Update message template approval status and active state |
-| `/{academicYearId}/communication/message-templates/preview` | Render one draft or approved message template with sample, provided, or lead variables without creating a delivery log |
-| `/{academicYearId}/communication/providers` | Get or initialize WhatsApp, SMS, and email provider settings |
-| `/{academicYearId}/communication/providers/{channel}` | Update one channel provider setting |
-| `/{academicYearId}/communication/opt-outs` | List, filter, or record communication opt-out records |
-| `/{academicYearId}/communication/opt-outs/clear` | Clear one active communication opt-out |
-| `/leads/{leadId}/messages/send-template` | Render one approved template, apply opt-out and provider checks, optionally dispatch to provider webhook, and create a communication delivery log |
-| `/{academicYearId}/communication/delivery-logs` | List communication delivery logs with provider message ID evidence and provider ID filtering |
-| `/communication/delivery-logs/{deliveryLogId}/retry` | Queue a delivery retry after provider and opt-out checks |
+| `/{academicYearId}/leads` | Create and list Pipeline inquiries |
+| `/{academicYearId}/quick-inquiry-options` | Return safe capture options such as enabled channels, sources, routes, and standards |
+| `/{academicYearId}/operations/my-work` | Return assigned and due follow-up work for the current user |
+| `/workspace/applicants/{leadId}/progress` | Return the canonical six-step applicant projection |
+| `/leads/{leadId}/owner` | Assign or clear owner |
+| `/leads/{leadId}/tasks` | Create or list follow-up tasks |
+| `/tasks/{taskId}/complete` | Complete a task |
+| `/leads/{leadId}/messages/send-template` | Send an approved message template and create delivery evidence |
+| `/{academicYearId}/exams` | List entrance exam records |
+| `/leads/{leadId}/exam/schedule` | Schedule or reschedule an entrance exam |
+| `/exams/{examRecordId}/attendance` | Mark exam attendance |
+| `/exams/{examRecordId}/result` | Record exam result |
+| `/exams/{examRecordId}/eligibility` | Decide eligibility, ineligibility, retest, or review |
+| `/leads/{leadId}/registrations/issue` | Issue registration for an eligible or bypassed applicant |
+| `/registrations/{applicationId}/staff-responses` | Save staff-entered registration responses |
+| `/registrations/{applicationId}/staff-submit` | Submit staff-entered registration responses |
+| `/registrations/{applicationId}/verify` | Verify registration |
+| `/registrations/{applicationId}/document-checklist` | Review document readiness |
+| `/leads/{leadId}/activation/preview` | Preview activation gates and placement readiness |
+| `/leads/{leadId}/activation` | Request activation |
+| `/activation/{activationId}/approve` | Approve activation |
+| `/activation/{activationId}/execute` | Execute activation |
+| `/{academicYearId}/activation/placement-options` | Return placement options from valid academic hierarchy and capacity sources |
+| `/{academicYearId}/reports/admissions` | Return the focused Admission Reports projection |
+| `/{academicYearId}/operations/overview` | Return operational counts for My Work and Pipeline |
+| `/setup/admission-years/{academicYearId}/versions` | List versioned Admission Year Setup records |
+| `/setup/admission-years/{academicYearId}/standard-options` | List Institute Setup standards that can be admitted |
+| `/setup/admission-years/{academicYearId}/draft` | Create the next Admission Year Setup draft |
+| `/setup/admission-years/drafts/{id}` | Update a draft with concurrency protection |
+| `/setup/admission-years/{id}/publish` | Validate and publish an immutable setup version |
+| `/setup/admission-years/{id}/close` | Close a published setup with an audit reason |
+| `/setup/cycles` | Compatibility route for the older academic-year setup list |
+| `/setup/cycles/{academicYearId}/summary` | Compatibility route for the older admission-year summary |
+| `/{academicYearId}/configuration/cycle` | Existing code-level route for admission-year configuration |
+| `/{academicYearId}/configuration/pipeline-stages` | Existing code-level route for fixed Pipeline stage labels and metadata |
+| `/{academicYearId}/configuration/registration-templates` | Configure registration templates |
+| `/{academicYearId}/configuration/message-templates` | Configure message templates |
+| `/{academicYearId}/communication/providers` | Read provider configuration with credential values redacted |
+| `/{academicYearId}/communication/providers/{channel}` | Update one channel and its write-only provider credentials |
 
-Journey communication rules can target inquiry acknowledgement, exam, registration, document, fee, offer, admission confirmation, activation, and welcome moments through fixed journey triggers.
-Delivery status must be read from communication delivery logs and provider callbacks rather than inferred from a configured rule.
+The existing route name `setup/cycles` may remain in API code for compatibility.
+User-facing copy should use Admission Year Setup unless a specific code route is being discussed.
 
-## Registration localization contract
+## Admission Reports contract
 
-Registration sections support `localizedTitles` and `localizedDescriptions`.
-Registration fields support `localizedLabels`, `localizedHelpTexts`, and `localizedOptions`.
-Localized option arrays must have the same item count as their canonical option arrays so submitted values remain language-neutral.
+Admission Reports requires `Students.Enrollment.AdmissionsCrm.Analytics`.
+The report is always limited to the current tenant, requested academic year, and effective Student UserScope.
+`FromDate` and `ToDate` filter applicant creation dates and include the complete selected calendar dates.
+The calendar-date span cannot exceed 366 days.
+`TargetStandardId` narrows the report after server-side scope enforcement.
+The response contains summary totals and fixed lifecycle, source, standard, and closed-outcome groupings.
+Lifecycle classification is shared with Pipeline so report counts do not drift from the operational board.
 
-## Result correction governance
+## Provider credential contract
 
-`POST /api/student-enrollment/admissions-crm/{academicYearId}/bulk/exam-results` requires `Students.Enrollment.AdmissionsCrm.BulkOperations` and `Students.Enrollment.AdmissionsCrm.ChangeExamResult`.
-Duplicate `examRecordId` values reject the batch with `AdmissionCrm:DuplicateBulkExamResultItems`.
-Replacing an existing result through either the individual or bulk endpoint requires a nonblank `correctionReason` and `Students.Enrollment.AdmissionsCrm.OverrideExamResult`.
-Missing correction evidence rejects with `AdmissionCrm:ExamResultCorrectionReasonRequired`.
-An unchanged retry is idempotent and returns the existing result without a second correction.
-Individual and bulk result evidence records previous values, new values, and the correction reason in the applicant timeline.
+Provider header values, provider parameter values, and callback secrets are write-only.
+Read responses retain configured header and parameter names but replace their values with empty strings.
+Read responses expose `HasStoredHeaderValues`, `HasStoredParameterValues`, and `HasCallbackSecret` so the UI can show that credentials exist.
+A blank value for an existing header or parameter preserves the stored value during an update.
+Omitting a header or parameter key removes that key from the saved settings.
+A blank callback secret preserves the stored secret, and a nonblank value replaces it.
+The frontend must remove read-only stored-value flags before sending an update.
 
-## Granular action permissions
+## Finance boundary
 
-| Action family | Required permissions |
+Enrollment APIs may request or display Finance-owned verification status.
+Enrollment APIs must not create receipts, post ledgers, settle payments, reconcile transactions, or issue refunds.
+Activation must block when fee verification is required and Finance has not returned a verified state.
+
+## Placement boundary
+
+Placement APIs must use Institute Setup and Class Management as the source of truth for board, medium, standard, division, capacity, active count, and remaining count.
+If capacity cannot be verified, the API should return an unknown capacity state rather than a fabricated seat count.
+Capacity override requires permission and reason.
+
+## Permission and scope rules
+
+| Action family | Required control |
 |---|---|
-| Exam results | `Students.Enrollment.AdmissionsCrm.ChangeExamResult`, plus `Students.Enrollment.AdmissionsCrm.BulkOperations` for bulk entry and `Students.Enrollment.AdmissionsCrm.OverrideExamResult` for replacement |
-| Offers and capacity | `Students.Enrollment.AdmissionsCrm.ManageOffers`, `Students.Enrollment.AdmissionsCrm.ApproveOffers`, and `Students.Enrollment.AdmissionsCrm.OverrideSeatCapacity` according to the action |
-| Waitlist and decision | `Students.Enrollment.AdmissionsCrm.ManageWaitlist` and `Students.Enrollment.AdmissionsCrm.MakeAdmissionDecision` |
-| Registration | `Students.Enrollment.AdmissionsCrm.IssueRegistrationForm`, `Students.Enrollment.AdmissionsCrm.ManageRegistrationLinks`, `Students.Enrollment.AdmissionsCrm.VerifyRegistration`, or `Students.Enrollment.AdmissionsCrm.WaiveRegistrationFee` according to the action |
-| Documents and readiness | `Students.Enrollment.AdmissionsCrm.ManageDocumentConfiguration`, `Students.Enrollment.AdmissionsCrm.ReviewDocuments`, `Students.Enrollment.AdmissionsCrm.WaiveDocuments`, `Students.Enrollment.AdmissionsCrm.ConfirmOriginalSeen`, or `Students.Enrollment.AdmissionsCrm.ConfirmAdmissionReadiness` according to the action |
-| Government readiness | `Students.Enrollment.AdmissionsCrm.ManageGovernmentReadiness` |
-| Financial readiness | `Students.Enrollment.AdmissionsCrm.IssueQuotations`, `Students.Enrollment.AdmissionsCrm.RecordFinanceStatus`, `Students.Enrollment.AdmissionsCrm.RequestConcession`, `Students.Enrollment.AdmissionsCrm.ApproveConcession`, or `Students.Enrollment.AdmissionsCrm.OverridePaymentGates` according to the action |
-| Activation | `Students.Enrollment.AdmissionsCrm.PreviewActivation`, `Students.Enrollment.AdmissionsCrm.RequestActivation`, `Students.Enrollment.AdmissionsCrm.ApproveActivation`, `Students.Enrollment.AdmissionsCrm.ExecuteActivation`, or `Students.Enrollment.AdmissionsCrm.RepairActivation` according to the action |
-| Activation identifiers and handoffs | `Students.Enrollment.AdmissionsCrm.AssignManualIdentifier` and `Students.Enrollment.AdmissionsCrm.ManageServiceHandoffs` |
-| Admission cancellation | `Students.Enrollment.AdmissionsCrm.CancelAdmission` |
-| Configuration safety | `Students.Enrollment.AdmissionsCrm.ManageConfiguration` |
+| Pipeline read | CRM view permission and academic scope |
+| Pipeline capture | CRM add permission and academic-year validity |
+| Owner and follow-up | CRM operation permission and lead scope |
+| Exam result and eligibility | Exam operation permission, correction reason for replacement, and academic scope |
+| Registration verification | Registration verification permission and document access control |
+| Finance status visibility | Finance handoff permission or role-appropriate Enrollment permission |
+| Placement override | Placement or capacity override permission and reason |
+| Activation | Activation preview, request, approve, execute, or repair permission according to the action |
+| Communication templates | Configuration permission |
+| Sending messages | Communication permission plus consent and opt-out checks |
 
-Standard and direct registration issuance also require `Students.Enrollment.AdmissionsCrm.WaiveRegistrationFee` whenever `waiveFee` is true.
-Changing a protected pipeline stage with `overrideWorkflowGuards` requires both `Students.Enrollment.AdmissionsCrm.ChangeStage` and `Students.Enrollment.AdmissionsCrm.BulkOperations`, and the override is recorded in the applicant timeline.
-Activation placement options and preview, request, approval, and execution paths apply the current user's academic scope.
-When an applicant has `TargetStandardId`, activation placement must use that standard.
+## Public admissions API
 
-## Configuration safety contract
-
-All configuration-safety routes require `Students.Enrollment.AdmissionsCrm.ManageConfiguration` and academic-year-wide user scope for every referenced year.
-Lower academic scope rejects configuration safety with `AdmissionCrm:AcademicYearWideScopeRequired`.
-Reference `kind` and `code` must be supplied together or the preview rejects with `AdmissionCrm:ConfigurationReferenceKindAndCodeRequiredTogether`.
-Clone preview rejects identical source and target years with `AdmissionCrm:ConfigurationCloneDistinctYearsRequired`.
-Clone confirm rejects a changed preview with `AdmissionCrm:ConfigurationCloneFingerprintMismatch`.
-Clone confirm rejects a target with applicant activity or existing admission configuration with `AdmissionCrm:ConfigurationCloneTargetNotEmpty`.
-Cycle and pipeline-stage updates require the exact `impactPreviewFingerprint` returned for their proposed payload and current configuration snapshot.
-Missing or stale update evidence rejects with `AdmissionCrm:ConfigurationImpactPreviewRequired` or `AdmissionCrm:ConfigurationImpactFingerprintMismatch`.
-Clone confirmation is serialized per tenant and target academic year, blocks unmapped source hierarchy identifiers, and remaps equivalent Board, Medium, Medium Stage, Standard, and Division identifiers.
-Successful cloning copies cycle settings unlocked, remaps configuration and academic hierarchy IDs, recreates approval-controlled artifacts as drafts, resets counters and occupancy, shifts effective dates, and reuses global policy packs.
-
-## Academic scope and journey lock
-
-CRM lead lists and lead-backed reads apply the current user's Board, Medium, Stage, Standard, and Division scope through `TargetStandardId`.
-A lead without `TargetStandardId` is visible only to tenant-wide or academic-year-wide users because it cannot be attributed safely to a lower scope.
-Out-of-scope lead access rejects with `UserScope:AccessDenied`.
-Academic-year-wide configuration mutations reject lower Board, Medium, Stage, Standard, or Division scope with `AdmissionCrm:AcademicYearWideScopeRequired`.
-Tenant-global school-default mutations reject lower user scope with `AdmissionCrm:TenantWideScopeRequired`.
-Retention-policy create, submit, and publish operations require academic-year-wide user scope.
-After a journey is locked, cycle-structure and pipeline-structure mutations reject with `AdmissionCrm:JourneyLocked`.
-Scheduled-report automation validates the tenant-owned academic year without requiring an interactive current user.
-
-## Public Admissions CRM API
-
-The public CRM route family is `api/public/student-enrollment/admissions-crm`.
-Public routes are tenant-qualified until a school slug or domain resolver is added.
-Public form submission stores consent and the complete submitted dynamic field payload.
-Public form system-field mapping can populate optional applicant DOB and use it for internal duplicate review.
-OTP challenge creation uses the applicant's consented SMS, WhatsApp, or email channel when a matching CRM communication provider is configured.
-OTP challenge creation is rate-limited per status token, and repeated invalid verification attempts lock the current OTP challenge.
-OTP delivery logs store a masked body snapshot instead of the raw OTP value.
-
-| Route pattern | Purpose |
-|---|---|
-| `/{tenantId}/forms/{templateId}` | Read one active public inquiry form |
-| `/{tenantId}/forms/{templateId}/submit` | Submit one public inquiry form and create a CRM lead |
-| `/{tenantId}/status/{token}/otp` | Issue an applicant status OTP challenge and create provider delivery evidence when a consented channel is available |
-| `/{tenantId}/status/{token}/verify` | Verify OTP and return applicant status, checklist, exam schedule, exam result, and eligibility details |
-| `/{tenantId}/communication/delivery-logs/{deliveryLogId}/callback` | Reconcile a provider callback using direct callback fields or `callbackMappings` JSON paths in provider settings |
-| `/{tenantId}/communication/{academicYearId}/{channel}/delivery-callback` | Reconcile a provider callback by provider message ID, academic year, and channel using direct callback fields or `callbackMappings` JSON paths |
+Public inquiry and status routes may remain available for parent-facing capture and status.
+They must be tenant-qualified, rate-limited where applicable, and restricted to applicant-safe information.
+Public responses must not expose duplicate evidence, internal notes, staff-only scores, Finance internals, or protected family details.
 
 ## Contract rule
 

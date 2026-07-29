@@ -454,7 +454,7 @@ public class AdmissionCrmPolicyPackAppService : ApplicationService, IAdmissionCr
 	{
 		var adoption = await _adoptionRepository.GetAsync(id);
 		if (adoption.TenantId != CurrentTenant.Id || adoption.AcademicYearId != academicYearId || !adoption.IsActive)
-			throw new AbpAuthorizationException("Policy adoption is not available for this admission cycle.");
+			throw new AbpAuthorizationException("Policy adoption is not available for this admission year.");
 		return adoption;
 	}
 

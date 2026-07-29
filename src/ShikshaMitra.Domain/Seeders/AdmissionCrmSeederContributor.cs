@@ -29,6 +29,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 	private readonly IRepository<AdmissionCrmCycleConfiguration, Guid> _cycleRepository;
 	private readonly IRepository<AdmissionCrmPipelineStage, Guid> _stageRepository;
 	private readonly IRepository<AdmissionCrmInquirySource, Guid> _sourceRepository;
+	private readonly IRepository<AdmissionCrmInquiryType, Guid> _inquiryTypeRepository;
 	private readonly IRepository<AdmissionCrmExamSlot, Guid> _slotRepository;
 	private readonly IRepository<AdmissionCrmDocumentType, Guid> _documentTypeRepository;
 	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
@@ -51,6 +52,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		IRepository<AdmissionCrmCycleConfiguration, Guid> cycleRepository,
 		IRepository<AdmissionCrmPipelineStage, Guid> stageRepository,
 		IRepository<AdmissionCrmInquirySource, Guid> sourceRepository,
+		IRepository<AdmissionCrmInquiryType, Guid> inquiryTypeRepository,
 		IRepository<AdmissionCrmExamSlot, Guid> slotRepository,
 		IRepository<AdmissionCrmDocumentType, Guid> documentTypeRepository,
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
@@ -62,6 +64,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		_cycleRepository = cycleRepository;
 		_stageRepository = stageRepository;
 		_sourceRepository = sourceRepository;
+		_inquiryTypeRepository = inquiryTypeRepository;
 		_slotRepository = slotRepository;
 		_documentTypeRepository = documentTypeRepository;
 		_leadRepository = leadRepository;
@@ -88,6 +91,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		await RepairCycleAsync(tenantId, academicYear.Id, academicYear.Name, ownerUserIds);
 		await RepairStagesAsync(tenantId, academicYear.Id);
 		await RepairSourcesAsync(tenantId, academicYear.Id);
+		await RepairInquiryTypesAsync(tenantId, academicYear.Id);
 		await RepairRouteDefinitionsAsync(tenantId, academicYear, ownerUserIds);
 		await RepairSlotsAsync(tenantId, academicYear.Id, academicYear.Name);
 		await RepairDocumentTypesAsync(tenantId, academicYear.Id);
@@ -325,6 +329,45 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 			result[spec.Code] = source;
 		}
 		return result;
+	}
+
+	private async Task RepairInquiryTypesAsync(Guid tenantId, Guid academicYearId)
+	{
+		var existing = await _inquiryTypeRepository.GetListAsync(item =>
+			item.AcademicYearId == academicYearId);
+		var specifications = new[]
+		{
+			(Code: "GENERAL", Name: "General admission", Order: 10),
+			(Code: "TRANSFER", Name: "Transfer admission", Order: 20),
+			(Code: "RTE_EWS", Name: "RTE / EWS admission", Order: 30)
+		};
+
+		foreach (var specification in specifications)
+		{
+			var inquiryType = existing.FirstOrDefault(item => item.Code == specification.Code) ??
+				new AdmissionCrmInquiryType(
+					StableId(tenantId, $"inquiry-type:{specification.Code}"),
+					tenantId,
+					academicYearId,
+					specification.Code,
+					specification.Name,
+					"Seeded admission inquiry type.",
+					specification.Order);
+			inquiryType.Update(
+				specification.Code,
+				specification.Name,
+				"Seeded admission inquiry type.",
+				specification.Order);
+			inquiryType.SetActive(true, null);
+			if (existing.Any(item => item.Id == inquiryType.Id))
+			{
+				await _inquiryTypeRepository.UpdateAsync(inquiryType);
+			}
+			else
+			{
+				await _inquiryTypeRepository.InsertAsync(inquiryType);
+			}
+		}
 	}
 
 	private async Task RepairRouteDefinitionsAsync(

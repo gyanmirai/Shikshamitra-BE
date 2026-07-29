@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -34,6 +35,117 @@ public class AdmissionCrmConfigurationSafetyApi_Tests : ShikshaMitraApiTestBase
 
 	public AdmissionCrmConfigurationSafetyApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
 	{
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Version_Admission_Year_And_Project_Applicant_Progress()
+	{
+		var academicYearId = (await CreateAcademicYearPairAsync()).SourceYearId;
+		var hierarchy = await CreateAcademicHierarchyAsync(academicYearId);
+
+		var optionsResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/setup/admission-years/{academicYearId}/standard-options");
+		optionsResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await optionsResponse.Content.ReadAsStringAsync());
+		var options = await optionsResponse.Content
+			.ReadFromJsonAsync<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>>(JsonOptions);
+		options.ShouldNotBeNull();
+		options.ShouldContain(option =>
+			option.StandardId == hierarchy.StandardId &&
+			option.BoardName == EducationBoardType.CBSE.ToString());
+
+		var draftResponse = await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/setup/admission-years/{academicYearId}/draft",
+			content: null);
+		draftResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await draftResponse.Content.ReadAsStringAsync());
+		var draft = await draftResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmAdmissionYearSetupDto>(JsonOptions);
+		draft.ShouldNotBeNull();
+		draft.Status.ShouldBe(AdmissionCrmAdmissionYearSetupStatus.Draft);
+
+		var today = DateTime.UtcNow.Date;
+		var updateResponse = await Client.PutAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/setup/admission-years/drafts/{draft.Id}",
+			new UpdateAdmissionCrmAdmissionYearSetupDto
+			{
+				ConcurrencyStamp = draft.ConcurrencyStamp,
+				InquiryOpenDate = today.AddDays(-1),
+				InquiryCloseDate = today.AddDays(30),
+				RegistrationCloseDate = today.AddDays(60),
+				ActivationTargetDate = today.AddDays(90),
+				EntranceExamRequired = true,
+				FinanceVerificationRequired = false,
+				PlacementTiming = AdmissionCrmPlacementTiming.StandardBeforeActivation,
+				TargetStandardIds = [hierarchy.StandardId],
+				RouteTypes = [AdmissionCrmRouteType.Fresh]
+			},
+			JsonOptions);
+		updateResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await updateResponse.Content.ReadAsStringAsync());
+
+		var publishResponse = await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/setup/admission-years/{draft.Id}/publish",
+			JsonContent.Create(
+				new PublishAdmissionCrmAdmissionYearSetupDto
+				{
+					ConcurrencyStamp = (await updateResponse.Content
+						.ReadFromJsonAsync<AdmissionCrmAdmissionYearSetupDto>(JsonOptions))!
+						.ConcurrencyStamp
+				},
+				options: JsonOptions));
+		publishResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await publishResponse.Content.ReadAsStringAsync());
+		var published = await publishResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmAdmissionYearSetupDto>(JsonOptions);
+		published.ShouldNotBeNull();
+		published.Status.ShouldBe(AdmissionCrmAdmissionYearSetupStatus.Published);
+		published.Version.ShouldBe(1);
+
+		var contactSuffix = Random.Shared.Next(100000, 999999);
+		var createLeadResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/leads",
+			new CreateAdmissionCrmLeadDto
+			{
+				Channel = AdmissionInquiryChannel.QuickCallEntry,
+				FirstName = "Admission",
+				LastName = "Year",
+				ParentGuardianName = "Setup Parent",
+				PrimaryContactNo = $"98{contactSuffix:000000}01",
+				Email = $"admission.year.{contactSuffix}@example.com",
+				AdmissionIntent = "Admission Year projection test",
+				IntendedRouteType = AdmissionCrmRouteType.Fresh,
+				TargetStandardId = hierarchy.StandardId,
+				AcademicBoardId = hierarchy.BoardId,
+				AcademicMediumId = hierarchy.MediumId,
+				AcademicMediumStageId = hierarchy.MediumStageId
+			},
+			JsonOptions);
+		createLeadResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await createLeadResponse.Content.ReadAsStringAsync());
+		var lead = await createLeadResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
+		lead.ShouldNotBeNull();
+		lead.AdmissionYearSetupId.ShouldBe(published.Id);
+		lead.AdmissionYearSetupVersion.ShouldBe(1);
+
+		var progressResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/workspace/applicants/{lead.Id}/progress");
+		progressResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await progressResponse.Content.ReadAsStringAsync());
+		var progress = await progressResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmApplicantProgressDto>(JsonOptions);
+		progress.ShouldNotBeNull();
+		progress.AdmissionYearSetupVersion.ShouldBe(1);
+		progress.Steps.Count.ShouldBe(6);
+		progress.Steps.Single(step => step.Step == AdmissionCrmApplicantStepKey.Exam)
+			.Status.ShouldBe(AdmissionCrmApplicantStepStatus.NotStarted);
 	}
 
 	[Fact]
@@ -446,6 +558,57 @@ public class AdmissionCrmConfigurationSafetyApi_Tests : ShikshaMitraApiTestBase
 			.ShouldContain("AdmissionCrm:AcademicYearWideScopeRequired");
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Return_Permission_And_Scope_Safe_Focused_Admission_Report()
+	{
+		var otherStandardId = await CreateAdditionalStandardAsync();
+		var suffix = Guid.NewGuid().ToString("N")[..8];
+		var scopedSource = $"Scoped report {suffix}";
+		var otherSource = $"Other report {suffix}";
+		await InsertReportLeadAsync(Factory.SeededStandardId, scopedSource);
+		await InsertReportLeadAsync(otherStandardId, otherSource);
+
+		using var forbiddenClient = Factory.CreateClient();
+		forbiddenClient.DefaultRequestHeaders.Add(
+			AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			"__none__");
+		var forbiddenResponse = await forbiddenClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/reports/admissions");
+		forbiddenResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		using var scopedClient = await CreateStandardScopedClientAsync();
+		var scopedResponse = await scopedClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/reports/admissions");
+		scopedResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await scopedResponse.Content.ReadAsStringAsync());
+		var scopedReport = await scopedResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmAdmissionReportDto>(JsonOptions);
+		scopedReport.ShouldNotBeNull();
+		scopedReport.IsScopeRestricted.ShouldBeTrue();
+		scopedReport.Sources.ShouldContain(source => source.SourceName == scopedSource);
+		scopedReport.Sources.ShouldNotContain(source => source.SourceName == otherSource);
+		scopedReport.Standards.ShouldAllBe(row =>
+			row.TargetStandardId == Factory.SeededStandardId);
+
+		var filteredResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/reports/admissions?targetStandardId={otherStandardId:D}");
+		filteredResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await filteredResponse.Content.ReadAsStringAsync());
+		var filteredReport = await filteredResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmAdmissionReportDto>(JsonOptions);
+		filteredReport.ShouldNotBeNull();
+		filteredReport.Sources.ShouldContain(source => source.SourceName == otherSource);
+
+		var oversizedRangeResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/reports/admissions?fromDate=2025-01-01&toDate=2026-01-03");
+		oversizedRangeResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await oversizedRangeResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:ReportDateRangeTooLarge");
+	}
+
 	private async Task<AdmissionCrmConfigurationImpactPreviewDto> PreviewImpactAsync(
 		Guid academicYearId,
 		PreviewAdmissionCrmConfigurationImpactDto input)
@@ -658,6 +821,67 @@ public class AdmissionCrmConfigurationSafetyApi_Tests : ShikshaMitraApiTestBase
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, userId.ToString("D"));
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "teacher");
 		return client;
+	}
+
+	private async Task<Guid> CreateAdditionalStandardAsync()
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider.GetRequiredService<IRepository<Standard, Guid>>();
+		var manager = scope.ServiceProvider.GetRequiredService<StandardManager>();
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var seededStandard = await repository.GetAsync(Factory.SeededStandardId);
+			var standard = await manager.CreateAsync(
+				seededStandard.EducationMediumStageId,
+				$"Report {Guid.NewGuid():N}",
+				7,
+				shiftId: null);
+			await repository.InsertAsync(standard, autoSave: false);
+			await uow.CompleteAsync();
+			return standard.Id;
+		}
+	}
+
+	private async Task InsertReportLeadAsync(Guid targetStandardId, string source)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionInquiryLead, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			await repository.InsertAsync(
+				new AdmissionInquiryLead(
+					Guid.NewGuid(),
+					tenantId,
+					Factory.SeededAcademicYearId,
+					null,
+					source,
+					AdmissionInquiryChannel.WalkInReception,
+					null,
+					null,
+					"en",
+					"Report",
+					null,
+					"Applicant",
+					null,
+					"Report Parent",
+					$"9{Random.Shared.NextInt64(100000000, 999999999)}",
+					null,
+					"Focused admission report scope test",
+					targetStandardId,
+					null,
+					null,
+					DateTimeOffset.UtcNow),
+				autoSave: false);
+			await uow.CompleteAsync();
+		}
 	}
 
 	private async Task<AdmissionCrmConfigurationClonePreviewDto> PreviewCloneAsync(

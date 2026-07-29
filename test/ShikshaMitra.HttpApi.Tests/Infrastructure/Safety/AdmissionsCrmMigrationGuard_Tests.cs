@@ -12,7 +12,7 @@ public class AdmissionsCrmMigrationGuard_Tests
 {
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public void Functional_Configuration_Migration_Should_Backfill_Stable_Pipeline_Stage_Keys()
+	public void Baseline_Migration_Should_Keep_Tenant_Scoped_Pipeline_Stage_Keys()
 	{
 		var repoRoot = FindRepositoryRoot();
 		var migrationPath = Path.Combine(
@@ -20,21 +20,73 @@ public class AdmissionsCrmMigrationGuard_Tests
 			"src",
 			"ShikshaMitra.EntityFrameworkCore",
 			"Migrations",
-			"20260720230000_AddAdmissionCrmFunctionalConfiguration.cs");
+			"20260721060936_v1.cs");
 		var text = File.ReadAllText(migrationPath);
 
-		text.ShouldContain("CASE \"\"SystemStage\"\"");
-		text.ShouldContain("WHEN 0 THEN 'NewInquiry'");
-		text.ShouldContain("WHEN 1 THEN 'FollowUp'");
-		text.ShouldContain("WHEN 2 THEN 'ExamReady'");
-		text.ShouldContain("WHEN 3 THEN 'ExamScheduled'");
-		text.ShouldContain("WHEN 4 THEN 'ExamCompleted'");
-		text.ShouldContain("WHEN 5 THEN 'Eligible'");
-		text.ShouldContain("WHEN 6 THEN 'Waitlisted'");
-		text.ShouldContain("WHEN 7 THEN 'Rejected'");
-		text.ShouldContain("WHEN 8 THEN 'Stale'");
-		text.ShouldContain("WHEN 9 THEN 'Archived'");
-		text.ShouldNotContain("SET \"\"StageKey\"\" = \"\"SystemStage\"\"::text");
+		text.ShouldContain("StageKey = table.Column<string>");
+		text.ShouldContain("columns: new[] { \"TenantId\", \"AcademicYearId\", \"StageKey\" }");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Admission_Year_Setup_Migration_Should_Stay_Inside_Enrollment()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var migrationPath = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.EntityFrameworkCore",
+			"Migrations",
+			"20260729044230_AddAdmissionYearSetupVersions.cs");
+		var text = File.ReadAllText(migrationPath);
+
+		text.ShouldContain("AppAdmissionCrmAdmissionYearSetups");
+		text.ShouldContain("AdmissionYearSetupSnapshotJson");
+		text.ShouldContain("AdmissionYearSetupVersion");
+		text.ShouldContain("\\\"Status\\\" IN (0, 1)");
+		text.ShouldNotContain("AppAssessmentRubrics");
+		text.ShouldNotContain("AppAcademicCalendars");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Inquiry_Type_Migration_Should_Stay_Inside_Enrollment()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var migrationPath = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.EntityFrameworkCore",
+			"Migrations",
+			"20260729063338_AddAdmissionCrmInquiryTypes.cs");
+		var text = File.ReadAllText(migrationPath);
+
+		text.ShouldContain("AppAdmissionCrmInquiryTypes");
+		text.ShouldContain("InquiryTypeId");
+		text.ShouldContain("InquiryTypeSnapshot");
+		text.ShouldNotContain("AppAssessmentRubrics");
+		text.ShouldNotContain("AppAcademicCalendars");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Timeline_Utc_Sort_Migration_Should_Backfill_And_Stay_Inside_Enrollment()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var migrationPath = Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.EntityFrameworkCore",
+			"Migrations",
+			"20260729083608_AddAdmissionCrmTimelineUtcSort.cs");
+		var text = File.ReadAllText(migrationPath);
+
+		text.ShouldContain("AppAdmissionCrmTimelineEvents");
+		text.ShouldContain("OccurredAtUtc");
+		text.ShouldContain("SET \"OccurredAtUtc\" = \"OccurredAt\"");
+		text.ShouldContain("TenantId\", \"LeadId\", \"OccurredAtUtc");
+		text.ShouldNotContain("AppAssessmentRubrics");
+		text.ShouldNotContain("AppAcademicCalendars");
 	}
 
 	private static string FindRepositoryRoot([CallerFilePath] string sourceFilePath = "")

@@ -557,7 +557,7 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			academicYearId,
-			"Default Admission Cycle");
+			"Default Admission Year");
 		var schoolDefault = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(x =>
 			x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == Guid.Empty));

@@ -648,6 +648,10 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 		AdmissionCrmLeadDto lead,
 		AdmissionCrmQuickInquiryRouteOptionDto route)
 	{
+		var routeDefinitionId = route.RouteDefinitionId ??
+			throw new InvalidOperationException("A published route definition is required.");
+		var routeVersion = route.Version ??
+			throw new InvalidOperationException("A published route version is required.");
 		using var scope = Factory.Services.CreateScope();
 		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
@@ -673,8 +677,8 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 				Guid.Parse(TestAuthHandler.TestTenantId),
 				lead.AcademicYearId,
 				lead.Id,
-				route.RouteDefinitionId,
-				route.Version,
+				routeDefinitionId,
+				routeVersion,
 				route.RouteType,
 				"{\"previousSchool\":\"Previous School\",\"previousBoard\":\"State Board\",\"lastClassCompleted\":\"Class 3\"}",
 				"[\"PREVIOUS_SCHOOL_RECORD:PSR-1\",\"TRANSFER_CERTIFICATE:TC-1\"]",
@@ -696,6 +700,10 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 		AdmissionCrmLeadDto lead,
 		AdmissionCrmQuickInquiryRouteOptionDto route)
 	{
+		var routeDefinitionId = route.RouteDefinitionId ??
+			throw new InvalidOperationException("A published route definition is required.");
+		var routeVersion = route.Version ??
+			throw new InvalidOperationException("A published route version is required.");
 		using var scope = Factory.Services.CreateScope();
 		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
@@ -711,8 +719,8 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 					Guid.Parse(TestAuthHandler.TestTenantId),
 					lead.AcademicYearId,
 					lead.Id,
-					route.RouteDefinitionId,
-					route.Version,
+					routeDefinitionId,
+					routeVersion,
 					route.RouteType,
 					"{\"previousSchool\":\"Unrelated School\",\"previousBoard\":\"Other Board\",\"lastClassCompleted\":\"Class 3\"}",
 					"[\"TRANSFER_RECORD:UNRELATED-1\"]",

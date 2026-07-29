@@ -47,6 +47,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<EducationMediumStage, Guid> _mediumStageRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
+	private readonly AdmissionCrmApplicantProgressReadService _progressReadService;
 
 	public AdmissionCrmOperationsAppService(
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
@@ -71,7 +72,8 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		IRepository<IdentityUser, Guid> userRepository,
 		IRepository<Standard, Guid> standardRepository,
 		IRepository<EducationMediumStage, Guid> mediumStageRepository,
-		StudentScopeAccessService studentScopeAccessService)
+		StudentScopeAccessService studentScopeAccessService,
+		AdmissionCrmApplicantProgressReadService progressReadService)
 	{
 		_leadRepository = leadRepository;
 		_examRepository = examRepository;
@@ -96,6 +98,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		_standardRepository = standardRepository;
 		_mediumStageRepository = mediumStageRepository;
 		_studentScopeAccessService = studentScopeAccessService;
+		_progressReadService = progressReadService;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
@@ -104,34 +107,98 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		GetAdmissionCrmMyWorkInput input)
 	{
 		var userId = CurrentUser.Id ?? throw new AbpAuthorizationException("Authenticated user required.");
-		var data = await LoadDataAsync(academicYearId, nameof(GetMyWorkAsync));
-		var leads = data.Leads.ToDictionary(x => x.Id);
-		var workItems = new List<AdmissionCrmMyWorkItemDto>();
-
+		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+			academicYearId,
+			nameof(GetMyWorkAsync));
+		var now = Clock.Now;
+		var today = now.ToUniversalTime().Date;
+		var tomorrow = today.AddDays(1);
+		var dueSoonEnd = today.AddDays(4);
+		var tenantId = CurrentTenant.Id;
+		var currentUser = await _userRepository.GetAsync(userId);
+		var currentUserDisplayName = GetUserDisplayName(currentUser);
+		var leadQueryable = await _leadRepository.GetQueryableAsync();
+		var scopedLeads = leadQueryable.Where(lead =>
+			lead.TenantId == tenantId &&
+			lead.AcademicYearId == academicYearId);
+		scopedLeads = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(scopedLeads);
 		var taskQueryable = await _taskRepository.GetQueryableAsync();
-		var tasks = await AsyncExecuter.ToListAsync(taskQueryable.Where(x =>
-			x.TenantId == CurrentTenant.Id &&
-			x.AcademicYearId == academicYearId &&
-			x.Status == AdmissionCrmTaskStatus.Pending &&
-			x.AssignedUserId == userId));
-		foreach (var task in tasks.Where(x => leads.ContainsKey(x.LeadId)))
-		{
-			var lead = leads[task.LeadId];
-			workItems.Add(CreateTaskWorkItem(task, lead, userId, data.Now));
-		}
+		var assignedTasks = taskQueryable.Where(task =>
+			task.TenantId == tenantId &&
+			task.AcademicYearId == academicYearId &&
+			task.Status == AdmissionCrmTaskStatus.Pending &&
+			task.AssignedUserId == userId &&
+			scopedLeads.Any(lead => lead.Id == task.LeadId));
 
-		foreach (var queueType in await GetPermittedQueueTypesAsync())
-		{
-			var delegatedOwners = await GetDelegatedOwnersAsync(academicYearId, queueType, userId);
-			foreach (var queueItem in BuildQueueItems(data, queueType).Where(x =>
-				x.OwnerUserId == userId ||
-				(x.OwnerUserId.HasValue && delegatedOwners.Contains(x.OwnerUserId.Value))))
-			{
-				if (!leads.TryGetValue(queueItem.LeadId, out var lead)) continue;
-				workItems.Add(CreateBlockerWorkItem(queueType, queueItem, lead, userId, data.Now));
-			}
-		}
+		var assignedTotal = await AsyncExecuter.CountAsync(assignedTasks);
+		var overdueCount = await AsyncExecuter.CountAsync(assignedTasks.Where(task => task.DueAt < today));
+		var dueTodayCount = await AsyncExecuter.CountAsync(assignedTasks.Where(task =>
+			task.DueAt >= today &&
+			task.DueAt < tomorrow));
 
+		IQueryable<AdmissionCrmFollowUpTask> filtered = assignedTasks;
+		if (!string.IsNullOrWhiteSpace(input.Search))
+		{
+			var search = input.Search.Trim().ToLowerInvariant();
+			filtered = filtered.Where(task =>
+				task.Title.ToLower().Contains(search) ||
+				(task.Notes != null && task.Notes.ToLower().Contains(search)) ||
+				scopedLeads.Any(lead =>
+					lead.Id == task.LeadId &&
+					((lead.FirstName != null && lead.FirstName.ToLower().Contains(search)) ||
+					 (lead.MiddleName != null && lead.MiddleName.ToLower().Contains(search)) ||
+					 (lead.LastName != null && lead.LastName.ToLower().Contains(search)) ||
+					 (lead.ParentGuardianName != null && lead.ParentGuardianName.ToLower().Contains(search)) ||
+					 (lead.PrimaryContactNo != null && lead.PrimaryContactNo.Contains(search)) ||
+					 (lead.Email != null && lead.Email.ToLower().Contains(search)))));
+		}
+		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
+		{
+			var search = input.ApplicantSearch.Trim().ToLowerInvariant();
+			filtered = filtered.Where(task => scopedLeads.Any(lead =>
+				lead.Id == task.LeadId &&
+				((lead.FirstName != null && lead.FirstName.ToLower().Contains(search)) ||
+				 (lead.MiddleName != null && lead.MiddleName.ToLower().Contains(search)) ||
+				 (lead.LastName != null && lead.LastName.ToLower().Contains(search)))));
+		}
+		if (!string.IsNullOrWhiteSpace(input.TargetClassSearch))
+		{
+			var search = input.TargetClassSearch.Trim().ToLowerInvariant();
+			var standardQueryable = await _standardRepository.GetQueryableAsync();
+			var matchingStandardIds = await AsyncExecuter.ToListAsync(standardQueryable
+				.Where(standard => standard.Name.ToLower().Contains(search))
+				.Select(standard => standard.Id));
+			filtered = filtered.Where(task => scopedLeads.Any(lead =>
+				lead.Id == task.LeadId &&
+				((lead.DesiredClassName != null && lead.DesiredClassName.ToLower().Contains(search)) ||
+				 (lead.TargetStandardId.HasValue &&
+				  matchingStandardIds.Contains(lead.TargetStandardId.Value)))));
+		}
+		if (!string.IsNullOrWhiteSpace(input.AssignedSearch) &&
+			!currentUserDisplayName.Contains(input.AssignedSearch.Trim(), StringComparison.OrdinalIgnoreCase))
+		{
+			filtered = filtered.Where(_ => false);
+		}
+		if (input.WorkType.HasValue && input.WorkType != AdmissionCrmMyWorkType.Task)
+		{
+			filtered = filtered.Where(_ => false);
+		}
+		if (input.QueueType.HasValue)
+		{
+			filtered = filtered.Where(_ => false);
+		}
+		if (input.Stage.HasValue)
+		{
+			filtered = filtered.Where(task => scopedLeads.Any(lead =>
+				lead.Id == task.LeadId &&
+				lead.Stage == input.Stage.Value));
+		}
+		if (input.TargetStandardId.HasValue)
+		{
+			filtered = filtered.Where(task => scopedLeads.Any(lead =>
+				lead.Id == task.LeadId &&
+				lead.TargetStandardId == input.TargetStandardId.Value));
+		}
 		if (input.AcademicMediumId.HasValue)
 		{
 			await _studentScopeAccessService.EnsureCanAccessMediumAsync(
@@ -145,85 +212,132 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			var standardIds = await AsyncExecuter.ToListAsync(standardQueryable
 				.Where(x => stageIds.Contains(x.EducationMediumStageId))
 				.Select(x => x.Id));
-			workItems = workItems
-				.Where(x => !x.TargetStandardId.HasValue || standardIds.Contains(x.TargetStandardId.Value))
-				.ToList();
+			filtered = filtered.Where(task => scopedLeads.Any(lead =>
+				lead.Id == task.LeadId &&
+				(!lead.TargetStandardId.HasValue ||
+				 standardIds.Contains(lead.TargetStandardId.Value))));
+		}
+		if (input.Priority.HasValue)
+		{
+			filtered = filtered.Where(task => scopedLeads.Any(lead =>
+				lead.Id == task.LeadId &&
+				lead.Priority == input.Priority.Value));
+		}
+		if (input.Urgency.HasValue)
+		{
+			filtered = input.Urgency.Value switch
+			{
+				AdmissionCrmWorkUrgency.Overdue =>
+					filtered.Where(task => task.DueAt < today),
+				AdmissionCrmWorkUrgency.DueToday =>
+					filtered.Where(task => task.DueAt >= today && task.DueAt < tomorrow),
+				AdmissionCrmWorkUrgency.DueSoon =>
+					filtered.Where(task => task.DueAt >= tomorrow && task.DueAt < dueSoonEnd),
+				_ =>
+					filtered.Where(task => task.DueAt >= dueSoonEnd)
+			};
 		}
 
-		var userIds = workItems
-			.SelectMany(x => new[] { x.OwnerUserId, x.AssignedUserId })
-			.Where(x => x.HasValue)
-			.Select(x => x!.Value)
-			.Distinct()
-			.ToList();
-		var userQueryable = await _userRepository.GetQueryableAsync();
-		var users = userIds.Count == 0
+		var descending = input.Sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
+		var sortField = input.Sorting?
+			.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+			.FirstOrDefault()?
+			.ToLowerInvariant();
+		filtered = sortField switch
+		{
+			"applicantname" => descending
+				? filtered.OrderByDescending(task => scopedLeads
+					.Where(lead => lead.Id == task.LeadId)
+					.Select(lead => lead.FirstName)
+					.FirstOrDefault())
+				: filtered.OrderBy(task => scopedLeads
+					.Where(lead => lead.Id == task.LeadId)
+					.Select(lead => lead.FirstName)
+					.FirstOrDefault()),
+			"priority" => descending
+				? filtered.OrderByDescending(task => scopedLeads
+					.Where(lead => lead.Id == task.LeadId)
+					.Select(lead => lead.Priority)
+					.FirstOrDefault())
+				: filtered.OrderBy(task => scopedLeads
+					.Where(lead => lead.Id == task.LeadId)
+					.Select(lead => lead.Priority)
+					.FirstOrDefault()),
+			"title" => descending
+				? filtered.OrderByDescending(task => task.Title)
+				: filtered.OrderBy(task => task.Title),
+			"dueat" => descending
+				? filtered.OrderByDescending(task => task.DueAt)
+				: filtered.OrderBy(task => task.DueAt),
+			_ => filtered.OrderBy(task => task.DueAt)
+				.ThenBy(task => task.CreationTime)
+		};
+		var totalCount = await AsyncExecuter.CountAsync(filtered);
+		var tasks = await AsyncExecuter.ToListAsync(filtered
+			.Skip(Math.Max(0, input.SkipCount))
+			.Take(Math.Clamp(input.MaxResultCount, 1, 200)));
+		var leadIds = tasks.Select(task => task.LeadId).Distinct().ToArray();
+		var leads = leadIds.Length == 0
 			? []
-			: await AsyncExecuter.ToListAsync(userQueryable.Where(x => userIds.Contains(x.Id)));
-		var userNames = users.ToDictionary(x => x.Id, GetUserDisplayName);
-		foreach (var item in workItems)
+			: await AsyncExecuter.ToListAsync(scopedLeads.Where(lead => leadIds.Contains(lead.Id)));
+		var leadById = leads.ToDictionary(lead => lead.Id);
+		var progressByLead = await _progressReadService.GetForLeadsAsync(leads);
+		var targetStandardIds = leads
+			.Where(lead => lead.TargetStandardId.HasValue)
+			.Select(lead => lead.TargetStandardId!.Value)
+			.Distinct()
+			.ToArray();
+		var standards = targetStandardIds.Length == 0
+			? []
+			: await _standardRepository.GetListAsync(standard => targetStandardIds.Contains(standard.Id));
+		var standardNames = standards.ToDictionary(standard => standard.Id, standard => standard.Name);
+		var ownerUserIds = leads
+			.Where(lead => lead.OwnerUserId.HasValue)
+			.Select(lead => lead.OwnerUserId!.Value)
+			.Distinct()
+			.ToArray();
+		var owners = ownerUserIds.Length == 0
+			? []
+			: await _userRepository.GetListAsync(user => ownerUserIds.Contains(user.Id));
+		var ownerNames = owners.ToDictionary(user => user.Id, GetUserDisplayName);
+		var workItems = new List<AdmissionCrmMyWorkItemDto>(tasks.Count);
+		foreach (var task in tasks)
 		{
-			item.OwnerDisplayName = item.OwnerUserId.HasValue
-				? userNames.GetValueOrDefault(item.OwnerUserId.Value)
+			if (!leadById.TryGetValue(task.LeadId, out var lead))
+			{
+				continue;
+			}
+
+			var item = CreateTaskWorkItem(task, lead, userId, now);
+			item.AssignedDisplayName = currentUserDisplayName;
+			item.OwnerDisplayName = lead.OwnerUserId.HasValue
+				? ownerNames.GetValueOrDefault(lead.OwnerUserId.Value)
 				: null;
-			item.AssignedDisplayName = item.AssignedUserId.HasValue
-				? userNames.GetValueOrDefault(item.AssignedUserId.Value)
-				: null;
+			item.TargetClassName = lead.DesiredClassName ??
+				(lead.TargetStandardId.HasValue
+					? standardNames.GetValueOrDefault(lead.TargetStandardId.Value)
+					: null);
+			if (progressByLead.TryGetValue(lead.Id, out var progress))
+			{
+				item.PipelineColumn = progress.PipelineColumn;
+				item.CurrentStep = progress.CurrentStep;
+				item.NextAction = progress.NextAction;
+				item.NextActionCode = progress.NextActionCode;
+			}
+
+			workItems.Add(item);
 		}
 
-		var assignedTotal = workItems.Count;
-		var overdueCount = workItems.Count(x => x.Urgency == AdmissionCrmWorkUrgency.Overdue);
-		var dueTodayCount = workItems.Count(x => x.Urgency == AdmissionCrmWorkUrgency.DueToday);
-		var urgentBlockerCount = workItems.Count(x =>
-			x.WorkType == AdmissionCrmMyWorkType.OperationalBlocker &&
-			(x.IsUrgent || x.Urgency >= AdmissionCrmWorkUrgency.DueToday));
-
-		IEnumerable<AdmissionCrmMyWorkItemDto> filtered = workItems;
-		if (!string.IsNullOrWhiteSpace(input.Search))
-		{
-			var search = input.Search.Trim();
-			filtered = filtered.Where(x =>
-				x.ApplicantName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-				x.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-				(x.Details?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
-		}
-		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
-		{
-			var applicantSearch = input.ApplicantSearch.Trim();
-			filtered = filtered.Where(x => x.ApplicantName.Contains(applicantSearch, StringComparison.OrdinalIgnoreCase));
-		}
-		if (!string.IsNullOrWhiteSpace(input.TargetClassSearch))
-		{
-			var targetClassSearch = input.TargetClassSearch.Trim();
-			filtered = filtered.Where(x => x.TargetClassName?.Contains(targetClassSearch, StringComparison.OrdinalIgnoreCase) == true);
-		}
-		if (!string.IsNullOrWhiteSpace(input.AssignedSearch))
-		{
-			var assignedSearch = input.AssignedSearch.Trim();
-			filtered = filtered.Where(x => x.AssignedDisplayName?.Contains(assignedSearch, StringComparison.OrdinalIgnoreCase) == true);
-		}
-		if (input.WorkType.HasValue) filtered = filtered.Where(x => x.WorkType == input.WorkType.Value);
-		if (input.QueueType.HasValue) filtered = filtered.Where(x => x.QueueType == input.QueueType.Value);
-		if (input.Stage.HasValue) filtered = filtered.Where(x => x.Stage == input.Stage.Value);
-		if (input.TargetStandardId.HasValue) filtered = filtered.Where(x => x.TargetStandardId == input.TargetStandardId.Value);
-		if (input.Priority.HasValue) filtered = filtered.Where(x => x.Priority == input.Priority.Value);
-		if (input.Urgency.HasValue) filtered = filtered.Where(x => x.Urgency == input.Urgency.Value);
-
-		filtered = ApplyMyWorkSorting(filtered, input.Sorting);
-		var filteredItems = filtered.ToList();
 		return new AdmissionCrmMyWorkDto
 		{
 			AcademicYearId = academicYearId,
-			GeneratedAt = data.Now,
+			GeneratedAt = now,
 			AssignedTotal = assignedTotal,
 			OverdueCount = overdueCount,
 			DueTodayCount = dueTodayCount,
-			UrgentBlockerCount = urgentBlockerCount,
-			TotalCount = filteredItems.Count,
-			Items = filteredItems
-				.Skip(input.SkipCount)
-				.Take(Math.Clamp(input.MaxResultCount, 1, 200))
-				.ToList()
+			UrgentBlockerCount = 0,
+			TotalCount = totalCount,
+			Items = workItems
 		};
 	}
 

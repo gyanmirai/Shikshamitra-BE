@@ -20515,6 +20515,135 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppAdmissionCrmAdmissionQuotations", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionCrmAdmissionYearSetup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ActivationTargetDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("CloseReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ClosedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DefaultOwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<bool>("EntranceExamRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("FinanceVerificationRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("InquiryCloseDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("InquiryOpenDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<int>("PlacementTiming")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PublishedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublishedSnapshotJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("RegistrationCloseDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("RouteTypesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StepOwnersJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("TargetStandardIdsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "Status")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false AND \"Status\" IN (0, 1)");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AppAdmissionCrmAdmissionYearSetups_TenantId_AcademicYearId~1")
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("AppAdmissionCrmAdmissionYearSetups", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionCrmApplicantChecklistProgress", b =>
                 {
                     b.Property<Guid>("Id")
@@ -23041,6 +23170,94 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "AcademicYearId", "IsActive", "DisplayOrder");
 
                     b.ToTable("AppAdmissionCrmInquirySources", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionCrmInquiryType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<string>("DeactivationReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "Code")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "AcademicYearId", "IsActive", "DisplayOrder");
+
+                    b.ToTable("AppAdmissionCrmInquiryTypes", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionCrmMessageDeliveryLog", b =>
@@ -26135,6 +26352,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("RelatedEntityId")
                         .HasColumnType("uuid");
 
@@ -26151,7 +26371,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "AcademicYearId", "EventType");
 
-                    b.HasIndex("TenantId", "LeadId", "OccurredAt");
+                    b.HasIndex("TenantId", "LeadId", "OccurredAtUtc");
 
                     b.ToTable("AppAdmissionCrmTimelineEvents", (string)null);
                 });
@@ -26710,6 +26930,15 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
 
+                    b.Property<Guid?>("AdmissionYearSetupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AdmissionYearSetupSnapshotJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int?>("AdmissionYearSetupVersion")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ArchiveReason")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -26779,6 +27008,13 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("InquirySourceSnapshot")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("InquiryTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("InquiryTypeSnapshot")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
@@ -26895,11 +27131,19 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AdmissionYearSetupId");
+
                     b.HasIndex("InquirySourceId");
+
+                    b.HasIndex("InquiryTypeId");
 
                     b.HasIndex("IntendedRouteDefinitionId");
 
+                    b.HasIndex("TenantId", "AdmissionYearSetupId");
+
                     b.HasIndex("TenantId", "MergedIntoLeadId");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "InquiryTypeId");
 
                     b.HasIndex("TenantId", "AcademicYearId", "NormalizedEmail");
 
@@ -34714,9 +34958,19 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionInquiryLead", b =>
                 {
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionCrmAdmissionYearSetup", null)
+                        .WithMany()
+                        .HasForeignKey("AdmissionYearSetupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionCrmInquirySource", "InquirySource")
                         .WithMany()
                         .HasForeignKey("InquirySourceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionCrmInquiryType", "InquiryType")
+                        .WithMany()
+                        .HasForeignKey("InquiryTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm.AdmissionCrmRouteDefinition", null)
@@ -34725,6 +34979,8 @@ namespace ShikshaMitra.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("InquirySource");
+
+                    b.Navigation("InquiryType");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Settings.DocumentType", b =>

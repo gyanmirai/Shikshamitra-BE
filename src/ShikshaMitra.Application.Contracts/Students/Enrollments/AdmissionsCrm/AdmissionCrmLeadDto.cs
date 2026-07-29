@@ -7,9 +7,13 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionCrmLeadDto : EntityDto<Guid>
 {
 	public Guid AcademicYearId { get; set; }
+	public Guid? AdmissionYearSetupId { get; set; }
+	public int? AdmissionYearSetupVersion { get; set; }
 	public Guid? StudentId { get; set; }
 	public Guid? InquirySourceId { get; set; }
 	public string? InquirySourceSnapshot { get; set; }
+	public Guid? InquiryTypeId { get; set; }
+	public string? InquiryTypeSnapshot { get; set; }
 	public AdmissionInquiryChannel Channel { get; set; }
 	public string? CampaignName { get; set; }
 	public string? CampusBranchName { get; set; }
@@ -45,6 +49,11 @@ public class AdmissionCrmLeadDto : EntityDto<Guid>
 	public DateTime? MergedAt { get; set; }
 	public string? MergeReason { get; set; }
 	public string? DuplicateContinueReason { get; set; }
+	public AdmissionCrmPipelineColumnKey? PipelineColumn { get; set; }
+	public AdmissionCrmClosedOutcome? ClosedOutcome { get; set; }
+	public AdmissionCrmApplicantStepKey? CurrentStep { get; set; }
+	public string? NextAction { get; set; }
+	public string? NextActionCode { get; set; }
 	public int LikelyDuplicateCount { get; set; }
 	public IReadOnlyList<AdmissionCrmLeadDuplicateDto> LikelyDuplicates { get; set; } = Array.Empty<AdmissionCrmLeadDuplicateDto>();
 }

@@ -293,7 +293,7 @@ public class AdmissionCrmConfigurationSafetyAppService(
 		var conflicts = new List<string>();
 		if (source.Cycle == null)
 		{
-			conflicts.Add("The source academic year has no admission cycle configuration to clone.");
+			conflicts.Add("The source academic year has no Admission Year settings to clone.");
 		}
 		if (targetApplicantCount > 0)
 		{

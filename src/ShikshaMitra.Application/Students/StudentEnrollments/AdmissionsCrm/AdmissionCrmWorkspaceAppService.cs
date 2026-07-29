@@ -18,19 +18,41 @@ public class AdmissionCrmWorkspaceAppService : ApplicationService, IAdmissionCrm
 {
 	private readonly IRepository<IdentityUser, Guid> _userRepository;
 	private readonly IRepository<AdmissionCrmCommunicationProviderConfiguration, Guid> _providerRepository;
+	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
+	private readonly AdmissionCrmApplicantProgressReadService _progressReadService;
 
 	public AdmissionCrmWorkspaceAppService(
 		IRepository<IdentityUser, Guid> userRepository,
 		IRepository<AdmissionCrmCommunicationProviderConfiguration, Guid> providerRepository,
+		IRepository<AdmissionInquiryLead, Guid> leadRepository,
 		StudentScopeAccessService studentScopeAccessService,
-		AdmissionCrmStaffEligibilityService staffEligibilityService)
+		AdmissionCrmStaffEligibilityService staffEligibilityService,
+		AdmissionCrmApplicantProgressReadService progressReadService)
 	{
 		_userRepository = userRepository;
 		_providerRepository = providerRepository;
+		_leadRepository = leadRepository;
 		_studentScopeAccessService = studentScopeAccessService;
 		_staffEligibilityService = staffEligibilityService;
+		_progressReadService = progressReadService;
+	}
+
+	public async Task<AdmissionCrmApplicantProgressDto> GetApplicantProgressAsync(Guid leadId)
+	{
+		var lead = await _leadRepository.FindAsync(leadId);
+		if (lead is null || lead.TenantId != CurrentTenant.Id)
+		{
+			throw new BusinessException("AdmissionCrm:LeadNotFound")
+				.WithData("LeadId", leadId);
+		}
+
+		await _studentScopeAccessService.EnsureCanAccessAdmissionLeadAsync(
+			lead,
+			nameof(GetApplicantProgressAsync));
+		var progressByLead = await _progressReadService.GetForLeadsAsync([lead]);
+		return progressByLead[lead.Id];
 	}
 
 	public async Task<IReadOnlyList<AdmissionCrmStaffLookupDto>> GetStaffAsync(
@@ -160,4 +182,5 @@ public class AdmissionCrmWorkspaceAppService : ApplicationService, IAdmissionCrm
 		OperationalMode = operationalMode,
 		Detail = detail
 	};
+
 }

@@ -15,6 +15,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCatalogAppService
 {
 	private readonly IRepository<AdmissionCrmInquirySource, Guid> _sourceRepository;
+	private readonly IRepository<AdmissionCrmInquiryType, Guid> _inquiryTypeRepository;
 	private readonly IRepository<AdmissionCrmExamSlot, Guid> _slotRepository;
 	private readonly IRepository<AdmissionCrmDocumentType, Guid> _documentTypeRepository;
 	private readonly IRepository<AdmissionCrmEntranceExamRecord, Guid> _examRepository;
@@ -23,6 +24,7 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 
 	public AdmissionCrmCatalogAppService(
 		IRepository<AdmissionCrmInquirySource, Guid> sourceRepository,
+		IRepository<AdmissionCrmInquiryType, Guid> inquiryTypeRepository,
 		IRepository<AdmissionCrmExamSlot, Guid> slotRepository,
 		IRepository<AdmissionCrmDocumentType, Guid> documentTypeRepository,
 		IRepository<AdmissionCrmEntranceExamRecord, Guid> examRepository,
@@ -30,6 +32,7 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 		StudentScopeAccessService scopeAccess)
 	{
 		_sourceRepository = sourceRepository;
+		_inquiryTypeRepository = inquiryTypeRepository;
 		_slotRepository = slotRepository;
 		_documentTypeRepository = documentTypeRepository;
 		_examRepository = examRepository;
@@ -75,6 +78,70 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 		entity.SetActive(input.IsActive, input.Reason);
 		await _sourceRepository.UpdateAsync(entity, autoSave: true);
 		return MapSource(entity);
+	}
+
+	public async Task<PagedResultDto<AdmissionCrmInquiryTypeDto>> GetInquiryTypesAsync(
+		Guid academicYearId,
+		bool includeInactive = true)
+	{
+		await _scopeAccess.EnsureCanAccessAcademicYearAsync(
+			academicYearId,
+			nameof(GetInquiryTypesAsync));
+		var queryable = await _inquiryTypeRepository.GetQueryableAsync();
+		var items = await AsyncExecuter.ToListAsync(queryable.Where(item =>
+			item.TenantId == CurrentTenant.Id &&
+			item.AcademicYearId == academicYearId &&
+			(includeInactive || item.IsActive)));
+		var mapped = items
+			.OrderBy(item => item.DisplayOrder)
+			.ThenBy(item => item.DisplayName)
+			.Select(MapInquiryType)
+			.ToList();
+		return new PagedResultDto<AdmissionCrmInquiryTypeDto>(mapped.Count, mapped);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmInquiryTypeDto> CreateInquiryTypeAsync(
+		Guid academicYearId,
+		AdmissionCrmInquiryTypeUpsertDto input)
+	{
+		await EnsureAcademicYearWideMutationAccessAsync(
+			academicYearId,
+			nameof(CreateInquiryTypeAsync));
+		await EnsureUniqueInquiryTypeCodeAsync(academicYearId, input.Code, null);
+		var entity = new AdmissionCrmInquiryType(
+			GuidGenerator.Create(),
+			CurrentTenant.Id,
+			academicYearId,
+			input.Code,
+			input.DisplayName,
+			input.Description,
+			input.DisplayOrder);
+		await _inquiryTypeRepository.InsertAsync(entity, autoSave: true);
+		return MapInquiryType(entity);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmInquiryTypeDto> UpdateInquiryTypeAsync(
+		Guid id,
+		AdmissionCrmInquiryTypeUpsertDto input)
+	{
+		var entity = await GetInquiryTypeAsync(id, nameof(UpdateInquiryTypeAsync));
+		await EnsureUniqueInquiryTypeCodeAsync(entity.AcademicYearId, input.Code, entity.Id);
+		entity.Update(input.Code, input.DisplayName, input.Description, input.DisplayOrder);
+		await _inquiryTypeRepository.UpdateAsync(entity, autoSave: true);
+		return MapInquiryType(entity);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public async Task<AdmissionCrmInquiryTypeDto> SetInquiryTypeStatusAsync(
+		Guid id,
+		AdmissionCrmCatalogStatusDto input)
+	{
+		var entity = await GetInquiryTypeAsync(id, nameof(SetInquiryTypeStatusAsync));
+		entity.SetActive(input.IsActive, input.Reason);
+		await _inquiryTypeRepository.UpdateAsync(entity, autoSave: true);
+		return MapInquiryType(entity);
 	}
 
 	public async Task<PagedResultDto<AdmissionCrmExamSlotDto>> GetExamSlotsAsync(
@@ -183,6 +250,18 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 		return entity;
 	}
 
+	private async Task<AdmissionCrmInquiryType> GetInquiryTypeAsync(Guid id, string operation)
+	{
+		var entity = await _inquiryTypeRepository.GetAsync(id);
+		await EnsureAcademicYearWideMutationAccessAsync(entity.AcademicYearId, operation);
+		if (entity.TenantId != CurrentTenant.Id)
+		{
+			throw new BusinessException("AdmissionCrm:InquiryTypeNotFound");
+		}
+
+		return entity;
+	}
+
 	private async Task<AdmissionCrmDocumentType> GetDocumentTypeAsync(Guid id, string operation)
 	{
 		var entity = await _documentTypeRepository.GetAsync(id);
@@ -220,6 +299,23 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 			throw new BusinessException("AdmissionCrm:DuplicateDocumentTypeCode");
 	}
 
+	private async Task EnsureUniqueInquiryTypeCodeAsync(
+		Guid academicYearId,
+		string code,
+		Guid? excludingId)
+	{
+		var normalized = code.Trim().ToUpperInvariant();
+		var queryable = await _inquiryTypeRepository.GetQueryableAsync();
+		if (await AsyncExecuter.AnyAsync(queryable.Where(item =>
+			item.TenantId == CurrentTenant.Id &&
+			item.AcademicYearId == academicYearId &&
+			item.Code == normalized &&
+			(!excludingId.HasValue || item.Id != excludingId.Value))))
+		{
+			throw new BusinessException("AdmissionCrm:DuplicateInquiryTypeCode");
+		}
+	}
+
 	private async Task<int> CountScheduledAsync(Guid slotId)
 	{
 		var queryable = await _examRepository.GetQueryableAsync();
@@ -231,6 +327,18 @@ public class AdmissionCrmCatalogAppService : ApplicationService, IAdmissionCrmCa
 		Id = x.Id, AcademicYearId = x.AcademicYearId, Code = x.Code, DisplayName = x.DisplayName,
 		Description = x.Description, AllowedChannels = x.GetAllowedChannels(), DisplayOrder = x.DisplayOrder,
 		IsRoutingEligible = x.IsRoutingEligible, IsActive = x.IsActive, DeactivationReason = x.DeactivationReason
+	};
+
+	private static AdmissionCrmInquiryTypeDto MapInquiryType(AdmissionCrmInquiryType inquiryType) => new()
+	{
+		Id = inquiryType.Id,
+		AcademicYearId = inquiryType.AcademicYearId,
+		Code = inquiryType.Code,
+		DisplayName = inquiryType.DisplayName,
+		Description = inquiryType.Description,
+		DisplayOrder = inquiryType.DisplayOrder,
+		IsActive = inquiryType.IsActive,
+		DeactivationReason = inquiryType.DeactivationReason
 	};
 
 	private static AdmissionCrmExamSlotDto MapSlot(AdmissionCrmExamSlot x, int scheduledCount) => new()

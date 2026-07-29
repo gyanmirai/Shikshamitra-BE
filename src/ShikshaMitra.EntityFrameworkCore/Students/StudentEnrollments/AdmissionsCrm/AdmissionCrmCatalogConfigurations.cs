@@ -20,6 +20,29 @@ public class AdmissionCrmInquirySourceConfiguration : IEntityTypeConfiguration<A
 	}
 }
 
+public class AdmissionCrmInquiryTypeConfiguration : IEntityTypeConfiguration<AdmissionCrmInquiryType>
+{
+	public void Configure(EntityTypeBuilder<AdmissionCrmInquiryType> builder)
+	{
+		builder.ToTable(
+			ShikshaMitraConsts.DbTablePrefix + "AdmissionCrmInquiryTypes",
+			ShikshaMitraConsts.DbSchema);
+		builder.ConfigureByConvention();
+		builder.Property(x => x.Code)
+			.HasMaxLength(AdmissionCrmConsts.MaxPlaybookCodeLength)
+			.IsRequired();
+		builder.Property(x => x.DisplayName)
+			.HasMaxLength(AdmissionCrmConsts.MaxSourceSnapshotLength)
+			.IsRequired();
+		builder.Property(x => x.Description)
+			.HasMaxLength(AdmissionCrmConsts.MaxDescriptionLength);
+		builder.Property(x => x.DeactivationReason)
+			.HasMaxLength(AdmissionCrmConsts.MaxNotesLength);
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Code }).IsUnique();
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsActive, x.DisplayOrder });
+	}
+}
+
 public class AdmissionCrmExamSlotConfiguration : IEntityTypeConfiguration<AdmissionCrmExamSlot>
 {
 	public void Configure(EntityTypeBuilder<AdmissionCrmExamSlot> builder)

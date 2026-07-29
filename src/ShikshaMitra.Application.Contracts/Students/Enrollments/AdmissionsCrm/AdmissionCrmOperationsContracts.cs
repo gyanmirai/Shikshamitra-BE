@@ -263,9 +263,13 @@ public class AdmissionCrmMyWorkItemDto
 	public Guid? TargetStandardId { get; set; }
 	public string? TargetClassName { get; set; }
 	public AdmissionInquiryStage Stage { get; set; }
+	public AdmissionCrmPipelineColumnKey PipelineColumn { get; set; }
+	public AdmissionCrmApplicantStepKey CurrentStep { get; set; }
 	public AdmissionCrmLeadPriority Priority { get; set; }
 	public string Title { get; set; } = string.Empty;
 	public string? Details { get; set; }
+	public string NextAction { get; set; } = string.Empty;
+	public string? NextActionCode { get; set; }
 	public DateTimeOffset? DueAt { get; set; }
 	public AdmissionCrmWorkUrgency Urgency { get; set; }
 	public bool IsUrgent { get; set; }

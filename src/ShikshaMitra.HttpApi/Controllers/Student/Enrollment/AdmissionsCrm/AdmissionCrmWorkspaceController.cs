@@ -10,6 +10,10 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmWorkspaceController(IAdmissionCrmWorkspaceAppService appService) : AbpControllerBase
 {
+	[HttpGet("workspace/applicants/{leadId:guid}/progress")]
+	public Task<AdmissionCrmApplicantProgressDto> GetApplicantProgressAsync(Guid leadId) =>
+		appService.GetApplicantProgressAsync(leadId);
+
 	[HttpGet("workspace/staff")]
 	public Task<IReadOnlyList<AdmissionCrmStaffLookupDto>> GetStaffAsync(
 		[FromQuery] string? filter = null,

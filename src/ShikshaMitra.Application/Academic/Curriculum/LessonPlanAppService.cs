@@ -483,6 +483,14 @@ public class LessonPlanAppService(
         var subjects = await subjectRepository.GetListAsync(x => subjectIds.Contains(x.Id));
         var chapters = await chapterRepository.GetListAsync(x => chapterIds.Contains(x.Id));
         var diaries = await teacherDiaryRepository.GetListAsync(x => lessonPlanIds.Contains(x.LessonPlanId));
+        var reviewerIds = list
+            .Where(x => x.ReviewedBy.HasValue)
+            .Select(x => x.ReviewedBy!.Value)
+            .Distinct()
+            .ToList();
+        var reviewers = reviewerIds.Count > 0
+            ? await employeeRepository.GetListAsync(x => x.UserId.HasValue && reviewerIds.Contains(x.UserId.Value))
+            : new List<Employee>();
         var timetableSlots = new List<TimetableSlot>();
 
         if (timetableSlotIds.Count > 0)
@@ -497,6 +505,9 @@ public class LessonPlanAppService(
             var division = divisions.FirstOrDefault(x => x.Id == item.DivisionId);
             var subject = subjects.FirstOrDefault(x => x.Id == item.SubjectId);
             var chapter = chapters.FirstOrDefault(x => x.Id == item.ChapterId);
+            var reviewer = item.ReviewedBy.HasValue
+                ? reviewers.FirstOrDefault(x => x.UserId == item.ReviewedBy.Value)
+                : null;
             var diary = diaries.FirstOrDefault(x => x.LessonPlanId == item.Id);
             var timetableSlot = item.TimetableSlotId.HasValue
                 ? timetableSlots.FirstOrDefault(x => x.Id == item.TimetableSlotId.Value)
@@ -507,6 +518,7 @@ public class LessonPlanAppService(
             item.DivisionName = division?.Name;
             item.SubjectName = subject?.Name;
             item.ChapterName = chapter?.ChapterName;
+            item.ReviewedByName = reviewer?.EmployeeName;
             item.PeriodName = timetableSlot != null ? $"Period {timetableSlot.Sequence}" : item.PeriodName;
             item.StartTime = timetableSlot?.StartTime.ToString("hh:mm tt");
             item.EndTime = timetableSlot?.EndTime.ToString("hh:mm tt");

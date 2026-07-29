@@ -26,7 +26,7 @@ public class UpdateAssignmentTypeDto
 	[Range(0, double.MaxValue, ErrorMessage = "Default marks cannot be negative")]
 	public decimal? DefaultMarks { get; set; }
 
-	[Range(0, int.MaxValue, ErrorMessage = "Default due days cannot be negative")]
+	[Range(1, int.MaxValue, ErrorMessage = "Default due days must be at least one")]
 	public int? DefaultDueDays { get; set; }
 
 	public bool EvaluationRequired { get; set; } = true;

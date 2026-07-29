@@ -98,10 +98,8 @@ public class AssignmentType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 		SetDescription(description);
 		SetDefaultSubmissionType(defaultSubmissionType);
-		SetDefaultMarks(defaultMarks);
 		SetDefaultDueDays(defaultDueDays);
-		SetEvaluationRequired(evaluationRequired);
-		SetDefaultEvaluationMethod(defaultEvaluationMethod);
+		SetEvaluationSettings(evaluationRequired, defaultEvaluationMethod, defaultMarks);
 		SetStatus(status);
 	}
 
@@ -110,64 +108,106 @@ public class AssignmentType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	internal AssignmentType SetName(string name)
 	{
-		Name = Check.NotNullOrWhiteSpace(
-			name,
-			nameof(name),
-			maxLength: AssignmentTypeConsts.MaxNameLength
-		);
+		var normalizedName = name?.Trim();
+		if (string.IsNullOrWhiteSpace(normalizedName) ||
+			normalizedName.Length < AssignmentTypeConsts.MinNameLength ||
+			normalizedName.Length > AssignmentTypeConsts.MaxNameLength)
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidAssignmentTypeName)
+				.WithData("MinLength", AssignmentTypeConsts.MinNameLength)
+				.WithData("MaxLength", AssignmentTypeConsts.MaxNameLength);
+		}
+
+		Name = normalizedName;
 		return this;
 	}
 
 	internal AssignmentType SetDescription(string? description)
 	{
-		if (description != null && description.Length > 250)
+		var normalizedDescription = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+		if (normalizedDescription?.Length > 250)
 		{
 			throw new ArgumentException("Description cannot exceed 250 characters.", nameof(description));
 		}
-		Description = description;
+		Description = normalizedDescription;
 		return this;
 	}
 
 	internal AssignmentType SetDefaultSubmissionType(SubmissionType? defaultSubmissionType)
 	{
-		DefaultSubmissionType = defaultSubmissionType;
-		return this;
-	}
-
-	internal AssignmentType SetDefaultMarks(decimal? defaultMarks)
-	{
-		if (defaultMarks.HasValue && defaultMarks.Value < 0)
+		if (defaultSubmissionType.HasValue && !Enum.IsDefined(defaultSubmissionType.Value))
 		{
-			throw new ArgumentException("Default marks cannot be negative.", nameof(defaultMarks));
+			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidSubmissionType)
+				.WithData("SubmissionType", defaultSubmissionType.Value);
 		}
-		DefaultMarks = defaultMarks;
+
+		DefaultSubmissionType = defaultSubmissionType;
 		return this;
 	}
 
 	internal AssignmentType SetDefaultDueDays(int? defaultDueDays)
 	{
-		if (defaultDueDays.HasValue && defaultDueDays.Value < 0)
+		if (defaultDueDays.HasValue && defaultDueDays.Value < 1)
 		{
-			throw new ArgumentException("Default due days cannot be negative.", nameof(defaultDueDays));
+			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidDefaultDueDays);
 		}
 		DefaultDueDays = defaultDueDays;
 		return this;
 	}
 
-	internal AssignmentType SetEvaluationRequired(bool evaluationRequired)
+	internal AssignmentType SetEvaluationSettings(
+		bool evaluationRequired,
+		EvaluationMethod? defaultEvaluationMethod,
+		decimal? defaultMarks)
 	{
-		EvaluationRequired = evaluationRequired;
-		return this;
-	}
+		if (defaultEvaluationMethod.HasValue && !Enum.IsDefined(defaultEvaluationMethod.Value))
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidEvaluationMethod)
+				.WithData("EvaluationMethod", defaultEvaluationMethod.Value);
+		}
 
-	internal AssignmentType SetDefaultEvaluationMethod(EvaluationMethod? defaultEvaluationMethod)
-	{
+		if (!evaluationRequired)
+		{
+			EvaluationRequired = false;
+			DefaultEvaluationMethod = EvaluationMethod.NoEvaluation;
+			DefaultMarks = null;
+			return this;
+		}
+
+		if (!defaultEvaluationMethod.HasValue || defaultEvaluationMethod == EvaluationMethod.NoEvaluation)
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.EvaluationMethodRequired);
+		}
+
+		if (defaultMarks.HasValue && defaultMarks.Value < 0)
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidDefaultMarks);
+		}
+
+		if (defaultEvaluationMethod == EvaluationMethod.Marks && !defaultMarks.HasValue)
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidDefaultMarks);
+		}
+
+		if (defaultEvaluationMethod != EvaluationMethod.Marks && defaultMarks.HasValue)
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidDefaultMarks);
+		}
+
+		EvaluationRequired = true;
 		DefaultEvaluationMethod = defaultEvaluationMethod;
+		DefaultMarks = defaultMarks;
 		return this;
 	}
 
 	internal AssignmentType SetStatus(TaskTypeStatus status)
 	{
+		if (!Enum.IsDefined(status))
+		{
+			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidTaskTypeStatus)
+				.WithData("Status", status);
+		}
+
 		Status = status;
 		return this;
 	}
@@ -186,10 +226,8 @@ public class AssignmentType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 		SetDescription(description);
 		SetDefaultSubmissionType(defaultSubmissionType);
-		SetDefaultMarks(defaultMarks);
 		SetDefaultDueDays(defaultDueDays);
-		SetEvaluationRequired(evaluationRequired);
-		SetDefaultEvaluationMethod(defaultEvaluationMethod);
+		SetEvaluationSettings(evaluationRequired, defaultEvaluationMethod, defaultMarks);
 		SetStatus(status);
 		return this;
 	}

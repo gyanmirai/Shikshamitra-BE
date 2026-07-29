@@ -33,6 +33,7 @@ public class LessonPlanDto : FullAuditedEntityDto<Guid>
     public LessonPlanStatus Status { get; set; }
     public string? ReviewRemarks { get; set; }
     public Guid? ReviewedBy { get; set; }
+    public string? ReviewedByName { get; set; }
     public DateTime? ReviewedAt { get; set; }
     public bool IsAiGenerated { get; set; }
     public TeacherDiaryStatus DiaryStatus { get; set; }

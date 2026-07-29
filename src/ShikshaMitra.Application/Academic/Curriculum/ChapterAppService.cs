@@ -23,6 +23,7 @@ public class ChapterAppService(
 	IRepository<AssignmentEntity, Guid> assignmentRepository,
 	IRepository<AssessmentRubric, Guid> rubricRepository,
 	IRepository<LessonPlan, Guid> lessonPlanRepository,
+	IRepository<TeacherDiary, Guid> teacherDiaryRepository,
 	IRepository<QuestionBankItem, Guid> questionBankRepository,
 	IRepository<QuestionPaperBlueprintChapterRule, Guid> blueprintChapterRuleRepository
 ) : ApplicationService, IChapterAppService
@@ -315,7 +316,36 @@ public class ChapterAppService(
 			lp.Status != LessonPlanStatus.Rejected);
 		foreach (var lessonPlan in lessonPlans)
 		{
-			linkedByChapter[lessonPlan.ChapterId].LessonPlans++;
+			var summary = linkedByChapter[lessonPlan.ChapterId];
+			summary.LessonPlans++;
+			summary.LessonPlanIds.Add(lessonPlan.Id);
+			summary.CompletionValues.Add(lessonPlan.Status == LessonPlanStatus.Approved
+				? lessonPlan.PlannedCompletionPercentage
+				: 0);
+		}
+
+		if (lessonPlans.Count > 0)
+		{
+			var lessonPlanIds = lessonPlans.Select(plan => plan.Id).ToList();
+			var submittedDiaries = await teacherDiaryRepository.GetListAsync(diary =>
+				lessonPlanIds.Contains(diary.LessonPlanId) &&
+				diary.Status == TeacherDiaryStatus.Submitted);
+			var diaryByLessonPlan = submittedDiaries
+				.GroupBy(diary => diary.LessonPlanId)
+				.ToDictionary(group => group.Key, group => group.OrderByDescending(diary => diary.CreationTime).First());
+
+			foreach (var lessonPlan in lessonPlans)
+			{
+				if (diaryByLessonPlan.TryGetValue(lessonPlan.Id, out var diary))
+				{
+					var summary = linkedByChapter[lessonPlan.ChapterId];
+					var planIndex = summary.LessonPlanIds.IndexOf(lessonPlan.Id);
+					if (planIndex >= 0)
+					{
+						summary.CompletionValues[planIndex] = diary.ActualCompletionPercentage;
+					}
+				}
+			}
 		}
 
 		var homeworks = await homeworkRepository.GetListAsync(hw =>
@@ -368,6 +398,16 @@ public class ChapterAppService(
 		{
 			var summary = linkedByChapter[dto.Id];
 			dto.LessonPlanStatus = summary.LessonPlans > 0 ? "Linked" : DefaultStatus(dto.LessonPlanStatus, "Not Linked");
+			if (summary.CompletionValues.Count > 0)
+			{
+				dto.ProgressPercentage = (int)Math.Round(summary.CompletionValues.Average());
+				dto.CoverageStatus = dto.ProgressPercentage switch
+				{
+					100 => "Completed",
+					> 0 => "In Progress",
+					_ => "Not Started"
+				};
+			}
 			dto.HomeworkStatus = summary.Homeworks > 0 ? "Mapped" : DefaultStatus(dto.HomeworkStatus, "Not Mapped");
 			dto.AssessmentStatus = summary.Assessments > 0 ? "Mapped" : DefaultStatus(dto.AssessmentStatus, "Not Mapped");
 			dto.QuestionCount = summary.Questions > 0 ? summary.Questions : dto.QuestionCount;
@@ -436,6 +476,8 @@ public class ChapterAppService(
 	private sealed class ChapterLinkSummary
 	{
 		public int LessonPlans { get; set; }
+		public List<Guid> LessonPlanIds { get; } = new();
+		public List<int> CompletionValues { get; } = new();
 		public int Homeworks { get; set; }
 		public int Assessments { get; set; }
 		public int Questions { get; set; }

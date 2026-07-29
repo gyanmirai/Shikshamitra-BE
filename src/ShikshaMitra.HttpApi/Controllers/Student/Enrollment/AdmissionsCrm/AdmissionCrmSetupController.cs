@@ -12,6 +12,45 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Route("api/student-enrollment/admissions-crm/setup")]
 public class AdmissionCrmSetupController(IAdmissionCrmSetupAppService setupAppService) : AbpControllerBase
 {
+	[HttpGet("admission-years/{academicYearId:guid}/versions")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<IReadOnlyList<AdmissionCrmAdmissionYearSetupDto>> GetAdmissionYearVersionsAsync(
+		Guid academicYearId) =>
+		setupAppService.GetAdmissionYearVersionsAsync(academicYearId);
+
+	[HttpGet("admission-years/{academicYearId:guid}/standard-options")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>>
+		GetAdmissionYearStandardOptionsAsync(Guid academicYearId) =>
+		setupAppService.GetAdmissionYearStandardOptionsAsync(academicYearId);
+
+	[HttpPost("admission-years/{academicYearId:guid}/draft")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<AdmissionCrmAdmissionYearSetupDto> CreateAdmissionYearDraftAsync(
+		Guid academicYearId) =>
+		setupAppService.CreateAdmissionYearDraftAsync(academicYearId);
+
+	[HttpPut("admission-years/drafts/{id:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<AdmissionCrmAdmissionYearSetupDto> UpdateAdmissionYearDraftAsync(
+		Guid id,
+		[FromBody] UpdateAdmissionCrmAdmissionYearSetupDto input) =>
+		setupAppService.UpdateAdmissionYearDraftAsync(id, input);
+
+	[HttpPost("admission-years/{id:guid}/publish")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<AdmissionCrmAdmissionYearSetupDto> PublishAdmissionYearAsync(
+		Guid id,
+		[FromBody] PublishAdmissionCrmAdmissionYearSetupDto input) =>
+		setupAppService.PublishAdmissionYearAsync(id, input);
+
+	[HttpPost("admission-years/{id:guid}/close")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
+	public Task<AdmissionCrmAdmissionYearSetupDto> CloseAdmissionYearAsync(
+		Guid id,
+		[FromBody] CloseAdmissionCrmAdmissionYearSetupDto input) =>
+		setupAppService.CloseAdmissionYearAsync(id, input);
+
 	[HttpGet("cycles")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public Task<PagedResultDto<AdmissionCrmCycleListItemDto>> GetCyclesAsync([FromQuery] PagedResultRequestDto input) => setupAppService.GetCyclesAsync(input);

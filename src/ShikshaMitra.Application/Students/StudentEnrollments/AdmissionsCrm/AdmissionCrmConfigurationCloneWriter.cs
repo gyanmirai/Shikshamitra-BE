@@ -46,7 +46,7 @@ public class AdmissionCrmConfigurationCloneWriter(
 	{
 		if (source.Cycle == null)
 		{
-			throw new InvalidOperationException("A source admission cycle is required for configuration cloning.");
+			throw new InvalidOperationException("A source admission year is required for configuration cloning.");
 		}
 
 		var idMap = BuildIdMap(source, hierarchyIdMap);

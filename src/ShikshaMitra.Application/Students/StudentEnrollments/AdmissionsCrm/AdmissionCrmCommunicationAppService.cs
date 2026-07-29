@@ -48,10 +48,10 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 		_dispatcher = dispatcher;
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageTemplates)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public async Task<PagedResultDto<AdmissionCrmCommunicationProviderDto>> GetProvidersAsync(Guid academicYearId)
 	{
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
 			academicYearId,
 			nameof(GetProvidersAsync));
 
@@ -61,23 +61,26 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 			providers.Select(ToDto).ToList());
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageTemplates)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public async Task<AdmissionCrmCommunicationProviderDto> UpdateProviderAsync(
 		Guid academicYearId,
 		AdmissionCrmMessageChannel channel,
 		UpdateAdmissionCrmCommunicationProviderDto input)
 	{
-		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+		await _studentScopeAccessService.EnsureAcademicYearWideConfigurationAccessAsync(
 			academicYearId,
 			nameof(UpdateProviderAsync));
 
-		ValidateProviderEndpoint(input.Settings, input.WebhookUrl);
 		var provider = await GetOrCreateProviderAsync(academicYearId, channel);
+		var settings = MergeProviderSettings(
+			DeserializeProviderSettings(provider.SettingsJson),
+			input.Settings);
+		ValidateProviderEndpoint(settings, input.WebhookUrl);
 		provider.Update(
 			input.IsEnabled,
 			input.ProviderName,
 			input.SenderId,
-			SerializeProviderSettings(input.Settings),
+			SerializeProviderSettings(settings),
 			input.WebhookUrl,
 			input.LastValidatedAt);
 		await _providerRepository.UpdateAsync(provider, autoSave: true);
@@ -783,7 +786,8 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 			IsEnabled = provider.IsEnabled,
 			ProviderName = provider.ProviderName,
 			SenderId = provider.SenderId,
-			Settings = DeserializeProviderSettings(provider.SettingsJson),
+			Settings = SanitizeProviderSettings(
+				DeserializeProviderSettings(provider.SettingsJson)),
 			WebhookUrl = provider.WebhookUrl,
 			LastValidatedAt = provider.LastValidatedAt
 		};
@@ -805,6 +809,72 @@ public class AdmissionCrmCommunicationAppService : ApplicationService, IAdmissio
 		settings.Adapter = adapter;
 		settings.PayloadMode = payloadMode;
 		return JsonSerializer.Serialize(settings, JsonOptions);
+	}
+
+	internal static AdmissionCrmCommunicationProviderSettingsDto MergeProviderSettings(
+		AdmissionCrmCommunicationProviderSettingsDto stored,
+		AdmissionCrmCommunicationProviderSettingsDto? input)
+	{
+		input ??= new AdmissionCrmCommunicationProviderSettingsDto();
+		var headers = MergeWriteOnlyValues(stored.Headers, input.Headers);
+		var parameters = MergeWriteOnlyValues(stored.Parameters, input.Parameters);
+		return new AdmissionCrmCommunicationProviderSettingsDto
+		{
+			Adapter = input.Adapter,
+			PayloadMode = input.PayloadMode,
+			ResponseProviderMessageIdPath = input.ResponseProviderMessageIdPath,
+			Headers = headers,
+			Parameters = parameters,
+			CallbackSecret = string.IsNullOrWhiteSpace(input.CallbackSecret)
+				? stored.CallbackSecret
+				: input.CallbackSecret.Trim(),
+			CallbackMappings = input.CallbackMappings ??
+				new AdmissionCrmCommunicationCallbackMappingsDto()
+		};
+	}
+
+	private static Dictionary<string, string> MergeWriteOnlyValues(
+		IReadOnlyDictionary<string, string> stored,
+		IReadOnlyDictionary<string, string>? input)
+	{
+		var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var (key, value) in input ?? new Dictionary<string, string>())
+		{
+			var normalizedKey = key.Trim();
+			if (normalizedKey.Length == 0) continue;
+			result[normalizedKey] = string.IsNullOrWhiteSpace(value) &&
+				stored.TryGetValue(normalizedKey, out var storedValue)
+					? storedValue
+					: value;
+		}
+
+		return result;
+	}
+
+	internal static AdmissionCrmCommunicationProviderSettingsDto SanitizeProviderSettings(
+		AdmissionCrmCommunicationProviderSettingsDto settings)
+	{
+		return new AdmissionCrmCommunicationProviderSettingsDto
+		{
+			Adapter = settings.Adapter,
+			PayloadMode = settings.PayloadMode,
+			ResponseProviderMessageIdPath = settings.ResponseProviderMessageIdPath,
+			Headers = settings.Headers.ToDictionary(
+				item => item.Key,
+				_ => string.Empty,
+				StringComparer.OrdinalIgnoreCase),
+			Parameters = settings.Parameters.ToDictionary(
+				item => item.Key,
+				_ => string.Empty,
+				StringComparer.OrdinalIgnoreCase),
+			CallbackSecret = null,
+			HasStoredHeaderValues = settings.Headers.Values.Any(value =>
+				!string.IsNullOrWhiteSpace(value)),
+			HasStoredParameterValues = settings.Parameters.Values.Any(value =>
+				!string.IsNullOrWhiteSpace(value)),
+			HasCallbackSecret = !string.IsNullOrWhiteSpace(settings.CallbackSecret),
+			CallbackMappings = settings.CallbackMappings
+		};
 	}
 
 	private static void ValidateProviderEndpoint(

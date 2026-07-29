@@ -56,6 +56,10 @@ public class AdmissionCrmPlacementOptionDto
 	public Guid DivisionId { get; set; }
 	public string DivisionName { get; set; } = string.Empty;
 	public int DivisionStrength { get; set; }
+	public bool CapacityConfigured { get; set; }
+	public int ActiveStudentCount { get; set; }
+	public int PendingActivationCount { get; set; }
+	public int? RemainingCapacity { get; set; }
 }
 
 public class AdmissionCrmActivationReadinessItemDto

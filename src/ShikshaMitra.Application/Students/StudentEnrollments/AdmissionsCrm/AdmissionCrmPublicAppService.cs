@@ -87,6 +87,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private readonly IRepository<AdmissionCrmActivation, Guid> _activationRepository;
 	private readonly IRepository<AdmissionCrmExamSlot, Guid> _slotRepository;
 	private readonly IRepository<AdmissionCrmInquirySource, Guid> _inquirySourceRepository;
+	private readonly IRepository<AdmissionCrmInquiryType, Guid> _inquiryTypeRepository;
+	private readonly IRepository<AdmissionCrmAdmissionYearSetup, Guid> _admissionYearRepository;
 	private readonly IAdmissionCrmCommunicationDispatcher _dispatcher;
 	private readonly IAdmissionCrmLeadAppService _leadAppService;
 	private readonly IAdmissionCrmDocumentAppService _documentAppService;
@@ -119,6 +121,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		IRepository<AdmissionCrmActivation, Guid> activationRepository,
 		IRepository<AdmissionCrmExamSlot, Guid> slotRepository,
 		IRepository<AdmissionCrmInquirySource, Guid> inquirySourceRepository,
+		IRepository<AdmissionCrmInquiryType, Guid> inquiryTypeRepository,
+		IRepository<AdmissionCrmAdmissionYearSetup, Guid> admissionYearRepository,
 		IAdmissionCrmCommunicationDispatcher dispatcher,
 		IAdmissionCrmLeadAppService leadAppService,
 		IAdmissionCrmDocumentAppService documentAppService,
@@ -150,6 +154,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		_activationRepository = activationRepository;
 		_slotRepository = slotRepository;
 		_inquirySourceRepository = inquirySourceRepository;
+		_inquiryTypeRepository = inquiryTypeRepository;
+		_admissionYearRepository = admissionYearRepository;
 		_dispatcher = dispatcher;
 		_leadAppService = leadAppService;
 		_documentAppService = documentAppService;
@@ -192,6 +198,18 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			ValidatePublicSubmission(template, fields, input);
 
 			var mapped = MapSystemFields(fields, input.FieldValues);
+			var admissionYearSetup = await GetAdmissionYearSetupForCaptureAsync(template.AcademicYearId);
+			var targetStandardId = ParseGuid(GetValue(mapped, "TargetStandardId"));
+			var intendedRouteType = ResolveDefaultPublicRoute(admissionYearSetup);
+			if (admissionYearSetup is not null)
+			{
+				EnsurePublishedAdmissionYearCaptureFields(mapped);
+				ValidateAdmissionYearScope(
+					admissionYearSetup,
+					targetStandardId,
+					intendedRouteType);
+			}
+
 			var routingSettings = AdmissionCrmLeadRoutingRuleMatcher.DeserializeSettings(
 				configuration.LeadRoutingRulesJson);
 			var trackedOwnerUserId = ResolvePublicTrackedOwnerUserId(
@@ -201,14 +219,20 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 				routingSettings);
 			var ownerUserId = trackedOwnerUserId ?? channelSetting.DefaultOwnerUserId;
 			var now = Clock.Now;
-			var inquirySourceSnapshot = await GetInquirySourceSnapshotAsync(
-				channelSetting.DefaultInquirySourceId);
+			var inquirySource = await ResolvePublicInquirySourceAsync(
+				template.AcademicYearId,
+				template.Channel,
+				channelSetting.DefaultInquirySourceId,
+				admissionYearSetup is not null);
+			var inquiryType = await ResolveDefaultInquiryTypeAsync(
+				template.AcademicYearId,
+				admissionYearSetup is not null);
 			var lead = new AdmissionInquiryLead(
 				GuidGenerator.Create(),
 				tenantId,
 				template.AcademicYearId,
-				channelSetting.DefaultInquirySourceId,
-				inquirySourceSnapshot,
+				inquirySource?.Id,
+				inquirySource?.DisplayName,
 				template.Channel,
 				GetValue(mapped, "CampaignName"),
 				GetValue(mapped, "CampusBranchName"),
@@ -221,10 +245,31 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 				GetValue(mapped, "PrimaryContactNo"),
 				GetValue(mapped, "Email"),
 				GetRequiredValue(mapped, "AdmissionIntent", "AdmissionCrm:PublicSubmissionIntentRequired"),
-				ParseGuid(GetValue(mapped, "TargetStandardId")),
+				targetStandardId,
 				GetValue(mapped, "DesiredClassName"),
 				notes: null,
-				now);
+				now,
+				intendedRouteType,
+				intendedRouteDefinitionId: null,
+				intendedRouteDefinitionVersion: null,
+				intendedRouteNameSnapshot: intendedRouteType.HasValue
+					? GetAdmissionRouteLabel(intendedRouteType.Value)
+					: null);
+			lead.ApplyInquiryType(inquiryType?.Id, inquiryType?.DisplayName);
+			if (admissionYearSetup is not null)
+			{
+				lead.ApplyAdmissionYearSetup(
+					admissionYearSetup.Id,
+					admissionYearSetup.Version,
+					admissionYearSetup.PublishedSnapshotJson!);
+			}
+			else
+			{
+				lead.ApplyAdmissionYearSetup(
+					null,
+					0,
+					BuildLegacyAdmissionYearSnapshot(configuration));
+			}
 			lead.UpdateScore(AdmissionCrmLeadScoreCalculator.Calculate(
 				lead,
 				AdmissionCrmLeadScoreCalculator.DeserializeRules(configuration.LeadScoringRulesJson)));
@@ -704,6 +749,16 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			throw new BusinessException("AdmissionCrm:PublicFormNotFound")
 				.WithData("TemplateId", template.Id);
 		}
+
+		var admissionYearSetup = await GetAdmissionYearSetupForCaptureAsync(template.AcademicYearId);
+		await ResolvePublicInquirySourceAsync(
+			template.AcademicYearId,
+			template.Channel,
+			channelSetting.DefaultInquirySourceId,
+			admissionYearSetup is not null);
+		await ResolveDefaultInquiryTypeAsync(
+			template.AcademicYearId,
+			admissionYearSetup is not null);
 	}
 
 	private async Task<AdmissionCrmCycleConfiguration> GetCycleConfigurationOrDefaultAsync(Guid academicYearId)
@@ -717,19 +772,202 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
 			academicYearId,
-			"Default Admission Cycle");
+			"Default Admission Year");
 	}
 
-	private async Task<string?> GetInquirySourceSnapshotAsync(Guid? inquirySourceId)
+	private async Task<AdmissionCrmAdmissionYearSetup?> GetAdmissionYearSetupForCaptureAsync(
+		Guid academicYearId)
 	{
-		if (!inquirySourceId.HasValue)
+		var setups = await _admissionYearRepository.GetListAsync(setup =>
+			setup.TenantId == CurrentTenant.Id &&
+			setup.AcademicYearId == academicYearId);
+		if (setups.Count == 0)
 		{
 			return null;
 		}
 
-		var inquirySource = await _inquirySourceRepository.GetAsync(inquirySourceId.Value);
-		return inquirySource.DisplayName;
+		var published = setups.SingleOrDefault(setup =>
+			setup.Status == AdmissionCrmAdmissionYearSetupStatus.Published);
+		if (published is null)
+		{
+			var latest = setups.OrderByDescending(setup => setup.Version).First();
+			throw new BusinessException("AdmissionCrm:AdmissionYearNotOpen")
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("Status", latest.Status)
+				.WithData("Version", latest.Version);
+		}
+
+		published.EnsureInquiryCaptureAllowed(Clock.Now);
+		if (string.IsNullOrWhiteSpace(published.PublishedSnapshotJson))
+		{
+			throw new BusinessException("AdmissionCrm:AdmissionYearSnapshotMissing")
+				.WithData("SetupId", published.Id)
+				.WithData("Version", published.Version);
+		}
+
+		return published;
 	}
+
+	private async Task<AdmissionCrmInquirySource?> ResolvePublicInquirySourceAsync(
+		Guid academicYearId,
+		AdmissionInquiryChannel channel,
+		Guid? inquirySourceId,
+		bool required)
+	{
+		if (!inquirySourceId.HasValue)
+		{
+			if (required)
+			{
+				throw new BusinessException("AdmissionCrm:InquirySourceRequired")
+					.WithData("AcademicYearId", academicYearId)
+					.WithData("Channel", channel);
+			}
+
+			return null;
+		}
+
+		var source = await _inquirySourceRepository.FindAsync(inquirySourceId.Value);
+		if (source is null ||
+			source.TenantId != CurrentTenant.Id ||
+			source.AcademicYearId != academicYearId ||
+			!source.IsActive ||
+			!source.Supports(channel))
+		{
+			throw new BusinessException("AdmissionCrm:InquirySourceUnavailable")
+				.WithData("InquirySourceId", inquirySourceId.Value)
+				.WithData("AcademicYearId", academicYearId)
+				.WithData("Channel", channel);
+		}
+
+		return source;
+	}
+
+	private async Task<AdmissionCrmInquiryType?> ResolveDefaultInquiryTypeAsync(
+		Guid academicYearId,
+		bool required)
+	{
+		var queryable = await _inquiryTypeRepository.GetQueryableAsync();
+		var inquiryType = await AsyncExecuter.FirstOrDefaultAsync(
+			queryable
+				.Where(type =>
+					type.TenantId == CurrentTenant.Id &&
+					type.AcademicYearId == academicYearId &&
+					type.IsActive)
+				.OrderBy(type => type.DisplayOrder)
+				.ThenBy(type => type.DisplayName));
+		if (inquiryType is null && required)
+		{
+			throw new BusinessException("AdmissionCrm:InquiryTypeRequired")
+				.WithData("AcademicYearId", academicYearId);
+		}
+
+		return inquiryType;
+	}
+
+	private static AdmissionCrmRouteType? ResolveDefaultPublicRoute(
+		AdmissionCrmAdmissionYearSetup? setup)
+	{
+		if (setup is null)
+		{
+			return null;
+		}
+
+		var routeTypes =
+			JsonSerializer.Deserialize<HashSet<AdmissionCrmRouteType>>(setup.RouteTypesJson, JsonOptions) ?? [];
+		if (routeTypes.Count == 0)
+		{
+			throw new BusinessException("AdmissionCrm:AdmissionYearRoutesRequired")
+				.WithData("AcademicYearId", setup.AcademicYearId)
+				.WithData("SetupVersion", setup.Version);
+		}
+
+		return routeTypes.Contains(AdmissionCrmRouteType.Fresh)
+			? AdmissionCrmRouteType.Fresh
+			: routeTypes.OrderBy(route => (int)route).First();
+	}
+
+	private static void ValidateAdmissionYearScope(
+		AdmissionCrmAdmissionYearSetup setup,
+		Guid? targetStandardId,
+		AdmissionCrmRouteType? routeType)
+	{
+		if (!targetStandardId.HasValue)
+		{
+			throw new BusinessException("AdmissionCrm:TargetStandardRequired")
+				.WithData("AcademicYearId", setup.AcademicYearId)
+				.WithData("SetupVersion", setup.Version);
+		}
+
+		var standardIds =
+			JsonSerializer.Deserialize<HashSet<Guid>>(setup.TargetStandardIdsJson, JsonOptions) ?? [];
+		if (!standardIds.Contains(targetStandardId.Value))
+		{
+			throw new BusinessException("AdmissionCrm:StandardNotOpenForAdmission")
+				.WithData("AcademicYearId", setup.AcademicYearId)
+				.WithData("TargetStandardId", targetStandardId.Value)
+				.WithData("SetupVersion", setup.Version);
+		}
+
+		var routeTypes =
+			JsonSerializer.Deserialize<HashSet<AdmissionCrmRouteType>>(setup.RouteTypesJson, JsonOptions) ?? [];
+		var effectiveRoute = routeType ?? AdmissionCrmRouteType.Fresh;
+		if (!routeTypes.Contains(effectiveRoute))
+		{
+			throw new BusinessException("AdmissionCrm:RouteNotOpenForAdmission")
+				.WithData("AcademicYearId", setup.AcademicYearId)
+				.WithData("RouteType", effectiveRoute)
+				.WithData("SetupVersion", setup.Version);
+		}
+	}
+
+	private static void EnsurePublishedAdmissionYearCaptureFields(
+		IReadOnlyDictionary<string, string?> mapped)
+	{
+		if (string.IsNullOrWhiteSpace(GetValue(mapped, "ParentGuardianName")))
+		{
+			throw new BusinessException("AdmissionCrm:ParentGuardianNameRequired");
+		}
+
+		if (string.IsNullOrWhiteSpace(GetValue(mapped, "PrimaryContactNo")))
+		{
+			throw new BusinessException("AdmissionCrm:GuardianMobileRequired");
+		}
+	}
+
+	private static string BuildLegacyAdmissionYearSnapshot(
+		AdmissionCrmCycleConfiguration configuration)
+	{
+		return JsonSerializer.Serialize(
+			new
+			{
+				schemaVersion = 0,
+				source = "legacy-cycle-configuration",
+				configuration.AcademicYearId,
+				configuration.EntranceExamRequired,
+				FinanceVerificationRequired = false,
+				PlacementTiming = AdmissionCrmPlacementTiming.StandardBeforeActivation
+			},
+			JsonOptions);
+	}
+
+	private static string GetAdmissionRouteLabel(AdmissionCrmRouteType routeType) => routeType switch
+	{
+		AdmissionCrmRouteType.Fresh => "Fresh admission",
+		AdmissionCrmRouteType.SiblingPriority => "Sibling priority",
+		AdmissionCrmRouteType.AlumniPreference => "Alumni preference",
+		AdmissionCrmRouteType.StaffChild => "Staff child",
+		AdmissionCrmRouteType.RteEws => "RTE / EWS",
+		AdmissionCrmRouteType.Transfer => "Transfer",
+		AdmissionCrmRouteType.Lateral => "Lateral entry",
+		AdmissionCrmRouteType.MidYear => "Mid-year admission",
+		AdmissionCrmRouteType.ReturningStudent => "Returning student",
+		AdmissionCrmRouteType.Interstate => "Interstate transfer",
+		AdmissionCrmRouteType.OverseasReturn => "Overseas return",
+		AdmissionCrmRouteType.Direct => "Direct registration",
+		AdmissionCrmRouteType.ManagementApproved => "Management approved",
+		AdmissionCrmRouteType.SchoolDefined => "School-defined",
+		_ => routeType.ToString()
+	};
 
 	private async Task<(AdmissionApplicantStatusAccess Access, AdmissionInquiryLead Lead)> GetStatusAccessAndLeadAsync(
 		string token)

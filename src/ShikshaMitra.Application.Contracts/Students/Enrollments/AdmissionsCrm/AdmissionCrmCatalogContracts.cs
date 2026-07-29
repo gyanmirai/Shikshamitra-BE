@@ -29,6 +29,25 @@ public class AdmissionCrmInquirySourceDto : AdmissionCrmInquirySourceUpsertDto
 	public string? DeactivationReason { get; set; }
 }
 
+public class AdmissionCrmInquiryTypeUpsertDto
+{
+	[Required, MaxLength(AdmissionCrmConsts.MaxPlaybookCodeLength)]
+	public string Code { get; set; } = string.Empty;
+	[Required, MaxLength(AdmissionCrmConsts.MaxSourceSnapshotLength)]
+	public string DisplayName { get; set; } = string.Empty;
+	[MaxLength(AdmissionCrmConsts.MaxDescriptionLength)]
+	public string? Description { get; set; }
+	public int DisplayOrder { get; set; }
+}
+
+public class AdmissionCrmInquiryTypeDto : AdmissionCrmInquiryTypeUpsertDto
+{
+	public Guid Id { get; set; }
+	public Guid AcademicYearId { get; set; }
+	public bool IsActive { get; set; }
+	public string? DeactivationReason { get; set; }
+}
+
 public class AdmissionCrmCatalogStatusDto
 {
 	public bool IsActive { get; set; }
@@ -94,6 +113,10 @@ public interface IAdmissionCrmCatalogAppService : IApplicationService
 	Task<AdmissionCrmInquirySourceDto> CreateInquirySourceAsync(Guid academicYearId, AdmissionCrmInquirySourceUpsertDto input);
 	Task<AdmissionCrmInquirySourceDto> UpdateInquirySourceAsync(Guid id, AdmissionCrmInquirySourceUpsertDto input);
 	Task<AdmissionCrmInquirySourceDto> SetInquirySourceStatusAsync(Guid id, AdmissionCrmCatalogStatusDto input);
+	Task<PagedResultDto<AdmissionCrmInquiryTypeDto>> GetInquiryTypesAsync(Guid academicYearId, bool includeInactive = true);
+	Task<AdmissionCrmInquiryTypeDto> CreateInquiryTypeAsync(Guid academicYearId, AdmissionCrmInquiryTypeUpsertDto input);
+	Task<AdmissionCrmInquiryTypeDto> UpdateInquiryTypeAsync(Guid id, AdmissionCrmInquiryTypeUpsertDto input);
+	Task<AdmissionCrmInquiryTypeDto> SetInquiryTypeStatusAsync(Guid id, AdmissionCrmCatalogStatusDto input);
 	Task<PagedResultDto<AdmissionCrmExamSlotDto>> GetExamSlotsAsync(Guid academicYearId, DateTimeOffset? from = null, DateTimeOffset? to = null, bool includeInactive = false);
 	Task<AdmissionCrmExamSlotDto> CreateExamSlotAsync(Guid academicYearId, AdmissionCrmExamSlotUpsertDto input);
 	Task<AdmissionCrmExamSlotDto> UpdateExamSlotAsync(Guid id, AdmissionCrmExamSlotUpsertDto input);

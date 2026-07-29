@@ -2530,6 +2530,13 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			},
 			JsonOptions);
 		manualProviderResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await manualProviderResponse.Content.ReadAsStringAsync());
+		var manualProvider = await manualProviderResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmCommunicationProviderDto>(JsonOptions);
+		manualProvider.ShouldNotBeNull();
+		manualProvider.Settings.Headers["X-School"].ShouldBeEmpty();
+		manualProvider.Settings.Parameters["templateLanguage"].ShouldBeEmpty();
+		manualProvider.Settings.HasStoredHeaderValues.ShouldBeTrue();
+		manualProvider.Settings.HasStoredParameterValues.ShouldBeTrue();
 
 		var manualDispatchResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/messages/send-template",
@@ -2605,6 +2612,11 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			},
 			JsonOptions);
 		updateProviderResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateProviderResponse.Content.ReadAsStringAsync());
+		var protectedProvider = await updateProviderResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmCommunicationProviderDto>(JsonOptions);
+		protectedProvider.ShouldNotBeNull();
+		protectedProvider.Settings.CallbackSecret.ShouldBeNull();
+		protectedProvider.Settings.HasCallbackSecret.ShouldBeTrue();
 
 		var sendResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/messages/send-template",

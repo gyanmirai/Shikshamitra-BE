@@ -17,6 +17,8 @@ public class AdmissionInquiryLeadConfiguration : IEntityTypeConfiguration<Admiss
 
 		builder.Property(x => x.InquirySourceSnapshot)
 			.HasMaxLength(AdmissionCrmConsts.MaxSourceSnapshotLength);
+		builder.Property(x => x.InquiryTypeSnapshot)
+			.HasMaxLength(AdmissionCrmConsts.MaxSourceSnapshotLength);
 		builder.Property(x => x.CampaignName)
 			.HasMaxLength(AdmissionCrmConsts.MaxCampaignLength);
 		builder.Property(x => x.CampusBranchName)
@@ -57,6 +59,8 @@ public class AdmissionInquiryLeadConfiguration : IEntityTypeConfiguration<Admiss
 			.HasMaxLength(AdmissionCrmConsts.MaxNotesLength);
 		builder.Property(x => x.DuplicateContinueReason)
 			.HasMaxLength(AdmissionCrmConsts.MaxNotesLength);
+		builder.Property(x => x.AdmissionYearSetupSnapshotJson)
+			.HasColumnType("jsonb");
 		builder.Property(x => x.RegistrationFormNumber)
 			.HasMaxLength(AdmissionCrmConsts.MaxRegistrationFormNumberLength);
 		builder.Property(x => x.Channel)
@@ -77,8 +81,18 @@ public class AdmissionInquiryLeadConfiguration : IEntityTypeConfiguration<Admiss
 			.WithMany()
 			.HasForeignKey(x => x.IntendedRouteDefinitionId)
 			.OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne(x => x.InquiryType)
+			.WithMany()
+			.HasForeignKey(x => x.InquiryTypeId)
+			.OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<AdmissionCrmAdmissionYearSetup>()
+			.WithMany()
+			.HasForeignKey(x => x.AdmissionYearSetupId)
+			.OnDelete(DeleteBehavior.Restrict);
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Stage });
+		builder.HasIndex(x => new { x.TenantId, x.AdmissionYearSetupId });
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.InquiryTypeId });
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Priority });
 		builder.HasIndex(x => new { x.TenantId, x.MergedIntoLeadId });
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.NormalizedPrimaryContactNo });

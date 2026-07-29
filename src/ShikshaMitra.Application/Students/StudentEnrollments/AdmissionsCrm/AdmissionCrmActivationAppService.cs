@@ -157,18 +157,52 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 			academicYearId);
 		var divisions = await AsyncExecuter.ToListAsync(divisionQuery
 			.Select(x => new { x.Id, x.StandardId, x.Name, x.Strength }));
+		var divisionIds = divisions.Select(x => x.Id).ToList();
+		var studentQueryable = await _studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var activeStudentCounts = await AsyncExecuter.ToListAsync(
+			studentQueryable
+				.Where(x =>
+					x.TenantId == CurrentTenant.Id &&
+					x.AcademicYearId == academicYearId &&
+					x.DivisionId.HasValue &&
+					divisionIds.Contains(x.DivisionId.Value) &&
+					x.Status == StudentLifeCycleStatusEnum.Enrolled)
+				.GroupBy(x => x.DivisionId!.Value)
+				.Select(group => new { DivisionId = group.Key, Count = group.Count() }));
+		var activationQueryable = await _activationRepository.GetQueryableAsync();
+		var pendingActivationCounts = await AsyncExecuter.ToListAsync(
+			activationQueryable
+				.Where(x =>
+					x.TenantId == CurrentTenant.Id &&
+					x.AcademicYearId == academicYearId &&
+					divisionIds.Contains(x.DivisionId) &&
+					x.Status != AdmissionCrmActivationStatus.Draft &&
+					x.Status != AdmissionCrmActivationStatus.FirstDayReady &&
+					x.Status != AdmissionCrmActivationStatus.Cancelled)
+				.GroupBy(x => x.DivisionId)
+				.Select(group => new { DivisionId = group.Key, Count = group.Count() }));
+		var activeByDivision = activeStudentCounts.ToDictionary(x => x.DivisionId, x => x.Count);
+		var pendingByDivision = pendingActivationCounts.ToDictionary(x => x.DivisionId, x => x.Count);
 		return (from board in boards
 			join medium in mediums on board.Id equals medium.EducationBoardId
 			join stage in stages on medium.Id equals stage.EducationMediumId
 			join standard in standards on stage.Id equals standard.EducationMediumStageId
 			join division in divisions on standard.Id equals division.StandardId
+			let activeCount = activeByDivision.GetValueOrDefault(division.Id)
+			let pendingCount = pendingByDivision.GetValueOrDefault(division.Id)
+			let capacityConfigured = division.Strength > 0
 			orderby board.Type, medium.Name, stage.Name, standard.Name, division.Name
 			select new AdmissionCrmPlacementOptionDto
 			{
 				EducationBoardId = board.Id, BoardName = board.Type.ToString(), AcademicMediumId = medium.Id,
 				MediumName = medium.Name, AcademicMediumStageId = stage.Id, StageName = stage.Name,
 				StandardId = standard.Id, StandardName = standard.Name, DivisionId = division.Id,
-				DivisionName = division.Name, DivisionStrength = division.Strength
+				DivisionName = division.Name, DivisionStrength = division.Strength,
+				CapacityConfigured = capacityConfigured, ActiveStudentCount = activeCount,
+				PendingActivationCount = pendingCount,
+				RemainingCapacity = capacityConfigured
+					? Math.Max(0, division.Strength - activeCount - pendingCount)
+					: null
 			}).ToList();
 	}
 

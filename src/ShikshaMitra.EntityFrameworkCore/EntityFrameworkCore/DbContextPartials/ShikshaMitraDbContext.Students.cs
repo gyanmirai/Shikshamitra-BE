@@ -29,9 +29,11 @@ public partial class ShikshaMitraDbContext
     public DbSet<StudentNote> StudentNotes { get; set; }
     public DbSet<AdmissionInquiryLead> AdmissionInquiryLeads { get; set; }
     public DbSet<AdmissionCrmInquirySource> AdmissionCrmInquirySources { get; set; }
+    public DbSet<AdmissionCrmInquiryType> AdmissionCrmInquiryTypes { get; set; }
     public DbSet<AdmissionCrmExamSlot> AdmissionCrmExamSlots { get; set; }
     public DbSet<AdmissionCrmDocumentType> AdmissionCrmDocumentTypes { get; set; }
     public DbSet<AdmissionCrmCycleConfiguration> AdmissionCrmCycleConfigurations { get; set; }
+    public DbSet<AdmissionCrmAdmissionYearSetup> AdmissionCrmAdmissionYearSetups { get; set; }
     public DbSet<AdmissionCrmPipelineStage> AdmissionCrmPipelineStages { get; set; }
     public DbSet<AdmissionInquiryFormTemplate> AdmissionInquiryFormTemplates { get; set; }
     public DbSet<AdmissionInquiryFormSubmission> AdmissionInquiryFormSubmissions { get; set; }

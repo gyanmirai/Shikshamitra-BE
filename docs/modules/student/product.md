@@ -3,66 +3,80 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-07-11
+updated_on: 2026-07-28
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Understand Student product behavior
 
-TL;DR: Student owns inquiry, registration, admission, student records, attendance, leave, compliance, certificates, and dashboard previews.
-Only part of that surface has deep written behavior docs today, so use source paths before making broad claims.
+TL;DR: Student owns pre-admission enrollment, active student records, attendance, leave, compliance, certificates, and dashboard previews.
+Student Enrollment is being refined around Admission Year Setup and a per-applicant Stepper where Pipeline is the source of truth before activation.
 
 ## Product areas
 
 | Area | Status | Behavior owned by Student |
 |---|---|---|
-| Enrollment inquiry | Implemented and future-state documented | Inquiry capture, notes, settings, entrance exam, lead-source tracking, and admissions CRM |
-| Registration | Implemented and future-state documented | General details, configurable forms, family, communication, bank, medical, previous school, documents, and readiness |
-| Admission | Implemented with future-state suite | Offers, seats, financial conditions, household resolution, final approval, Student activation, placement, and access |
-| Student records | Implemented | Student list, management, bulk upload, dashboard preview, and settings |
+| Student Enrollment | Refined requirement baseline | Inquiry capture, owner assignment, entrance exam flow, registration, Finance handoff status, placement review, activation, and parent communication |
+| Student Records | Implemented | Active student list, management, bulk upload, profile, dashboard preview, and records settings |
 | Attendance and leave | Implemented | Student attendance days, entries, leave requests, and leave type settings |
 | Compliance | Implemented | Student identity compliance workflow |
 | Certificates | Implemented | Student certificates and certificate templates |
-| Inquiry Source | Focused documented surface | Product label for compatibility route `inquiry-preferences` |
+| Inquiry Source | Implemented compatibility surface | Product label for compatibility route `inquiry-preferences` |
 
 ## Student Enrollment ownership boundary
 
-The [Student Enrollment Master Blueprint](./prd-student-enrollment-master-blueprint.md) is the canonical functional source for the complete future enrollment journey.
-Student Enrollment begins with an inquiry, direct registration, government allotment, transfer, re-entry, or another configured admission route.
-Student Enrollment ends when the admitted student is academically first-day ready with required identifiers, academic placement, and access.
-Student Enrollment may hand optional service interests to other modules but does not fulfil transport, hostel, library, health, uniform, meal, or similar services.
-Finance remains authoritative for monetary posting, receipts, settlement, reconciliation, and refund execution.
-Student Records owns active-student changes and the long-term lifecycle after the controlled activation-cancellation window.
+[Student Enrollment operating workflow](./prd-student-enrollment.md) is the current functional source for the refined admissions requirement.
+Student Enrollment begins when an applicant is captured in Pipeline for an academic year.
+Even direct registration, management referral, transfer, RTE, or government-allotment cases must create a Pipeline inquiry record first.
+Student Enrollment ends when the applicant is activated and handed to Student Records as an active student.
+Student Enrollment owns applicant progression, admission communication, registration readiness, Finance handoff status, placement review, and activation orchestration.
+Finance owns fee posting, receipts, settlement, reconciliation, concessions, and refunds.
+Institute Setup and Class Management own academic structure, class or division capacity, and active-student counts used for placement decisions.
+Student Records owns the active student's long-term lifecycle after activation.
 
-## Enrollment PRD coverage
+## Production Enrollment baseline
 
-| Product area | Canonical source |
+| Capability | Baseline rule |
 |---|---|
-| Complete journey and ownership | [Student Enrollment Master Blueprint](./prd-student-enrollment-master-blueprint.md) |
-| Inquiry CRM and entrance-exam eligibility | [Inquiry to Entrance Exam Admissions CRM](./prd-inquiry-entrance-exam-crm.md) |
-| Playbooks, registration, documents, and readiness | [Admissions Playbook, Registration, Documents, and Exam Configuration](./prd-admissions-playbook-registration-documents-exam-configuration.md) |
-| Offers, seats, waitlists, and final decisions | [Final Admission, Offers, and Seat Allocation](./prd-final-admission-offers-seat-allocation.md) |
-| Financial admission conditions | [Enrollment Fees, Concessions, and Payment Handoff](./prd-enrollment-fees-concessions-payment-handoff.md) |
-| Households, guardians, and identity | [Household, Guardian, Identity, and Compliance](./prd-household-guardian-identity-compliance.md) |
-| Student activation, placement, and access | [Student Activation, Academic Placement, and Access](./prd-student-activation-academic-placement-access.md) |
-| Route-specific admission behavior | [Special Admission Routes](./prd-special-admission-routes.md) |
-| CBSE, Gujarat, RTE, and state-board policy | [Indian Admission Policy Packs](./prd-indian-admission-policy-packs.md) |
-| Operations, analytics, and governance | [Enrollment Operations, Analytics, and Governance](./prd-enrollment-operations-analytics-governance.md) |
+| Pipeline | Required for every applicant and fixed enough for supportable reporting |
+| Admission Year Setup | Admission-specific rules attached to an Institute Setup academic year |
+| Applicant Stepper | Visible progress through Inquiry, Exam, Registration, Finance, Placement, and Activation |
+| Inquiry settings | Inquiry sources, inquiry types, default owner, owner pool, and quick-capture required fields are configurable |
+| Entrance exam | Optional by academic year, standard, route, and school policy |
+| Registration | Required before activation and configurable by section, field, document, language, and route |
+| Finance handoff | Enrollment requests or displays Finance verification but does not own payment accounting |
+| Placement | Required, with timing configurable between standard-only and division-before-activation |
+| Activation | Converts applicant to active Student only after configured gates pass |
+| Communication | Required templates and simple reminders for key moments, with write-only provider credentials and delivery status based on provider evidence |
+
+## Advanced surfaces deferred from the production baseline
+
+Simple admission reminders are part of Communication Settings.
+A separate Automation settings page, SLA escalation, forecasts, retention policies, privacy requests, waitlist forecasting, provider-specific adapters, and advanced analytics are outside the production Enrollment baseline.
+They may remain in code where already implemented, but the production requirement should not present them as required school configuration.
+GR number automation is reserved for activation and can be implemented in a later slice.
 
 ## Data-integrity rules
 
 | Rule | Consequence |
 |---|---|
+| Pipeline is canonical before activation | No applicant should bypass inquiry capture, even when staff proceeds directly to registration |
+| Admission setup belongs to the academic year | Enrollment must extend the Institute Setup academic year rather than creating a parallel school-year model |
+| Published setup is versioned | Existing applicants retain the Admission Year Setup version that determined their completed, skipped, and blocked steps |
+| Duplicate inquiry prevention | Likely matches should open the existing applicant or require an authorized continue reason |
+| Stepper state must be explainable | Every skipped, blocked, reopened, or completed step must have rule or audit evidence |
 | Student identity data is critical | Do not silently mutate student, parent, contact, medical, or compliance data |
-| Enrollment settings must preserve history | Inactive Inquiry Sources remain visible on records that already use them |
-| Academic scope affects reports and fees | Board, medium, standard, division, and academic year must remain consistent |
-| Documents need access audit | Sensitive student documents must not be exposed without traceability |
-| Attendance affects reporting | Student attendance mutations must preserve date and student consistency |
+| Enrollment settings must preserve history | Inactive Inquiry Sources and historical configuration labels remain visible on records that already use them |
+| Academic structure belongs to Institute Setup and Class Management | Enrollment must not duplicate board, medium, standard, division, or capacity truth |
+| Finance owns money | Enrollment must not claim paid status unless Finance returned or verified it |
+| Parent communication must be honest | Delivery success must not be inferred from template configuration alone |
+| Provider credentials are write-only | Stored header values, parameter values, and callback secrets are redacted from every read response |
+| Admission reports enforce scope | Report totals and groupings must use tenant, academic-year, UserScope, date, and standard filters on the server |
+| Activation is a boundary | Ordinary active-student lifecycle changes belong to Student Records after activation |
 
 ## Documentation status
 
-The Student Enrollment future-state product surface is covered by the master PRD suite.
-The [Student Enrollment implementation record](./implementation-student-enrollment-master-blueprint.md) maps that suite to the validated release baseline.
-The remaining Student product areas still require source-code review where focused behavior documentation is not available.
-When adding or changing Student behavior, update [api.md](./api.md), [workflows.md](./workflows.md), and [testing.md](./testing.md).
+The refined Student Enrollment requirement is the canonical production baseline.
+When changing Enrollment behavior, update [prd-student-enrollment.md](./prd-student-enrollment.md), [api.md](./api.md), [workflows.md](./workflows.md), and [testing.md](./testing.md).
+Frontend route and screen documentation remains in [Student frontend docs](../../../../Shikshamitra-FE/docs/student/README.md).

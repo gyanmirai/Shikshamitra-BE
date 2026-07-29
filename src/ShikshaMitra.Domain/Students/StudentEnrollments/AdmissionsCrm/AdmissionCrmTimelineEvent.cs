@@ -16,6 +16,7 @@ public class AdmissionCrmTimelineEvent : Entity<Guid>, IMultiTenant
 	public Guid? RelatedEntityId { get; private set; }
 	public Guid? ActorUserId { get; private set; }
 	public DateTimeOffset OccurredAt { get; private set; }
+	public DateTime OccurredAtUtc { get; private set; }
 
 	protected AdmissionCrmTimelineEvent()
 	{
@@ -46,6 +47,7 @@ public class AdmissionCrmTimelineEvent : Entity<Guid>, IMultiTenant
 		RelatedEntityId = relatedEntityId;
 		ActorUserId = actorUserId;
 		OccurredAt = occurredAt;
+		OccurredAtUtc = occurredAt.UtcDateTime;
 	}
 
 	private static string? NormalizeOptional(string? value, string name, int maxLength)

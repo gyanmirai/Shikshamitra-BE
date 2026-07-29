@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Security.UserScope;
@@ -108,7 +109,7 @@ public class AdmissionCrmStudentActivationOrchestrator : ITransientDependency
 		}
 
 		var username = student.GrNo?.ToString() ?? await GenerateUniqueUsernameAsync(student.FirstName, student.LastName);
-		var password = BuildInitialPassword(username, student.ContactDetail?.PrimaryContactNo);
+		var password = BuildUnsharedTemporaryPassword();
 		var user = new IdentityUser(_guidGenerator.Create(), username, email, student.TenantId)
 		{
 			Name = student.FirstName,
@@ -123,7 +124,12 @@ public class AdmissionCrmStudentActivationOrchestrator : ITransientDependency
 		}
 
 		await EnsureRoleAsync(user, "Student", student.Id);
-		await TrySendCredentialsAsync(email, $"{student.FirstName} {student.LastName}".Trim(), username, password, student.Id);
+		await TrySendAccountSetupAsync(
+			user,
+			email,
+			$"{student.FirstName} {student.LastName}".Trim(),
+			username,
+			student.Id);
 	}
 
 	private async Task EnsureGuardianAccountAsync(Student student)
@@ -147,7 +153,7 @@ public class AdmissionCrmStudentActivationOrchestrator : ITransientDependency
 		var firstName = nameParts.FirstOrDefault() ?? "parent";
 		var lastName = nameParts.Length > 1 ? nameParts[^1] : "user";
 		var username = await GenerateUniqueUsernameAsync(firstName, lastName);
-		var password = BuildInitialPassword(username, guardian.Details.ContactNo);
+		var password = BuildUnsharedTemporaryPassword();
 		var user = new IdentityUser(_guidGenerator.Create(), username, email, student.TenantId)
 		{
 			Name = firstName,
@@ -163,7 +169,12 @@ public class AdmissionCrmStudentActivationOrchestrator : ITransientDependency
 
 		await EnsureRoleAsync(user, "Parent", student.Id);
 		var studentName = $"{student.FirstName} {student.LastName}".Trim();
-		await TrySendCredentialsAsync(email, $"{fullName} ({guardian.Type} of {studentName})", username, password, student.Id);
+		await TrySendAccountSetupAsync(
+			user,
+			email,
+			$"{fullName} ({guardian.Type} of {studentName})",
+			username,
+			student.Id);
 	}
 
 	private static (ParentGuardianDetails? Details, string Type) SelectGuardian(Student student)
@@ -194,13 +205,8 @@ public class AdmissionCrmStudentActivationOrchestrator : ITransientDependency
 		return username;
 	}
 
-	private static string BuildInitialPassword(string username, string? mobile)
-	{
-		var normalizedMobile = string.IsNullOrWhiteSpace(mobile) ? "0000" : mobile;
-		var lastFour = normalizedMobile.Length >= 4 ? normalizedMobile[^4..] : "0000";
-		var normalizedUsername = char.ToUpperInvariant(username[0]) + username[1..];
-		return $"{normalizedUsername}@{lastFour}";
-	}
+	private static string BuildUnsharedTemporaryPassword() =>
+		$"Aa1!{Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))}";
 
 	private async Task EnsureRoleAsync(IdentityUser user, string roleName, Guid studentId)
 	{
@@ -219,15 +225,30 @@ public class AdmissionCrmStudentActivationOrchestrator : ITransientDependency
 		}
 	}
 
-	private async Task TrySendCredentialsAsync(string email, string displayName, string username, string password, Guid studentId)
+	private async Task TrySendAccountSetupAsync(
+		IdentityUser user,
+		string email,
+		string displayName,
+		string username,
+		Guid studentId)
 	{
 		try
 		{
-			await _studentEmailService.SendAdmissionApprovalEmailAsync(email, displayName, username, password);
+			var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+			await _studentEmailService.SendAdmissionAccountSetupEmailAsync(
+				email,
+				displayName,
+				username,
+				user.Id,
+				resetToken,
+				user.TenantId);
 		}
 		catch (Exception exception)
 		{
-			_logger.LogWarning(exception, "Account created but credentials could not be sent for student {StudentId}", studentId);
+			_logger.LogWarning(
+				exception,
+				"Account created but the setup link could not be sent for student {StudentId}",
+				studentId);
 		}
 	}
 }

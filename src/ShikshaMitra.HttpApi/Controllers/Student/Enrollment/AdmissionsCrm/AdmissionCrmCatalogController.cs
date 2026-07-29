@@ -24,6 +24,27 @@ public class AdmissionCrmCatalogController(IAdmissionCrmCatalogAppService appSer
 	public Task<AdmissionCrmInquirySourceDto> SetInquirySourceStatusAsync(Guid id, [FromBody] AdmissionCrmCatalogStatusDto input) =>
 		appService.SetInquirySourceStatusAsync(id, input);
 
+	[HttpGet("{academicYearId}/catalog/inquiry-types")]
+	public Task<PagedResultDto<AdmissionCrmInquiryTypeDto>> GetInquiryTypesAsync(
+		Guid academicYearId,
+		[FromQuery] bool includeInactive = true) =>
+		appService.GetInquiryTypesAsync(academicYearId, includeInactive);
+	[HttpPost("{academicYearId}/catalog/inquiry-types")]
+	public Task<AdmissionCrmInquiryTypeDto> CreateInquiryTypeAsync(
+		Guid academicYearId,
+		[FromBody] AdmissionCrmInquiryTypeUpsertDto input) =>
+		appService.CreateInquiryTypeAsync(academicYearId, input);
+	[HttpPut("catalog/inquiry-types/{id}")]
+	public Task<AdmissionCrmInquiryTypeDto> UpdateInquiryTypeAsync(
+		Guid id,
+		[FromBody] AdmissionCrmInquiryTypeUpsertDto input) =>
+		appService.UpdateInquiryTypeAsync(id, input);
+	[HttpPatch("catalog/inquiry-types/{id}/status")]
+	public Task<AdmissionCrmInquiryTypeDto> SetInquiryTypeStatusAsync(
+		Guid id,
+		[FromBody] AdmissionCrmCatalogStatusDto input) =>
+		appService.SetInquiryTypeStatusAsync(id, input);
+
 	[HttpGet("{academicYearId}/catalog/exam-slots")]
 	public Task<PagedResultDto<AdmissionCrmExamSlotDto>> GetExamSlotsAsync(Guid academicYearId, [FromQuery] DateTimeOffset? from = null,
 		[FromQuery] DateTimeOffset? to = null, [FromQuery] bool includeInactive = false) =>

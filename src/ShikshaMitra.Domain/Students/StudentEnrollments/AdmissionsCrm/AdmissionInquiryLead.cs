@@ -11,9 +11,14 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
+	public Guid? AdmissionYearSetupId { get; private set; }
+	public int? AdmissionYearSetupVersion { get; private set; }
+	public string? AdmissionYearSetupSnapshotJson { get; private set; }
 	public Guid? StudentId { get; private set; }
 	public Guid? InquirySourceId { get; private set; }
 	public string? InquirySourceSnapshot { get; private set; }
+	public Guid? InquiryTypeId { get; private set; }
+	public string? InquiryTypeSnapshot { get; private set; }
 	public AdmissionInquiryChannel Channel { get; private set; }
 	public string? CampaignName { get; private set; }
 	public string? CampusBranchName { get; private set; }
@@ -53,6 +58,7 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? DuplicateContinueReason { get; private set; }
 
 	public AdmissionCrmInquirySource? InquirySource { get; private set; }
+	public AdmissionCrmInquiryType? InquiryType { get; private set; }
 
 	protected AdmissionInquiryLead()
 	{
@@ -109,6 +115,34 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		StudentId = studentId;
 		Touch();
+	}
+
+	public void ApplyAdmissionYearSetup(
+		Guid? setupId,
+		int version,
+		string snapshotJson)
+	{
+		if (version < 0)
+		{
+			throw new BusinessException("AdmissionCrm:InvalidAdmissionYearSetupVersion")
+				.WithData("Version", version);
+		}
+
+		AdmissionYearSetupId = setupId;
+		AdmissionYearSetupVersion = version;
+		AdmissionYearSetupSnapshotJson = Check.NotNullOrWhiteSpace(
+			snapshotJson,
+			nameof(snapshotJson),
+			AdmissionCrmConsts.MaxAdmissionYearSetupSnapshotJsonLength);
+	}
+
+	public void ApplyInquiryType(Guid? inquiryTypeId, string? inquiryTypeSnapshot)
+	{
+		InquiryTypeId = inquiryTypeId;
+		InquiryTypeSnapshot = NormalizeOptional(
+			inquiryTypeSnapshot,
+			nameof(inquiryTypeSnapshot),
+			AdmissionCrmConsts.MaxSourceSnapshotLength);
 	}
 
 	public void ChangeStage(AdmissionInquiryStage stage)

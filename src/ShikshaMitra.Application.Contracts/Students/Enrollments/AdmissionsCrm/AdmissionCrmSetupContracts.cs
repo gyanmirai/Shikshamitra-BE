@@ -98,6 +98,75 @@ public class AdmissionCrmCycleCommunicationSummaryDto
 	public int TemplateBackedRuleCount { get; set; }
 }
 
+public class AdmissionCrmAdmissionYearSetupDto : EntityDto<Guid>
+{
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public Guid AcademicYearId { get; set; }
+	public int Version { get; set; }
+	public AdmissionCrmAdmissionYearSetupStatus Status { get; set; }
+	public DateTime InquiryOpenDate { get; set; }
+	public DateTime InquiryCloseDate { get; set; }
+	public DateTime RegistrationCloseDate { get; set; }
+	public DateTime ActivationTargetDate { get; set; }
+	public bool EntranceExamRequired { get; set; }
+	public bool FinanceVerificationRequired { get; set; }
+	public AdmissionCrmPlacementTiming PlacementTiming { get; set; }
+	public Guid? DefaultOwnerUserId { get; set; }
+	public IReadOnlyList<Guid> TargetStandardIds { get; set; } = [];
+	public IReadOnlyList<AdmissionCrmRouteType> RouteTypes { get; set; } = [];
+	public IReadOnlyDictionary<string, Guid?> StepOwners { get; set; } =
+		new Dictionary<string, Guid?>();
+	public DateTime? PublishedAt { get; set; }
+	public Guid? PublishedByUserId { get; set; }
+	public DateTime? ClosedAt { get; set; }
+	public Guid? ClosedByUserId { get; set; }
+	public string? CloseReason { get; set; }
+}
+
+public class UpdateAdmissionCrmAdmissionYearSetupDto
+{
+	[Required]
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public DateTime InquiryOpenDate { get; set; }
+	public DateTime InquiryCloseDate { get; set; }
+	public DateTime RegistrationCloseDate { get; set; }
+	public DateTime ActivationTargetDate { get; set; }
+	public bool EntranceExamRequired { get; set; }
+	public bool FinanceVerificationRequired { get; set; }
+	public AdmissionCrmPlacementTiming PlacementTiming { get; set; }
+	public Guid? DefaultOwnerUserId { get; set; }
+	public IReadOnlyList<Guid> TargetStandardIds { get; set; } = [];
+	public IReadOnlyList<AdmissionCrmRouteType> RouteTypes { get; set; } = [];
+	public IReadOnlyDictionary<string, Guid?> StepOwners { get; set; } =
+		new Dictionary<string, Guid?>();
+}
+
+public class CloseAdmissionCrmAdmissionYearSetupDto
+{
+	[Required]
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	[Required, MaxLength(AdmissionCrmConsts.MaxNotesLength)]
+	public string Reason { get; set; } = string.Empty;
+}
+
+public class PublishAdmissionCrmAdmissionYearSetupDto
+{
+	[Required]
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+}
+
+public class AdmissionCrmAdmissionYearStandardOptionDto
+{
+	public Guid StandardId { get; set; }
+	public string StandardName { get; set; } = string.Empty;
+	public Guid MediumStageId { get; set; }
+	public string MediumStageName { get; set; } = string.Empty;
+	public Guid MediumId { get; set; }
+	public string MediumName { get; set; } = string.Empty;
+	public Guid BoardId { get; set; }
+	public string BoardName { get; set; } = string.Empty;
+}
+
 public class AdmissionCrmApplicationStagePolicyDto
 {
 	public int Version { get; set; } = 1;
@@ -208,6 +277,20 @@ public class AdmissionCrmPresetApplyResultDto
 public interface IAdmissionCrmSetupAppService : IApplicationService
 {
 	Task<AdmissionCrmSetupStatusDto> GetStatusAsync(Guid academicYearId);
+	Task<IReadOnlyList<AdmissionCrmAdmissionYearSetupDto>> GetAdmissionYearVersionsAsync(
+		Guid academicYearId);
+	Task<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>>
+		GetAdmissionYearStandardOptionsAsync(Guid academicYearId);
+	Task<AdmissionCrmAdmissionYearSetupDto> CreateAdmissionYearDraftAsync(Guid academicYearId);
+	Task<AdmissionCrmAdmissionYearSetupDto> UpdateAdmissionYearDraftAsync(
+		Guid id,
+		UpdateAdmissionCrmAdmissionYearSetupDto input);
+	Task<AdmissionCrmAdmissionYearSetupDto> PublishAdmissionYearAsync(
+		Guid id,
+		PublishAdmissionCrmAdmissionYearSetupDto input);
+	Task<AdmissionCrmAdmissionYearSetupDto> CloseAdmissionYearAsync(
+		Guid id,
+		CloseAdmissionCrmAdmissionYearSetupDto input);
 	Task<PagedResultDto<AdmissionCrmCycleListItemDto>> GetCyclesAsync(PagedResultRequestDto input);
 	Task<AdmissionCrmCycleSummaryDto> GetCycleSummaryAsync(Guid academicYearId);
 	Task<AdmissionCrmApplicationStagePolicyDto> GetApplicationStagePolicyAsync(Guid academicYearId);

@@ -80,4 +80,5 @@ public static class AdmissionCrmConsts
 	public const int MaxNumberPatternLength = 100;
 	public const int MaxActivationStepsJsonLength = 50000;
 	public const int MaxRouteDataJsonLength = 100000;
+	public const int MaxAdmissionYearSetupSnapshotJsonLength = 50000;
 }

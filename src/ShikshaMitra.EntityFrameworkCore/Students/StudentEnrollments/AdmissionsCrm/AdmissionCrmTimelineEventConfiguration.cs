@@ -23,8 +23,10 @@ public class AdmissionCrmTimelineEventConfiguration : IEntityTypeConfiguration<A
 		builder.Property(x => x.EventType)
 			.HasConversion<int>()
 			.IsRequired();
+		builder.Property(x => x.OccurredAtUtc)
+			.IsRequired();
 
-		builder.HasIndex(x => new { x.TenantId, x.LeadId, x.OccurredAt });
+		builder.HasIndex(x => new { x.TenantId, x.LeadId, x.OccurredAtUtc });
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.EventType });
 	}
 }

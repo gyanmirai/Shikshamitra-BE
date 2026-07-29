@@ -7,6 +7,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class CreateAdmissionCrmLeadDto : IValidatableObject
 {
 	public Guid? InquirySourceId { get; set; }
+	public Guid? InquiryTypeId { get; set; }
 	public AdmissionInquiryChannel Channel { get; set; } = AdmissionInquiryChannel.ManualBackOffice;
 	[MaxLength(AdmissionCrmConsts.MaxCampaignLength)]
 	public string? CampaignName { get; set; }

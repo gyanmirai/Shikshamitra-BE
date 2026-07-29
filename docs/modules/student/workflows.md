@@ -3,59 +3,95 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-07-25
+updated_on: 2026-07-28
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Trace Student backend workflows
 
-TL;DR: Student workflows start with inquiry and registration, then move into admission, records, attendance, documents, and certificates.
+TL;DR: Student Enrollment starts in Pipeline, follows Admission Year Setup through a stepper-style applicant path, then requires Finance handoff, placement review, approval, and activation before Student Records takes over.
 
-## Core workflows
+## Core Student workflows
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
-| Inquiry Source setup | Create, update, activate, deactivate, delete only unused source | Active-only selection, inactive historical display, usage count, delete eligibility |
-| Inquiry | Capture lead details, source, notes, and follow-up information | Academic year, active source, contact data, and tenant scope |
-| Registration | Configure versioned English, Gujarati, and Hindi sections and fields, issue a secure form, save partial responses, submit, correct, and verify | Canonical option values, localized rendering, section persistence, validation, document access, and status |
-| Entrance exam results | Enter first-time marks individually or in bulk, import scanner-exported or office spreadsheets, and correct recorded results with evidence | Academic scope, duplicate exam IDs, mark bounds, correction reason, override permission, and per-item failure |
-| Admission | Convert eligible inquiry or registration into admitted student record | Duplicate prevention, academic scope, admission state, and required data |
-| Student records | List, search, update, bulk upload, and manage student dashboard data | Scope filters, pagination, dashboard preview freshness, and data integrity |
-| Attendance and leave | Capture student attendance, manage leave, and configure leave types | Date consistency, student eligibility, leave type validity, and reporting impact |
+| Enrollment Pipeline | Capture inquiry, assign owner, follow up, message family, and choose exam or registration path | Academic year, applicant identity, guardian contact, source, type, owner, tenant, and academic scope |
+| Admission Year Setup | Configure admission rules attached to one Institute Setup academic year | No parallel academic-year model, valid standards, route applicability, step rules, and message moments |
+| Applicant Stepper | Show one applicant's progress and next action | Step state, blockers, skips, owner, parent-safe visibility, and audit evidence |
+| Entrance exam | Configure applicability, schedule slot, invite family, record attendance, enter result, and decide eligibility | Standard or route applicability, pass rule, retest policy, result audit, and override permission |
+| Registration | Collect applicant, family, previous-school, consent, and document details, then verify | Required fields, required documents, language labels, correction reason, and document access |
+| Finance handoff | Request Finance verification and block activation until Finance returns a verified state when required | Finance authority, payment-reference visibility, and no ledger or receipt mutation from Enrollment |
+| Placement review | Confirm board, medium, standard, and division timing from Institute Setup and Class Management | No parallel capacity truth, valid academic hierarchy, current count, pending activation count, and override reason |
+| Activation | Approve and convert applicant into active Student after required gates pass | Registration, exam, Finance, placement, approval, idempotency, and repair visibility |
+| Student records | Manage active student profile after activation | Scope filters, pagination, dashboard preview freshness, and data integrity |
+| Attendance and leave | Capture student attendance and manage leave | Date consistency, student eligibility, leave type validity, and reporting impact |
 | Certificates | Create templates and issue certificates | Student identity, template validity, and audit trail |
-| Configuration safety | Inspect code references, preview critical impact, preview a source-to-target academic-year clone, and confirm the unchanged fingerprint | Academic-year-wide scope, applicant activity, target emptiness, draft recreation, ID remapping, and idempotent replay |
 
-## Inquiry Source rules
+## Enrollment operating flow
+
+1. Staff selects the academic year from Institute Setup.
+2. Enrollment loads Admission Year Setup attached to that academic year.
+3. Staff captures every applicant in Pipeline, including walk-in, phone, website, referral, transfer, RTE, and direct-registration cases.
+4. Pipeline stores applicant name, guardian contact, board, medium, standard, source, inquiry type, owner, and notes.
+5. The Applicant Stepper shows Inquiry as complete and calculates the next required step from Admission Year Setup.
+6. Staff sends an acknowledgement or follow-up message from an approved template.
+7. Staff either schedules or invites an entrance exam when Admission Year Setup requires it.
+8. Staff may move the applicant directly to Registration when exam is not required or an authorized bypass reason is recorded.
+9. Exam staff records attendance and result when an exam is required.
+10. The system marks the applicant Eligible, Ineligible, Needs Review, Absent, or Retest Required.
+11. Eligible or exam-bypassed applicants complete Registration.
+12. Registration staff verifies the submitted information and documents.
+13. Enrollment requests Finance verification when Admission Year Setup requires a fee gate.
+14. Academic staff reviews placement using Institute Setup and Class Management structure and capacity signals.
+15. An authorized approver confirms activation.
+16. Activation creates or links the active Student record and hands ordinary lifecycle ownership to Student Records.
+
+## Governance rules
 
 | Scenario | Expected behavior |
 |---|---|
-| Active-only list after deactivation | Inactive source is excluded |
-| Existing record with unchanged inactive source | Save remains valid |
-| New or changed record uses inactive source | Request is rejected |
-| In-use source delete | Request is rejected |
-| In-use source deactivate | Request succeeds |
-| Unused inactive source delete | Request succeeds |
+| Applicant skips Pipeline | Reject or redirect the operation because Pipeline is the pre-admission source of truth |
+| Academic year has no Admission Year Setup | Show setup-required state and block new admissions unless a safe default is explicitly allowed |
+| Stepper skip | Require an Admission Year Setup rule or authorized bypass reason |
+| Stepper blocker | Show missing data, document, Finance status, capacity issue, or permission requirement |
+| Exam not required | Allow direct movement from Pipeline to Registration with the configured reason trail |
+| Exam required | Block Registration until eligible, retest-authorized, or bypassed by permission and reason |
+| Ineligible applicant | Keep terminal unless an authorized user reopens, overrides, or schedules retest with reason |
+| Registration incomplete | Block activation and show missing information or document requirements |
+| Finance verification required | Block activation until Finance returns Verified |
+| Finance pending or blocked | Keep applicant visible in Pipeline, Registration, or Activation work queues without claiming payment success |
+| Placement capacity unknown | Show unknown capacity rather than inventing available seats |
+| Capacity override | Require permission and reason |
+| Activation failure | Keep repairable activation state visible and do not report first-day-ready completion |
+| Active student edit | Route ordinary post-activation edits to Student Records |
 
-## Admissions CRM governance rules
+## Settings workflows
 
-| Scenario | Expected behavior |
+| Settings area | Workflow |
 |---|---|
-| Standard-scoped CRM list | Only leads whose `TargetStandardId` is inside the user's effective academic scope are returned |
-| Lower-scope lead without target standard | The lead remains hidden because it cannot be assigned safely below academic-year scope |
-| Out-of-scope CRM mutation | The request fails with `UserScope:AccessDenied` before changing admission data |
-| Protected-stage override | The caller must have both stage-change and bulk-operations permissions, and the override is recorded in the applicant timeline |
-| Registration fee waiver during issuance | Standard and direct issuance require the dedicated fee-waiver permission before a waived application can be created |
-| Activation placement | Options are scope-filtered, mutations recheck Standard and Division access, and a captured target standard cannot be changed during activation |
-| Legacy activation without target standard | An academic-year-wide user may select a valid placement while lower-scoped users remain unable to access the unattributable lead |
-| School-default mutation | Only a tenant-wide user scope may change the tenant-global enrollment default |
-| Retention-policy mutation | Create, submit, and publish require academic-year-wide user scope |
-| Scheduled-report automation | The trusted worker validates the current tenant and academic year without depending on an interactive user |
-| Locked journey structure edit | Cycle, custom-stage, stage-order, enabled-state, or allowed-transition changes fail with `AdmissionCrm:JourneyLocked` |
-| Existing bulk result correction | A reason and `Students.Enrollment.AdmissionsCrm.OverrideExamResult` are required in addition to bulk and result-change permissions |
-| Configuration reference lookup | Stage, Round, Exam, Seat Plan, or Route code usage is grouped by authoritative configuration and applicant families |
-| Critical configuration preview | The response reports changed fields, affected applicants, references, warnings, and a deterministic fingerprint |
-| Critical configuration update | The submitted cycle or pipeline-stage payload must carry the still-current preview fingerprint |
-| Academic-year clone preview | The target must have no applicant activity or admission configuration before confirmation is enabled |
-| Academic-year clone confirm | The submitted fingerprint must still match the source and target snapshots, and every source hierarchy identifier must map to an equivalent target hierarchy record |
-| Academic-year clone replay | Repeating the same confirmed source and fingerprint reports `AlreadyApplied` without duplicating configuration |
+| Admission Year Setup | Configure admission dates, routes, required steps, owners, messages, and publish readiness for an Institute Setup academic year |
+| Pipeline Settings | Configure inquiry sources, inquiry types, owner defaults, owner pool, quick-capture required fields, and follow-up reasons |
+| Entrance Exam Settings | Configure applicability, exam slots, pass rules, retest policy, parent scheduling, and exam message templates |
+| Registration Settings | Configure sections, fields, documents, languages, verification, and correction reasons |
+| Finance Handoff Settings | Configure whether Finance verification is required and which Finance reference is visible |
+| Class Placement Settings | Configure placement timing and override permission behavior while reading live capacity status from Class Management |
+| Activation Settings | Configure approval, required gates, cancellation window, and admission confirmation message |
+| Communication Settings | Configure channels, templates, variables, consent behavior, provider mode, and delivery-log visibility |
+
+Simple admission reminders remain part of Communication Settings.
+A separate Automation page, forecasts, retention, privacy requests, and advanced analytics are outside the production Enrollment baseline.
+One-time admission moments send immediately when the corresponding action occurs.
+Idle-delay reminders are available only for Registration Issued, Registration Incomplete, Registration Correction Requested, Registration Verified, Fee Follow-up, Exam No-show, and Activation Welcome.
+The hourly lifecycle worker reevaluates those delayed states in batches of 250.
+Terminal outcomes, completed requirements, consent, opt-out, quiet hours, attempt limits, and duplicate-message protection can cancel or suppress a reminder.
+Provider header values, parameter values, and callback secrets remain write-only after storage.
+
+## Admission Reports workflow
+
+Admission Reports uses the same fixed lifecycle projection as Pipeline.
+Staff may filter by applicant creation date and target standard.
+The backend applies tenant, academic-year, effective UserScope, date, and standard filters before grouping.
+The screen shows one table at a time for lifecycle, source, standard, or closed outcome.
+The report returns all fixed lifecycle and closed-outcome rows, including zero-count rows, so exports and comparisons remain stable.
+The report date span is limited to 366 days to keep interactive requests bounded.

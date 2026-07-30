@@ -227,4 +227,15 @@ public class SubjectAssignmentController(
 		await subjectAssignmentAppService.RestoreAsync(assignmentId);
 		return Result.Success();
 	}
+
+	/// <summary>Copies subject assignments from one class into another class as draft rows</summary>
+	[HttpPost("subject-assignments/copy")]
+	[ProducesResponseType(typeof(CopySubjectAssignmentsResultDto), 200)]
+	[ProducesResponseType(400)]
+	public async Task<Result<CopySubjectAssignmentsResultDto>> CopyAsync(
+		[FromBody] CopySubjectAssignmentsDto input)
+	{
+		var result = await subjectAssignmentAppService.CopyAsync(input);
+		return Result.Success(result);
+	}
 }

@@ -115,4 +115,9 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// Restores an archived subject assignment as Draft after conflict checks
 	/// </summary>
 	Task RestoreAsync(Guid assignmentId);
+
+	/// <summary>
+	/// Copies subject assignments from one class into another class as draft rows.
+	/// </summary>
+	Task<CopySubjectAssignmentsResultDto> CopyAsync(CopySubjectAssignmentsDto input);
 }

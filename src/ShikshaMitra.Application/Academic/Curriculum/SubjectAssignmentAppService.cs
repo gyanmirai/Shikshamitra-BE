@@ -1033,6 +1033,333 @@ public class SubjectAssignmentAppService(
 		await assignmentRepository.UpdateManyAsync(groupAssignments, autoSave: true);
 	}
 
+	public async Task<CopySubjectAssignmentsResultDto> CopyAsync(CopySubjectAssignmentsDto input)
+	{
+		if (input.SourceClassId == Guid.Empty || input.TargetClassId == Guid.Empty)
+		{
+			throw new BusinessException("SubjectAssignment:CopyClassRequired");
+		}
+
+		if (input.SourceClassId == input.TargetClassId)
+		{
+			throw new BusinessException("SubjectAssignment:CopySourceAndTargetSame");
+		}
+
+		var conflictStrategy = (input.ConflictStrategy ?? "SKIP").Trim().ToUpperInvariant();
+		if (conflictStrategy is not ("SKIP" or "OVERWRITE"))
+		{
+			throw new BusinessException("SubjectAssignment:InvalidCopyConflictStrategy")
+				.WithData("ConflictStrategy", input.ConflictStrategy ?? string.Empty);
+		}
+
+		var requestedSubjectIds = input.SubjectIds?
+			.Where(id => id != Guid.Empty)
+			.Distinct()
+			.ToHashSet();
+
+		var query = await assignmentRepository.WithDetailsAsync(
+			a => a.Teachers,
+			a => a.Documents,
+			a => a.Chapters);
+
+		var sourceQuery = query.Where(a =>
+			a.StandardId == input.SourceClassId &&
+			a.Status != SubjectStatus.Archived &&
+			a.Status != SubjectStatus.Inactive);
+		if (requestedSubjectIds is { Count: > 0 })
+		{
+			sourceQuery = sourceQuery.Where(a => requestedSubjectIds.Contains(a.SubjectId));
+		}
+
+		var sourceAssignments = await AsyncExecuter.ToListAsync(sourceQuery);
+
+		if (sourceAssignments.Count == 0)
+		{
+			throw new BusinessException("SubjectAssignment:CopySourceEmpty")
+				.WithData("SourceClassId", input.SourceClassId);
+		}
+
+		var targetAssignments = await AsyncExecuter.ToListAsync(
+			query.Where(a => a.StandardId == input.TargetClassId));
+		var targetBySubjectId = targetAssignments.ToDictionary(a => a.SubjectId);
+
+		var copied = new List<AssignedSubject>();
+		var overwritten = new List<AssignedSubject>();
+		var skipped = 0;
+
+		foreach (var source in sourceAssignments.OrderBy(a => a.SubjectCode))
+		{
+			if (targetBySubjectId.TryGetValue(source.SubjectId, out var target))
+			{
+				if (conflictStrategy == "SKIP")
+				{
+					skipped++;
+					continue;
+				}
+
+				ApplyCopiedSubject(source, target, input);
+				overwritten.Add(target);
+				await assignmentRepository.UpdateAsync(target);
+				continue;
+			}
+
+			var newAssignment = CreateCopiedSubject(source, input.TargetClassId, input);
+			copied.Add(newAssignment);
+			targetBySubjectId[source.SubjectId] = newAssignment;
+		}
+
+		if (copied.Count > 0)
+		{
+			await assignmentRepository.InsertManyAsync(copied, autoSave: false);
+		}
+
+		var changedAssignments = copied.Concat(overwritten).ToList();
+		if (changedAssignments.Count > 0)
+		{
+			await SyncCopiedSubjectsToWeeklySlotAsync(
+				input.TargetClassId,
+				changedAssignments,
+				input.IncludeCurriculumDetails);
+		}
+
+		var result = new CopySubjectAssignmentsResultDto
+		{
+			CopiedCount = copied.Count,
+			SkippedCount = skipped,
+			OverwrittenCount = overwritten.Count
+		};
+		result.Message = $"{result.CopiedCount + result.OverwrittenCount} subject allocation(s) copied. {result.SkippedCount} skipped.";
+
+		return result;
+	}
+
+	private AssignedSubject CreateCopiedSubject(
+		AssignedSubject source,
+		Guid targetClassId,
+		CopySubjectAssignmentsDto input)
+	{
+		var target = new AssignedSubject(
+			guidGenerator.Create(),
+			CurrentTenant.Id,
+			targetClassId,
+			source.SubjectId,
+			source.SubjectCode,
+			SubjectStatus.Draft,
+			source.SubjectType,
+			source.ElectiveGroupId,
+			input.IncludeCurriculumDetails ? source.LearningGoals : null,
+			input.IncludeCurriculumDetails ? source.Prerequisites : null,
+			input.IncludeCurriculumDetails ? source.Description : null,
+			input.IncludeCurriculumDetails ? source.WeeklyPeriods : 0,
+			input.IncludeCurriculumDetails ? source.DifficultyLevel : DifficultyLevel.Beginner,
+			input.IncludeCurriculumDetails ? source.SubjectGroup : null,
+			source.IsAiSuggested,
+			true);
+
+		ApplyCopiedChildren(source, target, input, preserveExistingTeachers: false);
+		target.RecalculateSetupHealth();
+		return target;
+	}
+
+	private void ApplyCopiedSubject(
+		AssignedSubject source,
+		AssignedSubject target,
+		CopySubjectAssignmentsDto input)
+	{
+		target.StandardId = input.TargetClassId;
+		target.SubjectId = source.SubjectId;
+		target.SubjectCode = source.SubjectCode;
+		target.SubjectType = source.SubjectType;
+		target.ElectiveGroupId = source.ElectiveGroupId;
+		target.IsAiSuggested = source.IsAiSuggested;
+		target.IsCopiedFromPreviousYear = true;
+		target.ChangeStatus(SubjectStatus.Draft);
+		target.PublishedAt = null;
+
+		if (input.IncludeCurriculumDetails)
+		{
+			target.LearningGoals = source.LearningGoals;
+			target.Prerequisites = source.Prerequisites;
+			target.Description = source.Description;
+			target.WeeklyPeriods = source.WeeklyPeriods;
+			target.DifficultyLevel = source.DifficultyLevel;
+			target.SubjectGroup = source.SubjectGroup;
+		}
+
+		ApplyCopiedChildren(source, target, input, preserveExistingTeachers: true);
+		target.RecalculateSetupHealth();
+	}
+
+	private void ApplyCopiedChildren(
+		AssignedSubject source,
+		AssignedSubject target,
+		CopySubjectAssignmentsDto input,
+		bool preserveExistingTeachers)
+	{
+		if (input.IncludeTeachers)
+		{
+			target.Teachers.Clear();
+			var primaryTeacher = source.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
+			if (primaryTeacher != null)
+			{
+				target.SetPrimaryTeacher(primaryTeacher.TeacherId);
+			}
+
+			var secondaryTeacherIds = source.Teachers
+				.Where(t => t.TeacherType == SubjectTeacherType.Secondary)
+				.Select(t => t.TeacherId)
+				.ToList();
+			target.SetSecondaryTeachers(secondaryTeacherIds);
+		}
+		else if (!preserveExistingTeachers)
+		{
+			target.Teachers.Clear();
+		}
+
+		if (input.IncludeDocuments)
+		{
+			target.Documents.Clear();
+			foreach (var document in source.Documents.Where(d => !d.ChapterId.HasValue))
+			{
+				target.AddDocument(guidGenerator.Create(), document.BlobName);
+			}
+		}
+
+		if (!input.IncludeCurriculumDetails)
+		{
+			return;
+		}
+
+		target.Chapters.Clear();
+		if (!input.IncludeDocuments)
+		{
+			foreach (var document in target.Documents.Where(d => d.ChapterId.HasValue).ToList())
+			{
+				target.Documents.Remove(document);
+			}
+		}
+
+		foreach (var sourceChapter in source.Chapters.OrderBy(c => c.ChapterNumber))
+		{
+			var chapterId = guidGenerator.Create();
+			var targetChapter = new AssignedSubjectChapter(
+				chapterId,
+				target.Id,
+				sourceChapter.ChapterNumber,
+				sourceChapter.ChapterName,
+				sourceChapter.ChapterStartTime,
+				sourceChapter.ChapterEndTime,
+				sourceChapter.Description)
+			{
+				TenantId = CurrentTenant.Id,
+				UnitName = sourceChapter.UnitName,
+				TermName = sourceChapter.TermName,
+				Topic = sourceChapter.Topic,
+				EstimatedTeachingDays = sourceChapter.EstimatedTeachingDays,
+				EstimatedPeriods = sourceChapter.EstimatedPeriods,
+				RevisionDays = sourceChapter.RevisionDays,
+				BufferDays = sourceChapter.BufferDays,
+				DifficultyLevel = sourceChapter.DifficultyLevel,
+				BloomLevel = sourceChapter.BloomLevel,
+				Tags = sourceChapter.Tags,
+				LearningOutcomes = sourceChapter.LearningOutcomes,
+				SkillsCovered = sourceChapter.SkillsCovered,
+				Prerequisites = sourceChapter.Prerequisites,
+				TeachingMethods = sourceChapter.TeachingMethods,
+				ClassActivities = sourceChapter.ClassActivities,
+				CompletionCriteria = sourceChapter.CompletionCriteria,
+				TeacherNotes = sourceChapter.TeacherNotes,
+				StudentSummary = sourceChapter.StudentSummary,
+				ParentSummary = sourceChapter.ParentSummary,
+				ReferenceLinks = sourceChapter.ReferenceLinks,
+				Worksheets = sourceChapter.Worksheets,
+				AudioVideoMaterials = sourceChapter.AudioVideoMaterials,
+				BoardDocuments = sourceChapter.BoardDocuments,
+				AssessmentMethod = sourceChapter.AssessmentMethod,
+				QuestionTypes = sourceChapter.QuestionTypes,
+				MarksWeightage = sourceChapter.MarksWeightage,
+				BloomCoverage = sourceChapter.BloomCoverage,
+				DifficultyDistribution = sourceChapter.DifficultyDistribution,
+				Visibility = sourceChapter.Visibility,
+				PublishStatus = sourceChapter.PublishStatus,
+				ReviewStatus = sourceChapter.ReviewStatus,
+				NotifyOnPublish = sourceChapter.NotifyOnPublish,
+				ProgressPercentage = sourceChapter.ProgressPercentage,
+				CoverageStatus = sourceChapter.CoverageStatus,
+				LessonPlanStatus = sourceChapter.LessonPlanStatus,
+				HomeworkStatus = sourceChapter.HomeworkStatus,
+				AssessmentStatus = sourceChapter.AssessmentStatus,
+				ResourceStatus = sourceChapter.ResourceStatus,
+				QuestionCount = sourceChapter.QuestionCount,
+				HealthScore = sourceChapter.HealthScore,
+				IsAiGenerated = sourceChapter.IsAiGenerated,
+				CopiedFromPreviousYear = true,
+				TemplateSource = sourceChapter.TemplateSource,
+				DependencyChapterIds = sourceChapter.DependencyChapterIds,
+				VersionLabel = sourceChapter.VersionLabel
+			};
+
+			if (input.IncludeDocuments)
+			{
+				var chapterDocuments = source.Documents
+					.Where(d => d.ChapterId == sourceChapter.Id)
+					.ToList();
+				foreach (var document in chapterDocuments)
+				{
+					targetChapter.AddDocument(new AssignedSubjectDocument(
+						guidGenerator.Create(),
+						target.Id,
+						targetChapter.Id,
+						document.BlobName));
+				}
+			}
+
+			target.Chapters.Add(targetChapter);
+		}
+	}
+
+	private async Task SyncCopiedSubjectsToWeeklySlotAsync(
+		Guid targetClassId,
+		List<AssignedSubject> assignments,
+		bool copyWeeklyPeriods)
+	{
+		var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(targetClassId);
+		if (weeklySlot == null)
+		{
+			weeklySlot = new WeeklyLectureSlot(guidGenerator.Create(), CurrentTenant.Id, targetClassId);
+			weeklySlot = await weeklyLectureSlotRepository.InsertAsync(weeklySlot, autoSave: true);
+		}
+
+		var processedSubjects = new HashSet<Guid>();
+		var processedElectives = new HashSet<Guid>();
+		foreach (var assignment in assignments)
+		{
+			var weeklyPeriods = copyWeeklyPeriods ? assignment.WeeklyPeriods : 0;
+			if (assignment.SubjectType == SubjectType.Elective && assignment.ElectiveGroupId.HasValue)
+			{
+				if (!processedElectives.Add(assignment.ElectiveGroupId.Value))
+				{
+					continue;
+				}
+
+				weeklySlot.RemoveSubject(null, assignment.ElectiveGroupId);
+				weeklySlot.AddSubject(guidGenerator.Create(), null, assignment.ElectiveGroupId, weeklyPeriods);
+			}
+			else
+			{
+				if (!processedSubjects.Add(assignment.SubjectId))
+				{
+					continue;
+				}
+
+				weeklySlot.RemoveSubject(assignment.SubjectId, null);
+				weeklySlot.AddSubject(guidGenerator.Create(), assignment.SubjectId, null, weeklyPeriods);
+			}
+		}
+
+		await weeklyLectureSlotRepository.UpdateAsync(weeklySlot, autoSave: true);
+	}
+
 	private static void EnsureSubjectAssignmentInputIsConsistent(CreateUpdateSubjectAssignmentDto input)
 	{
 		if (input.Subjects == null || input.Subjects.Count == 0)

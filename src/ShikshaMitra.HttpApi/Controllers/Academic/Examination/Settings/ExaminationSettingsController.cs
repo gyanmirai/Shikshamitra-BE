@@ -23,12 +23,13 @@ public class ExaminationSettingsController(
     }
 
     [HttpGet("grading-scales")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsGradeScaling.View)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsGradeScaling.View)]
     public async Task<GradingScaleListResponseDto> GetAllGradingScalesAsync(
-        [FromQuery] Guid academicMediumId
+        [FromQuery] Guid academicMediumId,
+        [FromQuery] bool includeArchived = false
     )
     {
-        return await examinationSettingsAppService.GetAllGradingScalesAsync(academicMediumId);
+        return await examinationSettingsAppService.GetAllGradingScalesAsync(academicMediumId, includeArchived);
     }
 
     [HttpGet("grading-scales/{id}")]
@@ -62,6 +63,26 @@ public class ExaminationSettingsController(
     {
         await examinationSettingsAppService.DeleteGradingScaleAsync(id, academicMediumId);
         return Ok(new { message = "Grading scale deleted successfully" });
+    }
+
+    [HttpPost("grading-scales/{id}/archive")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsGradeScaling.Delete)]
+    public async Task<GradingScaleSingleResponseDto> ArchiveGradingScaleAsync(
+        [FromRoute] Guid id,
+        [FromQuery] Guid academicMediumId
+    )
+    {
+        return await examinationSettingsAppService.ArchiveGradingScaleAsync(id, academicMediumId);
+    }
+
+    [HttpPost("grading-scales/{id}/restore")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsGradeScaling.Add)]
+    public async Task<GradingScaleSingleResponseDto> RestoreGradingScaleAsync(
+        [FromRoute] Guid id,
+        [FromQuery] Guid academicMediumId
+    )
+    {
+        return await examinationSettingsAppService.RestoreGradingScaleAsync(id, academicMediumId);
     }
     [HttpPost("exam-type")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsExamTypes.Add)]
@@ -111,5 +132,25 @@ public class ExaminationSettingsController(
     )
     {
         await examinationSettingsAppService.DeleteExamTypeAsync(id, academicMediumId);
+    }
+
+    [HttpPost("exam-type/{id}/archive")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsExamTypes.Delete)]
+    public async Task<ExamTypeSingleResponseDto> ArchiveExamTypeAsync(
+        [FromRoute] Guid id,
+        [FromQuery] Guid academicMediumId
+    )
+    {
+        return await examinationSettingsAppService.ArchiveExamTypeAsync(id, academicMediumId);
+    }
+
+    [HttpPost("exam-type/{id}/restore")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SettingsExamTypes.Add)]
+    public async Task<ExamTypeSingleResponseDto> RestoreExamTypeAsync(
+        [FromRoute] Guid id,
+        [FromQuery] Guid academicMediumId
+    )
+    {
+        return await examinationSettingsAppService.RestoreExamTypeAsync(id, academicMediumId);
     }
 }

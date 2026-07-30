@@ -158,7 +158,7 @@ public class HomeworkManager : DomainService
 			);
 		}
 
-		if (homeworkType.Status == TaskTypeStatus.Inactive)
+		if (homeworkType.Status != TaskTypeStatus.Active)
 		{
 			throw new BusinessException("ShikshaMitra.Homework:InactiveHomeworkType").WithData(
 				"HomeworkTypeId",

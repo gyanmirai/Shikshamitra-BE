@@ -131,7 +131,7 @@ public class HomeworkTypeManager : DomainService
 		}
 
 		// Validation check: At least one active homework type must remain
-		if (status == TaskTypeStatus.Inactive && homeworkType.Status == TaskTypeStatus.Active)
+		if (status != TaskTypeStatus.Active && homeworkType.Status == TaskTypeStatus.Active)
 		{
 			var activeCount = await _repository.CountAsync(t =>
 				t.AcademicMediumId == homeworkType.AcademicMediumId &&
@@ -141,7 +141,7 @@ public class HomeworkTypeManager : DomainService
 			if (activeCount == 0)
 			{
 				throw new BusinessException(HomeworkAssignmentErrorCodes.AtLeastOneActiveHomeworkTypeMustRemain)
-					.WithData("message", "At least one active homework type must remain. You cannot deactivate this type.");
+					.WithData("message", "At least one active homework type must remain. You cannot deactivate or archive this type.");
 			}
 		}
 

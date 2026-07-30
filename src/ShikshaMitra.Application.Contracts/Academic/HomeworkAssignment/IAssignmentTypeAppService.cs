@@ -25,7 +25,7 @@ public interface IAssignmentTypeAppService : IApplicationService
 	/// </summary>
 	/// <param name="academicMediumId">Academic medium ID</param>
 	/// <returns>List of assignment types</returns>
-	Task<AssignmentTypeListResponseDto> GetAllAsync(Guid academicMediumId);
+	Task<AssignmentTypeListResponseDto> GetAllAsync(Guid academicMediumId, bool includeArchived = false);
 
 	/// <summary>
 	/// Gets a single assignment type by ID
@@ -55,4 +55,8 @@ public interface IAssignmentTypeAppService : IApplicationService
 	/// <param name="academicMediumId">Academic medium ID for validation</param>
 	/// <returns>Success message</returns>
 	Task<MessageResponseDto> DeleteAsync(Guid id, Guid academicMediumId);
+
+	Task<MessageResponseDto> ArchiveAsync(Guid id, Guid academicMediumId);
+
+	Task<MessageResponseDto> RestoreAsync(Guid id, Guid academicMediumId);
 }

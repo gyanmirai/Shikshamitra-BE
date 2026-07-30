@@ -8,13 +8,17 @@ public interface IExaminationSettingsAppService : IApplicationService
 {
 	Task CreateGradingScaleAsync(Guid academicMediumId, CreateGradingScaleDto input);
 
-	Task<GradingScaleListResponseDto> GetAllGradingScalesAsync(Guid academicMediumId);
+	Task<GradingScaleListResponseDto> GetAllGradingScalesAsync(Guid academicMediumId, bool includeArchived = false);
 
 	Task<GradingScaleSingleResponseDto> GetGradingScaleByIdAsync(Guid id, Guid academicMediumId);
 
 	Task UpdateGradingScaleAsync(Guid id, Guid academicMediumId, UpdateGradingScaleDto input);
 
     Task DeleteGradingScaleAsync(Guid id, Guid academicMediumId);
+
+    Task<GradingScaleSingleResponseDto> ArchiveGradingScaleAsync(Guid id, Guid academicMediumId);
+
+    Task<GradingScaleSingleResponseDto> RestoreGradingScaleAsync(Guid id, Guid academicMediumId);
 
     Task CreateExamTypeAsync(Guid academicMediumId, CreateExamTypeDto input);
 
@@ -25,4 +29,8 @@ public interface IExaminationSettingsAppService : IApplicationService
     Task UpdateExamTypeAsync(Guid id, Guid academicMediumId, UpdateExamTypeDto input);
 
     Task DeleteExamTypeAsync(Guid id, Guid academicMediumId);
+
+    Task<ExamTypeSingleResponseDto> ArchiveExamTypeAsync(Guid id, Guid academicMediumId);
+
+    Task<ExamTypeSingleResponseDto> RestoreExamTypeAsync(Guid id, Guid academicMediumId);
 }

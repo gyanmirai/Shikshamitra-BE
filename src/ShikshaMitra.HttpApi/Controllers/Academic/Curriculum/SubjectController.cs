@@ -28,10 +28,11 @@ public class SubjectController(ISubjectAppService subjectAppService) : AbpContro
 	)]
 	public async Task<IActionResult> GetAllSubjects(
 		Guid academicMediumId,
-		[FromQuery] string? searchTerm = null
+		[FromQuery] string? searchTerm = null,
+		[FromQuery] bool includeArchived = false
 	)
 	{
-		var subjects = await subjectAppService.GetListAsync(academicMediumId, searchTerm);
+		var subjects = await subjectAppService.GetListAsync(academicMediumId, searchTerm, includeArchived);
 		return Ok(subjects);
 	}
 

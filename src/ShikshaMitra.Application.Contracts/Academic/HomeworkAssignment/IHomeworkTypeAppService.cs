@@ -25,7 +25,7 @@ public interface IHomeworkTypeAppService : IApplicationService
 	/// </summary>
 	/// <param name="academicMediumId">Academic medium ID</param>
 	/// <returns>List of homework types</returns>
-	Task<HomeworkTypeListResponseDto> GetAllAsync(Guid academicMediumId);
+	Task<HomeworkTypeListResponseDto> GetAllAsync(Guid academicMediumId, bool includeArchived = false);
 
 	/// <summary>
 	/// Gets a single homework type by ID
@@ -55,4 +55,8 @@ public interface IHomeworkTypeAppService : IApplicationService
 	/// <param name="academicMediumId">Academic medium ID for validation</param>
 	/// <returns>Success message</returns>
 	Task<MessageResponseDto> DeleteAsync(Guid id, Guid academicMediumId);
+
+	Task<MessageResponseDto> ArchiveAsync(Guid id, Guid academicMediumId);
+
+	Task<MessageResponseDto> RestoreAsync(Guid id, Guid academicMediumId);
 }

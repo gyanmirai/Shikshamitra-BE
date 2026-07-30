@@ -16,7 +16,7 @@ public interface IElectiveGroupAppService : IApplicationService
 	/// <param name="academicMediumId">Education medium ID</param>
 	/// <param name="searchTerm">Optional search term to filter by group name</param>
 	/// <returns>List of elective groups with associated subjects</returns>
-	Task<List<ElectiveGroupDto>> GetListAsync(Guid academicMediumId, string? searchTerm = null);
+	Task<List<ElectiveGroupDto>> GetListAsync(Guid academicMediumId, string? searchTerm = null, bool includeArchived = false);
 
 	/// <summary>
 	/// Get a single elective group by ID

@@ -52,7 +52,8 @@ public class SubjectAppService(
 
 	public async Task<List<SubjectDto>> GetListAsync(
 		Guid educationMediumId,
-		string? searchTerm = null
+		string? searchTerm = null,
+		bool includeArchived = false
 	)
 	{
 		try
@@ -61,6 +62,10 @@ public class SubjectAppService(
 
 			// Filter by education medium
 			queryable = queryable.Where(x => x.EducationMediumId == educationMediumId);
+			if (!includeArchived)
+			{
+				queryable = queryable.Where(x => x.Status != SubjectMasterStatus.Archived);
+			}
 
 			// Apply search filter if provided
 			if (!string.IsNullOrWhiteSpace(searchTerm))

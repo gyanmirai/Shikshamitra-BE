@@ -416,10 +416,6 @@ public class LessonPlanAppService(
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
         EnsureOwnTeacherRecord(diary.TeacherId, "modify");
-        if (diary.Status == TeacherDiaryStatus.Submitted)
-        {
-            throw new UserFriendlyException("Submitted teacher diaries cannot be edited. Use an authorized correction workflow.");
-        }
 
         if (input.LessonPlanId != diary.LessonPlanId)
         {

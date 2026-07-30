@@ -53,6 +53,7 @@ public class ExamAppService(
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
 	{
 		await EnsureElectiveAssignmentsReadyAsync(input.StandardId, input.DivisionIds, input.SubjectIds);
+		await EnsureExamSettingsAvailableForFutureUseAsync(input.ExamTypeId, input.GradingScaleId);
 
 		var exam = examManager.Create(
 			input.ExamTypeId,
@@ -72,6 +73,7 @@ public class ExamAppService(
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		EnsureExamSetupEditable(exam);
 		await EnsureElectiveAssignmentsReadyAsync(input.StandardId, input.DivisionIds, input.SubjectIds);
+		await EnsureExamSettingsAvailableForFutureUseAsync(input.ExamTypeId, input.GradingScaleId);
 
 		examManager.UpdateBasicDetails(
 			exam,
@@ -106,6 +108,7 @@ public class ExamAppService(
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		EnsureExamSetupEditable(exam);
 		await ValidateScheduleInputAsync(exam, input);
+		await EnsureScheduleGradingScalesAvailableForFutureUseAsync(input);
 
 		await ValidateScheduleConflictsAsync(examId, exam, input);
 
@@ -437,11 +440,7 @@ public class ExamAppService(
 						where stage.EducationMediumId == input.AcademicMediumId
 						select new { exam, standard, examType };
 
-		var pendingCount = await AsyncExecuter.CountAsync(baseQuery.Where(x => x.exam.Status == ExamStatus.Pending));
-		var publishedCount = await AsyncExecuter.CountAsync(baseQuery.Where(x => x.exam.Status == ExamStatus.Published));
-		var completedCount = await AsyncExecuter.CountAsync(baseQuery.Where(x => x.exam.Status == ExamStatus.Completed));
-
-		var query = baseQuery.Where(x => x.exam.Status == input.Status);
+		var query = baseQuery;
 
 		if (input.StandardId.HasValue)
 		{
@@ -474,12 +473,31 @@ public class ExamAppService(
 			);
 		}
 
-		var totalCount = await AsyncExecuter.CountAsync(query);
+		var allRows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.exam.CreationTime));
+		var rowsWithEffectiveStatus = allRows
+			.Select(x => new
+			{
+				x.exam,
+				x.standard,
+				x.examType,
+				EffectiveStatus = GetEffectiveScheduleStatus(x.exam)
+			})
+			.ToList();
 
-		var pagedQuery = query.OrderBy(x => x.exam.CreationTime)
-							  .PageBy(input);
+		var pendingCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Pending);
+		var publishedCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Published);
+		var completedCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Completed);
 
-		var queryResult = await AsyncExecuter.ToListAsync(pagedQuery);
+		var filteredRows = rowsWithEffectiveStatus
+			.Where(x => x.EffectiveStatus == input.Status)
+			.ToList();
+
+		var totalCount = filteredRows.Count;
+
+		var queryResult = filteredRows
+			.Skip(input.SkipCount)
+			.Take(input.MaxResultCount)
+			.ToList();
 
 		// Fetch Divisions
 		var allDivisionIds = queryResult.SelectMany(x => x.exam.ExamDivisions.Select(d => d.DivisionId)).Distinct().ToList();
@@ -493,16 +511,34 @@ public class ExamAppService(
 			x => x.Id,
 			x => !string.IsNullOrWhiteSpace(x.Name) ? x.Name! : !string.IsNullOrWhiteSpace(x.UserName) ? x.UserName! : x.Email ?? "Unknown");
 
-		var items = queryResult.Select(x => new ExamTableItemDto
+		var items = queryResult.Select(x =>
 		{
-			ExamId = x.exam.Id,
-			ExamName = x.exam.ExamName,
-			ExamTypeName = x.examType.Name,
-			StandardName = x.standard.Name,
-			CreatedBy = x.exam.CreatorId,
-			CreatorName = x.exam.CreatorId.HasValue ? creatorNameById.GetValueOrDefault(x.exam.CreatorId.Value) : null,
-			Status = x.exam.Status,
-			Divisions = x.exam.ExamDivisions.Select(d => divisionDict.GetValueOrDefault(d.DivisionId) ?? string.Empty).OrderBy(name => name).ToList()
+			var startDate = GetExamStartDate(x.exam);
+			var finalEndAt = GetExamFinalEndAt(x.exam);
+			var subjectCount = x.exam.ExamSubjects.Count;
+			var missingRoomAssignmentCount = x.exam.ExamSubjects
+				.SelectMany(subject => x.exam.ExamDivisions.Select(division => new { subject, division }))
+				.Count(row => !row.subject.RoomAssignments.Any(assignment => assignment.DivisionId == row.division.DivisionId));
+
+			return new ExamTableItemDto
+			{
+				ExamId = x.exam.Id,
+				ExamName = x.exam.ExamName,
+				ExamTypeName = x.examType.Name,
+				StandardName = x.standard.Name,
+				CreatedBy = x.exam.CreatorId,
+				CreatorName = x.exam.CreatorId.HasValue ? creatorNameById.GetValueOrDefault(x.exam.CreatorId.Value) : null,
+				Status = x.EffectiveStatus,
+				SubjectCount = subjectCount,
+				StartDate = startDate,
+				EndDate = finalEndAt,
+				IsScheduleComplete = subjectCount > 0 && x.exam.ExamSubjects.All(HasCompleteSchedule),
+				HasRoomAssignment = subjectCount > 0 && missingRoomAssignmentCount == 0,
+				MissingRoomAssignmentCount = missingRoomAssignmentCount,
+				IssueCount = missingRoomAssignmentCount,
+				LastUpdatedAt = x.exam.LastModificationTime ?? x.exam.CreationTime,
+				Divisions = x.exam.ExamDivisions.Select(d => divisionDict.GetValueOrDefault(d.DivisionId) ?? string.Empty).OrderBy(name => name).ToList()
+			};
 		}).ToList();
 
 		return new ExamListResultDto
@@ -808,6 +844,63 @@ public class ExamAppService(
 		}
 	}
 
+	private async Task EnsureExamSettingsAvailableForFutureUseAsync(Guid examTypeId, Guid? gradingScaleId)
+	{
+		var examType = await examTypeRepository.FindAsync(examTypeId);
+		if (examType == null || !IsSettingAvailableForFutureUse(examType.Status))
+		{
+			throw new BusinessException("AC:Exam:SettingsUnavailable")
+				.WithData("message", "Selected exam type is archived or inactive and cannot be used for new exam setup.")
+				.WithData("ExamTypeId", examTypeId);
+		}
+
+		if (!gradingScaleId.HasValue)
+		{
+			return;
+		}
+
+		var gradingScale = await gradingScaleRepository.FindAsync(gradingScaleId.Value);
+		if (gradingScale == null || !IsSettingAvailableForFutureUse(gradingScale.Status))
+		{
+			throw new BusinessException("AC:Exam:SettingsUnavailable")
+				.WithData("message", "Selected grading scale is archived or inactive and cannot be used for new exam setup.")
+				.WithData("GradingScaleId", gradingScaleId.Value);
+		}
+	}
+
+	private async Task EnsureScheduleGradingScalesAvailableForFutureUseAsync(ExamScheduleRequestDto input)
+	{
+		var gradingScaleIds = input.Subjects
+			.Where(subject => subject.GradeScalingId.HasValue)
+			.Select(subject => subject.GradeScalingId!.Value)
+			.Distinct()
+			.ToList();
+
+		if (gradingScaleIds.Count == 0)
+		{
+			return;
+		}
+
+		var gradingScales = await gradingScaleRepository.GetListAsync(scale => gradingScaleIds.Contains(scale.Id));
+		var availableScaleIds = gradingScales
+			.Where(scale => IsSettingAvailableForFutureUse(scale.Status))
+			.Select(scale => scale.Id)
+			.ToHashSet();
+
+		var unavailableScaleId = gradingScaleIds.FirstOrDefault(id => !availableScaleIds.Contains(id));
+		if (unavailableScaleId != Guid.Empty)
+		{
+			throw new BusinessException("AC:Exam:SettingsUnavailable")
+				.WithData("message", "Selected subject grading scale is archived or inactive and cannot be used for new exam scheduling.")
+				.WithData("GradingScaleId", unavailableScaleId);
+		}
+	}
+
+	private static bool IsSettingAvailableForFutureUse(SettingStatus status)
+	{
+		return status is SettingStatus.Active or SettingStatus.SystemDefault;
+	}
+
 	private async Task EnsureValidExamStatusTransitionAsync(Exam exam, ExamStatus requestedStatus)
 	{
 		if (!Enum.IsDefined(requestedStatus))
@@ -862,6 +955,21 @@ public class ExamAppService(
 
 	private async Task EnsureExamReadyToCompleteAsync(Exam exam)
 	{
+		var finalEndAt = GetExamFinalEndAt(exam);
+		if (!finalEndAt.HasValue)
+		{
+			throw new BusinessException("ShikshaMitra.Exam:ScheduleIncomplete")
+				.WithData("ExamId", exam.Id);
+		}
+
+		if (Clock.Now <= finalEndAt.Value)
+		{
+			throw new BusinessException("ShikshaMitra.Exam:CompletionBeforeScheduleEnd")
+				.WithData("ExamId", exam.Id)
+				.WithData("FinalSubjectEndAt", finalEndAt.Value.ToString("yyyy-MM-dd HH:mm"))
+				.WithData("CurrentAt", Clock.Now.ToString("yyyy-MM-dd HH:mm"));
+		}
+
 		var divisionIds = exam.ExamDivisions.Select(x => x.DivisionId).ToList();
 		foreach (var subject in exam.ExamSubjects)
 		{
@@ -894,6 +1002,53 @@ public class ExamAppService(
 					.WithData("DivisionId", divisionId);
 			}
 		}
+	}
+
+	private ExamStatus GetEffectiveScheduleStatus(Exam exam)
+	{
+		if (exam.Status != ExamStatus.Completed)
+		{
+			return exam.Status;
+		}
+
+		return HasExamScheduleEnded(exam, Clock.Now)
+			? ExamStatus.Completed
+			: ExamStatus.Published;
+	}
+
+	private static bool HasExamScheduleEnded(Exam exam, DateTime currentAt)
+	{
+		var finalEndAt = GetExamFinalEndAt(exam);
+		return finalEndAt.HasValue && currentAt > finalEndAt.Value;
+	}
+
+	private static DateTime? GetExamStartDate(Exam exam)
+	{
+		var dates = exam.ExamSubjects
+			.Where(subject => subject.ExamDate.HasValue)
+			.Select(subject => subject.ExamDate!.Value.Date)
+			.ToList();
+
+		return dates.Count == 0 ? null : dates.Min();
+	}
+
+	private static DateTime? GetExamFinalEndAt(Exam exam)
+	{
+		var endTimes = exam.ExamSubjects
+			.Where(subject => subject.ExamDate.HasValue && subject.EndTime.HasValue)
+			.Select(subject => subject.ExamDate!.Value.Date.Add(subject.EndTime!.Value.TimeOfDay))
+			.ToList();
+
+		return endTimes.Count == 0 ? null : endTimes.Max();
+	}
+
+	private static bool HasCompleteSchedule(ExamSubject subject)
+	{
+		return subject.ExamDate.HasValue &&
+			subject.StartTime.HasValue &&
+			subject.EndTime.HasValue &&
+			subject.TotalMarks.HasValue &&
+			subject.PassingMarks.HasValue;
 	}
 
 	private async Task ValidateScheduleInputAsync(Exam exam, ExamScheduleRequestDto input)

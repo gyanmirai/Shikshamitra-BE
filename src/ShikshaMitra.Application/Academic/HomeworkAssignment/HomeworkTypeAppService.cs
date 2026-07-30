@@ -104,7 +104,7 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 	/// <summary>
 	/// Gets all homework types for a specific academic medium
 	/// </summary>
-	public async Task<HomeworkTypeListResponseDto> GetAllAsync(Guid academicMediumId)
+	public async Task<HomeworkTypeListResponseDto> GetAllAsync(Guid academicMediumId, bool includeArchived = false)
 	{
 		try
 		{
@@ -118,6 +118,10 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 
 			// Fetch from repository
 			var types = await _repository.GetListByAcademicMediumIdAsync(academicMediumId);
+			if (!includeArchived)
+			{
+				types = types.Where(type => type.Status != TaskTypeStatus.Archived).ToList();
+			}
 
 			// Map to DTOs
 			var dtos = ObjectMapper.Map<List<HomeworkType>, List<HomeworkTypeDto>>(types);
@@ -291,7 +295,7 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 			if (usageParts.Count > 0)
 			{
 				throw new BusinessException(HomeworkAssignmentErrorCodes.HomeworkTypeIsInUse)
-					.WithData("message", $"Cannot delete '{homeworkType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+					.WithData("message", $"Cannot delete '{homeworkType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please archive it to stop future usage.");
 			}
 
 			// Block if it's the last active homework type
@@ -333,6 +337,48 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 		}
 	}
 
+	public async Task<MessageResponseDto> ArchiveAsync(Guid id, Guid academicMediumId)
+	{
+		var homeworkType = await GetHomeworkTypeForMediumAsync(id, academicMediumId);
+
+		await _manager.UpdateAsync(
+			homeworkType,
+			homeworkType.Name,
+			homeworkType.Description,
+			homeworkType.DefaultSubmissionType,
+			homeworkType.DefaultMarks,
+			homeworkType.DefaultDueDays,
+			homeworkType.EvaluationRequired,
+			homeworkType.DefaultEvaluationMethod,
+			TaskTypeStatus.Archived
+		);
+
+		await _repository.UpdateAsync(homeworkType, autoSave: true);
+
+		return new MessageResponseDto { Message = "Homework type archived successfully" };
+	}
+
+	public async Task<MessageResponseDto> RestoreAsync(Guid id, Guid academicMediumId)
+	{
+		var homeworkType = await GetHomeworkTypeForMediumAsync(id, academicMediumId);
+
+		await _manager.UpdateAsync(
+			homeworkType,
+			homeworkType.Name,
+			homeworkType.Description,
+			homeworkType.DefaultSubmissionType,
+			homeworkType.DefaultMarks,
+			homeworkType.DefaultDueDays,
+			homeworkType.EvaluationRequired,
+			homeworkType.DefaultEvaluationMethod,
+			TaskTypeStatus.Active
+		);
+
+		await _repository.UpdateAsync(homeworkType, autoSave: true);
+
+		return new MessageResponseDto { Message = "Homework type restored successfully" };
+	}
+
 	/// <summary>
 	/// Validates that the academic medium exists
 	/// </summary>
@@ -353,5 +399,22 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 				.WithData("AcademicMediumId", academicMediumId)
 				.WithData("CorrelationId", correlationId);
 		}
+	}
+
+	private async Task<HomeworkType> GetHomeworkTypeForMediumAsync(Guid id, Guid academicMediumId)
+	{
+		var homeworkType = await _repository.GetAsync(id);
+
+		if (homeworkType.AcademicMediumId != academicMediumId)
+		{
+			_logger.LogWarning(
+				"Homework type {Id} does not belong to academic medium {MediumId}",
+				id,
+				academicMediumId
+			);
+			throw new EntityNotFoundException(typeof(HomeworkType), id);
+		}
+
+		return homeworkType;
 	}
 }

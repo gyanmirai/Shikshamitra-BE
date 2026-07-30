@@ -33,12 +33,14 @@ public class ElectiveGroupController(IElectiveGroupAppService electiveGroupAppSe
 	[ProducesResponseType(typeof(List<ElectiveGroupDto>), 200)]
 	public async Task<IActionResult> GetAllElectiveGroups(
 		Guid academicMediumId,
-		[FromQuery] string? searchTerm = null
+		[FromQuery] string? searchTerm = null,
+		[FromQuery] bool includeArchived = false
 	)
 	{
 		var electiveGroups = await electiveGroupAppService.GetListAsync(
 			academicMediumId,
-			searchTerm
+			searchTerm,
+			includeArchived
 		);
 		return Ok(electiveGroups);
 	}

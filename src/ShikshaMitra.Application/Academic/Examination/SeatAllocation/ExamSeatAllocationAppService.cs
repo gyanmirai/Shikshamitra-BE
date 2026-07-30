@@ -1182,8 +1182,9 @@ public class ExamSeatAllocationAppService(
         var exam = await examRepository.GetAsync(examId, includeDetails: true);
 
         var divisionIds = exam.ExamDivisions.Select(d => d.DivisionId).ToList();
+        var standardId = input.StandardId == Guid.Empty ? exam.StandardId : input.StandardId;
         var divisions = await divisionRepository.GetListAsync(d =>
-            divisionIds.Contains(d.Id) && d.StandardId == input.StandardId);
+            divisionIds.Contains(d.Id) && d.StandardId == standardId);
 
         if (!string.IsNullOrWhiteSpace(input.Search))
         {

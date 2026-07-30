@@ -69,7 +69,10 @@ public class HomeworkTypeController : AbpController
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsHomeworkTypes.View)]
 	[ProducesResponseType(typeof(HomeworkTypeListResponseDto), 200)]
 	[ProducesResponseType(404)]
-	public async Task<IActionResult> GetAllAsync([FromQuery, Required] Guid academicMediumId)
+	public async Task<IActionResult> GetAllAsync(
+		[FromQuery, Required] Guid academicMediumId,
+		[FromQuery] bool includeArchived = false
+	)
 	{
 		if (academicMediumId == Guid.Empty)
 		{
@@ -82,7 +85,7 @@ public class HomeworkTypeController : AbpController
 			);
 		}
 
-		var result = await _service.GetAllAsync(academicMediumId);
+		var result = await _service.GetAllAsync(academicMediumId, includeArchived);
 		return Ok(result);
 	}
 
@@ -183,6 +186,42 @@ public class HomeworkTypeController : AbpController
 		}
 
 		var result = await _service.DeleteAsync(id, academicMediumId);
+		return Ok(result);
+	}
+
+	[HttpPost("{id}/archive")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsHomeworkTypes.Delete)]
+	[ProducesResponseType(typeof(MessageResponseDto), 200)]
+	[ProducesResponseType(404)]
+	public async Task<IActionResult> ArchiveAsync(
+		[FromRoute] Guid id,
+		[FromQuery, Required] Guid academicMediumId
+	)
+	{
+		if (academicMediumId == Guid.Empty)
+		{
+			return BadRequest(new { error = "Validation failed", details = new { academicMediumId = "academicMediumId is required" } });
+		}
+
+		var result = await _service.ArchiveAsync(id, academicMediumId);
+		return Ok(result);
+	}
+
+	[HttpPost("{id}/restore")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsHomeworkTypes.Add)]
+	[ProducesResponseType(typeof(MessageResponseDto), 200)]
+	[ProducesResponseType(404)]
+	public async Task<IActionResult> RestoreAsync(
+		[FromRoute] Guid id,
+		[FromQuery, Required] Guid academicMediumId
+	)
+	{
+		if (academicMediumId == Guid.Empty)
+		{
+			return BadRequest(new { error = "Validation failed", details = new { academicMediumId = "academicMediumId is required" } });
+		}
+
+		var result = await _service.RestoreAsync(id, academicMediumId);
 		return Ok(result);
 	}
 }

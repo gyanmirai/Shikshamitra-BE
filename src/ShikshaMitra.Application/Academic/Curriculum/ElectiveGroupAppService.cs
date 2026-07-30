@@ -35,7 +35,8 @@ public class ElectiveGroupAppService(
 	/// </summary>
 	public async Task<List<ElectiveGroupDto>> GetListAsync(
 		Guid academicMediumId,
-		string? searchTerm = null
+		string? searchTerm = null,
+		bool includeArchived = false
 	)
 	{
 		try
@@ -44,6 +45,7 @@ public class ElectiveGroupAppService(
 
 			var filtered = query
 				.Where(eg => eg.AcademicMediumId == academicMediumId)
+				.WhereIf(!includeArchived, eg => eg.Status != SubjectMasterStatus.Archived)
 				.WhereIf(
 					!string.IsNullOrWhiteSpace(searchTerm),
 					eg => eg.Name.Contains(searchTerm!)

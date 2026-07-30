@@ -22,7 +22,7 @@ public interface ISubjectAppService
 	/// <param name="educationMediumId">Education Medium ID</param>
 	/// <param name="searchTerm">Optional search term to filter subjects by name</param>
 	/// <returns>List of subjects</returns>
-	Task<List<SubjectDto>> GetListAsync(Guid educationMediumId, string? searchTerm = null);
+	Task<List<SubjectDto>> GetListAsync(Guid educationMediumId, string? searchTerm = null, bool includeArchived = false);
 
 	/// <summary>
 	/// Create a new subject

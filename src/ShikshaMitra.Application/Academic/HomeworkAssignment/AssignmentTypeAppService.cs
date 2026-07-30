@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
@@ -107,7 +108,7 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 	/// Gets all assignment types for a specific academic medium
 	/// </summary>
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsAssignmentTypes.View)]
-	public async Task<AssignmentTypeListResponseDto> GetAllAsync(Guid academicMediumId)
+	public async Task<AssignmentTypeListResponseDto> GetAllAsync(Guid academicMediumId, bool includeArchived = false)
 	{
 		try
 		{
@@ -121,6 +122,10 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 
 			// Fetch from repository
 			var types = await _repository.GetListByAcademicMediumIdAsync(academicMediumId);
+			if (!includeArchived)
+			{
+				types = types.Where(type => type.Status != TaskTypeStatus.Archived).ToList();
+			}
 
 			// Map to DTOs
 			var dtos = ObjectMapper.Map<List<AssignmentType>, List<AssignmentTypeDto>>(types);
@@ -297,7 +302,7 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 			if (usageParts.Count > 0)
 			{
 				throw new BusinessException(HomeworkAssignmentErrorCodes.AssignmentTypeIsInUse)
-					.WithData("message", $"Cannot delete '{assignmentType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please remove these usages first.");
+					.WithData("message", $"Cannot delete '{assignmentType.Name}' because it is in use: {string.Join(", ", usageParts)}. Please archive it to stop future usage.");
 			}
 
 			// Block if it's the last active assignment type
@@ -339,6 +344,50 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 		}
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsAssignmentTypes.Delete)]
+	public async Task<MessageResponseDto> ArchiveAsync(Guid id, Guid academicMediumId)
+	{
+		var assignmentType = await GetAssignmentTypeForMediumAsync(id, academicMediumId);
+
+		await _manager.UpdateAsync(
+			assignmentType,
+			assignmentType.Name,
+			assignmentType.Description,
+			assignmentType.DefaultSubmissionType,
+			assignmentType.DefaultMarks,
+			assignmentType.DefaultDueDays,
+			assignmentType.EvaluationRequired,
+			assignmentType.DefaultEvaluationMethod,
+			TaskTypeStatus.Archived
+		);
+
+		await _repository.UpdateAsync(assignmentType, autoSave: true);
+
+		return new MessageResponseDto { Message = "Assignment type archived successfully" };
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_SettingsAssignmentTypes.Add)]
+	public async Task<MessageResponseDto> RestoreAsync(Guid id, Guid academicMediumId)
+	{
+		var assignmentType = await GetAssignmentTypeForMediumAsync(id, academicMediumId);
+
+		await _manager.UpdateAsync(
+			assignmentType,
+			assignmentType.Name,
+			assignmentType.Description,
+			assignmentType.DefaultSubmissionType,
+			assignmentType.DefaultMarks,
+			assignmentType.DefaultDueDays,
+			assignmentType.EvaluationRequired,
+			assignmentType.DefaultEvaluationMethod,
+			TaskTypeStatus.Active
+		);
+
+		await _repository.UpdateAsync(assignmentType, autoSave: true);
+
+		return new MessageResponseDto { Message = "Assignment type restored successfully" };
+	}
+
 	/// <summary>
 	/// Validates that the academic medium exists
 	/// </summary>
@@ -359,5 +408,22 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 				.WithData("AcademicMediumId", academicMediumId)
 				.WithData("CorrelationId", correlationId);
 		}
+	}
+
+	private async Task<AssignmentType> GetAssignmentTypeForMediumAsync(Guid id, Guid academicMediumId)
+	{
+		var assignmentType = await _repository.GetAsync(id);
+
+		if (assignmentType.AcademicMediumId != academicMediumId)
+		{
+			_logger.LogWarning(
+				"Assignment type {Id} does not belong to academic medium {MediumId}",
+				id,
+				academicMediumId
+			);
+			throw new EntityNotFoundException(typeof(AssignmentType), id);
+		}
+
+		return assignmentType;
 	}
 }

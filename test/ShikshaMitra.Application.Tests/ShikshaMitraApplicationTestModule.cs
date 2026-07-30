@@ -171,6 +171,7 @@ public class ShikshaMitraApplicationTestModule : AbpModule
         });
 
         context.Services.AddAlwaysDisableUnitOfWorkTransaction();
+        context.Services.AddHttpClient();
         ConfigureInMemorySqlite(context.Services);
 
         // Replace the PostgreSQL-specific sequence repository with an in-memory fake

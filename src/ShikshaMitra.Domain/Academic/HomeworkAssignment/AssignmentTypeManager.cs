@@ -135,7 +135,7 @@ public class AssignmentTypeManager : DomainService
 		}
 
 		// Validation check: At least one active assignment type must remain
-		if (status == TaskTypeStatus.Inactive && assignmentType.Status == TaskTypeStatus.Active)
+		if (status != TaskTypeStatus.Active && assignmentType.Status == TaskTypeStatus.Active)
 		{
 			var activeCount = await _repository.CountAsync(t =>
 				t.AcademicMediumId == assignmentType.AcademicMediumId &&
@@ -145,7 +145,7 @@ public class AssignmentTypeManager : DomainService
 			if (activeCount == 0)
 			{
 				throw new BusinessException(HomeworkAssignmentErrorCodes.AtLeastOneActiveAssignmentTypeMustRemain)
-					.WithData("message", "At least one active assignment type must remain. You cannot deactivate this type.");
+					.WithData("message", "At least one active assignment type must remain. You cannot deactivate or archive this type.");
 			}
 		}
 

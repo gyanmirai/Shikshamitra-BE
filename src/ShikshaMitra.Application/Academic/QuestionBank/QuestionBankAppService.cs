@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Common.Excel;
+using ShikshaMitra.Common.Excel.Elements;
 using ShikshaMitra.Academic.QuestionPapers;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -20,6 +22,7 @@ public class QuestionBankAppService(
     IRepository<QuestionTag, Guid> tagRepository,
     IRepository<QuestionUsageLog, Guid> usageRepository,
     IRepository<QuestionPaperQuestion, Guid> paperQuestionRepository,
+    IExcelService excelService,
     IAsyncQueryableExecuter asyncExecuter
 ) : ApplicationService, IQuestionBankAppService
 {
@@ -33,6 +36,55 @@ public class QuestionBankAppService(
         }
 
         return Map(setting);
+    }
+
+    public Task<QuestionBankTemplateDto> GetBulkTemplateAsync()
+    {
+        const string fileName = "question-bank-bulk-upload-template.xlsx";
+        var document = new ExcelDocument
+        {
+            OutputFileName = fileName,
+            Sheets =
+            [
+                new ExcelSheet
+                {
+                    SheetName = "Questions",
+                    DefaultColumnWidth = 24,
+                    Rows =
+                    [
+                        CreateExcelRow("Question Text", "Topic Name", "Question Type", "Difficulty", "Bloom Level", "Marks", "Negative Marks", "Answer Key", "Option 1", "Option 1 Correct", "Option 2", "Option 2 Correct", "Option 3", "Option 3 Correct", "Option 4", "Option 4 Correct", "Learning Outcome", "Explanation", "Marking Scheme", "Visibility", "Tags"),
+                        CreateExcelRow("Which part of the cell controls all activities?", "Cell Organelles", (int)QuestionType.McqSingleCorrect, (int)DifficultyLevel.Easy, (int)BloomLevel.Remembering, 1, 0, "Nucleus", "Nucleus", "Yes", "Cell wall", "No", "Vacuole", "No", "Cytoplasm", "No", "Identify cell organelles and their functions", "The nucleus controls cellular activities.", "1 mark for correct answer", (int)QuestionVisibility.Department, "cell,biology"),
+                        CreateExcelRow("Write one function of mitochondria.", "Cell Organelles", (int)QuestionType.ShortAnswer, (int)DifficultyLevel.Medium, (int)BloomLevel.Understanding, 2, string.Empty, "Mitochondria produce energy for the cell.", string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, "Explain functions of cell organelles", "Mitochondria are known as the powerhouse of the cell.", "2 marks for a correct function", (int)QuestionVisibility.Department, "mitochondria,short-answer")
+                    ]
+                },
+                new ExcelSheet
+                {
+                    SheetName = "Instructions",
+                    DefaultColumnWidth = 42,
+                    Rows =
+                    [
+                        CreateExcelRow("Field", "Allowed values / Notes"),
+                        CreateExcelRow("Question Text", "Required. Write the full question."),
+                        CreateExcelRow("Topic Name", "Optional unless topic is required in settings. New topic names are saved with the question."),
+                        CreateExcelRow("Question Type", BuildEnumInstruction<QuestionType>()),
+                        CreateExcelRow("Difficulty", BuildEnumInstruction<DifficultyLevel>()),
+                        CreateExcelRow("Bloom Level", BuildEnumInstruction<BloomLevel>()),
+                        CreateExcelRow("Marks", "Required. Positive number."),
+                        CreateExcelRow("Negative Marks", "Optional. Leave blank if not applicable."),
+                        CreateExcelRow("Answer Key", "Required for most question types. For MCQ, match the correct option text."),
+                        CreateExcelRow("Option N Correct", "Use Yes/No, TRUE/FALSE, or 1/0. Required for MCQ options."),
+                        CreateExcelRow("Visibility", BuildEnumInstruction<QuestionVisibility>()),
+                        CreateExcelRow("Tags", "Optional comma-separated values, e.g. cell,biology.")
+                    ]
+                }
+            ]
+        };
+
+        return Task.FromResult(new QuestionBankTemplateDto
+        {
+            FileName = fileName,
+            Content = excelService.GenerateExcelAsBytes(document)
+        });
     }
 
     public async Task<QuestionBankSettingDto> SaveSettingsAsync(QuestionBankSettingDto input)
@@ -219,6 +271,7 @@ public class QuestionBankAppService(
             SubjectId = question.SubjectId,
             ChapterId = question.ChapterId,
             TopicId = question.TopicId,
+            TopicName = question.TopicName,
             QuestionText = $"{question.QuestionText} (Copy)",
             QuestionType = question.QuestionType,
             DifficultyLevel = question.DifficultyLevel,
@@ -331,6 +384,19 @@ public class QuestionBankAppService(
         return Map(question, await GetQuestionUsageCountAsync(id));
     }
 
+    private static ExcelRow CreateExcelRow(params object?[] values)
+    {
+        return new ExcelRow
+        {
+            Cells = values.Select(value => new ExcelCell { Value = value ?? string.Empty }).ToList()
+        };
+    }
+
+    private static string BuildEnumInstruction<TEnum>() where TEnum : struct, Enum
+    {
+        return string.Join("; ", Enum.GetValues<TEnum>().Select(value => $"{Convert.ToInt32(value)} = {value}"));
+    }
+
     private async Task<BulkQuestionWorkflowResultDto> BulkReviewAsync(BulkQuestionReviewDto input, QuestionStatus status)
     {
         var rows = await questionRepository.GetListAsync(x => input.QuestionIds.Contains(x.Id));
@@ -371,7 +437,7 @@ public class QuestionBankAppService(
         if (!Enum.IsDefined(input.QuestionType)) throw new BusinessException("ShikshaMitra.QuestionBank:InvalidQuestionType");
         if (!Enum.IsDefined(input.DifficultyLevel)) throw new BusinessException("ShikshaMitra.QuestionBank:InvalidDifficulty");
         if (setting.RequireChapter && !input.ChapterId.HasValue) throw new BusinessException("ShikshaMitra.QuestionBank:ChapterRequired");
-        if (setting.RequireTopic && !input.TopicId.HasValue) throw new BusinessException("ShikshaMitra.QuestionBank:TopicRequired");
+        if (setting.RequireTopic && string.IsNullOrWhiteSpace(input.TopicName)) throw new BusinessException("ShikshaMitra.QuestionBank:TopicRequired");
         if (setting.RequireBloomLevel && !input.BloomLevel.HasValue) throw new BusinessException("ShikshaMitra.QuestionBank:BloomRequired");
         if (setting.RequireAnswerKey && string.IsNullOrWhiteSpace(input.AnswerKey)) throw new BusinessException("ShikshaMitra.QuestionBank:AnswerKeyRequired");
         if (setting.RequireLearningOutcome && string.IsNullOrWhiteSpace(input.LearningOutcome)) throw new BusinessException("ShikshaMitra.QuestionBank:LearningOutcomeRequired");
@@ -439,6 +505,11 @@ public class QuestionBankAppService(
         if (input.SubjectId.HasValue) query = query.Where(x => x.SubjectId == input.SubjectId);
         if (input.ChapterId.HasValue) query = query.Where(x => x.ChapterId == input.ChapterId);
         if (input.TopicId.HasValue) query = query.Where(x => x.TopicId == input.TopicId);
+        if (!string.IsNullOrWhiteSpace(input.TopicName))
+        {
+            var topicName = input.TopicName.Trim().ToLower();
+            query = query.Where(x => x.TopicName != null && x.TopicName.ToLower().Contains(topicName));
+        }
         if (input.QuestionType.HasValue) query = query.Where(x => x.QuestionType == input.QuestionType);
         if (input.DifficultyLevel.HasValue) query = query.Where(x => x.DifficultyLevel == input.DifficultyLevel);
         if (input.BloomLevel.HasValue) query = query.Where(x => x.BloomLevel == input.BloomLevel);
@@ -538,6 +609,12 @@ public class QuestionBankAppService(
         return union == 0 ? 0 : (int)Math.Round(intersection / (double)union * 100);
     }
 
+    private static string? NormalizeTopicName(string? topicName)
+    {
+        var normalized = topicName?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
     private void SyncChildren(QuestionBankItem question, CreateUpdateQuestionDto input)
     {
         foreach (var option in input.Options.OrderBy(x => x.SortOrder))
@@ -560,6 +637,7 @@ public class QuestionBankAppService(
         question.SubjectId = input.SubjectId;
         question.ChapterId = input.ChapterId;
         question.TopicId = input.TopicId;
+        question.TopicName = NormalizeTopicName(input.TopicName);
         question.QuestionText = input.QuestionText;
         question.PlainTextSearchContent = QuestionBankItem.Normalize(input.QuestionText);
         question.QuestionType = input.QuestionType;
@@ -587,6 +665,7 @@ public class QuestionBankAppService(
             SubjectId = question.SubjectId,
             ChapterId = question.ChapterId,
             TopicId = question.TopicId,
+            TopicName = question.TopicName,
             QuestionText = question.QuestionText,
             QuestionType = question.QuestionType,
             DifficultyLevel = question.DifficultyLevel,

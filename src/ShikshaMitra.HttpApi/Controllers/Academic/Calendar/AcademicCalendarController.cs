@@ -193,6 +193,13 @@ public class AcademicCalendarController : AbpController
         await _calendarAppService.CancelEmergencyClosureAsync(id);
     }
 
+    [HttpPut("academic/calendar-days/{id}/emergency-closure")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_EmergencyClosure.Edit)]
+    public async Task<AcademicCalendarDayDto> UpdateEmergencyClosureAsync([FromRoute] Guid id, [FromBody] UpdateEmergencyClosureDto input)
+    {
+        return await _calendarAppService.UpdateEmergencyClosureAsync(id, input);
+    }
+
     // ─── Impact Logs ────────────────────────────────────────────────────────
 
     [HttpGet("academic/calendar-impact-logs")]

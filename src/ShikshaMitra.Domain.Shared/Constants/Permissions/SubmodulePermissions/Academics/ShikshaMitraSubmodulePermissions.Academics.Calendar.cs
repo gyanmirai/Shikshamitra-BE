@@ -68,23 +68,25 @@ public static partial class ShikshaMitraSubmodulePermissions
 		}
 
 		public static class AcademicCalendar_EmergencyClosure
-		{
-			private const string SubmoduleName = $"{ModuleName}.AcademicCalendar.EmergencyClosure";
-			private const string SubmoduleDisplayName = $"{DisplayName}.AcademicCalendar.EmergencyClosure";
-
-			public const string View = $"{SubmoduleName}.View";
-			public const string Add = $"{SubmoduleName}.Add";
-			public const string Delete = $"{SubmoduleName}.Delete";
-
-			public static readonly string[] All = { View, Add, Delete };
-
-			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				{ View, $"{SubmoduleDisplayName}.View" },
-				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" }
-			};
-		}
+				private const string SubmoduleName = $"{ModuleName}.AcademicCalendar.EmergencyClosure";
+				private const string SubmoduleDisplayName = $"{DisplayName}.AcademicCalendar.EmergencyClosure";
+
+				public const string View = $"{SubmoduleName}.View";
+				public const string Add = $"{SubmoduleName}.Add";
+				public const string Edit = $"{SubmoduleName}.Edit";
+				public const string Delete = $"{SubmoduleName}.Delete";
+
+				public static readonly string[] All = { View, Add, Edit, Delete };
+
+				public static readonly Dictionary<string, string> DisplayNames = new()
+				{
+					{ View, $"{SubmoduleDisplayName}.View" },
+					{ Add, $"{SubmoduleDisplayName}.Add" },
+					{ Edit, $"{SubmoduleDisplayName}.Edit" },
+					{ Delete, $"{SubmoduleDisplayName}.Delete" }
+				};
+			}
 
 		public static class AcademicCalendar_ImpactLogs
 		{

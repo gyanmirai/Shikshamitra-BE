@@ -10,6 +10,8 @@ namespace ShikshaMitra.Constants.Permissions;
 /// - ShikshaMitraSubmodulePermissions.Academics.Timetable.cs
 /// - ShikshaMitraSubmodulePermissions.Academics.HomeworkAssignment.cs
 /// - ShikshaMitraSubmodulePermissions.Academics.Examination.cs
+/// - ShikshaMitraSubmodulePermissions.Academics.QuestionBank.cs
+/// - ShikshaMitraSubmodulePermissions.Academics.QuestionPapers.cs
 /// - ShikshaMitraSubmodulePermissions.Academics.Group.cs
 /// - ShikshaMitraSubmodulePermissions.Academics.LMS.cs
 /// </summary>
@@ -149,7 +151,9 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Academics.Examination.ResultCreation", new SubmoduleInfo(Examination_ResultCreation.All, Examination_ResultCreation.DisplayNames) },
 			{ "Academics.Examination.Result", new SubmoduleInfo(Examination_Result.All, Examination_Result.DisplayNames) },
 			{ "Academics.Examination.Settings.GradeScaling", new SubmoduleInfo(Examination_SettingsGradeScaling.All, Examination_SettingsGradeScaling.DisplayNames) },
-			{ "Academics.Examination.Settings.ExamTypes", new SubmoduleInfo(Examination_SettingsExamTypes.All, Examination_SettingsExamTypes.DisplayNames) },
+				{ "Academics.Examination.Settings.ExamTypes", new SubmoduleInfo(Examination_SettingsExamTypes.All, Examination_SettingsExamTypes.DisplayNames) },
+				{ "Academics.Examination.QuestionBank", new SubmoduleInfo(Examination_QuestionBank.All, Examination_QuestionBank.DisplayNames) },
+				{ "Academics.Examination.QuestionPapers", new SubmoduleInfo(Examination_QuestionPapers.All, Examination_QuestionPapers.DisplayNames) },
 
 			// Group Management submodules (defined in Academics.Group.cs)
 			{ "Academics.GroupManagement.Dashboard", new SubmoduleInfo(GroupManagement_Dashboard.All, GroupManagement_Dashboard.DisplayNames) },

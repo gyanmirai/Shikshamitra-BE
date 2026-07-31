@@ -36,6 +36,7 @@ public interface IAcademicCalendarAppService : IApplicationService
     // Emergency Closures
     Task<PagedResultDto<EmergencyClosureListItemDto>> GetEmergencyClosuresAsync(Guid? academicYearId, CalendarDayStatus? status, int skipCount = 0, int maxResultCount = 10);
     Task<List<AcademicCalendarDayDto>> CreateEmergencyClosureAsync(CreateEmergencyClosureDto input);
+    Task<AcademicCalendarDayDto> UpdateEmergencyClosureAsync(Guid dayId, UpdateEmergencyClosureDto input);
     Task CancelEmergencyClosureAsync(Guid dayId);
 
     // Impact Logs

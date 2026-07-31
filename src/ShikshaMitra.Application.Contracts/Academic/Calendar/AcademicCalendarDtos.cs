@@ -256,6 +256,23 @@ public class CreateEmergencyClosureDto
     public bool AutoScanImpacts { get; set; } = true;
 }
 
+public class UpdateEmergencyClosureDto
+{
+    public DateTimeOffset? StartDate { get; set; }
+    public DateTimeOffset? EndDate { get; set; }
+    public TimeSpan? StartTime { get; set; }
+    public TimeSpan? EndTime { get; set; }
+    public string Title { get; set; }
+    public string? Description { get; set; }
+    public bool AppliesToAll { get; set; }
+    public List<Guid>? StandardIds { get; set; }
+    public bool NotifyParents { get; set; }
+    public bool NotifyTeachers { get; set; }
+    public bool NotifyStudents { get; set; }
+    public bool NotifyStaff { get; set; }
+    public bool AutoScanImpacts { get; set; } = true;
+}
+
 public class ResolveImpactLogDto
 {
     public string? ResolutionNote { get; set; }

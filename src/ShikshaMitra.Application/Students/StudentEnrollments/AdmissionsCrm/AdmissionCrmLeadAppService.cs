@@ -5,7 +5,9 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -45,6 +47,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 	private readonly IRepository<AdmissionCrmRouteDefinition, Guid> _routeDefinitionRepository;
 	private readonly IAdmissionCrmCommunicationAppService _communicationAppService;
 	private readonly IAdmissionCrmRegistrationAppService _registrationAppService;
+	private readonly IUserScopeAccessService _userScopeAccessService;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 	private readonly StudentEnrollmentManager _studentEnrollmentManager;
 	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
@@ -72,6 +75,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		IRepository<AdmissionCrmRouteDefinition, Guid> routeDefinitionRepository,
 		IAdmissionCrmCommunicationAppService communicationAppService,
 		IAdmissionCrmRegistrationAppService registrationAppService,
+		IUserScopeAccessService userScopeAccessService,
 		StudentScopeAccessService studentScopeAccessService,
 		StudentEnrollmentManager studentEnrollmentManager,
 		AdmissionCrmStaffEligibilityService staffEligibilityService,
@@ -98,6 +102,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		_routeDefinitionRepository = routeDefinitionRepository;
 		_communicationAppService = communicationAppService;
 		_registrationAppService = registrationAppService;
+		_userScopeAccessService = userScopeAccessService;
 		_studentScopeAccessService = studentScopeAccessService;
 		_studentEnrollmentManager = studentEnrollmentManager;
 		_staffEligibilityService = staffEligibilityService;
@@ -280,6 +285,80 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		AdmissionCrmRouteType.SchoolDefined => "School-defined",
 		_ => routeType.ToString()
 	};
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add)]
+	public async Task<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>>
+		GetOperationalStandardOptionsAsync(Guid academicYearId)
+	{
+		await EnsureAcademicYearExistsAsync(academicYearId);
+		await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+			academicYearId,
+			nameof(GetOperationalStandardOptionsAsync));
+
+		var admissionYearSetups = await _admissionYearRepository.GetListAsync(setup =>
+			setup.TenantId == CurrentTenant.Id &&
+			setup.AcademicYearId == academicYearId);
+		var publishedSetup = admissionYearSetups.SingleOrDefault(setup =>
+			setup.Status == AdmissionCrmAdmissionYearSetupStatus.Published);
+		HashSet<Guid>? captureStandardIds = admissionYearSetups.Count == 0
+			? null
+			: publishedSetup is null
+				? []
+				: JsonSerializer.Deserialize<HashSet<Guid>>(
+					publishedSetup.TargetStandardIdsJson,
+					JsonOptions) ?? [];
+
+		var standards = await _standardRepository.GetQueryableAsync();
+		var stages = await _mediumStageRepository.GetQueryableAsync();
+		var mediums = await _mediumRepository.GetQueryableAsync();
+		var boards = await _boardRepository.GetQueryableAsync();
+		var optionQuery =
+			from standard in standards
+			join stage in stages on standard.EducationMediumStageId equals stage.Id
+			join medium in mediums on stage.EducationMediumId equals medium.Id
+			join board in boards on medium.EducationBoardId equals board.Id
+			where board.TenantId == CurrentTenant.Id &&
+			      board.AcademicYearId == academicYearId
+			select new OperationalStandardOptionRow
+			{
+				AcademicYearId = board.AcademicYearId,
+				EducationBoardId = board.Id,
+				EducationMediumId = medium.Id,
+				EducationMediumStageId = stage.Id,
+				StandardId = standard.Id,
+				StandardName = standard.Name,
+				MediumStageName = stage.Name,
+				MediumName = medium.Name,
+				BoardType = board.Type
+			};
+
+		if (captureStandardIds is not null)
+		{
+			optionQuery = optionQuery.Where(option =>
+				option.StandardId.HasValue && captureStandardIds.Contains(option.StandardId.Value));
+		}
+
+		var userScope = await _userScopeAccessService.GetCurrentUserScopeAsync();
+		var standardOptions = await AsyncExecuter.ToListAsync(optionQuery);
+		var scopedOptions = standardOptions.FilterByUserScope(userScope);
+		return scopedOptions
+			.OrderBy(option => option.BoardType)
+			.ThenBy(option => option.MediumName)
+			.ThenBy(option => option.MediumStageName)
+			.ThenBy(option => option.StandardName)
+			.Select(option => new AdmissionCrmAdmissionYearStandardOptionDto
+			{
+				StandardId = option.StandardId!.Value,
+				StandardName = option.StandardName,
+				MediumStageId = option.EducationMediumStageId!.Value,
+				MediumStageName = option.MediumStageName,
+				MediumId = option.EducationMediumId!.Value,
+				MediumName = option.MediumName,
+				BoardId = option.EducationBoardId!.Value,
+				BoardName = option.BoardType.ToString()
+			})
+			.ToList();
+	}
 
 	public async Task<AdmissionCrmLeadDto> CreateAsync(Guid academicYearId, CreateAdmissionCrmLeadDto input)
 	{
@@ -2814,6 +2893,20 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		}
 
 		return 50;
+	}
+
+	private sealed class OperationalStandardOptionRow : IUserScopedEntity
+	{
+		public Guid? AcademicYearId { get; init; }
+		public Guid? EducationBoardId { get; init; }
+		public Guid? EducationMediumId { get; init; }
+		public Guid? EducationMediumStageId { get; init; }
+		public Guid? StandardId { get; init; }
+		public Guid? DivisionId => null;
+		public string StandardName { get; init; } = string.Empty;
+		public string MediumStageName { get; init; } = string.Empty;
+		public string MediumName { get; init; } = string.Empty;
+		public EducationBoardType BoardType { get; init; }
 	}
 
 	private static string? NormalizeText(string? value)

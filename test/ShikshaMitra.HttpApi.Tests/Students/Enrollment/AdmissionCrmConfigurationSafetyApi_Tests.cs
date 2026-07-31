@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
@@ -560,6 +561,25 @@ public class AdmissionCrmConfigurationSafetyApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Filter_Operational_Standard_Options_To_UserScope()
+	{
+		var outOfScopeStandardId = await CreateAdditionalStandardAsync();
+		using var client = await CreateStandardScopedClientAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add);
+
+		var response = await client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/operational-standard-options");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var options = await response.Content
+			.ReadFromJsonAsync<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>>(JsonOptions);
+		options.ShouldNotBeNull();
+		options.ShouldContain(option => option.StandardId == Factory.SeededStandardId);
+		options.ShouldNotContain(option => option.StandardId == outOfScopeStandardId);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Return_Permission_And_Scope_Safe_Focused_Admission_Report()
 	{
 		var otherStandardId = await CreateAdditionalStandardAsync();
@@ -791,7 +811,7 @@ public class AdmissionCrmConfigurationSafetyApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	private async Task<HttpClient> CreateStandardScopedClientAsync()
+	private async Task<HttpClient> CreateStandardScopedClientAsync(params string[] permissions)
 	{
 		var userId = Guid.NewGuid();
 		using var scope = Factory.Services.CreateScope();
@@ -820,6 +840,12 @@ public class AdmissionCrmConfigurationSafetyApi_Tests : ShikshaMitraApiTestBase
 		var client = Factory.CreateClient();
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, userId.ToString("D"));
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "teacher");
+		if (permissions.Length > 0)
+		{
+			client.DefaultRequestHeaders.Add(
+				AlwaysGrantPermissionChecker.TestPermissionsHeader,
+				string.Join(",", permissions));
+		}
 		return client;
 	}
 

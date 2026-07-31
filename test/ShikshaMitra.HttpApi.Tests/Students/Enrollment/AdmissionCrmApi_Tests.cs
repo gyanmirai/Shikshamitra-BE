@@ -324,6 +324,38 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Require_Add_Permission_For_Operational_Standard_Options()
+	{
+		var endpoint =
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/operational-standard-options";
+
+		using var quickInquiryClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add);
+		var quickInquiryResponse = await quickInquiryClient.GetAsync(endpoint);
+		quickInquiryResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await quickInquiryResponse.Content.ReadAsStringAsync());
+
+		using var paperRegistrationClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add,
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm);
+		var paperRegistrationResponse = await paperRegistrationClient.GetAsync(endpoint);
+		paperRegistrationResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await paperRegistrationResponse.Content.ReadAsStringAsync());
+
+		using var viewOnlyClient = CreateClientWithCrmPermissions(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View);
+		var viewOnlyResponse = await viewOnlyClient.GetAsync(endpoint);
+		viewOnlyResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		var setupResponse = await quickInquiryClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/setup/admission-years/{Factory.SeededAcademicYearId}/standard-options");
+		setupResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Return_Only_Enabled_Ordered_Channels_And_Effective_Published_Routes()
 	{
 		var originalCycle = await GetCrmCycleConfigurationAsync();
@@ -2298,6 +2330,100 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		approved.ShouldNotBeNull();
 		approved.Status.ShouldBe(AdmissionCrmMessageTemplateStatus.Approved);
 		approved.IsActive.ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Protect_Approved_Message_Template_Used_By_Enabled_Automation()
+	{
+		var template = await CreateApprovedCrmMessageTemplateAsync();
+		var originalCycle = await GetCrmCycleConfigurationAsync();
+
+		try
+		{
+			var journeyRules = originalCycle.JourneyRules.ToList();
+			journeyRules.Add(new AdmissionCrmJourneyRuleDto
+			{
+				RuleName = "Template retirement guard " + Guid.NewGuid().ToString("N")[..8],
+				IsEnabled = true,
+				Priority = 10,
+				Trigger = AdmissionCrmJourneyTrigger.LeadCreated,
+				SendMessage = true,
+				MessageTemplateId = template.Id
+			});
+			await SetCrmAutomationReferencesAsync(
+				journeyRules,
+				originalCycle.ChannelSettings);
+
+			var retireResponse = await Client.PatchAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/configuration/message-templates/{template.Id}/status",
+				new UpdateAdmissionCrmMessageTemplateStatusDto
+				{
+					Status = AdmissionCrmMessageTemplateStatus.Retired,
+					IsActive = false
+				},
+				JsonOptions);
+			retireResponse.StatusCode.ShouldBe(
+				HttpStatusCode.BadRequest,
+				await retireResponse.Content.ReadAsStringAsync());
+			(await retireResponse.Content.ReadAsStringAsync())
+				.ShouldContain("AdmissionCrm:MessageTemplateInUse");
+
+			await SetCrmAutomationReferencesAsync(
+				originalCycle.JourneyRules,
+				originalCycle.ChannelSettings);
+			var channelSettings = originalCycle.ChannelSettings
+				.Select(setting => new AdmissionCrmChannelSettingDto
+				{
+					Channel = setting.Channel,
+					IsEnabled = setting.IsEnabled ||
+						setting.Channel == AdmissionInquiryChannel.WhatsAppInquiry,
+					DefaultInquirySourceId = setting.DefaultInquirySourceId,
+					DefaultFormTemplateId = setting.DefaultFormTemplateId,
+					DefaultOwnerUserId = setting.DefaultOwnerUserId,
+					DefaultAcknowledgementTemplateId =
+						setting.Channel == AdmissionInquiryChannel.WhatsAppInquiry
+							? template.Id
+							: setting.DefaultAcknowledgementTemplateId,
+					DisplayOrder = setting.DisplayOrder
+				})
+				.ToList();
+			await SetCrmAutomationReferencesAsync(
+				originalCycle.JourneyRules,
+				channelSettings);
+
+			var deactivateResponse = await Client.PatchAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/configuration/message-templates/{template.Id}/status",
+				new UpdateAdmissionCrmMessageTemplateStatusDto
+				{
+					Status = AdmissionCrmMessageTemplateStatus.Approved,
+					IsActive = false
+				},
+				JsonOptions);
+			deactivateResponse.StatusCode.ShouldBe(
+				HttpStatusCode.BadRequest,
+				await deactivateResponse.Content.ReadAsStringAsync());
+			(await deactivateResponse.Content.ReadAsStringAsync())
+				.ShouldContain("AdmissionCrm:MessageTemplateInUse");
+		}
+		finally
+		{
+			await SetCrmAutomationReferencesAsync(
+				originalCycle.JourneyRules,
+				originalCycle.ChannelSettings);
+		}
+
+		var unreferencedRetireResponse = await Client.PatchAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/configuration/message-templates/{template.Id}/status",
+			new UpdateAdmissionCrmMessageTemplateStatusDto
+			{
+				Status = AdmissionCrmMessageTemplateStatus.Retired,
+				IsActive = false
+			},
+			JsonOptions);
+		unreferencedRetireResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await unreferencedRetireResponse.Content.ReadAsStringAsync());
 	}
 
 	[Fact]
@@ -5823,6 +5949,46 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		var cycle = await response.Content.ReadFromJsonAsync<AdmissionCrmCycleConfigurationDto>(JsonOptions);
 		cycle.ShouldNotBeNull();
 		return cycle;
+	}
+
+	private async Task SetCrmAutomationReferencesAsync(
+		IReadOnlyList<AdmissionCrmJourneyRuleDto> journeyRules,
+		IReadOnlyList<AdmissionCrmChannelSettingDto> channelSettings)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var cycleRepository = scope.ServiceProvider
+				.GetRequiredService<IRepository<AdmissionCrmCycleConfiguration, Guid>>();
+			var configuration = await cycleRepository.FindAsync(item =>
+				item.TenantId == Guid.Parse(TestAuthHandler.TestTenantId) &&
+				item.AcademicYearId == Factory.SeededAcademicYearId);
+			configuration.ShouldNotBeNull();
+			configuration.Update(
+				configuration.CycleName,
+				configuration.IsActive,
+				configuration.RegistrationFormRequiredBeforeExam,
+				configuration.EntranceExamRequired,
+				configuration.StaleAfterDays,
+				configuration.ArchiveAfterDays,
+				configuration.DefaultLeadSlaHours,
+				configuration.ActivationCancellationWindowDays,
+				configuration.DefaultExamPassingPercentage,
+				configuration.MeritRankingMode,
+				configuration.ExamReadinessFields,
+				configuration.LeadScoringRulesJson,
+				configuration.LeadRoutingRulesJson,
+				JsonSerializer.Serialize(journeyRules, JsonOptions),
+				configuration.ApplicantChecklistJson,
+				JsonSerializer.Serialize(channelSettings, JsonOptions),
+				configuration.SlaPolicyJson,
+				configuration.Notes);
+			await cycleRepository.UpdateAsync(configuration, autoSave: false);
+			await uow.CompleteAsync();
+		}
 	}
 
 	private async Task<AdmissionCrmCycleConfigurationDto> UpdateSchoolDefaultCycleAsync(

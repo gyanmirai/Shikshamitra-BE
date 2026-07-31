@@ -17,6 +17,12 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid academicYearId) =>
 		admissionCrmLeadAppService.GetQuickInquiryOptionsAsync(academicYearId);
 
+	[HttpGet("{academicYearId}/operational-standard-options")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add)]
+	public Task<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>>
+		GetOperationalStandardOptionsAsync([FromRoute] Guid academicYearId) =>
+		admissionCrmLeadAppService.GetOperationalStandardOptionsAsync(academicYearId);
+
 	[HttpPost("{academicYearId}/leads")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add)]
 	public async Task<AdmissionCrmLeadDto> CreateAsync(

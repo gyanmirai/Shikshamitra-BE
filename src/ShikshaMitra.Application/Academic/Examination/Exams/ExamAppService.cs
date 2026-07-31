@@ -107,6 +107,7 @@ public class ExamAppService(
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		EnsureExamSetupEditable(exam);
+		await AttachMissingElectiveScheduleSubjectsAsync(exam, input);
 		await ValidateScheduleInputAsync(exam, input);
 		await EnsureScheduleGradingScalesAvailableForFutureUseAsync(input);
 
@@ -191,6 +192,29 @@ public class ExamAppService(
 			? (await electiveGroupRepository.GetListAsync(eg => separateElectiveGroupIds.Contains(eg.Id))).ToDictionary(eg => eg.Id)
 			: new Dictionary<Guid, ElectiveGroup>();
 
+		var selectedElectiveSubjectIdsByGroup = await GetSelectedElectiveSubjectIdsByGroupAsync(
+			exam.StandardId,
+			exam.ExamDivisions.Select(x => x.DivisionId).ToList(),
+			separateElectiveGroupIds);
+		var selectedSeparateSubjectIds = selectedElectiveSubjectIdsByGroup.Values
+			.SelectMany(x => x)
+			.Distinct()
+			.ToList();
+		if (selectedSeparateSubjectIds.Count > 0)
+		{
+			var missingSelectedSubjectIds = selectedSeparateSubjectIds
+				.Where(id => !subjectDict.ContainsKey(id))
+				.ToList();
+			if (missingSelectedSubjectIds.Count > 0)
+			{
+				var selectedSubjects = await subjectRepository.GetListAsync(s => missingSelectedSubjectIds.Contains(s.Id));
+				foreach (var subject in selectedSubjects)
+				{
+					subjectDict[subject.Id] = subject;
+				}
+			}
+		}
+
 		var result = new List<ExamScheduleSubjectDto>();
 
 		// ── Case 1: Combined mode (SubjectId = ElectiveGroupId) ────────────────────────────────
@@ -233,23 +257,30 @@ public class ExamAppService(
 			var egId = group.Key;
 			electiveGroupDict.TryGetValue(egId, out var eg);
 
-			var groupSubjects = group.Select(s =>
-			{
-				subjectDict.TryGetValue(s.SubjectId, out var subject);
-				return new ExamElectiveGroupSubjectDto
+			selectedElectiveSubjectIdsByGroup.TryGetValue(egId, out var selectedSubjectIds);
+
+			var scheduledSubjectsById = group.ToDictionary(s => s.SubjectId);
+			var groupSubjectIds = selectedSubjectIds?.ToList() ?? group.Select(s => s.SubjectId).ToList();
+
+			var groupSubjects = groupSubjectIds
+				.Select(subjectId =>
 				{
-					SubjectId = s.SubjectId,
-					SubjectName = subject?.Name,
-					Color = subject?.Color,
-					ExamDate = s.ExamDate,
-					StartTime = s.StartTime,
-					EndTime = s.EndTime,
-					TotalMarks = s.TotalMarks,
-					PassingMarks = s.PassingMarks,
-					Notes = s.Notes,
-					GradeScalingId = s.GradeScalingId
-				};
-			}).ToList();
+					subjectDict.TryGetValue(subjectId, out var subject);
+					scheduledSubjectsById.TryGetValue(subjectId, out var scheduledSubject);
+					return new ExamElectiveGroupSubjectDto
+					{
+						SubjectId = subjectId,
+						SubjectName = subject?.Name,
+						Color = subject?.Color,
+						ExamDate = scheduledSubject?.ExamDate,
+						StartTime = scheduledSubject?.StartTime,
+						EndTime = scheduledSubject?.EndTime,
+						TotalMarks = scheduledSubject?.TotalMarks,
+						PassingMarks = scheduledSubject?.PassingMarks,
+						Notes = scheduledSubject?.Notes,
+						GradeScalingId = scheduledSubject?.GradeScalingId
+					};
+				}).ToList();
 
 			result.Add(new ExamScheduleSubjectDto
 			{
@@ -1122,7 +1153,8 @@ public class ExamAppService(
 			.Where(x => x.ExamDate.HasValue && x.StartTime.HasValue && x.EndTime.HasValue)
 			.Select(x => new
 			{
-				SubjectId = x.ElectiveGroupId ?? x.SubjectId,
+				x.SubjectId,
+				x.ElectiveGroupId,
 				Date = x.ExamDate!.Value.Date,
 				Start = x.StartTime!.Value,
 				End = x.EndTime!.Value
@@ -1137,12 +1169,24 @@ public class ExamAppService(
 				var right = scheduled[j];
 				if (left.Date == right.Date && left.Start < right.End && left.End > right.Start)
 				{
+					if (IsSameElectiveGroup(left.ElectiveGroupId, right.ElectiveGroupId))
+					{
+						continue;
+					}
+
 					throw new BusinessException("ShikshaMitra.Exam:ScheduleOverlap")
 						.WithData("SubjectId", right.SubjectId)
 						.WithData("ExamDate", left.Date.ToString("yyyy-MM-dd"));
 				}
 			}
 		}
+	}
+
+	private static bool IsSameElectiveGroup(Guid? leftElectiveGroupId, Guid? rightElectiveGroupId)
+	{
+		return leftElectiveGroupId.HasValue &&
+			rightElectiveGroupId.HasValue &&
+			leftElectiveGroupId.Value == rightElectiveGroupId.Value;
 	}
 
 	private async Task EnsureExamDateAllowedAsync(Guid standardId, IEnumerable<Guid> divisionIds, DateTime examDate)
@@ -1363,6 +1407,95 @@ public class ExamAppService(
 				}
 			}
 		}
+	}
+
+	private async Task AttachMissingElectiveScheduleSubjectsAsync(Exam exam, ExamScheduleRequestDto input)
+	{
+		var existingSubjectIds = exam.ExamSubjects.Select(s => s.SubjectId).ToHashSet();
+		var missingElectiveRows = input.Subjects
+			.Where(s => s.SubjectId != Guid.Empty &&
+				s.ElectiveGroupId.HasValue &&
+				!existingSubjectIds.Contains(s.SubjectId))
+			.GroupBy(s => new { s.SubjectId, ElectiveGroupId = s.ElectiveGroupId!.Value })
+			.Select(g => g.Key)
+			.ToList();
+
+		if (missingElectiveRows.Count == 0)
+		{
+			return;
+		}
+
+		var missingSubjectIds = missingElectiveRows.Select(x => x.SubjectId).Distinct().ToList();
+		var electiveGroupIds = missingElectiveRows.Select(x => x.ElectiveGroupId).Distinct().ToList();
+		var assignments = await assignmentRepository.GetListAsync(a =>
+			a.StandardId == exam.StandardId &&
+			missingSubjectIds.Contains(a.SubjectId) &&
+			a.ElectiveGroupId.HasValue &&
+			electiveGroupIds.Contains(a.ElectiveGroupId.Value));
+		var assignmentKeys = assignments
+			.Select(a => (a.SubjectId, ElectiveGroupId: a.ElectiveGroupId!.Value))
+			.ToHashSet();
+		var selectedSubjectIdsByGroup = await GetSelectedElectiveSubjectIdsByGroupAsync(
+			exam.StandardId,
+			exam.ExamDivisions.Select(x => x.DivisionId).ToList(),
+			electiveGroupIds);
+
+		foreach (var row in missingElectiveRows)
+		{
+			if (!assignmentKeys.Contains((row.SubjectId, row.ElectiveGroupId)))
+			{
+				continue;
+			}
+
+			if (!selectedSubjectIdsByGroup.TryGetValue(row.ElectiveGroupId, out var selectedSubjectIds) ||
+				!selectedSubjectIds.Contains(row.SubjectId))
+			{
+				continue;
+			}
+
+			exam.AddSubject(new ExamSubject(GuidGenerator.Create(), exam.Id, row.SubjectId));
+			existingSubjectIds.Add(row.SubjectId);
+		}
+	}
+
+	private async Task<Dictionary<Guid, HashSet<Guid>>> GetSelectedElectiveSubjectIdsByGroupAsync(
+		Guid standardId,
+		IReadOnlyCollection<Guid> divisionIds,
+		IReadOnlyCollection<Guid> electiveGroupIds)
+	{
+		var validDivisionIds = divisionIds.Where(id => id != Guid.Empty).Distinct().ToList();
+		var validElectiveGroupIds = electiveGroupIds.Where(id => id != Guid.Empty).Distinct().ToList();
+		if (validDivisionIds.Count == 0 || validElectiveGroupIds.Count == 0)
+		{
+			return new Dictionary<Guid, HashSet<Guid>>();
+		}
+
+		var academicMediumId = await GetAcademicMediumIdForStandardAsync(standardId);
+		var students = await studentRepository.GetListAsync(s =>
+			s.AcademicMediumId == academicMediumId &&
+			s.StandardId == standardId &&
+			s.DivisionId.HasValue &&
+			validDivisionIds.Contains(s.DivisionId.Value) &&
+			s.Status == StudentLifeCycleStatusEnum.Enrolled &&
+			s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved &&
+			!s.IsDeleted);
+
+		var studentIds = students.Select(s => s.Id).ToList();
+		if (studentIds.Count == 0)
+		{
+			return new Dictionary<Guid, HashSet<Guid>>();
+		}
+
+		var selections = await studentElectiveSelectionRepository.GetListAsync(s =>
+			studentIds.Contains(s.StudentId) &&
+			validElectiveGroupIds.Contains(s.ElectiveGroupId) &&
+			s.IsLocked);
+
+		return selections
+			.GroupBy(s => s.ElectiveGroupId)
+			.ToDictionary(
+				g => g.Key,
+				g => g.Select(s => s.SelectedSubjectId).ToHashSet());
 	}
 
 	private async Task<Guid> GetAcademicMediumIdForStandardAsync(Guid standardId)

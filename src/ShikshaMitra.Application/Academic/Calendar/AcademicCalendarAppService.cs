@@ -845,6 +845,62 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return results;
     }
 
+    public async Task<AcademicCalendarDayDto> UpdateEmergencyClosureAsync(Guid dayId, UpdateEmergencyClosureDto input)
+    {
+        var day = await _calendarDayRepository.GetAsync(dayId);
+        if (day.DayType != DayType.EmergencyClosure)
+        {
+            throw new UserFriendlyException("Selected day is not an emergency closure.");
+        }
+
+        if (day.Status != CalendarDayStatus.Active)
+        {
+            throw new UserFriendlyException("Cannot update a cancelled emergency closure.");
+        }
+
+        if (input.StartTime.HasValue != input.EndTime.HasValue)
+        {
+            throw new UserFriendlyException("Both start time and end time are required for a partial-day closure.");
+        }
+
+        if (input.StartTime.HasValue && input.EndTime.HasValue && input.EndTime <= input.StartTime)
+        {
+            throw new UserFriendlyException("Closure end time must be after the start time.");
+        }
+
+        var beforeJson = System.Text.Json.JsonSerializer.Serialize(day);
+
+        day.Update(
+            day.Date,
+            DayType.EmergencyClosure,
+            input.Title,
+            input.Description,
+            input.AppliesToAll,
+            input.AppliesToAll ? null : input.StandardIds?.FirstOrDefault(),
+            null,
+            HolidayCategory.WeatherEmergency,
+            input.StartTime,
+            input.EndTime,
+            changeReason: "Emergency closure updated by administrator",
+            autoScanImpacts: input.AutoScanImpacts
+        );
+
+        await _calendarDayRepository.UpdateAsync(day);
+
+        await _auditWriter.WriteAsync(
+            day.AcademicCalendarId,
+            CalendarAuditAction.DayUpdated,
+            beforeJson: beforeJson,
+            afterJson: System.Text.Json.JsonSerializer.Serialize(day),
+            entityType: "Emergency Closure",
+            entityName: day.Title,
+            reason: "Emergency closure updated by administrator",
+            academicCalendarDayId: day.Id,
+            module: "EmergencyClosure");
+
+        return ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(day);
+    }
+
     private async Task CreateEmergencyClosureForDateAsync(
         CreateEmergencyClosureDto input,
         DateTime inputDate,

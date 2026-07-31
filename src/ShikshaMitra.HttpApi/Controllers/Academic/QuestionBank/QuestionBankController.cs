@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.QuestionBank;
 using Volo.Abp.AspNetCore.Mvc;
@@ -27,6 +28,14 @@ public class QuestionBankController(IQuestionBankAppService service) : AbpContro
 
     [HttpGet("dashboard")]
     public Task<QuestionBankDashboardDto> GetDashboard([FromQuery] Guid academicYearId) => service.GetDashboardAsync(academicYearId);
+
+    [HttpGet("questions/bulk-template")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DownloadBulkTemplate()
+    {
+        var template = await service.GetBulkTemplateAsync();
+        return File(template.Content, template.ContentType, template.FileName);
+    }
 
     [HttpGet("questions")]
     public Task<QuestionListResponseDto> GetQuestions([FromQuery] QuestionSearchInput input) => service.GetQuestionsAsync(input);

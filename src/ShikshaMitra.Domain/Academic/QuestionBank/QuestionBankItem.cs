@@ -17,6 +17,7 @@ public class QuestionBankItem : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid SubjectId { get; set; }
     public Guid? ChapterId { get; set; }
     public Guid? TopicId { get; set; }
+    public string? TopicName { get; set; }
     public string QuestionText { get; set; } = string.Empty;
     public string? PlainTextSearchContent { get; set; }
     public QuestionType QuestionType { get; set; }

@@ -22,6 +22,7 @@ public class QuestionBankItemConfiguration : IEntityTypeConfiguration<QuestionBa
         builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionBankItems", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.QuestionText).IsRequired();
+        builder.Property(x => x.TopicName).HasMaxLength(256);
         builder.Property(x => x.PlainTextSearchContent).HasMaxLength(2048);
         builder.Property(x => x.Marks).HasPrecision(10, 2);
         builder.Property(x => x.NegativeMarks).HasPrecision(10, 2);
@@ -38,6 +39,7 @@ public class QuestionBankItemConfiguration : IEntityTypeConfiguration<QuestionBa
         builder.HasIndex(x => x.SubjectId);
         builder.HasIndex(x => x.ChapterId);
         builder.HasIndex(x => x.TopicId);
+        builder.HasIndex(x => x.TopicName);
         builder.HasIndex(x => x.QuestionType);
         builder.HasIndex(x => x.DifficultyLevel);
         builder.HasIndex(x => x.BloomLevel);

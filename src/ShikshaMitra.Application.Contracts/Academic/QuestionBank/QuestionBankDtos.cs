@@ -11,6 +11,7 @@ public interface IQuestionBankAppService : IApplicationService
 {
     Task<QuestionBankSettingDto> GetSettingsAsync(Guid academicYearId);
     Task<QuestionBankSettingDto> SaveSettingsAsync(QuestionBankSettingDto input);
+    Task<QuestionBankTemplateDto> GetBulkTemplateAsync();
     Task<QuestionListResponseDto> GetQuestionsAsync(QuestionSearchInput input);
     Task<QuestionBankItemDto> GetQuestionAsync(Guid id);
     Task<QuestionBankItemDto> CreateQuestionAsync(CreateUpdateQuestionDto input);
@@ -62,6 +63,13 @@ public class QuestionBankSettingDto
     public bool EnableAiDuplicateDetector { get; set; }
 }
 
+public class QuestionBankTemplateDto
+{
+    public string FileName { get; set; } = "question-bank-bulk-upload-template.xlsx";
+    public string ContentType { get; set; } = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    public byte[] Content { get; set; } = [];
+}
+
 public class QuestionOptionDto
 {
     public Guid? Id { get; set; }
@@ -80,6 +88,7 @@ public class QuestionBankItemDto
     public Guid SubjectId { get; set; }
     public Guid? ChapterId { get; set; }
     public Guid? TopicId { get; set; }
+    public string? TopicName { get; set; }
     public string QuestionText { get; set; } = string.Empty;
     public QuestionType QuestionType { get; set; }
     public DifficultyLevel DifficultyLevel { get; set; }
@@ -117,6 +126,7 @@ public class CreateUpdateQuestionDto
     public Guid SubjectId { get; set; }
     public Guid? ChapterId { get; set; }
     public Guid? TopicId { get; set; }
+    public string? TopicName { get; set; }
     public string QuestionText { get; set; } = string.Empty;
     public QuestionType QuestionType { get; set; }
     public DifficultyLevel DifficultyLevel { get; set; }
@@ -139,6 +149,7 @@ public class QuestionSearchInput
     public Guid? SubjectId { get; set; }
     public Guid? ChapterId { get; set; }
     public Guid? TopicId { get; set; }
+    public string? TopicName { get; set; }
     public QuestionType? QuestionType { get; set; }
     public DifficultyLevel? DifficultyLevel { get; set; }
     public BloomLevel? BloomLevel { get; set; }

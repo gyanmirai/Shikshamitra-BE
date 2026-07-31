@@ -573,8 +573,9 @@ public class ExamAppService(
 				EndDate = finalEndAt,
 				IsScheduleComplete = IsExamScheduleComplete(x.exam, electiveGroupByStandardAndSubject),
 				HasRoomAssignment = roomRequiredSubjects.Count > 0 && missingRoomAssignmentCount == 0,
-				MissingRoomAssignmentCount = missingRoomAssignmentCount,
-				IssueCount = missingRoomAssignmentCount,
+					MissingRoomAssignmentCount = missingRoomAssignmentCount,
+					IssueCount = 0,
+					WarningCount = missingRoomAssignmentCount,
 				LastUpdatedAt = x.exam.LastModificationTime ?? x.exam.CreationTime,
 				Divisions = x.exam.ExamDivisions.Select(d => divisionDict.GetValueOrDefault(d.DivisionId) ?? string.Empty).OrderBy(name => name).ToList()
 			};

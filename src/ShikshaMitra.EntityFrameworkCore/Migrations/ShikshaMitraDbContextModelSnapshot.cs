@@ -4055,6 +4055,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("TopicId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("TopicName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<int>("VersionNumber")
                         .HasColumnType("integer");
 
@@ -4082,6 +4086,8 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("SubjectId");
 
                     b.HasIndex("TopicId");
+
+                    b.HasIndex("TopicName");
 
                     b.HasIndex("Visibility");
 

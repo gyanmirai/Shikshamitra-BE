@@ -532,6 +532,12 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 		await EnsureAcademicYearWideMutationAccessAsync(
 			template.AcademicYearId,
 			nameof(UpdateMessageTemplateStatusAsync));
+		if (template.Status == AdmissionCrmMessageTemplateStatus.Approved &&
+		    (input.Status != AdmissionCrmMessageTemplateStatus.Approved || !input.IsActive))
+		{
+			await EnsureMessageTemplateIsNotUsedByEnabledAutomationAsync(template.Id);
+		}
+
 		template.UpdateStatus(input.Status, input.IsActive);
 		await _messageTemplateRepository.UpdateAsync(template, autoSave: true);
 		return ToDto(template);
@@ -768,6 +774,36 @@ public class AdmissionCrmConfigurationAppService : ApplicationService, IAdmissio
 				.WithData("TemplateName", templateName)
 				.WithData("Channel", channel);
 		}
+	}
+
+	private async Task EnsureMessageTemplateIsNotUsedByEnabledAutomationAsync(Guid templateId)
+	{
+		var queryable = await _cycleRepository.GetQueryableAsync();
+		var configurations = await AsyncExecuter.ToListAsync(queryable.Where(configuration =>
+			configuration.TenantId == CurrentTenant.Id));
+		var journeyRuleReferenceCount = configurations
+			.SelectMany(configuration =>
+				AdmissionCrmJourneyRuleSerializer.DeserializeRules(configuration.JourneyRulesJson))
+			.Count(rule =>
+				rule.IsEnabled &&
+				rule.SendMessage &&
+				rule.MessageTemplateId == templateId);
+		var channelAcknowledgementReferenceCount = configurations
+			.SelectMany(configuration =>
+				AdmissionCrmChannelSettingsSerializer.DeserializeSettings(configuration.ChannelSettingsJson))
+			.Count(setting =>
+				setting.IsEnabled &&
+				setting.DefaultAcknowledgementTemplateId == templateId);
+
+		if (journeyRuleReferenceCount == 0 && channelAcknowledgementReferenceCount == 0)
+		{
+			return;
+		}
+
+		throw new BusinessException("AdmissionCrm:MessageTemplateInUse")
+			.WithData("TemplateId", templateId)
+			.WithData("JourneyRuleCount", journeyRuleReferenceCount)
+			.WithData("ChannelAcknowledgementCount", channelAcknowledgementReferenceCount);
 	}
 
 	private static string SerializeFields(IReadOnlyList<AdmissionCrmFormFieldDto> fields)

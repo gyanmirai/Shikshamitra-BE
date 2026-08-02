@@ -5,7 +5,6 @@ using ShikshaMitra.Security.UserScope;
 using Volo.Abp.AuditLogging;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.BlobStoring;
-using Volo.Abp.Emailing;
 using Volo.Abp.FeatureManagement;
 using Volo.Abp.MailKit;
 using Volo.Abp.Features;
@@ -34,7 +33,6 @@ namespace ShikshaMitra;
 	typeof(AbpPermissionManagementDomainIdentityModule),
 	typeof(AbpSettingManagementDomainModule),
 	typeof(AbpTenantManagementDomainModule),
-	typeof(AbpEmailingModule),
 	typeof(AbpMailKitModule)
 )]
 [DependsOn(typeof(BlobStoringDatabaseDomainModule))]

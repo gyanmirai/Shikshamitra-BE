@@ -492,10 +492,6 @@ public class QuestionBankAppService(
             throw new BusinessException("ShikshaMitra.QuestionBank:OnlySubmittedCanReview");
         }
 
-        if (CurrentUser.Id.HasValue && question.CreatedByTeacherId == CurrentUser.Id.Value)
-        {
-            throw new BusinessException("ShikshaMitra.QuestionBank:CannotReviewOwnQuestion");
-        }
     }
 
     private static IQueryable<QuestionBankItem> ApplySearch(IQueryable<QuestionBankItem> query, QuestionSearchInput input)

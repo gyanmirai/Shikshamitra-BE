@@ -75,6 +75,13 @@ public class ExamController(
         return await examAppService.GetSubjectsAsync(examId);
     }
 
+    [HttpGet("question-paper-lookup")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionPapers.View)]
+    public async Task<List<QuestionPaperExamLookupDto>> GetQuestionPaperLookupAsync([FromQuery] QuestionPaperExamLookupInput input)
+    {
+        return await examAppService.GetQuestionPaperLookupAsync(input);
+    }
+
     [HttpDelete("{examId}")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ScheduleExam.Delete)]
     public async Task DeleteAsync(Guid examId)

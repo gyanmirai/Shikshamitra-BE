@@ -39,6 +39,7 @@ public class SubstitutionAppService(
     public async Task<PagedResultDto<SubstitutionDto>> GetListAsync(GetSubstitutionsInput input)
     {
         var rows = await substitutionRepository.GetListAsync();
+        rows = await FilterByAcademicMediumAsync(rows, input.AcademicMediumId);
         var filtered = ApplyFilters(rows, input)
             .OrderBy(x => x.Date)
             .ThenBy(x => x.StartTime)
@@ -57,17 +58,30 @@ public class SubstitutionAppService(
         return new PagedResultDto<SubstitutionDto>(total, dtoRows);
     }
 
-    public async Task<SubstitutionDashboardDto> GetDashboardAsync(DateTimeOffset date, Guid? academicYearId = null)
+    public async Task<SubstitutionDashboardDto> GetDashboardAsync(DateTimeOffset date, Guid? academicYearId = null, Guid? academicMediumId = null)
     {
         var target = NormalizeDate(date);
         await teacherAvailabilitySyncService.SyncDateRangeAsync(target, target);
 
         var substitutions = await substitutionRepository.GetListAsync(x =>
             x.Date == target && (!academicYearId.HasValue || x.AcademicYearId == academicYearId));
+        substitutions = await FilterByAcademicMediumAsync(substitutions, academicMediumId);
         var availability = await availabilityRepository.GetListAsync(x =>
             x.AvailabilityDate == target &&
             !x.IsCancelled &&
             (!academicYearId.HasValue || x.AcademicYearId == academicYearId));
+        if (academicMediumId.HasValue && academicMediumId.Value != Guid.Empty)
+        {
+            var contextTeacherUserIds = await GetTeacherUserIdsForAcademicMediumAsync(academicMediumId);
+            availability = availability
+                .Where(x =>
+                    (x.TeacherId.HasValue && contextTeacherUserIds.Contains(x.TeacherId.Value)) ||
+                    (!x.TeacherId.HasValue && !string.IsNullOrWhiteSpace(x.TeacherName) &&
+                     substitutions.Any(substitution =>
+                         string.Equals(substitution.OriginalTeacherName, x.TeacherName, StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(substitution.SubstituteTeacherName, x.TeacherName, StringComparison.OrdinalIgnoreCase))))
+                .ToList();
+        }
 
         var nextRisk = substitutions
             .Where(x => x.Status is SubstitutionStatus.Pending or SubstitutionStatus.Conflict or SubstitutionStatus.WaitingAck)
@@ -91,7 +105,7 @@ public class SubstitutionAppService(
                 x.AcknowledgementStatus == SubstitutionAcknowledgementStatus.ChangeRequested),
             NextRisk = nextRisk == null ? null : await MapAsync(nextRisk, await GetAuditLogsAsync(nextRisk.Id)),
             RiskAlerts = BuildRiskAlerts(substitutions),
-            WorkloadSnapshot = await BuildWorkloadSnapshotAsync(target)
+            WorkloadSnapshot = await BuildWorkloadSnapshotAsync(target, academicMediumId)
         };
     }
 
@@ -185,7 +199,8 @@ public class SubstitutionAppService(
                 input.SubjectName,
                 input.SubstituteTeacherId,
                 input.SubstituteTeacherName,
-                null);
+                null,
+                input.AcademicMediumId);
             await EnsureAssignedRoomAvailableAsync(
                 date,
                 start,
@@ -257,7 +272,8 @@ public class SubstitutionAppService(
                 input.SubjectName,
                 entity.SubstituteTeacherId,
                 entity.SubstituteTeacherName,
-                id);
+                id,
+                input.AcademicMediumId);
             await EnsureAssignedRoomAvailableAsync(
                 date,
                 start,
@@ -323,7 +339,8 @@ public class SubstitutionAppService(
             entity.DepartmentName,
             input.SubstituteTeacherId,
             input.SubstituteTeacherName,
-            id);
+            id,
+            await ResolveAcademicMediumIdAsync(entity.SubjectId));
         await EnsureAssignedRoomAvailableAsync(
             entity.Date,
             entity.StartTime,
@@ -457,12 +474,26 @@ public class SubstitutionAppService(
             entity.OriginalTeacherId,
             entity.OriginalTeacherName,
             entity.DepartmentName,
-            id);
+            id,
+            await ResolveAcademicMediumIdAsync(entity.SubjectId));
     }
 
-    public async Task<SubstitutionCreateFormMetadataDto> GetCreateFormMetadataAsync()
+    public async Task<SubstitutionCreateFormMetadataDto> GetCreateFormMetadataAsync(SubstitutionCreateFormMetadataInput input)
     {
+        var subjectQuery = await subjectRepository.GetQueryableAsync();
+        if (input.AcademicMediumId.HasValue && input.AcademicMediumId.Value != Guid.Empty)
+        {
+            subjectQuery = subjectQuery.Where(x => x.EducationMediumId == input.AcademicMediumId.Value);
+        }
+
+        var subjects = await AsyncExecuter.ToListAsync(subjectQuery);
+        var scopedSubjectIds = subjects.Select(x => x.Id).ToHashSet();
         var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(x => x.Teachers);
+        if (input.AcademicMediumId.HasValue && input.AcademicMediumId.Value != Guid.Empty)
+        {
+            assignedSubjectQuery = assignedSubjectQuery.Where(x => scopedSubjectIds.Contains(x.SubjectId));
+        }
+
         var assignedSubjects = await AsyncExecuter.ToListAsync(assignedSubjectQuery);
         var assignedStandardIds = assignedSubjects.Select(x => x.StandardId).Distinct().ToList();
         var assignedSubjectIds = assignedSubjects.Select(x => x.SubjectId).Distinct().ToList();
@@ -475,9 +506,9 @@ public class SubstitutionAppService(
             ? await standardRepository.GetListAsync(x => assignedStandardIds.Contains(x.Id))
             : [];
         var divisions = await divisionRepository.GetListAsync();
-        var subjects = assignedSubjectIds.Count > 0
-            ? await subjectRepository.GetListAsync(x => assignedSubjectIds.Contains(x.Id))
-            : [];
+        subjects = subjects
+            .Where(x => assignedSubjectIds.Contains(x.Id))
+            .ToList();
         var rooms = await roomRepository.GetListAsync();
         var employees = assignedTeacherUserIds.Count > 0
             ? await employeeRepository.GetListAsync(x =>
@@ -632,7 +663,8 @@ public class SubstitutionAppService(
             input.OriginalTeacherId,
             input.OriginalTeacherName,
             input.DepartmentName ?? input.SubjectName,
-            null);
+            null,
+            input.AcademicMediumId);
     }
 
     private async Task<SuggestedTeacherDto> EnsureSubstituteCanBeAssignedAsync(
@@ -646,7 +678,8 @@ public class SubstitutionAppService(
         string? departmentName,
         Guid? substituteTeacherId,
         string? substituteTeacherName,
-        Guid? currentSubstitutionId)
+        Guid? currentSubstitutionId,
+        Guid? academicMediumId)
     {
         var suggestions = await BuildSuggestedTeachersAsync(
             date,
@@ -657,7 +690,8 @@ public class SubstitutionAppService(
             originalTeacherId,
             originalTeacherName,
             departmentName,
-            currentSubstitutionId);
+            currentSubstitutionId,
+            academicMediumId);
 
         var selected = suggestions.FirstOrDefault(x =>
             (substituteTeacherId.HasValue && x.TeacherId == substituteTeacherId) ||
@@ -743,10 +777,22 @@ public class SubstitutionAppService(
         Guid? originalTeacherId,
         string? originalTeacherName,
         string? departmentName,
-        Guid? currentSubstitutionId)
+        Guid? currentSubstitutionId,
+        Guid? academicMediumId)
     {
+        var effectiveAcademicMediumId = academicMediumId ?? await ResolveAcademicMediumIdAsync(subjectId);
+        var contextTeacherUserIds = await GetTeacherUserIdsForAcademicMediumAsync(effectiveAcademicMediumId);
         var employees = await employeeRepository.GetListAsync(x =>
             !x.EmployeeStatusType.HasValue || x.EmployeeStatusType == EmployeeStatusType.Active);
+        if (effectiveAcademicMediumId.HasValue && effectiveAcademicMediumId.Value != Guid.Empty)
+        {
+            employees = employees
+                .Where(x =>
+                    contextTeacherUserIds.Contains(x.Id) ||
+                    (x.UserId.HasValue && contextTeacherUserIds.Contains(x.UserId.Value)))
+                .ToList();
+        }
+
         var sameDay = await substitutionRepository.GetListAsync(x => x.Date == date);
         var unavailable = await availabilityRepository.GetListAsync(x =>
             x.AvailabilityDate == date &&
@@ -1076,6 +1122,63 @@ public class SubstitutionAppService(
             .ToDictionary(x => x.Key, x => x.Select(MapAudit).ToList());
     }
 
+    private async Task<List<SubstitutionRequest>> FilterByAcademicMediumAsync(
+        List<SubstitutionRequest> rows,
+        Guid? academicMediumId)
+    {
+        if (!academicMediumId.HasValue || academicMediumId.Value == Guid.Empty || rows.Count == 0)
+        {
+            return rows;
+        }
+
+        var subjectIds = await GetSubjectIdsForAcademicMediumAsync(academicMediumId);
+        return rows
+            .Where(x => x.SubjectId.HasValue && subjectIds.Contains(x.SubjectId.Value))
+            .ToList();
+    }
+
+    private async Task<HashSet<Guid>> GetSubjectIdsForAcademicMediumAsync(Guid? academicMediumId)
+    {
+        if (!academicMediumId.HasValue || academicMediumId.Value == Guid.Empty)
+        {
+            return [];
+        }
+
+        var subjectQuery = await subjectRepository.GetQueryableAsync();
+        return (await AsyncExecuter.ToListAsync(subjectQuery
+                .Where(x => x.EducationMediumId == academicMediumId.Value)
+                .Select(x => x.Id)))
+            .ToHashSet();
+    }
+
+    private async Task<HashSet<Guid>> GetTeacherUserIdsForAcademicMediumAsync(Guid? academicMediumId)
+    {
+        var subjectIds = await GetSubjectIdsForAcademicMediumAsync(academicMediumId);
+        if (subjectIds.Count == 0)
+        {
+            return [];
+        }
+
+        var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(x => x.Teachers);
+        return (await AsyncExecuter.ToListAsync(assignedSubjectQuery
+                .Where(x => subjectIds.Contains(x.SubjectId))))
+            .SelectMany(x => x.Teachers)
+            .Select(x => x.TeacherId)
+            .Distinct()
+            .ToHashSet();
+    }
+
+    private async Task<Guid?> ResolveAcademicMediumIdAsync(Guid? subjectId)
+    {
+        if (!subjectId.HasValue || subjectId.Value == Guid.Empty)
+        {
+            return null;
+        }
+
+        var subject = await subjectRepository.FindAsync(subjectId.Value);
+        return subject?.EducationMediumId;
+    }
+
     private static IEnumerable<SubstitutionRequest> ApplyFilters(
         IEnumerable<SubstitutionRequest> rows,
         GetSubstitutionsInput input)
@@ -1385,11 +1488,21 @@ public class SubstitutionAppService(
         return alerts;
     }
 
-    private async Task<List<SuggestedTeacherDto>> BuildWorkloadSnapshotAsync(DateTime date)
+    private async Task<List<SuggestedTeacherDto>> BuildWorkloadSnapshotAsync(DateTime date, Guid? academicMediumId)
     {
+        var contextTeacherUserIds = await GetTeacherUserIdsForAcademicMediumAsync(academicMediumId);
         var employees = await employeeRepository.GetListAsync(x =>
             !x.EmployeeStatusType.HasValue || x.EmployeeStatusType == EmployeeStatusType.Active);
-        var rows = await substitutionRepository.GetListAsync(x => x.Date == date);
+        if (academicMediumId.HasValue && academicMediumId.Value != Guid.Empty)
+        {
+            employees = employees
+                .Where(x =>
+                    contextTeacherUserIds.Contains(x.Id) ||
+                    (x.UserId.HasValue && contextTeacherUserIds.Contains(x.UserId.Value)))
+                .ToList();
+        }
+
+        var rows = await FilterByAcademicMediumAsync(await substitutionRepository.GetListAsync(x => x.Date == date), academicMediumId);
         return employees
             .Select(employee =>
             {

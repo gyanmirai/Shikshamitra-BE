@@ -25,9 +25,10 @@ public class SubstitutionController(ISubstitutionAppService substitutionAppServi
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public Task<SubstitutionDashboardDto> GetDashboardAsync(
         [FromQuery] DateTimeOffset date,
-        [FromQuery] Guid? academicYearId = null)
+        [FromQuery] Guid? academicYearId = null,
+        [FromQuery] Guid? academicMediumId = null)
     {
-        return substitutionAppService.GetDashboardAsync(date, academicYearId);
+        return substitutionAppService.GetDashboardAsync(date, academicYearId, academicMediumId);
     }
 
     [HttpGet("my-duties")]
@@ -39,9 +40,9 @@ public class SubstitutionController(ISubstitutionAppService substitutionAppServi
 
     [HttpGet("create-form-metadata")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
-    public Task<SubstitutionCreateFormMetadataDto> GetCreateFormMetadataAsync()
+    public Task<SubstitutionCreateFormMetadataDto> GetCreateFormMetadataAsync([FromQuery] SubstitutionCreateFormMetadataInput input)
     {
-        return substitutionAppService.GetCreateFormMetadataAsync();
+        return substitutionAppService.GetCreateFormMetadataAsync(input);
     }
 
     [HttpGet("lectures")]

@@ -416,6 +416,67 @@ public class ExamAppService(
 		}).ToList();
 	}
 
+	public async Task<List<QuestionPaperExamLookupDto>> GetQuestionPaperLookupAsync(QuestionPaperExamLookupInput input)
+	{
+		if (input.AcademicMediumId == Guid.Empty || input.StandardId == Guid.Empty || input.SubjectId == Guid.Empty)
+		{
+			return [];
+		}
+
+		var schedulableSubjectIds = new HashSet<Guid> { input.SubjectId };
+		var electiveGroupIdsBySubject = await GetElectiveGroupIdsBySubjectAsync(input.StandardId, [input.SubjectId]);
+		if (electiveGroupIdsBySubject.TryGetValue(input.SubjectId, out var electiveGroupId))
+		{
+			schedulableSubjectIds.Add(electiveGroupId);
+		}
+
+		var examQuery = await examRepository.WithDetailsAsync();
+		var standardQuery = await standardRepository.GetQueryableAsync();
+		var stageQuery = await educationMediumStageRepository.GetQueryableAsync();
+		var examTypeQuery = await examTypeRepository.GetQueryableAsync();
+
+		var query = from exam in examQuery
+					join standard in standardQuery on exam.StandardId equals standard.Id
+					join stage in stageQuery on standard.EducationMediumStageId equals stage.Id
+					join examType in examTypeQuery on exam.ExamTypeId equals examType.Id
+					where stage.EducationMediumId == input.AcademicMediumId &&
+						exam.StandardId == input.StandardId &&
+						exam.ExamSubjects.Any(subject =>
+							schedulableSubjectIds.Contains(subject.SubjectId) &&
+							subject.ExamDate.HasValue &&
+							subject.StartTime.HasValue &&
+							subject.EndTime.HasValue)
+					select new { exam, examType };
+
+		var rows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.exam.ExamName));
+
+		return rows
+			.Where(row => GetEffectiveScheduleStatus(row.exam) != ExamStatus.Completed)
+			.SelectMany(row => row.exam.ExamSubjects
+				.Where(subject =>
+					schedulableSubjectIds.Contains(subject.SubjectId) &&
+					subject.ExamDate.HasValue &&
+					subject.StartTime.HasValue &&
+					subject.EndTime.HasValue)
+				.Select(subject => new QuestionPaperExamLookupDto
+				{
+					ExamId = row.exam.Id,
+					ExamSubjectId = subject.Id,
+					ExamName = row.exam.ExamName,
+					ExamTypeName = row.examType.Name,
+					ExamDate = subject.ExamDate!.Value,
+					StartTime = subject.StartTime,
+					EndTime = subject.EndTime,
+					TotalMarks = subject.TotalMarks,
+					PassingMarks = subject.PassingMarks,
+					Status = GetEffectiveScheduleStatus(row.exam)
+				}))
+			.OrderBy(row => row.ExamDate)
+			.ThenBy(row => row.StartTime)
+			.ThenBy(row => row.ExamName)
+			.ToList();
+	}
+
 	public async Task DeleteAsync(Guid examId)
 	{
 		var exam = await examRepository.GetAsync(examId);
@@ -554,7 +615,7 @@ public class ExamAppService(
 			var startDate = GetExamStartDate(x.exam);
 			var finalEndAt = GetExamFinalEndAt(x.exam);
 			var subjectCount = x.exam.ExamSubjects.Count;
-			var roomRequiredSubjects = GetRoomRequiredSubjects(x.exam, electiveGroupByStandardAndSubject);
+			var roomRequiredSubjects = GetRoomRequiredSubjects(x.exam, x.examType, electiveGroupByStandardAndSubject);
 			var missingRoomAssignmentCount = roomRequiredSubjects
 				.SelectMany(subject => x.exam.ExamDivisions.Select(division => new { subject, division }))
 				.Count(row => !row.subject.RoomAssignments.Any(assignment => assignment.DivisionId == row.division.DivisionId));
@@ -571,7 +632,7 @@ public class ExamAppService(
 				SubjectCount = subjectCount,
 				StartDate = startDate,
 				EndDate = finalEndAt,
-				IsScheduleComplete = IsExamScheduleComplete(x.exam, electiveGroupByStandardAndSubject),
+				IsScheduleComplete = IsExamScheduleComplete(x.exam, x.examType, electiveGroupByStandardAndSubject),
 				HasRoomAssignment = roomRequiredSubjects.Count > 0 && missingRoomAssignmentCount == 0,
 					MissingRoomAssignmentCount = missingRoomAssignmentCount,
 					IssueCount = 0,
@@ -896,6 +957,12 @@ public class ExamAppService(
 
 		if (!gradingScaleId.HasValue)
 		{
+			if (examType.GradeScaleRequired)
+			{
+				throw new BusinessException("ShikshaMitra.Exam:GradingScaleRequired")
+					.WithData("ExamTypeId", examTypeId);
+			}
+
 			return;
 		}
 
@@ -970,6 +1037,8 @@ public class ExamAppService(
 
 	private async Task EnsureExamReadyToPublishAsync(Exam exam)
 	{
+		var examType = await examTypeRepository.GetAsync(exam.ExamTypeId);
+
 		if (exam.ExamDivisions.Count == 0)
 		{
 			throw new BusinessException("ShikshaMitra.Exam:DivisionRequired");
@@ -992,6 +1061,7 @@ public class ExamAppService(
 					.WithData("SubjectId", subject.SubjectId);
 			}
 
+			EnsureRequiredScheduleFieldsPresent(subject, examType);
 			ValidateSubjectScheduleValues(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime, subject.TotalMarks, subject.PassingMarks);
 			await EnsureExamDateAllowedAsync(exam.StandardId, exam.ExamDivisions.Select(x => x.DivisionId), subject.ExamDate.Value);
 		}
@@ -1020,6 +1090,7 @@ public class ExamAppService(
 						.WithData("SubjectId", subject.SubjectId);
 				}
 
+				EnsureRequiredScheduleFieldsPresent(subject, examType);
 				ValidateSubjectScheduleValues(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime, subject.TotalMarks, subject.PassingMarks);
 				await EnsureExamDateAllowedAsync(exam.StandardId, exam.ExamDivisions.Select(x => x.DivisionId), subject.ExamDate.Value);
 			}
@@ -1115,17 +1186,36 @@ public class ExamAppService(
 		return endTimes.Count == 0 ? null : endTimes.Max();
 	}
 
-	private static bool HasCompleteSchedule(ExamSubject subject)
+	private static bool HasCompleteSchedule(ExamSubject subject, ExamType examType)
 	{
-		return subject.ExamDate.HasValue &&
+		var hasRequiredTime = subject.ExamDate.HasValue &&
 			subject.StartTime.HasValue &&
-			subject.EndTime.HasValue &&
-			subject.TotalMarks.HasValue &&
-			subject.PassingMarks.HasValue;
+			subject.EndTime.HasValue;
+		var hasRequiredMarks = !examType.MarksEntryRequired ||
+			(subject.TotalMarks.HasValue && subject.PassingMarks.HasValue);
+		var hasRequiredGradeScale = !examType.GradeScaleRequired || subject.GradeScalingId.HasValue;
+
+		return hasRequiredTime && hasRequiredMarks && hasRequiredGradeScale;
+	}
+
+	private static void EnsureRequiredScheduleFieldsPresent(ExamSubject subject, ExamType examType)
+	{
+		if (examType.MarksEntryRequired && (!subject.TotalMarks.HasValue || !subject.PassingMarks.HasValue))
+		{
+			throw new BusinessException("ShikshaMitra.Exam:ScheduleIncomplete")
+				.WithData("SubjectId", subject.SubjectId);
+		}
+
+		if (examType.GradeScaleRequired && !subject.GradeScalingId.HasValue)
+		{
+			throw new BusinessException("ShikshaMitra.Exam:ScheduleIncomplete")
+				.WithData("SubjectId", subject.SubjectId);
+		}
 	}
 
 	private static bool IsExamScheduleComplete(
 		Exam exam,
+		ExamType examType,
 		IReadOnlyDictionary<(Guid StandardId, Guid SubjectId), Guid> electiveGroupByStandardAndSubject)
 	{
 		if (exam.ExamSubjects.Count == 0)
@@ -1137,7 +1227,7 @@ public class ExamAppService(
 			.Where(subject => !electiveGroupByStandardAndSubject.ContainsKey((exam.StandardId, subject.SubjectId)))
 			.ToList();
 
-		if (coreSubjects.Any(subject => !HasCompleteSchedule(subject)))
+		if (coreSubjects.Any(subject => !HasCompleteSchedule(subject, examType)))
 		{
 			return false;
 		}
@@ -1146,17 +1236,18 @@ public class ExamAppService(
 			.Where(subject => electiveGroupByStandardAndSubject.ContainsKey((exam.StandardId, subject.SubjectId)))
 			.GroupBy(subject => electiveGroupByStandardAndSubject[(exam.StandardId, subject.SubjectId)]);
 
-		return electiveGroups.All(group => group.Any(HasCompleteSchedule));
+		return electiveGroups.All(group => group.Any(subject => HasCompleteSchedule(subject, examType)));
 	}
 
 	private static List<ExamSubject> GetRoomRequiredSubjects(
 		Exam exam,
+		ExamType examType,
 		IReadOnlyDictionary<(Guid StandardId, Guid SubjectId), Guid> electiveGroupByStandardAndSubject)
 	{
 		return exam.ExamSubjects
 			.Where(subject =>
 				!electiveGroupByStandardAndSubject.ContainsKey((exam.StandardId, subject.SubjectId)) ||
-				HasCompleteSchedule(subject))
+				HasCompleteSchedule(subject, examType))
 			.ToList();
 	}
 

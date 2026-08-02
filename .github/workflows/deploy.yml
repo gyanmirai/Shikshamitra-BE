@@ -83,11 +83,18 @@ jobs:
         [xml]$publishData = $env:AZURE_PUBLISH_PROFILE
         $profile = @(
           $publishData.publishData.publishProfile |
-            Where-Object { $_.publishMethod -eq 'MSDeploy' }
+            Where-Object { $_.publishMethod -eq 'ZipDeploy' }
         )[0]
 
         if ($null -eq $profile) {
-          throw 'No MSDeploy profile was available to run the DbMigrator WebJob.'
+          $profile = @(
+            $publishData.publishData.publishProfile |
+              Where-Object { $_.publishMethod -eq 'MSDeploy' }
+          )[0]
+        }
+
+        if ($null -eq $profile) {
+          throw 'No ZipDeploy or MSDeploy profile was available to run the DbMigrator WebJob.'
         }
 
         $userName = [string]$profile.userName
@@ -95,7 +102,12 @@ jobs:
         Write-Output "::add-mask::$userName"
         Write-Output "::add-mask::$password"
 
-        $publishHost = ([string]$profile.publishUrl) -replace ':443$', ''
+        $publishHost = ([string]$profile.publishUrl) -replace '^https?://', '' -replace '/.*$', '' -replace ':443$', ''
+        $kuduHost = $publishHost
+        if ($kuduHost -notmatch '\.scm\.') {
+          $kuduHost = $kuduHost -replace '\.azurewebsites\.net$', '.scm.azurewebsites.net'
+        }
+        Write-Output "Using Kudu host $kuduHost for DbMigrator WebJob."
         $authorization = [Convert]::ToBase64String(
           [Text.Encoding]::ASCII.GetBytes("${userName}:${password}")
         )
@@ -103,7 +115,7 @@ jobs:
         $jobName = 'DbMigrator'
 
         Invoke-RestMethod `
-          -Uri "https://${publishHost}/api/triggeredwebjobs/${jobName}/run" `
+          -Uri "https://${kuduHost}/api/triggeredwebjobs/${jobName}/run" `
           -Method Post `
           -Headers $headers `
           -TimeoutSec 120 | Out-Null
@@ -112,7 +124,7 @@ jobs:
         foreach ($attempt in 1..90) {
           Start-Sleep -Seconds 10
           $history = Invoke-RestMethod `
-            -Uri "https://${publishHost}/api/triggeredwebjobs/${jobName}/history/latest" `
+            -Uri "https://${kuduHost}/api/triggeredwebjobs/${jobName}/history/latest" `
             -Method Get `
             -Headers $headers `
             -TimeoutSec 120

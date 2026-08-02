@@ -50,13 +50,6 @@ jobs:
           --no-build \
           --filter "FullyQualifiedName~OpenIddictCertificateStore_Tests"
 
-    - name: Apply database migrations and seed updates
-      env:
-        ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
-      run: |
-        cd src/ShikshaMitra.DbMigrator
-        dotnet run --configuration Release --no-build --no-launch-profile
-
     # ⭐ Publish Host App
     - name: Publish
       run: dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish

@@ -9,7 +9,7 @@ namespace ShikshaMitra.Academic.Timetable.Substitutions;
 public interface ISubstitutionAppService : IApplicationService
 {
     Task<PagedResultDto<SubstitutionDto>> GetListAsync(GetSubstitutionsInput input);
-    Task<SubstitutionDashboardDto> GetDashboardAsync(DateTimeOffset date, Guid? academicYearId = null);
+    Task<SubstitutionDashboardDto> GetDashboardAsync(DateTimeOffset date, Guid? academicYearId = null, Guid? academicMediumId = null);
     Task<SubstitutionDto> GetAsync(Guid id);
     Task<SubstitutionDto> CreateAsync(CreateSubstitutionDto input);
     Task<SubstitutionDto> UpdateAsync(Guid id, UpdateSubstitutionDto input);
@@ -21,7 +21,7 @@ public interface ISubstitutionAppService : IApplicationService
     Task<SubstitutionDto> AcknowledgeAsync(Guid id);
     Task<SubstitutionDto> RequestChangeAsync(Guid id, SubstitutionActionDto input);
     Task<SubstitutionDto> RejectDutyAsync(Guid id, SubstitutionActionDto input);
-    Task<SubstitutionCreateFormMetadataDto> GetCreateFormMetadataAsync();
+    Task<SubstitutionCreateFormMetadataDto> GetCreateFormMetadataAsync(SubstitutionCreateFormMetadataInput input);
     Task<List<SubstitutionLectureLookupDto>> GetLecturesAsync(SubstitutionLectureLookupInput input);
     Task<List<SuggestedTeacherDto>> GetSuggestedTeachersAsync(SuggestedTeacherInput input);
     Task<List<SuggestedTeacherDto>> GetSuggestedTeachersAsync(Guid id);

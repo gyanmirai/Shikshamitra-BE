@@ -255,6 +255,10 @@ public class AssessmentRubricCriterion : FullAuditedEntity<Guid>, IMultiTenant
 
 public class RubricEvaluation : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private const string ApprovedEvaluationIsLockedCode = "AssessmentRubric:ApprovedEvaluationIsLocked";
+	private const string ApprovedEvaluationIsLockedMessage =
+		"This evaluation has already been approved and is locked. It cannot be modified.";
+
 	public Guid? TenantId { get; private set; }
 	public Guid RubricId { get; private set; }
 	public Guid StudentSubmissionId { get; private set; }
@@ -283,7 +287,7 @@ public class RubricEvaluation : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (Status == RubricEvaluationStatus.Approved)
 		{
-			throw new BusinessException("AssessmentRubric:ApprovedEvaluationIsLocked");
+			throw new BusinessException(ApprovedEvaluationIsLockedCode, ApprovedEvaluationIsLockedMessage);
 		}
 
 		Scores = scores.ToList();
@@ -299,7 +303,7 @@ public class RubricEvaluation : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (Status == RubricEvaluationStatus.Approved)
 		{
-			throw new BusinessException("AssessmentRubric:ApprovedEvaluationIsLocked");
+			throw new BusinessException(ApprovedEvaluationIsLockedCode, ApprovedEvaluationIsLockedMessage);
 		}
 
 		Remarks = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim();

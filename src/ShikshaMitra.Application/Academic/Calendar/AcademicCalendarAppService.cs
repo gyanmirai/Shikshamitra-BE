@@ -848,6 +848,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     public async Task<AcademicCalendarDayDto> UpdateEmergencyClosureAsync(Guid dayId, UpdateEmergencyClosureDto input)
     {
         var day = await _calendarDayRepository.GetAsync(dayId);
+        var targetDate = (input.StartDate ?? input.EndDate)?.DateTime.Date ?? day.Date.Date;
         if (day.DayType != DayType.EmergencyClosure)
         {
             throw new UserFriendlyException("Selected day is not an emergency closure.");
@@ -868,15 +869,65 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             throw new UserFriendlyException("Closure end time must be after the start time.");
         }
 
+        if (input.EndDate.HasValue && input.EndDate.Value.DateTime.Date < targetDate)
+        {
+            throw new UserFriendlyException("Closure end date cannot be before the start date.");
+        }
+
+        var calendar = await _calendarRepository.GetAsync(day.AcademicCalendarId);
+        await _calendarManager.ValidateDayRangeAsync(calendar, targetDate);
+
+        var targetStandardIds = input.AppliesToAll
+            ? new List<Guid>()
+            : input.StandardIds is { Count: > 0 }
+                ? input.StandardIds.Distinct().ToList()
+                : new List<Guid>();
+
+        if (!input.AppliesToAll && targetStandardIds.Count == 0)
+        {
+            throw new UserFriendlyException("Select at least one class when the closure does not apply to all.");
+        }
+
+        if (input.AppliesToAll)
+        {
+            var duplicate = await _calendarDayRepository.FirstOrDefaultAsync(d =>
+                d.AcademicCalendarId == day.AcademicCalendarId &&
+                d.Date.Date == targetDate &&
+                d.Status == CalendarDayStatus.Active &&
+                d.Id != day.Id);
+
+            if (duplicate != null)
+            {
+                throw new UserFriendlyException($"A calendar day configuration already exists for {targetDate:yyyy-MM-dd}. Delete or update it instead.");
+            }
+        }
+        else
+        {
+            foreach (var standardId in targetStandardIds)
+            {
+                var duplicate = await _calendarDayRepository.FirstOrDefaultAsync(d =>
+                    d.AcademicCalendarId == day.AcademicCalendarId &&
+                    d.Date.Date == targetDate &&
+                    d.Status == CalendarDayStatus.Active &&
+                    d.Id != day.Id &&
+                    (d.AppliesToAll || d.StandardId == standardId));
+
+                if (duplicate != null)
+                {
+                    throw new UserFriendlyException($"A calendar day configuration already exists for {targetDate:yyyy-MM-dd}. Delete or update it instead.");
+                }
+            }
+        }
+
         var beforeJson = System.Text.Json.JsonSerializer.Serialize(day);
 
         day.Update(
-            day.Date,
+            targetDate,
             DayType.EmergencyClosure,
             input.Title,
             input.Description,
             input.AppliesToAll,
-            input.AppliesToAll ? null : input.StandardIds?.FirstOrDefault(),
+            input.AppliesToAll ? null : targetStandardIds.FirstOrDefault(),
             null,
             HolidayCategory.WeatherEmergency,
             input.StartTime,

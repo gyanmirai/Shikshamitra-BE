@@ -26,6 +26,8 @@ public interface IExamAppService : IApplicationService
 
     Task<List<ExamSubjectResponseDto>> GetSubjectsAsync(Guid examId);
 
+    Task<List<QuestionPaperExamLookupDto>> GetQuestionPaperLookupAsync(QuestionPaperExamLookupInput input);
+
     Task DeleteAsync(Guid examId);
 
     Task<ExamListResultDto> GetListAsync(GetExamsInput input);

@@ -50,16 +50,21 @@ jobs:
           --no-build \
           --filter "FullyQualifiedName~OpenIddictCertificateStore_Tests"
 
-    - name: Apply database migrations and seed updates
-      env:
-        ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
-      run: |
-        cd src/ShikshaMitra.DbMigrator
-        dotnet run --configuration Release --no-build --no-launch-profile
-
     # ⭐ Publish Host App
     - name: Publish
-      run: dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish
+      shell: pwsh
+      run: |
+        dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish
+        dotnet publish src/ShikshaMitra.DbMigrator -c Release -o ./publish/App_Data/jobs/triggered/DbMigrator
+        @'
+        @echo off
+        set ASPNETCORE_ENVIRONMENT=Staging
+        set DOTNET_ENVIRONMENT=Staging
+        set DOTNET_USELAUNCHSETTINGS=0
+        set ConnectionStrings__Default=
+        set SeedTestLogins=true
+        dotnet ShikshaMitra.DbMigrator.dll
+        '@ | Set-Content -Path ./publish/App_Data/jobs/triggered/DbMigrator/run.cmd -Encoding ascii
 
     # ⭐ Deploy using Publish Profile
     - name: Deploy to Azure Web App
@@ -69,6 +74,61 @@ jobs:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: ./publish
+
+    - name: Apply database migrations and seed updates
+      shell: pwsh
+      env:
+        AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+      run: |
+        [xml]$publishData = $env:AZURE_PUBLISH_PROFILE
+        $profile = @(
+          $publishData.publishData.publishProfile |
+            Where-Object { $_.publishMethod -eq 'MSDeploy' }
+        )[0]
+
+        if ($null -eq $profile) {
+          throw 'No MSDeploy profile was available to run the DbMigrator WebJob.'
+        }
+
+        $userName = [string]$profile.userName
+        $password = [string]$profile.userPWD
+        Write-Output "::add-mask::$userName"
+        Write-Output "::add-mask::$password"
+
+        $publishHost = ([string]$profile.publishUrl) -replace ':443$', ''
+        $authorization = [Convert]::ToBase64String(
+          [Text.Encoding]::ASCII.GetBytes("${userName}:${password}")
+        )
+        $headers = @{ Authorization = "Basic $authorization" }
+        $jobName = 'DbMigrator'
+
+        Invoke-RestMethod `
+          -Uri "https://${publishHost}/api/triggeredwebjobs/${jobName}/run" `
+          -Method Post `
+          -Headers $headers `
+          -TimeoutSec 120 | Out-Null
+
+        $lastStatus = 'not started'
+        foreach ($attempt in 1..90) {
+          Start-Sleep -Seconds 10
+          $history = Invoke-RestMethod `
+            -Uri "https://${publishHost}/api/triggeredwebjobs/${jobName}/history/latest" `
+            -Method Get `
+            -Headers $headers `
+            -TimeoutSec 120
+          $lastStatus = [string]$history.status
+          Write-Output "DbMigrator WebJob status (attempt $attempt/90): $lastStatus"
+
+          if ($lastStatus -eq 'Success') {
+            exit 0
+          }
+
+          if ($lastStatus -in @('Failed', 'Error', 'Aborted')) {
+            throw "DbMigrator WebJob failed with status: $lastStatus"
+          }
+        }
+
+        throw "DbMigrator WebJob did not complete after 15 minutes (last status: $lastStatus)."
 
     - name: Verify deployed API startup
       id: health

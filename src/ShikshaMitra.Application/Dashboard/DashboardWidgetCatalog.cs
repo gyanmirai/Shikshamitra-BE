@@ -49,7 +49,7 @@ internal static class DashboardWidgetCatalog
 				[ShikshaMitraModulePermissions.InstituteSetup]),
 			["leadership-admission-approvals"] = new(
 				Actions,
-				"/student/enrollment/admission",
+				"/student/enrollment/activation",
 				[ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View],
 				"Admissions"),
 			["leadership-payroll-review"] = new(
@@ -89,7 +89,7 @@ internal static class DashboardWidgetCatalog
 				[ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_ChapterManagement.View]),
 			["principal-pending-admissions"] = new(
 				Kpis,
-				"/student/enrollment/admission",
+				"/student/enrollment/activation",
 				[ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View]),
 			["principal-leave-approvals"] = new(
 				Actions,

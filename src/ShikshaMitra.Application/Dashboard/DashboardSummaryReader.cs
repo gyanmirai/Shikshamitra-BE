@@ -27,7 +27,7 @@ public class DashboardSummaryReader(
 		input ??= new DashboardSummaryRequestDto();
 		var template = NormalizeTemplate(input.DashboardTemplate);
 		var range = NormalizeDateRange(input.From, input.To, now.Date);
-		var summary = BuildBaseSummary(template, input.AcademicYearId, range);
+		var summary = BuildBaseSummary(template, input.AcademicYearId, range, now);
 		var sliceContext = new DashboardSummarySliceContext(summary, range);
 
 		foreach (var registration in slicePipeline.Registrations)
@@ -36,6 +36,7 @@ public class DashboardSummaryReader(
 		}
 
 		await FilterByPermissionsAsync(summary);
+		ApplySemanticMetadata(summary);
 
 		return summary;
 	}
@@ -141,13 +142,18 @@ public class DashboardSummaryReader(
 	private static DashboardSummaryDto BuildBaseSummary(
 		string template,
 		string? academicYearId,
-		DashboardDateRangeDto dateRange)
+		DashboardDateRangeDto dateRange,
+		DateTime generatedAt)
 	{
 		var summary = new DashboardSummaryDto
 		{
 			DashboardTemplate = template,
 			AcademicYearId = string.IsNullOrWhiteSpace(academicYearId) ? null : academicYearId,
-			DateRange = dateRange
+			DateRange = dateRange,
+			ScopeLabel = ScopeLabelFor(template),
+			GeneratedAtUtc = generatedAt.Kind == DateTimeKind.Utc
+				? generatedAt
+				: DateTime.SpecifyKind(generatedAt, DateTimeKind.Utc)
 		};
 
 		switch (template)
@@ -203,6 +209,58 @@ public class DashboardSummaryReader(
 		AddSharedCalendarAndAnnouncements(summary);
 
 		return summary;
+	}
+
+	private static string ScopeLabelFor(string template) => template switch
+	{
+		Leadership => "Your permitted school scope",
+		PrincipalAdmin => "Your permitted operational scope",
+		Teacher => "Your assigned classes",
+		FinanceHr => "Your permitted finance and staff scope",
+		StudentParent => "Your linked student",
+		_ => "Your permitted scope"
+	};
+
+	private static void ApplySemanticMetadata(DashboardSummaryDto summary)
+	{
+		ApplyZoneSemantics(summary.KpiCards, "metric", "View details");
+		ApplyZoneSemantics(summary.ActionItems, "action", "Review action");
+		ApplyZoneSemantics(summary.RiskAlerts, "risk", "Review risk");
+		ApplyZoneSemantics(summary.ModuleSnapshots, "health", "Open dashboard");
+		ApplyZoneSemantics(summary.CalendarItems, "timeline", "View event");
+		ApplyZoneSemantics(summary.Announcements, "announcement", "Read update");
+		summary.DataState = summary.ZoneErrors.Count == 0 ? "live" : "partial";
+	}
+
+	private static void ApplyZoneSemantics(
+		IEnumerable<DashboardWidgetDto> widgets,
+		string kind,
+		string actionLabel)
+	{
+		foreach (var widget in widgets)
+		{
+			widget.Kind = kind;
+			widget.ActionLabel = actionLabel;
+			widget.Priority = ResolvePriority(widget, kind);
+		}
+	}
+
+	private static string ResolvePriority(DashboardWidgetDto widget, string kind)
+	{
+		if (string.Equals(widget.Status, "error", StringComparison.OrdinalIgnoreCase))
+		{
+			return "critical";
+		}
+
+		if (kind is "action" or "risk" && (widget.Count.GetValueOrDefault() > 0 ||
+		    string.Equals(widget.Status, "warning", StringComparison.OrdinalIgnoreCase)))
+		{
+			return "high";
+		}
+
+		return string.Equals(widget.Status, "success", StringComparison.OrdinalIgnoreCase)
+			? "low"
+			: "normal";
 	}
 
 	private async Task FilterByPermissionsAsync(DashboardSummaryDto summary)
@@ -310,7 +368,10 @@ public class DashboardSummaryReader(
 				Trend = widget.Trend,
 				Owner = widget.Owner,
 				DrilldownUrl = widget.DrilldownUrl,
-				Health = widget.Health
+				Health = widget.Health,
+				Kind = widget.Kind,
+				Priority = widget.Priority,
+				ActionLabel = widget.ActionLabel
 			}).ToList();
 	}
 }

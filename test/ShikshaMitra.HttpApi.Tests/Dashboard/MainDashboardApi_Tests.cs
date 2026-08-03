@@ -136,6 +136,9 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 		document.RootElement.TryGetProperty("academicYearId", out _).ShouldBeTrue();
 		document.RootElement.GetProperty("dateRange").GetProperty("from").GetString().ShouldBe("2026-05-01");
 		document.RootElement.GetProperty("dateRange").GetProperty("to").GetString().ShouldBe("2026-05-23");
+		document.RootElement.GetProperty("scopeLabel").GetString().ShouldBe("Your permitted operational scope");
+		document.RootElement.GetProperty("dataState").GetString().ShouldBe("live");
+		document.RootElement.GetProperty("generatedAtUtc").GetDateTime().ShouldNotBe(default);
 		document.RootElement.TryGetProperty("kpiCards", out _).ShouldBeTrue();
 		document.RootElement.TryGetProperty("actionItems", out _).ShouldBeTrue();
 		document.RootElement.TryGetProperty("riskAlerts", out _).ShouldBeTrue();
@@ -177,6 +180,9 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 
 			(!string.IsNullOrWhiteSpace(widget.DrilldownUrl) || !string.IsNullOrWhiteSpace(widget.Owner))
 				.ShouldBeTrue($"{expectedWidgetId} should be actionable through a drilldown or accountable through an owner.");
+			widget.Kind.ShouldNotBeNullOrWhiteSpace();
+			widget.Priority.ShouldNotBeNullOrWhiteSpace();
+			widget.ActionLabel.ShouldNotBeNullOrWhiteSpace();
 
 			if (!string.IsNullOrWhiteSpace(widget.DrilldownUrl))
 			{
@@ -273,6 +279,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 			new DateTime(2026, 5, 23));
 
 		summary.ZoneErrors["kpis"].ShouldBe("KPI slice could not be loaded.");
+		summary.DataState.ShouldBe("partial");
 		summary.KpiCards.Single(x => x.Id == "principal-teacher-attendance")
 			.Title.ShouldBe("Teacher Attendance");
 		summary.KpiCards.ShouldNotContain(widget => widget.Title == FailingAfterMutationSliceProvider.LeakedTitle);
@@ -390,7 +397,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 
 		json.ShouldNotContain("leadership-admission-approvals");
 		json.ShouldNotContain("Admission approvals");
-		json.ShouldNotContain("/student/enrollment/admission");
+		json.ShouldNotContain("/student/enrollment/activation");
 		json.ShouldNotContain("leadership-payroll-review");
 		json.ShouldNotContain("Payroll review");
 		json.ShouldNotContain("/hr/payroll/run-payroll");
@@ -890,7 +897,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 		admissionAction.Count.Value.ShouldBeGreaterThanOrEqualTo(1);
 		admissionAction.Subtitle.ShouldNotBeNull();
 		admissionAction.Subtitle.ShouldContain("admission");
-		admissionAction.DrilldownUrl.ShouldBe("/student/enrollment/admission");
+		admissionAction.DrilldownUrl.ShouldBe("/student/enrollment/activation");
 	}
 
 	[Fact]

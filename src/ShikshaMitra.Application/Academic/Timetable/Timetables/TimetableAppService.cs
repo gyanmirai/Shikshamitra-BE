@@ -8,6 +8,7 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
@@ -33,6 +34,8 @@ public class TimetableAppService(
     IRepository<ElectiveGroup, Guid> electiveGroupRepository,
     IRepository<Room, Guid> roomRepository,
     IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+    IRepository<Student, Guid> studentRepository,
+    IRepository<StudentElectiveSelection, Guid> studentElectiveSelectionRepository,
     TimetableReportPdfService timetableReportPdfService,
     ITenantRepository tenantRepository,
     IRepository<Employee, Guid> employeeRepository
@@ -61,6 +64,7 @@ public class TimetableAppService(
         var assignedSubjectBySubjectId = assignedSubjects
             .GroupBy(a => a.SubjectId)
             .ToDictionary(g => g.Key, g => g.First().Id);
+        var selectedElectiveSubjectIdsByGroup = await GetSelectedElectiveSubjectIdsByGroupAsync(standardId, divisionId);
         var needsSubjectData = hasSavedData || assignedSubjects.Count > 0;
 
         var subjects = needsSubjectData ? await subjectRepository.GetListAsync() : [];
@@ -77,6 +81,12 @@ public class TimetableAppService(
         // Compute occupied slots per subject across all days in this timetable
         var occupiedBySubject = hasSavedData
             ? timetable!.Slots.SelectMany(s => s.Subjects).GroupBy(ss => ss.SubjectId)
+                .ToDictionary(g => g.Key, g => g.Count())
+            : new Dictionary<Guid, int>();
+        var occupiedByElective = hasSavedData
+            ? timetable!.Slots
+                .Where(s => s.ElectiveGroupId.HasValue)
+                .GroupBy(s => s.ElectiveGroupId!.Value)
                 .ToDictionary(g => g.Key, g => g.Count())
             : new Dictionary<Guid, int>();
 
@@ -145,32 +155,17 @@ public class TimetableAppService(
                             ElectiveGroupColor = matchingSavedSlot.ElectiveGroupId.HasValue
                                 ? electiveGroups.FirstOrDefault(eg => eg.Id == matchingSavedSlot.ElectiveGroupId.Value)?.Color
                                 : null,
-                            Subjects = matchingSavedSlot.Subjects.Select(sub =>
-                            {
-                                var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);
-                                var room = sub.RoomId.HasValue
-                                    ? rooms.FirstOrDefault(r => r.Id == sub.RoomId.Value) : null;
-                                var totalSlots = totalSlotsBySubject.GetValueOrDefault(sub.SubjectId, 0);
-                                if (totalSlots == 0 && matchingSavedSlot.ElectiveGroupId.HasValue)
-                                    totalSlots = totalSlotsByElective.GetValueOrDefault(matchingSavedSlot.ElectiveGroupId.Value, 0);
-                                var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
-                                return new TimetableSubjectResponseDto
-                                {
-                                    SubjectAssignmentId = assignedSubjectBySubjectId.GetValueOrDefault(sub.SubjectId),
-                                    SubjectId = sub.SubjectId,
-                                    Name = subject?.Name ?? string.Empty,
-                                    Color = subject?.Color,
-                                    TeacherId = sub.TeacherId,
-                                    TeacherName = sub.TeacherId.HasValue
-                                        ? employees.FirstOrDefault(e => e.Id == sub.TeacherId.Value)?.EmployeeName
-                                        : null,
-                                    RoomId = sub.RoomId,
-                                    RoomName = room?.RoomName,
-                                    TotalSlots = totalSlots,
-                                    OccupiedSlots = occupiedSlots,
-                                    UnoccupiedSlots = totalSlots - occupiedSlots
-                                };
-                            }).ToList()
+                            Subjects = BuildSlotSubjectResponses(
+                                matchingSavedSlot,
+                                subjects,
+                                rooms,
+                                employees,
+                                assignedSubjectBySubjectId,
+                                totalSlotsBySubject,
+                                totalSlotsByElective,
+                                occupiedBySubject,
+                                occupiedByElective,
+                                selectedElectiveSubjectIdsByGroup)
                         };
                     }
                     else
@@ -213,32 +208,17 @@ public class TimetableAppService(
                         ElectiveGroupColor = slot.ElectiveGroupId.HasValue
                         ? electiveGroups.FirstOrDefault(eg => eg.Id == slot.ElectiveGroupId.Value)?.Color
                         : null,
-                        Subjects = slot.Subjects.Select(sub =>
-                        {
-                            var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);
-                            var room = sub.RoomId.HasValue
-                                ? rooms.FirstOrDefault(r => r.Id == sub.RoomId.Value) : null;
-                            var totalSlots = totalSlotsBySubject.GetValueOrDefault(sub.SubjectId, 0);
-                            if (totalSlots == 0 && slot.ElectiveGroupId.HasValue)
-                                totalSlots = totalSlotsByElective.GetValueOrDefault(slot.ElectiveGroupId.Value, 0);
-                            var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
-                            return new TimetableSubjectResponseDto
-                            {
-                                SubjectAssignmentId = assignedSubjectBySubjectId.GetValueOrDefault(sub.SubjectId),
-                                SubjectId = sub.SubjectId,
-                                Name = subject?.Name ?? string.Empty,
-                                Color = subject?.Color,
-                                TeacherId = sub.TeacherId,
-                                TeacherName = sub.TeacherId.HasValue
-                                    ? employees.FirstOrDefault(e => e.Id == sub.TeacherId.Value)?.EmployeeName
-                                    : null,
-                                RoomId = sub.RoomId,
-                                RoomName = room?.RoomName,
-                                TotalSlots = totalSlots,
-                                OccupiedSlots = occupiedSlots,
-                                UnoccupiedSlots = totalSlots - occupiedSlots
-                            };
-                        }).ToList()
+                        Subjects = BuildSlotSubjectResponses(
+                            slot,
+                            subjects,
+                            rooms,
+                            employees,
+                            assignedSubjectBySubjectId,
+                            totalSlotsBySubject,
+                            totalSlotsByElective,
+                            occupiedBySubject,
+                            occupiedByElective,
+                            selectedElectiveSubjectIdsByGroup)
                     };
                 }).ToList();
             }
@@ -1151,6 +1131,105 @@ public class TimetableAppService(
             .Where(subject =>
                 (subject.SubjectId.HasValue && publishedSubjectIds.Contains(subject.SubjectId.Value)) ||
                 (subject.ElectiveGroupId.HasValue && publishedElectiveGroupIds.Contains(subject.ElectiveGroupId.Value)))
+            .ToList();
+    }
+
+    private async Task<Dictionary<Guid, List<Guid>>> GetSelectedElectiveSubjectIdsByGroupAsync(
+        Guid standardId,
+        Guid divisionId)
+    {
+        var students = await studentRepository.GetListAsync(student =>
+            student.StandardId == standardId &&
+            student.DivisionId == divisionId);
+        var studentIds = students.Select(student => student.Id).ToList();
+        if (studentIds.Count == 0)
+        {
+            return [];
+        }
+
+        var selections = await studentElectiveSelectionRepository.GetListAsync(selection =>
+            studentIds.Contains(selection.StudentId));
+
+        return selections
+            .GroupBy(selection => selection.ElectiveGroupId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .GroupBy(selection => selection.SelectedSubjectId)
+                    .OrderByDescending(subjectGroup => subjectGroup.Count())
+                    .ThenBy(subjectGroup => subjectGroup.Key)
+                    .Select(subjectGroup => subjectGroup.Key)
+                    .ToList());
+    }
+
+    private static List<TimetableSubjectResponseDto> BuildSlotSubjectResponses(
+        TimetableSlot slot,
+        IReadOnlyCollection<Subject> subjects,
+        IReadOnlyCollection<Room> rooms,
+        IReadOnlyCollection<Employee> employees,
+        IReadOnlyDictionary<Guid, Guid> assignedSubjectBySubjectId,
+        IReadOnlyDictionary<Guid, int> totalSlotsBySubject,
+        IReadOnlyDictionary<Guid, int> totalSlotsByElective,
+        IReadOnlyDictionary<Guid, int> occupiedBySubject,
+        IReadOnlyDictionary<Guid, int> occupiedByElective,
+        IReadOnlyDictionary<Guid, List<Guid>> selectedElectiveSubjectIdsByGroup)
+    {
+        return ResolveSlotSubjectsForDivision(slot, selectedElectiveSubjectIdsByGroup)
+            .Select(sub =>
+            {
+                var subject = subjects.FirstOrDefault(s => s.Id == sub.SubjectId);
+                var room = sub.RoomId.HasValue
+                    ? rooms.FirstOrDefault(r => r.Id == sub.RoomId.Value)
+                    : null;
+                var totalSlots = totalSlotsBySubject.GetValueOrDefault(sub.SubjectId, 0);
+                var occupiedSlots = occupiedBySubject.GetValueOrDefault(sub.SubjectId, 0);
+                if (slot.ElectiveGroupId.HasValue)
+                {
+                    totalSlots = totalSlotsByElective.GetValueOrDefault(slot.ElectiveGroupId.Value, totalSlots);
+                    occupiedSlots = occupiedByElective.GetValueOrDefault(slot.ElectiveGroupId.Value, occupiedSlots);
+                }
+
+                return new TimetableSubjectResponseDto
+                {
+                    SubjectAssignmentId = assignedSubjectBySubjectId.GetValueOrDefault(sub.SubjectId),
+                    SubjectId = sub.SubjectId,
+                    Name = subject?.Name ?? string.Empty,
+                    Color = subject?.Color,
+                    TeacherId = sub.TeacherId,
+                    TeacherName = sub.TeacherId.HasValue
+                        ? employees.FirstOrDefault(e => e.Id == sub.TeacherId.Value)?.EmployeeName
+                        : null,
+                    RoomId = sub.RoomId,
+                    RoomName = room?.RoomName,
+                    TotalSlots = totalSlots,
+                    OccupiedSlots = occupiedSlots,
+                    UnoccupiedSlots = totalSlots - occupiedSlots
+                };
+            }).ToList();
+    }
+
+    private static List<TimetableSlotSubject> ResolveSlotSubjectsForDivision(
+        TimetableSlot slot,
+        IReadOnlyDictionary<Guid, List<Guid>> selectedElectiveSubjectIdsByGroup)
+    {
+        var savedSubjects = slot.Subjects.ToList();
+        if (!slot.ElectiveGroupId.HasValue ||
+            !selectedElectiveSubjectIdsByGroup.TryGetValue(slot.ElectiveGroupId.Value, out var selectedSubjectIds) ||
+            selectedSubjectIds.Count == 0)
+        {
+            return savedSubjects;
+        }
+
+        var fallback = savedSubjects.FirstOrDefault();
+        return selectedSubjectIds
+            .Select(subjectId =>
+                savedSubjects.FirstOrDefault(subject => subject.SubjectId == subjectId) ??
+                new TimetableSlotSubject(
+                    Guid.Empty,
+                    slot.Id,
+                    subjectId,
+                    fallback?.TeacherId,
+                    fallback?.RoomId))
             .ToList();
     }
 

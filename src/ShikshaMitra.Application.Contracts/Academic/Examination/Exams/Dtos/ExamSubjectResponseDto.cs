@@ -6,9 +6,13 @@ public class ExamSubjectResponseDto
 {
     public Guid ExamSubjectId { get; set; }
     public Guid SubjectId { get; set; }
-    public string SubjectName { get; set; }
-    public string SubjectColor { get; set; }
-    public string Notes { get; set; }
+    public string? SubjectName { get; set; }
+    public string? SubjectColor { get; set; }
+    public string? SubjectCode { get; set; }
+    public Guid? ElectiveGroupId { get; set; }
+    public string? ElectiveGroupName { get; set; }
+    public string? ElectiveGroupColor { get; set; }
+    public string? Notes { get; set; }
     public DateTime? ExamDate { get; set; }
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; }

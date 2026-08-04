@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using ShikshaMitra.Academic.Examination.Settings;
@@ -28,6 +29,8 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 	private readonly IRepository<Division, Guid> _divisionRepository;
 	private readonly IRepository<Subject, Guid> _subjectRepository;
 	private readonly IRepository<Exam, Guid> _examRepository;
+	private readonly IRepository<AssignedSubject, Guid> _assignedSubjectRepository;
+	private readonly IRepository<ElectiveGroup, Guid> _electiveGroupRepository;
 	private readonly StandardManager _standardManager;
 	private readonly DivisionManager _divisionManager;
 	private readonly ExamTypeManager _examTypeManager;
@@ -42,6 +45,8 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 		_divisionRepository = GetRequiredService<IRepository<Division, Guid>>();
 		_subjectRepository = GetRequiredService<IRepository<Subject, Guid>>();
 		_examRepository = GetRequiredService<IRepository<Exam, Guid>>();
+		_assignedSubjectRepository = GetRequiredService<IRepository<AssignedSubject, Guid>>();
+		_electiveGroupRepository = GetRequiredService<IRepository<ElectiveGroup, Guid>>();
 		_standardManager = GetRequiredService<StandardManager>();
 		_divisionManager = GetRequiredService<DivisionManager>();
 		_examTypeManager = GetRequiredService<ExamTypeManager>();
@@ -139,6 +144,89 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 				var item = result.Items.Single(item => item.ExamId == exam.Id);
 				item.SubjectCount.ShouldBe(exam.ExamSubjects.Count);
 				item.SubjectCount.ShouldBe(2);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task GetSubjectsAsync_Should_Expand_Elective_Group_Subjects()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+				var stage = await _stageRepository.GetAsync(stageId);
+				var unique = Guid.NewGuid().ToString("N");
+
+				var standard = await _standardManager.CreateAsync(
+					stageId,
+					$"Exam Std {unique}"[..30],
+					7,
+					shiftId: null);
+				await _standardRepository.InsertAsync(standard, autoSave: true);
+
+				var division = await _divisionManager.CreateAsync(
+					standard.Id,
+					$"A-{unique}"[..30],
+					35);
+				await _divisionRepository.InsertAsync(division, autoSave: true);
+
+				var computer = await CreateSubjectAsync(stage.EducationMediumId, $"Computer {unique}"[..30]);
+				var pt = await CreateSubjectAsync(stage.EducationMediumId, $"Pt {unique}"[..30]);
+				var electiveGroup = new ElectiveGroup(
+					Guid.NewGuid(),
+					TestTenantId,
+					$"Pt & Computer {unique}"[..30],
+					"#FFAB00",
+					stage.EducationMediumId);
+				electiveGroup.AddSubject(computer.Id);
+				electiveGroup.AddSubject(pt.Id);
+				await _electiveGroupRepository.InsertAsync(electiveGroup, autoSave: true);
+
+				await _assignedSubjectRepository.InsertManyAsync(
+					[
+						new AssignedSubject(
+							Guid.NewGuid(),
+							TestTenantId,
+							standard.Id,
+							computer.Id,
+							"COM06",
+							SubjectStatus.Published,
+							SubjectType.Elective,
+							electiveGroup.Id),
+						new AssignedSubject(
+							Guid.NewGuid(),
+							TestTenantId,
+							standard.Id,
+							pt.Id,
+							"PT07",
+							SubjectStatus.Published,
+							SubjectType.Elective,
+							electiveGroup.Id)
+					],
+					autoSave: true);
+
+				var examType = await _examTypeManager.CreateAsync(
+					$"Mid Term {unique}"[..30],
+					description: null,
+					stage.EducationMediumId);
+
+				var exam = _examManager.Create(
+					examType.Id,
+					$"Winter Exam {unique}"[..40],
+					standard.Id,
+					new List<Guid> { division.Id },
+					new List<Guid> { computer.Id });
+				await _examRepository.InsertAsync(exam, autoSave: true);
+
+				var result = await _examAppService.GetSubjectsAsync(exam.Id);
+
+				result.Select(subject => subject.SubjectId).ShouldBe([computer.Id, pt.Id], ignoreOrder: true);
+				result.ShouldAllBe(subject => subject.ElectiveGroupId == electiveGroup.Id);
+				result.ShouldAllBe(subject => subject.ElectiveGroupName == electiveGroup.Name);
+				result.Single(subject => subject.SubjectId == computer.Id).ExamSubjectId.ShouldNotBe(Guid.Empty);
+				result.Single(subject => subject.SubjectId == pt.Id).ExamSubjectId.ShouldBe(Guid.Empty);
 			}
 		});
 	}

@@ -1191,6 +1191,11 @@ public class ExamSeatAllocationAppService(
             divisions = divisions.Where(d => d.Name.ToLower().Contains(search)).ToList();
         }
 
+        divisions = divisions
+            .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(d => d.Id)
+            .ToList();
+
         var totalCount = divisions.Count;
         var page = Math.Max(1, input.Page);
         var totalPages = (int) Math.Ceiling(totalCount / (double) input.PageSize);
@@ -1289,11 +1294,16 @@ public class ExamSeatAllocationAppService(
         var items = allExamsWithDetails.Select(exam =>
         {
             examTypesDict.TryGetValue(exam.ExamTypeId, out var examType);
-            var divisionNames = exam.ExamDivisions
+            var orderedExamDivisions = exam.ExamDivisions
                 .Where(d => divisionsDict.ContainsKey(d.DivisionId))
-                .Select(d => divisionsDict[d.DivisionId].Name)
+                .Select(d => divisionsDict[d.DivisionId])
+                .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(d => d.Id)
                 .ToList();
-            var examDivisionIds = exam.ExamDivisions.Select(d => d.DivisionId).ToList();
+            var divisionNames = orderedExamDivisions
+                .Select(d => d.Name)
+                .ToList();
+            var examDivisionIds = orderedExamDivisions.Select(d => d.Id).ToList();
             var totalStudents = examDivisionIds.Sum(divId => studentCountByDivision.GetValueOrDefault(divId, 0));
             var allocated = allocByExam.GetValueOrDefault(exam.Id, 0);
             var pending = totalStudents - allocated;

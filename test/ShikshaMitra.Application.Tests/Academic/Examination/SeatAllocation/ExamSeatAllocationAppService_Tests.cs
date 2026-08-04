@@ -85,6 +85,62 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 	}
 
 	[Fact]
+	public async Task GetDivisionsForExamAsync_Should_Return_Divisions_Alphabetically()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+				var stage = await _stageRepository.GetAsync(stageId);
+				var unique = Guid.NewGuid().ToString("N");
+
+				var standard = await _standardManager.CreateAsync(
+					stageId,
+					$"Seat Std {unique}"[..30],
+					11,
+					shiftId: null);
+				await _standardRepository.InsertAsync(standard, autoSave: true);
+
+				var divisionB = await _divisionManager.CreateAsync(standard.Id, $"B-{unique}"[..30], 30);
+				var divisionA = await _divisionManager.CreateAsync(standard.Id, $"A-{unique}"[..30], 30);
+				await _divisionRepository.InsertManyAsync([divisionB, divisionA], autoSave: true);
+
+				var subject = new Subject(
+					Guid.NewGuid(),
+					TestTenantId,
+					$"Math {unique}"[..30],
+					"#00A76F",
+					stage.EducationMediumId);
+				await _subjectRepository.InsertAsync(subject, autoSave: true);
+
+				var examType = await _examTypeManager.CreateAsync(
+					$"Seat Exam {unique}"[..30],
+					description: null,
+					stage.EducationMediumId);
+
+				var exam = _examManager.Create(
+					examType.Id,
+					$"Seating Plan Exam {unique}"[..40],
+					standard.Id,
+					new List<Guid> { divisionB.Id, divisionA.Id },
+					new List<Guid> { subject.Id });
+				exam.ChangeStatus(ExamStatus.Published);
+				await _examRepository.InsertAsync(exam, autoSave: true);
+
+				var result = await _seatAllocationAppService.GetDivisionsForExamAsync(
+					exam.Id,
+					new GetExamDivisionsInput
+					{
+						StandardId = Guid.Empty
+					});
+
+				result.Items.Select(item => item.Name).ToList().ShouldBe([divisionA.Name, divisionB.Name]);
+			}
+		});
+	}
+
+	[Fact]
 	public async Task GetSeatAllocationTableAsync_Should_Return_Division_Wise_Progress()
 	{
 		await WithUnitOfWorkAsync(async () =>
@@ -106,7 +162,7 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 
 				var divisionA = await _divisionManager.CreateAsync(standard.Id, $"A-{unique}"[..30], 30);
 				var divisionB = await _divisionManager.CreateAsync(standard.Id, $"B-{unique}"[..30], 30);
-				await _divisionRepository.InsertManyAsync([divisionA, divisionB], autoSave: true);
+				await _divisionRepository.InsertManyAsync([divisionB, divisionA], autoSave: true);
 
 				var subject = new Subject(
 					Guid.NewGuid(),
@@ -125,7 +181,7 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 					examType.Id,
 					$"Seating Plan Exam {unique}"[..40],
 					standard.Id,
-					new List<Guid> { divisionA.Id, divisionB.Id },
+					new List<Guid> { divisionB.Id, divisionA.Id },
 					new List<Guid> { subject.Id });
 				exam.ChangeStatus(ExamStatus.Published);
 				await _examRepository.InsertAsync(exam, autoSave: true);
@@ -163,6 +219,8 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 				row.TotalStudents.ShouldBe(6);
 				row.AllocatedStudents.ShouldBe(4);
 				row.DivisionProgress.Count.ShouldBe(2);
+				row.Divisions.ShouldBe([divisionA.Name, divisionB.Name]);
+				row.DivisionProgress.Select(item => item.DivisionName).ToList().ShouldBe([divisionA.Name, divisionB.Name]);
 				row.DivisionProgress.Single(item => item.DivisionId == divisionA.Id).AllocatedStudents.ShouldBe(3);
 				row.DivisionProgress.Single(item => item.DivisionId == divisionA.Id).Progress.ShouldBe(100);
 				row.DivisionProgress.Single(item => item.DivisionId == divisionB.Id).AllocatedStudents.ShouldBe(1);

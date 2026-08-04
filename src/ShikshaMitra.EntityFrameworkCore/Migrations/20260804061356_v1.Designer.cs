@@ -14,8 +14,8 @@ using Volo.Abp.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
-    [Migration("20260731112451_AddQuestionBankTopicName")]
-    partial class AddQuestionBankTopicName
+    [Migration("20260804061356_v1")]
+    partial class v1
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -62,10 +62,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
-
-                    b.Property<string>("EvaluationInstructions")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
 
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("timestamp with time zone");
@@ -2597,9 +2593,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("AcademicMediumId")
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("AllowPracticalOral")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Category")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
@@ -2645,12 +2638,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<bool>("GradeScaleRequired")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IncludedInResult")
-                        .HasColumnType("boolean");
-
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -2664,9 +2651,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("LastModifierId")
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
-
-                    b.Property<bool>("MarksEntryRequired")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2836,7 +2820,16 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AcademicMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("AppliesToWorkType")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("AssignmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AssignmentTypeId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -2866,6 +2859,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
+                    b.Property<string>("EvaluationInstructions")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -2874,11 +2871,19 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("HomeworkId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("HomeworkTypeId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsTemplate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
@@ -2895,6 +2900,9 @@ namespace ShikshaMitra.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
+
+                    b.Property<Guid?>("SourceTemplateId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("StandardId")
                         .HasColumnType("uuid");
@@ -2937,11 +2945,21 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AcademicMediumId");
+
                     b.HasIndex("AssignmentId");
+
+                    b.HasIndex("AssignmentTypeId");
 
                     b.HasIndex("HomeworkId");
 
+                    b.HasIndex("HomeworkTypeId");
+
+                    b.HasIndex("IsTemplate");
+
                     b.HasIndex("ScoringModel");
+
+                    b.HasIndex("SourceTemplateId");
 
                     b.HasIndex("Status");
 

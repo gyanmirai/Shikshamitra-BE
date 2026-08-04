@@ -33,11 +33,11 @@ public class AssignmentV2ModelMapping_Tests : ShikshaMitraEntityFrameworkCoreTes
 	}
 
 	[Fact]
-	public void Assignment_V2_Alignment_Migration_Should_Be_Discoverable()
+	public void Assignment_V2_Migration_Should_Be_Discoverable()
 	{
-		const string migrationId = "20260727111917_AlignAssignmentV2Evaluation";
+		const string migrationId = "20260804061356_v1";
 		var dbContext = GetRequiredService<ShikshaMitraDbContext>();
-		var migrationAttribute = typeof(AlignAssignmentV2Evaluation)
+		var migrationAttribute = typeof(v1)
 			.GetCustomAttribute<MigrationAttribute>();
 
 		migrationAttribute.ShouldNotBeNull();

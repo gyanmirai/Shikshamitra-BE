@@ -18,7 +18,7 @@ public interface ISubstitutionAppService : IApplicationService
     Task<SubstitutionDto> CompleteAsync(Guid id);
     Task<SubstitutionDto> CancelAsync(Guid id, SubstitutionActionDto input);
     Task<SubstitutionDto> RejectAsync(Guid id, SubstitutionActionDto input);
-    Task<SubstitutionDto> AcknowledgeAsync(Guid id);
+    Task<SubstitutionDto> AcknowledgeAsync(Guid id, SubstitutionActionDto? input = null);
     Task<SubstitutionDto> RequestChangeAsync(Guid id, SubstitutionActionDto input);
     Task<SubstitutionDto> RejectDutyAsync(Guid id, SubstitutionActionDto input);
     Task<SubstitutionCreateFormMetadataDto> GetCreateFormMetadataAsync(SubstitutionCreateFormMetadataInput input);

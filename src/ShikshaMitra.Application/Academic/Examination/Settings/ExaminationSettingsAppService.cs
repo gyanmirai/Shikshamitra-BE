@@ -217,10 +217,6 @@ public class ExaminationSettingsAppService(
 			SettingStatus.Active,
 			input.DefaultTotalMarks,
 			input.DefaultWeightage,
-			input.IncludedInResult,
-			input.MarksEntryRequired,
-			input.GradeScaleRequired,
-			input.AllowPracticalOral,
 			input.DefaultGradeScaleId
 		);
 	}
@@ -294,10 +290,6 @@ public class ExaminationSettingsAppService(
 			input.Status,
 			input.DefaultTotalMarks,
 			input.DefaultWeightage,
-			input.IncludedInResult,
-			input.MarksEntryRequired,
-			input.GradeScaleRequired,
-			input.AllowPracticalOral,
 			input.DefaultGradeScaleId
 		);
 	}

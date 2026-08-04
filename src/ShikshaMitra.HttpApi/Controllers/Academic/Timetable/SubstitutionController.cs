@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using ShikshaMitra.Academic.Timetable.Substitutions;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.Application.Dtos;
@@ -110,9 +111,11 @@ public class SubstitutionController(ISubstitutionAppService substitutionAppServi
 
     [HttpPost("{id:guid}/acknowledge")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
-    public Task<SubstitutionDto> AcknowledgeAsync([FromRoute] Guid id)
+    public Task<SubstitutionDto> AcknowledgeAsync(
+        [FromRoute] Guid id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] SubstitutionActionDto? input)
     {
-        return substitutionAppService.AcknowledgeAsync(id);
+        return substitutionAppService.AcknowledgeAsync(id, input);
     }
 
     [HttpPost("{id:guid}/request-change")]

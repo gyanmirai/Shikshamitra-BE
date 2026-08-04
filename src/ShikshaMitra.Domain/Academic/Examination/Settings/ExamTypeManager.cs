@@ -22,10 +22,6 @@ public class ExamTypeManager(
         SettingStatus status = SettingStatus.Active,
         double? defaultTotalMarks = null,
         double? defaultWeightage = null,
-        bool includedInResult = false,
-        bool marksEntryRequired = false,
-        bool gradeScaleRequired = false,
-        bool allowPracticalOral = false,
         Guid? defaultGradeScaleId = null
     )
     {
@@ -56,10 +52,6 @@ public class ExamTypeManager(
             existing.SetStatus(status);
             existing.SetDefaultTotalMarks(defaultTotalMarks);
             existing.SetDefaultWeightage(defaultWeightage);
-            existing.SetIncludedInResult(includedInResult);
-            existing.SetMarksEntryRequired(marksEntryRequired);
-            existing.SetGradeScaleRequired(gradeScaleRequired);
-            existing.SetAllowPracticalOral(allowPracticalOral);
             existing.SetDefaultGradeScaleId(defaultGradeScaleId);
             return await examTypeRepository.UpdateAsync(existing);
         }
@@ -74,10 +66,6 @@ public class ExamTypeManager(
             status,
             defaultTotalMarks,
             defaultWeightage,
-            includedInResult,
-            marksEntryRequired,
-            gradeScaleRequired,
-            allowPracticalOral,
             defaultGradeScaleId
         );
         return await examTypeRepository.InsertAsync(examType);
@@ -91,10 +79,6 @@ public class ExamTypeManager(
         SettingStatus status,
         double? defaultTotalMarks,
         double? defaultWeightage,
-        bool includedInResult,
-        bool marksEntryRequired,
-        bool gradeScaleRequired,
-        bool allowPracticalOral,
         Guid? defaultGradeScaleId
     )
     {
@@ -116,10 +100,6 @@ public class ExamTypeManager(
         examType.SetStatus(status);
         examType.SetDefaultTotalMarks(defaultTotalMarks);
         examType.SetDefaultWeightage(defaultWeightage);
-        examType.SetIncludedInResult(includedInResult);
-        examType.SetMarksEntryRequired(marksEntryRequired);
-        examType.SetGradeScaleRequired(gradeScaleRequired);
-        examType.SetAllowPracticalOral(allowPracticalOral);
         examType.SetDefaultGradeScaleId(defaultGradeScaleId);
         await examTypeRepository.UpdateAsync(examType);
     }

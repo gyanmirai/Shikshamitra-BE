@@ -109,6 +109,7 @@ public class RoomReservation : FullAuditedAggregateRoot<Guid>, IMultiTenant
     {
         Status = RoomReservationStatus.Rejected;
         RejectionReason = reason;
+        Remarks = reason;
         ApprovedByUserId = userId;
         ApprovedAt = DateTime.UtcNow;
     }

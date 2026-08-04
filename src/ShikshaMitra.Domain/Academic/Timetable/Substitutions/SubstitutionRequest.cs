@@ -206,11 +206,12 @@ public class SubstitutionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         }
     }
 
-    public void Acknowledge()
+    public void Acknowledge(string? remarks)
     {
         AcknowledgementStatus = SubstitutionAcknowledgementStatus.Accepted;
         Status = SubstitutionStatus.Acknowledged;
         AcknowledgedAt = DateTime.UtcNow;
+        Remarks = remarks;
     }
 
     public void RequestChange(string reason)
@@ -218,6 +219,7 @@ public class SubstitutionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         AcknowledgementStatus = SubstitutionAcknowledgementStatus.ChangeRequested;
         Status = SubstitutionStatus.Pending;
         ConflictReason = reason;
+        Remarks = reason;
     }
 
     public void Reject(string reason)
@@ -227,6 +229,7 @@ public class SubstitutionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         SubstituteTeacherId = null;
         SubstituteTeacherName = null;
         ConflictReason = reason;
+        Remarks = reason;
     }
 
     public void Complete()

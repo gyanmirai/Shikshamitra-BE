@@ -547,12 +547,39 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         throw new Volo.Abp.UserFriendlyException($"{action}: {detail}");
     }
 
+    public async Task UpdateReservationStatusAsync(Guid id, UpdateRoomReservationStatusDto input)
+    {
+        var requestedStatus = (input.ApprovalStatus ?? input.Status)?.Trim();
+
+        if (requestedStatus == null)
+        {
+            throw new Volo.Abp.UserFriendlyException("Reservation status is required.");
+        }
+
+        if (requestedStatus.Equals("rejected", StringComparison.OrdinalIgnoreCase) ||
+            requestedStatus.Equals("reject", StringComparison.OrdinalIgnoreCase))
+        {
+            await RejectReservationAsync(id, input.Remarks ?? input.Reason ?? string.Empty);
+            return;
+        }
+
+        if (requestedStatus.Equals("approved", StringComparison.OrdinalIgnoreCase) ||
+            requestedStatus.Equals("approve", StringComparison.OrdinalIgnoreCase))
+        {
+            await ApproveReservationAsync(id);
+            return;
+        }
+
+        throw new Volo.Abp.UserFriendlyException($"Unsupported reservation status '{requestedStatus}'.");
+    }
+
     public async Task RejectReservationAsync(Guid id, string reason)
     {
+        var normalizedReason = NormalizeRequiredReason(reason, "Rejection reason is required.");
         var reservation = await _reservationRepository.GetAsync(id);
         var oldValJson = JsonSerializer.Serialize(reservation);
 
-        reservation.Reject(CurrentUser.Id ?? Guid.Empty, reason);
+        reservation.Reject(CurrentUser.Id ?? Guid.Empty, normalizedReason);
         await _reservationRepository.UpdateAsync(reservation);
 
         if (reservation.IsRecurring && reservation.RecurringConfigId.HasValue)
@@ -562,7 +589,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 !r.IsRecurring);
             foreach (var child in children)
             {
-                child.Reject(CurrentUser.Id ?? Guid.Empty, reason);
+                child.Reject(CurrentUser.Id ?? Guid.Empty, normalizedReason);
                 await _reservationRepository.UpdateAsync(child);
             }
         }
@@ -579,9 +606,22 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             CurrentUser.UserName ?? "System",
             oldValJson,
             newValJson,
-            $"Reservation rejected: {reason}"
+            $"Reservation rejected: {normalizedReason}"
         );
         await _auditLogRepository.InsertAsync(auditLog);
+    }
+
+    private static string NormalizeRequiredReason(string? reason, string errorMessage)
+    {
+        var normalizedReason = reason?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedReason))
+        {
+            throw new Volo.Abp.UserFriendlyException(errorMessage);
+        }
+
+        return normalizedReason.Length <= 500
+            ? normalizedReason
+            : normalizedReason[..500];
     }
 
     public async Task<RoomMaintenanceBlockDto> CreateMaintenanceBlockAsync(CreateMaintenanceBlockDto input)

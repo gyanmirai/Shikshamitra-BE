@@ -108,12 +108,13 @@ public class ExamAppService(
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		EnsureExamSetupEditable(exam);
 		await AttachMissingElectiveScheduleSubjectsAsync(exam, input);
-		await ValidateScheduleInputAsync(exam, input);
+		var normalizedSubjects = NormalizeScheduleRows(input.Subjects);
+		await ValidateScheduleInputAsync(exam, normalizedSubjects);
 		await EnsureScheduleGradingScalesAvailableForFutureUseAsync(input);
 
-		await ValidateScheduleConflictsAsync(examId, exam, input);
+		await ValidateScheduleConflictsAsync(examId, exam, normalizedSubjects);
 
-		var schedules = input.Subjects.Select(s => (
+		var schedules = normalizedSubjects.Select(s => (
 			s.SubjectId,
 			s.ElectiveGroupId,
 			s.ExamDate,
@@ -131,7 +132,7 @@ public class ExamAppService(
 
 		if (input.SyncToAcademicCalendar)
 		{
-			await SyncScheduleToAcademicCalendarAsync(exam, input.Subjects);
+			await SyncScheduleToAcademicCalendarAsync(exam, normalizedSubjects);
 		}
 	}
 
@@ -957,13 +958,8 @@ public class ExamAppService(
 
 		if (!gradingScaleId.HasValue)
 		{
-			if (examType.GradeScaleRequired)
-			{
-				throw new BusinessException("ShikshaMitra.Exam:GradingScaleRequired")
-					.WithData("ExamTypeId", examTypeId);
-			}
-
-			return;
+			throw new BusinessException("ShikshaMitra.Exam:GradingScaleRequired")
+				.WithData("ExamTypeId", examTypeId);
 		}
 
 		var gradingScale = await gradingScaleRepository.FindAsync(gradingScaleId.Value);
@@ -1061,7 +1057,7 @@ public class ExamAppService(
 					.WithData("SubjectId", subject.SubjectId);
 			}
 
-			EnsureRequiredScheduleFieldsPresent(subject, examType);
+			EnsureRequiredScheduleFieldsPresent(subject);
 			ValidateSubjectScheduleValues(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime, subject.TotalMarks, subject.PassingMarks);
 			await EnsureExamDateAllowedAsync(exam.StandardId, exam.ExamDivisions.Select(x => x.DivisionId), subject.ExamDate.Value);
 		}
@@ -1090,7 +1086,7 @@ public class ExamAppService(
 						.WithData("SubjectId", subject.SubjectId);
 				}
 
-				EnsureRequiredScheduleFieldsPresent(subject, examType);
+				EnsureRequiredScheduleFieldsPresent(subject);
 				ValidateSubjectScheduleValues(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime, subject.TotalMarks, subject.PassingMarks);
 				await EnsureExamDateAllowedAsync(exam.StandardId, exam.ExamDivisions.Select(x => x.DivisionId), subject.ExamDate.Value);
 			}
@@ -1179,34 +1175,35 @@ public class ExamAppService(
 	private static DateTime? GetExamFinalEndAt(Exam exam)
 	{
 		var endTimes = exam.ExamSubjects
-			.Where(subject => subject.ExamDate.HasValue && subject.EndTime.HasValue)
-			.Select(subject => subject.ExamDate!.Value.Date.Add(subject.EndTime!.Value.TimeOfDay))
+			.Where(subject => subject.ExamDate.HasValue)
+			.Select(subject => subject.EndTime.HasValue
+				? subject.ExamDate!.Value.Date.Add(subject.EndTime!.Value.TimeOfDay)
+				: subject.ExamDate!.Value.Date)
 			.ToList();
 
 		return endTimes.Count == 0 ? null : endTimes.Max();
 	}
 
-	private static bool HasCompleteSchedule(ExamSubject subject, ExamType examType)
+	private static bool HasCompleteSchedule(ExamSubject subject)
 	{
 		var hasRequiredTime = subject.ExamDate.HasValue &&
 			subject.StartTime.HasValue &&
 			subject.EndTime.HasValue;
-		var hasRequiredMarks = !examType.MarksEntryRequired ||
-			(subject.TotalMarks.HasValue && subject.PassingMarks.HasValue);
-		var hasRequiredGradeScale = !examType.GradeScaleRequired || subject.GradeScalingId.HasValue;
+		var hasRequiredMarks = subject.TotalMarks.HasValue && subject.PassingMarks.HasValue;
+		var hasRequiredGradeScale = subject.GradeScalingId.HasValue;
 
 		return hasRequiredTime && hasRequiredMarks && hasRequiredGradeScale;
 	}
 
-	private static void EnsureRequiredScheduleFieldsPresent(ExamSubject subject, ExamType examType)
+	private static void EnsureRequiredScheduleFieldsPresent(ExamSubject subject)
 	{
-		if (examType.MarksEntryRequired && (!subject.TotalMarks.HasValue || !subject.PassingMarks.HasValue))
+		if (!subject.TotalMarks.HasValue || !subject.PassingMarks.HasValue)
 		{
 			throw new BusinessException("ShikshaMitra.Exam:ScheduleIncomplete")
 				.WithData("SubjectId", subject.SubjectId);
 		}
 
-		if (examType.GradeScaleRequired && !subject.GradeScalingId.HasValue)
+		if (!subject.GradeScalingId.HasValue)
 		{
 			throw new BusinessException("ShikshaMitra.Exam:ScheduleIncomplete")
 				.WithData("SubjectId", subject.SubjectId);
@@ -1227,7 +1224,7 @@ public class ExamAppService(
 			.Where(subject => !electiveGroupByStandardAndSubject.ContainsKey((exam.StandardId, subject.SubjectId)))
 			.ToList();
 
-		if (coreSubjects.Any(subject => !HasCompleteSchedule(subject, examType)))
+		if (coreSubjects.Any(subject => !HasCompleteSchedule(subject)))
 		{
 			return false;
 		}
@@ -1236,7 +1233,7 @@ public class ExamAppService(
 			.Where(subject => electiveGroupByStandardAndSubject.ContainsKey((exam.StandardId, subject.SubjectId)))
 			.GroupBy(subject => electiveGroupByStandardAndSubject[(exam.StandardId, subject.SubjectId)]);
 
-		return electiveGroups.All(group => group.Any(subject => HasCompleteSchedule(subject, examType)));
+		return electiveGroups.All(group => group.Any(HasCompleteSchedule));
 	}
 
 	private static List<ExamSubject> GetRoomRequiredSubjects(
@@ -1247,7 +1244,7 @@ public class ExamAppService(
 		return exam.ExamSubjects
 			.Where(subject =>
 				!electiveGroupByStandardAndSubject.ContainsKey((exam.StandardId, subject.SubjectId)) ||
-				HasCompleteSchedule(subject, examType))
+				HasCompleteSchedule(subject))
 			.ToList();
 	}
 
@@ -1280,10 +1277,38 @@ public class ExamAppService(
 			.ToDictionary(group => group.Key, group => group.First().ElectiveGroupId!.Value);
 	}
 
-	private async Task ValidateScheduleInputAsync(Exam exam, ExamScheduleRequestDto input)
+	private static List<NormalizedExamSubjectSchedule> NormalizeScheduleRows(IEnumerable<ExamSubjectScheduleDto> rows)
+	{
+		return rows.Select(row =>
+		{
+			var examDate = row.ExamDate?.Date;
+			return new NormalizedExamSubjectSchedule(
+				row.SubjectId,
+				row.ElectiveGroupId,
+				row.Notes,
+				examDate,
+				CombineExamDateAndTime(examDate, row.StartTime),
+				CombineExamDateAndTime(examDate, row.EndTime),
+				row.TotalMarks,
+				row.PassingMarks,
+				row.GradeScalingId);
+		}).ToList();
+	}
+
+	private static DateTime? CombineExamDateAndTime(DateTime? examDate, DateTimeOffset? time)
+	{
+		if (!examDate.HasValue || !time.HasValue)
+		{
+			return null;
+		}
+
+		return examDate.Value.Date.Add(time.Value.TimeOfDay);
+	}
+
+	private async Task ValidateScheduleInputAsync(Exam exam, List<NormalizedExamSubjectSchedule> rows)
 	{
 		var examSubjectIds = exam.ExamSubjects.Select(x => x.SubjectId).ToHashSet();
-		var rows = input.Subjects
+		rows = rows
 			.Where(x => x.SubjectId != Guid.Empty || x.ElectiveGroupId.HasValue)
 			.ToList();
 
@@ -1359,7 +1384,7 @@ public class ExamAppService(
 		}
 	}
 
-	private static void EnsureNoIncomingScheduleOverlap(List<ExamSubjectScheduleDto> rows)
+	private static void EnsureNoIncomingScheduleOverlap(List<NormalizedExamSubjectSchedule> rows)
 	{
 		var scheduled = rows
 			.Where(x => x.ExamDate.HasValue && x.StartTime.HasValue && x.EndTime.HasValue)
@@ -1422,7 +1447,7 @@ public class ExamAppService(
 		}
 	}
 
-	private async Task SyncScheduleToAcademicCalendarAsync(Exam exam, IReadOnlyCollection<ExamSubjectScheduleDto> subjectSchedules)
+	private async Task SyncScheduleToAcademicCalendarAsync(Exam exam, IReadOnlyCollection<NormalizedExamSubjectSchedule> subjectSchedules)
 	{
 		var scheduledRows = subjectSchedules
 			.Where(row => row.ExamDate.HasValue)
@@ -1832,10 +1857,10 @@ public class ExamAppService(
 		}
 	}
 
-	private async Task ValidateScheduleConflictsAsync(Guid examId, Exam currentExam, ExamScheduleRequestDto input)
+	private async Task ValidateScheduleConflictsAsync(Guid examId, Exam currentExam, List<NormalizedExamSubjectSchedule> subjects)
 	{
 		// Only validate entries that have a fully-specified time window
-		var incomingScheduled = input.Subjects
+		var incomingScheduled = subjects
 			.Where(s => s.StartTime.HasValue && s.EndTime.HasValue)
 			.ToList();
 
@@ -1859,7 +1884,7 @@ public class ExamAppService(
 		var conflictCandidateSubjects = otherExams
 			.Where(e => e.ExamDivisions.Any(d => currentDivisionIds.Contains(d.DivisionId)))
 			.SelectMany(e => e.ExamSubjects)
-			.Where(es => es.StartTime.HasValue && es.EndTime.HasValue)
+			.Where(es => es.ExamDate.HasValue && es.StartTime.HasValue && es.EndTime.HasValue)
 			.ToList();
 
 		if (conflictCandidateSubjects.Count == 0)
@@ -1873,9 +1898,13 @@ public class ExamAppService(
 			// Find all existing subjects on the same day whose window overlaps
 			var dayOverlaps = conflictCandidateSubjects
 				.Where(es =>
-					es.StartTime!.Value.Date == incomingStart.Date &&
-					es.StartTime < incomingEnd &&
-					es.EndTime > incomingStart)
+				{
+					var existingStart = es.ExamDate!.Value.Date.Add(es.StartTime!.Value.TimeOfDay);
+					var existingEnd = es.ExamDate.Value.Date.Add(es.EndTime!.Value.TimeOfDay);
+					return existingStart.Date == incomingStart.Date &&
+						existingStart < incomingEnd &&
+						existingEnd > incomingStart;
+				})
 				.ToList();
 
 			if (dayOverlaps.Count == 0)
@@ -2487,4 +2516,15 @@ public class ExamAppService(
 
 		return result;
 	}
+
+	private sealed record NormalizedExamSubjectSchedule(
+		Guid SubjectId,
+		Guid? ElectiveGroupId,
+		string? Notes,
+		DateTime? ExamDate,
+		DateTime? StartTime,
+		DateTime? EndTime,
+		double? TotalMarks,
+		double? PassingMarks,
+		Guid? GradeScalingId);
 }

@@ -85,8 +85,12 @@ public class QuestionBankItemDto
     public Guid? BoardId { get; set; }
     public Guid? MediumId { get; set; }
     public Guid StandardId { get; set; }
+    public string? StandardName { get; set; }
     public Guid SubjectId { get; set; }
+    public string? SubjectName { get; set; }
     public Guid? ChapterId { get; set; }
+    public string? ChapterName { get; set; }
+    public int? ChapterNumber { get; set; }
     public Guid? TopicId { get; set; }
     public string? TopicName { get; set; }
     public string QuestionText { get; set; } = string.Empty;

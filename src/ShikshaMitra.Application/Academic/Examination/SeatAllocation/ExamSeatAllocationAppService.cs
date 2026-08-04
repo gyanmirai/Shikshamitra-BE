@@ -1249,6 +1249,9 @@ public class ExamSeatAllocationAppService(
             .Where(s => s.DivisionId.HasValue)
             .GroupBy(s => s.DivisionId!.Value)
             .ToDictionary(g => g.Key, g => g.Count());
+        var studentDivisionById = studentsInDivisions
+            .Where(s => s.DivisionId.HasValue)
+            .ToDictionary(s => s.Id, s => s.DivisionId!.Value);
 
         // Allocations per exam
         var allocCounts = await seatAllocationRepository.GetListAsync(a => examIds.Contains(a.ExamId));
@@ -1275,6 +1278,13 @@ public class ExamSeatAllocationAppService(
             .Where(a => allSubjectPlanByExam.TryGetValue(a.ExamId, out var plan) && a.SeatingPlanId == plan.Id)
             .GroupBy(a => a.ExamId)
             .ToDictionary(g => g.Key, g => g.Count());
+        var allocByExamDivision = relevantAllocs
+            .Where(a =>
+                allSubjectPlanByExam.TryGetValue(a.ExamId, out var plan) &&
+                a.SeatingPlanId == plan.Id &&
+                studentDivisionById.ContainsKey(a.StudentId))
+            .GroupBy(a => new { a.ExamId, DivisionId = studentDivisionById[a.StudentId] })
+            .ToDictionary(g => (g.Key.ExamId, g.Key.DivisionId), g => g.Count());
 
         var items = allExamsWithDetails.Select(exam =>
         {
@@ -1288,6 +1298,27 @@ public class ExamSeatAllocationAppService(
             var allocated = allocByExam.GetValueOrDefault(exam.Id, 0);
             var pending = totalStudents - allocated;
             var status = allocated == 0 ? 0 : (allocated < totalStudents ? 1 : 2);
+            var divisionProgress = examDivisionIds
+                .Where(divisionsDict.ContainsKey)
+                .Select(divId =>
+                {
+                    var divisionTotal = studentCountByDivision.GetValueOrDefault(divId, 0);
+                    var divisionAllocated = allocByExamDivision.GetValueOrDefault((exam.Id, divId), 0);
+                    var divisionPending = Math.Max(0, divisionTotal - divisionAllocated);
+
+                    return new SeatAllocationDivisionProgressDto
+                    {
+                        DivisionId = divId,
+                        DivisionName = divisionsDict[divId].Name,
+                        TotalStudents = divisionTotal,
+                        AllocatedStudents = divisionAllocated,
+                        PendingStudents = divisionPending,
+                        Progress = divisionTotal == 0
+                            ? 0
+                            : Math.Min(100, (int) Math.Round(divisionAllocated * 100d / divisionTotal))
+                    };
+                })
+                .ToList();
 
             return new SeatAllocationSummaryDto
             {
@@ -1296,6 +1327,7 @@ public class ExamSeatAllocationAppService(
                 ExamTypeName = examType?.Name ?? string.Empty,
                 StandardName = standard?.Name ?? string.Empty,
                 Divisions = divisionNames,
+                DivisionProgress = divisionProgress,
                 TotalStudents = totalStudents,
                 AllocatedStudents = allocated,
                 PendingStudents = Math.Max(0, pending),

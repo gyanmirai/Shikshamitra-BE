@@ -5,7 +5,10 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common.Excel;
 using ShikshaMitra.Common.Excel.Elements;
+using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.QuestionPapers;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -22,6 +25,9 @@ public class QuestionBankAppService(
     IRepository<QuestionTag, Guid> tagRepository,
     IRepository<QuestionUsageLog, Guid> usageRepository,
     IRepository<QuestionPaperQuestion, Guid> paperQuestionRepository,
+    IRepository<Standard, Guid> standardRepository,
+    IRepository<Subject, Guid> subjectRepository,
+    IRepository<AssignedSubjectChapter, Guid> chapterRepository,
     IExcelService excelService,
     IAsyncQueryableExecuter asyncExecuter
 ) : ApplicationService, IQuestionBankAppService
@@ -120,13 +126,14 @@ public class QuestionBankAppService(
         var items = await asyncExecuter.ToListAsync(query.OrderByDescending(x => x.CreationTime).Skip((page - 1) * pageSize).Take(pageSize));
         var usageCounts = await GetUsageCountsAsync(items.Select(x => x.Id).ToList());
         var duplicateIds = GetDuplicateQuestionIds(items);
+        var lookup = await BuildQuestionLookupAsync(items);
 
         return new QuestionListResponseDto
         {
             TotalCount = total,
             CurrentPage = page,
             PageSize = pageSize,
-            Items = items.Select(x => Map(x, usageCounts.GetValueOrDefault(x.Id), duplicateIds.Contains(x.Id))).ToList()
+            Items = items.Select(x => Map(x, usageCounts.GetValueOrDefault(x.Id), duplicateIds.Contains(x.Id), lookup)).ToList()
         };
     }
 
@@ -134,7 +141,8 @@ public class QuestionBankAppService(
     {
         var question = await GetQuestionEntityAsync(id);
         var usageCount = await GetQuestionUsageCountAsync(id);
-        return Map(question, usageCount);
+        var lookup = await BuildQuestionLookupAsync([question]);
+        return Map(question, usageCount, lookup: lookup);
     }
 
     public async Task<QuestionBankItemDto> CreateQuestionAsync(CreateUpdateQuestionDto input)
@@ -199,8 +207,8 @@ public class QuestionBankAppService(
         }
 
         Apply(input, question);
-        await optionRepository.DeleteManyAsync(question.Options.ToList());
-        await tagRepository.DeleteManyAsync(question.Tags.ToList());
+        await optionRepository.DeleteDirectAsync(x => x.QuestionBankItemId == question.Id);
+        await tagRepository.DeleteDirectAsync(x => x.QuestionBankItemId == question.Id);
         question.Options.Clear();
         question.Tags.Clear();
         SyncChildren(question, input);
@@ -648,9 +656,36 @@ public class QuestionBankAppService(
         if (input.Visibility.HasValue) question.Visibility = input.Visibility.Value;
     }
 
-    private static QuestionBankItemDto Map(QuestionBankItem question, int usedCount, bool duplicateRisk = false)
+    private async Task<QuestionLookup> BuildQuestionLookupAsync(IReadOnlyCollection<QuestionBankItem> questions)
+    {
+        if (questions.Count == 0) return new QuestionLookup();
+
+        var standardIds = questions.Select(x => x.StandardId).Distinct().ToList();
+        var subjectIds = questions.Select(x => x.SubjectId).Distinct().ToList();
+        var chapterIds = questions.Where(x => x.ChapterId.HasValue).Select(x => x.ChapterId!.Value).Distinct().ToList();
+
+        var standards = await standardRepository.GetListAsync(x => standardIds.Contains(x.Id));
+        var subjects = await subjectRepository.GetListAsync(x => subjectIds.Contains(x.Id));
+        var chapters = chapterIds.Count > 0
+            ? await chapterRepository.GetListAsync(x => chapterIds.Contains(x.Id))
+            : new List<AssignedSubjectChapter>();
+
+        return new QuestionLookup(
+            standards.ToDictionary(x => x.Id, x => x.Name),
+            subjects.ToDictionary(x => x.Id, x => x.DisplayName ?? x.Name),
+            chapters.ToDictionary(x => x.Id, x => x));
+    }
+
+    private static QuestionBankItemDto Map(
+        QuestionBankItem question,
+        int usedCount,
+        bool duplicateRisk = false,
+        QuestionLookup? lookup = null)
     {
         var qualityScore = CalculateQualityScore(question);
+        lookup ??= new QuestionLookup();
+        lookup.Chapters.TryGetValue(question.ChapterId ?? Guid.Empty, out var chapter);
+
         return new QuestionBankItemDto
         {
             Id = question.Id,
@@ -658,8 +693,12 @@ public class QuestionBankAppService(
             BoardId = question.BoardId,
             MediumId = question.MediumId,
             StandardId = question.StandardId,
+            StandardName = lookup.StandardNames.GetValueOrDefault(question.StandardId),
             SubjectId = question.SubjectId,
+            SubjectName = lookup.SubjectNames.GetValueOrDefault(question.SubjectId),
             ChapterId = question.ChapterId,
+            ChapterName = chapter?.ChapterName,
+            ChapterNumber = chapter?.ChapterNumber,
             TopicId = question.TopicId,
             TopicName = question.TopicName,
             QuestionText = question.QuestionText,
@@ -689,6 +728,16 @@ public class QuestionBankAppService(
             Options = question.Options.OrderBy(x => x.SortOrder).Select(x => new QuestionOptionDto { Id = x.Id, OptionText = x.OptionText, IsCorrect = x.IsCorrect, SortOrder = x.SortOrder }).ToList(),
             Tags = question.Tags.Select(x => x.TagName).ToList()
         };
+    }
+
+    private sealed record QuestionLookup(
+        Dictionary<Guid, string> StandardNames,
+        Dictionary<Guid, string> SubjectNames,
+        Dictionary<Guid, AssignedSubjectChapter> Chapters)
+    {
+        public QuestionLookup() : this(new Dictionary<Guid, string>(), new Dictionary<Guid, string>(), new Dictionary<Guid, AssignedSubjectChapter>())
+        {
+        }
     }
 
     private static QuestionBankSettingDto Map(QuestionBankSetting setting) => new()

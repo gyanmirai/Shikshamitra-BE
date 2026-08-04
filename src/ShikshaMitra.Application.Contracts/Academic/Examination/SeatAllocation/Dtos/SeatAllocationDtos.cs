@@ -79,6 +79,7 @@ public class SeatAllocationSummaryDto
     public string ExamTypeName { get; set; } = string.Empty;
     public string StandardName { get; set; } = string.Empty;
     public List<string> Divisions { get; set; } = [];
+    public List<SeatAllocationDivisionProgressDto> DivisionProgress { get; set; } = [];
     public int TotalStudents { get; set; }
     public int AllocatedStudents { get; set; }
     public int PendingStudents { get; set; }
@@ -86,6 +87,16 @@ public class SeatAllocationSummaryDto
     public int SubjectCount { get; set; }
     /// <summary>0 = Pending, 1 = Updated, 2 = Allocated</summary>
     public int Status { get; set; }
+}
+
+public class SeatAllocationDivisionProgressDto
+{
+    public Guid DivisionId { get; set; }
+    public string DivisionName { get; set; } = string.Empty;
+    public int TotalStudents { get; set; }
+    public int AllocatedStudents { get; set; }
+    public int PendingStudents { get; set; }
+    public int Progress { get; set; }
 }
 
 public class SeatAllocationDashboardResponseDto

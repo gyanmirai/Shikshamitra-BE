@@ -422,43 +422,38 @@ public class SubstitutionAppService(
         return await RejectDutyAsync(id, input);
     }
 
-    public async Task<SubstitutionDto> AcknowledgeAsync(Guid id)
+    public async Task<SubstitutionDto> AcknowledgeAsync(Guid id, SubstitutionActionDto? input = null)
     {
         var entity = await substitutionRepository.GetAsync(id);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot acknowledge a substitution after the period has ended.");
-        entity.Acknowledge();
+        var note = NormalizeOptionalActionReason(input?.Reason);
+        entity.Acknowledge(note);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
-        await WriteAuditAsync(id, "Acknowledged", "Duty accepted.");
+        await WriteAuditAsync(id, "Acknowledged", note ?? "Duty accepted.");
         return await GetAsync(id);
     }
 
     public async Task<SubstitutionDto> RequestChangeAsync(Guid id, SubstitutionActionDto input)
     {
-        if (string.IsNullOrWhiteSpace(input.Reason))
-        {
-            throw new UserFriendlyException("Reason is required.");
-        }
+        var reason = NormalizeRequiredActionReason(input?.Reason);
 
         var entity = await substitutionRepository.GetAsync(id);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot request changes after the period has ended.");
-        entity.RequestChange(input.Reason);
+        entity.RequestChange(reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
-        await WriteAuditAsync(id, "Change Requested", input.Reason);
+        await WriteAuditAsync(id, "Change Requested", reason);
         return await GetAsync(id);
     }
 
     public async Task<SubstitutionDto> RejectDutyAsync(Guid id, SubstitutionActionDto input)
     {
-        if (string.IsNullOrWhiteSpace(input.Reason))
-        {
-            throw new UserFriendlyException("Reason is required.");
-        }
+        var reason = NormalizeRequiredActionReason(input?.Reason);
 
         var entity = await substitutionRepository.GetAsync(id);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot reject a substitution after the period has ended.");
-        entity.Reject(input.Reason);
+        entity.Reject(reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
-        await WriteAuditAsync(id, "Rejected", input.Reason);
+        await WriteAuditAsync(id, "Rejected", reason);
         return await GetAsync(id);
     }
 
@@ -1078,6 +1073,23 @@ public class SubstitutionAppService(
                 details,
                 CurrentUser.Id),
             autoSave: true);
+    }
+
+    private static string? NormalizeOptionalActionReason(string? reason)
+    {
+        var trimmed = reason?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    private static string NormalizeRequiredActionReason(string? reason)
+    {
+        var trimmed = NormalizeOptionalActionReason(reason);
+        if (trimmed is null || trimmed.Length < 5)
+        {
+            throw new UserFriendlyException("Reason must be at least 5 characters.");
+        }
+
+        return trimmed;
     }
 
     private async Task WriteNotificationAsync(SubstitutionRequest entity, string eventName, string recipientName, string status)

@@ -18,13 +18,5 @@ public class UpdateExamTypeDto
 
     public double? DefaultWeightage { get; set; }
 
-    public bool IncludedInResult { get; set; }
-
-    public bool MarksEntryRequired { get; set; }
-
-    public bool GradeScaleRequired { get; set; }
-
-    public bool AllowPracticalOral { get; set; }
-
     public Guid? DefaultGradeScaleId { get; set; }
 }

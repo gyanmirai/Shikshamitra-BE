@@ -15,10 +15,6 @@ public class ExamType : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public SettingStatus Status { get; private set; }
     public double? DefaultTotalMarks { get; private set; }
     public double? DefaultWeightage { get; private set; }
-    public bool IncludedInResult { get; private set; }
-    public bool MarksEntryRequired { get; private set; }
-    public bool GradeScaleRequired { get; private set; }
-    public bool AllowPracticalOral { get; private set; }
     public Guid? DefaultGradeScaleId { get; private set; }
 
     private ExamType()
@@ -28,7 +24,7 @@ public class ExamType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public ExamType(Guid id, Guid? tenantId, string name, string? description, Guid academicMediumId,
         string? category, SettingStatus status, double? defaultTotalMarks, double? defaultWeightage,
-        bool includedInResult, bool marksEntryRequired, bool gradeScaleRequired, bool allowPracticalOral, Guid? defaultGradeScaleId)
+        Guid? defaultGradeScaleId)
         : base(id)
     {
         TenantId = tenantId;
@@ -39,10 +35,6 @@ public class ExamType : FullAuditedAggregateRoot<Guid>, IMultiTenant
         SetStatus(status);
         SetDefaultTotalMarks(defaultTotalMarks);
         SetDefaultWeightage(defaultWeightage);
-        SetIncludedInResult(includedInResult);
-        SetMarksEntryRequired(marksEntryRequired);
-        SetGradeScaleRequired(gradeScaleRequired);
-        SetAllowPracticalOral(allowPracticalOral);
         SetDefaultGradeScaleId(defaultGradeScaleId);
     }
 
@@ -54,9 +46,6 @@ public class ExamType : FullAuditedAggregateRoot<Guid>, IMultiTenant
         SetDescription(description);
         AcademicMediumId = academicMediumId;
         Status = SettingStatus.Active;
-        IncludedInResult = true;
-        MarksEntryRequired = true;
-        GradeScaleRequired = true;
     }
 
     public void SetName(string name)
@@ -88,26 +77,6 @@ public class ExamType : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public void SetDefaultWeightage(double? defaultWeightage)
     {
         DefaultWeightage = defaultWeightage;
-    }
-
-    public void SetIncludedInResult(bool includedInResult)
-    {
-        IncludedInResult = includedInResult;
-    }
-
-    public void SetMarksEntryRequired(bool marksEntryRequired)
-    {
-        MarksEntryRequired = marksEntryRequired;
-    }
-
-    public void SetGradeScaleRequired(bool gradeScaleRequired)
-    {
-        GradeScaleRequired = gradeScaleRequired;
-    }
-
-    public void SetAllowPracticalOral(bool allowPracticalOral)
-    {
-        AllowPracticalOral = allowPracticalOral;
     }
 
     public void SetDefaultGradeScaleId(Guid? defaultGradeScaleId)

@@ -13,6 +13,7 @@ public interface IRoomAvailabilityAppService : IApplicationService
     Task<RoomReservationDto> CreateReservationAsync(CreateRoomReservationDto input);
     Task<List<RoomReservationDto>> GetReservationsAsync();
     Task<RoomReservationDto> UpdateReservationAsync(Guid id, CreateRoomReservationDto input);
+    Task UpdateReservationStatusAsync(Guid id, UpdateRoomReservationStatusDto input);
     Task CancelReservationAsync(Guid id, string reason);
     Task ApproveReservationAsync(Guid id);
     Task RejectReservationAsync(Guid id, string reason);

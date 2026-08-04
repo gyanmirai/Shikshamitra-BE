@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Timetable.RoomAvailability;
@@ -62,6 +63,14 @@ public class RoomAvailabilityController : AbpController
         return await _service.UpdateReservationAsync(id, input);
     }
 
+    [HttpPut]
+    [HttpPatch]
+    [Route("room-reservations/{id}/status")]
+    public async Task UpdateReservationStatusAsync(Guid id, [FromBody] UpdateRoomReservationStatusDto input)
+    {
+        await _service.UpdateReservationStatusAsync(id, input);
+    }
+
     [HttpPost]
     [Route("room-reservations/{id}/cancel")]
     public async Task CancelReservationAsync(Guid id, [FromBody] string reason)
@@ -78,9 +87,9 @@ public class RoomAvailabilityController : AbpController
 
     [HttpPost]
     [Route("room-reservations/{id}/reject")]
-    public async Task RejectReservationAsync(Guid id, [FromBody] string reason)
+    public async Task RejectReservationAsync(Guid id, [FromBody] JsonElement input)
     {
-        await _service.RejectReservationAsync(id, reason);
+        await _service.RejectReservationAsync(id, ExtractReason(input));
     }
 
     [HttpPost]
@@ -109,5 +118,36 @@ public class RoomAvailabilityController : AbpController
     public async Task<RoomScheduleDto> GetRoomScheduleAsync([FromQuery] Guid roomId, [FromQuery] DateTime date)
     {
         return await _service.GetRoomScheduleAsync(roomId, date);
+    }
+
+    private static string ExtractReason(JsonElement input)
+    {
+        if (input.ValueKind == JsonValueKind.String)
+        {
+            return input.GetString() ?? string.Empty;
+        }
+
+        if (input.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        if (input.TryGetProperty("remarks", out var remarks) && remarks.ValueKind == JsonValueKind.String)
+        {
+            return remarks.GetString() ?? string.Empty;
+        }
+
+        if (input.TryGetProperty("reason", out var reason) && reason.ValueKind == JsonValueKind.String)
+        {
+            return reason.GetString() ?? string.Empty;
+        }
+
+        if (input.TryGetProperty("rejectionReason", out var rejectionReason) &&
+            rejectionReason.ValueKind == JsonValueKind.String)
+        {
+            return rejectionReason.GetString() ?? string.Empty;
+        }
+
+        return string.Empty;
     }
 }

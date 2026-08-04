@@ -27,11 +27,11 @@ public class ExamSubjectScheduleDto
 
     public string? Notes { get; set; }
 
-    public DateTime? ExamDate { get; set; }
+    public DateTimeOffset? ExamDate { get; set; }
 
-    public DateTime? StartTime { get; set; }
+    public DateTimeOffset? StartTime { get; set; }
 
-    public DateTime? EndTime { get; set; }
+    public DateTimeOffset? EndTime { get; set; }
 
     public double? TotalMarks { get; set; }
 

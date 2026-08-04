@@ -12,10 +12,6 @@ public class ExamTypeDto
     public SettingStatus Status { get; set; }
     public double? DefaultTotalMarks { get; set; }
     public double? DefaultWeightage { get; set; }
-    public bool IncludedInResult { get; set; }
-    public bool MarksEntryRequired { get; set; }
-    public bool GradeScaleRequired { get; set; }
-    public bool AllowPracticalOral { get; set; }
     public Guid? DefaultGradeScaleId { get; set; }
     public int UsageCount { get; set; }
     public DateTime CreatedAt { get; set; }

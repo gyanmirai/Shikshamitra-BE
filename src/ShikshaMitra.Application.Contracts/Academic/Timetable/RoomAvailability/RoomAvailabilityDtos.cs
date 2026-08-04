@@ -172,8 +172,18 @@ public class RoomReservationDto
     public Guid? RecurringConfigId { get; set; }
     public DateTime? RecurringUntilDate { get; set; }
     public string? Remarks { get; set; }
+    public string? RejectionReason { get; set; }
+    public string? CancellationReason { get; set; }
     public DateTime CreationTime { get; set; }
     public string RequestedBy { get; set; } = string.Empty;
+}
+
+public class UpdateRoomReservationStatusDto
+{
+    public string? ApprovalStatus { get; set; }
+    public string? Status { get; set; }
+    public string? Remarks { get; set; }
+    public string? Reason { get; set; }
 }
 
 public class RoomMaintenanceBlockDto

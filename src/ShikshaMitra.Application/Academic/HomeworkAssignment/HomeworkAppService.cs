@@ -668,17 +668,33 @@ public class HomeworkAppService(
         var rows = schedules.ToList();
         if (rows.Count == 0)
         {
-            throw new BusinessException("ShikshaMitra.Homework:DivisionScheduleRequired");
+            throw new UserFriendlyException("Select at least one division schedule before saving this homework.");
         }
 
         if (rows.Any(x => x.DivisionId == Guid.Empty))
         {
-            throw new BusinessException("ShikshaMitra.Homework:DivisionRequired");
+            throw new UserFriendlyException("Division is required for every homework schedule row.");
         }
+
+        var divisionIds = rows.Select(row => row.DivisionId).Distinct().ToList();
+        var divisions = await divisionRepository.GetListAsync(division => divisionIds.Contains(division.Id));
+        var divisionLookup = divisions.ToDictionary(division => division.Id, division => division.Name);
 
         foreach (var row in rows)
         {
-            await EnsureHomeworkDueDateAllowedAsync(standardId, row.DivisionId, row.DueAt);
+            var divisionName = divisionLookup.GetValueOrDefault(row.DivisionId, "selected division");
+            if (!row.PublishAt.HasValue)
+            {
+                throw new UserFriendlyException($"Publish Date is required for {divisionName}.");
+            }
+
+            if (row.DueAt <= row.PublishAt.Value)
+            {
+                throw new UserFriendlyException(
+                    $"Due Date must be after Publish Date for {divisionName}. Publish Date: {row.PublishAt.Value:dd/MM/yyyy HH:mm}; Due Date: {row.DueAt:dd/MM/yyyy HH:mm}.");
+            }
+
+            await EnsureHomeworkDueDateAllowedAsync(standardId, row.DivisionId, row.DueAt, divisionName);
         }
     }
 
@@ -707,7 +723,11 @@ public class HomeworkAppService(
         }
     }
 
-    private async Task EnsureHomeworkDueDateAllowedAsync(Guid standardId, Guid divisionId, DateTime dueDate)
+    private async Task EnsureHomeworkDueDateAllowedAsync(
+        Guid standardId,
+        Guid divisionId,
+        DateTime dueDate,
+        string? divisionName = null)
     {
         var date = dueDate.Date;
         var blockedDays = await calendarDayRepository.GetListAsync(day =>
@@ -720,10 +740,11 @@ public class HomeworkAppService(
         var blockingDay = blockedDays.FirstOrDefault(day => CalendarDayBlockingRules.BlocksHomeworkDueDate(day.DayType));
         if (blockingDay != null)
         {
-            throw new BusinessException("ShikshaMitra.Homework:DueDateBlockedByCalendar")
-                .WithData("DueDate", date.ToString("yyyy-MM-dd"))
-                .WithData("CalendarDay", blockingDay.Title)
-                .WithData("DayType", blockingDay.DayType);
+            var targetDivision = string.IsNullOrWhiteSpace(divisionName)
+                ? "the selected division"
+                : divisionName;
+            throw new UserFriendlyException(
+                $"Due Date {date:dd/MM/yyyy} for {targetDivision} is blocked by the academic calendar entry \"{blockingDay.Title}\". Choose another due date.");
         }
     }
 

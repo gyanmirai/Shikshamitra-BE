@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
@@ -23,6 +24,9 @@ public class DashboardSummaryDto
 	public string DashboardTemplate { get; set; } = string.Empty;
 	public string? AcademicYearId { get; set; }
 	public DashboardDateRangeDto DateRange { get; set; } = new();
+	public string ScopeLabel { get; set; } = string.Empty;
+	public string DataState { get; set; } = "live";
+	public DateTime GeneratedAtUtc { get; set; }
 	public List<DashboardWidgetDto> KpiCards { get; set; } = [];
 	public List<DashboardWidgetDto> ActionItems { get; set; } = [];
 	public List<DashboardWidgetDto> RiskAlerts { get; set; } = [];
@@ -52,6 +56,9 @@ public class DashboardWidgetDto
 	public string? Owner { get; set; }
 	public string? DrilldownUrl { get; set; }
 	public string? Health { get; set; }
+	public string Kind { get; set; } = "metric";
+	public string Priority { get; set; } = "normal";
+	public string? ActionLabel { get; set; }
 }
 
 public class DashboardWidgetMetadataDto

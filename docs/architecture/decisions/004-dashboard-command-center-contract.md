@@ -20,6 +20,9 @@ Use `/dashboard` as a template-driven command center backed by one dashboard sum
 - Existing module dashboards and operational routes remain the drilldown destinations.
 - Backend permission filtering is authoritative and must happen before widget labels, counts, values, or links are returned.
 - Frontend widget filtering remains as defense in depth.
+- Summary responses include a safe scope label, generated timestamp, live or partial data state, and semantic widget kind, priority, and action label.
+- Semantic fields describe meaning and urgency without prescribing frontend grid spans or responsive layout.
+- Production clients must show honest partial or retryable error states and must not replace unavailable live data with mock operational values.
 
 Temporarily accept duplicated FE and BE dashboard widget metadata.
 
@@ -36,6 +39,7 @@ Temporarily accept duplicated FE and BE dashboard widget metadata.
 - The frontend shell, zones, adapter, and permission filtering stay reusable across all templates.
 - The backend can progressively enrich widgets from scoped module sources without changing the UI contract.
 - Permission and UserScope rules remain visible in both the UI and server-side aggregation path.
+- Shared semantic fields let each role template use an appropriate accessible renderer without creating separate page implementations.
 
 **Negative**
 

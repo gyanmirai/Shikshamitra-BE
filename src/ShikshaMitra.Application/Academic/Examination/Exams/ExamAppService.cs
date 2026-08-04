@@ -394,25 +394,82 @@ public class ExamAppService(
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 
-		var subjectIds = exam.ExamSubjects.Select(x => x.SubjectId).ToList();
-		var subjects = await subjectRepository.GetListAsync(x => subjectIds.Contains(x.Id));
+		var examSubjectBySubjectId = exam.ExamSubjects
+			.GroupBy(x => x.SubjectId)
+			.ToDictionary(group => group.Key, group => group.First());
+		var examSubjectIds = examSubjectBySubjectId.Keys.ToList();
+		var electiveAssignmentsForExamSubjects = examSubjectIds.Count > 0
+			? await assignmentRepository.GetListAsync(a =>
+				a.StandardId == exam.StandardId &&
+				examSubjectIds.Contains(a.SubjectId) &&
+				a.ElectiveGroupId.HasValue)
+			: [];
+		var electiveGroupIds = electiveAssignmentsForExamSubjects
+			.Select(a => a.ElectiveGroupId!.Value)
+			.Distinct()
+			.ToList();
+		var electiveGroupAssignments = electiveGroupIds.Count > 0
+			? await assignmentRepository.GetListAsync(a =>
+				a.StandardId == exam.StandardId &&
+				a.ElectiveGroupId.HasValue &&
+				electiveGroupIds.Contains(a.ElectiveGroupId.Value))
+			: [];
+		var assignmentBySubjectId = electiveGroupAssignments
+			.Concat(electiveAssignmentsForExamSubjects)
+			.GroupBy(a => a.SubjectId)
+			.ToDictionary(group => group.Key, group => group.First());
+		var electiveGroupById = electiveGroupIds.Count > 0
+			? (await electiveGroupRepository.GetListAsync(g => electiveGroupIds.Contains(g.Id))).ToDictionary(g => g.Id)
+			: new Dictionary<Guid, ElectiveGroup>();
+
+		var orderedSubjectIds = new List<Guid>();
+		foreach (var examSubject in exam.ExamSubjects)
+		{
+			if (assignmentBySubjectId.TryGetValue(examSubject.SubjectId, out var assignment) &&
+				assignment.ElectiveGroupId.HasValue)
+			{
+				orderedSubjectIds.AddRange(electiveGroupAssignments
+					.Where(a => a.ElectiveGroupId == assignment.ElectiveGroupId)
+					.OrderBy(a => a.SubjectCode)
+					.Select(a => a.SubjectId));
+			}
+			else
+			{
+				orderedSubjectIds.Add(examSubject.SubjectId);
+			}
+		}
+
+		orderedSubjectIds = orderedSubjectIds.Distinct().ToList();
+		var subjects = orderedSubjectIds.Count > 0
+			? await subjectRepository.GetListAsync(x => orderedSubjectIds.Contains(x.Id))
+			: [];
 		var subjectDict = subjects.ToDictionary(x => x.Id, x => x);
 
-		return exam.ExamSubjects.Select(es =>
+		return orderedSubjectIds.Select(subjectId =>
 		{
-			var subject = subjectDict.GetValueOrDefault(es.SubjectId);
+			var subject = subjectDict.GetValueOrDefault(subjectId);
+			examSubjectBySubjectId.TryGetValue(subjectId, out var examSubject);
+			assignmentBySubjectId.TryGetValue(subjectId, out var assignment);
+			var electiveGroup = assignment?.ElectiveGroupId.HasValue == true
+				? electiveGroupById.GetValueOrDefault(assignment.ElectiveGroupId.Value)
+				: null;
+
 			return new ExamSubjectResponseDto
 			{
-				ExamSubjectId = es.Id,
-				SubjectId = es.SubjectId,
+				ExamSubjectId = examSubject?.Id ?? Guid.Empty,
+				SubjectId = subjectId,
 				SubjectName = subject?.Name,
 				SubjectColor = subject?.Color,
-				Notes = es.Notes,
-				ExamDate = es.ExamDate,
-				StartTime = es.StartTime,
-				EndTime = es.EndTime,
-				TotalMarks = es.TotalMarks,
-				PassingMarks = es.PassingMarks
+				SubjectCode = assignment?.SubjectCode,
+				ElectiveGroupId = assignment?.ElectiveGroupId,
+				ElectiveGroupName = electiveGroup?.Name,
+				ElectiveGroupColor = electiveGroup?.Color,
+				Notes = examSubject?.Notes,
+				ExamDate = examSubject?.ExamDate,
+				StartTime = examSubject?.StartTime,
+				EndTime = examSubject?.EndTime,
+				TotalMarks = examSubject?.TotalMarks,
+				PassingMarks = examSubject?.PassingMarks
 			};
 		}).ToList();
 	}
@@ -1440,10 +1497,12 @@ public class ExamAppService(
 		var blockingDay = blockedDays.FirstOrDefault(day => CalendarDayBlockingRules.BlocksExamSchedule(day.DayType));
 		if (blockingDay != null)
 		{
-			throw new BusinessException("ShikshaMitra.Exam:ScheduleDateBlockedByCalendar")
+			var message = $"Cannot publish this exam because the scheduled date {date:dd MMM yyyy} conflicts with {blockingDay.DayType.ToString().ToLowerInvariant()} '{blockingDay.Title}' in the Academic Calendar.";
+			throw new BusinessException("ShikshaMitra.Exam:ScheduleDateBlockedByCalendar", message)
 				.WithData("ExamDate", date.ToString("yyyy-MM-dd"))
 				.WithData("CalendarDay", blockingDay.Title)
-				.WithData("DayType", blockingDay.DayType);
+				.WithData("DayType", blockingDay.DayType)
+				.WithData("message", message);
 		}
 	}
 

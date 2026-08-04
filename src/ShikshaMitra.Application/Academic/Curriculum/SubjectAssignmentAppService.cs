@@ -199,7 +199,7 @@ public class SubjectAssignmentAppService(
 		}
 
 		var assignments = await AsyncExecuter.ToListAsync(query);
-		await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(assignments, classId);
+		var readMetrics = await BuildSubjectAssignmentReadMetricsAsync(assignments, classId);
 
 		// Group assignments
 		var groupedAssignments = new List<SubjectAssignmentGroupDto>();
@@ -259,6 +259,7 @@ public class SubjectAssignmentAppService(
 		foreach (var coreAssignment in coreSubjects)
 		{
 			subjectsDict.TryGetValue(coreAssignment.SubjectId, out var subject);
+			var metrics = GetReadMetrics(readMetrics, coreAssignment);
 			var totalSlots = weeklyLecturesBySubject.GetValueOrDefault(coreAssignment.SubjectId, 0);
 			var occupiedSlots = occupiedBySubject.GetValueOrDefault(coreAssignment.SubjectId, 0);
 			var primaryTeacherEntry = coreAssignment.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
@@ -277,9 +278,9 @@ public class SubjectAssignmentAppService(
 				TotalSlots = totalSlots,
 				OccupiedSlots = occupiedSlots,
 				UnoccupiedSlots = totalSlots - occupiedSlots,
-				SetupHealthScore = coreAssignment.SetupHealthScore,
+				SetupHealthScore = metrics.SetupHealthScore,
 				ChaptersCount = coreAssignment.Chapters.Count,
-				WeeklyPeriods = coreAssignment.WeeklyPeriods,
+				WeeklyPeriods = metrics.WeeklyPeriods,
 				PrimaryTeacherId = primaryTeacherEntry?.TeacherId.ToString(),
 				PrimaryTeacherName = primaryTeacherEntry != null
 					? teacherNamesDict.GetValueOrDefault(primaryTeacherEntry.TeacherId)
@@ -309,9 +310,10 @@ public class SubjectAssignmentAppService(
 		{
 			var first = group.First();
 			electiveGroupsDict.TryGetValue(first.ElectiveGroupId.Value, out var electiveGroup);
+			var groupMetrics = group.Select(a => GetReadMetrics(readMetrics, a)).ToList();
 			var electiveTotalSlots = weeklyLecturesByElective.GetValueOrDefault(first.ElectiveGroupId.Value, 0);
 			var electiveOccupiedSlots = group.Sum(a => occupiedBySubject.GetValueOrDefault(a.SubjectId, 0));
-			var avgHealth = group.Any() ? (int)group.Average(a => a.SetupHealthScore) : 0;
+			var avgHealth = groupMetrics.Count > 0 ? (int)groupMetrics.Average(a => a.SetupHealthScore) : 0;
 			var firstPrimary = first.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
 			var subjectIdsInGroup = group.Select(a => a.SubjectId).ToList();
 			var usageParts = await GetAssignmentUsagePartsAsync(
@@ -333,7 +335,7 @@ public class SubjectAssignmentAppService(
 				UnoccupiedSlots = electiveTotalSlots - electiveOccupiedSlots,
 				SetupHealthScore = avgHealth,
 				ChaptersCount = group.Sum(a => a.Chapters.Count),
-				WeeklyPeriods = first.WeeklyPeriods,
+				WeeklyPeriods = groupMetrics.FirstOrDefault()?.WeeklyPeriods ?? first.WeeklyPeriods,
 				PrimaryTeacherId = firstPrimary?.TeacherId.ToString(),
 				PrimaryTeacherName = firstPrimary != null
 					? teacherNamesDict.GetValueOrDefault(firstPrimary.TeacherId)
@@ -409,7 +411,7 @@ public class SubjectAssignmentAppService(
 			groupAssignments = new List<AssignedSubject> { assignment };
 		}
 
-		await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(groupAssignments, assignment.StandardId);
+		var readMetrics = await BuildSubjectAssignmentReadMetricsAsync(groupAssignments, assignment.StandardId);
 
 		ElectiveGroup? electiveGroup = null;
 		if (assignment.ElectiveGroupId.HasValue)
@@ -440,6 +442,7 @@ public class SubjectAssignmentAppService(
 			Color = electiveGroup?.Color ?? first.Subject?.Color,
 			Subjects = groupAssignments.Select(a =>
 			{
+				var metrics = GetReadMetrics(readMetrics, a);
 				var primaryTeacherEntry = a.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
 				var secondaryTeacherEntries = a.Teachers.Where(t => t.TeacherType == SubjectTeacherType.Secondary).ToList();
 				return new SubjectAssignmentDetailResponseDto
@@ -465,12 +468,12 @@ public class SubjectAssignmentAppService(
 					Prerequisites = a.Prerequisites,
 					Description = a.Description,
 					Documents = a.Documents.Select(d => d.BlobName).ToList(),
-					WeeklyPeriods = a.WeeklyPeriods,
+					WeeklyPeriods = metrics.WeeklyPeriods,
 					DifficultyLevel = a.DifficultyLevel,
 					SubjectGroup = a.SubjectGroup,
 					IsAiSuggested = a.IsAiSuggested,
 					IsCopiedFromPreviousYear = a.IsCopiedFromPreviousYear,
-					SetupHealthScore = a.SetupHealthScore,
+					SetupHealthScore = metrics.SetupHealthScore,
 					ChaptersCount = a.Chapters.Count,
 					LastUpdatedAt = a.LastModificationTime ?? a.CreationTime,
 				};
@@ -845,7 +848,8 @@ public class SubjectAssignmentAppService(
 			query.Where(a => a.Id == assignmentId)
 		) ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(AssignedSubject), assignmentId);
 
-		await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(new List<AssignedSubject> { assignment }, assignment.StandardId);
+		var metrics = await BuildSubjectAssignmentReadMetricsAsync(new List<AssignedSubject> { assignment }, assignment.StandardId);
+		var readMetrics = GetReadMetrics(metrics, assignment);
 
 		var missing = new List<string>();
 		if (string.IsNullOrWhiteSpace(assignment.SubjectCode)) missing.Add("Subject code is missing");
@@ -854,14 +858,14 @@ public class SubjectAssignmentAppService(
 		if (string.IsNullOrWhiteSpace(assignment.Description)) missing.Add("Description is missing");
 		if (assignment.Chapters.Count == 0) missing.Add("No syllabus chapters added");
 		else if (assignment.Chapters.Count < 3) missing.Add("Add at least 3 chapters for a complete syllabus");
-		if (assignment.WeeklyPeriods == 0) missing.Add("Weekly periods not set");
+		if (readMetrics.WeeklyPeriods == 0) missing.Add("Weekly periods not set");
 		if (assignment.Documents.Count == 0) missing.Add("No documents attached");
 
 		return new SetupHealthDto
 		{
 			AssignedSubjectId = assignment.Id,
 			SubjectName = assignment.Subject?.Name,
-			HealthScore = assignment.SetupHealthScore,
+			HealthScore = readMetrics.SetupHealthScore,
 			MissingItems = missing
 		};
 	}
@@ -871,7 +875,7 @@ public class SubjectAssignmentAppService(
 		var query = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents, a => a.Chapters, a => a.Subject);
 		var assignments = await AsyncExecuter.ToListAsync(query.Where(a => a.StandardId == classId));
 
-		await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(assignments, classId);
+		var readMetrics = await BuildSubjectAssignmentReadMetricsAsync(assignments, classId);
 
 		var issues = new List<PublishReadinessIssueDto>();
 		foreach (var a in assignments)
@@ -911,12 +915,9 @@ public class SubjectAssignmentAppService(
 			}
 		}
 
-		// Persist recalculated scores
-		await assignmentRepository.UpdateManyAsync(assignments, autoSave: true);
-
 		var subjectsWithIssues = issues.DistinctBy(i => i.SubjectId).Count();
 		var overallHealth = assignments.Count > 0
-			? (int)assignments.Average(a => a.SetupHealthScore)
+			? (int)assignments.Average(a => GetReadMetrics(readMetrics, a).SetupHealthScore)
 			: 0;
 
 		return new PublishReadinessDto
@@ -1647,6 +1648,85 @@ public class SubjectAssignmentAppService(
 			}
 			a.RecalculateSetupHealth();
 			await assignmentRepository.UpdateAsync(a);
+		}
+	}
+
+	private async Task<Dictionary<Guid, SubjectAssignmentReadMetrics>> BuildSubjectAssignmentReadMetricsAsync(
+		IReadOnlyCollection<AssignedSubject> assignments,
+		Guid classId)
+	{
+		if (assignments.Count == 0)
+		{
+			return new Dictionary<Guid, SubjectAssignmentReadMetrics>();
+		}
+
+		var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(classId);
+		var weeklyLecturesBySubject = weeklySlot?.Subjects
+			.Where(s => s.SubjectId.HasValue)
+			.ToDictionary(s => s.SubjectId!.Value, s => s.WeeklyLectures)
+			?? new Dictionary<Guid, int>();
+		var weeklyLecturesByElective = weeklySlot?.Subjects
+			.Where(s => s.ElectiveGroupId.HasValue)
+			.ToDictionary(s => s.ElectiveGroupId!.Value, s => s.WeeklyLectures)
+			?? new Dictionary<Guid, int>();
+
+		return assignments.ToDictionary(
+			a => a.Id,
+			a =>
+			{
+				var weeklyPeriods = a.SubjectType == SubjectType.Elective && a.ElectiveGroupId.HasValue
+					? weeklyLecturesByElective.GetValueOrDefault(a.ElectiveGroupId.Value, 0)
+					: weeklyLecturesBySubject.GetValueOrDefault(a.SubjectId, 0);
+
+				return new SubjectAssignmentReadMetrics(
+					weeklyPeriods,
+					CalculateSetupHealthScore(a, weeklyPeriods));
+			});
+	}
+
+	private static SubjectAssignmentReadMetrics GetReadMetrics(
+		IReadOnlyDictionary<Guid, SubjectAssignmentReadMetrics> metrics,
+		AssignedSubject assignment)
+	{
+		return metrics.TryGetValue(assignment.Id, out var value)
+			? value
+			: SubjectAssignmentReadMetrics.FromAssignment(assignment);
+	}
+
+	private static int CalculateSetupHealthScore(AssignedSubject assignment, int weeklyPeriods)
+	{
+		var score = 0;
+		if (!string.IsNullOrWhiteSpace(assignment.SubjectCode)) score += 10;
+		score += 10;
+		if (assignment.Teachers.Any(t => t.TeacherType == SubjectTeacherType.Primary)) score += 20;
+		if (HasMeaningfulContent(assignment.LearningGoals)) score += 15;
+		if (HasMeaningfulContent(assignment.Description)) score += 5;
+		if (HasMeaningfulContent(assignment.Prerequisites)) score += 5;
+		if (assignment.Chapters.Count > 0) score += 15;
+		if (assignment.Chapters.Count >= 3) score += 10;
+		if (weeklyPeriods > 0) score += 5;
+		if (assignment.Documents.Count > 0) score += 5;
+
+		return Math.Min(score, 100);
+	}
+
+	private static bool HasMeaningfulContent(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			return false;
+		}
+
+		var text = System.Text.RegularExpressions.Regex.Replace(value, "<.*?>", string.Empty);
+		text = text.Replace("&nbsp;", " ").Trim();
+		return !string.IsNullOrWhiteSpace(text);
+	}
+
+	private sealed record SubjectAssignmentReadMetrics(int WeeklyPeriods, int SetupHealthScore)
+	{
+		public static SubjectAssignmentReadMetrics FromAssignment(AssignedSubject assignment)
+		{
+			return new SubjectAssignmentReadMetrics(assignment.WeeklyPeriods, assignment.SetupHealthScore);
 		}
 	}
 }

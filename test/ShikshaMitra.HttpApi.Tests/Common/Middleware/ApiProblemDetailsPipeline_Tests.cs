@@ -175,10 +175,7 @@ public class ApiProblemDetailsPipeline_Tests
 		const string expected =
 			"This attendance policy is the only active default for the selected academic year. " +
 			"Set another active attendance policy as default before clearing this policy's default status or archiving it.";
-		var resolver = CreateResolver(new Dictionary<string, string>
-		{
-			[HRErrorCodes.DefaultAttendancePolicyRequired] = expected
-		});
+		var resolver = CreateResolver(new Dictionary<string, string>());
 		var middleware = new ApiProblemDetailsMiddleware(
 			_ => throw new BusinessException(HRErrorCodes.DefaultAttendancePolicyRequired),
 			NullLogger<ApiProblemDetailsMiddleware>.Instance,

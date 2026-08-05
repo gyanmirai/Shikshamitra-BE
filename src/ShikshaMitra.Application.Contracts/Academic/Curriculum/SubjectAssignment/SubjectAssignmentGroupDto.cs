@@ -46,4 +46,10 @@ public class SubjectAssignmentGroupDto
 
     /// <summary>Reason shown when permanent remove is blocked.</summary>
     public string? DeleteDisabledReason { get; set; }
+
+    /// <summary>Whether this subject selection is disabled for exam scheduling</summary>
+    public bool IsDisabled { get; set; }
+
+    /// <summary>Reason explaining why selection is disabled (e.g., elective not locked)</summary>
+    public string? DisabledReason { get; set; }
 }

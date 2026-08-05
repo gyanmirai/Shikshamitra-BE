@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using ShikshaMitra.Common;
 using Volo.Abp.Application.Dtos;
@@ -62,4 +63,6 @@ public interface IExamAppService : IApplicationService
     Task<MarksWorkflowActionResponseDto> UnlockMarksAsync(Guid examId, UnlockWorkflowInputDto input);
 
     Task<List<GradeEntryAuditLogDto>> GetAuditLogsAsync(Guid examId, Guid subjectId, Guid divisionId);
+
+    Task<List<SubjectAssignmentGroupDto>> GetSubjectsLookupAsync(Guid classId, List<Guid> divisionIds);
 }

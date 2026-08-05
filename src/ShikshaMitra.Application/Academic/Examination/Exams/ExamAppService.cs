@@ -1106,17 +1106,19 @@ public class ExamAppService(
 			exam.StandardId,
 			exam.ExamSubjects.Select(subject => subject.SubjectId).ToList());
 
+		var incompleteSubjectIds = new List<Guid>();
+		var divisionIds = exam.ExamDivisions.Select(x => x.DivisionId).ToList();
+
 		foreach (var subject in exam.ExamSubjects.Where(subject => !electiveGroupBySubjectId.ContainsKey(subject.SubjectId)))
 		{
-			if (!subject.ExamDate.HasValue || !subject.StartTime.HasValue || !subject.EndTime.HasValue)
+			if (!HasCompleteScheduleFields(subject))
 			{
-				throw new BusinessException("ShikshaMitra.Exam:ScheduleIncomplete")
-					.WithData("SubjectId", subject.SubjectId);
+				incompleteSubjectIds.Add(subject.SubjectId);
+				continue;
 			}
 
-			EnsureRequiredScheduleFieldsPresent(subject);
 			ValidateSubjectScheduleValues(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime, subject.TotalMarks, subject.PassingMarks);
-			await EnsureExamDateAllowedAsync(exam.StandardId, exam.ExamDivisions.Select(x => x.DivisionId), subject.ExamDate.Value);
+			await EnsureExamDateAllowedAsync(exam.StandardId, divisionIds, subject.ExamDate.Value);
 		}
 
 		var electiveGroups = exam.ExamSubjects
@@ -1137,17 +1139,33 @@ public class ExamAppService(
 
 			foreach (var subject in scheduledSubjects)
 			{
-				if (!subject.ExamDate.HasValue || !subject.StartTime.HasValue || !subject.EndTime.HasValue)
+				if (!HasCompleteScheduleFields(subject))
 				{
-					throw new BusinessException("ShikshaMitra.Exam:ScheduleIncomplete")
-						.WithData("SubjectId", subject.SubjectId);
+					incompleteSubjectIds.Add(subject.SubjectId);
+					continue;
 				}
 
-				EnsureRequiredScheduleFieldsPresent(subject);
 				ValidateSubjectScheduleValues(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime, subject.TotalMarks, subject.PassingMarks);
-				await EnsureExamDateAllowedAsync(exam.StandardId, exam.ExamDivisions.Select(x => x.DivisionId), subject.ExamDate.Value);
+				await EnsureExamDateAllowedAsync(exam.StandardId, divisionIds, subject.ExamDate.Value);
 			}
 		}
+
+		if (incompleteSubjectIds.Count > 0)
+		{
+			throw new BusinessException("ShikshaMitra.Exam:ScheduleIncomplete")
+				.WithData("IncompleteSubjectCount", incompleteSubjectIds.Count)
+				.WithData("IncompleteSubjectIds", string.Join(", ", incompleteSubjectIds));
+		}
+	}
+
+	private static bool HasCompleteScheduleFields(ExamSubject subject)
+	{
+		return subject.ExamDate.HasValue
+			&& subject.StartTime.HasValue
+			&& subject.EndTime.HasValue
+			&& subject.TotalMarks.HasValue
+			&& subject.PassingMarks.HasValue
+			&& subject.GradeScalingId.HasValue;
 	}
 
 	private async Task EnsureExamReadyToCompleteAsync(Exam exam)
@@ -2574,6 +2592,153 @@ public class ExamAppService(
 		}
 
 		return result;
+	}
+
+	public async Task<List<SubjectAssignmentGroupDto>> GetSubjectsLookupAsync(Guid classId, List<Guid> divisionIds)
+	{
+		var assignments = await assignmentRepository.GetListAsync(a =>
+			a.StandardId == classId &&
+			a.Status == SubjectStatus.Published);
+
+		var groupedAssignments = new List<SubjectAssignmentGroupDto>();
+
+		var groupedByElective = assignments
+			.Where(a => a.SubjectType == SubjectType.Elective && a.ElectiveGroupId.HasValue)
+			.GroupBy(a => a.ElectiveGroupId)
+			.ToList();
+
+		var coreSubjects = assignments
+			.Where(a => a.SubjectType == SubjectType.Core || (a.SubjectType == SubjectType.Elective && !a.ElectiveGroupId.HasValue))
+			.ToList();
+
+		var subjectIds = assignments.Select(x => x.SubjectId).Distinct().ToList();
+		var subjectsDict = (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id)))
+						   .ToDictionary(s => s.Id);
+
+		var electiveGroupIds = assignments.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId.Value).Distinct().ToList();
+		var electiveGroupsDict = (await electiveGroupRepository.GetListAsync(g => electiveGroupIds.Contains(g.Id)))
+								 .ToDictionary(g => g.Id);
+
+		var academicMediumId = await GetAcademicMediumIdForStandardAsync(classId);
+		var validDivisionIds = (divisionIds ?? new List<Guid>()).Where(id => id != Guid.Empty).Distinct().ToList();
+
+		var students = new List<Student>();
+		var selections = new List<StudentElectiveSelection>();
+
+		if (validDivisionIds.Count > 0)
+		{
+			students = await studentRepository.GetListAsync(s =>
+				s.AcademicMediumId == academicMediumId &&
+				s.StandardId == classId &&
+				s.DivisionId.HasValue &&
+				validDivisionIds.Contains(s.DivisionId.Value) &&
+				s.Status == StudentLifeCycleStatusEnum.Enrolled &&
+				s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved &&
+				!s.IsDeleted);
+
+			if (students.Count > 0 && electiveGroupIds.Count > 0)
+			{
+				var studentIds = students.Select(s => s.Id).ToList();
+				selections = await studentElectiveSelectionRepository.GetListAsync(s =>
+					studentIds.Contains(s.StudentId) &&
+					electiveGroupIds.Contains(s.ElectiveGroupId));
+			}
+		}
+
+		foreach (var coreAssignment in coreSubjects)
+		{
+			subjectsDict.TryGetValue(coreAssignment.SubjectId, out var subject);
+
+			groupedAssignments.Add(new SubjectAssignmentGroupDto
+			{
+				Id = coreAssignment.Id,
+				SubjectType = coreAssignment.SubjectType,
+				Status = coreAssignment.Status,
+				Color = subject?.Color,
+				IsDisabled = false,
+				DisabledReason = null,
+				Subjects = new List<SubjectLiteDto>
+				{
+					new SubjectLiteDto
+					{
+						SubjectType = coreAssignment.SubjectType,
+						SubjectId = coreAssignment.SubjectId,
+						SubjectName = subject?.Name ?? "",
+						SubjectCode = coreAssignment.SubjectCode ?? "",
+						Color = subject?.Color ?? ""
+					}
+				}
+			});
+		}
+
+		foreach (var group in groupedByElective)
+		{
+			var first = group.First();
+			var egId = first.ElectiveGroupId!.Value;
+			electiveGroupsDict.TryGetValue(egId, out var electiveGroup);
+
+			bool isElectiveReady = true;
+			string? disabledReason = null;
+
+			if (validDivisionIds.Count == 0)
+			{
+				isElectiveReady = false;
+				disabledReason = "Please select a division first.";
+			}
+			else if (students.Count > 0)
+			{
+				foreach (var divisionId in validDivisionIds)
+				{
+					var divisionStudentIds = students
+						.Where(s => s.DivisionId == divisionId)
+						.Select(s => s.Id)
+						.ToList();
+
+					if (divisionStudentIds.Count == 0)
+					{
+						continue;
+					}
+
+					var divisionSelections = selections
+						.Where(s => s.ElectiveGroupId == egId && divisionStudentIds.Contains(s.StudentId))
+						.ToList();
+
+					var isReady = divisionSelections.Count == divisionStudentIds.Count && divisionSelections.All(s => s.IsLocked);
+					if (!isReady)
+					{
+						isElectiveReady = false;
+						disabledReason = "This subject is not finalized from class management.";
+						break;
+					}
+				}
+			}
+
+			groupedAssignments.Add(new SubjectAssignmentGroupDto
+			{
+				Id = first.Id,
+				SubjectType = SubjectType.Elective,
+				Status = first.Status,
+				ElectiveGroupId = first.ElectiveGroupId,
+				ElectiveGroupName = electiveGroup?.Name,
+				Color = electiveGroup?.Color,
+				IsDisabled = !isElectiveReady,
+				DisabledReason = disabledReason,
+				Subjects = group.Select(a =>
+				{
+					subjectsDict.TryGetValue(a.SubjectId, out var sub);
+					return new SubjectLiteDto
+					{
+						SubjectType = a.SubjectType,
+						SubjectId = a.SubjectId,
+						SubjectName = sub?.Name ?? "",
+						SubjectCode = a.SubjectCode ?? "",
+						Color = sub?.Color ?? ""
+					};
+				}).ToList()
+			});
+		}
+
+		return groupedAssignments;
 	}
 
 	private sealed record NormalizedExamSubjectSchedule(

@@ -93,6 +93,7 @@ public class HrPolicyImpactWarningDto
 	public string Severity { get; set; } = "info";
 	public string Code { get; set; } = string.Empty;
 	public string Message { get; set; } = string.Empty;
+	public HrPolicyAssignmentConflictDto? Conflict { get; set; }
 }
 
 public class HrPolicyAffectedEmployeeDto
@@ -125,6 +126,8 @@ public class HrPolicyAssignmentConflictDto
 	public string PayrollPolicyName { get; set; } = string.Empty;
 	public Guid AttendancePolicyId { get; set; }
 	public string AttendancePolicyName { get; set; } = string.Empty;
+	public Guid? LeavePolicyId { get; set; }
+	public string? LeavePolicyName { get; set; }
 	public DateTime EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public int Priority { get; set; }

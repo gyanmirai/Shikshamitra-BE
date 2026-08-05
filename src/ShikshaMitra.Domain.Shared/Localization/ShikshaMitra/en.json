@@ -345,6 +345,8 @@
     "HR:Payroll:030028": "Remove payroll-only adjustments before removing review from this payroll row.",
     "HR:Calendar:040005": "Calendar item with ID '{itemId}' was not found.",
     "ShikshaMitra:DueFee:10001": "Due fees have already been generated for this student.",
+    "ShikshaMitra:DefaultAttendancePolicyRequired": "This attendance policy is the only active default for the selected academic year. Set another active attendance policy as default before clearing this policy's default status or archiving it.",
+    "ShikshaMitra:HrPolicyAssignmentOverlap": "Policy assignment conflicts with active assignment {conflictingAssignmentId} for {targetDisplayName} ({effectiveRange}). Payroll: {payrollPolicyName}; attendance: {attendancePolicyName}; leave: {leavePolicyName}. Adjust the dates or deactivate or edit the conflicting assignment.",
 
     "Academic:HomeworkAssignment:010001": "Assignment type '{Name}' already exists. Please use a different name.",
     "Academic:HomeworkAssignment:010002": "Assignment type was not found.",

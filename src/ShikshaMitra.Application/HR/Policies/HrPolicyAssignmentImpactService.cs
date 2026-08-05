@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
@@ -161,6 +163,7 @@ public class HrPolicyAssignmentImpactService(
 		}
 		catch (BusinessException ex) when (ex.Code == HRErrorCodes.HrPolicyAssignmentOverlap)
 		{
+			var conflict = ReadAssignmentConflict(ex);
 			var isConfirmableEmployeeOverrideRepair = targetType == HrPolicyAssignmentTargetType.Employee &&
 				assignmentId.HasValue &&
 				string.Equals(action, EmployeeOverrideUpsertAction, StringComparison.OrdinalIgnoreCase);
@@ -168,11 +171,46 @@ public class HrPolicyAssignmentImpactService(
 			{
 				Severity = isConfirmableEmployeeOverrideRepair ? "warning" : "blocking",
 				Code = ex.Code,
+				Conflict = conflict,
 				Message = isConfirmableEmployeeOverrideRepair
-					? "This employee already has an active override for this date range. Confirming this change will deactivate the competing override."
-					: "This assignment overlaps an existing active assignment for the same target and date range."
+					? BuildOverlapMessage(conflict, "Confirming this change will deactivate the competing override.")
+					: BuildOverlapMessage(conflict, "Adjust the dates, deactivate the conflicting assignment, or edit it instead.")
 			});
 		}
+	}
+
+	private static HrPolicyAssignmentConflictDto? ReadAssignmentConflict(BusinessException exception)
+	{
+		var rawConflict = exception.Data["conflict"]?.ToString();
+		if (string.IsNullOrWhiteSpace(rawConflict))
+		{
+			return null;
+		}
+
+		try
+		{
+			return JsonSerializer.Deserialize<HrPolicyAssignmentConflictDto>(rawConflict);
+		}
+		catch (JsonException)
+		{
+			return null;
+		}
+	}
+
+	private static string BuildOverlapMessage(HrPolicyAssignmentConflictDto? conflict, string resolution)
+	{
+		if (conflict == null)
+		{
+			return $"This assignment overlaps an existing active assignment for the same target and date range. {resolution}";
+		}
+
+		var target = conflict.TargetDisplayName ?? conflict.TargetKey;
+		var start = conflict.EffectiveFrom.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
+		var end = conflict.EffectiveTo?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "No end date";
+		var leave = conflict.LeavePolicyName ?? "No leave policy";
+		return $"Conflicts with active assignment {conflict.AssignmentId:D} for {target} " +
+			$"({start} - {end}). Payroll: {conflict.PayrollPolicyName}; " +
+			$"attendance: {conflict.AttendancePolicyName}; leave: {leave}. {resolution}";
 	}
 
 	private static string NormalizeAction(string? action) =>

@@ -1,7 +1,9 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -13,6 +15,7 @@ public class HrPolicyAssignmentOverlapChecker(
 	IRepository<HrPolicyAssignment, Guid> assignmentRepository,
 	IRepository<AttendancePolicy, Guid> attendancePolicyRepository,
 	IRepository<PayrollPolicy, Guid> payrollPolicyRepository,
+	IRepository<LeavePolicy, Guid> leavePolicyRepository,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
@@ -56,13 +59,27 @@ public class HrPolicyAssignmentOverlapChecker(
 			.WithData("conflict", JsonSerializer.Serialize(conflict))
 			.WithData("conflictingAssignmentId", overlap.Id)
 			.WithData("targetType", conflict.TargetType)
-			.WithData("targetKey", conflict.TargetKey);
+			.WithData("targetKey", conflict.TargetKey)
+			.WithData("targetDisplayName", conflict.TargetDisplayName ?? conflict.TargetKey)
+			.WithData("effectiveRange", FormatRange(conflict.EffectiveFrom, conflict.EffectiveTo))
+			.WithData("payrollPolicyName", conflict.PayrollPolicyName)
+			.WithData("attendancePolicyName", conflict.AttendancePolicyName)
+			.WithData("leavePolicyName", conflict.LeavePolicyName ?? "No leave policy");
 	}
+
+	private static string FormatRange(DateTime effectiveFrom, DateTime? effectiveTo) =>
+		$"{effectiveFrom.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)} - " +
+		(effectiveTo.HasValue
+			? effectiveTo.Value.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)
+			: "No end date");
 
 	private async Task<HrPolicyAssignmentConflictDto> BuildConflictAsync(HrPolicyAssignment overlap)
 	{
 		var payroll = await payrollPolicyRepository.FindAsync(overlap.PayrollPolicyId);
 		var attendance = await attendancePolicyRepository.FindAsync(overlap.AttendancePolicyId);
+		var leave = overlap.LeavePolicyId.HasValue
+			? await leavePolicyRepository.FindAsync(overlap.LeavePolicyId.Value)
+			: null;
 		return new HrPolicyAssignmentConflictDto
 		{
 			AssignmentId = overlap.Id,
@@ -73,6 +90,8 @@ public class HrPolicyAssignmentOverlapChecker(
 			PayrollPolicyName = payroll?.Name ?? "Unknown payroll policy",
 			AttendancePolicyId = overlap.AttendancePolicyId,
 			AttendancePolicyName = attendance?.Name ?? "Unknown attendance policy",
+			LeavePolicyId = overlap.LeavePolicyId,
+			LeavePolicyName = leave?.PolicyName,
 			EffectiveFrom = overlap.EffectiveFrom,
 			EffectiveTo = overlap.EffectiveTo,
 			Priority = overlap.Priority,

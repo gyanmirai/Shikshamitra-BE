@@ -85,6 +85,12 @@ public class ApiProblemDetailsErrorDetailResolver : IApiProblemDetailsErrorDetai
 
 	private static string? BuildFallbackDetail(string errorCode, IReadOnlyDictionary<string, object?>? data)
 	{
+		if (string.Equals(errorCode, HRErrorCodes.DefaultAttendancePolicyRequired, StringComparison.Ordinal))
+		{
+			return "This attendance policy is the only active default for the selected academic year. " +
+			       "Set another active attendance policy as default before clearing this policy's default status or archiving it.";
+		}
+
 		if (!string.Equals(errorCode, HRErrorCodes.LeaveInvalidMonthForAcademicYear, StringComparison.Ordinal))
 		{
 			return null;

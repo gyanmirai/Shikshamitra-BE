@@ -290,7 +290,10 @@ public class TimetableAppService(
                     };
                 }).ToList();
 
-            // Elective subjects: one entry per distinct electiveGroupId
+            // Elective subjects: one entry per distinct electiveGroupId.
+            // When student elective selections exist for this division, filter to only the
+            // subjects that students actually selected — so the timetable palette and grid
+            // show "Pt" instead of "Computer | Pt" when 100% of students chose Pt.
             var electiveEntries = assignedSubjects
                 .Where(a => a.ElectiveGroupId.HasValue)
                 .GroupBy(a => a.ElectiveGroupId!.Value)
@@ -301,26 +304,40 @@ public class TimetableAppService(
                     var weeklyEntry = publishedWeeklySubjects.FirstOrDefault(w => w.ElectiveGroupId == groupId);
                     var total = weeklyEntry?.WeeklyLectures ?? 0;
                     var occupied = electiveOccupied.GetValueOrDefault(groupId, 0);
-                    var groupSubjects = g.Select(a =>
-                    {
-                        var subject = subjects.FirstOrDefault(s => s.Id == a.SubjectId);
-                        return new TimetableSummarySubjectDto
+
+                    // Use per-division student selections when available; fall back to all assigned subjects.
+                    var selectedForGroup = selectedElectiveSubjectIdsByGroup
+                        .GetValueOrDefault(groupId, g.Select(a => a.SubjectId).ToList());
+
+                    var groupSubjects = g
+                        .Where(a => selectedForGroup.Contains(a.SubjectId))
+                        .Select(a =>
                         {
-                            SubjectAssignmentId = a.Id,
-                            SubjectType = SubjectType.Elective,
-                            SubjectId = a.SubjectId,
-                            SubjectName = subject?.Name ?? string.Empty,
-                            SubjectCode = a.SubjectCode,
-                            Color = subject?.Color
-                        };
-                    }).ToList();
+                            var subject = subjects.FirstOrDefault(s => s.Id == a.SubjectId);
+                            return new TimetableSummarySubjectDto
+                            {
+                                SubjectAssignmentId = a.Id,
+                                SubjectType = SubjectType.Elective,
+                                SubjectId = a.SubjectId,
+                                SubjectName = subject?.Name ?? string.Empty,
+                                SubjectCode = a.SubjectCode,
+                                Color = subject?.Color
+                            };
+                        }).ToList();
+
+                    // When only one subject remains after filtering, use its name as the
+                    // display name so the palette shows "Pt" instead of the group name.
+                    var displayName = groupSubjects.Count == 1
+                        ? groupSubjects[0].SubjectName
+                        : group?.Name;
+
                     return new TimetableSubjectSummaryDto
                     {
                         Id = weeklyEntry?.Id ?? groupId,
                         SubjectAssignmentId = g.First().Id,
                         SubjectType = SubjectType.Elective,
                         ElectiveGroupId = groupId,
-                        ElectiveGroupName = group?.Name,
+                        ElectiveGroupName = displayName,
                         Color = group?.Color,
                         TotalSlots = total,
                         OccupiedSlots = occupied,

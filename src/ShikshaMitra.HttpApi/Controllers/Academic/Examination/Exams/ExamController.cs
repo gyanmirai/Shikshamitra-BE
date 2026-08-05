@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using ShikshaMitra.Constants.Permissions;
@@ -73,6 +74,15 @@ public class ExamController(
     public async Task<List<ExamSubjectResponseDto>> GetSubjectsAsync(Guid examId)
     {
         return await examAppService.GetSubjectsAsync(examId);
+    }
+
+    [HttpGet("subjects-lookup")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ScheduleExam.View)]
+    public async Task<List<SubjectAssignmentGroupDto>> GetSubjectsLookupAsync(
+        [FromQuery] Guid classId, 
+        [FromQuery] List<Guid> divisionIds)
+    {
+        return await examAppService.GetSubjectsLookupAsync(classId, divisionIds);
     }
 
     [HttpGet("question-paper-lookup")]

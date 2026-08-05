@@ -170,6 +170,33 @@ public class ApiProblemDetailsPipeline_Tests
 	}
 
 	[Fact]
+	public async Task Middleware_Should_Explain_When_The_Only_Default_Attendance_Policy_Is_Removed()
+	{
+		const string expected =
+			"This attendance policy is the only active default for the selected academic year. " +
+			"Set another active attendance policy as default before clearing this policy's default status or archiving it.";
+		var resolver = CreateResolver(new Dictionary<string, string>
+		{
+			[HRErrorCodes.DefaultAttendancePolicyRequired] = expected
+		});
+		var middleware = new ApiProblemDetailsMiddleware(
+			_ => throw new BusinessException(HRErrorCodes.DefaultAttendancePolicyRequired),
+			NullLogger<ApiProblemDetailsMiddleware>.Instance,
+			resolver);
+		var context = new DefaultHttpContext();
+		context.Request.Path = "/api/hr/attendance-policies/policy-id";
+		context.Response.Body = new MemoryStream();
+
+		await middleware.InvokeAsync(context);
+
+		context.Response.Body.Position = 0;
+		using var document = await JsonDocument.ParseAsync(context.Response.Body);
+		document.RootElement.GetProperty("errorCode").GetString()
+			.ShouldBe(HRErrorCodes.DefaultAttendancePolicyRequired);
+		document.RootElement.GetProperty("detail").GetString().ShouldBe(expected);
+	}
+
+	[Fact]
 	public async Task Middleware_Should_Fallback_To_Default_Detail_When_ErrorCode_Has_No_Localization()
 	{
 		const string unmappedCode = "HR:Leave:029999";

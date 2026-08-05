@@ -3406,13 +3406,54 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	{
 		var context = await CreatePolicyContextAsync();
 		var group = await CreateGroupAsync(context.AcademicYearId, "Science");
-		await _assignments.CreateAsync(BuildAssignment(context, "group", group.Id.ToString("D"), group.Name, effectiveFrom: new DateTime(2026, 4, 1), effectiveTo: new DateTime(2026, 6, 30)));
+		var existing = await _assignments.CreateAsync(BuildAssignment(context, "group", group.Id.ToString("D"), group.Name, effectiveFrom: new DateTime(2026, 4, 1), effectiveTo: new DateTime(2026, 6, 30)));
 
 		var ex = await Should.ThrowAsync<BusinessException>(() =>
 			_assignments.CreateAsync(BuildAssignment(context, "group", group.Id.ToString("D"), group.Name, effectiveFrom: new DateTime(2026, 6, 1), effectiveTo: null)));
 
 		ex.Code.ShouldBe("ShikshaMitra:HrPolicyAssignmentOverlap");
 		ex.Data.Contains("conflict").ShouldBeTrue();
+		ex.Data["conflictingAssignmentId"].ShouldBe(existing.Id);
+		ex.Data["targetDisplayName"].ShouldBe(group.Name);
+		ex.Data["effectiveRange"].ShouldBe("01 Apr 2026 - 30 Jun 2026");
+	}
+
+	[Fact]
+	public async Task Assignment_Impact_Preview_Should_Describe_The_Conflicting_Assignment()
+	{
+		var context = await CreatePolicyContextAsync();
+		var group = await CreateGroupAsync(context.AcademicYearId, "Science Preview");
+		var existing = await _assignments.CreateAsync(BuildAssignment(
+			context,
+			"group",
+			group.Id.ToString("D"),
+			group.Name,
+			effectiveFrom: new DateTime(2026, 4, 1),
+			effectiveTo: new DateTime(2026, 6, 30)));
+
+		var preview = await _assignments.PreviewImpactAsync(new HrPolicyAssignmentImpactPreviewRequestDto
+		{
+			Action = "create",
+			Assignment = BuildAssignment(
+				context,
+				"group",
+				group.Id.ToString("D"),
+				group.Name,
+				effectiveFrom: new DateTime(2026, 6, 1),
+				effectiveTo: null)
+		});
+
+		var warning = preview.BlockingWarnings.Single(x => x.Code == HRErrorCodes.HrPolicyAssignmentOverlap);
+		warning.Conflict.ShouldNotBeNull();
+		warning.Conflict.AssignmentId.ShouldBe(existing.Id);
+		warning.Conflict.TargetDisplayName.ShouldBe(group.Name);
+		warning.Conflict.EffectiveFrom.ShouldBe(new DateTime(2026, 4, 1));
+		warning.Conflict.EffectiveTo.ShouldBe(new DateTime(2026, 6, 30));
+		warning.Message.ShouldContain(existing.Id.ToString("D"));
+		warning.Message.ShouldContain(group.Name);
+		warning.Message.ShouldContain(context.PayrollPolicy.Name);
+		warning.Message.ShouldContain(context.AttendancePolicy.Name);
+		warning.Message.ShouldContain(context.LeavePolicy.PolicyName);
 	}
 
 	[Fact]

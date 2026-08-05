@@ -51,6 +51,19 @@ public class LessonPlanAppService(
         var query = await lessonPlanRepository.GetQueryableAsync();
         query = ApplyLessonPlanFilters(query, input);
 
+        if (!IsAdminUser())
+        {
+            var currentUserId = CurrentUser.GetId();
+            var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
+            if (currentEmployee == null)
+            {
+                return new PagedResultDto<LessonPlanDto>(0, new List<LessonPlanDto>());
+            }
+
+            var managedEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
+            query = query.Where(x => x.TeacherId == currentEmployee.Id || managedEmployeeIds.Contains(x.TeacherId));
+        }
+
         var count = await AsyncExecuter.CountAsync(query);
         var list = await AsyncExecuter.ToListAsync(
             query
@@ -66,6 +79,25 @@ public class LessonPlanAppService(
     public async Task<LessonPlanTimelineDto> GetTimelineAsync(DateTimeOffset date, Guid? teacherId = null)
     {
         var targetTeacherId = await ResolveTimelineTeacherIdAsync(teacherId);
+
+        if (!IsAdminUser())
+        {
+            var currentUserId = CurrentUser.GetId();
+            var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
+            if (currentEmployee == null)
+            {
+                throw new AbpAuthorizationException("You are not authorized to view this timeline.");
+            }
+
+            if (targetTeacherId != currentEmployee.Id)
+            {
+                var managedEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
+                if (!managedEmployeeIds.Contains(targetTeacherId))
+                {
+                    throw new AbpAuthorizationException("You are not authorized to view this timeline.");
+                }
+            }
+        }
         var lessonPlans = await lessonPlanRepository.GetListAsync(x =>
             x.TeacherId == targetTeacherId && x.PlannedDate.Date == date.DateTime.Date
         );
@@ -174,6 +206,26 @@ public class LessonPlanAppService(
     public async Task<LessonPlanDto> GetAsync(Guid id)
     {
         var plan = await lessonPlanRepository.GetAsync(id);
+
+        if (!IsAdminUser())
+        {
+            var currentUserId = CurrentUser.GetId();
+            var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
+            if (currentEmployee == null)
+            {
+                throw new AbpAuthorizationException("You are not authorized to view this lesson plan.");
+            }
+
+            if (plan.TeacherId != currentEmployee.Id)
+            {
+                var managedEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
+                if (!managedEmployeeIds.Contains(plan.TeacherId))
+                {
+                    throw new AbpAuthorizationException("You are not authorized to view this lesson plan.");
+                }
+            }
+        }
+
         return (await MapLessonPlansAsync(new[] { plan })).Single();
     }
 
@@ -282,6 +334,12 @@ public class LessonPlanAppService(
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
         EnsurePlanIsAwaitingReview(lessonPlan);
+
+        if (!await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
+        {
+            throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
+        }
+
         lessonPlan.Approve(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
         return await GetAsync(id);
@@ -294,6 +352,12 @@ public class LessonPlanAppService(
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
         EnsurePlanIsAwaitingReview(lessonPlan);
+
+        if (!await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
+        {
+            throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
+        }
+
         lessonPlan.Reject(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
         return await GetAsync(id);
@@ -306,6 +370,12 @@ public class LessonPlanAppService(
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
         EnsurePlanIsAwaitingReview(lessonPlan);
+
+        if (!await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
+        {
+            throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
+        }
+
         lessonPlan.RequestChanges(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
         return await GetAsync(id);
@@ -374,6 +444,19 @@ public class LessonPlanAppService(
         if (input.FromDate.HasValue) query = query.Where(x => x.diary.ActualDate.Date >= input.FromDate.Value.Date);
         if (input.ToDate.HasValue) query = query.Where(x => x.diary.ActualDate.Date <= input.ToDate.Value.Date);
 
+        if (!IsAdminUser())
+        {
+            var currentUserId = CurrentUser.GetId();
+            var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
+            if (currentEmployee == null)
+            {
+                return new PagedResultDto<TeacherDiaryDto>(0, new List<TeacherDiaryDto>());
+            }
+
+            var managedEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
+            query = query.Where(x => x.diary.TeacherId == currentEmployee.Id || managedEmployeeIds.Contains(x.diary.TeacherId));
+        }
+
         var count = await AsyncExecuter.CountAsync(query);
         var rows = await AsyncExecuter.ToListAsync(
             query
@@ -389,6 +472,26 @@ public class LessonPlanAppService(
     public async Task<TeacherDiaryDto> GetTeacherDiaryAsync(Guid id)
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
+
+        if (!IsAdminUser())
+        {
+            var currentUserId = CurrentUser.GetId();
+            var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
+            if (currentEmployee == null)
+            {
+                throw new AbpAuthorizationException("You are not authorized to view this diary entry.");
+            }
+
+            if (diary.TeacherId != currentEmployee.Id)
+            {
+                var managedEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
+                if (!managedEmployeeIds.Contains(diary.TeacherId))
+                {
+                    throw new AbpAuthorizationException("You are not authorized to view this diary entry.");
+                }
+            }
+        }
+
         return (await MapTeacherDiariesAsync(new[] { diary })).Single();
     }
 
@@ -588,6 +691,82 @@ public class LessonPlanAppService(
         {
             throw new UserFriendlyException($"You can only {action} your own lesson records.");
         }
+    }
+
+    private bool IsAdminUser()
+    {
+        return CurrentUser.Roles.Any(role =>
+            string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<List<Guid>> GetReportingEmployeesAsync(Guid managerEmployeeId)
+    {
+        var allEmployees = await employeeRepository.GetListAsync();
+        var result = new List<Guid>();
+        var visited = new HashSet<Guid>();
+        
+        void Traverse(Guid parentId)
+        {
+            if (!visited.Add(parentId))
+            {
+                return;
+            }
+            var children = allEmployees.Where(x => x.ReportingManagerId == parentId).ToList();
+            foreach (var child in children)
+            {
+                if (!result.Contains(child.Id))
+                {
+                    result.Add(child.Id);
+                    Traverse(child.Id);
+                }
+            }
+        }
+        
+        Traverse(managerEmployeeId);
+        return result;
+    }
+
+    private async Task<bool> IsReportingManagerOrAdminAsync(Guid planTeacherId)
+    {
+        if (IsAdminUser())
+        {
+            return true;
+        }
+
+        var currentUserId = CurrentUser.GetId();
+        var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
+        if (currentEmployee == null)
+        {
+            return false;
+        }
+
+        var targetEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.Id == planTeacherId);
+        if (targetEmployee == null)
+        {
+            return false;
+        }
+
+        var visited = new HashSet<Guid>();
+        var nextManagerId = targetEmployee.ReportingManagerId;
+
+        while (nextManagerId.HasValue && nextManagerId.Value != Guid.Empty)
+        {
+            if (nextManagerId.Value == currentEmployee.Id)
+            {
+                return true;
+            }
+
+            if (!visited.Add(nextManagerId.Value))
+            {
+                break;
+            }
+
+            var manager = await employeeRepository.FirstOrDefaultAsync(x => x.Id == nextManagerId.Value);
+            nextManagerId = manager?.ReportingManagerId;
+        }
+
+        return false;
     }
 
     private void EnsureCanReviewLessonPlans()

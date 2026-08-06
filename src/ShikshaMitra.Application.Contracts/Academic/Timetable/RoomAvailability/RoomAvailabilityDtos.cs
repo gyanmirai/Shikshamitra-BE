@@ -112,6 +112,8 @@ public class SuggestedRoomRequestDto
     public List<string>? RequiredFacilities { get; set; }
     public Guid? PreferredBuildingId { get; set; }
     public Guid? StandardId { get; set; }
+    public int? Page { get; set; }
+    public int? Limit { get; set; }
 }
 
 public class SuggestedRoomDto
@@ -176,6 +178,7 @@ public class RoomReservationDto
     public string? CancellationReason { get; set; }
     public DateTime CreationTime { get; set; }
     public string RequestedBy { get; set; } = string.Empty;
+    public Guid? CreatorId { get; set; }
 }
 
 public class UpdateRoomReservationStatusDto

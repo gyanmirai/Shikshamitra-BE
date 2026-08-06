@@ -28,7 +28,9 @@ public class RoomRecommendationService : DomainService
         int requiredCapacity,
         List<string>? requiredFacilities = null,
         Guid? preferredBuildingId = null,
-        Guid? standardId = null)
+        Guid? standardId = null,
+        int? page = null,
+        int? limit = null)
     {
         var allRooms = await _roomRepository.GetListAsync();
         var suggestions = new List<SuggestedRoom>();
@@ -113,6 +115,21 @@ public class RoomRecommendationService : DomainService
             });
         }
 
-        return suggestions.OrderByDescending(s => s.MatchScore).Take(5).ToList();
+        var sorted = suggestions.OrderByDescending(s => s.MatchScore);
+
+        if (page.HasValue && limit.HasValue)
+        {
+            var p = page.Value > 0 ? page.Value : 1;
+            var l = limit.Value > 0 ? limit.Value : 50;
+            return sorted.Skip((p - 1) * l).Take(l).ToList();
+        }
+
+        if (limit.HasValue)
+        {
+            var l = limit.Value > 0 ? limit.Value : 50;
+            return sorted.Take(l).ToList();
+        }
+
+        return sorted.Take(50).ToList();
     }
 }

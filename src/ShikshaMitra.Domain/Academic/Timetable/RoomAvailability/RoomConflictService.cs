@@ -143,17 +143,18 @@ public class RoomConflictService : DomainService
         }
 
         // 3. Check Overlapping Room Reservations
-        var existingReservations = await _reservationRepository.GetListAsync(r =>
+        var existingReservations = (await _reservationRepository.GetListAsync(r =>
             r.RoomId == roomId &&
-            r.Date == date.Date &&
-            r.Id != currentReservationId &&
+            r.Date == date.Date
+        )).Where(r =>
+            (!currentReservationId.HasValue || r.Id != currentReservationId.Value) &&
+            r.StartTime < endTime &&
+            r.EndTime > startTime &&
             (r.Status == RoomReservationStatus.Approved ||
              r.Status == RoomReservationStatus.Active ||
              r.Status == RoomReservationStatus.CheckedIn ||
-             r.Status == RoomReservationStatus.PendingApproval) &&
-            r.StartTime < endTime &&
-            r.EndTime > startTime
-        );
+             r.Status == RoomReservationStatus.PendingApproval)
+        ).ToList();
 
         if (existingReservations.Any())
         {
@@ -239,13 +240,16 @@ public class RoomConflictService : DomainService
         // 6. Check Teacher Double-booking (Warning)
         if (teacherId.HasValue)
         {
-            var teacherReserved = await _reservationRepository.AnyAsync(r =>
+            var teacherReservations = await _reservationRepository.GetListAsync(r =>
                 r.TeacherId == teacherId.Value &&
-                r.Date == date.Date &&
-                r.Id != currentReservationId &&
-                (r.Status == RoomReservationStatus.Approved || r.Status == RoomReservationStatus.Active) &&
+                r.Date == date.Date
+            );
+            var teacherReserved = teacherReservations.Any(r =>
+                (!currentReservationId.HasValue || r.Id != currentReservationId.Value) &&
                 r.StartTime < endTime &&
-                r.EndTime > startTime
+                r.EndTime > startTime &&
+                (r.Status == RoomReservationStatus.Approved ||
+                 r.Status == RoomReservationStatus.Active)
             );
             if (teacherReserved)
             {

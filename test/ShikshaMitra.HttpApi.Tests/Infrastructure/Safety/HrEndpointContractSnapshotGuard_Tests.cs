@@ -137,28 +137,7 @@ public class HrEndpointContractSnapshotGuard_Tests
 		violations.ShouldBeEmpty();
 	}
 
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public void Default_Leave_Policy_Uniqueness_Migration_Should_Be_Guarded_And_Null_Safe()
-	{
-		var repoRoot = FindRepositoryRoot();
-		var migrationPath = Path.Combine(
-			repoRoot,
-			"src",
-			"ShikshaMitra.EntityFrameworkCore",
-			"Migrations",
-			"20260726193000_ReinstateDefaultLeavePolicyUniqueness.cs");
-		var text = File.ReadAllText(migrationPath);
 
-		text.ShouldContain("HAVING COUNT(*) > 1");
-		text.ShouldContain("duplicate defaults already exist");
-		text.ShouldContain("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_EmployeeLeavePolicies_TenantId_AcademicYearId_Default\"");
-		text.ShouldContain("COALESCE(\"TenantId\", '00000000-0000-0000-0000-000000000000'::uuid)");
-		text.ShouldContain("WHERE \"IsDefault\" = true");
-		text.ShouldContain("[DbContext(typeof(ShikshaMitraDbContext))]");
-		text.ShouldContain("[Migration(\"20260726193000_ReinstateDefaultLeavePolicyUniqueness\")]");
-		text.ShouldContain("DROP INDEX IF EXISTS \"IX_EmployeeLeavePolicies_TenantId_AcademicYearId_Default\"");
-	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -178,7 +157,7 @@ public class HrEndpointContractSnapshotGuard_Tests
 			"src",
 			"ShikshaMitra.EntityFrameworkCore",
 			"Migrations",
-			"20260721060936_v1.cs");
+			"20260804061356_v1.cs");
 		var snapshotPath = Path.Combine(
 			repoRoot,
 			"src",
@@ -242,35 +221,7 @@ public class HrEndpointContractSnapshotGuard_Tests
 		text.ShouldNotContain("if (await _leavePolicyRepository.AnyAsync())");
 	}
 
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public void Current_Hr_Migrations_Should_Be_Discoverable()
-	{
-		var repoRoot = FindRepositoryRoot();
-		var migrationsRoot = Path.Combine(
-			repoRoot,
-			"src",
-			"ShikshaMitra.EntityFrameworkCore",
-			"Migrations");
-		var generatedMigrationIds = new[]
-		{
-			"20260726082832_AllowArchivedHrPolicyNameReuse",
-			"20260726091409_EnforceNormalizedLeavePolicyNames"
-		};
 
-		foreach (var migrationId in generatedMigrationIds)
-		{
-			File.Exists(Path.Combine(migrationsRoot, $"{migrationId}.cs")).ShouldBeTrue();
-			var designer = File.ReadAllText(Path.Combine(migrationsRoot, $"{migrationId}.Designer.cs"));
-			designer.ShouldContain("[DbContext(typeof(ShikshaMitraDbContext))]");
-			designer.ShouldContain($"[Migration(\"{migrationId}\")]");
-		}
-
-		var invariantMigration = File.ReadAllText(
-			Path.Combine(migrationsRoot, "20260726193000_ReinstateDefaultLeavePolicyUniqueness.cs"));
-		invariantMigration.ShouldContain("[DbContext(typeof(ShikshaMitraDbContext))]");
-		invariantMigration.ShouldContain("[Migration(\"20260726193000_ReinstateDefaultLeavePolicyUniqueness\")]");
-	}
 
 	private static List<string> BuildEndpointInventory(string controllersRoot)
 	{

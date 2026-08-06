@@ -14,7 +14,7 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 	: IShikshaMitraDbSchemaMigrator, ITransientDependency
 {
 	internal const string LegacyBaselineMigrationId = "20260712225012_v1";
-	internal const string CurrentBaselineMigrationId = "20260721060936_v1";
+	internal const string CurrentBaselineMigrationId = "20260804061356_v1";
 
 	internal static bool RequiresLegacyBaselineBridge(IEnumerable<string> appliedMigrations)
 	{
@@ -147,7 +147,7 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 		    END IF;
 
 		    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-		    SELECT '20260721060936_v1', "ProductVersion"
+		    SELECT '20260804061356_v1', "ProductVersion"
 		    FROM "__EFMigrationsHistory"
 		    WHERE "MigrationId" = '20260712225012_v1'
 		    ON CONFLICT ("MigrationId") DO NOTHING;
@@ -155,7 +155,7 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 		    IF NOT EXISTS (
 		        SELECT 1
 		        FROM "__EFMigrationsHistory"
-		        WHERE "MigrationId" = '20260721060936_v1'
+		        WHERE "MigrationId" = '20260804061356_v1'
 		    ) THEN
 		        RAISE EXCEPTION 'Legacy migration baseline reconciliation could not record the current baseline.';
 		    END IF;

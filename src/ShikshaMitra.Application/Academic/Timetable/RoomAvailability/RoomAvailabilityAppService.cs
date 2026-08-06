@@ -203,7 +203,9 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             input.RequiredCapacity,
             input.RequiredFacilities,
             input.PreferredBuildingId,
-            input.StandardId
+            input.StandardId,
+            input.Page,
+            input.Limit
         );
 
         return ObjectMapper.Map<List<SuggestedRoom>, List<SuggestedRoomDto>>(result);
@@ -470,9 +472,33 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         await _auditLogRepository.InsertAsync(auditLog);
     }
 
+    private void EnsureUserIsAuthorizedApprover(RoomReservation reservation)
+    {
+        var isAuthorized = CurrentUser.IsInRole("admin") ||
+                           CurrentUser.IsInRole("Administrator") ||
+                           CurrentUser.IsInRole("coordinator") ||
+                           CurrentUser.IsInRole("Coordinator") ||
+                           CurrentUser.IsInRole("HOD") ||
+                           CurrentUser.IsInRole("hod") ||
+                           CurrentUser.IsInRole("Principal") ||
+                           CurrentUser.IsInRole("principal") ||
+                           CurrentUser.IsInRole("Reporting Manager");
+
+        if (!isAuthorized)
+        {
+            throw new Volo.Abp.Authorization.AbpAuthorizationException("You are not authorized to approve or reject room reservations.");
+        }
+
+        if (reservation.CreatorId.HasValue && reservation.CreatorId.Value == CurrentUser.Id)
+        {
+            throw new Volo.Abp.UserFriendlyException("Self-approval is not allowed. You cannot approve or reject your own room reservation requests.");
+        }
+    }
+
     public async Task ApproveReservationAsync(Guid id)
     {
         var reservation = await _reservationRepository.GetAsync(id);
+        EnsureUserIsAuthorizedApprover(reservation);
         var oldValJson = JsonSerializer.Serialize(reservation);
 
         await EnsureReservationCanBeApprovedAsync(reservation);
@@ -577,6 +603,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     {
         var normalizedReason = NormalizeRequiredReason(reason, "Rejection reason is required.");
         var reservation = await _reservationRepository.GetAsync(id);
+        EnsureUserIsAuthorizedApprover(reservation);
         var oldValJson = JsonSerializer.Serialize(reservation);
 
         reservation.Reject(CurrentUser.Id ?? Guid.Empty, normalizedReason);

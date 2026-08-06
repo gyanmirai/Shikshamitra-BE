@@ -330,7 +330,7 @@ public class LessonPlanAppService(
 
     public async Task<LessonPlanDto> ApproveAsync(Guid id, ReviewRemarksDto input)
     {
-        EnsureCanReviewLessonPlans();
+        await EnsureCanReviewLessonPlansAsync();
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
         EnsurePlanIsAwaitingReview(lessonPlan);
@@ -347,7 +347,7 @@ public class LessonPlanAppService(
 
     public async Task<LessonPlanDto> RejectAsync(Guid id, ReviewRemarksDto input)
     {
-        EnsureCanReviewLessonPlans();
+        await EnsureCanReviewLessonPlansAsync();
         EnsureReviewCommentPresent(input, "reject");
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
@@ -365,7 +365,7 @@ public class LessonPlanAppService(
 
     public async Task<LessonPlanDto> RequestChangesAsync(Guid id, ReviewRemarksDto input)
     {
-        EnsureCanReviewLessonPlans();
+        await EnsureCanReviewLessonPlansAsync();
         EnsureReviewCommentPresent(input, "request changes for");
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
@@ -769,18 +769,31 @@ public class LessonPlanAppService(
         return false;
     }
 
-    private void EnsureCanReviewLessonPlans()
+    private async Task EnsureCanReviewLessonPlansAsync()
     {
-        var canReview = LessonPlanReviewerRoles.Any(role =>
+        var hasReviewerRole = LessonPlanReviewerRoles.Any(role =>
             CurrentUser.Roles.Any(currentRole =>
                 string.Equals(currentRole, role, StringComparison.OrdinalIgnoreCase) ||
                 currentRole.Contains("coordinator", StringComparison.OrdinalIgnoreCase)));
 
-        if (!canReview)
+        if (hasReviewerRole)
         {
-            throw new AbpAuthorizationException(
-                "Only Admin or Coordinator roles can approve, reject, or request changes for lesson plans.");
+            return;
         }
+
+        var currentUserId = CurrentUser.GetId();
+        var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
+        if (currentEmployee != null)
+        {
+            var subordinates = await GetReportingEmployeesAsync(currentEmployee.Id);
+            if (subordinates.Count > 0)
+            {
+                return;
+            }
+        }
+
+        throw new AbpAuthorizationException(
+            "Only Admin, Coordinator roles, or assigned Reporting Managers can approve, reject, or request changes for lesson plans.");
     }
 
     private async Task EnsureReviewerIsNotPlanOwnerAsync(LessonPlan lessonPlan)

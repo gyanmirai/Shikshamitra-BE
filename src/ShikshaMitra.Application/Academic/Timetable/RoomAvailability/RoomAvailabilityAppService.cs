@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Users;
+using ShikshaMitra.HR.Employees;
 
 namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 
@@ -24,6 +26,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     private readonly IRepository<TenantSettings.RoomsManagement.RoomTypes.RoomType, Guid> _roomTypeRepository;
     private readonly RoomConflictService _conflictService;
     private readonly RoomRecommendationService _recommendationService;
+    private readonly IRepository<Employee, Guid> _employeeRepository;
 
     public RoomAvailabilityAppService(
         IRepository<Room, Guid> roomRepository,
@@ -35,7 +38,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         IRepository<TenantSettings.RoomsManagement.Buildings.Floor, Guid> floorRepository,
         IRepository<TenantSettings.RoomsManagement.RoomTypes.RoomType, Guid> roomTypeRepository,
         RoomConflictService conflictService,
-        RoomRecommendationService recommendationService)
+        RoomRecommendationService recommendationService,
+        IRepository<Employee, Guid> employeeRepository)
     {
         _roomRepository = roomRepository;
         _reservationRepository = reservationRepository;
@@ -47,6 +51,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         _roomTypeRepository = roomTypeRepository;
         _conflictService = conflictService;
         _recommendationService = recommendationService;
+        _employeeRepository = employeeRepository;
     }
 
     public async Task<List<RoomAvailabilityDto>> GetAvailabilityAsync(RoomAvailabilityFilterDto input)
@@ -319,10 +324,41 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         return dates;
     }
 
-    public async Task<List<RoomReservationDto>> GetReservationsAsync()
+    public async Task<List<RoomReservationDto>> GetReservationsAsync(GetReservationsInputDto input)
     {
         var reservations = await _reservationRepository.GetListAsync(r =>
             !r.RecurringConfigId.HasValue || r.IsRecurring);
+
+        if (input.CreatedDate.HasValue)
+        {
+            var date = input.CreatedDate.Value.Date;
+            reservations = reservations.Where(r => r.CreationTime.Date == date).ToList();
+        }
+
+        var currentUserId = CurrentUser.GetId();
+        var isAdmin = CurrentUser.Roles.Any(role => string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
+
+        if (!isAdmin)
+        {
+            if (input.IsApprovalView)
+            {
+                var currentEmployee = await _employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
+                if (currentEmployee != null)
+                {
+                    var reportingEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
+                    reservations = reservations.Where(r => r.TeacherId.HasValue && reportingEmployeeIds.Contains(r.TeacherId.Value)).ToList();
+                }
+                else
+                {
+                    reservations = new List<RoomReservation>();
+                }
+            }
+            else
+            {
+                reservations = reservations.Where(r => r.CreatorId == currentUserId).ToList();
+            }
+        }
+
         var dtos = ObjectMapper.Map<List<RoomReservation>, List<RoomReservationDto>>(reservations);
 
         // Enrich with room names and building names
@@ -846,5 +882,29 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             "roomAvailability" => "reserved",
             _ => "free"
         };
+    }
+    private async Task<List<Guid>> GetReportingEmployeesAsync(Guid managerEmployeeId)
+    {
+        var allEmployees = await _employeeRepository.GetListAsync();
+        var result = new List<Guid>();
+        var visited = new HashSet<Guid>();
+        
+        void Traverse(Guid parentId)
+        {
+            if (!visited.Add(parentId)) return;
+            
+            var children = allEmployees.Where(x => x.ReportingManagerId == parentId).ToList();
+            foreach (var child in children)
+            {
+                if (!result.Contains(child.Id))
+                {
+                    result.Add(child.Id);
+                    Traverse(child.Id);
+                }
+            }
+        }
+        
+        Traverse(managerEmployeeId);
+        return result;
     }
 }

@@ -30,9 +30,9 @@ public class RoomAvailabilityController : AbpController
 
     [HttpGet]
     [Route("room-reservations")]
-    public async Task<List<RoomReservationDto>> GetReservationsAsync()
+    public async Task<List<RoomReservationDto>> GetReservationsAsync([FromQuery] GetReservationsInputDto input)
     {
-        return await _service.GetReservationsAsync();
+        return await _service.GetReservationsAsync(input);
     }
 
     [HttpPost]

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -372,7 +372,7 @@ public class OpenIddictDataSeedContributor(
 					{
 						application.RedirectUris.Add(new Uri("http://localhost:3000/auth/openiddict"));
 					}
-					if (uri.ToString().Contains("stg-gyanmirai-be.azurewebsites.net/swagger/oauth2-redirect.html"))
+					if (uri.ToString().Contains("stage-api.gyanmirai.in/swagger/oauth2-redirect.html"))
 					{
 						application.RedirectUris.Add(new Uri("https://localhost:44332/swagger/oauth2-redirect.html"));
 					}

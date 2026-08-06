@@ -11,7 +11,7 @@ public interface IRoomAvailabilityAppService : IApplicationService
     Task<ConflictCheckResultDto> CheckConflictsAsync(CheckConflictRequestDto input);
     Task<List<SuggestedRoomDto>> SuggestRoomsAsync(SuggestedRoomRequestDto input);
     Task<RoomReservationDto> CreateReservationAsync(CreateRoomReservationDto input);
-    Task<List<RoomReservationDto>> GetReservationsAsync();
+    Task<List<RoomReservationDto>> GetReservationsAsync(GetReservationsInputDto input);
     Task<RoomReservationDto> UpdateReservationAsync(Guid id, CreateRoomReservationDto input);
     Task UpdateReservationStatusAsync(Guid id, UpdateRoomReservationStatusDto input);
     Task CancelReservationAsync(Guid id, string reason);

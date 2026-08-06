@@ -266,3 +266,9 @@ public class ScheduleSlotDto
     public string? Teacher { get; set; }
     public Guid? ReservationId { get; set; }
 }
+
+public class GetReservationsInputDto
+{
+    public DateTime? CreatedDate { get; set; }
+    public bool IsApprovalView { get; set; }
+}

@@ -8,6 +8,7 @@ public class GetTeacherDiariesInput : PagedAndSortedResultRequestDto
 {
     public Guid? LessonPlanId { get; set; }
     public Guid? AcademicYearId { get; set; }
+    public Guid? AcademicMediumId { get; set; }
     public Guid? TeacherId { get; set; }
     public Guid? StandardId { get; set; }
     public Guid? DivisionId { get; set; }

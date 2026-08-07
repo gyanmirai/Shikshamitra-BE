@@ -225,6 +225,9 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
         EnsureNoCriticalConflicts(conflicts, "Cannot complete booking");
 
+        var isAdmin = CurrentUser.Roles.Any(role => string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
+        var approverId = CurrentUser.Id ?? Guid.Empty;
+
         Guid? configId = null;
 
         if (input.IsRecurring && input.RecurringConfig != null)
@@ -265,6 +268,11 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                     input.ReservedFor, input.Remarks, false, configId
                 );
 
+                if (isAdmin)
+                {
+                    subReservation.Approve(approverId);
+                }
+
                 await _reservationRepository.InsertAsync(subReservation);
             }
         }
@@ -275,6 +283,11 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             input.TeacherId, input.StandardId, input.DivisionId, input.SubjectId,
             input.ReservedFor, input.Remarks, input.IsRecurring, configId
         );
+
+        if (isAdmin)
+        {
+            mainReservation.Approve(approverId);
+        }
 
         await _reservationRepository.InsertAsync(mainReservation);
 

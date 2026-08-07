@@ -140,6 +140,18 @@ public class TimetableAppService(
 
                     if (matchingSavedSlot != null)
                     {
+                        var resolvedSubjects = BuildSlotSubjectResponses(
+                            matchingSavedSlot,
+                            subjects,
+                            rooms,
+                            employees,
+                            assignedSubjectBySubjectId,
+                            totalSlotsBySubject,
+                            totalSlotsByElective,
+                            occupiedBySubject,
+                            occupiedByElective,
+                            selectedElectiveSubjectIdsByGroup);
+
                         return new TimetableSlotResponseDto
                         {
                             Sequence = index + 1,
@@ -150,22 +162,12 @@ public class TimetableAppService(
                             SubjectType = matchingSavedSlot.SubjectType,
                             ElectiveGroupId = matchingSavedSlot.ElectiveGroupId,
                             ElectiveGroupName = matchingSavedSlot.ElectiveGroupId.HasValue
-                                ? electiveGroups.FirstOrDefault(eg => eg.Id == matchingSavedSlot.ElectiveGroupId.Value)?.Name
+                                ? (resolvedSubjects.Count == 1 ? resolvedSubjects[0].Name : electiveGroups.FirstOrDefault(eg => eg.Id == matchingSavedSlot.ElectiveGroupId.Value)?.Name)
                                 : null,
                             ElectiveGroupColor = matchingSavedSlot.ElectiveGroupId.HasValue
                                 ? electiveGroups.FirstOrDefault(eg => eg.Id == matchingSavedSlot.ElectiveGroupId.Value)?.Color
                                 : null,
-                            Subjects = BuildSlotSubjectResponses(
-                                matchingSavedSlot,
-                                subjects,
-                                rooms,
-                                employees,
-                                assignedSubjectBySubjectId,
-                                totalSlotsBySubject,
-                                totalSlotsByElective,
-                                occupiedBySubject,
-                                occupiedByElective,
-                                selectedElectiveSubjectIdsByGroup)
+                            Subjects = resolvedSubjects
                         };
                     }
                     else
@@ -193,6 +195,18 @@ public class TimetableAppService(
                         (slot.Day, slot.StartTime, slot.EndTime), out var configType)
                         ? configType
                         : (slot.SlotType, slot.BreakType);
+                    var resolvedSubjects = BuildSlotSubjectResponses(
+                        slot,
+                        subjects,
+                        rooms,
+                        employees,
+                        assignedSubjectBySubjectId,
+                        totalSlotsBySubject,
+                        totalSlotsByElective,
+                        occupiedBySubject,
+                        occupiedByElective,
+                        selectedElectiveSubjectIdsByGroup);
+
                     return new TimetableSlotResponseDto
                     {
                         Sequence = slot.Sequence,
@@ -203,22 +217,12 @@ public class TimetableAppService(
                         SubjectType = slot.SubjectType,
                         ElectiveGroupId = slot.ElectiveGroupId,
                         ElectiveGroupName = slot.ElectiveGroupId.HasValue
-                        ? electiveGroups.FirstOrDefault(eg => eg.Id == slot.ElectiveGroupId.Value)?.Name
+                        ? (resolvedSubjects.Count == 1 ? resolvedSubjects[0].Name : electiveGroups.FirstOrDefault(eg => eg.Id == slot.ElectiveGroupId.Value)?.Name)
                         : null,
                         ElectiveGroupColor = slot.ElectiveGroupId.HasValue
                         ? electiveGroups.FirstOrDefault(eg => eg.Id == slot.ElectiveGroupId.Value)?.Color
                         : null,
-                        Subjects = BuildSlotSubjectResponses(
-                            slot,
-                            subjects,
-                            rooms,
-                            employees,
-                            assignedSubjectBySubjectId,
-                            totalSlotsBySubject,
-                            totalSlotsByElective,
-                            occupiedBySubject,
-                            occupiedByElective,
-                            selectedElectiveSubjectIdsByGroup)
+                        Subjects = resolvedSubjects
                     };
                 }).ToList();
             }

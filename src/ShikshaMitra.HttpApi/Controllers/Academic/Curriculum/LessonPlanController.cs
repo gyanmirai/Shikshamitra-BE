@@ -19,9 +19,9 @@ public class LessonPlanController(ILessonPlanAppService lessonPlanAppService) : 
     }
 
     [HttpGet("timeline")]
-    public async Task<IActionResult> GetTimeline([FromQuery] DateTimeOffset date, [FromQuery] Guid? teacherId = null)
+    public async Task<IActionResult> GetTimeline([FromQuery] DateTimeOffset date, [FromQuery] Guid? teacherId = null, [FromQuery] Guid? academicMediumId = null)
     {
-        var timeline = await lessonPlanAppService.GetTimelineAsync(date, teacherId);
+        var timeline = await lessonPlanAppService.GetTimelineAsync(date, teacherId, academicMediumId);
         return Ok(timeline);
     }
 

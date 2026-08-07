@@ -26,6 +26,7 @@ public partial class ShikshaMitraDbContext
     // Academic — Curriculum
     // ───────────────────────────────────────────────
     public DbSet<Subject> Subjects { get; set; }
+    public DbSet<SubjectAuditLog> SubjectAuditLogs { get; set; }
     public DbSet<ElectiveGroup> ElectiveGroups { get; set; }
     public DbSet<AssignedSubject> StandardSubjectAssignments { get; set; }
     public DbSet<TeacherSubjectAllocation> TeacherSubjectAllocations { get; set; }

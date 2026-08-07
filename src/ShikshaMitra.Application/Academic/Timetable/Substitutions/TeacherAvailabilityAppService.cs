@@ -37,6 +37,29 @@ public class TeacherAvailabilityAppService(
         var rows = await availabilityRepository.GetListAsync(x => !x.IsCancelled);
         var filtered = rows.AsEnumerable();
 
+        if (!IsAdminUser())
+        {
+            var currentUserId = CurrentUser.Id;
+            if (currentUserId.HasValue)
+            {
+                var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId.Value);
+                if (currentEmployee != null)
+                {
+                    var allowedTeacherIds = await GetReportingEmployeesAsync(currentEmployee.Id);
+                    allowedTeacherIds.Add(currentEmployee.Id);
+                    filtered = filtered.Where(x => x.TeacherId.HasValue && allowedTeacherIds.Contains(x.TeacherId.Value));
+                }
+                else
+                {
+                    filtered = Enumerable.Empty<TeacherAvailability>();
+                }
+            }
+            else
+            {
+                filtered = Enumerable.Empty<TeacherAvailability>();
+            }
+        }
+
         if (input.AcademicYearId.HasValue) filtered = filtered.Where(x => x.AcademicYearId == input.AcademicYearId);
         if (input.Date.HasValue) filtered = filtered.Where(x => x.AvailabilityDate == NormalizeDate(input.Date.Value));
         if (input.FromDate.HasValue) filtered = filtered.Where(x => x.AvailabilityDate >= NormalizeDate(input.FromDate.Value));
@@ -141,6 +164,11 @@ public class TeacherAvailabilityAppService(
 
     public async Task<TeacherAvailabilityDto> CreateAsync(CreateTeacherAvailabilityDto input)
     {
+        if (!IsAdminUser())
+        {
+            throw new UserFriendlyException("Only administrators can create unavailability.");
+        }
+
         if (string.IsNullOrWhiteSpace(input.TeacherName) && !input.TeacherId.HasValue)
         {
             throw new UserFriendlyException("Teacher is required.");
@@ -355,6 +383,11 @@ public class TeacherAvailabilityAppService(
 
     public async Task CancelAsync(Guid id)
     {
+        if (!IsAdminUser())
+        {
+            throw new UserFriendlyException("Only administrators can cancel unavailability.");
+        }
+
         var entity = await availabilityRepository.GetAsync(id);
         entity.Cancel();
         await availabilityRepository.UpdateAsync(entity, autoSave: true);
@@ -362,6 +395,11 @@ public class TeacherAvailabilityAppService(
 
     public async Task<int> CreateSubstitutionsAsync(Guid id)
     {
+        if (!IsAdminUser())
+        {
+            throw new UserFriendlyException("Only administrators can create substitutions from unavailability.");
+        }
+
         var entity = await availabilityRepository.GetAsync(id);
         var input = new CreateTeacherAvailabilityDto
         {
@@ -622,4 +660,35 @@ public class TeacherAvailabilityAppService(
         DayOfWeek.Saturday => TimetableDayOfWeek.Saturday,
         _ => null
     };
+
+    private bool IsAdminUser()
+    {
+        return CurrentUser.Roles.Any(role =>
+            string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<List<Guid>> GetReportingEmployeesAsync(Guid managerEmployeeId)
+    {
+        var allEmployees = await employeeRepository.GetListAsync();
+        var result = new List<Guid>();
+        var visited = new HashSet<Guid>();
+        
+        void Traverse(Guid parentId)
+        {
+            if (!visited.Add(parentId))
+            {
+                return;
+            }
+            var children = allEmployees.Where(x => x.ReportingManagerId == parentId).ToList();
+            foreach (var child in children)
+            {
+                result.Add(child.Id);
+                Traverse(child.Id);
+            }
+        }
+        
+        Traverse(managerEmployeeId);
+        return result;
+    }
 }

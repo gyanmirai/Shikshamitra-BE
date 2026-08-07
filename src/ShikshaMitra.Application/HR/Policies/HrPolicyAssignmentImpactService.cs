@@ -208,7 +208,7 @@ public class HrPolicyAssignmentImpactService(
 		var start = conflict.EffectiveFrom.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
 		var end = conflict.EffectiveTo?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "No end date";
 		var leave = conflict.LeavePolicyName ?? "No leave policy";
-		return $"Conflicts with active assignment {conflict.AssignmentId:D} for {target} " +
+		return $"Conflicts with an existing active assignment for {target} " +
 			$"({start} - {end}). Payroll: {conflict.PayrollPolicyName}; " +
 			$"attendance: {conflict.AttendancePolicyName}; leave: {leave}. {resolution}";
 	}

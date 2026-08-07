@@ -40,6 +40,29 @@ public class SubstitutionAppService(
     {
         var rows = await substitutionRepository.GetListAsync();
         rows = await FilterByAcademicMediumAsync(rows, input.AcademicMediumId);
+
+        if (!IsAdminUser())
+        {
+            var currentUserId = CurrentUser.Id;
+            if (currentUserId.HasValue)
+            {
+                var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId.Value);
+                if (currentEmployee != null)
+                {
+                    var empId = currentEmployee.Id;
+                    rows = rows.Where(x => x.OriginalTeacherId == empId || x.SubstituteTeacherId == empId).ToList();
+                }
+                else
+                {
+                    rows = new List<SubstitutionRequest>();
+                }
+            }
+            else
+            {
+                rows = new List<SubstitutionRequest>();
+            }
+        }
+
         var filtered = ApplyFilters(rows, input)
             .OrderBy(x => x.Date)
             .ThenBy(x => x.StartTime)
@@ -66,6 +89,29 @@ public class SubstitutionAppService(
         var substitutions = await substitutionRepository.GetListAsync(x =>
             x.Date == target && (!academicYearId.HasValue || x.AcademicYearId == academicYearId));
         substitutions = await FilterByAcademicMediumAsync(substitutions, academicMediumId);
+
+        if (!IsAdminUser())
+        {
+            var currentUserId = CurrentUser.Id;
+            if (currentUserId.HasValue)
+            {
+                var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId.Value);
+                if (currentEmployee != null)
+                {
+                    var empId = currentEmployee.Id;
+                    substitutions = substitutions.Where(x => x.OriginalTeacherId == empId || x.SubstituteTeacherId == empId).ToList();
+                }
+                else
+                {
+                    substitutions = new List<SubstitutionRequest>();
+                }
+            }
+            else
+            {
+                substitutions = new List<SubstitutionRequest>();
+            }
+        }
+
         var availability = await availabilityRepository.GetListAsync(x =>
             x.AvailabilityDate == target &&
             !x.IsCancelled &&
@@ -117,6 +163,7 @@ public class SubstitutionAppService(
 
     public async Task<SubstitutionDto> CreateAsync(CreateSubstitutionDto input)
     {
+        await EnsureAdminAsync("create substitutions");
         var date = NormalizeDate(input.Date);
         var start = ParseTime(input.StartTime, "startTime");
         var end = ParseTime(input.EndTime, "endTime");
@@ -229,6 +276,7 @@ public class SubstitutionAppService(
 
     public async Task<SubstitutionDto> UpdateAsync(Guid id, UpdateSubstitutionDto input)
     {
+        await EnsureAdminAsync("update substitutions");
         var entity = await substitutionRepository.GetAsync(id);
         if (entity.Status is SubstitutionStatus.Completed or SubstitutionStatus.Cancelled)
         {
@@ -316,6 +364,7 @@ public class SubstitutionAppService(
 
     public async Task<SubstitutionDto> AssignAsync(Guid id, AssignSubstituteDto input)
     {
+        await EnsureAdminAsync("assign substitutions");
         if (string.IsNullOrWhiteSpace(input.SubstituteTeacherName) && !input.SubstituteTeacherId.HasValue)
         {
             throw new UserFriendlyException("Select a substitute teacher.");
@@ -374,6 +423,7 @@ public class SubstitutionAppService(
 
     public async Task<SubstitutionDto> SendReminderAsync(Guid id)
     {
+        await EnsureAdminAsync("send reminders");
         var entity = await substitutionRepository.GetAsync(id);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot send a reminder after the period has ended.");
         if (string.IsNullOrWhiteSpace(entity.SubstituteTeacherName))
@@ -391,6 +441,7 @@ public class SubstitutionAppService(
     public async Task<SubstitutionDto> CompleteAsync(Guid id)
     {
         var entity = await substitutionRepository.GetAsync(id);
+        await EnsureCanActAsSubstituteAsync(entity);
         EnsureSubstitutionWindowStarted(entity.Date, entity.StartTime, "Substitution duty can be completed only after the period has started.");
         if (string.IsNullOrWhiteSpace(entity.SubstituteTeacherName) && !entity.SubstituteTeacherId.HasValue)
         {
@@ -410,6 +461,7 @@ public class SubstitutionAppService(
 
     public async Task<SubstitutionDto> CancelAsync(Guid id, SubstitutionActionDto input)
     {
+        await EnsureAdminAsync("cancel substitutions");
         var entity = await substitutionRepository.GetAsync(id);
         entity.Cancel(input.Reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
@@ -425,6 +477,7 @@ public class SubstitutionAppService(
     public async Task<SubstitutionDto> AcknowledgeAsync(Guid id, SubstitutionActionDto? input = null)
     {
         var entity = await substitutionRepository.GetAsync(id);
+        await EnsureCanActAsSubstituteAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot acknowledge a substitution after the period has ended.");
         var note = NormalizeOptionalActionReason(input?.Reason);
         entity.Acknowledge(note);
@@ -438,6 +491,7 @@ public class SubstitutionAppService(
         var reason = NormalizeRequiredActionReason(input?.Reason);
 
         var entity = await substitutionRepository.GetAsync(id);
+        await EnsureCanActAsSubstituteAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot request changes after the period has ended.");
         entity.RequestChange(reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
@@ -450,6 +504,7 @@ public class SubstitutionAppService(
         var reason = NormalizeRequiredActionReason(input?.Reason);
 
         var entity = await substitutionRepository.GetAsync(id);
+        await EnsureCanActAsSubstituteAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot reject a substitution after the period has ended.");
         entity.Reject(reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
@@ -1569,7 +1624,40 @@ public class SubstitutionAppService(
         AllowTeacherReject = entity.AllowTeacherReject,
         StudentVisibleDailySheet = entity.StudentVisibleDailySheet
     };
+
+    private bool IsAdminUser()
+    {
+        return CurrentUser.Roles.Any(role =>
+            string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private Task EnsureAdminAsync(string action)
+    {
+        if (!IsAdminUser())
+        {
+            throw new UserFriendlyException($"Only administrators can {action}.");
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task EnsureCanActAsSubstituteAsync(SubstitutionRequest entity)
+    {
+        if (IsAdminUser()) return;
+
+        var currentUserId = CurrentUser.Id;
+        if (!currentUserId.HasValue) throw new UserFriendlyException("Unauthorized.");
+        
+        var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId.Value);
+        if (currentEmployee == null) throw new UserFriendlyException("Employee record not found.");
+
+        if (entity.SubstituteTeacherId != currentEmployee.Id)
+        {
+            throw new UserFriendlyException("Only the assigned substitute teacher or administrators can perform this action.");
+        }
+    }
 }
+
 
 internal static class DoubleExtensions
 {

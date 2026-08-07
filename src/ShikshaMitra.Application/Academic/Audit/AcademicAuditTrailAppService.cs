@@ -24,7 +24,7 @@ namespace ShikshaMitra.Academic.Audit;
 public class AcademicAuditTrailAppService(
 	IRepository<AcademicCalendarAuditLog, Guid> calendarAuditRepository,
 	IRepository<AcademicCalendar, Guid> calendarRepository,
-	IRepository<Subject, Guid> subjectRepository,
+	IRepository<SubjectAuditLog, Guid> subjectAuditLogRepository,
 	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
 	IRepository<RoomAuditLog, Guid> roomAuditRepository,
 	IRepository<SubstitutionAuditLog, Guid> substitutionAuditRepository,
@@ -125,28 +125,29 @@ public class AcademicAuditTrailAppService(
 
 	private async Task<List<AcademicAuditEventDto>> GetSubjectEventsAsync(AcademicAuditEventListRequestDto input)
 	{
-		var query = await subjectRepository.GetQueryableAsync();
-		query = query.Where(x => !x.IsDeleted);
+		var query = await subjectAuditLogRepository.GetQueryableAsync();
 		if (input.FromDate.HasValue)
-			query = query.Where(x => x.CreationTime >= input.FromDate.Value || x.LastModificationTime >= input.FromDate.Value);
+			query = query.Where(x => x.ChangedAt >= input.FromDate.Value);
 		if (input.ToDate.HasValue)
-			query = query.Where(x => x.CreationTime <= input.ToDate.Value || x.LastModificationTime <= input.ToDate.Value);
+			query = query.Where(x => x.ChangedAt <= input.ToDate.Value);
 
-		var rows = await AsyncExecuter.ToListAsync(
-			query.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime).Take(MaxSourceRows));
+		var rows = await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.ChangedAt).Take(MaxSourceRows));
 
-		return rows.SelectMany(x => CreateAuditedEntityEvents(
-			"subject_entity",
+		return rows.Select(x => AcademicAuditTrailProjection.Create(
+			"subject_audit",
 			"subject_creation",
 			"subject",
+			x.SubjectId,
+			x.EntityName ?? "Subject",
+			x.Action,
+			x.ChangedAt,
+			$"{ToLabel(x.Action)} subject",
 			x.Id,
-			x.Name,
-			x.CreationTime,
-			x.CreatorId,
-			x.LastModificationTime,
-			x.LastModifierId,
-			x.ArchiveReason,
-			BuildJson(new { x.Name, x.DisplayName, x.Category, x.Status, x.SortOrder, x.EducationMediumId }))).ToList();
+			actorUserId: x.ChangedByUserId,
+			actorName: x.ActorNameSnapshot,
+			reason: x.Reason,
+			changedFieldsJson: x.ChangedFieldsJson,
+			contextJson: BuildJson(new { x.OldValueJson, x.NewValueJson, Metadata = new { x.IpAddress, x.Device, x.Browser, x.OperatingSystem, x.RequestPath, x.HttpMethod } }))).ToList();
 	}
 
 	private async Task<List<AcademicAuditEventDto>> GetElectiveGroupEventsAsync(AcademicAuditEventListRequestDto input)

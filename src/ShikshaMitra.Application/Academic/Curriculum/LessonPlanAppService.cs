@@ -12,6 +12,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
 using Volo.Abp.Authorization;
 using Volo.Abp.Application.Dtos;
@@ -35,6 +36,7 @@ public class LessonPlanAppService(
     IRepository<Employee, Guid> employeeRepository,
     IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
     IRepository<EmployeeLeave, Guid> employeeLeaveRepository,
+    IRepository<EducationMediumStage, Guid> mediumStageRepository,
     IHomeworkAppService homeworkAppService
 ) : ApplicationService, ILessonPlanAppService
 {
@@ -49,7 +51,7 @@ public class LessonPlanAppService(
     public async Task<PagedResultDto<LessonPlanDto>> GetListAsync(GetLessonPlansInput input)
     {
         var query = await lessonPlanRepository.GetQueryableAsync();
-        query = ApplyLessonPlanFilters(query, input);
+        query = await ApplyLessonPlanFiltersAsync(query, input);
 
         if (!IsAdminUser())
         {
@@ -76,7 +78,7 @@ public class LessonPlanAppService(
         return new PagedResultDto<LessonPlanDto>(count, items);
     }
 
-    public async Task<LessonPlanTimelineDto> GetTimelineAsync(DateTimeOffset date, Guid? teacherId = null)
+    public async Task<LessonPlanTimelineDto> GetTimelineAsync(DateTimeOffset date, Guid? teacherId = null, Guid? academicMediumId = null)
     {
         var targetTeacherId = await ResolveTimelineTeacherIdAsync(teacherId);
 
@@ -98,9 +100,26 @@ public class LessonPlanAppService(
                 }
             }
         }
-        var lessonPlans = await lessonPlanRepository.GetListAsync(x =>
-            x.TeacherId == targetTeacherId && x.PlannedDate.Date == date.DateTime.Date
-        );
+        var lessonPlansQuery = await lessonPlanRepository.GetQueryableAsync();
+        lessonPlansQuery = lessonPlansQuery.Where(x => x.TeacherId == targetTeacherId && x.PlannedDate.Date == date.DateTime.Date);
+
+        List<Guid>? allowedStandardIds = null;
+        if (academicMediumId.HasValue)
+        {
+            var mediumStageQuery = await mediumStageRepository.GetQueryableAsync();
+            var stageIds = await AsyncExecuter.ToListAsync(mediumStageQuery
+                .Where(m => m.EducationMediumId == academicMediumId.Value)
+                .Select(m => m.Id));
+
+            var standardQuery = await standardRepository.GetQueryableAsync();
+            allowedStandardIds = await AsyncExecuter.ToListAsync(standardQuery
+                .Where(s => stageIds.Contains(s.EducationMediumStageId))
+                .Select(s => s.Id));
+
+            lessonPlansQuery = lessonPlansQuery.Where(lp => allowedStandardIds.Contains(lp.StandardId));
+        }
+
+        var lessonPlans = await AsyncExecuter.ToListAsync(lessonPlansQuery);
         var mappedPlans = await MapLessonPlansAsync(lessonPlans);
         var mappedById = mappedPlans.ToDictionary(x => x.Id);
         var matchedPlanIds = new HashSet<Guid>();
@@ -110,9 +129,12 @@ public class LessonPlanAppService(
         if (timetableDay != null)
         {
             var timetableQuery = await timetableRepository.WithDetailsAsync();
-            var timetables = await AsyncExecuter.ToListAsync(
-                timetableQuery.Where(x => x.Status == TimetableStatus.Published)
-            );
+            var timetablesQuery = timetableQuery.Where(x => x.Status == TimetableStatus.Published);
+            if (allowedStandardIds != null)
+            {
+                timetablesQuery = timetablesQuery.Where(x => allowedStandardIds.Contains(x.StandardId));
+            }
+            var timetables = await AsyncExecuter.ToListAsync(timetablesQuery);
 
             var standards = await standardRepository.GetListAsync();
             var divisions = await divisionRepository.GetListAsync();
@@ -433,6 +455,21 @@ public class LessonPlanAppService(
             join plan in planQuery on diary.LessonPlanId equals plan.Id
             select new { diary, plan };
 
+        if (input.AcademicMediumId.HasValue)
+        {
+            var mediumStageQuery = await mediumStageRepository.GetQueryableAsync();
+            var stageIds = await AsyncExecuter.ToListAsync(mediumStageQuery
+                .Where(m => m.EducationMediumId == input.AcademicMediumId.Value)
+                .Select(m => m.Id));
+
+            var standardQuery = await standardRepository.GetQueryableAsync();
+            var allowedStandardIds = await AsyncExecuter.ToListAsync(standardQuery
+                .Where(s => stageIds.Contains(s.EducationMediumStageId))
+                .Select(s => s.Id));
+
+            query = query.Where(x => allowedStandardIds.Contains(x.plan.StandardId));
+        }
+
         if (input.LessonPlanId.HasValue) query = query.Where(x => x.diary.LessonPlanId == input.LessonPlanId.Value);
         if (input.AcademicYearId.HasValue) query = query.Where(x => x.plan.AcademicYearId == input.AcademicYearId.Value);
         if (input.TeacherId.HasValue) query = query.Where(x => x.diary.TeacherId == input.TeacherId.Value);
@@ -544,8 +581,23 @@ public class LessonPlanAppService(
         return await GetTeacherDiaryAsync(id);
     }
 
-    private static IQueryable<LessonPlan> ApplyLessonPlanFilters(IQueryable<LessonPlan> query, GetLessonPlansInput input)
+    private async Task<IQueryable<LessonPlan>> ApplyLessonPlanFiltersAsync(IQueryable<LessonPlan> query, GetLessonPlansInput input)
     {
+        if (input.AcademicMediumId.HasValue)
+        {
+            var mediumStageQuery = await mediumStageRepository.GetQueryableAsync();
+            var stageIds = await AsyncExecuter.ToListAsync(mediumStageQuery
+                .Where(m => m.EducationMediumId == input.AcademicMediumId.Value)
+                .Select(m => m.Id));
+
+            var standardQuery = await standardRepository.GetQueryableAsync();
+            var allowedStandardIds = await AsyncExecuter.ToListAsync(standardQuery
+                .Where(s => stageIds.Contains(s.EducationMediumStageId))
+                .Select(s => s.Id));
+
+            query = query.Where(lp => allowedStandardIds.Contains(lp.StandardId));
+        }
+
         if (input.AcademicYearId.HasValue) query = query.Where(x => x.AcademicYearId == input.AcademicYearId.Value);
         if (input.TeacherId.HasValue) query = query.Where(x => x.TeacherId == input.TeacherId.Value);
         if (input.StandardId.HasValue) query = query.Where(x => x.StandardId == input.StandardId.Value);

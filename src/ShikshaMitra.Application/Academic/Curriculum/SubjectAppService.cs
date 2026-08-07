@@ -33,7 +33,9 @@ public class SubjectAppService(
 	IRepository<LessonPlan, Guid> lessonPlanRepository,
 	IRepository<Standard, Guid> standardRepository,
 	ILogger<SubjectAppService> logger,
-	IRepository<ElectiveGroup, Guid> electiveGroupRepository
+	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
+	SubjectAuditWriter subjectAuditWriter,
+	IRepository<SubjectAuditLog, Guid> subjectAuditLogRepository
 ) : ApplicationService, ISubjectAppService
 {
 	public async Task<SubjectDto> GetAsync(Guid id)
@@ -123,6 +125,15 @@ public class SubjectAppService(
 
 			await subjectRepository.InsertAsync(subject);
 
+			await subjectAuditWriter.WriteAsync(
+				subject.Id,
+				"Created",
+				null,
+				ToJsonSnapshot(subject),
+				entityType: "subject",
+				entityName: subject.Name
+			);
+
 			return await MapSubjectAsync(subject);
 		}
 		catch (BusinessException)
@@ -196,6 +207,9 @@ public class SubjectAppService(
 	{
 		try
 		{
+			var existingSubject = await subjectRepository.GetAsync(id);
+			var beforeSnapshot = ToJsonSnapshot(existingSubject);
+
 			var subject = await subjectManager.UpdateAsync(
 				id,
 				updateSubjectDto.Name,
@@ -236,6 +250,15 @@ public class SubjectAppService(
 				}
 			}
 
+			await subjectAuditWriter.WriteAsync(
+				subject.Id,
+				"Updated",
+				beforeSnapshot,
+				ToJsonSnapshot(subject),
+				entityType: "subject",
+				entityName: subject.Name
+			);
+
 			return await MapSubjectAsync(subject);
 		}
 		catch (BusinessException)
@@ -252,14 +275,27 @@ public class SubjectAppService(
 	public async Task<SubjectDto> ArchiveAsync(Guid id, SubjectStatusChangeDto input)
 	{
 		var subject = await subjectRepository.GetAsync(id);
+		var beforeSnapshot = ToJsonSnapshot(subject);
 		subject.Archive(input.Reason);
 		await subjectRepository.UpdateAsync(subject);
+		
+		await subjectAuditWriter.WriteAsync(
+			subject.Id,
+			"Archived",
+			beforeSnapshot,
+			ToJsonSnapshot(subject),
+			entityType: "subject",
+			entityName: subject.Name,
+			reason: input.Reason
+		);
+
 		return await MapSubjectAsync(subject);
 	}
 
 	public async Task<SubjectDto> RestoreAsync(Guid id)
 	{
 		var subject = await subjectRepository.GetAsync(id);
+		var beforeSnapshot = ToJsonSnapshot(subject);
 
 		// Check if another active/inactive subject with the same name already exists
 		var normalizedName = subject.Name.Trim().ToUpperInvariant();
@@ -288,6 +324,15 @@ public class SubjectAppService(
 			}
 			await assignedSubjectRepository.UpdateManyAsync(assignments);
 		}
+
+		await subjectAuditWriter.WriteAsync(
+			subject.Id,
+			"Restored",
+			beforeSnapshot,
+			ToJsonSnapshot(subject),
+			entityType: "subject",
+			entityName: subject.Name
+		);
 
 		return await MapSubjectAsync(subject);
 	}
@@ -434,30 +479,16 @@ public class SubjectAppService(
 
 	public async Task<List<SubjectAuditLogDto>> GetAuditLogsAsync(Guid id)
 	{
-		var subject = await subjectRepository.GetAsync(id); var logs = new List<SubjectAuditLogDto>
+		var logs = await subjectAuditLogRepository.GetListAsync(x => x.SubjectId == id);
+		return logs.Select(x => new SubjectAuditLogDto
 		{
-			new()
-			{
-				ChangedDate = subject.CreationTime,
-				ChangedBy = subject.CreatorId?.ToString(),
-				Action = "Subject Created",
-				AfterValue = subject.Name
-			}
-		};
-
-		if (subject.LastModificationTime.HasValue)
-		{
-			logs.Add(new SubjectAuditLogDto
-			{
-				ChangedDate = subject.LastModificationTime.Value,
-				ChangedBy = subject.LastModifierId?.ToString(),
-				Action = subject.Status == SubjectMasterStatus.Archived ? "Subject Archived" : "Subject Updated",
-				AfterValue = subject.Name,
-				Reason = subject.ArchiveReason
-			});
-		}
-
-		return logs.OrderByDescending(x => x.ChangedDate).ToList();
+			ChangedDate = x.ChangedAt,
+			ChangedBy = x.ActorNameSnapshot,
+			Action = $"Subject {x.Action}",
+			BeforeValue = null,
+			AfterValue = x.EntityName,
+			Reason = x.Reason
+		}).OrderByDescending(x => x.ChangedDate).ToList();
 	}
 
 	private async Task<SubjectDto> MapSubjectAsync(Subject subject)
@@ -532,5 +563,22 @@ public class SubjectAppService(
 		public int LessonPlans { get; set; }
 		public int Total => Allocations + ElectiveGroups + Chapters + WeeklySlots + TimetableSlots
 			+ ExamSubjects + ExamResults + Homeworks + Assignments + TeacherMappings + LessonPlans;
+	}
+
+	private static string ToJsonSnapshot(Subject subject)
+	{
+		return System.Text.Json.JsonSerializer.Serialize(new
+		{
+			subject.Id,
+			subject.Name,
+			subject.DisplayName,
+			subject.Category,
+			subject.Color,
+			subject.Icon,
+			subject.Description,
+			subject.Status,
+			subject.SortOrder,
+			subject.EducationMediumId
+		}, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
 	}
 }

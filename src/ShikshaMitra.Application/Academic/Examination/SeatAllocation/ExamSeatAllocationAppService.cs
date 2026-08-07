@@ -910,8 +910,12 @@ public class ExamSeatAllocationAppService(
             ? await roomRepository.GetListAsync(r => input.RoomIds.Contains(r.Id))
             : new List<Room>();
 
-        var occupiedSeatNumbersByRoom = (await seatAllocationRepository.GetListAsync(a =>
-                a.ExamId == examId && a.SeatingPlanId == plan.Id && input.RoomIds.Contains(a.RoomId)))
+        var internalOccupied = await seatAllocationRepository.GetListAsync(a =>
+                a.ExamId == examId && input.RoomIds.Contains(a.RoomId));
+                
+        var externalOccupied = await GetExternalOverlappingAllocationsAsync(examId, plan.Id, input.RoomIds);
+        
+        var occupiedSeatNumbersByRoom = internalOccupied.Concat(externalOccupied)
             .GroupBy(a => a.RoomId)
             .ToDictionary(g => g.Key, g => g.Select(a => a.SeatNumber).ToHashSet());
 
@@ -971,9 +975,14 @@ public class ExamSeatAllocationAppService(
 
         var totalSeats = room.TotalBenches > 0 ? room.TotalBenches * room.BenchCapacity : room.Capacity;
 
-        // All seat allocations for this exam in this room
-        var allAllocations = await seatAllocationRepository.GetListAsync(a =>
-            a.ExamId == examId && a.SeatingPlanId == plan.Id && a.RoomId == input.RoomId);
+        // 1. Internal allocations (this exam)
+        var internalAllocations = await seatAllocationRepository.GetListAsync(a =>
+            a.ExamId == examId && a.RoomId == input.RoomId);
+
+        // 2. External allocations (overlapping time slots from completely different exams)
+        var externalAllocations = await GetExternalOverlappingAllocationsAsync(examId, plan.Id, new List<Guid> { input.RoomId });
+
+        var allAllocations = internalAllocations.Concat(externalAllocations).ToList();
 
         // Students lookup
         var studentIds = allAllocations.Select(a => a.StudentId).Distinct().ToList();
@@ -1004,12 +1013,13 @@ public class ExamSeatAllocationAppService(
             {
                 SeatNumber = seat,
                 StudentId = alloc?.StudentId,
-                StudentName = student != null ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Replace("  ", " ").Trim() : null,
-                StandardName = stdName,
-                RollNo = student?.RollNo,
+                StudentName = (alloc != null && alloc.ExamId != examId) ? "Blocked (Other Exam)" : (student != null ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Replace("  ", " ").Trim() : null),
+                StandardName = (alloc != null && alloc.ExamId != examId) ? "Reserved" : stdName,
+                RollNo = (alloc != null && alloc.ExamId != examId) ? null : student?.RollNo,
                 RoomNumber = room.RoomName,
                 IsRoomAssign = alloc?.IsRoomAssign ?? false,
-                BenchId = alloc?.BenchId ?? Guid.Empty
+                BenchId = alloc?.BenchId ?? Guid.Empty,
+                IsExternalExamOccupied = alloc != null && alloc.ExamId != examId
             });
         }
 
@@ -1421,5 +1431,46 @@ public class ExamSeatAllocationAppService(
             TotalPages = totalPages,
             TotalCount = totalCount
         };
+    }
+
+    private async Task<List<ExamSeatAllocation>> GetExternalOverlappingAllocationsAsync(Guid examId, Guid planId, List<Guid> roomIds)
+    {
+        var externalAllocations = new List<ExamSeatAllocation>();
+        
+        var planSubjects = await seatingPlanSubjectRepository.GetListAsync(s => s.SeatingPlanId == planId);
+        var planSubjectIds = planSubjects.Select(s => s.ExamSubjectId).ToHashSet();
+        
+        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var currentSubjects = exam.ExamSubjects.Where(s => planSubjectIds.Contains(s.Id)).ToList();
+        
+        var activeTimeSlots = currentSubjects
+            .Where(s => s.StartTime.HasValue && s.EndTime.HasValue)
+            .Select(s => new { Start = s.StartTime.Value, End = s.EndTime.Value })
+            .ToList();
+
+        if (activeTimeSlots.Count > 0)
+        {
+            var allOtherExams = await examRepository.GetListAsync(e => e.Id != examId, includeDetails: true);
+            var overlappingOtherSubjects = allOtherExams
+                .SelectMany(e => e.ExamSubjects)
+                .Where(s => s.StartTime.HasValue && s.EndTime.HasValue &&
+                            activeTimeSlots.Any(t => s.StartTime.Value < t.End && s.EndTime.Value > t.Start))
+                .Select(s => s.Id)
+                .ToHashSet();
+
+            if (overlappingOtherSubjects.Count > 0)
+            {
+                var overlappingPlanSubjects = await seatingPlanSubjectRepository.GetListAsync(s => overlappingOtherSubjects.Contains(s.ExamSubjectId));
+                var overlappingPlanIds = overlappingPlanSubjects.Select(s => s.SeatingPlanId).ToHashSet();
+
+                if (overlappingPlanIds.Count > 0)
+                {
+                    externalAllocations = await seatAllocationRepository.GetListAsync(a => 
+                        roomIds.Contains(a.RoomId) && overlappingPlanIds.Contains(a.SeatingPlanId));
+                }
+            }
+        }
+        
+        return externalAllocations;
     }
 }

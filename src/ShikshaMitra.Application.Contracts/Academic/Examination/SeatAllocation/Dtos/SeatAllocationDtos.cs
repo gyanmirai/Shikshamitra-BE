@@ -16,6 +16,7 @@ public class SeatLayoutItemDto
     public string? RoomNumber { get; set; }
     public bool IsRoomAssign { get; set; }
     public Guid BenchId { get; set; }
+    public bool IsExternalExamOccupied { get; set; }
 }
 
 public class SeatLayoutResponseDto

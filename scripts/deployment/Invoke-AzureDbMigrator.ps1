@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $remoteDirectory = '/home/site/dbmigrator'
+$remoteArchive = '/home/site/dbmigrator.zip'
 
 function Protect-MigratorOutput {
     param([AllowEmptyString()][string]$Text)
@@ -45,22 +46,28 @@ $authorization = [Convert]::ToBase64String(
     [Text.Encoding]::ASCII.GetBytes("${userName}:${password}")
 )
 $headers = @{ Authorization = "Basic $authorization" }
-$escapedDirectory = [Uri]::EscapeDataString($remoteDirectory)
 $commandUri = "https://${publishHost}/api/command"
+$phase = 'initialization'
 
 try {
+    $phase = 'package upload'
     Write-Output 'Uploading the database migrator to the protected App Service workspace.'
+    $uploadHeaders = @{
+        Authorization = $headers.Authorization
+        'If-Match' = '*'
+    }
     Invoke-WebRequest `
-        -Uri "https://${publishHost}/api/publish?type=zip&path=${escapedDirectory}&async=false" `
-        -Method Post `
-        -Headers $headers `
+        -Uri "https://${publishHost}/api/vfs/site/dbmigrator.zip" `
+        -Method Put `
+        -Headers $uploadHeaders `
         -InFile $PackagePath `
-        -ContentType 'application/zip' `
+        -ContentType 'application/octet-stream' `
         -TimeoutSec 300 | Out-Null
 
+    $phase = 'remote execution'
     $migrationCommand = @{
-        command = 'ASPNETCORE_ENVIRONMENT=Staging DOTNET_ENVIRONMENT=Staging SeedTestLogins=true ShikshaMitra__Seeders__ForceRerun=true dotnet ShikshaMitra.DbMigrator.dll'
-        dir = $remoteDirectory
+        command = "rm -rf '$remoteDirectory' && mkdir -p '$remoteDirectory' && unzip -q '$remoteArchive' -d '$remoteDirectory' && cd '$remoteDirectory' && ASPNETCORE_ENVIRONMENT=Staging DOTNET_ENVIRONMENT=Staging SeedTestLogins=true ShikshaMitra__Seeders__ForceRerun=true dotnet ShikshaMitra.DbMigrator.dll"
+        dir = '/home/site'
     } | ConvertTo-Json
 
     Write-Output 'Running database migrations and seeders inside the App Service network.'
@@ -86,10 +93,14 @@ try {
 
     Write-Output 'Database migrations and seeders completed successfully.'
 }
+catch {
+    $safeMessage = Protect-MigratorOutput $_.Exception.Message
+    throw "Azure database migration failed during ${phase}: $safeMessage"
+}
 finally {
     try {
         $cleanupCommand = @{
-            command = "rm -rf '$remoteDirectory'"
+            command = "rm -rf '$remoteDirectory' '$remoteArchive'"
             dir = '/home/site'
         } | ConvertTo-Json
 
@@ -109,4 +120,5 @@ finally {
     $password = $null
     $authorization = $null
     $headers = $null
+    $uploadHeaders = $null
 }

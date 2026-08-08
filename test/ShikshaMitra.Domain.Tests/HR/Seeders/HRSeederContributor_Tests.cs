@@ -107,14 +107,30 @@ public class HRSeederContributor_Tests
 	}
 
 	[Fact]
-	public void Academic_Year_Wide_Test_Login_Scope_Should_Be_Limited_To_Enrollment_Principal()
+	public void Board_Scoped_Test_Logins_Should_Not_Receive_Academic_Year_Wide_Access()
 	{
 		var academicYearWideLogins = TestLoginSeederContributor.BuildAcademicYearWideScopeLoginEmails();
 
-		academicYearWideLogins.ShouldBe(["principal-gseb@ddvs.com"]);
+		academicYearWideLogins.ShouldBeEmpty();
+		academicYearWideLogins.ShouldNotContain("principal-gseb@ddvs.com");
 		academicYearWideLogins.ShouldNotContain("principal-cbse@ddvs.com");
 		academicYearWideLogins.ShouldNotContain("admissions-reception@ddvs.com");
 		academicYearWideLogins.ShouldNotContain("student-crm-denied@ddvs.com");
+	}
+
+	[Fact]
+	public void Existing_Academic_Year_Permissions_Should_Be_Removed_Only_For_Board_Scoped_Test_Logins()
+	{
+		TestLoginSeederContributor.ShouldRemoveAcademicYearWidePermissions("principal-gseb@ddvs.com")
+			.ShouldBeTrue();
+		TestLoginSeederContributor.ShouldRemoveAcademicYearWidePermissions("principal-cbse@ddvs.com")
+			.ShouldBeTrue();
+		TestLoginSeederContributor.ShouldRemoveAcademicYearWidePermissions("admin-ddvs@ddvs.com")
+			.ShouldBeFalse();
+		TestLoginSeederContributor.ShouldRemoveAcademicYearWidePermissions(
+			"principal-gseb@ddvs.com",
+			requiresAcademicYearWideScope: true)
+			.ShouldBeFalse();
 	}
 
 	[Fact]

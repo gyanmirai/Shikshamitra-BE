@@ -61,8 +61,9 @@ public class AdmissionsCrmMigrationGuard_Tests
 		staging.RootElement.GetProperty("SeedTestLogins").GetBoolean().ShouldBeTrue();
 		staging.RootElement.TryGetProperty("ShikshaMitra", out _).ShouldBeFalse(
 			"stage startup must not force every demo seeder to rerun");
+		seederOrchestrator.ShouldContain("TestLoginSeeder:v8");
 		seederOrchestrator.ShouldContain("EmployeeAcademicPermissionSeeder:v5");
-		seederOrchestrator.ShouldContain("AcademicPermissionUserScopeSeeder:v8");
+		seederOrchestrator.ShouldContain("AcademicPermissionUserScopeSeeder:v9");
 	}
 
 	private static string FindRepositoryRoot([CallerFilePath] string sourceFilePath = "")

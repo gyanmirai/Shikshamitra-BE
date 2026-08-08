@@ -85,6 +85,10 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			{
 				await EnsureAcademicYearWidePermissionsAsync(user);
 			}
+			else if (ShouldRemoveAcademicYearWidePermissions(spec.Email, spec.RequiresAcademicYearWideScope))
+			{
+				await RemoveAcademicYearWidePermissionsAsync(user);
+			}
 		}
 
 		await CurrentUnitOfWork.SaveChangesAsync();
@@ -108,12 +112,18 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			.Select(x => x.Email)
 			.ToList();
 
+	internal static bool ShouldRemoveAcademicYearWidePermissions(
+		string email,
+		bool requiresAcademicYearWideScope = false) =>
+		!requiresAcademicYearWideScope &&
+		SeededEmployeeAcademicScopePolicy.GetRequiredBoard(email).HasValue;
+
 	private static IReadOnlyList<TestLoginSpec> BuildCredentialSpecs() =>
 		new List<TestLoginSpec>
 		{
 			new("admin-ddvs", "admin-ddvs@ddvs.com", "Admin", "DDVS", "admin", ["admin1@gmail.com", "ddvs@gmail.com"], ["admin1"]),
 			new("admin-ops", "admin-ops@ddvs.com", "Admin", "Operations", "admin", ["admin2@ddvs.com"], ["admin2"]),
-			new("principal-gseb", "principal-gseb@ddvs.com", "Principal", "GSEB", "Principal", ["principal1@ddvs.com", "rajesh.kumar@school.edu", "hiren.vadher@ddvs.com"], ["principal1"], RequiresAcademicYearWideScope: true),
+			new("principal-gseb", "principal-gseb@ddvs.com", "Principal", "GSEB", "Principal", ["principal1@ddvs.com", "rajesh.kumar@school.edu", "hiren.vadher@ddvs.com"], ["principal1"]),
 			new("principal-cbse", "principal-cbse@ddvs.com", "Principal", "CBSE", "Principal", ["principle1@ddvs.com"], ["principle1"]),
 			new("teacher-gseb", "teacher-gseb@ddvs.com", "Teacher", "GSEB", "Teacher", ["teacher1@ddvs.com", "vikram.singh@school.edu", "sweta.badgujar@ddvs.com"], ["teacher1"]),
 			new("admissions-reception", "admissions-reception@ddvs.com", "Admissions", "Reception", "Admissions Receptionist", [], []),
@@ -272,6 +282,21 @@ public class TestLoginSeederContributor : BaseSeederContributor
 			"Seeded academic-year-wide permissions for test login {UserName}. AcademicYearCount={AcademicYearCount}",
 			user.UserName,
 			missingYearIds.Count);
+	}
+
+	private async Task RemoveAcademicYearWidePermissionsAsync(IdentityUser user)
+	{
+		var permissions = await _academicYearPermissionRepository.GetListAsync(x => x.UserId == user.Id);
+		if (permissions.Count == 0)
+		{
+			return;
+		}
+
+		await _academicYearPermissionRepository.DeleteManyAsync(permissions, autoSave: false);
+		_logger.LogInformation(
+			"Removed academic-year-wide permissions from board-scoped test login {UserName}. AcademicYearCount={AcademicYearCount}",
+			user.UserName,
+			permissions.Count);
 	}
 
 	private async Task LinkEmployeeAliasesToUserAsync(IdentityUser user, TestLoginSpec spec)

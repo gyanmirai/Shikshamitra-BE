@@ -264,9 +264,9 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 				intendedRouteType,
 				intendedRouteDefinitionId: null,
 				intendedRouteDefinitionVersion: null,
-				intendedRouteNameSnapshot: intendedRouteType.HasValue
-					? GetAdmissionRouteLabel(intendedRouteType.Value)
-					: null);
+				// A route label snapshot is definition metadata and cannot be stored without
+				// a matching definition id/version. The enum route remains authoritative here.
+				intendedRouteNameSnapshot: null);
 			lead.ApplyInquiryType(inquiryType?.Id, inquiryType?.DisplayName);
 			if (admissionYearSetup is not null)
 			{
@@ -1001,25 +1001,6 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			},
 			JsonOptions);
 	}
-
-	private static string GetAdmissionRouteLabel(AdmissionCrmRouteType routeType) => routeType switch
-	{
-		AdmissionCrmRouteType.Fresh => "Fresh admission",
-		AdmissionCrmRouteType.SiblingPriority => "Sibling priority",
-		AdmissionCrmRouteType.AlumniPreference => "Alumni preference",
-		AdmissionCrmRouteType.StaffChild => "Staff child",
-		AdmissionCrmRouteType.RteEws => "RTE / EWS",
-		AdmissionCrmRouteType.Transfer => "Transfer",
-		AdmissionCrmRouteType.Lateral => "Lateral entry",
-		AdmissionCrmRouteType.MidYear => "Mid-year admission",
-		AdmissionCrmRouteType.ReturningStudent => "Returning student",
-		AdmissionCrmRouteType.Interstate => "Interstate transfer",
-		AdmissionCrmRouteType.OverseasReturn => "Overseas return",
-		AdmissionCrmRouteType.Direct => "Direct registration",
-		AdmissionCrmRouteType.ManagementApproved => "Management approved",
-		AdmissionCrmRouteType.SchoolDefined => "School-defined",
-		_ => routeType.ToString()
-	};
 
 	private async Task<(AdmissionApplicantStatusAccess Access, AdmissionInquiryLead Lead)> GetStatusAccessAndLeadAsync(
 		string token)

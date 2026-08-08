@@ -166,8 +166,8 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 		TenantStep<Seeders.ReconciliationSeederContributor>(serviceProvider, "ReconciliationSeeder", "ReconciliationSeeder:v1", 210, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.ConcessionTypeSeederContributor>(serviceProvider, "ConcessionTypeSeeder", "ConcessionTypeSeeder:v1", 220, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<ConcessionType>(serviceProvider)),
 		TenantStep<Seeders.TestLoginSeederContributor>(serviceProvider, "TestLoginSeeder", "TestLoginSeeder:v7", 230, Seeders.ShikshaMitraSeederProfile.Demo),
-		TenantStep<Seeders.EmployeeAcademicPermissionSeederContributor>(serviceProvider, "EmployeeAcademicPermissionSeeder", "EmployeeAcademicPermissionSeeder:v4", 235, Seeders.ShikshaMitraSeederProfile.Demo),
-		TenantStep<Seeders.AcademicPermissionUserScopeSeederContributor>(serviceProvider, "AcademicPermissionUserScopeSeeder", "AcademicPermissionUserScopeSeeder:v7", 240, Seeders.ShikshaMitraSeederProfile.Demo)
+		TenantStep<Seeders.EmployeeAcademicPermissionSeederContributor>(serviceProvider, "EmployeeAcademicPermissionSeeder", "EmployeeAcademicPermissionSeeder:v5", 235, Seeders.ShikshaMitraSeederProfile.Demo),
+		TenantStep<Seeders.AcademicPermissionUserScopeSeederContributor>(serviceProvider, "AcademicPermissionUserScopeSeeder", "AcademicPermissionUserScopeSeeder:v8", 240, Seeders.ShikshaMitraSeederProfile.Demo)
 	];
 
 	private static Seeders.IShikshaMitraSeederStep TenantStep<TSeeder>(

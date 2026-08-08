@@ -35,6 +35,12 @@ public class AdmissionsCrmMigrationGuard_Tests
 		var repoRoot = FindRepositoryRoot();
 		var hostRoot = Path.Combine(repoRoot, "src", "ShikshaMitra.HttpApi.Host");
 		var program = File.ReadAllText(Path.Combine(hostRoot, "Program.cs"));
+		var seederOrchestrator = File.ReadAllText(Path.Combine(
+			repoRoot,
+			"src",
+			"ShikshaMitra.Domain",
+			"Seeders",
+			"ShikshaMitraSeederContributor.cs"));
 		using var staging = JsonDocument.Parse(
 			File.ReadAllText(Path.Combine(hostRoot, "appsettings.Staging.json")));
 
@@ -49,6 +55,10 @@ public class AdmissionsCrmMigrationGuard_Tests
 			.GetBoolean()
 			.ShouldBeTrue();
 		staging.RootElement.GetProperty("SeedTestLogins").GetBoolean().ShouldBeTrue();
+		staging.RootElement.TryGetProperty("ShikshaMitra", out _).ShouldBeFalse(
+			"stage startup must not force every demo seeder to rerun");
+		seederOrchestrator.ShouldContain("EmployeeAcademicPermissionSeeder:v5");
+		seederOrchestrator.ShouldContain("AcademicPermissionUserScopeSeeder:v8");
 	}
 
 	private static string FindRepositoryRoot([CallerFilePath] string sourceFilePath = "")

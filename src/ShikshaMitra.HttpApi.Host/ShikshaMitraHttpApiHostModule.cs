@@ -107,6 +107,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		var hostingEnvironment = context.Services.GetHostingEnvironment();
 		var services = context.Services;
 		services.AddHttpClient();
+		services.AddHostedService<StagingDatabaseMigrationHostedService>();
 
 		if (hostingEnvironment.IsDevelopment() && configuration.GetValue<bool>("DevAutoAuth:Enabled"))
 		{

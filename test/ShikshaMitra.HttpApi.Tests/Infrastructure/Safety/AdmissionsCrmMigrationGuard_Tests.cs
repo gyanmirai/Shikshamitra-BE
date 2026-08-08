@@ -34,7 +34,10 @@ public class AdmissionsCrmMigrationGuard_Tests
 	{
 		var repoRoot = FindRepositoryRoot();
 		var hostRoot = Path.Combine(repoRoot, "src", "ShikshaMitra.HttpApi.Host");
-		var program = File.ReadAllText(Path.Combine(hostRoot, "Program.cs"));
+		var hostModule = File.ReadAllText(Path.Combine(hostRoot, "ShikshaMitraHttpApiHostModule.cs"));
+		var migrationWorker = File.ReadAllText(Path.Combine(
+			hostRoot,
+			"StagingDatabaseMigrationHostedService.cs"));
 		var seederOrchestrator = File.ReadAllText(Path.Combine(
 			repoRoot,
 			"src",
@@ -44,10 +47,11 @@ public class AdmissionsCrmMigrationGuard_Tests
 		using var staging = JsonDocument.Parse(
 			File.ReadAllText(Path.Combine(hostRoot, "appsettings.Staging.json")));
 
-		program.ShouldContain("DatabaseMigrations:RunOnStartup");
-		program.ShouldContain("GetRequiredService<ShikshaMitraDbMigrationService>()");
-		program.IndexOf("MigrateAsync()", System.StringComparison.Ordinal)
-			.ShouldBeLessThan(program.IndexOf("app.RunAsync()", System.StringComparison.Ordinal));
+		hostModule.ShouldContain("AddHostedService<StagingDatabaseMigrationHostedService>()");
+		migrationWorker.ShouldContain("DatabaseMigrations:RunOnStartup");
+		migrationWorker.ShouldContain("BackgroundService");
+		migrationWorker.ShouldContain("GetRequiredService<ShikshaMitraDbMigrationService>()");
+		migrationWorker.ShouldContain("MigrateAsync()");
 
 		staging.RootElement
 			.GetProperty("DatabaseMigrations")

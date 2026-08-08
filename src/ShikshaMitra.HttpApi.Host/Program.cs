@@ -1,10 +1,8 @@
 ﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
-using ShikshaMitra.Data;
 using System;
 using System.Threading.Tasks;
 
@@ -36,14 +34,6 @@ public class Program
 			await builder.AddApplicationAsync<ShikshaMitraHttpApiHostModule>();
 			var app = builder.Build();
 			await app.InitializeApplicationAsync();
-			if (app.Configuration.GetValue<bool>("DatabaseMigrations:RunOnStartup"))
-			{
-				Log.Information("Running configured database migrations before accepting requests.");
-				await using var scope = app.Services.CreateAsyncScope();
-				await scope.ServiceProvider
-					.GetRequiredService<ShikshaMitraDbMigrationService>()
-					.MigrateAsync();
-			}
 			await app.RunAsync();
 			return 0;
 		}

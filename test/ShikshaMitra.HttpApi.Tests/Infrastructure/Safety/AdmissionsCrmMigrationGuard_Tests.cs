@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -25,6 +26,29 @@ public class AdmissionsCrmMigrationGuard_Tests
 
 		text.ShouldContain("StageKey = table.Column<string>");
 		text.ShouldContain("columns: new[] { \"TenantId\", \"AcademicYearId\", \"StageKey\" }");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Staging_Host_Should_Apply_Migrations_Before_Accepting_Requests()
+	{
+		var repoRoot = FindRepositoryRoot();
+		var hostRoot = Path.Combine(repoRoot, "src", "ShikshaMitra.HttpApi.Host");
+		var program = File.ReadAllText(Path.Combine(hostRoot, "Program.cs"));
+		using var staging = JsonDocument.Parse(
+			File.ReadAllText(Path.Combine(hostRoot, "appsettings.Staging.json")));
+
+		program.ShouldContain("DatabaseMigrations:RunOnStartup");
+		program.ShouldContain("GetRequiredService<ShikshaMitraDbMigrationService>()");
+		program.IndexOf("MigrateAsync()", System.StringComparison.Ordinal)
+			.ShouldBeLessThan(program.IndexOf("app.RunAsync()", System.StringComparison.Ordinal));
+
+		staging.RootElement
+			.GetProperty("DatabaseMigrations")
+			.GetProperty("RunOnStartup")
+			.GetBoolean()
+			.ShouldBeTrue();
+		staging.RootElement.GetProperty("SeedTestLogins").GetBoolean().ShouldBeTrue();
 	}
 
 	private static string FindRepositoryRoot([CallerFilePath] string sourceFilePath = "")

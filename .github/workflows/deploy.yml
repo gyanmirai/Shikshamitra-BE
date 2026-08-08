@@ -54,22 +54,6 @@ jobs:
     - name: Publish
       run: dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish
 
-    - name: Publish database migrator
-      run: dotnet publish src/ShikshaMitra.DbMigrator -c Release -o ./dbmigrator
-
-    - name: Package database migrator
-      shell: pwsh
-      run: Compress-Archive -Path ./dbmigrator/* -DestinationPath ./dbmigrator.zip
-
-    - name: Apply database migrations and seed data
-      shell: pwsh
-      env:
-        AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-      run: |
-        ./scripts/deployment/Invoke-AzureDbMigrator.ps1 `
-          -PublishProfile $env:AZURE_PUBLISH_PROFILE `
-          -PackagePath ./dbmigrator.zip
-
     # ⭐ Deploy using Publish Profile
     - name: Deploy to Azure Web App
       id: deploy
@@ -86,7 +70,7 @@ jobs:
         $healthUri = 'https://stage-api.gyanmirai.in/.well-known/openid-configuration'
         $lastStatus = 'no response'
 
-        foreach ($attempt in 1..24) {
+        foreach ($attempt in 1..60) {
           try {
             $response = Invoke-WebRequest `
               -Uri $healthUri `
@@ -104,11 +88,11 @@ jobs:
             $lastStatus = $_.Exception.Message
           }
 
-          Write-Output "Staging API is not ready (attempt $attempt/24; status: $lastStatus)."
+          Write-Output "Staging API is not ready (attempt $attempt/60; status: $lastStatus)."
           Start-Sleep -Seconds 10
         }
 
-        Write-Error "Staging API startup check failed after 24 attempts (last status: $lastStatus)."
+        Write-Error "Staging API startup check failed after 60 attempts (last status: $lastStatus)."
 
     - name: Collect Azure startup diagnostics
       if: failure() && steps.deploy.outcome == 'success'

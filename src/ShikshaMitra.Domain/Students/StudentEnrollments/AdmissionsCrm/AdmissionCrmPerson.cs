@@ -57,6 +57,21 @@ public class AdmissionCrmPerson : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? phone, string? email, AdmissionCrmPersonProvenance provenance,
 		bool verified, DateTime? verifiedAt)
 	{
+		if (!AdmissionCrmContactRules.IsValidPhone(phone))
+		{
+			throw new BusinessException("AdmissionCrm:InvalidContactNumber");
+		}
+
+		if (!AdmissionCrmContactRules.IsValidEmail(email))
+		{
+			throw new BusinessException("AdmissionCrm:InvalidEmail");
+		}
+
+		if (dateOfBirth?.Date > DateTime.UtcNow.Date)
+		{
+			throw new BusinessException("AdmissionCrm:FutureDateOfBirth");
+		}
+
 		if (CoreIdentityVerified && !verified && CoreValuesDiffer(firstName, middleName, lastName, dateOfBirth))
 		{
 			throw new BusinessException("AdmissionCrm:VerifiedPersonIdentityCannotBeOverwritten");

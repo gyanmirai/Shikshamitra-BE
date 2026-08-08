@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.Students.Compliance;
 using Volo.Abp.Application.Dtos;
 
@@ -18,15 +19,37 @@ public class AdmissionCrmAddressDto
 	public bool IsVerified { get; set; }
 }
 
-public class AdmissionCrmPersonInputDto
+public class AdmissionCrmPersonInputDto : IValidatableObject
 {
+	[Required, MaxLength(AdmissionCrmConsts.MaxNameLength)]
 	public string FirstName { get; set; } = string.Empty;
+	[MaxLength(AdmissionCrmConsts.MaxNameLength)]
 	public string? MiddleName { get; set; }
+	[MaxLength(AdmissionCrmConsts.MaxNameLength)]
 	public string? LastName { get; set; }
 	public DateTime? DateOfBirth { get; set; }
+	[MaxLength(AdmissionCrmConsts.MaxContactLength)]
 	public string? Phone { get; set; }
+	[EmailAddress, MaxLength(AdmissionCrmConsts.MaxEmailLength)]
 	public string? Email { get; set; }
 	public AdmissionCrmPersonProvenance Provenance { get; set; } = AdmissionCrmPersonProvenance.StaffSupplied;
+
+	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+	{
+		if (!AdmissionCrmContactRules.IsValidPhone(Phone))
+		{
+			yield return new ValidationResult(
+				"Enter a valid contact number containing 7 to 15 digits.",
+				new[] { nameof(Phone) });
+		}
+
+		if (DateOfBirth?.Date > DateTime.UtcNow.Date)
+		{
+			yield return new ValidationResult(
+				"Date of birth cannot be in the future.",
+				new[] { nameof(DateOfBirth) });
+		}
+	}
 }
 
 public class AdmissionCrmPersonDto : EntityDto<Guid>
@@ -65,10 +88,10 @@ public class CreateAdmissionCrmApplicantIdentityProfileDto
 	public AdmissionCrmPersonInputDto Applicant { get; set; } = new();
 }
 
-public class CreateAdmissionCrmGuardianRelationshipDto
+public class CreateAdmissionCrmGuardianRelationshipDto : IValidatableObject
 {
 	public Guid? ExistingGuardianPersonId { get; set; }
-	public AdmissionCrmPersonInputDto Guardian { get; set; } = new();
+	public AdmissionCrmPersonInputDto? Guardian { get; set; }
 	public AdmissionCrmGuardianRelationshipType RelationshipType { get; set; }
 	public bool IsPrimaryContact { get; set; }
 	public bool IsEmergencyContact { get; set; }
@@ -77,6 +100,16 @@ public class CreateAdmissionCrmGuardianRelationshipDto
 	public bool HasPickupAuthorization { get; set; }
 	public bool HasPortalAccess { get; set; }
 	public int CommunicationPriority { get; set; }
+
+	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+	{
+		if (!ExistingGuardianPersonId.HasValue && Guardian == null)
+		{
+			yield return new ValidationResult(
+				"Guardian details are required when an existing guardian is not selected.",
+				new[] { nameof(Guardian) });
+		}
+	}
 }
 
 public class AdmissionCrmGuardianRelationshipDto : EntityDto<Guid>

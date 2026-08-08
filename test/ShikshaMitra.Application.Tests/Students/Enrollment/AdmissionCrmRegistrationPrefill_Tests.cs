@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Text.Json;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using Shouldly;
 using Xunit;
@@ -34,6 +36,77 @@ public class AdmissionCrmRegistrationPrefill_Tests
 		prefill["admissionRoute"].ShouldBe(nameof(AdmissionCrmRouteType.SiblingPriority));
 		prefill["admissionRouteDefinitionId"].ShouldBeNull();
 		prefill["admissionRouteDefinitionVersion"].ShouldBeNull();
+	}
+
+	[Fact]
+	public void Should_Match_Camel_Case_Prefill_To_Pascal_Case_System_Fields()
+	{
+		var now = DateTime.UtcNow;
+		var lead = CreateLead(AdmissionCrmRouteType.Fresh);
+		var template = new AdmissionCrmRegistrationTemplateDto
+		{
+			Id = Guid.NewGuid(),
+			AcademicYearId = Guid.NewGuid(),
+			Name = "Registration",
+			Version = 1,
+			Sections =
+			[
+				new AdmissionCrmRegistrationSectionDto
+				{
+					Key = "student",
+					Title = "Student details",
+					Fields =
+					[
+						new AdmissionCrmRegistrationFieldDto
+						{
+							Key = "firstName",
+							Label = "First name",
+							SystemField = "FirstName",
+							Required = true
+						},
+						new AdmissionCrmRegistrationFieldDto
+						{
+							Key = "parentName",
+							Label = "Parent name",
+							SystemField = "ParentGuardianName",
+							Required = true
+						},
+						new AdmissionCrmRegistrationFieldDto
+						{
+							Key = "phone",
+							Label = "Phone",
+							SystemField = "PrimaryContactNo",
+							FieldType = AdmissionCrmFormFieldType.Phone,
+							Required = true
+						}
+					]
+				}
+			]
+		};
+		var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+		var application = new AdmissionCrmRegistrationApplication(
+			Guid.NewGuid(),
+			null,
+			template.AcademicYearId,
+			lead.Id,
+			template.Id,
+			template.Version,
+			null,
+			"REG-00001",
+			JsonSerializer.Serialize(template, jsonOptions),
+			JsonSerializer.Serialize(AdmissionCrmRegistrationAppService.BuildPrefill(lead), jsonOptions),
+			now,
+			now.AddDays(14),
+			0);
+
+		var completion = AdmissionCrmRegistrationResponseValidator.Validate(
+			application,
+			template,
+			new Dictionary<string, JsonElement>(),
+			requireComplete: true,
+			allowStaffManagedFields: true);
+
+		completion.ShouldBe(100);
 	}
 
 	private static AdmissionInquiryLead CreateLead(

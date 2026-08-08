@@ -418,6 +418,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		SaveAdmissionCrmRegistrationResponsesDto input)
 	{
 		var application = await GetApplicationForTenantAsync(id, nameof(SaveStaffResponsesAsync));
+		application.EnsureResponseVersion(input.ConcurrencyStamp);
 		var template = AdmissionCrmRegistrationResponseValidator.DeserializeTemplate(
 			application.TemplateSnapshotJson);
 		if (!template.AllowPartialSave)
@@ -446,6 +447,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		SaveAdmissionCrmRegistrationResponsesDto input)
 	{
 		var application = await GetApplicationForTenantAsync(id, nameof(SubmitStaffResponsesAsync));
+		application.EnsureResponseVersion(input.ConcurrencyStamp);
 		var template = AdmissionCrmRegistrationResponseValidator.DeserializeTemplate(
 			application.TemplateSnapshotJson);
 		AdmissionCrmRegistrationResponseValidator.Validate(
@@ -1032,7 +1034,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		var snapshot = Deserialize<AdmissionCrmRegistrationTemplateDto>(application.TemplateSnapshotJson);
 		return new AdmissionCrmRegistrationApplicationDto
 		{
-			Id = application.Id, AcademicYearId = application.AcademicYearId, LeadId = application.LeadId,
+			Id = application.Id, ConcurrencyStamp = application.ConcurrencyStamp, AcademicYearId = application.AcademicYearId, LeadId = application.LeadId,
 			RegistrationTemplateId = application.RegistrationTemplateId, RegistrationTemplateVersion = application.RegistrationTemplateVersion,
 			PlaybookId = application.PlaybookId, FormNumber = application.FormNumber, Status = application.Status, Sections = snapshot.Sections,
 			Provenance = application.Provenance, DataEntryState = application.DataEntryState,

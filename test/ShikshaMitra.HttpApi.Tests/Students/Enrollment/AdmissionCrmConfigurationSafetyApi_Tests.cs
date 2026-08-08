@@ -88,17 +88,61 @@ public class AdmissionCrmConfigurationSafetyApi_Tests : ShikshaMitraApiTestBase
 		updateResponse.StatusCode.ShouldBe(
 			HttpStatusCode.OK,
 			await updateResponse.Content.ReadAsStringAsync());
+		var publishInput = new PublishAdmissionCrmAdmissionYearSetupDto
+		{
+			ConcurrencyStamp = (await updateResponse.Content
+				.ReadFromJsonAsync<AdmissionCrmAdmissionYearSetupDto>(JsonOptions))!
+				.ConcurrencyStamp
+		};
+
+		var missingSourceResponse = await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/setup/admission-years/{draft.Id}/publish",
+			JsonContent.Create(publishInput, options: JsonOptions));
+		missingSourceResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await missingSourceResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:ActiveInquirySourceRequired");
+
+		var sourceResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/catalog/inquiry-sources",
+			new AdmissionCrmInquirySourceUpsertDto
+			{
+				Code = "QUICK",
+				DisplayName = "Quick inquiry",
+				AllowedChannels = [AdmissionInquiryChannel.QuickCallEntry]
+			},
+			JsonOptions);
+		sourceResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await sourceResponse.Content.ReadAsStringAsync());
+		var inquirySource = await sourceResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmInquirySourceDto>(JsonOptions);
+		inquirySource.ShouldNotBeNull();
+
+		var missingTypeResponse = await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/setup/admission-years/{draft.Id}/publish",
+			JsonContent.Create(publishInput, options: JsonOptions));
+		missingTypeResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await missingTypeResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:ActiveInquiryTypeRequired");
+
+		var typeResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/catalog/inquiry-types",
+			new AdmissionCrmInquiryTypeUpsertDto
+			{
+				Code = "STANDARD",
+				DisplayName = "Standard inquiry"
+			},
+			JsonOptions);
+		typeResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await typeResponse.Content.ReadAsStringAsync());
+		var inquiryType = await typeResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmInquiryTypeDto>(JsonOptions);
+		inquiryType.ShouldNotBeNull();
 
 		var publishResponse = await Client.PostAsync(
 			$"/api/student-enrollment/admissions-crm/setup/admission-years/{draft.Id}/publish",
-			JsonContent.Create(
-				new PublishAdmissionCrmAdmissionYearSetupDto
-				{
-					ConcurrencyStamp = (await updateResponse.Content
-						.ReadFromJsonAsync<AdmissionCrmAdmissionYearSetupDto>(JsonOptions))!
-						.ConcurrencyStamp
-				},
-				options: JsonOptions));
+			JsonContent.Create(publishInput, options: JsonOptions));
 		publishResponse.StatusCode.ShouldBe(
 			HttpStatusCode.OK,
 			await publishResponse.Content.ReadAsStringAsync());
@@ -113,6 +157,8 @@ public class AdmissionCrmConfigurationSafetyApi_Tests : ShikshaMitraApiTestBase
 			$"/api/student-enrollment/admissions-crm/{academicYearId}/leads",
 			new CreateAdmissionCrmLeadDto
 			{
+				InquirySourceId = inquirySource.Id,
+				InquiryTypeId = inquiryType.Id,
 				Channel = AdmissionInquiryChannel.QuickCallEntry,
 				FirstName = "Admission",
 				LastName = "Year",
@@ -134,6 +180,10 @@ public class AdmissionCrmConfigurationSafetyApi_Tests : ShikshaMitraApiTestBase
 		lead.ShouldNotBeNull();
 		lead.AdmissionYearSetupId.ShouldBe(published.Id);
 		lead.AdmissionYearSetupVersion.ShouldBe(1);
+		lead.IntendedRouteType.ShouldBe(AdmissionCrmRouteType.Fresh);
+		lead.IntendedRouteDefinitionId.ShouldBeNull();
+		lead.IntendedRouteDefinitionVersion.ShouldBeNull();
+		lead.IntendedRouteNameSnapshot.ShouldBeNull();
 
 		var progressResponse = await Client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/workspace/applicants/{lead.Id}/progress");

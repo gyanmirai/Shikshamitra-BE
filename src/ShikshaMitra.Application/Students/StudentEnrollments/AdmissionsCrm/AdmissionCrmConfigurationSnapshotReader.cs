@@ -33,10 +33,6 @@ public class AdmissionCrmConfigurationSnapshotReader(
 	IRepository<AdmissionCrmPolicyPack, Guid> policyPackRepository,
 	IRepository<AdmissionCrmNumberSeries, Guid> numberSeriesRepository,
 	IRepository<EducationBoard, Guid> educationBoardRepository,
-	IRepository<EducationMedium, Guid> educationMediumRepository,
-	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
-	IRepository<Standard, Guid> standardRepository,
-	IRepository<Division, Guid> divisionRepository,
 	IRepository<AdmissionInquiryLead, Guid> leadRepository,
 	IAsyncQueryableExecuter asyncExecuter,
 	ICurrentTenant currentTenant) : ITransientDependency
@@ -78,38 +74,26 @@ public class AdmissionCrmConfigurationSnapshotReader(
 		var policyAdoptions = await policyAdoptionRepository.GetQueryableAsync();
 		var numberSeries = await numberSeriesRepository.GetQueryableAsync();
 		var educationBoards = await educationBoardRepository.GetQueryableAsync();
-		var educationMediums = await educationMediumRepository.GetQueryableAsync();
-		var educationMediumStages = await educationMediumStageRepository.GetQueryableAsync();
-		var standards = await standardRepository.GetQueryableAsync();
-		var divisions = await divisionRepository.GetQueryableAsync();
 
 		var boardList = await asyncExecuter.ToListAsync(educationBoards.Where(x =>
 			x.TenantId == tenantId &&
 			x.AcademicYearId == academicYearId));
-		var boardIds = boardList.Select(x => x.Id).ToList();
-		var mediumList = boardIds.Count == 0
-			? []
-			: await asyncExecuter.ToListAsync(educationMediums.Where(x =>
-				x.TenantId == tenantId &&
-				boardIds.Contains(x.EducationBoardId)));
-		var mediumIds = mediumList.Select(x => x.Id).ToList();
-		var mediumStageList = mediumIds.Count == 0
-			? []
-			: await asyncExecuter.ToListAsync(educationMediumStages.Where(x =>
-				x.TenantId == tenantId &&
-				mediumIds.Contains(x.EducationMediumId)));
-		var mediumStageIds = mediumStageList.Select(x => x.Id).ToList();
-		var standardList = mediumStageIds.Count == 0
-			? []
-			: await asyncExecuter.ToListAsync(standards.Where(x =>
-				x.TenantId == tenantId &&
-				mediumStageIds.Contains(x.EducationMediumStageId)));
-		var standardIds = standardList.Select(x => x.Id).ToList();
-		var divisionList = standardIds.Count == 0
-			? []
-			: await asyncExecuter.ToListAsync(divisions.Where(x =>
-				x.TenantId == tenantId &&
-				standardIds.Contains(x.StandardId)));
+		var mediumList = boardList
+			.SelectMany(x => x.EducationMediums)
+			.Where(x => x.TenantId == tenantId)
+			.ToList();
+		var mediumStageList = mediumList
+			.SelectMany(x => x.EducationMediumStages)
+			.Where(x => x.TenantId == tenantId)
+			.ToList();
+		var standardList = mediumStageList
+			.SelectMany(x => x.Standards)
+			.Where(x => x.TenantId == tenantId)
+			.ToList();
+		var divisionList = standardList
+			.SelectMany(x => x.Divisions)
+			.Where(x => x.TenantId == tenantId)
+			.ToList();
 
 		var cycle = await asyncExecuter.FirstOrDefaultAsync(cycles.Where(x =>
 			x.TenantId == tenantId &&

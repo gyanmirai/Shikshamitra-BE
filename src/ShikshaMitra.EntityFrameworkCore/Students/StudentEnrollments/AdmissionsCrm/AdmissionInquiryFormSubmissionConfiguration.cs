@@ -22,8 +22,12 @@ public class AdmissionInquiryFormSubmissionConfiguration : IEntityTypeConfigurat
 			.HasMaxLength(AdmissionCrmConsts.MaxIpAddressLength);
 		builder.Property(x => x.UserAgent)
 			.HasMaxLength(AdmissionCrmConsts.MaxUserAgentLength);
+		builder.Property(x => x.SubmissionKey)
+			.HasMaxLength(AdmissionCrmConsts.MaxSubmissionKeyLength);
 
 		builder.HasIndex(x => new { x.TenantId, x.LeadId });
 		builder.HasIndex(x => new { x.TenantId, x.FormTemplateId });
+		builder.HasIndex(x => new { x.TenantId, x.FormTemplateId, x.SubmissionKey })
+			.IsUnique();
 	}
 }

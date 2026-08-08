@@ -461,10 +461,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			intendedRouteDefinition?.RouteType ?? input.IntendedRouteType,
 			intendedRouteDefinition?.Id,
 			intendedRouteDefinition?.Version,
-			intendedRouteDefinition?.Name ??
-				(input.IntendedRouteType.HasValue
-					? GetAdmissionRouteLabel(input.IntendedRouteType.Value)
-					: null));
+			intendedRouteDefinition?.Name);
 		lead.ApplyInquiryType(inquiryType?.Id, inquiryType?.DisplayName);
 		if (admissionYearSetup is not null)
 		{
@@ -1103,13 +1100,23 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			x.AcademicYearId == academicYearId &&
 			x.Stage != AdmissionInquiryStage.Archived &&
 			x.Stage != AdmissionInquiryStage.Eligible &&
-			x.Stage != AdmissionInquiryStage.Rejected &&
-			x.LastActivityTime <= staleBefore);
+			x.Stage != AdmissionInquiryStage.Rejected);
 		if (enforceUserScope)
 		{
 			activeLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(activeLeadQuery);
 		}
-		var candidates = await AsyncExecuter.ToListAsync(activeLeadQuery);
+		var activityCandidates = await AsyncExecuter.ToListAsync(activeLeadQuery.Select(x => new
+		{
+			x.Id,
+			x.LastActivityTime
+		}));
+		var candidateIds = activityCandidates
+			.Where(x => x.LastActivityTime <= staleBefore)
+			.Select(x => x.Id)
+			.ToList();
+		var candidates = candidateIds.Count == 0
+			? []
+			: await AsyncExecuter.ToListAsync(activeLeadQuery.Where(x => candidateIds.Contains(x.Id)));
 
 		var result = new AdmissionCrmStaleArchiveRunResultDto();
 		var markedStaleLeadIds = new List<Guid>();
@@ -1281,13 +1288,23 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			x.AcademicYearId == academicYearId &&
 			x.Stage != AdmissionInquiryStage.Archived &&
 			x.Stage != AdmissionInquiryStage.Eligible &&
-			x.Stage != AdmissionInquiryStage.Rejected &&
-			x.LastActivityTime <= earliestCandidateActivity);
+			x.Stage != AdmissionInquiryStage.Rejected);
 		if (enforceUserScope)
 		{
 			activeLeadQuery = await _studentScopeAccessService.ApplyCurrentUserAdmissionLeadScopeAsync(activeLeadQuery);
 		}
-		var activeLeads = await AsyncExecuter.ToListAsync(activeLeadQuery);
+		var activityCandidates = await AsyncExecuter.ToListAsync(activeLeadQuery.Select(x => new
+		{
+			x.Id,
+			x.LastActivityTime
+		}));
+		var activityCandidateIds = activityCandidates
+			.Where(x => x.LastActivityTime <= earliestCandidateActivity)
+			.Select(x => x.Id)
+			.ToList();
+		var activeLeads = activityCandidateIds.Count == 0
+			? []
+			: await AsyncExecuter.ToListAsync(activeLeadQuery.Where(x => activityCandidateIds.Contains(x.Id)));
 		var activeLeadIds = activeLeads.Select(x => x.Id).ToList();
 		var holdQueryable = await _slaHoldRepository.GetQueryableAsync();
 		List<AdmissionCrmSlaHold> holds = activeLeadIds.Count == 0

@@ -35,6 +35,8 @@ public class AcademicPermissionUserScopeSyncer(
 	ILogger<AcademicPermissionUserScopeSyncer> logger)
 	: DomainService
 {
+	private const string DerivedScopeDescription = "Derived from Academic Permissions.";
+
 	public async Task<int> SyncAsync()
 	{
 		logger.LogInformation("[AcademicPermissionUserScopeSyncer] Starting sync.");
@@ -44,24 +46,44 @@ public class AcademicPermissionUserScopeSyncer(
 			"[AcademicPermissionUserScopeSyncer] Loaded existing scopes. Count={ExistingScopeCount}",
 			existingScopes.Count);
 
-		var existingKeys = existingScopes
-			.Where(x => x.IsActive && !x.IsDeleted && x.UserId.HasValue)
-			.Select(ScopeKey.FromAssignment)
-			.ToHashSet();
-
 		var desiredScopes = await BuildDesiredScopesAsync();
 		logger.LogInformation(
 			"[AcademicPermissionUserScopeSyncer] Built desired scopes. Count={DesiredScopeCount}",
 			desiredScopes.Count);
 		var changedUserIds = new HashSet<Guid>();
+		await DeactivateObsoleteDerivedScopesAsync(existingScopes, desiredScopes, changedUserIds);
+
+		var existingKeys = existingScopes
+			.Where(x => x.IsActive && !x.IsDeleted && x.UserId.HasValue)
+			.Select(ScopeKey.FromAssignment)
+			.ToHashSet();
+		var inactiveDerivedScopesByKey = existingScopes
+			.Where(x =>
+				!x.IsActive &&
+				!x.IsDeleted &&
+				x.UserId.HasValue &&
+				string.Equals(x.Description, DerivedScopeDescription, StringComparison.Ordinal))
+			.GroupBy(ScopeKey.FromAssignment)
+			.ToDictionary(x => x.Key, x => x.First());
 		var assignmentsToInsert = new List<UserScopeAssignment>();
 
 		foreach (var desiredScope in desiredScopes.Distinct())
 		{
-			if (!existingKeys.Add(desiredScope))
+			if (existingKeys.Contains(desiredScope))
 			{
 				continue;
 			}
+
+			if (inactiveDerivedScopesByKey.TryGetValue(desiredScope, out var inactiveScope))
+			{
+				inactiveScope.Activate();
+				await userScopeRepository.UpdateAsync(inactiveScope, autoSave: false);
+				existingKeys.Add(desiredScope);
+				changedUserIds.Add(desiredScope.UserId);
+				continue;
+			}
+
+			existingKeys.Add(desiredScope);
 
 			assignmentsToInsert.Add(new UserScopeAssignment(
 				GuidGenerator.Create(),
@@ -73,7 +95,7 @@ public class AcademicPermissionUserScopeSyncer(
 				educationMediumStageId: desiredScope.EducationMediumStageId,
 				standardId: desiredScope.StandardId,
 				divisionId: desiredScope.DivisionId,
-				description: "Derived from Academic Permissions."));
+				description: DerivedScopeDescription));
 			changedUserIds.Add(desiredScope.UserId);
 		}
 
@@ -91,6 +113,32 @@ public class AcademicPermissionUserScopeSyncer(
 		}
 
 		return assignmentsToInsert.Count;
+	}
+
+	private async Task DeactivateObsoleteDerivedScopesAsync(
+		IEnumerable<UserScopeAssignment> existingScopes,
+		IReadOnlySet<ScopeKey> desiredScopes,
+		ISet<Guid> changedUserIds)
+	{
+		var obsoleteScopes = existingScopes
+			.Where(x =>
+				x.IsActive &&
+				!x.IsDeleted &&
+				x.UserId.HasValue &&
+				string.Equals(x.Description, DerivedScopeDescription, StringComparison.Ordinal) &&
+				!desiredScopes.Contains(ScopeKey.FromAssignment(x)))
+			.ToList();
+
+		foreach (var scope in obsoleteScopes)
+		{
+			scope.Deactivate();
+			await userScopeRepository.UpdateAsync(scope, autoSave: false);
+			changedUserIds.Add(scope.UserId!.Value);
+		}
+
+		logger.LogInformation(
+			"[AcademicPermissionUserScopeSyncer] Deactivated obsolete derived scopes. Count={DeactivatedScopeCount}",
+			obsoleteScopes.Count);
 	}
 
 	private async Task DeactivateLegacySeededScopesAsync(IEnumerable<UserScopeAssignment> existingScopes)

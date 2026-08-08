@@ -1119,7 +1119,8 @@ public class AdmissionCrmAnalyticsAppService : ApplicationService, IAdmissionCrm
 		{
 			ScheduledCount = scheduledCount,
 			PresentCount = presentCount,
-			AbsentCount = exams.Count(x => x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent),
+			AbsentCount = exams.Count(x => x.AttendanceStatus is AdmissionCrmExamAttendanceStatus.Absent or
+				AdmissionCrmExamAttendanceStatus.NoShow or AdmissionCrmExamAttendanceStatus.Excused),
 			NotMarkedCount = exams.Count(x => x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked),
 			PassCount = passCount,
 			FailCount = exams.Count(x => x.ExamStatus == EntranceExamStatusEnum.Fail),
@@ -1253,7 +1254,8 @@ public class AdmissionCrmAnalyticsAppService : ApplicationService, IAdmissionCrm
 					ClassName = group.Key.ClassName,
 					ScheduledCount = scheduledCount,
 					PresentCount = presentCount,
-					AbsentCount = group.Count(x => x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent),
+					AbsentCount = group.Count(x => x.AttendanceStatus is AdmissionCrmExamAttendanceStatus.Absent or
+						AdmissionCrmExamAttendanceStatus.NoShow or AdmissionCrmExamAttendanceStatus.Excused),
 					PassCount = passCount,
 					FailCount = group.Count(x => x.ExamStatus == EntranceExamStatusEnum.Fail),
 					EligibleCount = eligibleCount,

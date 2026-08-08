@@ -47,6 +47,13 @@ public class CreateAdmissionCrmLeadDto : IValidatableObject
 
 	public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
 	{
+		if (!AdmissionCrmContactRules.IsValidPhone(PrimaryContactNo))
+		{
+			yield return new ValidationResult(
+				"Enter a valid contact number containing 7 to 15 digits.",
+				new[] { nameof(PrimaryContactNo) });
+		}
+
 		if (string.IsNullOrWhiteSpace(PrimaryContactNo) && string.IsNullOrWhiteSpace(Email))
 		{
 			yield return new ValidationResult(

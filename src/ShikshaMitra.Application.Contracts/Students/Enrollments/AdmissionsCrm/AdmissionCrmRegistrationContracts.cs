@@ -202,12 +202,15 @@ public class AdmissionCrmDirectRegistrationResultDto
 
 public class SaveAdmissionCrmRegistrationResponsesDto
 {
+	[Required]
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public Dictionary<string, JsonElement> Responses { get; set; } = new();
 }
 
 public class AdmissionCrmRegistrationApplicationDto
 {
 	public Guid Id { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public Guid AcademicYearId { get; set; }
 	public Guid LeadId { get; set; }
 	public Guid RegistrationTemplateId { get; set; }
@@ -243,6 +246,8 @@ public class SavePublicAdmissionCrmRegistrationDto
 {
 	[Required]
 	public required string AccessSessionToken { get; set; }
+	[Required]
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public Dictionary<string, JsonElement> Responses { get; set; } = new();
 }
 

@@ -100,11 +100,7 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 			await _studentScopeAccessService.EnsureCanAccessAcademicYearAsync(slot.AcademicYearId, nameof(ScheduleAsync));
 		}
 
-		if (slot.StartDate <= DateTimeOffset.UtcNow)
-		{
-			throw new BusinessException("AdmissionCrm:ExamSlotAlreadyStarted")
-				.WithData("EntranceExamSlotId", slot.Id);
-		}
+		slot.EnsureCanAcceptReservation(Clock.Now);
 
 		if (!enforceUserScope && input.OverrideCapacity)
 		{
@@ -118,6 +114,10 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		var existing = await GetExamByLeadOrDefaultAsync(lead.Id);
 		var isReschedule = existing != null;
 		await EnsureSlotCapacityAsync(slot, input.OverrideCapacity, existing?.Id);
+		// Mark the shared slot aggregate as updated so ABP/EF advances its concurrency
+		// stamp atomically with the reservation. Do not replace the stamp manually:
+		// EF needs the loaded value as the optimistic-concurrency predicate.
+		await _slotRepository.UpdateAsync(slot, autoSave: false);
 
 		var now = Clock.Now;
 		var previousStage = lead.Stage;

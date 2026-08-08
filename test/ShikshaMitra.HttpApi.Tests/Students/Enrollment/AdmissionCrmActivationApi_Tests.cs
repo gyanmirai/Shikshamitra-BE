@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
@@ -57,6 +58,7 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 			JsonOptions);
 		leadResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await leadResponse.Content.ReadAsStringAsync());
 		var lead = (await leadResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions))!;
+		await SeedExistingStudentInDivisionAsync(placement);
 
 		var previewInput = new PreviewAdmissionCrmActivationDto
 		{
@@ -69,13 +71,16 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 			RequireStudentAccount = false,
 			RequireGuardianAccount = false
 		};
+		using var previewTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 		var blockedResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/activation/preview",
 			previewInput,
-			JsonOptions);
+			JsonOptions,
+			previewTimeout.Token);
 		blockedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await blockedResponse.Content.ReadAsStringAsync());
 		var blocked = (await blockedResponse.Content
 			.ReadFromJsonAsync<AdmissionCrmActivationPreviewDto>(JsonOptions))!;
+		blocked.DivisionOccupancy.ShouldBe(0);
 		var blockedRoute = blocked.Items.Single(item => item.Key == "admission_route");
 		blockedRoute.Status.ShouldBe(AdmissionCrmActivationStepStatus.Failed);
 		blockedRoute.Detail.ShouldContain("requires an evaluated route assignment");
@@ -641,6 +646,33 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 		{
 			var entity = await repository.GetAsync(id); entity.Submit(Guid.NewGuid()); entity.Publish(Guid.NewGuid());
 			await repository.UpdateAsync(entity); await uow.CompleteAsync();
+		}
+	}
+
+	private async Task SeedExistingStudentInDivisionAsync(AdmissionCrmPlacementOptionDto placement)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider.GetRequiredService<IRepository<Student, Guid>>();
+		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var existingStudent = new Student(
+				Guid.NewGuid(),
+				Guid.Parse(TestAuthHandler.TestTenantId),
+				"Existing",
+				null,
+				"Student",
+				Factory.SeededAcademicYearId,
+				placement.EducationBoardId,
+				placement.AcademicMediumId,
+				placement.AcademicMediumStageId,
+				placement.StandardId,
+				placement.DivisionId,
+				status: StudentLifeCycleStatusEnum.InActive);
+			await repository.InsertAsync(existingStudent);
+			await uow.CompleteAsync();
 		}
 	}
 

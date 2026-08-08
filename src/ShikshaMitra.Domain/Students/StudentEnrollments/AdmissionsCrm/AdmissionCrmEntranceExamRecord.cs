@@ -89,7 +89,8 @@ public class AdmissionCrmEntranceExamRecord : FullAuditedAggregateRoot<Guid>, IM
 
 	public void MarkAttendance(AdmissionCrmExamAttendanceStatus attendanceStatus, DateTime markedAt)
 	{
-		if (attendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked)
+		if (!Enum.IsDefined(attendanceStatus) ||
+		    attendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked)
 		{
 			throw new BusinessException("AdmissionCrm:InvalidAttendanceStatus");
 		}
@@ -103,7 +104,9 @@ public class AdmissionCrmEntranceExamRecord : FullAuditedAggregateRoot<Guid>, IM
 		AttendanceStatus = attendanceStatus;
 		AttendanceMarkedAt = markedAt;
 
-		if (attendanceStatus == AdmissionCrmExamAttendanceStatus.Absent)
+		if (attendanceStatus is AdmissionCrmExamAttendanceStatus.Absent or
+		    AdmissionCrmExamAttendanceStatus.NoShow or
+		    AdmissionCrmExamAttendanceStatus.Excused)
 		{
 			ExamStatus = EntranceExamStatusEnum.Absent;
 			EligibilityDecision = AdmissionCrmEligibilityDecision.Pending;
@@ -130,7 +133,9 @@ public class AdmissionCrmEntranceExamRecord : FullAuditedAggregateRoot<Guid>, IM
 		int? meritRank,
 		DateTime recordedAt)
 	{
-		if (AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent)
+		if (AttendanceStatus is AdmissionCrmExamAttendanceStatus.Absent or
+		    AdmissionCrmExamAttendanceStatus.NoShow or
+		    AdmissionCrmExamAttendanceStatus.Excused)
 		{
 			throw new BusinessException("AdmissionCrm:CannotRecordResultForAbsentApplicant")
 				.WithData("ExamRecordId", Id);

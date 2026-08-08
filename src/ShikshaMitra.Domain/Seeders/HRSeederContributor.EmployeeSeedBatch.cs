@@ -146,27 +146,16 @@ public partial class HRSeederContributor
 	{
 		var stages = (await _educationMediumStageRepository.GetQueryableAsync())
 			.OrderBy(x => x.Name)
-			.Select(x => new { x.Id, x.Name })
+			.Select(x => new SeededEmployeeAcademicScopePolicy.Stage(
+				x.Id,
+				x.Name,
+				x.EducationMedium.EducationBoard.Type))
 			.ToList();
 		if (stages.Count == 0)
 		{
 			return Array.Empty<Guid>();
 		}
 
-		var broadAccessRoles = new[] { "Director", "Principal", "Admin", "Administrative", "Manager", "Clerk", "Finance", "HR" };
-		if (broadAccessRoles.Any(token => roleName.Contains(token, StringComparison.OrdinalIgnoreCase)))
-		{
-			return stages.Select(x => x.Id).ToList();
-		}
-
-		var primary = stages.FirstOrDefault(x => x.Name.Contains("Primary", StringComparison.OrdinalIgnoreCase));
-		var secondary = stages.FirstOrDefault(x => x.Name.Contains("Secondary", StringComparison.OrdinalIgnoreCase));
-		if (roleName.Contains("Teacher", StringComparison.OrdinalIgnoreCase))
-		{
-			var preferred = StableSeedHash(email) % 2 == 0 ? primary ?? stages[0] : secondary ?? stages[^1];
-			return new[] { preferred.Id };
-		}
-
-		return new[] { stages[0].Id };
+		return SeededEmployeeAcademicScopePolicy.ResolveStageIds(roleName, email, stages);
 	}
 }

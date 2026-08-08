@@ -400,14 +400,15 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		var registrationPlaybookId = await CreatePublishedRegistrationPlaybookAsync(
 			AdmissionCrmRegistrationPath.RegistrationBeforeExam);
 
+		var issueInput = new IssueAdmissionCrmRegistrationApplicationDto
+		{
+			RegistrationTemplateId = published.Id,
+			FormNumberSeriesId = series.Id,
+			PlaybookId = registrationPlaybookId
+		};
 		var issueResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/issue",
-			new IssueAdmissionCrmRegistrationApplicationDto
-			{
-				RegistrationTemplateId = published.Id,
-				FormNumberSeriesId = series.Id,
-				PlaybookId = registrationPlaybookId
-			},
+			issueInput,
 			JsonOptions);
 		issueResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await issueResponse.Content.ReadAsStringAsync());
 		var issued = await issueResponse.Content.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
@@ -415,6 +416,41 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		issued.FormNumber.ShouldBe(series.NextPreview);
 		issued.RegistrationTemplateVersion.ShouldBe(1);
 		issued.ApplicantStatusPath.ShouldNotBeNullOrWhiteSpace();
+		var firstStatusPath = issued.ApplicantStatusPath;
+
+		var duplicateIssueResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/issue",
+			issueInput,
+			JsonOptions);
+		duplicateIssueResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await duplicateIssueResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:RegistrationApplicationAlreadyIssued");
+
+		var revokeResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/registrations/{issued.Id}/revoke",
+			new AdmissionCrmRegistrationReasonDto
+			{
+				Reason = "Applicant requested a controlled link replacement."
+			},
+			JsonOptions);
+		revokeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await revokeResponse.Content.ReadAsStringAsync());
+
+		var reissueResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/registrations/{issued.Id}/reissue",
+			new AdmissionCrmRegistrationReissueDto
+			{
+				LinkExpiryDays = 14,
+				Reason = "Applicant confirmed the replacement link."
+			},
+			JsonOptions);
+		reissueResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await reissueResponse.Content.ReadAsStringAsync());
+		var reissued = await reissueResponse.Content.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		reissued.ShouldNotBeNull();
+		reissued.Id.ShouldBe(issued.Id);
+		reissued.FormNumber.ShouldBe(issued.FormNumber);
+		reissued.ApplicantStatusPath.ShouldNotBeNullOrWhiteSpace();
+		reissued.ApplicantStatusPath.ShouldNotBe(firstStatusPath);
+		issued = reissued;
 		var issuedDocumentAvailabilityResponse = await Client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/documents/availability");
 		issuedDocumentAvailabilityResponse.StatusCode.ShouldBe(
@@ -504,6 +540,7 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			new
 			{
 				accessSessionToken = status.AccessSessionToken,
+				concurrencyStamp = status.Registration.ConcurrencyStamp,
 				responses = new { parentOccupation = "Engineer" }
 			},
 			JsonOptions);
@@ -513,11 +550,25 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		saved.Status.ShouldBe(AdmissionCrmRegistrationStatus.PartiallyCompleted);
 		saved.CompletionPercentage.ShouldBeGreaterThan(0);
 
+		var staleSaveResponse = await Client.PutAsJsonAsync(
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{token}/registration",
+			new
+			{
+				accessSessionToken = status.AccessSessionToken,
+				concurrencyStamp = status.Registration.ConcurrencyStamp,
+				responses = new { parentOccupation = "Stale overwrite" }
+			},
+			JsonOptions);
+		staleSaveResponse.IsSuccessStatusCode.ShouldBeFalse();
+		(await staleSaveResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:RegistrationConcurrencyConflict");
+
 		var incompleteSubmitResponse = await Client.PostAsJsonAsync(
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{token}/registration/submit",
 			new
 			{
 				accessSessionToken = status.AccessSessionToken,
+				concurrencyStamp = saved.ConcurrencyStamp,
 				responses = new { parentOccupation = "Engineer" }
 			},
 			JsonOptions);
@@ -529,6 +580,7 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			new
 			{
 				accessSessionToken = status.AccessSessionToken,
+				concurrencyStamp = saved.ConcurrencyStamp,
 				responses = new { parentOccupation = "Engineer", declarationAccepted = true }
 			},
 			JsonOptions);
@@ -546,6 +598,9 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			},
 			JsonOptions);
 		correctionResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await correctionResponse.Content.ReadAsStringAsync());
+		var returnedForCorrection = await correctionResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		returnedForCorrection.ShouldNotBeNull();
 		var correctionAvailabilityResponse = await Client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/documents/availability");
 		var correctionAvailability = (await correctionAvailabilityResponse.Content
@@ -559,6 +614,7 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			new
 			{
 				accessSessionToken = status.AccessSessionToken,
+				concurrencyStamp = returnedForCorrection.ConcurrencyStamp,
 				responses = new { parentOccupation = "Senior Engineer", declarationAccepted = true }
 			},
 			JsonOptions);
@@ -632,6 +688,22 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		uploadedChecklist.ShouldNotBeNull();
 		var firstDocument = uploadedChecklist.Documents.Single(x => x.RequirementKey == "birth-certificate");
 		firstDocument.Status.ShouldBe(AdmissionCrmApplicantDocumentStatus.Uploaded);
+		var downloadResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/documents/{firstDocument.Id}/download");
+		downloadResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await downloadResponse.Content.ReadAsStringAsync());
+		downloadResponse.Content.Headers.ContentType?.MediaType.ShouldBe("application/pdf");
+		var downloadName = downloadResponse.Content.Headers.ContentDisposition?.FileNameStar ??
+		                   downloadResponse.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+		downloadName.ShouldBe("birth.pdf");
+		(await downloadResponse.Content.ReadAsByteArrayAsync()).Take(5)
+			.ShouldBe(new byte[] { 0x25, 0x50, 0x44, 0x46, 0x2D });
+
+		using (var anonymousClient = CreateAnonymousClient())
+		{
+			var anonymousDownload = await anonymousClient.GetAsync(
+				$"/api/student-enrollment/admissions-crm/documents/{firstDocument.Id}/download");
+			anonymousDownload.StatusCode.ShouldBeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
+		}
 
 		var rejectResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/documents/{firstDocument.Id}/review",
@@ -838,6 +910,7 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 
 		var responses = new SaveAdmissionCrmRegistrationResponsesDto
 		{
+			ConcurrencyStamp = direct.Registration.ConcurrencyStamp,
 			Responses = new Dictionary<string, JsonElement>
 			{
 				["parentOccupation"] = JsonSerializer.SerializeToElement("Teacher"),
@@ -853,14 +926,15 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
 		saved.ShouldNotBeNull();
 		saved.Status.ShouldBe(AdmissionCrmRegistrationStatus.PartiallyCompleted);
+		responses.ConcurrencyStamp = saved.ConcurrencyStamp;
 
-		var submitResponse = await Client.PostAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/registrations/{direct.Registration.Id}/staff-submit",
-			responses,
-			JsonOptions);
-		submitResponse.StatusCode.ShouldBe(
-			HttpStatusCode.OK,
-			await submitResponse.Content.ReadAsStringAsync());
+		var submitPath = $"/api/student-enrollment/admissions-crm/registrations/{direct.Registration.Id}/staff-submit";
+		var submitResponses = await Task.WhenAll(
+			Client.PostAsJsonAsync(submitPath, responses, JsonOptions),
+			Client.PostAsJsonAsync(submitPath, responses, JsonOptions));
+		submitResponses.Count(response => response.StatusCode == HttpStatusCode.OK).ShouldBe(1);
+		submitResponses.Count(response => !response.IsSuccessStatusCode).ShouldBe(1);
+		var submitResponse = submitResponses.Single(response => response.StatusCode == HttpStatusCode.OK);
 		var submitted = await submitResponse.Content
 			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
 		submitted.ShouldNotBeNull();
@@ -1455,7 +1529,7 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		using var form = new MultipartFormDataContent();
 		form.Add(new StringContent(accessSessionToken), "AccessSessionToken");
 		form.Add(new StringContent(requirementKey), "RequirementKey");
-		var file = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(content));
+		var file = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("%PDF-1.4\n" + content));
 		file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
 		form.Add(file, "File", fileName);
 		return await Client.PostAsync(
@@ -1471,7 +1545,7 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 	{
 		using var form = new MultipartFormDataContent();
 		form.Add(new StringContent(requirementKey), "RequirementKey");
-		var file = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(content));
+		var file = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("%PDF-1.4\n" + content));
 		file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
 		form.Add(file, "File", fileName);
 		return await Client.PostAsync(

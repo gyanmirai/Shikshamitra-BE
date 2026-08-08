@@ -10,6 +10,7 @@ public static class AdmissionCrmConsts
 	public const int MaxCampaignLength = 120;
 	public const int MaxChannelLabelLength = 80;
 	public const int MaxNotesLength = 2000;
+	public const int MaxSubmissionKeyLength = 64;
 	public const int MaxCycleNameLength = 120;
 	public const int MaxPlaybookCodeLength = 50;
 	public const int MaxPlaybookJsonLength = 100000;

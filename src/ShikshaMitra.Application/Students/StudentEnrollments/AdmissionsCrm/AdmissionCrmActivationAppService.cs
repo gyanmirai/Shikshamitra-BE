@@ -861,11 +861,18 @@ public class AdmissionCrmActivationAppService : ApplicationService, IAdmissionCr
 		var relationsValid = board?.AcademicYearId == lead.AcademicYearId && medium?.EducationBoardId == board?.Id &&
 			stage?.EducationMediumId == medium?.Id && standard?.EducationMediumStageId == stage?.Id && division?.StandardId == standard?.Id;
 		if (!relationsValid) return (false, "Board, medium, stage, class, and division are not a valid active hierarchy.", division?.Strength ?? 0, 0);
-		var students = await _studentRepository.GetByDivisionAsync(division!.Id, lead.AcademicYearId);
-		var occupancy = students.Count(x => x.Status == StudentLifeCycleStatusEnum.Enrolled);
-		if (occupancy >= division.Strength) return (false, $"Division capacity is full ({occupancy}/{division.Strength}).", division.Strength, occupancy);
-		if (input.RollNumber.HasValue && students.Any(x => x.RollNo == input.RollNumber)) return (false, "Roll number is already assigned in this division.", division.Strength, occupancy);
-		return (true, $"Placement is valid with {division.Strength - occupancy} seat(s) remaining.", division.Strength, occupancy);
+		var validDivision = division!;
+		var studentQuery = await _studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var divisionStudents = studentQuery.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.DivisionId == validDivision.Id &&
+			x.AcademicYearId == lead.AcademicYearId);
+		var occupancy = await AsyncExecuter.CountAsync(divisionStudents.Where(x =>
+			x.Status == StudentLifeCycleStatusEnum.Enrolled));
+		if (occupancy >= validDivision.Strength) return (false, $"Division capacity is full ({occupancy}/{validDivision.Strength}).", validDivision.Strength, occupancy);
+		if (input.RollNumber.HasValue && await AsyncExecuter.AnyAsync(divisionStudents.Where(x =>
+			x.RollNo == input.RollNumber))) return (false, "Roll number is already assigned in this division.", validDivision.Strength, occupancy);
+		return (true, $"Placement is valid with {validDivision.Strength - occupancy} seat(s) remaining.", validDivision.Strength, occupancy);
 	}
 
 	private async Task<bool> IsPolicyReadyAsync(AdmissionInquiryLead lead)

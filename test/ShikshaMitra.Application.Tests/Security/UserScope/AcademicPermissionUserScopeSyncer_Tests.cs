@@ -162,6 +162,40 @@ public class AcademicPermissionUserScopeSyncer_Tests
 	}
 
 	[Fact]
+	public async Task SyncAsync_Should_Deactivate_Obsolete_Derived_Scope_And_Preserve_Manual_Scope()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var user = await CreateUserAsync();
+			var manualAcademicYearId = Guid.NewGuid();
+			var hierarchy = await CreateAcademicHierarchyAsync();
+			await InsertStagePermissionAsync(user.Id, hierarchy.StageId);
+			await InsertManualScopeAsync(user.Id, manualAcademicYearId);
+			await WithUnitOfWorkAsync(() => _syncer.SyncAsync());
+
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var permission = (await _stagePermissionRepository.GetListAsync(x =>
+					x.UserId == user.Id && x.EducationMediumStageId == hierarchy.StageId)).Single();
+				await _stagePermissionRepository.DeleteAsync(permission, autoSave: true);
+			});
+
+			await WithUnitOfWorkAsync(() => _syncer.SyncAsync());
+
+			var scopes = await _scopeRepository.GetListAsync(x => x.UserId == user.Id);
+			scopes.Single(x => x.EducationMediumStageId == hierarchy.StageId).IsActive.ShouldBeFalse();
+			scopes.Single(x => x.Description == "Manual test scope").IsActive.ShouldBeTrue();
+
+			await InsertStagePermissionAsync(user.Id, hierarchy.StageId);
+			await WithUnitOfWorkAsync(() => _syncer.SyncAsync());
+
+			scopes = await _scopeRepository.GetListAsync(x => x.UserId == user.Id);
+			scopes.Count(x => x.EducationMediumStageId == hierarchy.StageId).ShouldBe(1);
+			scopes.Single(x => x.EducationMediumStageId == hierarchy.StageId).IsActive.ShouldBeTrue();
+		}
+	}
+
+	[Fact]
 	public async Task SyncAsync_Should_Deactivate_Legacy_Demo_Scopes_Only()
 	{
 		using (_currentTenant.Change(TestTenantId))

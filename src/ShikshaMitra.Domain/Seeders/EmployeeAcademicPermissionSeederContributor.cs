@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp.Data;
@@ -53,6 +54,21 @@ public class EmployeeAcademicPermissionSeederContributor(
 		var existingPermissions = await educationMediumStagePermissionRepository.GetListAsync(x =>
 			x.UserId.HasValue &&
 			userIds.Contains(x.UserId.Value));
+		var requiredBoardByUserId = assignmentResult.RequiredBoardByEmployeeId
+			.Where(x => userIdByEmployeeId.ContainsKey(x.Key))
+			.ToDictionary(x => userIdByEmployeeId[x.Key], x => x.Value);
+		var obsoletePermissions = existingPermissions
+			.Where(x =>
+				x.UserId.HasValue &&
+				requiredBoardByUserId.TryGetValue(x.UserId.Value, out var requiredBoard) &&
+				assignmentResult.BoardByStageId.TryGetValue(x.EducationMediumStageId, out var actualBoard) &&
+				actualBoard != requiredBoard)
+			.ToList();
+		if (obsoletePermissions.Count > 0)
+		{
+			await educationMediumStagePermissionRepository.DeleteManyAsync(obsoletePermissions, autoSave: false);
+			existingPermissions.RemoveAll(x => obsoletePermissions.Contains(x));
+		}
 		var existingKeys = existingPermissions
 			.Select(x => (x.UserId!.Value, x.EducationMediumStageId))
 			.ToHashSet();
@@ -89,10 +105,11 @@ public class EmployeeAcademicPermissionSeederContributor(
 		await CurrentUnitOfWork.SaveChangesAsync();
 
 		logger.LogInformation(
-			"[EmployeeAcademicPermissionSeeder] Synced stage permissions from employee organization assignments. LinkedEmployees={EmployeeCount}, Assignments={AssignmentCount}, AssignmentsInserted={AssignmentsInserted}, PermissionsInserted={InsertedCount}",
+			"[EmployeeAcademicPermissionSeeder] Synced stage permissions from employee organization assignments. LinkedEmployees={EmployeeCount}, Assignments={AssignmentCount}, AssignmentsInserted={AssignmentsInserted}, PermissionsRemoved={PermissionsRemoved}, PermissionsInserted={InsertedCount}",
 			employees.Count,
 			assignments.Count,
 			assignmentResult.InsertedCount,
+			obsoletePermissions.Count,
 			permissionsToInsert.Count);
 	}
 
@@ -101,11 +118,18 @@ public class EmployeeAcademicPermissionSeederContributor(
 		var profilesByEmail = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
 		var stages = (await educationMediumStageRepository.GetQueryableAsync())
 			.OrderBy(x => x.Name)
-			.Select(x => new SeedStageInfo(x.Id, x.Name))
+			.Select(x => new SeededEmployeeAcademicScopePolicy.Stage(
+				x.Id,
+				x.Name,
+				x.EducationMedium.EducationBoard.Type))
 			.ToList();
 		if (stages.Count == 0)
 		{
-			return new EmployeeOrganizationAssignmentBackfillResult([], 0);
+			return new EmployeeOrganizationAssignmentBackfillResult(
+				[],
+				0,
+				new Dictionary<Guid, EducationBoardType>(),
+				new Dictionary<Guid, EducationBoardType>());
 		}
 
 		var seededEmployees = employees
@@ -113,12 +137,33 @@ public class EmployeeAcademicPermissionSeederContributor(
 			.ToList();
 		if (seededEmployees.Count == 0)
 		{
-			return new EmployeeOrganizationAssignmentBackfillResult([], 0);
+			return new EmployeeOrganizationAssignmentBackfillResult(
+				[],
+				0,
+				new Dictionary<Guid, EducationBoardType>(),
+				new Dictionary<Guid, EducationBoardType>());
 		}
 
 		var employeeIds = seededEmployees.Select(x => x.Id).ToHashSet();
 		var existing = await employeeOrganizationAssignmentRepository.GetListAsync(x =>
 			employeeIds.Contains(x.EmployeeId));
+		var boardByStageId = stages.ToDictionary(x => x.Id, x => x.BoardType);
+		var requiredBoardByEmployeeId = seededEmployees
+			.Where(x => x.Email != null && SeededEmployeeAcademicScopePolicy.GetRequiredBoard(x.Email).HasValue)
+			.ToDictionary(
+				x => x.Id,
+				x => SeededEmployeeAcademicScopePolicy.GetRequiredBoard(x.Email!)!.Value);
+		var obsoleteAssignments = existing
+			.Where(x =>
+				requiredBoardByEmployeeId.TryGetValue(x.EmployeeId, out var requiredBoard) &&
+				boardByStageId.TryGetValue(x.EducationMediumStageId, out var actualBoard) &&
+				actualBoard != requiredBoard)
+			.ToList();
+		if (obsoleteAssignments.Count > 0)
+		{
+			await employeeOrganizationAssignmentRepository.DeleteManyAsync(obsoleteAssignments, autoSave: false);
+			existing.RemoveAll(x => obsoleteAssignments.Contains(x));
+		}
 		var existingKeys = existing
 			.Select(x => (x.EmployeeId, x.EducationMediumStageId))
 			.ToHashSet();
@@ -131,7 +176,7 @@ public class EmployeeAcademicPermissionSeederContributor(
 				continue;
 			}
 
-			foreach (var stageId in ResolveSeedOrganizationIdsForEmployee(profile.RoleName, profile.Email, stages))
+			foreach (var stageId in SeededEmployeeAcademicScopePolicy.ResolveStageIds(profile.RoleName, profile.Email, stages))
 			{
 				if (!existingKeys.Add((employee.Id, stageId)))
 				{
@@ -153,49 +198,16 @@ public class EmployeeAcademicPermissionSeederContributor(
 		}
 
 		existing.AddRange(assignments);
-		return new EmployeeOrganizationAssignmentBackfillResult(existing, assignments.Count);
+		return new EmployeeOrganizationAssignmentBackfillResult(
+			existing,
+			assignments.Count,
+			requiredBoardByEmployeeId,
+			boardByStageId);
 	}
-
-	private static IReadOnlyCollection<Guid> ResolveSeedOrganizationIdsForEmployee(
-		string roleName,
-		string email,
-		IReadOnlyList<SeedStageInfo> stages)
-	{
-		var broadAccessRoles = new[] { "Director", "Principal", "Admin", "Administrative", "Manager", "Clerk", "Finance", "HR" };
-		if (broadAccessRoles.Any(token => roleName.Contains(token, StringComparison.OrdinalIgnoreCase)))
-		{
-			return stages.Select(x => x.Id).ToList();
-		}
-
-		var primary = stages.FirstOrDefault(x => x.Name.Contains("Primary", StringComparison.OrdinalIgnoreCase));
-		var secondary = stages.FirstOrDefault(x => x.Name.Contains("Secondary", StringComparison.OrdinalIgnoreCase));
-		if (roleName.Contains("Teacher", StringComparison.OrdinalIgnoreCase))
-		{
-			var preferred = StableSeedHash(email) % 2 == 0 ? primary ?? stages[0] : secondary ?? stages[^1];
-			return new[] { preferred.Id };
-		}
-
-		return new[] { stages[0].Id };
-	}
-
-	private static uint StableSeedHash(string value)
-	{
-		unchecked
-		{
-			var hash = 2166136261u;
-			foreach (var character in value.ToUpperInvariant())
-			{
-				hash ^= character;
-				hash *= 16777619u;
-			}
-
-			return hash;
-		}
-	}
-
-	private sealed record SeedStageInfo(Guid Id, string Name);
 
 	private sealed record EmployeeOrganizationAssignmentBackfillResult(
 		List<EmployeeOrganizationAssignment> Assignments,
-		int InsertedCount);
+		int InsertedCount,
+		IReadOnlyDictionary<Guid, EducationBoardType> RequiredBoardByEmployeeId,
+		IReadOnlyDictionary<Guid, EducationBoardType> BoardByStageId);
 }

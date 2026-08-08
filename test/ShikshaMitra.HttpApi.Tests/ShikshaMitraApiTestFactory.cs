@@ -37,6 +37,7 @@ using Volo.Abp.Auditing;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.Authorization;
 using Volo.Abp.BackgroundJobs;
+using Volo.Abp.BackgroundWorkers;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EntityFrameworkCore;
@@ -361,6 +362,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	private static void DisableBackgroundJobs(IServiceCollection services)
 	{
 		services.Configure<AbpBackgroundJobOptions>(o => o.IsJobExecutionEnabled = false);
+		services.Configure<AbpBackgroundWorkerOptions>(o => o.IsEnabled = false);
 	}
 
 	private static void DisableAuditing(IServiceCollection services)

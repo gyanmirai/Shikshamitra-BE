@@ -37,8 +37,6 @@ namespace ShikshaMitra.Seeders;
 
 public partial class HRSeederContributor
 {
-	private sealed record SeedStageInfo(Guid Id, string Name);
-
 	private static readonly string[] RequiredSeedEmployeeDocumentNames =
 	[
 		"Aadhaar Card",

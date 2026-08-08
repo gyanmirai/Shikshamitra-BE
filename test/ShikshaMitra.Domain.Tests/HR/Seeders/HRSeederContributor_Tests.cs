@@ -7,6 +7,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using Shouldly;
 using Xunit;
 
@@ -47,6 +48,37 @@ public class HRSeederContributor_Tests
 
 		profiles.ContainsKey("principal-cbse@ddvs.com").ShouldBeTrue();
 		profiles["principal-cbse@ddvs.com"].RoleName.ShouldBe("Principal");
+	}
+
+	[Fact]
+	public void Seeded_Principals_Should_Be_Restricted_To_Their_Named_Board()
+	{
+		var gsebStageId = Guid.NewGuid();
+		var cbseStageId = Guid.NewGuid();
+		var stages = new[]
+		{
+			new SeededEmployeeAcademicScopePolicy.Stage(gsebStageId, "Secondary", EducationBoardType.GSEB),
+			new SeededEmployeeAcademicScopePolicy.Stage(cbseStageId, "Secondary", EducationBoardType.CBSE)
+		};
+
+		SeededEmployeeAcademicScopePolicy.ResolveStageIds("Principal", "principal-gseb@ddvs.com", stages)
+			.ShouldBe([gsebStageId]);
+		SeededEmployeeAcademicScopePolicy.ResolveStageIds("Principal", "principal-cbse@ddvs.com", stages)
+			.ShouldBe([cbseStageId]);
+	}
+
+	[Fact]
+	public void Generic_Administrative_Seed_Profile_Should_Retain_All_Board_Access()
+	{
+		var stageIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+		var stages = new[]
+		{
+			new SeededEmployeeAcademicScopePolicy.Stage(stageIds[0], "Secondary", EducationBoardType.GSEB),
+			new SeededEmployeeAcademicScopePolicy.Stage(stageIds[1], "Secondary", EducationBoardType.CBSE)
+		};
+
+		SeededEmployeeAcademicScopePolicy.ResolveStageIds("Admin", "admin@ddvs.com", stages)
+			.ShouldBe(stageIds);
 	}
 
 	[Fact]

@@ -73,6 +73,21 @@ public class AdmissionCrmExamSlot : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void SetActive(bool active) => IsActive = active;
 
+	public void EnsureCanAcceptReservation(DateTimeOffset now)
+	{
+		if (!IsActive)
+		{
+			throw new BusinessException("AdmissionCrm:ExamSlotInactive")
+				.WithData("EntranceExamSlotId", Id);
+		}
+
+		if (StartDate <= now)
+		{
+			throw new BusinessException("AdmissionCrm:ExamSlotAlreadyStarted")
+				.WithData("EntranceExamSlotId", Id);
+		}
+	}
+
 	private static string? NormalizeOptional(string? value, int maxLength) =>
 		string.IsNullOrWhiteSpace(value) ? null : Check.Length(value.Trim(), nameof(value), maxLength);
 }

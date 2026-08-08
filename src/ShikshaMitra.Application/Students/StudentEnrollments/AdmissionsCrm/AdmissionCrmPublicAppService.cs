@@ -183,6 +183,18 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	{
 		using (CurrentTenant.Change(tenantId))
 		{
+			var submissionKey = Check.NotNullOrWhiteSpace(
+				input.SubmissionKey,
+				nameof(input.SubmissionKey),
+				AdmissionCrmConsts.MaxSubmissionKeyLength);
+			var existingResult = await GetExistingPublicSubmissionResultAsync(
+				templateId,
+				submissionKey);
+			if (existingResult != null)
+			{
+				return existingResult;
+			}
+
 			var template = await GetActivePublicTemplateAsync(templateId);
 			var configuration = await GetCycleConfigurationOrDefaultAsync(template.AcademicYearId);
 			var channelSetting = AdmissionCrmChannelSettingsSerializer.GetChannelSetting(
@@ -299,7 +311,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 					submittedFieldsJson,
 					now,
 					ipAddress,
-					userAgent),
+					userAgent,
+					submissionKey),
 				autoSave: false);
 
 			await _consentRepository.InsertAsync(
@@ -403,6 +416,43 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		}
 	}
 
+	private async Task<PublicAdmissionInquirySubmitResultDto?> GetExistingPublicSubmissionResultAsync(
+		Guid templateId,
+		string submissionKey)
+	{
+		var normalizedKey = submissionKey.Trim();
+		var submission = await _submissionRepository.FirstOrDefaultAsync(x =>
+			x.FormTemplateId == templateId && x.SubmissionKey == normalizedKey);
+		if (submission == null)
+		{
+			return null;
+		}
+
+		var lead = await _leadRepository.GetAsync(submission.LeadId);
+		var statusAccess = (await _statusAccessRepository.GetListAsync(x => x.LeadId == lead.Id))
+			.OrderByDescending(x => x.LinkIssuedAt)
+			.FirstOrDefault();
+		if (statusAccess?.EncryptedToken == null)
+		{
+			throw new BusinessException("AdmissionCrm:StatusAccessUnavailable");
+		}
+
+		var statusToken = _stringEncryptionService.Decrypt(statusAccess.EncryptedToken);
+		if (string.IsNullOrWhiteSpace(statusToken))
+		{
+			throw new BusinessException("AdmissionCrm:DecryptionFailed");
+		}
+
+		return new PublicAdmissionInquirySubmitResultDto
+		{
+			LeadId = lead.Id,
+			AcknowledgementMessage = "Inquiry submitted successfully.",
+			StatusToken = statusToken,
+			StatusPath = CreateStatusPath(CurrentTenant.Id!.Value, statusToken),
+			Stage = lead.Stage
+		};
+	}
+
 	public async Task<AdmissionApplicantStatusOtpChallengeDto> IssueStatusOtpAsync(Guid tenantId, string token)
 	{
 		using (CurrentTenant.Change(tenantId))
@@ -477,6 +527,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
 			access.EnsureAccessSession(HashSecret(input.AccessSessionToken), Clock.Now);
 			var application = await GetRegistrationApplicationAsync(lead.Id);
+			application.EnsureResponseVersion(input.ConcurrencyStamp);
 			var template = DeserializeRegistrationTemplate(application.TemplateSnapshotJson);
 			if (!template.AllowPartialSave)
 			{
@@ -505,6 +556,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
 			access.EnsureAccessSession(HashSecret(input.AccessSessionToken), Clock.Now);
 			var application = await GetRegistrationApplicationAsync(lead.Id);
+			application.EnsureResponseVersion(input.ConcurrencyStamp);
 			var template = DeserializeRegistrationTemplate(application.TemplateSnapshotJson);
 			AdmissionCrmRegistrationResponseValidator.Validate(
 				application,
@@ -1370,6 +1422,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		return new AdmissionCrmRegistrationApplicationDto
 		{
 			Id = application.Id,
+			ConcurrencyStamp = application.ConcurrencyStamp,
 			AcademicYearId = application.AcademicYearId,
 			LeadId = application.LeadId,
 			RegistrationTemplateId = application.RegistrationTemplateId,
@@ -2537,7 +2590,9 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	{
 		return exam is not null &&
 		       (exam.ResultRecordedAt.HasValue ||
-		        exam.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent);
+		        exam.AttendanceStatus is AdmissionCrmExamAttendanceStatus.Absent or
+		        AdmissionCrmExamAttendanceStatus.NoShow or
+		        AdmissionCrmExamAttendanceStatus.Excused);
 	}
 
 	private static bool HasEligibilityDecision(
@@ -2560,9 +2615,16 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 	private static string FormatExamResult(AdmissionCrmEntranceExamRecord exam)
 	{
-		if (exam.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent)
+		if (exam.AttendanceStatus is AdmissionCrmExamAttendanceStatus.Absent or
+		    AdmissionCrmExamAttendanceStatus.NoShow or
+		    AdmissionCrmExamAttendanceStatus.Excused)
 		{
-			return "The applicant was marked absent for the entrance exam.";
+			return exam.AttendanceStatus switch
+			{
+				AdmissionCrmExamAttendanceStatus.NoShow => "The applicant did not attend the entrance exam.",
+				AdmissionCrmExamAttendanceStatus.Excused => "The applicant was excused from the entrance exam.",
+				_ => "The applicant was marked absent for the entrance exam."
+			};
 		}
 
 		if (!exam.ObtainedMarks.HasValue || !exam.TotalMarks.HasValue)

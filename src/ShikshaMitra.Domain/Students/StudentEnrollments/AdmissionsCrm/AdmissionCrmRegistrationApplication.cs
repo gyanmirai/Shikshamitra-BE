@@ -145,6 +145,18 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 			: AdmissionCrmRegistrationStatus.Submitted;
 	}
 
+	public void EnsureResponseVersion(string expectedConcurrencyStamp)
+	{
+		if (string.IsNullOrWhiteSpace(expectedConcurrencyStamp))
+		{
+			throw new BusinessException("AdmissionCrm:RegistrationConcurrencyStampRequired");
+		}
+		if (!string.Equals(ConcurrencyStamp, expectedConcurrencyStamp, StringComparison.Ordinal))
+		{
+			throw new BusinessException("AdmissionCrm:RegistrationConcurrencyConflict");
+		}
+	}
+
 	public void ReturnForCorrection(string correctionJson, string reason)
 	{
 		if (Status is not (AdmissionCrmRegistrationStatus.Submitted or AdmissionCrmRegistrationStatus.Resubmitted))
@@ -243,4 +255,5 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 			throw new BusinessException("AdmissionCrm:RegistrationLinkExpired");
 		}
 	}
+
 }

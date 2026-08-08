@@ -11,6 +11,7 @@ public class AdmissionInquiryFormSubmission : FullAuditedAggregateRoot<Guid>, IM
 	public Guid? TenantId { get; private set; }
 	public Guid LeadId { get; private set; }
 	public Guid FormTemplateId { get; private set; }
+	public string? SubmissionKey { get; private set; }
 	public string TemplateNameSnapshot { get; private set; } = string.Empty;
 	public string SubmittedFieldsJson { get; private set; } = "{}";
 	public DateTime SubmittedAt { get; private set; }
@@ -30,12 +31,17 @@ public class AdmissionInquiryFormSubmission : FullAuditedAggregateRoot<Guid>, IM
 		string submittedFieldsJson,
 		DateTime submittedAt,
 		string? ipAddress,
-		string? userAgent)
+		string? userAgent,
+		string? submissionKey = null)
 		: base(id)
 	{
 		TenantId = tenantId;
 		LeadId = leadId;
 		FormTemplateId = formTemplateId;
+		SubmissionKey = NormalizeOptional(
+			submissionKey,
+			nameof(submissionKey),
+			AdmissionCrmConsts.MaxSubmissionKeyLength);
 		TemplateNameSnapshot = Check.NotNullOrWhiteSpace(
 			templateNameSnapshot,
 			nameof(templateNameSnapshot),

@@ -26,6 +26,30 @@ public static class FileValidationService
 		"http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument"
 	};
 
+	private static readonly IReadOnlyDictionary<string, string[]> DocumentContentTypes =
+		new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+		{
+			[".pdf"] = ["application/pdf"],
+			[".jpg"] = ["image/jpeg"],
+			[".jpeg"] = ["image/jpeg"],
+			[".png"] = ["image/png"],
+			[".doc"] = ["application/msword"],
+			[".docx"] = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+			[".xls"] = ["application/vnd.ms-excel"],
+			[".xlsx"] = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
+		};
+
+	public static bool IsSupportedDocumentExtension(string extension) =>
+		DocumentContentTypes.ContainsKey(NormalizeExtension(extension));
+
+	public static bool IsMatchingDocumentContentType(string extension, string? contentType)
+	{
+		var normalizedExtension = NormalizeExtension(extension);
+		var normalizedContentType = contentType?.Split(';', 2)[0].Trim();
+		return DocumentContentTypes.TryGetValue(normalizedExtension, out var allowed) &&
+		       !string.IsNullOrWhiteSpace(normalizedContentType) &&
+		       allowed.Contains(normalizedContentType, StringComparer.OrdinalIgnoreCase);
+	}
 	/// <summary>
 	/// Validates a profile picture upload: size, allowed extensions, and image magic bytes.
 	/// </summary>
@@ -88,12 +112,11 @@ public static class FileValidationService
 			throw new BusinessException($"File size cannot exceed {maxFileSizeBytes / 1024.0 / 1024.0:F0}MB. Current size: {fileContent.Length / 1024.0 / 1024.0:F2}MB.");
 		}
 
-		var allowedExtensions = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx", ".xls", ".xlsx" };
 		var fileExtension = Path.GetExtension(fileName).ToLowerInvariant();
 
-		if (string.IsNullOrEmpty(fileExtension) || !allowedExtensions.Contains(fileExtension))
+		if (string.IsNullOrEmpty(fileExtension) || !IsSupportedDocumentExtension(fileExtension))
 		{
-			throw new BusinessException($"Invalid file type. Allowed types: {string.Join(", ", allowedExtensions)}. Provided: {fileExtension}");
+			throw new BusinessException($"Invalid file type. Allowed types: {string.Join(", ", DocumentContentTypes.Keys)}. Provided: {fileExtension}");
 		}
 
 		ValidateDocumentFileSignature(fileContent, fileExtension);
@@ -468,4 +491,9 @@ public static class FileValidationService
 
 		return false;
 	}
+
+	private static string NormalizeExtension(string extension) =>
+		string.IsNullOrWhiteSpace(extension)
+			? string.Empty
+			: "." + extension.Trim().TrimStart('.').ToLowerInvariant();
 }

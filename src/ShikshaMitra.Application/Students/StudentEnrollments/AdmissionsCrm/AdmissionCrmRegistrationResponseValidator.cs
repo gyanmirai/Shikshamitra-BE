@@ -26,9 +26,12 @@ internal static class AdmissionCrmRegistrationResponseValidator
 		bool requireComplete,
 		bool allowStaffManagedFields = false)
 	{
-		var prefill = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+		var storedPrefill = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
 			application.PrefillJson,
 			JsonOptions) ?? new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+		var prefill = new Dictionary<string, JsonElement>(
+			storedPrefill,
+			StringComparer.OrdinalIgnoreCase);
 		var fields = template.Sections
 			.Where(section => section.ParentVisible)
 			.SelectMany(section => section.Fields)

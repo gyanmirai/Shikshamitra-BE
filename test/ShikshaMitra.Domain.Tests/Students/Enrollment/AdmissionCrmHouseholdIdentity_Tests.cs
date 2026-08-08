@@ -62,4 +62,27 @@ public class AdmissionCrmHouseholdIdentity_Tests
 		relationship.HasPickupAuthorization.ShouldBeTrue();
 		relationship.HasFeeResponsibility.ShouldBeFalse();
 	}
+
+	[Theory]
+	[InlineData("abc1", null, "AdmissionCrm:InvalidContactNumber")]
+	[InlineData("9999900807", "not-an-email", "AdmissionCrm:InvalidEmail")]
+	public void Person_identity_rejects_malformed_contact_data(
+		string phone,
+		string? email,
+		string expectedCode)
+	{
+		Should.Throw<BusinessException>(() => new AdmissionCrmPerson(
+			Guid.NewGuid(), Guid.NewGuid(), "Aarav", null, "Patel", new DateTime(2018, 4, 10),
+			phone, email, AdmissionCrmPersonProvenance.StaffSupplied))
+			.Code.ShouldBe(expectedCode);
+	}
+
+	[Fact]
+	public void Person_identity_rejects_future_date_of_birth()
+	{
+		Should.Throw<BusinessException>(() => new AdmissionCrmPerson(
+			Guid.NewGuid(), Guid.NewGuid(), "Aarav", null, "Patel", DateTime.UtcNow.Date.AddDays(1),
+			"9999900807", null, AdmissionCrmPersonProvenance.StaffSupplied))
+			.Code.ShouldBe("AdmissionCrm:FutureDateOfBirth");
+	}
 }

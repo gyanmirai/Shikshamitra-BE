@@ -7,6 +7,11 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class PublicAdmissionInquirySubmitDto
 {
 	[Required]
+	[MaxLength(AdmissionCrmConsts.MaxSubmissionKeyLength)]
+	[RegularExpression("^[A-Za-z0-9_-]{16,64}$")]
+	public string SubmissionKey { get; set; } = System.Guid.NewGuid().ToString("N");
+
+	[Required]
 	[MaxLength(AdmissionCrmConsts.MaxConsentVersionLength)]
 	public required string ConsentVersion { get; set; }
 

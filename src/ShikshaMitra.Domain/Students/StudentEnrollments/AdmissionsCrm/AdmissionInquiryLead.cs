@@ -351,6 +351,11 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private void SetContact(string? primaryContactNo, string? email)
 	{
+		if (!AdmissionCrmContactRules.IsValidPhone(primaryContactNo))
+		{
+			throw new BusinessException("AdmissionCrm:InvalidContactNumber");
+		}
+
 		PrimaryContactNo = NormalizeOptional(
 			primaryContactNo,
 			nameof(primaryContactNo),

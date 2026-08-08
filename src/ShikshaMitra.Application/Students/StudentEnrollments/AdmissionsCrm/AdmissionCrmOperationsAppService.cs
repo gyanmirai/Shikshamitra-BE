@@ -830,14 +830,17 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		IReadOnlyDictionary<Guid, AdmissionInquiryLead> leads)
 	{
 		return data.Exams
-			.Where(x => (x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent &&
+			.Where(x => ((x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent ||
+			              x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NoShow) &&
 			             x.EligibilityDecision == AdmissionCrmEligibilityDecision.Pending) ||
 			            (x.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked && x.ExamEndTime.UtcDateTime < data.Now))
 			.Where(x => leads.ContainsKey(x.LeadId))
 			.Select(exam => CreateItem(
 				leads[exam.LeadId],
 				$"no-show:{exam.Id}",
-				exam.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent ? "Entrance exam no-show" : "Attendance is overdue",
+				exam.AttendanceStatus is AdmissionCrmExamAttendanceStatus.Absent or AdmissionCrmExamAttendanceStatus.NoShow
+					? "Entrance exam no-show"
+					: "Attendance is overdue",
 				$"{exam.SlotNameSnapshot ?? "Exam"} was scheduled for {exam.ExamStartTime:dd MMM yyyy, h:mm tt}.",
 				exam.AttendanceStatus.ToString(),
 				exam.ExamEndTime,
@@ -1336,7 +1339,8 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		AdmissionCrmOperationsQueueItemDto item) => queueType switch
 	{
 		AdmissionCrmOperationsQueueType.UnassignedExam => AdmissionCrmRecommendedAction.ScheduleExam,
-		AdmissionCrmOperationsQueueType.NoShow when item.Status == AdmissionCrmExamAttendanceStatus.Absent.ToString() => AdmissionCrmRecommendedAction.RescheduleExam,
+		AdmissionCrmOperationsQueueType.NoShow when item.Status == AdmissionCrmExamAttendanceStatus.Absent.ToString() ||
+		                                                item.Status == AdmissionCrmExamAttendanceStatus.NoShow.ToString() => AdmissionCrmRecommendedAction.RescheduleExam,
 		AdmissionCrmOperationsQueueType.NoShow => AdmissionCrmRecommendedAction.RecordAttendance,
 		AdmissionCrmOperationsQueueType.CapacityConflict => AdmissionCrmRecommendedAction.RescheduleExam,
 		AdmissionCrmOperationsQueueType.RegistrationInvitationPending or

@@ -331,7 +331,9 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 				.ToHashSet(),
 			[AdmissionCrmJourneyTrigger.ExamNoShow] = exams
 				.Where(item =>
-					item.AttendanceStatus == AdmissionCrmExamAttendanceStatus.Absent ||
+					item.AttendanceStatus is
+						AdmissionCrmExamAttendanceStatus.Absent or
+						AdmissionCrmExamAttendanceStatus.NoShow ||
 					item.AttendanceStatus == AdmissionCrmExamAttendanceStatus.NotMarked &&
 					item.ExamEndTime.UtcDateTime < now)
 				.Select(item => item.LeadId)

@@ -26956,6 +26956,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("LeadId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SubmissionKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTime>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -26980,6 +26984,9 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId", "FormTemplateId");
+
+                    b.HasIndex("TenantId", "FormTemplateId", "SubmissionKey")
+                        .IsUnique();
 
                     b.HasIndex("TenantId", "LeadId");
 

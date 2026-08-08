@@ -141,7 +141,8 @@ public class AdmissionCrmHouseholdIdentityAppService : ApplicationService, IAdmi
 		var profile = await GetProfileEntityAsync(leadId, nameof(AddGuardianAsync));
 		var guardian = input.ExistingGuardianPersonId.HasValue
 			? await GetPersonAsync(input.ExistingGuardianPersonId.Value)
-			: await CreatePersonAsync(input.Guardian);
+			: await CreatePersonAsync(input.Guardian ??
+				throw new BusinessException("AdmissionCrm:GuardianDetailsRequired"));
 		await EnsureMembershipAsync(profile.HouseholdId, guardian.Id, AdmissionCrmHouseholdRole.Guardian);
 		var existingQueryable = await _guardianRepository.GetQueryableAsync();
 		if (await AsyncExecuter.AnyAsync(existingQueryable.Where(x =>

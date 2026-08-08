@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using Volo.Abp;
@@ -252,7 +253,7 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 		var requirement = template.Requirements.FirstOrDefault(x =>
 			string.Equals(x.Key, input.RequirementKey, StringComparison.OrdinalIgnoreCase))
 			?? throw new BusinessException("AdmissionCrm:DocumentRequirementNotFound");
-		ValidateUpload(requirement, input);
+		AdmissionCrmDocumentUploadValidator.Validate(requirement, input, Clock.Now);
 
 		var current = await GetCurrentDocumentOrDefaultAsync(assignment.Id, requirement.Key);
 		var hash = Convert.ToHexString(SHA256.HashData(input.Content)).ToLowerInvariant();
@@ -399,7 +400,10 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 				throw new BusinessException("AdmissionCrm:DocumentExpiryReminderRequiresValidityDate")
 					.WithData("RequirementKey", requirement.Key);
 			var extensions = requirement.AcceptedExtensions.Select(x => x.Trim().TrimStart('.').ToLowerInvariant()).Where(x => x.Length > 0).Distinct().ToList();
-			if (extensions.Count == 0 || extensions.Any(x => x.Any(character => !char.IsLetterOrDigit(character))))
+			if (extensions.Count == 0 ||
+			    extensions.Any(x =>
+				    x.Any(character => !char.IsLetterOrDigit(character)) ||
+				    !FileValidationService.IsSupportedDocumentExtension(x)))
 				throw new BusinessException("AdmissionCrm:InvalidDocumentExtensions");
 			requirement.AcceptedExtensions = extensions;
 			requirement.UploadInstructions = string.IsNullOrWhiteSpace(requirement.UploadInstructions)
@@ -423,20 +427,6 @@ public class AdmissionCrmDocumentAppService : ApplicationService, IAdmissionCrmD
 				if (type.TenantId != CurrentTenant.Id) throw new BusinessException("AdmissionCrm:DocumentTypeNotFound");
 			}
 		}
-	}
-
-	private static void ValidateUpload(AdmissionCrmDocumentRequirementDto requirement, ProcessedAdmissionCrmApplicantDocumentUploadDto input)
-	{
-		if (input.Content.Length == 0 || input.Size != input.Content.LongLength) throw new BusinessException("AdmissionCrm:InvalidDocumentContent");
-		var maxBytes = (long)(requirement.MaximumSizeMb * 1024 * 1024);
-		if (input.Size > maxBytes) throw new BusinessException("AdmissionCrm:DocumentFileSizeExceeded").WithData("MaximumSizeMb", requirement.MaximumSizeMb);
-		var extension = Path.GetExtension(input.FileName).TrimStart('.').ToLowerInvariant();
-		if (!requirement.AcceptedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
-			throw new BusinessException("AdmissionCrm:DocumentFileTypeNotAccepted").WithData("Extension", extension);
-		if (requirement.ValidityDateRequired && !input.ValidUntil.HasValue)
-			throw new BusinessException("AdmissionCrm:DocumentValidityDateRequired");
-		if (input.ValidUntil.HasValue && input.ValidUntil.Value.Date < DateTime.UtcNow.Date)
-			throw new BusinessException("AdmissionCrm:DocumentAlreadyExpired");
 	}
 
 	private async Task<AdmissionCrmApplicantDocumentChecklistDto> BuildChecklistDtoAsync(

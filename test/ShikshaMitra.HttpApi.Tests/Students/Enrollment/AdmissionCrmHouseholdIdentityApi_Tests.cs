@@ -47,6 +47,16 @@ public class AdmissionCrmHouseholdIdentityApi_Tests : ShikshaMitraApiTestBase
 		var profile = await profileResponse.Content.ReadFromJsonAsync<AdmissionCrmApplicantIdentityProfileDto>(JsonOptions);
 		profile.ShouldNotBeNull();
 
+		var missingGuardianResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{firstLead.Id}/household-identity/guardians",
+			new CreateAdmissionCrmGuardianRelationshipDto
+			{
+				RelationshipType = AdmissionCrmGuardianRelationshipType.Mother,
+				IsPrimaryContact = true
+			}, JsonOptions);
+		missingGuardianResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await missingGuardianResponse.Content.ReadAsStringAsync()).ShouldContain("Guardian");
+
 		var guardianInput = new CreateAdmissionCrmGuardianRelationshipDto
 		{
 			Guardian = new AdmissionCrmPersonInputDto

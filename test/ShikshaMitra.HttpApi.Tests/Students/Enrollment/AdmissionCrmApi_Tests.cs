@@ -4237,6 +4237,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			{
 				Title = "Call parent for document readiness",
 				DueAt = DateTime.Now.AddDays(1),
+				AssignedUserId = Guid.Parse(TestAuthHandler.TestUserId),
 				Notes = "Ask for previous school report card."
 			},
 			JsonOptions);
@@ -4252,6 +4253,13 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		var tasks = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<AdmissionCrmFollowUpTaskDto>>(JsonOptions);
 		tasks.ShouldNotBeNull();
 		tasks.Items.Select(x => x.Id).ShouldContain(task.Id);
+
+		var myWorkResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/operations/my-work?skipCount=0&maxResultCount=25");
+		myWorkResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await myWorkResponse.Content.ReadAsStringAsync());
+		var myWork = await myWorkResponse.Content.ReadFromJsonAsync<AdmissionCrmMyWorkDto>(JsonOptions);
+		myWork.ShouldNotBeNull();
+		myWork.Items.ShouldContain(item => item.LeadId == lead.Id && item.Title == task.Title);
 
 		var completeResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/tasks/{task.Id}/complete",

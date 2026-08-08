@@ -276,8 +276,10 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		var tasks = await AsyncExecuter.ToListAsync(filtered
 			.Skip(Math.Max(0, input.SkipCount))
 			.Take(Math.Clamp(input.MaxResultCount, 1, 200)));
-		var leadIds = tasks.Select(task => task.LeadId).Distinct().ToArray();
-		var leads = leadIds.Length == 0
+		// Keep this as a List so EF translates Enumerable.Contains. With newer runtimes,
+		// a captured Guid[] can bind to the ReadOnlySpan overload and fail during query evaluation.
+		var leadIds = tasks.Select(task => task.LeadId).Distinct().ToList();
+		var leads = leadIds.Count == 0
 			? []
 			: await AsyncExecuter.ToListAsync(scopedLeads.Where(lead => leadIds.Contains(lead.Id)));
 		var leadById = leads.ToDictionary(lead => lead.Id);

@@ -59,7 +59,7 @@ try {
         -TimeoutSec 300 | Out-Null
 
     $migrationCommand = @{
-        command = 'ASPNETCORE_ENVIRONMENT=Staging DOTNET_ENVIRONMENT=Staging SeedTestLogins=true dotnet ShikshaMitra.DbMigrator.dll'
+        command = 'ASPNETCORE_ENVIRONMENT=Staging DOTNET_ENVIRONMENT=Staging SeedTestLogins=true ShikshaMitra__Seeders__ForceRerun=true dotnet ShikshaMitra.DbMigrator.dll'
         dir = $remoteDirectory
     } | ConvertTo-Json
 

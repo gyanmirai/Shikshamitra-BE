@@ -59,8 +59,12 @@ public class AdmissionsCrmMigrationGuard_Tests
 			.GetBoolean()
 			.ShouldBeTrue();
 		staging.RootElement.GetProperty("SeedTestLogins").GetBoolean().ShouldBeTrue();
-		staging.RootElement.TryGetProperty("ShikshaMitra", out _).ShouldBeFalse(
-			"stage startup must not force every demo seeder to rerun");
+		staging.RootElement
+			.GetProperty("ShikshaMitra")
+			.GetProperty("Seeders")
+			.GetProperty("Enabled")
+			.GetBoolean()
+			.ShouldBeFalse("routine stage startup must apply migrations without rerunning demo seeders");
 		seederOrchestrator.ShouldContain("TestLoginSeeder:v8");
 		seederOrchestrator.ShouldContain("EmployeeAcademicPermissionSeeder:v5");
 		seederOrchestrator.ShouldContain("AcademicPermissionUserScopeSeeder:v9");

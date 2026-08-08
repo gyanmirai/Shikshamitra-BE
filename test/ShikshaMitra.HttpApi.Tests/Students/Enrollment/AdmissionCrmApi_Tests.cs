@@ -4229,7 +4229,17 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Create_List_And_Complete_Follow_Up_Task()
 	{
-		var lead = await CreateCrmLeadAsync("Admission inquiry for Grade 5");
+		var lead = await CreateCrmLeadAsync(
+			"Admission inquiry for Grade 5",
+			Factory.SeededStandardId);
+		var owner = (await GetEligibleCrmOwnersAsync()).First();
+		var assignOwnerResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/owner",
+			new AssignAdmissionCrmLeadOwnerDto { OwnerUserId = owner.Id },
+			JsonOptions);
+		assignOwnerResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await assignOwnerResponse.Content.ReadAsStringAsync());
 
 		var createResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/tasks",
@@ -4260,6 +4270,9 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		var myWork = await myWorkResponse.Content.ReadFromJsonAsync<AdmissionCrmMyWorkDto>(JsonOptions);
 		myWork.ShouldNotBeNull();
 		myWork.Items.ShouldContain(item => item.LeadId == lead.Id && item.Title == task.Title);
+		var workItem = myWork.Items.Single(item => item.LeadId == lead.Id && item.Title == task.Title);
+		workItem.TargetClassName.ShouldNotBeNullOrWhiteSpace();
+		workItem.OwnerDisplayName.ShouldNotBeNullOrWhiteSpace();
 
 		var completeResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/tasks/{task.Id}/complete",
@@ -5832,7 +5845,9 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		return template;
 	}
 
-	private async Task<AdmissionCrmLeadDto> CreateCrmLeadAsync(string admissionIntent)
+	private async Task<AdmissionCrmLeadDto> CreateCrmLeadAsync(
+		string admissionIntent,
+		Guid? targetStandardId = null)
 	{
 		var response = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
@@ -5844,6 +5859,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				Channel = AdmissionInquiryChannel.WalkInReception,
 				FirstName = "Aditi",
 				ParentGuardianName = "Nisha Patel " + Guid.NewGuid().ToString("N")[..6],
+				TargetStandardId = targetStandardId,
 				CampusBranchName = "Main Campus",
 				PreferredCommunicationLanguage = "English",
 				DesiredClassName = "Grade 4"

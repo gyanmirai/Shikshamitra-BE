@@ -288,8 +288,8 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			.Where(lead => lead.TargetStandardId.HasValue)
 			.Select(lead => lead.TargetStandardId!.Value)
 			.Distinct()
-			.ToArray();
-		var standards = targetStandardIds.Length == 0
+			.ToList();
+		var standards = targetStandardIds.Count == 0
 			? []
 			: await _standardRepository.GetListAsync(standard => targetStandardIds.Contains(standard.Id));
 		var standardNames = standards.ToDictionary(standard => standard.Id, standard => standard.Name);
@@ -297,8 +297,8 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			.Where(lead => lead.OwnerUserId.HasValue)
 			.Select(lead => lead.OwnerUserId!.Value)
 			.Distinct()
-			.ToArray();
-		var owners = ownerUserIds.Length == 0
+			.ToList();
+		var owners = ownerUserIds.Count == 0
 			? []
 			: await _userRepository.GetListAsync(user => ownerUserIds.Contains(user.Id));
 		var ownerNames = owners.ToDictionary(user => user.Id, GetUserDisplayName);

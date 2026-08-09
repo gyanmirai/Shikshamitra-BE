@@ -7,6 +7,7 @@ public class AdmissionCrmEntranceExamDto : EntityDto<Guid>
 {
 	public Guid AcademicYearId { get; set; }
 	public Guid LeadId { get; set; }
+	public int ApplicantNumber { get; set; }
 	public string ApplicantName { get; set; } = string.Empty;
 	public Guid EntranceExamSlotId { get; set; }
 	public string? SlotNameSnapshot { get; set; }

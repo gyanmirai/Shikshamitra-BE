@@ -10,6 +10,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
+	public int ApplicantNumber { get; private set; }
 	public Guid AcademicYearId { get; private set; }
 	public Guid? AdmissionYearSetupId { get; private set; }
 	public int? AdmissionYearSetupVersion { get; private set; }

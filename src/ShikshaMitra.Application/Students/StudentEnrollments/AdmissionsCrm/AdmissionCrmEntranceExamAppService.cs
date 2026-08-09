@@ -178,8 +178,10 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		if (!string.IsNullOrWhiteSpace(input.FilterText))
 		{
 			var filter = input.FilterText.Trim().ToLowerInvariant();
+			var applicantNumber = ParseApplicantNumber(input.FilterText);
 			var matchingLeadIds = leadQueryable
 				.Where(x =>
+					(applicantNumber.HasValue && x.ApplicantNumber == applicantNumber.Value) ||
 					(x.FirstName != null && x.FirstName.ToLower().Contains(filter)) ||
 					 (x.MiddleName != null && x.MiddleName.ToLower().Contains(filter)) ||
 					 (x.LastName != null && x.LastName.ToLower().Contains(filter)) ||
@@ -194,8 +196,10 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
 		{
 			var applicant = input.ApplicantSearch.Trim().ToLowerInvariant();
+			var applicantNumber = ParseApplicantNumber(input.ApplicantSearch);
 			var matchingLeadIds = leadQueryable
 				.Where(x =>
+					(applicantNumber.HasValue && x.ApplicantNumber == applicantNumber.Value) ||
 					(x.FirstName != null && x.FirstName.ToLower().Contains(applicant)) ||
 					 (x.MiddleName != null && x.MiddleName.ToLower().Contains(applicant)) ||
 					 (x.LastName != null && x.LastName.ToLower().Contains(applicant)) ||
@@ -770,6 +774,7 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 			Id = exam.Id,
 			AcademicYearId = exam.AcademicYearId,
 			LeadId = exam.LeadId,
+			ApplicantNumber = lead?.ApplicantNumber ?? 0,
 			ApplicantName = lead == null ? string.Empty : BuildApplicantName(lead),
 			EntranceExamSlotId = exam.EntranceExamSlotId,
 			SlotNameSnapshot = exam.SlotNameSnapshot,
@@ -809,6 +814,7 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 			AcademicYearId = lead.AcademicYearId,
 			LeadId = lead.Id,
 			ExamRecordId = exam.Id,
+			ApplicantNumber = lead.ApplicantNumber,
 			CanStartAdmission = canStartAdmission,
 			RequiresManualReview = exam.EligibilityOverrideUsed ||
 			                       !canStartAdmission,
@@ -849,6 +855,9 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
 		return field switch
 		{
+			"applicantnumber" => descending
+				? query.OrderByDescending(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.ApplicantNumber).FirstOrDefault())
+				: query.OrderBy(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.ApplicantNumber).FirstOrDefault()),
 			"applicantname" => descending
 				? query.OrderByDescending(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.FirstName).FirstOrDefault())
 					.ThenByDescending(exam => leads.Where(lead => lead.Id == exam.LeadId).Select(lead => lead.LastName).FirstOrDefault())
@@ -972,6 +981,14 @@ public class AdmissionCrmEntranceExamAppService : ApplicationService, IAdmission
 		return string.IsNullOrWhiteSpace(name)
 			? lead.ParentGuardianName ?? lead.PrimaryContactNo ?? lead.Email ?? "Unnamed applicant"
 			: name;
+	}
+
+	private static int? ParseApplicantNumber(string? value)
+	{
+		var normalized = value?.Trim().TrimStart('#');
+		return int.TryParse(normalized, out var applicantNumber) && applicantNumber > 0
+			? applicantNumber
+			: null;
 	}
 
 	private async Task AddTimelineEventAsync(

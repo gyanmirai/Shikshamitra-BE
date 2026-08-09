@@ -78,6 +78,7 @@ public class AdmissionCrmOperationsQueueItemDto
 {
 	public string Key { get; set; } = string.Empty;
 	public Guid LeadId { get; set; }
+	public int ApplicantNumber { get; set; }
 	public Guid? ExamRecordId { get; set; }
 	public Guid? RegistrationApplicationId { get; set; }
 	public Guid? DocumentId { get; set; }
@@ -257,6 +258,7 @@ public class AdmissionCrmMyWorkItemDto
 	public Guid? TaskId { get; set; }
 	public AdmissionCrmOperationsQueueType? QueueType { get; set; }
 	public Guid LeadId { get; set; }
+	public int ApplicantNumber { get; set; }
 	public Guid? ExamRecordId { get; set; }
 	public string ApplicantName { get; set; } = string.Empty;
 	public string? Contact { get; set; }

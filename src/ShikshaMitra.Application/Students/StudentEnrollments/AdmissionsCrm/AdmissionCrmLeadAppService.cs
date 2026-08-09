@@ -715,8 +715,10 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		if (!string.IsNullOrWhiteSpace(input.FilterText))
 		{
 			var filter = input.FilterText.Trim().ToLowerInvariant();
+			var applicantNumber = ParseApplicantNumber(input.FilterText);
 			var normalizedPhone = NormalizePhone(input.FilterText);
 			query = query.Where(x =>
+				(applicantNumber.HasValue && x.ApplicantNumber == applicantNumber.Value) ||
 				(x.FirstName != null && x.FirstName.ToLower().Contains(filter)) ||
 				(x.LastName != null && x.LastName.ToLower().Contains(filter)) ||
 				(x.ParentGuardianName != null && x.ParentGuardianName.ToLower().Contains(filter)) ||
@@ -728,7 +730,9 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
 		{
 			var applicant = input.ApplicantSearch.Trim().ToLowerInvariant();
+			var applicantNumber = ParseApplicantNumber(input.ApplicantSearch);
 			query = query.Where(x =>
+				(applicantNumber.HasValue && x.ApplicantNumber == applicantNumber.Value) ||
 				(x.FirstName != null && x.FirstName.ToLower().Contains(applicant)) ||
 				(x.LastName != null && x.LastName.ToLower().Contains(applicant)) ||
 				(x.ParentGuardianName != null && x.ParentGuardianName.ToLower().Contains(applicant)));
@@ -2534,6 +2538,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		return new AdmissionCrmLeadDto
 		{
 			Id = lead.Id,
+			ApplicantNumber = lead.ApplicantNumber,
 			AcademicYearId = lead.AcademicYearId,
 			AdmissionYearSetupId = lead.AdmissionYearSetupId,
 			AdmissionYearSetupVersion = lead.AdmissionYearSetupVersion,
@@ -2949,6 +2954,9 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
 		return field switch
 		{
+			"applicantnumber" => descending
+				? query.OrderByDescending(x => x.ApplicantNumber)
+				: query.OrderBy(x => x.ApplicantNumber),
 			"applicantname" => descending
 				? query.OrderByDescending(x => x.FirstName).ThenByDescending(x => x.LastName)
 				: query.OrderBy(x => x.FirstName).ThenBy(x => x.LastName),
@@ -3030,6 +3038,14 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 
 		var digits = new string(value.Where(char.IsDigit).ToArray());
 		return string.IsNullOrWhiteSpace(digits) ? null : digits;
+	}
+
+	private static int? ParseApplicantNumber(string? value)
+	{
+		var normalized = value?.Trim().TrimStart('#');
+		return int.TryParse(normalized, out var applicantNumber) && applicantNumber > 0
+			? applicantNumber
+			: null;
 	}
 
 	private sealed class DuplicateProfileProbe

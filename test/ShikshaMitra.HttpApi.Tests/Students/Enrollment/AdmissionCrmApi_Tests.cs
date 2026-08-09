@@ -234,6 +234,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
 		var created = await createResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
 		created.ShouldNotBeNull();
+		created.ApplicantNumber.ShouldBeGreaterThan(0);
 		created.Stage.ShouldBe(AdmissionInquiryStage.NewInquiry);
 		created.FirstName.ShouldBe("Aarav");
 		created.MiddleName.ShouldBe("Kumar");
@@ -247,7 +248,19 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		var opened = await openResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
 		opened.ShouldNotBeNull();
 		opened.Id.ShouldBe(created.Id);
+		opened.ApplicantNumber.ShouldBe(created.ApplicantNumber);
 		opened.Stage.ShouldBe(AdmissionInquiryStage.NewInquiry);
+
+		var applicantNumberSearchResponse = await receptionistClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{academicYearId}/leads?filterText=%23{created.ApplicantNumber:D4}");
+		applicantNumberSearchResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await applicantNumberSearchResponse.Content.ReadAsStringAsync());
+		var applicantNumberSearch = await applicantNumberSearchResponse.Content
+			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmLeadDto>>(JsonOptions);
+		applicantNumberSearch.ShouldNotBeNull();
+		applicantNumberSearch.Items.ShouldContain(item =>
+			item.Id == created.Id && item.ApplicantNumber == created.ApplicantNumber);
 	}
 
 	[Fact]

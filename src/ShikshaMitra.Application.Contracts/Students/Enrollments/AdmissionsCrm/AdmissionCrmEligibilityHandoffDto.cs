@@ -8,6 +8,7 @@ public class AdmissionCrmEligibilityHandoffDto
 	public Guid AcademicYearId { get; set; }
 	public Guid LeadId { get; set; }
 	public Guid ExamRecordId { get; set; }
+	public int ApplicantNumber { get; set; }
 	public bool CanStartAdmission { get; set; }
 	public bool RequiresManualReview { get; set; }
 	public List<string> MissingAdmissionFields { get; set; } = new();

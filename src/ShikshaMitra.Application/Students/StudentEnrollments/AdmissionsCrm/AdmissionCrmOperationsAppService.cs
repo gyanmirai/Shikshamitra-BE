@@ -140,12 +140,14 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
 			var search = input.Search.Trim().ToLowerInvariant();
+			var applicantNumber = ParseApplicantNumber(input.Search);
 			filtered = filtered.Where(task =>
 				task.Title.ToLower().Contains(search) ||
 				(task.Notes != null && task.Notes.ToLower().Contains(search)) ||
 				scopedLeads.Any(lead =>
 					lead.Id == task.LeadId &&
-					((lead.FirstName != null && lead.FirstName.ToLower().Contains(search)) ||
+					((applicantNumber.HasValue && lead.ApplicantNumber == applicantNumber.Value) ||
+					 (lead.FirstName != null && lead.FirstName.ToLower().Contains(search)) ||
 					 (lead.MiddleName != null && lead.MiddleName.ToLower().Contains(search)) ||
 					 (lead.LastName != null && lead.LastName.ToLower().Contains(search)) ||
 					 (lead.ParentGuardianName != null && lead.ParentGuardianName.ToLower().Contains(search)) ||
@@ -155,9 +157,11 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
 		{
 			var search = input.ApplicantSearch.Trim().ToLowerInvariant();
+			var applicantNumber = ParseApplicantNumber(input.ApplicantSearch);
 			filtered = filtered.Where(task => scopedLeads.Any(lead =>
 				lead.Id == task.LeadId &&
-				((lead.FirstName != null && lead.FirstName.ToLower().Contains(search)) ||
+				((applicantNumber.HasValue && lead.ApplicantNumber == applicantNumber.Value) ||
+				 (lead.FirstName != null && lead.FirstName.ToLower().Contains(search)) ||
 				 (lead.MiddleName != null && lead.MiddleName.ToLower().Contains(search)) ||
 				 (lead.LastName != null && lead.LastName.ToLower().Contains(search)))));
 		}
@@ -245,6 +249,15 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			.ToLowerInvariant();
 		filtered = sortField switch
 		{
+			"applicantnumber" => descending
+				? filtered.OrderByDescending(task => scopedLeads
+					.Where(lead => lead.Id == task.LeadId)
+					.Select(lead => lead.ApplicantNumber)
+					.FirstOrDefault())
+				: filtered.OrderBy(task => scopedLeads
+					.Where(lead => lead.Id == task.LeadId)
+					.Select(lead => lead.ApplicantNumber)
+					.FirstOrDefault()),
 			"applicantname" => descending
 				? filtered.OrderByDescending(task => scopedLeads
 					.Where(lead => lead.Id == task.LeadId)
@@ -452,14 +465,19 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
 			var search = input.Search.Trim();
-			items = items.Where(x => x.ApplicantName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+			var applicantNumber = ParseApplicantNumber(input.Search);
+			items = items.Where(x => (applicantNumber.HasValue && x.ApplicantNumber == applicantNumber.Value) ||
+				x.ApplicantName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
 				x.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
 				(x.Details?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
 		}
 		if (!string.IsNullOrWhiteSpace(input.ApplicantSearch))
 		{
 			var applicantSearch = input.ApplicantSearch.Trim();
-			items = items.Where(x => x.ApplicantName.Contains(applicantSearch, StringComparison.OrdinalIgnoreCase));
+			var applicantNumber = ParseApplicantNumber(input.ApplicantSearch);
+			items = items.Where(x =>
+				(applicantNumber.HasValue && x.ApplicantNumber == applicantNumber.Value) ||
+				x.ApplicantName.Contains(applicantSearch, StringComparison.OrdinalIgnoreCase));
 		}
 		if (!string.IsNullOrWhiteSpace(input.ActionSearch))
 		{
@@ -1113,6 +1131,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		{
 			Key = key,
 			LeadId = lead.Id,
+			ApplicantNumber = lead.ApplicantNumber,
 			ExamRecordId = examRecordId,
 			RegistrationApplicationId = registrationApplicationId,
 			DocumentId = documentId,
@@ -1281,6 +1300,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			WorkType = AdmissionCrmMyWorkType.Task,
 			TaskId = task.Id,
 			LeadId = lead.Id,
+			ApplicantNumber = lead.ApplicantNumber,
 			ApplicantName = GetApplicantName(lead),
 			Contact = lead.PrimaryContactNo ?? lead.Email,
 			TargetStandardId = lead.TargetStandardId,
@@ -1314,6 +1334,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 			WorkType = AdmissionCrmMyWorkType.OperationalBlocker,
 			QueueType = queueType,
 			LeadId = lead.Id,
+			ApplicantNumber = lead.ApplicantNumber,
 			ExamRecordId = item.ExamRecordId,
 			ApplicantName = item.ApplicantName,
 			Contact = lead.PrimaryContactNo ?? lead.Email,
@@ -1394,6 +1415,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
 		return field switch
 		{
+			"applicantnumber" => descending ? items.OrderByDescending(x => x.ApplicantNumber) : items.OrderBy(x => x.ApplicantNumber),
 			"applicantname" => descending ? items.OrderByDescending(x => x.ApplicantName) : items.OrderBy(x => x.ApplicantName),
 			"priority" => descending
 				? items.OrderByDescending(x => GetPriorityRank(x.Priority))
@@ -1416,6 +1438,7 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
 		return field switch
 		{
+			"applicantnumber" => descending ? items.OrderByDescending(x => x.ApplicantNumber) : items.OrderBy(x => x.ApplicantNumber),
 			"applicantname" => descending ? items.OrderByDescending(x => x.ApplicantName) : items.OrderBy(x => x.ApplicantName),
 			"title" => descending ? items.OrderByDescending(x => x.Title) : items.OrderBy(x => x.Title),
 			"status" => descending ? items.OrderByDescending(x => x.Status) : items.OrderBy(x => x.Status),
@@ -1576,6 +1599,14 @@ public class AdmissionCrmOperationsAppService : ApplicationService, IAdmissionCr
 	{
 		var name = string.Join(" ", new[] { lead.FirstName, lead.MiddleName, lead.LastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
 		return string.IsNullOrWhiteSpace(name) ? lead.ParentGuardianName ?? lead.PrimaryContactNo ?? "Applicant" : name;
+	}
+
+	private static int? ParseApplicantNumber(string? value)
+	{
+		var normalized = value?.Trim().TrimStart('#');
+		return int.TryParse(normalized, out var applicantNumber) && applicantNumber > 0
+			? applicantNumber
+			: null;
 	}
 
 	private static string GetQueueLabel(AdmissionCrmOperationsQueueType queueType)

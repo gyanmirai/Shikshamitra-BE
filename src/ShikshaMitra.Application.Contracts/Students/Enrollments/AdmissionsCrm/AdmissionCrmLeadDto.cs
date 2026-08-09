@@ -6,6 +6,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
 public class AdmissionCrmLeadDto : EntityDto<Guid>
 {
+	public int ApplicantNumber { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid? AdmissionYearSetupId { get; set; }
 	public int? AdmissionYearSetupVersion { get; set; }

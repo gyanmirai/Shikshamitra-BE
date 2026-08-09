@@ -15,6 +15,10 @@ public class AdmissionInquiryLeadConfiguration : IEntityTypeConfiguration<Admiss
 
 		builder.ConfigureByConvention();
 
+		builder.Property(x => x.ApplicantNumber)
+			.UseIdentityAlwaysColumn()
+			.ValueGeneratedOnAdd();
+
 		builder.Property(x => x.InquirySourceSnapshot)
 			.HasMaxLength(AdmissionCrmConsts.MaxSourceSnapshotLength);
 		builder.Property(x => x.InquiryTypeSnapshot)
@@ -91,6 +95,9 @@ public class AdmissionInquiryLeadConfiguration : IEntityTypeConfiguration<Admiss
 			.OnDelete(DeleteBehavior.Restrict);
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Stage });
+		builder.HasIndex(x => new { x.TenantId, x.ApplicantNumber })
+			.IsUnique()
+			.HasDatabaseName("IX_AdmissionInquiryLeads_Tenant_ApplicantNumber");
 		builder.HasIndex(x => new { x.TenantId, x.AdmissionYearSetupId });
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.InquiryTypeId });
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Priority });

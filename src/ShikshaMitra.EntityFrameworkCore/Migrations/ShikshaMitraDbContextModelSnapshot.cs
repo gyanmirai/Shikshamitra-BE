@@ -26985,10 +26985,10 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "FormTemplateId");
 
+                    b.HasIndex("TenantId", "LeadId");
+
                     b.HasIndex("TenantId", "FormTemplateId", "SubmissionKey")
                         .IsUnique();
-
-                    b.HasIndex("TenantId", "LeadId");
 
                     b.ToTable("AppAdmissionInquiryFormSubmissions", (string)null);
                 });
@@ -27116,6 +27116,12 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<int?>("AdmissionYearSetupVersion")
                         .HasColumnType("integer");
+
+                    b.Property<int>("ApplicantNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<int>("ApplicantNumber"));
 
                     b.Property<string>("ArchiveReason")
                         .HasMaxLength(2000)
@@ -27318,6 +27324,10 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("IntendedRouteDefinitionId");
 
                     b.HasIndex("TenantId", "AdmissionYearSetupId");
+
+                    b.HasIndex("TenantId", "ApplicantNumber")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AdmissionInquiryLeads_Tenant_ApplicantNumber");
 
                     b.HasIndex("TenantId", "MergedIntoLeadId");
 

@@ -63,7 +63,7 @@ Every applicant must have a Pipeline lead before entrance exam, registration, Fi
 |---|---|
 | Admission Year Setup | Read and update admission-specific rules attached to an Institute Setup academic year |
 | Applicant Stepper | Return applicant step status, blockers, skipped steps, and next action |
-| Pipeline | Create and list leads by academic year, source, inquiry type, owner, desired board, medium, standard, and stage |
+| Pipeline | Create and list leads by academic year, source, inquiry type, owner, desired board, medium, standard, and stage; return one immutable database-generated `ApplicantNumber` for every lead |
 | Owner assignment | Assign or clear lead owner with permission and timeline evidence |
 | Follow-up | Create, list, and complete lead tasks |
 | Messaging | Render, send, schedule, and cancel approved simple reminders with consent, duplicate-message protection, and delivery-log state |
@@ -121,6 +121,9 @@ Every applicant must have a Pipeline lead before entrance exam, registration, Fi
 
 The existing route name `setup/cycles` may remain in API code for compatibility.
 User-facing copy should use Admission Year Setup unless a specific code route is being discussed.
+`ApplicantNumber` is the short staff-facing Enrollment identifier. It is immutable after lead creation,
+searchable with or without the `#` display prefix, and projected into Pipeline, Entrance Exam,
+Operations Queue, My Work, and applicant-detail responses. The internal GUID remains the API route key.
 
 ## Admission Reports contract
 

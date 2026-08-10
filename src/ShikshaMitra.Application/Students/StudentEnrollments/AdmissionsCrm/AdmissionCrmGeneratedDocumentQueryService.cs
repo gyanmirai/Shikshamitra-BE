@@ -6,17 +6,16 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
-[Authorize]
-[RemoteService(false)]
-public class AdmissionCrmGeneratedDocumentQueryService(
+public class AdmissionCrmGeneratedDocumentQueryWorkflow(
 	AdmissionCrmLeadAccessReader leadAccessReader,
 	AdmissionCrmGeneratedDocumentAvailabilityReader availabilityReader,
 	IRepository<AdmissionCrmTimelineEvent, Guid> timelineRepository)
-	: ApplicationService, IAdmissionCrmGeneratedDocumentQueryService
+	: ApplicationService, ITransientDependency
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
 	public async Task<IReadOnlyList<AdmissionCrmGeneratedDocumentAvailabilityDto>> GetAvailabilityAsync(Guid leadId)

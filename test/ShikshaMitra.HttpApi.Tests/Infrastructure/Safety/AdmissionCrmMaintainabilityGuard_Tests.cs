@@ -36,7 +36,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmDocumentAppService.cs"] = 669,
 			["AdmissionCrmApplicantProgressProjector.cs"] = 596,
 			["AdmissionCrmHouseholdIdentityAppService.cs"] = 538,
-			["AdmissionCrmPolicyPackAppService.cs"] = 524,
 			["AdmissionCrmConfigurationCloneWriter.cs"] = 455,
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 447,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 364,
@@ -90,7 +89,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 16,
 			["AdmissionCrmOperationsAppService.cs"] = 44,
 			["AdmissionCrmPlaybookAppService.cs"] = 8,
-			["AdmissionCrmPolicyPackAppService.cs"] = 12,
 			["AdmissionCrmPublicAppService.cs"] = 60,
 			["AdmissionCrmRegistrationAppService.cs"] = 18,
 			["AdmissionCrmReportAppService.cs"] = 4,
@@ -149,8 +147,7 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 	{
 		var violations = GetSourceFiles()
 			.Select(file => new { File = file, Text = File.ReadAllText(file) })
-			.Where(item => Path.GetFileName(item.File).EndsWith("AppService.cs", StringComparison.Ordinal))
-			.Where(item => ApplicationServicePattern().IsMatch(item.Text))
+			.Where(item => EndpointFacadePattern().IsMatch(item.Text))
 			.Select(item => new
 			{
 				item.File,
@@ -277,8 +274,10 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 	private static Regex ClassNamePattern() =>
 		new(@"\bclass\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)", RegexOptions.CultureInvariant);
 
-	private static Regex ApplicationServicePattern() =>
-		new(@"(?:\:\s*ApplicationService\b|\bApplicationService\s*,)", RegexOptions.CultureInvariant);
+	private static Regex EndpointFacadePattern() =>
+		new(
+			@":\s*ApplicationService\s*,\s*IAdmissionCrm[A-Za-z0-9_]*(?:AppService|Service)\b",
+			RegexOptions.CultureInvariant);
 
 	private static Regex RepositoryInjectionPattern() =>
 		new(@"\b(?:IRepository<[^>]+>|I[A-Za-z0-9_]*Repository)\s+[A-Za-z_][A-Za-z0-9_]*", RegexOptions.CultureInvariant);

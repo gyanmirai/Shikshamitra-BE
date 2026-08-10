@@ -11,7 +11,8 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Authorize]
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmPlaybookController(
-	IAdmissionCrmPlaybookAppService playbookAppService) : AbpControllerBase
+	IAdmissionCrmPlaybookConfigurationService configurationService,
+	IAdmissionCrmPlaybookOperationsService operationsService) : AbpControllerBase
 {
 	[HttpPost("{academicYearId}/configuration/playbooks")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManagePlaybooks)]
@@ -19,7 +20,7 @@ public class AdmissionCrmPlaybookController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] CreateAdmissionCrmPlaybookDto input)
 	{
-		return await playbookAppService.CreateAsync(academicYearId, input);
+		return await configurationService.CreateAsync(academicYearId, input);
 	}
 
 	[HttpGet("{academicYearId}/configuration/playbooks")]
@@ -28,14 +29,14 @@ public class AdmissionCrmPlaybookController(
 		[FromRoute] Guid academicYearId,
 		[FromQuery] GetAdmissionCrmPlaybookListInput input)
 	{
-		return await playbookAppService.GetListAsync(academicYearId, input);
+		return await configurationService.GetListAsync(academicYearId, input);
 	}
 
 	[HttpGet("configuration/playbooks/{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
 	public async Task<AdmissionCrmPlaybookDto> GetAsync([FromRoute] Guid id)
 	{
-		return await playbookAppService.GetAsync(id);
+		return await configurationService.GetAsync(id);
 	}
 
 	[HttpPut("configuration/playbooks/{id}")]
@@ -44,28 +45,28 @@ public class AdmissionCrmPlaybookController(
 		[FromRoute] Guid id,
 		[FromBody] UpdateAdmissionCrmPlaybookDto input)
 	{
-		return await playbookAppService.UpdateAsync(id, input);
+		return await configurationService.UpdateAsync(id, input);
 	}
 
 	[HttpPost("configuration/playbooks/{id}/publish")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.PublishPlaybooks)]
 	public async Task<AdmissionCrmPlaybookDto> PublishAsync([FromRoute] Guid id)
 	{
-		return await playbookAppService.PublishAsync(id);
+		return await configurationService.PublishAsync(id);
 	}
 
 	[HttpPost("configuration/playbooks/{id}/new-version")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManagePlaybooks)]
 	public async Task<AdmissionCrmPlaybookDto> CreateNewVersionAsync([FromRoute] Guid id)
 	{
-		return await playbookAppService.CreateNewVersionAsync(id);
+		return await configurationService.CreateNewVersionAsync(id);
 	}
 
 	[HttpPost("configuration/playbooks/{id}/retire")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.PublishPlaybooks)]
 	public async Task<AdmissionCrmPlaybookDto> RetireAsync([FromRoute] Guid id)
 	{
-		return await playbookAppService.RetireAsync(id);
+		return await configurationService.RetireAsync(id);
 	}
 
 	[HttpPost("{academicYearId}/playbooks/resolve")]
@@ -74,7 +75,7 @@ public class AdmissionCrmPlaybookController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] ResolveAdmissionCrmPlaybookDto input)
 	{
-		return await playbookAppService.ResolveAsync(academicYearId, input);
+		return await operationsService.ResolveAsync(academicYearId, input);
 	}
 
 	[HttpPost("configuration/playbooks/{id}/slots/generate")]
@@ -83,7 +84,7 @@ public class AdmissionCrmPlaybookController(
 		[FromRoute] Guid id,
 		[FromBody] GenerateAdmissionCrmPlaybookSlotsDto input)
 	{
-		return await playbookAppService.GenerateSlotsAsync(id, input);
+		return await operationsService.GenerateSlotsAsync(id, input);
 	}
 
 	[HttpPost("configuration/playbooks/{id}/slots/recommend")]
@@ -92,7 +93,7 @@ public class AdmissionCrmPlaybookController(
 		[FromRoute] Guid id,
 		[FromBody] RecommendAdmissionCrmPlaybookSlotDto input)
 	{
-		return await playbookAppService.RecommendSlotAsync(id, input);
+		return await operationsService.RecommendSlotAsync(id, input);
 	}
 
 	[HttpPost("configuration/playbooks/{id}/exam-results/preview")]
@@ -101,6 +102,6 @@ public class AdmissionCrmPlaybookController(
 		[FromRoute] Guid id,
 		[FromBody] PreviewAdmissionCrmExamResultDto input)
 	{
-		return await playbookAppService.PreviewExamResultAsync(id, input);
+		return await operationsService.PreviewExamResultAsync(id, input);
 	}
 }

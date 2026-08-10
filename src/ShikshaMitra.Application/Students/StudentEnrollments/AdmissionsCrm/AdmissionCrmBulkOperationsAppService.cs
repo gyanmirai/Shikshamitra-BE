@@ -18,7 +18,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 {
 	private const int MaximumBatchSize = 100;
 	private readonly IAdmissionCrmLeadAppService _leadService;
-	private readonly IAdmissionCrmFinalAdmissionAppService _finalAdmissionService;
+	private readonly AdmissionCrmOfferDraftWorkflow _offerWorkflow;
 	private readonly AdmissionCrmActivationBulkWorkflow _activationWorkflow;
 	private readonly AdmissionCrmEntranceExamBulkWorkflow _examBulkWorkflow;
 	private readonly AdmissionCrmMessageDeliveryWorkflow _communicationWorkflow;
@@ -26,10 +26,9 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	private readonly IRepository<AdmissionCrmEntranceExamRecord, Guid> _entranceExamRepository;
 	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
 	private readonly StudentScopeAccessService _scopeAccess;
-
 	public AdmissionCrmBulkOperationsAppService(
 		IAdmissionCrmLeadAppService leadService,
-		IAdmissionCrmFinalAdmissionAppService finalAdmissionService,
+		AdmissionCrmOfferDraftWorkflow offerWorkflow,
 		AdmissionCrmActivationBulkWorkflow activationWorkflow,
 		AdmissionCrmEntranceExamBulkWorkflow examBulkWorkflow,
 		AdmissionCrmMessageDeliveryWorkflow communicationWorkflow,
@@ -39,7 +38,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		StudentScopeAccessService scopeAccess)
 	{
 		_leadService = leadService;
-		_finalAdmissionService = finalAdmissionService;
+		_offerWorkflow = offerWorkflow;
 		_activationWorkflow = activationWorkflow;
 		_examBulkWorkflow = examBulkWorkflow;
 		_communicationWorkflow = communicationWorkflow;
@@ -48,7 +47,6 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		_leadRepository = leadRepository;
 		_scopeAccess = scopeAccess;
 	}
-
 	[UnitOfWork(IsDisabled = true)]
 	public async Task<AdmissionCrmBulkOperationResultDto> AssignOwnersAsync(Guid academicYearId, AdmissionCrmBulkAssignOwnersDto input)
 	{
@@ -194,13 +192,14 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	[UnitOfWork(IsDisabled = true)]
 	public async Task<AdmissionCrmBulkOperationResultDto> PreviewOffersAsync(Guid academicYearId, AdmissionCrmBulkOfferDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageOffers);
 		await EnsureBatchAsync(academicYearId, input.LeadIds, nameof(PreviewOffersAsync));
 		var items = new List<AdmissionCrmBulkOperationItemResultDto>();
 		foreach (var leadId in input.LeadIds.Distinct())
 		{
 			try
 			{
-				var preview = await _finalAdmissionService.PreviewOfferAsync(leadId, input.Offer);
+				var preview = await _offerWorkflow.PreviewAsync(leadId, input.Offer);
 				items.Add(new AdmissionCrmBulkOperationItemResultDto
 				{
 					EntityId = leadId, Success = preview.IsReady,
@@ -219,16 +218,17 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	[UnitOfWork(IsDisabled = true)]
 	public async Task<AdmissionCrmBulkOperationResultDto> CreateOffersAsync(Guid academicYearId, AdmissionCrmBulkOfferDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageOffers);
 		await EnsureBatchAsync(academicYearId, input.LeadIds, nameof(CreateOffersAsync));
 		return await RunAsync(input.LeadIds.Distinct().ToList(), x => x, async leadId =>
 		{
-			var preview = await _finalAdmissionService.PreviewOfferAsync(leadId, input.Offer);
+			var preview = await _offerWorkflow.PreviewAsync(leadId, input.Offer);
 			if (!preview.IsReady)
 			{
 				throw new BusinessException("AdmissionCrm:BulkOfferNotReady")
 					.WithData("BlockingReasons", string.Join(",", preview.BlockingReasons));
 			}
-			var result = await _finalAdmissionService.CreateOfferAsync(leadId, input.Offer);
+			var result = await _offerWorkflow.CreateAsync(leadId, input.Offer);
 			return result.Id.ToString();
 		});
 	}

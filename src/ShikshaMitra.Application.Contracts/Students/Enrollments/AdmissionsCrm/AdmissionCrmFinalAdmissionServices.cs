@@ -6,11 +6,15 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
-public interface IAdmissionCrmFinalAdmissionAppService : IApplicationService
+public interface IAdmissionCrmSeatPoolService : IApplicationService
 {
 	Task<AdmissionCrmSeatPoolDto> CreateSeatPoolAsync(Guid academicYearId, UpsertAdmissionCrmSeatPoolDto input);
 	Task<AdmissionCrmSeatPoolDto> UpdateSeatPoolAsync(Guid id, UpsertAdmissionCrmSeatPoolDto input);
 	Task<PagedResultDto<AdmissionCrmSeatPoolDto>> GetSeatPoolsAsync(Guid academicYearId, GetAdmissionCrmSeatPoolListInput input);
+}
+
+public interface IAdmissionCrmSeatOfferService : IApplicationService
+{
 	Task<AdmissionCrmSeatOfferDto> CreateOfferAsync(Guid leadId, CreateAdmissionCrmSeatOfferDto input);
 	Task<AdmissionCrmSeatOfferPreviewDto> PreviewOfferAsync(Guid leadId, CreateAdmissionCrmSeatOfferDto input);
 	Task<PagedResultDto<AdmissionCrmSeatOfferDto>> GetOffersAsync(Guid academicYearId, GetAdmissionCrmSeatOfferListInput input);
@@ -24,7 +28,10 @@ public interface IAdmissionCrmFinalAdmissionAppService : IApplicationService
 	Task<AdmissionCrmSeatOfferDto> SupersedeOfferAsync(Guid id, SupersedeAdmissionCrmSeatOfferDto input);
 	Task<AdmissionCrmSeatOfferDto> ExpireOfferAsync(Guid id);
 	Task<AdmissionCrmOfferExpiryRunResultDto> RunOfferExpiryAsync(Guid academicYearId);
-	Task<AdmissionCrmOfferExpiryRunResultDto> RunOfferExpiryFromAutomationAsync(Guid academicYearId);
+}
+
+public interface IAdmissionCrmWaitlistService : IApplicationService
+{
 	Task<AdmissionCrmWaitlistEntryDto> AddToWaitlistAsync(Guid leadId, CreateAdmissionCrmWaitlistEntryDto input);
 	Task<IReadOnlyList<AdmissionCrmWaitlistEntryDto>> GetWaitlistAsync(Guid seatPoolId);
 	Task<AdmissionCrmSeatOfferDto> PrepareWaitlistPromotionAsync(Guid entryId, PrepareAdmissionCrmWaitlistPromotionDto input);
@@ -32,6 +39,10 @@ public interface IAdmissionCrmFinalAdmissionAppService : IApplicationService
 	Task<AdmissionCrmWaitlistEntryDto> UpdateWaitlistGovernanceAsync(Guid entryId, UpdateAdmissionCrmWaitlistGovernanceDto input);
 	Task<IReadOnlyList<AdmissionCrmWaitlistHistoryDto>> GetWaitlistHistoryAsync(Guid entryId);
 	Task<AdmissionCrmWaitlistPromotionRunResultDto> RunWaitlistPromotionAsync(Guid academicYearId, RunAdmissionCrmWaitlistPromotionDto input);
+}
+
+public interface IAdmissionCrmAdmissionDecisionService : IApplicationService
+{
 	Task<AdmissionCrmAdmissionDecisionDto> RecordDecisionAsync(Guid leadId, RecordAdmissionCrmAdmissionDecisionDto input);
 	Task<AdmissionCrmAdmissionDecisionDto?> GetDecisionAsync(Guid leadId);
 	Task<IReadOnlyList<AdmissionCrmAdmissionDecisionDto>> GetDecisionHistoryAsync(Guid leadId);

@@ -30,7 +30,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicYearId")
+                    b.Property<Guid?>("AcademicMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicYearId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -108,7 +111,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AcademicYearId", "IsDefault");
+                    b.HasIndex("AcademicMediumId", "IsDefault");
 
                     b.ToTable("AppAcademicCalendars", (string)null);
                 });
@@ -309,6 +312,15 @@ namespace ShikshaMitra.Migrations
                     b.Property<TimeSpan?>("EndTime")
                         .HasColumnType("interval");
 
+                    b.Property<TimeSpan?>("ExamEndTime")
+                        .HasColumnType("interval");
+
+                    b.Property<TimeSpan?>("ExamStartTime")
+                        .HasColumnType("interval");
+
+                    b.Property<Guid?>("ExamTypeId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("HolidayCategory")
                         .HasColumnType("integer");
 
@@ -325,6 +337,20 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("LastModifierId")
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
+
+                    b.Property<Guid?>("LinkedExamId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MeetingLink")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("PtmMode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("StandardId")
                         .HasColumnType("uuid");
@@ -344,6 +370,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<string>("Venue")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AcademicCalendarId", "Date");
@@ -358,7 +388,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AcademicYearId")
+                    b.Property<Guid?>("AcademicMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicYearId")
                         .HasColumnType("uuid");
 
                     b.Property<bool>("AllowClassSpecificHolidays")
@@ -499,7 +532,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AcademicYearId")
+                    b.HasIndex("AcademicMediumId")
                         .IsUnique();
 
                     b.ToTable("AppAcademicCalendarSettings", (string)null);

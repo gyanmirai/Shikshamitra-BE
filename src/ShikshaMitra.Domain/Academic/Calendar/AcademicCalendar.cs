@@ -8,7 +8,8 @@ namespace ShikshaMitra.Academic.Calendar;
 public class AcademicCalendar : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
-    public Guid AcademicYearId { get; private set; }
+    public Guid? AcademicMediumId { get; private set; }
+    public Guid? AcademicYearId { get; private set; }
     public string Name { get; private set; }
     public string? Description { get; private set; }
     public DateTime StartDate { get; private set; }
@@ -29,7 +30,8 @@ public class AcademicCalendar : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public AcademicCalendar(
         Guid id,
         Guid? tenantId,
-        Guid academicYearId,
+        Guid academicMediumId,
+        Guid? academicYearId,
         string name,
         DateTime startDate,
         DateTime endDate,
@@ -38,6 +40,7 @@ public class AcademicCalendar : FullAuditedAggregateRoot<Guid>, IMultiTenant
         : base(id)
     {
         TenantId = tenantId;
+        AcademicMediumId = academicMediumId;
         AcademicYearId = academicYearId;
         Name = name;
         StartDate = startDate;

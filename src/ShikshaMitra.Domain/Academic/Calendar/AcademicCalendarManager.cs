@@ -21,7 +21,8 @@ public class AcademicCalendarManager : DomainService, IAcademicCalendarManager
     }
 
     public async Task<AcademicCalendar> CreateAsync(
-        Guid academicYearId,
+        Guid academicMediumId,
+        Guid? academicYearId,
         string name,
         DateTime startDate,
         DateTime endDate,
@@ -30,18 +31,18 @@ public class AcademicCalendarManager : DomainService, IAcademicCalendarManager
     {
         // Check if calendar already exists
         var existing = await _calendarRepository.FirstOrDefaultAsync(c =>
-            c.AcademicYearId == academicYearId && c.Name == name);
+            c.AcademicMediumId == academicMediumId && c.Name == name);
         
         if (existing != null)
         {
-            throw new UserFriendlyException($"An academic calendar named '{name}' already exists for this academic year.");
+            throw new UserFriendlyException($"An academic calendar named '{name}' already exists for this medium.");
         }
 
         // Handle default calendar adjustment
         if (isDefault)
         {
             var currentDefaults = await _calendarRepository.GetListAsync(c =>
-                c.AcademicYearId == academicYearId && c.IsDefault);
+                c.AcademicMediumId == academicMediumId && c.IsDefault);
             
             foreach (var def in currentDefaults)
             {
@@ -54,6 +55,7 @@ public class AcademicCalendarManager : DomainService, IAcademicCalendarManager
         return new AcademicCalendar(
             calendarId,
             CurrentTenant.Id,
+            academicMediumId,
             academicYearId,
             name,
             startDate,

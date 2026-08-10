@@ -20,7 +20,7 @@ public class AcademicCalendarConfiguration : IEntityTypeConfiguration<AcademicCa
                .HasForeignKey(x => x.AcademicCalendarId)
                .OnDelete(DeleteBehavior.Cascade);
                
-        builder.HasIndex(x => new { x.AcademicYearId, x.IsDefault });
+        builder.HasIndex(x => new { x.AcademicMediumId, x.IsDefault });
     }
 }
 
@@ -34,6 +34,9 @@ public class AcademicCalendarDayConfiguration : IEntityTypeConfiguration<Academi
         builder.Property(x => x.Title).IsRequired().HasMaxLength(256);
         builder.Property(x => x.Description).HasMaxLength(1024);
         builder.Property(x => x.ChangeReason).HasMaxLength(1024);
+        builder.Property(x => x.Venue).HasMaxLength(256);
+        builder.Property(x => x.PtmMode).HasMaxLength(32);
+        builder.Property(x => x.MeetingLink).HasMaxLength(1024);
         builder.Property(x => x.AutoScanImpacts).IsRequired().HasDefaultValue(true);
         
         // Non-unique: a multi-class marker stores one row per class on the same date;
@@ -61,7 +64,7 @@ public class AcademicCalendarSettingConfiguration : IEntityTypeConfiguration<Aca
         builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicCalendarSettings", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         
-        builder.HasIndex(x => x.AcademicYearId).IsUnique();
+        builder.HasIndex(x => x.AcademicMediumId).IsUnique();
     }
 }
 

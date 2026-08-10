@@ -26,11 +26,14 @@ public class SubjectAssignmentGroupDto
     /// <summary>Weekly periods allocated for this subject</summary>
     public int WeeklyPeriods { get; set; }
 
-    /// <summary>Primary teacher name (display only)</summary>
-    public string? PrimaryTeacherName { get; set; }
+	/// <summary>Primary teacher name (display only)</summary>
+	public string? PrimaryTeacherName { get; set; }
+
+	/// <summary>All primary teacher names assigned to the subjects in this row.</summary>
+	public List<string> PrimaryTeacherNames { get; set; } = new();
 
     /// <summary>Primary teacher id</summary>
-    public string? PrimaryTeacherId { get; set; }
+	public string? PrimaryTeacherId { get; set; }
 
     /// <summary>When this record was last modified</summary>
     public DateTime? LastUpdatedAt { get; set; }

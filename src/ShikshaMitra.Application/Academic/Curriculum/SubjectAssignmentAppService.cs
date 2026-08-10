@@ -262,7 +262,15 @@ public class SubjectAssignmentAppService(
 			var metrics = GetReadMetrics(readMetrics, coreAssignment);
 			var totalSlots = weeklyLecturesBySubject.GetValueOrDefault(coreAssignment.SubjectId, 0);
 			var occupiedSlots = occupiedBySubject.GetValueOrDefault(coreAssignment.SubjectId, 0);
-			var primaryTeacherEntry = coreAssignment.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
+			var primaryTeacherEntries = coreAssignment.Teachers
+				.Where(t => t.TeacherType == SubjectTeacherType.Primary)
+				.ToList();
+			var primaryTeacherNames = primaryTeacherEntries
+				.Select(t => teacherNamesDict.GetValueOrDefault(t.TeacherId))
+				.Where(name => !string.IsNullOrWhiteSpace(name))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToList();
+			var primaryTeacherEntry = primaryTeacherEntries.FirstOrDefault();
 			var usageParts = await GetAssignmentUsagePartsAsync(
 				coreAssignment.StandardId,
 				new[] { coreAssignment.SubjectId },
@@ -282,9 +290,8 @@ public class SubjectAssignmentAppService(
 				ChaptersCount = coreAssignment.Chapters.Count,
 				WeeklyPeriods = metrics.WeeklyPeriods,
 				PrimaryTeacherId = primaryTeacherEntry?.TeacherId.ToString(),
-				PrimaryTeacherName = primaryTeacherEntry != null
-					? teacherNamesDict.GetValueOrDefault(primaryTeacherEntry.TeacherId)
-					: null,
+				PrimaryTeacherName = primaryTeacherNames.FirstOrDefault(),
+				PrimaryTeacherNames = primaryTeacherNames,
 				LastUpdatedAt = coreAssignment.LastModificationTime ?? coreAssignment.CreationTime,
 				IsAiSuggested = coreAssignment.IsAiSuggested,
 				IsCopiedFromPreviousYear = coreAssignment.IsCopiedFromPreviousYear,
@@ -314,7 +321,16 @@ public class SubjectAssignmentAppService(
 			var electiveTotalSlots = weeklyLecturesByElective.GetValueOrDefault(first.ElectiveGroupId.Value, 0);
 			var electiveOccupiedSlots = group.Sum(a => occupiedBySubject.GetValueOrDefault(a.SubjectId, 0));
 			var avgHealth = groupMetrics.Count > 0 ? (int)groupMetrics.Average(a => a.SetupHealthScore) : 0;
-			var firstPrimary = first.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
+			var primaryTeacherEntries = group
+				.SelectMany(a => a.Teachers)
+				.Where(t => t.TeacherType == SubjectTeacherType.Primary)
+				.ToList();
+			var primaryTeacherNames = primaryTeacherEntries
+				.Select(t => teacherNamesDict.GetValueOrDefault(t.TeacherId))
+				.Where(name => !string.IsNullOrWhiteSpace(name))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToList();
+			var firstPrimary = primaryTeacherEntries.FirstOrDefault();
 			var subjectIdsInGroup = group.Select(a => a.SubjectId).ToList();
 			var usageParts = await GetAssignmentUsagePartsAsync(
 				first.StandardId,
@@ -337,9 +353,8 @@ public class SubjectAssignmentAppService(
 				ChaptersCount = group.Sum(a => a.Chapters.Count),
 				WeeklyPeriods = groupMetrics.FirstOrDefault()?.WeeklyPeriods ?? first.WeeklyPeriods,
 				PrimaryTeacherId = firstPrimary?.TeacherId.ToString(),
-				PrimaryTeacherName = firstPrimary != null
-					? teacherNamesDict.GetValueOrDefault(firstPrimary.TeacherId)
-					: null,
+				PrimaryTeacherName = primaryTeacherNames.FirstOrDefault(),
+				PrimaryTeacherNames = primaryTeacherNames,
 				LastUpdatedAt = first.LastModificationTime ?? first.CreationTime,
 				IsAiSuggested = first.IsAiSuggested,
 				IsCopiedFromPreviousYear = first.IsCopiedFromPreviousYear,
@@ -367,8 +382,8 @@ public class SubjectAssignmentAppService(
 		{
 			groupedAssignments = groupedAssignments
 				.Where(a =>
-					!string.IsNullOrWhiteSpace(a.PrimaryTeacherName) &&
-					a.PrimaryTeacherName.Contains(normalizedTeacherSearch, StringComparison.OrdinalIgnoreCase))
+					a.PrimaryTeacherNames.Any(name =>
+					name.Contains(normalizedTeacherSearch, StringComparison.OrdinalIgnoreCase)))
 				.ToList();
 		}
 

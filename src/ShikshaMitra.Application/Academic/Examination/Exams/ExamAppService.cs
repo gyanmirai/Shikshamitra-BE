@@ -680,10 +680,11 @@ public class ExamAppService(
 
 			return new ExamTableItemDto
 			{
-				ExamId = x.exam.Id,
-				ExamName = x.exam.ExamName,
-				ExamTypeName = x.examType.Name,
-				StandardName = x.standard.Name,
+                ExamId = x.exam.Id,
+                ExamName = x.exam.ExamName,
+                ExamTypeName = x.examType.Name,
+                StandardId = x.exam.StandardId,
+                StandardName = x.standard.Name,
 				CreatedBy = x.exam.CreatorId,
 				CreatorName = x.exam.CreatorId.HasValue ? creatorNameById.GetValueOrDefault(x.exam.CreatorId.Value) : null,
 				Status = x.EffectiveStatus,

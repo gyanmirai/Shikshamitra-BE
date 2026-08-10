@@ -12,25 +12,26 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Authorize]
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmGeneratedDocumentController(
-	IAdmissionCrmGeneratedDocumentAppService appService) : AbpControllerBase
+	IAdmissionCrmGeneratedDocumentCommandService commandService,
+	IAdmissionCrmGeneratedDocumentQueryService queryService) : AbpControllerBase
 {
 	[HttpPost("leads/{leadId}/documents/preview")]
 	public Task<AdmissionCrmGeneratedDocumentDto> PreviewAsync(
 		Guid leadId,
 		[FromBody] PreviewAdmissionCrmGeneratedDocumentDto input) =>
-		appService.PreviewAsync(leadId, input);
+		commandService.PreviewAsync(leadId, input);
 
 	[HttpPost("leads/{leadId}/documents/issue")]
 	public Task<AdmissionCrmGeneratedDocumentDto> IssueAsync(
 		Guid leadId,
 		[FromBody] IssueAdmissionCrmGeneratedDocumentDto input) =>
-		appService.IssueAsync(leadId, input);
+		commandService.IssueAsync(leadId, input);
 
 	[HttpGet("leads/{leadId}/documents/history")]
 	public Task<IReadOnlyList<AdmissionCrmGeneratedDocumentHistoryDto>> GetHistoryAsync(Guid leadId) =>
-		appService.GetHistoryAsync(leadId);
+		queryService.GetHistoryAsync(leadId);
 
 	[HttpGet("leads/{leadId}/documents/availability")]
 	public Task<IReadOnlyList<AdmissionCrmGeneratedDocumentAvailabilityDto>> GetAvailabilityAsync(Guid leadId) =>
-		appService.GetAvailabilityAsync(leadId);
+		queryService.GetAvailabilityAsync(leadId);
 }

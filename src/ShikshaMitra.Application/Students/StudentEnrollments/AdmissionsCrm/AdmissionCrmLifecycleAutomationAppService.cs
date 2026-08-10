@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,8 +24,8 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 	private readonly IRepository<AdmissionCrmAdmissionQuotation, Guid> _quotationRepository;
 	private readonly IRepository<AdmissionCrmSeatOffer, Guid> _offerRepository;
 	private readonly IRepository<AdmissionCrmActivation, Guid> _activationRepository;
-	private readonly IAdmissionCrmLeadAppService _leadAppService;
-	private readonly IAdmissionCrmFinalAdmissionAppService _finalAdmissionAppService;
+	private readonly AdmissionCrmEnrollmentAutomationCoordinator _automationCoordinator;
+	private readonly AdmissionCrmOfferExpiryWorkflow _offerExpiryWorkflow;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 	private readonly IUnitOfWorkManager _unitOfWorkManager;
 
@@ -38,8 +38,8 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 		IRepository<AdmissionCrmAdmissionQuotation, Guid> quotationRepository,
 		IRepository<AdmissionCrmSeatOffer, Guid> offerRepository,
 		IRepository<AdmissionCrmActivation, Guid> activationRepository,
-		IAdmissionCrmLeadAppService leadAppService,
-		IAdmissionCrmFinalAdmissionAppService finalAdmissionAppService,
+		AdmissionCrmEnrollmentAutomationCoordinator automationCoordinator,
+		AdmissionCrmOfferExpiryWorkflow offerExpiryWorkflow,
 		StudentScopeAccessService studentScopeAccessService,
 		IUnitOfWorkManager unitOfWorkManager)
 	{
@@ -51,8 +51,8 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 		_quotationRepository = quotationRepository;
 		_offerRepository = offerRepository;
 		_activationRepository = activationRepository;
-		_leadAppService = leadAppService;
-		_finalAdmissionAppService = finalAdmissionAppService;
+		_automationCoordinator = automationCoordinator;
+		_offerExpiryWorkflow = offerExpiryWorkflow;
 		_studentScopeAccessService = studentScopeAccessService;
 		_unitOfWorkManager = unitOfWorkManager;
 	}
@@ -108,9 +108,7 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 			requiresNew: true,
 			isTransactional: false))
 		{
-			var expiry = enforceUserScope
-				? await _finalAdmissionAppService.RunOfferExpiryAsync(academicYearId)
-				: await _finalAdmissionAppService.RunOfferExpiryFromAutomationAsync(academicYearId);
+			var expiry = await _offerExpiryWorkflow.RunAsync(academicYearId, enforceUserScope);
 			result.ExpiredOfferCount = expiry.ExpiredCount;
 			result.OfferExpiryFailureCount = expiry.FailedCount;
 			await expiryUnitOfWork.CompleteAsync();
@@ -209,8 +207,8 @@ public class AdmissionCrmLifecycleAutomationAppService : ApplicationService, IAd
 					LeadId = leadId
 				};
 				var journey = enforceUserScope
-					? await _leadAppService.RunJourneyRulesAsync(academicYearId, input)
-					: await _leadAppService.RunJourneyRulesFromAutomationAsync(academicYearId, input);
+					? await _automationCoordinator.RunJourneyRulesForStaffAsync(academicYearId, input)
+					: await _automationCoordinator.RunJourneyRulesAsync(academicYearId, input);
 				result.CreatedTaskCount += journey.CreatedTaskCount;
 				result.SentMessageCount += journey.SentMessageCount;
 				batchTriggeredLeadIds.Add(leadId);

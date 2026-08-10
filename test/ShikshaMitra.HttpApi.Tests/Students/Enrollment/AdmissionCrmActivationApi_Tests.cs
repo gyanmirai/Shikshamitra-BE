@@ -231,7 +231,7 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Preview_Activate_And_Return_Idempotent_First_Day_Ready_Student()
+	public async Task Should_Roll_Back_Failed_Activation_And_Return_Idempotent_First_Day_Ready_Student()
 	{
 		var placementResponse = await Client.GetAsync($"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/activation/placement-options");
 		placementResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await placementResponse.Content.ReadAsStringAsync());
@@ -384,6 +384,20 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 				ConfirmedAt = DateTime.UtcNow
 			}, JsonOptions);
 		financeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await financeResponse.Content.ReadAsStringAsync());
+
+		using (Factory.FailNextAdmissionCrmTimelineSave(AdmissionCrmTimelineEventType.StudentActivated))
+		{
+			var failedExecution = await Client.PostAsync(
+				$"/api/student-enrollment/admissions-crm/activation/{activation.Id}/execute",
+				null);
+			failedExecution.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await failedExecution.Content.ReadAsStringAsync());
+		}
+		var afterFailedExecution = await Client.GetFromJsonAsync<AdmissionCrmActivationDto>(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/activation", JsonOptions);
+		afterFailedExecution.ShouldNotBeNull();
+		afterFailedExecution.Status.ShouldBe(AdmissionCrmActivationStatus.RepairRequired);
+		afterFailedExecution.StudentId.ShouldBeNull();
+		afterFailedExecution.Identifiers.ShouldHaveSingleItem().Status.ShouldNotBe(AdmissionCrmIdentifierStatus.Committed);
 
 		var executeResponse = await Client.PostAsync($"/api/student-enrollment/admissions-crm/activation/{activation.Id}/execute", null);
 		executeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await executeResponse.Content.ReadAsStringAsync());

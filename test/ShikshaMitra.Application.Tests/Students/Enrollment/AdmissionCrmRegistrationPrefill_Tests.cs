@@ -19,7 +19,7 @@ public class AdmissionCrmRegistrationPrefill_Tests
 			3,
 			"Fresh admission 2026");
 
-		var prefill = AdmissionCrmRegistrationAppService.BuildPrefill(lead);
+		var prefill = AdmissionCrmRegistrationModelMapper.BuildPrefill(lead);
 
 		prefill["admissionRoute"].ShouldBe("Fresh admission 2026");
 		prefill["admissionRouteDefinitionId"].ShouldBe(definitionId);
@@ -31,7 +31,7 @@ public class AdmissionCrmRegistrationPrefill_Tests
 	{
 		var lead = CreateLead(AdmissionCrmRouteType.SiblingPriority);
 
-		var prefill = AdmissionCrmRegistrationAppService.BuildPrefill(lead);
+		var prefill = AdmissionCrmRegistrationModelMapper.BuildPrefill(lead);
 
 		prefill["admissionRoute"].ShouldBe(nameof(AdmissionCrmRouteType.SiblingPriority));
 		prefill["admissionRouteDefinitionId"].ShouldBeNull();
@@ -94,7 +94,7 @@ public class AdmissionCrmRegistrationPrefill_Tests
 			null,
 			"REG-00001",
 			JsonSerializer.Serialize(template, jsonOptions),
-			JsonSerializer.Serialize(AdmissionCrmRegistrationAppService.BuildPrefill(lead), jsonOptions),
+			JsonSerializer.Serialize(AdmissionCrmRegistrationModelMapper.BuildPrefill(lead), jsonOptions),
 			now,
 			now.AddDays(14),
 			0);

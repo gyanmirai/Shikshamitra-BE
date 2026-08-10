@@ -13,11 +13,14 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Route("api/public/student-enrollment/admissions-crm")]
 [AllowAnonymous]
 public class PublicAdmissionCrmController(
-	IAdmissionCrmPublicAppService admissionCrmPublicAppService) : AbpControllerBase
+	IAdmissionCrmPublicInquiryService inquiryService,
+	IAdmissionCrmPublicAccessService accessService,
+	IAdmissionCrmPublicApplicantService applicantService,
+	IAdmissionCrmPublicDeliveryCallbackService callbackService) : AbpControllerBase
 {
 	[HttpGet("{tenantId}/portal")]
 	public Task<PublicAdmissionPortalDto> GetPortalAsync([FromRoute] Guid tenantId) =>
-		admissionCrmPublicAppService.GetPublicPortalAsync(tenantId);
+		inquiryService.GetPublicPortalAsync(tenantId);
 
 	[HttpGet("{tenantId}/forms/{templateId}")]
 	public async Task<PublicAdmissionInquiryFormDto> GetFormAsync(
@@ -25,7 +28,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute] Guid templateId,
 		[FromQuery] string? language = null)
 	{
-		return await admissionCrmPublicAppService.GetPublicFormAsync(tenantId, templateId, language);
+		return await inquiryService.GetPublicFormAsync(tenantId, templateId, language);
 	}
 
 	[HttpPost("{tenantId}/forms/{templateId}/submit")]
@@ -34,7 +37,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute] Guid templateId,
 		[FromBody] PublicAdmissionInquirySubmitDto input)
 	{
-		return await admissionCrmPublicAppService.SubmitPublicFormAsync(
+		return await inquiryService.SubmitPublicFormAsync(
 			tenantId,
 			templateId,
 			input,
@@ -47,7 +50,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute] Guid tenantId,
 		[FromRoute, Required] string token)
 	{
-		return await admissionCrmPublicAppService.IssueStatusOtpAsync(tenantId, token);
+		return await accessService.IssueStatusOtpAsync(tenantId, token);
 	}
 
 	[HttpPost("{tenantId}/family/otp")]
@@ -55,7 +58,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute] Guid tenantId,
 		[FromBody] StartAdmissionFamilyAccessDto input)
 	{
-		return admissionCrmPublicAppService.IssueFamilyAccessOtpAsync(tenantId, input);
+		return accessService.IssueFamilyAccessOtpAsync(tenantId, input);
 	}
 
 	[HttpPost("{tenantId}/family/verify")]
@@ -63,7 +66,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute] Guid tenantId,
 		[FromBody] VerifyAdmissionFamilyAccessDto input)
 	{
-		return admissionCrmPublicAppService.VerifyFamilyAccessOtpAsync(tenantId, input);
+		return accessService.VerifyFamilyAccessOtpAsync(tenantId, input);
 	}
 
 	[HttpPost("{tenantId}/status/{token}/verify")]
@@ -72,7 +75,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute, Required] string token,
 		[FromBody] VerifyAdmissionApplicantStatusOtpDto input)
 	{
-		return await admissionCrmPublicAppService.VerifyStatusOtpAsync(tenantId, token, input);
+		return await accessService.VerifyStatusOtpAsync(tenantId, token, input);
 	}
 
 	[HttpGet("{tenantId}/status/{token}")]
@@ -82,7 +85,7 @@ public class PublicAdmissionCrmController(
 		[FromHeader(Name = "X-Admission-Access-Session"), Required] string accessSessionToken,
 		[FromQuery] string? language = null)
 	{
-		return admissionCrmPublicAppService.GetVerifiedStatusAsync(
+		return accessService.GetVerifiedStatusAsync(
 			tenantId,
 			token,
 			accessSessionToken,
@@ -94,14 +97,14 @@ public class PublicAdmissionCrmController(
 		[FromRoute] Guid tenantId,
 		[FromRoute, Required] string token,
 		[FromBody] UpdatePublicAdmissionCommunicationPreferencesDto input) =>
-		admissionCrmPublicAppService.UpdateCommunicationPreferencesAsync(tenantId, token, input);
+		accessService.UpdateCommunicationPreferencesAsync(tenantId, token, input);
 
 	[HttpPost("{tenantId}/status/{token}/withdraw")]
 	public Task<AdmissionApplicantStatusDto> WithdrawApplicationAsync(
 		[FromRoute] Guid tenantId,
 		[FromRoute, Required] string token,
 		[FromBody] WithdrawPublicAdmissionApplicationDto input) =>
-		admissionCrmPublicAppService.WithdrawApplicationAsync(tenantId, token, input);
+		accessService.WithdrawApplicationAsync(tenantId, token, input);
 
 	[HttpPut("{tenantId}/status/{token}/registration")]
 	public async Task<AdmissionCrmRegistrationApplicationDto> SaveRegistrationAsync(
@@ -109,7 +112,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute, Required] string token,
 		[FromBody] SavePublicAdmissionCrmRegistrationDto input)
 	{
-		return await admissionCrmPublicAppService.SaveRegistrationAsync(tenantId, token, input);
+		return await applicantService.SaveRegistrationAsync(tenantId, token, input);
 	}
 
 	[HttpPost("{tenantId}/status/{token}/registration/submit")]
@@ -118,7 +121,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute, Required] string token,
 		[FromBody] SavePublicAdmissionCrmRegistrationDto input)
 	{
-		return await admissionCrmPublicAppService.SubmitRegistrationAsync(tenantId, token, input);
+		return await applicantService.SubmitRegistrationAsync(tenantId, token, input);
 	}
 
 	[HttpPost("{tenantId}/status/{token}/registration/documents")]
@@ -135,7 +138,7 @@ public class PublicAdmissionCrmController(
 		await using var memory = new MemoryStream((int)Math.Min(request.File.Length, 1024 * 1024));
 		await stream.CopyToAsync(memory, HttpContext.RequestAborted);
 		if (memory.Length > maximumBytes) throw new BusinessException("AdmissionCrm:DocumentFileSizeExceeded");
-		return await admissionCrmPublicAppService.UploadRegistrationDocumentAsync(
+		return await applicantService.UploadRegistrationDocumentAsync(
 			tenantId,
 			token,
 			request.AccessSessionToken,
@@ -156,7 +159,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute, Required] string token,
 		[FromHeader(Name = "X-Admission-Access-Session"), Required] string accessSessionToken)
 	{
-		return admissionCrmPublicAppService.GetAvailableExamSlotsAsync(tenantId, token, accessSessionToken);
+		return applicantService.GetAvailableExamSlotsAsync(tenantId, token, accessSessionToken);
 	}
 
 	[HttpPost("{tenantId}/status/{token}/exam/schedule")]
@@ -165,7 +168,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute, Required] string token,
 		[FromBody] ScheduleAdmissionCrmPublicExamDto input)
 	{
-		return admissionCrmPublicAppService.ScheduleExamAsync(tenantId, token, input);
+		return applicantService.ScheduleExamAsync(tenantId, token, input);
 	}
 
 	[HttpGet("{tenantId}/status/{token}/events")]
@@ -174,7 +177,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute, Required] string token,
 		[FromHeader(Name = "X-Admission-Access-Session"), Required] string accessSessionToken)
 	{
-		return admissionCrmPublicAppService.GetAvailableEventsAsync(tenantId, token, accessSessionToken);
+		return applicantService.GetAvailableEventsAsync(tenantId, token, accessSessionToken);
 	}
 
 	[HttpPost("{tenantId}/status/{token}/events/{eventId}/reserve")]
@@ -184,7 +187,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute] Guid eventId,
 		[FromBody] ReserveAdmissionCrmPublicEventDto input)
 	{
-		return admissionCrmPublicAppService.ReserveEventAsync(tenantId, token, eventId, input);
+		return applicantService.ReserveEventAsync(tenantId, token, eventId, input);
 	}
 
 	[HttpPost("{tenantId}/status/{token}/events/{eventId}/cancel")]
@@ -194,7 +197,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute] Guid eventId,
 		[FromBody] CancelAdmissionCrmPublicEventRegistrationDto input)
 	{
-		return admissionCrmPublicAppService.CancelEventRegistrationAsync(tenantId, token, eventId, input);
+		return applicantService.CancelEventRegistrationAsync(tenantId, token, eventId, input);
 	}
 
 	[HttpPost("{tenantId}/status/{token}/offers/{offerId}/respond")]
@@ -204,7 +207,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute] Guid offerId,
 		[FromBody] RespondAdmissionApplicantOfferDto input)
 	{
-		return admissionCrmPublicAppService.RespondToOfferAsync(tenantId, token, offerId, input);
+		return applicantService.RespondToOfferAsync(tenantId, token, offerId, input);
 	}
 
 	[HttpPost("{tenantId}/communication/delivery-logs/{deliveryLogId}/callback")]
@@ -213,7 +216,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute] Guid deliveryLogId,
 		[FromBody] ApplyAdmissionCrmDeliveryCallbackDto input)
 	{
-		return await admissionCrmPublicAppService.ApplyDeliveryCallbackAsync(
+		return await callbackService.ApplyDeliveryCallbackAsync(
 			tenantId,
 			deliveryLogId,
 			input);
@@ -226,7 +229,7 @@ public class PublicAdmissionCrmController(
 		[FromRoute] AdmissionCrmMessageChannel channel,
 		[FromBody] ApplyAdmissionCrmDeliveryCallbackDto input)
 	{
-		return await admissionCrmPublicAppService.ApplyDeliveryCallbackByProviderMessageAsync(
+		return await callbackService.ApplyDeliveryCallbackByProviderMessageAsync(
 			tenantId,
 			academicYearId,
 			channel,

@@ -66,10 +66,14 @@ public class AdmissionCrmGeneratedDocumentAvailabilityDto
 	public string Message { get; set; } = string.Empty;
 }
 
-public interface IAdmissionCrmGeneratedDocumentAppService : IApplicationService
+public interface IAdmissionCrmGeneratedDocumentCommandService : IApplicationService
 {
 	Task<AdmissionCrmGeneratedDocumentDto> PreviewAsync(Guid leadId, PreviewAdmissionCrmGeneratedDocumentDto input);
 	Task<AdmissionCrmGeneratedDocumentDto> IssueAsync(Guid leadId, IssueAdmissionCrmGeneratedDocumentDto input);
+}
+
+public interface IAdmissionCrmGeneratedDocumentQueryService : IApplicationService
+{
 	Task<IReadOnlyList<AdmissionCrmGeneratedDocumentAvailabilityDto>> GetAvailabilityAsync(Guid leadId);
 	Task<IReadOnlyList<AdmissionCrmGeneratedDocumentHistoryDto>> GetHistoryAsync(Guid leadId);
 }

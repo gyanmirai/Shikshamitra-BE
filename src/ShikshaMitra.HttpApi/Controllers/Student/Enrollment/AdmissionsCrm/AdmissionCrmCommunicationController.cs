@@ -11,14 +11,16 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Authorize]
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmCommunicationController(
-	IAdmissionCrmCommunicationAppService admissionCrmCommunicationAppService) : AbpControllerBase
+	IAdmissionCrmCommunicationProviderService providerService,
+	IAdmissionCrmCommunicationOptOutService optOutService,
+	IAdmissionCrmMessageDeliveryService deliveryService) : AbpControllerBase
 {
 	[HttpGet("{academicYearId}/communication/providers")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageTemplates)]
 	public async Task<PagedResultDto<AdmissionCrmCommunicationProviderDto>> GetProvidersAsync(
 		[FromRoute] Guid academicYearId)
 	{
-		return await admissionCrmCommunicationAppService.GetProvidersAsync(academicYearId);
+		return await providerService.GetProvidersAsync(academicYearId);
 	}
 
 	[HttpPut("{academicYearId}/communication/providers/{channel}")]
@@ -28,7 +30,7 @@ public class AdmissionCrmCommunicationController(
 		[FromRoute] AdmissionCrmMessageChannel channel,
 		[FromBody] UpdateAdmissionCrmCommunicationProviderDto input)
 	{
-		return await admissionCrmCommunicationAppService.UpdateProviderAsync(academicYearId, channel, input);
+		return await providerService.UpdateProviderAsync(academicYearId, channel, input);
 	}
 
 	[HttpGet("{academicYearId}/communication/opt-outs")]
@@ -37,7 +39,7 @@ public class AdmissionCrmCommunicationController(
 		[FromRoute] Guid academicYearId,
 		[FromQuery] GetAdmissionCrmCommunicationOptOutListInput input)
 	{
-		return await admissionCrmCommunicationAppService.GetOptOutsAsync(academicYearId, input);
+		return await optOutService.GetOptOutsAsync(academicYearId, input);
 	}
 
 	[HttpPost("{academicYearId}/communication/opt-outs")]
@@ -46,7 +48,7 @@ public class AdmissionCrmCommunicationController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] CreateAdmissionCrmCommunicationOptOutDto input)
 	{
-		return await admissionCrmCommunicationAppService.CreateOptOutAsync(academicYearId, input);
+		return await optOutService.CreateOptOutAsync(academicYearId, input);
 	}
 
 	[HttpPost("{academicYearId}/communication/opt-outs/clear")]
@@ -55,7 +57,7 @@ public class AdmissionCrmCommunicationController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] ClearAdmissionCrmCommunicationOptOutDto input)
 	{
-		return await admissionCrmCommunicationAppService.ClearOptOutAsync(academicYearId, input);
+		return await optOutService.ClearOptOutAsync(academicYearId, input);
 	}
 
 	[HttpPost("leads/{leadId}/messages/send-template")]
@@ -64,7 +66,7 @@ public class AdmissionCrmCommunicationController(
 		[FromRoute] Guid leadId,
 		[FromBody] SendAdmissionCrmMessageTemplateDto input)
 	{
-		return await admissionCrmCommunicationAppService.SendTemplateAsync(leadId, input);
+		return await deliveryService.SendTemplateAsync(leadId, input);
 	}
 
 	[HttpPost("{academicYearId}/communication/message-templates/preview")]
@@ -73,7 +75,7 @@ public class AdmissionCrmCommunicationController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] PreviewAdmissionCrmMessageTemplateDto input)
 	{
-		return await admissionCrmCommunicationAppService.PreviewTemplateAsync(academicYearId, input);
+		return await deliveryService.PreviewTemplateAsync(academicYearId, input);
 	}
 
 	[HttpGet("{academicYearId}/communication/delivery-logs")]
@@ -82,7 +84,7 @@ public class AdmissionCrmCommunicationController(
 		[FromRoute] Guid academicYearId,
 		[FromQuery] GetAdmissionCrmMessageDeliveryLogListInput input)
 	{
-		return await admissionCrmCommunicationAppService.GetDeliveryLogsAsync(academicYearId, input);
+		return await deliveryService.GetDeliveryLogsAsync(academicYearId, input);
 	}
 
 	[HttpPost("communication/delivery-logs/{deliveryLogId}/retry")]
@@ -91,6 +93,6 @@ public class AdmissionCrmCommunicationController(
 		[FromRoute] Guid deliveryLogId,
 		[FromBody] RetryAdmissionCrmMessageDeliveryDto input)
 	{
-		return await admissionCrmCommunicationAppService.RetryDeliveryAsync(deliveryLogId, input);
+		return await deliveryService.RetryDeliveryAsync(deliveryLogId, input);
 	}
 }

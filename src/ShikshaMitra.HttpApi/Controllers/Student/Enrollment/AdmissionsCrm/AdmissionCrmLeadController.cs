@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
@@ -10,18 +10,23 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [ApiController]
 [Authorize]
 [Route("api/student-enrollment/admissions-crm")]
-public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrmLeadAppService) : AbpControllerBase
+public class AdmissionCrmLeadController(
+	IAdmissionCrmLeadCaptureService captureService,
+	IAdmissionCrmLeadQueryService queryService,
+	IAdmissionCrmLeadManagementService managementService,
+	IAdmissionCrmLeadAutomationService automationService,
+	IAdmissionCrmLeadWorkService workService) : AbpControllerBase
 {
 	[HttpGet("{academicYearId}/quick-inquiry-options")]
 	public Task<AdmissionCrmQuickInquiryOptionsDto> GetQuickInquiryOptionsAsync(
 		[FromRoute] Guid academicYearId) =>
-		admissionCrmLeadAppService.GetQuickInquiryOptionsAsync(academicYearId);
+		captureService.GetQuickInquiryOptionsAsync(academicYearId);
 
 	[HttpGet("{academicYearId}/operational-standard-options")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add)]
 	public Task<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>>
 		GetOperationalStandardOptionsAsync([FromRoute] Guid academicYearId) =>
-		admissionCrmLeadAppService.GetOperationalStandardOptionsAsync(academicYearId);
+		captureService.GetOperationalStandardOptionsAsync(academicYearId);
 
 	[HttpPost("{academicYearId}/leads")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add)]
@@ -29,7 +34,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid academicYearId,
 		[FromBody] CreateAdmissionCrmLeadDto input)
 	{
-		return await admissionCrmLeadAppService.CreateAsync(academicYearId, input);
+		return await captureService.CreateAsync(academicYearId, input);
 	}
 
 	[HttpGet("{academicYearId}/leads")]
@@ -38,14 +43,14 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid academicYearId,
 		[FromQuery] GetAdmissionCrmLeadListInput input)
 	{
-		return await admissionCrmLeadAppService.GetListAsync(academicYearId, input);
+		return await queryService.GetListAsync(academicYearId, input);
 	}
 
 	[HttpGet("leads/{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
 	public async Task<AdmissionCrmLeadDto> GetAsync([FromRoute] Guid id)
 	{
-		return await admissionCrmLeadAppService.GetAsync(id);
+		return await queryService.GetAsync(id);
 	}
 
 	[HttpPost("{academicYearId}/leads/duplicate-preview")]
@@ -54,7 +59,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid academicYearId,
 		[FromBody] AdmissionCrmLeadDuplicatePreviewInput input)
 	{
-		return await admissionCrmLeadAppService.PreviewDuplicatesAsync(academicYearId, input);
+		return await queryService.PreviewDuplicatesAsync(academicYearId, input);
 	}
 
 	[HttpPost("leads/{leadId}/owner")]
@@ -63,7 +68,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromBody] AssignAdmissionCrmLeadOwnerDto input)
 	{
-		return await admissionCrmLeadAppService.AssignOwnerAsync(leadId, input);
+		return await managementService.AssignOwnerAsync(leadId, input);
 	}
 
 	[HttpPost("leads/{leadId}/priority")]
@@ -72,7 +77,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromBody] ChangeAdmissionCrmLeadPriorityDto input)
 	{
-		return await admissionCrmLeadAppService.ChangePriorityAsync(leadId, input);
+		return await managementService.ChangePriorityAsync(leadId, input);
 	}
 
 	[HttpPost("leads/{leadId}/registration-form")]
@@ -81,7 +86,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromBody] IssueAdmissionCrmRegistrationFormDto input)
 	{
-		return await admissionCrmLeadAppService.IssueRegistrationFormAsync(leadId, input);
+		return await managementService.IssueRegistrationFormAsync(leadId, input);
 	}
 
 	[HttpPost("leads/{leadId}/stage")]
@@ -90,14 +95,14 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromBody] ChangeAdmissionCrmLeadStageDto input)
 	{
-		return await admissionCrmLeadAppService.ChangeStageAsync(leadId, input);
+		return await managementService.ChangeStageAsync(leadId, input);
 	}
 
 	[HttpPost("leads/{leadId}/score/recalculate")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
 	public async Task<AdmissionCrmLeadDto> RecalculateScoreAsync([FromRoute] Guid leadId)
 	{
-		return await admissionCrmLeadAppService.RecalculateScoreAsync(leadId);
+		return await managementService.RecalculateScoreAsync(leadId);
 	}
 
 	[HttpPost("leads/{leadId}/duplicates/merge")]
@@ -106,7 +111,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromBody] MergeAdmissionCrmDuplicateLeadDto input)
 	{
-		return await admissionCrmLeadAppService.MergeDuplicateAsync(leadId, input);
+		return await managementService.MergeDuplicateAsync(leadId, input);
 	}
 
 	[HttpPost("leads/{leadId}/archive")]
@@ -115,7 +120,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromBody] ArchiveAdmissionCrmLeadDto input)
 	{
-		return await admissionCrmLeadAppService.ArchiveAsync(leadId, input);
+		return await managementService.ArchiveAsync(leadId, input);
 	}
 
 	[HttpPost("leads/{leadId}/reopen")]
@@ -124,7 +129,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromBody] ReopenAdmissionCrmLeadDto input)
 	{
-		return await admissionCrmLeadAppService.ReopenAsync(leadId, input);
+		return await managementService.ReopenAsync(leadId, input);
 	}
 
 	[HttpPost("{academicYearId}/automation/stale-archive/run")]
@@ -132,7 +137,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 	public async Task<AdmissionCrmStaleArchiveRunResultDto> RunStaleArchiveRulesAsync(
 		[FromRoute] Guid academicYearId)
 	{
-		return await admissionCrmLeadAppService.RunStaleArchiveRulesAsync(academicYearId);
+		return await automationService.RunStaleArchiveRulesAsync(academicYearId);
 	}
 
 	[HttpPost("{academicYearId}/automation/sla-reminders/run")]
@@ -140,20 +145,20 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 	public async Task<AdmissionCrmSlaReminderRunResultDto> RunSlaReminderRulesAsync(
 		[FromRoute] Guid academicYearId)
 	{
-		return await admissionCrmLeadAppService.RunSlaReminderRulesAsync(academicYearId);
+		return await automationService.RunSlaReminderRulesAsync(academicYearId);
 	}
 
 	[HttpGet("leads/{leadId}/sla-holds")]
 	public Task<IReadOnlyList<AdmissionCrmSlaHoldDto>> GetSlaHoldsAsync(Guid leadId) =>
-		admissionCrmLeadAppService.GetSlaHoldsAsync(leadId);
+		workService.GetSlaHoldsAsync(leadId);
 
 	[HttpPost("leads/{leadId}/sla-holds")]
 	public Task<AdmissionCrmSlaHoldDto> CreateSlaHoldAsync(Guid leadId, [FromBody] CreateAdmissionCrmSlaHoldDto input) =>
-		admissionCrmLeadAppService.CreateSlaHoldAsync(leadId, input);
+		workService.CreateSlaHoldAsync(leadId, input);
 
 	[HttpPost("sla-holds/{holdId}/resume")]
 	public Task<AdmissionCrmSlaHoldDto> ResumeSlaHoldAsync(Guid holdId, [FromBody] ResumeAdmissionCrmSlaHoldDto input) =>
-		admissionCrmLeadAppService.ResumeSlaHoldAsync(holdId, input);
+		workService.ResumeSlaHoldAsync(holdId, input);
 
 	[HttpPost("{academicYearId}/automation/journeys/run")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageAutomation)]
@@ -161,7 +166,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid academicYearId,
 		[FromBody] RunAdmissionCrmJourneyRulesDto input)
 	{
-		return await admissionCrmLeadAppService.RunJourneyRulesAsync(academicYearId, input);
+		return await automationService.RunJourneyRulesAsync(academicYearId, input);
 	}
 
 	[HttpPost("leads/{leadId}/tasks")]
@@ -170,7 +175,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromBody] CreateAdmissionCrmFollowUpTaskDto input)
 	{
-		return await admissionCrmLeadAppService.CreateTaskAsync(leadId, input);
+		return await workService.CreateTaskAsync(leadId, input);
 	}
 
 	[HttpGet("leads/{leadId}/tasks")]
@@ -179,7 +184,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromQuery] PagedAndSortedResultRequestDto input)
 	{
-		return await admissionCrmLeadAppService.GetTasksAsync(leadId, input);
+		return await workService.GetTasksAsync(leadId, input);
 	}
 
 	[HttpGet("leads/{leadId}/applicant-checklist")]
@@ -187,7 +192,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 	public async Task<IReadOnlyList<AdmissionCrmApplicantChecklistProgressDto>> GetApplicantChecklistAsync(
 		[FromRoute] Guid leadId)
 	{
-		return await admissionCrmLeadAppService.GetApplicantChecklistAsync(leadId);
+		return await workService.GetApplicantChecklistAsync(leadId);
 	}
 
 	[HttpPut("leads/{leadId}/applicant-checklist/{key}")]
@@ -197,7 +202,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] string key,
 		[FromBody] UpdateAdmissionCrmApplicantChecklistProgressDto input)
 	{
-		return await admissionCrmLeadAppService.UpdateApplicantChecklistAsync(leadId, key, input);
+		return await workService.UpdateApplicantChecklistAsync(leadId, key, input);
 	}
 
 	[HttpGet("leads/{leadId}/timeline")]
@@ -206,7 +211,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromQuery] PagedAndSortedResultRequestDto input)
 	{
-		return await admissionCrmLeadAppService.GetTimelineAsync(leadId, input);
+		return await workService.GetTimelineAsync(leadId, input);
 	}
 
 	[HttpPost("leads/{leadId}/notes")]
@@ -215,7 +220,7 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid leadId,
 		[FromBody] CreateAdmissionCrmLeadNoteDto input)
 	{
-		return await admissionCrmLeadAppService.AddNoteAsync(leadId, input);
+		return await workService.AddNoteAsync(leadId, input);
 	}
 
 	[HttpPost("tasks/{taskId}/complete")]
@@ -224,6 +229,6 @@ public class AdmissionCrmLeadController(IAdmissionCrmLeadAppService admissionCrm
 		[FromRoute] Guid taskId,
 		[FromBody] CompleteAdmissionCrmFollowUpTaskDto input)
 	{
-		return await admissionCrmLeadAppService.CompleteTaskAsync(taskId, input);
+		return await workService.CompleteTaskAsync(taskId, input);
 	}
 }

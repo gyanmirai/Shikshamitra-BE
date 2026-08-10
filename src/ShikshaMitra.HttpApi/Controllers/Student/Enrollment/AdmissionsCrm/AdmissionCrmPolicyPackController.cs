@@ -12,50 +12,53 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [ApiController]
 [Authorize]
 [Route("api/student-enrollment/admissions-crm")]
-public class AdmissionCrmPolicyPackController(IAdmissionCrmPolicyPackAppService appService) : AbpControllerBase
+public class AdmissionCrmPolicyPackController(
+	IAdmissionCrmPolicyCatalogService catalogService,
+	IAdmissionCrmPolicyAdoptionService adoptionService,
+	IAdmissionCrmPolicyEvaluationService evaluationService) : AbpControllerBase
 {
 	[HttpPost("policy-packs")]
 	public Task<AdmissionCrmPolicyPackDto> CreatePolicyPackAsync([FromBody] CreateAdmissionCrmPolicyPackDto input) =>
-		appService.CreatePolicyPackAsync(input);
+		catalogService.CreatePolicyPackAsync(input);
 
 	[HttpGet("policy-packs")]
 	public Task<PagedResultDto<AdmissionCrmPolicyPackDto>> GetPolicyPacksAsync([FromQuery] GetAdmissionCrmPolicyPackListInput input) =>
-		appService.GetPolicyPacksAsync(input);
+		catalogService.GetPolicyPacksAsync(input);
 
 	[HttpPost("policy-packs/install-official-baselines")]
 	public Task<AdmissionCrmPolicyBaselineInstallResultDto> InstallOfficialBaselineDraftsAsync() =>
-		appService.InstallOfficialBaselineDraftsAsync();
+		catalogService.InstallOfficialBaselineDraftsAsync();
 
 	[HttpPost("policy-packs/{id}/submit")]
-	public Task<AdmissionCrmPolicyPackDto> SubmitPolicyPackAsync(Guid id) => appService.SubmitPolicyPackAsync(id);
+	public Task<AdmissionCrmPolicyPackDto> SubmitPolicyPackAsync(Guid id) => catalogService.SubmitPolicyPackAsync(id);
 
 	[HttpPost("policy-packs/{id}/approve")]
-	public Task<AdmissionCrmPolicyPackDto> ApprovePolicyPackAsync(Guid id) => appService.ApprovePolicyPackAsync(id);
+	public Task<AdmissionCrmPolicyPackDto> ApprovePolicyPackAsync(Guid id) => catalogService.ApprovePolicyPackAsync(id);
 
 	[HttpPost("policy-packs/{id}/publish")]
-	public Task<AdmissionCrmPolicyPackDto> PublishPolicyPackAsync(Guid id) => appService.PublishPolicyPackAsync(id);
+	public Task<AdmissionCrmPolicyPackDto> PublishPolicyPackAsync(Guid id) => catalogService.PublishPolicyPackAsync(id);
 
 	[HttpPost("{academicYearId}/policy-adoptions/{policyPackId}")]
 	public Task<AdmissionCrmPolicyAdoptionDto> AdoptPolicyPackAsync(Guid academicYearId, Guid policyPackId,
-		[FromBody] AdoptAdmissionCrmPolicyPackDto input) => appService.AdoptPolicyPackAsync(academicYearId, policyPackId, input);
+		[FromBody] AdoptAdmissionCrmPolicyPackDto input) => adoptionService.AdoptPolicyPackAsync(academicYearId, policyPackId, input);
 
 	[HttpGet("{academicYearId}/policy-adoptions")]
 	public Task<IReadOnlyList<AdmissionCrmPolicyAdoptionDto>> GetAdoptionsAsync(Guid academicYearId) =>
-		appService.GetAdoptionsAsync(academicYearId);
+		adoptionService.GetAdoptionsAsync(academicYearId);
 
 	[HttpPost("leads/{leadId}/policy-evaluations")]
 	public Task<AdmissionCrmPolicyEvaluationDto> EvaluateRuleAsync(Guid leadId,
-		[FromBody] EvaluateAdmissionCrmPolicyRuleDto input) => appService.EvaluateRuleAsync(leadId, input);
+		[FromBody] EvaluateAdmissionCrmPolicyRuleDto input) => evaluationService.EvaluateRuleAsync(leadId, input);
 
 	[HttpGet("leads/{leadId}/policy-readiness")]
 	public Task<AdmissionCrmPolicyReadinessDto> GetPolicyReadinessAsync(Guid leadId) =>
-		appService.GetPolicyReadinessAsync(leadId);
+		evaluationService.GetPolicyReadinessAsync(leadId);
 
 	[HttpPost("policy-evaluations/{evaluationId}/exceptions")]
 	public Task<AdmissionCrmPolicyExceptionDto> RequestExceptionAsync(Guid evaluationId,
-		[FromBody] RequestAdmissionCrmPolicyExceptionDto input) => appService.RequestExceptionAsync(evaluationId, input);
+		[FromBody] RequestAdmissionCrmPolicyExceptionDto input) => evaluationService.RequestExceptionAsync(evaluationId, input);
 
 	[HttpPost("policy-exceptions/{id}/decision")]
 	public Task<AdmissionCrmPolicyExceptionDto> DecideExceptionAsync(Guid id,
-		[FromBody] DecideAdmissionCrmPolicyExceptionDto input) => appService.DecideExceptionAsync(id, input);
+		[FromBody] DecideAdmissionCrmPolicyExceptionDto input) => evaluationService.DecideExceptionAsync(id, input);
 }

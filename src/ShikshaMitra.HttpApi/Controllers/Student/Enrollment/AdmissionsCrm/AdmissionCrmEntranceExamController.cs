@@ -11,7 +11,11 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Authorize]
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmEntranceExamController(
-	IAdmissionCrmEntranceExamAppService admissionCrmEntranceExamAppService) : AbpControllerBase
+	IAdmissionCrmEntranceExamReadService readService,
+	IAdmissionCrmEntranceExamSchedulingService schedulingService,
+	IAdmissionCrmEntranceExamAttendanceService attendanceService,
+	IAdmissionCrmEntranceExamResultService resultService,
+	IAdmissionCrmEntranceExamEligibilityService eligibilityService) : AbpControllerBase
 {
 	[HttpGet("{academicYearId}/exams")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
@@ -19,14 +23,14 @@ public class AdmissionCrmEntranceExamController(
 		[FromRoute] Guid academicYearId,
 		[FromQuery] GetAdmissionCrmEntranceExamListInput input)
 	{
-		return await admissionCrmEntranceExamAppService.GetListAsync(academicYearId, input);
+		return await readService.GetListAsync(academicYearId, input);
 	}
 
 	[HttpGet("leads/{leadId}/exam")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
 	public async Task<AdmissionCrmEntranceExamDto> GetByLeadAsync([FromRoute] Guid leadId)
 	{
-		return await admissionCrmEntranceExamAppService.GetByLeadAsync(leadId);
+		return await readService.GetByLeadAsync(leadId);
 	}
 
 	[HttpGet("exams/{examRecordId}/eligibility-handoff")]
@@ -34,7 +38,7 @@ public class AdmissionCrmEntranceExamController(
 	public async Task<AdmissionCrmEligibilityHandoffDto> GetEligibilityHandoffAsync(
 		[FromRoute] Guid examRecordId)
 	{
-		return await admissionCrmEntranceExamAppService.GetEligibilityHandoffAsync(examRecordId);
+		return await readService.GetEligibilityHandoffAsync(examRecordId);
 	}
 
 	[HttpPost("leads/{leadId}/exam/schedule")]
@@ -43,7 +47,7 @@ public class AdmissionCrmEntranceExamController(
 		[FromRoute] Guid leadId,
 		[FromBody] ScheduleAdmissionCrmEntranceExamDto input)
 	{
-		return await admissionCrmEntranceExamAppService.ScheduleAsync(leadId, input);
+		return await schedulingService.ScheduleAsync(leadId, input);
 	}
 
 	[HttpPost("exams/{examRecordId}/attendance")]
@@ -52,7 +56,7 @@ public class AdmissionCrmEntranceExamController(
 		[FromRoute] Guid examRecordId,
 		[FromBody] MarkAdmissionCrmExamAttendanceDto input)
 	{
-		return await admissionCrmEntranceExamAppService.MarkAttendanceAsync(examRecordId, input);
+		return await attendanceService.MarkAttendanceAsync(examRecordId, input);
 	}
 
 	[HttpPost("exams/{examRecordId}/result")]
@@ -61,7 +65,7 @@ public class AdmissionCrmEntranceExamController(
 		[FromRoute] Guid examRecordId,
 		[FromBody] UploadAdmissionCrmEntranceExamResultDto input)
 	{
-		return await admissionCrmEntranceExamAppService.UploadResultAsync(examRecordId, input);
+		return await resultService.UploadResultAsync(examRecordId, input);
 	}
 
 	[HttpPost("exams/{examRecordId}/eligibility")]
@@ -70,6 +74,6 @@ public class AdmissionCrmEntranceExamController(
 		[FromRoute] Guid examRecordId,
 		[FromBody] UpdateAdmissionCrmEligibilityDecisionDto input)
 	{
-		return await admissionCrmEntranceExamAppService.DecideEligibilityAsync(examRecordId, input);
+		return await eligibilityService.DecideEligibilityAsync(examRecordId, input);
 	}
 }

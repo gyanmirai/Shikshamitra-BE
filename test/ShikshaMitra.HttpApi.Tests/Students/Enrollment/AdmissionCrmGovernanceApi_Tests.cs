@@ -284,14 +284,14 @@ public class AdmissionCrmGovernanceApi_Tests : ShikshaMitraApiTestBase
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
 		var currentPrincipalAccessor = scope.ServiceProvider.GetRequiredService<ICurrentPrincipalAccessor>();
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var governanceService = scope.ServiceProvider.GetRequiredService<IAdmissionCrmGovernanceAppService>();
+		var governanceCoordinator = scope.ServiceProvider.GetRequiredService<AdmissionCrmGovernanceAutomationCoordinator>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 		using (currentPrincipalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity())))
 		using (currentTenant.Change(tenantId))
 		{
 			using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 			{
-				var result = await governanceService.RunDueReportSchedulesFromAutomationAsync(yearId);
+				var result = await governanceCoordinator.RunDueReportSchedulesAsync(yearId);
 				result.GeneratedCount.ShouldBeGreaterThanOrEqualTo(1);
 				result.FailedScheduleIds.ShouldNotContain(schedule.Id);
 				await uow.CompleteAsync();
@@ -300,7 +300,7 @@ public class AdmissionCrmGovernanceApi_Tests : ShikshaMitraApiTestBase
 			using (uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 			{
 				var exception = await Should.ThrowAsync<BusinessException>(() =>
-					governanceService.RunDueReportSchedulesFromAutomationAsync(otherTenantYearId));
+					governanceCoordinator.RunDueReportSchedulesAsync(otherTenantYearId));
 				exception.Code.ShouldBe("AdmissionCrm:AcademicYearNotFound");
 			}
 		}

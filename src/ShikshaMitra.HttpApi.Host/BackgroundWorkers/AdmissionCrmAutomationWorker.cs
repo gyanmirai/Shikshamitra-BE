@@ -34,7 +34,7 @@ public class AdmissionCrmAutomationWorker : AsyncPeriodicBackgroundWorkerBase
 				.GetRequiredService<IRepository<AdmissionCrmCycleConfiguration, Guid>>();
 			var leadAppService = workerContext.ServiceProvider.GetRequiredService<IAdmissionCrmLeadAppService>();
 			var lifecycleAutomationAppService = workerContext.ServiceProvider.GetRequiredService<IAdmissionCrmLifecycleAutomationAppService>();
-			var governanceAppService = workerContext.ServiceProvider.GetRequiredService<IAdmissionCrmGovernanceAppService>();
+			var governanceCoordinator = workerContext.ServiceProvider.GetRequiredService<AdmissionCrmGovernanceAutomationCoordinator>();
 
 			var tenants = await tenantRepository.GetListAsync();
 			var processedCycleCount = 0;
@@ -61,7 +61,7 @@ public class AdmissionCrmAutomationWorker : AsyncPeriodicBackgroundWorkerBase
 							var staleResult = await leadAppService.RunStaleArchiveRulesFromAutomationAsync(cycle.AcademicYearId);
 							var slaResult = await leadAppService.RunSlaReminderRulesFromAutomationAsync(cycle.AcademicYearId);
 							var lifecycleResult = await lifecycleAutomationAppService.RunFromAutomationAsync(cycle.AcademicYearId);
-							var reportResult = await governanceAppService.RunDueReportSchedulesFromAutomationAsync(cycle.AcademicYearId);
+							var reportResult = await governanceCoordinator.RunDueReportSchedulesAsync(cycle.AcademicYearId);
 							await uow.CompleteAsync();
 
 							processedCycleCount++;

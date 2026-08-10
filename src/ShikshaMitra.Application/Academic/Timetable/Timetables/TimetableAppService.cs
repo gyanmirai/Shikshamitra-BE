@@ -1173,13 +1173,13 @@ public class TimetableAppService(
 
         return selections
             .GroupBy(selection => selection.ElectiveGroupId)
+            .Where(group => group.Select(selection => selection.StudentId).Distinct().Count() == studentIds.Count)
             .ToDictionary(
                 group => group.Key,
                 group => group
-                    .GroupBy(selection => selection.SelectedSubjectId)
-                    .OrderByDescending(subjectGroup => subjectGroup.Count())
-                    .ThenBy(subjectGroup => subjectGroup.Key)
-                    .Select(subjectGroup => subjectGroup.Key)
+                    .Select(selection => selection.SelectedSubjectId)
+                    .Distinct()
+                    .OrderBy(subjectId => subjectId)
                     .ToList());
     }
 

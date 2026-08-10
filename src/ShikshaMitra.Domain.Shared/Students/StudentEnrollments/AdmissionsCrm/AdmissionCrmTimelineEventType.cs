@@ -92,5 +92,14 @@ public enum AdmissionCrmTimelineEventType
 	SlaHoldCreated = 87,
 	SlaHoldResumed = 88,
 	GeneratedDocumentIssued = 89,
-	PaperRegistrationEntered = 90
+	PaperRegistrationEntered = 90,
+	EventRegistrationReserved = 91,
+	EventRegistrationCancelled = 92,
+	EventRegistrationCheckedIn = 93,
+	EventRegistrationMarkedNoShow = 94,
+	StructuredReviewStarted = 95,
+	StructuredReviewerAssigned = 96,
+	StructuredReviewConflictDeclared = 97,
+	StructuredReviewSubmitted = 98,
+	StructuredReviewClosed = 99
 }

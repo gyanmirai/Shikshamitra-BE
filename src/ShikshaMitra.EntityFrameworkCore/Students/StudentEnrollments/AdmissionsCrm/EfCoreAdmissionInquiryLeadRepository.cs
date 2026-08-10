@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,6 +23,20 @@ public class EfCoreAdmissionInquiryLeadRepository(
 	{
 		await EnsureSqliteApplicantNumberAsync(entity, cancellationToken);
 		return await base.InsertAsync(entity, autoSave, cancellationToken);
+	}
+
+	public override async Task InsertManyAsync(
+		IEnumerable<AdmissionInquiryLead> entities,
+		bool autoSave = false,
+		CancellationToken cancellationToken = default)
+	{
+		var entityList = entities.ToList();
+		foreach (var entity in entityList)
+		{
+			await EnsureSqliteApplicantNumberAsync(entity, cancellationToken);
+		}
+
+		await base.InsertManyAsync(entityList, autoSave, cancellationToken);
 	}
 
 	private async Task EnsureSqliteApplicantNumberAsync(

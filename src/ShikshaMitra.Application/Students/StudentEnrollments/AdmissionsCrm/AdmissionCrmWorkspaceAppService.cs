@@ -60,8 +60,13 @@ public class AdmissionCrmWorkspaceAppService : ApplicationService, IAdmissionCrm
 		string? ids = null,
 		int maxResultCount = 20,
 		Guid? academicYearId = null,
-		bool ownerOnly = false)
+		bool ownerOnly = false,
+		bool reviewerOnly = false)
 	{
+		if (ownerOnly && reviewerOnly)
+		{
+			throw new ArgumentException("Owner-only and reviewer-only filters cannot be combined.");
+		}
 		if (ownerOnly && !academicYearId.HasValue)
 		{
 			throw new ArgumentException("An academic year is required for owner lookups.", nameof(academicYearId));
@@ -83,7 +88,10 @@ public class AdmissionCrmWorkspaceAppService : ApplicationService, IAdmissionCrm
 			: employeesByUserId.Keys.ToHashSet();
 		var allowedUserIds = ownerOnly
 			? ownerEligibleUserIds
-			: employeesByUserId.Keys.ToHashSet();
+			: reviewerOnly
+				? await _staffEligibilityService.GetReviewerEligibleUserIdsAsync()
+				: employeesByUserId.Keys.ToHashSet();
+		allowedUserIds.IntersectWith(employeesByUserId.Keys);
 
 		var requestedIds = ParseIds(ids);
 		var take = Math.Clamp(maxResultCount, 1, 50);

@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -89,6 +90,9 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private readonly IRepository<AdmissionCrmInquirySource, Guid> _inquirySourceRepository;
 	private readonly IRepository<AdmissionCrmInquiryType, Guid> _inquiryTypeRepository;
 	private readonly IRepository<AdmissionCrmAdmissionYearSetup, Guid> _admissionYearRepository;
+	private readonly IRepository<AdmissionCrmPerson, Guid> _personRepository;
+	private readonly IRepository<AdmissionCrmGuardianRelationship, Guid> _guardianRepository;
+	private readonly IRepository<AdmissionCrmEvent, Guid> _eventRepository;
 	private readonly IAdmissionCrmCommunicationDispatcher _dispatcher;
 	private readonly IAdmissionCrmLeadAppService _leadAppService;
 	private readonly IAdmissionCrmDocumentAppService _documentAppService;
@@ -123,6 +127,9 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		IRepository<AdmissionCrmInquirySource, Guid> inquirySourceRepository,
 		IRepository<AdmissionCrmInquiryType, Guid> inquiryTypeRepository,
 		IRepository<AdmissionCrmAdmissionYearSetup, Guid> admissionYearRepository,
+		IRepository<AdmissionCrmPerson, Guid> personRepository,
+		IRepository<AdmissionCrmGuardianRelationship, Guid> guardianRepository,
+		IRepository<AdmissionCrmEvent, Guid> eventRepository,
 		IAdmissionCrmCommunicationDispatcher dispatcher,
 		IAdmissionCrmLeadAppService leadAppService,
 		IAdmissionCrmDocumentAppService documentAppService,
@@ -156,6 +163,9 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		_inquirySourceRepository = inquirySourceRepository;
 		_inquiryTypeRepository = inquiryTypeRepository;
 		_admissionYearRepository = admissionYearRepository;
+		_personRepository = personRepository;
+		_guardianRepository = guardianRepository;
+		_eventRepository = eventRepository;
 		_dispatcher = dispatcher;
 		_leadAppService = leadAppService;
 		_documentAppService = documentAppService;
@@ -480,6 +490,124 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		}
 	}
 
+	public async Task<AdmissionApplicantStatusOtpChallengeDto> IssueFamilyAccessOtpAsync(
+		Guid tenantId,
+		StartAdmissionFamilyAccessDto input)
+	{
+		using (CurrentTenant.Change(tenantId))
+		{
+			var now = Clock.Now;
+			var challenge = new AdmissionApplicantStatusOtpChallengeDto
+			{
+				ChallengeId = GuidGenerator.Create(),
+				MaskedDestination = MaskSubmittedContact(input.Contact),
+				OtpExpiresAt = now.AddMinutes(OtpExpiryMinutes),
+				DeliveryConfigured = true,
+				DeliveryStatus = "If active applications match this contact, an OTP has been sent."
+			};
+
+			var entry = await FindFamilyLoginEntryAsync(input.Contact, now);
+			if (entry == null)
+			{
+				return challenge;
+			}
+
+			var (access, lead, guardianPersonId, deliveryContact) = entry.Value;
+			challenge.ChallengeId = access.Id;
+			try
+			{
+				access.EnsureCanIssueOtp(now, TimeSpan.FromSeconds(OtpResendCooldownSeconds));
+				var statusToken = _stringEncryptionService.Decrypt(access.EncryptedToken!);
+				if (string.IsNullOrWhiteSpace(statusToken))
+				{
+					return challenge;
+				}
+
+				var otpCode = CreateOtpCode();
+				access.IssueFamilyOtp(
+					HashSecret($"{statusToken.Trim()}:{otpCode}"),
+					EncryptRequired(otpCode),
+					now,
+					now.AddMinutes(OtpExpiryMinutes),
+					guardianPersonId);
+				try
+				{
+					await DispatchStatusOtpAsync(lead, otpCode, now, deliveryContact);
+				}
+				catch (Exception exception) when (exception is not OperationCanceledException)
+				{
+					Logger.LogWarning(
+						exception,
+						"Family access OTP delivery failed for challenge {ChallengeId}.",
+						access.Id);
+				}
+				await _statusAccessRepository.UpdateAsync(access, autoSave: true);
+			}
+			catch (BusinessException exception) when (
+				exception.Code == "AdmissionCrm:StatusOtpResendTooSoon")
+			{
+				// Return the same non-enumerating response; the previously issued OTP remains valid.
+			}
+
+			return challenge;
+		}
+	}
+
+	[UnitOfWork(IsDisabled = true)]
+	public async Task<AdmissionApplicantStatusDto> VerifyFamilyAccessOtpAsync(
+		Guid tenantId,
+		VerifyAdmissionFamilyAccessDto input)
+	{
+		using (CurrentTenant.Change(tenantId))
+		using (var uow = UnitOfWorkManager.Begin(
+			       new AbpUnitOfWorkOptions { IsTransactional = true },
+			       requiresNew: true))
+		{
+			var access = await _statusAccessRepository.FindAsync(input.ChallengeId);
+			if (access == null || access.TenantId != CurrentTenant.Id || access.EncryptedToken == null)
+			{
+				throw new BusinessException("AdmissionCrm:InvalidStatusOtp");
+			}
+
+			var lead = await _leadRepository.GetAsync(access.LeadId);
+			var now = Clock.Now;
+			access.EnsureCanVerify(now);
+			var statusToken = _stringEncryptionService.Decrypt(access.EncryptedToken);
+			if (string.IsNullOrWhiteSpace(statusToken))
+			{
+				throw new BusinessException("AdmissionCrm:InvalidStatusOtp");
+			}
+			var providedHash = HashSecret($"{statusToken.Trim()}:{input.OtpCode.Trim()}");
+			if (!string.Equals(access.OtpCodeHash, providedHash, StringComparison.Ordinal))
+			{
+				access.RecordOtpFailure(now);
+				await _statusAccessRepository.UpdateAsync(access, autoSave: true);
+				await uow.CompleteAsync();
+				throw new BusinessException("AdmissionCrm:InvalidStatusOtp");
+			}
+
+			access.MarkOtpVerified(now);
+			var accessSessionToken = CreateRawToken();
+			var accessSessionExpiresAt = now.AddMinutes(AccessSessionMinutes);
+			var accessSessionTokenHash = HashSecret(accessSessionToken);
+			access.IssueAccessSession(accessSessionTokenHash, accessSessionExpiresAt, now);
+			await _statusAccessRepository.UpdateAsync(access, autoSave: true);
+			await EnsureFamilyAuthorizationAsync(access, lead, now);
+			var familyApplications = await ShareFamilyAccessSessionAsync(
+				lead,
+				access,
+				accessSessionTokenHash,
+				accessSessionExpiresAt,
+				now);
+			var status = await ToStatusDtoAsync(lead, input.Language);
+			status.AccessSessionToken = accessSessionToken;
+			status.AccessSessionExpiresAt = accessSessionExpiresAt;
+			status.FamilyApplications = familyApplications;
+			await uow.CompleteAsync();
+			return status;
+		}
+	}
+
 	[UnitOfWork(IsDisabled = true)]
 	public async Task<AdmissionApplicantStatusDto> VerifyStatusOtpAsync(
 		Guid tenantId,
@@ -507,12 +635,38 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			access.MarkOtpVerified(now);
 			var accessSessionToken = CreateRawToken();
 			var accessSessionExpiresAt = now.AddMinutes(AccessSessionMinutes);
-			access.IssueAccessSession(HashSecret(accessSessionToken), accessSessionExpiresAt, now);
+			var accessSessionTokenHash = HashSecret(accessSessionToken);
+			access.IssueAccessSession(accessSessionTokenHash, accessSessionExpiresAt, now);
 			await _statusAccessRepository.UpdateAsync(access, autoSave: true);
+			var familyApplications = await ShareFamilyAccessSessionAsync(
+				lead,
+				access,
+				accessSessionTokenHash,
+				accessSessionExpiresAt,
+				now);
 			var status = await ToStatusDtoAsync(lead, input.Language);
 			status.AccessSessionToken = accessSessionToken;
 			status.AccessSessionExpiresAt = accessSessionExpiresAt;
+			status.FamilyApplications = familyApplications;
 			await uow.CompleteAsync();
+			return status;
+		}
+	}
+
+	public async Task<AdmissionApplicantStatusDto> GetVerifiedStatusAsync(
+		Guid tenantId,
+		string token,
+		string accessSessionToken,
+		string? language = null)
+	{
+		using (CurrentTenant.Change(tenantId))
+		{
+			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
+			await EnsureApplicantAccessSessionAsync(access, lead, accessSessionToken);
+			var status = await ToStatusDtoAsync(lead, language);
+			status.AccessSessionToken = accessSessionToken;
+			status.AccessSessionExpiresAt = access.AccessSessionExpiresAt;
+			status.FamilyApplications = await BuildFamilyApplicationSummariesAsync(lead, access, Clock.Now);
 			return status;
 		}
 	}
@@ -525,7 +679,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		using (CurrentTenant.Change(tenantId))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
-			access.EnsureAccessSession(HashSecret(input.AccessSessionToken), Clock.Now);
+			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
 			var application = await GetRegistrationApplicationAsync(lead.Id);
 			application.EnsureResponseVersion(input.ConcurrencyStamp);
 			var template = DeserializeRegistrationTemplate(application.TemplateSnapshotJson);
@@ -554,7 +708,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		using (CurrentTenant.Change(tenantId))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
-			access.EnsureAccessSession(HashSecret(input.AccessSessionToken), Clock.Now);
+			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
 			var application = await GetRegistrationApplicationAsync(lead.Id);
 			application.EnsureResponseVersion(input.ConcurrencyStamp);
 			var template = DeserializeRegistrationTemplate(application.TemplateSnapshotJson);
@@ -581,7 +735,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		using (CurrentTenant.Change(tenantId))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
-			access.EnsureAccessSession(HashSecret(accessSessionToken), Clock.Now);
+			await EnsureApplicantAccessSessionAsync(access, lead, accessSessionToken);
 			return await _documentAppService.UploadFromApplicantAsync(lead.Id, input);
 		}
 	}
@@ -594,7 +748,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		using (CurrentTenant.Change(tenantId))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
-			access.EnsureAccessSession(HashSecret(accessSessionToken), Clock.Now);
+			await EnsureApplicantAccessSessionAsync(access, lead, accessSessionToken);
 			if (!await IsApplicantSelfSchedulingEnabledAsync(lead))
 			{
 				return new AdmissionCrmPublicExamSlotListDto { SelfSchedulingEnabled = false };
@@ -636,7 +790,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		using (CurrentTenant.Change(tenantId))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
-			access.EnsureAccessSession(HashSecret(input.AccessSessionToken), Clock.Now);
+			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
 			if (!await IsApplicantSelfSchedulingEnabledAsync(lead))
 			{
 				throw new BusinessException("AdmissionCrm:ApplicantSelfSchedulingNotEnabled");
@@ -659,7 +813,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			       requiresNew: true))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
-			access.EnsureAccessSession(HashSecret(input.AccessSessionToken), Clock.Now);
+			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
 
 			var offerQueryable = await _seatOfferRepository.GetQueryableAsync();
 			var offer = await AsyncExecuter.FirstOrDefaultAsync(offerQueryable.Where(x =>
@@ -1027,6 +1181,403 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		}
 
 		return (access, lead);
+	}
+
+	public async Task<AdmissionCrmPublicEventListDto> GetAvailableEventsAsync(
+		Guid tenantId,
+		string token,
+		string accessSessionToken)
+	{
+		using (CurrentTenant.Change(tenantId))
+		{
+			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
+			await EnsureApplicantAccessSessionAsync(access, lead, accessSessionToken);
+			var now = Clock.Now;
+			var query = (await _eventRepository.WithDetailsAsync(x => x.Registrations)).Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.AcademicYearId == lead.AcademicYearId &&
+				x.AllowFamilySelfScheduling &&
+				x.Status == AdmissionCrmEventStatus.Published &&
+				x.StartsAt > now);
+			var events = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.StartsAt));
+			return new AdmissionCrmPublicEventListDto
+			{
+				Events = events.Select(x => ToPublicEventDto(x, lead.Id)).ToList()
+			};
+		}
+	}
+
+	[UnitOfWork(IsDisabled = true)]
+	public async Task<AdmissionCrmPublicEventDto> ReserveEventAsync(
+		Guid tenantId,
+		string token,
+		Guid eventId,
+		ReserveAdmissionCrmPublicEventDto input)
+	{
+		using (CurrentTenant.Change(tenantId))
+		using (var uow = UnitOfWorkManager.Begin(
+			       new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true))
+		{
+			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
+			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
+			var admissionEvent = await GetPublicEventAsync(eventId, lead);
+			var registration = admissionEvent.Reserve(GuidGenerator.Create(), lead.Id, Clock.Now,
+				"Reserved by the family portal.");
+			await AddPublicEventTimelineAsync(lead, AdmissionCrmTimelineEventType.EventRegistrationReserved,
+				"Admissions event reserved by family", admissionEvent.Title, registration.Id);
+			await _eventRepository.UpdateAsync(admissionEvent, autoSave: true);
+			await uow.CompleteAsync();
+			return ToPublicEventDto(admissionEvent, lead.Id);
+		}
+	}
+
+	[UnitOfWork(IsDisabled = true)]
+	public async Task<AdmissionCrmPublicEventDto> CancelEventRegistrationAsync(
+		Guid tenantId,
+		string token,
+		Guid eventId,
+		CancelAdmissionCrmPublicEventRegistrationDto input)
+	{
+		using (CurrentTenant.Change(tenantId))
+		using (var uow = UnitOfWorkManager.Begin(
+			       new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true))
+		{
+			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
+			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
+			var admissionEvent = await GetPublicEventAsync(eventId, lead, requireFuture: false);
+			var registration = admissionEvent.Registrations.SingleOrDefault(x =>
+				x.LeadId == lead.Id && x.Status == AdmissionCrmEventRegistrationStatus.Reserved)
+				?? throw new BusinessException("AdmissionCrm:EventRegistrationNotFound");
+			admissionEvent.CancelRegistration(registration.Id, Clock.Now,
+				string.IsNullOrWhiteSpace(input.Reason) ? "Cancelled by the family." : input.Reason.Trim());
+			await AddPublicEventTimelineAsync(lead, AdmissionCrmTimelineEventType.EventRegistrationCancelled,
+				"Admissions event reservation cancelled by family", admissionEvent.Title, registration.Id);
+			await _eventRepository.UpdateAsync(admissionEvent, autoSave: true);
+			await uow.CompleteAsync();
+			return ToPublicEventDto(admissionEvent, lead.Id);
+		}
+	}
+
+	private async Task<List<AdmissionFamilyApplicationSummaryDto>> ShareFamilyAccessSessionAsync(
+		AdmissionInquiryLead verifiedLead,
+		AdmissionApplicantStatusAccess verifiedAccess,
+		string accessSessionTokenHash,
+		DateTime accessSessionExpiresAt,
+		DateTime now)
+	{
+		var familyEntries = await GetFamilyApplicationEntriesAsync(verifiedLead, verifiedAccess, now);
+		foreach (var (_, familyAccess) in familyEntries)
+		{
+			if (familyAccess.Id == verifiedAccess.Id)
+			{
+				continue;
+			}
+
+			familyAccess.ShareVerifiedFamilyAccessSession(
+				verifiedAccess,
+				accessSessionTokenHash,
+				accessSessionExpiresAt,
+				now);
+			await _statusAccessRepository.UpdateAsync(familyAccess, autoSave: false);
+		}
+
+		return await ToFamilyApplicationSummariesAsync(familyEntries);
+	}
+
+	private async Task<(
+		AdmissionApplicantStatusAccess Access,
+		AdmissionInquiryLead Lead,
+		Guid? GuardianPersonId,
+		string? DeliveryContact)?>
+		FindFamilyLoginEntryAsync(string contact, DateTime now)
+	{
+		var trimmedContact = contact.Trim();
+		var isEmail = trimmedContact.Contains('@');
+		if (isEmail && !AdmissionCrmContactRules.IsValidEmail(trimmedContact))
+		{
+			return null;
+		}
+		if (!isEmail && !AdmissionCrmContactRules.IsValidPhone(trimmedContact))
+		{
+			return null;
+		}
+
+		var personQueryable = await _personRepository.GetQueryableAsync();
+		var normalizedGuardianEmail = isEmail ? trimmedContact.ToUpperInvariant() : null;
+		var normalizedGuardianPhone = isEmail
+			? null
+			: new string(trimmedContact.Where(char.IsDigit).ToArray());
+		var matchingPeople = await AsyncExecuter.ToListAsync(personQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			(isEmail
+				? x.NormalizedEmail == normalizedGuardianEmail
+				: x.NormalizedPhone == normalizedGuardianPhone)));
+		if (matchingPeople.Count > 0)
+		{
+			var personIds = matchingPeople.Select(x => x.Id).ToList();
+			var guardianQueryable = await _guardianRepository.GetQueryableAsync();
+			var authorizedRelationships = await AsyncExecuter.ToListAsync(guardianQueryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				personIds.Contains(x.GuardianPersonId) &&
+				x.IsActive &&
+				x.HasPortalAccess &&
+				x.AuthorityVerified &&
+				(!x.EffectiveUntil.HasValue || x.EffectiveUntil > now)));
+			if (authorizedRelationships.Count > 0)
+			{
+				var guardianLeadIds = authorizedRelationships.Select(x => x.LeadId).Distinct().ToList();
+				var guardianAccessQueryable = await _statusAccessRepository.GetQueryableAsync();
+				var guardianAccesses = await AsyncExecuter.ToListAsync(guardianAccessQueryable.Where(x =>
+					x.TenantId == CurrentTenant.Id &&
+					guardianLeadIds.Contains(x.LeadId) &&
+					x.TokenExpiresAt > now &&
+					x.EncryptedToken != null));
+				var guardianAccess = guardianAccesses.OrderByDescending(x => x.LinkIssuedAt).FirstOrDefault();
+				if (guardianAccess != null)
+				{
+					var guardianLead = await _leadRepository.GetAsync(guardianAccess.LeadId);
+					var guardianPersonId = authorizedRelationships
+						.First(x => x.LeadId == guardianAccess.LeadId).GuardianPersonId;
+					return (guardianAccess, guardianLead, guardianPersonId, trimmedContact);
+				}
+			}
+		}
+
+		var leadQueryable = await _leadRepository.GetQueryableAsync();
+		List<AdmissionInquiryLead> matchingLeads;
+		if (isEmail)
+		{
+			var normalizedEmail = trimmedContact.ToLowerInvariant();
+			matchingLeads = await AsyncExecuter.ToListAsync(leadQueryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.NormalizedEmail == normalizedEmail));
+		}
+		else
+		{
+			var normalizedPhone = new string(trimmedContact.Where(x => x is >= '0' and <= '9').ToArray());
+			matchingLeads = await AsyncExecuter.ToListAsync(leadQueryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.NormalizedPrimaryContactNo == normalizedPhone));
+		}
+
+		if (matchingLeads.Count == 0)
+		{
+			return null;
+		}
+
+		var leadIds = matchingLeads.Select(x => x.Id).ToList();
+		var accessQueryable = await _statusAccessRepository.GetQueryableAsync();
+		var activeAccesses = await AsyncExecuter.ToListAsync(accessQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			leadIds.Contains(x.LeadId) &&
+			x.TokenExpiresAt > now &&
+			x.EncryptedToken != null));
+		var latestAccess = activeAccesses.OrderByDescending(x => x.LinkIssuedAt).FirstOrDefault();
+		if (latestAccess == null)
+		{
+			return null;
+		}
+
+		return (latestAccess, matchingLeads.Single(x => x.Id == latestAccess.LeadId), null, null);
+	}
+
+	private async Task<List<AdmissionFamilyApplicationSummaryDto>> BuildFamilyApplicationSummariesAsync(
+		AdmissionInquiryLead verifiedLead,
+		AdmissionApplicantStatusAccess verifiedAccess,
+		DateTime now)
+	{
+		return await ToFamilyApplicationSummariesAsync(
+			await GetFamilyApplicationEntriesAsync(verifiedLead, verifiedAccess, now));
+	}
+
+	private async Task<List<(AdmissionInquiryLead Lead, AdmissionApplicantStatusAccess Access)>>
+		GetFamilyApplicationEntriesAsync(
+			AdmissionInquiryLead verifiedLead,
+			AdmissionApplicantStatusAccess verifiedAccess,
+			DateTime now)
+	{
+		var leadQueryable = await _leadRepository.GetQueryableAsync();
+		List<AdmissionInquiryLead> familyLeads;
+		if (verifiedAccess.FamilyAccessGuardianPersonId.HasValue)
+		{
+			var guardianPersonId = verifiedAccess.FamilyAccessGuardianPersonId.Value;
+			var guardianQueryable = await _guardianRepository.GetQueryableAsync();
+			var relationships = await AsyncExecuter.ToListAsync(guardianQueryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.GuardianPersonId == guardianPersonId &&
+				x.IsActive &&
+				x.HasPortalAccess &&
+				x.AuthorityVerified &&
+				(!x.EffectiveUntil.HasValue || x.EffectiveUntil > now)));
+			var authorizedLeadIds = relationships.Select(x => x.LeadId).Distinct().ToList();
+			familyLeads = await AsyncExecuter.ToListAsync(leadQueryable.Where(x =>
+				x.TenantId == CurrentTenant.Id && authorizedLeadIds.Contains(x.Id)));
+		}
+		else if (!string.IsNullOrWhiteSpace(verifiedLead.NormalizedPrimaryContactNo))
+		{
+			var normalizedPhone = verifiedLead.NormalizedPrimaryContactNo;
+			familyLeads = await AsyncExecuter.ToListAsync(leadQueryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.NormalizedPrimaryContactNo == normalizedPhone));
+		}
+		else
+		{
+			var normalizedEmail = verifiedLead.NormalizedEmail;
+			familyLeads = await AsyncExecuter.ToListAsync(leadQueryable.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.NormalizedEmail == normalizedEmail));
+		}
+
+		var leadIds = familyLeads.Select(x => x.Id).ToList();
+		var accessQueryable = await _statusAccessRepository.GetQueryableAsync();
+		var activeAccesses = await AsyncExecuter.ToListAsync(accessQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			leadIds.Contains(x.LeadId) &&
+			x.TokenExpiresAt > now &&
+			x.EncryptedToken != null));
+		var latestAccessByLead = activeAccesses
+			.GroupBy(x => x.LeadId)
+			.ToDictionary(x => x.Key, x => x.OrderByDescending(y => y.LinkIssuedAt).First());
+
+		return familyLeads
+			.Where(x => latestAccessByLead.ContainsKey(x.Id))
+			.Select(x => (Lead: x, Access: latestAccessByLead[x.Id]))
+			.OrderByDescending(x => x.Lead.LastActivityTime)
+			.ToList();
+	}
+
+	private async Task EnsureApplicantAccessSessionAsync(
+		AdmissionApplicantStatusAccess access,
+		AdmissionInquiryLead lead,
+		string accessSessionToken)
+	{
+		var now = Clock.Now;
+		access.EnsureAccessSession(HashSecret(accessSessionToken), now);
+		await EnsureFamilyAuthorizationAsync(access, lead, now);
+	}
+
+	private async Task EnsureFamilyAuthorizationAsync(
+		AdmissionApplicantStatusAccess access,
+		AdmissionInquiryLead lead,
+		DateTime now)
+	{
+		if (!access.FamilyAccessGuardianPersonId.HasValue)
+		{
+			return;
+		}
+
+		var guardianPersonId = access.FamilyAccessGuardianPersonId.Value;
+		var guardianQueryable = await _guardianRepository.GetQueryableAsync();
+		var stillAuthorized = await AsyncExecuter.AnyAsync(guardianQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.LeadId == lead.Id &&
+			x.GuardianPersonId == guardianPersonId &&
+			x.IsActive &&
+			x.HasPortalAccess &&
+			x.AuthorityVerified &&
+			(!x.EffectiveUntil.HasValue || x.EffectiveUntil > now)));
+		if (!stillAuthorized)
+		{
+			throw new BusinessException("AdmissionCrm:FamilyAccessNoLongerAuthorized");
+		}
+	}
+
+	private async Task<AdmissionCrmEvent> GetPublicEventAsync(
+		Guid eventId,
+		AdmissionInquiryLead lead,
+		bool requireFuture = true)
+	{
+		var query = await _eventRepository.WithDetailsAsync(x => x.Registrations);
+		var admissionEvent = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x =>
+			x.Id == eventId &&
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == lead.AcademicYearId &&
+			x.AllowFamilySelfScheduling));
+		if (admissionEvent == null ||
+			admissionEvent.Status != AdmissionCrmEventStatus.Published ||
+			(requireFuture && admissionEvent.StartsAt <= Clock.Now))
+		{
+			throw new BusinessException("AdmissionCrm:EventNotOpenForRegistration");
+		}
+		return admissionEvent;
+	}
+
+	private static AdmissionCrmPublicEventDto ToPublicEventDto(AdmissionCrmEvent admissionEvent, Guid leadId)
+	{
+		var registration = admissionEvent.Registrations
+			.Where(x => x.LeadId == leadId)
+			.OrderByDescending(x => x.ReservedAt)
+			.FirstOrDefault();
+		return new AdmissionCrmPublicEventDto
+		{
+			Id = admissionEvent.Id,
+			Title = admissionEvent.Title,
+			EventType = admissionEvent.EventType,
+			StartsAt = admissionEvent.StartsAt,
+			EndsAt = admissionEvent.EndsAt,
+			Location = admissionEvent.Location,
+			Instructions = admissionEvent.Instructions,
+			AvailableCount = Math.Max(0, admissionEvent.Capacity - admissionEvent.ReservedCount),
+			RegistrationId = registration?.Id,
+			RegistrationStatus = registration?.Status
+		};
+	}
+
+	private Task AddPublicEventTimelineAsync(
+		AdmissionInquiryLead lead,
+		AdmissionCrmTimelineEventType type,
+		string title,
+		string details,
+		Guid registrationId) =>
+		_timelineRepository.InsertAsync(new AdmissionCrmTimelineEvent(
+			GuidGenerator.Create(), CurrentTenant.Id, lead.Id, lead.AcademicYearId, type,
+			title, details, registrationId, actorUserId: null, occurredAt: new DateTimeOffset(Clock.Now)),
+			autoSave: false);
+
+	private async Task<List<AdmissionFamilyApplicationSummaryDto>> ToFamilyApplicationSummariesAsync(
+		IReadOnlyList<(AdmissionInquiryLead Lead, AdmissionApplicantStatusAccess Access)> entries)
+	{
+		var summaries = new List<AdmissionFamilyApplicationSummaryDto>(entries.Count);
+		foreach (var (lead, access) in entries)
+		{
+			var statusToken = _stringEncryptionService.Decrypt(access.EncryptedToken!);
+			if (string.IsNullOrWhiteSpace(statusToken))
+			{
+				continue;
+			}
+
+			summaries.Add(new AdmissionFamilyApplicationSummaryDto
+			{
+				LeadId = lead.Id,
+				AcademicYearId = lead.AcademicYearId,
+				StatusToken = statusToken,
+				DisplayName = BuildDisplayName(lead),
+				DesiredClassName = lead.DesiredClassName,
+				Stage = lead.Stage,
+				StageName = await GetStageNameAsync(lead.AcademicYearId, lead.Stage),
+				LastActivityTime = lead.LastActivityTime
+			});
+		}
+
+		return summaries;
+	}
+
+	private static string MaskSubmittedContact(string contact)
+	{
+		var trimmed = contact.Trim();
+		if (trimmed.Contains('@'))
+		{
+			var separatorIndex = trimmed.IndexOf('@');
+			if (separatorIndex <= 0)
+			{
+				return "provided contact";
+			}
+
+			return $"{trimmed[0]}***{trimmed[separatorIndex..]}";
+		}
+
+		var digits = new string(trimmed.Where(x => x is >= '0' and <= '9').ToArray());
+		return digits.Length >= 4 ? $"***{digits[^4..]}" : "provided contact";
 	}
 
 	private async Task<bool> IsApplicantSelfSchedulingEnabledAsync(AdmissionInquiryLead lead)
@@ -1543,10 +2094,26 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private async Task<StatusOtpDeliveryResult> DispatchStatusOtpAsync(
 		AdmissionInquiryLead lead,
 		string otpCode,
-		DateTime issuedAt)
+		DateTime issuedAt,
+		string? verifiedGuardianContact = null)
 	{
-		var consentedChannels = await GetConsentedChannelsAsync(lead.Id);
-		var candidates = BuildOtpDeliveryCandidates(lead, consentedChannels).ToList();
+		List<StatusOtpDeliveryCandidate> candidates;
+		if (!string.IsNullOrWhiteSpace(verifiedGuardianContact))
+		{
+			candidates =
+			[
+				new StatusOtpDeliveryCandidate(
+					verifiedGuardianContact.Contains('@')
+						? AdmissionCrmMessageChannel.Email
+						: AdmissionCrmMessageChannel.Sms,
+					verifiedGuardianContact.Trim())
+			];
+		}
+		else
+		{
+			var consentedChannels = await GetConsentedChannelsAsync(lead.Id);
+			candidates = BuildOtpDeliveryCandidates(lead, consentedChannels).ToList();
+		}
 		if (candidates.Count == 0)
 		{
 			return new StatusOtpDeliveryResult(

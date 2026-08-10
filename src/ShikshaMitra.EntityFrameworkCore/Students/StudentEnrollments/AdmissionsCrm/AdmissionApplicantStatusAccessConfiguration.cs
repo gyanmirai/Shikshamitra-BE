@@ -30,5 +30,6 @@ public class AdmissionApplicantStatusAccessConfiguration : IEntityTypeConfigurat
 		builder.HasIndex(x => new { x.TenantId, x.LeadId });
 		builder.HasIndex(x => new { x.TenantId, x.OtpExpiresAt });
 		builder.HasIndex(x => new { x.TenantId, x.AccessSessionExpiresAt });
+		builder.HasIndex(x => new { x.TenantId, x.FamilyAccessGuardianPersonId });
 	}
 }

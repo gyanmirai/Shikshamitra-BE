@@ -46,6 +46,22 @@ public class PublicAdmissionCrmController(
 		return await admissionCrmPublicAppService.IssueStatusOtpAsync(tenantId, token);
 	}
 
+	[HttpPost("{tenantId}/family/otp")]
+	public Task<AdmissionApplicantStatusOtpChallengeDto> IssueFamilyAccessOtpAsync(
+		[FromRoute] Guid tenantId,
+		[FromBody] StartAdmissionFamilyAccessDto input)
+	{
+		return admissionCrmPublicAppService.IssueFamilyAccessOtpAsync(tenantId, input);
+	}
+
+	[HttpPost("{tenantId}/family/verify")]
+	public Task<AdmissionApplicantStatusDto> VerifyFamilyAccessOtpAsync(
+		[FromRoute] Guid tenantId,
+		[FromBody] VerifyAdmissionFamilyAccessDto input)
+	{
+		return admissionCrmPublicAppService.VerifyFamilyAccessOtpAsync(tenantId, input);
+	}
+
 	[HttpPost("{tenantId}/status/{token}/verify")]
 	public async Task<AdmissionApplicantStatusDto> VerifyStatusOtpAsync(
 		[FromRoute] Guid tenantId,
@@ -53,6 +69,20 @@ public class PublicAdmissionCrmController(
 		[FromBody] VerifyAdmissionApplicantStatusOtpDto input)
 	{
 		return await admissionCrmPublicAppService.VerifyStatusOtpAsync(tenantId, token, input);
+	}
+
+	[HttpGet("{tenantId}/status/{token}")]
+	public Task<AdmissionApplicantStatusDto> GetVerifiedStatusAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromHeader(Name = "X-Admission-Access-Session"), Required] string accessSessionToken,
+		[FromQuery] string? language = null)
+	{
+		return admissionCrmPublicAppService.GetVerifiedStatusAsync(
+			tenantId,
+			token,
+			accessSessionToken,
+			language);
 	}
 
 	[HttpPut("{tenantId}/status/{token}/registration")]
@@ -118,6 +148,35 @@ public class PublicAdmissionCrmController(
 		[FromBody] ScheduleAdmissionCrmPublicExamDto input)
 	{
 		return admissionCrmPublicAppService.ScheduleExamAsync(tenantId, token, input);
+	}
+
+	[HttpGet("{tenantId}/status/{token}/events")]
+	public Task<AdmissionCrmPublicEventListDto> GetAvailableEventsAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromHeader(Name = "X-Admission-Access-Session"), Required] string accessSessionToken)
+	{
+		return admissionCrmPublicAppService.GetAvailableEventsAsync(tenantId, token, accessSessionToken);
+	}
+
+	[HttpPost("{tenantId}/status/{token}/events/{eventId}/reserve")]
+	public Task<AdmissionCrmPublicEventDto> ReserveEventAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromRoute] Guid eventId,
+		[FromBody] ReserveAdmissionCrmPublicEventDto input)
+	{
+		return admissionCrmPublicAppService.ReserveEventAsync(tenantId, token, eventId, input);
+	}
+
+	[HttpPost("{tenantId}/status/{token}/events/{eventId}/cancel")]
+	public Task<AdmissionCrmPublicEventDto> CancelEventRegistrationAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromRoute] Guid eventId,
+		[FromBody] CancelAdmissionCrmPublicEventRegistrationDto input)
+	{
+		return admissionCrmPublicAppService.CancelEventRegistrationAsync(tenantId, token, eventId, input);
 	}
 
 	[HttpPost("{tenantId}/status/{token}/offers/{offerId}/respond")]

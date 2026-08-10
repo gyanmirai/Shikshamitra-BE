@@ -19,7 +19,7 @@ TL;DR: Student Enrollment starts in Pipeline, follows Admission Year Setup throu
 | Enrollment Pipeline | Capture inquiry, assign owner, follow up, message family, and choose exam or registration path | Academic year, applicant identity, guardian contact, source, type, owner, tenant, and academic scope |
 | Admission Year Setup | Configure admission rules attached to one Institute Setup academic year | No parallel academic-year model, valid standards, route applicability, step rules, and message moments |
 | Applicant Stepper | Show one applicant's progress and next action | Step state, blockers, skips, owner, parent-safe visibility, and audit evidence |
-| Entrance exam | Configure applicability, schedule slot, invite family, record attendance, enter result, and decide eligibility | Standard or route applicability, pass rule, retest policy, result audit, and override permission |
+| Assessment | Configure applicability, schedule a written test, interaction, or interview, invite family, record attendance and results, and decide eligibility | Standard or pathway applicability, pass rule, retest policy, result audit, and override permission |
 | Registration | Collect applicant, family, previous-school, consent, and document details, then verify | Required fields, required documents, language labels, correction reason, and document access |
 | Finance handoff | Request Finance verification and block activation until Finance returns a verified state when required | Finance authority, payment-reference visibility, and no ledger or receipt mutation from Enrollment |
 | Placement review | Confirm board, medium, standard, and division timing from Institute Setup and Class Management | No parallel capacity truth, valid academic hierarchy, current count, pending activation count, and override reason |
@@ -36,7 +36,7 @@ TL;DR: Student Enrollment starts in Pipeline, follows Admission Year Setup throu
 4. Pipeline stores applicant name, guardian contact, board, medium, standard, source, inquiry type, owner, and notes.
 5. The Applicant Stepper shows Inquiry as complete and calculates the next required step from Admission Year Setup.
 6. Staff sends an acknowledgement or follow-up message from an approved template.
-7. Staff either schedules or invites an entrance exam when Admission Year Setup requires it.
+7. Staff schedules or invites the configured assessment when Admission Year Setup requires it.
 8. Staff may move the applicant directly to Registration when exam is not required or an authorized bypass reason is recorded.
 9. Exam staff records attendance and result when an exam is required.
 10. The system marks the applicant Eligible, Ineligible, Needs Review, Absent, or Retest Required.
@@ -72,7 +72,7 @@ TL;DR: Student Enrollment starts in Pipeline, follows Admission Year Setup throu
 |---|---|
 | Admission Year Setup | Configure admission dates, routes, required steps, owners, messages, and publish readiness for an Institute Setup academic year |
 | Pipeline Settings | Configure inquiry sources, inquiry types, owner defaults, owner pool, quick-capture required fields, and follow-up reasons |
-| Entrance Exam Settings | Configure applicability, exam slots, pass rules, retest policy, parent scheduling, and exam message templates |
+| Assessment Settings | Configure applicability, slots, pass rules, retest policy, family scheduling, and message templates |
 | Registration Settings | Configure sections, fields, documents, languages, verification, and correction reasons |
 | Finance Handoff Settings | Configure whether Finance verification is required and which Finance reference is visible |
 | Class Placement Settings | Configure placement timing and override permission behavior while reading live capacity status from Class Management |

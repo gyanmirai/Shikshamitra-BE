@@ -17,7 +17,7 @@ Student Enrollment is being refined around Admission Year Setup and a per-applic
 
 | Area | Status | Behavior owned by Student |
 |---|---|---|
-| Student Enrollment | Refined requirement baseline | Inquiry capture, owner assignment, entrance exam flow, registration, Finance handoff status, placement review, activation, and parent communication |
+| Student Enrollment | Refined requirement baseline | Inquiry capture, owner assignment, assessment flow, visits and events, registration, Finance handoff status, placement review, activation, and family communication |
 | Student Records | Implemented | Active student list, management, bulk upload, profile, dashboard preview, and records settings |
 | Attendance and leave | Implemented | Student attendance days, entries, leave requests, and leave type settings |
 | Compliance | Implemented | Student identity compliance workflow |
@@ -43,7 +43,7 @@ Student Records owns the active student's long-term lifecycle after activation.
 | Admission Year Setup | Admission-specific rules attached to an Institute Setup academic year |
 | Applicant Stepper | Visible progress through Inquiry, Exam, Registration, Finance, Placement, and Activation |
 | Inquiry settings | Inquiry sources, inquiry types, default owner, owner pool, and quick-capture required fields are configurable |
-| Entrance exam | Optional by academic year, standard, route, and school policy |
+| Assessment | Optional by academic year, standard, admission pathway, and school policy |
 | Registration | Required before activation and configurable by section, field, document, language, and route |
 | Finance handoff | Enrollment requests or displays Finance verification but does not own payment accounting |
 | Placement | Required, with timing configurable between standard-only and division-before-activation |

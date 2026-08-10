@@ -84,18 +84,67 @@ public class AdmissionApplicantStatusAccess_Tests
 		exception.Code.ShouldBe("AdmissionCrm:ApplicantAccessSessionRequired");
 	}
 
-	private static AdmissionApplicantStatusAccess CreateVerifiedAccess(DateTime now)
+	[Fact]
+	public void Verified_guardian_session_can_be_shared_with_a_related_application_in_the_same_tenant()
 	{
-		var access = CreateAccess(now.AddDays(1), now);
+		var now = DateTime.UtcNow;
+		var tenantId = Guid.NewGuid();
+		var guardianPersonId = Guid.NewGuid();
+		var verified = CreateAccess(now.AddDays(1), now, tenantId);
+		verified.IssueFamilyOtp(
+			"otp-hash", "encrypted-otp", now, now.AddMinutes(5), guardianPersonId);
+		verified.MarkOtpVerified(now.AddSeconds(1));
+		var related = CreateAccess(now.AddDays(1), now, tenantId);
+
+		related.ShareVerifiedFamilyAccessSession(
+			verified,
+			"family-session-hash",
+			now.AddMinutes(15),
+			now);
+
+		Should.NotThrow(() =>
+			related.EnsureAccessSession("family-session-hash", now.AddMinutes(1)));
+		related.FamilyAccessGuardianPersonId.ShouldBe(guardianPersonId);
+	}
+
+	[Fact]
+	public void Family_session_cannot_cross_tenants()
+	{
+		var now = DateTime.UtcNow;
+		var verified = CreateVerifiedAccess(now, Guid.NewGuid());
+		var unrelated = CreateAccess(now.AddDays(1), now, Guid.NewGuid());
+
+		var exception = Should.Throw<BusinessException>(() =>
+			unrelated.ShareVerifiedFamilyAccessSession(
+				verified,
+				"family-session-hash",
+				now.AddMinutes(15),
+				now));
+
+		exception.Code.ShouldBe("AdmissionCrm:StatusOtpNotVerified");
+	}
+
+	private static AdmissionApplicantStatusAccess CreateVerifiedAccess(DateTime now)
+		=> CreateVerifiedAccess(now, Guid.NewGuid());
+
+	private static AdmissionApplicantStatusAccess CreateVerifiedAccess(DateTime now, Guid tenantId)
+	{
+		var access = CreateAccess(now.AddDays(1), now, tenantId);
 		access.IssueOtp("otp-hash", "encrypted-otp", now, now.AddMinutes(5));
 		access.MarkOtpVerified(now.AddSeconds(1));
 		return access;
 	}
 
 	private static AdmissionApplicantStatusAccess CreateAccess(DateTime expiresAt, DateTime issuedAt) =>
+		CreateAccess(expiresAt, issuedAt, Guid.NewGuid());
+
+	private static AdmissionApplicantStatusAccess CreateAccess(
+		DateTime expiresAt,
+		DateTime issuedAt,
+		Guid tenantId) =>
 		new(
 			Guid.NewGuid(),
-			Guid.NewGuid(),
+			tenantId,
 			Guid.NewGuid(),
 			"token-hash",
 			"encrypted-token",

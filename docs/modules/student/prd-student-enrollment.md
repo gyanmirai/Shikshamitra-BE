@@ -57,7 +57,7 @@ Schools configure whether an applicant must pass through each optional gate, but
 | Stage | Purpose | Required by default |
 |---|---|---|
 | Inquiry | Capture applicant and guardian intent in Pipeline | Yes |
-| Exam scheduled | Invite or schedule an entrance exam or interaction | Configurable |
+| Assessment scheduled | Invite or schedule a written test, interaction, or interview | Configurable |
 | Exam completed | Record attendance and result | Configurable |
 | Eligible or ineligible | Decide whether the applicant can continue | Configurable when exam is enabled |
 | Registration | Collect student, family, previous-school, consent, and document details | Yes |
@@ -81,7 +81,7 @@ Admission Year settings:
 |---|---|
 | Academic context | Academic year from Institute Setup, target board, medium, and standards |
 | Admission window | Inquiry open date, inquiry close date, registration close date, and activation target date |
-| Path requirement | Whether entrance exam and Finance verification are required and whether division is assigned before activation |
+| Path requirement | Whether an assessment and Finance verification are required and whether division is assigned before activation |
 | Route behavior | Fresh, transfer, RTE, sibling, staff-child, management referral, and other school-approved routes |
 | Step owner | Default owner role or team for each step |
 | Message moments | Templates for step start, reminder, completion, rejection, and activation |
@@ -134,7 +134,8 @@ Visible labels should use school-facing language even when existing route paths 
 |---|---|---|
 | Daily work | My Work | Assigned tasks, due work, blockers, and one recommended next action |
 | Daily work | Pipeline | School-wide applicant board and list before activation |
-| Admission process | Entrance Exams | Schedules, attendance, results, eligibility, absence, and retest work |
+| Admission process | Assessments | Written tests, interviews, interactions, schedules, attendance, decisions, absence, and retest work |
+| Admission process | Visits & Events | Campus visits, open houses, counselling, orientations, capacity, reservations, and attendance |
 | Admission process | Registration | Form progress, missing items, corrections, document review, and verification |
 | Admission process | Class Placement | Capacity review and division assignment from Institute Setup and Class Management |
 | Admission process | Activation | Gate matrix, approval, repair state, and Student Records handoff |
@@ -142,7 +143,7 @@ Visible labels should use school-facing language even when existing route paths 
 | Review | Admission Reports | Auditable admission counts, stage funnel, source mix, standard, and outcomes |
 | Settings | Admission Year Setup | Academic-year admission dates, routes, required steps, ownership, and publish readiness |
 | Settings | Pipeline Settings | Inquiry sources, inquiry types, owner defaults, owner pool, capture fields, and shortcuts |
-| Settings | Entrance Exam Settings | Applicability, schedules, pass rules, retest, scheduling, and exam messages |
+| Settings | Assessment Settings | Applicability, schedules, decision rules, retest, scheduling, and assessment messages |
 | Settings | Registration Settings | Sections, fields, documents, languages, verification, and correction reasons |
 | Settings | Finance Handoff Settings | Finance gate applicability, request trigger, and visible Finance references |
 | Settings | Class Placement Settings | Division timing, capacity warning, and override permissions |
@@ -153,11 +154,17 @@ Contextual surfaces should not become extra menu items.
 
 | Contextual surface | Entry behavior |
 |---|---|
-| Quick inquiry | Opens from My Work and Pipeline and creates the Pipeline record before any later work |
+| Add Inquiry | Opens from My Work and Pipeline and creates the Pipeline record before any later work |
 | Applicant workspace | Opens from any applicant row or card and carries the full Applicant Stepper, checklist, next action, and activity |
 | Finance verification | Appears in the Applicant Stepper and Activation gate matrix while Finance staff complete money work in Finance |
 | Parent inquiry form | Uses a public link outside authenticated staff navigation |
-| Parent status | Uses a public, applicant-safe view of the same step concept without internal notes or permission details |
+| Family enrollment center | Uses a public, applicant-safe view of the same step concept without internal notes or permission details; one verified guardian session may switch among active applications with the same tenant and primary contact, or among applications explicitly granted to the same authority-verified portal guardian |
+
+Family return sign-in is passwordless. It accepts a tenant-scoped phone or email, returns a
+non-enumerating challenge response, and grants only a short-lived session after OTP verification.
+Guardian delegation requires an active relationship, explicit portal access, and verified authority.
+Authorization is rechecked for every family action so revocation takes effect during an existing
+session. Expired, revoked, cross-tenant, or unmatched application links are never included.
 
 The target menu should not expose generic Operations, Offers & Seats, Policy & Compliance, Follow-up Automation, or generic Analytics labels.
 Follow-ups & Messages replaces generic Operations.
@@ -172,7 +179,8 @@ Simple admission reminders remain part of Communication Settings while advanced 
 | My Work | Show one configurable table of assigned tasks with applicant, current step, issue, due time, owner, and next action |
 | Pipeline | Support board and list views over the same applicant records |
 | Pipeline board | Use fixed school-facing columns and do not allow arbitrary lifecycle columns |
-| Focused worklists | Entrance Exams, Registration, Class Placement, Activation, and Follow-ups & Messages filter the same Pipeline applicants rather than copying records |
+| Focused worklists | Assessments, Registration, Class Placement, Activation, and Follow-ups & Messages filter the same Pipeline applicants rather than copying records |
+| Shared admissions events | Visits & Events uses a dedicated event aggregate with one capacity and roster; it must not be represented as duplicate applicant tasks or assessment slots |
 | Applicant workspace | Make the Applicant Stepper the primary navigation and show the exact blocker for locked work |
 | Settings pages | Keep each operational area on its own settings page instead of one large configuration page |
 | Admission Year Setup | Use a sequential setup stepper because configuration must be completed and published in order |
@@ -237,9 +245,9 @@ Pipeline actions:
 Pipeline settings should not allow arbitrary lifecycle redesign.
 Schools may configure labels, colors, owners, inquiry types, sources, required quick-capture fields, and whether exam or registration shortcuts are allowed.
 
-## Entrance exam requirements
+## Assessment requirements
 
-Entrance exam is optional by academic year, standard, route, and school policy.
+Assessment is optional by academic year, standard, admission pathway, and school policy.
 Schools may use it for formal exams, interactions, interviews, readiness checks, or document-screening sessions.
 
 Settings:
@@ -258,6 +266,43 @@ Settings:
 Result entry is manual in the production baseline.
 Bulk import and scanner import may exist later, but the requirement baseline should not depend on them.
 Eligibility must be auditable because it affects admission opportunity.
+
+## Visits and events requirements
+
+Admissions events are operational encounters that do not decide applicant eligibility. Campus visits,
+open houses, counselling sessions, and orientations therefore remain separate from Assessments.
+
+| Capability | Requirement |
+|---|---|
+| Lifecycle | Draft, Published, Cancelled, and Completed with audited actor and time |
+| Schedule | Start, end, location or meeting point, owner, and family-facing instructions |
+| Capacity | One event-wide limit with atomic duplicate and full-capacity protection |
+| Roster | Applicant, guardian context, reservation state, check-in, no-show, and cancellation evidence |
+| Cancellation | A reason is mandatory and active reservations are cancelled with the event |
+| Scope | Tenant, academic year, backend permission, and effective UserScope are mandatory |
+| Parent scheduling | Disabled by default per event; staff may allow OTP-verified families to reserve and cancel future published events, with the same event-wide capacity and applicant timeline audit |
+
+Event creation, editing, publishing, cancellation, completion, and roster mutation require explicit
+permissions. An event may be completed only after its end time. Applicant timeline evidence records
+reservation, cancellation, check-in, and no-show actions.
+
+## Optional structured admissions review
+
+Schools may enable a structured review gate for approve, reject, and waitlist decisions. It is
+disabled by default so a school can retain the simpler single-decision workflow.
+
+- Configuration is academic-year scoped and snapshots its title, required completed-review count,
+  conflict-declaration rule, and rubric criteria into each started review.
+- Only active employees with both review visibility and submission permissions may be assigned.
+- A reviewer can see and submit only their own confidential recommendation unless they separately
+  hold confidential-review access. Conflict declarations can recuse a reviewer without exposing the
+  reason to ordinary viewers.
+- Final decision-makers must have confidential-review access and cannot record an approve, reject,
+  or waitlist decision until the configured number of reviews is complete. Governed eligibility
+  override remains available only through the existing override permission and mandatory rationale.
+- Review assignment, conflict declaration, submission, readiness, closure, final rationale, and any
+  override remain tenant-scoped and auditable. Confidential rubric content is never copied into the
+  general applicant timeline.
 
 ## Registration requirements
 
@@ -390,7 +435,7 @@ Each operational area owns its settings so staff do not need to navigate one gia
 |---|---|
 | Admission Year Setup | Academic year, open and close dates, target standards, routes, default gates, and placement timing |
 | Pipeline Settings | Inquiry sources, inquiry types, default owner, owner pool, quick-capture required fields, follow-up reasons, and stage labels |
-| Entrance Exam Settings | Applicability, slots, pass rules, retest policy, parent scheduling, and exam messages |
+| Assessment Settings | Written tests, interviews, interactions, applicability, slots, decision rules, retest policy, parent scheduling, and messages |
 | Registration Settings | Sections, required fields, required documents, language labels, verification rules, and correction reasons |
 | Finance Handoff Settings | Whether fee verification is required, Finance request trigger, and displayed Finance reference fields |
 | Class Placement Settings | Placement timing, live capacity status, and override permissions |

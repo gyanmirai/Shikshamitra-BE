@@ -14,10 +14,21 @@ public interface IAdmissionCrmPublicAppService : IApplicationService
 		string? ipAddress,
 		string? userAgent);
 	Task<AdmissionApplicantStatusOtpChallengeDto> IssueStatusOtpAsync(Guid tenantId, string token);
+	Task<AdmissionApplicantStatusOtpChallengeDto> IssueFamilyAccessOtpAsync(
+		Guid tenantId,
+		StartAdmissionFamilyAccessDto input);
+	Task<AdmissionApplicantStatusDto> VerifyFamilyAccessOtpAsync(
+		Guid tenantId,
+		VerifyAdmissionFamilyAccessDto input);
 	Task<AdmissionApplicantStatusDto> VerifyStatusOtpAsync(
 		Guid tenantId,
 		string token,
 		VerifyAdmissionApplicantStatusOtpDto input);
+	Task<AdmissionApplicantStatusDto> GetVerifiedStatusAsync(
+		Guid tenantId,
+		string token,
+		string accessSessionToken,
+		string? language = null);
 	Task<AdmissionCrmRegistrationApplicationDto> SaveRegistrationAsync(
 		Guid tenantId,
 		string token,
@@ -39,6 +50,12 @@ public interface IAdmissionCrmPublicAppService : IApplicationService
 		Guid tenantId,
 		string token,
 		ScheduleAdmissionCrmPublicExamDto input);
+	Task<AdmissionCrmPublicEventListDto> GetAvailableEventsAsync(
+		Guid tenantId, string token, string accessSessionToken);
+	Task<AdmissionCrmPublicEventDto> ReserveEventAsync(
+		Guid tenantId, string token, Guid eventId, ReserveAdmissionCrmPublicEventDto input);
+	Task<AdmissionCrmPublicEventDto> CancelEventRegistrationAsync(
+		Guid tenantId, string token, Guid eventId, CancelAdmissionCrmPublicEventRegistrationDto input);
 	Task<AdmissionApplicantStatusOfferDto> RespondToOfferAsync(
 		Guid tenantId,
 		string token,

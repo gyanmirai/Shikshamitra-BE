@@ -10,7 +10,7 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Authorize]
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmAnalyticsController(
-	IAdmissionCrmAnalyticsAppService admissionCrmAnalyticsAppService,
+	IAdmissionCrmAnalyticsSummaryService analyticsSummaryService,
 	IAdmissionCrmReportAppService admissionCrmReportAppService) : AbpControllerBase
 {
 	[HttpGet("{academicYearId}/analytics/summary")]
@@ -19,7 +19,7 @@ public class AdmissionCrmAnalyticsController(
 		[FromRoute] Guid academicYearId,
 		[FromQuery] GetAdmissionCrmAnalyticsSummaryInput input)
 	{
-		return await admissionCrmAnalyticsAppService.GetSummaryAsync(academicYearId, input);
+		return await analyticsSummaryService.GetAsync(academicYearId, input);
 	}
 
 	[HttpGet("{academicYearId}/reports/admissions")]

@@ -21,7 +21,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 		{
 			["AdmissionCrmPublicAppService.cs"] = 3924,
 			["AdmissionCrmLeadAppService.cs"] = 3117,
-			["AdmissionCrmSetupAppService.cs"] = 1390,
 			["AdmissionCrmApplicantProgressProjector.cs"] = 596,
 			["AdmissionCrmConfigurationCloneWriter.cs"] = 455,
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 447,
@@ -38,7 +37,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 		{
 			["AdmissionCrmPublicAppService.cs"] = 36,
 			["AdmissionCrmLeadAppService.cs"] = 26,
-			["AdmissionCrmSetupAppService.cs"] = 23,
 			["AdmissionCrmDataQualityAppService.cs"] = 14,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 12,
 			["AdmissionCrmBulkOperationsAppService.cs"] = 9,
@@ -58,7 +56,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 16,
 			["AdmissionCrmPublicAppService.cs"] = 60,
 			["AdmissionCrmReportAppService.cs"] = 4,
-			["AdmissionCrmSetupAppService.cs"] = 36,
 			["AdmissionCrmStructuredReviewAppService.cs"] = 8,
 			["AdmissionCrmWorkspaceAppService.cs"] = 6
 		};
@@ -70,7 +67,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmLeadAppService.cs"] = 4,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 4,
 			["AdmissionCrmPublicAppService.cs"] = 6,
-			["AdmissionCrmSetupAppService.cs"] = 2
 		};
 
 	[Fact]

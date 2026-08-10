@@ -274,9 +274,8 @@ public class AdmissionCrmPresetApplyResultDto
 	public DateTime AppliedAt { get; set; }
 }
 
-public interface IAdmissionCrmSetupAppService : IApplicationService
+public interface IAdmissionCrmAdmissionYearSetupService : IApplicationService
 {
-	Task<AdmissionCrmSetupStatusDto> GetStatusAsync(Guid academicYearId);
 	Task<IReadOnlyList<AdmissionCrmAdmissionYearSetupDto>> GetAdmissionYearVersionsAsync(
 		Guid academicYearId);
 	Task<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>>
@@ -291,20 +290,41 @@ public interface IAdmissionCrmSetupAppService : IApplicationService
 	Task<AdmissionCrmAdmissionYearSetupDto> CloseAdmissionYearAsync(
 		Guid id,
 		CloseAdmissionCrmAdmissionYearSetupDto input);
+}
+
+public interface IAdmissionCrmCycleReadinessService : IApplicationService
+{
+	Task<AdmissionCrmSetupStatusDto> GetStatusAsync(Guid academicYearId);
 	Task<PagedResultDto<AdmissionCrmCycleListItemDto>> GetCyclesAsync(PagedResultRequestDto input);
 	Task<AdmissionCrmCycleSummaryDto> GetCycleSummaryAsync(Guid academicYearId);
+}
+
+public interface IAdmissionCrmApplicationStagePolicyService : IApplicationService
+{
 	Task<AdmissionCrmApplicationStagePolicyDto> GetApplicationStagePolicyAsync(Guid academicYearId);
 	Task<AdmissionCrmApplicationStagePolicyImpactDto> PreviewApplicationStagePolicyAsync(Guid academicYearId, UpdateAdmissionCrmApplicationStagePolicyDto input);
 	Task<AdmissionCrmApplicationStagePolicyDto> UpdateApplicationStagePolicyAsync(Guid academicYearId, UpdateAdmissionCrmApplicationStagePolicyDto input);
+}
+
+public interface IAdmissionCrmSettingsAccessService : IApplicationService
+{
 	Task<IReadOnlyList<AdmissionCrmSettingsAccessDto>> GetAccessPolicyAsync();
+	Task<IReadOnlyList<AdmissionCrmSettingsAccessDto>> UpdateAccessPolicyAsync(Guid tenantId, Guid supportSessionId, IReadOnlyList<UpdateAdmissionCrmSettingsAccessDto> input);
+}
+
+public interface IAdmissionCrmSupportSessionService : IApplicationService
+{
 	Task<AdmissionCrmSupportSessionDto> StartSupportSessionAsync(StartAdmissionCrmSupportSessionDto input);
 	Task<AdmissionCrmSupportSessionDto> GetSupportSessionAsync(Guid id);
 	Task EndSupportSessionAsync(Guid id);
+}
+
+public interface IAdmissionCrmPlatformPresetService : IApplicationService
+{
 	Task<AdmissionCrmPlatformPresetDto> CreatePresetAsync(CreateAdmissionCrmPlatformPresetDto input);
 	Task<AdmissionCrmPlatformPresetDto> PublishPresetAsync(Guid id);
 	Task<PagedResultDto<AdmissionCrmPlatformPresetDto>> GetPresetsAsync(PagedResultRequestDto input);
 	Task<AdmissionCrmPresetPreviewDto> PreviewPresetAsync(AdmissionCrmPresetOperationDto input);
 	Task<AdmissionCrmPresetApplyResultDto> ApplyPresetAsync(AdmissionCrmPresetOperationDto input);
 	Task RollbackPresetAsync(Guid adoptionId, Guid supportSessionId);
-	Task<IReadOnlyList<AdmissionCrmSettingsAccessDto>> UpdateAccessPolicyAsync(Guid tenantId, Guid supportSessionId, IReadOnlyList<UpdateAdmissionCrmSettingsAccessDto> input);
 }

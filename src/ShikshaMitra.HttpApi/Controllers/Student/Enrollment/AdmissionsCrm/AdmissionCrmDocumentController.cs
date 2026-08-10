@@ -13,53 +13,55 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [RemoteService(Name = "Default")]
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmDocumentController(
-	IAdmissionCrmDocumentAppService documentAppService) : AbpControllerBase
+	IAdmissionCrmDocumentTemplateService templateService,
+	IAdmissionCrmDocumentChecklistService checklistService,
+	IAdmissionCrmDocumentReviewService reviewService) : AbpControllerBase
 {
 	[HttpGet("{academicYearId}/configuration/document-checklists")]
 	public Task<PagedResultDto<AdmissionCrmDocumentChecklistTemplateDto>> GetTemplatesAsync(
 		Guid academicYearId,
 		[FromQuery] GetAdmissionCrmDocumentChecklistTemplateListInput input) =>
-		documentAppService.GetTemplatesAsync(academicYearId, input);
+		templateService.GetTemplatesAsync(academicYearId, input);
 
 	[HttpPost("{academicYearId}/configuration/document-checklists")]
 	public Task<AdmissionCrmDocumentChecklistTemplateDto> CreateTemplateAsync(
 		Guid academicYearId,
 		[FromBody] AdmissionCrmDocumentChecklistTemplateUpsertDto input) =>
-		documentAppService.CreateTemplateAsync(academicYearId, input);
+		templateService.CreateTemplateAsync(academicYearId, input);
 
 	[HttpPut("configuration/document-checklists/{id}")]
 	public Task<AdmissionCrmDocumentChecklistTemplateDto> UpdateTemplateAsync(
 		Guid id,
 		[FromBody] AdmissionCrmDocumentChecklistTemplateUpsertDto input) =>
-		documentAppService.UpdateTemplateAsync(id, input);
+		templateService.UpdateTemplateAsync(id, input);
 
 	[HttpPost("configuration/document-checklists/{id}/publish")]
 	public Task<AdmissionCrmDocumentChecklistTemplateDto> PublishTemplateAsync(Guid id) =>
-		documentAppService.PublishTemplateAsync(id);
+		templateService.PublishTemplateAsync(id);
 
 	[HttpPost("configuration/document-checklists/{id}/new-version")]
 	public Task<AdmissionCrmDocumentChecklistTemplateDto> CreateTemplateVersionAsync(Guid id) =>
-		documentAppService.CreateTemplateVersionAsync(id);
+		templateService.CreateTemplateVersionAsync(id);
 
 	[HttpPost("configuration/document-checklists/{id}/retire")]
 	public Task<AdmissionCrmDocumentChecklistTemplateDto> RetireTemplateAsync(Guid id) =>
-		documentAppService.RetireTemplateAsync(id);
+		templateService.RetireTemplateAsync(id);
 
 	[HttpPost("registrations/{registrationApplicationId}/document-checklist")]
 	public Task<AdmissionCrmApplicantDocumentChecklistDto> AssignChecklistAsync(
 		Guid registrationApplicationId,
 		[FromBody] AssignAdmissionCrmDocumentChecklistDto input) =>
-		documentAppService.AssignChecklistAsync(registrationApplicationId, input);
+		checklistService.AssignChecklistAsync(registrationApplicationId, input);
 
 	[HttpGet("registrations/{registrationApplicationId}/document-checklist")]
 	public Task<AdmissionCrmApplicantDocumentChecklistDto> GetChecklistAsync(Guid registrationApplicationId) =>
-		documentAppService.GetChecklistAsync(registrationApplicationId);
+		checklistService.GetChecklistAsync(registrationApplicationId);
 
 	[HttpPost("documents/{documentId}/review")]
 	public Task<AdmissionCrmApplicantDocumentDto> ReviewAsync(
 		Guid documentId,
 		[FromBody] ReviewAdmissionCrmApplicantDocumentDto input) =>
-		documentAppService.ReviewAsync(documentId, input);
+		reviewService.ReviewAsync(documentId, input);
 
 	[HttpPost("registrations/{registrationApplicationId}/documents")]
 	[Consumes("multipart/form-data")]
@@ -74,7 +76,7 @@ public class AdmissionCrmDocumentController(
 		await using var memory = new MemoryStream((int)Math.Min(request.File.Length, 1024 * 1024));
 		await stream.CopyToAsync(memory, HttpContext.RequestAborted);
 		if (memory.Length > maximumBytes) throw new BusinessException("AdmissionCrm:DocumentFileSizeExceeded");
-		return await documentAppService.UploadFromStaffAsync(
+		return await reviewService.UploadFromStaffAsync(
 			registrationApplicationId,
 			new ProcessedAdmissionCrmApplicantDocumentUploadDto
 			{
@@ -92,22 +94,22 @@ public class AdmissionCrmDocumentController(
 		Guid assignmentId,
 		string requirementKey,
 		[FromBody] AdmissionCrmDocumentReasonDto input) =>
-		documentAppService.WaiveAsync(assignmentId, requirementKey, input);
+		reviewService.WaiveAsync(assignmentId, requirementKey, input);
 
 	[HttpPost("documents/{documentId}/original-seen")]
 	public Task<AdmissionCrmApplicantDocumentDto> MarkOriginalSeenAsync(Guid documentId) =>
-		documentAppService.MarkOriginalSeenAsync(documentId);
+		reviewService.MarkOriginalSeenAsync(documentId);
 
 	[HttpPost("document-checklists/{assignmentId}/confirm-readiness")]
 	public Task<AdmissionCrmApplicantDocumentChecklistDto> ConfirmReadinessAsync(
 		Guid assignmentId,
 		[FromBody] ConfirmAdmissionCrmReadinessDto input) =>
-		documentAppService.ConfirmReadinessAsync(assignmentId, input);
+		reviewService.ConfirmReadinessAsync(assignmentId, input);
 
 	[HttpGet("documents/{documentId}/download")]
 	public async Task<IActionResult> DownloadAsync(Guid documentId)
 	{
-		var document = await documentAppService.DownloadAsync(documentId);
+		var document = await reviewService.DownloadAsync(documentId);
 		return File(document.Content, document.ContentType, document.FileName);
 	}
 }

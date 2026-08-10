@@ -33,7 +33,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmPlaybookAppService.cs"] = 1005,
 			["AdmissionCrmCommunicationAppService.cs"] = 948,
 			["AdmissionCrmGovernanceAppService.cs"] = 763,
-			["AdmissionCrmDocumentAppService.cs"] = 669,
 			["AdmissionCrmApplicantProgressProjector.cs"] = 596,
 			["AdmissionCrmConfigurationCloneWriter.cs"] = 455,
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 447,
@@ -61,7 +60,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 12,
 			["AdmissionCrmBulkOperationsAppService.cs"] = 9,
 			["AdmissionCrmConfigurationAppService.cs"] = 9,
-			["AdmissionCrmDocumentAppService.cs"] = 9,
 			["AdmissionCrmConfigurationCloneWriter.cs"] = 18,
 			["AdmissionCrmConfigurationSnapshotReader.cs"] = 20
 		};
@@ -76,7 +74,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmCommunicationAppService.cs"] = 12,
 			["AdmissionCrmConfigurationAppService.cs"] = 10,
 			["AdmissionCrmDataQualityAppService.cs"] = 27,
-			["AdmissionCrmDocumentAppService.cs"] = 14,
 			["AdmissionCrmEntranceExamAppService.cs"] = 12,
 			["AdmissionCrmEventAppService.cs"] = 6,
 			["AdmissionCrmFinalAdmissionAppService.cs"] = 26,

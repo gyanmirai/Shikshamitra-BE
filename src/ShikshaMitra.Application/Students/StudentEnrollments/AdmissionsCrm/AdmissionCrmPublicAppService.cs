@@ -97,7 +97,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private readonly IRepository<AdmissionCrmEvent, Guid> _eventRepository;
 	private readonly IAdmissionCrmCommunicationDispatcher _dispatcher;
 	private readonly IAdmissionCrmLeadAppService _leadAppService;
-	private readonly IAdmissionCrmDocumentAppService _documentAppService;
+	private readonly AdmissionCrmDocumentApplicantWorkflow _documentApplicantWorkflow;
 	private readonly IAdmissionCrmEntranceExamAppService _entranceExamAppService;
 	private readonly IStringEncryptionService _stringEncryptionService;
 	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
@@ -135,7 +135,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		IRepository<AdmissionCrmEvent, Guid> eventRepository,
 		IAdmissionCrmCommunicationDispatcher dispatcher,
 		IAdmissionCrmLeadAppService leadAppService,
-		IAdmissionCrmDocumentAppService documentAppService,
+		AdmissionCrmDocumentApplicantWorkflow documentApplicantWorkflow,
 		IAdmissionCrmEntranceExamAppService entranceExamAppService,
 		IStringEncryptionService stringEncryptionService,
 		AdmissionCrmStaffEligibilityService staffEligibilityService,
@@ -172,7 +172,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		_eventRepository = eventRepository;
 		_dispatcher = dispatcher;
 		_leadAppService = leadAppService;
-		_documentAppService = documentAppService;
+		_documentApplicantWorkflow = documentApplicantWorkflow;
 		_entranceExamAppService = entranceExamAppService;
 		_stringEncryptionService = stringEncryptionService;
 		_staffEligibilityService = staffEligibilityService;
@@ -859,7 +859,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
 			await EnsureApplicantAccessSessionAsync(access, lead, accessSessionToken);
-			return await _documentAppService.UploadFromApplicantAsync(lead.Id, input);
+			return await _documentApplicantWorkflow.UploadAsync(lead.Id, input);
 		}
 	}
 
@@ -1995,7 +1995,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		var exam = await GetExamRecordOrDefaultAsync(lead.Id);
 		var applicantChecklist = await BuildApplicantChecklistAsync(lead);
 		var registration = await GetRegistrationApplicationOrDefaultAsync(lead.Id);
-		var documents = await _documentAppService.GetChecklistFromApplicantAsync(lead.Id);
+		var documents = await _documentApplicantWorkflow.GetChecklistAsync(lead.Id);
 		var offer = await GetApplicantOfferOrDefaultAsync(lead.Id);
 		var financialStatus = await GetApplicantFinancialStatusOrDefaultAsync(lead.Id);
 		var admissionRoute = await GetApplicantRouteStatusOrDefaultAsync(lead.Id);

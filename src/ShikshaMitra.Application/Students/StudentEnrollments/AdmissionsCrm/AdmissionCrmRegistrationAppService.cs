@@ -41,7 +41,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 	private readonly StudentEnrollmentManager _studentEnrollmentManager;
 	private readonly IStringEncryptionService _stringEncryptionService;
-	private readonly IAdmissionCrmDocumentAppService _documentAppService;
+	private readonly AdmissionCrmDocumentChecklistWorkflow _documentChecklistWorkflow;
 
 	public AdmissionCrmRegistrationAppService(
 		IRepository<AdmissionCrmRegistrationTemplate, Guid> templateRepository,
@@ -56,7 +56,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		StudentScopeAccessService studentScopeAccessService,
 		StudentEnrollmentManager studentEnrollmentManager,
 		IStringEncryptionService stringEncryptionService,
-		IAdmissionCrmDocumentAppService documentAppService)
+		AdmissionCrmDocumentChecklistWorkflow documentChecklistWorkflow)
 	{
 		_templateRepository = templateRepository;
 		_seriesRepository = seriesRepository;
@@ -70,7 +70,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		_studentScopeAccessService = studentScopeAccessService;
 		_studentEnrollmentManager = studentEnrollmentManager;
 		_stringEncryptionService = stringEncryptionService;
-		_documentAppService = documentAppService;
+		_documentChecklistWorkflow = documentChecklistWorkflow;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
@@ -333,7 +333,7 @@ public class AdmissionCrmRegistrationAppService : ApplicationService, IAdmission
 		}
 		await AddTimelineAsync(lead, AdmissionCrmTimelineEventType.RegistrationFormIssued, "Registration form issued", $"Form {formNumber}, template {template.Name} v{template.Version}.", application.Id);
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		await _documentAppService.AssignApplicableChecklistFromAutomationAsync(
+		await _documentChecklistWorkflow.AssignApplicableChecklistFromAutomationAsync(
 			application.Id,
 			new AdmissionCrmPlaybookApplicabilityDto
 			{

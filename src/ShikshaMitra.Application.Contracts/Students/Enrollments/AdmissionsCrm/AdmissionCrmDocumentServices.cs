@@ -5,7 +5,7 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
-public interface IAdmissionCrmDocumentAppService : IApplicationService
+public interface IAdmissionCrmDocumentTemplateService : IApplicationService
 {
 	Task<PagedResultDto<AdmissionCrmDocumentChecklistTemplateDto>> GetTemplatesAsync(Guid academicYearId, GetAdmissionCrmDocumentChecklistTemplateListInput input);
 	Task<AdmissionCrmDocumentChecklistTemplateDto> CreateTemplateAsync(Guid academicYearId, AdmissionCrmDocumentChecklistTemplateUpsertDto input);
@@ -13,13 +13,16 @@ public interface IAdmissionCrmDocumentAppService : IApplicationService
 	Task<AdmissionCrmDocumentChecklistTemplateDto> PublishTemplateAsync(Guid id);
 	Task<AdmissionCrmDocumentChecklistTemplateDto> CreateTemplateVersionAsync(Guid id);
 	Task<AdmissionCrmDocumentChecklistTemplateDto> RetireTemplateAsync(Guid id);
+}
+
+public interface IAdmissionCrmDocumentChecklistService : IApplicationService
+{
 	Task<AdmissionCrmApplicantDocumentChecklistDto> AssignChecklistAsync(Guid registrationApplicationId, AssignAdmissionCrmDocumentChecklistDto input);
-	Task<AdmissionCrmApplicantDocumentChecklistDto?> AssignApplicableChecklistFromAutomationAsync(
-		Guid registrationApplicationId,
-		AdmissionCrmPlaybookApplicabilityDto applicability);
 	Task<AdmissionCrmApplicantDocumentChecklistDto> GetChecklistAsync(Guid registrationApplicationId);
-	Task<AdmissionCrmApplicantDocumentChecklistDto?> GetChecklistFromApplicantAsync(Guid leadId);
-	Task<AdmissionCrmApplicantDocumentChecklistDto> UploadFromApplicantAsync(Guid leadId, ProcessedAdmissionCrmApplicantDocumentUploadDto input);
+}
+
+public interface IAdmissionCrmDocumentReviewService : IApplicationService
+{
 	Task<AdmissionCrmApplicantDocumentChecklistDto> UploadFromStaffAsync(Guid registrationApplicationId, ProcessedAdmissionCrmApplicantDocumentUploadDto input);
 	Task<AdmissionCrmApplicantDocumentDto> ReviewAsync(Guid documentId, ReviewAdmissionCrmApplicantDocumentDto input);
 	Task<AdmissionCrmApplicantDocumentDto> WaiveAsync(Guid assignmentId, string requirementKey, AdmissionCrmDocumentReasonDto input);

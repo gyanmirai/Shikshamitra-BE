@@ -37,15 +37,10 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
 		StudentScopeAccessService scopeAccess)
 	{
-		_leadOperations = leadOperations;
-		_offerWorkflow = offerWorkflow;
-		_activationWorkflow = activationWorkflow;
-		_examBulkWorkflow = examBulkWorkflow;
-		_communicationWorkflow = communicationWorkflow;
-		_activationRepository = activationRepository;
-		_entranceExamRepository = entranceExamRepository;
-		_leadRepository = leadRepository;
-		_scopeAccess = scopeAccess;
+		(_leadOperations, _offerWorkflow, _activationWorkflow, _examBulkWorkflow, _communicationWorkflow) =
+			(leadOperations, offerWorkflow, activationWorkflow, examBulkWorkflow, communicationWorkflow);
+		(_activationRepository, _entranceExamRepository, _leadRepository, _scopeAccess) =
+			(activationRepository, entranceExamRepository, leadRepository, scopeAccess);
 	}
 	[UnitOfWork(IsDisabled = true)]
 	public async Task<AdmissionCrmBulkOperationResultDto> AssignOwnersAsync(Guid academicYearId, AdmissionCrmBulkAssignOwnersDto input)
@@ -57,7 +52,6 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 			return result.Id.ToString();
 		});
 	}
-
 	[UnitOfWork(IsDisabled = true)]
 	public async Task<AdmissionCrmBulkOperationResultDto> CreateTasksAsync(Guid academicYearId, AdmissionCrmBulkCreateTasksDto input)
 	{
@@ -74,7 +68,6 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 			return result.Id.ToString();
 		});
 	}
-
 	[UnitOfWork(IsDisabled = true)]
 	public async Task<AdmissionCrmBulkOperationResultDto> MarkExamAttendanceAsync(
 		Guid academicYearId,
@@ -94,7 +87,6 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 			return result.Id.ToString();
 		});
 	}
-
 	[UnitOfWork(IsDisabled = true)]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult)]
 	public async Task<AdmissionCrmBulkOperationResultDto> UploadExamResultsAsync(

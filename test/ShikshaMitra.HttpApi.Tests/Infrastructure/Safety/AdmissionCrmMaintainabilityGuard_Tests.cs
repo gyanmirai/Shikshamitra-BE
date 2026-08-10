@@ -19,7 +19,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 	private static readonly IReadOnlyDictionary<string, int> ApprovedOversizedFiles =
 		new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
 		{
-			["AdmissionCrmPublicAppService.cs"] = 3924,
 			["AdmissionCrmApplicantProgressProjector.cs"] = 596,
 			["AdmissionCrmConfigurationCloneWriter.cs"] = 455,
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 447,
@@ -34,7 +33,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 	private static readonly IReadOnlyDictionary<string, int> ApprovedDependencyCounts =
 		new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
 		{
-			["AdmissionCrmPublicAppService.cs"] = 36,
 			["AdmissionCrmDataQualityAppService.cs"] = 14,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 12,
 			["AdmissionCrmBulkOperationsAppService.cs"] = 9,
@@ -51,7 +49,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmEventAppService.cs"] = 6,
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 8,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 16,
-			["AdmissionCrmPublicAppService.cs"] = 60,
 			["AdmissionCrmReportAppService.cs"] = 4,
 			["AdmissionCrmStructuredReviewAppService.cs"] = 8,
 			["AdmissionCrmWorkspaceAppService.cs"] = 6
@@ -62,7 +59,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 		{
 			["AdmissionCrmBulkOperationsAppService.cs"] = 10,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 4,
-			["AdmissionCrmPublicAppService.cs"] = 6,
 		};
 
 	[Fact]

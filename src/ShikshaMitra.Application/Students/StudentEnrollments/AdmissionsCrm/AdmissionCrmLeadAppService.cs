@@ -21,9 +21,7 @@ using Volo.Abp.DependencyInjection;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
-
-[RemoteService(false)]
-[ExposeServices(typeof(IAdmissionCrmLeadAppService), typeof(IAdmissionCrmJourneyAutomation))]
+[RemoteService(false), ExposeServices(typeof(IAdmissionCrmLeadAppService), typeof(IAdmissionCrmJourneyAutomation))]
 public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadAppService, IAdmissionCrmJourneyAutomation
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

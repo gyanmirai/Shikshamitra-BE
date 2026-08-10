@@ -28,7 +28,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmFinalAdmissionAppService.cs"] = 1264,
 			["AdmissionCrmRegistrationAppService.cs"] = 1126,
 			["AdmissionCrmConfigurationAppService.cs"] = 1109,
-			["AdmissionCrmActivationAppService.cs"] = 1051,
 			["AdmissionCrmApplicantProgressProjector.cs"] = 596,
 			["AdmissionCrmConfigurationCloneWriter.cs"] = 455,
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 447,
@@ -45,7 +44,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 		{
 			["AdmissionCrmPublicAppService.cs"] = 36,
 			["AdmissionCrmAnalyticsAppService.cs"] = 30,
-			["AdmissionCrmActivationAppService.cs"] = 29,
 			["AdmissionCrmLeadAppService.cs"] = 26,
 			["AdmissionCrmOperationsAppService.cs"] = 24,
 			["AdmissionCrmSetupAppService.cs"] = 23,
@@ -62,7 +60,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 	private static readonly IReadOnlyDictionary<string, int> ApprovedFacadeRepositoryReferences =
 		new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
 		{
-			["AdmissionCrmActivationAppService.cs"] = 54,
 			["AdmissionCrmAnalyticsAppService.cs"] = 58,
 			["AdmissionCrmBulkOperationsAppService.cs"] = 6,
 			["AdmissionCrmCatalogAppService.cs"] = 10,

@@ -19,7 +19,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	private const int MaximumBatchSize = 100;
 	private readonly IAdmissionCrmLeadAppService _leadService;
 	private readonly IAdmissionCrmFinalAdmissionAppService _finalAdmissionService;
-	private readonly IAdmissionCrmActivationAppService _activationService;
+	private readonly AdmissionCrmActivationBulkWorkflow _activationWorkflow;
 	private readonly AdmissionCrmEntranceExamBulkWorkflow _examBulkWorkflow;
 	private readonly AdmissionCrmMessageDeliveryWorkflow _communicationWorkflow;
 	private readonly IRepository<AdmissionCrmActivation, Guid> _activationRepository;
@@ -30,7 +30,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	public AdmissionCrmBulkOperationsAppService(
 		IAdmissionCrmLeadAppService leadService,
 		IAdmissionCrmFinalAdmissionAppService finalAdmissionService,
-		IAdmissionCrmActivationAppService activationService,
+		AdmissionCrmActivationBulkWorkflow activationWorkflow,
 		AdmissionCrmEntranceExamBulkWorkflow examBulkWorkflow,
 		AdmissionCrmMessageDeliveryWorkflow communicationWorkflow,
 		IRepository<AdmissionCrmActivation, Guid> activationRepository,
@@ -40,7 +40,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	{
 		_leadService = leadService;
 		_finalAdmissionService = finalAdmissionService;
-		_activationService = activationService;
+		_activationWorkflow = activationWorkflow;
 		_examBulkWorkflow = examBulkWorkflow;
 		_communicationWorkflow = communicationWorkflow;
 		_activationRepository = activationRepository;
@@ -242,7 +242,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		{
 			try
 			{
-				var preview = await _activationService.PreviewAsync(leadId, input.Activation);
+				var preview = await _activationWorkflow.PreviewAsync(leadId, input.Activation);
 				var blockers = preview.Items.Where(x => x.Status == AdmissionCrmActivationStepStatus.Failed)
 					.Select(x => $"{x.Key}:{x.Detail}").ToList();
 				items.Add(new AdmissionCrmBulkOperationItemResultDto
@@ -269,7 +269,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 			var activation = await _activationRepository.GetAsync(activationId);
 			if (activation.AcademicYearId != academicYearId)
 				throw new BusinessException("AdmissionCrm:BulkAcademicYearMismatch");
-			var result = await _activationService.ExecuteAsync(activationId);
+			var result = await _activationWorkflow.ExecuteAsync(activationId);
 			return result.StudentId?.ToString() ?? result.Id.ToString();
 		});
 	}

@@ -10,7 +10,9 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmConfigurationSafetyController(
-	IAdmissionCrmConfigurationSafetyAppService configurationSafetyAppService) : AbpControllerBase
+	IAdmissionCrmConfigurationReferenceService referenceService,
+	IAdmissionCrmConfigurationImpactService impactService,
+	IAdmissionCrmConfigurationCloneService cloneService) : AbpControllerBase
 {
 	[HttpGet("{academicYearId}/configuration-safety/references")]
 	public async Task<AdmissionCrmConfigurationReferenceResultDto> GetReferencesAsync(
@@ -18,7 +20,7 @@ public class AdmissionCrmConfigurationSafetyController(
 		[FromQuery] AdmissionCrmConfigurationReferenceKind kind,
 		[FromQuery] string code)
 	{
-		return await configurationSafetyAppService.GetReferencesAsync(academicYearId, kind, code);
+		return await referenceService.GetAsync(academicYearId, kind, code);
 	}
 
 	[HttpPost("{academicYearId}/configuration-safety/impact-preview")]
@@ -26,20 +28,20 @@ public class AdmissionCrmConfigurationSafetyController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] PreviewAdmissionCrmConfigurationImpactDto input)
 	{
-		return await configurationSafetyAppService.PreviewImpactAsync(academicYearId, input);
+		return await impactService.PreviewAsync(academicYearId, input);
 	}
 
 	[HttpPost("configuration-safety/clone/preview")]
 	public async Task<AdmissionCrmConfigurationClonePreviewDto> PreviewCloneAsync(
 		[FromBody] PreviewAdmissionCrmConfigurationCloneDto input)
 	{
-		return await configurationSafetyAppService.PreviewCloneAsync(input);
+		return await cloneService.PreviewAsync(input);
 	}
 
 	[HttpPost("configuration-safety/clone/confirm")]
 	public async Task<AdmissionCrmConfigurationCloneResultDto> ConfirmCloneAsync(
 		[FromBody] ConfirmAdmissionCrmConfigurationCloneDto input)
 	{
-		return await configurationSafetyAppService.ConfirmCloneAsync(input);
+		return await cloneService.ConfirmAsync(input);
 	}
 }

@@ -23,7 +23,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmLeadAppService.cs"] = 3117,
 			["AdmissionCrmOperationsAppService.cs"] = 1661,
 			["AdmissionCrmAnalyticsAppService.cs"] = 1398,
-			["AdmissionCrmConfigurationSafetyAppService.cs"] = 1397,
 			["AdmissionCrmSetupAppService.cs"] = 1390,
 			["AdmissionCrmApplicantProgressProjector.cs"] = 596,
 			["AdmissionCrmConfigurationCloneWriter.cs"] = 455,

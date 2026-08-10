@@ -21,7 +21,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	private readonly IAdmissionCrmFinalAdmissionAppService _finalAdmissionService;
 	private readonly IAdmissionCrmActivationAppService _activationService;
 	private readonly IAdmissionCrmEntranceExamAppService _entranceExamService;
-	private readonly IAdmissionCrmCommunicationAppService _communicationService;
+	private readonly AdmissionCrmMessageDeliveryWorkflow _communicationWorkflow;
 	private readonly IRepository<AdmissionCrmActivation, Guid> _activationRepository;
 	private readonly IRepository<AdmissionCrmEntranceExamRecord, Guid> _entranceExamRepository;
 	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
@@ -32,7 +32,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		IAdmissionCrmFinalAdmissionAppService finalAdmissionService,
 		IAdmissionCrmActivationAppService activationService,
 		IAdmissionCrmEntranceExamAppService entranceExamService,
-		IAdmissionCrmCommunicationAppService communicationService,
+		AdmissionCrmMessageDeliveryWorkflow communicationWorkflow,
 		IRepository<AdmissionCrmActivation, Guid> activationRepository,
 		IRepository<AdmissionCrmEntranceExamRecord, Guid> entranceExamRepository,
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
@@ -42,7 +42,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		_finalAdmissionService = finalAdmissionService;
 		_activationService = activationService;
 		_entranceExamService = entranceExamService;
-		_communicationService = communicationService;
+		_communicationWorkflow = communicationWorkflow;
 		_activationRepository = activationRepository;
 		_entranceExamRepository = entranceExamRepository;
 		_leadRepository = leadRepository;
@@ -183,7 +183,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		await EnsureBatchAsync(academicYearId, input.LeadIds, nameof(SendMessagesAsync));
 		return await RunAsync(input.LeadIds.Distinct().ToList(), x => x, async leadId =>
 		{
-			var result = await _communicationService.SendTemplateAsync(leadId, new SendAdmissionCrmMessageTemplateDto
+			var result = await _communicationWorkflow.SendAsync(leadId, new SendAdmissionCrmMessageTemplateDto
 			{
 				TemplateId = input.TemplateId, Variables = input.Variables
 			});

@@ -12,7 +12,7 @@ public class AdmissionCrmCommunicationProviderSettings_Tests
 	{
 		var settings = BuildStoredSettings();
 
-		var sanitized = AdmissionCrmCommunicationAppService.SanitizeProviderSettings(settings);
+		var sanitized = AdmissionCrmCommunicationProviderSettingsMapper.Sanitize(settings);
 
 		sanitized.Headers["Authorization"].ShouldBeEmpty();
 		sanitized.Parameters["apiKey"].ShouldBeEmpty();
@@ -49,7 +49,7 @@ public class AdmissionCrmCommunicationProviderSettings_Tests
 			}
 		};
 
-		var merged = AdmissionCrmCommunicationAppService.MergeProviderSettings(stored, input);
+		var merged = AdmissionCrmCommunicationProviderSettingsMapper.Merge(stored, input);
 
 		merged.Headers["Authorization"].ShouldBe("Bearer stored-token");
 		merged.Headers["X-School"].ShouldBe("main-campus");

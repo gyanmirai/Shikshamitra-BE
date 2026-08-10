@@ -45,7 +45,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 	private readonly IRepository<AdmissionCrmApplicantChecklistProgress, Guid> _applicantChecklistProgressRepository;
 	private readonly IRepository<AdmissionCrmSlaHold, Guid> _slaHoldRepository;
 	private readonly IRepository<AdmissionCrmRouteDefinition, Guid> _routeDefinitionRepository;
-	private readonly IAdmissionCrmCommunicationAppService _communicationAppService;
+	private readonly AdmissionCrmMessageDeliveryWorkflow _communicationWorkflow;
 	private readonly IAdmissionCrmRegistrationAppService _registrationAppService;
 	private readonly IUserScopeAccessService _userScopeAccessService;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
@@ -73,7 +73,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		IRepository<AdmissionCrmApplicantChecklistProgress, Guid> applicantChecklistProgressRepository,
 		IRepository<AdmissionCrmSlaHold, Guid> slaHoldRepository,
 		IRepository<AdmissionCrmRouteDefinition, Guid> routeDefinitionRepository,
-		IAdmissionCrmCommunicationAppService communicationAppService,
+		AdmissionCrmMessageDeliveryWorkflow communicationWorkflow,
 		IAdmissionCrmRegistrationAppService registrationAppService,
 		IUserScopeAccessService userScopeAccessService,
 		StudentScopeAccessService studentScopeAccessService,
@@ -100,7 +100,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		_applicantChecklistProgressRepository = applicantChecklistProgressRepository;
 		_slaHoldRepository = slaHoldRepository;
 		_routeDefinitionRepository = routeDefinitionRepository;
-		_communicationAppService = communicationAppService;
+		_communicationWorkflow = communicationWorkflow;
 		_registrationAppService = registrationAppService;
 		_userScopeAccessService = userScopeAccessService;
 		_studentScopeAccessService = studentScopeAccessService;
@@ -1447,7 +1447,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 
 		try
 		{
-			await _communicationAppService.SendTemplateFromAutomationAsync(
+			await _communicationWorkflow.SendFromAutomationAsync(
 				lead.Id,
 				new SendAdmissionCrmMessageTemplateDto
 				{
@@ -1555,7 +1555,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 						}
 						else
 						{
-							await _communicationAppService.SendTemplateFromAutomationAsync(
+							await _communicationWorkflow.SendFromAutomationAsync(
 								lead.Id,
 								new SendAdmissionCrmMessageTemplateDto
 								{

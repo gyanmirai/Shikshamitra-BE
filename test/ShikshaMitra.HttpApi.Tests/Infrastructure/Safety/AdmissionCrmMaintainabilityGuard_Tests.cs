@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -21,7 +21,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 		{
 			["AdmissionCrmPublicAppService.cs"] = 3924,
 			["AdmissionCrmLeadAppService.cs"] = 3117,
-			["AdmissionCrmOperationsAppService.cs"] = 1661,
 			["AdmissionCrmSetupAppService.cs"] = 1390,
 			["AdmissionCrmApplicantProgressProjector.cs"] = 596,
 			["AdmissionCrmConfigurationCloneWriter.cs"] = 455,
@@ -39,7 +38,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 		{
 			["AdmissionCrmPublicAppService.cs"] = 36,
 			["AdmissionCrmLeadAppService.cs"] = 26,
-			["AdmissionCrmOperationsAppService.cs"] = 24,
 			["AdmissionCrmSetupAppService.cs"] = 23,
 			["AdmissionCrmDataQualityAppService.cs"] = 14,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 12,
@@ -58,7 +56,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 8,
 			["AdmissionCrmLeadAppService.cs"] = 36,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 16,
-			["AdmissionCrmOperationsAppService.cs"] = 44,
 			["AdmissionCrmPublicAppService.cs"] = 60,
 			["AdmissionCrmReportAppService.cs"] = 4,
 			["AdmissionCrmSetupAppService.cs"] = 36,
@@ -140,8 +137,8 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			var text = File.ReadAllText(file);
 			var appServiceReferences = AppServiceInjectionPattern().Matches(text).Count;
 			if (appServiceReferences > 0 &&
-			    (!ApprovedAppServiceReferences.TryGetValue(Path.GetFileName(file), out var approved) ||
-			     appServiceReferences > approved))
+				(!ApprovedAppServiceReferences.TryGetValue(Path.GetFileName(file), out var approved) ||
+				 appServiceReferences > approved))
 			{
 				violations.Add($"{Path.GetFileName(file)} has {appServiceReferences} app-service dependencies");
 			}

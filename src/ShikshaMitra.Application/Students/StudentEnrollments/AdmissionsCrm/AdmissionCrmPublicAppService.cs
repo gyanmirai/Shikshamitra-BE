@@ -11,10 +11,12 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Encryption;
 using Volo.Abp.Uow;
+using Volo.Abp.TenantManagement;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
@@ -99,6 +101,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private readonly IAdmissionCrmEntranceExamAppService _entranceExamAppService;
 	private readonly IStringEncryptionService _stringEncryptionService;
 	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
+	private readonly ITenantRepository _tenantRepository;
 
 	public AdmissionCrmPublicAppService(
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
@@ -135,7 +138,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		IAdmissionCrmDocumentAppService documentAppService,
 		IAdmissionCrmEntranceExamAppService entranceExamAppService,
 		IStringEncryptionService stringEncryptionService,
-		AdmissionCrmStaffEligibilityService staffEligibilityService)
+		AdmissionCrmStaffEligibilityService staffEligibilityService,
+		ITenantRepository tenantRepository)
 	{
 		_leadRepository = leadRepository;
 		_formTemplateRepository = formTemplateRepository;
@@ -172,6 +176,40 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		_entranceExamAppService = entranceExamAppService;
 		_stringEncryptionService = stringEncryptionService;
 		_staffEligibilityService = staffEligibilityService;
+		_tenantRepository = tenantRepository;
+	}
+
+	public async Task<PublicAdmissionPortalDto> GetPublicPortalAsync(Guid tenantId)
+	{
+		using (CurrentTenant.Change(null))
+		{
+			var tenant = await _tenantRepository.FindAsync(tenantId);
+			if (tenant == null)
+				throw new BusinessException("AdmissionCrm:PublicPortalNotFound");
+
+			var supportedLanguages = ParseSupportedLanguages(
+				tenant.GetProperty<string>("AdmissionsSupportedLanguages"));
+			var defaultLanguage = NormalizeConfiguredLanguage(
+				tenant.GetProperty<string>("AdmissionsDefaultLanguage"),
+				supportedLanguages);
+			return new PublicAdmissionPortalDto
+			{
+				SchoolName = FirstValue(tenant.GetProperty<string>("InstituteName"), tenant.Name) ?? "School",
+				LogoDataUrl = BuildPublicLogoDataUrl(
+					tenant.GetProperty<byte[]>("Logo"),
+					tenant.GetProperty<string>("LogoContentType")),
+				AdmissionsPhone = FirstValue(
+					tenant.GetProperty<string>("AdmissionsPhone"),
+					tenant.GetProperty<string>("ContactNo"),
+					tenant.GetProperty<string>("ContactNumber")),
+				AdmissionsEmail = tenant.GetProperty<string>("AdmissionsEmail"),
+				OfficeHours = tenant.GetProperty<string>("AdmissionsOfficeHours"),
+				HelpText = tenant.GetProperty<string>("AdmissionsHelpText"),
+				PrimaryColor = NormalizePublicColor(tenant.GetProperty<string>("AdmissionsPrimaryColor")),
+				DefaultLanguage = defaultLanguage,
+				SupportedLanguages = supportedLanguages
+			};
+		}
 	}
 
 	public async Task<PublicAdmissionInquiryFormDto> GetPublicFormAsync(Guid tenantId, Guid templateId, string? language = null)
@@ -180,7 +218,11 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		{
 			var template = await GetActivePublicTemplateAsync(templateId);
 			await EnsurePublicFormChannelEnabledAsync(template);
-			return ToPublicFormDto(tenantId, template, language);
+			return ToPublicFormDto(
+				tenantId,
+				template,
+				language,
+				await GetPublicSupportedLanguagesAsync(tenantId));
 		}
 	}
 
@@ -667,6 +709,87 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			status.AccessSessionToken = accessSessionToken;
 			status.AccessSessionExpiresAt = access.AccessSessionExpiresAt;
 			status.FamilyApplications = await BuildFamilyApplicationSummariesAsync(lead, access, Clock.Now);
+			return status;
+		}
+	}
+
+	[UnitOfWork(IsDisabled = true)]
+	public async Task<AdmissionApplicantStatusDto> UpdateCommunicationPreferencesAsync(
+		Guid tenantId,
+		string token,
+		UpdatePublicAdmissionCommunicationPreferencesDto input)
+	{
+		using (CurrentTenant.Change(tenantId))
+		using (var uow = UnitOfWorkManager.Begin(
+		       new AbpUnitOfWorkOptions { IsTransactional = true },
+		       requiresNew: true))
+		{
+			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
+			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
+			var now = Clock.Now;
+			await SetPublicCommunicationPreferenceAsync(
+				lead,
+				AdmissionCrmMessageChannel.WhatsApp,
+				lead.PrimaryContactNo,
+				input.WhatsApp,
+				now);
+			await SetPublicCommunicationPreferenceAsync(
+				lead,
+				AdmissionCrmMessageChannel.Sms,
+				lead.PrimaryContactNo,
+				input.Sms,
+				now);
+			await SetPublicCommunicationPreferenceAsync(
+				lead,
+				AdmissionCrmMessageChannel.Email,
+				lead.Email,
+				input.Email,
+				now);
+			await _timelineRepository.InsertAsync(new AdmissionCrmTimelineEvent(
+				GuidGenerator.Create(), tenantId, lead.Id, lead.AcademicYearId,
+				AdmissionCrmTimelineEventType.CommunicationPreferencesChanged,
+				"Communication preferences updated",
+				"The family updated admissions communication preferences in the secure applicant portal.",
+				null, null, now), autoSave: true);
+			var status = await BuildVerifiedStatusResponseAsync(lead, access, input.AccessSessionToken);
+			await uow.CompleteAsync();
+			return status;
+		}
+	}
+
+	[UnitOfWork(IsDisabled = true)]
+	public async Task<AdmissionApplicantStatusDto> WithdrawApplicationAsync(
+		Guid tenantId,
+		string token,
+		WithdrawPublicAdmissionApplicationDto input)
+	{
+		using (CurrentTenant.Change(tenantId))
+		using (var uow = UnitOfWorkManager.Begin(
+		       new AbpUnitOfWorkOptions { IsTransactional = true },
+		       requiresNew: true))
+		{
+			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
+			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
+			if (!CanFamilyWithdrawApplication(lead, await GetApplicantActivationEntityOrDefaultAsync(lead.Id)))
+			{
+				throw new BusinessException("AdmissionCrm:ApplicationCannotBeWithdrawn");
+			}
+
+			var reason = input.Reason.Trim();
+			var now = Clock.Now;
+			await WithdrawFamilyRegistrationAsync(lead, reason);
+			await ReleaseFamilyApplicationSeatAsync(lead, reason, now);
+			await WithdrawFamilyWaitlistEntryAsync(lead, reason, now);
+			lead.Archive($"Withdrawn by family: {reason}", now);
+			await _leadRepository.UpdateAsync(lead, autoSave: true);
+			await _timelineRepository.InsertAsync(new AdmissionCrmTimelineEvent(
+				GuidGenerator.Create(), tenantId, lead.Id, lead.AcademicYearId,
+				AdmissionCrmTimelineEventType.FamilyApplicationWithdrawn,
+				"Application withdrawn by family",
+				"The family withdrew this application in the secure applicant portal.",
+				null, null, now), autoSave: true);
+			var status = await BuildVerifiedStatusResponseAsync(lead, access, input.AccessSessionToken);
+			await uow.CompleteAsync();
 			return status;
 		}
 	}
@@ -1701,6 +1824,171 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		return candidates.Count(x => IsLikelyDuplicate(lead, x, profile));
 	}
 
+	private async Task<AdmissionApplicantStatusDto> BuildVerifiedStatusResponseAsync(
+		AdmissionInquiryLead lead,
+		AdmissionApplicantStatusAccess access,
+		string accessSessionToken)
+	{
+		var status = await ToStatusDtoAsync(lead, lead.PreferredCommunicationLanguage);
+		status.AccessSessionToken = accessSessionToken;
+		status.AccessSessionExpiresAt = access.AccessSessionExpiresAt;
+		status.FamilyApplications = await BuildFamilyApplicationSummariesAsync(lead, access, Clock.Now);
+		return status;
+	}
+
+	private async Task SetPublicCommunicationPreferenceAsync(
+		AdmissionInquiryLead lead,
+		AdmissionCrmMessageChannel channel,
+		string? contactValue,
+		bool enabled,
+		DateTime at)
+	{
+		if (string.IsNullOrWhiteSpace(contactValue)) return;
+		var normalizedContact = AdmissionCrmCommunicationOptOut.NormalizeContact(channel, contactValue);
+		var queryable = await _optOutRepository.GetQueryableAsync();
+		var existing = await AsyncExecuter.FirstOrDefaultAsync(queryable
+			.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == lead.AcademicYearId &&
+				x.Channel == channel && x.NormalizedContactValue == normalizedContact)
+			.OrderByDescending(x => x.CreationTime));
+		if (enabled)
+		{
+			if (existing is { IsActive: true })
+			{
+				existing.Clear("Family opted in through the secure applicant portal.", at);
+				await _optOutRepository.UpdateAsync(existing, autoSave: true);
+			}
+			return;
+		}
+
+		if (existing == null)
+		{
+			await _optOutRepository.InsertAsync(new AdmissionCrmCommunicationOptOut(
+				GuidGenerator.Create(), CurrentTenant.Id, lead.AcademicYearId, lead.Id, channel, contactValue,
+				"Family opted out through the secure applicant portal.", at), autoSave: true);
+		}
+		else if (!existing.IsActive)
+		{
+			existing.Reactivate(lead.Id, "Family opted out through the secure applicant portal.", at);
+			await _optOutRepository.UpdateAsync(existing, autoSave: true);
+		}
+	}
+
+	private async Task<PublicAdmissionCommunicationPreferencesDto> GetPublicCommunicationPreferencesAsync(
+		AdmissionInquiryLead lead)
+	{
+		var hasPhone = !string.IsNullOrWhiteSpace(lead.PrimaryContactNo);
+		var hasEmail = !string.IsNullOrWhiteSpace(lead.Email);
+		return new PublicAdmissionCommunicationPreferencesDto
+		{
+			WhatsApp = hasPhone && !await HasActiveOptOutAsync(lead, AdmissionCrmMessageChannel.WhatsApp, lead.PrimaryContactNo!),
+			Sms = hasPhone && !await HasActiveOptOutAsync(lead, AdmissionCrmMessageChannel.Sms, lead.PrimaryContactNo!),
+			Email = hasEmail && !await HasActiveOptOutAsync(lead, AdmissionCrmMessageChannel.Email, lead.Email!),
+			HasPhoneContact = hasPhone,
+			HasEmailContact = hasEmail
+		};
+	}
+
+	private async Task<bool> HasActiveOptOutAsync(
+		AdmissionInquiryLead lead,
+		AdmissionCrmMessageChannel channel,
+		string contactValue)
+	{
+		var normalizedContact = AdmissionCrmCommunicationOptOut.NormalizeContact(channel, contactValue);
+		var queryable = await _optOutRepository.GetQueryableAsync();
+		return await AsyncExecuter.AnyAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == lead.AcademicYearId && x.Channel == channel &&
+			x.NormalizedContactValue == normalizedContact && x.IsActive));
+	}
+
+	private async Task<AdmissionCrmActivation?> GetApplicantActivationEntityOrDefaultAsync(Guid leadId)
+	{
+		var queryable = await _activationRepository.GetQueryableAsync();
+		return await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id && x.LeadId == leadId));
+	}
+
+	private static bool CanFamilyWithdrawApplication(
+		AdmissionInquiryLead lead,
+		AdmissionCrmActivation? activation) =>
+		lead.StudentId == null &&
+		lead.Stage is not (AdmissionInquiryStage.Archived or AdmissionInquiryStage.Rejected) &&
+		(activation == null || activation.Status == AdmissionCrmActivationStatus.Cancelled);
+
+	private async Task ReleaseFamilyApplicationSeatAsync(AdmissionInquiryLead lead, string reason, DateTime at)
+	{
+		var offerQueryable = await _seatOfferRepository.GetQueryableAsync();
+		var offers = await AsyncExecuter.ToListAsync(offerQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id && x.LeadId == lead.Id));
+		var offer = offers.OrderByDescending(x => x.Version).FirstOrDefault(x =>
+			x.Status is AdmissionCrmSeatOfferStatus.Draft or AdmissionCrmSeatOfferStatus.ApprovalPending or
+				AdmissionCrmSeatOfferStatus.Approved or AdmissionCrmSeatOfferStatus.Issued or
+				AdmissionCrmSeatOfferStatus.Opened or AdmissionCrmSeatOfferStatus.Accepted);
+		if (offer == null) return;
+
+		switch (offer.Status)
+		{
+			case AdmissionCrmSeatOfferStatus.Accepted:
+				offer.CancelAccepted(reason, at);
+				break;
+			case AdmissionCrmSeatOfferStatus.Approved:
+			case AdmissionCrmSeatOfferStatus.Issued:
+			case AdmissionCrmSeatOfferStatus.Opened:
+				offer.Revoke(reason, at);
+				break;
+			default:
+				offer.MarkSuperseded(reason, at);
+				break;
+		}
+		await _seatOfferRepository.UpdateAsync(offer, autoSave: true);
+
+		var reservationQueryable = await _seatReservationRepository.GetQueryableAsync();
+		var reservation = await AsyncExecuter.FirstOrDefaultAsync(reservationQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id && x.SeatOfferId == offer.Id));
+		if (reservation == null || reservation.Status is not (
+			AdmissionCrmSeatReservationStatus.Active or AdmissionCrmSeatReservationStatus.Committed)) return;
+
+		var pool = await _seatPoolRepository.GetAsync(reservation.SeatPoolId);
+		if (pool.TenantId != CurrentTenant.Id) throw new BusinessException("AdmissionCrm:SeatPoolNotFound");
+		var wasAccepted = reservation.Status == AdmissionCrmSeatReservationStatus.Committed;
+		reservation.Release(reason, at, cancelled: true);
+		pool.ReleaseSeat(wasAccepted, cancelled: true);
+		await _seatReservationRepository.UpdateAsync(reservation, autoSave: true);
+		await _seatPoolRepository.UpdateAsync(pool, autoSave: true);
+	}
+
+	private async Task WithdrawFamilyRegistrationAsync(AdmissionInquiryLead lead, string reason)
+	{
+		var registration = await GetRegistrationApplicationOrDefaultAsync(lead.Id);
+		if (registration == null || registration.Status is AdmissionCrmRegistrationStatus.Withdrawn or AdmissionCrmRegistrationStatus.Revoked)
+		{
+			return;
+		}
+
+		registration.Withdraw($"Withdrawn by family: {reason}");
+		await _registrationApplicationRepository.UpdateAsync(registration, autoSave: true);
+	}
+
+	private async Task WithdrawFamilyWaitlistEntryAsync(AdmissionInquiryLead lead, string reason, DateTime at)
+	{
+		var waitlistQueryable = await _waitlistRepository.GetQueryableAsync();
+		var entries = await AsyncExecuter.ToListAsync(waitlistQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id && x.LeadId == lead.Id));
+		foreach (var entry in entries.Where(x => x.Status == AdmissionCrmWaitlistStatus.Active))
+		{
+			entry.Withdraw(reason, at);
+			var pool = await _seatPoolRepository.GetAsync(entry.SeatPoolId);
+			if (pool.TenantId != CurrentTenant.Id) throw new BusinessException("AdmissionCrm:SeatPoolNotFound");
+			pool.RemoveWaitlistedApplicant();
+			await _waitlistRepository.UpdateAsync(entry, autoSave: true);
+			await _seatPoolRepository.UpdateAsync(pool, autoSave: true);
+		}
+		foreach (var entry in entries.Where(x => x.Status == AdmissionCrmWaitlistStatus.Promoted))
+		{
+			entry.ClosePromotedOffer(reason, at);
+			await _waitlistRepository.UpdateAsync(entry, autoSave: true);
+		}
+	}
+
 	private async Task<AdmissionApplicantStatusDto> ToStatusDtoAsync(AdmissionInquiryLead lead, string? requestedLanguage)
 	{
 		var stageName = await GetStageNameAsync(lead.AcademicYearId, lead.Stage);
@@ -1711,7 +1999,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		var offer = await GetApplicantOfferOrDefaultAsync(lead.Id);
 		var financialStatus = await GetApplicantFinancialStatusOrDefaultAsync(lead.Id);
 		var admissionRoute = await GetApplicantRouteStatusOrDefaultAsync(lead.Id);
-		var activation = await GetApplicantActivationStatusOrDefaultAsync(lead.Id);
+		var activationEntity = await GetApplicantActivationEntityOrDefaultAsync(lead.Id);
+		var activation = activationEntity == null ? null : ToApplicantActivationStatusDto(activationEntity);
 		if (offer?.Status == AdmissionCrmSeatOfferStatus.Issued && offer.MarkOpened(Clock.Now))
 		{
 			await _seatOfferRepository.UpdateAsync(offer, autoSave: true);
@@ -1749,16 +2038,25 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			Offer = offer == null ? null : ToApplicantStatusOfferDto(offer),
 			FinancialStatus = financialStatus,
 			AdmissionRoute = admissionRoute,
-			Activation = activation
+			Activation = activation,
+			CommunicationPreferences = await GetPublicCommunicationPreferencesAsync(lead),
+			CanWithdrawApplication = CanFamilyWithdrawApplication(lead, activationEntity)
 		};
-		return LocalizeApplicantStatus(status, requestedLanguage ?? lead.PreferredCommunicationLanguage);
+		return LocalizeApplicantStatus(
+			status,
+			requestedLanguage ?? lead.PreferredCommunicationLanguage,
+			await GetPublicSupportedLanguagesAsync(CurrentTenant.Id!.Value));
 	}
 
-	private static AdmissionApplicantStatusDto LocalizeApplicantStatus(AdmissionApplicantStatusDto status, string? requestedLanguage)
+	private static AdmissionApplicantStatusDto LocalizeApplicantStatus(
+		AdmissionApplicantStatusDto status,
+		string? requestedLanguage,
+		IReadOnlyList<string> supportedLanguages)
 	{
-		var language = NormalizeApplicantLanguage(requestedLanguage);
+		var language = NormalizeConfiguredLanguage(requestedLanguage, supportedLanguages);
 		status.Language = language;
-		if (language == "en") return status;
+		status.SupportedLanguages = supportedLanguages;
+		if (language is not ("gu" or "hi")) return status;
 		status.StageName = TranslateApplicantText(language, GetDefaultStageName(status.Stage));
 		status.NextStep = TranslateApplicantText(language, status.NextStep);
 		foreach (var item in status.Checklist.Concat(status.ApplicantChecklist))
@@ -1805,16 +2103,17 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 	private async Task<AdmissionApplicantActivationStatusDto?> GetApplicantActivationStatusOrDefaultAsync(Guid leadId)
 	{
-		var queryable = await _activationRepository.GetQueryableAsync();
-		var activation = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(x =>
-			x.TenantId == CurrentTenant.Id && x.LeadId == leadId));
-		return activation == null ? null : new AdmissionApplicantActivationStatusDto
-		{
-			ActivationReference = activation.ActivationReference,
-			Status = activation.Status,
-			FirstDayReadyAt = activation.FirstDayReadyAt
-		};
+		var activation = await GetApplicantActivationEntityOrDefaultAsync(leadId);
+		return activation == null ? null : ToApplicantActivationStatusDto(activation);
 	}
+
+	private static AdmissionApplicantActivationStatusDto ToApplicantActivationStatusDto(
+		AdmissionCrmActivation activation) => new()
+	{
+		ActivationReference = activation.ActivationReference,
+		Status = activation.Status,
+		FirstDayReadyAt = activation.FirstDayReadyAt
+	};
 
 	private async Task<AdmissionApplicantFinancialStatusDto?> GetApplicantFinancialStatusOrDefaultAsync(Guid leadId)
 	{
@@ -2420,12 +2719,21 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		return configuredStage?.StageName ?? stage.ToString();
 	}
 
-	private static PublicAdmissionInquiryFormDto ToPublicFormDto(Guid tenantId, AdmissionInquiryFormTemplate template, string? requestedLanguage)
+	private static PublicAdmissionInquiryFormDto ToPublicFormDto(
+		Guid tenantId,
+		AdmissionInquiryFormTemplate template,
+		string? requestedLanguage,
+		IReadOnlyList<string> supportedLanguages)
 	{
-		var language = NormalizeApplicantLanguage(requestedLanguage);
+		var language = NormalizeConfiguredLanguage(requestedLanguage, supportedLanguages);
+		var languageFallbacks = BuildLanguageFallbacks(language);
 		var localizations = JsonSerializer.Deserialize<Dictionary<string, AdmissionCrmFormTemplateLocalizationDto>>(template.LocalizationsJson, JsonOptions) ?? [];
-		localizations.TryGetValue(language, out var localization);
-		var fields = DeserializeFields(template.FieldsJson).Select(field => LocalizeField(field, language)).ToList();
+		var localization = languageFallbacks
+			.Select(candidate => localizations.GetValueOrDefault(candidate))
+			.FirstOrDefault(candidate => candidate != null);
+		var fields = DeserializeFields(template.FieldsJson)
+			.Select(field => LocalizeField(field, languageFallbacks))
+			.ToList();
 		return new PublicAdmissionInquiryFormDto
 		{
 			TenantId = tenantId,
@@ -2441,24 +2749,29 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		};
 	}
 
-	private static AdmissionCrmFormFieldDto LocalizeField(AdmissionCrmFormFieldDto field, string language)
+	private static AdmissionCrmFormFieldDto LocalizeField(
+		AdmissionCrmFormFieldDto field,
+		IReadOnlyList<string> languageFallbacks)
 	{
-		field.Label = field.LocalizedLabels.GetValueOrDefault(language, field.Label);
-		field.HelperText = field.LocalizedHelperTexts.GetValueOrDefault(language, field.HelperText ?? string.Empty);
-		field.Placeholder = field.LocalizedPlaceholders.GetValueOrDefault(language, field.Placeholder ?? string.Empty);
-		field.OptionLabels = field.LocalizedOptions.TryGetValue(language, out var optionLabels) &&
-			optionLabels.Count == field.Options.Count
-			? optionLabels
-			: field.Options;
+		field.Label = GetLocalizedValue(field.LocalizedLabels, languageFallbacks) ?? field.Label;
+		field.HelperText = GetLocalizedValue(field.LocalizedHelperTexts, languageFallbacks) ?? field.HelperText;
+		field.Placeholder = GetLocalizedValue(field.LocalizedPlaceholders, languageFallbacks) ?? field.Placeholder;
+		field.OptionLabels = languageFallbacks
+			.Select(candidate => field.LocalizedOptions.GetValueOrDefault(candidate))
+			.FirstOrDefault(optionLabels => optionLabels?.Count == field.Options.Count) ?? field.Options;
 		return field;
 	}
 
-	private static string NormalizeApplicantLanguage(string? language) => language?.Trim().ToLowerInvariant() switch
+	private static IReadOnlyList<string> BuildLanguageFallbacks(string language)
 	{
-		"gu" or "gu-in" => "gu",
-		"hi" or "hi-in" => "hi",
-		_ => "en"
-	};
+		var baseLanguage = language.Split('-', 2)[0];
+		return baseLanguage == language ? [language] : [language, baseLanguage];
+	}
+
+	private static string? GetLocalizedValue(
+		IReadOnlyDictionary<string, string> values,
+		IReadOnlyList<string> languageFallbacks) =>
+		languageFallbacks.Select(values.GetValueOrDefault).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
 	private static IReadOnlyList<AdmissionCrmFormFieldDto> DeserializeFields(string fieldsJson)
 	{
@@ -3495,6 +3808,73 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		return expectedBytes.Length == providedBytes.Length &&
 		       CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
 	}
+
+	private static IReadOnlyList<string> ParseSupportedLanguages(string? configured)
+	{
+		var languages = string.IsNullOrWhiteSpace(configured)
+			? new List<string> { "en", "gu", "hi" }
+			: configured
+				.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+				.Select(x => x.ToLowerInvariant())
+				.Where(IsSafeLanguageTag)
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.Take(10)
+				.ToList();
+		if (!languages.Contains("en", StringComparer.OrdinalIgnoreCase)) languages.Insert(0, "en");
+		return languages.Count > 0 ? languages : ["en", "gu", "hi"];
+	}
+
+	private static bool IsSafeLanguageTag(string value) =>
+		value.Length is > 0 and <= 10 && value.All(character => char.IsLetter(character) || character == '-');
+
+	private async Task<IReadOnlyList<string>> GetPublicSupportedLanguagesAsync(Guid tenantId)
+	{
+		using (CurrentTenant.Change(null))
+		{
+			var tenant = await _tenantRepository.FindAsync(tenantId);
+			return tenant == null
+				? ["en", "gu", "hi"]
+				: ParseSupportedLanguages(tenant.GetProperty<string>("AdmissionsSupportedLanguages"));
+		}
+	}
+
+	private static string NormalizeConfiguredLanguage(
+		string? configured,
+		IReadOnlyList<string> supportedLanguages)
+	{
+		var language = configured?.Trim().ToLowerInvariant();
+		if (language != null && supportedLanguages.Contains(language, StringComparer.OrdinalIgnoreCase))
+		{
+			return supportedLanguages.First(x => string.Equals(x, language, StringComparison.OrdinalIgnoreCase));
+		}
+		var baseLanguage = language?.Split('-', 2)[0];
+		return baseLanguage != null && supportedLanguages.Contains(baseLanguage, StringComparer.OrdinalIgnoreCase)
+			? supportedLanguages.First(x => string.Equals(x, baseLanguage, StringComparison.OrdinalIgnoreCase))
+			: supportedLanguages[0];
+	}
+
+	private static string? NormalizePublicColor(string? value)
+	{
+		var color = value?.Trim();
+		return color?.Length == 7 && color[0] == '#' && color.Skip(1).All(Uri.IsHexDigit)
+			? color.ToUpperInvariant()
+			: null;
+	}
+
+	private static string? BuildPublicLogoDataUrl(byte[]? logo, string? contentType)
+	{
+		if (logo == null || logo.Length == 0 || logo.Length > 512 * 1024) return null;
+		var safeContentType = contentType?.Trim().ToLowerInvariant() switch
+		{
+			"image/jpeg" => "image/jpeg",
+			"image/webp" => "image/webp",
+			_ => "image/png"
+		};
+		return $"data:{safeContentType};base64,{Convert.ToBase64String(logo)}";
+	}
+
+	private static string? FirstValue(params string?[] values) =>
+		values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
 	private sealed record AdmissionCrmCallbackMappings(
 		string? StatusPath = null,

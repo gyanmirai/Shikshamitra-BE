@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-07-28
+updated_on: 2026-08-10
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,13 +11,13 @@ audience: humans-and-agents
 # Understand Student product behavior
 
 TL;DR: Student owns pre-admission enrollment, active student records, attendance, leave, compliance, certificates, and dashboard previews.
-Student Enrollment is being refined around Admission Year Setup and a per-applicant Stepper where Pipeline is the source of truth before activation.
+Student Enrollment uses Admission Year Setup and a per-applicant Stepper where Pipeline is the source of truth before activation.
 
 ## Product areas
 
 | Area | Status | Behavior owned by Student |
 |---|---|---|
-| Student Enrollment | Refined requirement baseline | Inquiry capture, owner assignment, assessment flow, visits and events, registration, Finance handoff status, placement review, activation, and family communication |
+| Student Enrollment | Implemented and actively refined | Inquiry capture, owner assignment, assessment flow, visits and events, registration, Finance handoff status, placement review, activation, family self-service, admission intelligence, and governance |
 | Student Records | Implemented | Active student list, management, bulk upload, profile, dashboard preview, and records settings |
 | Attendance and leave | Implemented | Student attendance days, entries, leave requests, and leave type settings |
 | Compliance | Implemented | Student identity compliance workflow |
@@ -26,7 +26,7 @@ Student Enrollment is being refined around Admission Year Setup and a per-applic
 
 ## Student Enrollment ownership boundary
 
-[Student Enrollment operating workflow](./prd-student-enrollment.md) is the current functional source for the refined admissions requirement.
+[Student Enrollment workflows](./workflows.md) and this product page are the current functional sources for admissions behavior.
 Student Enrollment begins when an applicant is captured in Pipeline for an academic year.
 Even direct registration, management referral, transfer, RTE, or government-allotment cases must create a Pipeline inquiry record first.
 Student Enrollment ends when the applicant is activated and handed to Student Records as an active student.
@@ -35,7 +35,7 @@ Finance owns fee posting, receipts, settlement, reconciliation, concessions, and
 Institute Setup and Class Management own academic structure, class or division capacity, and active-student counts used for placement decisions.
 Student Records owns the active student's long-term lifecycle after activation.
 
-## Production Enrollment baseline
+## Current Enrollment capabilities
 
 | Capability | Baseline rule |
 |---|---|
@@ -49,12 +49,15 @@ Student Records owns the active student's long-term lifecycle after activation.
 | Placement | Required, with timing configurable between standard-only and division-before-activation |
 | Activation | Converts applicant to active Student only after configured gates pass |
 | Communication | Required templates and simple reminders for key moments, with write-only provider credentials and delivery status based on provider evidence |
+| Family enrollment center | Branded, tenant-qualified inquiry, OTP return, status, registration, document, event, offer, communication-preference, and withdrawal workflows |
+| Admission intelligence | Scoped funnel, source, standard, outcome, cross-cycle, capacity, response-risk, abandonment, and SLA indicators |
+| Governance | Delegation, audit search, retention, privacy requests, advisory forecasts, waitlist monitoring, and scheduled coordinator report delivery |
 
-## Advanced surfaces deferred from the production baseline
+## Deliberately deferred surfaces
 
 Simple admission reminders are part of Communication Settings.
-A separate Automation settings page, SLA escalation, forecasts, retention policies, privacy requests, waitlist forecasting, provider-specific adapters, and advanced analytics are outside the production Enrollment baseline.
-They may remain in code where already implemented, but the production requirement should not present them as required school configuration.
+Enrollment does not expose a separate generic Automation settings page.
+Advanced audience builders, discount campaigns, multi-branch communication journeys, and additional provider-specific adapters remain deferred.
 GR number automation is reserved for activation and can be implemented in a later slice.
 
 ## Data-integrity rules
@@ -77,6 +80,6 @@ GR number automation is reserved for activation and can be implemented in a late
 
 ## Documentation status
 
-The refined Student Enrollment requirement is the canonical production baseline.
-When changing Enrollment behavior, update [prd-student-enrollment.md](./prd-student-enrollment.md), [api.md](./api.md), [workflows.md](./workflows.md), and [testing.md](./testing.md).
+This page and [workflows.md](./workflows.md) define the canonical Enrollment product behavior.
+When changing Enrollment behavior, update this page, [api.md](./api.md), [workflows.md](./workflows.md), and [testing.md](./testing.md).
 Frontend route and screen documentation remains in [Student frontend docs](../../../../Shikshamitra-FE/docs/student/README.md).

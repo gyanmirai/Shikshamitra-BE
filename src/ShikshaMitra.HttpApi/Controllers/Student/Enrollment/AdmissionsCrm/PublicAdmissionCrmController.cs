@@ -15,6 +15,10 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 public class PublicAdmissionCrmController(
 	IAdmissionCrmPublicAppService admissionCrmPublicAppService) : AbpControllerBase
 {
+	[HttpGet("{tenantId}/portal")]
+	public Task<PublicAdmissionPortalDto> GetPortalAsync([FromRoute] Guid tenantId) =>
+		admissionCrmPublicAppService.GetPublicPortalAsync(tenantId);
+
 	[HttpGet("{tenantId}/forms/{templateId}")]
 	public async Task<PublicAdmissionInquiryFormDto> GetFormAsync(
 		[FromRoute] Guid tenantId,
@@ -84,6 +88,20 @@ public class PublicAdmissionCrmController(
 			accessSessionToken,
 			language);
 	}
+
+	[HttpPut("{tenantId}/status/{token}/communication-preferences")]
+	public Task<AdmissionApplicantStatusDto> UpdateCommunicationPreferencesAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromBody] UpdatePublicAdmissionCommunicationPreferencesDto input) =>
+		admissionCrmPublicAppService.UpdateCommunicationPreferencesAsync(tenantId, token, input);
+
+	[HttpPost("{tenantId}/status/{token}/withdraw")]
+	public Task<AdmissionApplicantStatusDto> WithdrawApplicationAsync(
+		[FromRoute] Guid tenantId,
+		[FromRoute, Required] string token,
+		[FromBody] WithdrawPublicAdmissionApplicationDto input) =>
+		admissionCrmPublicAppService.WithdrawApplicationAsync(tenantId, token, input);
 
 	[HttpPut("{tenantId}/status/{token}/registration")]
 	public async Task<AdmissionCrmRegistrationApplicationDto> SaveRegistrationAsync(

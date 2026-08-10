@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.Students.StudentEnrollments;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
@@ -27,6 +28,36 @@ public class AdmissionApplicantStatusDto
 	public AdmissionApplicantRouteStatusDto? AdmissionRoute { get; set; }
 	public AdmissionApplicantActivationStatusDto? Activation { get; set; }
 	public List<AdmissionFamilyApplicationSummaryDto> FamilyApplications { get; set; } = new();
+	public PublicAdmissionCommunicationPreferencesDto CommunicationPreferences { get; set; } = new();
+	public bool CanWithdrawApplication { get; set; }
+}
+
+public class PublicAdmissionCommunicationPreferencesDto
+{
+	public bool WhatsApp { get; set; }
+	public bool Sms { get; set; }
+	public bool Email { get; set; }
+	public bool HasPhoneContact { get; set; }
+	public bool HasEmailContact { get; set; }
+}
+
+public class UpdatePublicAdmissionCommunicationPreferencesDto
+{
+	[Required]
+	public string AccessSessionToken { get; set; } = string.Empty;
+	public bool WhatsApp { get; set; }
+	public bool Sms { get; set; }
+	public bool Email { get; set; }
+}
+
+public class WithdrawPublicAdmissionApplicationDto
+{
+	[Required]
+	public string AccessSessionToken { get; set; } = string.Empty;
+
+	[Required]
+	[MaxLength(AdmissionCrmConsts.MaxNotesLength)]
+	public string Reason { get; set; } = string.Empty;
 }
 
 public class AdmissionFamilyApplicationSummaryDto

@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-07-28
+updated_on: 2026-08-10
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -80,7 +80,8 @@ TL;DR: Student Enrollment starts in Pipeline, follows Admission Year Setup throu
 | Communication Settings | Configure channels, templates, variables, consent behavior, provider mode, and delivery-log visibility |
 
 Simple admission reminders remain part of Communication Settings.
-A separate Automation page, forecasts, retention, privacy requests, and advanced analytics are outside the production Enrollment baseline.
+Enrollment does not expose a separate generic Automation page.
+Governance settings provide scoped advisory forecasts, retention policies, privacy-request handling, delegation, audit search, waitlist monitoring, and scheduled report delivery without adding extra top-level navigation.
 One-time admission moments send immediately when the corresponding action occurs.
 Idle-delay reminders are available only for Registration Issued, Registration Incomplete, Registration Correction Requested, Registration Verified, Fee Follow-up, Exam No-show, and Activation Welcome.
 The hourly lifecycle worker reevaluates those delayed states in batches of 250.
@@ -92,6 +93,15 @@ Provider header values, parameter values, and callback secrets remain write-only
 Admission Reports uses the same fixed lifecycle projection as Pipeline.
 Staff may filter by applicant creation date and target standard.
 The backend applies tenant, academic-year, effective UserScope, date, and standard filters before grouping.
-The screen shows one table at a time for lifecycle, source, standard, or closed outcome.
+The screen shows one table at a time for lifecycle, source, standard, or closed outcome, with a second academic-year selector for cross-cycle comparison.
 The report returns all fixed lifecycle and closed-outcome rows, including zero-count rows, so exports and comparisons remain stable.
 The report date span is limited to 366 days to keep interactive requests bounded.
+The intelligence summary adds approved and remaining capacity, projected seat surplus or shortfall, first-response risk, funnel abandonment and completion, overdue work, and SLA misses from server-scoped data.
+Scheduled delivery accepts only an active Enrollment employee recipient and sends an authenticated report link rather than attaching applicant data to email.
+
+## Family enrollment workflow
+
+The public portal returns only safe tenant branding, support contacts, office hours, and configured languages.
+English copy is always available, while configured locale tags may select tenant-authored form labels and fall back to English for built-in interface copy.
+After OTP verification, a guardian can review related authorized applications, update email, SMS, and WhatsApp preferences, and withdraw an eligible application with an explicit reason.
+Withdrawal releases Enrollment-owned reservations and waitlist state, closes active offers, records timeline evidence, and never performs Finance accounting work.

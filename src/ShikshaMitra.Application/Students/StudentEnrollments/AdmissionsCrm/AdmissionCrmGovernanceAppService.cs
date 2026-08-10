@@ -36,8 +36,13 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 	private readonly IRepository<AdmissionCrmPerson, Guid> _personRepository;
 	private readonly IRepository<AdmissionCrmDataQualityIssue, Guid> _dataQualityRepository;
 	private readonly IRepository<AdmissionCrmTimelineEvent, Guid> _timelineRepository;
+	private readonly IRepository<AdmissionCrmSeatPool, Guid> _seatPoolRepository;
+	private readonly IRepository<AdmissionCrmPipelineStage, Guid> _pipelineStageRepository;
+	private readonly IRepository<AdmissionCrmCycleConfiguration, Guid> _cycleConfigurationRepository;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 	private readonly StudentScopeAccessService _scopeAccess;
+	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
+	private readonly AdmissionCrmReportScheduleDeliveryService _reportScheduleDeliveryService;
 
 	public AdmissionCrmGovernanceAppService(
 		IRepository<AdmissionCrmRetentionPolicy, Guid> retentionRepository,
@@ -54,8 +59,13 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 		IRepository<AdmissionCrmPerson, Guid> personRepository,
 		IRepository<AdmissionCrmDataQualityIssue, Guid> dataQualityRepository,
 		IRepository<AdmissionCrmTimelineEvent, Guid> timelineRepository,
+		IRepository<AdmissionCrmSeatPool, Guid> seatPoolRepository,
+		IRepository<AdmissionCrmPipelineStage, Guid> pipelineStageRepository,
+		IRepository<AdmissionCrmCycleConfiguration, Guid> cycleConfigurationRepository,
 		IRepository<AcademicYear, Guid> academicYearRepository,
-		StudentScopeAccessService scopeAccess)
+		StudentScopeAccessService scopeAccess,
+		AdmissionCrmStaffEligibilityService staffEligibilityService,
+		AdmissionCrmReportScheduleDeliveryService reportScheduleDeliveryService)
 	{
 		_retentionRepository = retentionRepository; _privacyRepository = privacyRepository;
 		_exportRepository = exportRepository; _scheduleRepository = scheduleRepository;
@@ -64,8 +74,12 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 		_quotationRepository = quotationRepository; _routeRepository = routeRepository;
 		_identityProfileRepository = identityProfileRepository; _personRepository = personRepository;
 		_dataQualityRepository = dataQualityRepository; _timelineRepository = timelineRepository;
+		_seatPoolRepository = seatPoolRepository; _pipelineStageRepository = pipelineStageRepository;
+		_cycleConfigurationRepository = cycleConfigurationRepository;
 		_academicYearRepository = academicYearRepository;
 		_scopeAccess = scopeAccess;
+		_staffEligibilityService = staffEligibilityService;
+		_reportScheduleDeliveryService = reportScheduleDeliveryService;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageRetention)]
@@ -240,8 +254,20 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 		await EnsureCanManageAcademicYearWideReportScheduleAsync(
 			academicYearId,
 			nameof(CreateReportScheduleAsync));
-		if (!input.Destination.StartsWith("manual:", StringComparison.OrdinalIgnoreCase))
+		if (TryParseScheduleRecipient(input.Destination, out var recipientUserId))
+		{
+			var eligibleStaff = await _staffEligibilityService.GetEligibleEmployeesByUserIdAsync();
+			if (!eligibleStaff.ContainsKey(recipientUserId))
+			{
+				throw new BusinessException("AdmissionCrm:ScheduledReportRecipientMustBeAdmissionsStaff")
+					.WithData("UserId", recipientUserId);
+			}
+			await _reportScheduleDeliveryService.EnsureRecipientAsync(recipientUserId);
+		}
+		else if (!input.Destination.StartsWith("manual:", StringComparison.OrdinalIgnoreCase))
+		{
 			throw new BusinessException("AdmissionCrm:ApprovedReportDestinationRequired");
+		}
 		var entity = new AdmissionCrmReportSchedule(GuidGenerator.Create(), CurrentTenant.Id, academicYearId,
 			input.Name, input.ReportType, input.Frequency, input.Destination, Serialize(input.Filters), input.NextRunAt, UserId());
 		await _scheduleRepository.InsertAsync(entity, autoSave: true); return MapSchedule(entity);
@@ -318,6 +344,13 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 				schedule.MarkRun(now);
 				await _scheduleRepository.UpdateAsync(schedule, autoSave: true);
 				exportIds.Add(exportId);
+				if (TryParseScheduleRecipient(schedule.Destination, out var recipientUserId) &&
+					!await _reportScheduleDeliveryService.SendAsync(
+						schedule.Id, schedule.Name, academicYearId, exportId, recipientUserId))
+				{
+					failedIds.Add(schedule.Id);
+					failureDetails[schedule.Id] = "AdmissionCrm:ScheduledReportDeliveryFailed";
+				}
 			}
 			catch (Exception exception)
 			{
@@ -410,6 +443,34 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 			x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId &&
 			scopedLeadIds.Contains(x.LeadId)));
+		var capacityIsScopeComplete = await _scopeAccess.CurrentUserHasAcademicYearWideScopeAsync(academicYearId);
+		var seatPools = new List<AdmissionCrmSeatPool>();
+		if (capacityIsScopeComplete)
+		{
+			var seatPoolQuery = await _seatPoolRepository.GetQueryableAsync();
+			seatPools = await AsyncExecuter.ToListAsync(seatPoolQuery.Where(x =>
+				x.TenantId == CurrentTenant.Id &&
+				x.AcademicYearId == academicYearId &&
+				x.Status == AdmissionCrmSeatPoolStatus.Active));
+		}
+		var pipelineStageQuery = await _pipelineStageRepository.GetQueryableAsync();
+		var newInquiryStage = await AsyncExecuter.FirstOrDefaultAsync(pipelineStageQuery.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId &&
+			x.SystemStage == AdmissionInquiryStage.NewInquiry));
+		var cycleQuery = await _cycleConfigurationRepository.GetQueryableAsync();
+		var cycle = await AsyncExecuter.FirstOrDefaultAsync(cycleQuery.Where(x =>
+			x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
+		var firstResponseSlaHours = newInquiryStage?.SlaTargetHours ?? cycle?.DefaultLeadSlaHours ?? 24;
+		var timelineQuery = await _timelineRepository.GetQueryableAsync();
+		var responseLeadIds = (await AsyncExecuter.ToListAsync(timelineQuery.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
+			x.AcademicYearId == academicYearId &&
+			scopedLeadIds.Contains(x.LeadId) &&
+			x.ActorUserId != null)))
+			.Where(IsForecastFirstResponseEvent)
+			.Select(x => x.LeadId)
+			.ToHashSet();
 		var responded = offers.Count(x => x.Status is AdmissionCrmSeatOfferStatus.Accepted or AdmissionCrmSeatOfferStatus.Declined);
 		var accepted = offers.Count(x => x.Status == AdmissionCrmSeatOfferStatus.Accepted);
 		var offerRate = responded == 0 ? 0m : (decimal)accepted / responded;
@@ -417,19 +478,68 @@ public class AdmissionCrmGovernanceAppService : ApplicationService, IAdmissionCr
 		var ready = activations.Count(x => x.Status == AdmissionCrmActivationStatus.FirstDayReady);
 		var activationRate = eligible == 0 ? 0m : (decimal)ready / eligible;
 		var open = leads.Count(x => x.Stage is not (AdmissionInquiryStage.Eligible or AdmissionInquiryStage.Rejected or AdmissionInquiryStage.Archived));
+		var projectedAdditionalActivations = (int)Math.Round(open * activationRate);
+		var remainingSeatCapacity = seatPools.Sum(x => x.RemainingCapacity);
+		var now = new DateTimeOffset(Clock.Now);
+		var pendingFirstResponseLeads = leads.Where(x =>
+			x.Stage is not (AdmissionInquiryStage.Rejected or AdmissionInquiryStage.Archived) &&
+			!responseLeadIds.Contains(x.Id)).ToList();
+		var firstResponseAtRiskCount = pendingFirstResponseLeads.Count(x =>
+		{
+			var createdAt = new DateTimeOffset(DateTime.SpecifyKind(x.CreationTime, DateTimeKind.Utc));
+			var dueAt = createdAt.AddHours(firstResponseSlaHours);
+			return now <= dueAt && now >= createdAt.AddHours(firstResponseSlaHours * 0.75);
+		});
+		var firstResponseAlreadyBreachedCount = pendingFirstResponseLeads.Count(x =>
+			new DateTimeOffset(DateTime.SpecifyKind(x.CreationTime, DateTimeKind.Utc))
+				.AddHours(firstResponseSlaHours) < now);
 		return new AdmissionCrmForecastDto
 		{
 			AcademicYearId = academicYearId, GeneratedAt = Clock.Now, HistoricalLeadCount = leads.Count,
 			CurrentOpenLeadCount = open, ObservedOfferAcceptanceRate = Math.Round(offerRate, 4),
 			ObservedActivationRate = Math.Round(activationRate, 4),
 			ProjectedAdditionalAcceptedOffers = (int)Math.Round(open * offerRate),
-			ProjectedAdditionalActivations = (int)Math.Round(open * activationRate),
+			ProjectedAdditionalActivations = projectedAdditionalActivations,
+			ApprovedSeatCapacity = seatPools.Sum(x => x.ApprovedCapacity),
+			RemainingSeatCapacity = remainingSeatCapacity,
+			ProjectedSeatSurplus = remainingSeatCapacity - projectedAdditionalActivations,
+			CapacityIsScopeComplete = capacityIsScopeComplete,
+			FirstResponseAtRiskCount = firstResponseAtRiskCount,
+			FirstResponseAlreadyBreachedCount = firstResponseAlreadyBreachedCount,
 			Confidence = leads.Count >= 200 ? "Moderate" : leads.Count >= 50 ? "Low" : "Insufficient sample",
 			Inputs = ["Current-cycle lead volume", "Observed issued-offer responses", "Observed eligible-to-activation conversion"],
 			Limitations = ["Current-cycle descriptive projection only.", "No protected attributes are used.", "The projection cannot make or change an admission decision."],
 			IsAdvisory = true
 		};
 	}
+
+	private static bool TryParseScheduleRecipient(string destination, out Guid userId)
+	{
+		const string prefix = "user:";
+		if (destination.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+			Guid.TryParse(destination[prefix.Length..], out userId) &&
+			userId != Guid.Empty)
+		{
+			return true;
+		}
+		userId = Guid.Empty;
+		return false;
+	}
+
+	private static bool IsForecastFirstResponseEvent(AdmissionCrmTimelineEvent timelineEvent) =>
+		timelineEvent.EventType is
+			AdmissionCrmTimelineEventType.NoteAdded or
+			AdmissionCrmTimelineEventType.TaskCompleted or
+			AdmissionCrmTimelineEventType.StageChanged or
+			AdmissionCrmTimelineEventType.MessageTemplateChanged or
+			AdmissionCrmTimelineEventType.RegistrationFormIssued or
+			AdmissionCrmTimelineEventType.ExamScheduled or
+			AdmissionCrmTimelineEventType.ExamAttendanceMarked or
+			AdmissionCrmTimelineEventType.ExamResultRecorded or
+			AdmissionCrmTimelineEventType.EligibilityDecided or
+			AdmissionCrmTimelineEventType.Archived or
+			AdmissionCrmTimelineEventType.Reopened or
+			AdmissionCrmTimelineEventType.DuplicateMerged;
 
 	private async Task<string> BuildExportContentAsync(
 		Guid academicYearId,

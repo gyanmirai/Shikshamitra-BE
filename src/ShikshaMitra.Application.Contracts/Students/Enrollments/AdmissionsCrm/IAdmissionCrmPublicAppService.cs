@@ -6,6 +6,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
 public interface IAdmissionCrmPublicAppService : IApplicationService
 {
+	Task<PublicAdmissionPortalDto> GetPublicPortalAsync(Guid tenantId);
 	Task<PublicAdmissionInquiryFormDto> GetPublicFormAsync(Guid tenantId, Guid templateId, string? language = null);
 	Task<PublicAdmissionInquirySubmitResultDto> SubmitPublicFormAsync(
 		Guid tenantId,
@@ -29,6 +30,14 @@ public interface IAdmissionCrmPublicAppService : IApplicationService
 		string token,
 		string accessSessionToken,
 		string? language = null);
+	Task<AdmissionApplicantStatusDto> UpdateCommunicationPreferencesAsync(
+		Guid tenantId,
+		string token,
+		UpdatePublicAdmissionCommunicationPreferencesDto input);
+	Task<AdmissionApplicantStatusDto> WithdrawApplicationAsync(
+		Guid tenantId,
+		string token,
+		WithdrawPublicAdmissionApplicationDto input);
 	Task<AdmissionCrmRegistrationApplicationDto> SaveRegistrationAsync(
 		Guid tenantId,
 		string token,

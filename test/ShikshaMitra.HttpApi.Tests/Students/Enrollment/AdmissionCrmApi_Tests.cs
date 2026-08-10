@@ -33,6 +33,24 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 {
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Expose_Safe_Public_Admission_Portal_Branding()
+	{
+		using var anonymousClient = CreateAnonymousClient();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		var response = await anonymousClient.GetAsync(
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/portal");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var portal = await response.Content.ReadFromJsonAsync<PublicAdmissionPortalDto>(JsonOptions);
+		portal.ShouldNotBeNull();
+		portal.SchoolName.ShouldNotBeNullOrWhiteSpace();
+		portal.SupportedLanguages.ShouldContain("en");
+		portal.DefaultLanguage.ShouldNotBeNullOrWhiteSpace();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Reject_Anonymous_Crm_Workspace_Access()
 	{
 		using var anonymousClient = CreateAnonymousClient();
@@ -3923,6 +3941,10 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			status.FamilyApplications.Count.ShouldBe(2);
 			status.FamilyApplications.Select(x => x.DisplayName).ShouldContain("Kabir");
 			status.FamilyApplications.Select(x => x.DisplayName).ShouldContain("Kavya");
+			status.CommunicationPreferences.HasPhoneContact.ShouldBeTrue();
+			status.CommunicationPreferences.HasEmailContact.ShouldBeFalse();
+			status.CommunicationPreferences.Sms.ShouldBeTrue();
+			status.CanWithdrawApplication.ShouldBeTrue();
 
 			using var siblingStatusRequest = new HttpRequestMessage(
 				HttpMethod.Get,
@@ -3969,6 +3991,41 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				.ReadFromJsonAsync<AdmissionApplicantStatusDto>(JsonOptions);
 			familyStatus.ShouldNotBeNull();
 			familyStatus.FamilyApplications.Count.ShouldBe(2);
+
+			var preferencesResponse = await anonymousClient.PutAsJsonAsync(
+				$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{submit.StatusToken}/communication-preferences",
+				new UpdatePublicAdmissionCommunicationPreferencesDto
+				{
+					AccessSessionToken = familyStatus.AccessSessionToken!,
+					WhatsApp = false,
+					Sms = true,
+					Email = false
+				}, JsonOptions);
+			preferencesResponse.StatusCode.ShouldBe(
+				HttpStatusCode.OK,
+				await preferencesResponse.Content.ReadAsStringAsync());
+			var preferencesStatus = await preferencesResponse.Content
+				.ReadFromJsonAsync<AdmissionApplicantStatusDto>(JsonOptions);
+			preferencesStatus.ShouldNotBeNull();
+			preferencesStatus.CommunicationPreferences.WhatsApp.ShouldBeFalse();
+			preferencesStatus.CommunicationPreferences.Sms.ShouldBeTrue();
+
+			var withdrawResponse = await anonymousClient.PostAsJsonAsync(
+				$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{submit.StatusToken}/withdraw",
+				new WithdrawPublicAdmissionApplicationDto
+				{
+					AccessSessionToken = familyStatus.AccessSessionToken!,
+					Reason = "Family chose another school."
+				}, JsonOptions);
+			withdrawResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await withdrawResponse.Content.ReadAsStringAsync());
+			var withdrawnStatus = await withdrawResponse.Content
+				.ReadFromJsonAsync<AdmissionApplicantStatusDto>(JsonOptions);
+			withdrawnStatus.ShouldNotBeNull();
+			withdrawnStatus.Stage.ShouldBe(AdmissionInquiryStage.Archived);
+			withdrawnStatus.CanWithdrawApplication.ShouldBeFalse();
+			var withdrawnTimeline = await GetCrmTimelineAsync(submit.LeadId);
+			withdrawnTimeline.Items.Any(x =>
+				x.EventType == AdmissionCrmTimelineEventType.FamilyApplicationWithdrawn).ShouldBeTrue();
 		}
 		finally
 		{

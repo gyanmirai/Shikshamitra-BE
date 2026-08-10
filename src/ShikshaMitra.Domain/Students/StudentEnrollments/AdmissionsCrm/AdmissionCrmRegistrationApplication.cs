@@ -213,6 +213,12 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 		Status = AdmissionCrmRegistrationStatus.Revoked;
 	}
 
+	public void Withdraw(string reason)
+	{
+		LifecycleReason = Check.NotNullOrWhiteSpace(reason, nameof(reason), AdmissionCrmConsts.MaxNotesLength);
+		Status = AdmissionCrmRegistrationStatus.Withdrawn;
+	}
+
 	public void Reissue(DateTime newExpiry, string reason, DateTime reissuedAt)
 	{
 		if (Status != AdmissionCrmRegistrationStatus.Revoked && LinkExpiresAt > reissuedAt)

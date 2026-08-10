@@ -3,7 +3,7 @@ module: student
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-07-28
+updated_on: 2026-08-10
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -18,17 +18,16 @@ Student Enrollment uses a production requirement baseline centered on Pipeline, 
 | Step | File | Use it to |
 |---|---|---|
 | 1 | [product.md](./product.md) | Understand Student product areas, Enrollment boundaries, and deferred surfaces |
-| 2 | [prd-student-enrollment.md](./prd-student-enrollment.md) | Understand the refined Student Enrollment operating PRD |
-| 3 | [workflows.md](./workflows.md) | Trace the admissions flow from Pipeline to activation |
-| 4 | [api.md](./api.md) | Find endpoint families, permissions, and integration boundaries |
-| 5 | [architecture.md](./architecture.md) | Locate Student source paths and ownership rules |
-| 6 | [testing.md](./testing.md) | Pick focused Student validation commands |
+| 2 | [workflows.md](./workflows.md) | Trace admissions, family self-service, intelligence, and activation workflows |
+| 3 | [api.md](./api.md) | Find endpoint families, permissions, and integration boundaries |
+| 4 | [architecture.md](./architecture.md) | Locate Student source paths and ownership rules |
+| 5 | [testing.md](./testing.md) | Pick focused Student validation commands |
 
 ## Source of truth
 
 | Need | Source |
 |---|---|
-| Enrollment PRD | [prd-student-enrollment.md](./prd-student-enrollment.md) |
+| Enrollment product rules | [product.md](./product.md) and [workflows.md](./workflows.md) |
 | Contracts | `src/ShikshaMitra.Application.Contracts/Students/**` |
 | Application logic | `src/ShikshaMitra.Application/Students/**` |
 | Domain rules | `src/ShikshaMitra.Domain/Students/**` |
@@ -52,7 +51,7 @@ Use this table before searching code:
 | Question | First file |
 |---|---|
 | What does Student own? | [product.md](./product.md) |
-| What is the refined Student Enrollment requirement? | [prd-student-enrollment.md](./prd-student-enrollment.md) |
+| What is the current Student Enrollment behavior? | [product.md](./product.md) and [workflows.md](./workflows.md) |
 | Which Enrollment workflow should I trace? | [workflows.md](./workflows.md) |
 | Which endpoint family should I use? | [api.md](./api.md) |
 | Where is the code? | [architecture.md](./architecture.md) |

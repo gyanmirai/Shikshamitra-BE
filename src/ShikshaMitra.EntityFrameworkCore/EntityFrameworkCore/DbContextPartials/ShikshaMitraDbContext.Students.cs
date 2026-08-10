@@ -41,6 +41,13 @@ public partial class ShikshaMitraDbContext
     public DbSet<AdmissionApplicantStatusAccess> AdmissionApplicantStatusAccesses { get; set; }
     public DbSet<AdmissionCrmApplicantChecklistProgress> AdmissionCrmApplicantChecklistProgresses { get; set; }
     public DbSet<AdmissionCrmFollowUpTask> AdmissionCrmFollowUpTasks { get; set; }
+    public DbSet<AdmissionCrmEvent> AdmissionCrmEvents { get; set; }
+	public DbSet<AdmissionCrmEventRegistration> AdmissionCrmEventRegistrations { get; set; }
+	public DbSet<AdmissionCrmReviewConfiguration> AdmissionCrmReviewConfigurations { get; set; }
+	public DbSet<AdmissionCrmReviewConfigurationCriterion> AdmissionCrmReviewConfigurationCriteria { get; set; }
+	public DbSet<AdmissionCrmStructuredReview> AdmissionCrmStructuredReviews { get; set; }
+	public DbSet<AdmissionCrmStructuredReviewCriterion> AdmissionCrmStructuredReviewCriteria { get; set; }
+	public DbSet<AdmissionCrmReviewAssignment> AdmissionCrmReviewAssignments { get; set; }
     public DbSet<AdmissionCrmEntranceExamRecord> AdmissionCrmEntranceExamRecords { get; set; }
     public DbSet<AdmissionCrmMessageTemplate> AdmissionCrmMessageTemplates { get; set; }
     public DbSet<AdmissionCrmCommunicationProviderConfiguration> AdmissionCrmCommunicationProviderConfigurations { get; set; }

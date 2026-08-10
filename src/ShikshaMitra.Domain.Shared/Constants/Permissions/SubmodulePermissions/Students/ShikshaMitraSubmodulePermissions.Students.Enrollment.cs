@@ -44,6 +44,14 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string OverrideAdmissionReadiness = $"{SubmoduleName}.OverrideAdmissionReadiness";
 			public const string ChangeStage = $"{SubmoduleName}.ChangeStage";
 			public const string ManageTasks = $"{SubmoduleName}.ManageTasks";
+			public const string ViewEvents = $"{SubmoduleName}.ViewEvents";
+			public const string ManageEvents = $"{SubmoduleName}.ManageEvents";
+			public const string CheckInEvents = $"{SubmoduleName}.CheckInEvents";
+			public const string ViewStructuredReviews = $"{SubmoduleName}.ViewStructuredReviews";
+			public const string ManageReviewConfiguration = $"{SubmoduleName}.ManageReviewConfiguration";
+			public const string AssignReviewers = $"{SubmoduleName}.AssignReviewers";
+			public const string SubmitReviews = $"{SubmoduleName}.SubmitReviews";
+			public const string ViewConfidentialReviews = $"{SubmoduleName}.ViewConfidentialReviews";
 			public const string ArchiveReopen = $"{SubmoduleName}.ArchiveReopen";
 			public const string ScheduleExam = $"{SubmoduleName}.ScheduleExam";
 			public const string OverrideExamCapacity = $"{SubmoduleName}.OverrideExamCapacity";
@@ -142,6 +150,14 @@ public static partial class ShikshaMitraSubmodulePermissions
 				OverrideAdmissionReadiness,
 				ChangeStage,
 				ManageTasks,
+				ViewEvents,
+				ManageEvents,
+				CheckInEvents,
+				ViewStructuredReviews,
+				ManageReviewConfiguration,
+				AssignReviewers,
+				SubmitReviews,
+				ViewConfidentialReviews,
 				ArchiveReopen,
 				ScheduleExam,
 				OverrideExamCapacity,
@@ -241,6 +257,14 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ OverrideAdmissionReadiness, $"{SubmoduleDisplayName}.OverrideAdmissionReadiness" },
 				{ ChangeStage, $"{SubmoduleDisplayName}.ChangeStage" },
 				{ ManageTasks, $"{SubmoduleDisplayName}.ManageTasks" },
+				{ ViewEvents, $"{SubmoduleDisplayName}.ViewEvents" },
+				{ ManageEvents, $"{SubmoduleDisplayName}.ManageEvents" },
+				{ CheckInEvents, $"{SubmoduleDisplayName}.CheckInEvents" },
+				{ ViewStructuredReviews, $"{SubmoduleDisplayName}.ViewStructuredReviews" },
+				{ ManageReviewConfiguration, $"{SubmoduleDisplayName}.ManageReviewConfiguration" },
+				{ AssignReviewers, $"{SubmoduleDisplayName}.AssignReviewers" },
+				{ SubmitReviews, $"{SubmoduleDisplayName}.SubmitReviews" },
+				{ ViewConfidentialReviews, $"{SubmoduleDisplayName}.ViewConfidentialReviews" },
 				{ ArchiveReopen, $"{SubmoduleDisplayName}.ArchiveReopen" },
 				{ ScheduleExam, $"{SubmoduleDisplayName}.ScheduleExam" },
 				{ OverrideExamCapacity, $"{SubmoduleDisplayName}.OverrideExamCapacity" },

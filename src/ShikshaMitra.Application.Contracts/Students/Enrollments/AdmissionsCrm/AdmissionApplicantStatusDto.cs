@@ -26,6 +26,19 @@ public class AdmissionApplicantStatusDto
 	public AdmissionApplicantFinancialStatusDto? FinancialStatus { get; set; }
 	public AdmissionApplicantRouteStatusDto? AdmissionRoute { get; set; }
 	public AdmissionApplicantActivationStatusDto? Activation { get; set; }
+	public List<AdmissionFamilyApplicationSummaryDto> FamilyApplications { get; set; } = new();
+}
+
+public class AdmissionFamilyApplicationSummaryDto
+{
+	public Guid LeadId { get; set; }
+	public Guid AcademicYearId { get; set; }
+	public string StatusToken { get; set; } = string.Empty;
+	public string DisplayName { get; set; } = string.Empty;
+	public string? DesiredClassName { get; set; }
+	public AdmissionInquiryStage Stage { get; set; }
+	public string StageName { get; set; } = string.Empty;
+	public DateTimeOffset LastActivityTime { get; set; }
 }
 
 public class AdmissionApplicantRouteStatusDto

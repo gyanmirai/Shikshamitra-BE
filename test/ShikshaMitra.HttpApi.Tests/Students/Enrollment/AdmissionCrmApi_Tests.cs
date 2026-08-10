@@ -3850,6 +3850,27 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			var submit = await submitResponse.Content.ReadFromJsonAsync<PublicAdmissionInquirySubmitResultDto>(JsonOptions);
 			submit.ShouldNotBeNull();
 
+			var siblingSubmitResponse = await anonymousClient.PostAsJsonAsync(
+				$"/api/public/student-enrollment/admissions-crm/{tenantId}/forms/{template.Id}/submit",
+				new PublicAdmissionInquirySubmitDto
+				{
+					ConsentVersion = form.ConsentVersion,
+					ConsentAccepted = true,
+					CommunicationPreferences = ["SMS"],
+					FieldValues = new Dictionary<string, JsonElement>
+					{
+						["studentFirstName"] = JsonSerializer.SerializeToElement("Kavya", JsonOptions),
+						["parentPhone"] = JsonSerializer.SerializeToElement("9911223344", JsonOptions),
+						["admissionIntent"] = JsonSerializer.SerializeToElement("Admission inquiry for Grade 2", JsonOptions),
+						["desiredClass"] = JsonSerializer.SerializeToElement("Grade 2", JsonOptions)
+					}
+				},
+				JsonOptions);
+			siblingSubmitResponse.EnsureSuccessStatusCode();
+			var siblingSubmit = await siblingSubmitResponse.Content
+				.ReadFromJsonAsync<PublicAdmissionInquirySubmitResultDto>(JsonOptions);
+			siblingSubmit.ShouldNotBeNull();
+
 			var challengeResponse = await anonymousClient.PostAsync(
 				$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{submit.StatusToken}/otp",
 				content: null);
@@ -3898,11 +3919,246 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				x.Details != null &&
 				x.Details.Contains("duplicate", StringComparison.OrdinalIgnoreCase)).ShouldBeFalse();
 			status.Exam.ShouldBeNull();
+			status.AccessSessionToken.ShouldNotBeNullOrWhiteSpace();
+			status.FamilyApplications.Count.ShouldBe(2);
+			status.FamilyApplications.Select(x => x.DisplayName).ShouldContain("Kabir");
+			status.FamilyApplications.Select(x => x.DisplayName).ShouldContain("Kavya");
+
+			using var siblingStatusRequest = new HttpRequestMessage(
+				HttpMethod.Get,
+				$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{siblingSubmit.StatusToken}?language=en");
+			siblingStatusRequest.Headers.Add("X-Admission-Access-Session", status.AccessSessionToken);
+			var siblingStatusResponse = await anonymousClient.SendAsync(siblingStatusRequest);
+			siblingStatusResponse.StatusCode.ShouldBe(
+				HttpStatusCode.OK,
+				await siblingStatusResponse.Content.ReadAsStringAsync());
+			var siblingStatus = await siblingStatusResponse.Content
+				.ReadFromJsonAsync<AdmissionApplicantStatusDto>(JsonOptions);
+			siblingStatus.ShouldNotBeNull();
+			siblingStatus.LeadId.ShouldBe(siblingSubmit.LeadId);
+			siblingStatus.DisplayName.ShouldBe("Kavya");
+			siblingStatus.FamilyApplications.Count.ShouldBe(2);
+
+			var familyChallengeResponse = await anonymousClient.PostAsJsonAsync(
+				$"/api/public/student-enrollment/admissions-crm/{tenantId}/family/otp",
+				new StartAdmissionFamilyAccessDto { Contact = "9911223344" },
+				JsonOptions);
+			familyChallengeResponse.StatusCode.ShouldBe(
+				HttpStatusCode.OK,
+				await familyChallengeResponse.Content.ReadAsStringAsync());
+			var familyChallenge = await familyChallengeResponse.Content
+				.ReadFromJsonAsync<AdmissionApplicantStatusOtpChallengeDto>(JsonOptions);
+			familyChallenge.ShouldNotBeNull();
+			familyChallenge.ChallengeId.ShouldNotBeNull();
+			familyChallenge.DeliveryStatus.ShouldContain("If active applications match");
+
+			var familyOtpCode = await GetEncryptedOtpCodeForLeadAsync(siblingSubmit.LeadId);
+			var familyVerifyResponse = await anonymousClient.PostAsJsonAsync(
+				$"/api/public/student-enrollment/admissions-crm/{tenantId}/family/verify",
+				new VerifyAdmissionFamilyAccessDto
+				{
+					ChallengeId = familyChallenge.ChallengeId.Value,
+					OtpCode = familyOtpCode,
+					Language = "en"
+				},
+				JsonOptions);
+			familyVerifyResponse.StatusCode.ShouldBe(
+				HttpStatusCode.OK,
+				await familyVerifyResponse.Content.ReadAsStringAsync());
+			var familyStatus = await familyVerifyResponse.Content
+				.ReadFromJsonAsync<AdmissionApplicantStatusDto>(JsonOptions);
+			familyStatus.ShouldNotBeNull();
+			familyStatus.FamilyApplications.Count.ShouldBe(2);
 		}
 		finally
 		{
 			await UpdateCrmCycleConfigurationAsync(originalCycle, originalCycle.ExamReadinessFields);
 		}
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Allow_Only_Verified_Portal_Guardian_To_Access_Authorized_Siblings()
+	{
+		var template = await CreatePublicInquiryTemplateAsync(
+			"Delegated family access " + Guid.NewGuid().ToString("N")[..8]);
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using var anonymousClient = CreateAnonymousClient();
+		var form = await anonymousClient.GetFromJsonAsync<PublicAdmissionInquiryFormDto>(
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/forms/{template.Id}", JsonOptions);
+		form.ShouldNotBeNull();
+
+		async Task<PublicAdmissionInquirySubmitResultDto> SubmitAsync(string name, string phone, string grade)
+		{
+			var response = await anonymousClient.PostAsJsonAsync(
+				$"/api/public/student-enrollment/admissions-crm/{tenantId}/forms/{template.Id}/submit",
+				new PublicAdmissionInquirySubmitDto
+				{
+					ConsentVersion = form.ConsentVersion,
+					ConsentAccepted = true,
+					CommunicationPreferences = ["SMS"],
+					FieldValues = new Dictionary<string, JsonElement>
+					{
+						["studentFirstName"] = JsonSerializer.SerializeToElement(name, JsonOptions),
+						["parentPhone"] = JsonSerializer.SerializeToElement(phone, JsonOptions),
+						["admissionIntent"] = JsonSerializer.SerializeToElement($"Admission inquiry for {grade}", JsonOptions),
+						["desiredClass"] = JsonSerializer.SerializeToElement(grade, JsonOptions)
+					}
+				}, JsonOptions);
+			response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+			return (await response.Content.ReadFromJsonAsync<PublicAdmissionInquirySubmitResultDto>(JsonOptions))!;
+		}
+
+		var first = await SubmitAsync("Aarav", "9911000001", "Grade 1");
+		var second = await SubmitAsync("Anaya", "9911000002", "Grade 3");
+		var firstProfileResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{first.LeadId}/household-identity",
+			new CreateAdmissionCrmApplicantIdentityProfileDto
+			{
+				HouseholdDisplayName = "Shah household",
+				PreferredLanguage = "gu",
+				Applicant = new AdmissionCrmPersonInputDto
+				{
+					FirstName = "Aarav", Phone = "9911000001",
+					Provenance = AdmissionCrmPersonProvenance.ApplicantSupplied
+				}
+			}, JsonOptions);
+		firstProfileResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await firstProfileResponse.Content.ReadAsStringAsync());
+		var firstProfile = await firstProfileResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmApplicantIdentityProfileDto>(JsonOptions);
+		firstProfile.ShouldNotBeNull();
+
+		var guardianResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{first.LeadId}/household-identity/guardians",
+			new CreateAdmissionCrmGuardianRelationshipDto
+			{
+				Guardian = new AdmissionCrmPersonInputDto
+				{
+					FirstName = "Nisha", LastName = "Shah", Phone = "9876500099",
+					Provenance = AdmissionCrmPersonProvenance.StaffSupplied
+				},
+				RelationshipType = AdmissionCrmGuardianRelationshipType.Mother,
+				IsPrimaryContact = false,
+				IsAccountableContact = true,
+				HasPortalAccess = true,
+				CommunicationPriority = 1
+			}, JsonOptions);
+		guardianResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await guardianResponse.Content.ReadAsStringAsync());
+		var profileWithGuardian = await guardianResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmApplicantIdentityProfileDto>(JsonOptions);
+		var firstGuardian = profileWithGuardian!.Guardians.ShouldHaveSingleItem();
+		var unverifiedChallengeResponse = await anonymousClient.PostAsJsonAsync(
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/family/otp",
+			new StartAdmissionFamilyAccessDto { Contact = "9876500099" }, JsonOptions);
+		unverifiedChallengeResponse.StatusCode.ShouldBe(HttpStatusCode.OK,
+			await unverifiedChallengeResponse.Content.ReadAsStringAsync());
+		var unverifiedChallenge = await unverifiedChallengeResponse.Content
+			.ReadFromJsonAsync<AdmissionApplicantStatusOtpChallengeDto>(JsonOptions);
+		(await StatusAccessExistsAsync(unverifiedChallenge!.ChallengeId!.Value)).ShouldBeFalse();
+		var verifyFirst = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/household-identity/guardians/{firstGuardian.Id}/verify-authority",
+			new VerifyAdmissionCrmGuardianAuthorityDto { EvidenceReference = "BIRTH-CERT-DELEGATED-1" }, JsonOptions);
+		verifyFirst.StatusCode.ShouldBe(HttpStatusCode.OK, await verifyFirst.Content.ReadAsStringAsync());
+
+		var secondProfileResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{second.LeadId}/household-identity",
+			new CreateAdmissionCrmApplicantIdentityProfileDto
+			{
+				ExistingHouseholdId = firstProfile.HouseholdId,
+				HouseholdDisplayName = "Shah household",
+				Applicant = new AdmissionCrmPersonInputDto
+				{
+					FirstName = "Anaya", Phone = "9911000002",
+					Provenance = AdmissionCrmPersonProvenance.ApplicantSupplied
+				}
+			}, JsonOptions);
+		secondProfileResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await secondProfileResponse.Content.ReadAsStringAsync());
+		var secondGuardianResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{second.LeadId}/household-identity/guardians",
+			new CreateAdmissionCrmGuardianRelationshipDto
+			{
+				ExistingGuardianPersonId = firstGuardian.GuardianPersonId,
+				RelationshipType = AdmissionCrmGuardianRelationshipType.Mother,
+				IsAccountableContact = true,
+				HasPortalAccess = true,
+				CommunicationPriority = 1
+			}, JsonOptions);
+		secondGuardianResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await secondGuardianResponse.Content.ReadAsStringAsync());
+		var secondProfile = await secondGuardianResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmApplicantIdentityProfileDto>(JsonOptions);
+		var verifySecond = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/household-identity/guardians/{secondProfile!.Guardians.ShouldHaveSingleItem().Id}/verify-authority",
+			new VerifyAdmissionCrmGuardianAuthorityDto { EvidenceReference = "BIRTH-CERT-DELEGATED-2" }, JsonOptions);
+		verifySecond.StatusCode.ShouldBe(HttpStatusCode.OK, await verifySecond.Content.ReadAsStringAsync());
+		await AssertDelegatedFamilyAccessSetupAsync(firstGuardian.GuardianPersonId, first.LeadId, second.LeadId);
+
+		var eventStartsAt = DateTime.UtcNow.AddDays(2);
+		var createEventResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/events",
+			new CreateUpdateAdmissionCrmEventDto
+			{
+				Title = "Family campus visit",
+				EventType = AdmissionCrmEventType.CampusVisit,
+				StartsAt = eventStartsAt,
+				EndsAt = eventStartsAt.AddHours(1),
+				Location = "Main reception",
+				Capacity = 2,
+				Instructions = "Bring the applicant's inquiry reference.",
+				AllowFamilySelfScheduling = true
+			}, JsonOptions);
+		createEventResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createEventResponse.Content.ReadAsStringAsync());
+		var admissionEvent = await createEventResponse.Content.ReadFromJsonAsync<AdmissionCrmEventDto>(JsonOptions);
+		var publishEventResponse = await Client.PostAsync(
+			$"/api/student-enrollment/admissions-crm/events/{admissionEvent!.Id}/publish", null);
+		publishEventResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await publishEventResponse.Content.ReadAsStringAsync());
+
+		var challengeResponse = await anonymousClient.PostAsJsonAsync(
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/family/otp",
+			new StartAdmissionFamilyAccessDto { Contact = "9876500099" }, JsonOptions);
+		challengeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await challengeResponse.Content.ReadAsStringAsync());
+		var challenge = await challengeResponse.Content
+			.ReadFromJsonAsync<AdmissionApplicantStatusOtpChallengeDto>(JsonOptions);
+		challenge.ShouldNotBeNull();
+		var otpCode = await GetEncryptedOtpCodeForChallengeAsync(challenge.ChallengeId!.Value);
+		var verifyResponse = await anonymousClient.PostAsJsonAsync(
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/family/verify",
+			new VerifyAdmissionFamilyAccessDto
+			{
+				ChallengeId = challenge.ChallengeId.Value,
+				OtpCode = otpCode,
+				Language = "gu"
+			}, JsonOptions);
+		verifyResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await verifyResponse.Content.ReadAsStringAsync());
+		var family = await verifyResponse.Content.ReadFromJsonAsync<AdmissionApplicantStatusDto>(JsonOptions);
+		family.ShouldNotBeNull();
+		family.FamilyApplications.Select(x => x.DisplayName).ShouldBe(["Anaya", "Aarav"], ignoreOrder: true);
+		var aaravToken = family.FamilyApplications.Single(x => x.LeadId == first.LeadId).StatusToken;
+		using var eventsRequest = new HttpRequestMessage(HttpMethod.Get,
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{aaravToken}/events");
+		eventsRequest.Headers.Add("X-Admission-Access-Session", family.AccessSessionToken);
+		var eventsResponse = await anonymousClient.SendAsync(eventsRequest);
+		eventsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await eventsResponse.Content.ReadAsStringAsync());
+		var publicEvents = await eventsResponse.Content.ReadFromJsonAsync<AdmissionCrmPublicEventListDto>(JsonOptions);
+		publicEvents!.Events.ShouldHaveSingleItem().Id.ShouldBe(admissionEvent.Id);
+
+		var reserveResponse = await anonymousClient.PostAsJsonAsync(
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{aaravToken}/events/{admissionEvent.Id}/reserve",
+			new ReserveAdmissionCrmPublicEventDto { AccessSessionToken = family.AccessSessionToken! }, JsonOptions);
+		reserveResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await reserveResponse.Content.ReadAsStringAsync());
+		var reservedEvent = await reserveResponse.Content.ReadFromJsonAsync<AdmissionCrmPublicEventDto>(JsonOptions);
+		reservedEvent!.RegistrationStatus.ShouldBe(AdmissionCrmEventRegistrationStatus.Reserved);
+		reservedEvent.AvailableCount.ShouldBe(1);
+
+		var cancelResponse = await anonymousClient.PostAsJsonAsync(
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{aaravToken}/events/{admissionEvent.Id}/cancel",
+			new CancelAdmissionCrmPublicEventRegistrationDto
+			{
+				AccessSessionToken = family.AccessSessionToken!, Reason = "Plans changed."
+			}, JsonOptions);
+		cancelResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await cancelResponse.Content.ReadAsStringAsync());
+		var cancelledEvent = await cancelResponse.Content.ReadFromJsonAsync<AdmissionCrmPublicEventDto>(JsonOptions);
+		cancelledEvent!.RegistrationStatus.ShouldBe(AdmissionCrmEventRegistrationStatus.Cancelled);
+		cancelledEvent.AvailableCount.ShouldBe(2);
 	}
 
 	[Fact]
@@ -6571,6 +6827,71 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			access.EncryptedOtpCode.ShouldNotBeNullOrWhiteSpace();
 			await uow.CompleteAsync();
 			return encryptionService.Decrypt(access.EncryptedOtpCode!)!;
+		}
+	}
+
+	private async Task<string> GetEncryptedOtpCodeForChallengeAsync(Guid challengeId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var statusAccessRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionApplicantStatusAccess, Guid>>();
+		var encryptionService = scope.ServiceProvider.GetRequiredService<IStringEncryptionService>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var access = await statusAccessRepository.GetAsync(challengeId);
+			access.EncryptedOtpCode.ShouldNotBeNullOrWhiteSpace();
+			await uow.CompleteAsync();
+			return encryptionService.Decrypt(access.EncryptedOtpCode!)!;
+		}
+	}
+
+	private async Task AssertDelegatedFamilyAccessSetupAsync(Guid guardianPersonId, params Guid[] leadIds)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var personRepository = scope.ServiceProvider.GetRequiredService<IRepository<AdmissionCrmPerson, Guid>>();
+		var guardianRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmGuardianRelationship, Guid>>();
+		var accessRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionApplicantStatusAccess, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var leadIdList = leadIds.ToList();
+			var person = await personRepository.GetAsync(guardianPersonId);
+			person.NormalizedPhone.ShouldBe("9876500099");
+			var guardianQueryable = await guardianRepository.GetQueryableAsync();
+			var relationships = guardianQueryable.Where(x =>
+				x.GuardianPersonId == guardianPersonId && leadIdList.Contains(x.LeadId)).ToList();
+			relationships.Count.ShouldBe(2);
+			relationships.ShouldAllBe(x => x.IsActive && x.HasPortalAccess && x.AuthorityVerified);
+			var accessQueryable = await accessRepository.GetQueryableAsync();
+			accessQueryable.Count(x => leadIdList.Contains(x.LeadId) && x.EncryptedToken != null).ShouldBe(2);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task<bool> StatusAccessExistsAsync(Guid challengeId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionApplicantStatusAccess, Guid>>();
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var exists = await repository.FindAsync(challengeId) != null;
+			await uow.CompleteAsync();
+			return exists;
 		}
 	}
 

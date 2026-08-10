@@ -17,9 +17,9 @@ Controller source paths are canonical when route details change.
 
 | Family | Controller path | Requirement role |
 |---|---|---|
-| Admissions CRM | `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/AdmissionsCrm/**` | Pipeline, entrance exam, registration, Finance handoff display, placement review, activation, and communication |
+| Admissions CRM | `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/AdmissionsCrm/**` | Pipeline, assessments, visits and events, registration, Finance handoff display, placement review, activation, and communication |
 | Enrollment settings | Admissions CRM catalog and configuration controllers | Compatibility settings such as Inquiry Source where still active |
-| Legacy inquiry and admission | `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/**` | Keep route compatibility only where current consumers still require it |
+| Direct student registration and notes | `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/**` | Existing active-student registration details and notes outside the Admissions CRM aggregate |
 
 ## Records API families
 
@@ -57,7 +57,7 @@ Product copy should say Inquiry Source, while route and DTO names can still use 
 The CRM route family is `api/student-enrollment/admissions-crm`.
 Every authenticated Enrollment workflow must validate tenant and academic scope on the server.
 Frontend route visibility is not authorization.
-Every applicant must have a Pipeline lead before entrance exam, registration, Finance handoff, placement review, or activation.
+Every applicant must have a Pipeline lead before assessment, registration, Finance handoff, placement review, or activation.
 
 | Requirement area | Contract expectation |
 |---|---|
@@ -67,7 +67,7 @@ Every applicant must have a Pipeline lead before entrance exam, registration, Fi
 | Owner assignment | Assign or clear lead owner with permission and timeline evidence |
 | Follow-up | Create, list, and complete lead tasks |
 | Messaging | Render, send, schedule, and cancel approved simple reminders with consent, duplicate-message protection, and delivery-log state |
-| Entrance exam | Schedule exam, record attendance, enter result, decide eligibility, and preserve result evidence |
+| Assessment | Schedule an entrance exam, interaction, or interview; record attendance and results; decide eligibility; preserve evidence |
 | Registration | Issue, save, submit, correct, verify, and review document checklist |
 | Finance handoff | Request or display Finance-owned verification state without posting money |
 | Placement | Read placement options from academic setup and capacity sources, then record selected timing or division |
@@ -87,8 +87,8 @@ Every applicant must have a Pipeline lead before entrance exam, registration, Fi
 | `/leads/{leadId}/tasks` | Create or list follow-up tasks |
 | `/tasks/{taskId}/complete` | Complete a task |
 | `/leads/{leadId}/messages/send-template` | Send an approved message template and create delivery evidence |
-| `/{academicYearId}/exams` | List entrance exam records |
-| `/leads/{leadId}/exam/schedule` | Schedule or reschedule an entrance exam |
+| `/{academicYearId}/exams` | List assessment records; the stable API segment remains `exams` |
+| `/leads/{leadId}/exam/schedule` | Schedule or reschedule an assessment |
 | `/exams/{examRecordId}/attendance` | Mark exam attendance |
 | `/exams/{examRecordId}/result` | Record exam result |
 | `/exams/{examRecordId}/eligibility` | Decide eligibility, ineligibility, retest, or review |
@@ -122,7 +122,7 @@ Every applicant must have a Pipeline lead before entrance exam, registration, Fi
 The existing route name `setup/cycles` may remain in API code for compatibility.
 User-facing copy should use Admission Year Setup unless a specific code route is being discussed.
 `ApplicantNumber` is the short staff-facing Enrollment identifier. It is immutable after lead creation,
-searchable with or without the `#` display prefix, and projected into Pipeline, Entrance Exam,
+searchable with or without the `#` display prefix, and projected into Pipeline, Assessments,
 Operations Queue, My Work, and applicant-detail responses. The internal GUID remains the API route key.
 
 ## Admission Reports contract
@@ -177,6 +177,13 @@ Capacity override requires permission and reason.
 Public inquiry and status routes may remain available for parent-facing capture and status.
 They must be tenant-qualified, rate-limited where applicable, and restricted to applicant-safe information.
 Public responses must not expose duplicate evidence, internal notes, staff-only scores, Finance internals, or protected family details.
+
+The family OTP route accepts either an inquiry primary contact or the phone/email of an active,
+authority-verified guardian with explicit portal access. Guardian authorization is tenant- and
+applicant-scoped and is rechecked on each status, registration, document, exam, offer, and event
+action. Public event routes list only future published events with family self-scheduling enabled;
+reserve and cancel operations use the verified applicant session and preserve server-authoritative
+capacity and timeline evidence.
 
 ## Contract rule
 

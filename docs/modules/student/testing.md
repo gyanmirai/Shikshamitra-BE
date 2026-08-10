@@ -28,7 +28,7 @@ git diff --check
 | Applicant Stepper state, blockers, skips, and next action | `AdmissionCrmApplicantProgressProjector_Tests` |
 | Pipeline lead capture, duplicate detection, continue reason, source, type, owner, task, and message behavior | `AdmissionCrmApi_Tests` |
 | Fixed Pipeline projection and grouped Admission Reports | `AdmissionCrmPipelineQueryService_Tests`, `AdmissionCrmConfigurationSafetyApi_Tests` |
-| Entrance exam applicability, scheduling, result, eligibility, retest, and override behavior | `AdmissionCrmApi_Tests`, `AdmissionCrmBulkOperationsApi_Tests` |
+| Assessment applicability, scheduling, result, eligibility, retest, and override behavior | `AdmissionCrmApi_Tests`, `AdmissionCrmBulkOperationsApi_Tests` |
 | Registration issue, staff entry, parent entry, document checklist, correction, and verification | `AdmissionCrmRegistrationApi_Tests` |
 | Finance handoff status and activation blocking | `AdmissionCrmFinancialReadiness_Tests`, `AdmissionCrmApplicantProgressProjector_Tests`, `AdmissionCrmActivationApi_Tests` |
 | Placement options, capacity state, and override reason | `AdmissionCrmActivationApi_Tests` |

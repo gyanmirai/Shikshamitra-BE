@@ -40,7 +40,7 @@ Student Enrollment refinement must preserve backend authorization, tenant isolat
 
 | Boundary | Rule |
 |---|---|
-| Pipeline before everything | Entrance exam, registration, Finance handoff, placement review, and activation must reference a Pipeline lead |
+| Pipeline before everything | Assessment, registration, Finance handoff, placement review, and activation must reference a Pipeline lead |
 | Admission Year Setup extends academic year | Admission setup attaches to the Institute Setup academic year and must not duplicate the academic-year model |
 | Stepper is projection-friendly | Applicant progress should be derivable from workflow state, configuration, and blockers rather than stored as disconnected UI-only state |
 | Applicant before Student | Incomplete admission leads must not become active Student rows |

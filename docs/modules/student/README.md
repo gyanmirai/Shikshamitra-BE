@@ -11,7 +11,7 @@ audience: humans-and-agents
 # Understand the Student backend module
 
 TL;DR: use this page as the entrypoint for Student enrollment, records, attendance, compliance, certificates, and dashboard behavior.
-Student Enrollment now uses a production requirement baseline centered on Pipeline, Entrance Exam, Registration, Finance handoff, Class Placement, Activation, and Communication.
+Student Enrollment uses a production requirement baseline centered on Pipeline, Assessments, Visits & Events, Registration, Finance handoff, Class Placement, Activation, and Communication.
 
 ## Read order
 

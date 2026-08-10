@@ -37,6 +37,8 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 	private readonly IRepository<AdmissionCrmWaitlistEntry, Guid> _waitlistRepository;
 	private readonly IRepository<AdmissionCrmWaitlistHistory, Guid> _waitlistHistoryRepository;
 	private readonly IRepository<AdmissionCrmAdmissionDecision, Guid> _decisionRepository;
+	private readonly IRepository<AdmissionCrmReviewConfiguration, Guid> _reviewConfigurationRepository;
+	private readonly IRepository<AdmissionCrmStructuredReview, Guid> _structuredReviewRepository;
 	private readonly IRepository<AdmissionCrmAdmissionQuotation, Guid> _quotationRepository;
 	private readonly IRepository<AdmissionCrmTimelineEvent, Guid> _timelineRepository;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
@@ -51,6 +53,8 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 		IRepository<AdmissionCrmWaitlistEntry, Guid> waitlistRepository,
 		IRepository<AdmissionCrmWaitlistHistory, Guid> waitlistHistoryRepository,
 		IRepository<AdmissionCrmAdmissionDecision, Guid> decisionRepository,
+		IRepository<AdmissionCrmReviewConfiguration, Guid> reviewConfigurationRepository,
+		IRepository<AdmissionCrmStructuredReview, Guid> structuredReviewRepository,
 		IRepository<AdmissionCrmAdmissionQuotation, Guid> quotationRepository,
 		IRepository<AdmissionCrmTimelineEvent, Guid> timelineRepository,
 		StudentScopeAccessService studentScopeAccessService)
@@ -64,6 +68,8 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 		_waitlistRepository = waitlistRepository;
 		_waitlistHistoryRepository = waitlistHistoryRepository;
 		_decisionRepository = decisionRepository;
+		_reviewConfigurationRepository = reviewConfigurationRepository;
+		_structuredReviewRepository = structuredReviewRepository;
 		_quotationRepository = quotationRepository;
 		_timelineRepository = timelineRepository;
 		_studentScopeAccessService = studentScopeAccessService;
@@ -766,6 +772,8 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 			throw new BusinessException("AdmissionCrm:AcceptedOfferRequiredForCancellation");
 		}
 
+		var structuredReview = await EnsureStructuredReviewReadinessAsync(lead, input);
+
 		var decisionQueryable = await _decisionRepository.GetQueryableAsync();
 		var previousDecision = await AsyncExecuter.FirstOrDefaultAsync(decisionQueryable
 			.Where(x => x.TenantId == CurrentTenant.Id && x.LeadId == leadId)
@@ -789,9 +797,61 @@ public class AdmissionCrmFinalAdmissionAppService : ApplicationService, IAdmissi
 		ApplyDecisionToLead(lead, input.Status, input.Reason);
 		await _decisionRepository.InsertAsync(decision, autoSave: true);
 		await _leadRepository.UpdateAsync(lead, autoSave: true);
+		if (structuredReview?.Status == AdmissionCrmStructuredReviewStatus.ReadyForDecision)
+		{
+			var closureReason = $"Final admission decision recorded as {input.Status}.";
+			structuredReview.Close(GetCurrentUserId(), Clock.Now, closureReason);
+			await _structuredReviewRepository.UpdateAsync(structuredReview, autoSave: true);
+			await AddTimelineAsync(lead, AdmissionCrmTimelineEventType.StructuredReviewClosed,
+				"Structured admissions review closed", closureReason, structuredReview.Id);
+		}
 		await AddTimelineAsync(lead, AdmissionCrmTimelineEventType.AdmissionDecisionRecorded,
 			"Admission decision recorded", $"Decision: {input.Status}. Reason: {input.Reason}", decision.Id);
 		return MapDecision(decision);
+	}
+
+	private async Task<AdmissionCrmStructuredReview?> EnsureStructuredReviewReadinessAsync(
+		AdmissionInquiryLead lead, RecordAdmissionCrmAdmissionDecisionDto input)
+	{
+		if (input.Status is not (AdmissionCrmAdmissionDecisionStatus.Approved or
+			AdmissionCrmAdmissionDecisionStatus.Rejected or AdmissionCrmAdmissionDecisionStatus.Waitlisted))
+		{
+			return null;
+		}
+
+		var configurationQueryable = await _reviewConfigurationRepository.GetQueryableAsync();
+		var configuration = await AsyncExecuter.FirstOrDefaultAsync(configurationQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id && x.AcademicYearId == lead.AcademicYearId));
+		if (configuration?.IsEnabled != true)
+		{
+			return null;
+		}
+		if (!input.OverrideUsed && !await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewConfidentialReviews))
+		{
+			throw new AbpAuthorizationException(
+				"Confidential structured-review access is required to record this admission decision.");
+		}
+
+		var reviewQueryable = await _structuredReviewRepository.WithDetailsAsync(x => x.Criteria, x => x.Assignments);
+		var review = await AsyncExecuter.FirstOrDefaultAsync(reviewQueryable.Where(x =>
+			x.TenantId == CurrentTenant.Id && x.LeadId == lead.Id));
+		if (input.OverrideUsed)
+		{
+			return review;
+		}
+		if (review == null)
+		{
+			throw new BusinessException("AdmissionCrm:StructuredReviewRequiredForDecision");
+		}
+		if (review.Status is not (AdmissionCrmStructuredReviewStatus.ReadyForDecision or
+			AdmissionCrmStructuredReviewStatus.Closed))
+		{
+			throw new BusinessException("AdmissionCrm:StructuredReviewNotReadyForDecision")
+				.WithData("SubmittedReviewCount", review.SubmittedReviewCount)
+				.WithData("RequiredCompletedReviews", review.RequiredCompletedReviews);
+		}
+		return review;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]

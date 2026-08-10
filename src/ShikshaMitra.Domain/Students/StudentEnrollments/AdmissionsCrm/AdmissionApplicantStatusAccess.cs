@@ -22,6 +22,7 @@ public class AdmissionApplicantStatusAccess : FullAuditedAggregateRoot<Guid>, IM
 	public DateTime? OtpVerifiedAt { get; private set; }
 	public string? AccessSessionTokenHash { get; private set; }
 	public DateTime? AccessSessionExpiresAt { get; private set; }
+	public Guid? FamilyAccessGuardianPersonId { get; private set; }
 	public int OtpFailedAttemptCount { get; private set; }
 	public DateTime? LastOtpFailureAt { get; private set; }
 
@@ -75,6 +76,18 @@ public class AdmissionApplicantStatusAccess : FullAuditedAggregateRoot<Guid>, IM
 		AccessSessionExpiresAt = null;
 		OtpFailedAttemptCount = 0;
 		LastOtpFailureAt = null;
+		FamilyAccessGuardianPersonId = null;
+	}
+
+	public void IssueFamilyOtp(
+		string otpCodeHash,
+		string encryptedOtpCode,
+		DateTime issuedAt,
+		DateTime expiresAt,
+		Guid? guardianPersonId)
+	{
+		IssueOtp(otpCodeHash, encryptedOtpCode, issuedAt, expiresAt);
+		FamilyAccessGuardianPersonId = guardianPersonId;
 	}
 
 	public void ReissueLink(
@@ -96,6 +109,7 @@ public class AdmissionApplicantStatusAccess : FullAuditedAggregateRoot<Guid>, IM
 		LastOtpFailureAt = null;
 		AccessSessionTokenHash = null;
 		AccessSessionExpiresAt = null;
+		FamilyAccessGuardianPersonId = null;
 	}
 
 	public void EnsureCanIssueOtp(DateTime now, TimeSpan resendCooldown)
@@ -149,6 +163,27 @@ public class AdmissionApplicantStatusAccess : FullAuditedAggregateRoot<Guid>, IM
 			nameof(sessionTokenHash),
 			maxLength: AdmissionCrmConsts.MaxTokenHashLength);
 		AccessSessionExpiresAt = expiresAt;
+	}
+
+	public void ShareVerifiedFamilyAccessSession(
+		AdmissionApplicantStatusAccess verifiedAccess,
+		string sessionTokenHash,
+		DateTime expiresAt,
+		DateTime issuedAt)
+	{
+		Check.NotNull(verifiedAccess, nameof(verifiedAccess));
+		EnsureTokenActive(issuedAt);
+		if (verifiedAccess.TenantId != TenantId || !verifiedAccess.OtpVerifiedAt.HasValue)
+		{
+			throw new BusinessException("AdmissionCrm:StatusOtpNotVerified");
+		}
+
+		AccessSessionTokenHash = Check.NotNullOrWhiteSpace(
+			sessionTokenHash,
+			nameof(sessionTokenHash),
+			maxLength: AdmissionCrmConsts.MaxTokenHashLength);
+		AccessSessionExpiresAt = expiresAt;
+		FamilyAccessGuardianPersonId = verifiedAccess.FamilyAccessGuardianPersonId;
 	}
 
 	public void EnsureAccessSession(string sessionTokenHash, DateTime now)

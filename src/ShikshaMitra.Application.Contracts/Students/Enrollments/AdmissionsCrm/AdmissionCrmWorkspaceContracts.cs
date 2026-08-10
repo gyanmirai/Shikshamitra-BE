@@ -66,6 +66,7 @@ public interface IAdmissionCrmWorkspaceAppService : IApplicationService
 		string? ids = null,
 		int maxResultCount = 20,
 		Guid? academicYearId = null,
-		bool ownerOnly = false);
+		bool ownerOnly = false,
+		bool reviewerOnly = false);
 	Task<IReadOnlyList<AdmissionCrmIntegrationCapabilityDto>> GetIntegrationCapabilitiesAsync(Guid academicYearId);
 }

@@ -128,6 +128,33 @@ public class AdmissionCrmStaffEligibilityService : ApplicationService, ITransien
 		}
 	}
 
+	public async Task EnsureReviewerEligibleAsync(Guid userId)
+	{
+		await EnsureTaskAssigneeEligibleAsync(userId);
+		var reviewerIds = await GetReviewerEligibleUserIdsAsync();
+		if (!reviewerIds.Contains(userId))
+		{
+			throw new BusinessException("AdmissionCrm:ReviewerPermissionRequired")
+				.WithData("ReviewerUserId", userId);
+		}
+	}
+
+	public async Task<HashSet<Guid>> GetReviewerEligibleUserIdsAsync()
+	{
+		var submitIds = await GetUserIdsWithPermissionAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.SubmitReviews);
+		var viewIds = await GetUserIdsWithPermissionAsync(
+			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewStructuredReviews);
+		submitIds.IntersectWith(viewIds);
+		if (submitIds.Count > 0)
+		{
+			var activeUsers = await _userRepository.GetListAsync(user =>
+				user.IsActive && submitIds.Contains(user.Id));
+			submitIds.IntersectWith(activeUsers.Select(user => user.Id));
+		}
+		return submitIds;
+	}
+
 	public async Task ValidateConfigurationStaffAsync(
 		AdmissionCrmLeadRoutingSettingsDto routingSettings,
 		IReadOnlyCollection<AdmissionCrmChannelSettingDto> channelSettings,
@@ -175,6 +202,19 @@ public class AdmissionCrmStaffEligibilityService : ApplicationService, ITransien
 	private async Task<HashSet<Guid>> GetCrmUserIdsAsync()
 	{
 		var permissionName = ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View;
+		var userIds = await GetUserIdsWithPermissionAsync(permissionName);
+
+		var currentUserId = CurrentUser.Id;
+		if (currentUserId.HasValue && await _permissionChecker.IsGrantedAsync(permissionName))
+		{
+			userIds.Add(currentUserId.Value);
+		}
+
+		return userIds;
+	}
+
+	private async Task<HashSet<Guid>> GetUserIdsWithPermissionAsync(string permissionName)
+	{
 		var grants = await _permissionGrantRepository.GetListAsync(grant =>
 			grant.Name == permissionName &&
 			(grant.ProviderName == "U" || grant.ProviderName == "R"));
@@ -199,12 +239,6 @@ public class AdmissionCrmStaffEligibilityService : ApplicationService, ITransien
 					.Select(user => user.Id));
 				userIds.UnionWith(roleUserIds);
 			}
-		}
-
-		var currentUserId = CurrentUser.Id;
-		if (currentUserId.HasValue && await _permissionChecker.IsGrantedAsync(permissionName))
-		{
-			userIds.Add(currentUserId.Value);
 		}
 
 		return userIds;

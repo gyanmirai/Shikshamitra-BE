@@ -56,8 +56,8 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 	private readonly IRepository<EducationMedium, Guid> _mediumRepository;
 	private readonly IRepository<EducationBoard, Guid> _boardRepository;
 	private readonly StudentScopeAccessService _scopeAccess;
-	private readonly IAdmissionCrmConfigurationAppService _configurationService;
-	private readonly AdmissionCrmConfigurationSafetyAppService _configurationSafety;
+	private readonly AdmissionCrmCycleConfigurationWorkflow _configurationWorkflow;
+	private readonly AdmissionCrmConfigurationImpactWorkflow _configurationImpact;
 	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
 	private readonly IAbpDistributedLock _distributedLock;
 
@@ -81,8 +81,8 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		IRepository<EducationMedium, Guid> mediumRepository,
 		IRepository<EducationBoard, Guid> boardRepository,
 		StudentScopeAccessService scopeAccess,
-		IAdmissionCrmConfigurationAppService configurationService,
-		AdmissionCrmConfigurationSafetyAppService configurationSafety,
+		AdmissionCrmCycleConfigurationWorkflow configurationWorkflow,
+		AdmissionCrmConfigurationImpactWorkflow configurationImpact,
 		AdmissionCrmStaffEligibilityService staffEligibilityService,
 		IAbpDistributedLock distributedLock)
 	{
@@ -105,8 +105,8 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		_mediumRepository = mediumRepository;
 		_boardRepository = boardRepository;
 		_scopeAccess = scopeAccess;
-		_configurationService = configurationService;
-		_configurationSafety = configurationSafety;
+		_configurationWorkflow = configurationWorkflow;
+		_configurationImpact = configurationImpact;
 		_staffEligibilityService = staffEligibilityService;
 		_distributedLock = distributedLock;
 	}
@@ -349,7 +349,7 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		await _scopeAccess.EnsureAcademicYearWideConfigurationAccessAsync(
 			academicYearId,
 			nameof(GetStatusAsync));
-		var configuration = await _configurationService.GetCycleConfigurationAsync(academicYearId);
+		var configuration = await _configurationWorkflow.GetAsync(academicYearId);
 		var policies = await GetAccessPolicyAsync();
 		var adoption = (await _adoptionRepository.GetListAsync(x => x.AcademicYearId == academicYearId && x.RolledBackAt == null))
 			.OrderByDescending(x => x.AppliedAt)
@@ -518,7 +518,7 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 			nameof(GetCycleSummaryAsync));
 		var year = await GetAcademicYearAsync(academicYearId);
 		var readiness = await GetStatusAsync(academicYearId);
-		var configuration = await _configurationService.GetCycleConfigurationAsync(academicYearId);
+		var configuration = await _configurationWorkflow.GetAsync(academicYearId);
 		var journeyRules = configuration.JourneyRules;
 		var applicantCounts = await GetApplicantCountsAsync([academicYearId]);
 		var cycle = BuildCycleListItem(
@@ -686,7 +686,7 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		await GetOwnedSessionAsync(input.SupportSessionId, input.TenantId);
 		var preset = await GetPublishedPresetAsync(input.PresetId);
 		AdmissionCrmCycleConfigurationDto current;
-		using (CurrentTenant.Change(input.TenantId)) current = await _configurationService.GetCycleConfigurationAsync(input.AcademicYearId);
+		using (CurrentTenant.Change(input.TenantId)) current = await _configurationWorkflow.GetAsync(input.AcademicYearId);
 		var currentJson = JsonSerializer.Serialize(current, JsonOptions);
 		var currentFields = JsonDocument.Parse(currentJson).RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.GetRawText());
 		var presetFields = JsonDocument.Parse(preset.ConfigurationJson).RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.GetRawText());
@@ -701,7 +701,7 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		await GetOwnedSessionAsync(input.SupportSessionId, input.TenantId);
 		var preset = await GetPublishedPresetAsync(input.PresetId);
 		AdmissionCrmCycleConfigurationDto current;
-		using (CurrentTenant.Change(input.TenantId)) current = await _configurationService.GetCycleConfigurationAsync(input.AcademicYearId);
+		using (CurrentTenant.Change(input.TenantId)) current = await _configurationWorkflow.GetAsync(input.AcademicYearId);
 		var previousJson = JsonSerializer.Serialize(current, JsonOptions);
 		var currentHash = Hash(previousJson);
 		if (!string.IsNullOrWhiteSpace(input.ExpectedSnapshotHash) && !string.Equals(input.ExpectedSnapshotHash, currentHash, StringComparison.Ordinal)) throw new BusinessException("AdmissionCrm:PresetApplyConcurrencyConflict");
@@ -709,11 +709,11 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		using (CurrentTenant.Change(input.TenantId))
 		{
 			configuration.ImpactPreviewFingerprint =
-				await _configurationSafety.CreateCycleImpactFingerprintAsync(
+				await _configurationImpact.CreateCycleFingerprintAsync(
 					input.AcademicYearId,
 					configuration,
 					nameof(ApplyPresetAsync));
-			await _configurationService.UpdateCycleConfigurationAsync(input.AcademicYearId, configuration);
+			await _configurationWorkflow.UpdateAsync(input.AcademicYearId, configuration);
 		}
 		var adoption = new AdmissionCrmPresetAdoption(GuidGenerator.Create(), input.TenantId, input.AcademicYearId, preset.Id, preset.Version, Hash(preset.ConfigurationJson), previousJson, Clock.Now);
 		using (CurrentTenant.Change(input.TenantId)) await _adoptionRepository.InsertAsync(adoption, autoSave: true);
@@ -733,11 +733,11 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 		using (CurrentTenant.Change(adoption.TenantId))
 		{
 			previous.ImpactPreviewFingerprint =
-				await _configurationSafety.CreateCycleImpactFingerprintAsync(
+				await _configurationImpact.CreateCycleFingerprintAsync(
 					adoption.AcademicYearId,
 					previous,
 					nameof(RollbackPresetAsync));
-			await _configurationService.UpdateCycleConfigurationAsync(adoption.AcademicYearId, previous);
+			await _configurationWorkflow.UpdateAsync(adoption.AcademicYearId, previous);
 			adoption.MarkRolledBack(Clock.Now);
 			await _adoptionRepository.UpdateAsync(adoption, autoSave: true);
 		}
@@ -1096,7 +1096,7 @@ public class AdmissionCrmSetupAppService : ApplicationService, IAdmissionCrmSetu
 
 	private async Task<AdmissionCrmCycleConfiguration> GetCycleConfigurationEntityAsync(Guid academicYearId)
 	{
-		var configuration = await _configurationService.GetCycleConfigurationAsync(academicYearId);
+		var configuration = await _configurationWorkflow.GetAsync(academicYearId);
 		return await _cycleRepository.GetAsync(configuration.Id);
 	}
 

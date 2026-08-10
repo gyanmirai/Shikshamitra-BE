@@ -11,13 +11,16 @@ namespace ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 [Authorize]
 [Route("api/student-enrollment/admissions-crm")]
 public class AdmissionCrmConfigurationController(
-	IAdmissionCrmConfigurationAppService admissionCrmConfigurationAppService) : AbpControllerBase
+	IAdmissionCrmCycleConfigurationService cycleService,
+	IAdmissionCrmPipelineConfigurationService pipelineService,
+	IAdmissionCrmInquiryFormTemplateService formTemplateService,
+	IAdmissionCrmMessageTemplateService messageTemplateService) : AbpControllerBase
 {
 	[HttpGet("configuration/cycle-default")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public async Task<AdmissionCrmCycleConfigurationDto> GetSchoolDefaultCycleConfigurationAsync()
 	{
-		return await admissionCrmConfigurationAppService.GetSchoolDefaultCycleConfigurationAsync();
+		return await cycleService.GetSchoolDefaultAsync();
 	}
 
 	[HttpPut("configuration/cycle-default")]
@@ -25,7 +28,7 @@ public class AdmissionCrmConfigurationController(
 	public async Task<AdmissionCrmCycleConfigurationDto> UpdateSchoolDefaultCycleConfigurationAsync(
 		[FromBody] UpdateAdmissionCrmCycleConfigurationDto input)
 	{
-		return await admissionCrmConfigurationAppService.UpdateSchoolDefaultCycleConfigurationAsync(input);
+		return await cycleService.UpdateSchoolDefaultAsync(input);
 	}
 
 	[HttpGet("{academicYearId}/configuration/cycle")]
@@ -33,7 +36,7 @@ public class AdmissionCrmConfigurationController(
 	public async Task<AdmissionCrmCycleConfigurationDto> GetCycleConfigurationAsync(
 		[FromRoute] Guid academicYearId)
 	{
-		return await admissionCrmConfigurationAppService.GetCycleConfigurationAsync(academicYearId);
+		return await cycleService.GetAsync(academicYearId);
 	}
 
 	[HttpPut("{academicYearId}/configuration/cycle")]
@@ -42,14 +45,14 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] UpdateAdmissionCrmCycleConfigurationDto input)
 	{
-		return await admissionCrmConfigurationAppService.UpdateCycleConfigurationAsync(academicYearId, input);
+		return await cycleService.UpdateAsync(academicYearId, input);
 	}
 
 	[HttpGet("{academicYearId}/configuration/pipeline-stages")]
 	public async Task<PagedResultDto<AdmissionCrmPipelineStageDto>> GetPipelineStagesAsync(
 		[FromRoute] Guid academicYearId)
 	{
-		return await admissionCrmConfigurationAppService.GetPipelineStagesAsync(academicYearId);
+		return await pipelineService.GetAsync(academicYearId);
 	}
 
 	[HttpPost("{academicYearId}/configuration/pipeline-stages")]
@@ -58,7 +61,7 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] CreateAdmissionCrmPipelineStageDto input)
 	{
-		return await admissionCrmConfigurationAppService.CreatePipelineStageAsync(academicYearId, input);
+		return await pipelineService.CreateAsync(academicYearId, input);
 	}
 
 	[HttpPut("configuration/pipeline-stages/{stageId}")]
@@ -67,7 +70,7 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid stageId,
 		[FromBody] UpdateAdmissionCrmPipelineStageDto input)
 	{
-		return await admissionCrmConfigurationAppService.UpdatePipelineStageAsync(stageId, input);
+		return await pipelineService.UpdateAsync(stageId, input);
 	}
 
 	[HttpPost("{academicYearId}/configuration/journey/lock")]
@@ -76,7 +79,7 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] AdmissionCrmJourneyLockDto input)
 	{
-		return await admissionCrmConfigurationAppService.LockJourneyAsync(academicYearId, input);
+		return await cycleService.LockAsync(academicYearId, input);
 	}
 
 	[HttpPost("{academicYearId}/configuration/journey/unlock")]
@@ -85,7 +88,7 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] AdmissionCrmJourneyLockDto input)
 	{
-		return await admissionCrmConfigurationAppService.UnlockJourneyAsync(academicYearId, input);
+		return await cycleService.UnlockAsync(academicYearId, input);
 	}
 
 	[HttpPost("{academicYearId}/configuration/form-templates")]
@@ -94,7 +97,7 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] CreateAdmissionCrmFormTemplateDto input)
 	{
-		return await admissionCrmConfigurationAppService.CreateFormTemplateAsync(academicYearId, input);
+		return await formTemplateService.CreateAsync(academicYearId, input);
 	}
 
 	[HttpGet("{academicYearId}/configuration/form-templates")]
@@ -103,14 +106,14 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid academicYearId,
 		[FromQuery] GetAdmissionCrmFormTemplateListInput input)
 	{
-		return await admissionCrmConfigurationAppService.GetFormTemplatesAsync(academicYearId, input);
+		return await formTemplateService.GetListAsync(academicYearId, input);
 	}
 
 	[HttpGet("configuration/form-templates/{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration)]
 	public async Task<AdmissionCrmFormTemplateDto> GetFormTemplateAsync([FromRoute] Guid id)
 	{
-		return await admissionCrmConfigurationAppService.GetFormTemplateAsync(id);
+		return await formTemplateService.GetAsync(id);
 	}
 
 	[HttpPut("configuration/form-templates/{id}")]
@@ -119,7 +122,7 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid id,
 		[FromBody] UpdateAdmissionCrmFormTemplateDto input)
 	{
-		return await admissionCrmConfigurationAppService.UpdateFormTemplateAsync(id, input);
+		return await formTemplateService.UpdateAsync(id, input);
 	}
 
 	[HttpPatch("configuration/form-templates/{id}/status")]
@@ -128,7 +131,7 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid id,
 		[FromBody] UpdateAdmissionCrmFormTemplateStatusDto input)
 	{
-		return await admissionCrmConfigurationAppService.UpdateFormTemplateStatusAsync(id, input);
+		return await formTemplateService.UpdateStatusAsync(id, input);
 	}
 
 	[HttpPost("{academicYearId}/configuration/message-templates")]
@@ -137,7 +140,7 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid academicYearId,
 		[FromBody] CreateAdmissionCrmMessageTemplateDto input)
 	{
-		return await admissionCrmConfigurationAppService.CreateMessageTemplateAsync(academicYearId, input);
+		return await messageTemplateService.CreateAsync(academicYearId, input);
 	}
 
 	[HttpGet("{academicYearId}/configuration/message-templates")]
@@ -146,14 +149,14 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid academicYearId,
 		[FromQuery] GetAdmissionCrmMessageTemplateListInput input)
 	{
-		return await admissionCrmConfigurationAppService.GetMessageTemplatesAsync(academicYearId, input);
+		return await messageTemplateService.GetListAsync(academicYearId, input);
 	}
 
 	[HttpGet("configuration/message-templates/{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageTemplates)]
 	public async Task<AdmissionCrmMessageTemplateDto> GetMessageTemplateAsync([FromRoute] Guid id)
 	{
-		return await admissionCrmConfigurationAppService.GetMessageTemplateAsync(id);
+		return await messageTemplateService.GetAsync(id);
 	}
 
 	[HttpPut("configuration/message-templates/{id}")]
@@ -162,7 +165,7 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid id,
 		[FromBody] UpdateAdmissionCrmMessageTemplateDto input)
 	{
-		return await admissionCrmConfigurationAppService.UpdateMessageTemplateAsync(id, input);
+		return await messageTemplateService.UpdateAsync(id, input);
 	}
 
 	[HttpPatch("configuration/message-templates/{id}/status")]
@@ -171,6 +174,6 @@ public class AdmissionCrmConfigurationController(
 		[FromRoute] Guid id,
 		[FromBody] UpdateAdmissionCrmMessageTemplateStatusDto input)
 	{
-		return await admissionCrmConfigurationAppService.UpdateMessageTemplateStatusAsync(id, input);
+		return await messageTemplateService.UpdateStatusAsync(id, input);
 	}
 }

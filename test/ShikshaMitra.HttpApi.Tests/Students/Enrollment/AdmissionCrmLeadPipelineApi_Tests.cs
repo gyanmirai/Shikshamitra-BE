@@ -823,6 +823,7 @@ public class AdmissionCrmLeadPipelineApi_Tests(ShikshaMitraApiTestFactory factor
 	public async Task Should_Send_Channel_Default_Acknowledgement_For_Staff_And_Public_Inquiries()
 	{
 		var originalCycle = await GetCrmCycleConfigurationAsync();
+		var providerSnapshot = await DisableCommunicationProviderAsync(AdmissionCrmMessageChannel.WhatsApp);
 		var acknowledgementTemplate = await CreateApprovedCrmMessageTemplateAsync(
 			body:
 				"Thanks {{parentName}}. We received {{studentName}} inquiry. Track here: {{statusLink}}",
@@ -915,6 +916,7 @@ public class AdmissionCrmLeadPipelineApi_Tests(ShikshaMitraApiTestFactory factor
 				originalCycle,
 				originalCycle.ExamReadinessFields,
 				channelSettings: originalCycle.ChannelSettings);
+			await RestoreCommunicationProviderAsync(providerSnapshot);
 		}
 	}
 

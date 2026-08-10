@@ -67,7 +67,7 @@ public class AdmissionCrmSetupApi_Tests(ShikshaMitraApiTestFactory factory) : Ad
 	public async Task Should_Expose_Admission_Cycles_To_Configuration_Managers()
 	{
 		var cyclesResponse = await Client.GetAsync(
-			"/api/student-enrollment/admissions-crm/setup/cycles?skipCount=0&maxResultCount=10");
+			"/api/student-enrollment/admissions-crm/setup/cycles?skipCount=0&maxResultCount=100");
 		cyclesResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await cyclesResponse.Content.ReadAsStringAsync());
 		var cycles = await cyclesResponse.Content
 			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmCycleListItemDto>>(JsonOptions);

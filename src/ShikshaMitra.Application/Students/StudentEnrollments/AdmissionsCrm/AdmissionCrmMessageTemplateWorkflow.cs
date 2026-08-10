@@ -69,7 +69,7 @@ public class AdmissionCrmMessageTemplateWorkflow(
 		await access.EnsureYearMutationAsync(template.AcademicYearId, "UpdateMessageTemplateStatusAsync");
 		if (template.Status == AdmissionCrmMessageTemplateStatus.Approved &&
 			(input.Status != AdmissionCrmMessageTemplateStatus.Approved || !input.IsActive))
-			await EnsureNotUsedByAutomationAsync(template.Id);
+			await EnsureNotUsedByAutomationAsync(template.AcademicYearId, template.Id);
 		template.UpdateStatus(input.Status, input.IsActive);
 		await repository.UpdateAsync(template, autoSave: true);
 		return AdmissionCrmConfigurationMapper.MessageTemplate(template);
@@ -86,10 +86,10 @@ public class AdmissionCrmMessageTemplateWorkflow(
 				.WithData("TemplateName", name).WithData("Channel", channel);
 	}
 
-	private async Task EnsureNotUsedByAutomationAsync(Guid templateId)
+	private async Task EnsureNotUsedByAutomationAsync(Guid academicYearId, Guid templateId)
 	{
 		var configurations = await AsyncExecuter.ToListAsync((await cycleRepository.GetQueryableAsync())
-			.Where(x => x.TenantId == CurrentTenant.Id));
+			.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId));
 		var journeyCount = configurations.SelectMany(x => AdmissionCrmJourneyRuleSerializer.DeserializeRules(x.JourneyRulesJson))
 			.Count(x => x.IsEnabled && x.SendMessage && x.MessageTemplateId == templateId);
 		var acknowledgementCount = configurations.SelectMany(x => AdmissionCrmChannelSettingsSerializer.DeserializeSettings(x.ChannelSettingsJson))

@@ -944,4 +944,62 @@ public abstract class AdmissionCrmApiTestBase(ShikshaMitraApiTestFactory factory
 			return access.OtpFailedAttemptCount;
 		}
 	}
+
+	protected sealed record AdmissionCrmCommunicationProviderSnapshot(
+		Guid Id,
+		bool IsEnabled,
+		string? ProviderName,
+		string? SenderId,
+		string? SettingsJson,
+		string? WebhookUrl,
+		DateTime? LastValidatedAt);
+
+	protected async Task<AdmissionCrmCommunicationProviderSnapshot?> DisableCommunicationProviderAsync(
+		AdmissionCrmMessageChannel channel)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmCommunicationProviderConfiguration, Guid>>();
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var queryable = await repository.GetQueryableAsync();
+			var provider = queryable.SingleOrDefault(item =>
+				item.AcademicYearId == Factory.SeededAcademicYearId && item.Channel == channel);
+			if (provider == null)
+			{
+				await uow.CompleteAsync();
+				return null;
+			}
+			var snapshot = new AdmissionCrmCommunicationProviderSnapshot(
+				provider.Id, provider.IsEnabled, provider.ProviderName, provider.SenderId,
+				provider.SettingsJson, provider.WebhookUrl, provider.LastValidatedAt);
+			provider.Update(false, provider.ProviderName, provider.SenderId, provider.SettingsJson,
+				provider.WebhookUrl, provider.LastValidatedAt);
+			await repository.UpdateAsync(provider, autoSave: true);
+			await uow.CompleteAsync();
+			return snapshot;
+		}
+	}
+
+	protected async Task RestoreCommunicationProviderAsync(AdmissionCrmCommunicationProviderSnapshot? snapshot)
+	{
+		if (snapshot == null) return;
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmCommunicationProviderConfiguration, Guid>>();
+		using (currentTenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var provider = await repository.GetAsync(snapshot.Id);
+			provider.Update(snapshot.IsEnabled, snapshot.ProviderName, snapshot.SenderId,
+				snapshot.SettingsJson, snapshot.WebhookUrl, snapshot.LastValidatedAt);
+			await repository.UpdateAsync(provider, autoSave: true);
+			await uow.CompleteAsync();
+		}
+	}
 }

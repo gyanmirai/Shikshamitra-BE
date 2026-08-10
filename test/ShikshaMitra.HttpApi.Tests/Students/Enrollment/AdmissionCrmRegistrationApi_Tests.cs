@@ -325,7 +325,7 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Complete_Secure_Versioned_Registration_Workflow()
+	public async Task Should_Roll_Back_Failed_Verification_And_Complete_Secure_Versioned_Registration_Workflow()
 	{
 		var unique = Guid.NewGuid().ToString("N")[..8];
 		var templateInput = CreateTemplateInput("Primary registration " + unique);
@@ -622,6 +622,21 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		var resubmitted = await resubmitResponse.Content.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
 		resubmitted.ShouldNotBeNull();
 		resubmitted.Status.ShouldBe(AdmissionCrmRegistrationStatus.Resubmitted);
+
+		using (Factory.FailNextAdmissionCrmTimelineSave(AdmissionCrmTimelineEventType.RegistrationVerified))
+		{
+			var failedVerification = await Client.PostAsync(
+				$"/api/student-enrollment/admissions-crm/registrations/{issued.Id}/verify",
+				null);
+			failedVerification.StatusCode.ShouldBe(
+				HttpStatusCode.Forbidden,
+				await failedVerification.Content.ReadAsStringAsync());
+		}
+		var afterFailedVerificationResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/registrations/{issued.Id}");
+		var afterFailedVerification = (await afterFailedVerificationResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions))!;
+		afterFailedVerification.Status.ShouldBe(AdmissionCrmRegistrationStatus.Resubmitted);
 
 		var registrationVerifyResponse = await Client.PostAsync(
 			$"/api/student-enrollment/admissions-crm/registrations/{issued.Id}/verify",

@@ -58,6 +58,7 @@ namespace ShikshaMitra;
 public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 {
 	private SqliteConnection? _keepAliveConnection;
+	private readonly AdmissionCrmTransactionFailureInterceptor _admissionCrmTransactionFailure = new();
 
 	public Guid SeededRoleId { get; private set; }
 	public Guid SeededShiftId { get; private set; }
@@ -68,6 +69,8 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	public Guid SeededStandardId { get; private set; }
 	public Guid SeededDivisionId { get; private set; }
 	public Guid SeededFreshRouteDefinitionId { get; private set; }
+	public IDisposable FailNextAdmissionCrmTimelineSave(AdmissionCrmTimelineEventType eventType) =>
+		_admissionCrmTransactionFailure.FailNextTimelineSave(eventType);
 
 	protected override IHost CreateHost(IHostBuilder builder)
 	{
@@ -347,12 +350,14 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		{
 			options.Configure(ctx =>
 			{
-				ctx.DbContextOptions.UseSqlite(_keepAliveConnection);
+				ctx.DbContextOptions.UseSqlite(_keepAliveConnection)
+					.AddInterceptors(_admissionCrmTransactionFailure);
 			});
 		});
 
 		var dbOptions = new DbContextOptionsBuilder<ShikshaMitraDbContext>()
 			.UseSqlite(_keepAliveConnection)
+			.AddInterceptors(_admissionCrmTransactionFailure)
 			.Options;
 
 		using var context = new ShikshaMitraDbContext(dbOptions);

@@ -64,7 +64,7 @@ public class AdmissionCrmFinalAdmissionApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Run_Offer_Acceptance_Decision_History_And_Cancellation_Workflow()
+	public async Task Should_Roll_Back_Failed_Offer_Acceptance_And_Run_Decision_History_And_Cancellation_Workflow()
 	{
 		var pool = await CreateSeatPoolAsync(1);
 		var staleUpdateResponse = await Client.PutAsJsonAsync(
@@ -97,15 +97,33 @@ public class AdmissionCrmFinalAdmissionApi_Tests : ShikshaMitraApiTestBase
 		applicantStatus.Offer.OfferId.ShouldBe(offer.Id);
 		applicantStatus.Offer.Status.ShouldBe(AdmissionCrmSeatOfferStatus.Opened);
 
+		var acceptInput = new RespondAdmissionApplicantOfferDto
+		{
+			AccessSessionToken = applicantStatus.AccessSessionToken!,
+			Accept = true,
+			Language = "en",
+			Declarations = new System.Collections.Generic.Dictionary<string, bool> { ["offerTermsAccepted"] = true }
+		};
+		using (Factory.FailNextAdmissionCrmTimelineSave(AdmissionCrmTimelineEventType.OfferAccepted))
+		{
+			var failedAcceptance = await Client.PostAsJsonAsync(
+				$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{statusToken}/offers/{offer.Id}/respond",
+				acceptInput, JsonOptions);
+			failedAcceptance.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await failedAcceptance.Content.ReadAsStringAsync());
+		}
+		var afterFailedAcceptanceResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/final-admission/offers/{offer.Id}");
+		var afterFailedAcceptance = (await afterFailedAcceptanceResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmSeatOfferDto>(JsonOptions))!;
+		afterFailedAcceptance.Status.ShouldBe(AdmissionCrmSeatOfferStatus.Opened);
+		afterFailedAcceptance.Reservation!.Status.ShouldBe(AdmissionCrmSeatReservationStatus.Active);
+		var poolAfterFailedAcceptance = await GetSeatPoolAsync(pool.Id);
+		poolAfterFailedAcceptance.ReservedSeats.ShouldBe(1);
+		poolAfterFailedAcceptance.AcceptedSeats.ShouldBe(0);
+
 		var acceptResponse = await Client.PostAsJsonAsync(
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{statusToken}/offers/{offer.Id}/respond",
-			new RespondAdmissionApplicantOfferDto
-			{
-				AccessSessionToken = applicantStatus.AccessSessionToken!,
-				Accept = true,
-				Language = "en",
-				Declarations = new System.Collections.Generic.Dictionary<string, bool> { ["offerTermsAccepted"] = true }
-			}, JsonOptions);
+			acceptInput, JsonOptions);
 		acceptResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await acceptResponse.Content.ReadAsStringAsync());
 		var applicantOffer = await acceptResponse.Content.ReadFromJsonAsync<AdmissionApplicantStatusOfferDto>(JsonOptions);
 		applicantOffer.ShouldNotBeNull();

@@ -459,7 +459,7 @@ public class AdmissionCrmPublicApi_Tests(ShikshaMitraApiTestFactory factory) : A
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Issue_And_Verify_Public_Status_Otp()
+	public async Task Should_Roll_Back_Failed_Withdrawal_And_Verify_Public_Status_Otp()
 	{
 		var originalCycle = await GetCrmCycleConfigurationAsync();
 		await UpdateCrmCycleConfigurationAsync(
@@ -657,13 +657,35 @@ public class AdmissionCrmPublicApi_Tests(ShikshaMitraApiTestFactory factory) : A
 			preferencesStatus.CommunicationPreferences.WhatsApp.ShouldBeFalse();
 			preferencesStatus.CommunicationPreferences.Sms.ShouldBeTrue();
 
+			var withdrawalInput = new WithdrawPublicAdmissionApplicationDto
+			{
+				AccessSessionToken = familyStatus.AccessSessionToken!,
+				Reason = "Family chose another school."
+			};
+			using (Factory.FailNextAdmissionCrmTimelineSave(AdmissionCrmTimelineEventType.FamilyApplicationWithdrawn))
+			{
+				var failedWithdrawal = await anonymousClient.PostAsJsonAsync(
+					$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{submit.StatusToken}/withdraw",
+					withdrawalInput, JsonOptions);
+				failedWithdrawal.StatusCode.ShouldBeOneOf(
+					HttpStatusCode.Unauthorized,
+					HttpStatusCode.Forbidden);
+			}
+			using (var statusAfterFailureRequest = new HttpRequestMessage(
+				HttpMethod.Get,
+				$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{submit.StatusToken}?language=en"))
+			{
+				statusAfterFailureRequest.Headers.Add("X-Admission-Access-Session", familyStatus.AccessSessionToken);
+				var statusAfterFailureResponse = await anonymousClient.SendAsync(statusAfterFailureRequest);
+				var statusAfterFailure = (await statusAfterFailureResponse.Content
+					.ReadFromJsonAsync<AdmissionApplicantStatusDto>(JsonOptions))!;
+				statusAfterFailure.Stage.ShouldBe(AdmissionInquiryStage.NewInquiry);
+				statusAfterFailure.CanWithdrawApplication.ShouldBeTrue();
+			}
+
 			var withdrawResponse = await anonymousClient.PostAsJsonAsync(
 				$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{submit.StatusToken}/withdraw",
-				new WithdrawPublicAdmissionApplicationDto
-				{
-					AccessSessionToken = familyStatus.AccessSessionToken!,
-					Reason = "Family chose another school."
-				}, JsonOptions);
+				withdrawalInput, JsonOptions);
 			withdrawResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await withdrawResponse.Content.ReadAsStringAsync());
 			var withdrawnStatus = await withdrawResponse.Content
 				.ReadFromJsonAsync<AdmissionApplicantStatusDto>(JsonOptions);

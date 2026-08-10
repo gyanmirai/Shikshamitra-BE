@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -235,7 +235,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			{
 				AdmissionIntent = "Reception quick inquiry for Grade 1",
 				Channel = options.Channels.FirstOrDefault(channel => channel.IsDefault)?.Channel
-				          ?? options.Channels[0].Channel,
+						  ?? options.Channels[0].Channel,
 				FirstName = "Aarav",
 				MiddleName = "Kumar",
 				LastName = "Patel",
@@ -337,10 +337,10 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Expose_Operational_Metadata_With_Either_Add_Or_View_Permission()
 	{
 		foreach (var permission in new[]
-		         {
-			         ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add,
-			         ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View
-		         })
+				 {
+					 ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add,
+					 ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View
+				 })
 		{
 			using var client = CreateClientWithCrmPermissions(permission);
 			var optionsResponse = await client.GetAsync(
@@ -1264,24 +1264,24 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 		var cycleUpdate = new UpdateAdmissionCrmCycleConfigurationDto
 		{
-				CycleName = cycle.CycleName,
-				IsActive = cycle.IsActive,
-				RegistrationFormRequiredBeforeExam = cycle.RegistrationFormRequiredBeforeExam,
-				EntranceExamRequired = cycle.EntranceExamRequired,
-				StaleAfterDays = cycle.StaleAfterDays,
-				ArchiveAfterDays = cycle.ArchiveAfterDays,
-				DefaultLeadSlaHours = cycle.DefaultLeadSlaHours,
-				SlaPolicy = cycle.SlaPolicy,
-				ActivationCancellationWindowDays = cycle.ActivationCancellationWindowDays,
-				DefaultExamPassingPercentage = cycle.DefaultExamPassingPercentage,
-				MeritRankingMode = cycle.MeritRankingMode,
-				ExamReadinessFields = cycle.ExamReadinessFields,
-				LeadScoringRules = cycle.LeadScoringRules,
-				LeadRoutingSettings = cycle.LeadRoutingSettings,
-				JourneyRules = cycle.JourneyRules,
-				ApplicantChecklist = cycle.ApplicantChecklist,
-				ChannelSettings = cycle.ChannelSettings,
-				Notes = "This update must not bypass the journey lock."
+			CycleName = cycle.CycleName,
+			IsActive = cycle.IsActive,
+			RegistrationFormRequiredBeforeExam = cycle.RegistrationFormRequiredBeforeExam,
+			EntranceExamRequired = cycle.EntranceExamRequired,
+			StaleAfterDays = cycle.StaleAfterDays,
+			ArchiveAfterDays = cycle.ArchiveAfterDays,
+			DefaultLeadSlaHours = cycle.DefaultLeadSlaHours,
+			SlaPolicy = cycle.SlaPolicy,
+			ActivationCancellationWindowDays = cycle.ActivationCancellationWindowDays,
+			DefaultExamPassingPercentage = cycle.DefaultExamPassingPercentage,
+			MeritRankingMode = cycle.MeritRankingMode,
+			ExamReadinessFields = cycle.ExamReadinessFields,
+			LeadScoringRules = cycle.LeadScoringRules,
+			LeadRoutingSettings = cycle.LeadRoutingSettings,
+			JourneyRules = cycle.JourneyRules,
+			ApplicantChecklist = cycle.ApplicantChecklist,
+			ChannelSettings = cycle.ChannelSettings,
+			Notes = "This update must not bypass the journey lock."
 		};
 		var updateResponse = await PutCycleConfigurationWithImpactAsync(academicYearId, cycleUpdate);
 
@@ -1599,7 +1599,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		changed.LeadScore.ShouldBe(originalLeadScore);
 
 		var listResponse = await Client.GetAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads?priority={(int)AdmissionCrmLeadPriority.Hot}&maxResultCount=200");
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads?priority={(int) AdmissionCrmLeadPriority.Hot}&maxResultCount=200");
 		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await listResponse.Content.ReadAsStringAsync());
 		var filtered = await listResponse.Content.ReadFromJsonAsync<PagedResultDto<AdmissionCrmLeadDto>>(JsonOptions);
 		filtered.ShouldNotBeNull();
@@ -2384,7 +2384,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		created.Variables.ShouldContain("examDate");
 
 		var listResponse = await Client.GetAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/message-templates?channel={(int)AdmissionCrmMessageChannel.WhatsApp}&filterText=Entrance");
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/configuration/message-templates?channel={(int) AdmissionCrmMessageChannel.WhatsApp}&filterText=Entrance");
 		listResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await listResponse.Content.ReadAsStringAsync());
 		var list = await listResponse.Content
 			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmMessageTemplateDto>>(JsonOptions);
@@ -2626,7 +2626,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		providerMissingLog.BodySnapshot.ShouldContain("15 July");
 
 		var updateProviderResponse = await Client.PutAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int)AdmissionCrmMessageChannel.WhatsApp}",
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int) AdmissionCrmMessageChannel.WhatsApp}",
 			new UpdateAdmissionCrmCommunicationProviderDto
 			{
 				IsEnabled = true,
@@ -2659,7 +2659,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		optOut.IsActive.ShouldBeTrue();
 
 		var activeOptOutsResponse = await Client.GetAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/opt-outs?leadId={lead.Id}&channel={(int)AdmissionCrmMessageChannel.WhatsApp}&isActive=true&contactSearch={lead.PrimaryContactNo}");
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/opt-outs?leadId={lead.Id}&channel={(int) AdmissionCrmMessageChannel.WhatsApp}&isActive=true&contactSearch={lead.PrimaryContactNo}");
 		activeOptOutsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await activeOptOutsResponse.Content.ReadAsStringAsync());
 		var activeOptOuts = await activeOptOutsResponse.Content
 			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmCommunicationOptOutDto>>(JsonOptions);
@@ -2693,7 +2693,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		cleared.IsActive.ShouldBeFalse();
 
 		var inactiveOptOutsResponse = await Client.GetAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/opt-outs?channel={(int)AdmissionCrmMessageChannel.WhatsApp}&isActive=false&contactSearch={lead.PrimaryContactNo}");
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/opt-outs?channel={(int) AdmissionCrmMessageChannel.WhatsApp}&isActive=false&contactSearch={lead.PrimaryContactNo}");
 		inactiveOptOutsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await inactiveOptOutsResponse.Content.ReadAsStringAsync());
 		var inactiveOptOuts = await inactiveOptOutsResponse.Content
 			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmCommunicationOptOutDto>>(JsonOptions);
@@ -2725,7 +2725,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		retriedLog.AttemptCount.ShouldBe(1);
 
 		var manualProviderResponse = await Client.PutAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int)AdmissionCrmMessageChannel.WhatsApp}",
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int) AdmissionCrmMessageChannel.WhatsApp}",
 			new UpdateAdmissionCrmCommunicationProviderDto
 			{
 				IsEnabled = true,
@@ -2766,7 +2766,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		manualDispatchLog.StatusDetails.ShouldContain("manual");
 
 		var unsupportedProviderResponse = await Client.PutAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int)AdmissionCrmMessageChannel.WhatsApp}",
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int) AdmissionCrmMessageChannel.WhatsApp}",
 			new UpdateAdmissionCrmCommunicationProviderDto
 			{
 				IsEnabled = true,
@@ -2779,7 +2779,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		unsupportedProviderResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await unsupportedProviderResponse.Content.ReadAsStringAsync());
 
 		var invalidWebhookProviderResponse = await Client.PutAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int)AdmissionCrmMessageChannel.WhatsApp}",
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int) AdmissionCrmMessageChannel.WhatsApp}",
 			new UpdateAdmissionCrmCommunicationProviderDto
 			{
 				IsEnabled = true,
@@ -2815,7 +2815,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		const string callbackSecret = "crm-callback-secret";
 
 		var updateProviderResponse = await Client.PutAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int)AdmissionCrmMessageChannel.WhatsApp}",
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int) AdmissionCrmMessageChannel.WhatsApp}",
 			new UpdateAdmissionCrmCommunicationProviderDto
 			{
 				IsEnabled = true,
@@ -2921,7 +2921,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			(x.Details ?? string.Empty).Contains("Ignored stale Sent callback")).ShouldBeTrue();
 
 		var mappedProviderResponse = await Client.PutAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int)AdmissionCrmMessageChannel.WhatsApp}",
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int) AdmissionCrmMessageChannel.WhatsApp}",
 			new UpdateAdmissionCrmCommunicationProviderDto
 			{
 				IsEnabled = true,
@@ -2983,7 +2983,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		mappedFailedLog.StatusDetails.ShouldContain("provider-message-mapped");
 
 		var providerMessageCallbackResponse = await anonymousClient.PostAsJsonAsync(
-			$"/api/public/student-enrollment/admissions-crm/{tenantId}/communication/{Factory.SeededAcademicYearId}/{(int)AdmissionCrmMessageChannel.WhatsApp}/delivery-callback",
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/communication/{Factory.SeededAcademicYearId}/{(int) AdmissionCrmMessageChannel.WhatsApp}/delivery-callback",
 			new ApplyAdmissionCrmDeliveryCallbackDto
 			{
 				Payload = new Dictionary<string, JsonElement>
@@ -3040,7 +3040,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		};
 
 		var providerResponse = await Client.PutAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int)AdmissionCrmMessageChannel.WhatsApp}",
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int) AdmissionCrmMessageChannel.WhatsApp}",
 			new UpdateAdmissionCrmCommunicationProviderDto { IsEnabled = false },
 			JsonOptions);
 		providerResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await providerResponse.Content.ReadAsStringAsync());
@@ -3436,23 +3436,23 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 		var submissionKey = Guid.NewGuid().ToString("N");
 		var submitRequest = new PublicAdmissionInquirySubmitDto
+		{
+			SubmissionKey = submissionKey,
+			ConsentVersion = form.ConsentVersion,
+			ConsentAccepted = true,
+			CommunicationPreferences = ["WhatsApp", "Email"],
+			FieldValues = new Dictionary<string, JsonElement>
 			{
-				SubmissionKey = submissionKey,
-				ConsentVersion = form.ConsentVersion,
-				ConsentAccepted = true,
-				CommunicationPreferences = ["WhatsApp", "Email"],
-				FieldValues = new Dictionary<string, JsonElement>
-				{
-					["studentFirstName"] = JsonSerializer.SerializeToElement("Riya", JsonOptions),
-					["parentPhone"] = JsonSerializer.SerializeToElement("9988776655", JsonOptions),
-					["parentEmail"] = JsonSerializer.SerializeToElement("riya.parent@example.com", JsonOptions),
-					["admissionIntent"] = JsonSerializer.SerializeToElement("Admission inquiry for Grade 1", JsonOptions),
-					["desiredClass"] = JsonSerializer.SerializeToElement("Grade 1", JsonOptions),
-					["campusBranch"] = JsonSerializer.SerializeToElement("North Campus", JsonOptions),
-					["preferredLanguage"] = JsonSerializer.SerializeToElement("Hindi", JsonOptions),
-					["campaignName"] = JsonSerializer.SerializeToElement("Monsoon QR Drive", JsonOptions)
-				}
-			};
+				["studentFirstName"] = JsonSerializer.SerializeToElement("Riya", JsonOptions),
+				["parentPhone"] = JsonSerializer.SerializeToElement("9988776655", JsonOptions),
+				["parentEmail"] = JsonSerializer.SerializeToElement("riya.parent@example.com", JsonOptions),
+				["admissionIntent"] = JsonSerializer.SerializeToElement("Admission inquiry for Grade 1", JsonOptions),
+				["desiredClass"] = JsonSerializer.SerializeToElement("Grade 1", JsonOptions),
+				["campusBranch"] = JsonSerializer.SerializeToElement("North Campus", JsonOptions),
+				["preferredLanguage"] = JsonSerializer.SerializeToElement("Hindi", JsonOptions),
+				["campaignName"] = JsonSerializer.SerializeToElement("Monsoon QR Drive", JsonOptions)
+			}
+		};
 		var submitResponse = await anonymousClient.PostAsJsonAsync(
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/forms/{template.Id}/submit",
 			submitRequest,
@@ -4076,7 +4076,8 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				PreferredLanguage = "gu",
 				Applicant = new AdmissionCrmPersonInputDto
 				{
-					FirstName = "Aarav", Phone = "9911000001",
+					FirstName = "Aarav",
+					Phone = "9911000001",
 					Provenance = AdmissionCrmPersonProvenance.ApplicantSupplied
 				}
 			}, JsonOptions);
@@ -4091,7 +4092,9 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			{
 				Guardian = new AdmissionCrmPersonInputDto
 				{
-					FirstName = "Nisha", LastName = "Shah", Phone = "9876500099",
+					FirstName = "Nisha",
+					LastName = "Shah",
+					Phone = "9876500099",
 					Provenance = AdmissionCrmPersonProvenance.StaffSupplied
 				},
 				RelationshipType = AdmissionCrmGuardianRelationshipType.Mother,
@@ -4125,7 +4128,8 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 				HouseholdDisplayName = "Shah household",
 				Applicant = new AdmissionCrmPersonInputDto
 				{
-					FirstName = "Anaya", Phone = "9911000002",
+					FirstName = "Anaya",
+					Phone = "9911000002",
 					Provenance = AdmissionCrmPersonProvenance.ApplicantSupplied
 				}
 			}, JsonOptions);
@@ -4210,7 +4214,8 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/status/{aaravToken}/events/{admissionEvent.Id}/cancel",
 			new CancelAdmissionCrmPublicEventRegistrationDto
 			{
-				AccessSessionToken = family.AccessSessionToken!, Reason = "Plans changed."
+				AccessSessionToken = family.AccessSessionToken!,
+				Reason = "Plans changed."
 			}, JsonOptions);
 		cancelResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await cancelResponse.Content.ReadAsStringAsync());
 		var cancelledEvent = await cancelResponse.Content.ReadFromJsonAsync<AdmissionCrmPublicEventDto>(JsonOptions);
@@ -4424,7 +4429,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		var template = await CreatePublicInquiryTemplateAsync("Provider OTP inquiry " + Guid.NewGuid().ToString("N")[..8]);
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 		var providerResponse = await Client.PutAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int)AdmissionCrmMessageChannel.Sms}",
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/providers/{(int) AdmissionCrmMessageChannel.Sms}",
 			new UpdateAdmissionCrmCommunicationProviderDto
 			{
 				IsEnabled = true,
@@ -4473,7 +4478,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 
 		var otpCode = await GetEncryptedOtpCodeForLeadAsync(submit.LeadId);
 		var logsResponse = await Client.GetAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/delivery-logs?leadId={submit.LeadId}&channel={(int)AdmissionCrmMessageChannel.Sms}");
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/communication/delivery-logs?leadId={submit.LeadId}&channel={(int) AdmissionCrmMessageChannel.Sms}");
 		logsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await logsResponse.Content.ReadAsStringAsync());
 		var logs = await logsResponse.Content
 			.ReadFromJsonAsync<PagedResultDto<AdmissionCrmMessageDeliveryLogDto>>(JsonOptions);
@@ -4776,15 +4781,15 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var leadAppService = scope.ServiceProvider.GetRequiredService<IAdmissionCrmLeadAppService>();
+		var enrollmentAutomation = scope.ServiceProvider.GetRequiredService<AdmissionCrmEnrollmentAutomationCoordinator>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
 		using (currentTenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
-			var staleResult = await leadAppService.RunStaleArchiveRulesFromAutomationAsync(
+			var staleResult = await enrollmentAutomation.RunStaleArchiveRulesAsync(
 				Factory.SeededAcademicYearId);
-			var slaResult = await leadAppService.RunSlaReminderRulesFromAutomationAsync(
+			var slaResult = await enrollmentAutomation.RunSlaReminderRulesAsync(
 				Factory.SeededAcademicYearId);
 			await uow.CompleteAsync();
 
@@ -5408,7 +5413,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 			$"/api/student-enrollment/admissions-crm/exams/{excusedExam.Id}/attendance",
 			new MarkAdmissionCrmExamAttendanceDto
 			{
-				AttendanceStatus = (AdmissionCrmExamAttendanceStatus)999
+				AttendanceStatus = (AdmissionCrmExamAttendanceStatus) 999
 			},
 			JsonOptions);
 		invalidResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -6014,7 +6019,7 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 		var filteredResponse = await Client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/analytics/summary" +
 			$"?campaignName={Uri.EscapeDataString(campaignName)}" +
-			$"&channel={(int)AdmissionInquiryChannel.QuickCallEntry}" +
+			$"&channel={(int) AdmissionInquiryChannel.QuickCallEntry}" +
 			$"&fromDate={trendFromDate:yyyy-MM-dd}" +
 			$"&toDate={trendToDate:yyyy-MM-dd}" +
 			"&minimumLeadScore=0&maximumLeadScore=100");
@@ -6667,22 +6672,22 @@ public class AdmissionCrmApi_Tests : ShikshaMitraApiTestBase
 	{
 		var input = new UpdateAdmissionCrmCycleConfigurationDto
 		{
-				CycleName = currentCycle.CycleName,
-				IsActive = currentCycle.IsActive,
-				RegistrationFormRequiredBeforeExam =
+			CycleName = currentCycle.CycleName,
+			IsActive = currentCycle.IsActive,
+			RegistrationFormRequiredBeforeExam =
 					registrationFormRequiredBeforeExam ?? currentCycle.RegistrationFormRequiredBeforeExam,
-				StaleAfterDays = currentCycle.StaleAfterDays,
-				ArchiveAfterDays = currentCycle.ArchiveAfterDays,
-				DefaultLeadSlaHours = currentCycle.DefaultLeadSlaHours,
-				DefaultExamPassingPercentage = currentCycle.DefaultExamPassingPercentage,
-				MeritRankingMode = currentCycle.MeritRankingMode,
-				ExamReadinessFields = examReadinessFields,
-				LeadScoringRules = leadScoringRules ?? currentCycle.LeadScoringRules,
-				LeadRoutingSettings = leadRoutingSettings ?? currentCycle.LeadRoutingSettings,
-				JourneyRules = (journeyRules ?? currentCycle.JourneyRules).ToList(),
-				ApplicantChecklist = (applicantChecklist ?? currentCycle.ApplicantChecklist).ToList(),
-				ChannelSettings = (channelSettings ?? currentCycle.ChannelSettings).ToList(),
-				Notes = currentCycle.Notes
+			StaleAfterDays = currentCycle.StaleAfterDays,
+			ArchiveAfterDays = currentCycle.ArchiveAfterDays,
+			DefaultLeadSlaHours = currentCycle.DefaultLeadSlaHours,
+			DefaultExamPassingPercentage = currentCycle.DefaultExamPassingPercentage,
+			MeritRankingMode = currentCycle.MeritRankingMode,
+			ExamReadinessFields = examReadinessFields,
+			LeadScoringRules = leadScoringRules ?? currentCycle.LeadScoringRules,
+			LeadRoutingSettings = leadRoutingSettings ?? currentCycle.LeadRoutingSettings,
+			JourneyRules = (journeyRules ?? currentCycle.JourneyRules).ToList(),
+			ApplicantChecklist = (applicantChecklist ?? currentCycle.ApplicantChecklist).ToList(),
+			ChannelSettings = (channelSettings ?? currentCycle.ChannelSettings).ToList(),
+			Notes = currentCycle.Notes
 		};
 		var response = await PutCycleConfigurationWithImpactAsync(
 			Factory.SeededAcademicYearId,

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -17,19 +17,19 @@ public class AdmissionCrmRegistrationController(
 	IAdmissionCrmRegistrationResponseService responseService,
 	IAdmissionCrmRegistrationLinkService linkService,
 	IAdmissionCrmRegistrationFeeService feeService,
-	IAdmissionCrmLeadAppService leadAppService) : AbpControllerBase
+	IAdmissionCrmLeadCaptureService leadCaptureService) : AbpControllerBase
 {
 	[HttpPost("{academicYearId}/registrations/direct")]
 	public Task<AdmissionCrmDirectRegistrationResultDto> CreateDirectRegistrationAsync(
 		Guid academicYearId,
 		[FromBody] CreateDirectAdmissionCrmRegistrationDto input) =>
-		leadAppService.CreateDirectRegistrationAsync(academicYearId, input);
+		leadCaptureService.CreateDirectRegistrationAsync(academicYearId, input);
 
 	[HttpPost("{academicYearId}/registrations/from-paper")]
 	public Task<AdmissionCrmDirectRegistrationResultDto> CreatePaperRegistrationAsync(
 		Guid academicYearId,
 		[FromBody] CreatePaperAdmissionCrmRegistrationDto input) =>
-		leadAppService.CreatePaperRegistrationAsync(academicYearId, input);
+		leadCaptureService.CreatePaperRegistrationAsync(academicYearId, input);
 
 	[HttpGet("{academicYearId}/configuration/registration-templates")]
 	public Task<PagedResultDto<AdmissionCrmRegistrationTemplateDto>> GetTemplatesAsync(

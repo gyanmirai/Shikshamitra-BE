@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,7 +32,7 @@ public class AdmissionCrmAutomationWorker : AsyncPeriodicBackgroundWorkerBase
 			var unitOfWorkManager = workerContext.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 			var cycleRepository = workerContext.ServiceProvider
 				.GetRequiredService<IRepository<AdmissionCrmCycleConfiguration, Guid>>();
-			var leadAppService = workerContext.ServiceProvider.GetRequiredService<IAdmissionCrmLeadAppService>();
+			var enrollmentAutomation = workerContext.ServiceProvider.GetRequiredService<AdmissionCrmEnrollmentAutomationCoordinator>();
 			var lifecycleAutomationAppService = workerContext.ServiceProvider.GetRequiredService<IAdmissionCrmLifecycleAutomationAppService>();
 			var governanceCoordinator = workerContext.ServiceProvider.GetRequiredService<AdmissionCrmGovernanceAutomationCoordinator>();
 
@@ -58,8 +58,8 @@ public class AdmissionCrmAutomationWorker : AsyncPeriodicBackgroundWorkerBase
 						try
 						{
 							using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
-							var staleResult = await leadAppService.RunStaleArchiveRulesFromAutomationAsync(cycle.AcademicYearId);
-							var slaResult = await leadAppService.RunSlaReminderRulesFromAutomationAsync(cycle.AcademicYearId);
+							var staleResult = await enrollmentAutomation.RunStaleArchiveRulesAsync(cycle.AcademicYearId);
+							var slaResult = await enrollmentAutomation.RunSlaReminderRulesAsync(cycle.AcademicYearId);
 							var lifecycleResult = await lifecycleAutomationAppService.RunFromAutomationAsync(cycle.AcademicYearId);
 							var reportResult = await governanceCoordinator.RunDueReportSchedulesAsync(cycle.AcademicYearId);
 							await uow.CompleteAsync();

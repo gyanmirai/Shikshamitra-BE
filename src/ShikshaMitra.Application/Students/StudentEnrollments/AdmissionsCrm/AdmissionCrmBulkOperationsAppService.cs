@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,7 +17,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissionCrmBulkOperationsAppService
 {
 	private const int MaximumBatchSize = 100;
-	private readonly IAdmissionCrmLeadAppService _leadService;
+	private readonly AdmissionCrmLeadOperationsCoordinator _leadOperations;
 	private readonly AdmissionCrmOfferDraftWorkflow _offerWorkflow;
 	private readonly AdmissionCrmActivationBulkWorkflow _activationWorkflow;
 	private readonly AdmissionCrmEntranceExamBulkWorkflow _examBulkWorkflow;
@@ -27,7 +27,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
 	private readonly StudentScopeAccessService _scopeAccess;
 	public AdmissionCrmBulkOperationsAppService(
-		IAdmissionCrmLeadAppService leadService,
+		AdmissionCrmLeadOperationsCoordinator leadOperations,
 		AdmissionCrmOfferDraftWorkflow offerWorkflow,
 		AdmissionCrmActivationBulkWorkflow activationWorkflow,
 		AdmissionCrmEntranceExamBulkWorkflow examBulkWorkflow,
@@ -37,7 +37,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		IRepository<AdmissionInquiryLead, Guid> leadRepository,
 		StudentScopeAccessService scopeAccess)
 	{
-		_leadService = leadService;
+		_leadOperations = leadOperations;
 		_offerWorkflow = offerWorkflow;
 		_activationWorkflow = activationWorkflow;
 		_examBulkWorkflow = examBulkWorkflow;
@@ -53,7 +53,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		await EnsureBatchAsync(academicYearId, input.Items.Select(x => x.LeadId), nameof(AssignOwnersAsync));
 		return await RunAsync(input.Items, x => x.LeadId, async item =>
 		{
-			var result = await _leadService.AssignOwnerAsync(item.LeadId, new AssignAdmissionCrmLeadOwnerDto { OwnerUserId = item.OwnerUserId });
+			var result = await _leadOperations.AssignOwnerAsync(item.LeadId, new AssignAdmissionCrmLeadOwnerDto { OwnerUserId = item.OwnerUserId });
 			return result.Id.ToString();
 		});
 	}
@@ -64,9 +64,12 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		await EnsureBatchAsync(academicYearId, input.LeadIds, nameof(CreateTasksAsync));
 		return await RunAsync(input.LeadIds.Distinct().ToList(), x => x, async leadId =>
 		{
-			var result = await _leadService.CreateTaskAsync(leadId, new CreateAdmissionCrmFollowUpTaskDto
+			var result = await _leadOperations.CreateTaskAsync(leadId, new CreateAdmissionCrmFollowUpTaskDto
 			{
-				Title = input.Title, DueAt = input.DueAt, AssignedUserId = input.AssignedUserId, Notes = input.Notes
+				Title = input.Title,
+				DueAt = input.DueAt,
+				AssignedUserId = input.AssignedUserId,
+				Notes = input.Notes
 			});
 			return result.Id.ToString();
 		});
@@ -152,7 +155,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 				throw new BusinessException("AdmissionCrm:BulkProtectedStage")
 					.WithData("Stage", lead.Stage);
 			}
-			var result = await _leadService.ChangeStageAsync(
+			var result = await _leadOperations.ChangeStageAsync(
 				leadId,
 				new ChangeAdmissionCrmLeadStageDto
 				{
@@ -170,7 +173,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		await EnsureBatchAsync(academicYearId, input.LeadIds, nameof(ArchiveAsync));
 		return await RunAsync(input.LeadIds.Distinct().ToList(), x => x, async leadId =>
 		{
-			var result = await _leadService.ArchiveAsync(leadId, new ArchiveAdmissionCrmLeadDto { Reason = input.Reason });
+			var result = await _leadOperations.ArchiveAsync(leadId, new ArchiveAdmissionCrmLeadDto { Reason = input.Reason });
 			return result.Id.ToString();
 		});
 	}
@@ -183,7 +186,8 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		{
 			var result = await _communicationWorkflow.SendAsync(leadId, new SendAdmissionCrmMessageTemplateDto
 			{
-				TemplateId = input.TemplateId, Variables = input.Variables
+				TemplateId = input.TemplateId,
+				Variables = input.Variables
 			});
 			return result.Id.ToString();
 		});
@@ -202,7 +206,8 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 				var preview = await _offerWorkflow.PreviewAsync(leadId, input.Offer);
 				items.Add(new AdmissionCrmBulkOperationItemResultDto
 				{
-					EntityId = leadId, Success = preview.IsReady,
+					EntityId = leadId,
+					Success = preview.IsReady,
 					ErrorCode = preview.IsReady ? null : "AdmissionCrm:BulkOfferNotReady",
 					BlockingReasons = preview.BlockingReasons
 				});
@@ -247,7 +252,8 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 					.Select(x => $"{x.Key}:{x.Detail}").ToList();
 				items.Add(new AdmissionCrmBulkOperationItemResultDto
 				{
-					EntityId = leadId, Success = preview.IsReady,
+					EntityId = leadId,
+					Success = preview.IsReady,
 					ErrorCode = preview.IsReady ? null : "AdmissionCrm:BulkActivationNotReady",
 					BlockingReasons = blockers
 				});
@@ -292,7 +298,9 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 			{
 				items.Add(new AdmissionCrmBulkOperationItemResultDto
 				{
-					EntityId = id(value), Success = true, ResultId = await operation(value)
+					EntityId = id(value),
+					Success = true,
+					ResultId = await operation(value)
 				});
 			}
 			catch (Exception exception)

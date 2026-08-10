@@ -1,12 +1,12 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
-public class AdmissionCrmEntranceExamJourney(IAdmissionCrmJourneyAutomation automation) : ITransientDependency
+public class AdmissionCrmEntranceExamJourney(AdmissionCrmEnrollmentAutomationCoordinator automation) : ITransientDependency
 {
 	public Task RunAsync(AdmissionInquiryLead lead, AdmissionCrmJourneyTrigger trigger) =>
-		automation.RunJourneyRulesFromAutomationAsync(
+		automation.RunJourneyRulesAsync(
 			lead.AcademicYearId,
 			new RunAdmissionCrmJourneyRulesDto { Trigger = trigger, LeadId = lead.Id, Stage = lead.Stage });
 

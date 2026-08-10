@@ -20,7 +20,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 		new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
 		{
 			["AdmissionCrmPublicAppService.cs"] = 3924,
-			["AdmissionCrmLeadAppService.cs"] = 3117,
 			["AdmissionCrmApplicantProgressProjector.cs"] = 596,
 			["AdmissionCrmConfigurationCloneWriter.cs"] = 455,
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 447,
@@ -36,7 +35,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 		new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
 		{
 			["AdmissionCrmPublicAppService.cs"] = 36,
-			["AdmissionCrmLeadAppService.cs"] = 26,
 			["AdmissionCrmDataQualityAppService.cs"] = 14,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 12,
 			["AdmissionCrmBulkOperationsAppService.cs"] = 9,
@@ -52,7 +50,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmDataQualityAppService.cs"] = 27,
 			["AdmissionCrmEventAppService.cs"] = 6,
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 8,
-			["AdmissionCrmLeadAppService.cs"] = 36,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 16,
 			["AdmissionCrmPublicAppService.cs"] = 60,
 			["AdmissionCrmReportAppService.cs"] = 4,
@@ -64,7 +61,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 		new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
 		{
 			["AdmissionCrmBulkOperationsAppService.cs"] = 10,
-			["AdmissionCrmLeadAppService.cs"] = 4,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 4,
 			["AdmissionCrmPublicAppService.cs"] = 6,
 		};

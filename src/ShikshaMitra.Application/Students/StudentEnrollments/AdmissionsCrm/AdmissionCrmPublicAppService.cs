@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -32,17 +32,24 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private static readonly IReadOnlyDictionary<string, (string Gujarati, string Hindi)> ApplicantTranslations =
 		new Dictionary<string, (string, string)>
 		{
-			["Completed"] = ("પૂર્ણ", "पूर्ण"), ["Current"] = ("ચાલુ", "वर्तमान"), ["Pending"] = ("બાકી", "लंबित"),
+			["Completed"] = ("પૂર્ણ", "पूर्ण"),
+			["Current"] = ("ચાલુ", "वर्तमान"),
+			["Pending"] = ("બાકી", "लंबित"),
 			["Inquiry received"] = ("પૂછપરછ પ્રાપ્ત થઈ", "पूछताछ प्राप्त हुई"),
 			["Admissions follow-up"] = ("પ્રવેશ અનુસરણ", "प्रवेश अनुवर्ती कार्रवाई"),
 			["Entrance exam schedule"] = ("પ્રવેશ પરીક્ષા સમયપત્રક", "प्रवेश परीक्षा समय-सारणी"),
 			["Entrance exam result"] = ("પ્રવેશ પરીક્ષા પરિણામ", "प्रवेश परीक्षा परिणाम"),
 			["Eligibility decision"] = ("પાત્રતા નિર્ણય", "पात्रता निर्णय"),
-			["New Inquiry"] = ("નવી પૂછપરછ", "नई पूछताछ"), ["Follow-up"] = ("અનુસરણ", "अनुवर्ती कार्रवाई"),
-			["Exam Ready"] = ("પરીક્ષા માટે તૈયાર", "परीक्षा के लिए तैयार"), ["Exam Scheduled"] = ("પરીક્ષા નિર્ધારિત", "परीक्षा निर्धारित"),
-			["Exam Completed"] = ("પરીક્ષા પૂર્ણ", "परीक्षा पूर्ण"), ["Eligible"] = ("પાત્ર", "पात्र"),
-			["Waitlisted"] = ("પ્રતીક્ષા સૂચિ", "प्रतीक्षा सूची"), ["Rejected"] = ("નામંજૂર", "अस्वीकृत"),
-			["Stale"] = ("અનુસરણ બાકી", "अनुवर्ती लंबित"), ["Archived"] = ("આર્કાઇવ", "संग्रहीत"),
+			["New Inquiry"] = ("નવી પૂછપરછ", "नई पूछताछ"),
+			["Follow-up"] = ("અનુસરણ", "अनुवर्ती कार्रवाई"),
+			["Exam Ready"] = ("પરીક્ષા માટે તૈયાર", "परीक्षा के लिए तैयार"),
+			["Exam Scheduled"] = ("પરીક્ષા નિર્ધારિત", "परीक्षा निर्धारित"),
+			["Exam Completed"] = ("પરીક્ષા પૂર્ણ", "परीक्षा पूर्ण"),
+			["Eligible"] = ("પાત્ર", "पात्र"),
+			["Waitlisted"] = ("પ્રતીક્ષા સૂચિ", "प्रतीक्षा सूची"),
+			["Rejected"] = ("નામંજૂર", "अस्वीकृत"),
+			["Stale"] = ("અનુસરણ બાકી", "अनुवर्ती लंबित"),
+			["Archived"] = ("આર્કાઇવ", "संग्रहीत"),
 			["The admissions team will review the inquiry and follow up."] = ("પ્રવેશ ટીમ પૂછપરછની સમીક્ષા કરીને સંપર્ક કરશે.", "प्रवेश टीम पूछताछ की समीक्षा करके संपर्क करेगी।"),
 			["The admissions team is following up on the inquiry."] = ("પ્રવેશ ટીમ પૂછપરછ પર અનુસરણ કરી રહી છે.", "प्रवेश टीम पूछताछ पर अनुवर्ती कार्रवाई कर रही है।"),
 			["The inquiry is ready for entrance exam scheduling."] = ("પૂછપરછ પ્રવેશ પરીક્ષા નક્કી કરવા તૈયાર છે.", "पूछताछ प्रवेश परीक्षा निर्धारित करने के लिए तैयार है।"),
@@ -96,7 +103,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private readonly IRepository<AdmissionCrmGuardianRelationship, Guid> _guardianRepository;
 	private readonly IRepository<AdmissionCrmEvent, Guid> _eventRepository;
 	private readonly IAdmissionCrmCommunicationDispatcher _dispatcher;
-	private readonly IAdmissionCrmLeadAppService _leadAppService;
+	private readonly AdmissionCrmEnrollmentAutomationCoordinator _enrollmentAutomation;
 	private readonly AdmissionCrmDocumentApplicantWorkflow _documentApplicantWorkflow;
 	private readonly AdmissionCrmEntranceExamSchedulingWorkflow _entranceExamSchedulingWorkflow;
 	private readonly IStringEncryptionService _stringEncryptionService;
@@ -134,7 +141,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		IRepository<AdmissionCrmGuardianRelationship, Guid> guardianRepository,
 		IRepository<AdmissionCrmEvent, Guid> eventRepository,
 		IAdmissionCrmCommunicationDispatcher dispatcher,
-		IAdmissionCrmLeadAppService leadAppService,
+		AdmissionCrmEnrollmentAutomationCoordinator enrollmentAutomation,
 		AdmissionCrmDocumentApplicantWorkflow documentApplicantWorkflow,
 		AdmissionCrmEntranceExamSchedulingWorkflow entranceExamSchedulingWorkflow,
 		IStringEncryptionService stringEncryptionService,
@@ -171,7 +178,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		_guardianRepository = guardianRepository;
 		_eventRepository = eventRepository;
 		_dispatcher = dispatcher;
-		_leadAppService = leadAppService;
+		_enrollmentAutomation = enrollmentAutomation;
 		_documentApplicantWorkflow = documentApplicantWorkflow;
 		_entranceExamSchedulingWorkflow = entranceExamSchedulingWorkflow;
 		_stringEncryptionService = stringEncryptionService;
@@ -442,14 +449,14 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 			await _statusAccessRepository.InsertAsync(statusAccess, autoSave: true);
 			var statusPath = CreateStatusPath(tenantId, statusToken);
-			await _leadAppService.TrySendAcknowledgementFromAutomationAsync(
+			await _enrollmentAutomation.TrySendAcknowledgementAsync(
 				lead.Id,
 				channelSetting.DefaultAcknowledgementTemplateId,
 				new Dictionary<string, string>
 				{
 					["statusLink"] = statusPath
 				});
-			await _leadAppService.RunJourneyRulesFromAutomationAsync(
+			await _enrollmentAutomation.RunJourneyRulesAsync(
 				lead.AcademicYearId,
 				new RunAdmissionCrmJourneyRulesDto
 				{
@@ -602,8 +609,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	{
 		using (CurrentTenant.Change(tenantId))
 		using (var uow = UnitOfWorkManager.Begin(
-			       new AbpUnitOfWorkOptions { IsTransactional = true },
-			       requiresNew: true))
+				   new AbpUnitOfWorkOptions { IsTransactional = true },
+				   requiresNew: true))
 		{
 			var access = await _statusAccessRepository.FindAsync(input.ChallengeId);
 			if (access == null || access.TenantId != CurrentTenant.Id || access.EncryptedToken == null)
@@ -658,8 +665,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	{
 		using (CurrentTenant.Change(tenantId))
 		using (var uow = UnitOfWorkManager.Begin(
-			       new AbpUnitOfWorkOptions { IsTransactional = true },
-			       requiresNew: true))
+				   new AbpUnitOfWorkOptions { IsTransactional = true },
+				   requiresNew: true))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
 			var now = Clock.Now;
@@ -721,8 +728,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	{
 		using (CurrentTenant.Change(tenantId))
 		using (var uow = UnitOfWorkManager.Begin(
-		       new AbpUnitOfWorkOptions { IsTransactional = true },
-		       requiresNew: true))
+			   new AbpUnitOfWorkOptions { IsTransactional = true },
+			   requiresNew: true))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
 			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
@@ -765,8 +772,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	{
 		using (CurrentTenant.Change(tenantId))
 		using (var uow = UnitOfWorkManager.Begin(
-		       new AbpUnitOfWorkOptions { IsTransactional = true },
-		       requiresNew: true))
+			   new AbpUnitOfWorkOptions { IsTransactional = true },
+			   requiresNew: true))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
 			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
@@ -932,8 +939,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	{
 		using (CurrentTenant.Change(tenantId))
 		using (var uow = UnitOfWorkManager.Begin(
-			       new AbpUnitOfWorkOptions { IsTransactional = true },
-			       requiresNew: true))
+				   new AbpUnitOfWorkOptions { IsTransactional = true },
+				   requiresNew: true))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
 			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
@@ -971,8 +978,11 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 				await EnsureApplicantOfferPaymentGateAsync(lead.Id, now);
 				offer.Accept("Applicant OTP link", now, JsonSerializer.Serialize(new
 				{
-					input.Language, input.Declarations, Actor = "ApplicantOtpSession",
-					RespondedAt = now, TermsVersion = offer.Version
+					input.Language,
+					input.Declarations,
+					Actor = "ApplicantOtpSession",
+					RespondedAt = now,
+					TermsVersion = offer.Version
 				}));
 				reservation.Commit(now);
 				pool.AcceptReservedSeat();
@@ -985,7 +995,9 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 					: input.Reason.Trim();
 				offer.Decline("Applicant OTP link", reason, now, JsonSerializer.Serialize(new
 				{
-					input.Language, Actor = "ApplicantOtpSession", RespondedAt = now,
+					input.Language,
+					Actor = "ApplicantOtpSession",
+					RespondedAt = now,
 					TermsVersion = offer.Version
 				}));
 				reservation.Release(reason, now);
@@ -1212,7 +1224,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 		return routeTypes.Contains(AdmissionCrmRouteType.Fresh)
 			? AdmissionCrmRouteType.Fresh
-			: routeTypes.OrderBy(route => (int)route).First();
+			: routeTypes.OrderBy(route => (int) route).First();
 	}
 
 	private static void ValidateAdmissionYearScope(
@@ -1339,7 +1351,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	{
 		using (CurrentTenant.Change(tenantId))
 		using (var uow = UnitOfWorkManager.Begin(
-			       new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true))
+				   new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
 			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
@@ -1363,7 +1375,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	{
 		using (CurrentTenant.Change(tenantId))
 		using (var uow = UnitOfWorkManager.Begin(
-			       new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true))
+				   new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true))
 		{
 			var (access, lead) = await GetStatusAccessAndLeadAsync(token);
 			await EnsureApplicantAccessSessionAsync(access, lead, input.AccessSessionToken);
@@ -1713,7 +1725,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		foreach (var playbook in playbooks.OrderBy(x => x.IsFallback))
 		{
 			var scope = JsonSerializer.Deserialize<AdmissionCrmPlaybookApplicabilityDto>(playbook.ApplicabilityJson, JsonOptions)
-			            ?? new AdmissionCrmPlaybookApplicabilityDto();
+						?? new AdmissionCrmPlaybookApplicabilityDto();
 			if (!playbook.IsFallback && !MatchesApplicantScope(scope, lead))
 			{
 				continue;
@@ -1733,18 +1745,18 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		AdmissionInquiryLead lead)
 	{
 		return MatchesOptional(configured.Campus, lead.CampusBranchName) &&
-		       MatchesOptional(configured.DesiredClass, lead.DesiredClassName) &&
-		       string.IsNullOrWhiteSpace(configured.Board) &&
-		       string.IsNullOrWhiteSpace(configured.Medium) &&
-		       string.IsNullOrWhiteSpace(configured.ApplicantCategory) &&
-		       string.IsNullOrWhiteSpace(configured.AdmissionRound) &&
-		       string.IsNullOrWhiteSpace(configured.AdmissionRoute);
+			   MatchesOptional(configured.DesiredClass, lead.DesiredClassName) &&
+			   string.IsNullOrWhiteSpace(configured.Board) &&
+			   string.IsNullOrWhiteSpace(configured.Medium) &&
+			   string.IsNullOrWhiteSpace(configured.ApplicantCategory) &&
+			   string.IsNullOrWhiteSpace(configured.AdmissionRound) &&
+			   string.IsNullOrWhiteSpace(configured.AdmissionRoute);
 	}
 
 	private static bool MatchesOptional(string? configured, string? actual)
 	{
 		return string.IsNullOrWhiteSpace(configured) ||
-		       string.Equals(configured.Trim(), actual?.Trim(), StringComparison.OrdinalIgnoreCase);
+			   string.Equals(configured.Trim(), actual?.Trim(), StringComparison.OrdinalIgnoreCase);
 	}
 
 	private static void ValidatePublicSubmission(
@@ -1783,7 +1795,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 		var mapped = MapSystemFields(fields, input.FieldValues);
 		if (string.IsNullOrWhiteSpace(GetValue(mapped, "PrimaryContactNo")) &&
-		    string.IsNullOrWhiteSpace(GetValue(mapped, "Email")))
+			string.IsNullOrWhiteSpace(GetValue(mapped, "Email")))
 		{
 			throw new BusinessException("AdmissionCrm:PublicSubmissionContactRequired");
 		}
@@ -1819,8 +1831,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 			  (x.ParentGuardianName != null || x.DateOfBirth.HasValue) &&
 			  ((profile.TargetStandardId.HasValue && x.TargetStandardId == profile.TargetStandardId.Value) ||
 			   (profile.DesiredClassName != null &&
-			    x.DesiredClassName != null &&
-			    x.DesiredClassName.ToLower() == profile.DesiredClassName))))));
+				x.DesiredClassName != null &&
+				x.DesiredClassName.ToLower() == profile.DesiredClassName))))));
 		return candidates.Count(x => IsLikelyDuplicate(lead, x, profile));
 	}
 
@@ -2080,11 +2092,17 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 	private static string GetDefaultStageName(AdmissionInquiryStage stage) => stage switch
 	{
-		AdmissionInquiryStage.NewInquiry => "New Inquiry", AdmissionInquiryStage.FollowUp => "Follow-up",
-		AdmissionInquiryStage.ExamReady => "Exam Ready", AdmissionInquiryStage.ExamScheduled => "Exam Scheduled",
-		AdmissionInquiryStage.ExamCompleted => "Exam Completed", AdmissionInquiryStage.Eligible => "Eligible",
-		AdmissionInquiryStage.Waitlisted => "Waitlisted", AdmissionInquiryStage.Rejected => "Rejected",
-		AdmissionInquiryStage.Stale => "Stale", AdmissionInquiryStage.Archived => "Archived", _ => stage.ToString()
+		AdmissionInquiryStage.NewInquiry => "New Inquiry",
+		AdmissionInquiryStage.FollowUp => "Follow-up",
+		AdmissionInquiryStage.ExamReady => "Exam Ready",
+		AdmissionInquiryStage.ExamScheduled => "Exam Scheduled",
+		AdmissionInquiryStage.ExamCompleted => "Exam Completed",
+		AdmissionInquiryStage.Eligible => "Eligible",
+		AdmissionInquiryStage.Waitlisted => "Waitlisted",
+		AdmissionInquiryStage.Rejected => "Rejected",
+		AdmissionInquiryStage.Stale => "Stale",
+		AdmissionInquiryStage.Archived => "Archived",
+		_ => stage.ToString()
 	};
 
 	private async Task<AdmissionApplicantRouteStatusDto?> GetApplicantRouteStatusOrDefaultAsync(Guid leadId)
@@ -2109,11 +2127,11 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 	private static AdmissionApplicantActivationStatusDto ToApplicantActivationStatusDto(
 		AdmissionCrmActivation activation) => new()
-	{
-		ActivationReference = activation.ActivationReference,
-		Status = activation.Status,
-		FirstDayReadyAt = activation.FirstDayReadyAt
-	};
+		{
+			ActivationReference = activation.ActivationReference,
+			Status = activation.Status,
+			FirstDayReadyAt = activation.FirstDayReadyAt
+		};
 
 	private async Task<AdmissionApplicantFinancialStatusDto?> GetApplicantFinancialStatusOrDefaultAsync(Guid leadId)
 	{
@@ -2238,13 +2256,13 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private async Task<AdmissionCrmRegistrationApplication> GetRegistrationApplicationAsync(Guid leadId)
 	{
 		return await GetRegistrationApplicationOrDefaultAsync(leadId)
-		       ?? throw new BusinessException("AdmissionCrm:RegistrationApplicationNotFound");
+			   ?? throw new BusinessException("AdmissionCrm:RegistrationApplicationNotFound");
 	}
 
 	private static AdmissionCrmRegistrationTemplateDto DeserializeRegistrationTemplate(string json)
 	{
 		return JsonSerializer.Deserialize<AdmissionCrmRegistrationTemplateDto>(json, JsonOptions)
-		       ?? throw new BusinessException("AdmissionCrm:InvalidStoredRegistrationConfiguration");
+			   ?? throw new BusinessException("AdmissionCrm:InvalidStoredRegistrationConfiguration");
 	}
 
 	private static AdmissionCrmRegistrationApplicationDto ToPublicRegistrationDto(AdmissionCrmRegistrationApplication application)
@@ -2900,10 +2918,10 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		AdmissionCrmLeadRoutingSettingsDto routingSettings)
 	{
 		return channelSetting.DefaultOwnerUserId == ownerUserId ||
-		       (routingSettings.IsEnabled &&
-		        (routingSettings.DefaultOwnerUserId == ownerUserId ||
-		         routingSettings.OwnerPoolUserIds.Contains(ownerUserId) ||
-		         routingSettings.Rules.Any(x => x.OwnerUserId == ownerUserId)));
+			   (routingSettings.IsEnabled &&
+				(routingSettings.DefaultOwnerUserId == ownerUserId ||
+				 routingSettings.OwnerPoolUserIds.Contains(ownerUserId) ||
+				 routingSettings.Rules.Any(x => x.OwnerUserId == ownerUserId)));
 	}
 
 	private static string? GetFirstTrackingValue(
@@ -3002,7 +3020,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private string EncryptRequired(string value)
 	{
 		return _stringEncryptionService.Encrypt(value)
-		       ?? throw new BusinessException("AdmissionCrm:EncryptionFailed");
+			   ?? throw new BusinessException("AdmissionCrm:EncryptionFailed");
 	}
 
 	private static string CreateOtpCode()
@@ -3068,7 +3086,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		}
 
 		if (!string.IsNullOrWhiteSpace(lead.Email) &&
-		    consentedChannels.Contains(AdmissionCrmMessageChannel.Email))
+			consentedChannels.Contains(AdmissionCrmMessageChannel.Email))
 		{
 			yield return new StatusOtpDeliveryCandidate(
 				AdmissionCrmMessageChannel.Email,
@@ -3126,14 +3144,14 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private static bool HasParentGuardianMatch(AdmissionInquiryLead lead, DuplicateProfileProbe profile)
 	{
 		return profile.ParentGuardianName != null &&
-		       NormalizeText(lead.ParentGuardianName) == profile.ParentGuardianName;
+			   NormalizeText(lead.ParentGuardianName) == profile.ParentGuardianName;
 	}
 
 	private static bool HasDateOfBirthMatch(AdmissionInquiryLead lead, DuplicateProfileProbe profile)
 	{
 		return lead.DateOfBirth.HasValue &&
-		       profile.DateOfBirth.HasValue &&
-		       lead.DateOfBirth.Value.Date == profile.DateOfBirth.Value.Date;
+			   profile.DateOfBirth.HasValue &&
+			   lead.DateOfBirth.Value.Date == profile.DateOfBirth.Value.Date;
 	}
 
 	private static string? NormalizeText(string? value)
@@ -3379,12 +3397,12 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 	private static AdmissionApplicantStatusActivityDto ApplicantActivity(
 		string type, string title, string details, DateTimeOffset occurredAt) => new()
-	{
-		Type = type,
-		Title = title,
-		Details = details,
-		OccurredAt = occurredAt
-	};
+		{
+			Type = type,
+			Title = title,
+			Details = details,
+			OccurredAt = occurredAt
+		};
 
 	private static AdmissionApplicantStatusActivityDto ToApplicantMessageActivity(
 		AdmissionCrmMessageDeliveryLog log)
@@ -3450,10 +3468,10 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private static bool HasExamResult(AdmissionCrmEntranceExamRecord? exam)
 	{
 		return exam is not null &&
-		       (exam.ResultRecordedAt.HasValue ||
-		        exam.AttendanceStatus is AdmissionCrmExamAttendanceStatus.Absent or
-		        AdmissionCrmExamAttendanceStatus.NoShow or
-		        AdmissionCrmExamAttendanceStatus.Excused);
+			   (exam.ResultRecordedAt.HasValue ||
+				exam.AttendanceStatus is AdmissionCrmExamAttendanceStatus.Absent or
+				AdmissionCrmExamAttendanceStatus.NoShow or
+				AdmissionCrmExamAttendanceStatus.Excused);
 	}
 
 	private static bool HasEligibilityDecision(
@@ -3461,9 +3479,9 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		AdmissionCrmEntranceExamRecord? exam)
 	{
 		return stage is AdmissionInquiryStage.Eligible
-			       or AdmissionInquiryStage.Waitlisted
-			       or AdmissionInquiryStage.Rejected ||
-		       exam is { EligibilityDecision: not AdmissionCrmEligibilityDecision.Pending };
+				   or AdmissionInquiryStage.Waitlisted
+				   or AdmissionInquiryStage.Rejected ||
+			   exam is { EligibilityDecision: not AdmissionCrmEligibilityDecision.Pending };
 	}
 
 	private static string FormatExamSchedule(AdmissionCrmEntranceExamRecord exam)
@@ -3477,8 +3495,8 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private static string FormatExamResult(AdmissionCrmEntranceExamRecord exam)
 	{
 		if (exam.AttendanceStatus is AdmissionCrmExamAttendanceStatus.Absent or
-		    AdmissionCrmExamAttendanceStatus.NoShow or
-		    AdmissionCrmExamAttendanceStatus.Excused)
+			AdmissionCrmExamAttendanceStatus.NoShow or
+			AdmissionCrmExamAttendanceStatus.Excused)
 		{
 			return exam.AttendanceStatus switch
 			{
@@ -3509,7 +3527,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		if (exam is { EligibilityDecision: not AdmissionCrmEligibilityDecision.Pending })
 		{
 			return exam.EligibilityDecisionReason ??
-			       $"Decision: {exam.EligibilityDecision}.";
+				   $"Decision: {exam.EligibilityDecision}.";
 		}
 
 		return stage switch
@@ -3577,14 +3595,14 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	{
 		var mappings = GetCallbackMappings(settingsJson);
 		var status = NormalizeOptionalCallbackValue(input.Status) ??
-		             ExtractPayloadString(input.Payload, mappings.StatusPath);
+					 ExtractPayloadString(input.Payload, mappings.StatusPath);
 		if (string.IsNullOrWhiteSpace(status))
 		{
 			throw new BusinessException("AdmissionCrm:DeliveryCallbackStatusRequired");
 		}
 
 		var callbackSecret = NormalizeOptionalCallbackValue(input.CallbackSecret) ??
-		                     ExtractPayloadString(input.Payload, mappings.CallbackSecretPath);
+							 ExtractPayloadString(input.Payload, mappings.CallbackSecretPath);
 		if (string.IsNullOrWhiteSpace(callbackSecret))
 		{
 			throw new BusinessException("AdmissionCrm:DeliveryCallbackSecretRequired");
@@ -3608,7 +3626,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 		using var parsed = JsonDocument.Parse(settingsJson);
 		if (!parsed.RootElement.TryGetProperty("callbackMappings", out var mappings) ||
-		    mappings.ValueKind != JsonValueKind.Object)
+			mappings.ValueKind != JsonValueKind.Object)
 		{
 			return new AdmissionCrmCallbackMappings();
 		}
@@ -3696,7 +3714,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 		next = current;
 		if (!string.IsNullOrWhiteSpace(propertyName) &&
-		    !TryGetJsonProperty(current, propertyName, out next))
+			!TryGetJsonProperty(current, propertyName, out next))
 		{
 			return false;
 		}
@@ -3722,7 +3740,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		out JsonElement value)
 	{
 		if (element.ValueKind == JsonValueKind.Object &&
-		    element.TryGetProperty(propertyName, out value))
+			element.TryGetProperty(propertyName, out value))
 		{
 			return true;
 		}
@@ -3777,7 +3795,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private static string? GetOptionalStringProperty(JsonElement element, string propertyName)
 	{
 		return element.TryGetProperty(propertyName, out var value) &&
-		       value.ValueKind == JsonValueKind.String
+			   value.ValueKind == JsonValueKind.String
 			? value.GetString()
 			: null;
 	}
@@ -3791,7 +3809,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 
 		using var parsed = JsonDocument.Parse(settingsJson);
 		return parsed.RootElement.TryGetProperty("callbackSecret", out var secret) &&
-		       secret.ValueKind == JsonValueKind.String
+			   secret.ValueKind == JsonValueKind.String
 			? secret.GetString()
 			: null;
 	}
@@ -3806,7 +3824,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		var expectedBytes = Encoding.UTF8.GetBytes(expected.Trim());
 		var providedBytes = Encoding.UTF8.GetBytes(provided.Trim());
 		return expectedBytes.Length == providedBytes.Length &&
-		       CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
+			   CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
 	}
 
 	private static IReadOnlyList<string> ParseSupportedLanguages(string? configured)

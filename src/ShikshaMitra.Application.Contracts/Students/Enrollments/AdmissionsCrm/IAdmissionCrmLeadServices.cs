@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
@@ -6,11 +6,10 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
-public interface IAdmissionCrmLeadAppService : IApplicationService
+public interface IAdmissionCrmLeadCaptureService : IApplicationService
 {
 	Task<AdmissionCrmQuickInquiryOptionsDto> GetQuickInquiryOptionsAsync(Guid academicYearId);
-	Task<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>> GetOperationalStandardOptionsAsync(
-		Guid academicYearId);
+	Task<IReadOnlyList<AdmissionCrmAdmissionYearStandardOptionDto>> GetOperationalStandardOptionsAsync(Guid academicYearId);
 	Task<AdmissionCrmLeadDto> CreateAsync(Guid academicYearId, CreateAdmissionCrmLeadDto input);
 	Task<AdmissionCrmDirectRegistrationResultDto> CreateDirectRegistrationAsync(
 		Guid academicYearId,
@@ -18,11 +17,19 @@ public interface IAdmissionCrmLeadAppService : IApplicationService
 	Task<AdmissionCrmDirectRegistrationResultDto> CreatePaperRegistrationAsync(
 		Guid academicYearId,
 		CreatePaperAdmissionCrmRegistrationDto input);
+}
+
+public interface IAdmissionCrmLeadQueryService : IApplicationService
+{
 	Task<AdmissionCrmLeadDto> GetAsync(Guid id);
 	Task<PagedResultDto<AdmissionCrmLeadDto>> GetListAsync(Guid academicYearId, GetAdmissionCrmLeadListInput input);
 	Task<IReadOnlyList<AdmissionCrmLeadDuplicateDto>> PreviewDuplicatesAsync(
 		Guid academicYearId,
 		AdmissionCrmLeadDuplicatePreviewInput input);
+}
+
+public interface IAdmissionCrmLeadManagementService : IApplicationService
+{
 	Task<AdmissionCrmLeadDto> AssignOwnerAsync(Guid leadId, AssignAdmissionCrmLeadOwnerDto input);
 	Task<AdmissionCrmLeadDto> ChangePriorityAsync(Guid leadId, ChangeAdmissionCrmLeadPriorityDto input);
 	Task<AdmissionCrmLeadDto> IssueRegistrationFormAsync(Guid leadId, IssueAdmissionCrmRegistrationFormDto input);
@@ -31,20 +38,19 @@ public interface IAdmissionCrmLeadAppService : IApplicationService
 	Task<AdmissionCrmLeadDto> MergeDuplicateAsync(Guid targetLeadId, MergeAdmissionCrmDuplicateLeadDto input);
 	Task<AdmissionCrmLeadDto> ArchiveAsync(Guid leadId, ArchiveAdmissionCrmLeadDto input);
 	Task<AdmissionCrmLeadDto> ReopenAsync(Guid leadId, ReopenAdmissionCrmLeadDto input);
+}
+
+public interface IAdmissionCrmLeadAutomationService : IApplicationService
+{
 	Task<AdmissionCrmStaleArchiveRunResultDto> RunStaleArchiveRulesAsync(Guid academicYearId);
-	Task<AdmissionCrmStaleArchiveRunResultDto> RunStaleArchiveRulesFromAutomationAsync(Guid academicYearId);
 	Task<AdmissionCrmSlaReminderRunResultDto> RunSlaReminderRulesAsync(Guid academicYearId);
-	Task<AdmissionCrmSlaReminderRunResultDto> RunSlaReminderRulesFromAutomationAsync(Guid academicYearId);
 	Task<AdmissionCrmJourneyRunResultDto> RunJourneyRulesAsync(
 		Guid academicYearId,
 		RunAdmissionCrmJourneyRulesDto input);
-	Task<AdmissionCrmJourneyRunResultDto> RunJourneyRulesFromAutomationAsync(
-		Guid academicYearId,
-		RunAdmissionCrmJourneyRulesDto input);
-	Task TrySendAcknowledgementFromAutomationAsync(
-		Guid leadId,
-		Guid? templateId,
-		Dictionary<string, string>? variables = null);
+}
+
+public interface IAdmissionCrmLeadWorkService : IApplicationService
+{
 	Task<AdmissionCrmFollowUpTaskDto> CreateTaskAsync(Guid leadId, CreateAdmissionCrmFollowUpTaskDto input);
 	Task<PagedResultDto<AdmissionCrmFollowUpTaskDto>> GetTasksAsync(Guid leadId, PagedAndSortedResultRequestDto input);
 	Task<IReadOnlyList<AdmissionCrmApplicantChecklistProgressDto>> GetApplicantChecklistAsync(Guid leadId);

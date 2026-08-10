@@ -46,7 +46,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 	private readonly IRepository<AdmissionCrmSlaHold, Guid> _slaHoldRepository;
 	private readonly IRepository<AdmissionCrmRouteDefinition, Guid> _routeDefinitionRepository;
 	private readonly AdmissionCrmMessageDeliveryWorkflow _communicationWorkflow;
-	private readonly IAdmissionCrmRegistrationAppService _registrationAppService;
+	private readonly AdmissionCrmRegistrationCoordinator _registrationCoordinator;
 	private readonly IUserScopeAccessService _userScopeAccessService;
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 	private readonly StudentEnrollmentManager _studentEnrollmentManager;
@@ -74,7 +74,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		IRepository<AdmissionCrmSlaHold, Guid> slaHoldRepository,
 		IRepository<AdmissionCrmRouteDefinition, Guid> routeDefinitionRepository,
 		AdmissionCrmMessageDeliveryWorkflow communicationWorkflow,
-		IAdmissionCrmRegistrationAppService registrationAppService,
+		AdmissionCrmRegistrationCoordinator registrationCoordinator,
 		IUserScopeAccessService userScopeAccessService,
 		StudentScopeAccessService studentScopeAccessService,
 		StudentEnrollmentManager studentEnrollmentManager,
@@ -101,7 +101,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		_slaHoldRepository = slaHoldRepository;
 		_routeDefinitionRepository = routeDefinitionRepository;
 		_communicationWorkflow = communicationWorkflow;
-		_registrationAppService = registrationAppService;
+		_registrationCoordinator = registrationCoordinator;
 		_userScopeAccessService = userScopeAccessService;
 		_studentScopeAccessService = studentScopeAccessService;
 		_studentEnrollmentManager = studentEnrollmentManager;
@@ -571,7 +571,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			"The applicant entered Enrollment at registration through an authorized staff workflow.",
 			lead.Id);
 
-		var registration = await _registrationAppService.IssueDirectAsync(lead.Id, input.Registration);
+		var registration = await _registrationCoordinator.IssueDirectAsync(lead.Id, input.Registration);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
 		return new AdmissionCrmDirectRegistrationResultDto
@@ -605,7 +605,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 			"The applicant entered Enrollment from a physical registration form entered by authorized staff.",
 			lead.Id);
 
-		var registration = await _registrationAppService.IssueFromPaperAsync(lead.Id, input);
+		var registration = await _registrationCoordinator.IssueFromPaperAsync(lead.Id, input);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
 		return new AdmissionCrmDirectRegistrationResultDto
@@ -826,7 +826,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		IssueAdmissionCrmRegistrationFormDto input)
 	{
 		var lead = await GetLeadForCurrentTenantAsync(leadId, nameof(IssueRegistrationFormAsync));
-		await _registrationAppService.EnsureStandardIssuanceEligibleAsync(leadId);
+		await _registrationCoordinator.EnsureStandardIssuanceEligibleAsync(leadId);
 		var formNumber = input.FormNumber.Trim();
 		await _studentEnrollmentManager.ValidateFormNumberUniqueAsync(
 			formNumber,
@@ -1487,7 +1487,7 @@ public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadA
 		};
 		if (input.Trigger == AdmissionCrmJourneyTrigger.StageReached && input.Stage.HasValue && input.LeadId.HasValue)
 		{
-			await _registrationAppService.IssueApplicableFromAutomationAsync(input.LeadId.Value, input.Stage.Value);
+			await _registrationCoordinator.IssueApplicableFromAutomationAsync(input.LeadId.Value, input.Stage.Value);
 		}
 
 		if (rules.Count == 0)

@@ -169,6 +169,12 @@ public class AdmissionCrmForecastDto
 	public decimal ObservedActivationRate { get; set; }
 	public int ProjectedAdditionalAcceptedOffers { get; set; }
 	public int ProjectedAdditionalActivations { get; set; }
+	public int ApprovedSeatCapacity { get; set; }
+	public int RemainingSeatCapacity { get; set; }
+	public int ProjectedSeatSurplus { get; set; }
+	public bool CapacityIsScopeComplete { get; set; }
+	public int FirstResponseAtRiskCount { get; set; }
+	public int FirstResponseAlreadyBreachedCount { get; set; }
 	public string Confidence { get; set; } = string.Empty;
 	public IReadOnlyList<string> Inputs { get; set; } = [];
 	public IReadOnlyList<string> Limitations { get; set; } = [];

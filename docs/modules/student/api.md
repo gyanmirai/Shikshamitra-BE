@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-07-28
+updated_on: 2026-08-10
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -73,6 +73,8 @@ Every applicant must have a Pipeline lead before assessment, registration, Finan
 | Placement | Read placement options from academic setup and capacity sources, then record selected timing or division |
 | Activation | Preview, request, approve, execute, and repair activation after required gates pass |
 | Admission Reports | Return lifecycle, source, standard, and closed-outcome counts after tenant, academic-year, UserScope, date, and standard filters |
+| Admission intelligence | Return capacity, projected surplus or shortfall, first-response risk, abandonment, completion, overdue, and SLA indicators without bypassing scope |
+| Scheduled reports | Validate active internal recipients and send authenticated report links without email attachments containing applicant data |
 | Communication settings | Configure templates, channels, variables, provider mode, write-only provider credentials, and delivery-log behavior |
 
 ## Key route patterns
@@ -103,6 +105,9 @@ Every applicant must have a Pipeline lead before assessment, registration, Finan
 | `/activation/{activationId}/execute` | Execute activation |
 | `/{academicYearId}/activation/placement-options` | Return placement options from valid academic hierarchy and capacity sources |
 | `/{academicYearId}/reports/admissions` | Return the focused Admission Reports projection |
+| `/{academicYearId}/analytics/advisory-forecast` | Return scoped advisory forecast, capacity, response-risk, and SLA indicators |
+| `/{academicYearId}/governance/report-schedules` | Create or list scheduled report definitions; internal recipients use `user:{userId}` |
+| `/{academicYearId}/governance/report-schedules/run-due` | Generate due expiring exports and deliver authenticated links for internal recipients |
 | `/{academicYearId}/operations/overview` | Return operational counts for My Work and Pipeline |
 | `/setup/admission-years/{academicYearId}/versions` | List versioned Admission Year Setup records |
 | `/setup/admission-years/{academicYearId}/standard-options` | List Institute Setup standards that can be admitted |
@@ -174,13 +179,20 @@ Capacity override requires permission and reason.
 
 ## Public admissions API
 
-Public inquiry and status routes may remain available for parent-facing capture and status.
+Public inquiry and status routes provide parent-facing capture and status.
 They must be tenant-qualified, rate-limited where applicable, and restricted to applicant-safe information.
 Public responses must not expose duplicate evidence, internal notes, staff-only scores, Finance internals, or protected family details.
 
+| Public route suffix | Purpose |
+|---|---|
+| `/{tenantId}/portal` | Return safe school branding, help contacts, office hours, and supported languages |
+| `/{tenantId}/status/{token}/communication-preferences` | Update verified guardian email, SMS, and WhatsApp preferences |
+| `/{tenantId}/status/{token}/withdraw` | Withdraw an eligible application, release Enrollment-owned seat state, and record audit evidence |
+
 The family OTP route accepts either an inquiry primary contact or the phone/email of an active,
 authority-verified guardian with explicit portal access. Guardian authorization is tenant- and
-applicant-scoped and is rechecked on each status, registration, document, exam, offer, and event
+applicant-scoped and is rechecked on each status, registration, document, exam, offer, event,
+communication-preference, and withdrawal
 action. Public event routes list only future published events with family self-scheduling enabled;
 reserve and cancel operations use the verified applicant session and preserve server-authoritative
 capacity and timeline evidence.

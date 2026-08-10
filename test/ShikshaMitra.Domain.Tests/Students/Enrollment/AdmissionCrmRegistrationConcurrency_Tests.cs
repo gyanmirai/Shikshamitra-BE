@@ -56,6 +56,17 @@ public class AdmissionCrmRegistrationConcurrency_Tests
 		exception.Code.ShouldBe("AdmissionCrm:RegistrationConcurrencyStampRequired");
 	}
 
+	[Fact]
+	public void Family_withdrawal_closes_the_registration_with_a_reason()
+	{
+		var application = CreateApplication();
+
+		application.Withdraw("Withdrawn by family: Chose another school.");
+
+		application.Status.ShouldBe(AdmissionCrmRegistrationStatus.Withdrawn);
+		application.LifecycleReason.ShouldBe("Withdrawn by family: Chose another school.");
+	}
+
 	private static AdmissionCrmRegistrationApplication CreateApplication()
 	{
 		var now = DateTime.UtcNow;

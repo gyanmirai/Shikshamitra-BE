@@ -106,6 +106,19 @@ public class AdmissionCrmGovernanceApi_Tests : ShikshaMitraApiTestBase
 		scheduleResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await scheduleResponse.Content.ReadAsStringAsync());
 		var createdSchedule = (await scheduleResponse.Content
 			.ReadFromJsonAsync<AdmissionCrmReportScheduleDto>(JsonOptions))!;
+		var unapprovedRecipientResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{yearId}/governance/report-schedules",
+			new CreateAdmissionCrmReportScheduleDto
+			{
+				Name = "Unapproved recipient",
+				ReportType = AdmissionCrmExportReportType.Funnel,
+				Frequency = AdmissionCrmReportFrequency.Weekly,
+				Destination = $"user:{Guid.NewGuid()}",
+				NextRunAt = DateTime.UtcNow.AddDays(1)
+			}, JsonOptions);
+		unapprovedRecipientResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await unapprovedRecipientResponse.Content.ReadAsStringAsync())
+			.ShouldContain("AdmissionCrm:ScheduledReportRecipientMustBeAdmissionsStaff");
 		var runScheduleResponse = await Client.PostAsync(
 			$"/api/student-enrollment/admissions-crm/{yearId}/governance/report-schedules/run-due", null);
 		runScheduleResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await runScheduleResponse.Content.ReadAsStringAsync());
@@ -169,6 +182,11 @@ public class AdmissionCrmGovernanceApi_Tests : ShikshaMitraApiTestBase
 		forecastResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await forecastResponse.Content.ReadAsStringAsync());
 		var forecast = (await forecastResponse.Content.ReadFromJsonAsync<AdmissionCrmForecastDto>(JsonOptions))!;
 		forecast.IsAdvisory.ShouldBeTrue();
+		forecast.RemainingSeatCapacity.ShouldBeGreaterThanOrEqualTo(0);
+		forecast.ProjectedSeatSurplus.ShouldBe(
+			forecast.RemainingSeatCapacity - forecast.ProjectedAdditionalActivations);
+		forecast.CapacityIsScopeComplete.ShouldBeTrue();
+		forecast.FirstResponseAtRiskCount.ShouldBeGreaterThanOrEqualTo(0);
 		forecast.Limitations.ShouldContain(x => x.Contains("cannot make or change an admission decision"));
 	}
 
@@ -193,6 +211,17 @@ public class AdmissionCrmGovernanceApi_Tests : ShikshaMitraApiTestBase
 		deniedCreateResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		(await deniedCreateResponse.Content.ReadAsStringAsync())
 			.ShouldContain("AdmissionCrm:AcademicYearWideScopeRequired");
+		var scopedForecastResponse = await standardScopedClient.GetAsync(
+			$"/api/student-enrollment/admissions-crm/{yearId}/analytics/advisory-forecast");
+		scopedForecastResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await scopedForecastResponse.Content.ReadAsStringAsync());
+		var scopedForecast = await scopedForecastResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmForecastDto>(JsonOptions);
+		scopedForecast.ShouldNotBeNull();
+		scopedForecast.CapacityIsScopeComplete.ShouldBeFalse();
+		scopedForecast.ApprovedSeatCapacity.ShouldBe(0);
+		scopedForecast.RemainingSeatCapacity.ShouldBe(0);
 
 		var createResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/{yearId}/governance/retention-policies",

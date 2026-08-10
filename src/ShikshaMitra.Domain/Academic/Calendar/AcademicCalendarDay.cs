@@ -19,6 +19,14 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
 
     public TimeSpan? StartTime { get; private set; }
     public TimeSpan? EndTime { get; private set; }
+    public string? Venue { get; private set; }
+    public Guid? ExamTypeId { get; private set; }
+    public Guid? LinkedExamId { get; private set; }
+    public TimeSpan? ExamStartTime { get; private set; }
+    public TimeSpan? ExamEndTime { get; private set; }
+    public string? PtmMode { get; private set; }
+    public Guid? RoomId { get; private set; }
+    public string? MeetingLink { get; private set; }
     public bool AutoScanImpacts { get; private set; }
 
     public CalendarDayStatus Status { get; private set; }
@@ -43,7 +51,15 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
         HolidayCategory? holidayCategory = null,
         TimeSpan? startTime = null,
         TimeSpan? endTime = null,
-        bool autoScanImpacts = true)
+        bool autoScanImpacts = true,
+        string? venue = null,
+        Guid? examTypeId = null,
+        Guid? linkedExamId = null,
+        TimeSpan? examStartTime = null,
+        TimeSpan? examEndTime = null,
+        string? ptmMode = null,
+        Guid? roomId = null,
+        string? meetingLink = null)
         : base(id)
     {
         TenantId = tenantId;
@@ -58,6 +74,14 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
         HolidayCategory = holidayCategory;
         StartTime = startTime;
         EndTime = endTime;
+        Venue = venue;
+        ExamTypeId = examTypeId;
+        LinkedExamId = linkedExamId;
+        ExamStartTime = examStartTime;
+        ExamEndTime = examEndTime;
+        PtmMode = ptmMode;
+        RoomId = roomId;
+        MeetingLink = meetingLink;
         AutoScanImpacts = autoScanImpacts;
 
         Status = CalendarDayStatus.Active;
@@ -75,7 +99,15 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
         TimeSpan? startTime,
         TimeSpan? endTime,
         string? changeReason,
-        bool? autoScanImpacts = null)
+        bool? autoScanImpacts = null,
+        string? venue = null,
+        Guid? examTypeId = null,
+        Guid? linkedExamId = null,
+        TimeSpan? examStartTime = null,
+        TimeSpan? examEndTime = null,
+        string? ptmMode = null,
+        Guid? roomId = null,
+        string? meetingLink = null)
     {
         Date = date.Date;
         DayType = dayType;
@@ -87,6 +119,14 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
         HolidayCategory = holidayCategory;
         StartTime = startTime;
         EndTime = endTime;
+        Venue = venue;
+        ExamTypeId = examTypeId;
+        LinkedExamId = linkedExamId;
+        ExamStartTime = examStartTime;
+        ExamEndTime = examEndTime;
+        PtmMode = ptmMode;
+        RoomId = roomId;
+        MeetingLink = meetingLink;
         if (autoScanImpacts.HasValue)
         {
             AutoScanImpacts = autoScanImpacts.Value;

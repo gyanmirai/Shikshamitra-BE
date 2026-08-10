@@ -8,7 +8,8 @@ namespace ShikshaMitra.Academic.Calendar;
 public interface IAcademicCalendarManager : IDomainService
 {
     Task<AcademicCalendar> CreateAsync(
-        Guid academicYearId,
+        Guid academicMediumId,
+        Guid? academicYearId,
         string name,
         DateTime startDate,
         DateTime endDate,

@@ -8,7 +8,8 @@ namespace ShikshaMitra.Academic.Calendar;
 
 public class AcademicCalendarDto : EntityDto<Guid>
 {
-    public Guid AcademicYearId { get; set; }
+    public Guid? AcademicMediumId { get; set; }
+    public Guid? AcademicYearId { get; set; }
     public string Name { get; set; }
     public string? Description { get; set; }
     public DateTime StartDate { get; set; }
@@ -40,6 +41,14 @@ public class AcademicCalendarDayDto : EntityDto<Guid>
     public Guid? DivisionId { get; set; }
     public TimeSpan? StartTime { get; set; }
     public TimeSpan? EndTime { get; set; }
+    public string? Venue { get; set; }
+    public Guid? ExamTypeId { get; set; }
+    public Guid? LinkedExamId { get; set; }
+    public TimeSpan? ExamStartTime { get; set; }
+    public TimeSpan? ExamEndTime { get; set; }
+    public string? PtmMode { get; set; }
+    public Guid? RoomId { get; set; }
+    public string? MeetingLink { get; set; }
     public bool AutoScanImpacts { get; set; }
 
     public CalendarDayStatus Status { get; set; }
@@ -53,6 +62,14 @@ public class EmergencyClosureListItemDto : EntityDto<Guid>
     public DateTime Date { get; set; }
     public TimeSpan? StartTime { get; set; }
     public TimeSpan? EndTime { get; set; }
+    public string? Venue { get; set; }
+    public Guid? ExamTypeId { get; set; }
+    public Guid? LinkedExamId { get; set; }
+    public TimeSpan? ExamStartTime { get; set; }
+    public TimeSpan? ExamEndTime { get; set; }
+    public string? PtmMode { get; set; }
+    public Guid? RoomId { get; set; }
+    public string? MeetingLink { get; set; }
     public string Title { get; set; }
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
@@ -80,7 +97,8 @@ public class AcademicCalendarWorkingHourDto : EntityDto<Guid>
 
 public class AcademicCalendarSettingDto : EntityDto<Guid>
 {
-    public Guid AcademicYearId { get; set; }
+    public Guid? AcademicMediumId { get; set; }
+    public Guid? AcademicYearId { get; set; }
     public WeekendRule WeekendRule { get; set; }
     public bool AllowClassSpecificHolidays { get; set; }
     public bool AllowDivisionSpecificHolidays { get; set; }
@@ -198,7 +216,8 @@ public class AcademicCalendarAuditSummaryDto
 
 public class CreateCalendarDto
 {
-    public Guid AcademicYearId { get; set; }
+    public Guid AcademicMediumId { get; set; }
+    public Guid? AcademicYearId { get; set; }
     public string Name { get; set; }
     public string? Description { get; set; }
     public DateTimeOffset StartDate { get; set; }
@@ -229,6 +248,14 @@ public class CreateCalendarDayDto
     public Guid? DivisionId { get; set; }
     public TimeSpan? StartTime { get; set; }
     public TimeSpan? EndTime { get; set; }
+    public string? Venue { get; set; }
+    public Guid? ExamTypeId { get; set; }
+    public Guid? LinkedExamId { get; set; }
+    public TimeSpan? ExamStartTime { get; set; }
+    public TimeSpan? ExamEndTime { get; set; }
+    public string? PtmMode { get; set; }
+    public Guid? RoomId { get; set; }
+    public string? MeetingLink { get; set; }
     public string? ChangeReason { get; set; }
 }
 
@@ -239,6 +266,7 @@ public class CreateCalendarDaysBulkDto
 
 public class CreateEmergencyClosureDto
 {
+    public Guid AcademicMediumId { get; set; }
     public DateTimeOffset Date { get; set; }
     public DateTimeOffset? StartDate { get; set; }
     public DateTimeOffset? EndDate { get; set; }
@@ -292,6 +320,7 @@ public class RescheduleImpactLogDto
 public class CheckDateQueryDto
 {
     public DateTimeOffset Date { get; set; }
+    public Guid? AcademicMediumId { get; set; }
     public Guid? StandardId { get; set; }
     public Guid? DivisionId { get; set; }
     public string ValidationType { get; set; } // Timetable, HomeworkDueDate, ExamSchedule, etc.
@@ -310,7 +339,7 @@ public class CheckDateResponseDto
 
 public class CalendarDashboardDto
 {
-    public Guid AcademicYearId { get; set; }
+    public Guid AcademicMediumId { get; set; }
     public int TotalWorkingDays { get; set; }
     public int TotalHolidays { get; set; }
     public int TotalVacationDays { get; set; }

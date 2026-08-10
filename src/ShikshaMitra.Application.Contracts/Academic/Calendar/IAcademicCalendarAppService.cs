@@ -9,7 +9,7 @@ namespace ShikshaMitra.Academic.Calendar;
 public interface IAcademicCalendarAppService : IApplicationService
 {
     // Calendar Setup
-    Task<PagedResultDto<AcademicCalendarDto>> GetCalendarsAsync(Guid? academicYearId, CalendarStatus? status);
+    Task<PagedResultDto<AcademicCalendarDto>> GetCalendarsAsync(Guid? academicMediumId, CalendarStatus? status);
     Task<AcademicCalendarDto> GetCalendarByIdAsync(Guid id);
     Task<AcademicCalendarDto> CreateCalendarAsync(CreateCalendarDto input);
     Task<AcademicCalendarDto> UpdateCalendarAsync(Guid id, UpdateCalendarDto input);
@@ -34,7 +34,7 @@ public interface IAcademicCalendarAppService : IApplicationService
     Task<CheckDateResponseDto> CheckDateAsync(CheckDateQueryDto input);
 
     // Emergency Closures
-    Task<PagedResultDto<EmergencyClosureListItemDto>> GetEmergencyClosuresAsync(Guid? academicYearId, CalendarDayStatus? status, int skipCount = 0, int maxResultCount = 10);
+    Task<PagedResultDto<EmergencyClosureListItemDto>> GetEmergencyClosuresAsync(Guid? academicMediumId, CalendarDayStatus? status, int skipCount = 0, int maxResultCount = 10);
     Task<List<AcademicCalendarDayDto>> CreateEmergencyClosureAsync(CreateEmergencyClosureDto input);
     Task<AcademicCalendarDayDto> UpdateEmergencyClosureAsync(Guid dayId, UpdateEmergencyClosureDto input);
     Task CancelEmergencyClosureAsync(Guid dayId);
@@ -53,10 +53,10 @@ public interface IAcademicCalendarAppService : IApplicationService
     Task<AcademicCalendarAuditSummaryDto> GetAuditLogsSummaryAsync();
 
     // Settings
-    Task<AcademicCalendarSettingDto> GetCalendarSettingsAsync(Guid academicYearId);
+    Task<AcademicCalendarSettingDto> GetCalendarSettingsAsync(Guid academicMediumId);
     Task<AcademicCalendarSettingDto> CreateCalendarSettingsAsync(AcademicCalendarSettingDto input);
     Task<AcademicCalendarSettingDto> UpdateCalendarSettingsAsync(Guid id, AcademicCalendarSettingDto input);
 
     // Dashboard
-    Task<CalendarDashboardDto> GetCalendarDashboardAsync(Guid academicYearId);
+    Task<CalendarDashboardDto> GetCalendarDashboardAsync(Guid academicMediumId);
 }

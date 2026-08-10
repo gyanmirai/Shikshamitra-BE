@@ -27,10 +27,10 @@ public class AcademicCalendarController : AbpController
     [HttpGet("academic/calendars")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_CalendarManagement.View)]
     public async Task<PagedResultDto<AcademicCalendarDto>> GetCalendarsAsync(
-        [FromQuery] Guid? academicYearId, 
+        [FromQuery] Guid? academicMediumId,
         [FromQuery] CalendarStatus? status)
     {
-        return await _calendarAppService.GetCalendarsAsync(academicYearId, status);
+        return await _calendarAppService.GetCalendarsAsync(academicMediumId, status);
     }
 
     [HttpGet("academic/calendars/{id}")]
@@ -171,12 +171,12 @@ public class AcademicCalendarController : AbpController
     [HttpGet("academic/calendar-days/emergency-closures")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_EmergencyClosure.View)]
     public async Task<PagedResultDto<EmergencyClosureListItemDto>> GetEmergencyClosuresAsync(
-        [FromQuery] Guid? academicYearId,
+        [FromQuery] Guid? academicMediumId,
         [FromQuery] CalendarDayStatus? status,
         [FromQuery] int skipCount = 0,
         [FromQuery] int maxResultCount = 10)
     {
-        return await _calendarAppService.GetEmergencyClosuresAsync(academicYearId, status, skipCount, maxResultCount);
+        return await _calendarAppService.GetEmergencyClosuresAsync(academicMediumId, status, skipCount, maxResultCount);
     }
 
     [HttpPost("academic/calendar-days/emergency-closure")]
@@ -280,9 +280,9 @@ public class AcademicCalendarController : AbpController
 
     [HttpGet("academic/calendar/settings")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_Settings.View)]
-    public async Task<AcademicCalendarSettingDto> GetCalendarSettingsAsync([FromQuery] Guid academicYearId)
+    public async Task<AcademicCalendarSettingDto> GetCalendarSettingsAsync([FromQuery] Guid academicMediumId)
     {
-        return await _calendarAppService.GetCalendarSettingsAsync(academicYearId);
+        return await _calendarAppService.GetCalendarSettingsAsync(academicMediumId);
     }
 
     [HttpPost("academic/calendar/settings")]
@@ -303,8 +303,8 @@ public class AcademicCalendarController : AbpController
 
     [HttpGet("academic/calendar/dashboard")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_Dashboard.View)]
-    public async Task<CalendarDashboardDto> GetCalendarDashboardAsync([FromQuery] Guid academicYearId)
+    public async Task<CalendarDashboardDto> GetCalendarDashboardAsync([FromQuery] Guid academicMediumId)
     {
-        return await _calendarAppService.GetCalendarDashboardAsync(academicYearId);
+        return await _calendarAppService.GetCalendarDashboardAsync(academicMediumId);
     }
 }

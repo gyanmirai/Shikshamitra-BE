@@ -7,7 +7,8 @@ namespace ShikshaMitra.Academic.Calendar;
 public class AcademicCalendarSetting : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
-    public Guid AcademicYearId { get; private set; }
+    public Guid? AcademicMediumId { get; private set; }
+    public Guid? AcademicYearId { get; private set; }
     public WeekendRule WeekendRule { get; set; }
     
     public bool AllowClassSpecificHolidays { get; set; }
@@ -55,9 +56,10 @@ public class AcademicCalendarSetting : FullAuditedAggregateRoot<Guid>, IMultiTen
         /* ORM */
     }
 
-    public AcademicCalendarSetting(Guid id, Guid? tenantId, Guid academicYearId) : base(id)
+    public AcademicCalendarSetting(Guid id, Guid? tenantId, Guid academicMediumId, Guid? academicYearId = null) : base(id)
     {
         TenantId = tenantId;
+        AcademicMediumId = academicMediumId;
         AcademicYearId = academicYearId;
         
         // Defaults

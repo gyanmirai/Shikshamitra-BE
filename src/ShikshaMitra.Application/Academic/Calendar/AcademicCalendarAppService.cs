@@ -4,6 +4,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using EducationMedium = ShikshaMitra.TenantSettings.EducationMediums.EducationMedium;
+using ShikshaMitra.Academic.Timetable.RoomAvailability;
+using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Academic.Examination.Settings;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -21,8 +28,14 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     private readonly IRepository<CalendarImpactLog, Guid> _impactLogRepository;
     private readonly IRepository<AcademicCalendarAuditLog, Guid> _auditLogRepository;
     private readonly IAcademicYearRepository _academicYearRepository;
+    private readonly IRepository<EducationMedium, Guid> _academicMediumRepository;
     private readonly IAcademicCalendarManager _calendarManager;
     private readonly AcademicCalendarAuditWriter _auditWriter;
+    private readonly RoomConflictService _roomConflictService;
+    private readonly IRepository<ExamType, Guid> _examTypeRepository;
+    private readonly IRepository<Exam, Guid> _examRepository;
+    private readonly IRepository<Standard, Guid> _standardRepository;
+    private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
 
     public AcademicCalendarAppService(
         IRepository<AcademicCalendar, Guid> calendarRepository,
@@ -32,8 +45,14 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         IRepository<CalendarImpactLog, Guid> impactLogRepository,
         IRepository<AcademicCalendarAuditLog, Guid> auditLogRepository,
         IAcademicYearRepository academicYearRepository,
+        IRepository<EducationMedium, Guid> academicMediumRepository,
         IAcademicCalendarManager calendarManager,
-        AcademicCalendarAuditWriter auditWriter)
+        AcademicCalendarAuditWriter auditWriter,
+        RoomConflictService roomConflictService,
+        IRepository<ExamType, Guid> examTypeRepository,
+        IRepository<Exam, Guid> examRepository,
+        IRepository<Standard, Guid> standardRepository,
+        IRepository<EducationMediumStage, Guid> educationMediumStageRepository)
     {
         _calendarRepository = calendarRepository;
         _calendarDayRepository = calendarDayRepository;
@@ -42,19 +61,25 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         _impactLogRepository = impactLogRepository;
         _auditLogRepository = auditLogRepository;
         _academicYearRepository = academicYearRepository;
+        _academicMediumRepository = academicMediumRepository;
         _calendarManager = calendarManager;
         _auditWriter = auditWriter;
+        _roomConflictService = roomConflictService;
+        _examTypeRepository = examTypeRepository;
+        _examRepository = examRepository;
+        _standardRepository = standardRepository;
+        _educationMediumStageRepository = educationMediumStageRepository;
     }
 
     // ─── Calendar Setup CRUD ────────────────────────────────────────────────
 
-    public async Task<PagedResultDto<AcademicCalendarDto>> GetCalendarsAsync(Guid? academicYearId, CalendarStatus? status)
+    public async Task<PagedResultDto<AcademicCalendarDto>> GetCalendarsAsync(Guid? academicMediumId, CalendarStatus? status)
     {
         var query = await _calendarRepository.GetQueryableAsync();
         
-        if (academicYearId.HasValue)
+        if (academicMediumId.HasValue)
         {
-            query = query.Where(c => c.AcademicYearId == academicYearId.Value);
+            query = query.Where(c => c.AcademicMediumId == academicMediumId.Value);
         }
         
         if (status.HasValue)
@@ -104,7 +129,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
     public async Task<AcademicCalendarDto> CreateCalendarAsync(CreateCalendarDto input)
     {
+        await _academicMediumRepository.GetAsync(input.AcademicMediumId);
         var calendar = await _calendarManager.CreateAsync(
+            input.AcademicMediumId,
             input.AcademicYearId,
             input.Name,
             input.StartDate.DateTime,
@@ -116,7 +143,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         await _calendarRepository.InsertAsync(calendar);
 
         // Pre-populate weekends if setting weekend rule exists
-        var settings = await _settingRepository.FirstOrDefaultAsync(s => s.AcademicYearId == input.AcademicYearId);
+        var settings = await _settingRepository.FirstOrDefaultAsync(s => s.AcademicMediumId == input.AcademicMediumId);
         if (settings != null)
         {
             await _calendarManager.GenerateWeekendDaysAsync(calendar, settings.WeekendRule);
@@ -144,7 +171,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         if (input.IsDefault && !calendar.IsDefault)
         {
             var currentDefaults = await _calendarRepository.GetListAsync(c =>
-                c.AcademicYearId == calendar.AcademicYearId && c.IsDefault);
+                c.AcademicMediumId == calendar.AcademicMediumId && c.IsDefault);
             foreach (var def in currentDefaults)
             {
                 def.UpdateInfo(def.Name, def.Description, false);
@@ -255,7 +282,11 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     public async Task<AcademicCalendarDayDto> CreateCalendarDayAsync(Guid calendarId, CreateCalendarDayDto input)
     {
         var calendar = await _calendarRepository.GetAsync(calendarId);
-        var startDate = input.Date.DateTime.Date;
+        var details = NormalizeDayDetails(input);
+        var resolved = await ResolveExamScheduleAsync(calendar, details, input.Date.DateTime.Date);
+        details = resolved.Details;
+        await ValidateRoomAvailabilityAsync(details, resolved.Date, input.StandardId, input.DivisionId);
+        var startDate = resolved.Date;
         var endDate = input.DayType == DayType.Vacation
             ? (input.EndDate ?? input.Date).DateTime.Date
             : startDate;
@@ -314,8 +345,16 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     standardId,
                     divisionId,
                     input.HolidayCategory,
-                    input.StartTime,
-                    input.EndTime
+                    details.StartTime,
+                    details.EndTime,
+                    venue: details.Venue,
+                    examTypeId: details.ExamTypeId,
+                    linkedExamId: details.LinkedExamId,
+                    examStartTime: details.ExamStartTime,
+                    examEndTime: details.ExamEndTime,
+                    ptmMode: details.PtmMode,
+                    roomId: details.RoomId,
+                    meetingLink: details.MeetingLink
                 );
 
                 await _calendarDayRepository.InsertAsync(day);
@@ -347,6 +386,178 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(firstDay!);
     }
 
+    private static CalendarDayDetails NormalizeDayDetails(CreateCalendarDayDto input)
+    {
+        var dayType = input.DayType;
+
+        if (dayType is DayType.Event or DayType.HalfDay or DayType.PTM)
+        {
+            if (dayType == DayType.HalfDay && (!input.StartTime.HasValue || !input.EndTime.HasValue))
+            {
+                throw new UserFriendlyException("Both start time and end time are required for a half day.");
+            }
+
+            if (input.StartTime.HasValue && input.EndTime.HasValue && input.EndTime <= input.StartTime)
+            {
+                throw new UserFriendlyException("End time must be later than start time.");
+            }
+        }
+
+        if (dayType == DayType.Exam)
+        {
+            if (!input.ExamTypeId.HasValue || input.ExamTypeId == Guid.Empty)
+            {
+                throw new UserFriendlyException("Exam type is required for an exam day.");
+            }
+
+            if (!input.LinkedExamId.HasValue)
+            {
+                return new CalendarDayDetails(null, null, null, input.ExamTypeId, null, null, null, null, null, null);
+            }
+
+            return new CalendarDayDetails(null, null, null, input.ExamTypeId, input.LinkedExamId, null, null, null, null, null);
+        }
+
+        if (dayType == DayType.PTM)
+        {
+            if (string.IsNullOrWhiteSpace(input.PtmMode))
+            {
+                throw new UserFriendlyException("PTM mode is required.");
+            }
+
+            var mode = input.PtmMode.Trim();
+            var supportsRoom = mode is "inPerson" or "hybrid";
+            var supportsMeetingLink = mode is "online" or "hybrid";
+            if (!supportsRoom && !supportsMeetingLink)
+            {
+                throw new UserFriendlyException("PTM mode must be inPerson, online, or hybrid.");
+            }
+
+            if (supportsRoom && (!input.RoomId.HasValue || input.RoomId == Guid.Empty))
+            {
+                throw new UserFriendlyException("Room is required for an in-person PTM.");
+            }
+
+            if (supportsMeetingLink && string.IsNullOrWhiteSpace(input.MeetingLink))
+            {
+                throw new UserFriendlyException("Meeting link is required for an online PTM.");
+            }
+
+            return new CalendarDayDetails(null, input.StartTime, input.EndTime, null, null, null, null, mode, input.RoomId, input.MeetingLink);
+        }
+
+        return new CalendarDayDetails(
+            dayType == DayType.Event ? input.Venue : null,
+            dayType is DayType.Event or DayType.HalfDay ? input.StartTime : null,
+            dayType is DayType.Event or DayType.HalfDay ? input.EndTime : null,
+            null, null, null, null, null, null, null);
+    }
+
+    private sealed record CalendarDayDetails(
+        string? Venue,
+        TimeSpan? StartTime,
+        TimeSpan? EndTime,
+        Guid? ExamTypeId,
+        Guid? LinkedExamId,
+        TimeSpan? ExamStartTime,
+        TimeSpan? ExamEndTime,
+        string? PtmMode,
+        Guid? RoomId,
+        string? MeetingLink);
+
+    private async Task<(CalendarDayDetails Details, DateTime Date)> ResolveExamScheduleAsync(
+        AcademicCalendar calendar,
+        CalendarDayDetails details,
+        DateTime requestedDate)
+    {
+        var exam = await ValidateExamReferencesAsync(calendar, details);
+        if (exam == null)
+        {
+            return (details, requestedDate);
+        }
+
+        var scheduledSubject = exam.ExamSubjects
+            .Where(subject => subject.ExamDate.HasValue)
+            .OrderBy(subject => subject.ExamDate)
+            .FirstOrDefault();
+
+        if (scheduledSubject?.ExamDate == null ||
+            !scheduledSubject.StartTime.HasValue ||
+            !scheduledSubject.EndTime.HasValue)
+        {
+            throw new UserFriendlyException("The selected exam does not have a complete scheduled date and time.");
+        }
+
+        if (scheduledSubject.EndTime <= scheduledSubject.StartTime)
+        {
+            throw new UserFriendlyException("The selected exam has an invalid schedule: end time must be later than start time.");
+        }
+
+        return (
+            details with
+            {
+                ExamStartTime = scheduledSubject.StartTime.Value.TimeOfDay,
+                ExamEndTime = scheduledSubject.EndTime.Value.TimeOfDay
+            },
+            scheduledSubject.ExamDate.Value.Date);
+    }
+
+    private async Task ValidateRoomAvailabilityAsync(
+        CalendarDayDetails details,
+        DateTime date,
+        Guid? standardId,
+        Guid? divisionId)
+    {
+        if (!details.RoomId.HasValue || !details.StartTime.HasValue || !details.EndTime.HasValue)
+        {
+            return;
+        }
+
+        var conflict = await _roomConflictService.CheckConflictsAsync(
+            details.RoomId.Value,
+            date,
+            details.StartTime.Value,
+            details.EndTime.Value,
+            standardId: standardId,
+            divisionId: divisionId);
+
+        if (conflict.OverallSeverity == "critical")
+        {
+            var message = conflict.Conflicts.FirstOrDefault()?.Message
+                ?? "The selected room is not available for this time.";
+            throw new UserFriendlyException(message);
+        }
+    }
+
+    private async Task<Exam?> ValidateExamReferencesAsync(AcademicCalendar calendar, CalendarDayDetails details)
+    {
+        if (!details.ExamTypeId.HasValue)
+        {
+            return null;
+        }
+
+        var examType = await _examTypeRepository.GetAsync(details.ExamTypeId.Value);
+        if (examType.AcademicMediumId != calendar.AcademicMediumId)
+        {
+            throw new UserFriendlyException("The selected exam type does not belong to this academic medium.");
+        }
+
+        if (!details.LinkedExamId.HasValue)
+        {
+            return null;
+        }
+
+        var exam = await _examRepository.GetAsync(details.LinkedExamId.Value, includeDetails: true);
+        var standard = await _standardRepository.GetAsync(exam.StandardId);
+        var stage = await _educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
+        if (stage.EducationMediumId != calendar.AcademicMediumId)
+        {
+            throw new UserFriendlyException("The selected exam does not belong to this academic medium.");
+        }
+
+        return exam;
+    }
+
     private static IEnumerable<DateTime> EnumerateDates(DateTime startDate, DateTime endDate)
     {
         for (var date = startDate.Date; date <= endDate.Date; date = date.AddDays(1))
@@ -371,7 +582,11 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var day = await _calendarDayRepository.GetAsync(id);
         var oldVal = System.Text.Json.JsonSerializer.Serialize(day);
         var calendar = await _calendarRepository.GetAsync(day.AcademicCalendarId);
-        var targetDate = input.Date.DateTime.Date;
+        var details = NormalizeDayDetails(input);
+        var resolved = await ResolveExamScheduleAsync(calendar, details, input.Date.DateTime.Date);
+        details = resolved.Details;
+        var targetDate = resolved.Date;
+        await ValidateRoomAvailabilityAsync(details, targetDate, input.StandardId, input.DivisionId);
 
         await _calendarManager.ValidateDayRangeAsync(calendar, targetDate);
 
@@ -454,9 +669,17 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 standardId: null,
                 divisionId: null,
                 input.HolidayCategory,
-                input.StartTime,
-                input.EndTime,
-                input.ChangeReason
+                details.StartTime,
+                details.EndTime,
+                input.ChangeReason,
+                venue: details.Venue,
+                examTypeId: details.ExamTypeId,
+                linkedExamId: details.LinkedExamId,
+                examStartTime: details.ExamStartTime,
+                examEndTime: details.ExamEndTime,
+                ptmMode: details.PtmMode,
+                roomId: details.RoomId,
+                meetingLink: details.MeetingLink
             );
             await _calendarDayRepository.UpdateAsync(day);
             resultDay = day;
@@ -480,9 +703,17 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                         row.StandardId,
                         divisionId,
                         input.HolidayCategory,
-                        input.StartTime,
-                        input.EndTime,
-                        input.ChangeReason
+                        details.StartTime,
+                        details.EndTime,
+                        input.ChangeReason,
+                        venue: details.Venue,
+                        examTypeId: details.ExamTypeId,
+                        linkedExamId: details.LinkedExamId,
+                        examStartTime: details.ExamStartTime,
+                        examEndTime: details.ExamEndTime,
+                        ptmMode: details.PtmMode,
+                        roomId: details.RoomId,
+                        meetingLink: details.MeetingLink
                     );
                     await _calendarDayRepository.UpdateAsync(row);
                     resultDay ??= row;
@@ -508,9 +739,17 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                         reassignedStandardId,
                         divisionId,
                         input.HolidayCategory,
-                        input.StartTime,
-                        input.EndTime,
-                        input.ChangeReason
+                        details.StartTime,
+                        details.EndTime,
+                        input.ChangeReason,
+                        venue: details.Venue,
+                        examTypeId: details.ExamTypeId,
+                        linkedExamId: details.LinkedExamId,
+                        examStartTime: details.ExamStartTime,
+                        examEndTime: details.ExamEndTime,
+                        ptmMode: details.PtmMode,
+                        roomId: details.RoomId,
+                        meetingLink: details.MeetingLink
                     );
                     await _calendarDayRepository.UpdateAsync(row);
                     resultDay ??= row;
@@ -535,8 +774,16 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     standardId: newStandardId,
                     divisionId: divisionId,
                     holidayCategory: input.HolidayCategory,
-                    startTime: input.StartTime,
-                    endTime: input.EndTime
+                    startTime: details.StartTime,
+                    endTime: details.EndTime,
+                    venue: details.Venue,
+                    examTypeId: details.ExamTypeId,
+                    linkedExamId: details.LinkedExamId,
+                    examStartTime: details.ExamStartTime,
+                    examEndTime: details.ExamEndTime,
+                    ptmMode: details.PtmMode,
+                    roomId: details.RoomId,
+                    meetingLink: details.MeetingLink
                 );
                 await _calendarDayRepository.InsertAsync(newDay);
                 resultDay ??= newDay;
@@ -662,9 +909,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     public async Task<CheckDateResponseDto> CheckDateAsync(CheckDateQueryDto input)
     {
         var inputDate = input.Date.DateTime;
-        // Find default active calendar for this date's academic year
-        // We find the calendar matching the date range first
+        // Find the default active calendar for the requested medium and date range first.
         var calendar = await _calendarRepository.FirstOrDefaultAsync(c =>
+            (!input.AcademicMediumId.HasValue || c.AcademicMediumId == input.AcademicMediumId.Value) &&
             c.Status == CalendarStatus.Published &&
             inputDate.Date >= c.StartDate.Date &&
             inputDate.Date <= c.EndDate.Date);
@@ -752,7 +999,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
     [AllowAnonymous]
     public async Task<PagedResultDto<EmergencyClosureListItemDto>> GetEmergencyClosuresAsync(
-        Guid? academicYearId,
+        Guid? academicMediumId,
         CalendarDayStatus? status,
         int skipCount = 0,
         int maxResultCount = 10)
@@ -765,9 +1012,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             where day.DayType == DayType.EmergencyClosure
             select new { day, calendar };
 
-        if (academicYearId.HasValue)
+        if (academicMediumId.HasValue)
         {
-            query = query.Where(x => x.calendar.AcademicYearId == academicYearId.Value);
+            query = query.Where(x => x.calendar.AcademicMediumId == academicMediumId.Value);
         }
 
         if (status.HasValue)
@@ -838,7 +1085,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var results = new List<AcademicCalendarDayDto>();
         for (var closureDate = startDate; closureDate <= endDate; closureDate = closureDate.AddDays(1))
         {
-            var calendar = await ResolveCalendarForEmergencyClosureAsync(closureDate);
+            var calendar = await ResolveCalendarForEmergencyClosureAsync(input.AcademicMediumId, closureDate);
             await CreateEmergencyClosureForDateAsync(input, closureDate, calendar, results);
         }
 
@@ -1050,10 +1297,11 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         }
     }
 
-    private async Task<AcademicCalendar> ResolveCalendarForEmergencyClosureAsync(DateTime inputDate)
+    private async Task<AcademicCalendar> ResolveCalendarForEmergencyClosureAsync(Guid academicMediumId, DateTime inputDate)
     {
         var requestedDate = inputDate.Date;
         var matchingCalendars = await _calendarRepository.GetListAsync(c =>
+            c.AcademicMediumId == academicMediumId &&
             c.Status != CalendarStatus.Archived &&
             requestedDate >= c.StartDate.Date &&
             requestedDate <= c.EndDate.Date);
@@ -1073,22 +1321,24 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
         if (academicYear == null)
         {
-            throw new UserFriendlyException("Cannot declare emergency closure: No academic year covers this date.");
+            throw new UserFriendlyException("Cannot declare emergency closure: No academic year covers this date for the selected medium.");
         }
 
-        var existingYearCalendars = await _calendarRepository.GetListAsync(c =>
-            c.AcademicYearId == academicYear.Id &&
+        var existingMediumCalendars = await _calendarRepository.GetListAsync(c =>
+            c.AcademicMediumId == academicMediumId &&
             c.Status != CalendarStatus.Archived);
-        var calendarName = BuildAutoCalendarName(academicYear.Name, existingYearCalendars);
+        var medium = await _academicMediumRepository.GetAsync(academicMediumId);
+        var calendarName = BuildAutoCalendarName(medium.Name, existingMediumCalendars);
         var autoCalendar = await _calendarManager.CreateAsync(
+            academicMediumId,
             academicYear.Id,
             calendarName,
             academicYear.StartDate,
             academicYear.EndDate,
             "System-created calendar for emergency closure entries.",
-            isDefault: existingYearCalendars.All(c => !c.IsDefault));
+            isDefault: existingMediumCalendars.All(c => !c.IsDefault));
 
-        var settings = await _settingRepository.FirstOrDefaultAsync(s => s.AcademicYearId == academicYear.Id);
+        var settings = await _settingRepository.FirstOrDefaultAsync(s => s.AcademicMediumId == academicMediumId);
         if (settings != null)
         {
             await _calendarManager.GenerateWeekendDaysAsync(autoCalendar, settings.WeekendRule);
@@ -1109,9 +1359,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return autoCalendar;
     }
 
-    private static string BuildAutoCalendarName(string academicYearName, IReadOnlyCollection<AcademicCalendar> existingCalendars)
+    private static string BuildAutoCalendarName(string mediumName, IReadOnlyCollection<AcademicCalendar> existingCalendars)
     {
-        var baseName = $"{academicYearName} Calendar";
+        var baseName = $"{mediumName} Academic Calendar";
         if (existingCalendars.All(c => !string.Equals(c.Name, baseName, StringComparison.OrdinalIgnoreCase)))
         {
             return baseName;
@@ -1314,14 +1564,14 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
     // ─── Settings ───────────────────────────────────────────────────────────
 
-    public async Task<AcademicCalendarSettingDto> GetCalendarSettingsAsync(Guid academicYearId)
+    public async Task<AcademicCalendarSettingDto> GetCalendarSettingsAsync(Guid academicMediumId)
     {
-        var setting = await _settingRepository.FirstOrDefaultAsync(s => s.AcademicYearId == academicYearId);
+        var setting = await _settingRepository.FirstOrDefaultAsync(s => s.AcademicMediumId == academicMediumId);
         if (setting == null)
         {
             // Seed a default
             var id = GuidGenerator.Create();
-            setting = new AcademicCalendarSetting(id, CurrentTenant.Id, academicYearId);
+            setting = new AcademicCalendarSetting(id, CurrentTenant.Id, academicMediumId);
             await _settingRepository.InsertAsync(setting);
         }
         return ObjectMapper.Map<AcademicCalendarSetting, AcademicCalendarSettingDto>(setting);
@@ -1329,8 +1579,13 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
     public async Task<AcademicCalendarSettingDto> CreateCalendarSettingsAsync(AcademicCalendarSettingDto input)
     {
+        if (!input.AcademicMediumId.HasValue)
+        {
+            throw new UserFriendlyException("Academic medium is required for calendar settings.");
+        }
+
         var id = GuidGenerator.Create();
-        var setting = new AcademicCalendarSetting(id, CurrentTenant.Id, input.AcademicYearId)
+        var setting = new AcademicCalendarSetting(id, CurrentTenant.Id, input.AcademicMediumId.Value)
         {
             WeekendRule = input.WeekendRule,
             AllowClassSpecificHolidays = input.AllowClassSpecificHolidays,
@@ -1429,18 +1684,18 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
     // ─── Dashboard statistics ────────────────────────────────────────────────
 
-    public async Task<CalendarDashboardDto> GetCalendarDashboardAsync(Guid academicYearId)
+    public async Task<CalendarDashboardDto> GetCalendarDashboardAsync(Guid academicMediumId)
     {
         var calendar = await _calendarRepository.FirstOrDefaultAsync(c =>
-            c.AcademicYearId == academicYearId && c.IsDefault);
+            c.AcademicMediumId == academicMediumId && c.IsDefault);
             
         if (calendar == null)
         {
             calendar = await _calendarRepository.FirstOrDefaultAsync(c =>
-                c.AcademicYearId == academicYearId);
+                c.AcademicMediumId == academicMediumId);
         }
 
-        var db = new CalendarDashboardDto { AcademicYearId = academicYearId };
+        var db = new CalendarDashboardDto { AcademicMediumId = academicMediumId };
 
         if (calendar != null)
         {

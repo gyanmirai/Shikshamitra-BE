@@ -5,21 +5,36 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
-public interface IAdmissionCrmEntranceExamAppService : IApplicationService
+public interface IAdmissionCrmEntranceExamReadService : IApplicationService
 {
 	Task<PagedResultDto<AdmissionCrmEntranceExamDto>> GetListAsync(
 		Guid academicYearId,
 		GetAdmissionCrmEntranceExamListInput input);
 	Task<AdmissionCrmEntranceExamDto> GetByLeadAsync(Guid leadId);
 	Task<AdmissionCrmEligibilityHandoffDto> GetEligibilityHandoffAsync(Guid examRecordId);
+}
+
+public interface IAdmissionCrmEntranceExamSchedulingService : IApplicationService
+{
 	Task<AdmissionCrmEntranceExamDto> ScheduleAsync(Guid leadId, ScheduleAdmissionCrmEntranceExamDto input);
-	Task<AdmissionCrmEntranceExamDto> ScheduleFromApplicantAsync(Guid leadId, Guid entranceExamSlotId);
-	Task<AdmissionCrmEntranceExamDto> MarkAttendanceAsync(Guid examRecordId, MarkAdmissionCrmExamAttendanceDto input);
-	Task<AdmissionCrmEntranceExamDto> UploadResultAsync(Guid examRecordId, UploadAdmissionCrmEntranceExamResultDto input);
-	Task<AdmissionCrmEntranceExamDto> UploadResultFromBulkAsync(
+}
+
+public interface IAdmissionCrmEntranceExamAttendanceService : IApplicationService
+{
+	Task<AdmissionCrmEntranceExamDto> MarkAttendanceAsync(
 		Guid examRecordId,
-		UploadAdmissionCrmEntranceExamResultDto input,
-		string? correctionReason);
+		MarkAdmissionCrmExamAttendanceDto input);
+}
+
+public interface IAdmissionCrmEntranceExamResultService : IApplicationService
+{
+	Task<AdmissionCrmEntranceExamDto> UploadResultAsync(
+		Guid examRecordId,
+		UploadAdmissionCrmEntranceExamResultDto input);
+}
+
+public interface IAdmissionCrmEntranceExamEligibilityService : IApplicationService
+{
 	Task<AdmissionCrmEntranceExamDto> DecideEligibilityAsync(
 		Guid examRecordId,
 		UpdateAdmissionCrmEligibilityDecisionDto input);

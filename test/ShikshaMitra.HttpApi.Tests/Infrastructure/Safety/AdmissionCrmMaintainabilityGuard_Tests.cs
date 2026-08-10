@@ -29,7 +29,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmRegistrationAppService.cs"] = 1126,
 			["AdmissionCrmConfigurationAppService.cs"] = 1109,
 			["AdmissionCrmActivationAppService.cs"] = 1051,
-			["AdmissionCrmEntranceExamAppService.cs"] = 1015,
 			["AdmissionCrmApplicantProgressProjector.cs"] = 596,
 			["AdmissionCrmConfigurationCloneWriter.cs"] = 455,
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 447,
@@ -69,7 +68,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 			["AdmissionCrmCatalogAppService.cs"] = 10,
 			["AdmissionCrmConfigurationAppService.cs"] = 10,
 			["AdmissionCrmDataQualityAppService.cs"] = 27,
-			["AdmissionCrmEntranceExamAppService.cs"] = 12,
 			["AdmissionCrmEventAppService.cs"] = 6,
 			["AdmissionCrmFinalAdmissionAppService.cs"] = 26,
 			["AdmissionCrmFinancialReadinessAppService.cs"] = 8,
@@ -88,7 +86,6 @@ public class AdmissionCrmMaintainabilityGuard_Tests
 		new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
 		{
 			["AdmissionCrmBulkOperationsAppService.cs"] = 10,
-			["AdmissionCrmEntranceExamAppService.cs"] = 2,
 			["AdmissionCrmLeadAppService.cs"] = 4,
 			["AdmissionCrmLifecycleAutomationAppService.cs"] = 4,
 			["AdmissionCrmPublicAppService.cs"] = 6,

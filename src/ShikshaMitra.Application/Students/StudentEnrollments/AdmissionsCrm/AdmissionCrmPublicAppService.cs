@@ -98,7 +98,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 	private readonly IAdmissionCrmCommunicationDispatcher _dispatcher;
 	private readonly IAdmissionCrmLeadAppService _leadAppService;
 	private readonly AdmissionCrmDocumentApplicantWorkflow _documentApplicantWorkflow;
-	private readonly IAdmissionCrmEntranceExamAppService _entranceExamAppService;
+	private readonly AdmissionCrmEntranceExamSchedulingWorkflow _entranceExamSchedulingWorkflow;
 	private readonly IStringEncryptionService _stringEncryptionService;
 	private readonly AdmissionCrmStaffEligibilityService _staffEligibilityService;
 	private readonly ITenantRepository _tenantRepository;
@@ -136,7 +136,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		IAdmissionCrmCommunicationDispatcher dispatcher,
 		IAdmissionCrmLeadAppService leadAppService,
 		AdmissionCrmDocumentApplicantWorkflow documentApplicantWorkflow,
-		IAdmissionCrmEntranceExamAppService entranceExamAppService,
+		AdmissionCrmEntranceExamSchedulingWorkflow entranceExamSchedulingWorkflow,
 		IStringEncryptionService stringEncryptionService,
 		AdmissionCrmStaffEligibilityService staffEligibilityService,
 		ITenantRepository tenantRepository)
@@ -173,7 +173,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 		_dispatcher = dispatcher;
 		_leadAppService = leadAppService;
 		_documentApplicantWorkflow = documentApplicantWorkflow;
-		_entranceExamAppService = entranceExamAppService;
+		_entranceExamSchedulingWorkflow = entranceExamSchedulingWorkflow;
 		_stringEncryptionService = stringEncryptionService;
 		_staffEligibilityService = staffEligibilityService;
 		_tenantRepository = tenantRepository;
@@ -919,7 +919,7 @@ public class AdmissionCrmPublicAppService : ApplicationService, IAdmissionCrmPub
 				throw new BusinessException("AdmissionCrm:ApplicantSelfSchedulingNotEnabled");
 			}
 
-			return await _entranceExamAppService.ScheduleFromApplicantAsync(lead.Id, input.EntranceExamSlotId);
+			return await _entranceExamSchedulingWorkflow.ScheduleFromApplicantAsync(lead.Id, input.EntranceExamSlotId);
 		}
 	}
 

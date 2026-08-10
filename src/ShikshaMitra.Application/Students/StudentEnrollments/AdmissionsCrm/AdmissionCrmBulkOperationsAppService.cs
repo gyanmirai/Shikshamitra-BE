@@ -20,7 +20,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 	private readonly IAdmissionCrmLeadAppService _leadService;
 	private readonly IAdmissionCrmFinalAdmissionAppService _finalAdmissionService;
 	private readonly IAdmissionCrmActivationAppService _activationService;
-	private readonly IAdmissionCrmEntranceExamAppService _entranceExamService;
+	private readonly AdmissionCrmEntranceExamBulkWorkflow _examBulkWorkflow;
 	private readonly AdmissionCrmMessageDeliveryWorkflow _communicationWorkflow;
 	private readonly IRepository<AdmissionCrmActivation, Guid> _activationRepository;
 	private readonly IRepository<AdmissionCrmEntranceExamRecord, Guid> _entranceExamRepository;
@@ -31,7 +31,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		IAdmissionCrmLeadAppService leadService,
 		IAdmissionCrmFinalAdmissionAppService finalAdmissionService,
 		IAdmissionCrmActivationAppService activationService,
-		IAdmissionCrmEntranceExamAppService entranceExamService,
+		AdmissionCrmEntranceExamBulkWorkflow examBulkWorkflow,
 		AdmissionCrmMessageDeliveryWorkflow communicationWorkflow,
 		IRepository<AdmissionCrmActivation, Guid> activationRepository,
 		IRepository<AdmissionCrmEntranceExamRecord, Guid> entranceExamRepository,
@@ -41,7 +41,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 		_leadService = leadService;
 		_finalAdmissionService = finalAdmissionService;
 		_activationService = activationService;
-		_entranceExamService = entranceExamService;
+		_examBulkWorkflow = examBulkWorkflow;
 		_communicationWorkflow = communicationWorkflow;
 		_activationRepository = activationRepository;
 		_entranceExamRepository = entranceExamRepository;
@@ -87,7 +87,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 			var exam = await _entranceExamRepository.GetAsync(examRecordId);
 			if (exam.AcademicYearId != academicYearId)
 				throw new BusinessException("AdmissionCrm:BulkAcademicYearMismatch");
-			var result = await _entranceExamService.MarkAttendanceAsync(
+			var result = await _examBulkWorkflow.MarkAttendanceAsync(
 				examRecordId,
 				new MarkAdmissionCrmExamAttendanceDto { AttendanceStatus = input.AttendanceStatus });
 			return result.Id.ToString();
@@ -119,7 +119,7 @@ public class AdmissionCrmBulkOperationsAppService : ApplicationService, IAdmissi
 			var exam = await _entranceExamRepository.GetAsync(item.ExamRecordId);
 			if (exam.AcademicYearId != academicYearId)
 				throw new BusinessException("AdmissionCrm:BulkAcademicYearMismatch");
-			var result = await _entranceExamService.UploadResultFromBulkAsync(
+			var result = await _examBulkWorkflow.UploadResultAsync(
 				item.ExamRecordId,
 				new UploadAdmissionCrmEntranceExamResultDto
 				{

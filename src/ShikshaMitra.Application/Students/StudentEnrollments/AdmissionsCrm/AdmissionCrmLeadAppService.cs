@@ -17,12 +17,14 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.DependencyInjection;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
 [RemoteService(false)]
-public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadAppService
+[ExposeServices(typeof(IAdmissionCrmLeadAppService), typeof(IAdmissionCrmJourneyAutomation))]
+public class AdmissionCrmLeadAppService : ApplicationService, IAdmissionCrmLeadAppService, IAdmissionCrmJourneyAutomation
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 	private const string SlaReminderTaskTitle = "SLA follow-up required";

@@ -320,7 +320,7 @@ public class SubjectAssignmentAppService(
 			var groupMetrics = group.Select(a => GetReadMetrics(readMetrics, a)).ToList();
 			var electiveTotalSlots = weeklyLecturesByElective.GetValueOrDefault(first.ElectiveGroupId.Value, 0);
 			var electiveOccupiedSlots = group.Sum(a => occupiedBySubject.GetValueOrDefault(a.SubjectId, 0));
-			var avgHealth = groupMetrics.Count > 0 ? (int)groupMetrics.Average(a => a.SetupHealthScore) : 0;
+			var avgHealth = groupMetrics.Count > 0 ? (int) groupMetrics.Average(a => a.SetupHealthScore) : 0;
 			var primaryTeacherEntries = group
 				.SelectMany(a => a.Teachers)
 				.Where(t => t.TeacherType == SubjectTeacherType.Primary)
@@ -932,7 +932,7 @@ public class SubjectAssignmentAppService(
 
 		var subjectsWithIssues = issues.DistinctBy(i => i.SubjectId).Count();
 		var overallHealth = assignments.Count > 0
-			? (int)assignments.Average(a => GetReadMetrics(readMetrics, a).SetupHealthScore)
+			? (int) assignments.Average(a => GetReadMetrics(readMetrics, a).SetupHealthScore)
 			: 0;
 
 		return new PublishReadinessDto
@@ -997,7 +997,7 @@ public class SubjectAssignmentAppService(
 			SubjectsMissingTeacher = assignments.Count(a => !a.Teachers.Any(t => t.TeacherType == SubjectTeacherType.Primary)),
 			PublishedSubjects = assignments.Count(a => a.Status == SubjectStatus.Published),
 			DraftSubjects = assignments.Count(a => a.Status == SubjectStatus.Draft),
-			OverallHealthScore = assignments.Count > 0 ? (int)assignments.Average(a => a.SetupHealthScore) : 0
+			OverallHealthScore = assignments.Count > 0 ? (int) assignments.Average(a => a.SetupHealthScore) : 0
 		};
 	}
 
@@ -1622,7 +1622,6 @@ public class SubjectAssignmentAppService(
 	{
 		var blockers = new List<string>();
 		if (string.IsNullOrWhiteSpace(assignment.SubjectCode)) blockers.Add("Subject code is missing.");
-		if (!assignment.Teachers.Any(t => t.TeacherType == SubjectTeacherType.Primary)) blockers.Add("Primary teacher is missing.");
 
 		if (blockers.Count > 0)
 		{

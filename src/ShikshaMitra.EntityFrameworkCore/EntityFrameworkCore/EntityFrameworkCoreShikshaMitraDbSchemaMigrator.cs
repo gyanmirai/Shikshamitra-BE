@@ -14,21 +14,30 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 	: IShikshaMitraDbSchemaMigrator, ITransientDependency
 {
 	internal const string LegacyBaselineMigrationId = "20260712225012_v1";
-	internal const string CurrentBaselineMigrationId = "20260804061356_v1";
+	internal static string GetCurrentBaselineMigrationId(IEnumerable<string> availableMigrations)
+	{
+		// EF returns migrations in application order; the consolidated baseline is the first one.
+		return availableMigrations.FirstOrDefault()
+			?? throw new InvalidOperationException("No Entity Framework migrations were found.");
+	}
 
-	internal static bool RequiresLegacyBaselineBridge(IEnumerable<string> appliedMigrations)
+	internal static bool RequiresLegacyBaselineBridge(
+		IEnumerable<string> appliedMigrations,
+		string currentBaselineMigrationId)
 	{
 		var applied = appliedMigrations.ToHashSet(StringComparer.Ordinal);
 		return applied.Contains(LegacyBaselineMigrationId) &&
-		       !applied.Contains(CurrentBaselineMigrationId);
+		       !applied.Contains(currentBaselineMigrationId);
 	}
 
-	internal static bool HasUnsupportedMigrationHistory(IEnumerable<string> appliedMigrations)
+	internal static bool HasUnsupportedMigrationHistory(
+		IEnumerable<string> appliedMigrations,
+		string currentBaselineMigrationId)
 	{
 		var applied = appliedMigrations.ToHashSet(StringComparer.Ordinal);
 		return applied.Count > 0 &&
 		       !applied.Contains(LegacyBaselineMigrationId) &&
-		       !applied.Contains(CurrentBaselineMigrationId);
+		       !applied.Contains(currentBaselineMigrationId);
 	}
 
 	public async Task MigrateAsync()
@@ -48,30 +57,37 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 		await dbContext.Database.ExecuteSqlRawAsync(
 			"CREATE SCHEMA IF NOT EXISTS public;");
 
+		var availableMigrations = dbContext.Database.GetMigrations().ToArray();
+		var currentBaselineMigrationId = GetCurrentBaselineMigrationId(availableMigrations);
 		var appliedMigrations = (await dbContext.Database.GetAppliedMigrationsAsync()).ToArray();
-		if (HasUnsupportedMigrationHistory(appliedMigrations))
+		if (HasUnsupportedMigrationHistory(appliedMigrations, currentBaselineMigrationId))
 		{
 			throw new InvalidOperationException(
 				$"The database has migration history but neither recognized baseline " +
-				$"'{LegacyBaselineMigrationId}' nor '{CurrentBaselineMigrationId}'. " +
+				$"'{LegacyBaselineMigrationId}' nor the current EF baseline '{currentBaselineMigrationId}'. " +
 				"Automatic migration was stopped before changing the schema.");
 		}
 
-		if (RequiresLegacyBaselineBridge(appliedMigrations))
+		if (RequiresLegacyBaselineBridge(appliedMigrations, currentBaselineMigrationId))
 		{
 			var logger = serviceProvider
 				.GetRequiredService<ILogger<EntityFrameworkCoreShikshaMitraDbSchemaMigrator>>();
 			logger.LogWarning(
 				"Reconciling legacy EF baseline {LegacyBaselineMigrationId} to current baseline {CurrentBaselineMigrationId}.",
 				LegacyBaselineMigrationId,
-				CurrentBaselineMigrationId);
-			await dbContext.Database.ExecuteSqlRawAsync(LegacyBaselineBridgeSql);
+				currentBaselineMigrationId);
+			await dbContext.Database.ExecuteSqlRawAsync(
+				BuildLegacyBaselineBridgeSql(currentBaselineMigrationId));
 		}
 
 		await dbContext.Database.MigrateAsync();
 	}
 
-	internal const string LegacyBaselineBridgeSql =
+	internal static string BuildLegacyBaselineBridgeSql(string currentBaselineMigrationId)
+	{
+		var escapedCurrentBaselineMigrationId = currentBaselineMigrationId.Replace("'", "''", StringComparison.Ordinal);
+
+		return
 		"""
 		DO $bridge$
 		BEGIN
@@ -147,7 +163,7 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 		    END IF;
 
 		    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-		    SELECT '20260804061356_v1', "ProductVersion"
+		    SELECT '__CURRENT_BASELINE_MIGRATION_ID__', "ProductVersion"
 		    FROM "__EFMigrationsHistory"
 		    WHERE "MigrationId" = '20260712225012_v1'
 		    ON CONFLICT ("MigrationId") DO NOTHING;
@@ -155,11 +171,12 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 		    IF NOT EXISTS (
 		        SELECT 1
 		        FROM "__EFMigrationsHistory"
-		        WHERE "MigrationId" = '20260804061356_v1'
+				WHERE "MigrationId" = '__CURRENT_BASELINE_MIGRATION_ID__'
 		    ) THEN
 		        RAISE EXCEPTION 'Legacy migration baseline reconciliation could not record the current baseline.';
 		    END IF;
 		END
 		$bridge$;
-		""";
+		""".Replace("__CURRENT_BASELINE_MIGRATION_ID__", escapedCurrentBaselineMigrationId, StringComparison.Ordinal);
+	}
 }

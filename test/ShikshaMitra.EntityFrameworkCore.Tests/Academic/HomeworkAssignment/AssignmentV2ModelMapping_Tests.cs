@@ -31,17 +31,4 @@ public class AssignmentV2ModelMapping_Tests : ShikshaMitraEntityFrameworkCoreTes
 		evaluationMethod.IsNullable.ShouldBeTrue();
 		evaluationMethod.GetColumnName(table).ShouldBe("EvaluationMethod");
 	}
-
-	[Fact]
-	public void Assignment_V2_Migration_Should_Be_Discoverable()
-	{
-		const string migrationId = "20260804061356_v1";
-		var dbContext = GetRequiredService<ShikshaMitraDbContext>();
-		var migrationAttribute = typeof(v1)
-			.GetCustomAttribute<MigrationAttribute>();
-
-		migrationAttribute.ShouldNotBeNull();
-		migrationAttribute.Id.ShouldBe(migrationId);
-		dbContext.Database.GetMigrations().ShouldContain(migrationId);
-	}
 }

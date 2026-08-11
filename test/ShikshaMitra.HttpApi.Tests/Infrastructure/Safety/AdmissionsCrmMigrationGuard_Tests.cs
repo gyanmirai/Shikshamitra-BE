@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using ShikshaMitra.Infrastructure.Traits;
@@ -16,13 +18,12 @@ public class AdmissionsCrmMigrationGuard_Tests
 	public void Baseline_Migration_Should_Keep_Tenant_Scoped_Pipeline_Stage_Keys()
 	{
 		var repoRoot = FindRepositoryRoot();
-		var migrationPath = Path.Combine(
-			repoRoot,
-			"src",
-			"ShikshaMitra.EntityFrameworkCore",
-			"Migrations",
-			"20260804061356_v1.cs");
-		var text = File.ReadAllText(migrationPath);
+		var migrationDirectory = Path.Combine(repoRoot, "src", "ShikshaMitra.EntityFrameworkCore", "Migrations");
+		var migrationFiles = Directory.GetFiles(migrationDirectory, "*.cs")
+			.Where(path => !path.EndsWith(".Designer.cs", StringComparison.Ordinal))
+			.ToArray();
+		migrationFiles.ShouldNotBeEmpty();
+		var text = string.Join(Environment.NewLine, migrationFiles.Select(File.ReadAllText));
 
 		text.ShouldContain("StageKey = table.Column<string>");
 		text.ShouldContain("columns: new[] { \"TenantId\", \"AcademicYearId\", \"StageKey\" }");

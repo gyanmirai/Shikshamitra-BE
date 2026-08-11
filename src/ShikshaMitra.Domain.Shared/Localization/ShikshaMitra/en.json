@@ -351,7 +351,7 @@
     "HR:Attendance:020315": "Attendance cannot be changed for an approved leave day.",
     "HR:Payroll:030009": "EmployeeId is required.",
     "HR:Payroll:030010": "An error occurred while fetching the salary slip. Please try again.",
-    "HR:Payroll:030019": "Payroll snapshot schema is not applied. Run DB migration 20260428034756_PayrollRunItemSnapshots and try again.",
+    "HR:Payroll:030019": "Payroll snapshot schema is not applied. Apply the latest database migration and try again.",
     "HR:Payroll:030020": "This payroll structure endpoint is deprecated. Use /api/payroll/employees/{employeeId}/salary-structure.",
     "HR:Payroll:030021": "Official payslip PDF is available only after the salary slip is finalized.",
     "HR:Payroll:030022": "Payroll adjustment name is required.",

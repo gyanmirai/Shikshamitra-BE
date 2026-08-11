@@ -45,7 +45,7 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public int LeadScore { get; private set; }
 	public AdmissionCrmLeadPriority Priority { get; private set; }
 	public string? RegistrationFormNumber { get; private set; }
-	public double? RegistrationFormAmount { get; private set; }
+	public decimal? RegistrationFormAmount { get; private set; }
 	public DateTime? RegistrationFormIssuedAt { get; private set; }
 	public DateTimeOffset LastActivityTime { get; private set; }
 	public string? Notes { get; private set; }
@@ -190,7 +190,7 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Touch();
 	}
 
-	public void IssueRegistrationForm(string formNumber, double amount, DateTime issuedAt)
+	public void IssueRegistrationForm(string formNumber, decimal amount, DateTime issuedAt)
 	{
 		if (Stage == AdmissionInquiryStage.Archived || MergedIntoLeadId.HasValue)
 		{
@@ -216,7 +216,7 @@ public class AdmissionInquiryLead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("FormNumber", normalizedFormNumber);
 		}
 
-		if (amount is < 0 or > 999999.99)
+		if (amount is < 0m or > 999999.99m)
 		{
 			throw new BusinessException("AdmissionCrm:InvalidRegistrationFormAmount")
 				.WithData("Amount", amount);

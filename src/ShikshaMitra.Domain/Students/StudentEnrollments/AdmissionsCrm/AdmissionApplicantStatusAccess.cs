@@ -8,6 +8,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionApplicantStatusAccess : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	private const int MaximumFailedAttempts = 5;
+	private static readonly TimeSpan FailedAttemptLockout = TimeSpan.FromMinutes(15);
 
 	public Guid? TenantId { get; private set; }
 	public Guid LeadId { get; private set; }
@@ -74,8 +75,6 @@ public class AdmissionApplicantStatusAccess : FullAuditedAggregateRoot<Guid>, IM
 		OtpVerifiedAt = null;
 		AccessSessionTokenHash = null;
 		AccessSessionExpiresAt = null;
-		OtpFailedAttemptCount = 0;
-		LastOtpFailureAt = null;
 		FamilyAccessGuardianPersonId = null;
 	}
 
@@ -115,6 +114,7 @@ public class AdmissionApplicantStatusAccess : FullAuditedAggregateRoot<Guid>, IM
 	public void EnsureCanIssueOtp(DateTime now, TimeSpan resendCooldown)
 	{
 		EnsureTokenActive(now);
+		EnsureNotFailureLocked(now);
 
 		if (OtpIssuedAt.HasValue && OtpIssuedAt.Value.Add(resendCooldown) > now)
 		{
@@ -128,6 +128,7 @@ public class AdmissionApplicantStatusAccess : FullAuditedAggregateRoot<Guid>, IM
 	public void EnsureCanVerify(DateTime now)
 	{
 		EnsureTokenActive(now);
+		EnsureNotFailureLocked(now);
 
 		if (string.IsNullOrWhiteSpace(OtpCodeHash) || !OtpExpiresAt.HasValue)
 		{
@@ -139,10 +140,6 @@ public class AdmissionApplicantStatusAccess : FullAuditedAggregateRoot<Guid>, IM
 			throw new BusinessException("AdmissionCrm:StatusOtpExpired");
 		}
 
-		if (OtpFailedAttemptCount >= MaximumFailedAttempts)
-		{
-			throw new BusinessException("AdmissionCrm:StatusOtpLocked");
-		}
 	}
 
 	public void MarkOtpVerified(DateTime verifiedAt)
@@ -205,8 +202,32 @@ public class AdmissionApplicantStatusAccess : FullAuditedAggregateRoot<Guid>, IM
 
 	public void RecordOtpFailure(DateTime failedAt)
 	{
+		if (!LastOtpFailureAt.HasValue || LastOtpFailureAt.Value.Add(FailedAttemptLockout) <= failedAt)
+		{
+			OtpFailedAttemptCount = 0;
+		}
+
 		OtpFailedAttemptCount++;
 		LastOtpFailureAt = failedAt;
+	}
+
+	private void EnsureNotFailureLocked(DateTime now)
+	{
+		if (OtpFailedAttemptCount < MaximumFailedAttempts || !LastOtpFailureAt.HasValue)
+		{
+			return;
+		}
+
+		var lockedUntil = LastOtpFailureAt.Value.Add(FailedAttemptLockout);
+		if (lockedUntil <= now)
+		{
+			OtpFailedAttemptCount = 0;
+			LastOtpFailureAt = null;
+			return;
+		}
+
+		throw new BusinessException("AdmissionCrm:StatusOtpLocked")
+			.WithData("RetryAfterSeconds", (int)Math.Ceiling((lockedUntil - now).TotalSeconds));
 	}
 
 	private void EnsureTokenActive(DateTime now)

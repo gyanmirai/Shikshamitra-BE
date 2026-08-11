@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
@@ -87,13 +88,13 @@ public class AdmissionCrmPublicEventDto : EntityDto<Guid>
 
 public class ReserveAdmissionCrmPublicEventDto
 {
-	[Required]
+	[JsonIgnore]
 	public string AccessSessionToken { get; set; } = string.Empty;
 }
 
 public class CancelAdmissionCrmPublicEventRegistrationDto
 {
-	[Required]
+	[JsonIgnore]
 	public string AccessSessionToken { get; set; } = string.Empty;
 	[StringLength(AdmissionCrmConsts.MaxNotesLength)]
 	public string? Reason { get; set; }

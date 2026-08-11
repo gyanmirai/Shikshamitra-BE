@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
@@ -244,8 +245,8 @@ public class AdmissionCrmRegistrationApplicationDto
 
 public class SavePublicAdmissionCrmRegistrationDto
 {
-	[Required]
-	public required string AccessSessionToken { get; set; }
+	[JsonIgnore]
+	public string AccessSessionToken { get; set; } = string.Empty;
 	[Required]
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public Dictionary<string, JsonElement> Responses { get; set; } = new();

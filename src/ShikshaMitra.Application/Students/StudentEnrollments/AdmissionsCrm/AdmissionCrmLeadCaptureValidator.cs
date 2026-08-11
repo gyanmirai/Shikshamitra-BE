@@ -219,19 +219,4 @@ internal static class AdmissionCrmLeadCaptureRules
 		}
 	}
 
-	internal static string BuildLegacyAdmissionYearSnapshot(
-		AdmissionCrmCycleConfiguration configuration)
-	{
-		return JsonSerializer.Serialize(
-			new
-			{
-				schemaVersion = 0,
-				source = "legacy-cycle-configuration",
-				configuration.AcademicYearId,
-				configuration.EntranceExamRequired,
-				FinanceVerificationRequired = false,
-				PlacementTiming = AdmissionCrmPlacementTiming.StandardBeforeActivation
-			},
-			AdmissionCrmLeadFormat.JsonOptions);
-	}
 }

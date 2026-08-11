@@ -244,7 +244,7 @@ public class LibraryCoreWorkflow_Tests : ShikshaMitraApplicationTestBase<Shiksha
 					educationMediumId),
 				autoSave: true);
 
-			var student = Student.CreateDirectRegistration(
+			var student = Student.CreateForAdmission(
 				studentId,
 				tenantId: null,
 				firstName: "Library",

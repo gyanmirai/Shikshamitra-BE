@@ -18,7 +18,6 @@ public class AdmissionCrmEntranceExamSchedulingWorkflow(
 	IRepository<AdmissionInquiryLead, Guid> leadRepository,
 	IRepository<AdmissionCrmEntranceExamRecord, Guid> examRepository,
 	IRepository<AdmissionCrmExamSlot, Guid> slotRepository,
-	IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
 	AdmissionCrmEntranceExamAccess access,
 	AdmissionCrmEntranceExamTimeline timeline,
 	AdmissionCrmEntranceExamJourney journey) : ApplicationService, ITransientDependency
@@ -85,16 +84,14 @@ public class AdmissionCrmEntranceExamSchedulingWorkflow(
 
 	private async Task EnsureCapacityAsync(AdmissionCrmExamSlot slot, bool overrideCapacity, Guid? excludedExamId)
 	{
-		var details = await studentAdditionalDetailRepository.GetQueryableAsync();
-		var legacyCount = await AsyncExecuter.CountAsync(details.Where(x => x.EntranceExamSlotId == slot.Id));
 		var exams = await examRepository.GetQueryableAsync();
 		var crmCount = await AsyncExecuter.CountAsync(exams.Where(x =>
 			x.TenantId == CurrentTenant.Id && x.EntranceExamSlotId == slot.Id &&
 			(!excludedExamId.HasValue || x.Id != excludedExamId.Value)));
-		if (legacyCount + crmCount >= slot.StudentLimit && !overrideCapacity)
+		if (crmCount >= slot.StudentLimit && !overrideCapacity)
 			throw new BusinessException("AdmissionCrm:ExamSlotCapacityFull")
 				.WithData("EntranceExamSlotId", slot.Id).WithData("StudentLimit", slot.StudentLimit)
-				.WithData("ScheduledCount", legacyCount + crmCount);
+				.WithData("ScheduledCount", crmCount);
 	}
 
 	private async Task EnsureCapacityOverridePermissionAsync()
@@ -108,12 +105,6 @@ public class AdmissionCrmEntranceExamSchedulingWorkflow(
 	{
 		if (!required || (lead.RegistrationFormIssuedAt.HasValue &&
 		                  !string.IsNullOrWhiteSpace(lead.RegistrationFormNumber))) return;
-		if (lead.StudentId.HasValue)
-		{
-			var details = await studentAdditionalDetailRepository.FindAsync(lead.StudentId.Value);
-			if (details != null && details.TenantId == CurrentTenant.Id &&
-			    !string.IsNullOrWhiteSpace(details.RegistrationFormNo)) return;
-		}
 		throw new BusinessException("AdmissionCrm:RegistrationFormRequiredBeforeExam")
 			.WithData("LeadId", lead.Id).WithData("AcademicYearId", lead.AcademicYearId);
 	}

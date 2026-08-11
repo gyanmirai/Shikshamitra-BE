@@ -31,7 +31,7 @@ public class StudentCertificateApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Return_Live_Preview_Data_Without_Persisting_Certificate()
 	{
-		var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "CertPreview");
+		var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "CertPreview");
 		var issueDate = new DateTimeOffset(2026, 6, 20, 0, 0, 0, TimeSpan.Zero);
 
 		var placeholdersResponse = await Client.GetAsync($"{BaseUrl}/placeholders");
@@ -98,7 +98,7 @@ public class StudentCertificateApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Generate_History_Duplicate_And_Pdf_Separately()
 	{
-		var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "CertGenerate");
+		var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "CertGenerate");
 		var issueDate = new DateTimeOffset(2026, 6, 20, 0, 0, 0, TimeSpan.Zero);
 
 		var generateResponse = await Client.PostAsJsonAsync(
@@ -162,7 +162,7 @@ public class StudentCertificateApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Enforce_Student_Scope_For_Certificate_Actions()
 	{
-		var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "CertScope");
+		var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "CertScope");
 		var generated = await GenerateCertificateAsync(
 			student.StudentId,
 			StudentCertificateType.Character,
@@ -218,7 +218,7 @@ public class StudentCertificateApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Return_Stored_Certificate_Snapshot_After_Student_And_Template_Change()
 	{
-		var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "CertSnapshot");
+		var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "CertSnapshot");
 		var issueDate = new DateTimeOffset(2026, 6, 20, 0, 0, 0, TimeSpan.Zero);
 		await UpsertTemplateAsync(
 			StudentCertificateType.Bonafide,
@@ -280,7 +280,7 @@ public class StudentCertificateApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Generate_Distinct_Certificate_Numbers_For_Repeated_Requests()
 	{
-		var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "CertConcurrent");
+		var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "CertConcurrent");
 		var issueDate = new DateTimeOffset(2026, 6, 20, 0, 0, 0, TimeSpan.Zero);
 
 		var responses = new List<HttpResponseMessage>();

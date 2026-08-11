@@ -114,16 +114,16 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		unassignedResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		(await unassignedResponse.Content.ReadAsStringAsync())
 			.ShouldContain("AdmissionCrm:RegistrationOwnerRequired");
-		var legacyUnassignedResponse = await Client.PostAsJsonAsync(
+		var manuallyNumberedUnassignedResponse = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registration-form",
 			new IssueAdmissionCrmRegistrationFormDto
 			{
-				FormNumber = "LEGACY-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
+				FormNumber = "MANUAL-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
 				Amount = 1
 			},
 			JsonOptions);
-		legacyUnassignedResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		(await legacyUnassignedResponse.Content.ReadAsStringAsync())
+		manuallyNumberedUnassignedResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await manuallyNumberedUnassignedResponse.Content.ReadAsStringAsync())
 			.ShouldContain("AdmissionCrm:RegistrationOwnerRequired");
 
 		await SetLeadWorkflowStateAsync(lead.Id, AdmissionInquiryStage.NewInquiry, Guid.NewGuid());
@@ -1319,7 +1319,12 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 				AdmissionIntent = "Registration gate validation",
 				PrimaryContactNo = "95" + Random.Shared.NextInt64(10000000, 99999999),
 				Channel = AdmissionInquiryChannel.QuickCallEntry,
-				FirstName = suffix
+				FirstName = suffix,
+				ParentGuardianName = "Registration Parent",
+				InquirySourceId = Factory.SeededInquirySourceId,
+				InquiryTypeId = Factory.SeededInquiryTypeId,
+				TargetStandardId = Factory.SeededStandardId,
+				DesiredClassName = "Grade 4"
 			},
 			JsonOptions);
 		response.StatusCode.ShouldBe(

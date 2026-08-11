@@ -9,7 +9,7 @@ using Volo.Abp;
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
 internal sealed record AdmissionCrmResolvedDeliveryCallback(
-	string Status, string? StatusDetails, string? ProviderMessageId, string CallbackSecret);
+	string Status, string? StatusDetails, string? ProviderMessageId);
 
 internal static class AdmissionCrmDeliveryCallbackParser
 {
@@ -19,23 +19,33 @@ internal static class AdmissionCrmDeliveryCallbackParser
 		var mappings = GetMappings(settingsJson);
 		var status = Normalize(input.Status) ?? Extract(input.Payload, mappings.StatusPath);
 		if (string.IsNullOrWhiteSpace(status)) throw new BusinessException("AdmissionCrm:DeliveryCallbackStatusRequired");
-		var secret = Normalize(input.CallbackSecret) ?? Extract(input.Payload, mappings.CallbackSecretPath);
-		if (string.IsNullOrWhiteSpace(secret)) throw new BusinessException("AdmissionCrm:DeliveryCallbackSecretRequired");
 		return new(status, Normalize(input.StatusDetails) ?? Extract(input.Payload, mappings.StatusDetailsPath),
-			Normalize(input.ProviderMessageId) ?? Extract(input.Payload, mappings.ProviderMessageIdPath), secret);
+			Normalize(input.ProviderMessageId) ?? Extract(input.Payload, mappings.ProviderMessageIdPath));
 	}
 
-	internal static void EnsureSecret(
+	internal static void EnsureSignature(
 		string? settingsJson,
-		AdmissionCrmResolvedDeliveryCallback callback,
+		ApplyAdmissionCrmDeliveryCallbackDto input,
 		AdmissionCrmMessageChannel channel,
 		Guid? deliveryLogId = null)
 	{
 		var configured = GetSecret(settingsJson);
 		if (string.IsNullOrWhiteSpace(configured))
 			throw new BusinessException("AdmissionCrm:DeliveryCallbackSecretNotConfigured").WithData("Channel", channel);
-		if (SecretsEqual(configured, callback.CallbackSecret)) return;
-		var exception = new BusinessException("AdmissionCrm:DeliveryCallbackSecretInvalid").WithData("Channel", channel);
+		if (!long.TryParse(input.CallbackTimestamp, out var unixSeconds))
+			throw new BusinessException("AdmissionCrm:DeliveryCallbackTimestampInvalid").WithData("Channel", channel);
+		var sentAt = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
+		if (Math.Abs((DateTimeOffset.UtcNow - sentAt).TotalMinutes) > 5)
+			throw new BusinessException("AdmissionCrm:DeliveryCallbackTimestampExpired").WithData("Channel", channel);
+		if (string.IsNullOrWhiteSpace(input.CallbackNonce) || input.CallbackNonce.Length is < 16 or > 128)
+			throw new BusinessException("AdmissionCrm:DeliveryCallbackNonceInvalid").WithData("Channel", channel);
+		var signature = Normalize(input.CallbackSignature);
+		if (signature?.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase) == true) signature = signature[7..];
+		var signedContent = $"{input.CallbackTimestamp}.{input.CallbackNonce}.{input.RawBody}";
+		var expected = Convert.ToHexString(HMACSHA256.HashData(
+			Encoding.UTF8.GetBytes(configured), Encoding.UTF8.GetBytes(signedContent))).ToLowerInvariant();
+		if (SecretsEqual(expected, signature ?? string.Empty)) return;
+		var exception = new BusinessException("AdmissionCrm:DeliveryCallbackSignatureInvalid").WithData("Channel", channel);
 		if (deliveryLogId.HasValue) exception.WithData("DeliveryLogId", deliveryLogId.Value);
 		throw exception;
 	}
@@ -67,7 +77,7 @@ internal static class AdmissionCrmDeliveryCallbackParser
 		if (!parsed.RootElement.TryGetProperty("callbackMappings", out var mappings) ||
 			mappings.ValueKind != JsonValueKind.Object) return new();
 		return new(GetString(mappings, "statusPath"), GetString(mappings, "statusDetailsPath"),
-			GetString(mappings, "providerMessageIdPath"), GetString(mappings, "callbackSecretPath"));
+			GetString(mappings, "providerMessageIdPath"));
 	}
 
 	private static string? Extract(IReadOnlyDictionary<string, JsonElement> payload, string? path)
@@ -165,6 +175,5 @@ internal static class AdmissionCrmDeliveryCallbackParser
 	private sealed record AdmissionCrmCallbackMappings(
 		string? StatusPath = "status",
 		string? StatusDetailsPath = "statusDetails",
-		string? ProviderMessageIdPath = "providerMessageId",
-		string? CallbackSecretPath = "callbackSecret");
+		string? ProviderMessageIdPath = "providerMessageId");
 }

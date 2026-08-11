@@ -7,7 +7,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments;
-using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.Students.Records.Profiles;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.StudentRecords;
 using Volo.Abp;
@@ -101,9 +101,9 @@ public class StudentListAppService(
 					SecondaryContactNo = s.ContactDetail != null ? s.ContactDetail.SecondaryContactNo : null,
 					Email = s.ContactDetail != null ? s.ContactDetail.Email : null,
 					PreviousSchool = s.AdditionalDetail != null ? s.AdditionalDetail.PreviousSchool : null,
-					InquiryPreferenceId = s.AdditionalDetail != null ? s.AdditionalDetail.InquiryPreferenceId : null,
-					InquiryPreference = s.AdditionalDetail != null && s.AdditionalDetail.InquiryPreference != null
-						? s.AdditionalDetail.InquiryPreference.PreferenceName
+					InquirySourceId = s.AdditionalDetail != null ? s.AdditionalDetail.InquirySourceId : null,
+					InquirySource = s.AdditionalDetail != null && s.AdditionalDetail.InquirySource != null
+						? s.AdditionalDetail.InquirySource.DisplayName
 						: null,
 					IsFeeStructureAssigned = s.FeeStructureId.HasValue,
 					StudentEnrollmentState = s.Status,

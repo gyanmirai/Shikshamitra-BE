@@ -560,7 +560,7 @@ public class CommunicationCampaignApi_Tests : ShikshaMitraApiTestBase
 				.Select(x => x.Id)
 				.FirstAsync();
 			var studentId = Guid.NewGuid();
-			var student = Student.CreateDirectRegistration(
+			var student = Student.CreateForAdmission(
 				studentId,
 				tenantId,
 				"Comm",

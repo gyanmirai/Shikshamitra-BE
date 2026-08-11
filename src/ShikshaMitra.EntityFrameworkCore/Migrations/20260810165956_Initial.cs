@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -3740,33 +3740,6 @@ namespace ShikshaMitra.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "AppEntranceExamSlots",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
-                    SlotName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    StartDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    StudentLimit = table.Column<int>(type: "integer", nullable: false),
-                    RoomNo = table.Column<int>(type: "integer", nullable: false),
-                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
-                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppEntranceExamSlots", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "AppEventTypes",
                 columns: table => new
                 {
@@ -4147,33 +4120,6 @@ namespace ShikshaMitra.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AppHouseSettings", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AppInquiryPreferences",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AcademicYearId = table.Column<Guid>(type: "uuid", nullable: false),
-                    PreferenceName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    DisplayOrder = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
-                    DeactivationReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    ExtraProperties = table.Column<string>(type: "text", nullable: false),
-                    ConcurrencyStamp = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
-                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastModifierId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeleterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppInquiryPreferences", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -8934,7 +8880,7 @@ namespace ShikshaMitra.Migrations
                     LeadScore = table.Column<int>(type: "integer", nullable: false),
                     Priority = table.Column<int>(type: "integer", nullable: false),
                     RegistrationFormNumber = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    RegistrationFormAmount = table.Column<double>(type: "double precision", nullable: true),
+                    RegistrationFormAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
                     RegistrationFormIssuedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     LastActivityTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Notes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
@@ -11912,19 +11858,9 @@ namespace ShikshaMitra.Migrations
                     ProfilePictureUrl = table.Column<string>(type: "text", nullable: true),
                     DateOfInquiry = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     InquiryNo = table.Column<string>(type: "text", nullable: false),
-                    InquiryPreferenceId = table.Column<Guid>(type: "uuid", nullable: true),
+                    InquirySourceId = table.Column<Guid>(type: "uuid", nullable: true),
                     RegistrationFormNo = table.Column<string>(type: "text", nullable: true),
                     RegistrationAmount = table.Column<double>(type: "double precision", nullable: true),
-                    EntranceExamSlotId = table.Column<Guid>(type: "uuid", nullable: true),
-                    EntranceExamStartDateTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    EntranceExamEndDateTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    EntranceExamRoomNo = table.Column<int>(type: "integer", nullable: true),
-                    EntranceExamTotalMarks = table.Column<double>(type: "double precision", nullable: true),
-                    EntranceExamPassingMarks = table.Column<double>(type: "double precision", nullable: true),
-                    EntranceExamObtainedMarks = table.Column<double>(type: "double precision", nullable: true),
-                    EntranceExamPercentage = table.Column<double>(type: "double precision", nullable: true),
-                    EntranceExamStatus = table.Column<int>(type: "integer", nullable: true),
-                    EntranceExamResultDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     AdharNo = table.Column<string>(type: "text", nullable: true),
                     ApparId = table.Column<string>(type: "text", nullable: true),
                     PanNo = table.Column<string>(type: "text", nullable: true),
@@ -11971,9 +11907,9 @@ namespace ShikshaMitra.Migrations
                         principalTable: "AppHouseSettings",
                         principalColumn: "Id");
                     table.ForeignKey(
-                        name: "FK_AppStudentAdditionalDetails_AppInquiryPreferences_InquiryPr~",
-                        column: x => x.InquiryPreferenceId,
-                        principalTable: "AppInquiryPreferences",
+                        name: "FK_AppStudentAdditionalDetails_AppAdmissionCrmInquirySources_Inq~",
+                        column: x => x.InquirySourceId,
+                        principalTable: "AppAdmissionCrmInquirySources",
                         principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_AppStudentAdditionalDetails_AppStudents_Id",
@@ -14325,11 +14261,6 @@ namespace ShikshaMitra.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppEntranceExamSlots_AcademicYearId_StartDate_TenantId",
-                table: "AppEntranceExamSlots",
-                columns: new[] { "AcademicYearId", "StartDate", "TenantId" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_AppEvents_AcademicYearId_TenantId",
                 table: "AppEvents",
                 columns: new[] { "AcademicYearId", "TenantId" });
@@ -14607,13 +14538,6 @@ namespace ShikshaMitra.Migrations
                 name: "IX_AppHouseSettings_AcademicMediumId",
                 table: "AppHouseSettings",
                 column: "AcademicMediumId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AppInquiryPreferences_TenantId_AcademicYearId_PreferenceName",
-                table: "AppInquiryPreferences",
-                columns: new[] { "TenantId", "AcademicYearId", "PreferenceName" },
-                unique: true,
-                filter: "\"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppLearningResources_BlobName",
@@ -15099,9 +15023,9 @@ namespace ShikshaMitra.Migrations
                 column: "HouseId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AppStudentAdditionalDetails_InquiryPreferenceId",
+                name: "IX_AppStudentAdditionalDetails_InquirySourceId",
                 table: "AppStudentAdditionalDetails",
-                column: "InquiryPreferenceId");
+                column: "InquirySourceId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppStudentCertificates_StudentId",
@@ -15325,6 +15249,20 @@ namespace ShikshaMitra.Migrations
                 name: "IX_AppStudents_AdmissionApprovalStatus_DivisionId",
                 table: "AppStudents",
                 columns: new[] { "AdmissionApprovalStatus", "DivisionId" });
+
+            migrationBuilder.CreateIndex(
+                name: "UX_AppStudents_Host_GrNo",
+                table: "AppStudents",
+                column: "GrNo",
+                unique: true,
+                filter: "\"IsDeleted\" = false AND \"GrNo\" IS NOT NULL AND \"TenantId\" IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "UX_AppStudents_TenantId_GrNo",
+                table: "AppStudents",
+                columns: new[] { "TenantId", "GrNo" },
+                unique: true,
+                filter: "\"IsDeleted\" = false AND \"GrNo\" IS NOT NULL AND \"TenantId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AppStudents_BankDetailId",
@@ -17182,9 +17120,6 @@ namespace ShikshaMitra.Migrations
                 name: "AppEmployeePayrollDetails");
 
             migrationBuilder.DropTable(
-                name: "AppEntranceExamSlots");
-
-            migrationBuilder.DropTable(
                 name: "AppEvents");
 
             migrationBuilder.DropTable(
@@ -17780,9 +17715,6 @@ namespace ShikshaMitra.Migrations
 
             migrationBuilder.DropTable(
                 name: "AppHouseSettings");
-
-            migrationBuilder.DropTable(
-                name: "AppInquiryPreferences");
 
             migrationBuilder.DropTable(
                 name: "AppDocumentTypes");

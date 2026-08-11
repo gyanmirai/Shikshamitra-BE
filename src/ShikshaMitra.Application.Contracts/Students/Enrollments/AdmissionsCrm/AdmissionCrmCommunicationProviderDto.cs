@@ -36,5 +36,4 @@ public class AdmissionCrmCommunicationCallbackMappingsDto
 	public string? StatusPath { get; set; }
 	public string? StatusDetailsPath { get; set; }
 	public string? ProviderMessageIdPath { get; set; }
-	public string? CallbackSecretPath { get; set; }
 }

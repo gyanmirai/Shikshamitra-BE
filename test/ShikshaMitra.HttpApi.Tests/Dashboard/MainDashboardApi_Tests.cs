@@ -2416,7 +2416,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
 			var medium = await mediumRepository.GetAsync(Factory.SeededMediumId);
-			var student = Student.CreateDirectRegistration(
+			var student = Student.CreateForAdmission(
 				Guid.NewGuid(),
 				tenantId,
 				"Dashboard",

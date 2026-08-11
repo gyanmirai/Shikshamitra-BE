@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Students;
@@ -12,12 +12,11 @@ public class StudentAdditionalDetailConfiguration : IEntityTypeConfiguration<Stu
 
 		builder.Property(x => x.DisabilityDetails).HasMaxLength(500);
 
-		// add navigation properties for inquiry preference
-		builder.HasOne(x => x.InquiryPreference)
+		builder.HasOne(x => x.InquirySource)
 			.WithMany()
-			.HasForeignKey(x => x.InquiryPreferenceId)
+			.HasForeignKey(x => x.InquirySourceId)
 			.OnDelete(DeleteBehavior.NoAction);
 
-		builder.Navigation(x => x.InquiryPreference).AutoInclude();
+		builder.Navigation(x => x.InquirySource).AutoInclude();
 	}
 }

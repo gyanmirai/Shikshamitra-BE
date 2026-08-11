@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Records.Profiles;
 using ShikshaMitra.Students.ValueObjects;
 using Volo.Abp.DependencyInjection;
 

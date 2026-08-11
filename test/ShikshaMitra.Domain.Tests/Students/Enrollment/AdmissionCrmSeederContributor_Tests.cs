@@ -150,13 +150,10 @@ public class AdmissionCrmSeederContributor_Tests
 	}
 
 	[Fact]
-	public void Legacy_Reset_Catalog_Should_Include_Previous_And_Current_Deterministic_Leads()
+	public void Demo_Reset_Catalog_Should_Contain_Only_Current_Deterministic_Leads()
 	{
-		var legacyKeys = AdmissionCrmSeederContributor.LegacyDemoLeadKeys();
-
-		legacyKeys.ShouldContain("duplicate-warning");
-		legacyKeys.ShouldContain("first-day-ready");
-		AdmissionCrmSeederContributor.DemoLeadSpecs().All(item => legacyKeys.Contains(item.Key)).ShouldBeTrue();
+		AdmissionCrmSeederContributor.DemoLeadKeys()
+			.ShouldBe(AdmissionCrmSeederContributor.DemoLeadSpecs().Select(item => item.Key).ToArray());
 	}
 
 	[Fact]

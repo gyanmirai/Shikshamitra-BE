@@ -1,7 +1,7 @@
-﻿using ShikshaMitra.Students.Records.Settings;
+using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Students.StudentEnrollments;
-using ShikshaMitra.Students.StudentEnrollments.Registration;
-using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.Students.Records.Profiles;
+using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -17,23 +17,9 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 
 	public DateTimeOffset? DateOfInquiry { get; private set; }
 	public string InquiryNo { get; private set; }
-	public Guid? InquiryPreferenceId { get; private set; }
+	public Guid? InquirySourceId { get; private set; }
 	public string? RegistrationFormNo { get; private set; }
 	public double? RegistrationAmount { get; private set; }
-
-	// Entrance Exam Information
-	public Guid? EntranceExamSlotId { get; private set; }
-	public DateTimeOffset? EntranceExamStartDateTime { get; private set; }
-	public DateTimeOffset? EntranceExamEndDateTime { get; private set; }
-	public int? EntranceExamRoomNo { get; private set; }
-
-	// Exam Results
-	public double? EntranceExamTotalMarks { get; private set; }
-	public double? EntranceExamPassingMarks { get; private set; }
-	public double? EntranceExamObtainedMarks { get; private set; }
-	public double? EntranceExamPercentage { get; private set; }
-	public EntranceExamStatusEnum? EntranceExamStatus { get; private set; }
-	public DateTimeOffset? EntranceExamResultDate { get; private set; }
 
 	public string? AdharNo { get; private set; }
 	public string? ApparId { get; private set; }
@@ -68,7 +54,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public bool? IsGlobalHouseLeader { get; private set; }
 	public bool? IsDivisionHouseLeader { get; private set; }
 
-	public InquiryPreference? InquiryPreference { get; private set; }
+	public AdmissionCrmInquirySource? InquirySource { get; private set; }
 
 	public StudentRegistrationStateEnum StudentRegistrationState { get; private set; }
 
@@ -84,7 +70,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		GenderEnum? gender,
 		DateTimeOffset? dateOfInquiry,
 		string inquiryNo,
-		Guid? inquiryPreferenceId,
+		Guid? inquirySourceId,
 		string? previousSchool
 	)
 		: base(id)
@@ -94,7 +80,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		Gender = gender;
 		DateOfInquiry = dateOfInquiry;
 		InquiryNo = inquiryNo;
-		InquiryPreferenceId = inquiryPreferenceId;
+		InquirySourceId = inquirySourceId;
 		// Ensure non-null default to satisfy DB not-null constraint until General Info is provided
 		FamilyCast = string.Empty;
 		PreviousSchool = previousSchool;
@@ -105,13 +91,13 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	DateTimeOffset? dateOfBirth,
 	GenderEnum? gender,
 	DateTimeOffset? dateOfInquiry,
-	Guid? inquiryPreferenceId,
+	Guid? inquirySourceId,
 	string? previousSchool)
 	{
 		DateOfBirth = dateOfBirth;
 		Gender = gender;
 		DateOfInquiry = dateOfInquiry;
-		InquiryPreferenceId = inquiryPreferenceId;
+		InquirySourceId = inquirySourceId;
 		PreviousSchool = previousSchool;
 	}
 
@@ -132,7 +118,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		string? previousSchool,
 		string? lastClassPassed,
         StudentRegistrationStateEnum state,
-		Guid? inquiryPreferenceId,
+		Guid? inquirySourceId,
 		string registrationFormNo
 		)
 	{
@@ -152,7 +138,7 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		PreviousSchool = previousSchool;
 		LastClassPassed = lastClassPassed;
         StudentRegistrationState = state;
-		InquiryPreferenceId = inquiryPreferenceId;
+		InquirySourceId = inquirySourceId;
 		RegistrationFormNo = registrationFormNo;
     }
 
@@ -215,41 +201,6 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	{
 		if (StudentRegistrationState < newState)
 			StudentRegistrationState = newState;
-	}
-
-	/// <summary>
-	/// Schedules entrance exam for the student
-	/// </summary>
-	public void ScheduleEntranceExam(
-		Guid entranceExamSlotId,
-		DateTimeOffset examStartTime,
-		DateTimeOffset examEndTime,
-		int examRoomNo)
-	{
-		EntranceExamSlotId = entranceExamSlotId;
-		EntranceExamStartDateTime = examStartTime;
-		EntranceExamEndDateTime = examEndTime;
-		EntranceExamRoomNo = examRoomNo;
-		EntranceExamStatus = EntranceExamStatusEnum.Pending;
-	}
-
-	/// <summary>
-	/// Records entrance exam result
-	/// </summary>
-	public void RecordExamResult(
-		double totalMarks,
-		double passingMarks,
-		double obtainedMarks)
-	{
-		EntranceExamTotalMarks = totalMarks;
-		EntranceExamPassingMarks = passingMarks;
-		EntranceExamObtainedMarks = obtainedMarks;
-        // Safe percentage calculation since totalMarks > 0 is validated
-        EntranceExamPercentage = (obtainedMarks / totalMarks) * 100;
-		EntranceExamStatus = obtainedMarks >= passingMarks
-			? EntranceExamStatusEnum.Pass
-			: EntranceExamStatusEnum.Fail;
-		EntranceExamResultDate = DateTimeOffset.UtcNow;
 	}
 
 	public void AssignHouse(Guid houseId)

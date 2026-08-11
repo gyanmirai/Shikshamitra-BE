@@ -238,7 +238,7 @@ public class LibraryPhase3A_Tests : ShikshaMitraApplicationTestBase<ShikshaMitra
 					educationMediumId),
 				autoSave: true);
 
-			var student = Student.CreateDirectRegistration(
+			var student = Student.CreateForAdmission(
 				studentId,
 				tenantId: null,
 				firstName: "Library",

@@ -346,7 +346,7 @@ public class AdmissionCrmSpecialRouteApi_Tests : ShikshaMitraApiTestBase
 		using (tenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
-			var student = Student.CreateDirectRegistration(
+			var student = Student.CreateForAdmission(
 				Guid.NewGuid(),
 				tenantId,
 				"Unrelated",

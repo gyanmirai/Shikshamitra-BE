@@ -11,6 +11,8 @@ using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Enrollment;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
+using ShikshaMitra.Finance.Charges;
+using ShikshaMitra.Finance.ConcessionRequests;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
@@ -41,8 +43,10 @@ public abstract class ShikshaMitraApiTestBase
 		EmployeeTestHelper.DefaultMediumStageId = factory.SeededMediumStageId;
 
 		StudentEnrollmentTestHelper.DefaultAcademicMediumId = factory.SeededMediumId;
-		StudentEnrollmentTestHelper.DefaultStandardId = factory.SeededStandardId;
 		StudentEnrollmentTestHelper.DefaultDivisionId = factory.SeededDivisionId;
+		StudentEnrollmentTestHelper.Factory = factory;
+		ChargeTestHelper.Factory = factory;
+		ConcessionRequestTestHelper.Factory = factory;
 	}
 
 	/// <summary>

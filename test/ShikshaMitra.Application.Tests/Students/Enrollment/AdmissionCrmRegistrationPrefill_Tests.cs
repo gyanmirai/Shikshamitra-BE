@@ -27,13 +27,13 @@ public class AdmissionCrmRegistrationPrefill_Tests
 	}
 
 	[Fact]
-	public void Should_Fall_Back_To_Legacy_Route_Type_When_Snapshot_Is_Missing()
+	public void Should_Not_Invent_A_Route_Name_When_The_Immutable_Snapshot_Is_Missing()
 	{
 		var lead = CreateLead(AdmissionCrmRouteType.SiblingPriority);
 
 		var prefill = AdmissionCrmRegistrationModelMapper.BuildPrefill(lead);
 
-		prefill["admissionRoute"].ShouldBe(nameof(AdmissionCrmRouteType.SiblingPriority));
+		prefill["admissionRoute"].ShouldBeNull();
 		prefill["admissionRouteDefinitionId"].ShouldBeNull();
 		prefill["admissionRouteDefinitionVersion"].ShouldBeNull();
 	}
@@ -124,7 +124,7 @@ public class AdmissionCrmRegistrationPrefill_Tests
 			null,
 			null,
 			null,
-			"Legacy",
+			"Test",
 			null,
 			"Applicant",
 			null,

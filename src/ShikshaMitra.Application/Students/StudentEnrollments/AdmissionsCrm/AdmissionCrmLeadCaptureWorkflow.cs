@@ -125,20 +125,12 @@ public class AdmissionCrmLeadCaptureWorkflow(
 			intendedRouteDefinition?.Version,
 			intendedRouteDefinition?.Name);
 		lead.ApplyInquiryType(inquiryType?.Id, inquiryType?.DisplayName);
-		if (admissionYearSetup is not null)
-		{
-			lead.ApplyAdmissionYearSetup(
-				admissionYearSetup.Id,
-				admissionYearSetup.Version,
-				admissionYearSetup.PublishedSnapshotJson!);
-		}
-		else
-		{
-			lead.ApplyAdmissionYearSetup(
-				null,
-				0,
-				AdmissionCrmLeadCaptureRules.BuildLegacyAdmissionYearSnapshot(cycle));
-		}
+		if (admissionYearSetup is null)
+			throw new BusinessException("AdmissionCrm:PublishedAdmissionYearSetupRequired");
+		lead.ApplyAdmissionYearSetup(
+			admissionYearSetup.Id,
+			admissionYearSetup.Version,
+			admissionYearSetup.PublishedSnapshotJson!);
 		if (duplicates.Count > 0)
 		{
 			lead.RecordDuplicateContinue(input.DuplicateContinueReason!);

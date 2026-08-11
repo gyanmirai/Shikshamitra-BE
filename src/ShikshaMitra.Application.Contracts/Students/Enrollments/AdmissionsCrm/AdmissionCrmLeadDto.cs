@@ -38,7 +38,7 @@ public class AdmissionCrmLeadDto : EntityDto<Guid>
 	public int LeadScore { get; set; }
 	public AdmissionCrmLeadPriority Priority { get; set; }
 	public string? RegistrationFormNumber { get; set; }
-	public double? RegistrationFormAmount { get; set; }
+	public decimal? RegistrationFormAmount { get; set; }
 	public DateTime? RegistrationFormIssuedAt { get; set; }
 	public DateTimeOffset LastActivityTime { get; set; }
 	public string? Notes { get; set; }

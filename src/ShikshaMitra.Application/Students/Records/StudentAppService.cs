@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -207,7 +207,7 @@ public class StudentAppService(
 				Country = student.ContactDetail?.Country,
 				PinCode = student.ContactDetail?.Pincode,
 				PreviousSchool = student.AdditionalDetail?.PreviousSchool,
-				InquiryPreferenceId = student.AdditionalDetail?.InquiryPreferenceId
+				InquirySourceId = student.AdditionalDetail?.InquirySourceId
 			};
 		}
 		catch (Exception ex)

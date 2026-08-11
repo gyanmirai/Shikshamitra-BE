@@ -16,5 +16,5 @@ public class IssueAdmissionCrmRegistrationFormDto
 
 	[Required(ErrorMessage = "Amount is required")]
 	[Range(0.01, 999999.99, ErrorMessage = "Amount must be between 0.01 and 999,999.99")]
-	public required double Amount { get; set; }
+	public required decimal Amount { get; set; }
 }

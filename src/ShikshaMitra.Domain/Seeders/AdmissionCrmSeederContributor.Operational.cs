@@ -476,12 +476,12 @@ public partial class AdmissionCrmSeederContributor
 		}
 	}
 
-	private async Task ResetLegacyDemoScenariosAsync(Guid tenantId)
+	private async Task ResetDemoScenariosAsync(Guid tenantId)
 	{
-		var leadIds = LegacyDemoLeadKeys()
+		var leadIds = DemoLeadKeys()
 			.Select(key => StableId(tenantId, $"lead:{key}"))
 			.ToHashSet();
-		await ReconcileLegacySeatPoolCountersAsync(tenantId, leadIds);
+		await ReconcileDemoSeatPoolCountersAsync(tenantId, leadIds);
 
 		await HardDeleteByLeadIdsAsync<AdmissionApplicantStatusAccess>(item => leadIds.Contains(item.LeadId));
 		await HardDeleteByLeadIdsAsync<AdmissionCrmActivation>(item => leadIds.Contains(item.LeadId));
@@ -519,19 +519,9 @@ public partial class AdmissionCrmSeederContributor
 			await _leadRepository.HardDeleteAsync(lead, autoSave: false);
 		}
 
-		var oldNumberSeriesId = StableId(tenantId, "number-series:gr");
-		if (!await Repository<AdmissionCrmIdentifierAllocation>().AnyAsync(item => item.NumberSeriesId == oldNumberSeriesId))
-		{
-			var oldNumberSeries = await Repository<AdmissionCrmNumberSeries>().FindAsync(oldNumberSeriesId);
-			if (oldNumberSeries != null)
-			{
-				await Repository<AdmissionCrmNumberSeries>().HardDeleteAsync(oldNumberSeries, autoSave: false);
-			}
-		}
-
 	}
 
-	private async Task ReconcileLegacySeatPoolCountersAsync(Guid tenantId, IReadOnlySet<Guid> leadIds)
+	private async Task ReconcileDemoSeatPoolCountersAsync(Guid tenantId, IReadOnlySet<Guid> leadIds)
 	{
 		var seatPoolRepository = Repository<AdmissionCrmSeatPool>();
 		var seatPool = await seatPoolRepository.FindAsync(StableId(tenantId, "seat-pool:general-1"));
@@ -656,13 +646,7 @@ public partial class AdmissionCrmSeederContributor
 			},
 			new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-	internal static IReadOnlyList<string> LegacyDemoLeadKeys() =>
-	[
-		"new-inquiry", "follow-up", "duplicate-warning", "stale", "archived", "exam-ready", "exam-scheduled",
-		"no-show", "passed", "failed", "registration-correction", "document-rejection", "admission-ready",
-		"offer-pending", "offer-accepted", "waitlisted", "rte-allotment", "payment-pending", "activation-pending",
-		"activation-repair", "first-day-ready"
-	];
+	internal static IReadOnlyList<string> DemoLeadKeys() => DemoLeadSpecs().Select(item => item.Key).ToArray();
 
 	internal static IReadOnlyList<FollowUpTaskSpec> FollowUpTaskSpecs() =>
 	[

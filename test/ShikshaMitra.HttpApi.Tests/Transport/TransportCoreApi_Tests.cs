@@ -580,7 +580,7 @@ public class TransportCoreApi_Tests : ShikshaMitraApiTestBase
 	public async Task Transport_Applications_Should_Approve_Student_And_Create_Member_Assignment()
 	{
 		var mediumId = Factory.SeededMediumId;
-		var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "TransportPassenger");
+		var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "TransportPassenger");
 		var stop = (await CreateStopAsync(mediumId, UniqueName("Member Stop"), "Passenger")).Data!;
 		var route = (await CreateRouteAsync(mediumId, UniqueName("Member Route"))).Data!;
 		await AssignRouteStopsAsync(mediumId, route.Id, stop.Id);
@@ -643,7 +643,7 @@ public class TransportCoreApi_Tests : ShikshaMitraApiTestBase
 	public async Task Transport_Applications_Should_Block_Duplicate_Pending_Applications()
 	{
 		var mediumId = Factory.SeededMediumId;
-		var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "TransportDuplicate");
+		var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "TransportDuplicate");
 		var stop = (await CreateStopAsync(mediumId, UniqueName("Duplicate Stop"), "Passenger")).Data!;
 
 		await CreateTransportApplicationAsync(
@@ -694,7 +694,7 @@ public class TransportCoreApi_Tests : ShikshaMitraApiTestBase
 	public async Task Stop_Change_Approval_Should_Close_Old_Assignment_And_Create_Current_Assignment()
 	{
 		var mediumId = Factory.SeededMediumId;
-		var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "TransportStopChange");
+		var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "TransportStopChange");
 		var firstStop = (await CreateStopAsync(mediumId, UniqueName("Old Stop"), "Passenger")).Data!;
 		var secondStop = (await CreateStopAsync(mediumId, UniqueName("New Stop"), "Passenger")).Data!;
 		var firstRoute = (await CreateRouteAsync(mediumId, UniqueName("Old Route"))).Data!;
@@ -869,7 +869,7 @@ public class TransportCoreApi_Tests : ShikshaMitraApiTestBase
 		var dueDate = DateTime.UtcNow.Date.AddDays(30);
 		var effectiveDate = periodFrom.AddDays(4);
 
-		var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "TransportBillingStudent");
+		var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "TransportBillingStudent");
 		await MoveRegistrationToEnrolledAsync(student.StudentId);
 		var studentMember = await CreateApprovedTransportMemberAsync(
 			mediumId,

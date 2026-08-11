@@ -27,6 +27,7 @@ using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
+using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
@@ -69,8 +70,43 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	public Guid SeededStandardId { get; private set; }
 	public Guid SeededDivisionId { get; private set; }
 	public Guid SeededFreshRouteDefinitionId { get; private set; }
+	public Guid SeededInquirySourceId { get; private set; }
+	public Guid SeededInquiryTypeId { get; private set; }
 	public IDisposable FailNextAdmissionCrmTimelineSave(AdmissionCrmTimelineEventType eventType) =>
 		_admissionCrmTransactionFailure.FailNextTimelineSave(eventType);
+
+	/// <summary>
+	/// Creates a canonical student aggregate as test fixture data without exposing a
+	/// production API that bypasses Admissions CRM.
+	/// </summary>
+	public async Task<Student> CreateStudentFixtureAsync(
+		string firstName,
+		string primaryContactNo,
+		Guid? divisionId = null,
+		DateTimeOffset? dateOfBirth = null)
+	{
+		using var scope = Services.CreateScope();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var repository = scope.ServiceProvider.GetRequiredService<IRepository<Student, Guid>>();
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(requiresNew: true, isTransactional: true))
+		{
+			var student = Student.CreateForAdmission(
+				Guid.NewGuid(), tenantId, firstName, null, "TestStudent",
+				SeededAcademicYearId, SeededBoardId, SeededMediumId, SeededMediumStageId,
+				SeededStandardId, divisionId ?? SeededDivisionId,
+				dateOfBirth ?? DateTimeOffset.UtcNow.AddYears(-10), GenderEnum.Female, primaryContactNo,
+				city: "Pune", state: new State("Maharashtra", "MH"),
+				country: new Country("India", "IN"));
+
+			await repository.InsertAsync(student, autoSave: true);
+			await uow.CompleteAsync();
+			return student;
+		}
+	}
 
 	protected override IHost CreateHost(IHostBuilder builder)
 	{
@@ -170,9 +206,57 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 				.OrderBy(d => d.Id)
 				.FirstOrDefaultAsync();
 			SeededDivisionId = firstDivision?.Id ?? Guid.Empty;
+			await EnsureSeededAdmissionConfigurationAsync(services, tenantId);
 
 			await uow.CompleteAsync();
 		}
+	}
+
+	private async Task EnsureSeededAdmissionConfigurationAsync(IServiceProvider services, Guid tenantId)
+	{
+		if (SeededAcademicYearId == Guid.Empty || SeededStandardId == Guid.Empty)
+		{
+			return;
+		}
+
+		var sourceRepository = services.GetRequiredService<IRepository<AdmissionCrmInquirySource, Guid>>();
+		var source = await (await sourceRepository.GetQueryableAsync()).FirstOrDefaultAsync(item =>
+			item.AcademicYearId == SeededAcademicYearId && item.IsActive);
+		if (source == null)
+		{
+			source = await sourceRepository.InsertAsync(new AdmissionCrmInquirySource(
+				Guid.NewGuid(), tenantId, SeededAcademicYearId, "TEST-WALK-IN", "Test walk-in",
+				null, Enum.GetValues<AdmissionInquiryChannel>(), 10, true));
+		}
+		SeededInquirySourceId = source.Id;
+
+		var typeRepository = services.GetRequiredService<IRepository<AdmissionCrmInquiryType, Guid>>();
+		var inquiryType = await (await typeRepository.GetQueryableAsync()).FirstOrDefaultAsync(item =>
+			item.AcademicYearId == SeededAcademicYearId && item.IsActive);
+		if (inquiryType == null)
+		{
+			inquiryType = await typeRepository.InsertAsync(new AdmissionCrmInquiryType(
+				Guid.NewGuid(), tenantId, SeededAcademicYearId, "TEST-STANDARD", "Test standard inquiry",
+				null, 10));
+		}
+		SeededInquiryTypeId = inquiryType.Id;
+
+		var setupRepository = services.GetRequiredService<IRepository<AdmissionCrmAdmissionYearSetup, Guid>>();
+		if (await (await setupRepository.GetQueryableAsync()).AnyAsync(setup =>
+			setup.AcademicYearId == SeededAcademicYearId &&
+			setup.Status == AdmissionCrmAdmissionYearSetupStatus.Published))
+		{
+			return;
+		}
+
+		var today = DateTime.UtcNow.Date;
+		var setup = new AdmissionCrmAdmissionYearSetup(
+			Guid.NewGuid(), tenantId, SeededAcademicYearId, 1,
+			today.AddYears(-1), today.AddYears(1), today.AddYears(1).AddMonths(1), today.AddYears(1).AddMonths(2),
+			false, false, AdmissionCrmPlacementTiming.StandardBeforeActivation, null,
+			$"[\"{SeededStandardId}\"]", "[0]", "{}");
+		setup.Publish("{}", Guid.Parse(TestAuthHandler.TestUserId), DateTime.UtcNow);
+		await setupRepository.InsertAsync(setup);
 	}
 
 	private static async Task<Guid> EnsureTestFreshAdmissionRouteAsync(

@@ -130,10 +130,9 @@ public class AdmissionCrmPublicInquiryWorkflow(
 			AdmissionCrmPublicSubmissionMapper.GetValue(mapped, "DesiredClassName"),
 			notes: null, Clock.Now, routeType, null, null, null);
 		lead.ApplyInquiryType(inquiryType?.Id, inquiryType?.DisplayName);
-		lead.ApplyAdmissionYearSetup(
-			setup?.Id,
-			setup?.Version ?? 0,
-			setup?.PublishedSnapshotJson ?? AdmissionCrmPublicCaptureConfiguration.BuildLegacyAdmissionYearSnapshot(cycle));
+		if (setup is null)
+			throw new BusinessException("AdmissionCrm:PublishedAdmissionYearSetupRequired");
+		lead.ApplyAdmissionYearSetup(setup.Id, setup.Version, setup.PublishedSnapshotJson!);
 		lead.UpdateScore(AdmissionCrmLeadScoreCalculator.Calculate(
 			lead, AdmissionCrmLeadScoreCalculator.DeserializeRules(cycle.LeadScoringRulesJson)));
 		return lead;

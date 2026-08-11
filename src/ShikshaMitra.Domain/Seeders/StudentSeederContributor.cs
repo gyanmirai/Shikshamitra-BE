@@ -361,7 +361,7 @@ public class StudentSeederContributor : BaseSeederContributor
 			gender: gender,
 			dateOfInquiry: null,
 			inquiryNo: string.Empty,
-			inquiryPreferenceId: null,
+			inquirySourceId: null,
 			previousSchool: null
 		);
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
@@ -13,7 +14,17 @@ public class ApplyAdmissionCrmDeliveryCallbackDto
 	[MaxLength(AdmissionCrmConsts.MaxProviderMessageIdLength)]
 	public string? ProviderMessageId { get; set; }
 
-	public string CallbackSecret { get; set; } = string.Empty;
+	[JsonIgnore]
+	public string CallbackSignature { get; set; } = string.Empty;
+
+	[JsonIgnore]
+	public string CallbackTimestamp { get; set; } = string.Empty;
+
+	[JsonIgnore]
+	public string CallbackNonce { get; set; } = string.Empty;
+
+	[JsonIgnore]
+	public string RawBody { get; set; } = string.Empty;
 
 	public Dictionary<string, JsonElement> Payload { get; set; } = new();
 }

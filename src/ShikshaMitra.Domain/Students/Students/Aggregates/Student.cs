@@ -187,7 +187,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 	/// Factory method to create a student directly in Registration status.
 	/// This bypasses the inquiry and registration form stages.
 	/// </summary>
-	public static Student CreateDirectRegistration(
+	public static Student CreateForAdmission(
 		Guid id,
 		Guid? tenantId,
 		string? firstName,
@@ -237,7 +237,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 			gender,
 			dateOfInquiry: null,
 			inquiryNo: string.Empty,
-			inquiryPreferenceId: null,
+			inquirySourceId: null,
 			previousSchool: null
 		);
 
@@ -424,61 +424,6 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 	public void SetPhotoBlobName(string blobName)
 	{
 		PhotoBlobName = Check.NotNullOrWhiteSpace(blobName, nameof(blobName), maxLength: 512);
-	}
-
-	/// <summary>
-	/// Schedules the student for entrance exam using a slot.
-	/// Allowed from <see cref="StudentLifeCycleStatusEnum.RegistrationFormIssued"/> (inquiry path)
-	/// and <see cref="StudentLifeCycleStatusEnum.Registration"/> (direct registration path).
-	/// </summary>
-	public void ScheduleEntranceExam(
-		Guid entranceExamSlotId,
-		DateTimeOffset slotStartDate,
-		DateTimeOffset slotEndDate,
-		int slotRoomNo)
-	{
-		if (Status != StudentLifeCycleStatusEnum.RegistrationFormIssued &&
-		    Status != StudentLifeCycleStatusEnum.Registration)
-		{
-			throw new InvalidOperationException(
-				$"Cannot schedule entrance exam. Student must be in RegistrationFormIssued or Registration status. Current status: {Status}");
-		}
-
-		EnsureAdditionalDetailExists();
-		AdditionalDetail!.ScheduleEntranceExam(
-			entranceExamSlotId,
-			slotStartDate,
-			slotEndDate,
-			slotRoomNo);
-
-		ChangeStatus(StudentLifeCycleStatusEnum.EntranceExam);
-	}
-
-	public void RescheduleEntranceExam(
-		Guid entranceExamSlotId,
-		DateTimeOffset slotStartDate,
-		DateTimeOffset slotEndDate,
-		int slotRoomNo)
-	{
-		if (Status != StudentLifeCycleStatusEnum.EntranceExam)
-		{
-			throw new InvalidOperationException(
-				$"Cannot reschedule entrance exam. Student must be in EntranceExam status. Current status: {Status}");
-		}
-
-		if (AdditionalDetail?.EntranceExamObtainedMarks.HasValue == true)
-		{
-			throw new InvalidOperationException("Cannot reschedule entrance exam after a result has been uploaded.");
-		}
-
-		EnsureAdditionalDetailExists();
-		AdditionalDetail!.ScheduleEntranceExam(
-			entranceExamSlotId,
-			slotStartDate,
-			slotEndDate,
-			slotRoomNo);
-
-		ChangeStatus(StudentLifeCycleStatusEnum.EntranceExam);
 	}
 
 	/// <summary>

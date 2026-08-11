@@ -1,8 +1,10 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Caching.Distributed;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Caching;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 
@@ -11,7 +13,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionCrmPublicDeliveryCallbackWorkflow(
 	IRepository<AdmissionCrmMessageDeliveryLog, Guid> logRepository,
 	IRepository<AdmissionCrmCommunicationProviderConfiguration, Guid> providerRepository,
-	IRepository<AdmissionCrmTimelineEvent, Guid> timelineRepository) : ApplicationService, ITransientDependency
+	IRepository<AdmissionCrmTimelineEvent, Guid> timelineRepository,
+	IDistributedCache<string> replayCache) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionCrmMessageDeliveryLogDto> ApplyAsync(
 		Guid tenantId, Guid deliveryLogId, ApplyAdmissionCrmDeliveryCallbackDto input)
@@ -23,7 +26,8 @@ public class AdmissionCrmPublicDeliveryCallbackWorkflow(
 				throw new BusinessException("AdmissionCrm:MessageDeliveryLogNotFound").WithData("DeliveryLogId", deliveryLogId);
 			var provider = await GetProviderAsync(log.AcademicYearId, log.Channel);
 			var callback = AdmissionCrmDeliveryCallbackParser.Resolve(provider?.SettingsJson, input);
-			AdmissionCrmDeliveryCallbackParser.EnsureSecret(provider?.SettingsJson, callback, log.Channel, deliveryLogId);
+			AdmissionCrmDeliveryCallbackParser.EnsureSignature(provider?.SettingsJson, input, log.Channel, deliveryLogId);
+			await EnsureNotReplayedAsync(tenantId, log.Channel, input.CallbackNonce);
 			return await ApplyResolvedAsync(log, callback);
 		}
 	}
@@ -38,7 +42,8 @@ public class AdmissionCrmPublicDeliveryCallbackWorkflow(
 		{
 			var provider = await GetProviderAsync(academicYearId, channel);
 			var callback = AdmissionCrmDeliveryCallbackParser.Resolve(provider?.SettingsJson, input);
-			AdmissionCrmDeliveryCallbackParser.EnsureSecret(provider?.SettingsJson, callback, channel);
+			AdmissionCrmDeliveryCallbackParser.EnsureSignature(provider?.SettingsJson, input, channel);
+			await EnsureNotReplayedAsync(tenantId, channel, input.CallbackNonce);
 			var providerMessageId = AdmissionCrmDeliveryCallbackParser.NormalizeProviderMessageId(callback.ProviderMessageId);
 			if (string.IsNullOrWhiteSpace(providerMessageId))
 				throw new BusinessException("AdmissionCrm:DeliveryCallbackProviderMessageIdRequired")
@@ -46,6 +51,17 @@ public class AdmissionCrmPublicDeliveryCallbackWorkflow(
 			var log = await GetLogAsync(academicYearId, channel, providerMessageId);
 			return await ApplyResolvedAsync(log, callback with { ProviderMessageId = providerMessageId });
 		}
+	}
+
+	private async Task EnsureNotReplayedAsync(Guid tenantId, AdmissionCrmMessageChannel channel, string nonce)
+	{
+		var cacheKey = $"admission-crm:callback-replay:{tenantId:N}:{channel}:{nonce}";
+		if (await replayCache.GetAsync(cacheKey) != null)
+			throw new BusinessException("AdmissionCrm:DeliveryCallbackReplayDetected").WithData("Channel", channel);
+		await replayCache.SetAsync(cacheKey, "1", new DistributedCacheEntryOptions
+		{
+			AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+		});
 	}
 
 	private async Task<AdmissionCrmCommunicationProviderConfiguration?> GetProviderAsync(

@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -18,7 +17,7 @@ using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.Enrollment;
-using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Records.Profiles;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
@@ -74,72 +73,23 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Require_Student_Management_Add_For_Bulk_Upload()
+    public async Task Should_Not_Expose_Removed_Bulk_Upload_Endpoint()
     {
         using var viewOnlyClient = CreatePermissionClient(
             ShikshaMitraSubmodulePermissions.Students.Records_StudentManagement.View);
-        using var content = BuildBulkStudentUpload("students.csv", "FormNumber,FirstName\nFORM-IGNORED,Ignored\n");
+        using var content = new StringContent("removed endpoint probe");
 
         var response = await viewOnlyClient.PostAsync("/api/students/bulk-upload", content);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Create_Direct_Registration_From_Bulk_Upload_Csv()
-    {
-        var context = await ResolveSeededDivisionContextAsync();
-        var firstName = TestDataHelper.UniqueName("BulkStudent");
-        using var content = BuildBulkStudentUpload(
-            "students.csv",
-            BuildBulkStudentUploadCsv(context, firstName, Factory.SeededDivisionId));
-
-        var response = await Client.PostAsync("/api/students/bulk-upload", content);
-
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-        var body = await response.Content.ReadFromJsonAsync<Result<StudentBulkUploadResultDto>>(JsonOptions);
-        body.ShouldNotBeNull();
-        body.Data.ShouldNotBeNull();
-        body.Data.ImportedCount.ShouldBe(1);
-        body.Data.FailedCount.ShouldBe(0);
-        var studentId = body.Data.StudentIds.Single();
-
-        var detailsResponse = await Client.GetAsync(
-            $"/api/student/enrollment/registrations/{studentId}/general-details");
-        detailsResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await detailsResponse.Content.ReadAsStringAsync());
-        var details = await detailsResponse.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
-        details.ShouldNotBeNull();
-        details.Data.ShouldNotBeNull();
-        details.Data.FirstName.ShouldBe(firstName);
-    }
-
-    [Fact]
-    [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Create_Direct_Registration_From_Bulk_Upload_Csv_With_Utf8_Bom()
-    {
-        var context = await ResolveSeededDivisionContextAsync();
-        var firstName = TestDataHelper.UniqueName("BulkStudentBom");
-        using var content = BuildBulkStudentUpload(
-            "students.csv",
-            "\uFEFF" + BuildBulkStudentUploadCsv(context, firstName, Factory.SeededDivisionId));
-
-        var response = await Client.PostAsync("/api/students/bulk-upload", content);
-
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-        var body = await response.Content.ReadFromJsonAsync<Result<StudentBulkUploadResultDto>>(JsonOptions);
-        body.ShouldNotBeNull();
-        body.Data.ShouldNotBeNull();
-        body.Data.ImportedCount.ShouldBe(1);
-        body.Data.FailedCount.ShouldBe(0);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Reject_Duplicate_Gr_Numbers_Before_Save()
     {
-        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrDupA");
-        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrDupB");
+        var first = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "GrDupA");
+        var second = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "GrDupB");
         var grBase = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 700000;
 
         var okResponse = await Client.PostAsJsonAsync(
@@ -192,8 +142,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Reject_Gr_Number_Transfer_From_Student_In_Same_Batch()
     {
-        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrTransferA");
-        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrTransferB");
+        var first = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "GrTransferA");
+        var second = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "GrTransferB");
         var grBase = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 800000;
 
         var initialResponse = await Client.PostAsJsonAsync(
@@ -228,8 +178,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Allow_Student_To_Keep_Own_Gr_Number_In_Batch()
     {
-        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrKeepA");
-        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "GrKeepB");
+        var first = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "GrKeepA");
+        var second = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "GrKeepB");
         var grBase = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 900000;
 
         var initialResponse = await Client.PostAsJsonAsync(
@@ -259,44 +209,18 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
-    public void Should_Keep_Bulk_Upload_App_Service_Non_Remote_And_Permission_Guarded()
+    public void Should_Not_Keep_Bulk_Upload_App_Service()
     {
-        var serviceType = typeof(StudentBulkUploadAppService);
-
-        var remoteService = serviceType
-            .GetCustomAttributes(inherit: true)
-            .SingleOrDefault(attribute => attribute.GetType().Name == "RemoteServiceAttribute");
-        remoteService.ShouldNotBeNull();
-        remoteService
-            .GetType()
-            .GetProperty("IsEnabled")!
-            .GetValue(remoteService)
-            .ShouldBe(false);
-
-        var authorize = serviceType
-            .GetCustomAttributes<AuthorizeAttribute>()
-            .SingleOrDefault(attribute =>
-                attribute.Policy == ShikshaMitraSubmodulePermissions.Students.Records_StudentManagement.Add);
-        authorize.ShouldNotBeNull();
-    }
-
-    [Fact]
-    [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Reject_Non_Csv_Bulk_Upload()
-    {
-        using var content = BuildBulkStudentUpload("students.xlsx", "not,csv\n");
-
-        var response = await Client.PostAsync("/api/students/bulk-upload", content);
-
-        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        typeof(StudentRecordsListApi_Tests).Assembly.GetType(
+            "ShikshaMitra.Students.Records.StudentBulkUploadAppService").ShouldBeNull();
     }
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_List_Enrolled_Students_By_Division_With_Search()
     {
-        var included = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RecordsListIncluded");
-        var excluded = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RecordsListExcluded");
+        var included = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RecordsListIncluded");
+        var excluded = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RecordsListExcluded");
 
         await MoveRegistrationToEnrolledAsync(included.StudentId);
         await MoveRegistrationToEnrolledAsync(excluded.StudentId);
@@ -335,7 +259,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_List_Inactive_Students_With_Source_Of_Truth_Status()
     {
-        var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RecordsInactive");
+        var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RecordsInactive");
         await MoveRegistrationToEnrolledAsync(student.StudentId);
 
         var statusResponse = await Client.PutAsJsonAsync(
@@ -364,7 +288,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_List_And_Summarize_Student_With_Feb_29_Birthday()
     {
-        var leapDayStudent = await CreateDirectRegistrationWithBirthdayAsync(
+        var leapDayStudent = await CreateStudentFixtureWithBirthdayAsync(
             "LeapDay",
             new DateTimeOffset(2012, 2, 29, 0, 0, 0, TimeSpan.Zero));
         await MoveRegistrationToEnrolledAsync(leapDayStudent.StudentId);
@@ -384,7 +308,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Return_Student_Dashboard_Summaries_From_Tenant_Scope()
     {
-        var enrolled = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RecordsSummary");
+        var enrolled = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RecordsSummary");
         await MoveRegistrationToEnrolledAsync(enrolled.StudentId);
 
         var dashboardResponse = await Client.GetAsync("/api/students/records/dashboard-summary");
@@ -419,14 +343,14 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
             0,
             0,
             TimeSpan.Zero);
-        var olderStudent = await CreateDirectRegistrationWithBirthdayAsync("BirthdayOlder", birthday);
+        var olderStudent = await CreateStudentFixtureWithBirthdayAsync("BirthdayOlder", birthday);
         await MoveRegistrationToEnrolledAsync(olderStudent.StudentId);
         await SetStudentCreationTimeAsync(olderStudent.StudentId, DateTime.UtcNow.AddDays(-90));
 
         var nonMatchingBirthday = birthday.AddDays(-14);
         for (var index = 0; index < 31; index++)
         {
-            var newerStudent = await CreateDirectRegistrationWithBirthdayAsync(
+            var newerStudent = await CreateStudentFixtureWithBirthdayAsync(
                 $"BirthdayWindow{index:00}",
                 nonMatchingBirthday);
             await MoveRegistrationToEnrolledAsync(newerStudent.StudentId);
@@ -445,11 +369,11 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     public async Task Should_Calculate_Attendance_Dashboard_Percentage_From_Marked_Attendance()
     {
         var context = await ResolveSeededDivisionContextAsync();
-        var contextStudentA = await CreateDirectRegistrationForDivisionAsync(
+        var contextStudentA = await CreateStudentFixtureForDivisionAsync(
             context,
             "RecordsAttendanceA",
             Factory.SeededDivisionId);
-        var contextStudentB = await CreateDirectRegistrationForDivisionAsync(
+        var contextStudentB = await CreateStudentFixtureForDivisionAsync(
             context,
             "RecordsAttendanceB",
             Factory.SeededDivisionId);
@@ -512,11 +436,11 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     public async Task Should_Filter_Attendance_Dashboard_Summary_By_Date_Range()
     {
         var context = await ResolveSeededDivisionContextAsync();
-        var studentA = await CreateDirectRegistrationForDivisionAsync(
+        var studentA = await CreateStudentFixtureForDivisionAsync(
             context,
             "RecordsRangeA",
             Factory.SeededDivisionId);
-        var studentB = await CreateDirectRegistrationForDivisionAsync(
+        var studentB = await CreateStudentFixtureForDivisionAsync(
             context,
             "RecordsRangeB",
             Factory.SeededDivisionId);
@@ -594,7 +518,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         var context = await ResolveSeededDivisionContextAsync();
         var originalDivisionId = await CreateDivisionAsync(context.StandardId, "DashOriginal");
         var currentDivisionId = await CreateDivisionAsync(context.StandardId, "DashCurrent");
-        var student = await CreateDirectRegistrationForDivisionAsync(
+        var student = await CreateStudentFixtureForDivisionAsync(
             context,
             "RecordsMovedDash",
             originalDivisionId);
@@ -643,7 +567,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Upload_And_Report_Student_Photo()
     {
-        var enrolled = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RecordsPhoto");
+        var enrolled = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RecordsPhoto");
         await MoveRegistrationToEnrolledAsync(enrolled.StudentId);
 
         using var content = BuildPhotoUpload("student-photo.png", new byte[] { 0x89, 0x50, 0x4E, 0x47 });
@@ -673,7 +597,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Reject_Invalid_Student_Photo_File()
     {
-        var enrolled = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RecordsBadPhoto");
+        var enrolled = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RecordsBadPhoto");
         await MoveRegistrationToEnrolledAsync(enrolled.StudentId);
 
         using var content = BuildPhotoUpload("student-photo.txt", new byte[] { 0x00, 0x01, 0x02, 0x03 });
@@ -686,7 +610,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Retrieve_Students_By_Academic_Scope()
     {
-        var studentDetails = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "ScopeTest");
+        var studentDetails = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "ScopeTest");
         await MoveRegistrationToEnrolledAsync(studentDetails.StudentId);
 
         Guid academicYearId;
@@ -737,8 +661,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Return_Roll_Number_Save_Summary()
     {
-        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollSummaryA");
-        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollSummaryB");
+        var first = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollSummaryA");
+        var second = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollSummaryB");
         await MoveRegistrationToEnrolledAsync(first.StudentId);
         await MoveRegistrationToEnrolledAsync(second.StudentId);
         var term = await CreateAcademicTermAsync(
@@ -770,7 +694,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Roll_Number_Arrangement_Metadata_In_Response_Body()
     {
-        var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollMetadata");
+        var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollMetadata");
         await MoveRegistrationToEnrolledAsync(student.StudentId);
 
         var response = await Client.GetAsync(
@@ -793,7 +717,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Record_List_Arrangement_Metadata_In_Response_Body()
     {
-        var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RecordMetadata");
+        var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RecordMetadata");
         await MoveRegistrationToEnrolledAsync(student.StudentId);
 
         var settingsResponse = await Client.PostAsJsonAsync(
@@ -822,7 +746,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Pending_Gr_And_Roll_Assignment_Students()
     {
-        var pending = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "PendingAssign");
+        var pending = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "PendingAssign");
         await MoveRegistrationToEnrolledAsync(pending.StudentId);
 
         var response = await Client.GetAsync(
@@ -845,7 +769,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Division_Capacity_Distribution_For_Assign_Division_Lookup()
     {
-        var student = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "DivisionCapacity");
+        var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "DivisionCapacity");
         await MoveRegistrationToEnrolledAsync(student.StudentId);
 
         var response = await Client.GetAsync(
@@ -868,8 +792,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Reject_Duplicate_Roll_Number_Batch_Without_Partial_Save()
     {
-        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollDupA");
-        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollDupB");
+        var first = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollDupA");
+        var second = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollDupB");
         await MoveRegistrationToEnrolledAsync(first.StudentId);
         await MoveRegistrationToEnrolledAsync(second.StudentId);
         var term = await CreateAcademicTermAsync(
@@ -896,7 +820,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Reject_Roll_Number_For_Non_Enrolled_Student()
     {
-        var registration = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollNotEnrolled");
+        var registration = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollNotEnrolled");
         var term = await CreateAcademicTermAsync(
             "Roll Enrollment Guard",
             Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 240000,
@@ -923,8 +847,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Reject_Roll_Number_Above_Division_Student_Count_Without_Partial_Save()
     {
-        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollMaxA");
-        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollMaxB");
+        var first = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollMaxA");
+        var second = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollMaxB");
         await MoveRegistrationToEnrolledAsync(first.StudentId);
         await MoveRegistrationToEnrolledAsync(second.StudentId);
         var term = await CreateAcademicTermAsync(
@@ -965,8 +889,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Assign_Different_Roll_Numbers_By_Academic_Term()
     {
-        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollSemA");
-        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollSemB");
+        var first = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollSemA");
+        var second = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollSemB");
         await MoveRegistrationToEnrolledAsync(first.StudentId);
         await MoveRegistrationToEnrolledAsync(second.StudentId);
         var sequenceBase = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 300000;
@@ -1010,8 +934,8 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Reject_Duplicate_Roll_Number_Per_Term_Without_Touching_Other_Terms()
     {
-        var first = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollTermDupA");
-        var second = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "RollTermDupB");
+        var first = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollTermDupA");
+        var second = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "RollTermDupB");
         await MoveRegistrationToEnrolledAsync(first.StudentId);
         await MoveRegistrationToEnrolledAsync(second.StudentId);
         var sequenceBase = Math.Abs(Guid.NewGuid().GetHashCode() % 100000) + 400000;
@@ -1109,43 +1033,21 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         }
     }
 
-    private async Task<StudentGeneralDetailsDto> CreateDirectRegistrationWithBirthdayAsync(
+    private async Task<StudentGeneralDetailsDto> CreateStudentFixtureWithBirthdayAsync(
         string suffix,
         DateTimeOffset dateOfBirth)
     {
-        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto(suffix);
-        dto.DateOfBirth = dateOfBirth;
-
-        var response = await Client.PostAsJsonAsync(
-            "/api/student/enrollment/registrations/general-details",
-            dto,
-            JsonOptions);
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
-        body.ShouldNotBeNull();
-        body.Data.ShouldNotBeNull();
-        return body.Data;
+        return await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(
+            Client, suffix, dateOfBirth: dateOfBirth);
     }
 
-    private async Task<StudentGeneralDetailsDto> CreateDirectRegistrationForDivisionAsync(
+    private async Task<StudentGeneralDetailsDto> CreateStudentFixtureForDivisionAsync(
         SeededDivisionContext context,
         string suffix,
         Guid divisionId)
     {
-        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto(suffix);
-        dto.AcademicMediumId = context.AcademicMediumId;
-        dto.StandardId = context.StandardId;
-        dto.DivisionId = divisionId;
-
-        var response = await Client.PostAsJsonAsync(
-            "/api/student/enrollment/registrations/general-details",
-            dto,
-            JsonOptions);
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-        var body = await response.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions);
-        body.ShouldNotBeNull();
-        body.Data.ShouldNotBeNull();
-        return body.Data;
+        return await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(
+            Client, suffix, divisionId);
     }
 
     private async Task<SeededDivisionContext> ResolveSeededDivisionContextAsync()
@@ -1400,24 +1302,6 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         return document.RootElement.TryGetProperty("detail", out var detail)
             ? detail.GetString()
             : null;
-    }
-
-    private static string BuildBulkStudentUploadCsv(
-        SeededDivisionContext context,
-        string firstName,
-        Guid divisionId) =>
-        string.Join(
-            Environment.NewLine,
-            "FormNumber,FirstName,LastName,DateOfBirth,Gender,ParentContactNumber,StateName,StateIsoCode,City,CountryName,CountryIsoCode,FamilyCast,EducationMediumId,StandardId,DivisionId",
-            $"{StudentEnrollmentTestHelper.UniqueFormNumber()},{firstName},Student,15-05-2010,Female,{TestDataHelper.UniquePhone()},Gujarat,GJ,Ahmedabad,India,IN,General,{context.AcademicMediumId},{context.StandardId},{divisionId}");
-
-    private static MultipartFormDataContent BuildBulkStudentUpload(string fileName, string csv)
-    {
-        var content = new MultipartFormDataContent();
-        var file = new ByteArrayContent(Encoding.UTF8.GetBytes(csv));
-        file.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
-        content.Add(file, "files", fileName);
-        return content;
     }
 
     private static MultipartFormDataContent BuildPhotoUpload(string fileName, byte[] bytes)

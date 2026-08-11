@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using ShikshaMitra.Students.StudentEnrollments;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
@@ -43,7 +44,7 @@ public class PublicAdmissionCommunicationPreferencesDto
 
 public class UpdatePublicAdmissionCommunicationPreferencesDto
 {
-	[Required]
+	[JsonIgnore]
 	public string AccessSessionToken { get; set; } = string.Empty;
 	public bool WhatsApp { get; set; }
 	public bool Sms { get; set; }
@@ -52,7 +53,7 @@ public class UpdatePublicAdmissionCommunicationPreferencesDto
 
 public class WithdrawPublicAdmissionApplicationDto
 {
-	[Required]
+	[JsonIgnore]
 	public string AccessSessionToken { get; set; } = string.Empty;
 
 	[Required]
@@ -131,7 +132,8 @@ public class AdmissionApplicantStatusOfferDto
 
 public class RespondAdmissionApplicantOfferDto
 {
-	public required string AccessSessionToken { get; set; }
+	[JsonIgnore]
+	public string AccessSessionToken { get; set; } = string.Empty;
 	public bool Accept { get; set; }
 	public string? Reason { get; set; }
 	public string Language { get; set; } = "en";

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
-using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
@@ -30,7 +29,6 @@ public class StudentScopeAccessService_Tests : ShikshaMitraApplicationTestBase<S
 
 	private readonly StudentScopeAccessService _studentScopeAccessService;
 	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
-	private readonly IRepository<InquiryPreference, Guid> _inquiryPreferenceRepository;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
 	private readonly IRepository<EducationBoard, Guid> _boardRepository;
 	private readonly IRepository<EducationMedium, Guid> _mediumRepository;
@@ -38,7 +36,6 @@ public class StudentScopeAccessService_Tests : ShikshaMitraApplicationTestBase<S
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<Division, Guid> _divisionRepository;
 	private readonly IRepository<AdmissionInquiryLead, Guid> _leadRepository;
-	private readonly InquiryPreferenceManager _inquiryPreferenceManager;
 	private readonly AcademicYearManager _academicYearManager;
 	private readonly EducationBoardManager _boardManager;
 	private readonly EducationMediumManager _mediumManager;
@@ -53,7 +50,6 @@ public class StudentScopeAccessService_Tests : ShikshaMitraApplicationTestBase<S
 	{
 		_studentScopeAccessService = GetRequiredService<StudentScopeAccessService>();
 		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
-		_inquiryPreferenceRepository = GetRequiredService<IRepository<InquiryPreference, Guid>>();
 		_academicYearRepository = GetRequiredService<IRepository<AcademicYear, Guid>>();
 		_boardRepository = GetRequiredService<IRepository<EducationBoard, Guid>>();
 		_mediumRepository = GetRequiredService<IRepository<EducationMedium, Guid>>();
@@ -61,7 +57,6 @@ public class StudentScopeAccessService_Tests : ShikshaMitraApplicationTestBase<S
 		_standardRepository = GetRequiredService<IRepository<Standard, Guid>>();
 		_divisionRepository = GetRequiredService<IRepository<Division, Guid>>();
 		_leadRepository = GetRequiredService<IRepository<AdmissionInquiryLead, Guid>>();
-		_inquiryPreferenceManager = GetRequiredService<InquiryPreferenceManager>();
 		_academicYearManager = GetRequiredService<AcademicYearManager>();
 		_boardManager = GetRequiredService<EducationBoardManager>();
 		_mediumManager = GetRequiredService<EducationMediumManager>();
@@ -243,27 +238,6 @@ public class StudentScopeAccessService_Tests : ShikshaMitraApplicationTestBase<S
 		}
 	}
 
-	[Fact]
-	public async Task EnsureCanUseInquiryPreferenceAsync_Should_Deny_Preference_From_Different_Academic_Year()
-	{
-		var userId = Guid.NewGuid();
-		var inScopeAcademicYearId = Guid.NewGuid();
-		var preferenceAcademicYearId = Guid.NewGuid();
-		await SeedAcademicYearScopeAsync(userId, inScopeAcademicYearId);
-		var preference = await SeedInquiryPreferenceAsync(preferenceAcademicYearId);
-
-		using (_currentPrincipalAccessor.Change(BuildPrincipal(userId)))
-		{
-			var exception = await Should.ThrowAsync<BusinessException>(async () =>
-				await _studentScopeAccessService.EnsureCanUseInquiryPreferenceAsync(
-					preference.Id,
-					inScopeAcademicYearId,
-					nameof(EnsureCanUseInquiryPreferenceAsync_Should_Deny_Preference_From_Different_Academic_Year)));
-
-			exception.Code.ShouldBe(UserScopeErrorCodes.AccessDenied);
-		}
-	}
-
 	private async Task<AdmissionLeadHierarchy> CreateAdmissionLeadHierarchyAsync()
 	{
 		return await WithUnitOfWorkAsync(async () =>
@@ -401,21 +375,6 @@ public class StudentScopeAccessService_Tests : ShikshaMitraApplicationTestBase<S
 				autoSave: true);
 
 			await _userScopeService.InvalidateUserScopeCacheAsync(userId);
-		});
-	}
-
-	private async Task<InquiryPreference> SeedInquiryPreferenceAsync(Guid academicYearId)
-	{
-		return await WithUnitOfWorkAsync(async () =>
-		{
-			var preference = await _inquiryPreferenceManager.CreateAsync(
-				_currentTenant.Id,
-				academicYearId,
-				$"Scope Test {Guid.NewGuid():N}",
-				null,
-				0);
-
-			return await _inquiryPreferenceRepository.InsertAsync(preference, autoSave: true);
 		});
 	}
 

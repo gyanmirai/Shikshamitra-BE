@@ -29,7 +29,9 @@ public class AdmissionCrmActivationPlacementReadiness(
 	{
 		await scopeAccess.EnsureCanAccessStandardAsync(input.StandardId, operation);
 		await scopeAccess.EnsureCanAccessDivisionAsync(input.DivisionId, operation);
-		if (lead.TargetStandardId.HasValue && lead.TargetStandardId.Value != input.StandardId)
+		if (!lead.TargetStandardId.HasValue)
+			return (false, "The applicant must have a target standard before activation.", 0, 0);
+		if (lead.TargetStandardId.Value != input.StandardId)
 			return (false, "The activation placement must match the applicant's target standard.", 0, 0);
 		var board = await boardRepository.FindAsync(input.EducationBoardId);
 		var medium = await mediumRepository.FindAsync(input.AcademicMediumId);

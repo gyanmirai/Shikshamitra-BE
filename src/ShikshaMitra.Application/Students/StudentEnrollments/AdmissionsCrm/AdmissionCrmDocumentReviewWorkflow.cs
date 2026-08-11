@@ -21,7 +21,8 @@ public class AdmissionCrmDocumentReviewWorkflow(
 	IBlobContainer blobContainer,
 	AdmissionCrmDocumentAccessReader accessReader,
 	AdmissionCrmDocumentChecklistWorkflow checklistWorkflow,
-	AdmissionCrmDocumentTimelineWriter timelineWriter)
+	AdmissionCrmDocumentTimelineWriter timelineWriter,
+	IAdmissionCrmDocumentMalwareScanner malwareScanner)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionCrmApplicantDocumentChecklistDto> UploadFromApplicantAsync(
@@ -140,6 +141,7 @@ public class AdmissionCrmDocumentReviewWorkflow(
 		var requirement = template.Requirements.FirstOrDefault(x => string.Equals(x.Key, input.RequirementKey, StringComparison.OrdinalIgnoreCase))
 			?? throw new BusinessException("AdmissionCrm:DocumentRequirementNotFound");
 		AdmissionCrmDocumentUploadValidator.Validate(requirement, input, Clock.Now);
+		await malwareScanner.EnsureCleanAsync(input.Content);
 		var current = await accessReader.GetCurrentDocumentOrDefaultAsync(assignment.Id, requirement.Key);
 		var hash = Convert.ToHexString(SHA256.HashData(input.Content)).ToLowerInvariant();
 		if (current?.Sha256Hash == hash) throw new BusinessException("AdmissionCrm:DuplicateDocumentUpload");

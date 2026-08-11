@@ -9,7 +9,7 @@ using ShikshaMitra.Finance.Fees.Charges.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Students;
-using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Records.Profiles;
 
 namespace ShikshaMitra.Finance.Charges;
 
@@ -22,7 +22,6 @@ public static class ChargeTestHelper
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-	private const string RegistrationUrl = "/api/student/enrollment/registrations";
 	private const string ChargeCategoriesUrl = "/api/charge-categories";
 	private const string ChargesUrl = "/api/app/charges";
 
@@ -32,6 +31,7 @@ public static class ChargeTestHelper
 	public static Guid DefaultMediumId { get; set; }
 	public static Guid DefaultStandardId { get; set; }
 	public static Guid DefaultDivisionId { get; set; }
+	public static ShikshaMitraApiTestFactory Factory { get; set; } = null!;
 
 	// ── Prerequisite data factory methods ────────────────────────────────────
 
@@ -42,34 +42,9 @@ public static class ChargeTestHelper
 	/// </summary>
 	public static async Task<(Guid StudentId, Guid BoardId)> CreateStudentAsync(HttpClient client)
 	{
-		var dto = new CreateDirectRegistrationDto
-		{
-			AcademicMediumId = DefaultMediumId,
-			StandardId = DefaultStandardId,
-			DivisionId = DefaultDivisionId,
-			FormNumber = $"CHRG-{Guid.NewGuid():N}"[..14].ToUpperInvariant(),
-			FirstName = TestDataHelper.UniqueName("ChrgStudent"),
-			LastName = "TestStudent",
-			DateOfBirth = DateTimeOffset.UtcNow.AddYears(-12),
-			Gender = GenderEnum.Male,
-			PrimaryContactNo = TestDataHelper.UniquePhone(),
-			FamilyCast = "General",
-			City = "Mumbai",
-			State = new State("Maharashtra", "MH"),
-			Country = new Country("India", "IN"),
-		};
-
-		var response = await client.PostAsJsonAsync($"{RegistrationUrl}/general-details", dto, JsonOptions);
-		await EnsureSuccessAsync(response, "Student creation failed");
-
-		var result = await response.Content
-			.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions)
-			?? throw new InvalidOperationException("Null response from student creation");
-
-		var details = result.Data
-			?? throw new InvalidOperationException("Null student details in response");
-
-		return (details.StudentId, details.AcademicBoardId);
+		var student = await Factory.CreateStudentFixtureAsync(
+			TestDataHelper.UniqueName("ChrgStudent"), TestDataHelper.UniquePhone(), DefaultDivisionId);
+		return (student.Id, student.AcademicBoardId!.Value);
 	}
 
 	/// <summary>

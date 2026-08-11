@@ -18,8 +18,8 @@ Controller source paths are canonical when route details change.
 | Family | Controller path | Requirement role |
 |---|---|---|
 | Admissions CRM | `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/AdmissionsCrm/**` | Pipeline, assessments, visits and events, registration, Finance handoff display, placement review, activation, and communication |
-| Enrollment settings | Admissions CRM catalog and configuration controllers | Compatibility settings such as Inquiry Source where still active |
-| Direct student registration and notes | `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/**` | Existing active-student registration details and notes outside the Admissions CRM aggregate |
+| Enrollment settings | Admissions CRM catalog and configuration controllers | Admission Year, pipeline, assessment, registration, communication, placement, and activation configuration |
+| Active-student notes | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentNotesController.cs` | Student Records notes with named permissions and UserScope enforcement |
 
 ## Records API families
 
@@ -27,7 +27,7 @@ Controller source paths are canonical when route details change.
 |---|---|
 | Student list | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentListController.cs` |
 | Student management | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentManagementController.cs` |
-| Bulk upload | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentBulkUploadController.cs` |
+| Student profiles and documents | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentProfileController.cs` |
 | Dashboard | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentDashboardController.cs` |
 | Certificates | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/StudentCertificateController.cs` |
 | House settings | `src/ShikshaMitra.HttpApi/Controllers/Student/Records/Settings/HouseSettingsController.cs` |
@@ -41,16 +41,15 @@ Controller source paths are canonical when route details change.
 | Student leave type settings | `src/ShikshaMitra.HttpApi/Controllers/Student/Attendance/Settings/StudentLeaveTypeController.cs` |
 | Identity compliance | Student identity compliance controller source paths |
 
-## Inquiry Source compatibility
+## Inquiry sources
 
-Inquiry Source is exposed through the existing `inquiry-preferences` route for compatibility.
-Product copy should say Inquiry Source, while route and DTO names can still use Inquiry Preference.
+Inquiry sources are owned by Admissions CRM configuration. Product copy and new contracts should use “Inquiry Source.”
 
 | Route | Purpose |
 |---|---|
-| `/api/student-enrollment/{academicYearId}/settings/inquiry-preferences` | List or create Inquiry Sources |
-| `/api/student-enrollment/settings/inquiry-preferences/{id}` | Get, update, or delete one source |
-| `/api/student-enrollment/settings/inquiry-preferences/{id}/status` | Activate or deactivate one source |
+| `/api/student-enrollment/admissions-crm/{academicYearId}/catalog/inquiry-sources` | List or create Inquiry Sources |
+| `/api/student-enrollment/admissions-crm/catalog/inquiry-sources/{id}` | Update one source |
+| `/api/student-enrollment/admissions-crm/catalog/inquiry-sources/{id}/status` | Activate or deactivate one source |
 
 ## Refined Admissions CRM contract
 
@@ -115,8 +114,6 @@ Every applicant must have a Pipeline lead before assessment, registration, Finan
 | `/setup/admission-years/drafts/{id}` | Update a draft with concurrency protection |
 | `/setup/admission-years/{id}/publish` | Validate and publish an immutable setup version |
 | `/setup/admission-years/{id}/close` | Close a published setup with an audit reason |
-| `/setup/cycles` | Compatibility route for the older academic-year setup list |
-| `/setup/cycles/{academicYearId}/summary` | Compatibility route for the older admission-year summary |
 | `/{academicYearId}/configuration/cycle` | Existing code-level route for admission-year configuration |
 | `/{academicYearId}/configuration/pipeline-stages` | Existing code-level route for fixed Pipeline stage labels and metadata |
 | `/{academicYearId}/configuration/registration-templates` | Configure registration templates |
@@ -124,7 +121,6 @@ Every applicant must have a Pipeline lead before assessment, registration, Finan
 | `/{academicYearId}/communication/providers` | Read provider configuration with credential values redacted |
 | `/{academicYearId}/communication/providers/{channel}` | Update one channel and its write-only provider credentials |
 
-The existing route name `setup/cycles` may remain in API code for compatibility.
 User-facing copy should use Admission Year Setup unless a specific code route is being discussed.
 `ApplicantNumber` is the short staff-facing Enrollment identifier. It is immutable after lead creation,
 searchable with or without the `#` display prefix, and projected into Pipeline, Assessments,

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Attendance;
-using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -27,7 +26,6 @@ public class StudentScopeAccessService(
 	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 	IRepository<EducationMedium, Guid> educationMediumRepository,
 	IRepository<EducationBoard, Guid> educationBoardRepository,
-	IRepository<InquiryPreference, Guid> inquiryPreferenceRepository,
 	IRepository<AdmissionCrmInquirySource, Guid> admissionCrmInquirySourceRepository)
 	: ApplicationService, ITransientDependency
 {
@@ -277,41 +275,10 @@ public class StudentScopeAccessService(
 			.WithData("Operation", operation);
 	}
 
-	public async Task EnsureCanUseInquiryPreferenceAsync(
-		Guid? inquiryPreferenceId,
-		Guid academicYearId,
-		string operation,
-		Guid? existingInquiryPreferenceId = null)
-	{
-		if (!inquiryPreferenceId.HasValue)
-		{
-			return;
-		}
-
-		var inquiryPreference = await inquiryPreferenceRepository.GetAsync(inquiryPreferenceId.Value);
-		if (inquiryPreference.AcademicYearId != academicYearId)
-		{
-			throw new BusinessException(UserScopeErrorCodes.AccessDenied)
-				.WithData("InquiryPreferenceId", inquiryPreference.Id)
-				.WithData("AcademicYearId", academicYearId)
-				.WithData("Operation", operation);
-		}
-
-		if (!inquiryPreference.IsActive && inquiryPreference.Id != existingInquiryPreferenceId)
-		{
-			throw new BusinessException("InquiryPreference:Inactive")
-				.WithData("InquiryPreferenceId", inquiryPreference.Id)
-				.WithData("AcademicYearId", academicYearId)
-				.WithData("Operation", operation);
-		}
-
-		await EnsureCanAccessAcademicYearAsync(inquiryPreference.AcademicYearId, operation);
-	}
-
 	public async Task EnsureCanUseInquirySourceAsync(
 		Guid? inquirySourceId,
 		Guid academicYearId,
-		AdmissionInquiryChannel channel,
+		AdmissionInquiryChannel? channel,
 		string operation,
 		Guid? existingInquirySourceId = null)
 	{
@@ -335,11 +302,11 @@ public class StudentScopeAccessService(
 				.WithData("InquirySourceId", source.Id);
 		}
 
-		if (!source.Supports(channel))
+		if (channel.HasValue && !source.Supports(channel.Value))
 		{
 			throw new BusinessException("AdmissionCrm:InquirySourceChannelNotAllowed")
 				.WithData("InquirySourceId", source.Id)
-				.WithData("Channel", channel);
+				.WithData("Channel", channel.Value);
 		}
 
 		await EnsureCanAccessAcademicYearAsync(source.AcademicYearId, operation);

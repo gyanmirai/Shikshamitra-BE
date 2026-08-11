@@ -31,7 +31,7 @@ public class AdmissionCrmDocumentUploadValidator_Tests
 	}
 
 	[Fact]
-	public void Short_legacy_office_content_with_a_wrong_signature_is_rejected()
+	public void Short_office_content_with_a_wrong_signature_is_rejected()
 	{
 		var requirement = CreateRequirement();
 		requirement.AcceptedExtensions = ["doc"];

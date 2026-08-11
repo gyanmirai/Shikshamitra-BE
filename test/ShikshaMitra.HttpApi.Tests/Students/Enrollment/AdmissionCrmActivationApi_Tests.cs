@@ -114,39 +114,6 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Allow_Year_Wide_Placement_For_Legacy_Lead_Without_Target_Standard()
-	{
-		var placementResponse = await Client.GetAsync(
-			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/activation/placement-options");
-		placementResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await placementResponse.Content.ReadAsStringAsync());
-		var placement = (await placementResponse.Content
-			.ReadFromJsonAsync<AdmissionCrmPlacementOptionDto[]>(JsonOptions))!.First();
-		var lead = await CreateLeadAsync(
-			$"legacy-activation-{Guid.NewGuid():N}@example.test",
-			placement.StandardName,
-			standardId: null);
-
-		var previewResponse = await Client.PostAsJsonAsync(
-			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/activation/preview",
-			new PreviewAdmissionCrmActivationDto
-			{
-				EducationBoardId = placement.EducationBoardId,
-				AcademicMediumId = placement.AcademicMediumId,
-				AcademicMediumStageId = placement.AcademicMediumStageId,
-				StandardId = placement.StandardId,
-				DivisionId = placement.DivisionId,
-				GrNumberSeriesId = Guid.NewGuid()
-			},
-			JsonOptions);
-		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await previewResponse.Content.ReadAsStringAsync());
-		var preview = (await previewResponse.Content
-			.ReadFromJsonAsync<AdmissionCrmActivationPreviewDto>(JsonOptions))!;
-		var placementCheck = preview.Items.Single(item => item.Key == "placement");
-		placementCheck.Status.ShouldBe(AdmissionCrmActivationStepStatus.Completed);
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Scope_Placement_Options_And_Reject_Sibling_Standard_For_Request_And_Execute()
 	{
 		var placementResponse = await Client.GetAsync(
@@ -898,6 +865,9 @@ public class AdmissionCrmActivationApi_Tests : ShikshaMitraApiTestBase
 				AdmissionIntent = "Final activation", DesiredClassName = standardName, DateOfBirth = DateTimeOffset.UtcNow.AddYears(-7),
 				PrimaryContactNo = "9" + Random.Shared.NextInt64(100000000, 999999999), Email = email,
 				Channel = AdmissionInquiryChannel.QuickCallEntry, FirstName = "Activate" + Guid.NewGuid().ToString("N")[..6], LastName = "Student",
+				ParentGuardianName = "Activation Parent",
+				InquirySourceId = Factory.SeededInquirySourceId,
+				InquiryTypeId = Factory.SeededInquiryTypeId,
 				TargetStandardId = standardId
 			}, JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());

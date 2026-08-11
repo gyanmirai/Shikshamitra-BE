@@ -73,7 +73,7 @@ internal static class AdmissionCrmRegistrationModelMapper
 		["firstName"] = lead.FirstName, ["middleName"] = lead.MiddleName, ["lastName"] = lead.LastName,
 		["dateOfBirth"] = lead.DateOfBirth?.ToString("yyyy-MM-dd"), ["parentGuardianName"] = lead.ParentGuardianName,
 		["primaryContactNo"] = lead.PrimaryContactNo, ["email"] = lead.Email, ["desiredClassName"] = lead.DesiredClassName,
-		["campus"] = lead.CampusBranchName, ["admissionRoute"] = lead.IntendedRouteNameSnapshot ?? lead.IntendedRouteType?.ToString(),
+		["campus"] = lead.CampusBranchName, ["admissionRoute"] = lead.IntendedRouteNameSnapshot,
 		["admissionRouteDefinitionId"] = lead.IntendedRouteDefinitionId,
 		["admissionRouteDefinitionVersion"] = lead.IntendedRouteDefinitionVersion
 	};

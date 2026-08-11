@@ -153,13 +153,15 @@ public abstract class AdmissionCrmApiTestBase(ShikshaMitraApiTestFactory factory
 			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
 			new CreateAdmissionCrmLeadDto
 			{
+				InquirySourceId = Factory.SeededInquirySourceId,
+				InquiryTypeId = Factory.SeededInquiryTypeId,
 				AdmissionIntent = admissionIntent,
 				PrimaryContactNo = "989898" + Random.Shared.Next(1000, 9999),
 				Email = "crm.lead." + Guid.NewGuid().ToString("N")[..8] + "@example.com",
 				Channel = AdmissionInquiryChannel.WalkInReception,
 				FirstName = "Aditi",
 				ParentGuardianName = "Nisha Patel " + Guid.NewGuid().ToString("N")[..6],
-				TargetStandardId = targetStandardId,
+				TargetStandardId = targetStandardId ?? Factory.SeededStandardId,
 				CampusBranchName = "Main Campus",
 				PreferredCommunicationLanguage = "English",
 				DesiredClassName = "Grade 4"

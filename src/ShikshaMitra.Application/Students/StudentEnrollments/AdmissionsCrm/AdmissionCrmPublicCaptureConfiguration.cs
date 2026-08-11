@@ -167,16 +167,4 @@ public class AdmissionCrmPublicCaptureConfiguration(
 		}
 	}
 
-	public static string BuildLegacyAdmissionYearSnapshot(AdmissionCrmCycleConfiguration configuration) =>
-		JsonSerializer.Serialize(
-			new
-			{
-				schemaVersion = 0,
-				source = "legacy-cycle-configuration",
-				configuration.AcademicYearId,
-				configuration.EntranceExamRequired,
-				FinanceVerificationRequired = false,
-				PlacementTiming = AdmissionCrmPlacementTiming.StandardBeforeActivation
-			},
-			AdmissionCrmPublicFormat.JsonOptions);
 }

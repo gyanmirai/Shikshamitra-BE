@@ -1,13 +1,12 @@
-﻿using AutoMapper;
+using AutoMapper;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.Attendance.Settings;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.StudentRecords;
-using ShikshaMitra.Students.Enrollments.Notes;
-using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Records.Notes;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Students.StudentEnrollments;
-using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.Students.Records.Profiles;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using System;
 using System.Linq;
@@ -18,38 +17,6 @@ public class StudentMapperProfile : Profile
 {
 	public StudentMapperProfile()
 	{
-		// Entrance Exam Slot mappings
-		CreateMap<EntranceExamSlot, EntranceExamSlotDto>()
-			.ForMember(dest => dest.StartDateTime,
-				opt => opt.MapFrom(src => src.StartDate))
-			.ForMember(dest => dest.EndDateTime,
-				opt => opt.MapFrom(src => src.EndDate))
-			.ForMember(dest => dest.Duration,
-				opt => opt.MapFrom(src => (int)(src.EndDate - src.StartDate).TotalMinutes))
-			.ForMember(dest => dest.EnrolledStudents,
-				opt => opt.Ignore()) // Will be set manually in app service
-			.ForMember(dest => dest.AvailableSeats,
-				opt => opt.Ignore()); // Will be set manually in app service
-
-		CreateMap<EntranceExamSlot, EntranceExamSlotDetailDto>()
-			.IncludeBase<EntranceExamSlot, EntranceExamSlotDto>()
-			.ForMember(dest => dest.CreatedTime,
-				opt => opt.MapFrom(src => src.CreationTime))
-			.ForMember(dest => dest.LastModifiedTime,
-				opt => opt.MapFrom(src => src.LastModificationTime));
-
-		CreateMap<EntranceExamSlot, AvailableExamSlotDto>()
-			.ForMember(dest => dest.Date,
-				opt => opt.MapFrom(src => src.StartDate.Date))
-			.ForMember(dest => dest.StartTime,
-				opt => opt.MapFrom(src => src.StartDate.TimeOfDay))
-			.ForMember(dest => dest.EndTime,
-				opt => opt.MapFrom(src => src.EndDate.TimeOfDay))
-			.ForMember(dest => dest.AvailableSeats,
-				opt => opt.Ignore()) // Will be set manually
-			.ForMember(dest => dest.DisplayText,
-				opt => opt.Ignore()); // Will be set manually
-
 		// Student Leave Type mappings
 		CreateMap<StudentLeaveType, StudentLeaveTypeDto>();
 		CreateMap<CreateUpdateStudentLeaveTypeDto, StudentLeaveType>();
@@ -97,8 +64,8 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.SecondaryContactNo, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.SecondaryContactNo : null))
 			.ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.ContactDetail != null ? src.ContactDetail.Email : null))
 			.ForMember(dest => dest.PreviousSchool, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.PreviousSchool : null))
-			.ForMember(dest => dest.InquiryPreferenceId, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquiryPreferenceId : null))
-			.ForMember(dest => dest.InquiryPreference, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.InquiryPreference != null ? src.AdditionalDetail.InquiryPreference.PreferenceName : null))
+			.ForMember(dest => dest.InquirySourceId, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquirySourceId : null))
+			.ForMember(dest => dest.InquirySource, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.InquirySource != null ? src.AdditionalDetail.InquirySource.DisplayName : null))
 			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.RegistrationFormNo : null))
 			.ForMember(dest => dest.NextReminderDate, opt => opt.MapFrom(src => src.Notes.OrderByDescending(x => x.CreationTime).FirstOrDefault().NextReminderDate))
 			.ForMember(dest => dest.InquiryStatus, opt => opt.MapFrom(src => src.Notes.OrderByDescending(x => x.CreationTime).FirstOrDefault().Status))
@@ -137,8 +104,8 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.AdharNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.AdharNo : null))
 			.ForMember(dest => dest.ApparId, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.ApparId : null))
 			.ForMember(dest => dest.PanNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.PanNo : null))
-			.ForMember(dest => dest.InquiryPreferenceId, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquiryPreferenceId : null))
-			.ForMember(dest => dest.InquiryPreference, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.InquiryPreference != null ? src.AdditionalDetail.InquiryPreference.PreferenceName : null))
+			.ForMember(dest => dest.InquirySourceId, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquirySourceId : null))
+			.ForMember(dest => dest.InquirySource, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.InquirySource != null ? src.AdditionalDetail.InquirySource.DisplayName : null))
 			.ForMember(dest => dest.Religion, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.Religion : null))
 			.ForMember(dest => dest.FamilyCast, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.FamilyCast : null))
 			.ForMember(dest => dest.CastCategory, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.CastCategory : null))

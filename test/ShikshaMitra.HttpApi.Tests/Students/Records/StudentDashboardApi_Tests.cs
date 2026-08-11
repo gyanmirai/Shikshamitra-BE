@@ -63,7 +63,7 @@ public class StudentDashboardApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Build_Ready_Reporting_Dashboard_Payload()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
-		var registration = await StudentEnrollmentTestHelper.CreateDirectRegistrationAsync(Client, "ReportingDash");
+		var registration = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(Client, "ReportingDash");
 
 		var response = await Client.PostAsync($"{ReportingPreviewUrl}/refresh", content: null);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());

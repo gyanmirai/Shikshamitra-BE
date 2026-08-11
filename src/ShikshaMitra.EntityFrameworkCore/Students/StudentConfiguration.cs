@@ -26,6 +26,14 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 		// Add indexes for filtering by admission status and academic year
 		builder.HasIndex(x => new { x.AdmissionApprovalStatus, x.DivisionId });
 		builder.HasIndex(x => new { x.AcademicYearId, x.Status });
+		builder.HasIndex(x => new { x.TenantId, x.GrNo })
+			.IsUnique()
+			.HasDatabaseName("UX_AppStudents_TenantId_GrNo")
+			.HasFilter("\"IsDeleted\" = false AND \"GrNo\" IS NOT NULL AND \"TenantId\" IS NOT NULL");
+		builder.HasIndex(x => x.GrNo)
+			.IsUnique()
+			.HasDatabaseName("UX_AppStudents_Host_GrNo")
+			.HasFilter("\"IsDeleted\" = false AND \"GrNo\" IS NOT NULL AND \"TenantId\" IS NULL");
 
 		// Configure navigation properties to load aggregate parts together
 		// This ensures the aggregate is loaded as a complete unit

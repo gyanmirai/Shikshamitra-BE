@@ -160,7 +160,7 @@ public class AdmissionCrmExamApi_Tests(ShikshaMitraApiTestFactory factory) : Adm
 			var issuedLead = await issueResponse.Content.ReadFromJsonAsync<AdmissionCrmLeadDto>(JsonOptions);
 			issuedLead.ShouldNotBeNull();
 			issuedLead.RegistrationFormNumber.ShouldBe(formNumber);
-			issuedLead.RegistrationFormAmount.ShouldBe(250D);
+			issuedLead.RegistrationFormAmount.ShouldBe(250m);
 			issuedLead.RegistrationFormIssuedAt.ShouldNotBeNull();
 
 			var timeline = await GetCrmTimelineAsync(lead.Id);

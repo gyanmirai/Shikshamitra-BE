@@ -15,6 +15,7 @@ public class AdmissionCrmActivationStudentWorkflow(
 	IRepository<AdmissionInquiryLead, Guid> leadRepository,
 	IRepository<AdmissionCrmIdentifierAllocation, Guid> identifierRepository,
 	AdmissionCrmIdentifierWorkflow identifierWorkflow,
+	AdmissionCrmStudentProfileProjector profileProjector,
 	AdmissionCrmStudentActivationOrchestrator orchestrator) : ApplicationService, ITransientDependency
 {
 	public async Task<(Guid StudentId, string? Failure)> ActivateAsync(
@@ -28,11 +29,12 @@ public class AdmissionCrmActivationStudentWorkflow(
 			var identifier = await identifierWorkflow.GetOrAllocateAsync(activation, lead, steps);
 			if (identifier.Sequence > int.MaxValue) throw new BusinessException("AdmissionCrm:GrSequenceExceedsStudentLimit");
 			if (!lead.DateOfBirth.HasValue) throw new BusinessException("AdmissionCrm:ActivationDateOfBirthRequired");
-			student = Student.CreateDirectRegistration(GuidGenerator.Create(), CurrentTenant.Id,
+			student = Student.CreateForAdmission(GuidGenerator.Create(), CurrentTenant.Id,
 				lead.FirstName, lead.MiddleName, lead.LastName, lead.AcademicYearId, activation.EducationBoardId,
 				activation.AcademicMediumId, activation.AcademicMediumStageId, activation.StandardId,
 				activation.DivisionId, lead.DateOfBirth.Value, activation.Gender,
 				lead.PrimaryContactNo ?? string.Empty, email: lead.Email);
+			await profileProjector.ProjectAsync(student, lead, activation.Gender);
 			student.MoveToAdmission();
 			student.AssignGrNo((int)identifier.Sequence);
 			if (activation.RollNumber.HasValue) student.AssignRollNo(activation.RollNumber.Value);
@@ -47,6 +49,8 @@ public class AdmissionCrmActivationStudentWorkflow(
 		}
 		else
 		{
+			if (await profileProjector.ProjectAsync(student, lead, activation.Gender))
+				await studentRepository.UpdateAsync(student, autoSave: true);
 			activation.LinkStudent(student.Id);
 			AdmissionCrmActivationMapper.UpsertStep(steps, "student_conversion",
 				AdmissionCrmActivationStepStatus.Completed, $"Existing student {student.Id} reused.");

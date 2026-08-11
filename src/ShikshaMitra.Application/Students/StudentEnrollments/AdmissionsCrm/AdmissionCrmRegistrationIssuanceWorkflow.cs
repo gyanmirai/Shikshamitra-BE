@@ -78,7 +78,7 @@ public class AdmissionCrmRegistrationIssuanceWorkflow(
 		var statusPath = await statusLinks.EnsureAsync(lead, now.AddDays(Math.Max(expiryDays, 90)));
 		if (!lead.RegistrationFormIssuedAt.HasValue)
 		{
-			lead.IssueRegistrationForm(formNumber, decimal.ToDouble(template.FeeAmount), now);
+			lead.IssueRegistrationForm(formNumber, template.FeeAmount, now);
 			await leadRepository.UpdateAsync(lead, autoSave: false);
 		}
 		await timeline.AddAsync(lead, AdmissionCrmTimelineEventType.RegistrationFormIssued, "Registration form issued",

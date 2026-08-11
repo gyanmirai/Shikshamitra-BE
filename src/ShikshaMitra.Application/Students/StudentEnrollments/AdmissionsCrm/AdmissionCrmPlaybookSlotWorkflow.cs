@@ -12,7 +12,6 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionCrmPlaybookSlotWorkflow(
 	IRepository<AdmissionCrmExamSlot, Guid> slotRepository,
 	IRepository<AdmissionCrmEntranceExamRecord, Guid> examRepository,
-	IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
 	AdmissionCrmExamSlotManager slotManager,
 	AdmissionCrmPlaybookAccess access)
 	: ApplicationService, ITransientDependency
@@ -87,13 +86,11 @@ public class AdmissionCrmPlaybookSlotWorkflow(
 		if (template != null)
 			futureSlots = futureSlots.Where(x => x.SlotName != null && x.SlotName.StartsWith(template.Name + " - ", StringComparison.OrdinalIgnoreCase)).ToList();
 		var slotIds = futureSlots.Select(x => x.Id).ToList();
-		var studentQueryable = await studentAdditionalDetailRepository.GetQueryableAsync();
-		var legacy = await AsyncExecuter.ToListAsync(studentQueryable.Where(x => x.EntranceExamSlotId.HasValue && slotIds.Contains(x.EntranceExamSlotId.Value)));
 		var examQueryable = await examRepository.GetQueryableAsync();
 		var crm = await AsyncExecuter.ToListAsync(examQueryable.Where(x => x.TenantId == CurrentTenant.Id && slotIds.Contains(x.EntranceExamSlotId)));
 		var candidates = futureSlots.Select(slot =>
 		{
-			var scheduled = legacy.Count(x => x.EntranceExamSlotId == slot.Id) + crm.Count(x => x.EntranceExamSlotId == slot.Id);
+			var scheduled = crm.Count(x => x.EntranceExamSlotId == slot.Id);
 			return new { Slot = slot, Scheduled = scheduled, Available = slot.StudentLimit - scheduled };
 		}).Where(x => x.Available > 0).ToList();
 		if (candidates.Count == 0) throw new BusinessException("AdmissionCrm:NoAvailableConfiguredExamSlot");

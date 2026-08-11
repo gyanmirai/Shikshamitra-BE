@@ -1,4 +1,4 @@
-﻿namespace ShikshaMitra.Students.StudentEnrollments.Registration;
+namespace ShikshaMitra.Students.Records.Profiles;
 
 public enum Category
 {

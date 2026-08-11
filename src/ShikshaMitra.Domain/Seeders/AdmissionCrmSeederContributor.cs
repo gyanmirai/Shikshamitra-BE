@@ -133,7 +133,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 		await RepairStagesAsync(tenantId, academicYear.Id);
 		await RepairDocumentTypesAsync(tenantId, academicYear.Id);
 		var standards = await ResolveDemoStandardsAsync(academicYear.Id);
-		await ResetLegacyDemoScenariosAsync(tenantId);
+		await ResetDemoScenariosAsync(tenantId);
 		await CurrentUnitOfWork.SaveChangesAsync();
 
 		var sources = await RepairSourcesAsync(tenantId, academicYear.Id);
@@ -174,7 +174,7 @@ public partial class AdmissionCrmSeederContributor : BaseSeederContributor
 
 	private async Task<AcademicYear?> GetDemoScenarioAcademicYearAsync(Guid tenantId)
 	{
-		var deterministicLeadIds = LegacyDemoLeadKeys()
+		var deterministicLeadIds = DemoLeadKeys()
 			.Select(key => StableId(tenantId, $"lead:{key}"))
 			.ToHashSet();
 		var existingDemoLeads = await _leadRepository.GetListAsync(item => deterministicLeadIds.Contains(item.Id));

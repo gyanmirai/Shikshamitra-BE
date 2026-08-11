@@ -67,6 +67,8 @@ public class AdmissionInquiryLeadConfiguration : IEntityTypeConfiguration<Admiss
 			.HasColumnType("jsonb");
 		builder.Property(x => x.RegistrationFormNumber)
 			.HasMaxLength(AdmissionCrmConsts.MaxRegistrationFormNumberLength);
+		builder.Property(x => x.RegistrationFormAmount)
+			.HasPrecision(18, 2);
 		builder.Property(x => x.Channel)
 			.HasConversion<int>()
 			.IsRequired();

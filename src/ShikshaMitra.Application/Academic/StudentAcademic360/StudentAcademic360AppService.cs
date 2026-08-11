@@ -13,7 +13,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments;
-using ShikshaMitra.Students.StudentEnrollments.Registration;
+using ShikshaMitra.Students.Records.Profiles;
 using ShikshaMitra.Students.StudentRecords;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -170,7 +170,7 @@ public class StudentAcademic360AppService(
             SecondaryContactNo = student.ContactDetail?.SecondaryContactNo,
             Email = student.ContactDetail?.Email,
             PreviousSchool = student.AdditionalDetail?.PreviousSchool,
-            InquiryPreferenceId = student.AdditionalDetail?.InquiryPreferenceId,
+            InquirySourceId = student.AdditionalDetail?.InquirySourceId,
             IsFeeStructureAssigned = student.FeeStructureId.HasValue,
             StudentEnrollmentState = student.Status,
             Status = student.Status,

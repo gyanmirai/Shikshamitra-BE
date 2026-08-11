@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,6 +20,7 @@ using ShikshaMitra.Extensions;
 using ShikshaMitra.HealthChecks;
 using ShikshaMitra.MultiTenancy;
 using ShikshaMitra.BackgroundWorkers;
+using ShikshaMitra.Controllers.Students.StudentEnrollments.AdmissionsCrm;
 using ShikshaMitra.Security;
 using System;
 using Volo.Abp.BackgroundWorkers;
@@ -29,6 +31,7 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using System.Threading.RateLimiting;
 using Volo.Abp;
 using Volo.Abp.Account;
 using Volo.Abp.Account.Web;
@@ -128,6 +131,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		ConfigureCors(context, configuration);
 
 		ConfigureFormOptions(context, configuration);
+		ConfigureAdmissionCrmRateLimiting(context);
 
 		ConfigureSwaggerServices(context, configuration);
 
@@ -150,6 +154,53 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 			var memoryThreshold = configuration.GetValue<int?>("FormOptions:MemoryBufferThreshold");
 			options.MemoryBufferThreshold = memoryThreshold is > 0 ? memoryThreshold.Value : defaultMemoryBufferThreshold;
+		});
+	}
+
+	private static void ConfigureAdmissionCrmRateLimiting(ServiceConfigurationContext context)
+	{
+		context.Services.AddRateLimiter(options =>
+		{
+			options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+			options.OnRejected = async (rejectionContext, cancellationToken) =>
+			{
+				if (rejectionContext.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+				{
+					rejectionContext.HttpContext.Response.Headers.RetryAfter =
+						Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+				}
+
+				await rejectionContext.HttpContext.Response.WriteAsJsonAsync(
+					new { error = "Too many requests. Please try again later." },
+					cancellationToken);
+			};
+
+			AddFixedWindowPolicy(options, AdmissionCrmRateLimitPolicies.Public, 60, TimeSpan.FromMinutes(1));
+			AddFixedWindowPolicy(options, AdmissionCrmRateLimitPolicies.Otp, 5, TimeSpan.FromMinutes(5));
+			AddFixedWindowPolicy(options, AdmissionCrmRateLimitPolicies.Upload, 6, TimeSpan.FromMinutes(5));
+			AddFixedWindowPolicy(options, AdmissionCrmRateLimitPolicies.Callback, 120, TimeSpan.FromMinutes(1));
+		});
+	}
+
+	private static void AddFixedWindowPolicy(
+		RateLimiterOptions options,
+		string policyName,
+		int permitLimit,
+		TimeSpan window)
+	{
+		options.AddPolicy(policyName, httpContext =>
+		{
+			var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+			var endpointKey = httpContext.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
+			return RateLimitPartition.GetFixedWindowLimiter(
+				$"{remoteAddress}:{endpointKey}",
+				_ => new FixedWindowRateLimiterOptions
+				{
+					PermitLimit = permitLimit,
+					Window = window,
+					QueueLimit = 0,
+					AutoReplenishment = true
+				});
 		});
 	}
 
@@ -503,6 +554,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseStaticFiles();
 		app.UseRouting();
 		app.UseCors();
+		app.UseRateLimiter();
 
 		if (env.IsDevelopment() && configuration.GetValue<bool>("DevAutoAuth:Enabled"))
 		{

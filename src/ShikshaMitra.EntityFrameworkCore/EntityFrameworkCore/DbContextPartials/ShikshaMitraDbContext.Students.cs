@@ -105,8 +105,6 @@ public partial class ShikshaMitraDbContext
     // Students — Enrollment Settings
     // ───────────────────────────────────────────────
     public DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
-    public DbSet<InquiryPreference> InquiryPreferences { get; set; }
-    public DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
     public DbSet<DocumentType> DocumentTypes { get; set; }
 
     // ───────────────────────────────────────────────

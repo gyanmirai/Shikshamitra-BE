@@ -6,22 +6,22 @@ using System.Threading.Tasks;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Enrollment;
-using ShikshaMitra.Students.Enrollments.Notes;
+using ShikshaMitra.Students.Records.Notes;
 using Shouldly;
 using Xunit;
 
 namespace ShikshaMitra.Students.Enrollments;
 
 /// <summary>
-/// API-level tests for student enrollment notes endpoints.
+/// API-level tests for Student Records notes endpoints.
 /// Validates HTTP pipeline, auth, and response contracts for
-/// GET/POST/PUT/DELETE /api/student/enrollment/{studentId}/notes.
+/// GET/POST/PUT/DELETE /api/students/records/{studentId}/notes.
 /// </summary>
 [Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Students)]
 public class StudentNotesApi_Tests : ShikshaMitraApiTestBase
 {
-    private const string BaseUrl = "/api/student/enrollment";
+    private const string BaseUrl = "/api/students/records";
 
     public StudentNotesApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 

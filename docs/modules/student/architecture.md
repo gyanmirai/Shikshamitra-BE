@@ -29,7 +29,7 @@ Student Enrollment refinement must preserve backend authorization, tenant isolat
 | Subsystem | Source area |
 |---|---|
 | Enrollment admissions CRM | `src/ShikshaMitra.Domain/Students/StudentEnrollments/AdmissionsCrm/**` |
-| Enrollment compatibility | `src/ShikshaMitra.Domain/Students/StudentEnrollments/**` |
+| Enrollment shared domain | `src/ShikshaMitra.Domain/Students/StudentEnrollments/**` |
 | Records | `src/ShikshaMitra.Domain/Students/Records/**` and root Student entities |
 | Attendance | `src/ShikshaMitra.Domain/Students/Attendance/**` |
 | Attendance settings | `src/ShikshaMitra.Domain/Students/Attendance/Settings/**` |
@@ -59,7 +59,7 @@ Student Enrollment refinement must preserve backend authorization, tenant isolat
 | Version published Admission Year Setup | Later configuration changes must not silently rewrite existing applicant evidence |
 | Snapshot the published setup on capture | Each applicant retains the setup identifier, version, and immutable rule snapshot used when the inquiry was accepted |
 | Detect likely duplicate inquiries | One applicant record should remain authoritative unless an authorized reason permits another |
-| Preserve route compatibility | Existing API paths such as `setup/cycles` and `inquiry-preferences` may remain even when user-facing copy changes |
+| Keep one canonical contract | Removed Enrollment routes and DTOs must not be reintroduced as aliases or compatibility shims |
 | Keep historical lookup values visible | Inactive sources, types, and templates must remain readable on historical applicants |
 | Require reasons for consequential overrides | Exam bypass, retest, ineligible reopen, capacity override, and activation override must be auditable |
 | Protect document access | Student and applicant documents are sensitive |

@@ -5,6 +5,8 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Constants.Permissions;
@@ -666,30 +668,35 @@ public class AdmissionCrmConfigurationApi_Tests(ShikshaMitraApiTestFactory facto
 
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 		using var anonymousClient = CreateAnonymousClient();
-		var invalidCallbackResponse = await anonymousClient.PostAsJsonAsync(
+		var invalidCallbackResponse = await PostSignedDeliveryCallbackAsync(
+			anonymousClient,
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/communication/delivery-logs/{queuedLog.Id}/callback",
 			new ApplyAdmissionCrmDeliveryCallbackDto
 			{
 				Status = "delivered",
 				StatusDetails = "Provider delivered the message.",
-				ProviderMessageId = "provider-message-1",
-				CallbackSecret = "wrong-secret"
+				ProviderMessageId = "provider-message-1"
 			},
-			JsonOptions);
+			"invalid-callback-secret");
 		invalidCallbackResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
 		var invalidCallbackBody = await invalidCallbackResponse.Content.ReadAsStringAsync();
-		invalidCallbackBody.ShouldContain("AdmissionCrm:DeliveryCallbackSecretInvalid");
+		invalidCallbackBody.ShouldContain("AdmissionCrm:DeliveryCallbackSignatureInvalid");
 
-		var callbackResponse = await anonymousClient.PostAsJsonAsync(
+		var callbackPayload = new ApplyAdmissionCrmDeliveryCallbackDto
+		{
+			Status = "delivered",
+			StatusDetails = "Provider delivered the message.",
+			ProviderMessageId = "provider-message-1"
+		};
+		var callbackTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+		var callbackNonce = Guid.NewGuid().ToString("N");
+		var callbackResponse = await PostSignedDeliveryCallbackAsync(
+			anonymousClient,
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/communication/delivery-logs/{queuedLog.Id}/callback",
-			new ApplyAdmissionCrmDeliveryCallbackDto
-			{
-				Status = "delivered",
-				StatusDetails = "Provider delivered the message.",
-				ProviderMessageId = "provider-message-1",
-				CallbackSecret = callbackSecret
-			},
-			JsonOptions);
+			callbackPayload,
+			callbackSecret,
+			callbackTimestamp,
+			callbackNonce);
 		callbackResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await callbackResponse.Content.ReadAsStringAsync());
 		var deliveredLog = await callbackResponse.Content.ReadFromJsonAsync<AdmissionCrmMessageDeliveryLogDto>(JsonOptions);
 		deliveredLog.ShouldNotBeNull();
@@ -699,16 +706,26 @@ public class AdmissionCrmConfigurationApi_Tests(ShikshaMitraApiTestFactory facto
 		deliveredLog.DeliveredAt.ShouldNotBeNull();
 		deliveredLog.StatusDetails.ShouldContain("provider-message-1");
 
-		var lateSentCallbackResponse = await anonymousClient.PostAsJsonAsync(
+		var replayResponse = await PostSignedDeliveryCallbackAsync(
+			anonymousClient,
+			$"/api/public/student-enrollment/admissions-crm/{tenantId}/communication/delivery-logs/{queuedLog.Id}/callback",
+			callbackPayload,
+			callbackSecret,
+			callbackTimestamp,
+			callbackNonce);
+		replayResponse.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+		(await replayResponse.Content.ReadAsStringAsync()).ShouldContain("AdmissionCrm:DeliveryCallbackReplayDetected");
+
+		var lateSentCallbackResponse = await PostSignedDeliveryCallbackAsync(
+			anonymousClient,
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/communication/delivery-logs/{queuedLog.Id}/callback",
 			new ApplyAdmissionCrmDeliveryCallbackDto
 			{
 				Status = "sent",
 				StatusDetails = "Provider sent callback arrived late.",
-				ProviderMessageId = "provider-message-late",
-				CallbackSecret = callbackSecret
+				ProviderMessageId = "provider-message-late"
 			},
-			JsonOptions);
+			callbackSecret);
 		lateSentCallbackResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await lateSentCallbackResponse.Content.ReadAsStringAsync());
 		var lateSentLog = await lateSentCallbackResponse.Content.ReadFromJsonAsync<AdmissionCrmMessageDeliveryLogDto>(JsonOptions);
 		lateSentLog.ShouldNotBeNull();
@@ -755,8 +772,7 @@ public class AdmissionCrmConfigurationApi_Tests(ShikshaMitraApiTestFactory facto
 					{
 						StatusPath = "event.status",
 						StatusDetailsPath = "event.description",
-						ProviderMessageIdPath = "message.id",
-						CallbackSecretPath = "auth.secret"
+						ProviderMessageIdPath = "message.id"
 					}
 				}
 			},
@@ -772,7 +788,8 @@ public class AdmissionCrmConfigurationApi_Tests(ShikshaMitraApiTestFactory facto
 		mappedQueuedLog.ShouldNotBeNull();
 		mappedQueuedLog.Status.ShouldBe(AdmissionCrmMessageDeliveryLog.QueuedStatus);
 
-		var mappedCallbackResponse = await anonymousClient.PostAsJsonAsync(
+		var mappedCallbackResponse = await PostSignedDeliveryCallbackAsync(
+			anonymousClient,
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/communication/delivery-logs/{mappedQueuedLog.Id}/callback",
 			new ApplyAdmissionCrmDeliveryCallbackDto
 			{
@@ -793,7 +810,7 @@ public class AdmissionCrmConfigurationApi_Tests(ShikshaMitraApiTestFactory facto
 					}, JsonOptions)
 				}
 			},
-			JsonOptions);
+			callbackSecret);
 		mappedCallbackResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await mappedCallbackResponse.Content.ReadAsStringAsync());
 		var mappedFailedLog = await mappedCallbackResponse.Content.ReadFromJsonAsync<AdmissionCrmMessageDeliveryLogDto>(JsonOptions);
 		mappedFailedLog.ShouldNotBeNull();
@@ -802,7 +819,8 @@ public class AdmissionCrmConfigurationApi_Tests(ShikshaMitraApiTestFactory facto
 		mappedFailedLog.StatusDetails.ShouldContain("Mapped provider reported failure.");
 		mappedFailedLog.StatusDetails.ShouldContain("provider-message-mapped");
 
-		var providerMessageCallbackResponse = await anonymousClient.PostAsJsonAsync(
+		var providerMessageCallbackResponse = await PostSignedDeliveryCallbackAsync(
+			anonymousClient,
 			$"/api/public/student-enrollment/admissions-crm/{tenantId}/communication/{Factory.SeededAcademicYearId}/{(int) AdmissionCrmMessageChannel.WhatsApp}/delivery-callback",
 			new ApplyAdmissionCrmDeliveryCallbackDto
 			{
@@ -823,7 +841,7 @@ public class AdmissionCrmConfigurationApi_Tests(ShikshaMitraApiTestFactory facto
 					}, JsonOptions)
 				}
 			},
-			JsonOptions);
+			callbackSecret);
 		providerMessageCallbackResponse.StatusCode.ShouldBe(
 			HttpStatusCode.OK,
 			await providerMessageCallbackResponse.Content.ReadAsStringAsync());
@@ -1202,6 +1220,34 @@ public class AdmissionCrmConfigurationApi_Tests(ShikshaMitraApiTestFactory facto
 				originalCycle.LeadRoutingSettings,
 				originalCycle.JourneyRules);
 		}
+	}
+
+	private static async Task<HttpResponseMessage> PostSignedDeliveryCallbackAsync(
+		HttpClient client,
+		string url,
+		ApplyAdmissionCrmDeliveryCallbackDto payload,
+		string signingSecret,
+		string? timestamp = null,
+		string? nonce = null)
+	{
+		var rawBody = JsonSerializer.Serialize(payload, JsonOptions);
+		timestamp ??= DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+		nonce ??= Guid.NewGuid().ToString("N");
+		var signedPayload = $"{timestamp}.{nonce}.{rawBody}";
+		var signature = Convert.ToHexString(
+			HMACSHA256.HashData(
+				Encoding.UTF8.GetBytes(signingSecret),
+				Encoding.UTF8.GetBytes(signedPayload)))
+			.ToLowerInvariant();
+
+		using var request = new HttpRequestMessage(HttpMethod.Post, url)
+		{
+			Content = new StringContent(rawBody, Encoding.UTF8, "application/json")
+		};
+		request.Headers.Add("X-Admission-Callback-Signature", signature);
+		request.Headers.Add("X-Admission-Callback-Timestamp", timestamp);
+		request.Headers.Add("X-Admission-Callback-Nonce", nonce);
+		return await client.SendAsync(request);
 	}
 
 }

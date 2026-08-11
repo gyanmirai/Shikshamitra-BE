@@ -53,6 +53,41 @@ public class AdmissionApplicantStatusAccess_Tests
 	}
 
 	[Fact]
+	public void Reissuing_an_otp_does_not_reset_the_failed_attempt_lock()
+	{
+		var now = DateTime.UtcNow;
+		var access = CreateAccess(now.AddDays(1), now);
+		access.IssueOtp("first-otp-hash", "first-encrypted-otp", now, now.AddMinutes(5));
+		for (var attempt = 0; attempt < 5; attempt++)
+		{
+			access.RecordOtpFailure(now.AddSeconds(attempt));
+		}
+
+		var locked = Should.Throw<BusinessException>(() =>
+			access.EnsureCanIssueOtp(now.AddMinutes(2), TimeSpan.FromSeconds(30)));
+
+		locked.Code.ShouldBe("AdmissionCrm:StatusOtpLocked");
+		access.OtpFailedAttemptCount.ShouldBe(5);
+	}
+
+	[Fact]
+	public void Otp_failure_lock_expires_after_a_quiet_period()
+	{
+		var now = DateTime.UtcNow;
+		var access = CreateAccess(now.AddDays(1), now);
+		access.IssueOtp("otp-hash", "encrypted-otp", now, now.AddMinutes(5));
+		for (var attempt = 0; attempt < 5; attempt++)
+		{
+			access.RecordOtpFailure(now.AddSeconds(attempt));
+		}
+
+		Should.NotThrow(() =>
+			access.EnsureCanIssueOtp(now.AddMinutes(16), TimeSpan.FromSeconds(30)));
+		access.OtpFailedAttemptCount.ShouldBe(0);
+		access.LastOtpFailureAt.ShouldBeNull();
+	}
+
+	[Fact]
 	public void Tampered_or_expired_access_session_is_rejected()
 	{
 		var now = DateTime.UtcNow;

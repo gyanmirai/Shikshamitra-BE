@@ -18,11 +18,11 @@ Student Enrollment uses Admission Year Setup and a per-applicant Stepper where P
 | Area | Status | Behavior owned by Student |
 |---|---|---|
 | Student Enrollment | Implemented and actively refined | Inquiry capture, owner assignment, assessment flow, visits and events, registration, Finance handoff status, placement review, activation, family self-service, admission intelligence, and governance |
-| Student Records | Implemented | Active student list, management, bulk upload, profile, dashboard preview, and records settings |
+| Student Records | Implemented | Active student list, management, profile, dashboard preview, and records settings |
 | Attendance and leave | Implemented | Student attendance days, entries, leave requests, and leave type settings |
 | Compliance | Implemented | Student identity compliance workflow |
 | Certificates | Implemented | Student certificates and certificate templates |
-| Inquiry Source | Implemented compatibility surface | Product label for compatibility route `inquiry-preferences` |
+| Inquiry Source | Implemented | Admissions CRM source configuration used by inquiry capture and reporting |
 
 ## Student Enrollment ownership boundary
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
@@ -22,7 +23,7 @@ public class AdmissionCrmPublicExamSlotListDto
 
 public class ScheduleAdmissionCrmPublicExamDto
 {
-	[Required]
-	public required string AccessSessionToken { get; set; }
+	[JsonIgnore]
+	public string AccessSessionToken { get; set; } = string.Empty;
 	public Guid EntranceExamSlotId { get; set; }
 }

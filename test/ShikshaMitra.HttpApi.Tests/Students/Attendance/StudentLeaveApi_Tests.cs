@@ -8,7 +8,7 @@ using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Students.Enrollment;
-using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Records.Profiles;
 using ShikshaMitra.Students.Attendance.Settings;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
@@ -27,7 +27,6 @@ public class StudentLeaveApi_Tests : ShikshaMitraApiTestBase
 {
     private const string LeaveBaseUrl = "/api/students/attendance/leaves";
     private const string LeaveTypeBaseUrl = "/api/students/attendance/settings/leave-types";
-    private const string RegistrationBaseUrl = "/api/student/enrollment/registrations";
 
     public StudentLeaveApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
@@ -186,18 +185,8 @@ public class StudentLeaveApi_Tests : ShikshaMitraApiTestBase
         SeededDivisionContext context,
         string suffix)
     {
-        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto(suffix);
-        dto.AcademicMediumId = context.AcademicMediumId;
-        dto.StandardId = context.StandardId;
-        dto.DivisionId = Factory.SeededDivisionId;
-
-        var response = await Client.PostAsJsonAsync(
-            $"{RegistrationBaseUrl}/general-details", dto, JsonOptions);
-        response.EnsureSuccessStatusCode();
-
-        var result = await response.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions)
-                     ?? throw new InvalidOperationException("Failed to create direct registration");
-        var student = result.Data ?? throw new InvalidOperationException("Null direct registration data");
+        var student = await StudentEnrollmentTestHelper.CreateStudentFixtureAsync(
+            Client, suffix, Factory.SeededDivisionId);
 
         await MoveRegistrationToEnrolledAsync(student.StudentId);
         return student;

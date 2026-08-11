@@ -1,127 +1,135 @@
 name: Deploy ABP App using Publish Profile
 
 on:
-  push:
-    branches: ["main"]
+    push:
+        branches: ['main']
 
 env:
-  AZURE_WEBAPP_NAME: stg-gyanmirai-be
-  DOTNET_VERSION: '9.0.x'
-  ASPNETCORE_ENVIRONMENT: Staging
-  DOTNET_ENVIRONMENT: Staging
-  DOTNET_USELAUNCHSETTINGS: '0'
-  SeedTestLogins: 'true'
+    AZURE_WEBAPP_NAME: stg-gyanmirai-be
+    DOTNET_VERSION: '9.0.x'
+    ASPNETCORE_ENVIRONMENT: Staging
+    DOTNET_ENVIRONMENT: Staging
+    DOTNET_USELAUNCHSETTINGS: '0'
+    SeedTestLogins: 'true'
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+    build-and-deploy:
+        runs-on: ubuntu-latest
 
-    steps:
-    - uses: actions/checkout@v4
+        steps:
+            - uses: actions/checkout@v4
 
-    - name: Diagnose an existing production startup failure
-      shell: pwsh
-      env:
-        AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-      run: |
-        ./scripts/deployment/Get-AzureStartupDiagnostics.ps1 `
-          -PublishProfile $env:AZURE_PUBLISH_PROFILE
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+            - name: Diagnose an existing production startup failure
+              shell: pwsh
+              env:
+                  AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+              run: |
+                  ./scripts/deployment/Get-AzureStartupDiagnostics.ps1 `
+                    -PublishProfile $env:AZURE_PUBLISH_PROFILE
+            - name: Setup .NET
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: ${{ env.DOTNET_VERSION }}
 
-    - name: Restore
-      run: dotnet restore
+            - name: Restore
+              run: dotnet restore
 
-    - name: Install ABP CLI
-      run: dotnet tool install -g Volo.Abp.Cli
+            - name: Install ABP CLI
+              run: dotnet tool install -g Volo.Abp.Cli
 
-    - name: Download ABP libraries
-      run: abp install-libs
+            - name: Download ABP libraries
+              run: abp install-libs
 
-    - name: Build
-      run: dotnet build --configuration Release
+            - name: Build
+              run: dotnet build --configuration Release
 
-    - name: Run deployment startup regression gates
-      run: |
-        dotnet test test/ShikshaMitra.HttpApi.Tests \
-          --configuration Release \
-          --no-build \
-          --filter "FullyQualifiedName~OpenIddictCertificateStore_Tests"
+            # ⭐ Run ABP DbMigrator
+            - name: Run DbMigrator
+              env:
+                  ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
+              run: |
+                  cd src/ShikshaMitra.DbMigrator
+                  dotnet run --configuration Release --no-launch-profile
 
-    # ⭐ Publish Host App
-    - name: Publish
-      run: dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish
+            - name: Run deployment startup regression gates
+              run: |
+                  dotnet test test/ShikshaMitra.HttpApi.Tests \
+                    --configuration Release \
+                    --no-build \
+                    --filter "FullyQualifiedName~OpenIddictCertificateStore_Tests"
 
-    - name: Validate Azure publish profile
-      shell: pwsh
-      env:
-        AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-      run: |
-        if ([string]::IsNullOrWhiteSpace($env:AZURE_PUBLISH_PROFILE)) {
-          throw 'AZURE_WEBAPP_PUBLISH_PROFILE is empty or unavailable to this workflow.'
-        }
+            # ⭐ Publish Host App
+            - name: Publish
+              run: dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish
 
-        try {
-          [xml]$profile = $env:AZURE_PUBLISH_PROFILE
-        }
-        catch {
-          throw 'AZURE_WEBAPP_PUBLISH_PROFILE is not valid publish-profile XML. Download a fresh profile from the target App Service.'
-        }
+            - name: Validate Azure publish profile
+              shell: pwsh
+              env:
+                  AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+              run: |
+                  if ([string]::IsNullOrWhiteSpace($env:AZURE_PUBLISH_PROFILE)) {
+                    throw 'AZURE_WEBAPP_PUBLISH_PROFILE is empty or unavailable to this workflow.'
+                  }
 
-        $publishUrl = [string]$profile.publishData.publishProfile.publishUrl
-        if ([string]::IsNullOrWhiteSpace($publishUrl)) {
-          throw 'AZURE_WEBAPP_PUBLISH_PROFILE does not contain a publish URL.'
-        }
+                  try {
+                    [xml]$profile = $env:AZURE_PUBLISH_PROFILE
+                  }
+                  catch {
+                    throw 'AZURE_WEBAPP_PUBLISH_PROFILE is not valid publish-profile XML. Download a fresh profile from the target App Service.'
+                  }
 
-        Write-Output "Publish profile XML is valid; deployment endpoint: $publishUrl"
+                  $publishUrl = [string]$profile.publishData.publishProfile.publishUrl
+                  if ([string]::IsNullOrWhiteSpace($publishUrl)) {
+                    throw 'AZURE_WEBAPP_PUBLISH_PROFILE does not contain a publish URL.'
+                  }
 
-    # ⭐ Deploy using Publish Profile
-    - name: Deploy to Azure Web App
-      id: deploy
-      uses: azure/webapps-deploy@v3
-      with:
-        app-name: ${{ env.AZURE_WEBAPP_NAME }}
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: ./publish
+                  Write-Output "Publish profile XML is valid; deployment endpoint: $publishUrl"
 
-    - name: Verify deployed API startup
-      id: health
-      shell: pwsh
-      run: |
-        $healthUri = 'https://stage-api.gyanmirai.in/.well-known/openid-configuration'
-        $lastStatus = 'no response'
+            # ⭐ Deploy using Publish Profile
+            - name: Deploy to Azure Web App
+              id: deploy
+              uses: azure/webapps-deploy@v3
+              with:
+                  app-name: ${{ env.AZURE_WEBAPP_NAME }}
+                  publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+                  package: ./publish
 
-        foreach ($attempt in 1..60) {
-          try {
-            $response = Invoke-WebRequest `
-              -Uri $healthUri `
-              -Method Get `
-              -TimeoutSec 20 `
-              -SkipHttpErrorCheck
-            $lastStatus = [string]$response.StatusCode
+            - name: Verify deployed API startup
+              id: health
+              shell: pwsh
+              run: |
+                  $healthUri = 'https://stage-api.gyanmirai.in/.well-known/openid-configuration'
+                  $lastStatus = 'no response'
 
-            if ($response.StatusCode -eq 200) {
-              Write-Output "Staging API startup check passed on attempt $attempt."
-              exit 0
-            }
-          }
-          catch {
-            $lastStatus = $_.Exception.Message
-          }
+                  foreach ($attempt in 1..60) {
+                    try {
+                      $response = Invoke-WebRequest `
+                        -Uri $healthUri `
+                        -Method Get `
+                        -TimeoutSec 20 `
+                        -SkipHttpErrorCheck
+                      $lastStatus = [string]$response.StatusCode
 
-          Write-Output "Staging API is not ready (attempt $attempt/60; status: $lastStatus)."
-          Start-Sleep -Seconds 10
-        }
+                      if ($response.StatusCode -eq 200) {
+                        Write-Output "Staging API startup check passed on attempt $attempt."
+                        exit 0
+                      }
+                    }
+                    catch {
+                      $lastStatus = $_.Exception.Message
+                    }
 
-        Write-Error "Staging API startup check failed after 60 attempts (last status: $lastStatus)."
+                    Write-Output "Staging API is not ready (attempt $attempt/60; status: $lastStatus)."
+                    Start-Sleep -Seconds 10
+                  }
 
-    - name: Collect Azure startup diagnostics
-      if: failure() && steps.deploy.outcome == 'success'
-      shell: pwsh
-      env:
-        AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-      run: |
-        ./scripts/deployment/Get-AzureStartupDiagnostics.ps1 `
-          -PublishProfile $env:AZURE_PUBLISH_PROFILE
+                  Write-Error "Staging API startup check failed after 60 attempts (last status: $lastStatus)."
+
+            - name: Collect Azure startup diagnostics
+              if: failure() && steps.deploy.outcome == 'success'
+              shell: pwsh
+              env:
+                  AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+              run: |
+                  ./scripts/deployment/Get-AzureStartupDiagnostics.ps1 `
+                    -PublishProfile $env:AZURE_PUBLISH_PROFILE

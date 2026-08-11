@@ -46,16 +46,10 @@ public class SubstitutionAppService(
             var currentUserId = CurrentUser.Id;
             if (currentUserId.HasValue)
             {
-                var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId.Value);
-                if (currentEmployee != null)
-                {
-                    var empId = currentEmployee.Id;
-                    rows = rows.Where(x => x.OriginalTeacherId == empId || x.SubstituteTeacherId == empId).ToList();
-                }
-                else
-                {
-                    rows = new List<SubstitutionRequest>();
-                }
+                var visibleTeacherIds = await GetVisibleTeacherReferenceIdsAsync(currentUserId.Value);
+                rows = rows.Where(x =>
+                    (x.OriginalTeacherId.HasValue && visibleTeacherIds.Contains(x.OriginalTeacherId.Value)) ||
+                    (x.SubstituteTeacherId.HasValue && visibleTeacherIds.Contains(x.SubstituteTeacherId.Value))).ToList();
             }
             else
             {
@@ -95,16 +89,10 @@ public class SubstitutionAppService(
             var currentUserId = CurrentUser.Id;
             if (currentUserId.HasValue)
             {
-                var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId.Value);
-                if (currentEmployee != null)
-                {
-                    var empId = currentEmployee.Id;
-                    substitutions = substitutions.Where(x => x.OriginalTeacherId == empId || x.SubstituteTeacherId == empId).ToList();
-                }
-                else
-                {
-                    substitutions = new List<SubstitutionRequest>();
-                }
+                var visibleTeacherIds = await GetVisibleTeacherReferenceIdsAsync(currentUserId.Value);
+                substitutions = substitutions.Where(x =>
+                    (x.OriginalTeacherId.HasValue && visibleTeacherIds.Contains(x.OriginalTeacherId.Value)) ||
+                    (x.SubstituteTeacherId.HasValue && visibleTeacherIds.Contains(x.SubstituteTeacherId.Value))).ToList();
             }
             else
             {
@@ -158,6 +146,7 @@ public class SubstitutionAppService(
     public async Task<SubstitutionDto> GetAsync(Guid id)
     {
         var entity = await substitutionRepository.GetAsync(id);
+        await EnsureCanViewSubstitutionAsync(entity);
         return await MapAsync(entity, await GetAuditLogsAsync(id));
     }
 
@@ -1042,6 +1031,13 @@ public class SubstitutionAppService(
     public async Task<SubstitutionAnalyticsDto> GetAnalyticsAsync(SubstitutionAnalyticsInput input)
     {
         var rows = await substitutionRepository.GetListAsync();
+        if (!IsAdminUser() && CurrentUser.Id.HasValue)
+        {
+            var visibleTeacherIds = await GetVisibleTeacherReferenceIdsAsync(CurrentUser.Id.Value);
+            rows = rows.Where(x =>
+                (x.OriginalTeacherId.HasValue && visibleTeacherIds.Contains(x.OriginalTeacherId.Value)) ||
+                (x.SubstituteTeacherId.HasValue && visibleTeacherIds.Contains(x.SubstituteTeacherId.Value))).ToList();
+        }
         var filtered = rows.AsEnumerable();
         if (input.AcademicYearId.HasValue) filtered = filtered.Where(x => x.AcademicYearId == input.AcademicYearId);
         if (input.FromDate.HasValue) filtered = filtered.Where(x => x.Date >= NormalizeDate(input.FromDate.Value));
@@ -1560,6 +1556,15 @@ public class SubstitutionAppService(
         var contextTeacherUserIds = await GetTeacherUserIdsForAcademicMediumAsync(academicMediumId);
         var employees = await employeeRepository.GetListAsync(x =>
             !x.EmployeeStatusType.HasValue || x.EmployeeStatusType == EmployeeStatusType.Active);
+        HashSet<Guid>? visibleTeacherIds = null;
+        if (!IsAdminUser() && CurrentUser.Id.HasValue)
+        {
+            visibleTeacherIds = await GetVisibleTeacherReferenceIdsAsync(CurrentUser.Id.Value);
+            employees = employees
+                .Where(x => visibleTeacherIds.Contains(x.Id) ||
+                            (x.UserId.HasValue && visibleTeacherIds.Contains(x.UserId.Value)))
+                .ToList();
+        }
         if (academicMediumId.HasValue && academicMediumId.Value != Guid.Empty)
         {
             employees = employees
@@ -1570,6 +1575,12 @@ public class SubstitutionAppService(
         }
 
         var rows = await FilterByAcademicMediumAsync(await substitutionRepository.GetListAsync(x => x.Date == date), academicMediumId);
+        if (visibleTeacherIds != null)
+        {
+            rows = rows.Where(x =>
+                (x.OriginalTeacherId.HasValue && visibleTeacherIds.Contains(x.OriginalTeacherId.Value)) ||
+                (x.SubstituteTeacherId.HasValue && visibleTeacherIds.Contains(x.SubstituteTeacherId.Value))).ToList();
+        }
         return employees
             .Select(employee =>
             {
@@ -1639,6 +1650,60 @@ public class SubstitutionAppService(
             throw new UserFriendlyException($"Only administrators can {action}.");
         }
         return Task.CompletedTask;
+    }
+
+    private async Task EnsureCanViewSubstitutionAsync(SubstitutionRequest entity)
+    {
+        if (IsAdminUser() || !CurrentUser.Id.HasValue)
+        {
+            return;
+        }
+
+        var visibleTeacherIds = await GetVisibleTeacherReferenceIdsAsync(CurrentUser.Id.Value);
+        var canView = (entity.OriginalTeacherId.HasValue && visibleTeacherIds.Contains(entity.OriginalTeacherId.Value)) ||
+                      (entity.SubstituteTeacherId.HasValue && visibleTeacherIds.Contains(entity.SubstituteTeacherId.Value));
+        if (!canView)
+        {
+            throw new Volo.Abp.Authorization.AbpAuthorizationException(
+                "You are not authorized to view this substitution.");
+        }
+    }
+
+    private async Task<HashSet<Guid>> GetVisibleTeacherReferenceIdsAsync(Guid currentUserId)
+    {
+        var employees = await employeeRepository.GetListAsync();
+        var currentEmployee = employees.FirstOrDefault(x => x.UserId == currentUserId);
+        var visibleTeacherIds = new HashSet<Guid> { currentUserId };
+        if (currentEmployee == null)
+        {
+            return visibleTeacherIds;
+        }
+
+        var visited = new HashSet<Guid>();
+        var queue = new Queue<Guid>();
+        queue.Enqueue(currentEmployee.Id);
+        while (queue.Count > 0)
+        {
+            var managerId = queue.Dequeue();
+            if (!visited.Add(managerId))
+            {
+                continue;
+            }
+
+            var manager = employees.First(x => x.Id == managerId);
+            visibleTeacherIds.Add(manager.Id);
+            if (manager.UserId.HasValue)
+            {
+                visibleTeacherIds.Add(manager.UserId.Value);
+            }
+
+            foreach (var employee in employees.Where(x => x.ReportingManagerId == managerId))
+            {
+                queue.Enqueue(employee.Id);
+            }
+        }
+
+        return visibleTeacherIds;
     }
 
     private async Task EnsureCanActAsSubstituteAsync(SubstitutionRequest entity)

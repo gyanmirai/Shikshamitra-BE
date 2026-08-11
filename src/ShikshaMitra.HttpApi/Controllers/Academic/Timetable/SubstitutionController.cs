@@ -183,17 +183,4 @@ public class SubstitutionController(ISubstitutionAppService substitutionAppServi
         return substitutionAppService.GetAnalyticsAsync(input);
     }
 
-    [HttpGet("settings")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
-    public Task<SubstitutionSettingsDto> GetSettingsAsync([FromQuery] Guid? academicYearId = null)
-    {
-        return substitutionAppService.GetSettingsAsync(academicYearId);
-    }
-
-    [HttpPut("settings")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
-    public Task<SubstitutionSettingsDto> UpdateSettingsAsync([FromBody] SubstitutionSettingsDto input)
-    {
-        return substitutionAppService.UpdateSettingsAsync(input);
-    }
 }

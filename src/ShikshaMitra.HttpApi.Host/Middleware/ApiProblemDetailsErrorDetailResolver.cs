@@ -138,7 +138,11 @@ public class ApiProblemDetailsErrorDetailResolver : IApiProblemDetailsErrorDetai
 
 	private static string? BuildKnownCodeFallback(string errorCode)
 	{
-		if (!HrCodeToName.TryGetValue(errorCode, out var codeName) || string.IsNullOrWhiteSpace(codeName))
+		var codeName = HrCodeToName.TryGetValue(errorCode, out var knownHrCodeName)
+			? knownHrCodeName
+			: GetAcademicCodeName(errorCode);
+
+		if (string.IsNullOrWhiteSpace(codeName))
 		{
 			return null;
 		}
@@ -154,5 +158,35 @@ public class ApiProblemDetailsErrorDetailResolver : IApiProblemDetailsErrorDetai
 
 		var sentence = string.Join(" ", words);
 		return $"{sentence}.";
+	}
+
+	private static string? GetAcademicCodeName(string errorCode)
+	{
+		if (!errorCode.StartsWith("Academic:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("AC:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("AssessmentRubric:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("ClassManagement:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("LearningResource:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("SubjectAssignment", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("ShikshaMitra.Assignment:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("ShikshaMitra.Exam:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("ShikshaMitra.Homework:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("ShikshaMitra.QuestionBank:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("ShikshaMitra.QuestionPapers:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("ShikshaMitra.Submission:", StringComparison.OrdinalIgnoreCase) &&
+		    !errorCode.StartsWith("ShikshaMitra:ElectiveGroup:", StringComparison.OrdinalIgnoreCase))
+		{
+			return null;
+		}
+
+		var lastSegment = errorCode[(errorCode.LastIndexOf(':') + 1)..];
+		if (lastSegment.All(char.IsDigit))
+		{
+			var prefix = errorCode[..errorCode.LastIndexOf(':')];
+			var area = prefix[(prefix.LastIndexOf(':') + 1)..].Replace("ShikshaMitra.", string.Empty, StringComparison.OrdinalIgnoreCase);
+			return $"{area} rule {lastSegment}";
+		}
+
+		return lastSegment;
 	}
 }

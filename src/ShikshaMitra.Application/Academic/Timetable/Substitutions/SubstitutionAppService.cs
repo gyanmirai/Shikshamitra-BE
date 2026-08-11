@@ -25,7 +25,6 @@ public class SubstitutionAppService(
     IRepository<SubstitutionAuditLog, Guid> auditRepository,
     IRepository<TeacherAvailability, Guid> availabilityRepository,
     IRepository<SubstitutionNotificationLog, Guid> notificationRepository,
-    IRepository<SubstitutionSetting, Guid> settingRepository,
     ITimetableRepository timetableRepository,
     IRepository<AssignedSubject, Guid> assignedSubjectRepository,
     IRepository<Standard, Guid> standardRepository,
@@ -1079,28 +1078,6 @@ public class SubstitutionAppService(
         };
     }
 
-    public async Task<SubstitutionSettingsDto> GetSettingsAsync(Guid? academicYearId = null)
-    {
-        var entity = await GetOrCreateSettingsAsync(academicYearId);
-        return MapSettings(entity);
-    }
-
-    public async Task<SubstitutionSettingsDto> UpdateSettingsAsync(SubstitutionSettingsDto input)
-    {
-        var entity = await GetOrCreateSettingsAsync(input.AcademicYearId);
-        entity.Update(
-            input.MaxSubstitutionsPerTeacherPerDay,
-            input.MaxSubstitutionsPerTeacherPerWeek,
-            input.AcknowledgementRequiredByDefault,
-            input.AutoReminderEnabled,
-            input.ReminderBeforeMinutes,
-            input.NotifyLeadershipForUrgent,
-            input.AllowTeacherReject,
-            input.StudentVisibleDailySheet);
-        await settingRepository.UpdateAsync(entity, autoSave: true);
-        return MapSettings(entity);
-    }
-
     private async Task<Employee?> ResolveCurrentEmployeeAsync()
     {
         if (!CurrentUser.Id.HasValue)
@@ -1156,19 +1133,6 @@ public class SubstitutionAppService(
                 status,
                 $"{eventName} notification for {entity.Period} {entity.ClassName}-{entity.DivisionName}."),
             autoSave: true);
-    }
-
-    private async Task<SubstitutionSetting> GetOrCreateSettingsAsync(Guid? academicYearId)
-    {
-        var entity = await settingRepository.FirstOrDefaultAsync(x => x.AcademicYearId == academicYearId);
-        if (entity != null)
-        {
-            return entity;
-        }
-
-        entity = new SubstitutionSetting(GuidGenerator.Create(), CurrentTenant.Id, academicYearId);
-        await settingRepository.InsertAsync(entity, autoSave: true);
-        return entity;
     }
 
     private async Task<Dictionary<Guid, List<SubstitutionAuditLogDto>>> GetAuditLookupAsync(List<Guid> ids)
@@ -1622,19 +1586,6 @@ public class SubstitutionAppService(
 
     private static string EscapeCsv(string value) =>
         $"\"{value.Replace("\"", "\"\"")}\"";
-
-    private static SubstitutionSettingsDto MapSettings(SubstitutionSetting entity) => new()
-    {
-        AcademicYearId = entity.AcademicYearId,
-        MaxSubstitutionsPerTeacherPerDay = entity.MaxSubstitutionsPerTeacherPerDay,
-        MaxSubstitutionsPerTeacherPerWeek = entity.MaxSubstitutionsPerTeacherPerWeek,
-        AcknowledgementRequiredByDefault = entity.AcknowledgementRequiredByDefault,
-        AutoReminderEnabled = entity.AutoReminderEnabled,
-        ReminderBeforeMinutes = entity.ReminderBeforeMinutes,
-        NotifyLeadershipForUrgent = entity.NotifyLeadershipForUrgent,
-        AllowTeacherReject = entity.AllowTeacherReject,
-        StudentVisibleDailySheet = entity.StudentVisibleDailySheet
-    };
 
     private bool IsAdminUser()
     {

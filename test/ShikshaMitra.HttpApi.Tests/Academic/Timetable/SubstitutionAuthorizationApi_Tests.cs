@@ -33,7 +33,6 @@ public class SubstitutionAuthorizationApi_Tests : ShikshaMitraApiTestBase
 		yield return [HttpMethod.Put, $"{BaseUrl}/{id}", new UpdateSubstitutionDto()];
 		yield return [HttpMethod.Post, $"{BaseUrl}/{id}/acknowledge", null!];
 		yield return [HttpMethod.Post, $"{BaseUrl}/{id}/cancel", new SubstitutionActionDto()];
-		yield return [HttpMethod.Put, $"{BaseUrl}/settings", new SubstitutionSettingsDto()];
 	}
 
 	[Theory]
@@ -120,13 +119,11 @@ public class SubstitutionAuthorizationApi_Tests : ShikshaMitraApiTestBase
 			[nameof(SubstitutionController.GetDailySheetPdfAsync)] = view,
 			[nameof(SubstitutionController.GetDailySheetExcelAsync)] = view,
 			[nameof(SubstitutionController.GetAnalyticsAsync)] = view,
-			[nameof(SubstitutionController.GetSettingsAsync)] = view,
-			[nameof(SubstitutionController.UpdateSettingsAsync)] = add
 		};
 
 		var methods = typeof(SubstitutionController).GetMethods(
 			BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
-		methods.Length.ShouldBe(25);
+		methods.Length.ShouldBe(23);
 
 		foreach (var method in methods)
 		{

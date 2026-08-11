@@ -86,6 +86,33 @@ public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<
     }
 
     [Fact]
+    public async Task CreateReservation_Should_AutoApprove_For_Admin_Role()
+    {
+        // Arrange
+        var creatorUserId = Guid.NewGuid();
+        var (room, _) = await SeedRoomAndReservationAsync(creatorUserId);
+        var adminUserId = Guid.NewGuid();
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(adminUserId, "admin")))
+        {
+            // Act
+            var created = await _roomAvailabilityAppService.CreateReservationAsync(new CreateRoomReservationDto
+            {
+                RoomId = room.Id,
+                Date = DateTime.UtcNow.Date,
+                StartTime = new TimeSpan(12, 0, 0),
+                EndTime = new TimeSpan(13, 0, 0),
+                Purpose = "Yoga session for all",
+                ReservationType = RoomReservationType.Event
+            });
+
+            // Assert
+            created.Status.ShouldBe(RoomReservationStatus.Approved);
+            created.CreatorId.ShouldBe(adminUserId);
+        }
+    }
+
+    [Fact]
     public async Task RejectReservation_Should_Throw_UserFriendlyException_For_Self_Rejection()
     {
         // Arrange

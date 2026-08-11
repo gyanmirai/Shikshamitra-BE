@@ -29,7 +29,6 @@ public class GetSubstitutionsInput : PagedAndSortedResultRequestDto
     public string? DivisionName { get; set; }
     public string? SubjectName { get; set; }
 }
-
 public class SubstitutionDto : EntityDto<Guid>
 {
     public DateTime Date { get; set; }
@@ -299,17 +298,4 @@ public class SubstitutionAnalyticsBreakdownDto
 {
     public string Label { get; set; } = string.Empty;
     public int Count { get; set; }
-}
-
-public class SubstitutionSettingsDto
-{
-    public Guid? AcademicYearId { get; set; }
-    public int MaxSubstitutionsPerTeacherPerDay { get; set; } = 3;
-    public int MaxSubstitutionsPerTeacherPerWeek { get; set; } = 8;
-    public bool AcknowledgementRequiredByDefault { get; set; } = true;
-    public bool AutoReminderEnabled { get; set; } = true;
-    public int ReminderBeforeMinutes { get; set; } = 15;
-    public bool NotifyLeadershipForUrgent { get; set; } = true;
-    public bool AllowTeacherReject { get; set; } = true;
-    public bool StudentVisibleDailySheet { get; set; }
 }

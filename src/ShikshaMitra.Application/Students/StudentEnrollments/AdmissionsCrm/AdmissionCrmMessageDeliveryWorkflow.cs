@@ -17,7 +17,8 @@ public class AdmissionCrmMessageDeliveryWorkflow(
 	AdmissionCrmCommunicationAccess access,
 	AdmissionCrmCommunicationProviderWorkflow providerWorkflow,
 	AdmissionCrmCommunicationOptOutWorkflow optOutWorkflow,
-	IAdmissionCrmCommunicationDispatcher dispatcher)
+	IAdmissionCrmCommunicationDispatcher dispatcher,
+	AdmissionCrmGeneratedDocumentRenderer generatedDocumentRenderer)
 	: ApplicationService, ITransientDependency
 {
 	public Task<AdmissionCrmMessageDeliveryLogDto> SendAsync(Guid leadId, SendAdmissionCrmMessageTemplateDto input) =>
@@ -25,6 +26,70 @@ public class AdmissionCrmMessageDeliveryWorkflow(
 
 	public Task<AdmissionCrmMessageDeliveryLogDto> SendFromAutomationAsync(Guid leadId, SendAdmissionCrmMessageTemplateDto input) =>
 		SendCoreAsync(leadId, input, "Automation", enforceUserScope: false);
+
+	public async Task<AdmissionCrmMessageDeliveryLogDto> SendRegistrationInvitationAsync(
+		Guid leadId,
+		string registrationLink)
+	{
+		var lead = await access.GetLeadAsync(leadId, "SendRegistrationInvitationAsync");
+		var queryable = await templateRepository.GetQueryableAsync();
+		var template = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(x =>
+			x.TenantId == CurrentTenant.Id && x.AcademicYearId == lead.AcademicYearId &&
+			x.Channel == AdmissionCrmMessageChannel.Email && x.Purpose == "Registration invitation" &&
+			x.Status == AdmissionCrmMessageTemplateStatus.Approved && x.IsActive));
+		if (template == null)
+			throw new BusinessException("AdmissionCrm:RegistrationInvitationTemplateRequired");
+		return await SendCoreAsync(leadId, new SendAdmissionCrmMessageTemplateDto
+		{
+			TemplateId = template.Id,
+			Variables = new Dictionary<string, string> { ["registrationLink"] = registrationLink }
+		}, "RegistrationInvitation", enforceUserScope: true);
+	}
+
+	public async Task<AdmissionCrmMessageDeliveryLogDto> SendGeneratedDocumentAsync(
+		AdmissionInquiryLead lead,
+		AdmissionCrmGeneratedDocumentDto document)
+	{
+		if (string.IsNullOrWhiteSpace(lead.Email))
+			throw new BusinessException("AdmissionCrm:ApplicantEmailRequired").WithData("LeadId", lead.Id);
+		var recipient = lead.Email;
+		var provider = await providerWorkflow.FindAsync(lead.AcademicYearId, AdmissionCrmMessageChannel.Email);
+		var optOut = await optOutWorkflow.FindActiveAsync(
+			lead.AcademicYearId,
+			AdmissionCrmMessageChannel.Email,
+			AdmissionCrmCommunicationOptOut.NormalizeContact(AdmissionCrmMessageChannel.Email, recipient));
+		var subject = $"{document.DocumentTypeName} for your admission application";
+		var body = $"Hello, attached is {document.DocumentTypeName.ToLowerInvariant()} for your admission application.";
+		var dispatch = await ResolveDispatchAsync(provider, optOut, new AdmissionCrmCommunicationDispatchRequest
+		{
+			AcademicYearId = lead.AcademicYearId,
+			LeadId = lead.Id,
+			Channel = AdmissionCrmMessageChannel.Email,
+			Recipient = recipient,
+			Subject = subject,
+			Body = body,
+			Trigger = "GeneratedDocument",
+			Attachments = [new AdmissionCrmCommunicationAttachment
+			{
+				FileName = document.FileName,
+				ContentType = document.ContentType,
+				Content = document.Content
+			}]
+		});
+		var log = new AdmissionCrmMessageDeliveryLog(
+			GuidGenerator.Create(), CurrentTenant.Id, lead.AcademicYearId, lead.Id, null,
+			AdmissionCrmMessageChannel.Email, recipient, provider?.ProviderName, subject, body,
+			dispatch.Status, dispatch.StatusDetails, Clock.Now, document.DocumentType,
+			document.Language, document.FileName, document.ContentType);
+		log.RecordProviderMessageId(dispatch.ProviderMessageId);
+		await deliveryLogRepository.InsertAsync(log, autoSave: false);
+		await timelineRepository.InsertAsync(new AdmissionCrmTimelineEvent(
+			GuidGenerator.Create(), CurrentTenant.Id, lead.Id, lead.AcademicYearId,
+			AdmissionCrmTimelineEventType.GeneratedDocumentEmailed,
+			$"{document.DocumentTypeName} email recorded", dispatch.StatusDetails,
+			log.Id, CurrentUser.Id, new DateTimeOffset(Clock.Now)), autoSave: true);
+		return AdmissionCrmCommunicationMapper.Delivery(log);
+	}
 
 	public async Task<AdmissionCrmMessageTemplatePreviewDto> PreviewAsync(Guid academicYearId, PreviewAdmissionCrmMessageTemplateDto input)
 	{
@@ -87,14 +152,40 @@ public class AdmissionCrmMessageDeliveryWorkflow(
 		var optOut = await optOutWorkflow.FindActiveAsync(log.AcademicYearId, log.Channel, log.NormalizedRecipient);
 		if (optOut is not null)
 			throw new BusinessException("AdmissionCrm:RecipientOptedOut").WithData("Channel", log.Channel).WithData("Recipient", log.Recipient);
+		var attachments = new List<AdmissionCrmCommunicationAttachment>();
+		if (log.GeneratedDocumentType.HasValue)
+		{
+			var lead = await access.GetLeadAsync(log.LeadId!.Value, "RetryGeneratedDocumentDeliveryAsync");
+			var document = await generatedDocumentRenderer.RenderAsync(
+				lead,
+				log.GeneratedDocumentType.Value,
+				AdmissionCrmGeneratedDocumentText.NormalizeLanguage(log.AttachmentLanguage),
+				Clock.Now,
+				true,
+				null);
+			attachments.Add(new AdmissionCrmCommunicationAttachment
+			{
+				FileName = log.AttachmentFileName ?? document.FileName,
+				ContentType = log.AttachmentContentType ?? document.ContentType,
+				Content = document.Content
+			});
+		}
 		var dispatch = await dispatcher.DispatchAsync(provider, new AdmissionCrmCommunicationDispatchRequest
 		{
 			AcademicYearId = log.AcademicYearId, LeadId = log.LeadId, TemplateId = log.TemplateId, Channel = log.Channel,
 			Recipient = log.Recipient, Subject = log.SubjectSnapshot, Body = log.BodySnapshot,
-			Trigger = string.IsNullOrWhiteSpace(input.Reason) ? "Retry" : input.Reason!
+			Trigger = string.IsNullOrWhiteSpace(input.Reason) ? "Retry" : input.Reason!,
+			Attachments = attachments
 		});
 		log.ApplyDispatchResult(dispatch.Status, dispatch.StatusDetails, Clock.Now, dispatch.ProviderMessageId);
-		await deliveryLogRepository.UpdateAsync(log, autoSave: true);
+		await deliveryLogRepository.UpdateAsync(log, autoSave: false);
+		if (log.LeadId.HasValue)
+			await timelineRepository.InsertAsync(new AdmissionCrmTimelineEvent(
+				GuidGenerator.Create(), CurrentTenant.Id, log.LeadId.Value, log.AcademicYearId,
+				AdmissionCrmTimelineEventType.MessageDeliveryRetried, "Message delivery retried",
+				dispatch.StatusDetails, log.Id, CurrentUser.Id, new DateTimeOffset(Clock.Now)), autoSave: true);
+		else
+			await CurrentUnitOfWork!.SaveChangesAsync();
 		return AdmissionCrmCommunicationMapper.Delivery(log);
 	}
 
@@ -125,8 +216,11 @@ public class AdmissionCrmMessageDeliveryWorkflow(
 			dispatch.Status, dispatch.StatusDetails, Clock.Now);
 		log.RecordProviderMessageId(dispatch.ProviderMessageId);
 		await deliveryLogRepository.InsertAsync(log, autoSave: false);
+		var timelineEventType = string.Equals(trigger, "RegistrationInvitation", StringComparison.Ordinal)
+			? AdmissionCrmTimelineEventType.RegistrationInvitationSent
+			: AdmissionCrmTimelineEventType.MessageTemplateChanged;
 		await timelineRepository.InsertAsync(new AdmissionCrmTimelineEvent(GuidGenerator.Create(), CurrentTenant.Id, lead.Id,
-			lead.AcademicYearId, AdmissionCrmTimelineEventType.MessageTemplateChanged, "Message delivery recorded",
+			lead.AcademicYearId, timelineEventType, "Message delivery recorded",
 			$"{log.Channel}: {dispatch.StatusDetails}", log.Id, CurrentUser.Id, new DateTimeOffset(Clock.Now)), autoSave: true);
 		return AdmissionCrmCommunicationMapper.Delivery(log);
 	}

@@ -12,7 +12,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionCrmGeneratedDocumentCommandWorkflow(
 	AdmissionCrmLeadAccessReader leadAccessReader,
 	AdmissionCrmGeneratedDocumentRenderer renderer,
-	IRepository<AdmissionCrmTimelineEvent, Guid> timelineRepository)
+	IRepository<AdmissionCrmTimelineEvent, Guid> timelineRepository,
+	AdmissionCrmMessageDeliveryWorkflow messageDelivery)
 	: ApplicationService, ITransientDependency
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
@@ -54,6 +55,30 @@ public class AdmissionCrmGeneratedDocumentCommandWorkflow(
 		await timelineRepository.InsertAsync(timelineEvent, autoSave: true);
 		document.TimelineEventId = timelineEvent.Id;
 		return document;
+	}
+
+	public async Task<AdmissionCrmGeneratedDocumentDeliveryDto> SendEmailAsync(
+		Guid leadId,
+		SendAdmissionCrmGeneratedDocumentEmailDto input)
+	{
+		var document = await IssueAsync(leadId, input);
+		var lead = await leadAccessReader.GetAsync(leadId, nameof(SendEmailAsync));
+		try
+		{
+			return new AdmissionCrmGeneratedDocumentDeliveryDto
+			{
+				Document = document,
+				Delivery = await messageDelivery.SendGeneratedDocumentAsync(lead, document)
+			};
+		}
+		catch (BusinessException exception)
+		{
+			return new AdmissionCrmGeneratedDocumentDeliveryDto
+			{
+				Document = document,
+				DeliveryError = exception.Code ?? exception.Message
+			};
+		}
 	}
 
 	private static string GetRequiredPermission(AdmissionCrmGeneratedDocumentType documentType) => documentType switch

@@ -41,11 +41,17 @@ public class AdmissionCrmRegistrationNumberSeriesService(AdmissionCrmRegistratio
 }
 
 [Authorize, RemoteService(false)]
-public class AdmissionCrmRegistrationIssuanceService(AdmissionCrmRegistrationIssuanceWorkflow workflow)
+public class AdmissionCrmRegistrationIssuanceService(
+	AdmissionCrmRegistrationIssuanceWorkflow workflow,
+	AdmissionCrmRegistrationReadinessWorkflow readiness)
 	: ApplicationService, IAdmissionCrmRegistrationIssuanceService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm)]
-	public Task<AdmissionCrmRegistrationApplicationDto> IssueAsync(Guid leadId, IssueAdmissionCrmRegistrationApplicationDto input) => workflow.IssueAsync(leadId, input);
+	public Task<AdmissionCrmRegistrationIssuanceResultDto> IssueAsync(Guid leadId, IssueAdmissionCrmRegistrationApplicationDto input) => workflow.IssueAsync(leadId, input);
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm)]
+	public Task<AdmissionCrmRegistrationIssuanceResultDto> SendInvitationAsync(Guid registrationId) => workflow.SendInvitationAsync(registrationId);
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View)]
+	public Task<AdmissionCrmRegistrationReadinessDto> GetReadinessAsync(Guid leadId) => readiness.GetAsync(leadId);
 }
 
 [Authorize, RemoteService(false)]

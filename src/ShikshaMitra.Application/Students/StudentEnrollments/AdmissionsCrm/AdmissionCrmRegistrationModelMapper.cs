@@ -54,7 +54,7 @@ internal static class AdmissionCrmRegistrationModelMapper
 			LeadId = application.LeadId, RegistrationTemplateId = application.RegistrationTemplateId,
 			RegistrationTemplateVersion = application.RegistrationTemplateVersion, PlaybookId = application.PlaybookId,
 			FormNumber = application.FormNumber, Status = application.Status, Sections = snapshot.Sections,
-			Provenance = application.Provenance, DataEntryState = application.DataEntryState,
+			Provenance = application.Provenance, AccessMode = application.AccessMode, DataEntryState = application.DataEntryState,
 			PhysicalFormNumber = application.PhysicalFormNumber, PhysicalFormReceivedDate = application.PhysicalFormReceivedDate,
 			PhysicalFormReceivedByUserId = application.PhysicalFormReceivedByUserId,
 			ScannedFormAttachmentReference = application.ScannedFormAttachmentReference,

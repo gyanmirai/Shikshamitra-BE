@@ -21,4 +21,8 @@ public class AdmissionCrmGeneratedDocumentCommandService(
 	public Task<AdmissionCrmGeneratedDocumentDto> IssueAsync(
 		Guid leadId,
 		IssueAdmissionCrmGeneratedDocumentDto input) => workflow.IssueAsync(leadId, input);
+
+	public Task<AdmissionCrmGeneratedDocumentDeliveryDto> SendEmailAsync(
+		Guid leadId,
+		SendAdmissionCrmGeneratedDocumentEmailDto input) => workflow.SendEmailAsync(leadId, input);
 }

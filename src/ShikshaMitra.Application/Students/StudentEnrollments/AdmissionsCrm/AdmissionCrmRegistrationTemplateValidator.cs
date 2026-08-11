@@ -11,7 +11,19 @@ internal static class AdmissionCrmRegistrationTemplateValidator
 	private static readonly HashSet<string> SupportedSystemFields = new(StringComparer.OrdinalIgnoreCase)
 	{
 		"firstName", "middleName", "lastName", "dateOfBirth", "parentGuardianName", "primaryContactNo", "email",
-		"desiredClassName", "campus", "board", "medium", "admissionRound", "applicantCategory", "admissionRoute"
+		"desiredClassName", "campus", "board", "medium", "admissionRound", "applicantCategory", "admissionRoute",
+		"gender", "nationality", "birthPlace", "motherTongue", "aadharNo", "apparId", "penNo",
+		"secondaryContactNo", "localAddress1", "localAddress2", "localAddress3", "localCity", "localState",
+		"localCountry", "localPincode", "permanentSameAsLocal", "permanentAddress1", "permanentAddress2",
+		"permanentAddress3", "permanentCity", "permanentState", "permanentCountry", "permanentPincode",
+		"guardianName", "guardianContactNo", "guardianEmail", "guardianOccupation", "guardianQualification",
+		"guardianAadharNo", "emergencyContactName", "emergencyContactNo", "emergencyContactRelation",
+		"category", "religion", "familyCast", "secondLanguage", "haveDisability", "disabilityDetails",
+		"previousSchoolName", "previousSchoolAddress", "previousSchoolBoard", "previousSchoolMedium",
+		"lastClassAttended", "previousSchoolLeavingDate", "previousSchoolPercentage",
+		"previousSchoolAcademicYear", "previousSchoolLeavingReason", "weightKg", "heightCm", "bloodGroup",
+		"allergies", "chronicConditions", "currentMedications", "bankName", "bankAccountNo", "bankIfscCode",
+		"bankBranchName", "bankAccountHolderName", "bankAccountType", "declarationAccepted"
 	};
 
 	public static void NormalizeAndValidate(AdmissionCrmRegistrationTemplateUpsertDto input)

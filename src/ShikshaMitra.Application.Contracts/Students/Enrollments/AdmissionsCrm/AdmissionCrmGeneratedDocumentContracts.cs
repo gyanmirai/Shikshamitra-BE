@@ -6,16 +6,6 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
-public enum AdmissionCrmGeneratedDocumentType
-{
-	HallTicket = 0,
-	RegistrationAcknowledgement = 1,
-	OfferLetter = 2,
-	AdmissionLetter = 3,
-	CorrectionNotice = 4,
-	CancellationLetter = 5
-}
-
 public class PreviewAdmissionCrmGeneratedDocumentDto
 {
 	public AdmissionCrmGeneratedDocumentType DocumentType { get; set; }
@@ -28,6 +18,15 @@ public class IssueAdmissionCrmGeneratedDocumentDto : PreviewAdmissionCrmGenerate
 {
 	[MaxLength(2000)]
 	public string? Reason { get; set; }
+}
+
+public class SendAdmissionCrmGeneratedDocumentEmailDto : IssueAdmissionCrmGeneratedDocumentDto;
+
+public class AdmissionCrmGeneratedDocumentDeliveryDto
+{
+	public required AdmissionCrmGeneratedDocumentDto Document { get; set; }
+	public AdmissionCrmMessageDeliveryLogDto? Delivery { get; set; }
+	public string? DeliveryError { get; set; }
 }
 
 public class AdmissionCrmGeneratedDocumentDto
@@ -70,6 +69,7 @@ public interface IAdmissionCrmGeneratedDocumentCommandService : IApplicationServ
 {
 	Task<AdmissionCrmGeneratedDocumentDto> PreviewAsync(Guid leadId, PreviewAdmissionCrmGeneratedDocumentDto input);
 	Task<AdmissionCrmGeneratedDocumentDto> IssueAsync(Guid leadId, IssueAdmissionCrmGeneratedDocumentDto input);
+	Task<AdmissionCrmGeneratedDocumentDeliveryDto> SendEmailAsync(Guid leadId, SendAdmissionCrmGeneratedDocumentEmailDto input);
 }
 
 public interface IAdmissionCrmGeneratedDocumentQueryService : IApplicationService

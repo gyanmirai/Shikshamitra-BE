@@ -158,6 +158,23 @@ public partial class AdmissionCrmSeederContributor
 			template.UpdateStatus(AdmissionCrmMessageTemplateStatus.Approved, true);
 			await repository.InsertAsync(template);
 		}
+
+		var registrationInvitationId = StableId(tenantId, "message-template:registration-invitation:email");
+		if (!await repository.AnyAsync(item => item.Id == registrationInvitationId))
+		{
+			var registrationInvitation = new AdmissionCrmMessageTemplate(
+				registrationInvitationId,
+				tenantId,
+				academicYearId,
+				"Registration invitation - Email",
+				AdmissionCrmMessageChannel.Email,
+				"Registration invitation",
+				"Complete your admission registration",
+				"Hello {{applicantName}}, your registration form is ready. Complete it securely at {{registrationLink}}.",
+				"[\"applicantName\",\"registrationLink\"]");
+			registrationInvitation.UpdateStatus(AdmissionCrmMessageTemplateStatus.Approved, true);
+			await repository.InsertAsync(registrationInvitation);
+		}
 	}
 
 	private async Task RepairOperationalScenariosAsync(
@@ -585,76 +602,114 @@ public partial class AdmissionCrmSeederContributor
 		}
 	}
 
-	internal static string DefaultRegistrationSectionsJson() =>
-		JsonSerializer.Serialize(
-			new[]
-			{
-				new
-				{
-					key = "student",
-					title = "Student details",
-					displayOrder = 10,
-					parentVisible = true,
-					fields = new[]
-					{
-						new
-						{
-							key = "firstName",
-							label = "First name",
-							fieldType = AdmissionCrmFormFieldType.Text,
-							systemField = "FirstName",
-							required = true,
-							parentEditable = true,
-							displayOrder = 10,
-							options = Array.Empty<string>()
-						},
-						new
-						{
-							key = "dateOfBirth",
-							label = "Date of birth",
-							fieldType = AdmissionCrmFormFieldType.Date,
-							systemField = "DateOfBirth",
-							required = true,
-							parentEditable = true,
-							displayOrder = 20,
-							options = Array.Empty<string>()
-						}
-					}
-				},
-				new
-				{
-					key = "family",
-					title = "Family and communication",
-					displayOrder = 20,
-					parentVisible = true,
-					fields = new[]
-					{
-						new
-						{
-							key = "parentName",
-							label = "Parent or guardian",
-							fieldType = AdmissionCrmFormFieldType.Text,
-							systemField = "ParentGuardianName",
-							required = true,
-							parentEditable = true,
-							displayOrder = 10,
-							options = Array.Empty<string>()
-						},
-						new
-						{
-							key = "phone",
-							label = "Mobile number",
-							fieldType = AdmissionCrmFormFieldType.Phone,
-							systemField = "PrimaryContactNo",
-							required = true,
-							parentEditable = true,
-							displayOrder = 20,
-							options = Array.Empty<string>()
-						}
-					}
-				}
-			},
-			new JsonSerializerOptions(JsonSerializerDefaults.Web));
+	internal static string DefaultRegistrationSectionsJson()
+	{
+		static object Field(string key, string label, AdmissionCrmFormFieldType type, int order,
+			bool required = false, string[]? options = null) => new
+		{
+			key,
+			label,
+			fieldType = type,
+			systemField = key,
+			required,
+			parentEditable = true,
+			displayOrder = order,
+			options = options ?? Array.Empty<string>()
+		};
+
+		static object Section(string key, string title, int order, params object[] fields) => new
+		{
+			key,
+			title,
+			displayOrder = order,
+			parentVisible = true,
+			fields
+		};
+
+		var sections = new[]
+		{
+			Section("personal", "Personal and applicant details", 10,
+				Field("firstName", "First name", AdmissionCrmFormFieldType.Text, 10, true),
+				Field("middleName", "Middle name", AdmissionCrmFormFieldType.Text, 20),
+				Field("lastName", "Last name", AdmissionCrmFormFieldType.Text, 30, true),
+				Field("dateOfBirth", "Date of birth", AdmissionCrmFormFieldType.Date, 40, true),
+				Field("gender", "Gender", AdmissionCrmFormFieldType.Select, 50, true, ["Male", "Female"]),
+				Field("nationality", "Nationality", AdmissionCrmFormFieldType.Text, 60),
+				Field("birthPlace", "Place of birth", AdmissionCrmFormFieldType.Text, 70),
+				Field("motherTongue", "Mother tongue", AdmissionCrmFormFieldType.Text, 80),
+				Field("aadharNo", "Aadhaar number", AdmissionCrmFormFieldType.Text, 90),
+				Field("apparId", "APAAR ID", AdmissionCrmFormFieldType.Text, 100),
+				Field("penNo", "PEN", AdmissionCrmFormFieldType.Text, 110)),
+			Section("academic", "Academic and admission details", 20,
+				Field("desiredClassName", "Class applied for", AdmissionCrmFormFieldType.Text, 10, true),
+				Field("campus", "Campus", AdmissionCrmFormFieldType.Text, 20),
+				Field("board", "Education board", AdmissionCrmFormFieldType.Text, 30),
+				Field("medium", "Medium", AdmissionCrmFormFieldType.Text, 40),
+				Field("admissionRound", "Admission round", AdmissionCrmFormFieldType.Text, 50),
+				Field("applicantCategory", "Applicant category", AdmissionCrmFormFieldType.Text, 60),
+				Field("admissionRoute", "Admission route", AdmissionCrmFormFieldType.Text, 70)),
+			Section("family", "Family and guardians", 30,
+				Field("parentGuardianName", "Parent or guardian name", AdmissionCrmFormFieldType.Text, 10, true),
+				Field("guardianContactNo", "Parent or guardian mobile", AdmissionCrmFormFieldType.Phone, 20, true),
+				Field("guardianEmail", "Parent or guardian email", AdmissionCrmFormFieldType.Email, 30),
+				Field("guardianOccupation", "Occupation", AdmissionCrmFormFieldType.Text, 40),
+				Field("guardianQualification", "Qualification", AdmissionCrmFormFieldType.Text, 50),
+				Field("guardianAadharNo", "Parent or guardian Aadhaar", AdmissionCrmFormFieldType.Text, 60)),
+			Section("contact", "Contact and addresses", 40,
+				Field("primaryContactNo", "Primary mobile", AdmissionCrmFormFieldType.Phone, 10, true),
+				Field("secondaryContactNo", "Secondary mobile", AdmissionCrmFormFieldType.Phone, 20),
+				Field("email", "Applicant email", AdmissionCrmFormFieldType.Email, 30),
+				Field("localAddress1", "Current address", AdmissionCrmFormFieldType.Text, 40, true),
+				Field("localAddress2", "Current address line 2", AdmissionCrmFormFieldType.Text, 50),
+				Field("localCity", "Current city", AdmissionCrmFormFieldType.Text, 60, true),
+				Field("localState", "Current state", AdmissionCrmFormFieldType.Text, 70, true),
+				Field("localCountry", "Current country", AdmissionCrmFormFieldType.Text, 80, true),
+				Field("localPincode", "Current postal code", AdmissionCrmFormFieldType.Text, 90, true),
+				Field("permanentSameAsLocal", "Permanent address is the same", AdmissionCrmFormFieldType.Checkbox, 100),
+				Field("permanentAddress1", "Permanent address", AdmissionCrmFormFieldType.Text, 110),
+				Field("permanentCity", "Permanent city", AdmissionCrmFormFieldType.Text, 120),
+				Field("permanentState", "Permanent state", AdmissionCrmFormFieldType.Text, 130),
+				Field("permanentCountry", "Permanent country", AdmissionCrmFormFieldType.Text, 140),
+				Field("permanentPincode", "Permanent postal code", AdmissionCrmFormFieldType.Text, 150)),
+			Section("compliance", "Additional and compliance information", 50,
+				Field("category", "Category", AdmissionCrmFormFieldType.Text, 10),
+				Field("religion", "Religion", AdmissionCrmFormFieldType.Text, 20),
+				Field("familyCast", "Community or caste", AdmissionCrmFormFieldType.Text, 30),
+				Field("secondLanguage", "Second language", AdmissionCrmFormFieldType.Text, 40),
+				Field("haveDisability", "Disability accommodation required", AdmissionCrmFormFieldType.Checkbox, 50),
+				Field("disabilityDetails", "Disability or accommodation details", AdmissionCrmFormFieldType.TextArea, 60),
+				Field("emergencyContactName", "Emergency contact name", AdmissionCrmFormFieldType.Text, 70, true),
+				Field("emergencyContactNo", "Emergency contact mobile", AdmissionCrmFormFieldType.Phone, 80, true),
+				Field("emergencyContactRelation", "Emergency contact relationship", AdmissionCrmFormFieldType.Text, 90, true)),
+			Section("previousSchool", "Previous school", 60,
+				Field("previousSchoolName", "School name", AdmissionCrmFormFieldType.Text, 10),
+				Field("previousSchoolAddress", "School address", AdmissionCrmFormFieldType.TextArea, 20),
+				Field("previousSchoolBoard", "Board", AdmissionCrmFormFieldType.Text, 30),
+				Field("previousSchoolMedium", "Medium", AdmissionCrmFormFieldType.Text, 40),
+				Field("lastClassAttended", "Last class attended", AdmissionCrmFormFieldType.Text, 50),
+				Field("previousSchoolLeavingDate", "Date of leaving", AdmissionCrmFormFieldType.Date, 60),
+				Field("previousSchoolPercentage", "Result or percentage", AdmissionCrmFormFieldType.Number, 70),
+				Field("previousSchoolAcademicYear", "Academic year", AdmissionCrmFormFieldType.Text, 80),
+				Field("previousSchoolLeavingReason", "Reason for leaving", AdmissionCrmFormFieldType.TextArea, 90)),
+			Section("medical", "Medical information", 70,
+				Field("bloodGroup", "Blood group", AdmissionCrmFormFieldType.Text, 10),
+				Field("heightCm", "Height (cm)", AdmissionCrmFormFieldType.Number, 20),
+				Field("weightKg", "Weight (kg)", AdmissionCrmFormFieldType.Number, 30),
+				Field("allergies", "Allergies", AdmissionCrmFormFieldType.TextArea, 40),
+				Field("chronicConditions", "Chronic conditions", AdmissionCrmFormFieldType.TextArea, 50),
+				Field("currentMedications", "Current medications", AdmissionCrmFormFieldType.TextArea, 60)),
+			Section("bank", "Bank and payment identity", 80,
+				Field("bankAccountHolderName", "Account holder", AdmissionCrmFormFieldType.Text, 10),
+				Field("bankName", "Bank name", AdmissionCrmFormFieldType.Text, 20),
+				Field("bankAccountNo", "Account number", AdmissionCrmFormFieldType.Text, 30),
+				Field("bankIfscCode", "IFSC code", AdmissionCrmFormFieldType.Text, 40),
+				Field("bankBranchName", "Branch", AdmissionCrmFormFieldType.Text, 50),
+				Field("bankAccountType", "Account type", AdmissionCrmFormFieldType.Text, 60),
+				Field("declarationAccepted", "I confirm that the information is accurate", AdmissionCrmFormFieldType.Checkbox, 70, true))
+		};
+
+		return JsonSerializer.Serialize(sections, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+	}
 
 	internal static IReadOnlyList<string> LegacyDemoLeadKeys() =>
 	[

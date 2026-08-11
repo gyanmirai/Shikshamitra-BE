@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -19,6 +20,14 @@ public class AdmissionCrmCommunicationDispatchRequest
 	public string? Subject { get; set; }
 	public string Body { get; set; } = string.Empty;
 	public string Trigger { get; set; } = "Manual";
+	public IReadOnlyList<AdmissionCrmCommunicationAttachment> Attachments { get; set; } = [];
+}
+
+public class AdmissionCrmCommunicationAttachment
+{
+	public string FileName { get; set; } = string.Empty;
+	public string ContentType { get; set; } = "application/octet-stream";
+	public byte[] Content { get; set; } = [];
 }
 
 public class AdmissionCrmCommunicationDispatchResult
@@ -178,6 +187,13 @@ public class AdmissionCrmCommunicationDispatcher(
 			? "default"
 			: settings.PayloadMode.Trim().ToLowerInvariant();
 
+		var attachments = request.Attachments.Select(item => new
+		{
+			item.FileName,
+			item.ContentType,
+			ContentBase64 = Convert.ToBase64String(item.Content)
+		}).ToArray();
+
 		if (payloadMode == "envelope")
 		{
 			return new
@@ -192,7 +208,8 @@ public class AdmissionCrmCommunicationDispatcher(
 				{
 					request.Recipient,
 					request.Subject,
-					request.Body
+					request.Body,
+					Attachments = attachments
 				},
 				Context = new
 				{
@@ -217,6 +234,7 @@ public class AdmissionCrmCommunicationDispatcher(
 			request.Subject,
 			request.Body,
 			request.Trigger,
+			Attachments = attachments,
 			Parameters = settings.Parameters
 		};
 	}

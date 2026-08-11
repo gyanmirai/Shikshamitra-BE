@@ -109,6 +109,14 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			AdmissionCrmRegistrationPath.RegistrationBeforeExam);
 		var lead = await CreateRegistrationLeadAsync("GateOwner");
 		await SetLeadWorkflowStateAsync(lead.Id, AdmissionInquiryStage.NewInquiry, ownerUserId: null);
+		var readinessResponse = await Client.GetAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/readiness");
+		readinessResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var readiness = await readinessResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationReadinessDto>(JsonOptions);
+		readiness.ShouldNotBeNull();
+		readiness.CanIssue.ShouldBeFalse();
+		readiness.Blockers.ShouldContain(item => item.Code == "AdmissionCrm:RegistrationOwnerRequired");
 
 		var unassignedResponse = await IssueRegistrationAsync(lead.Id, resources, playbookId);
 		unassignedResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -137,6 +145,54 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		followUpResponse.StatusCode.ShouldBe(
 			HttpStatusCode.OK,
 			await followUpResponse.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Issue_All_Access_Modes_Without_Duplicating_A_Shared_Draft()
+	{
+		foreach (var mode in Enum.GetValues<AdmissionCrmRegistrationAccessMode>())
+		{
+			var resources = await CreatePublishedRegistrationResourcesAsync("Access " + mode);
+			var playbookId = await CreatePublishedRegistrationPlaybookAsync(
+				AdmissionCrmRegistrationPath.RegistrationBeforeExam);
+			var lead = await CreateRegistrationLeadAsync("Access" + mode);
+			await SetLeadWorkflowStateAsync(lead.Id, AdmissionInquiryStage.FollowUp, Guid.NewGuid());
+
+			var response = await Client.PostAsJsonAsync(
+				$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/issue",
+				new IssueAdmissionCrmRegistrationApplicationDto
+				{
+					RegistrationTemplateId = resources.TemplateId,
+					FormNumberSeriesId = resources.SeriesId,
+					PlaybookId = playbookId,
+					AccessMode = mode
+				},
+				JsonOptions);
+			response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+			var result = await response.Content
+				.ReadFromJsonAsync<AdmissionCrmRegistrationIssuanceResultDto>(JsonOptions);
+			result.ShouldNotBeNull();
+			result.Registration.AccessMode.ShouldBe(mode);
+			if (mode == AdmissionCrmRegistrationAccessMode.StaffAssisted)
+			{
+				result.Delivery.ShouldBeNull();
+				result.DeliveryError.ShouldBeNull();
+			}
+			else
+			{
+				(result.Delivery != null || !string.IsNullOrWhiteSpace(result.DeliveryError)).ShouldBeTrue();
+				var retryResponse = await Client.PostAsync(
+					$"/api/student-enrollment/admissions-crm/registrations/{result.Registration.Id}/invitation/send",
+					null);
+				retryResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await retryResponse.Content.ReadAsStringAsync());
+				var retryResult = await retryResponse.Content
+					.ReadFromJsonAsync<AdmissionCrmRegistrationIssuanceResultDto>(JsonOptions);
+				retryResult.ShouldNotBeNull();
+				retryResult.Registration.Id.ShouldBe(result.Registration.Id);
+				(retryResult.Delivery != null || !string.IsNullOrWhiteSpace(retryResult.DeliveryError)).ShouldBeTrue();
+			}
+		}
 	}
 
 	[Fact]
@@ -184,6 +240,18 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		eligibleResponse.StatusCode.ShouldBe(
 			HttpStatusCode.OK,
 			await eligibleResponse.Content.ReadAsStringAsync());
+
+		var overrideLead = await CreateRegistrationLeadAsync("GateOverride");
+		await SetLeadWorkflowStateAsync(overrideLead.Id, AdmissionInquiryStage.ExamScheduled, Guid.NewGuid());
+		await AddScheduledEligibilityOverrideAsync(overrideLead.Id);
+		await SetLeadWorkflowStateAsync(overrideLead.Id, AdmissionInquiryStage.Eligible, Guid.NewGuid());
+		var overrideResponse = await IssueRegistrationAsync(
+			overrideLead.Id,
+			resources,
+			afterExamPlaybookId);
+		overrideResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await overrideResponse.Content.ReadAsStringAsync());
 	}
 
 	[Theory]
@@ -267,8 +335,9 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		allowedStandardResponse.StatusCode.ShouldBe(
 			HttpStatusCode.OK,
 			await allowedStandardResponse.Content.ReadAsStringAsync());
-		var standardRegistration = await allowedStandardResponse.Content
-			.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		var standardIssuance = await allowedStandardResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmRegistrationIssuanceResultDto>(JsonOptions);
+		var standardRegistration = standardIssuance?.Registration;
 		standardRegistration.ShouldNotBeNull();
 		standardRegistration.FeeStatus.ShouldBe(AdmissionCrmRegistrationFeeStatus.Waived);
 
@@ -386,6 +455,7 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			{
 				AdmissionIntent = "Admission inquiry for Grade 1",
 				PrimaryContactNo = "98" + Random.Shared.NextInt64(10000000, 99999999),
+				Email = $"aarav-{unique}@example.test",
 				Channel = AdmissionInquiryChannel.QuickCallEntry,
 				FirstName = "Aarav"
 			},
@@ -411,7 +481,8 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 			issueInput,
 			JsonOptions);
 		issueResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await issueResponse.Content.ReadAsStringAsync());
-		var issued = await issueResponse.Content.ReadFromJsonAsync<AdmissionCrmRegistrationApplicationDto>(JsonOptions);
+		var issuance = await issueResponse.Content.ReadFromJsonAsync<AdmissionCrmRegistrationIssuanceResultDto>(JsonOptions);
+		var issued = issuance?.Registration;
 		issued.ShouldNotBeNull();
 		issued.FormNumber.ShouldBe(series.NextPreview);
 		issued.RegistrationTemplateVersion.ShouldBe(1);
@@ -464,6 +535,50 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 		issuedDocumentAvailability.Single(item =>
 			item.DocumentType == AdmissionCrmGeneratedDocumentType.CorrectionNotice)
 			.IsAvailable.ShouldBeFalse();
+		var emailProviderResponse = await Client.PutAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{lead.AcademicYearId}/communication/providers/{(int) AdmissionCrmMessageChannel.Email}",
+			new UpdateAdmissionCrmCommunicationProviderDto
+			{
+				IsEnabled = true,
+				ProviderName = "Admissions email queue",
+				SenderId = "admissions",
+				Settings = new AdmissionCrmCommunicationProviderSettingsDto()
+			},
+			JsonOptions);
+		emailProviderResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await emailProviderResponse.Content.ReadAsStringAsync());
+		var emailDocumentResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/documents/send-email",
+			new SendAdmissionCrmGeneratedDocumentEmailDto
+			{
+				DocumentType = AdmissionCrmGeneratedDocumentType.RegistrationAcknowledgement,
+				Language = "en"
+			},
+			JsonOptions);
+		emailDocumentResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await emailDocumentResponse.Content.ReadAsStringAsync());
+		var emailedDocument = await emailDocumentResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmGeneratedDocumentDeliveryDto>(JsonOptions);
+		emailedDocument.ShouldNotBeNull();
+		emailedDocument.Document.Content.ShouldNotBeEmpty();
+		emailedDocument.Delivery.ShouldNotBeNull();
+		emailedDocument.Delivery.GeneratedDocumentType.ShouldBe(
+			AdmissionCrmGeneratedDocumentType.RegistrationAcknowledgement);
+		emailedDocument.Delivery.AttachmentLanguage.ShouldBe("en");
+		emailedDocument.Delivery.AttachmentFileName.ShouldBe(emailedDocument.Document.FileName);
+		var documentRetryResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/communication/delivery-logs/{emailedDocument.Delivery.Id}/retry",
+			new RetryAdmissionCrmMessageDeliveryDto { Reason = "Retry generated registration document" },
+			JsonOptions);
+		documentRetryResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await documentRetryResponse.Content.ReadAsStringAsync());
+		var retriedDocumentDelivery = await documentRetryResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmMessageDeliveryLogDto>(JsonOptions);
+		retriedDocumentDelivery.ShouldNotBeNull();
+		retriedDocumentDelivery.AttemptCount.ShouldBeGreaterThan(emailedDocument.Delivery.AttemptCount);
 
 		var currentRegistrationResponse = await Client.GetAsync(
 			$"/api/student-enrollment/admissions-crm/leads/{lead.Id}/registrations/current");
@@ -1312,14 +1427,32 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 
 	private async Task<AdmissionCrmLeadDto> CreateRegistrationLeadAsync(string suffix)
 	{
+		var sourceResponse = await Client.PostAsJsonAsync(
+			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/catalog/inquiry-sources",
+			new AdmissionCrmInquirySourceUpsertDto
+			{
+				Code = "registration-" + Guid.NewGuid().ToString("N"),
+				DisplayName = "Registration source " + suffix,
+				AllowedChannels = [AdmissionInquiryChannel.SchoolWebsiteForm]
+			},
+			JsonOptions);
+		sourceResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await sourceResponse.Content.ReadAsStringAsync());
+		var inquirySource = await sourceResponse.Content
+			.ReadFromJsonAsync<AdmissionCrmInquirySourceDto>(JsonOptions);
+		inquirySource.ShouldNotBeNull();
 		var response = await Client.PostAsJsonAsync(
 			$"/api/student-enrollment/admissions-crm/{Factory.SeededAcademicYearId}/leads",
 			new CreateAdmissionCrmLeadDto
 			{
+				InquirySourceId = inquirySource.Id,
 				AdmissionIntent = "Registration gate validation",
 				PrimaryContactNo = "95" + Random.Shared.NextInt64(10000000, 99999999),
-				Channel = AdmissionInquiryChannel.QuickCallEntry,
-				FirstName = suffix
+				Email = $"{suffix}.{Guid.NewGuid():N}@example.test",
+				Channel = AdmissionInquiryChannel.SchoolWebsiteForm,
+				FirstName = suffix,
+				ParentGuardianName = suffix + " Guardian",
+				TargetStandardId = Factory.SeededStandardId,
+				DesiredClassName = "Grade 4"
 			},
 			JsonOptions);
 		response.StatusCode.ShouldBe(
@@ -1489,6 +1622,33 @@ public class AdmissionCrmRegistrationApi_Tests : ShikshaMitraApiTestBase
 				null,
 				now.AddDays(-3).UtcDateTime);
 			exam.RecordResult(100, 40, 75, null, now.AddDays(-2).UtcDateTime);
+			await examRepository.InsertAsync(exam);
+			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task AddScheduledEligibilityOverrideAsync(Guid leadId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var slotRepository = scope.ServiceProvider.GetRequiredService<IRepository<AdmissionCrmExamSlot, Guid>>();
+		var examRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<AdmissionCrmEntranceExamRecord, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var now = DateTimeOffset.UtcNow;
+			var slot = new AdmissionCrmExamSlot(Guid.NewGuid(), tenantId, Factory.SeededAcademicYearId,
+				null, null, null, "Registration override exam", null, null, now.AddDays(2),
+				now.AddDays(2).AddHours(2), 20, 1);
+			await slotRepository.InsertAsync(slot);
+			var exam = new AdmissionCrmEntranceExamRecord(Guid.NewGuid(), tenantId,
+				Factory.SeededAcademicYearId, leadId, slot, false, null, now.UtcDateTime);
+			exam.SetEligibilityDecision(AdmissionCrmEligibilityDecision.Eligible,
+				"Authorized admission eligibility override.", true,
+				"Principal approved a documented entrance-exam exception.", null, now.UtcDateTime);
 			await examRepository.InsertAsync(exam);
 			await uow.CompleteAsync();
 		}

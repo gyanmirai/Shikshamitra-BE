@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Configuration;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -19,17 +20,67 @@ public class AdmissionCrmRegistrationIssuanceWorkflow(
 	AdmissionCrmRegistrationFormNumberWorkflow formNumbers,
 	AdmissionCrmApplicantStatusLinkWorkflow statusLinks,
 	AdmissionCrmRegistrationTimeline timeline,
-	AdmissionCrmDocumentChecklistWorkflow documentChecklist) : ApplicationService, ITransientDependency
+	AdmissionCrmDocumentChecklistWorkflow documentChecklist,
+	AdmissionCrmMessageDeliveryWorkflow messageDelivery,
+	IConfiguration configuration) : ApplicationService, ITransientDependency
 {
-	public Task<AdmissionCrmRegistrationApplicationDto> IssueAsync(Guid leadId, IssueAdmissionCrmRegistrationApplicationDto input) =>
-		IssueCoreAsync(leadId, input, false, AdmissionCrmRegistrationProvenance.OnlineParent);
+	public async Task<AdmissionCrmRegistrationIssuanceResultDto> IssueAsync(
+		Guid leadId,
+		IssueAdmissionCrmRegistrationApplicationDto input)
+	{
+		var provenance = input.AccessMode == AdmissionCrmRegistrationAccessMode.Online
+			? AdmissionCrmRegistrationProvenance.OnlineParent
+			: AdmissionCrmRegistrationProvenance.StaffAssistedCounter;
+		var registration = await IssueCoreAsync(leadId, input, false, provenance, input.AccessMode);
+		var result = new AdmissionCrmRegistrationIssuanceResultDto { Registration = registration };
+		if (input.AccessMode == AdmissionCrmRegistrationAccessMode.StaffAssisted) return result;
+		var lead = await access.GetLeadAsync(leadId, "SendRegistrationInvitationAsync");
+		return await DeliverInvitationAsync(lead, result);
+	}
+
+	public async Task<AdmissionCrmRegistrationIssuanceResultDto> SendInvitationAsync(Guid registrationId)
+	{
+		var application = await access.GetApplicationAsync(registrationId, "SendRegistrationInvitationAsync");
+		var lead = await access.GetLeadAsync(application.LeadId, "SendRegistrationInvitationAsync");
+		var registration = AdmissionCrmRegistrationModelMapper.ToApplicationDto(application);
+		registration.ApplicantStatusPath = await statusLinks.EnsureAsync(lead, Clock.Now.AddDays(90));
+		return await DeliverInvitationAsync(lead, new AdmissionCrmRegistrationIssuanceResultDto
+		{
+			Registration = registration
+		});
+	}
+
+	private async Task<AdmissionCrmRegistrationIssuanceResultDto> DeliverInvitationAsync(
+		AdmissionInquiryLead lead,
+		AdmissionCrmRegistrationIssuanceResultDto result)
+	{
+		try
+		{
+			if (string.IsNullOrWhiteSpace(result.Registration.ApplicantStatusPath))
+				throw new BusinessException("AdmissionCrm:ApplicantStatusLinkUnavailable");
+			var clientUrl = configuration["App:ClientUrl"]?.TrimEnd('/');
+			if (string.IsNullOrWhiteSpace(clientUrl))
+				throw new BusinessException("AdmissionCrm:ClientUrlNotConfigured");
+			var link = clientUrl + "/" + result.Registration.ApplicantStatusPath.TrimStart('/');
+			result.Delivery = await messageDelivery.SendRegistrationInvitationAsync(lead.Id, link);
+		}
+		catch (BusinessException exception)
+		{
+			result.DeliveryError = exception.Code ?? exception.Message;
+			await timeline.AddAsync(lead, AdmissionCrmTimelineEventType.RegistrationInvitationSent,
+				"Registration invitation not sent", result.DeliveryError, result.Registration.Id);
+		}
+		return result;
+	}
 
 	public Task<AdmissionCrmRegistrationApplicationDto> IssueDirectAsync(Guid leadId, IssueAdmissionCrmRegistrationApplicationDto input) =>
-		IssueCoreAsync(leadId, input, true, AdmissionCrmRegistrationProvenance.StaffAssistedCounter);
+		IssueCoreAsync(leadId, input, true, AdmissionCrmRegistrationProvenance.StaffAssistedCounter,
+			AdmissionCrmRegistrationAccessMode.StaffAssisted);
 
 	public async Task<AdmissionCrmRegistrationApplicationDto> IssueFromPaperAsync(Guid leadId, CreatePaperAdmissionCrmRegistrationDto input)
 	{
-		var dto = await IssueCoreAsync(leadId, input.Registration, true, AdmissionCrmRegistrationProvenance.StaffEnteredFromPaper);
+		var dto = await IssueCoreAsync(leadId, input.Registration, true, AdmissionCrmRegistrationProvenance.StaffEnteredFromPaper,
+			AdmissionCrmRegistrationAccessMode.StaffAssisted);
 		var application = await access.GetApplicationAsync(dto.Id, "IssueFromPaperAsync");
 		application.RecordPaperReceipt(input.PhysicalFormNumber,
 			input.PhysicalFormReceivedDate == default ? Clock.Now.Date : input.PhysicalFormReceivedDate,
@@ -48,7 +99,8 @@ public class AdmissionCrmRegistrationIssuanceWorkflow(
 	}
 
 	private async Task<AdmissionCrmRegistrationApplicationDto> IssueCoreAsync(Guid leadId,
-		IssueAdmissionCrmRegistrationApplicationDto input, bool direct, AdmissionCrmRegistrationProvenance provenance)
+		IssueAdmissionCrmRegistrationApplicationDto input, bool direct, AdmissionCrmRegistrationProvenance provenance,
+		AdmissionCrmRegistrationAccessMode accessMode)
 	{
 		if (input.WaiveFee)
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.WaiveRegistrationFee);
@@ -72,7 +124,7 @@ public class AdmissionCrmRegistrationIssuanceWorkflow(
 			lead.Id, template.Id, template.Version, input.PlaybookId, formNumber,
 			AdmissionCrmRegistrationModelMapper.Serialize(AdmissionCrmRegistrationModelMapper.ToTemplateDto(template)),
 			AdmissionCrmRegistrationModelMapper.Serialize(AdmissionCrmRegistrationModelMapper.BuildPrefill(lead)), now,
-			now.AddDays(expiryDays), template.FeeRequired ? template.FeeAmount : 0, provenance);
+			now.AddDays(expiryDays), template.FeeRequired ? template.FeeAmount : 0, provenance, accessMode);
 		if (input.WaiveFee) application.WaiveFee(Check.NotNullOrWhiteSpace(input.WaiverReason, nameof(input.WaiverReason), AdmissionCrmConsts.MaxNotesLength));
 		await applicationRepository.InsertAsync(application, autoSave: false);
 		var statusPath = await statusLinks.EnsureAsync(lead, now.AddDays(Math.Max(expiryDays, 90)));
@@ -82,7 +134,7 @@ public class AdmissionCrmRegistrationIssuanceWorkflow(
 			await leadRepository.UpdateAsync(lead, autoSave: false);
 		}
 		await timeline.AddAsync(lead, AdmissionCrmTimelineEventType.RegistrationFormIssued, "Registration form issued",
-			$"Form {formNumber}, template {template.Name} v{template.Version}.", application.Id);
+			$"Form {formNumber}, template {template.Name} v{template.Version}, access {accessMode}.", application.Id);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		await documentChecklist.AssignApplicableChecklistFromAutomationAsync(application.Id,
 			new AdmissionCrmPlaybookApplicabilityDto { Campus = lead.CampusBranchName, DesiredClass = lead.DesiredClassName });

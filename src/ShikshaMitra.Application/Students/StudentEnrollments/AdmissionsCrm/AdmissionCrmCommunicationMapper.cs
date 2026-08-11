@@ -28,6 +28,8 @@ internal static class AdmissionCrmCommunicationMapper
 		Channel = value.Channel, Recipient = value.Recipient, NormalizedRecipient = value.NormalizedRecipient,
 		ProviderName = value.ProviderName, ProviderMessageId = value.ProviderMessageId, SubjectSnapshot = value.SubjectSnapshot,
 		BodySnapshot = value.BodySnapshot, Status = value.Status, StatusDetails = value.StatusDetails,
+		GeneratedDocumentType = value.GeneratedDocumentType, AttachmentLanguage = value.AttachmentLanguage,
+		AttachmentFileName = value.AttachmentFileName, AttachmentContentType = value.AttachmentContentType,
 		AttemptCount = value.AttemptCount, CreatedAt = value.CreatedAt, LastAttemptAt = value.LastAttemptAt,
 		SentAt = value.SentAt, DeliveredAt = value.DeliveredAt
 	};

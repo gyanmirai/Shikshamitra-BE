@@ -977,7 +977,9 @@ public class ExamSeatAllocationAppService(
 
         // 1. Internal allocations (this exam)
         var internalAllocations = await seatAllocationRepository.GetListAsync(a =>
-            a.ExamId == examId && a.RoomId == input.RoomId);
+            a.ExamId == examId &&
+            a.SeatingPlanId == plan.Id &&
+            a.RoomId == input.RoomId);
 
         // 2. External allocations (overlapping time slots from completely different exams)
         var externalAllocations = await GetExternalOverlappingAllocationsAsync(examId, plan.Id, new List<Guid> { input.RoomId });
@@ -999,7 +1001,12 @@ public class ExamSeatAllocationAppService(
         var standardsDict = standards.ToDictionary(s => s.Id);
 
         // Build seat items — one per seat in the room
-        var allocBySeats = allAllocations.ToDictionary(a => a.SeatNumber);
+        // A seat can only be shown once. The plan filter above prevents normal
+        // cross-plan collisions; grouping also keeps old/inconsistent data from
+        // turning this read-only endpoint into a 500 response.
+        var allocBySeats = allAllocations
+            .GroupBy(a => a.SeatNumber)
+            .ToDictionary(g => g.Key, g => g.First());
         var allItems = new List<SeatLayoutItemDto>();
 
         for (var seat = 1; seat <= totalSeats; seat++)

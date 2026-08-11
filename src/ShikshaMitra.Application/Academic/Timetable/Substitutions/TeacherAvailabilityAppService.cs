@@ -42,17 +42,9 @@ public class TeacherAvailabilityAppService(
             var currentUserId = CurrentUser.Id;
             if (currentUserId.HasValue)
             {
-                var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId.Value);
-                if (currentEmployee != null)
-                {
-                    var allowedTeacherIds = await GetReportingEmployeesAsync(currentEmployee.Id);
-                    allowedTeacherIds.Add(currentEmployee.Id);
-                    filtered = filtered.Where(x => x.TeacherId.HasValue && allowedTeacherIds.Contains(x.TeacherId.Value));
-                }
-                else
-                {
-                    filtered = Enumerable.Empty<TeacherAvailability>();
-                }
+                var visibleTeacherIds = await GetVisibleTeacherReferenceIdsAsync(currentUserId.Value);
+                filtered = filtered.Where(x =>
+                    x.TeacherId.HasValue && visibleTeacherIds.Contains(x.TeacherId.Value));
             }
             else
             {
@@ -668,27 +660,40 @@ public class TeacherAvailabilityAppService(
             string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
     }
 
-    private async Task<List<Guid>> GetReportingEmployeesAsync(Guid managerEmployeeId)
+    private async Task<HashSet<Guid>> GetVisibleTeacherReferenceIdsAsync(Guid currentUserId)
     {
         var allEmployees = await employeeRepository.GetListAsync();
-        var result = new List<Guid>();
-        var visited = new HashSet<Guid>();
-        
-        void Traverse(Guid parentId)
+        var currentEmployee = allEmployees.FirstOrDefault(x => x.UserId == currentUserId);
+        var result = new HashSet<Guid> { currentUserId };
+        if (currentEmployee == null)
         {
-            if (!visited.Add(parentId))
+            return result;
+        }
+
+        var visited = new HashSet<Guid>();
+        var queue = new Queue<Guid>();
+        queue.Enqueue(currentEmployee.Id);
+        while (queue.Count > 0)
+        {
+            var managerId = queue.Dequeue();
+            if (!visited.Add(managerId))
             {
-                return;
+                continue;
             }
-            var children = allEmployees.Where(x => x.ReportingManagerId == parentId).ToList();
-            foreach (var child in children)
+
+            var manager = allEmployees.First(x => x.Id == managerId);
+            result.Add(manager.Id);
+            if (manager.UserId.HasValue)
             {
-                result.Add(child.Id);
-                Traverse(child.Id);
+                result.Add(manager.UserId.Value);
+            }
+
+            foreach (var child in allEmployees.Where(x => x.ReportingManagerId == managerId))
+            {
+                queue.Enqueue(child.Id);
             }
         }
-        
-        Traverse(managerEmployeeId);
+
         return result;
     }
 }

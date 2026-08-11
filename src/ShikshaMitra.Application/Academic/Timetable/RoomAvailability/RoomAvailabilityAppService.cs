@@ -349,27 +349,14 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         }
 
         var currentUserId = CurrentUser.GetId();
-        var isAdmin = CurrentUser.Roles.Any(role => string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
+        var isAdmin = IsAdministrator();
 
         if (!isAdmin)
         {
-            if (input.IsApprovalView)
-            {
-                var currentEmployee = await _employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
-                if (currentEmployee != null)
-                {
-                    var reportingEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
-                    reservations = reservations.Where(r => r.TeacherId.HasValue && reportingEmployeeIds.Contains(r.TeacherId.Value)).ToList();
-                }
-                else
-                {
-                    reservations = new List<RoomReservation>();
-                }
-            }
-            else
-            {
-                reservations = reservations.Where(r => r.CreatorId == currentUserId).ToList();
-            }
+            var visibleUserIds = await GetVisibleReservationUserIdsAsync(currentUserId);
+            reservations = reservations
+                .Where(r => r.CreatorId.HasValue && visibleUserIds.Contains(r.CreatorId.Value))
+                .ToList();
         }
 
         var dtos = ObjectMapper.Map<List<RoomReservation>, List<RoomReservationDto>>(reservations);
@@ -521,17 +508,22 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         await _auditLogRepository.InsertAsync(auditLog);
     }
 
-    private void EnsureUserIsAuthorizedApprover(RoomReservation reservation)
+    private async Task EnsureUserIsAuthorizedApproverAsync(RoomReservation reservation)
     {
-        var isAuthorized = CurrentUser.IsInRole("admin") ||
-                           CurrentUser.IsInRole("Administrator") ||
-                           CurrentUser.IsInRole("coordinator") ||
+        var isPrivilegedApprover = CurrentUser.IsInRole("coordinator") ||
                            CurrentUser.IsInRole("Coordinator") ||
                            CurrentUser.IsInRole("HOD") ||
                            CurrentUser.IsInRole("hod") ||
                            CurrentUser.IsInRole("Principal") ||
-                           CurrentUser.IsInRole("principal") ||
-                           CurrentUser.IsInRole("Reporting Manager");
+                           CurrentUser.IsInRole("principal");
+        var isAuthorized = IsAdministrator() || isPrivilegedApprover;
+
+        if (!isAuthorized && reservation.CreatorId.HasValue)
+        {
+            var visibleUserIds = await GetVisibleReservationUserIdsAsync(CurrentUser.GetId());
+            isAuthorized = reservation.CreatorId.Value != CurrentUser.GetId() &&
+                          visibleUserIds.Contains(reservation.CreatorId.Value);
+        }
 
         if (!isAuthorized)
         {
@@ -544,10 +536,51 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         }
     }
 
+    private bool IsAdministrator() => CurrentUser.Roles.Any(role =>
+        string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase));
+
+    private async Task<HashSet<Guid>> GetVisibleReservationUserIdsAsync(Guid currentUserId)
+    {
+        var employees = await _employeeRepository.GetListAsync();
+        var currentEmployee = employees.FirstOrDefault(x => x.UserId == currentUserId);
+        var visibleUserIds = new HashSet<Guid> { currentUserId };
+
+        if (currentEmployee == null)
+        {
+            return visibleUserIds;
+        }
+
+        var visited = new HashSet<Guid>();
+        var queue = new Queue<Guid>();
+        queue.Enqueue(currentEmployee.Id);
+
+        while (queue.Count > 0)
+        {
+            var managerId = queue.Dequeue();
+            if (!visited.Add(managerId))
+            {
+                continue;
+            }
+
+            foreach (var employee in employees.Where(x => x.ReportingManagerId == managerId))
+            {
+                if (employee.UserId.HasValue)
+                {
+                    visibleUserIds.Add(employee.UserId.Value);
+                }
+
+                queue.Enqueue(employee.Id);
+            }
+        }
+
+        return visibleUserIds;
+    }
+
     public async Task ApproveReservationAsync(Guid id)
     {
         var reservation = await _reservationRepository.GetAsync(id);
-        EnsureUserIsAuthorizedApprover(reservation);
+        await EnsureUserIsAuthorizedApproverAsync(reservation);
         var oldValJson = JsonSerializer.Serialize(reservation);
 
         await EnsureReservationCanBeApprovedAsync(reservation);
@@ -652,7 +685,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     {
         var normalizedReason = NormalizeRequiredReason(reason, "Rejection reason is required.");
         var reservation = await _reservationRepository.GetAsync(id);
-        EnsureUserIsAuthorizedApprover(reservation);
+        await EnsureUserIsAuthorizedApproverAsync(reservation);
         var oldValJson = JsonSerializer.Serialize(reservation);
 
         reservation.Reject(CurrentUser.Id ?? Guid.Empty, normalizedReason);
@@ -895,29 +928,5 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             "roomAvailability" => "reserved",
             _ => "free"
         };
-    }
-    private async Task<List<Guid>> GetReportingEmployeesAsync(Guid managerEmployeeId)
-    {
-        var allEmployees = await _employeeRepository.GetListAsync();
-        var result = new List<Guid>();
-        var visited = new HashSet<Guid>();
-        
-        void Traverse(Guid parentId)
-        {
-            if (!visited.Add(parentId)) return;
-            
-            var children = allEmployees.Where(x => x.ReportingManagerId == parentId).ToList();
-            foreach (var child in children)
-            {
-                if (!result.Contains(child.Id))
-                {
-                    result.Add(child.Id);
-                    Traverse(child.Id);
-                }
-            }
-        }
-        
-        Traverse(managerEmployeeId);
-        return result;
     }
 }

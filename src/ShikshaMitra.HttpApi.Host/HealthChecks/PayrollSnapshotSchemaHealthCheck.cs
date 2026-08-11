@@ -36,7 +36,7 @@ public class PayrollSnapshotSchemaHealthCheck : IHealthCheck
 			if (!tableExists)
 			{
 				return HealthCheckResult.Unhealthy(
-					"Missing table HR_PayrollRunItems. Run migration 20260428034756_PayrollRunItemSnapshots.");
+					"Missing table HR_PayrollRunItems. Apply the latest database migration.");
 			}
 
 			var indexExists = await ExistsAsync(

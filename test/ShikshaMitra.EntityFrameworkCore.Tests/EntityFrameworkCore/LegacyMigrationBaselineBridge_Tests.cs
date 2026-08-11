@@ -8,45 +8,52 @@ public class LegacyMigrationBaselineBridge_Tests
 	[Fact]
 	public void Legacy_Baseline_Without_Current_Baseline_Requires_Bridge()
 	{
+		const string currentMigrationId = "20260810165956_Initial";
+
 		EntityFrameworkCoreShikshaMitraDbSchemaMigrator
 			.RequiresLegacyBaselineBridge(
 			[
-				"20260710051950_AddSmartLearningTaskTypeSettings",
+				"LegacyMigrationBeforeBaseline",
 				EntityFrameworkCoreShikshaMitraDbSchemaMigrator.LegacyBaselineMigrationId
-			])
+			], currentMigrationId)
 			.ShouldBeTrue();
 	}
 
 	[Fact]
 	public void Fresh_Or_Current_Baseline_Does_Not_Require_Bridge()
 	{
+		const string currentMigrationId = "20260810165956_Initial";
+
 		EntityFrameworkCoreShikshaMitraDbSchemaMigrator
-			.RequiresLegacyBaselineBridge([])
+			.RequiresLegacyBaselineBridge([], currentMigrationId)
 			.ShouldBeFalse();
 		EntityFrameworkCoreShikshaMitraDbSchemaMigrator
 			.RequiresLegacyBaselineBridge(
 			[
 				EntityFrameworkCoreShikshaMitraDbSchemaMigrator.LegacyBaselineMigrationId,
-				EntityFrameworkCoreShikshaMitraDbSchemaMigrator.CurrentBaselineMigrationId
-			])
+				currentMigrationId
+			], currentMigrationId)
 			.ShouldBeFalse();
 	}
 
 	[Fact]
 	public void Unknown_Nonempty_History_Is_Rejected()
 	{
+		const string currentMigrationId = "20260810165956_Initial";
+
 		EntityFrameworkCoreShikshaMitraDbSchemaMigrator
-			.HasUnsupportedMigrationHistory(["20260101000000_UnknownBaseline"])
+			.HasUnsupportedMigrationHistory(["20260101000000_UnknownBaseline"], currentMigrationId)
 			.ShouldBeTrue();
 		EntityFrameworkCoreShikshaMitraDbSchemaMigrator
-			.HasUnsupportedMigrationHistory([])
+			.HasUnsupportedMigrationHistory([], currentMigrationId)
 			.ShouldBeFalse();
 	}
 
 	[Fact]
 	public void Bridge_Is_Idempotent_And_Validates_Folded_Schema_Before_Aliasing()
 	{
-		var sql = EntityFrameworkCoreShikshaMitraDbSchemaMigrator.LegacyBaselineBridgeSql;
+		const string currentMigrationId = "20260810165956_Initial";
+		var sql = EntityFrameworkCoreShikshaMitraDbSchemaMigrator.BuildLegacyBaselineBridgeSql(currentMigrationId);
 
 		sql.ShouldContain("ADD COLUMN IF NOT EXISTS");
 		sql.ShouldContain("CREATE UNIQUE INDEX IF NOT EXISTS");
@@ -54,6 +61,14 @@ public class LegacyMigrationBaselineBridge_Tests
 		sql.ShouldContain("\"AppEmployeeApplications\"");
 		sql.ShouldContain("\"AppAdmissionCrmPipelineStages\"");
 		sql.ShouldContain(EntityFrameworkCoreShikshaMitraDbSchemaMigrator.LegacyBaselineMigrationId);
-		sql.ShouldContain(EntityFrameworkCoreShikshaMitraDbSchemaMigrator.CurrentBaselineMigrationId);
+		sql.ShouldContain(currentMigrationId);
+	}
+
+	[Fact]
+	public void Current_Baseline_Is_Discovered_From_The_Migration_Assembly()
+	{
+		EntityFrameworkCoreShikshaMitraDbSchemaMigrator
+			.GetCurrentBaselineMigrationId(["ConsolidatedBaseline", "FutureMigration"])
+			.ShouldBe("ConsolidatedBaseline");
 	}
 }

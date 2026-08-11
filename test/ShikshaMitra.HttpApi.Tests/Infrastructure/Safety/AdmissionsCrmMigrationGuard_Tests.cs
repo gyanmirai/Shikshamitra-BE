@@ -1,8 +1,11 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore.Migrations;
+using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -27,6 +30,28 @@ public class AdmissionsCrmMigrationGuard_Tests
 
 		text.ShouldContain("StageKey = table.Column<string>");
 		text.ShouldContain("columns: new[] { \"TenantId\", \"AcademicYearId\", \"StageKey\" }");
+		text.ShouldContain("20260811221500_EnsureAdmissionCrmRegistrationDeliveryColumns");
+		text.ShouldContain("ADD COLUMN IF NOT EXISTS \"AccessMode\"");
+		text.ShouldContain("ADD COLUMN IF NOT EXISTS \"GeneratedDocumentType\"");
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public void Admission_Crm_Compatibility_Migration_Should_Be_Discoverable()
+	{
+		var migration = typeof(ShikshaMitraDbContext).Assembly
+			.GetTypes()
+			.Select(type => new
+			{
+				Type = type,
+				Attribute = type.GetCustomAttribute<MigrationAttribute>()
+			})
+			.SingleOrDefault(item =>
+				item.Attribute?.Id ==
+				"20260811221500_EnsureAdmissionCrmRegistrationDeliveryColumns");
+
+		migration.ShouldNotBeNull();
+		migration.Type.Name.ShouldBe("EnsureAdmissionCrmRegistrationDeliveryColumns");
 	}
 
 	[Fact]

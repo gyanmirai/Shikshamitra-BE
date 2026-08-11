@@ -31,7 +31,6 @@ public class SubstitutionRequestConfiguration : IEntityTypeConfiguration<Substit
         builder.Property(x => x.Remarks).HasMaxLength(2000);
     }
 }
-
 public class TeacherAvailabilityConfiguration : IEntityTypeConfiguration<TeacherAvailability>
 {
     public void Configure(EntityTypeBuilder<TeacherAvailability> builder)
@@ -73,15 +72,5 @@ public class SubstitutionNotificationLogConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.Channel).HasMaxLength(64);
         builder.Property(x => x.Status).HasMaxLength(64);
         builder.Property(x => x.Details).HasMaxLength(1000);
-    }
-}
-
-public class SubstitutionSettingConfiguration : IEntityTypeConfiguration<SubstitutionSetting>
-{
-    public void Configure(EntityTypeBuilder<SubstitutionSetting> builder)
-    {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicSubstitutionSettings", ShikshaMitraConsts.DbSchema);
-        builder.ConfigureByConvention();
-        builder.HasIndex(x => new { x.TenantId, x.AcademicYearId });
     }
 }

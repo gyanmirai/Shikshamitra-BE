@@ -220,6 +220,27 @@ public class ApiProblemDetailsPipeline_Tests
 	}
 
 	[Fact]
+	public async Task Middleware_Should_Return_Readable_Academic_Detail_When_Abp_Uses_Generic_Business_Message()
+	{
+		const string academicCode = "ShikshaMitra.Exam:InvalidPassingMarks";
+		var resolver = CreateResolver(new Dictionary<string, string>());
+		var middleware = new ApiProblemDetailsMiddleware(
+			_ => throw new BusinessException(academicCode),
+			NullLogger<ApiProblemDetailsMiddleware>.Instance,
+			resolver);
+
+		var context = new DefaultHttpContext();
+		context.Request.Path = "/api/academic/exams";
+		context.Response.Body = new MemoryStream();
+
+		await middleware.InvokeAsync(context);
+
+		context.Response.Body.Position = 0;
+		using var document = await JsonDocument.ParseAsync(context.Response.Body);
+		document.RootElement.GetProperty("detail").GetString().ShouldBe("Invalid passing marks.");
+	}
+
+	[Fact]
 	public async Task Middleware_Should_Use_Known_Hr_Code_Fallback_When_Localization_Is_Missing()
 	{
 		var resolver = CreateResolver(new Dictionary<string, string>());

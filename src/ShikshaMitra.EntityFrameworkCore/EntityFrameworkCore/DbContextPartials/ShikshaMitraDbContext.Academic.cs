@@ -129,7 +129,6 @@ public partial class ShikshaMitraDbContext
     public DbSet<TeacherAvailability> AcademicTeacherAvailabilities { get; set; }
     public DbSet<SubstitutionAuditLog> AcademicSubstitutionAuditLogs { get; set; }
     public DbSet<SubstitutionNotificationLog> AcademicSubstitutionNotificationLogs { get; set; }
-    public DbSet<SubstitutionSetting> AcademicSubstitutionSettings { get; set; }
 
     // ───────────────────────────────────────────────
     // Academic — Calendar

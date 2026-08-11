@@ -31,6 +31,4 @@ public interface ISubstitutionAppService : IApplicationService
     Task<byte[]> GetDailySheetPdfAsync(SubstitutionDailySheetInput input);
     Task<byte[]> GetDailySheetExcelAsync(SubstitutionDailySheetInput input);
     Task<SubstitutionAnalyticsDto> GetAnalyticsAsync(SubstitutionAnalyticsInput input);
-    Task<SubstitutionSettingsDto> GetSettingsAsync(Guid? academicYearId = null);
-    Task<SubstitutionSettingsDto> UpdateSettingsAsync(SubstitutionSettingsDto input);
 }

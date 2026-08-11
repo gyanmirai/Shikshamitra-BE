@@ -225,7 +225,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
         EnsureNoCriticalConflicts(conflicts, "Cannot complete booking");
 
-        var isAdmin = CurrentUser.Roles.Any(role => string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
+        var isAdmin = IsAdministrator();
         var approverId = CurrentUser.Id ?? Guid.Empty;
 
         Guid? configId = null;

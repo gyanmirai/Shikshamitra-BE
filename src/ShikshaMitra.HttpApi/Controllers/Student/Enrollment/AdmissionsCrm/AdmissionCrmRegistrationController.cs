@@ -82,10 +82,18 @@ public class AdmissionCrmRegistrationController(
 		numberSeriesService.UpdateFormNumberSeriesAsync(id, input);
 
 	[HttpPost("leads/{leadId}/registrations/issue")]
-	public Task<AdmissionCrmRegistrationApplicationDto> IssueAsync(
+	public Task<AdmissionCrmRegistrationIssuanceResultDto> IssueAsync(
 		Guid leadId,
 		[FromBody] IssueAdmissionCrmRegistrationApplicationDto input) =>
 		issuanceService.IssueAsync(leadId, input);
+
+	[HttpGet("leads/{leadId}/registrations/readiness")]
+	public Task<AdmissionCrmRegistrationReadinessDto> GetReadinessAsync(Guid leadId) =>
+		issuanceService.GetReadinessAsync(leadId);
+
+	[HttpPost("registrations/{id}/invitation/send")]
+	public Task<AdmissionCrmRegistrationIssuanceResultDto> SendInvitationAsync(Guid id) =>
+		issuanceService.SendInvitationAsync(id);
 
 	[HttpGet("registrations/{id}")]
 	public Task<AdmissionCrmRegistrationApplicationDto> GetApplicationAsync(Guid id) =>

@@ -23670,12 +23670,27 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("AttemptCount")
                         .HasColumnType("integer");
 
+                    b.Property<string>("AttachmentContentType")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("AttachmentFileName")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("AttachmentLanguage")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
                     b.Property<string>("BodySnapshot")
                         .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
                     b.Property<int>("Channel")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("GeneratedDocumentType")
                         .HasColumnType("integer");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -25267,6 +25282,9 @@ namespace ShikshaMitra.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("AccessMode")
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");

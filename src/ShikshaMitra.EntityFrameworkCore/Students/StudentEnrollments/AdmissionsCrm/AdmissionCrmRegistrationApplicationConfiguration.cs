@@ -13,6 +13,7 @@ public class AdmissionCrmRegistrationApplicationConfiguration : IEntityTypeConfi
 		builder.ConfigureByConvention();
 		builder.Property(x => x.FormNumber).HasMaxLength(AdmissionCrmConsts.MaxRegistrationFormNumberLength).IsRequired();
 		builder.Property(x => x.Provenance).HasConversion<int>().IsRequired();
+		builder.Property(x => x.AccessMode).HasConversion<int>().IsRequired();
 		builder.Property(x => x.DataEntryState).HasConversion<int>().IsRequired();
 		builder.Property(x => x.PhysicalFormNumber).HasMaxLength(AdmissionCrmConsts.MaxRegistrationFormNumberLength);
 		builder.Property(x => x.ScannedFormAttachmentReference).HasMaxLength(AdmissionCrmConsts.MaxDocumentBlobNameLength);

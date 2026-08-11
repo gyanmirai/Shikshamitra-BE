@@ -25,7 +25,9 @@ public interface IAdmissionCrmRegistrationNumberSeriesService : IApplicationServ
 
 public interface IAdmissionCrmRegistrationIssuanceService : IApplicationService
 {
-	Task<AdmissionCrmRegistrationApplicationDto> IssueAsync(Guid leadId, IssueAdmissionCrmRegistrationApplicationDto input);
+	Task<AdmissionCrmRegistrationIssuanceResultDto> IssueAsync(Guid leadId, IssueAdmissionCrmRegistrationApplicationDto input);
+	Task<AdmissionCrmRegistrationIssuanceResultDto> SendInvitationAsync(Guid registrationId);
+	Task<AdmissionCrmRegistrationReadinessDto> GetReadinessAsync(Guid leadId);
 }
 
 public interface IAdmissionCrmRegistrationQueryService : IApplicationService

@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.ValueObjects;
 using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.Security.UserScope;
@@ -608,6 +609,129 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 		FamilyDetail ??= new StudentFamilyDetail(Id, TenantId);
 		FamilyDetail.UpdateFamilyInformation(fatherDetails, motherDetails, guardianDetails, siblingStudentIds);
 		AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.Family);
+	}
+
+	public void ApplyVerifiedRegistrationContact(
+		string primaryContactNo,
+		string? secondaryContactNo,
+		string? email,
+		string? address1,
+		string? address2,
+		string? address3,
+		string? city,
+		State? state,
+		Country? country,
+		string? pincode)
+	{
+		ContactDetail ??= new StudentContactDetail(Id, TenantId, primaryContactNo);
+		ContactDetail.UpdateContactInfo(primaryContactNo, secondaryContactNo, email, address1, address2,
+			address3, city, state, country, pincode);
+	}
+
+	public void ApplyVerifiedRegistrationAdditionalDetails(
+		DateTimeOffset? dateOfBirth,
+		GenderEnum? gender,
+		string? adharNo,
+		string? apparId,
+		string? penNo,
+		ReligionEnum? religion,
+		string? familyCast,
+		CastCategoryEnum? castCategory,
+		string? nationality,
+		string? birthPlace,
+		MotherTongueEnum? motherTongue,
+		string? previousSchool,
+		string? lastClassPassed,
+		string registrationFormNo,
+		string? secondLanguage,
+		bool? haveDisability,
+		string? disabilityDetails,
+		string? emergencyContactName,
+		string? emergencyContactRelation,
+		string? emergencyContactNo,
+		Category? category)
+	{
+		if (AdditionalDetail == null) return;
+		var resolvedDateOfBirth = dateOfBirth ?? AdditionalDetail.DateOfBirth;
+		var resolvedGender = gender ?? AdditionalDetail.Gender;
+		if (resolvedDateOfBirth.HasValue && resolvedGender.HasValue)
+		{
+			AdditionalDetail.UpdateGeneralInformation(resolvedDateOfBirth.Value, resolvedGender.Value,
+				AdditionalDetail.ProfilePictureUrl, adharNo ?? AdditionalDetail.AdharNo,
+				apparId ?? AdditionalDetail.ApparId, AdditionalDetail.PanNo, penNo ?? AdditionalDetail.PennNo,
+				religion ?? AdditionalDetail.Religion, familyCast ?? AdditionalDetail.FamilyCast,
+				castCategory ?? AdditionalDetail.CastCategory, nationality ?? AdditionalDetail.Nationality,
+				birthPlace ?? AdditionalDetail.BirthPlace, motherTongue ?? AdditionalDetail.MotherTongue,
+				previousSchool ?? AdditionalDetail.PreviousSchool,
+				lastClassPassed ?? AdditionalDetail.LastClassPassed, AdditionalDetail.StudentRegistrationState,
+				AdditionalDetail.InquiryPreferenceId, registrationFormNo);
+		}
+		AdditionalDetail.UpdateAdditionalDetails(AdditionalDetail.IsBPLStudent ?? false,
+			AdditionalDetail.BPLCardNo, secondLanguage ?? AdditionalDetail.SecondLanguage,
+			haveDisability ?? AdditionalDetail.HaveDisability ?? false,
+			disabilityDetails ?? AdditionalDetail.DisabilityDetails,
+			emergencyContactName ?? AdditionalDetail.EmergencyRelationName,
+			emergencyContactRelation ?? AdditionalDetail.EmergencyRelationType,
+			emergencyContactNo ?? AdditionalDetail.EmergencyContactNo,
+			AdditionalDetail.IsSingleChild ?? false, AdditionalDetail.IsSingleParentChild ?? false,
+			category ?? AdditionalDetail.Category, AdditionalDetail.IsLibraryMember ?? false,
+			AdditionalDetail.IsTransportMember ?? false);
+	}
+
+	public void ApplyVerifiedRegistrationCommunication(
+		AddressDetails? localAddress,
+		AddressDetails? permanentAddress,
+		bool permanentSameAsLocal,
+		string? emergencyContactName,
+		string? emergencyContactPhone,
+		string? emergencyContactRelation)
+	{
+		CommunicationDetail ??= new StudentCommunicationDetail(Id, TenantId);
+		CommunicationDetail.UpdateCommunicationInformation(localAddress, permanentAddress, null,
+			permanentSameAsLocal, true, emergencyContactName, emergencyContactPhone, emergencyContactRelation);
+	}
+
+	public void ApplyVerifiedRegistrationMedical(
+		decimal? weightKg,
+		decimal? heightCm,
+		string? allergies,
+		string? bloodGroup,
+		string? chronicConditions,
+		string? currentMedications)
+	{
+		MedicalRecord ??= new StudentMedicalRecord(Id, TenantId);
+		MedicalRecord.UpdateMedicalRecords(weightKg, heightCm, null, null, null, allergies, null, null,
+			null, bloodGroup, chronicConditions, currentMedications);
+	}
+
+	public void ApplyVerifiedRegistrationPreviousSchool(
+		string? schoolName,
+		string? schoolAddress,
+		string? board,
+		string? medium,
+		string? lastClassAttended,
+		DateTimeOffset? dateOfLeaving,
+		decimal? percentageObtained,
+		string? academicYear,
+		string? reasonForLeaving)
+	{
+		PreviousSchoolDetail ??= new StudentPreviousSchoolDetail(Id, TenantId);
+		PreviousSchoolDetail.UpdatePreviousSchoolDetails(schoolName, schoolAddress, board, medium,
+			lastClassAttended, null, null, dateOfLeaving, percentageObtained, academicYear, reasonForLeaving, null);
+		AdditionalDetail?.UpdatePreviousSchoolSummary(schoolName, lastClassAttended);
+	}
+
+	public void ApplyVerifiedRegistrationBank(
+		string? bankName,
+		string? accountNo,
+		string? ifscCode,
+		string? branchName,
+		string? accountHolderName,
+		string? accountType)
+	{
+		BankDetail ??= new StudentBankDetail(Id, TenantId);
+		BankDetail.UpdateBankDetails(bankName, accountNo, ifscCode, branchName, accountHolderName,
+			accountType, null, null, null);
 	}
 
 	public void AssignFeeStructure(Guid feeStructureId)

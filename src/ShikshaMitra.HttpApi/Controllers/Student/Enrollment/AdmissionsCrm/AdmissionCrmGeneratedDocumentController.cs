@@ -27,6 +27,12 @@ public class AdmissionCrmGeneratedDocumentController(
 		[FromBody] IssueAdmissionCrmGeneratedDocumentDto input) =>
 		commandService.IssueAsync(leadId, input);
 
+	[HttpPost("leads/{leadId}/documents/send-email")]
+	public Task<AdmissionCrmGeneratedDocumentDeliveryDto> SendEmailAsync(
+		Guid leadId,
+		[FromBody] SendAdmissionCrmGeneratedDocumentEmailDto input) =>
+		commandService.SendEmailAsync(leadId, input);
+
 	[HttpGet("leads/{leadId}/documents/history")]
 	public Task<IReadOnlyList<AdmissionCrmGeneratedDocumentHistoryDto>> GetHistoryAsync(Guid leadId) =>
 		queryService.GetHistoryAsync(leadId);

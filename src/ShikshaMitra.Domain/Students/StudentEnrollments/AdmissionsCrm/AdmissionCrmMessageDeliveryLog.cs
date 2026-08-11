@@ -25,6 +25,10 @@ public class AdmissionCrmMessageDeliveryLog : FullAuditedAggregateRoot<Guid>, IM
 	public string? ProviderMessageId { get; private set; }
 	public string? SubjectSnapshot { get; private set; }
 	public string BodySnapshot { get; private set; } = string.Empty;
+	public AdmissionCrmGeneratedDocumentType? GeneratedDocumentType { get; private set; }
+	public string? AttachmentLanguage { get; private set; }
+	public string? AttachmentFileName { get; private set; }
+	public string? AttachmentContentType { get; private set; }
 	public string Status { get; private set; } = ProviderNotConfiguredStatus;
 	public string StatusDetails { get; private set; } = string.Empty;
 	public int AttemptCount { get; private set; }
@@ -50,7 +54,11 @@ public class AdmissionCrmMessageDeliveryLog : FullAuditedAggregateRoot<Guid>, IM
 		string bodySnapshot,
 		string status,
 		string statusDetails,
-		DateTime createdAt)
+		DateTime createdAt,
+		AdmissionCrmGeneratedDocumentType? generatedDocumentType = null,
+		string? attachmentLanguage = null,
+		string? attachmentFileName = null,
+		string? attachmentContentType = null)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -75,6 +83,10 @@ public class AdmissionCrmMessageDeliveryLog : FullAuditedAggregateRoot<Guid>, IM
 			bodySnapshot,
 			nameof(bodySnapshot),
 			AdmissionCrmConsts.MaxMessageBodyLength);
+		GeneratedDocumentType = generatedDocumentType;
+		AttachmentLanguage = NormalizeOptional(attachmentLanguage, nameof(attachmentLanguage), 8);
+		AttachmentFileName = NormalizeOptional(attachmentFileName, nameof(attachmentFileName), AdmissionCrmConsts.MaxDocumentBlobNameLength);
+		AttachmentContentType = NormalizeOptional(attachmentContentType, nameof(attachmentContentType), 120);
 		CreatedAt = createdAt;
 		SetStatus(status, statusDetails, createdAt);
 	}

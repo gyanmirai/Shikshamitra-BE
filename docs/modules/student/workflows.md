@@ -37,11 +37,11 @@ TL;DR: Student Enrollment starts in Pipeline, follows Admission Year Setup throu
 5. The Applicant Stepper shows Inquiry as complete and calculates the next required step from Admission Year Setup.
 6. Staff sends an acknowledgement or follow-up message from an approved template.
 7. Staff schedules or invites the configured assessment when Admission Year Setup requires it.
-8. Staff may move the applicant directly to Registration when exam is not required or an authorized bypass reason is recorded.
+8. Staff may move directly to Registration when the published configuration requires no exam. Once an exam is scheduled, an authorized eligibility override with a reason may also continue the applicant without a recorded result.
 9. Exam staff records attendance and result when an exam is required.
 10. The system marks the applicant Eligible, Ineligible, Needs Review, Absent, or Retest Required.
-11. Eligible or exam-bypassed applicants complete Registration.
-12. Registration staff verifies the submitted information and documents.
+11. Staff issues one shared Registration draft as Online, Staff-assisted, or Both. Email failure does not revoke the issued registration, and staff can retry the invitation against that same draft.
+12. Registration staff verifies the template-driven sections and documents; activation projects verified canonical responses into Student Records.
 13. Enrollment requests Finance verification when Admission Year Setup requires a fee gate.
 14. Academic staff reviews placement using Institute Setup and Class Management structure and capacity signals.
 15. An authorized approver confirms activation.
@@ -56,7 +56,8 @@ TL;DR: Student Enrollment starts in Pipeline, follows Admission Year Setup throu
 | Stepper skip | Require an Admission Year Setup rule or authorized bypass reason |
 | Stepper blocker | Show missing data, document, Finance status, capacity issue, or permission requirement |
 | Exam not required | Allow direct movement from Pipeline to Registration with the configured reason trail |
-| Exam required | Block Registration until eligible, retest-authorized, or bypassed by permission and reason |
+| Exam required but unscheduled | Block Registration; an unscheduled applicant cannot use eligibility override |
+| Exam scheduled | Allow Registration after an eligible result or an authorized Eligible override with a recorded reason |
 | Ineligible applicant | Keep terminal unless an authorized user reopens, overrides, or schedules retest with reason |
 | Registration incomplete | Block activation and show missing information or document requirements |
 | Finance verification required | Block activation until Finance returns Verified |

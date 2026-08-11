@@ -87,6 +87,43 @@ public class AdmissionCrmCommunicationDispatcher_Tests
 		log.Status.ShouldBe(AdmissionCrmMessageDeliveryLog.DeliveredStatus);
 	}
 
+	[Fact]
+	public async Task Should_Send_Pdf_Attachment_In_Webhook_Payload()
+	{
+		string? requestBody = null;
+		var handler = new StubHttpMessageHandler(request =>
+		{
+			requestBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+			return new HttpResponseMessage(HttpStatusCode.Accepted)
+			{
+				Content = new StringContent("{}", Encoding.UTF8, "application/json")
+			};
+		});
+		var dispatcher = new AdmissionCrmCommunicationDispatcher(
+			new StubHttpClientFactory(handler),
+			NullLogger<AdmissionCrmCommunicationDispatcher>.Instance);
+		var request = CreateRequest();
+		request.Channel = AdmissionCrmMessageChannel.Email;
+		request.Attachments =
+		[
+			new AdmissionCrmCommunicationAttachment
+			{
+				FileName = "hall-ticket.pdf",
+				ContentType = "application/pdf",
+				Content = [1, 2, 3, 4]
+			}
+		];
+
+		await dispatcher.DispatchAsync(CreateProvider(new { adapter = "webhook" }), request);
+
+		requestBody.ShouldNotBeNull();
+		using var payload = JsonDocument.Parse(requestBody);
+		var attachment = payload.RootElement.GetProperty("attachments")[0];
+		attachment.GetProperty("fileName").GetString().ShouldBe("hall-ticket.pdf");
+		attachment.GetProperty("contentType").GetString().ShouldBe("application/pdf");
+		attachment.GetProperty("contentBase64").GetString().ShouldBe("AQIDBA==");
+	}
+
 	private static AdmissionCrmCommunicationDispatcher CreateDispatcher(object responseBody)
 	{
 		var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Accepted)

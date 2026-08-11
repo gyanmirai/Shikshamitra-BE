@@ -124,6 +124,7 @@ public class AdmissionCrmFormNumberSeriesDto : AdmissionCrmFormNumberSeriesUpser
 public class IssueAdmissionCrmRegistrationApplicationDto
 {
 	public Guid RegistrationTemplateId { get; set; }
+	public AdmissionCrmRegistrationAccessMode AccessMode { get; set; } = AdmissionCrmRegistrationAccessMode.Online;
 	public Guid? FormNumberSeriesId { get; set; }
 	[MaxLength(AdmissionCrmConsts.MaxRegistrationFormNumberLength)]
 	public string? ManualFormNumber { get; set; }
@@ -132,6 +133,27 @@ public class IssueAdmissionCrmRegistrationApplicationDto
 	public bool WaiveFee { get; set; }
 	[MaxLength(AdmissionCrmConsts.MaxNotesLength)]
 	public string? WaiverReason { get; set; }
+}
+
+public class AdmissionCrmRegistrationReadinessBlockerDto
+{
+	public string Code { get; set; } = string.Empty;
+	public string Message { get; set; } = string.Empty;
+	public string? ActionCode { get; set; }
+}
+
+public class AdmissionCrmRegistrationReadinessDto
+{
+	public bool CanIssue { get; set; }
+	public AdmissionCrmRegistrationPath RegistrationPath { get; set; }
+	public IReadOnlyList<AdmissionCrmRegistrationReadinessBlockerDto> Blockers { get; set; } = [];
+}
+
+public class AdmissionCrmRegistrationIssuanceResultDto
+{
+	public required AdmissionCrmRegistrationApplicationDto Registration { get; set; }
+	public AdmissionCrmMessageDeliveryLogDto? Delivery { get; set; }
+	public string? DeliveryError { get; set; }
 }
 
 public class CreateDirectAdmissionCrmRegistrationDto : IValidatableObject
@@ -218,6 +240,7 @@ public class AdmissionCrmRegistrationApplicationDto
 	public Guid? PlaybookId { get; set; }
 	public string FormNumber { get; set; } = string.Empty;
 	public AdmissionCrmRegistrationProvenance Provenance { get; set; }
+	public AdmissionCrmRegistrationAccessMode AccessMode { get; set; }
 	public AdmissionCrmRegistrationDataEntryState DataEntryState { get; set; }
 	public string? PhysicalFormNumber { get; set; }
 	public DateTime? PhysicalFormReceivedDate { get; set; }

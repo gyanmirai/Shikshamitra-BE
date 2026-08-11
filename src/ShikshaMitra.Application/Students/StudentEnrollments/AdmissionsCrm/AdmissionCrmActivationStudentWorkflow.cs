@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Students.Admissions;
 using ShikshaMitra.Students.StudentRecords;
@@ -13,8 +14,10 @@ namespace ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 public class AdmissionCrmActivationStudentWorkflow(
 	IStudentRepository studentRepository,
 	IRepository<AdmissionInquiryLead, Guid> leadRepository,
+	IRepository<AdmissionCrmRegistrationApplication, Guid> registrationRepository,
 	IRepository<AdmissionCrmIdentifierAllocation, Guid> identifierRepository,
 	AdmissionCrmIdentifierWorkflow identifierWorkflow,
+	AdmissionCrmVerifiedRegistrationStudentProjector registrationProjector,
 	AdmissionCrmStudentActivationOrchestrator orchestrator) : ApplicationService, ITransientDependency
 {
 	public async Task<(Guid StudentId, string? Failure)> ActivateAsync(
@@ -54,6 +57,17 @@ public class AdmissionCrmActivationStudentWorkflow(
 
 		if (student.Status != StudentLifeCycleStatusEnum.Enrolled)
 		{
+			var verifiedRegistration = (await registrationRepository.GetListAsync(item =>
+				item.LeadId == lead.Id &&
+				(item.Status == AdmissionCrmRegistrationStatus.Verified ||
+				 item.Status == AdmissionCrmRegistrationStatus.AdmissionReady)))
+				.OrderByDescending(item => item.VerifiedAt)
+				.FirstOrDefault();
+			if (verifiedRegistration != null)
+			{
+				registrationProjector.Project(student, verifiedRegistration);
+				await studentRepository.UpdateAsync(student, autoSave: true);
+			}
 			var outcome = await orchestrator.ActivateAsync(student.Id, activation.RequireStudentAccount,
 				activation.RequireGuardianAccount, $"Activated from {activation.ActivationReference}.");
 			if (!outcome.Success) return (student.Id, outcome.Message);

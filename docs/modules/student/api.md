@@ -94,11 +94,14 @@ Every applicant must have a Pipeline lead before assessment, registration, Finan
 | `/exams/{examRecordId}/attendance` | Mark exam attendance |
 | `/exams/{examRecordId}/result` | Record exam result |
 | `/exams/{examRecordId}/eligibility` | Decide eligibility, ineligibility, retest, or review |
-| `/leads/{leadId}/registrations/issue` | Issue registration for an eligible or bypassed applicant |
+| `/leads/{leadId}/registrations/readiness` | Return the resolved registration path and structured issuance blockers |
+| `/leads/{leadId}/registrations/issue` | Issue one shared registration draft in Online, Staff-assisted, or Both mode; invitation failure is returned separately |
+| `/registrations/{applicationId}/invitation/send` | Send or retry the secure online-registration invitation without issuing a duplicate registration |
 | `/registrations/{applicationId}/staff-responses` | Save staff-entered registration responses |
 | `/registrations/{applicationId}/staff-submit` | Submit staff-entered registration responses |
 | `/registrations/{applicationId}/verify` | Verify registration |
 | `/registrations/{applicationId}/document-checklist` | Review document readiness |
+| `/leads/{leadId}/documents/send-email` | Generate and issue an enabled applicant document, then email a re-rendered PDF attachment with recoverable delivery metadata |
 | `/leads/{leadId}/activation/preview` | Preview activation gates and placement readiness |
 | `/leads/{leadId}/activation` | Request activation |
 | `/activation/{activationId}/approve` | Approve activation |

@@ -103,5 +103,8 @@ public enum AdmissionCrmTimelineEventType
 	StructuredReviewSubmitted = 98,
 	StructuredReviewClosed = 99,
 	FamilyApplicationWithdrawn = 100,
-	CommunicationPreferencesChanged = 101
+	CommunicationPreferencesChanged = 101,
+	RegistrationInvitationSent = 102,
+	GeneratedDocumentEmailed = 103,
+	MessageDeliveryRetried = 104
 }

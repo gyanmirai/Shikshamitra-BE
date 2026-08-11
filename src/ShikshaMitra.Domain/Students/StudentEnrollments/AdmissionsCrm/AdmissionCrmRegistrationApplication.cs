@@ -15,6 +15,7 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 	public Guid? PlaybookId { get; private set; }
 	public string FormNumber { get; private set; } = string.Empty;
 	public AdmissionCrmRegistrationProvenance Provenance { get; private set; }
+	public AdmissionCrmRegistrationAccessMode AccessMode { get; private set; }
 	public AdmissionCrmRegistrationDataEntryState DataEntryState { get; private set; }
 	public string? PhysicalFormNumber { get; private set; }
 	public DateTime? PhysicalFormReceivedDate { get; private set; }
@@ -56,7 +57,8 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 		DateTime issuedAt,
 		DateTime linkExpiresAt,
 		decimal feeAmount,
-		AdmissionCrmRegistrationProvenance provenance = AdmissionCrmRegistrationProvenance.OnlineParent)
+		AdmissionCrmRegistrationProvenance provenance = AdmissionCrmRegistrationProvenance.OnlineParent,
+		AdmissionCrmRegistrationAccessMode accessMode = AdmissionCrmRegistrationAccessMode.Online)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -71,6 +73,7 @@ public class AdmissionCrmRegistrationApplication : FullAuditedAggregateRoot<Guid
 		IssuedAt = issuedAt;
 		LinkExpiresAt = linkExpiresAt;
 		Provenance = provenance;
+		AccessMode = accessMode;
 		DataEntryState = AdmissionCrmRegistrationDataEntryState.NotStarted;
 		Status = AdmissionCrmRegistrationStatus.Issued;
 		FeeAmount = feeAmount;

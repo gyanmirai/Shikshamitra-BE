@@ -57,8 +57,12 @@ public class AdmissionCrmSeederContributor_Tests
 
 		fieldTypes["firstName"].ShouldBe(AdmissionCrmFormFieldType.Text);
 		fieldTypes["dateOfBirth"].ShouldBe(AdmissionCrmFormFieldType.Date);
-		fieldTypes["parentName"].ShouldBe(AdmissionCrmFormFieldType.Text);
-		fieldTypes["phone"].ShouldBe(AdmissionCrmFormFieldType.Phone);
+		fieldTypes["parentGuardianName"].ShouldBe(AdmissionCrmFormFieldType.Text);
+		fieldTypes["primaryContactNo"].ShouldBe(AdmissionCrmFormFieldType.Phone);
+		fieldTypes["previousSchoolName"].ShouldBe(AdmissionCrmFormFieldType.Text);
+		fieldTypes["bloodGroup"].ShouldBe(AdmissionCrmFormFieldType.Text);
+		fieldTypes["bankAccountNo"].ShouldBe(AdmissionCrmFormFieldType.Text);
+		document.RootElement.GetArrayLength().ShouldBe(8);
 	}
 
 	[Fact]

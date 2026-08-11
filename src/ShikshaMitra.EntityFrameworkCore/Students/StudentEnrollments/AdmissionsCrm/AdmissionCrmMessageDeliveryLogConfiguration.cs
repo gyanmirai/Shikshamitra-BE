@@ -36,6 +36,10 @@ public class AdmissionCrmMessageDeliveryLogConfiguration : IEntityTypeConfigurat
 		builder.Property(x => x.BodySnapshot)
 			.HasMaxLength(AdmissionCrmConsts.MaxMessageBodyLength)
 			.IsRequired();
+		builder.Property(x => x.GeneratedDocumentType).HasConversion<int>();
+		builder.Property(x => x.AttachmentLanguage).HasMaxLength(8);
+		builder.Property(x => x.AttachmentFileName).HasMaxLength(AdmissionCrmConsts.MaxDocumentBlobNameLength);
+		builder.Property(x => x.AttachmentContentType).HasMaxLength(120);
 		builder.Property(x => x.StatusDetails)
 			.HasMaxLength(AdmissionCrmConsts.MaxNotesLength)
 			.IsRequired();

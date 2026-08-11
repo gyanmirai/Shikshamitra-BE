@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -37,41 +38,64 @@ public class AdmissionCrmRegistrationEligibilityWorkflow(
 
 	public async Task EnsureAsync(AdmissionInquiryLead lead, AdmissionCrmRegistrationPath path, bool direct)
 	{
+		var blockers = await EvaluateAsync(lead, path, direct);
+		if (blockers.Count == 0) return;
+		throw new BusinessException(blockers[0].Code)
+			.WithData("LeadId", lead.Id)
+			.WithData("Stage", lead.Stage)
+			.WithData("RegistrationPath", path);
+	}
+
+	public async Task<IReadOnlyList<AdmissionCrmRegistrationReadinessBlockerDto>> EvaluateAsync(
+		AdmissionInquiryLead lead,
+		AdmissionCrmRegistrationPath path,
+		bool direct)
+	{
+		var blockers = new List<AdmissionCrmRegistrationReadinessBlockerDto>();
+		void Add(string code, string message, string? actionCode = null) => blockers.Add(new()
+		{
+			Code = code,
+			Message = message,
+			ActionCode = actionCode
+		});
+
 		if (direct)
 		{
 			if (path != AdmissionCrmRegistrationPath.DirectRegistration)
-				throw new BusinessException("AdmissionCrm:DirectRegistrationPlaybookRequired").WithData("LeadId", lead.Id).WithData("RegistrationPath", path);
-			return;
+				Add("AdmissionCrm:DirectRegistrationPlaybookRequired", "Select a direct-registration playbook before issuing the form.", "select-playbook");
+			return blockers;
 		}
 		if (path == AdmissionCrmRegistrationPath.DirectRegistration)
-			throw new BusinessException("AdmissionCrm:DirectRegistrationPathRequiresDirectEndpoint").WithData("LeadId", lead.Id);
-		if (!lead.OwnerUserId.HasValue) throw new BusinessException("AdmissionCrm:RegistrationOwnerRequired").WithData("LeadId", lead.Id);
-		if (lead.Stage is AdmissionInquiryStage.Rejected or AdmissionInquiryStage.Stale or AdmissionInquiryStage.Archived)
-			throw new BusinessException("AdmissionCrm:RegistrationNotAllowedForTerminalLead").WithData("LeadId", lead.Id).WithData("Stage", lead.Stage);
-		if (lead.Stage == AdmissionInquiryStage.NewInquiry)
-			throw new BusinessException("AdmissionCrm:RegistrationFollowUpRequired").WithData("LeadId", lead.Id);
-		if (path == AdmissionCrmRegistrationPath.RegistrationBeforeExam)
 		{
-			if (lead.Stage is not (AdmissionInquiryStage.FollowUp or AdmissionInquiryStage.ExamReady))
-				throw new BusinessException("AdmissionCrm:RegistrationMustBeIssuedBeforeExam").WithData("LeadId", lead.Id).WithData("Stage", lead.Stage);
-			return;
+			Add("AdmissionCrm:DirectRegistrationPathRequiresDirectEndpoint", "Use the direct-registration workflow for this admission path.", "open-direct-registration");
+			return blockers;
 		}
-		if (path == AdmissionCrmRegistrationPath.RegistrationAfterExam)
+		if (!lead.OwnerUserId.HasValue)
+			Add("AdmissionCrm:RegistrationOwnerRequired", "Assign an inquiry owner before issuing registration.", "assign-owner");
+		if (lead.Stage is AdmissionInquiryStage.Rejected or AdmissionInquiryStage.Stale or AdmissionInquiryStage.Archived)
+			Add("AdmissionCrm:RegistrationNotAllowedForTerminalLead", "Reopen this applicant before issuing registration.", "reopen-applicant");
+		if (lead.Stage == AdmissionInquiryStage.NewInquiry)
+			Add("AdmissionCrm:RegistrationFollowUpRequired", "Complete an inquiry follow-up before issuing registration.", "schedule-follow-up");
+
+		if (path == AdmissionCrmRegistrationPath.RegistrationBeforeExam &&
+			lead.Stage is not (AdmissionInquiryStage.FollowUp or AdmissionInquiryStage.ExamReady))
+			Add("AdmissionCrm:RegistrationMustBeIssuedBeforeExam", "Move the applicant to follow-up or exam-ready before issuing registration.", "review-inquiry");
+		else if (path == AdmissionCrmRegistrationPath.RegistrationAfterExam)
 		{
 			var queryable = await examRepository.GetQueryableAsync();
 			var eligible = await AsyncExecuter.AnyAsync(queryable.Where(x => x.TenantId == CurrentTenant.Id &&
-				x.AcademicYearId == lead.AcademicYearId && x.LeadId == lead.Id && x.ResultRecordedAt.HasValue &&
+				x.AcademicYearId == lead.AcademicYearId && x.LeadId == lead.Id &&
+				(x.ResultRecordedAt.HasValue || x.EligibilityOverrideUsed) &&
 				x.EligibilityDecision == AdmissionCrmEligibilityDecision.Eligible));
 			if (!eligible || lead.Stage != AdmissionInquiryStage.Eligible)
-				throw new BusinessException("AdmissionCrm:RegistrationRequiresEligibleExamResult").WithData("LeadId", lead.Id).WithData("Stage", lead.Stage);
-			return;
+				Add("AdmissionCrm:RegistrationRequiresEligibleExamResult", "Record an eligible exam result or use an authorized exam override before registration.", "complete-exam");
 		}
-		if (path == AdmissionCrmRegistrationPath.ExamWaived)
-		{
-			if (lead.Stage is not (AdmissionInquiryStage.FollowUp or AdmissionInquiryStage.ExamReady or AdmissionInquiryStage.Eligible))
-				throw new BusinessException("AdmissionCrm:RegistrationStageNotEligible").WithData("LeadId", lead.Id).WithData("Stage", lead.Stage);
-			return;
-		}
-		throw new BusinessException("AdmissionCrm:InvalidRegistrationPath").WithData("RegistrationPath", path);
+		else if (path == AdmissionCrmRegistrationPath.ExamWaived &&
+			lead.Stage is not (AdmissionInquiryStage.FollowUp or AdmissionInquiryStage.ExamReady or AdmissionInquiryStage.Eligible))
+			Add("AdmissionCrm:RegistrationStageNotEligible", "Complete inquiry follow-up before issuing registration.", "review-inquiry");
+		else if (!Enum.IsDefined(path))
+			Add("AdmissionCrm:InvalidRegistrationPath", "The registration path is not valid.", "review-admission-year");
+
+		return blockers;
 	}
 }

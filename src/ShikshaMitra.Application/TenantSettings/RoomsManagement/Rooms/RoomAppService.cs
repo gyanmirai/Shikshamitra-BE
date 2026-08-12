@@ -58,6 +58,12 @@ public class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoomListDto
 	{
 		var query = await base.CreateFilteredQueryAsync(input);
 
+		if (!string.IsNullOrWhiteSpace(input.Filter))
+		{
+			var filter = input.Filter.Trim();
+			query = query.Where(r => r.RoomName.Contains(filter));
+		}
+
 		if (input.BuildingId.HasValue)
 		{
 			query = query.Where(r => r.BuildingId == input.BuildingId.Value);

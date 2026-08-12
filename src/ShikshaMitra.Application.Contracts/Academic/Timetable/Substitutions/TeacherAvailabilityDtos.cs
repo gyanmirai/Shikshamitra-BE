@@ -31,6 +31,7 @@ public class TeacherAvailabilityDto : EntityDto<Guid>
     public bool AutoCreateSubstitutions { get; set; }
     public bool NotifyLeadership { get; set; }
     public bool CanCreateSubstitution { get; set; }
+    public List<string> ActiveSubstitutionStatuses { get; set; } = new();
     public string? AttachmentName { get; set; }
     public string? Remarks { get; set; }
 }
@@ -75,6 +76,7 @@ public class AffectedLectureDto
     public Guid? TeacherId { get; set; }
     public string TeacherName { get; set; } = string.Empty;
     public Guid? ExistingSubstitutionId { get; set; }
+    public string? ExistingSubstitutionStatus { get; set; }
     public bool CanCreateSubstitution { get; set; } = true;
 }
 

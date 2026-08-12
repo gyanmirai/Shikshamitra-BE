@@ -1324,7 +1324,14 @@ public class ExamSeatAllocationAppService(
             var totalStudents = examDivisionIds.Sum(divId => studentCountByDivision.GetValueOrDefault(divId, 0));
             var allocated = allocByExam.GetValueOrDefault(exam.Id, 0);
             var pending = totalStudents - allocated;
-            var status = allocated == 0 ? 0 : (allocated < totalStudents ? 1 : 2);
+            var seatingPlan = allSubjectPlanByExam.GetValueOrDefault(exam.Id);
+            var status = seatingPlan == null
+                ? ComputeStatus(totalStudents, allocated, isLocked: false, isPublished: false)
+                : ComputeStatus(
+                    totalStudents,
+                    allocated,
+                    seatingPlan.IsLocked,
+                    seatingPlan.Status == SeatingPlanStatus.Published);
             var divisionProgress = examDivisionIds
                 .Where(divisionsDict.ContainsKey)
                 .Select(divId =>
@@ -1360,7 +1367,7 @@ public class ExamSeatAllocationAppService(
                 PendingStudents = Math.Max(0, pending),
                 SeatingPlanCount = planCountByExam.GetValueOrDefault(exam.Id, 0),
                 SubjectCount = exam.ExamSubjects.Count,
-                Status = status
+                Status = (int)status
             };
         }).ToList();
 

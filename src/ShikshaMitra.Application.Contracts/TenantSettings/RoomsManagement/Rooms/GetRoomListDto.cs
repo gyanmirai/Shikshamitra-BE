@@ -5,6 +5,7 @@ namespace ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 
 public class GetRoomListDto : PagedAndSortedResultRequestDto
 {
+	public string? Filter { get; set; }
 	public Guid? BuildingId { get; set; }
 	public Guid? FloorId { get; set; }
 	public Guid? RoomTypeId { get; set; }

@@ -494,6 +494,7 @@ public class TeacherAvailabilityAppService(
             TeacherId = teacher?.Id ?? slotSubject.TeacherId,
             TeacherName = teacher?.EmployeeName ?? string.Empty,
             ExistingSubstitutionId = existingRow?.Id,
+            ExistingSubstitutionStatus = existingRow?.Status.ToString(),
             CanCreateSubstitution = existingRow == null && !IsPastWindow(availabilityDate, slot.EndTime)
         };
     }
@@ -572,6 +573,11 @@ public class TeacherAvailabilityAppService(
             Remarks = row.Remarks
         });
         dto.CanCreateSubstitution = affected.Items.Any(x => x.CanCreateSubstitution);
+        dto.ActiveSubstitutionStatuses = affected.Items
+            .Where(x => x.ExistingSubstitutionId.HasValue && !string.IsNullOrWhiteSpace(x.ExistingSubstitutionStatus))
+            .Select(x => x.ExistingSubstitutionStatus!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         return dto;
     }
 
@@ -592,6 +598,7 @@ public class TeacherAvailabilityAppService(
         AutoCreateSubstitutions = row.AutoCreateSubstitutions,
         NotifyLeadership = row.NotifyLeadership,
         CanCreateSubstitution = row.AffectedLectureCount > 0,
+        ActiveSubstitutionStatuses = [],
         AttachmentName = row.AttachmentName,
         Remarks = row.Remarks
     };

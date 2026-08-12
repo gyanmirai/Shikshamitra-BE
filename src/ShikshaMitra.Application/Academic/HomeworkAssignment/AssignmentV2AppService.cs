@@ -145,8 +145,9 @@ public class AssignmentV2AppService(
             .Where(a => a.DivisionSchedules.Any(s =>
                 s.DivisionId == filter.DivisionId
                 && (!filter.AssignmentDate.HasValue ||
-                    ((!s.PublishDate.HasValue || s.PublishDate.Value.Date <= filter.AssignmentDate.Value.Date)
-                    && s.DueDate.Date >= filter.AssignmentDate.Value.Date))));
+                    a.CreationTime.Date == filter.AssignmentDate.Value.Date
+                    || (s.PublishDate.HasValue && s.PublishDate.Value.Date == filter.AssignmentDate.Value.Date)
+                    || s.DueDate.Date == filter.AssignmentDate.Value.Date)));
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {

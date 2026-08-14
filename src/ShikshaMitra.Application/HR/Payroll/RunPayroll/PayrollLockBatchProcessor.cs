@@ -69,6 +69,7 @@ public class PayrollLockBatchProcessor(
 
 			var earningLineItems = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EarningComponentsJson);
 			var deductionLineItems = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.DeductionComponentsJson);
+			var employerContributionLineItems = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EmployerContributionsJson);
 			PayrollSnapshotTotalGuard.EnsureMatchesLineItems(snapshot, earningLineItems, deductionLineItems);
 			var dayCalculationMode = PayrollRunRules.ParseDayCalculationMode(snapshot.DayCalculationMode);
 
@@ -76,6 +77,7 @@ public class PayrollLockBatchProcessor(
 				snapshot,
 				earningLineItems,
 				deductionLineItems,
+				employerContributionLineItems,
 				dayCalculationMode);
 
 			if (salarySlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)

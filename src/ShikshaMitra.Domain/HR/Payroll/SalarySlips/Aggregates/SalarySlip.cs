@@ -38,6 +38,12 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public List<SalarySlipLineItem> Earnings { get; private set; } = new();
 
 	public List<SalarySlipLineItem> Deductions { get; private set; } = new();
+	public List<SalarySlipLineItem> EmployerContributions { get; private set; } = new();
+	public decimal EmployerContributionTotal { get; private set; }
+	public Guid? ProvidentFundRuleId { get; private set; }
+	public int? ProvidentFundRuleVersion { get; private set; }
+	public Guid? ProfessionalTaxRuleId { get; private set; }
+	public int? ProfessionalTaxRuleVersion { get; private set; }
 
 	/// <summary>
 	/// Payroll day basis used for LOP proration (denominator days).
@@ -178,6 +184,24 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AttendancePolicyVersion = attendancePolicyVersion;
 		WorkCalendarPolicyId = workCalendarPolicyId;
 		WorkCalendarPolicyVersion = workCalendarPolicyVersion;
+	}
+
+	internal void SetStatutorySnapshot(
+		List<SalarySlipLineItem> employerContributions,
+		Guid? providentFundRuleId,
+		int? providentFundRuleVersion,
+		Guid? professionalTaxRuleId,
+		int? professionalTaxRuleVersion)
+	{
+		if (IsImmutable())
+			throw new InvalidOperationException("Cannot update finalized or paid salary slip");
+
+		EmployerContributions = employerContributions ?? new List<SalarySlipLineItem>();
+		EmployerContributionTotal = EmployerContributions.Sum(x => x.Amount);
+		ProvidentFundRuleId = providentFundRuleId;
+		ProvidentFundRuleVersion = providentFundRuleVersion;
+		ProfessionalTaxRuleId = professionalTaxRuleId;
+		ProfessionalTaxRuleVersion = professionalTaxRuleVersion;
 	}
 
 	private bool IsImmutable() => Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid;

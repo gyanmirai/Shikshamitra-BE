@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using ShikshaMitra.HR.Payroll.Templates;
 
 namespace ShikshaMitra.HR.Employees.Payroll;
 
@@ -46,6 +47,13 @@ public class SalaryDetailsContract
 	public string? UanNumber { get; set; }
 	public string? PunchId { get; set; }
 	public decimal? TotalWorkingHourPerMonth { get; set; }
+	public string? QuotedSalaryBasis { get; set; }
+	public decimal? QuotedMonthlyAmount { get; set; }
+	public Guid? SourceSalaryTemplateId { get; set; }
+	public Guid? SourceSalaryTemplateVersionId { get; set; }
+	public int? SourceSalaryTemplateVersion { get; set; }
+	public DateTime? SalaryGeneratedAt { get; set; }
+	public bool WasModifiedAfterGeneration { get; set; }
 }
 
 public class EmployeePayrollPolicyOverrideContract
@@ -84,6 +92,11 @@ public class SalaryComponentContract
 	public bool? IsFixed { get; set; }
 
 	public bool? IsTemp { get; set; }
+	public bool? UsesMasterValue { get; set; }
 
 	public DateTime? ApplicableMonth { get; set; }
+
+	public PayrollComponentSemanticType SemanticType { get; set; }
+
+	public Guid? StatutoryRuleId { get; set; }
 }

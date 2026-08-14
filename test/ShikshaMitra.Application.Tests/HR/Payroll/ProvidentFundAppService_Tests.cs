@@ -239,6 +239,7 @@ public class ProvidentFundAppService_Tests : ShikshaMitraApplicationTestBase<Shi
         result.Code.ShouldBe("UPD_PF");
         result.EmployeePercentage.ShouldBe(15);
         result.EmployerPercentage.ShouldBe(18);
+        result.Version.ShouldBe(created.Version + 1);
     }
 
     #endregion

@@ -1,3 +1,5 @@
+using System;
+
 namespace ShikshaMitra.HR.Payroll.Settings;
 
 /// <summary>
@@ -25,4 +27,9 @@ public class CreateUpdateProvidentFundDto
 	/// Employer contribution percentage (0-100)
 	/// </summary>
 	public decimal EmployerPercentage { get; set; }
+	public PfContributionBasis ContributionBasis { get; set; } = PfContributionBasis.Basic;
+	public decimal? WageCeiling { get; set; }
+	public DateTime EffectiveFrom { get; set; } = new(2022, 4, 1);
+	public DateTime? EffectiveTo { get; set; }
+	public bool IsActive { get; set; } = true;
 }

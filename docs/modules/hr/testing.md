@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-07-26
+updated_on: 2026-08-13
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,9 @@ audience: humans-and-agents
 
 TL;DR: run the smallest command that proves the changed HR behavior, then run docs validation before handoff.
 Use broader API tests when a change touches contracts, permissions, payroll, attendance, leave, or policy resolution.
+
+Salary-template coverage must include one Basic, one balancing earning, dependency cycles, percentage validation, two-decimal midpoint-away-from-zero rounding, PF ceilings, Gujarat professional-tax boundaries, and Take-home solving across discontinuities.
+Monthly payroll coverage must prove that PF uses prorated eligible wages, professional tax uses actual monthly Gross without attendance-prorating the slab amount, cessation-month treatment follows the effective professional-tax profile, employer PF remains outside net pay, unlocked previews refresh, and locked snapshots remain immutable.
 
 ## Required docs checks
 

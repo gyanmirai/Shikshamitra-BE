@@ -48,6 +48,12 @@ public class PfRuleApi_Tests : ShikshaMitraApiTestBase
 		var body = await response.Content.ReadFromJsonAsync<PfRuleResponseDto>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.Id.ShouldBe(created.Id);
+		body.ContributionBasis.ShouldBe(PfContributionBasis.BasicAndDearnessAllowance);
+		body.WageCeiling.ShouldBe(15_000m);
+		body.EffectiveFrom.ShouldBe(new DateTime(2023, 4, 1));
+		body.EffectiveTo.ShouldBe(new DateTime(2027, 3, 31));
+		body.IsActive.ShouldBeTrue();
+		body.Version.ShouldBe(1);
 	}
 
 	[Fact]
@@ -119,6 +125,11 @@ public class PfRuleApi_Tests : ShikshaMitraApiTestBase
 			Code = BuildValidPfCode("SEARCH"),
 			EmployeePercentage = 12m,
 			EmployerPercentage = 12m,
+			ContributionBasis = PfContributionBasis.BasicAndDearnessAllowance,
+			WageCeiling = 15_000m,
+			EffectiveFrom = new DateTime(2023, 4, 1),
+			EffectiveTo = new DateTime(2027, 3, 31),
+			IsActive = true,
 		};
 		await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 
@@ -249,6 +260,11 @@ public class PfRuleApi_Tests : ShikshaMitraApiTestBase
 			Code = BuildValidPfCode("PF"),
 			EmployeePercentage = 12m,
 			EmployerPercentage = 12m,
+			ContributionBasis = PfContributionBasis.BasicAndDearnessAllowance,
+			WageCeiling = 15_000m,
+			EffectiveFrom = new DateTime(2023, 4, 1),
+			EffectiveTo = new DateTime(2027, 3, 31),
+			IsActive = true,
 		};
 	}
 

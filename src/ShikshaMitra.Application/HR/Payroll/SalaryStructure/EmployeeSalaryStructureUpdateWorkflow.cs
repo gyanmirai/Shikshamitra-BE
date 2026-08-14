@@ -11,9 +11,11 @@ namespace ShikshaMitra.HR.Payroll.SalaryStructure;
 
 public class EmployeeSalaryStructureUpdateWorkflow(
 	IEmployeePayrollComponentRepository payrollComponentRepository,
+	IEmployeePayrollDetailsRepository payrollDetailsRepository,
 	SalaryStructureMasterResolver masterResolver,
 	SalaryStructureComponentFactory componentFactory,
-	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator) : ITransientDependency
+	EmployeeSalaryStructurePersistenceWorkflow persistenceWorkflow,
+	Volo.Abp.Guids.IGuidGenerator guidGenerator) : ITransientDependency
 {
 	public async Task UpdateAsync(Guid employeeId, UpdateSalaryStructureDto input)
 	{
@@ -81,9 +83,6 @@ public class EmployeeSalaryStructureUpdateWorkflow(
 			earningAmountsByComponentId,
 			grossAmount);
 
-		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: true);
-		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: false);
-
 		var componentsToInsert = new List<EmployeePayrollComponent>();
 		foreach (var resolved in resolvedEarnings)
 		{
@@ -95,11 +94,34 @@ public class EmployeeSalaryStructureUpdateWorkflow(
 			componentsToInsert.Add(componentFactory.BuildDeductionComponent(employeeId, resolved, deductionAmountsByComponentId));
 		}
 
-		if (componentsToInsert.Count > 0)
-		{
-			await payrollComponentRepository.InsertManyAsync(componentsToInsert);
-		}
-
-		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { employeeId });
+		var existingDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+		var salaryGenerationRefreshed =
+			input.SourceSalaryTemplateVersionId.HasValue &&
+			input.SalaryGeneratedAt.HasValue &&
+			(existingDetails == null ||
+			 existingDetails.SourceSalaryTemplateVersionId != input.SourceSalaryTemplateVersionId ||
+			 existingDetails.SalaryGeneratedAt != input.SalaryGeneratedAt);
+		var details = existingDetails ?? new EmployeePayrollDetails(guidGenerator.Create(), employeeId);
+		details.UpdateDetails(
+			details.BankName,
+			details.BranchName,
+			details.AccountHolderName,
+			details.AccountNumber,
+			details.IfscCode,
+			input.PfRuleId?.ToString(),
+			details.EpfNumber,
+			details.UanNumber,
+			details.PunchId,
+			details.TotalWorkingHourPerMonth);
+		details.SetSalaryGeneration(
+			input.QuotedSalaryBasis,
+			input.QuotedMonthlyAmount,
+			input.SourceSalaryTemplateId,
+			input.SourceSalaryTemplateVersionId,
+			input.SourceSalaryTemplateVersion,
+			input.SalaryGeneratedAt,
+			input.WasModifiedAfterGeneration);
+		await persistenceWorkflow.SaveAsync(
+			employeeId, details, existingDetails != null, componentsToInsert, salaryGenerationRefreshed);
 	}
 }

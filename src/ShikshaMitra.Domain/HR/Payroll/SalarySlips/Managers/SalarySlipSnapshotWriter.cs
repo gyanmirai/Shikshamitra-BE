@@ -15,6 +15,7 @@ public class SalarySlipSnapshotWriter(ISalarySlipRepository salarySlipRepository
 		PayrollRunItemSnapshot snapshot,
 		List<SalarySlipLineItem> earningLineItems,
 		List<SalarySlipLineItem> deductionLineItems,
+		List<SalarySlipLineItem> employerContributionLineItems,
 		DayCalculationType dayCalculationMode,
 		CancellationToken cancellationToken = default)
 	{
@@ -40,12 +41,16 @@ public class SalarySlipSnapshotWriter(ISalarySlipRepository salarySlipRepository
 				Clock.Now);
 
 			SalarySlipGenerationRules.ApplySnapshotMetadata(salarySlip, snapshot, dayCalculationMode);
+			salarySlip.SetStatutorySnapshot(employerContributionLineItems, snapshot.ProvidentFundRuleId,
+				snapshot.ProvidentFundRuleVersion, snapshot.ProfessionalTaxRuleId, snapshot.ProfessionalTaxRuleVersion);
 			await salarySlipRepository.InsertAsync(salarySlip, cancellationToken: cancellationToken);
 			return salarySlip;
 		}
 
 		existingSlip.UpdateLineItems(earningLineItems, deductionLineItems, Clock.Now);
 		SalarySlipGenerationRules.ApplySnapshotMetadata(existingSlip, snapshot, dayCalculationMode);
+		existingSlip.SetStatutorySnapshot(employerContributionLineItems, snapshot.ProvidentFundRuleId,
+			snapshot.ProvidentFundRuleVersion, snapshot.ProfessionalTaxRuleId, snapshot.ProfessionalTaxRuleVersion);
 		await salarySlipRepository.UpdateAsync(existingSlip, cancellationToken: cancellationToken);
 		return existingSlip;
 	}

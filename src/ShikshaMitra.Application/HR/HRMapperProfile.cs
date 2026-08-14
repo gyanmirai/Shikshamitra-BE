@@ -15,6 +15,7 @@ using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.Students;
 using System.Linq;
 
@@ -39,8 +40,9 @@ public class HRMapperProfile : Profile
 		CreateMap<ContactDetails, ContactDetailsDto>().ReverseMap();
 		CreateMap<BankDetails, BankDetailsDto>().ReverseMap();
 
-		CreateMap<EmployeePayrollComponent, SalaryComponentDto>();
-		CreateMap<SalaryComponentDto, EmployeePayrollComponent>();
+		CreateMap<EmployeePayrollComponent, SalaryComponentDto>()
+			.ForMember(dest => dest.SemanticType,
+				opt => opt.MapFrom(src => PayrollComponentSemanticTypeCodes.ToCode(src.SemanticType)));
 
 		CreateMap<EmployeePayrollComponent, Employees.Payroll.PayrollComponentDto>();
 		CreateMap<Employees.Payroll.PayrollComponentDto, EmployeePayrollComponent>();

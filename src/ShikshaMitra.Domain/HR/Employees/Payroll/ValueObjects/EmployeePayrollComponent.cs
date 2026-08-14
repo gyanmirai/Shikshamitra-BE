@@ -1,6 +1,8 @@
 ﻿using System;
 using Volo.Abp.Domain.Entities;
 
+using ShikshaMitra.HR.Payroll.Templates;
+
 namespace ShikshaMitra.HR.Employees.Payroll;
 
 /// <summary>
@@ -66,6 +68,8 @@ public class EmployeePayrollComponent : Entity<Guid>
 	/// False means the employee row was manually overridden and normal master changes should skip it.
 	/// </summary>
 	public bool UsesMasterValue { get; set; }
+	public PayrollComponentSemanticType SemanticType { get; set; }
+	public Guid? StatutoryRuleId { get; set; }
 
 	// Navigation property
 	public Employee Employee { get; set; } = null!;
@@ -87,7 +91,9 @@ public class EmployeePayrollComponent : Entity<Guid>
 		SalaryComponentType componentType,
 		SalaryComponentDependency? dependOn,
 		bool isEarning,
-		bool usesMasterValue = true) : base(id)
+		bool usesMasterValue = true,
+		PayrollComponentSemanticType semanticType = PayrollComponentSemanticType.Ordinary,
+		Guid? statutoryRuleId = null) : base(id)
 	{
 		EmployeeId = employeeId;
 		Name = name;
@@ -101,6 +107,8 @@ public class EmployeePayrollComponent : Entity<Guid>
 		DependOn = dependOn;
 		IsEarning = isEarning;
 		UsesMasterValue = componentId.HasValue && !isTemp && usesMasterValue;
+		SemanticType = semanticType;
+		StatutoryRuleId = statutoryRuleId;
 	}
 
 	public void UpdateComponent(

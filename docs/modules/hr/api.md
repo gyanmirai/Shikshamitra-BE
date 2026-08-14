@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-07-26
+updated_on: 2026-08-13
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -104,6 +104,8 @@ Payroll APIs manage setup, preview, review, lock, and salary slips:
 | Earning components | `/api/payroll/earning-components` | `HR.PayrollManagement.Settings.EarningComponents.*` | Implemented |
 | Deduction components | `/api/payroll/deduction-components` | `HR.PayrollManagement.Settings.DeductionComponents.*` | Implemented |
 | Provident fund rules | `/api/payroll/pf-rules` | `HR.PayrollManagement.Settings.PfRule.*` | Implemented |
+| Salary structure templates | `/api/payroll/salary-templates*` | `HR.PayrollManagement.Settings.SalaryTemplates.*` | Implemented |
+| Gujarat professional-tax rules | `/api/payroll/professional-taxes` | `HR.PayrollManagement.Settings.ProfessionalTax.*` | Implemented |
 | Pay elements | `/api/payroll/pay-elements` | Class-level authorization | Implemented |
 | Payroll policies | `/api/hr/payroll/policies` | `HR.PayrollManagement.Settings.PayrollPolicies.*` | Implemented |
 | Salary structure | `/api/payroll/employees/{employeeId}/salary-structure` | `HR.Employee.EmployeeList.*` | Implemented |
@@ -116,6 +118,14 @@ Payroll month parameters use `MMMM-YYYY`, such as `JANUARY-2025`.
 Payroll lock is idempotent for an already locked month and returns the documented payroll lock error.
 Finalized and Paid salary slips are immutable and are both included in month-lock and dependency-impact checks.
 Saved employee salary-component rows satisfy salary-structure readiness even when optional employee payroll metadata has not been saved.
+
+Salary structure templates are tenant-scoped, versioned smart fillers.
+Published versions are immutable, and applying or reapplying a template writes ordinary employee salary-component rows without creating a persistent employee-template assignment.
+The calculate endpoint accepts Gross or Take-home basis and returns earnings, employee deductions, employer contributions, statutory references, warnings, and a formula trace.
+`GET /api/payroll/salary-templates/published` exposes only the current published versions to payroll-structure users, while the settings list also returns the latest draft and current published version.
+Payroll preview recalculates employee PF from prorated eligible wages and Gujarat professional tax from actual monthly gross.
+The selected effective professional-tax slab also controls whether tax is deducted in an employee's employment cessation month.
+Employer PF is stored separately and never reduces employee net pay.
 Percentage-based earning components with a custom-component base may reference only an active earning component in the current tenant and may not create a self-reference or dependency cycle.
 An earning component cannot be deactivated or deleted while an active custom-component percentage component depends on it, and activation revalidates the full dependency chain.
 Dependency validation returns `HR:Payroll:030035` for self-reference, `HR:Payroll:030036` for a cycle, `HR:Payroll:030037` for an invalid target, and `HR:Payroll:030038` for an active dependent.

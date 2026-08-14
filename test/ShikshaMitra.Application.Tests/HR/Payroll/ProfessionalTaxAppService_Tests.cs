@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Common;
 using ShikshaMitra.HR.Payroll.Settings;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
@@ -29,7 +28,7 @@ public class ProfessionalTaxAppService_Tests : ShikshaMitraApplicationTestBase<S
         // Arrange
         var input = new CreateUpdateProfessionalTaxDto
         {
-            GenderType = GenderType.Male,
+			JurisdictionCode = "IN-GJ",
             FromSalary = 0,
             ToSalary = 15000,
             TaxAmount = 0
@@ -41,19 +40,19 @@ public class ProfessionalTaxAppService_Tests : ShikshaMitraApplicationTestBase<S
         // Assert
         result.ShouldNotBeNull();
         result.Id.ShouldNotBe(Guid.Empty);
-        result.GenderType.ShouldBe(GenderType.Male);
+		result.JurisdictionCode.ShouldBe("IN-GJ");
         result.FromSalary.ShouldBe(0);
         result.ToSalary.ShouldBe(15000);
         result.TaxAmount.ShouldBe(0);
     }
 
     [Fact]
-    public async Task Should_Create_Tax_Slab_For_Female()
+	public async Task Should_Create_Open_Ended_Tax_Slab()
     {
         // Arrange
         var input = new CreateUpdateProfessionalTaxDto
         {
-            GenderType = GenderType.Female,
+			JurisdictionCode = "IN-GJ",
             FromSalary = 15001,
             ToSalary = 25000,
             TaxAmount = 150
@@ -63,7 +62,7 @@ public class ProfessionalTaxAppService_Tests : ShikshaMitraApplicationTestBase<S
         var result = await _professionalTaxAppService.CreateAsync(input);
 
         // Assert
-        result.GenderType.ShouldBe(GenderType.Female);
+		result.JurisdictionCode.ShouldBe("IN-GJ");
         result.FromSalary.ShouldBe(15001);
         result.ToSalary.ShouldBe(25000);
         result.TaxAmount.ShouldBe(150);
@@ -119,7 +118,8 @@ public class ProfessionalTaxAppService_Tests : ShikshaMitraApplicationTestBase<S
         // Arrange
         for (int i = 0; i < 15; i++)
         {
-            await CreateTestProfessionalTaxAsync(i * 10000, (i + 1) * 10000, i * 50);
+			var fromSalary = i == 0 ? 0m : i * 10000m + 0.01m;
+			await CreateTestProfessionalTaxAsync(fromSalary, (i + 1) * 10000m, i * 50m);
         }
 
         var input = new PagedAndSortedResultRequestDto
@@ -149,7 +149,7 @@ public class ProfessionalTaxAppService_Tests : ShikshaMitraApplicationTestBase<S
 
         var updateInput = new CreateUpdateProfessionalTaxDto
         {
-            GenderType = GenderType.Female,
+			JurisdictionCode = "IN-GJ",
             FromSalary = 5000,
             ToSalary = 20000,
             TaxAmount = 200
@@ -160,11 +160,23 @@ public class ProfessionalTaxAppService_Tests : ShikshaMitraApplicationTestBase<S
 
         // Assert
         result.ShouldNotBeNull();
-        result.GenderType.ShouldBe(GenderType.Female);
+		result.JurisdictionCode.ShouldBe("IN-GJ");
         result.FromSalary.ShouldBe(5000);
         result.ToSalary.ShouldBe(20000);
         result.TaxAmount.ShouldBe(200);
+		result.Version.ShouldBe(created.Version + 1);
     }
+
+	[Fact]
+	public async Task Should_Reject_Overlapping_Active_Slabs()
+	{
+		await CreateTestProfessionalTaxAsync(0m, 12000m, 0m);
+
+		var exception = await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			CreateTestProfessionalTaxAsync(12000m, null, 200m));
+
+		exception.Code.ShouldBe("HR:Payroll:ProfessionalTaxSlabOverlap");
+	}
 
     #endregion
 
@@ -217,14 +229,13 @@ public class ProfessionalTaxAppService_Tests : ShikshaMitraApplicationTestBase<S
     #region Helper Methods
 
     private async Task<ProfessionalTaxDto> CreateTestProfessionalTaxAsync(
-        double fromSalary,
-        double toSalary,
-        double taxAmount,
-        GenderType genderType = GenderType.Male)
+		decimal fromSalary,
+		decimal? toSalary,
+		decimal taxAmount)
     {
         var input = new CreateUpdateProfessionalTaxDto
         {
-            GenderType = genderType,
+			JurisdictionCode = "IN-GJ",
             FromSalary = fromSalary,
             ToSalary = toSalary,
             TaxAmount = taxAmount

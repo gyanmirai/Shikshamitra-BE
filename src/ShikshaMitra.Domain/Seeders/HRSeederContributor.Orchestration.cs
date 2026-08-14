@@ -23,10 +23,17 @@ public partial class HRSeederContributor
 
 	private async Task SeedPayrollCatalogAsync()
 	{
+		await SeedPayrollCatalogDefaultsAsync();
+		await SeedDefaultHrPoliciesAsync();
+		_logger.LogInformation("[HRSeeder] Phase 1 complete (payroll components)");
+	}
+
+	internal async Task SeedPayrollCatalogDefaultsAsync()
+	{
 		await SeedEarningComponentsAsync();
 		await SeedDeductionComponentsAsync();
 		await SeedPayrollSettingsAsync();
-		_logger.LogInformation("[HRSeeder] Phase 1 complete (payroll components)");
+		await SeedSalaryStructureTemplatesAsync();
 	}
 
 	private async Task SeedEmployeeFoundationAsync()

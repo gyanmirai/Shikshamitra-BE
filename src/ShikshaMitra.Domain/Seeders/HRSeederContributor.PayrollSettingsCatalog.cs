@@ -11,6 +11,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.HR.ProfessionalManagement;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -48,26 +49,24 @@ public partial class HRSeederContributor
 					"STD-PF",
 					"Standard Provident Fund",
 					employeePercentage: 12,
-					employerPercentage: 12),
+					employerPercentage: 12,
+					contributionBasis: PfContributionBasis.Basic,
+					wageCeiling: 15_000m,
+					effectiveFrom: new DateTime(2022, 4, 1)),
 				autoSave: true);
 		}
 
 		var professionalTaxSlabs = new[]
 		{
-			new { Gender = GenderType.Male, From = 0d, To = 5_999.99d, Amount = 0d },
-			new { Gender = GenderType.Male, From = 6_000d, To = 8_999.99d, Amount = 80d },
-			new { Gender = GenderType.Male, From = 9_000d, To = 11_999.99d, Amount = 150d },
-			new { Gender = GenderType.Male, From = 12_000d, To = 999_999d, Amount = 200d },
-			new { Gender = GenderType.Female, From = 0d, To = 5_999.99d, Amount = 0d },
-			new { Gender = GenderType.Female, From = 6_000d, To = 8_999.99d, Amount = 80d },
-			new { Gender = GenderType.Female, From = 9_000d, To = 11_999.99d, Amount = 150d },
-			new { Gender = GenderType.Female, From = 12_000d, To = 999_999d, Amount = 200d }
+			new { From = 0m, To = (decimal?)12_000m, Amount = 0m },
+			new { From = 12_000.01m, To = (decimal?)null, Amount = 200m }
 		};
 
 		foreach (var slab in professionalTaxSlabs)
 		{
 			if (await _professionalTaxRepository.AnyAsync(x =>
-				    x.GenderType == slab.Gender &&
+				    x.JurisdictionCode == "IN-GJ" &&
+				    x.EffectiveFrom == new DateTime(2022, 4, 1) &&
 				    x.FromSalary == slab.From &&
 				    x.ToSalary == slab.To))
 			{
@@ -78,14 +77,14 @@ public partial class HRSeederContributor
 				new ProfessionalTax(
 					GuidGenerator.Create(),
 					CurrentTenant.Id,
-					slab.Gender,
+					"IN-GJ",
+					new DateTime(2022, 4, 1),
+					null,
 					slab.From,
 					slab.To,
 					slab.Amount),
 				autoSave: false);
 		}
-
-		await SeedDefaultHrPoliciesAsync();
 
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}

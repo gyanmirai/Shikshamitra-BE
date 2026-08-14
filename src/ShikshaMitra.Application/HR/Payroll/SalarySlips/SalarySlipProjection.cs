@@ -55,7 +55,13 @@ internal static class SalarySlipProjection
 			EpfNumber = payrollDetails?.EpfNumber,
 			NetPayInWords = IndianCurrencyWords.Format(salarySlip.NetSalary),
 			Earnings = salarySlip.Earnings.Select(ToLineItemDto).ToList(),
-			Deductions = salarySlip.Deductions.Select(ToLineItemDto).ToList()
+			Deductions = salarySlip.Deductions.Select(ToLineItemDto).ToList(),
+			EmployerContributions = salarySlip.EmployerContributions.Select(ToLineItemDto).ToList(),
+			EmployerContributionTotal = salarySlip.EmployerContributionTotal,
+			ProvidentFundRuleId = salarySlip.ProvidentFundRuleId,
+			ProvidentFundRuleVersion = salarySlip.ProvidentFundRuleVersion,
+			ProfessionalTaxRuleId = salarySlip.ProfessionalTaxRuleId,
+			ProfessionalTaxRuleVersion = salarySlip.ProfessionalTaxRuleVersion
 		};
 	}
 

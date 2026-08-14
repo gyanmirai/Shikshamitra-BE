@@ -20,5 +20,9 @@ public class CreateUpdateProvidentFundDtoValidator : AbstractValidator<CreateUpd
 		RuleFor(x => x.EmployeePercentage).InclusiveBetween(0m, 100m);
 
 		RuleFor(x => x.EmployerPercentage).InclusiveBetween(0m, 100m);
+		RuleFor(x => x.ContributionBasis).IsInEnum();
+		RuleFor(x => x.WageCeiling).GreaterThan(0m).When(x => x.WageCeiling.HasValue);
+		RuleFor(x => x.EffectiveFrom).NotEmpty();
+		RuleFor(x => x.EffectiveTo).GreaterThanOrEqualTo(x => x.EffectiveFrom).When(x => x.EffectiveTo.HasValue);
 	}
 }

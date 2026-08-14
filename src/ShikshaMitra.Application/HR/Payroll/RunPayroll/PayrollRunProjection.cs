@@ -17,11 +17,13 @@ internal static class PayrollRunProjection
 		string attendancePolicyWarningsJson,
 		string earningsJson,
 		string deductionsJson,
+		string employerContributionsJson,
 		string adjustmentsJson) =>
 		snapshot.BasicSalary != (decimal)item.BasicSalary ||
 		snapshot.GrossSalary != (decimal)item.GrossSalary ||
 		snapshot.FullGrossSalary != (decimal)item.FullGrossSalary ||
 		snapshot.TotalDeduction != (decimal)item.TotalDeduction ||
+		snapshot.EmployerContributionTotal != (decimal)item.EmployerContributionTotal ||
 		snapshot.NetPay != (decimal)item.NetPay ||
 		snapshot.PresentDays != (decimal)item.PresentDays ||
 		snapshot.HalfWorkingDays != (decimal)item.HalfWorkingDays ||
@@ -41,6 +43,11 @@ internal static class PayrollRunProjection
 		snapshot.AttendancePolicyWarningsJson != attendancePolicyWarningsJson ||
 		snapshot.EarningComponentsJson != earningsJson ||
 		snapshot.DeductionComponentsJson != deductionsJson ||
+		snapshot.EmployerContributionsJson != employerContributionsJson ||
+		snapshot.ProvidentFundRuleId != item.ProvidentFundRuleId ||
+		snapshot.ProvidentFundRuleVersion != item.ProvidentFundRuleVersion ||
+		snapshot.ProfessionalTaxRuleId != item.ProfessionalTaxRuleId ||
+		snapshot.ProfessionalTaxRuleVersion != item.ProfessionalTaxRuleVersion ||
 		snapshot.PayrollAdjustmentsJson != adjustmentsJson;
 
 	public static void ApplySnapshotValues(
@@ -50,6 +57,7 @@ internal static class PayrollRunProjection
 		string attendancePolicyWarningsJson,
 		string earningsJson,
 		string deductionsJson,
+		string employerContributionsJson,
 		string adjustmentsJson)
 	{
 		snapshot.IsLocked = item.IsLocked;
@@ -63,6 +71,7 @@ internal static class PayrollRunProjection
 		snapshot.GrossSalary = (decimal)item.GrossSalary;
 		snapshot.FullGrossSalary = (decimal)item.FullGrossSalary;
 		snapshot.TotalDeduction = (decimal)item.TotalDeduction;
+		snapshot.EmployerContributionTotal = (decimal)item.EmployerContributionTotal;
 		snapshot.NetPay = (decimal)item.NetPay;
 		snapshot.PreviousMonthNetPay = item.PreviousMonthNetPay.HasValue ? (decimal)item.PreviousMonthNetPay.Value : null;
 		snapshot.NetPayDelta = item.NetPayDelta.HasValue ? (decimal)item.NetPayDelta.Value : null;
@@ -88,6 +97,11 @@ internal static class PayrollRunProjection
 		snapshot.AttendancePolicyWarningsJson = attendancePolicyWarningsJson;
 		snapshot.EarningComponentsJson = earningsJson;
 		snapshot.DeductionComponentsJson = deductionsJson;
+		snapshot.EmployerContributionsJson = employerContributionsJson;
+		snapshot.ProvidentFundRuleId = item.ProvidentFundRuleId;
+		snapshot.ProvidentFundRuleVersion = item.ProvidentFundRuleVersion;
+		snapshot.ProfessionalTaxRuleId = item.ProfessionalTaxRuleId;
+		snapshot.ProfessionalTaxRuleVersion = item.ProfessionalTaxRuleVersion;
 		snapshot.PayrollAdjustmentsJson = adjustmentsJson;
 	}
 
@@ -106,6 +120,7 @@ internal static class PayrollRunProjection
 			GrossSalary = (double)row.GrossSalary,
 			FullGrossSalary = (double)row.FullGrossSalary,
 			TotalDeduction = (double)row.TotalDeduction,
+			EmployerContributionTotal = (double)row.EmployerContributionTotal,
 			NetPay = (double)row.NetPay,
 			PreviousMonthNetPay = row.PreviousMonthNetPay.HasValue ? (double)row.PreviousMonthNetPay.Value : null,
 			NetPayDelta = row.NetPayDelta.HasValue ? (double)row.NetPayDelta.Value : null,
@@ -134,6 +149,12 @@ internal static class PayrollRunProjection
 				?? new List<RunPayrollComponentItem>(),
 			DeductionComponents = JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(row.DeductionComponentsJson)
 				?? new List<RunPayrollComponentItem>(),
+			EmployerContributions = JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(row.EmployerContributionsJson)
+				?? new List<RunPayrollComponentItem>(),
+			ProvidentFundRuleId = row.ProvidentFundRuleId,
+			ProvidentFundRuleVersion = row.ProvidentFundRuleVersion,
+			ProfessionalTaxRuleId = row.ProfessionalTaxRuleId,
+			ProfessionalTaxRuleVersion = row.ProfessionalTaxRuleVersion,
 			PayrollAdjustments = JsonSerializer.Deserialize<List<PayrollAdjustmentDto>>(row.PayrollAdjustmentsJson)
 				?? new List<PayrollAdjustmentDto>()
 		};
@@ -148,6 +169,18 @@ internal static class PayrollRunProjection
 			IsTemp = item.Source.IsTemp,
 			ComponentType = item.Source.ComponentType.ToString(),
 			DependOn = (item.Source.DependOn ?? SalaryComponentDependency.None).ToString()
+		};
+
+	public static RunPayrollComponentItem ToEmployerContributionItem(PayrollComputedEmployerContribution item) =>
+		new()
+		{
+			Name = item.Name,
+			Amount = (double)item.Amount,
+			Description = $"Statutory rule version {item.RuleVersion}",
+			IsFixed = true,
+			IsTemp = false,
+			ComponentType = "EmployerContribution",
+			DependOn = "Basic"
 		};
 
 	public static EmployeePayrollComponent ToPayrollComponent(PayrollAdjustment adjustment) =>

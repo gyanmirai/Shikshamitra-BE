@@ -28,6 +28,7 @@ public class SalarySlipDraftFreshnessService(
 
 		var snapshotEarnings = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EarningComponentsJson);
 		var snapshotDeductions = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.DeductionComponentsJson);
+		var snapshotEmployerContributions = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EmployerContributionsJson);
 		PayrollSnapshotTotalGuard.EnsureMatchesLineItems(snapshot, snapshotEarnings, snapshotDeductions);
 
 		return SalarySlipMatchesSnapshot(salarySlip, snapshot, snapshotEarnings, snapshotDeductions)
@@ -36,6 +37,7 @@ public class SalarySlipDraftFreshnessService(
 				snapshot,
 				snapshotEarnings,
 				snapshotDeductions,
+				snapshotEmployerContributions,
 				ParseDayCalculationMode(snapshot.DayCalculationMode));
 	}
 }

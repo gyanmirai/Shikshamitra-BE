@@ -9,7 +9,9 @@ using Volo.Abp.Application.Services;
 namespace ShikshaMitra.HR.Payroll.Settings;
 
 [RemoteService(false)]
-public class ProvidentFundAppService(IProvidentFundRepository providentFundRepository)
+public class ProvidentFundAppService(
+	IProvidentFundRepository providentFundRepository,
+	PayrollStatutoryRuleInvalidator statutoryRuleInvalidator)
 	: CrudAppService<HR.Payroll.Settings.ProvidentFund, ProvidentFundDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateProvidentFundDto>(providentFundRepository),
 		IProvidentFundAppService
 {
@@ -24,7 +26,12 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 
 		try
 		{
-			return await base.CreateAsync(input);
+			var entity = new ProvidentFund(
+				GuidGenerator.Create(), CurrentTenant.Id, input.Code.Trim(), input.Name.Trim(),
+				input.EmployeePercentage, input.EmployerPercentage, input.ContributionBasis,
+				input.WageCeiling, input.EffectiveFrom, input.EffectiveTo, input.IsActive);
+			await Repository.InsertAsync(entity, autoSave: true);
+			return ObjectMapper.Map<ProvidentFund, ProvidentFundDto>(entity);
 		}
 		catch (Exception ex) when (IsProvidentFundCodeUniqueViolation(ex))
 		{
@@ -55,7 +62,13 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 
 		try
 		{
-			return await base.UpdateAsync(id, input);
+			existing.Update(
+				input.Code, input.Name, input.EmployeePercentage, input.EmployerPercentage,
+				input.ContributionBasis, input.WageCeiling, input.EffectiveFrom,
+				input.EffectiveTo, input.IsActive);
+			await Repository.UpdateAsync(existing, autoSave: true);
+			await statutoryRuleInvalidator.InvalidateProvidentFundAsync(id);
+			return ObjectMapper.Map<ProvidentFund, ProvidentFundDto>(existing);
 		}
 		catch (Exception ex) when (IsProvidentFundCodeUniqueViolation(ex))
 		{
@@ -67,6 +80,12 @@ public class ProvidentFundAppService(IProvidentFundRepository providentFundRepos
 			throw new BusinessException(HRErrorCodes.ProvidentFundNameAlreadyExists)
 				.WithData("name", input.Name);
 		}
+	}
+
+	public override async Task DeleteAsync(Guid id)
+	{
+		await base.DeleteAsync(id);
+		await statutoryRuleInvalidator.InvalidateProvidentFundAsync(id);
 	}
 
 	public async Task<PagedResultDto<ProvidentFundDto>> GetFilteredListAsync(int skipCount, int maxResultCount, string? search)

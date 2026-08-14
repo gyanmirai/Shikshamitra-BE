@@ -178,6 +178,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "HR.PayrollManagement.Settings.DeductionComponents", new SubmoduleInfo(PayrollManagement_SettingsDeductionComponents.All, PayrollManagement_SettingsDeductionComponents.DisplayNames) },
 			{ "HR.PayrollManagement.Settings.PfRule", new SubmoduleInfo(PayrollManagement_SettingsPfRule.All, PayrollManagement_SettingsPfRule.DisplayNames) },
 			{ "HR.PayrollManagement.Settings.PayrollPolicies", new SubmoduleInfo(PayrollManagement_SettingsPayrollPolicies.All, PayrollManagement_SettingsPayrollPolicies.DisplayNames) },
+			{ "HR.PayrollManagement.Settings.SalaryTemplates", new SubmoduleInfo(PayrollManagement_SettingsSalaryTemplates.All, PayrollManagement_SettingsSalaryTemplates.DisplayNames) },
 			{ "HR.PayrollManagement.Settings.Tds", new SubmoduleInfo(PayrollManagement_SettingsTds.All, PayrollManagement_SettingsTds.DisplayNames) },
 			{ "HR.PayrollManagement.Settings.ProfessionalTax", new SubmoduleInfo(PayrollManagement_SettingsProfessionalTax.All, PayrollManagement_SettingsProfessionalTax.DisplayNames) },
 			{ "HR.AttendanceAndLeave.Dashboard", new SubmoduleInfo(AttendanceAndLeave_Dashboard.All, AttendanceAndLeave_Dashboard.DisplayNames) },

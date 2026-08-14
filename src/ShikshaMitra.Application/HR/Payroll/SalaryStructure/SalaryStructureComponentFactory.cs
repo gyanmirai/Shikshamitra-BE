@@ -17,10 +17,14 @@ public class SalaryStructureComponentFactory(IGuidGenerator guidGenerator) : ITr
 		var earning = resolved.Line;
 		var master = resolved.Master;
 		var existingComponent = resolved.Existing;
-		var componentType = master is not null
+		var componentType = earning.UsesMasterValue == false
+			? SalaryComponentType.Fixed
+			: master is not null
 			? SalaryStructureComponentRules.MapCalculationType(master.CalculationType)
 			: existingComponent?.ComponentType ?? SalaryComponentType.Fixed;
-		var dependOn = master is not null
+		var dependOn = earning.UsesMasterValue == false
+			? SalaryComponentDependency.None
+			: master is not null
 			? PayrollComponentImpactProjection.MapDependency(master.DependOn)
 			: existingComponent?.DependOn;
 		var description = master?.Description ?? existingComponent?.Description;
@@ -35,13 +39,15 @@ public class SalaryStructureComponentFactory(IGuidGenerator guidGenerator) : ITr
 			master?.Id,
 			description,
 			amount,
-			earning.IsFixed,
+			earning.UsesMasterValue == false || earning.IsFixed,
 			earning.IsTemp,
 			earning.ApplicableMonth ?? existingComponent?.ApplicableMonth,
 			componentType,
 			dependOn,
 			isEarning: true,
-			usesMasterValue: SalaryStructureComponentRules.ShouldUseMasterValue(earning, master));
+			usesMasterValue: SalaryStructureComponentRules.ShouldUseMasterValue(earning, master),
+			semanticType: SalaryStructureComponentRules.ParseSemanticType(earning.SemanticType),
+			statutoryRuleId: earning.StatutoryRuleId);
 	}
 
 	public EmployeePayrollComponent BuildDeductionComponent(
@@ -52,10 +58,14 @@ public class SalaryStructureComponentFactory(IGuidGenerator guidGenerator) : ITr
 		var deduction = resolved.Line;
 		var master = resolved.Master;
 		var existingComponent = resolved.Existing;
-		var componentType = master is not null
+		var componentType = deduction.UsesMasterValue == false
+			? SalaryComponentType.Fixed
+			: master is not null
 			? SalaryStructureComponentRules.MapCalculationType(master.CalculationType)
 			: existingComponent?.ComponentType ?? SalaryComponentType.Fixed;
-		var dependOn = master is not null
+		var dependOn = deduction.UsesMasterValue == false
+			? SalaryComponentDependency.None
+			: master is not null
 			? PayrollComponentImpactProjection.MapDependency(master.DependOn)
 			: existingComponent?.DependOn;
 		var description = master?.Description ?? existingComponent?.Description;
@@ -70,12 +80,14 @@ public class SalaryStructureComponentFactory(IGuidGenerator guidGenerator) : ITr
 			master?.Id,
 			description,
 			amount,
-			deduction.IsFixed,
+			deduction.UsesMasterValue == false || deduction.IsFixed,
 			deduction.IsTemp,
 			deduction.ApplicableMonth ?? existingComponent?.ApplicableMonth,
 			componentType,
 			dependOn,
 			isEarning: false,
-			usesMasterValue: SalaryStructureComponentRules.ShouldUseMasterValue(deduction, master));
+			usesMasterValue: SalaryStructureComponentRules.ShouldUseMasterValue(deduction, master),
+			semanticType: SalaryStructureComponentRules.ParseSemanticType(deduction.SemanticType),
+			statutoryRuleId: deduction.StatutoryRuleId);
 	}
 }

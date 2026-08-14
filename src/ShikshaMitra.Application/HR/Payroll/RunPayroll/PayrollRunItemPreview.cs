@@ -32,7 +32,8 @@ internal sealed record PayrollRunItemPreview(
 		decimal? previousMonthNetPay,
 		DateOnly? employmentStartDate,
 		ShiftManagement? shift = null,
-		AttendancePolicy? attendancePolicy = null)
+		AttendancePolicy? attendancePolicy = null,
+		PayrollStatutoryRuleSet? statutoryRules = null)
 	{
 		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
 			attendanceRecords,
@@ -64,7 +65,8 @@ internal sealed record PayrollRunItemPreview(
 			attendanceSummary.HalfWorkingDays,
 			attendanceSummary.PayableDays,
 			basis.BasisDays,
-			allComponents);
+			allComponents,
+			statutoryRules);
 		var netPayDelta = previousMonthNetPay.HasValue
 			? computation.NetPay - previousMonthNetPay.Value
 			: (decimal?) null;

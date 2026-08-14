@@ -66,6 +66,12 @@ public class SalarySlipDto
 	/// List of deductions breakdown
 	/// </summary>
 	public List<SalarySlipLineItemDto> Deductions { get; set; } = new();
+	public List<SalarySlipLineItemDto> EmployerContributions { get; set; } = new();
+	public decimal EmployerContributionTotal { get; set; }
+	public Guid? ProvidentFundRuleId { get; set; }
+	public int? ProvidentFundRuleVersion { get; set; }
+	public Guid? ProfessionalTaxRuleId { get; set; }
+	public int? ProfessionalTaxRuleVersion { get; set; }
 
 	/// <summary>
 	/// Salary slip status

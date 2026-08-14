@@ -175,6 +175,31 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		public static class PayrollManagement_SettingsSalaryTemplates
+		{
+			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.SalaryTemplates";
+			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.SalaryTemplates";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string Publish = $"{SubmoduleName}.Publish";
+			public const string SetDefault = $"{SubmoduleName}.SetDefault";
+			public const string Archive = $"{SubmoduleName}.Archive";
+
+			public static readonly string[] All = { View, Add, Edit, Publish, SetDefault, Archive };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Publish, $"{SubmoduleDisplayName}.Publish" },
+				{ SetDefault, $"{SubmoduleDisplayName}.SetDefault" },
+				{ Archive, $"{SubmoduleDisplayName}.Archive" }
+			};
+		}
+
 		public static class PayrollManagement_SettingsTds
 		{
 			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.Tds";

@@ -40,5 +40,32 @@ public class SalaryDetailsContractValidator : AbstractValidator<SalaryDetailsCon
 			.Matches(UanNumberPattern)
 			.WithMessage("UAN number must be exactly 12 digits.")
 			.When(x => !string.IsNullOrEmpty(x.UanNumber));
+
+		RuleFor(x => x.QuotedSalaryBasis)
+			.Must(x => x is "GROSS" or "TAKE_HOME")
+			.When(x => !string.IsNullOrWhiteSpace(x.QuotedSalaryBasis))
+			.WithMessage("Quoted salary basis must be GROSS or TAKE_HOME.");
+		RuleFor(x => x.QuotedMonthlyAmount)
+			.GreaterThan(0m)
+			.LessThanOrEqualTo(100_000_000m)
+			.When(x => x.QuotedMonthlyAmount.HasValue);
+		RuleFor(x => x)
+			.Must(HasConsistentGenerationProvenance)
+			.WithMessage("Salary generation provenance must include the quote, template, version, and generation timestamp together.");
+	}
+
+	private static bool HasConsistentGenerationProvenance(SalaryDetailsContract salary)
+	{
+		var hasAny = salary.SourceSalaryTemplateId.HasValue ||
+			salary.SourceSalaryTemplateVersionId.HasValue ||
+			salary.SourceSalaryTemplateVersion.HasValue ||
+			salary.SalaryGeneratedAt.HasValue;
+		return !hasAny ||
+			salary.SourceSalaryTemplateId is { } templateId && templateId != Guid.Empty &&
+			salary.SourceSalaryTemplateVersionId is { } versionId && versionId != Guid.Empty &&
+			salary.SourceSalaryTemplateVersion > 0 &&
+			salary.SalaryGeneratedAt.HasValue &&
+			salary.QuotedMonthlyAmount > 0m &&
+			salary.QuotedSalaryBasis is "GROSS" or "TAKE_HOME";
 	}
 }

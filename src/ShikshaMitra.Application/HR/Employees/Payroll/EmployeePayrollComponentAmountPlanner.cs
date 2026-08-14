@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Templates;
 using Volo.Abp;
 using static ShikshaMitra.HR.Employees.Payroll.EmployeePayrollComponentAmountValidator;
 
@@ -72,6 +73,10 @@ public static class EmployeePayrollComponentAmountPlanner
 		{
 			return false;
 		}
+		if (resolved.Line.UsesMasterValue == false)
+		{
+			return false;
+		}
 
 		if (resolved.Master.CalculationType == CalculationType.Percentage)
 		{
@@ -85,6 +90,10 @@ public static class EmployeePayrollComponentAmountPlanner
 	public static bool ShouldUseMasterValue(EmployeePayrollResolvedLine<DeductionComponent> resolved, decimal amount)
 	{
 		if (resolved.Master is null || resolved.Line.IsTemp == true)
+		{
+			return false;
+		}
+		if (resolved.Line.UsesMasterValue == false)
 		{
 			return false;
 		}
@@ -122,7 +131,10 @@ public static class EmployeePayrollComponentAmountPlanner
 		foreach (var resolved in deductionLines)
 		{
 			var amount = ResolveDeductionLineAmount(resolved, deductionAmountsByComponentId);
-			if (!IsPercentageComponent(resolved) && (!amount.HasValue || amount <= 0))
+			var isZeroValueStatutoryLine = amount == 0m &&
+				(resolved.Line.SemanticType is PayrollComponentSemanticType.EmployeeProvidentFund or
+					PayrollComponentSemanticType.ProfessionalTax);
+			if (!IsPercentageComponent(resolved) && (!amount.HasValue || amount < 0m || amount == 0m && !isZeroValueStatutoryLine))
 			{
 				throw new BusinessException(HRErrorCodes.EmployeePayrollComponentAmountInvalid)
 					.WithData("componentId", (object?)resolved.Master?.Id ?? null!)
@@ -144,12 +156,12 @@ public static class EmployeePayrollComponentAmountPlanner
 
 	private static bool IsPercentageComponent(EmployeePayrollResolvedLine<EarningComponent> resolved)
 	{
-		return resolved.Master?.CalculationType == CalculationType.Percentage;
+		return resolved.Master?.CalculationType == CalculationType.Percentage && resolved.Line.UsesMasterValue != false;
 	}
 
 	private static bool IsPercentageComponent(EmployeePayrollResolvedLine<DeductionComponent> resolved)
 	{
-		return resolved.Master?.CalculationType == CalculationType.Percentage;
+		return resolved.Master?.CalculationType == CalculationType.Percentage && resolved.Line.UsesMasterValue != false;
 	}
 
 	private static PayrollComponentAmountLine<EarningComponent> ToAmountLine(
@@ -162,6 +174,7 @@ public static class EmployeePayrollComponentAmountPlanner
 			resolved.Master?.Name ?? line.Name,
 			line.Amount,
 			line.IsTemp ?? resolved.ExistingPayrollComponent?.IsTemp ?? resolved.Master is null,
+			line.UsesMasterValue,
 			resolved.Master);
 	}
 
@@ -175,6 +188,7 @@ public static class EmployeePayrollComponentAmountPlanner
 			resolved.Master?.Name ?? line.Name,
 			line.Amount,
 			line.IsTemp ?? resolved.ExistingPayrollComponent?.IsTemp ?? resolved.Master is null,
+			line.UsesMasterValue,
 			resolved.Master);
 	}
 }

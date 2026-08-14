@@ -3,12 +3,24 @@ using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Templates;
 using Volo.Abp;
 
 namespace ShikshaMitra.HR.Payroll.SalaryStructure;
 
 internal static class SalaryStructureComponentRules
 {
+	public static PayrollComponentSemanticType ParseSemanticType(string value)
+	{
+		if (PayrollComponentSemanticTypeCodes.TryParse(value, out var semanticType))
+		{
+			return semanticType;
+		}
+
+		throw new BusinessException("HR:Payroll:SalaryStructureInvalidSemanticType")
+			.WithData("semanticType", value);
+	}
+
 	public static EmployeePayrollComponent? FindExistingComponent(
 		SalaryComponentDto component,
 		IReadOnlyDictionary<Guid, EmployeePayrollComponent> existingById)
@@ -104,6 +116,7 @@ internal static class SalaryStructureComponentRules
 			resolved.Master?.Name ?? line.Name,
 			line.Amount,
 			line.IsTemp,
+			line.UsesMasterValue,
 			resolved.Master);
 	}
 
@@ -117,12 +130,17 @@ internal static class SalaryStructureComponentRules
 			resolved.Master?.Name ?? line.Name,
 			line.Amount,
 			line.IsTemp,
+			line.UsesMasterValue,
 			resolved.Master);
 	}
 
 	public static bool ShouldUseMasterValue(SalaryComponentDto line, EarningComponent? master)
 	{
 		if (master is null || line.IsTemp)
+		{
+			return false;
+		}
+		if (line.UsesMasterValue == false)
 		{
 			return false;
 		}
@@ -134,6 +152,10 @@ internal static class SalaryStructureComponentRules
 	public static bool ShouldUseMasterValue(SalaryComponentDto line, DeductionComponent? master)
 	{
 		if (master is null || line.IsTemp)
+		{
+			return false;
+		}
+		if (line.UsesMasterValue == false)
 		{
 			return false;
 		}

@@ -30,6 +30,9 @@ public class TeacherAvailabilityAppService(
     IEmployeeAttendanceRepository employeeAttendanceRepository
 ) : ApplicationService, ITeacherAvailabilityAppService
 {
+    private const string AvailabilityOverlapMessage =
+        "Teacher is already marked unavailable for the selected date and time. Please choose a different time slot.";
+
     public async Task<PagedResultDto<TeacherAvailabilityDto>> GetListAsync(GetTeacherAvailabilityInput input)
     {
         await SyncAttendanceAvailabilityRowsAsync(input);
@@ -167,14 +170,34 @@ public class TeacherAvailabilityAppService(
         }
 
         var availabilityDate = NormalizeDate(input.AvailabilityDate);
+        var startTime = ParseTime(input.StartTime, "startTime");
+        var endTime = ParseTime(input.EndTime, "endTime");
+        if (endTime <= startTime)
+        {
+            throw new UserFriendlyException("End time must be later than start time.");
+        }
+
+        var existingRows = await availabilityRepository.GetListAsync(x =>
+            !x.IsCancelled && x.AvailabilityDate == availabilityDate);
+        var teacherName = input.TeacherName?.Trim() ?? string.Empty;
+        var hasOverlappingAvailability = existingRows.Any(existing =>
+            IsSameTeacher(existing, input.TeacherId, teacherName) &&
+            existing.StartTime < endTime &&
+            startTime < existing.EndTime);
+
+        if (hasOverlappingAvailability)
+        {
+            throw new UserFriendlyException(AvailabilityOverlapMessage);
+        }
+
         var affected = await GetAffectedLecturesAsync(input);
         var entity = new TeacherAvailability(
             GuidGenerator.Create(),
             CurrentTenant.Id,
             input.TeacherName,
             availabilityDate,
-            ParseTime(input.StartTime, "startTime"),
-            ParseTime(input.EndTime, "endTime"),
+            startTime,
+            endTime,
             input.AvailabilityStatus,
             input.SourceType,
             input.Reason,
@@ -360,12 +383,8 @@ public class TeacherAvailabilityAppService(
     {
         if (teacherId.HasValue)
         {
-            var employee = await employeeRepository.FirstOrDefaultAsync(x =>
+            return await employeeRepository.FirstOrDefaultAsync(x =>
                 x.Id == teacherId.Value || x.UserId == teacherId.Value);
-            if (employee != null)
-            {
-                return employee;
-            }
         }
 
         return string.IsNullOrWhiteSpace(teacherName)
@@ -611,6 +630,20 @@ public class TeacherAvailabilityAppService(
         }
 
         return parsed;
+    }
+
+    private static bool IsSameTeacher(
+        TeacherAvailability existing,
+        Guid? teacherId,
+        string teacherName)
+    {
+        if (teacherId.HasValue && existing.TeacherId.HasValue)
+        {
+            return existing.TeacherId == teacherId;
+        }
+
+        return !string.IsNullOrWhiteSpace(teacherName) &&
+            string.Equals(existing.TeacherName, teacherName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static TimeZoneInfo GetInstitutionTimeZone()

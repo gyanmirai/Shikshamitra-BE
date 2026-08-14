@@ -352,10 +352,35 @@ public class StudentAcademic360AppService(
 
         var divisionId = student.DivisionId.Value;
         var examQuery = await examRepository.WithDetailsAsync(e => e.ExamSubjects, e => e.ExamDivisions);
-        var exams = await AsyncExecuter.ToListAsync(examQuery
+        var scopedExams = await AsyncExecuter.ToListAsync(examQuery
             .Where(e => e.StandardId == student.StandardId.Value && e.ExamDivisions.Any(d => d.DivisionId == divisionId))
-            .OrderByDescending(e => e.CreationTime)
-            .Take(Math.Clamp(recentExamCount, 1, 10)));
+            .OrderByDescending(e => e.CreationTime));
+
+        if (scopedExams.Count == 0)
+        {
+            return [];
+        }
+
+        var allExamIds = scopedExams.Select(e => e.Id).ToList();
+        var publishedMarkExamIds = (await examMarkRepository.GetListAsync(m =>
+                allExamIds.Contains(m.ExamId) &&
+                m.StudentId == student.Id &&
+                m.DivisionId == divisionId &&
+                m.IsPublished))
+            .Select(m => m.ExamId)
+            .ToHashSet();
+        var headers = await resultHeaderRepository.GetListAsync(h =>
+            allExamIds.Contains(h.ExamId) &&
+            h.DivisionId == divisionId &&
+            (h.Status == ExamResultStatus.Published || h.Status == ExamResultStatus.Frozen));
+        var publishedResultExamIds = headers.Select(h => h.ExamId).ToHashSet();
+        var exams = scopedExams
+            .Where(e =>
+                e.Status is ExamStatus.Published or ExamStatus.Completed ||
+                publishedResultExamIds.Contains(e.Id) ||
+                publishedMarkExamIds.Contains(e.Id))
+            .Take(Math.Clamp(recentExamCount, 1, 10))
+            .ToList();
 
         if (exams.Count == 0)
         {
@@ -364,12 +389,18 @@ public class StudentAcademic360AppService(
 
         var examIds = exams.Select(e => e.Id).ToList();
         var subjectNames = await LoadSubjectNamesAsync();
-        var marks = await examMarkRepository.GetListAsync(m => examIds.Contains(m.ExamId) && m.StudentId == student.Id);
-        var headers = await resultHeaderRepository.GetListAsync(h => examIds.Contains(h.ExamId) && h.DivisionId == divisionId);
+        var marks = await examMarkRepository.GetListAsync(m =>
+            examIds.Contains(m.ExamId) &&
+            m.StudentId == student.Id &&
+            m.DivisionId == divisionId);
+        headers = headers.Where(h => examIds.Contains(h.ExamId)).ToList();
         var headerIds = headers.Select(h => h.Id).ToList();
         var details = headerIds.Count == 0
             ? []
-            : await resultDetailRepository.GetListAsync(d => headerIds.Contains(d.ResultHeaderId) && d.StudentId == student.Id);
+            : await resultDetailRepository.GetListAsync(d =>
+                headerIds.Contains(d.ResultHeaderId) &&
+                d.StudentId == student.Id &&
+                d.DivisionId == divisionId);
 
         return exams.Select(exam =>
         {

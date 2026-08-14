@@ -1095,6 +1095,21 @@ public class SubjectAssignmentAppService(
 				.WithData("SourceClassId", input.SourceClassId);
 		}
 
+		// An elective group is stored as one AssignedSubject row per constituent
+		// subject. Older/corrupted copied groups can contain only the first row,
+		// while the group definition still contains every constituent subject.
+		// Expand that definition here so copying the group repairs the missing
+		// assignment rows instead of reproducing the incomplete group.
+		var sourceElectiveGroupIds = sourceAssignments
+			.Where(a => a.ElectiveGroupId.HasValue)
+			.Select(a => a.ElectiveGroupId!.Value)
+			.Distinct()
+			.ToList();
+		var sourceElectiveGroups = sourceElectiveGroupIds.Count == 0
+			? new List<ElectiveGroup>()
+			: await AsyncExecuter.ToListAsync(
+				(await electiveGroupRepository.WithDetailsAsync(g => g.Subjects))
+					.Where(g => sourceElectiveGroupIds.Contains(g.Id)));
 		var targetAssignments = await AsyncExecuter.ToListAsync(
 			query.Where(a => a.StandardId == input.TargetClassId));
 		var targetBySubjectId = targetAssignments.ToDictionary(a => a.SubjectId);
@@ -1122,6 +1137,49 @@ public class SubjectAssignmentAppService(
 			var newAssignment = CreateCopiedSubject(source, input.TargetClassId, input);
 			copied.Add(newAssignment);
 			targetBySubjectId[source.SubjectId] = newAssignment;
+		}
+
+		foreach (var group in sourceElectiveGroups)
+		{
+			foreach (var component in group.Subjects)
+			{
+				if (requestedSubjectIds is { Count: > 0 } && !requestedSubjectIds.Contains(component.SubjectId))
+				{
+					continue;
+				}
+
+				if (targetBySubjectId.ContainsKey(component.SubjectId))
+				{
+					continue;
+				}
+
+				var sourceGroupAssignment = sourceAssignments.FirstOrDefault(a =>
+					a.ElectiveGroupId == group.Id);
+				if (sourceGroupAssignment == null)
+				{
+					continue;
+				}
+
+				var subjectName = component.Subject?.Name;
+				var syntheticSource = new AssignedSubject(
+					component.SubjectId,
+					sourceGroupAssignment.TenantId,
+					input.SourceClassId,
+					component.SubjectId,
+					$"AUTO-{component.SubjectId:N}",
+					SubjectStatus.Draft,
+					SubjectType.Elective,
+					group.Id);
+
+				var newAssignment = CreateCopiedSubject(syntheticSource, input.TargetClassId, input);
+				copied.Add(newAssignment);
+				targetBySubjectId[component.SubjectId] = newAssignment;
+				logger.LogInformation(
+					"Expanded missing elective subject {SubjectId} ({SubjectName}) while copying group {ElectiveGroupId}",
+					component.SubjectId,
+					subjectName,
+					group.Id);
+			}
 		}
 
 		if (copied.Count > 0)

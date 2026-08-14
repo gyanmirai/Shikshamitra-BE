@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.Templates;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.EntityFrameworkCore.HR.Employees.Payroll;
@@ -35,6 +36,8 @@ public class EmployeePayrollDetailsConfiguration : IEntityTypeConfiguration<Empl
 		builder.Property(x => x.PunchId).HasMaxLength(50);
 
 		builder.Property(x => x.TotalWorkingHourPerMonth).HasColumnType("decimal(18,2)");
+		builder.Property(x => x.QuotedSalaryBasis).HasMaxLength(16);
+		builder.Property(x => x.QuotedMonthlyAmount).HasPrecision(18, 2);
 	}
 }
 
@@ -69,5 +72,7 @@ public class EmployeePayrollComponentConfiguration : IEntityTypeConfiguration<Em
 		builder.Property(x => x.DependOn);
 		builder.Property(x => x.IsEarning).IsRequired();
 		builder.Property(x => x.UsesMasterValue).IsRequired().HasDefaultValue(true);
+		builder.Property(x => x.SemanticType).IsRequired().HasDefaultValue(PayrollComponentSemanticType.Ordinary);
+		builder.Property(x => x.StatutoryRuleId);
 	}
 }

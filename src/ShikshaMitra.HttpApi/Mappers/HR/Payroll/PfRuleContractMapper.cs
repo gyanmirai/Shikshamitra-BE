@@ -17,6 +17,12 @@ public static class PfRuleContractMapper
             Code = dto.Code,
             EmployeePercentage = dto.EmployeePercentage,
             EmployerPercentage = dto.EmployerPercentage,
+			ContributionBasis = dto.ContributionBasis,
+			WageCeiling = dto.WageCeiling,
+			EffectiveFrom = dto.EffectiveFrom,
+			EffectiveTo = dto.EffectiveTo,
+			IsActive = dto.IsActive,
+			Version = dto.Version,
             CreatedAt = dto.CreationTime,
             UpdatedAt = dto.LastModificationTime
         };

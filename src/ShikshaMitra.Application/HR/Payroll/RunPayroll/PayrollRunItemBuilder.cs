@@ -34,7 +34,8 @@ internal static class PayrollRunItemBuilder
 		decimal? previousMonthNetPay,
 		IReadOnlyList<string>? additionalIssueCodes = null,
 		DateOnly? employmentStartDate = null,
-		ShiftManagement? shift = null)
+		ShiftManagement? shift = null,
+		PayrollStatutoryRuleSet? statutoryRules = null)
 	{
 		var resolvedShift = shift ?? employee.Shift;
 		var itemAttendancePolicyWarnings = new List<string>();
@@ -65,7 +66,8 @@ internal static class PayrollRunItemBuilder
 			previousMonthNetPay,
 			employmentStartDate,
 			resolvedShift,
-			resolvedPolicies.AttendancePolicy);
+			resolvedPolicies.AttendancePolicy,
+			statutoryRules);
 
 		return new RunPayrollItem
 		{
@@ -81,6 +83,7 @@ internal static class PayrollRunItemBuilder
 			GrossSalary = (double)preview.Computation.GrossSalary,
 			FullGrossSalary = (double)preview.Computation.FullGrossSalary,
 			TotalDeduction = (double)preview.Computation.TotalDeduction,
+			EmployerContributionTotal = (double)preview.Computation.EmployerContributionTotal,
 			NetPay = (double)preview.Computation.NetPay,
 			PreviousMonthNetPay = previousMonthNetPay.HasValue ? (double)previousMonthNetPay.Value : null,
 			NetPayDelta = preview.NetPayDelta.HasValue ? (double)preview.NetPayDelta.Value : null,
@@ -109,6 +112,11 @@ internal static class PayrollRunItemBuilder
 			AttendancePolicyWarnings = itemAttendancePolicyWarnings,
 			EarningComponents = preview.Computation.Earnings.Select(PayrollRunProjection.ToComponentItem).ToList(),
 			DeductionComponents = preview.Computation.Deductions.Select(PayrollRunProjection.ToComponentItem).ToList(),
+			EmployerContributions = preview.Computation.EmployerContributions.Select(PayrollRunProjection.ToEmployerContributionItem).ToList(),
+			ProvidentFundRuleId = preview.Computation.ProvidentFundRuleId,
+			ProvidentFundRuleVersion = preview.Computation.ProvidentFundRuleVersion,
+			ProfessionalTaxRuleId = preview.Computation.ProfessionalTaxRuleId,
+			ProfessionalTaxRuleVersion = preview.Computation.ProfessionalTaxRuleVersion,
 			PayrollAdjustments = adjustments.Select(PayrollRunProjection.ToAdjustmentDto).ToList()
 		};
 	}
@@ -126,7 +134,8 @@ internal static class PayrollRunItemBuilder
 		decimal? previousMonthNetPay,
 		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate,
 		IReadOnlyList<string> issueCodes,
-		DateOnly? employmentStartDate = null)
+		DateOnly? employmentStartDate = null,
+		PayrollStatutoryRuleSet? statutoryRules = null)
 	{
 		var basis = new PayrollBasisDaysResult(
 			DateTime.DaysInMonth(year, month),
@@ -143,7 +152,8 @@ internal static class PayrollRunItemBuilder
 			Array.Empty<Holiday>(),
 			leaveUnitsByDate,
 			previousMonthNetPay,
-			employmentStartDate);
+			employmentStartDate,
+			statutoryRules: statutoryRules);
 
 		return new RunPayrollItem
 		{
@@ -159,6 +169,7 @@ internal static class PayrollRunItemBuilder
 			GrossSalary = (double)preview.Computation.GrossSalary,
 			FullGrossSalary = (double)preview.Computation.FullGrossSalary,
 			TotalDeduction = (double)preview.Computation.TotalDeduction,
+			EmployerContributionTotal = (double)preview.Computation.EmployerContributionTotal,
 			NetPay = (double)preview.Computation.NetPay,
 			PreviousMonthNetPay = previousMonthNetPay.HasValue ? (double)previousMonthNetPay.Value : null,
 			NetPayDelta = preview.NetPayDelta.HasValue ? (double)preview.NetPayDelta.Value : null,
@@ -180,6 +191,11 @@ internal static class PayrollRunItemBuilder
 			PayrollAttendanceSource = "raw_attendance",
 			EarningComponents = preview.Computation.Earnings.Select(PayrollRunProjection.ToComponentItem).ToList(),
 			DeductionComponents = preview.Computation.Deductions.Select(PayrollRunProjection.ToComponentItem).ToList(),
+			EmployerContributions = preview.Computation.EmployerContributions.Select(PayrollRunProjection.ToEmployerContributionItem).ToList(),
+			ProvidentFundRuleId = preview.Computation.ProvidentFundRuleId,
+			ProvidentFundRuleVersion = preview.Computation.ProvidentFundRuleVersion,
+			ProfessionalTaxRuleId = preview.Computation.ProfessionalTaxRuleId,
+			ProfessionalTaxRuleVersion = preview.Computation.ProfessionalTaxRuleVersion,
 			PayrollAdjustments = adjustments.Select(PayrollRunProjection.ToAdjustmentDto).ToList()
 		};
 	}

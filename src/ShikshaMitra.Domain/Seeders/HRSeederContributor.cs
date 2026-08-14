@@ -11,6 +11,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.HR.ProfessionalManagement;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
@@ -53,6 +54,8 @@ public partial class HRSeederContributor : BaseSeederContributor
 		DeductionComponentManager deductionComponentManager,
 		IProvidentFundRepository providentFundRepository,
 		IProfessionalTaxRepository professionalTaxRepository,
+		IRepository<SalaryStructureTemplate, Guid> salaryStructureTemplateRepository,
+		IRepository<SalaryStructureTemplateVersion, Guid> salaryStructureTemplateVersionRepository,
 		IRepository<WorkCalendarPolicy, Guid> workCalendarPolicyRepository,
 		IRepository<WorkCalendarHoliday, Guid> workCalendarHolidayRepository,
 		IRepository<PayrollPolicy, Guid> payrollPolicyRepository,
@@ -109,6 +112,8 @@ public partial class HRSeederContributor : BaseSeederContributor
 		_deductionComponentManager = deductionComponentManager;
 		_providentFundRepository = providentFundRepository;
 		_professionalTaxRepository = professionalTaxRepository;
+		_salaryStructureTemplateRepository = salaryStructureTemplateRepository;
+		_salaryStructureTemplateVersionRepository = salaryStructureTemplateVersionRepository;
 		_workCalendarPolicyRepository = workCalendarPolicyRepository;
 		_workCalendarHolidayRepository = workCalendarHolidayRepository;
 		_payrollPolicyRepository = payrollPolicyRepository;

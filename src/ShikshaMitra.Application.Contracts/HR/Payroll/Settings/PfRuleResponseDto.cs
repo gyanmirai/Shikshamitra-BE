@@ -33,6 +33,18 @@ public class PfRuleResponseDto
 	/// </summary>
 	public decimal EmployerPercentage { get; set; }
 
+	public PfContributionBasis ContributionBasis { get; set; }
+
+	public decimal? WageCeiling { get; set; }
+
+	public DateTime EffectiveFrom { get; set; }
+
+	public DateTime? EffectiveTo { get; set; }
+
+	public bool IsActive { get; set; }
+
+	public int Version { get; set; }
+
 	/// <summary>
 	/// Creation timestamp
 	/// </summary>

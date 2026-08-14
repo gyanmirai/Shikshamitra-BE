@@ -19,6 +19,12 @@ public class ProvidentFundConfiguration : IEntityTypeConfiguration<ProvidentFund
 			.IsRequired()
 			.HasMaxLength(20);
 
+		builder.Property(x => x.EmployeePercentage).HasPrecision(7, 4);
+		builder.Property(x => x.EmployerPercentage).HasPrecision(7, 4);
+		builder.Property(x => x.WageCeiling).HasPrecision(18, 2);
+		builder.Property(x => x.EffectiveFrom).HasColumnType("date");
+		builder.Property(x => x.EffectiveTo).HasColumnType("date");
+
 		builder.HasIndex(x => new { x.TenantId, x.Code })
 			.IsUnique()
 			.HasDatabaseName("IX_ProvidentFunds_TenantId_Code")
@@ -28,5 +34,7 @@ public class ProvidentFundConfiguration : IEntityTypeConfiguration<ProvidentFund
 			.IsUnique()
 			.HasDatabaseName("IX_ProvidentFunds_TenantId_Name")
 			.HasFilter("\"IsDeleted\" = false");
+
+		builder.HasIndex(x => new { x.TenantId, x.EffectiveFrom, x.IsActive });
 	}
 }

@@ -10,6 +10,17 @@ public sealed record PayrollComputedLineItem(
 	EmployeePayrollComponent Source,
 	decimal Amount);
 
+public sealed record PayrollComputedEmployerContribution(
+	string Name,
+	decimal Amount,
+	Guid RuleId,
+	int RuleVersion);
+
+public sealed record PayrollStatutoryRuleSet(
+	ProvidentFund? ProvidentFund,
+	IReadOnlyList<ProfessionalTax> ProfessionalTaxSlabs,
+	bool IsEmploymentCessationMonth = false);
+
 public sealed record PayrollComputationResult(
 	int PresentDays,
 	int HalfWorkingDays,
@@ -19,9 +30,15 @@ public sealed record PayrollComputationResult(
 	decimal FullGrossSalary,
 	decimal GrossSalary,
 	decimal TotalDeduction,
+	decimal EmployerContributionTotal,
 	decimal NetPay,
 	List<PayrollComputedLineItem> Earnings,
-	List<PayrollComputedLineItem> Deductions);
+	List<PayrollComputedLineItem> Deductions,
+	List<PayrollComputedEmployerContribution> EmployerContributions,
+	Guid? ProvidentFundRuleId,
+	int? ProvidentFundRuleVersion,
+	Guid? ProfessionalTaxRuleId,
+	int? ProfessionalTaxRuleVersion);
 
 public sealed record PayrollAttendancePayableDays(
 	int PresentDays,

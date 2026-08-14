@@ -49,8 +49,13 @@ public static partial class ShikshaMitraSubmodulePermissions
 		/// </summary>
 		public static readonly Dictionary<string, SubmoduleInfo> Submodules = new()
 		{
-			// Enrollment submodules (defined in Students.Enrollment.cs)
-			{ "Students.Enrollment.AdmissionsCrm", new SubmoduleInfo(Enrollment_AdmissionsCrm.All, Enrollment_AdmissionsCrm.DisplayNames) },
+			{ "Students.Admissions", new SubmoduleInfo(Admissions.All, Admissions.DisplayNames) },
+			{ "Students.Admissions.Offerings", new SubmoduleInfo(AdmissionOfferings.All, AdmissionOfferings.DisplayNames) },
+			{ "Students.Admissions.Inquiries", new SubmoduleInfo(AdmissionInquiries.All, AdmissionInquiries.DisplayNames) },
+			{ "Students.Admissions.Workflows", new SubmoduleInfo(AdmissionWorkflows.All, AdmissionWorkflows.DisplayNames) },
+			{ "Students.Admissions.Forms", new SubmoduleInfo(AdmissionForms.All, AdmissionForms.DisplayNames) },
+			{ "Students.Admissions.Applications", new SubmoduleInfo(AdmissionApplications.All, AdmissionApplications.DisplayNames) },
+			{ "Students.Admissions.Applicants", new SubmoduleInfo(AdmissionApplicants.All, AdmissionApplicants.DisplayNames) },
 			{ "Students.IdentityCompliance", new SubmoduleInfo(IdentityCompliance.All, IdentityCompliance.DisplayNames) },
 
 			// Records submodules (defined in Students.Records.cs)

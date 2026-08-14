@@ -58,7 +58,6 @@ namespace ShikshaMitra;
 public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 {
 	private SqliteConnection? _keepAliveConnection;
-	private readonly AdmissionCrmTransactionFailureInterceptor _admissionCrmTransactionFailure = new();
 
 	public Guid SeededRoleId { get; private set; }
 	public Guid SeededShiftId { get; private set; }
@@ -68,10 +67,6 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	public Guid SeededMediumId { get; private set; }
 	public Guid SeededStandardId { get; private set; }
 	public Guid SeededDivisionId { get; private set; }
-	public Guid SeededFreshRouteDefinitionId { get; private set; }
-	public IDisposable FailNextAdmissionCrmTimelineSave(AdmissionCrmTimelineEventType eventType) =>
-		_admissionCrmTransactionFailure.FailNextTimelineSave(eventType);
-
 	protected override IHost CreateHost(IHostBuilder builder)
 	{
 		var host = base.CreateHost(builder);
@@ -126,10 +121,6 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 				.OrderBy(y => y.Id)
 				.FirstOrDefaultAsync();
 			SeededAcademicYearId = firstYear?.Id ?? Guid.Empty;
-			SeededFreshRouteDefinitionId = await EnsureTestFreshAdmissionRouteAsync(
-				services,
-				tenantId,
-				SeededAcademicYearId);
 
 			var mediumStageRepo = services.GetRequiredService<IEducationMediumStageRepository>();
 			var firstStage = await (await mediumStageRepo.GetQueryableAsync()).AsNoTracking()
@@ -173,47 +164,6 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 
 			await uow.CompleteAsync();
 		}
-	}
-
-	private static async Task<Guid> EnsureTestFreshAdmissionRouteAsync(
-		IServiceProvider services,
-		Guid tenantId,
-		Guid academicYearId)
-	{
-		if (academicYearId == Guid.Empty)
-		{
-			return Guid.Empty;
-		}
-
-		var repository = services.GetRequiredService<IRepository<AdmissionCrmRouteDefinition, Guid>>();
-		var now = DateTime.UtcNow;
-		var queryable = await repository.GetQueryableAsync();
-		var existing = await queryable.FirstOrDefaultAsync(definition =>
-			definition.AcademicYearId == academicYearId &&
-			definition.RouteType == AdmissionCrmRouteType.Fresh &&
-			definition.Status == AdmissionCrmRouteDefinitionStatus.Published &&
-			definition.EffectiveFrom <= now &&
-			(!definition.EffectiveUntil.HasValue || now < definition.EffectiveUntil.Value));
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var definition = new AdmissionCrmRouteDefinition(
-			Guid.NewGuid(),
-			tenantId,
-			academicYearId,
-			"TEST-FRESH",
-			"Fresh admission",
-			AdmissionCrmRouteType.Fresh,
-			1,
-			"{\"requiresPolicyEvaluation\":false,\"requiresDistinctApproval\":false,\"requiredEvidenceCodes\":[]}",
-			now.AddDays(-1),
-			now.AddYears(2));
-		definition.Submit(Guid.Parse(TestAuthHandler.TestUserId));
-		definition.Publish(Guid.NewGuid());
-		await repository.InsertAsync(definition);
-		return definition.Id;
 	}
 
 	/// <summary>
@@ -350,15 +300,13 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		{
 			options.Configure(ctx =>
 			{
-				ctx.DbContextOptions.UseSqlite(_keepAliveConnection)
-					.AddInterceptors(_admissionCrmTransactionFailure);
+					ctx.DbContextOptions.UseSqlite(_keepAliveConnection);
 			});
 		});
 
 		var dbOptions = new DbContextOptionsBuilder<ShikshaMitraDbContext>()
 			.UseSqlite(_keepAliveConnection)
-			.AddInterceptors(_admissionCrmTransactionFailure)
-			.Options;
+				.Options;
 
 		using var context = new ShikshaMitraDbContext(dbOptions);
 		context.GetService<IRelationalDatabaseCreator>().CreateTables();

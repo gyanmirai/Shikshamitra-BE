@@ -43,8 +43,6 @@ using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.Fees.FeeAdjustment;
-using ShikshaMitra.EntityFrameworkCore.Students.StudentEnrollments.AdmissionsCrm;
-using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -115,7 +113,6 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             options.AddRepository<FeeRefundRequest, EfCoreFeeRefundRepository>();
             options.AddRepository<FeeAdjustmentRequest, EfCoreFeeAdjustmentRepository>();
             options.AddRepository<FeePaymentReceipt, EfCoreFeePaymentReceiptRepository>();
-			options.AddRepository<AdmissionInquiryLead, EfCoreAdmissionInquiryLeadRepository>();
         });
 
         // Register custom repository extensions

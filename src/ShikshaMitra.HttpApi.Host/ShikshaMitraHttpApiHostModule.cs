@@ -335,7 +335,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			[
 				sub switch
 				{
-					"Enrollments" or "StudentEnrollments" => "Students - Enrollments",
 					"Attendances" => "Students - Attendance",
 					"Records" => "Students - Records",
 					_ => $"Students - {sub}"
@@ -520,8 +519,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseUnitOfWork();
 		app.UseDynamicClaims();
 		app.UseAuthorization();
-		app.UseMiddleware<AdmissionCrmSettingsAccessMiddleware>();
-
 		app.UseSwagger();
 		app.UseAbpSwaggerUI(c =>
 		{
@@ -565,7 +562,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		OnApplicationInitialization(context);
 		await context.AddBackgroundWorkerAsync<AssignmentScheduledPublicationWorker>();
 		await context.AddBackgroundWorkerAsync<ExamAutoCompleteWorker>();
-		await context.AddBackgroundWorkerAsync<AdmissionCrmAutomationWorker>();
 		await context.AddBackgroundWorkerAsync<HrDashboardPreviewRefreshWorker>();
 		await context.AddBackgroundWorkerAsync<StudentDashboardPreviewRefreshWorker>();
 		await context.AddBackgroundWorkerAsync<HrReportScheduleWorker>();

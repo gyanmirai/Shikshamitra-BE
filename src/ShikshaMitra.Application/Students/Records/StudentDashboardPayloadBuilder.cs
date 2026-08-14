@@ -47,14 +47,6 @@ public class StudentDashboardPayloadBuilder(
 
 		var totalStudents = await AsyncExecuter.CountAsync(studentQuery);
 		var enrolledStudents = await AsyncExecuter.CountAsync(studentQuery.Where(x => x.Status == StudentLifeCycleStatusEnum.Enrolled));
-		var inquiries = await AsyncExecuter.CountAsync(studentQuery.Where(x => x.Status == StudentLifeCycleStatusEnum.Inquiry));
-		var registrations = await AsyncExecuter.CountAsync(studentQuery.Where(x =>
-			x.Status == StudentLifeCycleStatusEnum.Registration ||
-			x.Status == StudentLifeCycleStatusEnum.RegistrationFormIssued ||
-			x.Status == StudentLifeCycleStatusEnum.EntranceExam));
-		var pendingAdmissions = await AsyncExecuter.CountAsync(studentQuery.Where(x =>
-			x.Status == StudentLifeCycleStatusEnum.Admission &&
-			x.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Pending));
 
 		var enrolledRows = await AsyncExecuter.ToListAsync(studentQuery
 			.Where(x => x.Status == StudentLifeCycleStatusEnum.Enrolled)
@@ -85,16 +77,13 @@ public class StudentDashboardPayloadBuilder(
 			[
 				Kpi("total-students", "Total students", totalStudents, "default", "All students visible in your scope.", "/student/profile"),
 				Kpi("enrolled-students", "Enrolled", enrolledStudents, "success", "Active enrolled student records.", "/student/profile"),
-				Kpi("inquiries", "Open inquiries", inquiries, "info", "Student inquiries not yet converted.", "/student/enrollment/inquiry"),
-				Kpi("registrations", "Registrations", registrations, "warning", "Registration and entrance exam records in progress.", "/student/enrollment/registration"),
-				Kpi("pending-admissions", "Pending admissions", pendingAdmissions, pendingAdmissions > 0 ? "warning" : "success", "Admission decisions awaiting action.", "/student/enrollment/admission"),
 				Kpi("attendance-rate", "30 day attendance", attendancePercentage, attendancePercentage >= 75 ? "success" : "warning", "Present percentage from marked attendance.", "/student/attendance/dashboard", $"{attendancePercentage}%")
 			],
 			Categories = BuildCategories(),
 			EnrollmentTrend = await BuildEnrollmentTrendAsync(studentQuery, now),
 			AttendanceTrend = BuildAttendanceTrend(attendanceRows, rangeEnd),
 			ClassStrength = BuildClassStrength(enrolledRows),
-			Alerts = BuildAlerts(pendingAdmissions, missingGr, missingPhotos, missingDocuments, unmarkedAttendanceGroups),
+			Alerts = BuildAlerts(missingGr, missingPhotos, missingDocuments, unmarkedAttendanceGroups),
 			QuickLinks = BuildQuickLinks()
 		};
 	}
@@ -245,7 +234,6 @@ public class StudentDashboardPayloadBuilder(
 	}
 
 	private static List<StudentReportingAlertDto> BuildAlerts(
-		int pendingAdmissions,
 		int missingGr,
 		int missingPhotos,
 		int missingDocuments,
@@ -253,7 +241,6 @@ public class StudentDashboardPayloadBuilder(
 	{
 		var alerts = new List<StudentReportingAlertDto>
 		{
-			Alert("pending-admissions", "warning", "Admissions awaiting review", pendingAdmissions, "Admission records still need approval or rejection.", "Review admissions", "/student/enrollment/admission"),
 			Alert("missing-gr", "warning", "Missing GR numbers", missingGr, "Enrolled students without GR numbers.", "Open GR generation", "/student/management?tab=grGeneration"),
 			Alert("missing-photos", "info", "Missing student photos", missingPhotos, "Student profiles without uploaded photos.", "Upload photos", "/student/upload-student-photo"),
 			Alert("missing-documents", "warning", "Required documents pending", missingDocuments, "Students missing one or more required documents.", "Upload documents", "/student/upload-student-documents"),
@@ -266,7 +253,6 @@ public class StudentDashboardPayloadBuilder(
 	private static List<StudentReportingCategoryDto> BuildCategories() =>
 	[
 		new() { Id = "records", Title = "Records reports", Description = "Strength, lists, gender, age, religion, birthday, and contact reports.", AvailableReports = 19, Href = "/student/reports", Icon = "solar:documents-bold-duotone" },
-		new() { Id = "enrollment", Title = "Enrollment reports", Description = "Inquiry, admission, source, caste, DOB, contact, and previous school reports.", AvailableReports = 13, Href = "/student/enrollment/reports", Icon = "solar:user-plus-bold-duotone" },
 		new() { Id = "attendance", Title = "Attendance reports", Description = "Daily, monthly, gender-wise, sheet, register, and absent-day reports.", AvailableReports = 8, Href = "/student/attendance/reports", Icon = "solar:calendar-mark-bold-duotone" },
 		new() { Id = "certificates", Title = "Certificates and cards", Description = "Bonafide, leaving, character, first trial, and student I-card workflows.", AvailableReports = 5, Href = "/student/certificates", Icon = "solar:diploma-verified-bold-duotone" }
 	];

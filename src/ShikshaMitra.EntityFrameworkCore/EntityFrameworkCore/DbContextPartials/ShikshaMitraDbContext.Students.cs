@@ -5,8 +5,8 @@ using ShikshaMitra.Students.Compliance;
 using ShikshaMitra.Students.Documents;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.Records.Settings;
-using ShikshaMitra.Students.StudentEnrollments.AdmissionsCrm;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -27,87 +27,33 @@ public partial class ShikshaMitraDbContext
     public DbSet<StudentIdentityCompliance> StudentIdentityCompliances { get; set; }
     public DbSet<StudentDocumentAccessAudit> StudentDocumentAccessAudits { get; set; }
     public DbSet<StudentNote> StudentNotes { get; set; }
-    public DbSet<AdmissionInquiryLead> AdmissionInquiryLeads { get; set; }
-    public DbSet<AdmissionCrmInquirySource> AdmissionCrmInquirySources { get; set; }
-    public DbSet<AdmissionCrmInquiryType> AdmissionCrmInquiryTypes { get; set; }
-    public DbSet<AdmissionCrmExamSlot> AdmissionCrmExamSlots { get; set; }
-    public DbSet<AdmissionCrmDocumentType> AdmissionCrmDocumentTypes { get; set; }
-    public DbSet<AdmissionCrmCycleConfiguration> AdmissionCrmCycleConfigurations { get; set; }
-    public DbSet<AdmissionCrmAdmissionYearSetup> AdmissionCrmAdmissionYearSetups { get; set; }
-    public DbSet<AdmissionCrmPipelineStage> AdmissionCrmPipelineStages { get; set; }
-    public DbSet<AdmissionInquiryFormTemplate> AdmissionInquiryFormTemplates { get; set; }
-    public DbSet<AdmissionInquiryFormSubmission> AdmissionInquiryFormSubmissions { get; set; }
-    public DbSet<AdmissionInquiryConsentRecord> AdmissionInquiryConsentRecords { get; set; }
-    public DbSet<AdmissionApplicantStatusAccess> AdmissionApplicantStatusAccesses { get; set; }
-    public DbSet<AdmissionCrmApplicantChecklistProgress> AdmissionCrmApplicantChecklistProgresses { get; set; }
-    public DbSet<AdmissionCrmFollowUpTask> AdmissionCrmFollowUpTasks { get; set; }
-    public DbSet<AdmissionCrmEvent> AdmissionCrmEvents { get; set; }
-	public DbSet<AdmissionCrmEventRegistration> AdmissionCrmEventRegistrations { get; set; }
-	public DbSet<AdmissionCrmReviewConfiguration> AdmissionCrmReviewConfigurations { get; set; }
-	public DbSet<AdmissionCrmReviewConfigurationCriterion> AdmissionCrmReviewConfigurationCriteria { get; set; }
-	public DbSet<AdmissionCrmStructuredReview> AdmissionCrmStructuredReviews { get; set; }
-	public DbSet<AdmissionCrmStructuredReviewCriterion> AdmissionCrmStructuredReviewCriteria { get; set; }
-	public DbSet<AdmissionCrmReviewAssignment> AdmissionCrmReviewAssignments { get; set; }
-    public DbSet<AdmissionCrmEntranceExamRecord> AdmissionCrmEntranceExamRecords { get; set; }
-    public DbSet<AdmissionCrmMessageTemplate> AdmissionCrmMessageTemplates { get; set; }
-    public DbSet<AdmissionCrmCommunicationProviderConfiguration> AdmissionCrmCommunicationProviderConfigurations { get; set; }
-    public DbSet<AdmissionCrmCommunicationOptOut> AdmissionCrmCommunicationOptOuts { get; set; }
-    public DbSet<AdmissionCrmMessageDeliveryLog> AdmissionCrmMessageDeliveryLogs { get; set; }
-    public DbSet<AdmissionCrmTimelineEvent> AdmissionCrmTimelineEvents { get; set; }
-    public DbSet<AdmissionCrmAutomationRun> AdmissionCrmAutomationRuns { get; set; }
-    public DbSet<AdmissionCrmPlaybook> AdmissionCrmPlaybooks { get; set; }
-    public DbSet<AdmissionCrmRegistrationTemplate> AdmissionCrmRegistrationTemplates { get; set; }
-    public DbSet<AdmissionCrmFormNumberSeries> AdmissionCrmFormNumberSeries { get; set; }
-    public DbSet<AdmissionCrmRegistrationApplication> AdmissionCrmRegistrationApplications { get; set; }
-    public DbSet<AdmissionCrmDocumentChecklistTemplate> AdmissionCrmDocumentChecklistTemplates { get; set; }
-    public DbSet<AdmissionCrmDocumentChecklistAssignment> AdmissionCrmDocumentChecklistAssignments { get; set; }
-    public DbSet<AdmissionCrmApplicantDocument> AdmissionCrmApplicantDocuments { get; set; }
-    public DbSet<AdmissionCrmSeatPool> AdmissionCrmSeatPools { get; set; }
-    public DbSet<AdmissionCrmSeatReservation> AdmissionCrmSeatReservations { get; set; }
-    public DbSet<AdmissionCrmSeatOffer> AdmissionCrmSeatOffers { get; set; }
-    public DbSet<AdmissionCrmWaitlistEntry> AdmissionCrmWaitlistEntries { get; set; }
-    public DbSet<AdmissionCrmWaitlistHistory> AdmissionCrmWaitlistHistories { get; set; }
-    public DbSet<AdmissionCrmAdmissionDecision> AdmissionCrmAdmissionDecisions { get; set; }
-    public DbSet<AdmissionCrmFeePolicy> AdmissionCrmFeePolicies { get; set; }
-    public DbSet<AdmissionCrmAdmissionQuotation> AdmissionCrmAdmissionQuotations { get; set; }
-    public DbSet<AdmissionCrmConcessionRequest> AdmissionCrmConcessionRequests { get; set; }
-    public DbSet<AdmissionCrmPerson> AdmissionCrmPersons { get; set; }
-    public DbSet<AdmissionCrmHousehold> AdmissionCrmHouseholds { get; set; }
-    public DbSet<AdmissionCrmHouseholdMembership> AdmissionCrmHouseholdMemberships { get; set; }
-    public DbSet<AdmissionCrmApplicantIdentityProfile> AdmissionCrmApplicantIdentityProfiles { get; set; }
-    public DbSet<AdmissionCrmGuardianRelationship> AdmissionCrmGuardianRelationships { get; set; }
-    public DbSet<AdmissionCrmIdentityConsent> AdmissionCrmIdentityConsents { get; set; }
-    public DbSet<AdmissionCrmPolicyPack> AdmissionCrmPolicyPacks { get; set; }
-    public DbSet<AdmissionCrmPolicyAdoption> AdmissionCrmPolicyAdoptions { get; set; }
-    public DbSet<AdmissionCrmPolicyEvaluation> AdmissionCrmPolicyEvaluations { get; set; }
-    public DbSet<AdmissionCrmPolicyException> AdmissionCrmPolicyExceptions { get; set; }
-    public DbSet<AdmissionCrmNumberSeries> AdmissionCrmNumberSeries { get; set; }
-    public DbSet<AdmissionCrmIdentifierAllocation> AdmissionCrmIdentifierAllocations { get; set; }
-    public DbSet<AdmissionCrmActivation> AdmissionCrmActivations { get; set; }
-    public DbSet<AdmissionCrmServiceHandoff> AdmissionCrmServiceHandoffs { get; set; }
-      public DbSet<AdmissionCrmRouteDefinition> AdmissionCrmRouteDefinitions { get; set; }
-      public DbSet<AdmissionCrmRouteAssignment> AdmissionCrmRouteAssignments { get; set; }
-      public DbSet<AdmissionCrmRouteAppeal> AdmissionCrmRouteAppeals { get; set; }
-    public DbSet<AdmissionCrmDataQualityIssue> AdmissionCrmDataQualityIssues { get; set; }
-    public DbSet<AdmissionCrmRetentionPolicy> AdmissionCrmRetentionPolicies { get; set; }
-    public DbSet<AdmissionCrmPrivacyRequest> AdmissionCrmPrivacyRequests { get; set; }
-    public DbSet<AdmissionCrmExportRequest> AdmissionCrmExportRequests { get; set; }
-    public DbSet<AdmissionCrmReportSchedule> AdmissionCrmReportSchedules { get; set; }
-    public DbSet<AdmissionCrmWorkDelegation> AdmissionCrmWorkDelegations { get; set; }
-    public DbSet<AdmissionCrmOperationsSavedView> AdmissionCrmOperationsSavedViews { get; set; }
-    public DbSet<AdmissionCrmSlaHold> AdmissionCrmSlaHolds { get; set; }
-    public DbSet<AdmissionCrmSettingsAccessPolicy> AdmissionCrmSettingsAccessPolicies { get; set; }
-    public DbSet<AdmissionCrmPlatformSupportSession> AdmissionCrmPlatformSupportSessions { get; set; }
-    public DbSet<AdmissionCrmPlatformPreset> AdmissionCrmPlatformPresets { get; set; }
-    public DbSet<AdmissionCrmPresetAdoption> AdmissionCrmPresetAdoptions { get; set; }
 
     // ───────────────────────────────────────────────
-    // Students — Enrollment Settings
+    // Students — Document and admission-support settings
     // ───────────────────────────────────────────────
     public DbSet<StudentDocumentSetting> StudentDocumentSettings { get; set; }
     public DbSet<InquiryPreference> InquiryPreferences { get; set; }
     public DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
-    public DbSet<DocumentType> DocumentTypes { get; set; }
+	public DbSet<DocumentType> DocumentTypes { get; set; }
+	public DbSet<AdmissionCycle> AdmissionCycles { get; set; }
+	public DbSet<AdmissionOffering> AdmissionOfferings { get; set; }
+	public DbSet<AdmissionInquiry> AdmissionInquiries { get; set; }
+	public DbSet<AdmissionWorkflowDefinition> AdmissionWorkflowDefinitions { get; set; }
+	public DbSet<AdmissionWorkflowStageDefinition> AdmissionWorkflowStageDefinitions { get; set; }
+	public DbSet<AdmissionWorkflowTransitionDefinition> AdmissionWorkflowTransitionDefinitions { get; set; }
+	public DbSet<AdmissionFormDefinition> AdmissionFormDefinitions { get; set; }
+	public DbSet<AdmissionFormSectionDefinition> AdmissionFormSectionDefinitions { get; set; }
+	public DbSet<AdmissionFormFieldDefinition> AdmissionFormFieldDefinitions { get; set; }
+	public DbSet<AdmissionFamily> AdmissionFamilies { get; set; }
+	public DbSet<AdmissionGuardian> AdmissionGuardians { get; set; }
+	public DbSet<AdmissionApplicant> AdmissionApplicants { get; set; }
+	public DbSet<AdmissionApplication> AdmissionApplications { get; set; }
+	public DbSet<AdmissionApplicationWorkflowInstance> AdmissionApplicationWorkflowInstances { get; set; }
+	public DbSet<AdmissionApplicationStageInstance> AdmissionApplicationStageInstances { get; set; }
+	public DbSet<AdmissionFormInstance> AdmissionFormInstances { get; set; }
+	public DbSet<AdmissionFormFieldValue> AdmissionFormFieldValues { get; set; }
+	public DbSet<AdmissionActivity> AdmissionActivities { get; set; }
+	public DbSet<AdmissionNote> AdmissionNotes { get; set; }
 
     // ───────────────────────────────────────────────
     // Students — Records

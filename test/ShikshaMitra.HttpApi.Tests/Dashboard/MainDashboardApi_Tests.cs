@@ -869,39 +869,6 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Surface_Live_Scoped_Admission_Action_Count()
-	{
-		await EnsureDefaultTestUserHasTenantWideScopeAsync();
-		await SeedPendingAdmissionAsync();
-
-		var client = Factory.CreateClient();
-		client.DefaultRequestHeaders.Add(
-			AlwaysGrantPermissionChecker.TestPermissionsHeader,
-			string.Join(
-				",",
-				ShikshaMitraModulePermissions.Dashboard,
-				ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View));
-
-		var response = await client.GetAsync(
-			$"{BaseUrl}?dashboardTemplate=leadership&from=2026-05-01&to=2026-05-23");
-		var rawPayload = await response.Content.ReadAsStringAsync();
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
-
-		var payload = await response.Content.ReadFromJsonAsync<DashboardSummaryDto>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to deserialize dashboard summary.");
-		var admissionAction = payload.ActionItems.SingleOrDefault(x => x.Id == "leadership-admission-approvals");
-
-		admissionAction.ShouldNotBeNull();
-		admissionAction.Count.ShouldNotBeNull();
-		admissionAction.Count.Value.ShouldBeGreaterThanOrEqualTo(1);
-		admissionAction.Subtitle.ShouldNotBeNull();
-		admissionAction.Subtitle.ShouldContain("admission");
-		admissionAction.DrilldownUrl.ShouldBe("/student/enrollment/activation");
-	}
-
-	[Fact]
-	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Surface_Finance_Hr_Live_Snapshot_When_Permissions_Are_Granted()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();

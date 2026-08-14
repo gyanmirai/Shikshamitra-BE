@@ -1,0 +1,16 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ShikshaMitra.Students.StudentEnrollments.Admissions;
+using Volo.Abp.EntityFrameworkCore.Modeling;
+
+namespace ShikshaMitra.EntityFrameworkCore.Students.StudentEnrollments.Admissions;
+
+public class AdmissionApplicationConfiguration : IEntityTypeConfiguration<AdmissionApplication>, IEntityTypeConfiguration<AdmissionApplicationWorkflowInstance>, IEntityTypeConfiguration<AdmissionApplicationStageInstance>, IEntityTypeConfiguration<AdmissionFormInstance>, IEntityTypeConfiguration<AdmissionFormFieldValue>, IEntityTypeConfiguration<AdmissionActivity>
+{
+	public void Configure(EntityTypeBuilder<AdmissionApplication> b) { b.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionApplications", ShikshaMitraConsts.DbSchema); b.ConfigureByConvention(); b.Property(x => x.ApplicationNumber).IsRequired().HasMaxLength(64); b.HasIndex(x => new { x.TenantId, x.ApplicationNumber }).IsUnique(); b.HasIndex(x => new { x.TenantId, x.ApplicantId, x.AdmissionOfferingId }).IsUnique(); }
+	void IEntityTypeConfiguration<AdmissionApplicationWorkflowInstance>.Configure(EntityTypeBuilder<AdmissionApplicationWorkflowInstance> b) { b.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionApplicationWorkflowInstances", ShikshaMitraConsts.DbSchema); b.ConfigureByConvention(); b.HasIndex(x => new { x.TenantId, x.ApplicationId }).IsUnique(); }
+	void IEntityTypeConfiguration<AdmissionApplicationStageInstance>.Configure(EntityTypeBuilder<AdmissionApplicationStageInstance> b) { b.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionApplicationStageInstances", ShikshaMitraConsts.DbSchema); b.ConfigureByConvention(); b.Property(x => x.Code).IsRequired().HasMaxLength(64); b.Property(x => x.Name).IsRequired().HasMaxLength(128); b.HasIndex(x => new { x.WorkflowInstanceId, x.DisplayOrder }); }
+	void IEntityTypeConfiguration<AdmissionFormInstance>.Configure(EntityTypeBuilder<AdmissionFormInstance> b) { b.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionFormInstances", ShikshaMitraConsts.DbSchema); b.ConfigureByConvention(); b.HasIndex(x => new { x.TenantId, x.ApplicationId }).IsUnique(); }
+	void IEntityTypeConfiguration<AdmissionFormFieldValue>.Configure(EntityTypeBuilder<AdmissionFormFieldValue> b) { b.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionFormFieldValues", ShikshaMitraConsts.DbSchema); b.ConfigureByConvention(); b.Property(x => x.FieldCode).IsRequired().HasMaxLength(128); b.Property(x => x.ValueJson).HasColumnType("text"); b.HasIndex(x => new { x.FormInstanceId, x.FieldCode }).IsUnique(); }
+	void IEntityTypeConfiguration<AdmissionActivity>.Configure(EntityTypeBuilder<AdmissionActivity> b) { b.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionActivities", ShikshaMitraConsts.DbSchema); b.ConfigureByConvention(); b.Property(x => x.ActivityType).IsRequired().HasMaxLength(64); b.Property(x => x.Description).IsRequired().HasMaxLength(512); b.Property(x => x.MetadataJson).HasColumnType("text"); b.HasIndex(x => new { x.TenantId, x.ApplicantId, x.OccurredAt }); b.HasIndex(x => new { x.TenantId, x.ApplicationId, x.OccurredAt }); }
+}

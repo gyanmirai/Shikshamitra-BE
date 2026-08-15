@@ -8,7 +8,7 @@ namespace ShikshaMitra.Seeders;
 
 public partial class HRSeederContributor
 {
-	private async Task SeedSalaryStructureTemplatesAsync()
+	internal async Task SeedSalaryStructureTemplatesAsync()
 	{
 		const string templateName = "Gujarat Standard Salary";
 		if (await _salaryStructureTemplateRepository.FindAsync(x => x.Name == templateName) is not null)

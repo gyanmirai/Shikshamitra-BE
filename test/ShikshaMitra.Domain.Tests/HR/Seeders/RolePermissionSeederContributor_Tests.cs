@@ -21,8 +21,24 @@ public class RolePermissionSeederContributor_Tests
 	public void Permission_Grant_Changes_Should_Use_The_Current_Seeder_Marker_Version()
 	{
 		RolePermissionSeederContributor.StepName.ShouldBe("RolePermissionSeeder");
-		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v11");
+		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v13");
 		RolePermissionSeederContributor.StepOrder.ShouldBe(120);
+	}
+
+	[Fact]
+	public void Payroll_Salary_Template_Permissions_Should_Be_Granted_To_Payroll_Administrators()
+	{
+		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
+
+		foreach (var roleName in new[] { "admin", "super-admin", "Director", "HR Manager" })
+		{
+			var permissions = rolePermissions[roleName];
+
+			foreach (var permission in ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.All)
+			{
+				permissions.ShouldContain(permission);
+			}
+		}
 	}
 
 	[Fact]

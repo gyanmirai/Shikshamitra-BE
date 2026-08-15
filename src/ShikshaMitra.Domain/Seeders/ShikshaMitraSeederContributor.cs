@@ -147,6 +147,12 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 		TenantStep<Seeders.AcademicSetupSeederContributor>(serviceProvider, "AcademicSetupSeeder", "AcademicSetupSeeder:v2", 140, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.DemoAcademicAndInstituteSeederContributor>(serviceProvider, "DemoAcademicAndInstituteSeeder", "DemoAcademicAndInstituteSeeder:v2", 150, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.HRSeederContributor>(serviceProvider, "HRSeeder", "HRSeeder:v8", 160, Seeders.ShikshaMitraSeederProfile.Demo),
+		TenantStep<Seeders.SalaryTemplateBackfillSeederContributor>(
+			serviceProvider,
+			Seeders.SalaryTemplateBackfillSeederContributor.StepName,
+			Seeders.SalaryTemplateBackfillSeederContributor.StepVersion,
+			Seeders.SalaryTemplateBackfillSeederContributor.StepOrder,
+			Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.LeaveApprovedUnitsRepairSeederContributor>(serviceProvider, "LeaveApprovedUnitsRepairSeeder", "LeaveApprovedUnitsRepairSeeder:v1", 165, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.StudentSeederContributor>(serviceProvider, "StudentSeeder", "StudentSeeder:v1", 170, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<Student>(serviceProvider)),
 		TenantStep<Seeders.AdmissionCrmSeederContributor>(serviceProvider, "AdmissionCrmSeeder", "AdmissionCrmSeeder:v2", 172, Seeders.ShikshaMitraSeederProfile.All, useCompletionMarker: false),

@@ -221,6 +221,67 @@ public class SalaryTemplateCalculator_Tests
 	}
 
 	[Fact]
+	public void Should_allow_incomplete_drafts_but_reject_them_for_publishing()
+	{
+		SalaryTemplateCalculator.ValidateDraftRules([]);
+
+		var incompleteRules = new List<SalaryTemplateRule>
+		{
+			new("BASIC", Guid.NewGuid(), SalaryTemplateLineKind.Earning,
+				SalaryTemplateFormulaType.PercentageOfGross, PayrollComponentSemanticType.Basic,
+				60m, null, 0)
+		};
+
+		SalaryTemplateCalculator.ValidateDraftRules(incompleteRules);
+		Should.Throw<BusinessException>(() => SalaryTemplateCalculator.ValidateRules(incompleteRules))
+			.Code.ShouldBe("HR:Payroll:SalaryTemplateRequiresOneRemainder");
+	}
+
+	[Fact]
+	public void Should_calculate_arbitrary_template_lines_and_balance_to_gross()
+	{
+		var fixture = BuildFixture(employeePfPercentage: 12m, employerPfPercentage: 12m, wageCeiling: 15_000m);
+		var hraId = Guid.NewGuid();
+		var transportId = Guid.NewGuid();
+		var loanId = Guid.NewGuid();
+		fixture.Rules.Insert(1, new SalaryTemplateRule(
+			"HRA", hraId, SalaryTemplateLineKind.Earning,
+			SalaryTemplateFormulaType.PercentageOfGross, PayrollComponentSemanticType.Ordinary,
+			20m, null, 2));
+		fixture.Rules.Insert(2, new SalaryTemplateRule(
+			"TRANSPORT", transportId, SalaryTemplateLineKind.Earning,
+			SalaryTemplateFormulaType.FixedAmount, PayrollComponentSemanticType.Ordinary,
+			1_500m, null, 3));
+		fixture.Rules.Add(new SalaryTemplateRule(
+			"LOAN", loanId, SalaryTemplateLineKind.Deduction,
+			SalaryTemplateFormulaType.FixedAmount, PayrollComponentSemanticType.Ordinary,
+			1_000m, null, 20));
+		for (var index = 0; index < fixture.Rules.Count; index++)
+		{
+			fixture.Rules[index] = fixture.Rules[index] with { DisplayOrder = index };
+		}
+		fixture.Components[hraId] = new(hraId, "House Rent Allowance");
+		fixture.Components[transportId] = new(transportId, "Transport Allowance");
+		fixture.Components[loanId] = new(loanId, "Loan Recovery");
+
+		var result = SalaryTemplateCalculator.Calculate(
+			SalaryInputBasis.Gross,
+			30_000m,
+			fixture.Rules,
+			fixture.Components,
+			fixture.PfRule,
+			fixture.ProfessionalTaxSlabs);
+
+		result.Earnings.Single(x => x.Code == "HRA").Amount.ShouldBe(6_000m);
+		result.Earnings.Single(x => x.Code == "TRANSPORT").Amount.ShouldBe(1_500m);
+		result.Earnings.Single(x => x.Code == "SPECIAL_ALLOWANCE").Amount.ShouldBe(4_500m);
+		result.Earnings.Sum(x => x.Amount).ShouldBe(30_000m);
+		result.Deductions.Single(x => x.Code == "LOAN").Amount.ShouldBe(1_000m);
+		result.Net.ShouldBe(27_000m);
+		result.EmployerContributionTotal.ShouldBe(1_800m);
+	}
+
+	[Fact]
 	public void Should_reject_statutory_formula_on_an_earning_line()
 	{
 		var fixture = BuildFixture(employeePfPercentage: 5m, employerPfPercentage: 5m, wageCeiling: null);

@@ -16,14 +16,27 @@ public class SalaryTemplateRuleDto
 	public string SemanticType { get; set; } = "ORDINARY";
 	public decimal? Value { get; set; }
 	public string? BasisCode { get; set; }
+	public Guid? BasisComponentId { get; set; }
 	public int DisplayOrder { get; set; }
+}
+
+public class SalaryTemplateComponentCatalogItemDto
+{
+	public Guid ComponentId { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public string? Description { get; set; }
+	public string LineKind { get; set; } = "EARNING";
+}
+
+public class SalaryTemplateComponentCatalogDto
+{
+	public List<SalaryTemplateComponentCatalogItemDto> Items { get; set; } = [];
 }
 
 public class CreateSalaryTemplateDto
 {
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
-	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
 }
 
 public class UpdateSalaryTemplateDraftDto
@@ -105,6 +118,7 @@ public interface ISalaryTemplateAppService : IApplicationService
 {
 	Task<SalaryTemplateListDto> GetListAsync();
 	Task<SalaryTemplateListDto> GetPublishedListAsync();
+	Task<SalaryTemplateComponentCatalogDto> GetComponentCatalogAsync();
 	Task<SalaryTemplateDto> GetAsync(Guid id);
 	Task<SalaryTemplateDto> CreateAsync(CreateSalaryTemplateDto input);
 	Task<SalaryTemplateDto> CreateNextVersionAsync(Guid id);
@@ -122,8 +136,6 @@ public class CreateSalaryTemplateDtoValidator : AbstractValidator<CreateSalaryTe
 	{
 		RuleFor(x => x.Name).NotEmpty().MaximumLength(160);
 		RuleFor(x => x.Description).MaximumLength(500);
-		RuleFor(x => x.Rules).NotEmpty();
-		RuleForEach(x => x.Rules).SetValidator(new SalaryTemplateRuleDtoValidator());
 	}
 }
 
@@ -133,7 +145,6 @@ public class UpdateSalaryTemplateDraftDtoValidator : AbstractValidator<UpdateSal
 	{
 		RuleFor(x => x.Name).NotEmpty().MaximumLength(160);
 		RuleFor(x => x.Description).MaximumLength(500);
-		RuleFor(x => x.Rules).NotEmpty();
 		RuleForEach(x => x.Rules).SetValidator(new SalaryTemplateRuleDtoValidator());
 	}
 }
@@ -142,7 +153,10 @@ public class SalaryTemplateRuleDtoValidator : AbstractValidator<SalaryTemplateRu
 {
 	public SalaryTemplateRuleDtoValidator()
 	{
-		RuleFor(x => x.Code).NotEmpty().MaximumLength(64).Matches("^[A-Z][A-Z0-9_]*$");
+		RuleFor(x => x.Code)
+			.MaximumLength(64)
+			.Matches("^[A-Z][A-Z0-9_]*$")
+			.When(x => !string.IsNullOrWhiteSpace(x.Code));
 		RuleFor(x => x.ComponentId).NotEmpty();
 		RuleFor(x => x.LineKind).NotEmpty().Must(BeLineKind).WithMessage("LineKind must be EARNING or DEDUCTION.");
 		RuleFor(x => x.FormulaType).NotEmpty().Must(BeFormulaType).WithMessage("FormulaType is invalid.");

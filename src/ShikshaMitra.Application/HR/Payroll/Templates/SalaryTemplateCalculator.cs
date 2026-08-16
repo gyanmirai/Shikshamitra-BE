@@ -23,23 +23,11 @@ internal static class SalaryTemplateCalculator
 {
 	public static void ValidateRules(IReadOnlyList<SalaryTemplateRule> rules)
 	{
+		ValidateDraftRules(rules);
+
 		if (rules.Count == 0)
 		{
 			throw new BusinessException("HR:Payroll:SalaryTemplateRulesRequired");
-		}
-
-		var normalizedCodes = rules.Select(x => x.Code.Trim().ToUpperInvariant()).ToList();
-		if (normalizedCodes.Distinct().Count() != rules.Count)
-		{
-			throw new BusinessException("HR:Payroll:SalaryTemplateDuplicateCode");
-		}
-		if (rules.Select(x => x.ComponentId).Distinct().Count() != rules.Count)
-		{
-			throw new BusinessException("HR:Payroll:SalaryTemplateDuplicateComponent");
-		}
-		if (rules.Select(x => x.DisplayOrder).Distinct().Count() != rules.Count)
-		{
-			throw new BusinessException("HR:Payroll:SalaryTemplateDuplicateDisplayOrder");
 		}
 
 		if (rules.Count(x => x.LineKind == SalaryTemplateLineKind.Earning && x.SemanticType == PayrollComponentSemanticType.Basic) != 1)
@@ -56,6 +44,50 @@ internal static class SalaryTemplateCalculator
 			throw new BusinessException("HR:Payroll:SalaryTemplateRequiresOneRemainder");
 		}
 
+		var basicRule = rules.Single(x =>
+			x.LineKind == SalaryTemplateLineKind.Earning &&
+			x.SemanticType == PayrollComponentSemanticType.Basic);
+		if (rules.Any(x =>
+			x.FormulaType == SalaryTemplateFormulaType.PercentageOfBasic &&
+			basicRule.DisplayOrder >= x.DisplayOrder))
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplateBasicMustPrecedeDependent");
+		}
+	}
+
+	public static void ValidateDraftRules(IReadOnlyList<SalaryTemplateRule> rules)
+	{
+		if (rules.Count == 0)
+		{
+			return;
+		}
+
+		var normalizedCodes = rules.Select(x => x.Code.Trim().ToUpperInvariant()).ToList();
+		if (normalizedCodes.Distinct().Count() != rules.Count)
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplateDuplicateCode");
+		}
+		if (rules.Select(x => x.ComponentId).Distinct().Count() != rules.Count)
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplateDuplicateComponent");
+		}
+		if (rules.Select(x => x.DisplayOrder).Distinct().Count() != rules.Count)
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplateDuplicateDisplayOrder");
+		}
+
+		if (rules.Count(x => x.LineKind == SalaryTemplateLineKind.Earning && x.SemanticType == PayrollComponentSemanticType.Basic) > 1)
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplateRequiresOneBasic");
+		}
+
+		if (rules.Count(x => x.LineKind == SalaryTemplateLineKind.Earning &&
+		                     x.FormulaType == SalaryTemplateFormulaType.RemainderOfGross) > 1 ||
+		    rules.Count(x => x.SemanticType == PayrollComponentSemanticType.BalancingEarning) > 1)
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplateRequiresOneRemainder");
+		}
+
 		if (rules.Count(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund) > 1 ||
 		    rules.Count(x => x.FormulaType == SalaryTemplateFormulaType.ProfessionalTax) > 1)
 		{
@@ -64,7 +96,7 @@ internal static class SalaryTemplateCalculator
 
 		var codes = normalizedCodes.ToHashSet();
 		var rulesByCode = rules.ToDictionary(x => x.Code.Trim(), StringComparer.OrdinalIgnoreCase);
-		var basicRule = rules.Single(x => x.LineKind == SalaryTemplateLineKind.Earning && x.SemanticType == PayrollComponentSemanticType.Basic);
+		var basicRule = rules.SingleOrDefault(x => x.LineKind == SalaryTemplateLineKind.Earning && x.SemanticType == PayrollComponentSemanticType.Basic);
 		foreach (var rule in rules)
 		{
 			if (rule.ComponentId == Guid.Empty || rule.DisplayOrder < 0)
@@ -94,6 +126,12 @@ internal static class SalaryTemplateCalculator
 			}
 
 			if (rule.FormulaType == SalaryTemplateFormulaType.PercentageOfComponent &&
+			    rulesByCode[rule.BasisCode!.Trim()].LineKind != SalaryTemplateLineKind.Earning)
+			{
+				throw new BusinessException("HR:Payroll:SalaryTemplateInvalidBasis").WithData("code", rule.Code);
+			}
+
+			if (rule.FormulaType == SalaryTemplateFormulaType.PercentageOfComponent &&
 			    rulesByCode[rule.BasisCode!.Trim()].DisplayOrder >= rule.DisplayOrder)
 			{
 				throw new BusinessException("HR:Payroll:SalaryTemplateBasisMustPrecedeDependent")
@@ -102,6 +140,7 @@ internal static class SalaryTemplateCalculator
 			}
 
 			if (rule.FormulaType == SalaryTemplateFormulaType.PercentageOfBasic &&
+			    basicRule != null &&
 			    basicRule.DisplayOrder >= rule.DisplayOrder)
 			{
 				throw new BusinessException("HR:Payroll:SalaryTemplateBasicMustPrecedeDependent")
@@ -116,6 +155,11 @@ internal static class SalaryTemplateCalculator
 	{
 		var statutoryFormula = rule.FormulaType is SalaryTemplateFormulaType.EmployeeProvidentFund or
 			SalaryTemplateFormulaType.ProfessionalTax;
+		if (rule.SemanticType == PayrollComponentSemanticType.Basic &&
+		    rule.FormulaType is not (SalaryTemplateFormulaType.PercentageOfGross or SalaryTemplateFormulaType.FixedAmount))
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplateSemanticFormulaMismatch").WithData("code", rule.Code);
+		}
 		if (rule.LineKind == SalaryTemplateLineKind.Earning && statutoryFormula)
 		{
 			throw new BusinessException("HR:Payroll:SalaryTemplateFormulaLineKindMismatch").WithData("code", rule.Code);

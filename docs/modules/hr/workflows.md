@@ -56,6 +56,9 @@ Payroll workflows depend on employee, attendance, leave, and policy data:
 
 The salary builder resolves full-month Gross directly or solves the lowest Gross for a requested Take-home amount across statutory intervals.
 It calculates Basic and other earnings, assigns the balancing earning, calculates ordinary and statutory deductions, and returns employer PF separately.
+Salary Template settings starts with a blank draft and lets users compose variable earning and deduction rules from the active tenant component catalog.
+Draft validation allows incomplete structures but rejects malformed rows, duplicate components or special roles, invalid dependencies, and cycles.
+Publishing additionally requires exactly one Basic earning and one remainder earning.
 When a published template receives a new draft, employee onboarding continues to use the current published version until the draft is published.
 Applying the result replaces recurring employee components while preserving temporary components and records template provenance on employee payroll details.
 Later template edits do not change employee components automatically.

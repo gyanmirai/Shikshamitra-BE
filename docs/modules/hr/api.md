@@ -123,6 +123,8 @@ Salary structure templates are tenant-scoped, versioned smart fillers.
 Published versions are immutable, and applying or reapplying a template writes ordinary employee salary-component rows without creating a persistent employee-template assignment.
 The calculate endpoint accepts Gross or Take-home basis and returns earnings, employee deductions, employer contributions, statutory references, warnings, and a formula trace.
 `GET /api/payroll/salary-templates/published` exposes only the current published versions to payroll-structure users, while the settings list also returns the latest draft and current published version.
+`GET /api/payroll/salary-templates/component-catalog` returns active tenant earning and deduction components to Salary Template View users.
+Creating a salary template produces a blank draft, and draft updates accept variable component rules keyed by component IDs while the server controls internal dependency codes.
 Payroll preview recalculates employee PF from prorated eligible wages and Gujarat professional tax from actual monthly gross.
 The selected effective professional-tax slab also controls whether tax is deducted in an employee's employment cessation month.
 Employer PF is stored separately and never reduces employee net pay.

@@ -50,6 +50,39 @@ public class SalaryTemplateAppService(
 		};
 	}
 
+	public async Task<SalaryTemplateComponentCatalogDto> GetComponentCatalogAsync()
+	{
+		var earnings = await asyncExecuter.ToListAsync(
+			(await earningComponentRepository.GetQueryableAsync())
+				.Where(x => x.IsActive)
+				.OrderBy(x => x.DisplayOrder)
+				.ThenBy(x => x.Name));
+		var deductions = await asyncExecuter.ToListAsync(
+			(await deductionComponentRepository.GetQueryableAsync())
+				.Where(x => x.IsActive)
+				.OrderBy(x => x.DisplayOrder)
+				.ThenBy(x => x.Name));
+
+		return new SalaryTemplateComponentCatalogDto
+		{
+			Items = earnings.Select(x => new SalaryTemplateComponentCatalogItemDto
+				{
+					ComponentId = x.Id,
+					Name = x.Name,
+					Description = x.Description,
+					LineKind = "EARNING"
+				})
+				.Concat(deductions.Select(x => new SalaryTemplateComponentCatalogItemDto
+				{
+					ComponentId = x.Id,
+					Name = x.Name,
+					Description = x.Description,
+					LineKind = "DEDUCTION"
+				}))
+				.ToList()
+		};
+	}
+
 	public async Task<SalaryTemplateDto> GetAsync(Guid id)
 	{
 		var template = await templateRepository.GetAsync(id);
@@ -59,15 +92,7 @@ public class SalaryTemplateAppService(
 
 	public async Task<SalaryTemplateDto> CreateAsync(CreateSalaryTemplateDto input)
 	{
-		await EnsureNameAvailableAsync(input.Name);
-		var rules = MapRules(input.Rules);
-		await ValidateRulesAndComponentsAsync(rules);
-		var template = new SalaryStructureTemplate(GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Description);
-		var version = new SalaryStructureTemplateVersion(
-			GuidGenerator.Create(), CurrentTenant.Id, template.Id, 1, rules);
-		await templateRepository.InsertAsync(template, autoSave: true);
-		await versionRepository.InsertAsync(version, autoSave: true);
-		return Map(template, version, null);
+		return await CreateTemplateAsync(input.Name, input.Description, []);
 	}
 
 	public async Task<SalaryTemplateDto> CreateNextVersionAsync(Guid id)
@@ -96,7 +121,7 @@ public class SalaryTemplateAppService(
 		EnsureLatestVersion(template, version);
 		await EnsureNameAvailableAsync(input.Name, template.Id);
 		var rules = MapRules(input.Rules);
-		await ValidateRulesAndComponentsAsync(rules);
+		await ValidateDraftRulesAndComponentsAsync(rules);
 		template.SetDetails(input.Name, input.Description);
 		version.SetRules(rules);
 		await templateRepository.UpdateAsync(template, autoSave: true);
@@ -111,7 +136,7 @@ public class SalaryTemplateAppService(
 		var version = await versionRepository.GetAsync(versionId);
 		EnsureVersionBelongsToTemplate(version, template.Id);
 		EnsureLatestVersion(template, version);
-		await ValidateRulesAndComponentsAsync(version.GetRules());
+		await ValidatePublishableRulesAndComponentsAsync(version.GetRules());
 		version.Publish(clock.Now);
 		template.MarkPublished(version.VersionNumber);
 		await versionRepository.UpdateAsync(version, autoSave: true);
@@ -124,12 +149,7 @@ public class SalaryTemplateAppService(
 		var source = await templateRepository.GetAsync(id);
 		EnsureNotArchived(source);
 		var sourceVersion = await GetPublishedVersionAsync(source) ?? await GetLatestVersionAsync(source);
-		return await CreateAsync(new CreateSalaryTemplateDto
-		{
-			Name = name,
-			Description = source.Description,
-			Rules = sourceVersion.GetRules().Select(MapRule).ToList()
-		});
+		return await CreateTemplateAsync(name, source.Description, sourceVersion.GetRules());
 	}
 
 	public async Task ArchiveAsync(Guid id)
@@ -246,10 +266,31 @@ public class SalaryTemplateAppService(
 		return components;
 	}
 
-	private async Task ValidateRulesAndComponentsAsync(IReadOnlyList<SalaryTemplateRule> rules)
+	private async Task ValidateDraftRulesAndComponentsAsync(IReadOnlyList<SalaryTemplateRule> rules)
+	{
+		SalaryTemplateCalculator.ValidateDraftRules(rules);
+		await LoadComponentsAsync(rules);
+	}
+
+	private async Task ValidatePublishableRulesAndComponentsAsync(IReadOnlyList<SalaryTemplateRule> rules)
 	{
 		SalaryTemplateCalculator.ValidateRules(rules);
 		await LoadComponentsAsync(rules);
+	}
+
+	private async Task<SalaryTemplateDto> CreateTemplateAsync(
+		string name,
+		string? description,
+		IReadOnlyList<SalaryTemplateRule> rules)
+	{
+		await EnsureNameAvailableAsync(name);
+		await ValidateDraftRulesAndComponentsAsync(rules);
+		var template = new SalaryStructureTemplate(GuidGenerator.Create(), CurrentTenant.Id, name, description);
+		var version = new SalaryStructureTemplateVersion(
+			GuidGenerator.Create(), CurrentTenant.Id, template.Id, 1, rules);
+		await templateRepository.InsertAsync(template, autoSave: true);
+		await versionRepository.InsertAsync(version, autoSave: true);
+		return Map(template, version, null);
 	}
 
 	private async Task EnsureNameAvailableAsync(string name, Guid? excludedId = null)
@@ -326,31 +367,62 @@ public class SalaryTemplateAppService(
 		VersionNumber = version.VersionNumber,
 		Status = version.Status.ToString().ToUpperInvariant(),
 		PublishedAt = version.PublishedAt,
-		Rules = version.GetRules().OrderBy(x => x.DisplayOrder).Select(MapRule).ToList()
+		Rules = MapRulesForContract(version.GetRules())
 	};
 
-	private static List<SalaryTemplateRule> MapRules(IEnumerable<SalaryTemplateRuleDto> rules) =>
-		rules.Select(x => new SalaryTemplateRule(
-			x.Code.Trim().ToUpperInvariant(),
+	private static List<SalaryTemplateRule> MapRules(IEnumerable<SalaryTemplateRuleDto> rules)
+	{
+		var inputs = rules.ToList();
+		var codesByComponentId = inputs
+			.Where(x => x.ComponentId != Guid.Empty)
+			.GroupBy(x => x.ComponentId)
+			.ToDictionary(x => x.Key, x => BuildRuleCode(x.Key));
+
+		return inputs.Select(x => new SalaryTemplateRule(
+			codesByComponentId.GetValueOrDefault(x.ComponentId, BuildRuleCode(x.ComponentId)),
 			x.ComponentId,
 			ParseEnum<SalaryTemplateLineKind>(x.LineKind, nameof(x.LineKind)),
 			ParseEnum<SalaryTemplateFormulaType>(x.FormulaType, nameof(x.FormulaType)),
 			ParseEnum<PayrollComponentSemanticType>(x.SemanticType, nameof(x.SemanticType)),
 			x.Value,
-			x.BasisCode?.Trim().ToUpperInvariant(),
+			ResolveBasisCode(x, codesByComponentId),
 			x.DisplayOrder)).ToList();
+	}
 
-	private static SalaryTemplateRuleDto MapRule(SalaryTemplateRule rule) => new()
+	private static List<SalaryTemplateRuleDto> MapRulesForContract(IReadOnlyList<SalaryTemplateRule> rules)
 	{
-		Code = rule.Code,
-		ComponentId = rule.ComponentId,
-		LineKind = ToContractEnum(rule.LineKind.ToString()),
-		FormulaType = ToContractEnum(rule.FormulaType.ToString()),
-		SemanticType = ToContractEnum(rule.SemanticType.ToString()),
-		Value = rule.Value,
-		BasisCode = rule.BasisCode,
-		DisplayOrder = rule.DisplayOrder
-	};
+		var componentIdsByCode = rules.ToDictionary(x => x.Code, x => x.ComponentId, StringComparer.OrdinalIgnoreCase);
+		return rules.OrderBy(x => x.DisplayOrder).Select(rule => new SalaryTemplateRuleDto
+		{
+			Code = rule.Code,
+			ComponentId = rule.ComponentId,
+			LineKind = ToContractEnum(rule.LineKind.ToString()),
+			FormulaType = ToContractEnum(rule.FormulaType.ToString()),
+			SemanticType = ToContractEnum(rule.SemanticType.ToString()),
+			Value = rule.Value,
+			BasisCode = rule.BasisCode,
+			BasisComponentId = string.IsNullOrWhiteSpace(rule.BasisCode)
+				? null
+				: componentIdsByCode.GetValueOrDefault(rule.BasisCode),
+			DisplayOrder = rule.DisplayOrder
+		}).ToList();
+	}
+
+	private static string BuildRuleCode(Guid componentId) => $"COMPONENT_{componentId:N}".ToUpperInvariant();
+
+	private static string? ResolveBasisCode(
+		SalaryTemplateRuleDto rule,
+		IReadOnlyDictionary<Guid, string> codesByComponentId)
+	{
+		if (rule.BasisComponentId.HasValue)
+		{
+			return codesByComponentId.GetValueOrDefault(
+				rule.BasisComponentId.Value,
+				BuildRuleCode(rule.BasisComponentId.Value));
+		}
+
+		return null;
+	}
 
 	private static SalaryInputBasis ParseSalaryBasis(string value) =>
 		string.Equals(value, "TAKE_HOME", StringComparison.OrdinalIgnoreCase) ? SalaryInputBasis.TakeHome : SalaryInputBasis.Gross;

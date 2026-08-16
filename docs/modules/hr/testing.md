@@ -13,7 +13,7 @@ audience: humans-and-agents
 TL;DR: run the smallest command that proves the changed HR behavior, then run docs validation before handoff.
 Use broader API tests when a change touches contracts, permissions, payroll, attendance, leave, or policy resolution.
 
-Salary-template coverage must include one Basic, one balancing earning, dependency cycles, percentage validation, two-decimal midpoint-away-from-zero rounding, PF ceilings, Gujarat professional-tax boundaries, and Take-home solving across discontinuities.
+Salary-template coverage must include blank and incomplete drafts, arbitrary active tenant components, one Basic, one balancing earning, dependency cycles, cross-tenant component rejection, permission boundaries, percentage validation, two-decimal midpoint-away-from-zero rounding, PF ceilings, Gujarat professional-tax boundaries, and Take-home solving across discontinuities.
 Monthly payroll coverage must prove that PF uses prorated eligible wages, professional tax uses actual monthly Gross without attendance-prorating the slab amount, cessation-month treatment follows the effective professional-tax profile, employer PF remains outside net pay, unlocked previews refresh, and locked snapshots remain immutable.
 
 ## Required docs checks
@@ -52,7 +52,7 @@ Use this table to pick focused tests:
 | Employee profile, family, documents, status, or reporting | `EmployeeListApi_Tests`, `EmployeePersonalInfoApi_Tests`, `FamilyInfoApi_Tests`, `EmployeeDocumentApi_Tests`, `EmployeeStatusApi_Tests` |
 | Employee profile dashboard | `EmployeeDashboardProjection_Tests`, `EmployeeListApi_Tests.Should_Get_Employee_Dashboard_From_Stored_HR_Data`, and the attendance-only resolver regression in `HrPolicyAppService_Tests` |
 | Employee onboarding and public submission | `EmployeeApplication_Tests` for the forward-only terminal state graph and token regeneration, `EmployeeApplicationAppService_Tests` for validation, unique invitation numbers, legacy uploads, atomic scope changes, and deferred effects, `EmployeeOnboardingAcademicScopeAssigner_Tests` for the BulkAssign gate, `EmployeeApplicationUploadPolicy_Tests` for strict-new and legacy-stored MIME behavior, `EmployeePersonalInfoAppService_Tests` for explicit role approval and employee-group audiences, `RolesSeederContributor_Tests` for stable role metadata, `EfCoreSampleAppServiceTests` for identity-role metadata round trips, and `EmployeeApplicationPublicApi_Tests` for multipart validation and upload limits |
-| Payroll settings | `EarningComponentAppService_Tests` dependency lifecycle tests, `EarningComponentDependencyConcurrency_Tests` two-transaction graph races, `EarningComponentApi_Tests`, `DeductionComponentApi_Tests`, `PfRuleApi_Tests`, `PayElementApi_Tests`, `HrPolicyApi_Tests` |
+| Payroll settings | `SalaryTemplateCalculator_Tests`, `SalaryTemplateComposerAppService_Tests`, `SalaryTemplateApi_Tests`, `EarningComponentAppService_Tests` dependency lifecycle tests, `EarningComponentDependencyConcurrency_Tests` two-transaction graph races, `EarningComponentApi_Tests`, `DeductionComponentApi_Tests`, `PfRuleApi_Tests`, `PayElementApi_Tests`, `HrPolicyApi_Tests` |
 | Payroll preview, review, lock, or slips | `RunPayrollApi_Tests`, `SalarySlipApi_Tests`, `AttendanceImportLogsApi_Tests` |
 | Attendance and imports | `TakeAttendanceApi_Tests`, `AttendanceTrackingApi_Tests`, `AttendanceImportLogsApi_Tests`, `AttendancePolicyEvaluationApi_Tests` |
 | Leave policies and requests | `LeavePolicyApi_Tests`, `LeavePolicyAppService_Tests`, `LeaveManagementApi_Tests` |

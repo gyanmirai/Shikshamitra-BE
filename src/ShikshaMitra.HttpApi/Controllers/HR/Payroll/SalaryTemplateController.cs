@@ -23,6 +23,11 @@ public class SalaryTemplateController(ISalaryTemplateAppService appService) : Ab
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
 	public Task<SalaryTemplateListDto> GetPublishedListAsync() => appService.GetPublishedListAsync();
 
+	[HttpGet("component-catalog")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
+	public Task<SalaryTemplateComponentCatalogDto> GetComponentCatalogAsync() =>
+		appService.GetComponentCatalogAsync();
+
 	[HttpGet("{id:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
 	public Task<SalaryTemplateDto> GetAsync(Guid id) => appService.GetAsync(id);

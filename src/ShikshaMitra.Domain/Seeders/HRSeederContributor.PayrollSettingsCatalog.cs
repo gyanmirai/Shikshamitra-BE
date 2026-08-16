@@ -38,7 +38,7 @@ namespace ShikshaMitra.Seeders;
 
 public partial class HRSeederContributor
 {
-	private async Task SeedPayrollSettingsAsync()
+	internal async Task SeedPayrollSettingsAsync()
 	{
 		if (!await _providentFundRepository.IsCodeExistsAsync("STD-PF"))
 		{

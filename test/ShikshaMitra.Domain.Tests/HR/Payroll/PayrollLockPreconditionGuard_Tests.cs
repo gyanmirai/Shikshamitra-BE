@@ -11,6 +11,15 @@ namespace ShikshaMitra.HR.Payroll;
 
 public class PayrollLockPreconditionGuard_Tests
 {
+	[Fact]
+	public void Esi_readiness_issues_should_block_payroll_lock()
+	{
+		PayrollLockPreconditionGuard.HasBlockingLockIssue("[\"ESI_WAGE_CLASSIFICATION_REQUIRED\"]")
+			.ShouldBeTrue();
+		PayrollLockPreconditionGuard.HasBlockingLockIssue("[\"ESI_ENROLLMENT_REVIEW_REQUIRED\"]")
+			.ShouldBeTrue();
+	}
+
 	[Theory]
 	[InlineData(SalarySlipStatus.Finalized)]
 	[InlineData(SalarySlipStatus.Paid)]

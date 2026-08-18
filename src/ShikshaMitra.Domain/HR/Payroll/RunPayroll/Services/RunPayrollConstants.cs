@@ -19,4 +19,8 @@ public static class IssueCodes
 	public const string AttendanceSalaryDeductionConfiguration = "ATTENDANCE_SALARY_DEDUCTION_CONFIGURATION";
 	public const string PayrollPolicyConfiguration = "PAYROLL_POLICY_CONFIGURATION";
 	public const string NoWorkingDays = "NO_WORKING_DAYS";
+	public const string EsiEstablishmentInactive = "ESI_ESTABLISHMENT_INACTIVE";
+	public const string EsiWageClassificationRequired = "ESI_WAGE_CLASSIFICATION_REQUIRED";
+	public const string EsiEnrollmentReviewRequired = "ESI_ENROLLMENT_REVIEW_REQUIRED";
+	public const string EsiInsuranceNumberRequired = "ESI_INSURANCE_NUMBER_REQUIRED";
 }

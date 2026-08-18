@@ -48,6 +48,13 @@ internal static class PayrollRunProjection
 		snapshot.ProvidentFundRuleVersion != item.ProvidentFundRuleVersion ||
 		snapshot.ProfessionalTaxRuleId != item.ProfessionalTaxRuleId ||
 		snapshot.ProfessionalTaxRuleVersion != item.ProfessionalTaxRuleVersion ||
+		snapshot.EmployeeStateInsuranceRuleId != item.EmployeeStateInsuranceRuleId ||
+		snapshot.EmployeeStateInsuranceRuleVersion != item.EmployeeStateInsuranceRuleVersion ||
+		snapshot.EmployeeStateInsuranceWages != (decimal)item.EmployeeStateInsuranceWages ||
+		snapshot.EmployeeStateInsuranceCoverageDecision != item.EmployeeStateInsuranceCoverageDecision ||
+		snapshot.EmployeeStateInsuranceNumber != item.EmployeeStateInsuranceNumber ||
+		snapshot.EmployeeStateInsuranceContributionPeriodStart != item.EmployeeStateInsuranceContributionPeriodStart ||
+		snapshot.EmployeeStateInsuranceContributionPeriodEnd != item.EmployeeStateInsuranceContributionPeriodEnd ||
 		snapshot.PayrollAdjustmentsJson != adjustmentsJson;
 
 	public static void ApplySnapshotValues(
@@ -102,6 +109,13 @@ internal static class PayrollRunProjection
 		snapshot.ProvidentFundRuleVersion = item.ProvidentFundRuleVersion;
 		snapshot.ProfessionalTaxRuleId = item.ProfessionalTaxRuleId;
 		snapshot.ProfessionalTaxRuleVersion = item.ProfessionalTaxRuleVersion;
+		snapshot.EmployeeStateInsuranceRuleId = item.EmployeeStateInsuranceRuleId;
+		snapshot.EmployeeStateInsuranceRuleVersion = item.EmployeeStateInsuranceRuleVersion;
+		snapshot.EmployeeStateInsuranceWages = (decimal)item.EmployeeStateInsuranceWages;
+		snapshot.EmployeeStateInsuranceCoverageDecision = item.EmployeeStateInsuranceCoverageDecision;
+		snapshot.EmployeeStateInsuranceNumber = item.EmployeeStateInsuranceNumber;
+		snapshot.EmployeeStateInsuranceContributionPeriodStart = item.EmployeeStateInsuranceContributionPeriodStart;
+		snapshot.EmployeeStateInsuranceContributionPeriodEnd = item.EmployeeStateInsuranceContributionPeriodEnd;
 		snapshot.PayrollAdjustmentsJson = adjustmentsJson;
 	}
 
@@ -155,6 +169,13 @@ internal static class PayrollRunProjection
 			ProvidentFundRuleVersion = row.ProvidentFundRuleVersion,
 			ProfessionalTaxRuleId = row.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = row.ProfessionalTaxRuleVersion,
+			EmployeeStateInsuranceRuleId = row.EmployeeStateInsuranceRuleId,
+			EmployeeStateInsuranceRuleVersion = row.EmployeeStateInsuranceRuleVersion,
+			EmployeeStateInsuranceWages = (double)row.EmployeeStateInsuranceWages,
+			EmployeeStateInsuranceCoverageDecision = row.EmployeeStateInsuranceCoverageDecision,
+			EmployeeStateInsuranceNumber = row.EmployeeStateInsuranceNumber,
+			EmployeeStateInsuranceContributionPeriodStart = row.EmployeeStateInsuranceContributionPeriodStart,
+			EmployeeStateInsuranceContributionPeriodEnd = row.EmployeeStateInsuranceContributionPeriodEnd,
 			PayrollAdjustments = JsonSerializer.Deserialize<List<PayrollAdjustmentDto>>(row.PayrollAdjustmentsJson)
 				?? new List<PayrollAdjustmentDto>()
 		};

@@ -62,6 +62,9 @@ public class SalarySlipConfiguration : IEntityTypeConfiguration<SalarySlip>
 			.IsRequired();
 
 		builder.Property(x => x.EmployerContributionTotal).HasPrecision(18, 2);
+		builder.Property(x => x.EmployeeStateInsuranceWages).HasPrecision(18, 2);
+		builder.Property(x => x.EmployeeStateInsuranceCoverageDecision).HasMaxLength(64);
+		builder.Property(x => x.EmployeeStateInsuranceNumber).HasMaxLength(100);
 
 		builder.Property(x => x.Status)
 			.IsRequired()

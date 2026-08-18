@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Templates;
@@ -10,7 +11,8 @@ using Volo.Abp.DependencyInjection;
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class PayrollProvidentFundComponentBuilder(
-	IProvidentFundRepository providentFundRepository)
+	IProvidentFundRepository providentFundRepository,
+	ILogger<PayrollProvidentFundComponentBuilder> logger)
 	: ITransientDependency
 {
 	public async Task<List<EmployeePayrollComponent>> AddProvidentFundDeductionAsync(
@@ -78,21 +80,35 @@ public class PayrollProvidentFundComponentBuilder(
 		int year,
 		int month)
 	{
-		if (payrollDetails == null ||
-		    string.IsNullOrWhiteSpace(payrollDetails.PfRule) ||
-		    !Guid.TryParse(payrollDetails.PfRule, out var pfRuleId))
+		if (payrollDetails == null || string.IsNullOrWhiteSpace(payrollDetails.PfRule))
 		{
+			return null;
+		}
+		if (!Guid.TryParse(payrollDetails.PfRule, out var pfRuleId))
+		{
+			logger.LogWarning(
+				"Employee {EmployeeId} has an invalid PF rule identifier {PfRuleId}.",
+				payrollDetails.EmployeeId,
+				payrollDetails.PfRule);
 			return null;
 		}
 
 		var rule = await providentFundRepository.FindAsync(pfRuleId);
 		var effectiveDate = new DateTime(year, month, 1);
-		return rule is { IsActive: true } &&
-		       (rule.EmployeePercentage > 0m || rule.EmployerPercentage > 0m) &&
-		       rule.EffectiveFrom <= effectiveDate &&
-		       (!rule.EffectiveTo.HasValue || rule.EffectiveTo.Value >= effectiveDate)
-			? rule
-			: null;
+		if (rule is not { IsActive: true } ||
+		    (rule.EmployeePercentage <= 0m && rule.EmployerPercentage <= 0m) ||
+		    rule.EffectiveFrom > effectiveDate ||
+		    rule.EffectiveTo.HasValue && rule.EffectiveTo.Value < effectiveDate)
+		{
+			logger.LogWarning(
+				"Employee {EmployeeId} PF rule {PfRuleId} is unavailable or not effective for {EffectiveDate:yyyy-MM-dd}.",
+				payrollDetails.EmployeeId,
+				pfRuleId,
+				effectiveDate);
+			return null;
+		}
+
+		return rule;
 	}
 
 	private static decimal ResolveProvidentFundBaseAmount(

@@ -48,4 +48,9 @@ public static partial class HRErrorCodes
 	public const string PayrollComponentDependencyCycle = "HR:Payroll:030036";
 	public const string PayrollComponentDependencyTargetInvalid = "HR:Payroll:030037";
 	public const string PayrollComponentDependencyInUse = "HR:Payroll:030038";
+	public const string StatutoryEstablishmentNotReady = "HR:Payroll:030039";
+	public const string StatutoryActivationBlocked = "HR:Payroll:030040";
+	public const string StatutoryRuleNotFound = "HR:Payroll:030041";
+	public const string StatutoryOverrideInvalid = "HR:Payroll:030042";
+	public const string StatutoryEnrollmentNotFound = "HR:Payroll:030043";
 }

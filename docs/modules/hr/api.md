@@ -106,6 +106,7 @@ Payroll APIs manage setup, preview, review, lock, and salary slips:
 | Provident fund rules | `/api/payroll/pf-rules` | `HR.PayrollManagement.Settings.PfRule.*` | Implemented |
 | Salary structure templates | `/api/payroll/salary-templates*` | `HR.PayrollManagement.Settings.SalaryTemplates.*` | Implemented |
 | Gujarat professional-tax rules | `/api/payroll/professional-taxes` | `HR.PayrollManagement.Settings.ProfessionalTax.*` | Implemented |
+| ESI statutory scheme | `/api/payroll/statutory-schemes/esi*` | `HR.PayrollManagement.Settings.StatutorySchemes.*` | Implemented |
 | Pay elements | `/api/payroll/pay-elements` | Class-level authorization | Implemented |
 | Payroll policies | `/api/hr/payroll/policies` | `HR.PayrollManagement.Settings.PayrollPolicies.*` | Implemented |
 | Salary structure | `/api/payroll/employees/{employeeId}/salary-structure` | `HR.Employee.EmployeeList.*` | Implemented |
@@ -126,6 +127,13 @@ The calculate endpoint accepts Gross or Take-home basis and returns earnings, em
 `GET /api/payroll/salary-templates/component-catalog` returns active tenant earning and deduction components to Salary Template View users.
 Creating a salary template produces a blank draft, and draft updates accept variable component rules keyed by component IDs while the server controls internal dependency codes.
 Payroll preview recalculates employee PF from prorated eligible wages and Gujarat professional tax from actual monthly gross.
+Payroll preview evaluates ESI independently from salary templates after the tenant activates its establishment profile.
+ESI uses effective-dated component wage classifications, the employee coverage record, the standard or disability ceiling, contribution-period continuation, and audited overrides.
+The wage-mapping catalog includes active master earnings and employee-specific earnings applicable to the selected month so a custom salary line cannot become an unresolvable payroll blocker.
+`GET` and `POST /api/payroll/statutory-schemes/esi/employees/{employeeId}/overrides` expose immutable exception history and add permission-controlled exceptions.
+When exceptions overlap, the newest applicable coverage or amount exception is authoritative.
+Unclassified wages, pending enrollment review, and missing required insurance numbers block payroll lock.
+Locked salary slips retain the ESI rule version, statutory wages, coverage decision, insurance number, contribution period, employee deduction, and employer contribution.
 The selected effective professional-tax slab also controls whether tax is deducted in an employee's employment cessation month.
 Employer PF is stored separately and never reduces employee net pay.
 Percentage-based earning components with a custom-component base may reference only an active earning component in the current tenant and may not create a self-reference or dependency cycle.

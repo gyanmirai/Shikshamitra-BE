@@ -93,7 +93,9 @@ public class PayrollComponentVersionResolver : DomainService
 					: SalaryComponentType.Percentage,
 				MapDependency(version.DependOn),
 				component.IsEarning,
-				usesMasterValue: true);
+				usesMasterValue: true,
+				component.SemanticType,
+				component.StatutoryRuleId);
 			versionByResolvedComponentId[resolved.Id] = version;
 			return resolved;
 		}).ToList();

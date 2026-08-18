@@ -55,6 +55,13 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public int? ProvidentFundRuleVersion { get; set; }
 	public Guid? ProfessionalTaxRuleId { get; set; }
 	public int? ProfessionalTaxRuleVersion { get; set; }
+	public Guid? EmployeeStateInsuranceRuleId { get; set; }
+	public int? EmployeeStateInsuranceRuleVersion { get; set; }
+	public decimal EmployeeStateInsuranceWages { get; set; }
+	public string? EmployeeStateInsuranceCoverageDecision { get; set; }
+	public string? EmployeeStateInsuranceNumber { get; set; }
+	public DateTime? EmployeeStateInsuranceContributionPeriodStart { get; set; }
+	public DateTime? EmployeeStateInsuranceContributionPeriodEnd { get; set; }
 	public string PayrollAdjustmentsJson { get; set; } = "[]";
 
 	private PayrollRunItemSnapshot()

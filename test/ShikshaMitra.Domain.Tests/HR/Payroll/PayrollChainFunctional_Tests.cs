@@ -9,6 +9,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Templates;
 using Shouldly;
 using Xunit;
 
@@ -71,6 +72,43 @@ public class PayrollChainFunctional_Tests
 		result.TotalDeduction.ShouldBe(2509.09m);
 		result.NetPay.ShouldBe(47150.00m);
 		result.Earnings.ShouldContain(x => x.Source.Name == "One Time Bonus" && x.Amount == 500m);
+	}
+
+	[Fact]
+	public void Pf_Should_Fall_Back_To_Gross_When_Custom_Earning_Has_No_Basic_Classification()
+	{
+		var employeeId = Guid.NewGuid();
+		var pfRule = new ProvidentFund(
+			Guid.NewGuid(),
+			tenantId: null,
+			"PF_TEST",
+			"PF test rule",
+			employeePercentage: 12m,
+			employerPercentage: 12m,
+			PfContributionBasis.Basic,
+			wageCeiling: 15000m);
+		var components = new List<EmployeePayrollComponent>
+		{
+			BuildComponent(employeeId, "Consolidated Pay", 30000m, isEarning: true),
+			BuildComponent(
+				employeeId,
+				"Provident Fund - PF test rule",
+				1800m,
+				isEarning: false,
+				semanticType: PayrollComponentSemanticType.EmployeeProvidentFund)
+		};
+
+		var result = PayrollComputation.Calculate(
+			presentDays: 30,
+			halfWorkingDays: 0,
+			payableDays: 30m,
+			basisDays: 30m,
+			components,
+			new PayrollStatutoryRuleSet(pfRule, [], IsEmploymentCessationMonth: false));
+
+		result.Deductions.Single().Amount.ShouldBe(1800m);
+		result.EmployerContributions.Single().Amount.ShouldBe(1800m);
+		result.ProvidentFundRuleId.ShouldBe(pfRule.Id);
 	}
 
 	[Fact]
@@ -527,7 +565,8 @@ public class PayrollChainFunctional_Tests
 		decimal amount,
 		bool isEarning,
 		bool isTemp = false,
-		DateTime? applicableMonth = null) => new(
+		DateTime? applicableMonth = null,
+		PayrollComponentSemanticType semanticType = PayrollComponentSemanticType.Ordinary) => new(
 		Guid.NewGuid(),
 		employeeId,
 		name,
@@ -539,7 +578,9 @@ public class PayrollChainFunctional_Tests
 		applicableMonth,
 		SalaryComponentType.Fixed,
 		SalaryComponentDependency.None,
-		isEarning);
+		isEarning,
+		usesMasterValue: true,
+		semanticType);
 
 	private static EmployeeAttendance BuildAttendance(
 		DateOnly date,

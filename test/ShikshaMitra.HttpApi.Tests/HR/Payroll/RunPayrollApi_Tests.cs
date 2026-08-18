@@ -689,6 +689,12 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			$"PayrollPfRule{Guid.NewGuid():N}",
 			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 		var pfRule = await PayrollTestHelper.CreatePfRuleAsync(Client, "PayrollPFRule");
+		var savedRule = await Client.GetFromJsonAsync<ProvidentFundDto>(
+			$"/api/payroll/pf-rules/{pfRule.Id}",
+			JsonOptions);
+		savedRule.ShouldNotBeNull();
+		savedRule.IsActive.ShouldBeTrue();
+		savedRule.EffectiveFrom.ShouldBeLessThanOrEqualTo(new DateTime(2026, 6, 1));
 		await EnsureActiveDefaultLeavePolicyAsync(new DateTime(2026, 6, 1));
 		await AssignSalaryStructureAsync(
 			employee.Id,
@@ -697,6 +703,12 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			deductionAmount: 0m,
 			useMasterComponents: false,
 			pfRuleId: pfRule.Id);
+		var savedPayroll = await Client.GetFromJsonAsync<EmployeePayrollResponse>(
+			$"/api/employees/{employee.Id}/payroll",
+			JsonOptions);
+		savedPayroll.ShouldNotBeNull();
+		savedPayroll.SalaryDetails.ShouldNotBeNull();
+		savedPayroll.SalaryDetails.PfRuleId.ShouldBe(pfRule.Id);
 		await MarkAttendanceAsync(employee.Id, "10-06-2026");
 
 		var preview = await GetPayrollPreviewAsync(month, forceRefresh: true);

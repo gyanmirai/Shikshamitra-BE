@@ -61,18 +61,10 @@ public class TeacherAvailabilityController(ITeacherAvailabilityAppService teache
             EndTime = endTime,
             IsFullDay = isFullDay,
             Reason = reason ?? "Preview",
-            AutoCreateSubstitutions = false,
             NotifyLeadership = false
         };
 
         return teacherAvailabilityAppService.GetAffectedLecturesAsync(input);
-    }
-
-    [HttpPost("{id:guid}/create-substitutions")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
-    public Task<int> CreateSubstitutionsAsync([FromRoute] Guid id)
-    {
-        return teacherAvailabilityAppService.CreateSubstitutionsAsync(id);
     }
 
     [HttpPost("{id:guid}/cancel")]

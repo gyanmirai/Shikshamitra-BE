@@ -1016,7 +1016,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 				!x.IsCancelled);
 
 			var availability = rows.ShouldHaveSingleItem();
-			availability.AutoCreateSubstitutions.ShouldBeTrue();
 			availability.AffectedLectureCount.ShouldBe(0);
 			await uow.CompleteAsync();
 		}

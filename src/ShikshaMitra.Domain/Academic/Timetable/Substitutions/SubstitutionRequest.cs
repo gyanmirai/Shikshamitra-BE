@@ -142,6 +142,11 @@ public class SubstitutionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         NotificationStatus = sendNotification ? "Queued" : "Not Sent";
     }
 
+    public void SetAcademicYear(Guid? academicYearId)
+    {
+        AcademicYearId = academicYearId;
+    }
+
     public void UpdateDetails(
         DateTime date,
         string period,

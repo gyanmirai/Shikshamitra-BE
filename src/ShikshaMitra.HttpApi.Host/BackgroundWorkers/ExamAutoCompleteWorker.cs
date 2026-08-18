@@ -13,7 +13,7 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.BackgroundWorkers;
 
 /// <summary>
-/// Runs every hour and auto-transitions Published/Pending exams to Completed
+/// Runs periodically and auto-transitions Published/Pending exams to Completed
 /// once the last scheduled exam subject date has passed.
 /// </summary>
 public class ExamAutoCompleteWorker : AsyncPeriodicBackgroundWorkerBase
@@ -21,7 +21,7 @@ public class ExamAutoCompleteWorker : AsyncPeriodicBackgroundWorkerBase
     public ExamAutoCompleteWorker(AbpAsyncTimer timer, IServiceScopeFactory serviceScopeFactory)
         : base(timer, serviceScopeFactory)
     {
-        Timer.Period = 60 * 60 * 1000; // 1 hour
+        Timer.Period = 5 * 60 * 1000; // 5 minutes
     }
 
     protected override async Task DoWorkAsync(PeriodicBackgroundWorkerContext workerContext)
@@ -31,54 +31,84 @@ public class ExamAutoCompleteWorker : AsyncPeriodicBackgroundWorkerBase
         var dataFilter = workerContext.ServiceProvider.GetRequiredService<IDataFilter>();
         var unitOfWorkManager = workerContext.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 
-        var now = DateTime.UtcNow;
+        var nowUtc = DateTime.UtcNow;
+        var institutionTimeZone = GetInstitutionTimeZone();
+        var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, institutionTimeZone);
         var completedCount = 0;
 
-        using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
-
-        using (dataFilter.Disable<IMultiTenant>())
+        try
         {
-            var exams = await examRepository.GetListAsync(
-                e => e.Status == ExamStatus.Pending || e.Status == ExamStatus.Published,
-                includeDetails: true);
+            using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
 
-            foreach (var exam in exams)
+            using (dataFilter.Disable<IMultiTenant>())
             {
-                // Use EndTime when available (most accurate); fall back to ExamDate when EndTime
-                // was not set so exams without a time window are still auto-completed.
-                var subjectsWithEndTime = exam.ExamSubjects
-                    .Where(s => s.EndTime.HasValue)
-                    .ToList();
+                var exams = await examRepository.GetListAsync(
+                    e => e.Status == ExamStatus.Pending || e.Status == ExamStatus.Published,
+                    includeDetails: true);
 
-                if (subjectsWithEndTime.Count > 0)
+                foreach (var exam in exams)
                 {
-                    // All scheduled subjects must have finished before we mark Completed
-                    if (subjectsWithEndTime.Max(s => s.EndTime!.Value) > now)
-                        continue;
-                }
-                else
-                {
-                    // Fallback: use ExamDate (date-only) when no EndTime is stored
-                    var scheduledDates = exam.ExamSubjects
-                        .Where(s => s.ExamDate.HasValue)
-                        .Select(s => s.ExamDate!.Value.Date)
+                    // Exam schedule values are institution-local date/time values.
+                    // Convert them to UTC before comparing with the server clock.
+                    var subjectsWithEndTime = exam.ExamSubjects
+                        .Where(s => s.ExamDate.HasValue && s.EndTime.HasValue)
                         .ToList();
 
-                    if (scheduledDates.Count == 0 || scheduledDates.Max() >= now.Date)
-                        continue;
-                }
+                    if (subjectsWithEndTime.Count > 0)
+                    {
+                        var finalEndAtUtc = subjectsWithEndTime
+                            .Max(s => ToInstitutionUtc(s.ExamDate!.Value.Date.Add(s.EndTime!.Value.TimeOfDay), institutionTimeZone));
 
-                exam.ChangeStatus(ExamStatus.Completed);
-                await examRepository.UpdateAsync(exam);
-                completedCount++;
+                        if (finalEndAtUtc > nowUtc)
+                            continue;
+                    }
+                    else
+                    {
+                        // Fallback: use the institution-local exam date when no end time is stored.
+                        var scheduledDates = exam.ExamSubjects
+                            .Where(s => s.ExamDate.HasValue)
+                            .Select(s => s.ExamDate!.Value.Date)
+                            .ToList();
+
+                        if (scheduledDates.Count == 0 || scheduledDates.Max() >= nowLocal.Date)
+                            continue;
+                    }
+
+                    exam.ChangeStatus(ExamStatus.Completed);
+                    await examRepository.UpdateAsync(exam);
+                    completedCount++;
+                }
+            }
+
+            await uow.CompleteAsync();
+
+            if (completedCount > 0)
+            {
+                logger.LogInformation("ExamAutoCompleteWorker: marked {Count} exam(s) as Completed.", completedCount);
             }
         }
-
-        await uow.CompleteAsync();
-
-        if (completedCount > 0)
+        catch (Exception exception)
         {
-            logger.LogInformation("ExamAutoCompleteWorker: marked {Count} exam(s) as Completed.", completedCount);
+            logger.LogError(exception, "ExamAutoCompleteWorker: failed to auto-complete exams.");
+        }
+    }
+
+    private static DateTime ToInstitutionUtc(DateTime localDateTime, TimeZoneInfo institutionTimeZone)
+    {
+        return TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(localDateTime, DateTimeKind.Unspecified),
+            institutionTimeZone);
+    }
+
+    private static TimeZoneInfo GetInstitutionTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
         }
     }
 }

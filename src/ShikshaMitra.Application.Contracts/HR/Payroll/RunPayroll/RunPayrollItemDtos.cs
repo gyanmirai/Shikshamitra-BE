@@ -67,6 +67,7 @@ public class RunPayrollItem
 	/// Total deductions
 	/// </summary>
 	public double TotalDeduction { get; set; }
+	public double EmployerContributionTotal { get; set; }
 
 	/// <summary>
 	/// Net pay (Gross - Deductions)
@@ -149,6 +150,11 @@ public class RunPayrollItem
 	/// Itemized deduction components contributing to total deduction
 	/// </summary>
 	public List<RunPayrollComponentItem> DeductionComponents { get; set; } = new();
+	public List<RunPayrollComponentItem> EmployerContributions { get; set; } = new();
+	public Guid? ProvidentFundRuleId { get; set; }
+	public int? ProvidentFundRuleVersion { get; set; }
+	public Guid? ProfessionalTaxRuleId { get; set; }
+	public int? ProfessionalTaxRuleVersion { get; set; }
 
 	/// <summary>
 	/// Payroll-only financial adjustments included in this preview/lock.

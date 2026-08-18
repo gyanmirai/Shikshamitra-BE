@@ -12,6 +12,7 @@ internal sealed record PayrollComponentAmountLine<TMaster>(
 	string? Name,
 	decimal? Amount,
 	bool IsTemp,
+	bool? UsesMasterValue,
 	TMaster? Master)
 	where TMaster : class;
 
@@ -22,7 +23,8 @@ internal static class PayrollComponentAmountResolver
 	{
 		var amountsByComponentId = new Dictionary<Guid, decimal>();
 
-		foreach (var earning in earnings.Where(x => x.Master?.CalculationType != CalculationType.Percentage))
+		foreach (var earning in earnings.Where(x =>
+			x.Master?.CalculationType != CalculationType.Percentage || x.UsesMasterValue == false))
 		{
 			if (earning.Master?.Id is Guid masterId)
 			{
@@ -31,7 +33,7 @@ internal static class PayrollComponentAmountResolver
 		}
 
 		var pendingPercentageEarnings = earnings
-			.Where(x => x.Master?.CalculationType == CalculationType.Percentage)
+			.Where(x => x.Master?.CalculationType == CalculationType.Percentage && x.UsesMasterValue != false)
 			.ToList();
 		while (pendingPercentageEarnings.Count > 0)
 		{
@@ -75,7 +77,8 @@ internal static class PayrollComponentAmountResolver
 	{
 		var amountsByComponentId = new Dictionary<Guid, decimal>();
 
-		foreach (var deduction in deductions.Where(x => x.Master?.CalculationType != CalculationType.Percentage))
+		foreach (var deduction in deductions.Where(x =>
+			x.Master?.CalculationType != CalculationType.Percentage || x.UsesMasterValue == false))
 		{
 			if (deduction.Master?.Id is Guid masterId)
 			{
@@ -84,7 +87,7 @@ internal static class PayrollComponentAmountResolver
 		}
 
 		var pendingPercentageDeductions = deductions
-			.Where(x => x.Master?.CalculationType == CalculationType.Percentage)
+			.Where(x => x.Master?.CalculationType == CalculationType.Percentage && x.UsesMasterValue != false)
 			.ToList();
 		while (pendingPercentageDeductions.Count > 0)
 		{

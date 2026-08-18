@@ -10,6 +10,7 @@ using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
@@ -32,12 +33,14 @@ public class SubstitutionAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<Room, Guid> roomRepository,
     IRepository<Employee, Guid> employeeRepository,
-    TakeAttendanceTeacherAvailabilitySyncService teacherAvailabilitySyncService
+    TakeAttendanceTeacherAvailabilitySyncService teacherAvailabilitySyncService,
+    IRepository<AcademicYear, Guid> academicYearRepository
 ) : ApplicationService, ISubstitutionAppService
 {
     public async Task<PagedResultDto<SubstitutionDto>> GetListAsync(GetSubstitutionsInput input)
     {
         var rows = await substitutionRepository.GetListAsync();
+        await BackfillAcademicYearAsync(rows, input.AcademicYearId);
         rows = await FilterByAcademicMediumAsync(rows, input.AcademicMediumId);
 
         if (!IsAdminUser())
@@ -79,8 +82,12 @@ public class SubstitutionAppService(
         var target = NormalizeDate(date);
         await teacherAvailabilitySyncService.SyncDateRangeAsync(target, target);
 
-        var substitutions = await substitutionRepository.GetListAsync(x =>
-            x.Date == target && (!academicYearId.HasValue || x.AcademicYearId == academicYearId));
+        var substitutions = await substitutionRepository.GetListAsync(x => x.Date == target);
+        await BackfillAcademicYearAsync(substitutions, academicYearId);
+        if (academicYearId.HasValue)
+        {
+            substitutions = substitutions.Where(x => x.AcademicYearId == academicYearId).ToList();
+        }
         substitutions = await FilterByAcademicMediumAsync(substitutions, academicMediumId);
 
         if (!IsAdminUser())
@@ -161,6 +168,11 @@ public class SubstitutionAppService(
         }
         EnsureSubstitutionWindowNotFinished(date, end, "Cannot create a substitution after the period has ended.");
 
+        if (!input.SubstituteTeacherId.HasValue && string.IsNullOrWhiteSpace(input.SubstituteTeacherName))
+        {
+            throw new UserFriendlyException("Select a substitute teacher before creating the substitution.");
+        }
+
         var employees = await employeeRepository.GetListAsync();
         var originalTeacher = ResolveEmployeeByTeacherReference(
             employees,
@@ -221,9 +233,7 @@ public class SubstitutionAppService(
         await substitutionRepository.InsertAsync(entity, autoSave: true);
         await WriteAuditAsync(entity.Id, "Created", "Substitution request created.");
 
-        if (input.SubstituteTeacherId.HasValue || !string.IsNullOrWhiteSpace(input.SubstituteTeacherName))
-        {
-            var selected = await EnsureSubstituteCanBeAssignedAsync(
+        var selected = await EnsureSubstituteCanBeAssignedAsync(
                 date,
                 start,
                 end,
@@ -236,7 +246,7 @@ public class SubstitutionAppService(
                 input.SubstituteTeacherName,
                 null,
                 input.AcademicMediumId);
-            await EnsureAssignedRoomAvailableAsync(
+        await EnsureAssignedRoomAvailableAsync(
                 date,
                 start,
                 end,
@@ -244,7 +254,7 @@ public class SubstitutionAppService(
                 input.TimetableSlotId,
                 entity.Id);
 
-            entity.Assign(
+        entity.Assign(
                 input.SubstituteTeacherId ?? selected.TeacherId,
                 string.IsNullOrWhiteSpace(input.SubstituteTeacherName) ? selected.TeacherName : input.SubstituteTeacherName,
                 input.AssignedRoomId,
@@ -255,9 +265,8 @@ public class SubstitutionAppService(
                 selected.ConflictReason,
                 input.SendNotification);
             entity.MarkNotificationSent();
-            await substitutionRepository.UpdateAsync(entity, autoSave: true);
-            await WriteAuditAsync(entity.Id, "Assigned", $"Assigned to {input.SubstituteTeacherName}.");
-        }
+        await substitutionRepository.UpdateAsync(entity, autoSave: true);
+        await WriteAuditAsync(entity.Id, "Assigned", $"Assigned to {input.SubstituteTeacherName}.");
 
         return await GetAsync(entity.Id);
     }
@@ -1236,6 +1245,37 @@ public class SubstitutionAppService(
         if (!string.IsNullOrWhiteSpace(input.DivisionName)) rows = rows.Where(x => x.DivisionName == input.DivisionName);
         if (!string.IsNullOrWhiteSpace(input.SubjectName)) rows = rows.Where(x => x.SubjectName == input.SubjectName);
         return rows;
+    }
+
+    private async Task BackfillAcademicYearAsync(
+        List<SubstitutionRequest> rows,
+        Guid? academicYearId)
+    {
+        if (!academicYearId.HasValue)
+        {
+            return;
+        }
+
+        var academicYear = await academicYearRepository.FindAsync(academicYearId.Value);
+        if (academicYear == null)
+        {
+            return;
+        }
+
+        var changed = false;
+        foreach (var row in rows.Where(x => !x.AcademicYearId.HasValue &&
+                                            x.Date.Date >= academicYear.StartDate.Date &&
+                                            x.Date.Date <= academicYear.EndDate.Date))
+        {
+            row.SetAcademicYear(academicYear.Id);
+            await substitutionRepository.UpdateAsync(row, autoSave: false);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            await CurrentUnitOfWork.SaveChangesAsync();
+        }
     }
 
     private async Task<SubstitutionDto> MapAsync(SubstitutionRequest row, List<SubstitutionAuditLogDto> auditLogs)

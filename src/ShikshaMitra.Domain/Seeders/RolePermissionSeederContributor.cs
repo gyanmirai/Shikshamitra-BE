@@ -15,7 +15,7 @@ namespace ShikshaMitra.Seeders;
 public class RolePermissionSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "RolePermissionSeeder";
-	internal const string StepVersion = "RolePermissionSeeder:v12";
+	internal const string StepVersion = "RolePermissionSeeder:v13";
 	internal const int StepOrder = 120;
 	private const string RoleProviderName = "R";
 

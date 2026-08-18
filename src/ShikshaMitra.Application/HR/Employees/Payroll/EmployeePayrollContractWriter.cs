@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Guids;
@@ -9,7 +11,7 @@ namespace ShikshaMitra.HR.Employees.Payroll;
 
 public class EmployeePayrollContractWriter(
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
-	IEmployeePayrollComponentRepository payrollComponentRepository,
+	EmployeeSalaryStructurePersistenceWorkflow persistenceWorkflow,
 	IGuidGenerator guidGenerator) : ITransientDependency
 {
 	public async Task SaveAsync(
@@ -18,12 +20,18 @@ public class EmployeePayrollContractWriter(
 		IEnumerable<EmployeePayrollResolvedLine<EarningComponent>> earningLines,
 		IEnumerable<EmployeePayrollResolvedLine<DeductionComponent>> deductionLines)
 	{
-		var amountPlan = EmployeePayrollComponentAmountPlanner.Create(earningLines, deductionLines);
-		await UpsertPayrollDetailsAsync(employeeId, input);
-		await ReplacePayrollComponentsAsync(employeeId, earningLines, deductionLines, amountPlan);
+		var resolvedEarnings = earningLines.ToList();
+		var resolvedDeductions = deductionLines.ToList();
+		var amountPlan = EmployeePayrollComponentAmountPlanner.Create(resolvedEarnings, resolvedDeductions);
+		var (payrollDetails, payrollDetailsExist, salaryGenerationRefreshed) = await PreparePayrollDetailsAsync(employeeId, input);
+		var components = BuildPayrollComponents(employeeId, resolvedEarnings, resolvedDeductions, amountPlan);
+		await persistenceWorkflow.SaveAsync(
+			employeeId, payrollDetails, payrollDetailsExist, components, salaryGenerationRefreshed);
 	}
 
-	private async Task UpsertPayrollDetailsAsync(Guid employeeId, PayrollContract input)
+	private async Task<(EmployeePayrollDetails Details, bool Exists, bool SalaryGenerationRefreshed)> PreparePayrollDetailsAsync(
+		Guid employeeId,
+		PayrollContract input)
 	{
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 		if (payrollDetails == null)
@@ -40,8 +48,8 @@ public class EmployeePayrollContractWriter(
 				input.SalaryDetails?.UanNumber,
 				input.SalaryDetails?.PunchId,
 				input.SalaryDetails?.TotalWorkingHourPerMonth);
-			await payrollDetailsRepository.InsertAsync(payrollDetails);
-			return;
+			ApplySalaryGeneration(payrollDetails, input.SalaryDetails);
+			return (payrollDetails, false, input.SalaryDetails?.SourceSalaryTemplateVersionId.HasValue == true);
 		}
 
 		var bank = input.BankDetails;
@@ -57,27 +65,54 @@ public class EmployeePayrollContractWriter(
 			salary != null ? salary.UanNumber : payrollDetails.UanNumber,
 			salary != null ? salary.PunchId : payrollDetails.PunchId,
 			salary != null ? salary.TotalWorkingHourPerMonth : payrollDetails.TotalWorkingHourPerMonth);
-		await payrollDetailsRepository.UpdateAsync(payrollDetails);
+		var salaryGenerationRefreshed = IsSalaryGenerationRefreshed(payrollDetails, salary);
+		ApplySalaryGeneration(payrollDetails, salary);
+		return (payrollDetails, true, salaryGenerationRefreshed);
 	}
 
-	private async Task ReplacePayrollComponentsAsync(
+	private static bool IsSalaryGenerationRefreshed(
+		EmployeePayrollDetails existing,
+		SalaryDetailsContract? salary) =>
+		salary?.SourceSalaryTemplateVersionId.HasValue == true &&
+		salary.SalaryGeneratedAt.HasValue &&
+		(existing.SourceSalaryTemplateVersionId != salary.SourceSalaryTemplateVersionId ||
+		 existing.SalaryGeneratedAt != salary.SalaryGeneratedAt);
+
+	private static void ApplySalaryGeneration(EmployeePayrollDetails payrollDetails, SalaryDetailsContract? salary)
+	{
+		if (salary == null)
+		{
+			return;
+		}
+
+		payrollDetails.SetSalaryGeneration(
+			salary.QuotedSalaryBasis,
+			salary.QuotedMonthlyAmount,
+			salary.SourceSalaryTemplateId,
+			salary.SourceSalaryTemplateVersionId,
+			salary.SourceSalaryTemplateVersion,
+			salary.SalaryGeneratedAt,
+			salary.WasModifiedAfterGeneration);
+	}
+
+	private List<EmployeePayrollComponent> BuildPayrollComponents(
 		Guid employeeId,
 		IEnumerable<EmployeePayrollResolvedLine<EarningComponent>> earningLines,
 		IEnumerable<EmployeePayrollResolvedLine<DeductionComponent>> deductionLines,
 		EmployeePayrollComponentAmountPlan amountPlan)
 	{
-		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: true);
-		await payrollComponentRepository.DeleteByEmployeeIdAsync(employeeId, isEarning: false);
-
+		var components = new List<EmployeePayrollComponent>();
 		foreach (var resolved in earningLines)
 		{
-			await payrollComponentRepository.InsertAsync(BuildEarningComponent(employeeId, resolved, amountPlan));
+			components.Add(BuildEarningComponent(employeeId, resolved, amountPlan));
 		}
 
 		foreach (var resolved in deductionLines)
 		{
-			await payrollComponentRepository.InsertAsync(BuildDeductionComponent(employeeId, resolved, amountPlan));
+			components.Add(BuildDeductionComponent(employeeId, resolved, amountPlan));
 		}
+
+		return components;
 	}
 
 	private EmployeePayrollComponent BuildEarningComponent(
@@ -90,7 +125,9 @@ public class EmployeePayrollContractWriter(
 		var amount = EmployeePayrollComponentAmountPlanner.ResolveEarningLineAmount(
 			resolved,
 			amountPlan.EarningAmountsByComponentId)!.Value;
-		var isFixed = master is not null
+		var isFixed = line.UsesMasterValue == false
+			? true
+			: master is not null
 			? master.CalculationType == CalculationType.Amount
 			: line.IsFixed ?? resolved.ExistingPayrollComponent?.IsFixed ?? false;
 
@@ -104,14 +141,20 @@ public class EmployeePayrollContractWriter(
 			isFixed,
 			isTemp: line.IsTemp ?? resolved.ExistingPayrollComponent?.IsTemp ?? master is null,
 			applicableMonth: line.ApplicableMonth ?? resolved.ExistingPayrollComponent?.ApplicableMonth,
-			master is null
+			line.UsesMasterValue == false
+				? SalaryComponentType.Fixed
+				: master is null
 				? resolved.ExistingPayrollComponent?.ComponentType ?? SalaryComponentType.Fixed
 				: master.CalculationType == CalculationType.Amount
 				? SalaryComponentType.Fixed
 				: SalaryComponentType.Percentage,
-			master is null ? resolved.ExistingPayrollComponent?.DependOn : PayrollComponentImpactProjection.MapDependency(master.DependOn),
+			line.UsesMasterValue == false
+				? SalaryComponentDependency.None
+				: master is null ? resolved.ExistingPayrollComponent?.DependOn : PayrollComponentImpactProjection.MapDependency(master.DependOn),
 			isEarning: true,
-			usesMasterValue: EmployeePayrollComponentAmountPlanner.ShouldUseMasterValue(resolved, amount));
+			usesMasterValue: EmployeePayrollComponentAmountPlanner.ShouldUseMasterValue(resolved, amount),
+			semanticType: line.SemanticType,
+			statutoryRuleId: line.StatutoryRuleId);
 	}
 
 	private EmployeePayrollComponent BuildDeductionComponent(
@@ -124,7 +167,9 @@ public class EmployeePayrollContractWriter(
 		var amount = EmployeePayrollComponentAmountPlanner.ResolveDeductionLineAmount(
 			resolved,
 			amountPlan.DeductionAmountsByComponentId)!.Value;
-		var isFixed = master is not null
+		var isFixed = line.UsesMasterValue == false
+			? true
+			: master is not null
 			? master.CalculationType == CalculationType.Amount
 			: line.IsFixed ?? resolved.ExistingPayrollComponent?.IsFixed ?? false;
 
@@ -138,13 +183,19 @@ public class EmployeePayrollContractWriter(
 			isFixed,
 			isTemp: line.IsTemp ?? resolved.ExistingPayrollComponent?.IsTemp ?? master is null,
 			applicableMonth: line.ApplicableMonth ?? resolved.ExistingPayrollComponent?.ApplicableMonth,
-			master is null
+			line.UsesMasterValue == false
+				? SalaryComponentType.Fixed
+				: master is null
 				? resolved.ExistingPayrollComponent?.ComponentType ?? SalaryComponentType.Fixed
 				: master.CalculationType == CalculationType.Amount
 				? SalaryComponentType.Fixed
 				: SalaryComponentType.Percentage,
-			master is null ? resolved.ExistingPayrollComponent?.DependOn : PayrollComponentImpactProjection.MapDependency(master.DependOn),
+			line.UsesMasterValue == false
+				? SalaryComponentDependency.None
+				: master is null ? resolved.ExistingPayrollComponent?.DependOn : PayrollComponentImpactProjection.MapDependency(master.DependOn),
 			isEarning: false,
-			usesMasterValue: EmployeePayrollComponentAmountPlanner.ShouldUseMasterValue(resolved, amount));
+			usesMasterValue: EmployeePayrollComponentAmountPlanner.ShouldUseMasterValue(resolved, amount),
+			semanticType: line.SemanticType,
+			statutoryRuleId: line.StatutoryRuleId);
 	}
 }

@@ -36,9 +36,12 @@ public class SalaryComponentDto
 	/// Temporary or one-time component.
 	/// </summary>
 	public bool IsTemp { get; set; }
+	public bool? UsesMasterValue { get; set; }
 
 	/// <summary>
 	/// Month from which this component is applicable.
 	/// </summary>
 	public DateTime? ApplicableMonth { get; set; }
+	public string SemanticType { get; set; } = "ORDINARY";
+	public Guid? StatutoryRuleId { get; set; }
 }

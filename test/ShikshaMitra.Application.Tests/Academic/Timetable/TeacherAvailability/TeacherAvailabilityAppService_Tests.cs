@@ -51,7 +51,6 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
                     TeacherAvailabilitySource.Manual,
                     "Existing unavailability",
                     false,
-                    false,
                     true,
                     teacherId: teacherId),
                 autoSave: true);
@@ -89,7 +88,6 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
                 StartTime = "10:00",
                 EndTime = "11:00",
                 Reason = "Persistence regression test",
-                AutoCreateSubstitutions = false
             });
 
             var persisted = await _availabilityRepository.GetAsync(created.Id);

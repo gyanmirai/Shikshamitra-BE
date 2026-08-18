@@ -61,6 +61,8 @@ public class SalarySlipConfiguration : IEntityTypeConfiguration<SalarySlip>
 			.HasPrecision(18, 2)
 			.IsRequired();
 
+		builder.Property(x => x.EmployerContributionTotal).HasPrecision(18, 2);
+
 		builder.Property(x => x.Status)
 			.IsRequired()
 			.HasConversion<int>();
@@ -99,6 +101,15 @@ public class SalarySlipConfiguration : IEntityTypeConfiguration<SalarySlip>
 			.HasColumnType("jsonb");
 
 		builder.Property(x => x.Deductions)
+			.HasConversion(
+				v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
+				v => string.IsNullOrEmpty(v)
+					? new System.Collections.Generic.List<SalarySlipLineItem>()
+					: JsonSerializer.Deserialize<System.Collections.Generic.List<SalarySlipLineItem>>(v, JsonSerializerOptions.Default)
+						?? new System.Collections.Generic.List<SalarySlipLineItem>())
+			.HasColumnType("jsonb");
+
+		builder.Property(x => x.EmployerContributions)
 			.HasConversion(
 				v => JsonSerializer.Serialize(v, JsonSerializerOptions.Default),
 				v => string.IsNullOrEmpty(v)

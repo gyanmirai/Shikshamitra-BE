@@ -8,6 +8,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
@@ -20,7 +21,7 @@ public class RubricAssessmentAppService(
 	IRepository<RubricCriterionScore, Guid> scoreRepository,
 	IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
 		IRepository<AssignmentEntity, Guid> assignmentRepository,
-		IRepository<StudentSubmissionEntity, Guid> submissionRepository,
+		IStudentSubmissionRepository submissionRepository,
 		IUserScopeService userScopeService
 
 ) : ApplicationService, IRubricAssessmentAppService
@@ -288,6 +289,27 @@ public class RubricAssessmentAppService(
 		var evaluations = await evaluationRepository.GetListAsync(e => e.RubricId == rubricId);
 		await LoadScoresAsync(evaluations);
 		return evaluations.Select(MapEvaluation).ToList();
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
+	public async Task<RubricEvaluationDto> GetStudentAssignmentEvaluationAsync(Guid studentId, Guid assignmentId)
+	{
+		var submission = await submissionRepository.GetSubmissionByStudentAndAssignmentAsync(studentId, assignmentId);
+		if (submission == null)
+		{
+			throw new EntityNotFoundException(typeof(StudentSubmissionEntity), studentId);
+		}
+
+		await EnsureCurrentUserCanAccessSubmissionAsync(submission, nameof(GetStudentAssignmentEvaluationAsync));
+		var evaluation = await evaluationRepository.FirstOrDefaultAsync(e =>
+			e.StudentSubmissionId == submission.Id && e.StudentId == studentId);
+		if (evaluation == null)
+		{
+			throw new EntityNotFoundException(typeof(RubricEvaluation), submission.Id);
+		}
+
+		await LoadScoresAsync([evaluation]);
+		return MapEvaluation(evaluation);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]

@@ -25,11 +25,13 @@ public class SalarySlipSnapshotGenerationService(
 
 		var earnings = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EarningComponentsJson);
 		var deductions = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.DeductionComponentsJson);
+		var employerContributions = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EmployerContributionsJson);
 		PayrollSnapshotTotalGuard.EnsureMatchesLineItems(snapshot, earnings, deductions);
 		return await salarySlipManager.GenerateOrGetSalarySlipFromSnapshotAsync(
 			snapshot,
 			earnings,
 			deductions,
+			employerContributions,
 			ParseDayCalculationMode(snapshot.DayCalculationMode));
 	}
 

@@ -264,7 +264,34 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             query = query.Where(d => d.DayType == dayType.Value);
         }
 
-        var items = query.ToList();
+        var allItems = query.ToList();
+        var rangeEnds = new Dictionary<Guid, DateTime?>();
+        foreach (var group in allItems
+                     .Where(d => d.DayType == DayType.Vacation)
+                     .GroupBy(d => new { d.AcademicCalendarId, d.DayType, d.Title, d.AppliesToAll, d.StandardId, d.DivisionId }))
+        {
+            var orderedDays = group.OrderBy(d => d.Date).ToList();
+            var rangeStartIndex = 0;
+            for (var index = 1; index <= orderedDays.Count; index++)
+            {
+                var isSameRange = index < orderedDays.Count &&
+                                  orderedDays[index].Date.Date == orderedDays[index - 1].Date.Date.AddDays(1);
+                if (isSameRange)
+                {
+                    continue;
+                }
+
+                var rangeEnd = orderedDays[index - 1].Date.Date;
+                for (var rangeIndex = rangeStartIndex; rangeIndex < index; rangeIndex++)
+                {
+                    rangeEnds[orderedDays[rangeIndex].Id] = rangeEnd;
+                }
+
+                rangeStartIndex = index;
+            }
+        }
+
+        var items = allItems;
 
         if (month.HasValue)
         {
@@ -276,7 +303,16 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             items = items.Where(d => d.Date.Year == year.Value).ToList();
         }
 
-        return ObjectMapper.Map<List<AcademicCalendarDay>, List<AcademicCalendarDayDto>>(items.OrderBy(d => d.Date).ToList());
+        var result = ObjectMapper.Map<List<AcademicCalendarDay>, List<AcademicCalendarDayDto>>(items.OrderBy(d => d.Date).ToList());
+        foreach (var dto in result)
+        {
+            if (rangeEnds.TryGetValue(dto.Id, out var endDate))
+            {
+                dto.EndDate = endDate;
+            }
+        }
+
+        return result;
     }
 
     public async Task<AcademicCalendarDayDto> CreateCalendarDayAsync(Guid calendarId, CreateCalendarDayDto input)
@@ -383,7 +419,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             }
         }
 
-        return ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(firstDay!);
+        var result = ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(firstDay!);
+        result.EndDate = input.DayType == DayType.Vacation ? endDate : null;
+        return result;
     }
 
     private static CalendarDayDetails NormalizeDayDetails(CreateCalendarDayDto input)
@@ -587,6 +625,11 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         details = resolved.Details;
         var targetDate = resolved.Date;
         await ValidateRoomAvailabilityAsync(details, targetDate, input.StandardId, input.DivisionId);
+
+        if (input.DayType == DayType.Vacation)
+        {
+            return await UpdateVacationRangeAsync(day, input, calendar, targetDate);
+        }
 
         await _calendarManager.ValidateDayRangeAsync(calendar, targetDate);
 
@@ -803,6 +846,120 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             academicCalendarDayId: resultDay.Id);
 
         return ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(resultDay);
+    }
+
+    private async Task<AcademicCalendarDayDto> UpdateVacationRangeAsync(
+        AcademicCalendarDay day,
+        CreateCalendarDayDto input,
+        AcademicCalendar calendar,
+        DateTime startDate)
+    {
+        var endDate = (input.EndDate ?? input.Date).DateTime.Date;
+        if (endDate < startDate)
+        {
+            throw new UserFriendlyException("Vacation end date cannot be before the start date.");
+        }
+
+        for (var date = startDate; date <= endDate; date = date.AddDays(1))
+        {
+            await _calendarManager.ValidateDayRangeAsync(calendar, date);
+        }
+
+        var targetStandardIds = input.AppliesToAll
+            ? new List<Guid?> { null }
+            : input.StandardIds is { Count: > 0 }
+                ? input.StandardIds.Distinct().Select(id => (Guid?)id).ToList()
+                : new List<Guid?> { input.StandardId };
+
+        if (!input.AppliesToAll && targetStandardIds.All(id => !id.HasValue))
+        {
+            throw new UserFriendlyException("Select at least one class when the marker does not apply to all.");
+        }
+
+        var existingRows = await _calendarDayRepository.GetListAsync(d =>
+            d.AcademicCalendarId == day.AcademicCalendarId &&
+            d.Status == CalendarDayStatus.Active &&
+            d.DayType == DayType.Vacation &&
+            d.Title == day.Title &&
+            (d.AppliesToAll == day.AppliesToAll) &&
+            (day.AppliesToAll || d.StandardId == day.StandardId ||
+                (input.StandardIds != null && d.StandardId.HasValue && input.StandardIds.Contains(d.StandardId.Value))));
+
+        var desired = new HashSet<(DateTime Date, Guid? StandardId)>();
+        for (var date = startDate; date <= endDate; date = date.AddDays(1))
+        {
+            foreach (var standardId in targetStandardIds)
+            {
+                desired.Add((date, standardId));
+            }
+        }
+
+        AcademicCalendarDay? resultDay = null;
+        foreach (var existing in existingRows)
+        {
+            var key = (existing.Date.Date, existing.StandardId);
+            if (!desired.Remove(key))
+            {
+                await _calendarDayRepository.DeleteAsync(existing.Id);
+                continue;
+            }
+
+            existing.Update(
+                existing.Date,
+                DayType.Vacation,
+                input.Title,
+                input.Description,
+                input.AppliesToAll,
+                input.AppliesToAll ? null : existing.StandardId,
+                input.AppliesToAll ? null : targetStandardIds.Count == 1 ? input.DivisionId : null,
+                input.HolidayCategory,
+                null,
+                null,
+                input.ChangeReason,
+                venue: null,
+                examTypeId: null,
+                linkedExamId: null,
+                examStartTime: null,
+                examEndTime: null,
+                ptmMode: null,
+                roomId: null,
+                meetingLink: null);
+            await _calendarDayRepository.UpdateAsync(existing);
+            resultDay ??= existing;
+        }
+
+        foreach (var (date, standardId) in desired)
+        {
+            var newDay = new AcademicCalendarDay(
+                GuidGenerator.Create(),
+                CurrentTenant.Id,
+                day.AcademicCalendarId,
+                date,
+                DayType.Vacation,
+                input.Title,
+                input.Description,
+                input.AppliesToAll,
+                standardId,
+                input.AppliesToAll || targetStandardIds.Count != 1 ? null : input.DivisionId,
+                input.HolidayCategory);
+            await _calendarDayRepository.InsertAsync(newDay);
+            resultDay ??= newDay;
+        }
+
+        resultDay ??= day;
+        await _auditWriter.WriteAsync(
+            day.AcademicCalendarId,
+            CalendarAuditAction.DayUpdated,
+            beforeJson: null,
+            afterJson: System.Text.Json.JsonSerializer.Serialize(resultDay),
+            entityType: resultDay.DayType.ToString(),
+            entityName: resultDay.Title,
+            reason: input.ChangeReason,
+            academicCalendarDayId: resultDay.Id);
+
+        var result = ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(resultDay);
+        result.EndDate = endDate;
+        return result;
     }
 
     public async Task DeleteCalendarDayAsync(Guid id)

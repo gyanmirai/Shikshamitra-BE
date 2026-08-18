@@ -41,6 +41,7 @@ public class PayrollRunItemSnapshotConfiguration : IEntityTypeConfiguration<Payr
 		builder.Property(x => x.AttendancePolicyWarningsJson).HasColumnType("jsonb");
 		builder.Property(x => x.EarningComponentsJson).HasColumnType("jsonb");
 		builder.Property(x => x.DeductionComponentsJson).HasColumnType("jsonb");
+		builder.Property(x => x.EmployerContributionsJson).HasColumnType("jsonb");
 		builder.Property(x => x.PayrollAdjustmentsJson).HasColumnType("jsonb");
 
 		builder.HasIndex(x => new { x.TenantId, x.MonthYear, x.EmployeeId })

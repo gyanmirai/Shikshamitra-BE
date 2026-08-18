@@ -29,6 +29,13 @@ public class EmployeePayrollDetails : Entity<Guid>
 	public string? PunchId { get; set; }
 
 	public decimal? TotalWorkingHourPerMonth { get; set; }
+	public string? QuotedSalaryBasis { get; private set; }
+	public decimal? QuotedMonthlyAmount { get; private set; }
+	public Guid? SourceSalaryTemplateId { get; private set; }
+	public Guid? SourceSalaryTemplateVersionId { get; private set; }
+	public int? SourceSalaryTemplateVersion { get; private set; }
+	public DateTime? SalaryGeneratedAt { get; private set; }
+	public bool WasModifiedAfterGeneration { get; private set; }
 
 	// Navigation property
 	public Employee Employee { get; set; } = null!;
@@ -64,5 +71,42 @@ public class EmployeePayrollDetails : Entity<Guid>
 		UanNumber = uanNumber;
 		PunchId = punchId;
 		TotalWorkingHourPerMonth = totalWorkingHourPerMonth;
+	}
+
+	public void SetSalaryGeneration(
+		string? quotedSalaryBasis,
+		decimal? quotedMonthlyAmount,
+		Guid? sourceTemplateId,
+		Guid? sourceTemplateVersionId,
+		int? sourceTemplateVersion,
+		DateTime? generatedAt,
+		bool wasModified)
+	{
+		var hasAnyProvenance = sourceTemplateId.HasValue || sourceTemplateVersionId.HasValue ||
+			sourceTemplateVersion.HasValue || generatedAt.HasValue;
+		if (hasAnyProvenance &&
+			(sourceTemplateId is not { } templateId || templateId == Guid.Empty ||
+			 sourceTemplateVersionId is not { } versionId || versionId == Guid.Empty ||
+			 sourceTemplateVersion is not > 0 || !generatedAt.HasValue ||
+			 quotedMonthlyAmount is not > 0m || quotedSalaryBasis is not ("GROSS" or "TAKE_HOME")))
+		{
+			throw new Volo.Abp.BusinessException("HR:Payroll:SalaryGenerationProvenanceInvalid");
+		}
+
+		QuotedSalaryBasis = quotedSalaryBasis;
+		QuotedMonthlyAmount = quotedMonthlyAmount;
+		SourceSalaryTemplateId = sourceTemplateId;
+		SourceSalaryTemplateVersionId = sourceTemplateVersionId;
+		SourceSalaryTemplateVersion = sourceTemplateVersion;
+		SalaryGeneratedAt = generatedAt;
+		WasModifiedAfterGeneration = wasModified;
+	}
+
+	public void MarkSalaryComponentsModified()
+	{
+		if (SourceSalaryTemplateVersionId.HasValue)
+		{
+			WasModifiedAfterGeneration = true;
+		}
 	}
 }

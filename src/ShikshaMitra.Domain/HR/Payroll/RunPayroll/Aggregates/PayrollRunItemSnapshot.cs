@@ -24,6 +24,7 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public decimal GrossSalary { get; set; }
 	public decimal FullGrossSalary { get; set; }
 	public decimal TotalDeduction { get; set; }
+	public decimal EmployerContributionTotal { get; set; }
 	public decimal NetPay { get; set; }
 	public decimal? PreviousMonthNetPay { get; set; }
 	public decimal? NetPayDelta { get; set; }
@@ -49,6 +50,11 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public string AttendancePolicyWarningsJson { get; set; } = "[]";
 	public string EarningComponentsJson { get; set; } = "[]";
 	public string DeductionComponentsJson { get; set; } = "[]";
+	public string EmployerContributionsJson { get; set; } = "[]";
+	public Guid? ProvidentFundRuleId { get; set; }
+	public int? ProvidentFundRuleVersion { get; set; }
+	public Guid? ProfessionalTaxRuleId { get; set; }
+	public int? ProfessionalTaxRuleVersion { get; set; }
 	public string PayrollAdjustmentsJson { get; set; } = "[]";
 
 	private PayrollRunItemSnapshot()

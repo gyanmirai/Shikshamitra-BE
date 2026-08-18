@@ -51,7 +51,14 @@ internal static class EmployeePayrollProjection
 				EpfNumber = payrollDetails?.EpfNumber,
 				UanNumber = payrollDetails?.UanNumber,
 				PunchId = payrollDetails?.PunchId,
-				TotalWorkingHourPerMonth = payrollDetails?.TotalWorkingHourPerMonth
+				TotalWorkingHourPerMonth = payrollDetails?.TotalWorkingHourPerMonth,
+				QuotedSalaryBasis = payrollDetails?.QuotedSalaryBasis,
+				QuotedMonthlyAmount = payrollDetails?.QuotedMonthlyAmount,
+				SourceSalaryTemplateId = payrollDetails?.SourceSalaryTemplateId,
+				SourceSalaryTemplateVersionId = payrollDetails?.SourceSalaryTemplateVersionId,
+				SourceSalaryTemplateVersion = payrollDetails?.SourceSalaryTemplateVersion,
+				SalaryGeneratedAt = payrollDetails?.SalaryGeneratedAt,
+				WasModifiedAfterGeneration = payrollDetails?.WasModifiedAfterGeneration ?? false
 			},
 			EarningComponents = (earnings ?? Enumerable.Empty<EmployeePayrollComponent>())
 				.Select(e => ToSalaryComponentContract(e, earningComponentIdByName))
@@ -109,7 +116,10 @@ internal static class EmployeePayrollProjection
 			Amount = component.Amount,
 			IsFixed = component.IsFixed,
 			IsTemp = component.IsTemp,
-			ApplicableMonth = component.ApplicableMonth
+			UsesMasterValue = component.UsesMasterValue,
+			ApplicableMonth = component.ApplicableMonth,
+			SemanticType = component.SemanticType,
+			StatutoryRuleId = component.StatutoryRuleId
 		};
 	}
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Templates;
 using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
@@ -19,28 +20,36 @@ public class PayrollProvidentFundComponentBuilder(
 		int month)
 	{
 		var result = components.ToList();
-		if (payrollDetails == null ||
-		    string.IsNullOrWhiteSpace(payrollDetails.PfRule) ||
-		    !Guid.TryParse(payrollDetails.PfRule, out var pfRuleId))
+		if (payrollDetails == null)
 		{
+			result.RemoveAll(x => x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund);
 			return result;
 		}
 
-		var rule = await providentFundRepository.FindAsync(pfRuleId);
-		if (rule == null || rule.EmployeePercentage <= 0)
+		var rule = await ResolveRuleAsync(payrollDetails, year, month);
+		if (rule == null)
 		{
+			result.RemoveAll(x => x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund);
 			return result;
 		}
 
-		var baseAmount = ResolveProvidentFundBaseAmount(result);
+		var baseAmount = ResolveProvidentFundBaseAmount(result, rule.ContributionBasis);
+		if (rule.WageCeiling.HasValue)
+		{
+			baseAmount = Math.Min(baseAmount, rule.WageCeiling.Value);
+		}
+
 		if (baseAmount <= 0m)
 		{
 			return result;
 		}
 
 		var amount = Math.Round(baseAmount * (decimal)rule.EmployeePercentage / 100m, 2, MidpointRounding.AwayFromZero);
-		if (amount <= 0m)
+		var existing = result.FirstOrDefault(x => x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund);
+		if (existing != null)
 		{
+			existing.Amount = amount;
+			existing.StatutoryRuleId = rule.Id;
 			return result;
 		}
 
@@ -57,13 +66,50 @@ public class PayrollProvidentFundComponentBuilder(
 			SalaryComponentType.Fixed,
 			SalaryComponentDependency.None,
 			isEarning: false,
-			usesMasterValue: false));
+			usesMasterValue: false,
+			semanticType: PayrollComponentSemanticType.EmployeeProvidentFund,
+			statutoryRuleId: rule.Id));
 
 		return result;
 	}
 
-	private static decimal ResolveProvidentFundBaseAmount(IReadOnlyList<EmployeePayrollComponent> components)
+	public async Task<ProvidentFund?> ResolveRuleAsync(
+		EmployeePayrollDetails? payrollDetails,
+		int year,
+		int month)
 	{
+		if (payrollDetails == null ||
+		    string.IsNullOrWhiteSpace(payrollDetails.PfRule) ||
+		    !Guid.TryParse(payrollDetails.PfRule, out var pfRuleId))
+		{
+			return null;
+		}
+
+		var rule = await providentFundRepository.FindAsync(pfRuleId);
+		var effectiveDate = new DateTime(year, month, 1);
+		return rule is { IsActive: true } &&
+		       (rule.EmployeePercentage > 0m || rule.EmployerPercentage > 0m) &&
+		       rule.EffectiveFrom <= effectiveDate &&
+		       (!rule.EffectiveTo.HasValue || rule.EffectiveTo.Value >= effectiveDate)
+			? rule
+			: null;
+	}
+
+	private static decimal ResolveProvidentFundBaseAmount(
+		IReadOnlyList<EmployeePayrollComponent> components,
+		PfContributionBasis contributionBasis)
+	{
+		var semanticBase = components
+			.Where(x => x.IsEarning &&
+			            (x.SemanticType == PayrollComponentSemanticType.Basic ||
+			             contributionBasis == PfContributionBasis.BasicAndDearnessAllowance &&
+			             x.SemanticType == PayrollComponentSemanticType.DearnessAllowance))
+			.Sum(x => x.Amount);
+		if (semanticBase > 0m)
+		{
+			return semanticBase;
+		}
+
 		var basic = components
 			.Where(x => x.IsEarning && IsBasicSalaryComponentName(x.Name))
 			.Sum(x => x.Amount);

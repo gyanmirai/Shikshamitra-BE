@@ -1,6 +1,7 @@
 using FluentValidation;
 using FluentValidation.Results;
 using System.Collections.Generic;
+using System;
 
 namespace ShikshaMitra.HR.Payroll.SalaryStructure;
 
@@ -13,12 +14,38 @@ public class UpdateSalaryStructureDtoValidator : AbstractValidator<UpdateSalaryS
 
 		RuleForEach(x => x.EarningComponents).SetValidator(new SalaryComponentDtoValidator());
 		RuleForEach(x => x.DeductionComponents).SetValidator(new SalaryComponentDtoValidator());
+		RuleFor(x => x.QuotedSalaryBasis)
+			.Must(x => x is "GROSS" or "TAKE_HOME")
+			.When(x => !string.IsNullOrWhiteSpace(x.QuotedSalaryBasis))
+			.WithMessage("Quoted salary basis must be GROSS or TAKE_HOME.");
+		RuleFor(x => x.QuotedMonthlyAmount)
+			.GreaterThan(0m)
+			.LessThanOrEqualTo(100_000_000m)
+			.When(x => x.QuotedMonthlyAmount.HasValue);
+		RuleFor(x => x)
+			.Must(HasConsistentGenerationProvenance)
+			.WithMessage("Salary generation provenance must include the quote, template, version, and generation timestamp together.");
 
 		RuleFor(x => x).Custom((input, context) =>
 		{
 			AddComponentFailures(context, input.EarningComponents, nameof(UpdateSalaryStructureDto.EarningComponents));
 			AddComponentFailures(context, input.DeductionComponents, nameof(UpdateSalaryStructureDto.DeductionComponents));
 		});
+	}
+
+	private static bool HasConsistentGenerationProvenance(UpdateSalaryStructureDto input)
+	{
+		var hasAny = input.SourceSalaryTemplateId.HasValue ||
+			input.SourceSalaryTemplateVersionId.HasValue ||
+			input.SourceSalaryTemplateVersion.HasValue ||
+			input.SalaryGeneratedAt.HasValue;
+		return !hasAny ||
+			input.SourceSalaryTemplateId is { } templateId && templateId != Guid.Empty &&
+			input.SourceSalaryTemplateVersionId is { } versionId && versionId != Guid.Empty &&
+			input.SourceSalaryTemplateVersion > 0 &&
+			input.SalaryGeneratedAt.HasValue &&
+			input.QuotedMonthlyAmount > 0m &&
+			input.QuotedSalaryBasis is "GROSS" or "TAKE_HOME";
 	}
 
 	private static void AddComponentFailures(

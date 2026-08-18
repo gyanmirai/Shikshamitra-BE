@@ -152,6 +152,50 @@ public class EmployeeSalaryStructureApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Mark_Generated_Structure_Modified_When_A_Recurring_Row_Changes()
+	{
+		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalModified");
+		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "SalModifiedEarn");
+		var generatedAt = new DateTime(2026, 8, 13, 12, 0, 0, DateTimeKind.Utc);
+		var templateId = Guid.NewGuid();
+		var versionId = Guid.NewGuid();
+		var initial = new UpdateSalaryStructureDto
+		{
+			EarningComponents =
+			[
+				new SalaryComponentDto
+				{
+					ComponentId = earningComponent.Id,
+					Name = "Basic Salary",
+					Amount = 18000m,
+					IsFixed = true,
+					UsesMasterValue = false,
+					IsTemp = false
+				}
+			],
+			DeductionComponents = [],
+			QuotedSalaryBasis = "GROSS",
+			QuotedMonthlyAmount = 18000m,
+			SourceSalaryTemplateId = templateId,
+			SourceSalaryTemplateVersionId = versionId,
+			SourceSalaryTemplateVersion = 1,
+			SalaryGeneratedAt = generatedAt,
+			WasModifiedAfterGeneration = false
+		};
+		(await Client.PutAsJsonAsync(Url(empId), initial, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		initial.EarningComponents[0].Amount = 19000m;
+		initial.WasModifiedAfterGeneration = false;
+		(await Client.PutAsJsonAsync(Url(empId), initial, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var payload = await (await Client.GetAsync(Url(empId)))
+			.Content.ReadFromJsonAsync<SalaryStructureResponseDto>(JsonOptions);
+		payload.ShouldNotBeNull();
+		payload.WasModifiedAfterGeneration.ShouldBeTrue();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Salary_Structure_With_Employee_Edit_And_Payroll_Permission()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "SalEditPerm");

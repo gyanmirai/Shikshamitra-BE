@@ -42,6 +42,7 @@ public class PayrollRunSnapshotStore(
 			var attendancePolicyWarningsJson = JsonSerializer.Serialize(item.AttendancePolicyWarnings ?? new List<string>());
 			var earningsJson = JsonSerializer.Serialize(item.EarningComponents ?? new List<RunPayrollComponentItem>());
 			var deductionsJson = JsonSerializer.Serialize(item.DeductionComponents ?? new List<RunPayrollComponentItem>());
+			var employerContributionsJson = JsonSerializer.Serialize(item.EmployerContributions ?? new List<RunPayrollComponentItem>());
 			var adjustmentsJson = JsonSerializer.Serialize(item.PayrollAdjustments ?? new List<PayrollAdjustmentDto>());
 
 			if (existingByEmployee.TryGetValue(item.EmployeeId, out var existing))
@@ -53,8 +54,8 @@ public class PayrollRunSnapshotStore(
 
 				var shouldResetReview = !preserveReviewedSnapshots &&
 					existing.ReviewStatus == ReviewStatuses.Reviewed &&
-					PayrollRunProjection.SnapshotValuesChanged(existing, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, adjustmentsJson);
-				PayrollRunProjection.ApplySnapshotValues(existing, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, adjustmentsJson);
+					PayrollRunProjection.SnapshotValuesChanged(existing, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, employerContributionsJson, adjustmentsJson);
+				PayrollRunProjection.ApplySnapshotValues(existing, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, employerContributionsJson, adjustmentsJson);
 				if (shouldResetReview)
 				{
 					existing.MarkPending();
@@ -70,7 +71,7 @@ public class PayrollRunSnapshotStore(
 				currentTenant.Id,
 				monthYear,
 				item.EmployeeId);
-			PayrollRunProjection.ApplySnapshotValues(snapshot, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, adjustmentsJson);
+			PayrollRunProjection.ApplySnapshotValues(snapshot, item, issuesJson, attendancePolicyWarningsJson, earningsJson, deductionsJson, employerContributionsJson, adjustmentsJson);
 			await payrollRunItemSnapshotRepository.InsertAsync(snapshot, autoSave: false);
 		}
 

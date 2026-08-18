@@ -12,6 +12,7 @@ public partial class SalarySlipManager
 		PayrollRunItemSnapshot snapshot,
 		List<SalarySlipLineItem> earningLineItems,
 		List<SalarySlipLineItem> deductionLineItems,
+		List<SalarySlipLineItem> employerContributionLineItems,
 		DayCalculationType dayCalculationMode,
 		CancellationToken cancellationToken = default)
 	{
@@ -19,6 +20,7 @@ public partial class SalarySlipManager
 			snapshot,
 			earningLineItems,
 			deductionLineItems,
+			employerContributionLineItems,
 			dayCalculationMode,
 			cancellationToken);
 	}

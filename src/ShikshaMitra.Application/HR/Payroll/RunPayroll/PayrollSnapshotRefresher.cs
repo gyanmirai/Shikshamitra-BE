@@ -35,6 +35,7 @@ public class PayrollSnapshotRefresher(
 	PayrollBasisPreviewResolver basisPreviewResolver,
 	PayrollSnapshotRefreshLookupReader lookupReader,
 	PayrollProvidentFundComponentBuilder providentFundComponentBuilder,
+	IProfessionalTaxRepository professionalTaxRepository,
 	ILogger<PayrollSnapshotRefresher> logger)
 	: ITransientDependency
 {
@@ -125,6 +126,12 @@ public class PayrollSnapshotRefresher(
 			componentsByEmployee,
 			internalMonthYear);
 		var adjustmentsByEmployee = await adjustmentReader.GetByEmployeeAsync(internalMonthYear, employeeIds);
+		var statutoryEffectiveDate = new DateTime(year, month, 1);
+		var professionalTaxSlabs = await professionalTaxRepository.GetListAsync(x =>
+			x.IsActive &&
+			x.JurisdictionCode == "IN-GJ" &&
+			x.EffectiveFrom <= statutoryEffectiveDate &&
+			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= statutoryEffectiveDate));
 
 		var computedItems = new List<RunPayrollItem>();
 		var payrollContextByEmployee = new Dictionary<Guid, PayrollEmployeeComputationContext>();
@@ -172,11 +179,15 @@ public class PayrollSnapshotRefresher(
 					employee.Id,
 					internalMonthYear,
 					ex.Code);
+				var payrollDetails = payrollDetailsByEmployee.GetValueOrDefault(employee.Id);
+				var payrollComponents = await GetPayrollComponentsAsync(
+					payrollDetailsByEmployee, resolvedComponentsByEmployee, employee.Id, year, month);
+				var pfRule = await providentFundComponentBuilder.ResolveRuleAsync(payrollDetails, year, month);
 				computedItems.Add(PayrollRunItemBuilder.BuildPayrollSetupIssueItem(
 					employee,
 					attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
-					payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-					await GetPayrollComponentsAsync(payrollDetailsByEmployee, resolvedComponentsByEmployee, employee.Id, year, month),
+					payrollDetails,
+					payrollComponents,
 					adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
 					year,
 					month,
@@ -185,7 +196,11 @@ public class PayrollSnapshotRefresher(
 					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
 					leaveUnitsByDate: null,
 					new[] { IssueCodes.PayrollPolicyConfiguration },
-					PayrollRunRules.GetEffectiveEmploymentStartDate(employee)));
+					PayrollRunRules.GetEffectiveEmploymentStartDate(employee),
+					new PayrollStatutoryRuleSet(
+						pfRule,
+						professionalTaxSlabs,
+						IsEmploymentCessationMonth(employee, year, month))));
 			}
 		}
 
@@ -214,11 +229,15 @@ public class PayrollSnapshotRefresher(
 				continue;
 			}
 
+			var payrollDetails = payrollDetailsByEmployee.GetValueOrDefault(employee.Id);
+			var payrollComponents = await GetPayrollComponentsAsync(
+				payrollDetailsByEmployee, resolvedComponentsByEmployee, employee.Id, year, month);
+			var pfRule = await providentFundComponentBuilder.ResolveRuleAsync(payrollDetails, year, month);
 			computedItems.Add(PayrollRunItemBuilder.BuildPayrollItem(
 				employee,
 				attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
-				payrollDetailsByEmployee.GetValueOrDefault(employee.Id),
-				await GetPayrollComponentsAsync(payrollDetailsByEmployee, resolvedComponentsByEmployee, employee.Id, year, month),
+				payrollDetails,
+				payrollComponents,
 				adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
 				payrollContext.Basis,
 				year,
@@ -232,11 +251,27 @@ public class PayrollSnapshotRefresher(
 				previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
 				payrollContext.PayrollPolicyIssueCodes,
 				PayrollRunRules.GetEffectiveEmploymentStartDate(employee),
-				ResolveShift(employee, shiftsById)
+				ResolveShift(employee, shiftsById),
+				new PayrollStatutoryRuleSet(
+					pfRule,
+					professionalTaxSlabs,
+					IsEmploymentCessationMonth(employee, year, month))
 			));
 		}
 
 		await snapshotStore.UpsertAsync(internalMonthYear, computedItems, preserveReviewedSnapshots);
+	}
+
+	private static bool IsEmploymentCessationMonth(Employee employee, int year, int month)
+	{
+		if (employee.EmployeeStatusType is null or EmployeeStatusType.Active || !employee.StatusEffectiveDate.HasValue)
+		{
+			return false;
+		}
+
+		var monthStart = new DateOnly(year, month, 1);
+		var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+		return employee.StatusEffectiveDate.Value >= monthStart && employee.StatusEffectiveDate.Value <= monthEnd;
 	}
 
 	private static List<EmployeePayrollComponent> GetResolvedComponents(

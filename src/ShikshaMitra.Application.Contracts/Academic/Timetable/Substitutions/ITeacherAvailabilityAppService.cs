@@ -10,6 +10,5 @@ public interface ITeacherAvailabilityAppService : IApplicationService
     Task<PagedResultDto<TeacherAvailabilityDto>> GetListAsync(GetTeacherAvailabilityInput input);
     Task<TeacherAvailabilityDto> CreateAsync(CreateTeacherAvailabilityDto input);
     Task<AffectedLectureResultDto> GetAffectedLecturesAsync(CreateTeacherAvailabilityDto input);
-    Task<int> CreateSubstitutionsAsync(Guid id);
     Task CancelAsync(Guid id);
 }

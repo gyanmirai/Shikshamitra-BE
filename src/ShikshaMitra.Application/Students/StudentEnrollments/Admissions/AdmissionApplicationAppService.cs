@@ -21,7 +21,7 @@ public class AdmissionApplicationAppService(
 	IRepository<AdmissionFamily, Guid> familyRepository,
 	IRepository<AdmissionGuardian, Guid> guardianRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
-	IRepository<AdmissionCycle, Guid> cycleRepository,
+	AdmissionOfferingRuntimeService offeringRuntimeService,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionWorkflowStageDefinition, Guid> stageRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
@@ -64,19 +64,26 @@ public class AdmissionApplicationAppService(
 		if (existing != null) return Map(existing);
 
 		var applicant = await applicantRepository.FindAsync(applicantId) ?? throw new EntityNotFoundException(typeof(AdmissionApplicant), applicantId);
+		var runtime = await offeringRuntimeService.GetAvailableAsync(offeringId);
+		var offering = runtime.Offering;
 		if (!inquiryId.HasValue)
 		{
 			var inquiryQuery = await inquiryRepository.GetQueryableAsync();
-			var latestInquiry = await AsyncExecuter.FirstOrDefaultAsync(inquiryQuery.Where(x => x.ApplicantId == applicantId).OrderByDescending(x => x.CreationTime));
+			var latestInquiry = await AsyncExecuter.FirstOrDefaultAsync(inquiryQuery
+				.Where(x => x.ApplicantId == applicantId && x.AdmissionOfferingId == offeringId)
+				.OrderByDescending(x => x.CreationTime));
 			inquiryId = latestInquiry?.Id;
 		}
-		var offering = await offeringRepository.FindAsync(offeringId) ?? throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable);
-		var cycle = await cycleRepository.FindAsync(offering.AdmissionCycleId) ?? throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable);
-		var today = DateTime.UtcNow.Date;
-		if (!offering.IsActive || cycle.Status != AdmissionCycleStatus.Published || today < offering.OpenDate || today > offering.CloseDate)
-			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable);
-		if (!offering.WorkflowDefinitionId.HasValue || !offering.ApplicationFormDefinitionId.HasValue)
-			throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
+		if (inquiryId.HasValue)
+		{
+			var sourceInquiry = await inquiryRepository.FindAsync(inquiryId.Value) ??
+				throw new EntityNotFoundException(typeof(AdmissionInquiry), inquiryId.Value);
+			if (sourceInquiry.ApplicantId != applicantId || sourceInquiry.AdmissionCycleId != offering.AdmissionCycleId ||
+				sourceInquiry.AdmissionOfferingId != offeringId)
+			{
+				throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable);
+			}
+		}
 		var workflow = await workflowRepository.FindAsync(offering.WorkflowDefinitionId.Value);
 		var form = await formRepository.FindAsync(offering.ApplicationFormDefinitionId.Value);
 		if (workflow == null || workflow.Status != AdmissionWorkflowStatus.Published || form == null || form.Status != AdmissionFormStatus.Published)

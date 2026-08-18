@@ -36,12 +36,28 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleDisplayName = $"{DisplayName}.Admissions.Offerings";
 
 			public const string View = $"{SubmoduleName}.View";
+			public const string Create = $"{SubmoduleName}.Create";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			public const string Activate = $"{SubmoduleName}.Activate";
+			public const string Deactivate = $"{SubmoduleName}.Deactivate";
+			public const string Clone = $"{SubmoduleName}.Clone";
+			public const string BulkCreate = $"{SubmoduleName}.BulkCreate";
+			public const string Validate = $"{SubmoduleName}.Validate";
 			public const string Manage = $"{SubmoduleName}.Manage";
 
-			public static readonly string[] All = { View, Manage };
+			public static readonly string[] All = { View, Create, Edit, Delete, Activate, Deactivate, Clone, BulkCreate, Validate, Manage };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Create, $"{SubmoduleDisplayName}.Create" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
+				{ Activate, $"{SubmoduleDisplayName}.Activate" },
+				{ Deactivate, $"{SubmoduleDisplayName}.Deactivate" },
+				{ Clone, $"{SubmoduleDisplayName}.Clone" },
+				{ BulkCreate, $"{SubmoduleDisplayName}.BulkCreate" },
+				{ Validate, $"{SubmoduleDisplayName}.Validate" },
 				{ Manage, $"{SubmoduleDisplayName}.Manage" }
 			};
 		}

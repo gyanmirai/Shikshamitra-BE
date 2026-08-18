@@ -22,5 +22,6 @@ public class AdmissionInquiryConfiguration : IEntityTypeConfiguration<AdmissionI
 		builder.HasIndex(x => new { x.TenantId, x.AdmissionCycleId, x.NormalizedPhone });
 		builder.HasIndex(x => new { x.TenantId, x.AdmissionCycleId, x.Status });
 		builder.HasIndex(x => new { x.TenantId, x.AssignedCounsellorId });
+		builder.HasOne<AdmissionOffering>().WithMany().HasForeignKey(x => x.AdmissionOfferingId).OnDelete(DeleteBehavior.Restrict);
 	}
 }

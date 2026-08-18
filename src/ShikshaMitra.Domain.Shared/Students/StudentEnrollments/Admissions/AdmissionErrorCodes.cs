@@ -16,4 +16,15 @@ public static class AdmissionErrorCodes
 	public const string InquiryCounsellorCandidatesRequired = "Admissions.InquiryCounsellorCandidatesRequired";
 	public const string OfferingWorkflowNotPublished = "Admissions.OfferingWorkflowNotPublished";
 	public const string OfferingFormNotPublished = "Admissions.OfferingFormNotPublished";
+	public const string OfferingConfigurationIncomplete = "Admissions.Offering.ConfigurationIncomplete";
+	public const string OfferingInactive = "Admissions.Offering.Inactive";
+	public const string OfferingNotOpenYet = "Admissions.Offering.NotOpenYet";
+	public const string OfferingClosed = "Admissions.Offering.Closed";
+	public const string OfferingIdentityLocked = "Admissions.Offering.IdentityLocked";
+	public const string OfferingHasApplications = "Admissions.Offering.HasApplications";
+	public const string OfferingConcurrencyConflict = "Admissions.Offering.ConcurrencyConflict";
+	public const string OfferingHierarchyOutOfScope = "Admissions.Offering.HierarchyOutOfScope";
+	public const string OfferingCampusUnsupported = "Admissions.Offering.CampusUnsupported";
+	public const string OfferingBulkValidationFailed = "Admissions.Offering.BulkValidationFailed";
+	public const string OfferingStateCommandRequired = "Admissions.Offering.StateCommandRequired";
 }

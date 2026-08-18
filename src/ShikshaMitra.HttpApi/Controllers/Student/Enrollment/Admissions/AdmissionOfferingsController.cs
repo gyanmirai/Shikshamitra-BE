@@ -16,25 +16,69 @@ public class AdmissionOfferingsController(IAdmissionOfferingAppService appServic
 {
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
-	public async Task<Result<PagedResultDto<AdmissionOfferingDto>>> GetList([FromQuery] AdmissionOfferingListInput input) =>
-		Result.Success(await appService.GetListAsync(input));
+	public async Task<Result<PagedResultDto<AdmissionOfferingListDto>>> GetList(
+		[FromQuery] AdmissionOfferingListInput input) => Result.Success(await appService.GetListAsync(input));
 
 	[HttpGet("{id:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
 	public async Task<Result<AdmissionOfferingDto>> Get(Guid id) => Result.Success(await appService.GetAsync(id));
 
+	[HttpPost("cycles/{admissionCycleId:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Create)]
+	public async Task<Result<AdmissionOfferingDto>> Create(
+		Guid admissionCycleId,
+		[FromBody] CreateAdmissionOfferingDto input) =>
+		Result.Success(await appService.CreateAsync(admissionCycleId, input));
+
 	[HttpPost]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Manage)]
-	public async Task<Result<AdmissionOfferingDto>> Create([FromQuery] Guid admissionCycleId, [FromBody] CreateUpdateAdmissionOfferingDto input) =>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Create)]
+	public async Task<Result<AdmissionOfferingDto>> CreateCompatibility(
+		[FromQuery] Guid admissionCycleId,
+		[FromBody] CreateAdmissionOfferingDto input) =>
 		Result.Success(await appService.CreateAsync(admissionCycleId, input));
 
 	[HttpPut("{id:guid}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Manage)]
-	public async Task<Result<AdmissionOfferingDto>> Update(Guid id, [FromBody] CreateUpdateAdmissionOfferingDto input) =>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Edit)]
+	public async Task<Result<AdmissionOfferingDto>> Update(Guid id, [FromBody] UpdateAdmissionOfferingDto input) =>
 		Result.Success(await appService.UpdateAsync(id, input));
 
-	[HttpPost("{id:guid}/active")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Manage)]
-	public async Task<Result<AdmissionOfferingDto>> SetActive(Guid id, [FromQuery] bool isActive) =>
-		Result.Success(await appService.SetActiveAsync(id, isActive));
+	[HttpPost("{id:guid}/activate")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Activate)]
+	public async Task<Result<AdmissionOfferingDto>> Activate(Guid id, [FromQuery] string concurrencyStamp) =>
+		Result.Success(await appService.ActivateAsync(id, concurrencyStamp));
+
+	[HttpPost("{id:guid}/deactivate")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Deactivate)]
+	public async Task<Result<AdmissionOfferingDto>> Deactivate(Guid id, [FromQuery] string concurrencyStamp) =>
+		Result.Success(await appService.DeactivateAsync(id, concurrencyStamp));
+
+	[HttpDelete("{id:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Delete)]
+	public async Task<Result> Delete(Guid id, [FromQuery] string concurrencyStamp)
+	{
+		await appService.DeleteAsync(id, concurrencyStamp);
+		return Result.Success();
+	}
+
+	[HttpPost("{id:guid}/clone")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Clone)]
+	public async Task<Result<AdmissionOfferingDto>> Clone(Guid id, [FromBody] CloneAdmissionOfferingDto input) =>
+		Result.Success(await appService.CloneAsync(id, input));
+
+	[HttpPost("validate")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Validate)]
+	public async Task<Result<AdmissionOfferingConfigurationValidationDto>> Validate(
+		[FromBody] ValidateAdmissionOfferingDto input) => Result.Success(await appService.ValidateAsync(input));
+
+	[HttpGet("{id:guid}/availability")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
+	public async Task<Result<AdmissionOfferingAvailabilityDto>> GetAvailability(Guid id) =>
+		Result.Success(await appService.GetAvailabilityAsync(id));
+
+	[HttpPost("cycles/{admissionCycleId:guid}/bulk")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.BulkCreate)]
+	public async Task<Result<BulkAdmissionOfferingResultDto>> BulkCreate(
+		Guid admissionCycleId,
+		[FromBody] BulkCreateAdmissionOfferingsDto input) =>
+		Result.Success(await appService.BulkCreateAsync(admissionCycleId, input));
 }

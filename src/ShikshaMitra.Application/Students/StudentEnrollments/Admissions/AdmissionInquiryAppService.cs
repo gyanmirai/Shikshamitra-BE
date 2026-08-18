@@ -19,7 +19,7 @@ public class AdmissionInquiryAppService(
 	IRepository<AdmissionFamily, Guid> familyRepository,
 	IRepository<AdmissionGuardian, Guid> guardianRepository,
 	IRepository<AdmissionApplicant, Guid> applicantRepository,
-	IRepository<AdmissionOffering, Guid> offeringRepository,
+	AdmissionOfferingRuntimeService offeringRuntimeService,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
 	IRepository<AdmissionFormFieldDefinition, Guid> formFieldRepository,
 	IRepository<AdmissionActivity, Guid> activityRepository) : ApplicationService, IAdmissionInquiryAppService
@@ -51,8 +51,14 @@ public class AdmissionInquiryAppService(
 		var inquiryFields = new List<AdmissionFormFieldDefinition>();
 		if (input.AdmissionOfferingId.HasValue)
 		{
-			var offering = await offeringRepository.FindAsync(input.AdmissionOfferingId.Value);
-			if (offering?.InquiryFormDefinitionId is Guid inquiryFormId)
+			var runtime = await offeringRuntimeService.GetAvailableAsync(input.AdmissionOfferingId.Value);
+			var offering = runtime.Offering;
+			if (offering.AdmissionCycleId != input.AdmissionCycleId)
+			{
+				throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotFound,
+					"The selected Admission Offering does not belong to the selected Admission Cycle.");
+			}
+			if (offering.InquiryFormDefinitionId is Guid inquiryFormId)
 			{
 				var form = await formRepository.FindAsync(inquiryFormId); var fields = await formFieldRepository.GetListAsync(x => x.FormDefinitionId == inquiryFormId); inquiryFields = fields;
 				if (form == null || form.Status != AdmissionFormStatus.Published) throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);

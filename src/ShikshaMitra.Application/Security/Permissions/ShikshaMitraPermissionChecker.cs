@@ -1,5 +1,7 @@
+using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Hosting;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.Security.Claims;
@@ -12,18 +14,28 @@ namespace ShikshaMitra.Security.Permissions;
 [ExposeServices(typeof(IPermissionChecker))]
 public class ShikshaMitraPermissionChecker : PermissionChecker
 {
+	private readonly IHostEnvironment _hostEnvironment;
+
 	public ShikshaMitraPermissionChecker(
 		ICurrentPrincipalAccessor currentPrincipalAccessor,
 		IPermissionDefinitionManager permissionDefinitionManager,
 		ICurrentTenant currentTenant,
 		IPermissionValueProviderManager permissionValueProviderManager,
-		ISimpleStateCheckerManager<PermissionDefinition> stateCheckerManager)
+		ISimpleStateCheckerManager<PermissionDefinition> stateCheckerManager,
+		IHostEnvironment hostEnvironment)
 		: base(currentPrincipalAccessor, permissionDefinitionManager, currentTenant, permissionValueProviderManager, stateCheckerManager)
 	{
+		_hostEnvironment = hostEnvironment;
 	}
 
 	public override async Task<bool> IsGrantedAsync(string name)
 	{
+		// TODO: Remove this development-only bypass after Admissions permissions are seeded for dev roles.
+		if (_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name))
+		{
+			return true;
+		}
+
 		if (await base.IsGrantedAsync(name))
 		{
 			return true;
@@ -78,6 +90,12 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 
 	public override async Task<bool> IsGrantedAsync(ClaimsPrincipal claimsPrincipal, string name)
 	{
+		// TODO: Remove this development-only bypass after Admissions permissions are seeded for dev roles.
+		if (_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name))
+		{
+			return true;
+		}
+
 		if (await base.IsGrantedAsync(claimsPrincipal, name))
 		{
 			return true;
@@ -129,4 +147,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 
 		return false;
 	}
+
+	private static bool IsAdmissionsPermission(string name) =>
+		name.StartsWith("Students.Admission", StringComparison.Ordinal);
 }

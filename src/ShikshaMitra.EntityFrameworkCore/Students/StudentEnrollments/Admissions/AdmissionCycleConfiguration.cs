@@ -13,6 +13,10 @@ public class AdmissionCycleConfiguration : IEntityTypeConfiguration<AdmissionCyc
 		builder.ConfigureByConvention();
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(AdmissionCycleConsts.MaxNameLength);
 		builder.Property(x => x.Code).IsRequired().HasMaxLength(AdmissionCycleConsts.MaxCodeLength);
+		builder.Property(x => x.IsDeleted)
+			.IsRequired()
+			.ValueGeneratedNever()
+			.HasDefaultValue(false);
 		builder.Property(x => x.Status).IsRequired().HasConversion<int>();
 		builder.Property(x => x.StartDate).IsRequired();
 		builder.Property(x => x.EndDate).IsRequired();

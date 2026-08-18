@@ -12,6 +12,7 @@ using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.ProfessionalManagement;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -83,6 +84,24 @@ public partial class HRSeederContributor
 					slab.From,
 					slab.To,
 					slab.Amount),
+				autoSave: false);
+		}
+
+		if (!await _statutoryRuleRepository.AnyAsync(x =>
+			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
+			x.JurisdictionCode == "IN-GJ" && x.Version == 1))
+		{
+			await _statutoryRuleRepository.InsertAsync(
+				new StatutoryRuleVersion(
+					GuidGenerator.Create(), CurrentTenant.Id,
+					StatutorySchemeCodes.EmployeeStateInsurance, "IN-GJ", version: 1,
+					new DateTime(2025, 11, 21), null, establishmentThreshold: 10,
+					standardWageCeiling: 21_000m, disabilityWageCeiling: 25_000m,
+					employeePercentage: 0.75m, employerPercentage: 3.25m,
+					exclusionCapPercentage: 50m, inKindCapPercentage: 15m,
+					StatutoryRoundingPolicy.NextHigherRupee,
+					"https://www.labour.gov.in/offerings/schemes-and-services/details/labour-codes-gzNzQzMtQWa",
+					new DateTime(2026, 8, 18)),
 				autoSave: false);
 		}
 

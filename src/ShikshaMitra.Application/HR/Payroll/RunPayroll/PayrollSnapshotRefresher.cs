@@ -35,6 +35,7 @@ public class PayrollSnapshotRefresher(
 	PayrollBasisPreviewResolver basisPreviewResolver,
 	PayrollSnapshotRefreshLookupReader lookupReader,
 	PayrollProvidentFundComponentBuilder providentFundComponentBuilder,
+	PayrollEsiContextResolver esiContextResolver,
 	IProfessionalTaxRepository professionalTaxRepository,
 	ILogger<PayrollSnapshotRefresher> logger)
 	: ITransientDependency
@@ -132,6 +133,11 @@ public class PayrollSnapshotRefresher(
 			x.JurisdictionCode == "IN-GJ" &&
 			x.EffectiveFrom <= statutoryEffectiveDate &&
 			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= statutoryEffectiveDate));
+		var esiContexts = await esiContextResolver.ResolveAsync(
+			year,
+			month,
+			employeeIds,
+			resolvedComponentsByEmployee);
 
 		var computedItems = new List<RunPayrollItem>();
 		var payrollContextByEmployee = new Dictionary<Guid, PayrollEmployeeComputationContext>();
@@ -200,7 +206,8 @@ public class PayrollSnapshotRefresher(
 					new PayrollStatutoryRuleSet(
 						pfRule,
 						professionalTaxSlabs,
-						IsEmploymentCessationMonth(employee, year, month))));
+						IsEmploymentCessationMonth(employee, year, month),
+						esiContexts.GetValueOrDefault(employee.Id))));
 			}
 		}
 
@@ -255,7 +262,8 @@ public class PayrollSnapshotRefresher(
 				new PayrollStatutoryRuleSet(
 					pfRule,
 					professionalTaxSlabs,
-					IsEmploymentCessationMonth(employee, year, month))
+					IsEmploymentCessationMonth(employee, year, month),
+					esiContexts.GetValueOrDefault(employee.Id))
 			));
 		}
 

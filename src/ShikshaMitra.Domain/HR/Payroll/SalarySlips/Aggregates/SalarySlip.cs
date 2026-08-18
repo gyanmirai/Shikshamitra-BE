@@ -44,6 +44,13 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public int? ProvidentFundRuleVersion { get; private set; }
 	public Guid? ProfessionalTaxRuleId { get; private set; }
 	public int? ProfessionalTaxRuleVersion { get; private set; }
+	public Guid? EmployeeStateInsuranceRuleId { get; private set; }
+	public int? EmployeeStateInsuranceRuleVersion { get; private set; }
+	public decimal EmployeeStateInsuranceWages { get; private set; }
+	public string? EmployeeStateInsuranceCoverageDecision { get; private set; }
+	public string? EmployeeStateInsuranceNumber { get; private set; }
+	public DateTime? EmployeeStateInsuranceContributionPeriodStart { get; private set; }
+	public DateTime? EmployeeStateInsuranceContributionPeriodEnd { get; private set; }
 
 	/// <summary>
 	/// Payroll day basis used for LOP proration (denominator days).
@@ -191,7 +198,14 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? providentFundRuleId,
 		int? providentFundRuleVersion,
 		Guid? professionalTaxRuleId,
-		int? professionalTaxRuleVersion)
+		int? professionalTaxRuleVersion,
+		Guid? employeeStateInsuranceRuleId,
+		int? employeeStateInsuranceRuleVersion,
+		decimal employeeStateInsuranceWages,
+		string? employeeStateInsuranceCoverageDecision,
+		string? employeeStateInsuranceNumber,
+		DateTime? employeeStateInsuranceContributionPeriodStart,
+		DateTime? employeeStateInsuranceContributionPeriodEnd)
 	{
 		if (IsImmutable())
 			throw new InvalidOperationException("Cannot update finalized or paid salary slip");
@@ -202,6 +216,13 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ProvidentFundRuleVersion = providentFundRuleVersion;
 		ProfessionalTaxRuleId = professionalTaxRuleId;
 		ProfessionalTaxRuleVersion = professionalTaxRuleVersion;
+		EmployeeStateInsuranceRuleId = employeeStateInsuranceRuleId;
+		EmployeeStateInsuranceRuleVersion = employeeStateInsuranceRuleVersion;
+		EmployeeStateInsuranceWages = employeeStateInsuranceWages;
+		EmployeeStateInsuranceCoverageDecision = employeeStateInsuranceCoverageDecision;
+		EmployeeStateInsuranceNumber = employeeStateInsuranceNumber;
+		EmployeeStateInsuranceContributionPeriodStart = employeeStateInsuranceContributionPeriodStart;
+		EmployeeStateInsuranceContributionPeriodEnd = employeeStateInsuranceContributionPeriodEnd;
 	}
 
 	private bool IsImmutable() => Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid;

@@ -89,6 +89,7 @@ internal static class PayrollRunItemBuilder
 			NetPayDelta = preview.NetPayDelta.HasValue ? (double)preview.NetPayDelta.Value : null,
 			NetPayDeltaPercent = preview.NetPayDeltaPercent.HasValue ? (double)preview.NetPayDeltaPercent.Value : null,
 			IssueCodes = issueCodes
+				.Concat(preview.Computation.StatutoryIssueCodes)
 				.Concat(PayrollIssueCodeBuilder.Build(payrollDetails, components, basis.BasisDays, preview.Computation.PayableDays, preview.Computation.NetPay, previousMonthNetPay, preview.NetPayDeltaPercent, preview.HasAttendanceOrPaidLeave))
 				.Distinct()
 				.ToList(),
@@ -117,6 +118,13 @@ internal static class PayrollRunItemBuilder
 			ProvidentFundRuleVersion = preview.Computation.ProvidentFundRuleVersion,
 			ProfessionalTaxRuleId = preview.Computation.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = preview.Computation.ProfessionalTaxRuleVersion,
+			EmployeeStateInsuranceRuleId = preview.Computation.EmployeeStateInsuranceRuleId,
+			EmployeeStateInsuranceRuleVersion = preview.Computation.EmployeeStateInsuranceRuleVersion,
+			EmployeeStateInsuranceWages = (double)preview.Computation.EmployeeStateInsuranceWages,
+			EmployeeStateInsuranceCoverageDecision = preview.Computation.EmployeeStateInsuranceCoverageDecision,
+			EmployeeStateInsuranceNumber = preview.Computation.EmployeeStateInsuranceNumber,
+			EmployeeStateInsuranceContributionPeriodStart = preview.Computation.EmployeeStateInsuranceContributionPeriodStart,
+			EmployeeStateInsuranceContributionPeriodEnd = preview.Computation.EmployeeStateInsuranceContributionPeriodEnd,
 			PayrollAdjustments = adjustments.Select(PayrollRunProjection.ToAdjustmentDto).ToList()
 		};
 	}
@@ -175,6 +183,7 @@ internal static class PayrollRunItemBuilder
 			NetPayDelta = preview.NetPayDelta.HasValue ? (double)preview.NetPayDelta.Value : null,
 			NetPayDeltaPercent = preview.NetPayDeltaPercent.HasValue ? (double)preview.NetPayDeltaPercent.Value : null,
 			IssueCodes = issueCodes
+				.Concat(preview.Computation.StatutoryIssueCodes)
 				.Concat(PayrollIssueCodeBuilder.Build(payrollDetails, components, basis.BasisDays, preview.Computation.PayableDays, preview.Computation.NetPay, previousMonthNetPay, preview.NetPayDeltaPercent, preview.HasAttendanceOrPaidLeave))
 				.Distinct()
 				.ToList(),
@@ -196,6 +205,13 @@ internal static class PayrollRunItemBuilder
 			ProvidentFundRuleVersion = preview.Computation.ProvidentFundRuleVersion,
 			ProfessionalTaxRuleId = preview.Computation.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = preview.Computation.ProfessionalTaxRuleVersion,
+			EmployeeStateInsuranceRuleId = preview.Computation.EmployeeStateInsuranceRuleId,
+			EmployeeStateInsuranceRuleVersion = preview.Computation.EmployeeStateInsuranceRuleVersion,
+			EmployeeStateInsuranceWages = (double)preview.Computation.EmployeeStateInsuranceWages,
+			EmployeeStateInsuranceCoverageDecision = preview.Computation.EmployeeStateInsuranceCoverageDecision,
+			EmployeeStateInsuranceNumber = preview.Computation.EmployeeStateInsuranceNumber,
+			EmployeeStateInsuranceContributionPeriodStart = preview.Computation.EmployeeStateInsuranceContributionPeriodStart,
+			EmployeeStateInsuranceContributionPeriodEnd = preview.Computation.EmployeeStateInsuranceContributionPeriodEnd,
 			PayrollAdjustments = adjustments.Select(PayrollRunProjection.ToAdjustmentDto).ToList()
 		};
 	}

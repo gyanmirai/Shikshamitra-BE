@@ -23,13 +23,13 @@ HR behavior is split by operational area:
 | Employees | Implemented | Employee lifecycle, profile data, documents, I-card data, status transitions, payroll details, reporting manager, and academic scope |
 | Attendance | Implemented | Manual attendance, attendance tracking, grouped register, imports, automated runs, locks, and payroll tags |
 | Leave | Implemented | Paid and unpaid leave policies, leave requests, approvals, balances, leave center, and payroll impact |
-| Payroll | Implemented | Component settings, salary structures, readiness, preview, reviews, adjustments, lock, salary slips, and PDF output |
+| Payroll | Implemented | Component settings, salary structures, ESI statutory setup and calculation, readiness, preview, reviews, adjustments, lock, salary slips, and PDF output |
 | HR policies | Implemented | Work calendar policies, attendance policies, payroll policies, assignments, effective preview, versions, audit, and holiday impact |
 | Professional management | Implemented | Templates, cycles, reviews, observations, evidence, feedback, outcomes, reports, audit, and PDFs |
 | Reports | Implemented | HR report catalog, options, templates, preview, export, and export history |
 | Notifications | Implemented | HR notification settings and notification history surfaces |
 | Events and holidays | Partial | Calendar contracts exist, but frontend HR navigation must be verified before treating HR menu access as shipped |
-| TDS and professional tax | Partial | Payroll settings screens and domain pieces exist, but professional tax has no documented HTTP controller |
+| TDS | Partial | Payroll settings and statutory behavior require separate verification before use. |
 | Training | Unconfirmed | Treat as product-unconfirmed until the frontend menu and backend ownership are verified |
 
 ## Business rules that protect data

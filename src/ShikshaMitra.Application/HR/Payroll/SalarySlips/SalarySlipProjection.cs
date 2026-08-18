@@ -61,7 +61,14 @@ internal static class SalarySlipProjection
 			ProvidentFundRuleId = salarySlip.ProvidentFundRuleId,
 			ProvidentFundRuleVersion = salarySlip.ProvidentFundRuleVersion,
 			ProfessionalTaxRuleId = salarySlip.ProfessionalTaxRuleId,
-			ProfessionalTaxRuleVersion = salarySlip.ProfessionalTaxRuleVersion
+			ProfessionalTaxRuleVersion = salarySlip.ProfessionalTaxRuleVersion,
+			EmployeeStateInsuranceRuleId = salarySlip.EmployeeStateInsuranceRuleId,
+			EmployeeStateInsuranceRuleVersion = salarySlip.EmployeeStateInsuranceRuleVersion,
+			EmployeeStateInsuranceWages = salarySlip.EmployeeStateInsuranceWages,
+			EmployeeStateInsuranceCoverageDecision = salarySlip.EmployeeStateInsuranceCoverageDecision,
+			EmployeeStateInsuranceNumber = salarySlip.EmployeeStateInsuranceNumber,
+			EmployeeStateInsuranceContributionPeriodStart = salarySlip.EmployeeStateInsuranceContributionPeriodStart,
+			EmployeeStateInsuranceContributionPeriodEnd = salarySlip.EmployeeStateInsuranceContributionPeriodEnd
 		};
 	}
 

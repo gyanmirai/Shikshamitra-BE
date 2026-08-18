@@ -23,6 +23,8 @@ public class SalaryTemplateAppService(
 	IAsyncQueryableExecuter asyncExecuter,
 	IClock clock) : ApplicationService, ISalaryTemplateAppService
 {
+	private const string CanonicalEsiComponentName = "Employee State Insurance (ESI) - Auto";
+
 	public async Task<SalaryTemplateListDto> GetListAsync()
 	{
 		var templates = await asyncExecuter.ToListAsync(
@@ -59,7 +61,7 @@ public class SalaryTemplateAppService(
 				.ThenBy(x => x.Name));
 		var deductions = await asyncExecuter.ToListAsync(
 			(await deductionComponentRepository.GetQueryableAsync())
-				.Where(x => x.IsActive)
+				.Where(x => x.IsActive && x.Name != CanonicalEsiComponentName)
 				.OrderBy(x => x.DisplayOrder)
 				.ThenBy(x => x.Name));
 

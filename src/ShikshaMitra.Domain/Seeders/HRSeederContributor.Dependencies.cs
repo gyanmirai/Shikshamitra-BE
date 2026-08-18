@@ -13,6 +13,7 @@ using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.ProfessionalManagement;
 using ShikshaMitra.TenantSettings;
@@ -47,6 +48,7 @@ public partial class HRSeederContributor
 	private readonly DeductionComponentManager _deductionComponentManager;
 	private readonly IProvidentFundRepository _providentFundRepository;
 	private readonly IProfessionalTaxRepository _professionalTaxRepository;
+	private readonly IRepository<StatutoryRuleVersion, Guid> _statutoryRuleRepository;
 	private readonly IRepository<SalaryStructureTemplate, Guid> _salaryStructureTemplateRepository;
 	private readonly IRepository<SalaryStructureTemplateVersion, Guid> _salaryStructureTemplateVersionRepository;
 	private readonly IRepository<WorkCalendarPolicy, Guid> _workCalendarPolicyRepository;

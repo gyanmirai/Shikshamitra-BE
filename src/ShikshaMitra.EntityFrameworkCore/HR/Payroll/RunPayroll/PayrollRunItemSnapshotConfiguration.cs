@@ -35,6 +35,9 @@ public class PayrollRunItemSnapshotConfiguration : IEntityTypeConfiguration<Payr
 		builder.Property(x => x.BasisDays).HasPrecision(18, 2);
 		builder.Property(x => x.PayableUnits).HasPrecision(18, 2);
 		builder.Property(x => x.ProrationFactor).HasPrecision(18, 4);
+		builder.Property(x => x.EmployeeStateInsuranceWages).HasPrecision(18, 2);
+		builder.Property(x => x.EmployeeStateInsuranceCoverageDecision).HasMaxLength(64);
+		builder.Property(x => x.EmployeeStateInsuranceNumber).HasMaxLength(100);
 
 		builder.Property(x => x.IssueCodesJson).HasColumnType("jsonb");
 		builder.Property(x => x.HolidayImpactJson).HasColumnType("jsonb");

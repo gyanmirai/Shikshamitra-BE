@@ -219,6 +219,29 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		public static class PayrollManagement_SettingsStatutorySchemes
+		{
+			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.StatutorySchemes";
+			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.StatutorySchemes";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string Activate = $"{SubmoduleName}.Activate";
+			public const string ManageEnrollment = $"{SubmoduleName}.ManageEnrollment";
+			public const string ApproveOverride = $"{SubmoduleName}.ApproveOverride";
+
+			public static readonly string[] All = { View, Edit, Activate, ManageEnrollment, ApproveOverride };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Activate, $"{SubmoduleDisplayName}.Activate" },
+				{ ManageEnrollment, $"{SubmoduleDisplayName}.ManageEnrollment" },
+				{ ApproveOverride, $"{SubmoduleDisplayName}.ApproveOverride" }
+			};
+		}
+
 		public static class PayrollManagement_SettingsProfessionalTax
 		{
 			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.ProfessionalTax";

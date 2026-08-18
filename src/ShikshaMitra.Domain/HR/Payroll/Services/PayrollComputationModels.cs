@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Statutory;
 
 namespace ShikshaMitra.HR.Payroll.Services;
 
@@ -19,7 +20,17 @@ public sealed record PayrollComputedEmployerContribution(
 public sealed record PayrollStatutoryRuleSet(
 	ProvidentFund? ProvidentFund,
 	IReadOnlyList<ProfessionalTax> ProfessionalTaxSlabs,
-	bool IsEmploymentCessationMonth = false);
+	bool IsEmploymentCessationMonth = false,
+	PayrollEsiStatutoryContext? EmployeeStateInsurance = null);
+
+public sealed record PayrollEsiStatutoryContext(
+	DateTime PayrollMonth,
+	StatutoryRuleVersion Rule,
+	StatutoryEstablishment Establishment,
+	EmployeeStatutoryEnrollment? Enrollment,
+	IReadOnlyDictionary<Guid, StatutoryWageTreatment> ComponentTreatments,
+	IReadOnlyList<StatutoryOverride> Overrides,
+	EmployeePayrollComponent DeductionSource);
 
 public sealed record PayrollComputationResult(
 	int PresentDays,
@@ -38,7 +49,15 @@ public sealed record PayrollComputationResult(
 	Guid? ProvidentFundRuleId,
 	int? ProvidentFundRuleVersion,
 	Guid? ProfessionalTaxRuleId,
-	int? ProfessionalTaxRuleVersion);
+	int? ProfessionalTaxRuleVersion,
+	Guid? EmployeeStateInsuranceRuleId,
+	int? EmployeeStateInsuranceRuleVersion,
+	decimal EmployeeStateInsuranceWages,
+	string? EmployeeStateInsuranceCoverageDecision,
+	string? EmployeeStateInsuranceNumber,
+	DateTime? EmployeeStateInsuranceContributionPeriodStart,
+	DateTime? EmployeeStateInsuranceContributionPeriodEnd,
+	List<string> StatutoryIssueCodes);
 
 public sealed record PayrollAttendancePayableDays(
 	int PresentDays,

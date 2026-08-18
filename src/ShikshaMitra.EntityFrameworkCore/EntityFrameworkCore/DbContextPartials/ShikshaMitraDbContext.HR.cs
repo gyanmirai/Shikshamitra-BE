@@ -20,6 +20,7 @@ using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.ProfessionalManagement;
 using ShikshaMitra.HR.Reports;
 
@@ -63,6 +64,11 @@ public partial class ShikshaMitraDbContext
     public DbSet<PayrollMonthLock> PayrollMonthLocks { get; set; }
     public DbSet<SalaryStructureTemplate> SalaryStructureTemplates { get; set; }
     public DbSet<SalaryStructureTemplateVersion> SalaryStructureTemplateVersions { get; set; }
+    public DbSet<StatutoryRuleVersion> StatutoryRuleVersions { get; set; }
+    public DbSet<StatutoryEstablishment> StatutoryEstablishments { get; set; }
+    public DbSet<EmployeeStatutoryEnrollment> EmployeeStatutoryEnrollments { get; set; }
+    public DbSet<PayrollComponentStatutoryTreatment> PayrollComponentStatutoryTreatments { get; set; }
+    public DbSet<StatutoryOverride> StatutoryOverrides { get; set; }
 
     public DbSet<WorkCalendarPolicy> WorkCalendarPolicies { get; set; }
     public DbSet<WorkCalendarHoliday> WorkCalendarHolidays { get; set; }

@@ -20,7 +20,6 @@ public class TeacherAvailability : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public string Reason { get; private set; } = string.Empty;
     public bool IsFullDay { get; private set; }
     public int AffectedLectureCount { get; private set; }
-    public bool AutoCreateSubstitutions { get; private set; }
     public bool NotifyLeadership { get; private set; }
     public string? AttachmentName { get; private set; }
     public string? Remarks { get; private set; }
@@ -41,7 +40,6 @@ public class TeacherAvailability : FullAuditedAggregateRoot<Guid>, IMultiTenant
         TeacherAvailabilitySource sourceType,
         string reason,
         bool isFullDay,
-        bool autoCreateSubstitutions,
         bool notifyLeadership,
         Guid? academicYearId = null,
         Guid? teacherId = null,
@@ -66,7 +64,6 @@ public class TeacherAvailability : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Reason = reason;
         IsFullDay = isFullDay;
         AffectedLectureCount = affectedLectureCount;
-        AutoCreateSubstitutions = autoCreateSubstitutions;
         NotifyLeadership = notifyLeadership;
         AttachmentName = attachmentName;
         Remarks = remarks;
@@ -75,6 +72,11 @@ public class TeacherAvailability : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public void SetAffectedLectureCount(int count)
     {
         AffectedLectureCount = count;
+    }
+
+    public void SetAcademicYear(Guid? academicYearId)
+    {
+        AcademicYearId = academicYearId;
     }
 
     public void Cancel()

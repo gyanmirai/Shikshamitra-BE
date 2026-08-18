@@ -115,8 +115,7 @@ public class TakeAttendanceTeacherAvailabilitySyncService(
 			SourceEntityId = attendance.Id,
 			Reason = reason,
 			IsFullDay = isFullDay,
-			AutoCreateSubstitutions = true,
-			NotifyLeadership = true,
+            NotifyLeadership = true,
 			Remarks = attendance.Remarks
 		});
 	}

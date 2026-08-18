@@ -6372,9 +6372,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
-                    b.Property<bool>("AutoCreateSubstitutions")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTime>("AvailabilityDate")
                         .HasColumnType("timestamp with time zone");
 

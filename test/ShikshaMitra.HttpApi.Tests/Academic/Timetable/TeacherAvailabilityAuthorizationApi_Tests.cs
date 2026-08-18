@@ -31,7 +31,6 @@ public class TeacherAvailabilityAuthorizationApi_Tests : ShikshaMitraApiTestBase
 		yield return [HttpMethod.Post, BaseUrl];
 		yield return [HttpMethod.Post, $"{BaseUrl}/affected-lectures"];
 		yield return [HttpMethod.Get, $"{BaseUrl}/affected-lectures?availabilityDate=2026-07-26"];
-		yield return [HttpMethod.Post, $"{BaseUrl}/{Guid.NewGuid():D}/create-substitutions"];
 		yield return [HttpMethod.Post, $"{BaseUrl}/{Guid.NewGuid():D}/cancel"];
 	}
 
@@ -98,8 +97,6 @@ public class TeacherAvailabilityAuthorizationApi_Tests : ShikshaMitraApiTestBase
 				ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View,
 			[nameof(TeacherAvailabilityController.GetAffectedLecturesFromQueryAsync)] =
 				ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View,
-			[nameof(TeacherAvailabilityController.CreateSubstitutionsAsync)] =
-				ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add,
 			[nameof(TeacherAvailabilityController.CancelAsync)] =
 				ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Delete
 		};

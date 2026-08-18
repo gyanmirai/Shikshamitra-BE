@@ -32,6 +32,7 @@ public class AcademicCalendarDayDto : EntityDto<Guid>
 {
     public Guid AcademicCalendarId { get; set; }
     public DateTime Date { get; set; }
+    public DateTime? EndDate { get; set; }
     public DayType DayType { get; set; }
     public HolidayCategory? HolidayCategory { get; set; }
     public string Title { get; set; }

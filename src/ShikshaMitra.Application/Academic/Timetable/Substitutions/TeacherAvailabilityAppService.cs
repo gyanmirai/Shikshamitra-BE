@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -20,14 +21,14 @@ namespace ShikshaMitra.Academic.Timetable.Substitutions;
 public class TeacherAvailabilityAppService(
     IRepository<TeacherAvailability, Guid> availabilityRepository,
     IRepository<SubstitutionRequest, Guid> substitutionRepository,
-    IRepository<SubstitutionAuditLog, Guid> auditRepository,
     ITimetableRepository timetableRepository,
     IRepository<Standard, Guid> standardRepository,
     IRepository<Division, Guid> divisionRepository,
     IRepository<Subject, Guid> subjectRepository,
     IRepository<Room, Guid> roomRepository,
     IRepository<Employee, Guid> employeeRepository,
-    IEmployeeAttendanceRepository employeeAttendanceRepository
+    IEmployeeAttendanceRepository employeeAttendanceRepository,
+    IRepository<AcademicYear, Guid> academicYearRepository
 ) : ApplicationService, ITeacherAvailabilityAppService
 {
     private const string AvailabilityOverlapMessage =
@@ -123,12 +124,20 @@ public class TeacherAvailabilityAppService(
             }
 
             var availabilityDate = NormalizeDate(attendance.AttendanceDate.ToDateTime(TimeOnly.MinValue));
-            var hasExisting = existingRows.Any(x =>
+            var existingRow = existingRows.FirstOrDefault(x =>
                 x.SourceEntityId == attendance.Id ||
                 (x.TeacherId == attendance.EmployeeId && x.AvailabilityDate == availabilityDate));
 
-            if (hasExisting)
+            if (existingRow != null)
             {
+                // Older attendance syncs could create rows without an academic year.
+                // Backfill the year so the current-year filter does not hide them.
+                if (!existingRow.AcademicYearId.HasValue && input.AcademicYearId.HasValue)
+                {
+                    existingRow.SetAcademicYear(input.AcademicYearId);
+                    await availabilityRepository.UpdateAsync(existingRow, autoSave: true);
+                }
+
                 continue;
             }
 
@@ -150,7 +159,6 @@ public class TeacherAvailabilityAppService(
                     ? "Marked absent in HR attendance."
                     : "Marked half-day unavailable in HR attendance.",
                 IsFullDay = isFullDay,
-                AutoCreateSubstitutions = true,
                 NotifyLeadership = true,
                 Remarks = attendance.Remarks
             });
@@ -190,6 +198,8 @@ public class TeacherAvailabilityAppService(
             throw new UserFriendlyException(AvailabilityOverlapMessage);
         }
 
+        var academicYearId = input.AcademicYearId ?? await ResolveAcademicYearIdAsync(availabilityDate);
+
         var affected = await GetAffectedLecturesAsync(input);
         var entity = new TeacherAvailability(
             GuidGenerator.Create(),
@@ -202,9 +212,8 @@ public class TeacherAvailabilityAppService(
             input.SourceType,
             input.Reason,
             input.IsFullDay,
-            input.AutoCreateSubstitutions,
             input.NotifyLeadership,
-            input.AcademicYearId,
+            academicYearId,
             input.TeacherId,
             input.DepartmentName,
             input.SourceEntityId,
@@ -214,72 +223,19 @@ public class TeacherAvailabilityAppService(
 
         await availabilityRepository.InsertAsync(entity, autoSave: true);
 
-        if (input.AutoCreateSubstitutions)
-        {
-            foreach (var lecture in affected.Items.Where(x => x.CanCreateSubstitution))
-            {
-                if (IsPastWindow(availabilityDate, ParseTime(lecture.EndTime, "endTime")))
-                {
-                    continue;
-                }
-
-                var duplicate = lecture.ExistingSubstitutionId.HasValue ||
-                    await substitutionRepository.AnyAsync(x =>
-                        x.Date == availabilityDate &&
-                        x.TimetableSlotSubjectId == lecture.SlotSubjectId &&
-                        x.OriginalTeacherId == lecture.TeacherId &&
-                        x.Status != SubstitutionStatus.Cancelled &&
-                        x.Status != SubstitutionStatus.Rejected &&
-                        x.Status != SubstitutionStatus.Expired);
-
-                if (duplicate)
-                {
-                    continue;
-                }
-
-                var request = new SubstitutionRequest(
-                    GuidGenerator.Create(),
-                    CurrentTenant.Id,
-                    availabilityDate,
-                    lecture.Period,
-                    ParseTime(lecture.StartTime, "startTime"),
-                    ParseTime(lecture.EndTime, "endTime"),
-                    lecture.ClassName,
-                    lecture.DivisionName,
-                    lecture.SubjectName,
-                    lecture.TeacherName,
-                    lecture.RoomName,
-                    input.Reason,
-                    SubstitutionPriority.High,
-                    MapAvailabilitySourceToSubstitutionSource(input.SourceType),
-                    true,
-                    input.AcademicYearId,
-                    lecture.StandardId,
-                    lecture.DivisionId,
-                    lecture.TimetableId,
-                    lecture.TimetableSlotId,
-                    lecture.SlotSubjectId,
-                    lecture.SubjectId,
-                    lecture.TeacherId,
-                    lecture.RoomId,
-                    lecture.SubjectName,
-                    input.Remarks);
-
-                await substitutionRepository.InsertAsync(request, autoSave: true);
-                await auditRepository.InsertAsync(
-                    new SubstitutionAuditLog(
-                        GuidGenerator.Create(),
-                        CurrentTenant.Id,
-                        request.Id,
-                        CurrentUser.Name ?? CurrentUser.UserName ?? "System",
-                        "Auto Created",
-                        "Substitution created from teacher availability.",
-                        CurrentUser.Id),
-                    autoSave: true);
-            }
-        }
-
         return Map(entity);
+    }
+
+    private async Task<Guid?> ResolveAcademicYearIdAsync(DateTime availabilityDate)
+    {
+        var query = await academicYearRepository.GetQueryableAsync();
+        var academicYear = await AsyncExecuter.FirstOrDefaultAsync(
+            query
+                .Where(year => year.StartDate.Date <= availabilityDate.Date &&
+                               year.EndDate.Date >= availabilityDate.Date)
+                .OrderByDescending(year => year.StartDate));
+
+        return academicYear?.Id;
     }
 
     public async Task<AffectedLectureResultDto> GetAffectedLecturesAsync(CreateTeacherAvailabilityDto input)
@@ -404,76 +360,6 @@ public class TeacherAvailabilityAppService(
         await availabilityRepository.UpdateAsync(entity, autoSave: true);
     }
 
-    public async Task<int> CreateSubstitutionsAsync(Guid id)
-    {
-        if (!IsAdminUser())
-        {
-            throw new UserFriendlyException("Only administrators can create substitutions from unavailability.");
-        }
-
-        var entity = await availabilityRepository.GetAsync(id);
-        var input = new CreateTeacherAvailabilityDto
-        {
-            AcademicYearId = entity.AcademicYearId,
-            TeacherId = entity.TeacherId,
-            TeacherName = entity.TeacherName,
-            DepartmentName = entity.DepartmentName,
-            AvailabilityDate = entity.AvailabilityDate,
-            StartTime = entity.StartTime.ToString("HH:mm"),
-            EndTime = entity.EndTime.ToString("HH:mm"),
-            AvailabilityStatus = entity.AvailabilityStatus,
-            SourceType = entity.SourceType,
-            SourceEntityId = entity.SourceEntityId,
-            Reason = entity.Reason,
-            IsFullDay = entity.IsFullDay,
-            AutoCreateSubstitutions = false,
-            NotifyLeadership = entity.NotifyLeadership,
-            AttachmentName = entity.AttachmentName,
-            Remarks = entity.Remarks
-        };
-        var affected = await GetAffectedLecturesAsync(input);
-        var created = 0;
-        foreach (var lecture in affected.Items.Where(x => x.CanCreateSubstitution))
-        {
-            if (IsPastWindow(entity.AvailabilityDate, ParseTime(lecture.EndTime, "endTime")))
-            {
-                continue;
-            }
-
-            var request = new SubstitutionRequest(
-                GuidGenerator.Create(),
-                CurrentTenant.Id,
-                entity.AvailabilityDate,
-                lecture.Period,
-                ParseTime(lecture.StartTime, "startTime"),
-                ParseTime(lecture.EndTime, "endTime"),
-                lecture.ClassName,
-                lecture.DivisionName,
-                lecture.SubjectName,
-                lecture.TeacherName,
-                lecture.RoomName,
-                entity.Reason,
-                SubstitutionPriority.High,
-                MapAvailabilitySourceToSubstitutionSource(entity.SourceType),
-                true,
-                entity.AcademicYearId,
-                lecture.StandardId,
-                lecture.DivisionId,
-                lecture.TimetableId,
-                lecture.TimetableSlotId,
-                lecture.SlotSubjectId,
-                lecture.SubjectId,
-                lecture.TeacherId,
-                lecture.RoomId,
-                lecture.SubjectName,
-                entity.Remarks);
-            await substitutionRepository.InsertAsync(request, autoSave: true);
-            created++;
-        }
-
-        return created;
-    }
-
     private static AffectedLectureDto BuildAffectedLecture(
         Timetables.Timetable timetable,
         TimetableSlot slot,
@@ -491,7 +377,14 @@ public class TeacherAvailabilityAppService(
         var division = divisions.FirstOrDefault(x => x.Id == timetable.DivisionId);
         var room = slotSubject.RoomId.HasValue ? rooms.FirstOrDefault(x => x.Id == slotSubject.RoomId.Value) : null;
         var teacher = ResolveEmployeeByTeacherReference(employees, slotSubject.TeacherId, null);
-        var existingRow = existing.FirstOrDefault(x => x.TimetableSlotSubjectId == slotSubject.Id);
+        var existingRow = existing.FirstOrDefault(x =>
+            x.TimetableSlotSubjectId == slotSubject.Id ||
+            (x.TimetableSlotSubjectId == null &&
+             x.TimetableId == timetable.Id &&
+             x.TimetableSlotId == slot.Id &&
+             x.SubjectId == slotSubject.SubjectId &&
+             x.StartTime < slot.EndTime &&
+             x.EndTime > slot.StartTime));
 
         return new AffectedLectureDto
         {
@@ -586,7 +479,6 @@ public class TeacherAvailabilityAppService(
             SourceEntityId = row.SourceEntityId,
             Reason = row.Reason,
             IsFullDay = row.IsFullDay,
-            AutoCreateSubstitutions = false,
             NotifyLeadership = row.NotifyLeadership,
             AttachmentName = row.AttachmentName,
             Remarks = row.Remarks
@@ -596,6 +488,17 @@ public class TeacherAvailabilityAppService(
             .Where(x => x.ExistingSubstitutionId.HasValue && !string.IsNullOrWhiteSpace(x.ExistingSubstitutionStatus))
             .Select(x => x.ExistingSubstitutionStatus!)
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        dto.ActiveSubstitutionIds = affected.Items
+            .Where(x => x.ExistingSubstitutionId.HasValue)
+            .Select(x => x.ExistingSubstitutionId!.Value)
+            .Distinct()
+            .ToList();
+        dto.PendingSubstitutionIds = affected.Items
+            .Where(x => x.ExistingSubstitutionId.HasValue &&
+                        string.Equals(x.ExistingSubstitutionStatus, SubstitutionStatus.Pending.ToString(), StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.ExistingSubstitutionId!.Value)
+            .Distinct()
             .ToList();
         return dto;
     }
@@ -614,10 +517,11 @@ public class TeacherAvailabilityAppService(
         Reason = row.Reason,
         IsFullDay = row.IsFullDay,
         AffectedLectureCount = row.AffectedLectureCount,
-        AutoCreateSubstitutions = row.AutoCreateSubstitutions,
         NotifyLeadership = row.NotifyLeadership,
         CanCreateSubstitution = row.AffectedLectureCount > 0,
         ActiveSubstitutionStatuses = [],
+        ActiveSubstitutionIds = [],
+        PendingSubstitutionIds = [],
         AttachmentName = row.AttachmentName,
         Remarks = row.Remarks
     };
@@ -671,16 +575,6 @@ public class TeacherAvailabilityAppService(
 
     private static bool IsPastWindow(DateTime date, TimeOnly endTime) =>
         DateTime.UtcNow > CombineDateAndTime(date, endTime);
-
-    private static SubstitutionSource MapAvailabilitySourceToSubstitutionSource(
-        TeacherAvailabilitySource sourceType) => sourceType switch
-    {
-        TeacherAvailabilitySource.HrLeave => SubstitutionSource.HrLeave,
-        TeacherAvailabilitySource.Attendance => SubstitutionSource.Attendance,
-        TeacherAvailabilitySource.AcademicCalendar => SubstitutionSource.AcademicCalendar,
-        TeacherAvailabilitySource.ExamDuty => SubstitutionSource.ExamDuty,
-        _ => SubstitutionSource.AutoCreated
-    };
 
     private static TimetableDayOfWeek? ToTimetableDay(DayOfWeek dayOfWeek) => dayOfWeek switch
     {

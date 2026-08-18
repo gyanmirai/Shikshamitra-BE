@@ -674,21 +674,36 @@ public class SubjectAssignmentAppService(
 		}
 
 		var status = (SubjectStatus) input.Status;
-		EnsureSubjectAssignmentStatusTransitionAllowed(assignment, status);
-		if (status == SubjectStatus.Published)
+		var assignments = assignment.ElectiveGroupId.HasValue
+			? await AsyncExecuter.ToListAsync(query.Where(a =>
+				a.StandardId == assignment.StandardId &&
+				a.ElectiveGroupId == assignment.ElectiveGroupId))
+			: new List<AssignedSubject> { assignment };
+
+		foreach (var groupAssignment in assignments)
 		{
-			await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(new List<AssignedSubject> { assignment }, assignment.StandardId);
-			EnsureSubjectAssignmentReadyToPublish(assignment);
+			EnsureSubjectAssignmentStatusTransitionAllowed(groupAssignment, status);
 		}
 
-		assignment.ChangeStatus(status);
-
 		if (status == SubjectStatus.Published)
 		{
-			assignment.PublishedAt = DateTimeOffset.UtcNow;
+			await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(assignments, assignment.StandardId);
+			foreach (var groupAssignment in assignments)
+			{
+				EnsureSubjectAssignmentReadyToPublish(groupAssignment);
+			}
 		}
 
-		await assignmentRepository.UpdateAsync(assignment, autoSave: true);
+		foreach (var groupAssignment in assignments)
+		{
+			groupAssignment.ChangeStatus(status);
+			if (status == SubjectStatus.Published)
+			{
+				groupAssignment.PublishedAt = DateTimeOffset.UtcNow;
+			}
+		}
+
+		await assignmentRepository.UpdateManyAsync(assignments, autoSave: true);
 	}
 
 	public async Task<PublishResponseDto> PublishAsync(List<Guid> assignmentIds)
@@ -1075,8 +1090,7 @@ public class SubjectAssignmentAppService(
 
 		var query = await assignmentRepository.WithDetailsAsync(
 			a => a.Teachers,
-			a => a.Documents,
-			a => a.Chapters);
+			a => a.Documents);
 
 		var sourceQuery = query.Where(a =>
 			a.StandardId == input.SourceClassId &&
@@ -1292,104 +1306,18 @@ public class SubjectAssignmentAppService(
 
 		if (input.IncludeDocuments)
 		{
-			target.Documents.Clear();
+			foreach (var document in target.Documents.Where(d => !d.ChapterId.HasValue).ToList())
+			{
+				target.Documents.Remove(document);
+			}
+
 			foreach (var document in source.Documents.Where(d => !d.ChapterId.HasValue))
 			{
 				target.AddDocument(guidGenerator.Create(), document.BlobName);
 			}
 		}
 
-		if (!input.IncludeCurriculumDetails)
-		{
-			return;
-		}
-
-		target.Chapters.Clear();
-		if (!input.IncludeDocuments)
-		{
-			foreach (var document in target.Documents.Where(d => d.ChapterId.HasValue).ToList())
-			{
-				target.Documents.Remove(document);
-			}
-		}
-
-		foreach (var sourceChapter in source.Chapters.OrderBy(c => c.ChapterNumber))
-		{
-			var chapterId = guidGenerator.Create();
-			var targetChapter = new AssignedSubjectChapter(
-				chapterId,
-				target.Id,
-				sourceChapter.ChapterNumber,
-				sourceChapter.ChapterName,
-				sourceChapter.ChapterStartTime,
-				sourceChapter.ChapterEndTime,
-				sourceChapter.Description)
-			{
-				TenantId = CurrentTenant.Id,
-				UnitName = sourceChapter.UnitName,
-				TermName = sourceChapter.TermName,
-				Topic = sourceChapter.Topic,
-				EstimatedTeachingDays = sourceChapter.EstimatedTeachingDays,
-				EstimatedPeriods = sourceChapter.EstimatedPeriods,
-				RevisionDays = sourceChapter.RevisionDays,
-				BufferDays = sourceChapter.BufferDays,
-				DifficultyLevel = sourceChapter.DifficultyLevel,
-				BloomLevel = sourceChapter.BloomLevel,
-				Tags = sourceChapter.Tags,
-				LearningOutcomes = sourceChapter.LearningOutcomes,
-				SkillsCovered = sourceChapter.SkillsCovered,
-				Prerequisites = sourceChapter.Prerequisites,
-				TeachingMethods = sourceChapter.TeachingMethods,
-				ClassActivities = sourceChapter.ClassActivities,
-				CompletionCriteria = sourceChapter.CompletionCriteria,
-				TeacherNotes = sourceChapter.TeacherNotes,
-				StudentSummary = sourceChapter.StudentSummary,
-				ParentSummary = sourceChapter.ParentSummary,
-				ReferenceLinks = sourceChapter.ReferenceLinks,
-				Worksheets = sourceChapter.Worksheets,
-				AudioVideoMaterials = sourceChapter.AudioVideoMaterials,
-				BoardDocuments = sourceChapter.BoardDocuments,
-				AssessmentMethod = sourceChapter.AssessmentMethod,
-				QuestionTypes = sourceChapter.QuestionTypes,
-				MarksWeightage = sourceChapter.MarksWeightage,
-				BloomCoverage = sourceChapter.BloomCoverage,
-				DifficultyDistribution = sourceChapter.DifficultyDistribution,
-				Visibility = sourceChapter.Visibility,
-				PublishStatus = sourceChapter.PublishStatus,
-				ReviewStatus = sourceChapter.ReviewStatus,
-				NotifyOnPublish = sourceChapter.NotifyOnPublish,
-				ProgressPercentage = sourceChapter.ProgressPercentage,
-				CoverageStatus = sourceChapter.CoverageStatus,
-				LessonPlanStatus = sourceChapter.LessonPlanStatus,
-				HomeworkStatus = sourceChapter.HomeworkStatus,
-				AssessmentStatus = sourceChapter.AssessmentStatus,
-				ResourceStatus = sourceChapter.ResourceStatus,
-				QuestionCount = sourceChapter.QuestionCount,
-				HealthScore = sourceChapter.HealthScore,
-				IsAiGenerated = sourceChapter.IsAiGenerated,
-				CopiedFromPreviousYear = true,
-				TemplateSource = sourceChapter.TemplateSource,
-				DependencyChapterIds = sourceChapter.DependencyChapterIds,
-				VersionLabel = sourceChapter.VersionLabel
-			};
-
-			if (input.IncludeDocuments)
-			{
-				var chapterDocuments = source.Documents
-					.Where(d => d.ChapterId == sourceChapter.Id)
-					.ToList();
-				foreach (var document in chapterDocuments)
-				{
-					targetChapter.AddDocument(new AssignedSubjectDocument(
-						guidGenerator.Create(),
-						target.Id,
-						targetChapter.Id,
-						document.BlobName));
-				}
-			}
-
-			target.Chapters.Add(targetChapter);
-		}
+		// Chapters are maintained independently in Syllabus and are never copied with an allocation.
 	}
 
 	private async Task SyncCopiedSubjectsToWeeklySlotAsync(

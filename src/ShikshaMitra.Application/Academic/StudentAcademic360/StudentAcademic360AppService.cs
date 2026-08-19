@@ -19,6 +19,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Domain.Entities;
 using StandardEntity = ShikshaMitra.TenantSettings.Standards.Standard;
 using DivisionEntity = ShikshaMitra.TenantSettings.Divisions.Division;
 using AcademicYearEntity = ShikshaMitra.TenantSettings.AcademicYears.AcademicYear;
@@ -52,11 +53,12 @@ public class StudentAcademic360AppService(
     {
         input = NormalizeInput(input);
         var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(GetAsync), includeDetails: true);
+        var academicYearId = await ResolveAcademicYearAsync(student, input);
         var studentDto = await MapStudentAsync(student);
-        var attendance = await BuildAttendanceAsync(studentId, input);
+        var attendance = await BuildAttendanceAsync(studentId, input, academicYearId);
         var timetable = await BuildTimetableAsync(student.StandardId, student.DivisionId);
-        var learningTasks = await BuildLearningTasksAsync(student, input.RecentTaskCount);
-        var exams = await BuildExamResultsAsync(student, input.RecentExamCount);
+        var learningTasks = await BuildLearningTasksAsync(student, input, academicYearId);
+        var exams = await BuildExamResultsAsync(student, input, academicYearId);
         var subjectPerformance = BuildSubjectPerformance(exams);
         var alerts = BuildAlerts(attendance, learningTasks, exams, timetable);
         var academicHealth = BuildAcademicHealth(attendance, learningTasks, exams);
@@ -98,6 +100,10 @@ public class StudentAcademic360AppService(
         input ??= new StudentAcademic360Input();
         input.RecentTaskCount = Math.Clamp(input.RecentTaskCount <= 0 ? 10 : input.RecentTaskCount, 1, 25);
         input.RecentExamCount = Math.Clamp(input.RecentExamCount <= 0 ? 5 : input.RecentExamCount, 1, 10);
+        input.TaskSkipCount = Math.Max(0, input.TaskSkipCount);
+        input.TaskMaxResultCount = Math.Clamp(input.TaskMaxResultCount <= 0 ? input.RecentTaskCount : input.TaskMaxResultCount, 1, 100);
+        input.ExamSkipCount = Math.Max(0, input.ExamSkipCount);
+        input.ExamMaxResultCount = Math.Clamp(input.ExamMaxResultCount <= 0 ? input.RecentExamCount : input.ExamMaxResultCount, 1, 50);
 
         if (input.AttendanceStartDate.HasValue && input.AttendanceEndDate.HasValue)
         {
@@ -118,6 +124,28 @@ public class StudentAcademic360AppService(
         }
 
         return input;
+    }
+
+    private async Task<Guid?> ResolveAcademicYearAsync(Student student, StudentAcademic360Input input)
+    {
+        var academicYearId = input.AcademicYearId;
+        if (!academicYearId.HasValue && !input.IncludeHistorical)
+        {
+            academicYearId = student.AcademicYearId;
+        }
+
+        if (!academicYearId.HasValue)
+        {
+            return null;
+        }
+
+        if (await academicYearRepository.FindAsync(academicYearId.Value) == null)
+        {
+            throw new EntityNotFoundException(typeof(AcademicYearEntity), academicYearId.Value);
+        }
+
+        await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(academicYearId.Value, nameof(GetAsync));
+        return academicYearId;
     }
 
     private async Task<StudentDto> MapStudentAsync(Student student)
@@ -188,7 +216,8 @@ public class StudentAcademic360AppService(
 
     private async Task<StudentAcademic360AttendanceDto> BuildAttendanceAsync(
         Guid studentId,
-        StudentAcademic360Input input)
+        StudentAcademic360Input input,
+        Guid? academicYearId)
     {
         var (startDate, endDate) = ResolveAttendanceDateRange(input.AttendanceStartDate, input.AttendanceEndDate);
         var scopedDays = await studentScopeAccessService.ApplyCurrentUserAttendanceDayScopeAsync(
@@ -199,6 +228,7 @@ public class StudentAcademic360AppService(
             from entry in entries
             join day in scopedDays on entry.AttendanceDayId equals day.Id
             where entry.StudentId == studentId && day.Date >= startDate && day.Date <= endDate
+                && (!academicYearId.HasValue || day.AcademicYearId == academicYearId.Value)
             orderby day.Date descending
             select new StudentAttendanceHistoryDto
             {
@@ -243,7 +273,8 @@ public class StudentAcademic360AppService(
 
     private async Task<StudentAcademic360LearningTaskSummaryDto> BuildLearningTasksAsync(
         Student student,
-        int recentTaskCount)
+        StudentAcademic360Input input,
+        Guid? academicYearId)
     {
         if (!student.StandardId.HasValue || !student.DivisionId.HasValue)
         {
@@ -251,7 +282,6 @@ public class StudentAcademic360AppService(
         }
 
         var divisionId = student.DivisionId.Value;
-        var subjectNames = await LoadSubjectNamesAsync();
         var submissions = await submissionRepository.GetListAsync(s => s.StudentId == student.Id);
         var submissionByHomework = submissions
             .Where(s => s.HomeworkAssignmentId.HasValue)
@@ -271,6 +301,7 @@ public class StudentAcademic360AppService(
         var homeworkQuery = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
         var homeworks = await AsyncExecuter.ToListAsync(homeworkQuery.Where(h =>
             h.StandardId == student.StandardId.Value &&
+            (!academicYearId.HasValue || h.AcademicYearId == academicYearId.Value) &&
             (h.Status == HomeworkStatus.Published || h.IsPublished || h.DivisionSchedules.Any(s => s.IsPublished)) &&
             ((h.DivisionId == divisionId && (h.IsPublished || h.Status == HomeworkStatus.Published)) ||
              h.DivisionSchedules.Any(s => s.DivisionId == divisionId && s.IsPublished))));
@@ -278,9 +309,12 @@ public class StudentAcademic360AppService(
         var assignmentQuery = await assignmentRepository.WithDetailsAsync(a => a.DivisionSchedules);
         var assignments = await AsyncExecuter.ToListAsync(assignmentQuery.Where(a =>
             a.StandardId == student.StandardId.Value &&
+            (!academicYearId.HasValue || a.AcademicYearId == academicYearId.Value) &&
             (a.Status == AssignmentStatus.Published || a.DivisionSchedules.Any(s => s.IsPublished)) &&
             a.DivisionSchedules.Any(s => s.DivisionId == divisionId && s.IsPublished)));
 
+        var subjectNames = await LoadSubjectNamesAsync(
+            homeworks.Select(h => h.SubjectId).Concat(assignments.Select(a => a.SubjectId)));
         var tasks = new List<StudentAcademic360LearningTaskDto>();
         tasks.AddRange(homeworks.Select(homework =>
         {
@@ -339,11 +373,17 @@ public class StudentAcademic360AppService(
             Late = ordered.Count(t => t.StatusCode == (int)SubmissionStatus.Late),
             Reviewed = ordered.Count(t => t.StatusCode == (int)SubmissionStatus.Reviewed),
             PendingEvaluation = ordered.Count(t => t.StatusCode is (int)SubmissionStatus.Submitted or (int)SubmissionStatus.NeedsReview or (int)SubmissionStatus.Late),
-            RecentTasks = ordered.Take(Math.Clamp(recentTaskCount, 1, 25)).ToList()
+            RecentTasks = ordered
+                .Skip(input.TaskSkipCount)
+                .Take(input.TaskMaxResultCount)
+                .ToList()
         };
     }
 
-    private async Task<List<StudentAcademic360ExamResultDto>> BuildExamResultsAsync(Student student, int recentExamCount)
+    private async Task<List<StudentAcademic360ExamResultDto>> BuildExamResultsAsync(
+        Student student,
+        StudentAcademic360Input input,
+        Guid? academicYearId)
     {
         if (!student.StandardId.HasValue || !student.DivisionId.HasValue)
         {
@@ -353,7 +393,8 @@ public class StudentAcademic360AppService(
         var divisionId = student.DivisionId.Value;
         var examQuery = await examRepository.WithDetailsAsync(e => e.ExamSubjects, e => e.ExamDivisions);
         var scopedExams = await AsyncExecuter.ToListAsync(examQuery
-            .Where(e => e.StandardId == student.StandardId.Value && e.ExamDivisions.Any(d => d.DivisionId == divisionId))
+            .Where(e => e.StandardId == student.StandardId.Value
+                && e.ExamDivisions.Any(d => d.DivisionId == divisionId))
             .OrderByDescending(e => e.CreationTime));
 
         if (scopedExams.Count == 0)
@@ -379,7 +420,8 @@ public class StudentAcademic360AppService(
                 e.Status is ExamStatus.Published or ExamStatus.Completed ||
                 publishedResultExamIds.Contains(e.Id) ||
                 publishedMarkExamIds.Contains(e.Id))
-            .Take(Math.Clamp(recentExamCount, 1, 10))
+            .Skip(input.ExamSkipCount)
+            .Take(input.ExamMaxResultCount)
             .ToList();
 
         if (exams.Count == 0)
@@ -388,7 +430,7 @@ public class StudentAcademic360AppService(
         }
 
         var examIds = exams.Select(e => e.Id).ToList();
-        var subjectNames = await LoadSubjectNamesAsync();
+        var subjectNames = await LoadSubjectNamesAsync(exams.SelectMany(e => e.ExamSubjects.Select(s => s.SubjectId)));
         var marks = await examMarkRepository.GetListAsync(m =>
             examIds.Contains(m.ExamId) &&
             m.StudentId == student.Id &&
@@ -779,9 +821,15 @@ public class StudentAcademic360AppService(
         }
     }
 
-    private async Task<Dictionary<Guid, string>> LoadSubjectNamesAsync()
+    private async Task<Dictionary<Guid, string>> LoadSubjectNamesAsync(IEnumerable<Guid> subjectIds)
     {
-        var subjects = await subjectRepository.GetListAsync();
+        var ids = subjectIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var subjects = await subjectRepository.GetListAsync(s => ids.Contains(s.Id));
         return subjects.ToDictionary(s => s.Id, s => string.IsNullOrWhiteSpace(s.DisplayName) ? s.Name : s.DisplayName!);
     }
 

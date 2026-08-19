@@ -76,6 +76,7 @@ public class ChapterAppService(
 
 		var chapters = assignedSubject.Chapters.OrderBy(c => c.ChapterNumber).ToList();
 		var dtos = ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);
+		ApplyResourceStatusFallback(dtos);
 		foreach (var dto in dtos)
 		{
 			dto.StandardId = assignedSubject.StandardId;
@@ -142,6 +143,7 @@ public class ChapterAppService(
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
 		var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
+		ApplyResourceStatusFallback(new List<ChapterDto> { dto });
 		dto.StandardId = assignedSubject.StandardId;
 		dto.SubjectId = assignedSubject.SubjectId;
 		await EnrichLinkedPlanningStatusesAsync(assignedSubject, new List<ChapterDto> { dto });
@@ -472,6 +474,16 @@ public class ChapterAppService(
 
 	private static string DefaultStatus(string? currentStatus, string fallback) =>
 		string.IsNullOrWhiteSpace(currentStatus) ? fallback : currentStatus;
+
+	private static void ApplyResourceStatusFallback(IEnumerable<ChapterDto> dtos)
+	{
+		foreach (var dto in dtos)
+		{
+			dto.ResourceStatus = DefaultStatus(
+				dto.ResourceStatus,
+				dto.Documents.Count > 0 ? "Ready" : "Missing");
+		}
+	}
 
 	private sealed class ChapterLinkSummary
 	{

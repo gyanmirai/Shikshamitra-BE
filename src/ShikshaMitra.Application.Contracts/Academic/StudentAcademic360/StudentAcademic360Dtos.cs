@@ -9,8 +9,14 @@ namespace ShikshaMitra.Academic.StudentAcademic360;
 
 public class StudentAcademic360Input
 {
+    public Guid? AcademicYearId { get; set; }
     public DateTime? AttendanceStartDate { get; set; }
     public DateTime? AttendanceEndDate { get; set; }
+    public bool IncludeHistorical { get; set; }
+    public int TaskSkipCount { get; set; }
+    public int TaskMaxResultCount { get; set; } = 10;
+    public int ExamSkipCount { get; set; }
+    public int ExamMaxResultCount { get; set; } = 5;
     public int RecentTaskCount { get; set; } = 10;
     public int RecentExamCount { get; set; } = 5;
 }

@@ -182,6 +182,9 @@ public class RubricAssessmentAppService(
 				{
 					Title = c.Title,
 					Description = c.Description,
+					StudentDescription = c.StudentDescription,
+					TeacherGuidance = c.TeacherGuidance,
+					IsRequired = c.IsRequired,
 					MaxMarks = c.MaxMarks,
 					DisplayOrder = c.DisplayOrder
 				})
@@ -350,7 +353,7 @@ public class RubricAssessmentAppService(
 		submission.UpdateFeedback(
 			evaluation.TotalMarks,
 			rubric.TotalMarks,
-			null,
+			evaluation.Remarks,
 			evaluation.Remarks,
 			SubmissionStatus.Reviewed,
 			CurrentUser.Id ?? Guid.Empty);
@@ -446,7 +449,8 @@ public class RubricAssessmentAppService(
 	private static void EnsureScoresAreValid(AssessmentRubric rubric, IReadOnlyCollection<RubricEvaluationScoreInputDto> scores)
 	{
 		var criteria = rubric.Criteria.ToDictionary(c => c.Id);
-		if (scores.Count != criteria.Count)
+		var scoredCriterionIds = scores.Select(score => score.CriterionId).ToHashSet();
+		if (criteria.Values.Any(criterion => criterion.IsRequired && !scoredCriterionIds.Contains(criterion.Id)))
 		{
 			throw new BusinessException("AssessmentRubric:AllCriteriaMustBeScored");
 		}
@@ -554,6 +558,9 @@ public class RubricAssessmentAppService(
 				rubricId,
 				c.Title,
 				c.Description,
+				c.StudentDescription,
+				c.TeacherGuidance,
+				c.IsRequired,
 				c.MaxMarks,
 				c.DisplayOrder > 0 ? c.DisplayOrder : index + 1))
 			.ToList();
@@ -611,6 +618,9 @@ public class RubricAssessmentAppService(
 					RubricId = c.RubricId,
 					Title = c.Title,
 					Description = c.Description,
+					StudentDescription = c.StudentDescription,
+					TeacherGuidance = c.TeacherGuidance,
+					IsRequired = c.IsRequired,
 					MaxMarks = c.MaxMarks,
 					DisplayOrder = c.DisplayOrder
 				})

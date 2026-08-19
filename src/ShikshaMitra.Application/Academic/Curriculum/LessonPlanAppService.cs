@@ -152,6 +152,27 @@ public class LessonPlanAppService(
                         var division = divisions.FirstOrDefault(d => d.Id == timetable.DivisionId);
                         var subject = subjects.FirstOrDefault(sub => sub.Id == slotSubject.SubjectId);
                         var plan = lessonPlans.FirstOrDefault(lp => lp.TimetableSlotId == slot.Id);
+
+                        // Timetable slots used to be recreated when a timetable was saved. If a
+                        // lesson plan still points at the previous slot id, recover it only when
+                        // there is one unambiguous plan for this teacher/date/context.
+                        if (plan == null)
+                        {
+                            var contextualPlans = lessonPlans
+                                .Where(lp =>
+                                    !matchedPlanIds.Contains(lp.Id) &&
+                                    lp.StandardId == timetable.StandardId &&
+                                    lp.DivisionId == timetable.DivisionId &&
+                                    lp.SubjectId == slotSubject.SubjectId &&
+                                    lp.TimetableSlotId != slot.Id)
+                                .ToList();
+
+                            if (contextualPlans.Count == 1)
+                            {
+                                plan = contextualPlans[0];
+                            }
+                        }
+
                         LessonPlanDto? mappedPlan = null;
                         if (plan != null && mappedById.TryGetValue(plan.Id, out var dto))
                         {

@@ -315,11 +315,12 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		EnsureSubmissionCanBeEvaluated(submission);
 
 		// 5. Update feedback
+		var preservedRemarks = input.Remarks ?? submission.Remarks;
 		submission.UpdateFeedback(
-			null,
-			null,
+			submission.Marks,
+			submission.TotalMarks,
 			input.Feedback,
-			input.Remarks,
+			preservedRemarks,
 			input.Status,
 			CurrentUser.Id!.Value
 		);
@@ -336,10 +337,10 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				SubmissionId = submission.Id.ToString(),
 				StudentId = studentId.ToString(),
 				HomeworkId = homeworkId.ToString(),
-				Marks = null,
-				TotalMarks = null,
+				Marks = submission.Marks,
+				TotalMarks = submission.TotalMarks,
 				Feedback = input.Feedback,
-				Remarks = input.Remarks,
+				Remarks = preservedRemarks,
 				Status = input.Status.ToString()
 			}
 		};

@@ -43,7 +43,9 @@ public class QuestionPaperSectionConfiguration : IEntityTypeConfiguration<Questi
         builder.ConfigureByConvention();
         builder.Property(x => x.SectionName).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Marks).HasPrecision(10, 2);
-        builder.HasIndex(x => new { x.QuestionPaperId, x.SectionName }).IsUnique();
+        // Section labels are presentation data and may legitimately repeat (for example,
+        // two separate "Section B" groups with different mark values).
+        builder.HasIndex(x => x.QuestionPaperId);
     }
 }
 

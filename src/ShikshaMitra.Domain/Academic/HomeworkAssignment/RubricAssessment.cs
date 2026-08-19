@@ -149,9 +149,24 @@ public class AssessmentRubric : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException("AssessmentRubric:TemplateCannotBeTaskLinked");
 		}
 
+		if (isTemplate && !appliesToWorkType.HasValue)
+		{
+			throw new BusinessException("AssessmentRubric:TemplateWorkTypeRequired");
+		}
+
 		if (homeworkTypeId.HasValue && assignmentTypeId.HasValue)
 		{
 			throw new BusinessException("AssessmentRubric:OnlyOneTypeLinkAllowed");
+		}
+
+		if (homeworkTypeId.HasValue && appliesToWorkType is not (WorkType.Homework or WorkType.Both))
+		{
+			throw new BusinessException("AssessmentRubric:HomeworkTypeWorkTypeMismatch");
+		}
+
+		if (assignmentTypeId.HasValue && appliesToWorkType is not (WorkType.Assignment or WorkType.Both))
+		{
+			throw new BusinessException("AssessmentRubric:AssignmentTypeWorkTypeMismatch");
 		}
 
 		if (!isTemplate && (!standardId.HasValue || standardId.Value == Guid.Empty ||

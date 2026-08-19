@@ -636,6 +636,7 @@ public class ExamAppService(
 
 		var pendingCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Pending);
 		var publishedCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Published);
+		var ongoingCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Ongoing);
 		var completedCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Completed);
 
 		var filteredRows = rowsWithEffectiveStatus
@@ -707,6 +708,7 @@ public class ExamAppService(
 			Items = items,
 			PendingCount = pendingCount,
 			PublishedCount = publishedCount,
+			OngoingCount = ongoingCount,
 			CompletedCount = completedCount
 		};
 	}
@@ -1064,7 +1066,7 @@ public class ExamAppService(
 
 	private async Task EnsureValidExamStatusTransitionAsync(Exam exam, ExamStatus requestedStatus)
 	{
-		if (!Enum.IsDefined(requestedStatus))
+		if (!Enum.IsDefined(requestedStatus) || requestedStatus == ExamStatus.Ongoing)
 		{
 			throw new BusinessException("ShikshaMitra.Exam:InvalidStatus");
 		}
@@ -1222,14 +1224,37 @@ public class ExamAppService(
 
 	private ExamStatus GetEffectiveScheduleStatus(Exam exam)
 	{
-		if (exam.Status != ExamStatus.Completed)
+		if (exam.Status == ExamStatus.Pending)
 		{
-			return exam.Status;
+			return ExamStatus.Pending;
 		}
 
-		return HasExamScheduleEnded(exam, Clock.Now)
-			? ExamStatus.Completed
-			: ExamStatus.Published;
+		var now = Clock.Now;
+		var start = GetExamStartDateTime(exam);
+		var end = GetExamFinalEndAt(exam);
+
+		if (start.HasValue && end.HasValue && now >= start.Value && now <= end.Value)
+		{
+			return ExamStatus.Ongoing;
+		}
+
+		if (exam.Status == ExamStatus.Completed && (!end.HasValue || now > end.Value))
+		{
+			return ExamStatus.Completed;
+		}
+
+		return exam.Status;
+	}
+
+	private static DateTime? GetExamStartDateTime(Exam exam)
+	{
+		var starts = exam.ExamSubjects
+			.Where(subject => subject.ExamDate.HasValue)
+			.Select(subject => subject.ExamDate!.Value.Date.Add(
+				subject.StartTime?.TimeOfDay ?? TimeSpan.Zero))
+			.ToList();
+
+		return starts.Count == 0 ? null : starts.Min();
 	}
 
 	private static bool HasExamScheduleEnded(Exam exam, DateTime currentAt)

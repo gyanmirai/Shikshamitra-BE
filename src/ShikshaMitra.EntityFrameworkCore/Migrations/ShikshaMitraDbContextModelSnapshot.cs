@@ -5067,8 +5067,7 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("QuestionPaperId", "SectionName")
-                        .IsUnique();
+                    b.HasIndex("QuestionPaperId");
 
                     b.ToTable("AppQuestionPaperSections", (string)null);
                 });

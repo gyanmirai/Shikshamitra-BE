@@ -3175,6 +3175,11 @@ namespace ShikshaMitra.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
 
+                    b.Property<bool>("IsRequired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("LastModificationTime");
@@ -3189,6 +3194,14 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid>("RubricId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("StudentDescription")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("TeacherGuidance")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")

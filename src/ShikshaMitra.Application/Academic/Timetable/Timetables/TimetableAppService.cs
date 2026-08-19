@@ -932,14 +932,22 @@ public class TimetableAppService(
 
     private void ReplaceSlotsFromInput(Timetable timetable, SaveTimetableDto input)
     {
+        var existingSlotIdsByPosition = timetable.Slots
+            .GroupBy(slot => (slot.Day, slot.Sequence))
+            .ToDictionary(group => group.Key, group => group.First().Id);
+
         timetable.ClearSlots();
 
         foreach (var (day, slots) in input.Timetable)
         {
             foreach (var slotDto in slots)
             {
+                var slotId = existingSlotIdsByPosition.TryGetValue((day, slotDto.Sequence), out var existingSlotId)
+                    ? existingSlotId
+                    : GuidGenerator.Create();
+
                 var slot = new TimetableSlot(
-                    GuidGenerator.Create(),
+                    slotId,
                     timetable.Id,
                     day,
                     slotDto.Sequence,

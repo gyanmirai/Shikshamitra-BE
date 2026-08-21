@@ -11,6 +11,7 @@ using Volo.Abp.Guids;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.QuestionBank;
 using ShikshaMitra.Academic.QuestionPapers;
+using ShikshaMitra.TenantSettings.Divisions;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -25,7 +26,8 @@ public class ChapterAppService(
 	IRepository<LessonPlan, Guid> lessonPlanRepository,
 	IRepository<TeacherDiary, Guid> teacherDiaryRepository,
 	IRepository<QuestionBankItem, Guid> questionBankRepository,
-	IRepository<QuestionPaperBlueprintChapterRule, Guid> blueprintChapterRuleRepository
+	IRepository<QuestionPaperBlueprintChapterRule, Guid> blueprintChapterRuleRepository,
+	IRepository<Division, Guid> divisionRepository
 ) : ApplicationService, IChapterAppService
 {
 	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, List<CreateChapterDto> input)
@@ -66,13 +68,23 @@ public class ChapterAppService(
 		return new ApiSuccessResponseDto { Message = "Chapters created successfully." };
 	}
 
-	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId)
+	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId, Guid? divisionId = null)
 	{
 		var assignedSubject = (await assignedSubjectRepository.GetListAsync(
 				a => a.StandardId == standardId && a.SubjectId == subjectId,
 				includeDetails: true
 			)).FirstOrDefault()
 			?? throw new BusinessException("Academic:Chapter:002", "Subject not assigned to this class");
+
+		if (divisionId.HasValue)
+		{
+			var divisionExists = await divisionRepository.AnyAsync(
+				division => division.Id == divisionId.Value && division.StandardId == standardId);
+			if (!divisionExists)
+			{
+				throw new BusinessException("Academic:Chapter:006", "Division does not belong to the selected class.");
+			}
+		}
 
 		var chapters = assignedSubject.Chapters.OrderBy(c => c.ChapterNumber).ToList();
 		var dtos = ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);
@@ -83,7 +95,7 @@ public class ChapterAppService(
 			dto.SubjectId = assignedSubject.SubjectId;
 		}
 
-		await EnrichLinkedPlanningStatusesAsync(assignedSubject, dtos);
+		await EnrichLinkedPlanningStatusesAsync(assignedSubject, dtos, divisionId);
 
 		return dtos;
 	}
@@ -301,7 +313,10 @@ public class ChapterAppService(
 		);
 	}
 
-	private async Task EnrichLinkedPlanningStatusesAsync(AssignedSubject assignedSubject, List<ChapterDto> dtos)
+	private async Task EnrichLinkedPlanningStatusesAsync(
+		AssignedSubject assignedSubject,
+		List<ChapterDto> dtos,
+		Guid? divisionId)
 	{
 		if (dtos.Count == 0)
 		{
@@ -315,15 +330,16 @@ public class ChapterAppService(
 			lp.StandardId == assignedSubject.StandardId &&
 			lp.SubjectId == assignedSubject.SubjectId &&
 			chapterIds.Contains(lp.ChapterId) &&
+			(!divisionId.HasValue || lp.DivisionId == divisionId.Value) &&
 			lp.Status != LessonPlanStatus.Rejected);
 		foreach (var lessonPlan in lessonPlans)
 		{
 			var summary = linkedByChapter[lessonPlan.ChapterId];
 			summary.LessonPlans++;
 			summary.LessonPlanIds.Add(lessonPlan.Id);
-			summary.CompletionValues.Add(lessonPlan.Status == LessonPlanStatus.Approved
-				? lessonPlan.PlannedCompletionPercentage
-				: 0);
+			// The lesson plan is the progress fallback until a submitted
+			// Teacher Diary provides the actual delivered-lesson progress.
+			summary.CompletionValues.Add(Math.Clamp(lessonPlan.PlannedCompletionPercentage, 0, 100));
 		}
 
 		if (lessonPlans.Count > 0)
@@ -352,7 +368,10 @@ public class ChapterAppService(
 
 		var homeworks = await homeworkRepository.GetListAsync(hw =>
 			hw.StandardId == assignedSubject.StandardId &&
-			hw.SubjectId == assignedSubject.SubjectId);
+			hw.SubjectId == assignedSubject.SubjectId &&
+			(!divisionId.HasValue ||
+				hw.DivisionId == divisionId.Value ||
+				hw.DivisionSchedules.Any(schedule => schedule.DivisionId == divisionId.Value)));
 		var homeworkChapterLinks = new Dictionary<Guid, List<Guid>>();
 		foreach (var homework in homeworks)
 		{
@@ -365,7 +384,10 @@ public class ChapterAppService(
 
 		var assignments = await assignmentRepository.GetListAsync(assignment =>
 			assignment.StandardId == assignedSubject.StandardId &&
-			assignment.SubjectId == assignedSubject.SubjectId);
+			assignment.SubjectId == assignedSubject.SubjectId &&
+			(!divisionId.HasValue ||
+				assignment.DivisionId == divisionId.Value ||
+				assignment.DivisionSchedules.Any(schedule => schedule.DivisionId == divisionId.Value)));
 		var assignmentChapterLinks = new Dictionary<Guid, List<Guid>>();
 		foreach (var assignment in assignments)
 		{

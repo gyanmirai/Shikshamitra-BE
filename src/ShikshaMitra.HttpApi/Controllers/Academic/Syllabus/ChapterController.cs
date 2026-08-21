@@ -28,9 +28,10 @@ public class ChapterController(IChapterAppService chapterAppService) : AbpContro
 	[HttpGet]
 	public Task<List<ChapterDto>> GetAsync(
 		[FromQuery] Guid standardId,
-		[FromQuery] Guid subjectId)
+		[FromQuery] Guid subjectId,
+		[FromQuery] Guid? divisionId = null)
 	{
-		return chapterAppService.GetByStandardAndSubjectAsync(standardId, subjectId);
+		return chapterAppService.GetByStandardAndSubjectAsync(standardId, subjectId, divisionId);
 	}
 
 	[HttpPut("{id}")]

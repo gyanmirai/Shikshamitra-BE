@@ -276,6 +276,15 @@ public class AcademicCalendarController : AbpController
         return await _calendarAppService.GetAuditLogsSummaryAsync();
     }
 
+    [HttpPost("academic/calendar-audit-logs/{auditLogId}/review-notes")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_AuditLogs.Add)]
+    public async Task<AuditLogReviewNoteDto> AddAuditLogReviewNoteAsync(
+        [FromRoute] Guid auditLogId,
+        [FromBody] AddAuditLogReviewNoteDto input)
+    {
+        return await _calendarAppService.AddAuditLogReviewNoteAsync(auditLogId, input);
+    }
+
     // ─── Settings ───────────────────────────────────────────────────────────
 
     [HttpGet("academic/calendar/settings")]

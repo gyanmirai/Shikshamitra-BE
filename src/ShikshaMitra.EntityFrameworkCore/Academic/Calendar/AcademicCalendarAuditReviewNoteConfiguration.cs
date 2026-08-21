@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.Calendar;
+using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.EntityFrameworkCore.Academic.Calendar;
 

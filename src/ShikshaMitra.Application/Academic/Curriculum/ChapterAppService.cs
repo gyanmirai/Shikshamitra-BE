@@ -158,7 +158,7 @@ public class ChapterAppService(
 		ApplyResourceStatusFallback(new List<ChapterDto> { dto });
 		dto.StandardId = assignedSubject.StandardId;
 		dto.SubjectId = assignedSubject.SubjectId;
-		await EnrichLinkedPlanningStatusesAsync(assignedSubject, new List<ChapterDto> { dto });
+		await EnrichLinkedPlanningStatusesAsync(assignedSubject, new List<ChapterDto> { dto }, divisionId: null);
 		return dto;
 	}
 

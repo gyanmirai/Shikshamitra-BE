@@ -476,10 +476,16 @@ public class ExamAppService(
 
 	public async Task<List<QuestionPaperExamLookupDto>> GetQuestionPaperLookupAsync(QuestionPaperExamLookupInput input)
 	{
-		if (input.AcademicMediumId == Guid.Empty || input.StandardId == Guid.Empty || input.SubjectId == Guid.Empty)
+		if (input.StandardId == Guid.Empty || input.SubjectId == Guid.Empty)
 		{
 			return [];
 		}
+
+		// Exam does not persist AcademicYearId. Its scope is determined by the
+		// selected standard's education medium. AcademicYearId is still part of
+		// the public lookup contract because it is the context sent by the
+		// question-paper wizard.
+		var academicMediumId = await GetAcademicMediumIdForStandardAsync(input.StandardId);
 
 		var schedulableSubjectIds = new HashSet<Guid> { input.SubjectId };
 		var electiveGroupIdsBySubject = await GetElectiveGroupIdsBySubjectAsync(input.StandardId, [input.SubjectId]);
@@ -497,7 +503,7 @@ public class ExamAppService(
 					join standard in standardQuery on exam.StandardId equals standard.Id
 					join stage in stageQuery on standard.EducationMediumStageId equals stage.Id
 					join examType in examTypeQuery on exam.ExamTypeId equals examType.Id
-					where stage.EducationMediumId == input.AcademicMediumId &&
+					where stage.EducationMediumId == academicMediumId &&
 						exam.StandardId == input.StandardId &&
 						exam.ExamSubjects.Any(subject =>
 							schedulableSubjectIds.Contains(subject.SubjectId) &&
@@ -521,6 +527,8 @@ public class ExamAppService(
 					ExamId = row.exam.Id,
 					ExamSubjectId = subject.Id,
 					ExamName = row.exam.ExamName,
+					StandardId = row.exam.StandardId,
+					SubjectId = input.SubjectId,
 					ExamTypeName = row.examType.Name,
 					ExamDate = subject.ExamDate!.Value,
 					StartTime = subject.StartTime,

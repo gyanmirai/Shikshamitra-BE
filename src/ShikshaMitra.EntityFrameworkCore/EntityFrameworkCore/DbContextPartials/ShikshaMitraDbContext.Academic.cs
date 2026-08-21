@@ -139,4 +139,5 @@ public partial class ShikshaMitraDbContext
     public DbSet<AcademicCalendarSetting> AcademicCalendarSettings { get; set; }
     public DbSet<CalendarImpactLog> CalendarImpactLogs { get; set; }
     public DbSet<AcademicCalendarAuditLog> AcademicCalendarAuditLogs { get; set; }
+    public DbSet<AcademicCalendarAuditReviewNote> AcademicCalendarAuditReviewNotes { get; set; }
 }

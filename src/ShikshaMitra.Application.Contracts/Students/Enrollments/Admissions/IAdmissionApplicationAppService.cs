@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -14,4 +15,7 @@ public interface IAdmissionApplicationAppService : IApplicationService
 	Task<AdmissionApplicationFormDto> GetFormAsync(Guid id);
 	Task<AdmissionApplicationFormDto> UpdateFormValuesAsync(Guid id, UpdateAdmissionApplicationFormValuesDto input);
 	Task<AdmissionApplicationSubmitResultDto> SubmitAsync(Guid id);
+	Task<AdmissionApplicationFormDto> ReopenFormAsync(Guid id);
+	Task<List<AdmissionFormChangeHistoryDto>> GetFormHistoryAsync(Guid id);
+	Task<AdmissionApplicationWorkflowDto> AdvanceWorkflowAsync(Guid id, AdvanceAdmissionWorkflowDto input);
 }

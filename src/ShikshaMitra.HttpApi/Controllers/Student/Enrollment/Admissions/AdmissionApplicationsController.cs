@@ -44,4 +44,17 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[HttpPost("{id:guid}/submit")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Submit)]
 	public async Task<Result<AdmissionApplicationSubmitResultDto>> SubmitAsync(Guid id) => Result.Success(await service.SubmitAsync(id));
+
+	[HttpPost("{id:guid}/form/reopen")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Reopen)]
+	public async Task<Result<AdmissionApplicationFormDto>> ReopenFormAsync(Guid id) => Result.Success(await service.ReopenFormAsync(id));
+
+	[HttpGet("{id:guid}/form/history")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<System.Collections.Generic.List<AdmissionFormChangeHistoryDto>>> GetFormHistoryAsync(Guid id) => Result.Success(await service.GetFormHistoryAsync(id));
+
+	[HttpPost("{id:guid}/workflow/advance")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance)]
+	public async Task<Result<AdmissionApplicationWorkflowDto>> AdvanceWorkflowAsync(Guid id, AdvanceAdmissionWorkflowDto input) =>
+		Result.Success(await service.AdvanceWorkflowAsync(id, input));
 }

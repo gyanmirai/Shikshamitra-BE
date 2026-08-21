@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using ShikshaMitra.Students;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -12,7 +13,8 @@ public sealed record AdmissionOfferingRuntimeContext(AdmissionOffering Offering,
 public class AdmissionOfferingRuntimeService(
 	IRepository<AdmissionOffering, Guid> offeringRepository,
 	IRepository<AdmissionCycle, Guid> cycleRepository,
-	AdmissionOfferingConfigurationValidator configurationValidator)
+	AdmissionOfferingConfigurationValidator configurationValidator,
+	StudentScopeAccessService studentScopeAccessService)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionOfferingRuntimeContext> GetAvailableAsync(Guid offeringId)
@@ -21,6 +23,8 @@ public class AdmissionOfferingRuntimeService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable);
 		var cycle = await cycleRepository.FindAsync(offering.AdmissionCycleId) ??
 			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable);
+		await studentScopeAccessService.EnsureCanAccessStandardAsync(
+			offering.StandardId, nameof(GetAvailableAsync));
 		var validation = await configurationValidator.ValidateStoredAsync(offering);
 		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(
 			offering, cycle, validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime()));

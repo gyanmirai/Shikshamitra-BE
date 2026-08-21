@@ -13,5 +13,7 @@ public enum AdmissionWorkflowStageType
 	Offer = 8,
 	Seat = 9,
 	Enrollment = 10,
-	Custom = 11
+	Custom = 11,
+	// Appended to preserve the persisted numeric values of existing stage types.
+	Appointment = 12
 }

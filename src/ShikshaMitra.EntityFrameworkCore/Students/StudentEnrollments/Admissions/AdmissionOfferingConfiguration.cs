@@ -32,6 +32,7 @@ public class AdmissionOfferingConfiguration : IEntityTypeConfiguration<Admission
 			.HasDatabaseName("IX_AdmissionOfferings_CycleActiveStandard");
 
 		builder.HasOne<AdmissionCycle>().WithMany().HasForeignKey(x => x.AdmissionCycleId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<AdmissionCampus>().WithMany().HasForeignKey(x => x.CampusId).OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne<EducationBoard>().WithMany().HasForeignKey(x => x.BoardId).OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne<EducationMedium>().WithMany().HasForeignKey(x => x.MediumId).OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne<EducationMediumStage>().WithMany().HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.Restrict);

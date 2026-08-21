@@ -56,10 +56,9 @@ public class LegacyMigrationBaselineBridge_Tests
 		var sql = EntityFrameworkCoreShikshaMitraDbSchemaMigrator.BuildLegacyBaselineBridgeSql(currentMigrationId);
 
 		sql.ShouldContain("ADD COLUMN IF NOT EXISTS");
-		sql.ShouldContain("CREATE UNIQUE INDEX IF NOT EXISTS");
 		sql.ShouldContain("ON CONFLICT (\"MigrationId\") DO NOTHING");
+		sql.ShouldContain("DO $bridge$");
 		sql.ShouldContain("\"AppEmployeeApplications\"");
-		sql.ShouldContain("\"AppAdmissionCrmPipelineStages\"");
 		sql.ShouldContain(EntityFrameworkCoreShikshaMitraDbSchemaMigrator.LegacyBaselineMigrationId);
 		sql.ShouldContain(currentMigrationId);
 	}

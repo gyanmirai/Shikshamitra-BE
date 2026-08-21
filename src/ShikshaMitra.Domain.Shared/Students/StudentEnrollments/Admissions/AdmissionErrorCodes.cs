@@ -24,7 +24,8 @@ public static class AdmissionErrorCodes
 	public const string OfferingHasApplications = "Admissions.Offering.HasApplications";
 	public const string OfferingConcurrencyConflict = "Admissions.Offering.ConcurrencyConflict";
 	public const string OfferingHierarchyOutOfScope = "Admissions.Offering.HierarchyOutOfScope";
-	public const string OfferingCampusUnsupported = "Admissions.Offering.CampusUnsupported";
+	public const string OfferingCampusInvalid = "Admissions.Offering.CampusInvalid";
 	public const string OfferingBulkValidationFailed = "Admissions.Offering.BulkValidationFailed";
 	public const string OfferingStateCommandRequired = "Admissions.Offering.StateCommandRequired";
+	public const string CampusCodeAlreadyExists = "Admissions.CampusCodeAlreadyExists";
 }

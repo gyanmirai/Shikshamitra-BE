@@ -30,6 +30,20 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public void SetCurrentStage(Guid stageInstanceId) => CurrentStageInstanceId = stageInstanceId;
+	public void CompleteWorkflow() => CurrentStageInstanceId = null;
+	public void RecordWorkflowStarted(Guid workflowInstanceId, Guid entryStageInstanceId) =>
+		AddLocalEvent(new ApplicationWorkflowStartedEvent(Id, workflowInstanceId, WorkflowDefinitionId, entryStageInstanceId, TenantId));
+	public void RecordStageEntered(Guid workflowInstanceId, Guid stageInstanceId) =>
+		AddLocalEvent(new ApplicationWorkflowStageEnteredEvent(Id, workflowInstanceId, stageInstanceId, TenantId));
+	public void RecordStageCompleted(Guid workflowInstanceId, Guid stageInstanceId) =>
+		AddLocalEvent(new ApplicationWorkflowStageCompletedEvent(Id, workflowInstanceId, stageInstanceId, TenantId));
+	public void RecordStageSkipped(Guid workflowInstanceId, Guid stageInstanceId, string reason) =>
+		AddLocalEvent(new ApplicationWorkflowStageSkippedEvent(Id, workflowInstanceId, stageInstanceId, reason, TenantId));
+	public void RecordTransitioned(Guid workflowInstanceId, Guid fromStageInstanceId, Guid toStageInstanceId, Guid? transitionDefinitionId) =>
+		AddLocalEvent(new ApplicationWorkflowTransitionedEvent(Id, workflowInstanceId, fromStageInstanceId, toStageInstanceId, transitionDefinitionId, TenantId));
+	public void RecordWorkflowCompleted(Guid workflowInstanceId, Guid terminalStageInstanceId) =>
+		AddLocalEvent(new ApplicationWorkflowCompletedEvent(Id, workflowInstanceId, terminalStageInstanceId, TenantId));
 	public void SaveDraft() { if (Status != AdmissionApplicationStatus.Draft) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); LastSavedAt = DateTime.UtcNow; }
 	public void Submit() { if (Status != AdmissionApplicationStatus.Draft) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); Status = AdmissionApplicationStatus.Submitted; SubmittedAt = DateTime.UtcNow; LastSavedAt = SubmittedAt; }
+	public void Reopen() { if (Status != AdmissionApplicationStatus.Submitted) throw new BusinessException(AdmissionApplicationErrorCodes.FormNotSubmitted); Status = AdmissionApplicationStatus.Draft; LastSavedAt = DateTime.UtcNow; }
 }

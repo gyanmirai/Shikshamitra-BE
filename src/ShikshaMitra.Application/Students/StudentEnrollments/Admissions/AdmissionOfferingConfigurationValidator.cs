@@ -15,6 +15,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionOfferingConfigurationValidator(
 	IRepository<AdmissionOffering, Guid> offeringRepository,
+	IRepository<AdmissionCampus, Guid> campusRepository,
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
@@ -99,8 +100,17 @@ public class AdmissionOfferingConfigurationValidator(
 	{
 		if (input.CampusId.HasValue)
 		{
-			errors.Add(Error(AdmissionOfferingValidationCodes.CampusUnsupported,
-				"Campus cannot be selected because this installation has no Admission Campus source configured."));
+			var campus = await campusRepository.FindAsync(input.CampusId.Value);
+			if (campus == null)
+			{
+				errors.Add(Error(AdmissionOfferingValidationCodes.CampusMissing,
+					"The selected Campus was not found in this tenant."));
+			}
+			else if (!campus.IsActive)
+			{
+				errors.Add(Error(AdmissionOfferingValidationCodes.CampusInactive,
+					"The selected Campus is inactive."));
+			}
 		}
 
 		var board = await boardRepository.FindAsync(input.BoardId);
@@ -223,7 +233,7 @@ public class AdmissionOfferingConfigurationValidator(
 		AdmissionOfferingValidationCodes.Duplicate => AdmissionErrorCodes.OfferingDuplicate,
 		AdmissionOfferingValidationCodes.WorkflowNotPublished => AdmissionErrorCodes.OfferingWorkflowNotPublished,
 		AdmissionOfferingValidationCodes.InquiryFormNotPublished or AdmissionOfferingValidationCodes.ApplicationFormNotPublished => AdmissionErrorCodes.OfferingFormNotPublished,
-		AdmissionOfferingValidationCodes.CampusUnsupported => AdmissionErrorCodes.OfferingCampusUnsupported,
+		AdmissionOfferingValidationCodes.CampusMissing or AdmissionOfferingValidationCodes.CampusInactive => AdmissionErrorCodes.OfferingCampusInvalid,
 		AdmissionOfferingValidationCodes.CycleMissing => AdmissionErrorCodes.OfferingCycleNotFound,
 		_ => AdmissionErrorCodes.OfferingConfigurationIncomplete
 	};

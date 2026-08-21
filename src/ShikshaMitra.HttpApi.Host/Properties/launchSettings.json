@@ -13,7 +13,8 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "SeedTestLogins": "true"
+        "SeedTestLogins": "true",
+        "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=postgres;User ID=postgres;Password=postgres;"
       }
     },
     "ShikshaMitra.HttpApi.Host (Development)": {
@@ -22,7 +23,8 @@
       "applicationUrl": "https://localhost:44332",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "SeedTestLogins": "true"
+        "SeedTestLogins": "true",
+        "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=postgres;User ID=postgres;Password=postgres;"
       }
     },
     "ShikshaMitra.HttpApi.Host (Staging)": {

@@ -7,5 +7,5 @@ namespace ShikshaMitra.EntityFrameworkCore.Students.StudentEnrollments.Admission
 
 public class AdmissionNoteConfiguration : IEntityTypeConfiguration<AdmissionNote>
 {
-	public void Configure(EntityTypeBuilder<AdmissionNote> b) { b.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionNotes", ShikshaMitraConsts.DbSchema); b.ConfigureByConvention(); b.Property(x => x.Text).IsRequired().HasColumnType("text"); b.HasIndex(x => new { x.TenantId, x.ApplicantId, x.CreationTime }); }
+	public void Configure(EntityTypeBuilder<AdmissionNote> b) { b.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionNotes", ShikshaMitraConsts.DbSchema); b.ConfigureByConvention(); b.ConfigureSoftDeleteDefault(); b.Property(x => x.Text).IsRequired().HasColumnType("text"); b.HasIndex(x => new { x.TenantId, x.ApplicantId, x.CreationTime }); }
 }

@@ -11,6 +11,7 @@ public class AdmissionInquiryConfiguration : IEntityTypeConfiguration<AdmissionI
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionInquiries", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.ConfigureSoftDeleteDefault();
 		builder.Property(x => x.ApplicantName).IsRequired().HasMaxLength(AdmissionInquiryConsts.MaxNameLength);
 		builder.Property(x => x.InquiryNumber).IsRequired().HasMaxLength(AdmissionInquiryConsts.MaxInquiryNumberLength);
 		builder.HasIndex(x => new { x.TenantId, x.InquiryNumber }).IsUnique();

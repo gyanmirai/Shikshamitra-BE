@@ -84,14 +84,43 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Admissions.Workflows";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Admissions.Workflows";
 			public const string View = $"{SubmoduleName}.View";
+			public const string Create = $"{SubmoduleName}.Create";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			public const string Clone = $"{SubmoduleName}.Clone";
+			public const string CreateVersion = $"{SubmoduleName}.CreateVersion";
+			public const string Validate = $"{SubmoduleName}.Validate";
 			public const string Manage = $"{SubmoduleName}.Manage";
 			public const string Publish = $"{SubmoduleName}.Publish";
-			public static readonly string[] All = { View, Manage, Publish };
+			public const string Archive = $"{SubmoduleName}.Archive";
+			public const string ViewUsage = $"{SubmoduleName}.ViewUsage";
+			public static readonly string[] All =
+			{
+				View,
+				Create,
+				Edit,
+				Delete,
+				Clone,
+				CreateVersion,
+				Validate,
+				Manage,
+				Publish,
+				Archive,
+				ViewUsage
+			};
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Create, $"{SubmoduleDisplayName}.Create" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
+				{ Clone, $"{SubmoduleDisplayName}.Clone" },
+				{ CreateVersion, $"{SubmoduleDisplayName}.CreateVersion" },
+				{ Validate, $"{SubmoduleDisplayName}.Validate" },
 				{ Manage, $"{SubmoduleDisplayName}.Manage" },
-				{ Publish, $"{SubmoduleDisplayName}.Publish" }
+				{ Publish, $"{SubmoduleDisplayName}.Publish" },
+				{ Archive, $"{SubmoduleDisplayName}.Archive" },
+				{ ViewUsage, $"{SubmoduleDisplayName}.ViewUsage" }
 			};
 		}
 
@@ -99,9 +128,9 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Admissions.Forms";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Admissions.Forms";
-			public const string View = $"{SubmoduleName}.View"; public const string Manage = $"{SubmoduleName}.Manage"; public const string Publish = $"{SubmoduleName}.Publish";
-			public static readonly string[] All = { View, Manage, Publish };
-			public static readonly Dictionary<string, string> DisplayNames = new() { { View, $"{SubmoduleDisplayName}.View" }, { Manage, $"{SubmoduleDisplayName}.Manage" }, { Publish, $"{SubmoduleDisplayName}.Publish" } };
+			public const string View = $"{SubmoduleName}.View"; public const string Manage = $"{SubmoduleName}.Manage"; public const string Publish = $"{SubmoduleName}.Publish"; public const string Archive = $"{SubmoduleName}.Archive"; public const string CreateVersion = $"{SubmoduleName}.CreateVersion"; public const string ViewUsage = $"{SubmoduleName}.ViewUsage";
+			public static readonly string[] All = { View, Manage, Publish, Archive, CreateVersion, ViewUsage };
+			public static readonly Dictionary<string, string> DisplayNames = new() { { View, $"{SubmoduleDisplayName}.View" }, { Manage, $"{SubmoduleDisplayName}.Manage" }, { Publish, $"{SubmoduleDisplayName}.Publish" }, { Archive, $"{SubmoduleDisplayName}.Archive" }, { CreateVersion, $"{SubmoduleDisplayName}.CreateVersion" }, { ViewUsage, $"{SubmoduleDisplayName}.ViewUsage" } };
 		}
 
 		public static class AdmissionApplications
@@ -112,8 +141,22 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Start = $"{SubmoduleName}.Start";
 			public const string Edit = $"{SubmoduleName}.Edit";
 			public const string Submit = $"{SubmoduleName}.Submit";
-			public static readonly string[] All = { View, Start, Edit, Submit };
-			public static readonly Dictionary<string, string> DisplayNames = new() { { View, $"{SubmoduleDisplayName}.View" }, { Start, $"{SubmoduleDisplayName}.Start" }, { Edit, $"{SubmoduleDisplayName}.Edit" }, { Submit, $"{SubmoduleDisplayName}.Submit" } };
+			public const string Reopen = $"{SubmoduleName}.Reopen";
+			public const string Advance = $"{SubmoduleName}.Advance";
+			public const string SkipStage = $"{SubmoduleName}.SkipStage";
+			public const string OverrideWorkflow = $"{SubmoduleName}.OverrideWorkflow";
+			public static readonly string[] All = { View, Start, Edit, Submit, Reopen, Advance, SkipStage, OverrideWorkflow };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Start, $"{SubmoduleDisplayName}.Start" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Submit, $"{SubmoduleDisplayName}.Submit" },
+				{ Reopen, $"{SubmoduleDisplayName}.Reopen" },
+				{ Advance, $"{SubmoduleDisplayName}.Advance" },
+				{ SkipStage, $"{SubmoduleDisplayName}.SkipStage" },
+				{ OverrideWorkflow, $"{SubmoduleDisplayName}.OverrideWorkflow" }
+			};
 		}
 
 		public static class AdmissionApplicants

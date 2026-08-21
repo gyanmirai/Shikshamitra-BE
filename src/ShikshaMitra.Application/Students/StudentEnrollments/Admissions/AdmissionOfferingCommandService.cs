@@ -22,7 +22,15 @@ public class AdmissionOfferingCommandService(
 		var validation = await configurationValidator.ValidateAsync(admissionCycleId, input);
 		AdmissionOfferingConfigurationValidator.EnsureCanSave(validation, input.IsActive);
 		var offering = CreateEntity(admissionCycleId, input);
-		await offeringRepository.InsertAsync(offering, autoSave: true);
+		try
+		{
+			await offeringRepository.InsertAsync(offering, autoSave: true);
+		}
+		catch (Exception exception) when (IsUniqueConstraintViolation(exception))
+		{
+			throw new BusinessException(AdmissionErrorCodes.OfferingDuplicate,
+				"An Admission Offering already exists for the selected Cycle and academic hierarchy.");
+		}
 		return await readService.GetAsync(offering.Id);
 	}
 
@@ -140,7 +148,15 @@ public class AdmissionOfferingCommandService(
 			await offeringRepository.InsertAsync(offering, autoSave: false);
 			result.Items[index].OfferingId = offering.Id;
 		}
-		await CurrentUnitOfWork.SaveChangesAsync();
+		try
+		{
+			await UnitOfWorkManager.Current!.SaveChangesAsync();
+		}
+		catch (Exception exception) when (IsUniqueConstraintViolation(exception))
+		{
+			throw new BusinessException(AdmissionErrorCodes.OfferingDuplicate,
+				"One or more Admission Offerings already exist for the selected Cycle and academic hierarchy.");
+		}
 		result.CreatedCount = pending.Count;
 		return result;
 	}
@@ -189,6 +205,18 @@ public class AdmissionOfferingCommandService(
 		ApplicationFormDefinitionId = offering.ApplicationFormDefinitionId,
 		IsActive = offering.IsActive
 	};
+
+	private static bool IsUniqueConstraintViolation(Exception exception)
+	{
+		for (var current = exception; current is not null; current = current.InnerException)
+		{
+			var sqlState = current.GetType().GetProperty("SqlState")?.GetValue(current)?.ToString();
+			if (sqlState == "23505" || current.Message.Contains("23505", StringComparison.Ordinal))
+				return true;
+		}
+
+		return false;
+	}
 
 	private static CreateAdmissionOfferingDto ToCreateDto(
 		BulkCreateAdmissionOfferingsDto input,

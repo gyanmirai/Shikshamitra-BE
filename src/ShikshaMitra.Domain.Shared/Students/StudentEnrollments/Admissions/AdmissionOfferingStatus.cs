@@ -28,6 +28,7 @@ public static class AdmissionOfferingValidationCodes
 	public const string InquiryFormNotPublished = "InquiryFormNotPublished";
 	public const string ApplicationFormMissing = "ApplicationFormMissing";
 	public const string ApplicationFormNotPublished = "ApplicationFormNotPublished";
-	public const string CampusUnsupported = "CampusUnsupported";
+	public const string CampusMissing = "CampusMissing";
+	public const string CampusInactive = "CampusInactive";
 	public const string Duplicate = "Duplicate";
 }

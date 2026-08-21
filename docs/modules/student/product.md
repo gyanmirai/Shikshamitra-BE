@@ -17,7 +17,10 @@ TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that 
 The active identity is Admission Cycle, optional Campus, Board, Medium, Stage, and Standard.
 Division is not part of Admission Offering identity.
 The database prevents duplicate non-deleted identities with separate filtered indexes for Campus and no-Campus records.
-Campus selection is currently rejected because this installation has no authoritative Admission Campus source.
+Campus is backed by the tenant-scoped Admission Campus source. Campus codes are unique per tenant,
+and only active campuses can be selected for an offering. Deactivating a campus does not delete
+history, but offerings that reference it become configuration-incomplete until an active campus is
+selected or the campus is cleared.
 
 ## Admission window
 

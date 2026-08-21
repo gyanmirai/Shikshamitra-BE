@@ -11,7 +11,32 @@ public enum AdmissionApplicationStatus
 public enum AdmissionRuntimeStageStatus
 {
 	Pending = 0,
-	Current = 1,
+	Active = 1,
 	Completed = 2,
-	Skipped = 3
+	Skipped = 3,
+	Failed = 4,
+	Cancelled = 5
+}
+
+public enum AdmissionWorkflowInstanceStatus
+{
+	Active = 0,
+	Completed = 1,
+	Cancelled = 2,
+	Failed = 3,
+	NotStarted = 4
+}
+
+public enum AdmissionWorkflowTransitionAction
+{
+	Completed = 0,
+	Skipped = 1,
+	AdminOverride = 2
+}
+
+public enum AdmissionFormInstanceStatus
+{
+	Draft = 0,
+	Submitted = 1,
+	Reopened = 2
 }

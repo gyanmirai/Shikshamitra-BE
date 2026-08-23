@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.QuestionBank;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -31,7 +32,8 @@ public class QuestionPaperAppService(
     IRepository<Standard, Guid> standardRepository,
     IRepository<Subject, Guid> subjectRepository,
     IRepository<Exam, Guid> examRepository,
-    IAsyncQueryableExecuter asyncExecuter
+    IAsyncQueryableExecuter asyncExecuter,
+    IUserScopeAccessService userScopeAccessService
 ) : ApplicationService, IQuestionPaperAppService
 {
     public async Task<QuestionPaperSettingDto> GetSettingsAsync(Guid academicYearId)
@@ -63,6 +65,7 @@ public class QuestionPaperAppService(
     {
         var query = await paperRepository.WithDetailsAsync(x => x.Sections, x => x.Questions);
         query = ApplySearch(query, input);
+		query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
         var total = await asyncExecuter.CountAsync(query);
         var page = Math.Max(1, input.Page);
         var pageSize = Math.Clamp(input.PageSize, 5, 100);
@@ -91,6 +94,7 @@ public class QuestionPaperAppService(
         ValidatePaperInput(input);
         var paper = new QuestionPaper(GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId, input.StandardId, input.SubjectId, input.PaperTitle, input.TotalMarks, input.DurationMinutes, input.CreationMode);
         Apply(input, paper);
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(paper, operation: "question-paper-create");
         foreach (var section in input.Sections.OrderBy(x => x.SortOrder))
         {
             paper.Sections.Add(new QuestionPaperSection(section.Id ?? GuidGenerator.Create(), paper.Id, section.SectionName, section.Marks, section.SortOrder, section.Instructions));
@@ -106,6 +110,7 @@ public class QuestionPaperAppService(
         EnsureEditable(paper);
         ValidatePaperInput(input);
         Apply(input, paper);
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(paper, operation: "question-paper-update");
         await sectionRepository.DeleteManyAsync(paper.Sections.ToList());
         paper.Sections.Clear();
         foreach (var section in input.Sections.OrderBy(x => x.SortOrder))
@@ -568,8 +573,10 @@ public class QuestionPaperAppService(
     private async Task<QuestionPaper> GetPaperEntityAsync(Guid id)
     {
         var query = await paperRepository.WithDetailsAsync(x => x.Sections, x => x.Questions);
-        return await asyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == id))
+        var paper = await asyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == id))
             ?? throw new BusinessException("ShikshaMitra.QuestionPapers:NotFound").WithData("Id", id);
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(paper, operation: "question-paper-access");
+		return paper;
     }
 
     private async Task<Dictionary<Guid, string>> GetQuestionTextMapAsync(QuestionPaper paper)

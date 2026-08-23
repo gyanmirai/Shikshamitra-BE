@@ -1,10 +1,11 @@
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 
-public class RoomReservation : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class RoomReservation : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
     public Guid? TenantId { get; private set; }
     public Guid RoomId { get; private set; }
@@ -31,6 +32,13 @@ public class RoomReservation : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public DateTime? ApprovedAt { get; private set; }
     public DateTime? CheckedInAt { get; private set; }
     public DateTime? CheckedOutAt { get; private set; }
+
+    Guid? IUserScopedEntity.AcademicYearId => null;
+    Guid? IUserScopedEntity.EducationBoardId => null;
+    Guid? IUserScopedEntity.EducationMediumId => null;
+    Guid? IUserScopedEntity.EducationMediumStageId => null;
+    Guid? IUserScopedEntity.StandardId => StandardId;
+    Guid? IUserScopedEntity.DivisionId => DivisionId;
 
     private RoomReservation() { }
 

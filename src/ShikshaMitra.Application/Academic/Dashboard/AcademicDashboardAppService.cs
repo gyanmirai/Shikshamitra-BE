@@ -25,6 +25,7 @@ using ShikshaMitra.Academic.QuestionBank;
 using ShikshaMitra.Academic.QuestionPapers;
 using ShikshaMitra.Academic.Examination.SeatAllocation;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Academic.Dashboard;
 
@@ -56,6 +57,7 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
     private readonly IRepository<ExamSeatAllocation, Guid> _seatAllocationRepository;
     private readonly IRepository<AssignmentEntity, Guid> _assignmentRepository;
     private readonly IRepository<Room, Guid> _roomRepository;
+    private readonly IUserScopeAccessService _userScopeAccessService;
 
     public AcademicDashboardAppService(
         IRepository<Student, Guid> studentRepository,
@@ -81,7 +83,8 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         IRepository<ExamSeatingPlan, Guid> seatingPlanRepository,
         IRepository<ExamSeatAllocation, Guid> seatAllocationRepository,
         IRepository<AssignmentEntity, Guid> assignmentRepository,
-        IRepository<Room, Guid> roomRepository)
+        IRepository<Room, Guid> roomRepository,
+        IUserScopeAccessService userScopeAccessService)
     {
         _studentRepository = studentRepository;
         _employeeRepository = employeeRepository;
@@ -107,10 +110,16 @@ public class AcademicDashboardAppService : ApplicationService, IAcademicDashboar
         _seatAllocationRepository = seatAllocationRepository;
         _assignmentRepository = assignmentRepository;
         _roomRepository = roomRepository;
+        _userScopeAccessService = userScopeAccessService;
     }
 
     public async Task<AdminAcademicDashboardDto> GetAdminDashboardAsync()
     {
+        if (!await _userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
+        {
+            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+        }
+
         var adminStudents = await _studentRepository.GetListAsync();
         var studentsCount = adminStudents.Count;
         var totalStudents = studentsCount;

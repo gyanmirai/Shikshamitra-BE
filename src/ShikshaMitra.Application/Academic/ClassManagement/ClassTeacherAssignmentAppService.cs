@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.ClassTeacher;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Seeders;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.Standards;
@@ -26,6 +28,8 @@ public class ClassTeacherAssignmentAppService(
 	IRepository<Employee, Guid> employeeRepository,
 	IIdentityUserRepository userRepository,
 	IGuidGenerator guidGenerator,
+	AcademicPermissionUserScopeSyncer academicPermissionUserScopeSyncer,
+	IClassTeacherAccessService classTeacherAccessService,
 	ILogger<ClassTeacherAssignmentAppService> logger
 ) : ApplicationService, IClassTeacherAssignmentAppService
 {
@@ -183,6 +187,17 @@ public class ClassTeacherAssignmentAppService(
 			var existingAssignments = await classTeacherRepository.GetListAsync(
 				assignment => orgStandardIds.Contains(assignment.StandardId)
 			);
+			var affectedTeacherIds = existingAssignments
+				.Select(assignment => assignment.TeacherId)
+				.Concat(input.Assignments.Select(assignment => assignment.TeacherId))
+				.Distinct()
+				.ToList();
+			var affectedUserIds = affectedTeacherIds.Count == 0
+				? []
+				: (await employeeRepository.GetListAsync(employee => affectedTeacherIds.Contains(employee.Id)))
+					.Where(employee => employee.UserId.HasValue)
+					.Select(employee => employee.UserId!.Value)
+					.ToList();
 			if (existingAssignments.Any())
 			{
 				await classTeacherRepository.DeleteManyAsync(existingAssignments, autoSave: true);
@@ -205,6 +220,13 @@ public class ClassTeacherAssignmentAppService(
 
 				await classTeacherRepository.InsertAsync(newAssignment);
 			}
+
+			// Class-teacher assignments are a first-class source of user scope. Persist
+			// the replacement set before synchronizing so the synchronizer sees both
+			// additions and removals in the same transaction.
+			await CurrentUnitOfWork.SaveChangesAsync();
+			await academicPermissionUserScopeSyncer.SyncAsync();
+			await classTeacherAccessService.InvalidateAsync(affectedUserIds);
 
 			return new ApiSuccessResponseDto
 			{

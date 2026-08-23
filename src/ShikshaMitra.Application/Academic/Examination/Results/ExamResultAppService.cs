@@ -12,6 +12,7 @@ using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -31,7 +32,8 @@ public class ExamResultAppService(
     IRepository<Student, Guid> studentRepository,
     IRepository<Subject, Guid> subjectRepository,
     IRepository<Standard, Guid> standardRepository,
-    IRepository<Division, Guid> divisionRepository) : ApplicationService, IExamResultAppService
+    IRepository<Division, Guid> divisionRepository,
+    IUserScopeService userScopeService) : ApplicationService, IExamResultAppService
 {
     // ─────────────────────────────────────────────────────────────────────────
     // Readiness check
@@ -42,7 +44,7 @@ public class ExamResultAppService(
     {
         var checks = new List<ReadinessCheckDto>();
 
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId, divisionId);
 
         // Check 1: At least one subject configured
         checks.Add(new ReadinessCheckDto
@@ -152,7 +154,7 @@ public class ExamResultAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.Generate)]
     public async Task<ResultHeaderDto> GenerateAsync(GenerateResultRequestDto input)
     {
-        var exam = await examRepository.GetAsync(input.ExamId, includeDetails: true);
+        var exam = await GetScopedExamAsync(input.ExamId, input.DivisionId);
         if (exam.ExamDivisions.All(x => x.DivisionId != input.DivisionId))
             throw new UserFriendlyException("Selected division does not belong to this exam.");
 
@@ -331,6 +333,7 @@ public class ExamResultAppService(
     public async Task<ResultHeaderDto> PublishAsync(PublishResultRequestDto input)
     {
         var header = await resultHeaderRepository.GetAsync(input.ResultHeaderId);
+        await GetScopedExamAsync(header.ExamId, header.DivisionId);
         var userId = CurrentUser.GetId();
         if (header.Status != ExamResultStatus.Generated)
             throw new UserFriendlyException("Only generated results can be published.");
@@ -358,6 +361,7 @@ public class ExamResultAppService(
     public async Task<ResultHeaderDto> FreezeAsync(FreezeResultRequestDto input)
     {
         var header = await resultHeaderRepository.GetAsync(input.ResultHeaderId);
+        await GetScopedExamAsync(header.ExamId, header.DivisionId);
         var userId = CurrentUser.GetId();
 
         header.Freeze(userId, input.Remarks);
@@ -379,6 +383,8 @@ public class ExamResultAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.View)]
     public async Task<ResultAnalyticsDto> GetAnalyticsAsync(Guid resultHeaderId)
     {
+        var header = await resultHeaderRepository.GetAsync(resultHeaderId);
+        await GetScopedExamAsync(header.ExamId, header.DivisionId);
         var details = await resultDetailRepository.GetListAsync(d => d.ResultHeaderId == resultHeaderId);
         return ComputeAnalytics(resultHeaderId, details);
     }
@@ -390,6 +396,7 @@ public class ExamResultAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.View)]
     public async Task<ResultHeaderDto?> GetHeaderAsync(Guid examId, Guid divisionId)
     {
+        await GetScopedExamAsync(examId, divisionId);
         var header = await resultHeaderRepository.FirstOrDefaultAsync(
             h => h.ExamId == examId && h.DivisionId == divisionId);
         if (header is null) return null;
@@ -401,6 +408,40 @@ public class ExamResultAppService(
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
+
+    private async Task<Exam> GetScopedExamAsync(Guid examId, Guid? divisionId = null)
+    {
+        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        if (divisionId.HasValue && exam.ExamDivisions.All(row => row.DivisionId != divisionId.Value))
+        {
+            throw new UserFriendlyException("Selected division does not belong to this exam.");
+        }
+
+        if (!CurrentUser.Id.HasValue)
+        {
+            throw new BusinessException(UserScopeErrorCodes.NoCurrentUser);
+        }
+
+        var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+        if (scope.IsAdmin || scope.HasTenantWideScope() ||
+            scope.StandardIds.Contains(exam.StandardId) ||
+            scope.WildcardDivisionStandardIds.Contains(exam.StandardId))
+        {
+            return exam;
+        }
+
+        var targetDivisionIds = divisionId.HasValue
+            ? new[] { divisionId.Value }
+            : exam.ExamDivisions.Select(row => row.DivisionId).Distinct().ToArray();
+        if (targetDivisionIds.Length > 0 && targetDivisionIds.All(scope.DivisionIds.Contains))
+        {
+            return exam;
+        }
+
+        throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+            .WithData("ExamId", examId)
+            .WithData("Operation", "exam-result");
+    }
 
     private static string ComputeGrade(double obtained, double total, ICollection<GradeRange>? ranges = null, double scaleTotal = 100.0)
     {
@@ -495,7 +536,7 @@ public class ExamResultAppService(
     public async Task<StudentResultViewDto> GetStudentResultDetailsAsync(Guid examId, Guid studentId)
     {
         var student = await studentRepository.GetAsync(studentId);
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId, student.DivisionId);
 
         // Fetch standard and division names
         var standardName = student.StandardId.HasValue 

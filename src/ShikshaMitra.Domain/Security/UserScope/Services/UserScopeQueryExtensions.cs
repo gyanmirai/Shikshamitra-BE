@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
 
 namespace ShikshaMitra.Security.UserScope;
 
@@ -21,97 +23,100 @@ public static class UserScopeQueryExtensions
 			return queryable.Where(_ => false);
 		}
 
-		var baseFilter = queryable.Where(e =>
-			userScope.HasWildcardAcademicYear ||
-			(e.AcademicYearId.HasValue &&
-			 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value)) ||
-			(e.DivisionId.HasValue && (
-				(userScope.HasWildcardDivision &&
-				 (
-					(e.StandardId.HasValue &&
-					 (userScope.StandardIds.Contains(e.StandardId.Value) ||
-					  userScope.WildcardDivisionStandardIds.Contains(e.StandardId.Value))) ||
-					(userScope.HasWildcardStandard &&
-					 e.EducationMediumStageId.HasValue &&
-					 userScope.WildcardStandardMediumStageIds.Contains(e.EducationMediumStageId.Value)) ||
-					(userScope.HasWildcardMediumStage &&
-					 e.EducationMediumId.HasValue &&
-					 userScope.WildcardMediumStageMediumIds.Contains(e.EducationMediumId.Value)) ||
-					(userScope.HasWildcardMedium &&
-					 e.EducationBoardId.HasValue &&
-					 userScope.WildcardMediumBoardIds.Contains(e.EducationBoardId.Value)) ||
-					userScope.HasWildcardAcademicYear ||
-					(e.AcademicYearId.HasValue &&
-					 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value))
-				 )) ||
-				userScope.DivisionIds.Contains(e.DivisionId.Value)
-			)) ||
-			(e.StandardId.HasValue && (
-				(userScope.HasWildcardStandard &&
-				 (
-					(e.EducationMediumStageId.HasValue &&
-					 (userScope.MediumStageIds.Contains(e.EducationMediumStageId.Value) ||
-					  userScope.WildcardStandardMediumStageIds.Contains(e.EducationMediumStageId.Value))) ||
-					(userScope.HasWildcardMediumStage &&
-					 e.EducationMediumId.HasValue &&
-					 userScope.WildcardMediumStageMediumIds.Contains(e.EducationMediumId.Value)) ||
-					(userScope.HasWildcardMedium &&
-					 e.EducationBoardId.HasValue &&
-					 userScope.WildcardMediumBoardIds.Contains(e.EducationBoardId.Value)) ||
-					userScope.HasWildcardAcademicYear ||
-					(e.AcademicYearId.HasValue &&
-					 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value))
-				 )) ||
-				userScope.StandardIds.Contains(e.StandardId.Value)
-			)) ||
-			(e.EducationMediumStageId.HasValue && (
-				(userScope.HasWildcardMediumStage &&
-				 (
-					(e.EducationMediumId.HasValue &&
-					 (userScope.MediumIds.Contains(e.EducationMediumId.Value) ||
-					  userScope.WildcardMediumStageMediumIds.Contains(e.EducationMediumId.Value))) ||
-					(userScope.HasWildcardMedium &&
-					 e.EducationBoardId.HasValue &&
-					 userScope.WildcardMediumBoardIds.Contains(e.EducationBoardId.Value)) ||
-					userScope.HasWildcardAcademicYear ||
-					(e.AcademicYearId.HasValue &&
-					 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value))
-				 )) ||
-				userScope.MediumStageIds.Contains(e.EducationMediumStageId.Value)
-			)) ||
-			(e.EducationMediumId.HasValue && (
-				(userScope.HasWildcardMedium &&
-				 (
-					(e.EducationBoardId.HasValue &&
-					 userScope.WildcardMediumBoardIds.Contains(e.EducationBoardId.Value)) ||
-					userScope.HasWildcardAcademicYear ||
-					(e.AcademicYearId.HasValue &&
-					 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value))
-				 )) ||
-				userScope.MediumIds.Contains(e.EducationMediumId.Value)
-			)) ||
-			(e.EducationBoardId.HasValue && (
-				userScope.HasWildcardAcademicYear ||
-				(e.AcademicYearId.HasValue &&
-				 userScope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId.Value)) ||
-				userScope.BoardIds.Contains(e.EducationBoardId.Value)
-			))
-		);
+		// EF Core cannot translate a cast to IUserScopedEntity because interface members
+		// are often explicit/computed properties rather than mapped columns. Build the
+		// predicate from the entity's real CLR properties instead.
+		var parameter = Expression.Parameter(typeof(TEntity), "entity");
+		var academicYear = FindMappedGuidProperty<TEntity>(parameter, "AcademicYearId");
+		var board = FindMappedGuidProperty<TEntity>(parameter, "EducationBoardId", "BoardId");
+		var medium = FindMappedGuidProperty<TEntity>(parameter, "EducationMediumId", "MediumId");
+		var mediumStage = FindMappedGuidProperty<TEntity>(parameter, "EducationMediumStageId", "MediumStageId");
+		var standard = FindMappedGuidProperty<TEntity>(parameter, "StandardId");
+		var division = FindMappedGuidProperty<TEntity>(parameter, "DivisionId");
 
-		if (userScope.HasWildcardAcademicYear)
+		Expression predicate = Expression.Constant(userScope.HasWildcardAcademicYear);
+		predicate = Or(predicate, Contains(academicYear, userScope.WildcardBoardAcademicYearIds));
+		predicate = Or(predicate, Contains(board, userScope.BoardIds));
+		predicate = Or(predicate, Contains(medium, userScope.MediumIds));
+		predicate = Or(predicate, Contains(mediumStage, userScope.MediumStageIds));
+		predicate = Or(predicate, Contains(standard, userScope.StandardIds));
+		predicate = Or(predicate, Contains(standard, userScope.WildcardDivisionStandardIds));
+		predicate = Or(predicate, Contains(division, userScope.DivisionIds));
+
+		if (userScope.HasWildcardDivision)
 		{
-			return baseFilter;
+			predicate = Or(predicate, Contains(standard, userScope.StandardIds));
+			predicate = Or(predicate, Contains(standard, userScope.WildcardDivisionStandardIds));
 		}
 
-		if (userScope.AcademicYearIds.Any())
+		if (userScope.HasWildcardStandard)
 		{
-			return baseFilter.Where(e =>
-				!e.AcademicYearId.HasValue ||
-				userScope.AcademicYearIds.Contains(e.AcademicYearId.Value));
+			predicate = Or(predicate, Contains(mediumStage, userScope.MediumStageIds));
+			predicate = Or(predicate, Contains(mediumStage, userScope.WildcardStandardMediumStageIds));
 		}
 
-		return baseFilter.Where(e => !e.AcademicYearId.HasValue);
+		if (userScope.HasWildcardMediumStage)
+		{
+			predicate = Or(predicate, Contains(medium, userScope.MediumIds));
+			predicate = Or(predicate, Contains(medium, userScope.WildcardMediumStageMediumIds));
+		}
+
+		if (userScope.HasWildcardMedium)
+		{
+			predicate = Or(predicate, Contains(board, userScope.BoardIds));
+			predicate = Or(predicate, Contains(board, userScope.WildcardMediumBoardIds));
+		}
+
+		if (academicYear != null && !userScope.HasWildcardAcademicYear && userScope.AcademicYearIds.Any())
+		{
+			predicate = Expression.AndAlso(
+				predicate,
+				Expression.OrElse(
+					IsNull(academicYear),
+					Contains(academicYear, userScope.AcademicYearIds)!));
+		}
+
+		return queryable.Where(Expression.Lambda<Func<TEntity, bool>>(predicate, parameter));
 	}
+
+	private static Expression Or(Expression left, Expression? right) =>
+		right == null ? left : Expression.OrElse(left, right);
+
+	private static MemberExpression? FindMappedGuidProperty<TEntity>(
+		ParameterExpression parameter,
+		params string[] names)
+	{
+		var property = names
+			.Select(name => typeof(TEntity).GetProperty(name, BindingFlags.Instance | BindingFlags.Public))
+			.FirstOrDefault(candidate => candidate?.PropertyType is not null &&
+				(candidate.PropertyType == typeof(Guid) || candidate.PropertyType == typeof(Guid?)));
+		return property == null ? null : Expression.Property(parameter, property);
+	}
+
+	private static Expression? Contains(MemberExpression? property, IReadOnlyCollection<Guid> values)
+	{
+		if (property == null || values.Count == 0)
+		{
+			return null;
+		}
+
+		var contains = typeof(Enumerable)
+			.GetMethods(BindingFlags.Public | BindingFlags.Static)
+			.Single(method => method.Name == nameof(Enumerable.Contains) && method.GetParameters().Length == 2)
+			.MakeGenericMethod(typeof(Guid));
+		var value = property.Type == typeof(Guid?)
+			? Expression.Property(property, nameof(Nullable<Guid>.Value))
+			: property;
+		var containsCall = Expression.Call(contains, Expression.Constant(values), value);
+		return property.Type == typeof(Guid?)
+			? Expression.AndAlso(Expression.Property(property, nameof(Nullable<Guid>.HasValue)), containsCall)
+			: containsCall;
+	}
+
+	private static Expression IsNull(MemberExpression property) =>
+		property.Type == typeof(Guid?)
+			? Expression.Not(Expression.Property(property, nameof(Nullable<Guid>.HasValue)))
+			: Expression.Constant(false);
 
 	public static bool HasAccessToEntity<TEntity>(
 		TEntity entity,

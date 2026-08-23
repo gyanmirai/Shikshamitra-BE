@@ -1,6 +1,9 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Academic.ClassTeacher;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.TenantSettings.AcademicSetups;
@@ -12,6 +15,7 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
@@ -33,6 +37,10 @@ public class AcademicPermissionUserScopeSyncer_Tests
 	private readonly StandardManager _standardManager;
 	private readonly DivisionManager _divisionManager;
 	private readonly IdentityUserManager _userManager;
+	private readonly IdentityRoleManager _roleManager;
+	private readonly EmployeeManager _employeeManager;
+	private readonly IRepository<Employee, Guid> _employeeRepository;
+	private readonly IRepository<ClassTeacher, Guid> _classTeacherRepository;
 	private readonly IRepository<TenantSettings.AcademicYears.AcademicYear, Guid> _academicYearRepository;
 	private readonly IRepository<EducationBoard, Guid> _boardRepository;
 	private readonly IRepository<EducationMedium, Guid> _mediumRepository;
@@ -43,6 +51,7 @@ public class AcademicPermissionUserScopeSyncer_Tests
 	private readonly IRepository<EducationMediumStagePermission, Guid> _stagePermissionRepository;
 	private readonly IRepository<TenantSettings.AcademicSetups.Divisions.DivisionPermission, Guid> _divisionPermissionRepository;
 	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
+	private readonly IClassTeacherAccessService _classTeacherAccessService;
 	private readonly ICurrentTenant _currentTenant;
 
 	public AcademicPermissionUserScopeSyncer_Tests()
@@ -56,6 +65,10 @@ public class AcademicPermissionUserScopeSyncer_Tests
 		_standardManager = GetRequiredService<StandardManager>();
 		_divisionManager = GetRequiredService<DivisionManager>();
 		_userManager = GetRequiredService<IdentityUserManager>();
+		_roleManager = GetRequiredService<IdentityRoleManager>();
+		_employeeManager = GetRequiredService<EmployeeManager>();
+		_employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
+		_classTeacherRepository = GetRequiredService<IRepository<ClassTeacher, Guid>>();
 		_academicYearRepository = GetRequiredService<IRepository<TenantSettings.AcademicYears.AcademicYear, Guid>>();
 		_boardRepository = GetRequiredService<IRepository<EducationBoard, Guid>>();
 		_mediumRepository = GetRequiredService<IRepository<EducationMedium, Guid>>();
@@ -67,6 +80,7 @@ public class AcademicPermissionUserScopeSyncer_Tests
 		_divisionPermissionRepository =
 			GetRequiredService<IRepository<TenantSettings.AcademicSetups.Divisions.DivisionPermission, Guid>>();
 		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		_classTeacherAccessService = GetRequiredService<IClassTeacherAccessService>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 	}
 
@@ -227,6 +241,79 @@ public class AcademicPermissionUserScopeSyncer_Tests
 		}
 	}
 
+	[Fact]
+	public async Task SyncAsync_Should_Create_Exact_Division_Scope_For_Class_Teacher()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var user = await CreateUserAsync();
+			var hierarchy = await CreateAcademicHierarchyAsync();
+			var employee = await CreateEmployeeForUserAsync(user.Id);
+
+			await WithUnitOfWorkAsync(async () =>
+			{
+				await _classTeacherRepository.InsertAsync(
+					new ClassTeacher(
+						Guid.NewGuid(),
+						TestTenantId,
+						hierarchy.StandardId,
+						hierarchy.DivisionId,
+						employee.Id,
+						hierarchy.MediumId,
+						academicYearId: hierarchy.AcademicYearId,
+						educationBoardId: hierarchy.BoardId,
+						educationMediumId: hierarchy.MediumId,
+						educationMediumStageId: hierarchy.StageId),
+					autoSave: true);
+			});
+
+			await WithUnitOfWorkAsync(() => _syncer.SyncAsync());
+			(await WithUnitOfWorkAsync(() => _classTeacherAccessService.HasAssignmentAsync(user.Id))).ShouldBeTrue();
+
+			var scope = (await _scopeRepository.GetListAsync(x => x.UserId == user.Id)).Single();
+			scope.AcademicYearId.ShouldBe(hierarchy.AcademicYearId);
+			scope.EducationBoardId.ShouldBe(hierarchy.BoardId);
+			scope.EducationMediumId.ShouldBe(hierarchy.MediumId);
+			scope.EducationMediumStageId.ShouldBe(hierarchy.StageId);
+			scope.StandardId.ShouldBe(hierarchy.StandardId);
+			scope.DivisionId.ShouldBe(hierarchy.DivisionId);
+		}
+	}
+
+	[Fact]
+	public async Task SyncAsync_Should_Deactivate_ClassTeacher_Scope_When_Assignment_Is_Removed()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var user = await CreateUserAsync();
+			var hierarchy = await CreateAcademicHierarchyAsync();
+			var employee = await CreateEmployeeForUserAsync(user.Id);
+			var assignment = new ClassTeacher(
+				Guid.NewGuid(),
+				TestTenantId,
+				hierarchy.StandardId,
+				hierarchy.DivisionId,
+				employee.Id,
+				hierarchy.MediumId,
+				academicYearId: hierarchy.AcademicYearId,
+				educationBoardId: hierarchy.BoardId,
+				educationMediumId: hierarchy.MediumId,
+				educationMediumStageId: hierarchy.StageId);
+
+			await WithUnitOfWorkAsync(() => _classTeacherRepository.InsertAsync(assignment, autoSave: true));
+			await WithUnitOfWorkAsync(() => _syncer.SyncAsync());
+
+			await WithUnitOfWorkAsync(() => _classTeacherRepository.DeleteAsync(assignment, autoSave: true));
+			await WithUnitOfWorkAsync(() => _syncer.SyncAsync());
+
+			var scope = (await _scopeRepository.GetListAsync(x =>
+				x.UserId == user.Id &&
+				x.StandardId == hierarchy.StandardId &&
+				x.DivisionId == hierarchy.DivisionId)).Single();
+			scope.IsActive.ShouldBeFalse();
+		}
+	}
+
 	private async Task<IdentityUser> CreateUserAsync()
 	{
 		return await WithUnitOfWorkAsync(async () =>
@@ -236,6 +323,38 @@ public class AcademicPermissionUserScopeSyncer_Tests
 			var result = await _userManager.CreateAsync(user, "Test@1234");
 			result.Succeeded.ShouldBeTrue(string.Join(", ", result.Errors.Select(x => x.Description)));
 			return user;
+		});
+	}
+
+	private async Task<Employee> CreateEmployeeForUserAsync(Guid userId)
+	{
+		return await WithUnitOfWorkAsync(async () =>
+		{
+			var suffix = Guid.NewGuid().ToString("N")[..8];
+			var role = new IdentityRole(Guid.NewGuid(), $"scope-teacher-role-{suffix}", TestTenantId);
+			role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
+			role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, EmployeeGroupAudience.Teaching);
+			role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);
+			var roleResult = await _roleManager.CreateAsync(role);
+			roleResult.Succeeded.ShouldBeTrue(string.Join(", ", roleResult.Errors.Select(x => x.Description)));
+
+			var employee = await _employeeManager.CreateEmployeeAsync(
+				userId,
+				role.Id,
+				$"Teacher{suffix}",
+				"Scope",
+				null,
+				$"TS{suffix[..4]}",
+				EmployeeStatusType.Active,
+				new DateOnly(1992, 3, 10),
+				mobileNo: $"9{Random.Shared.NextInt64(100_000_000, 999_999_999)}",
+				email: $"scope.teacher.{suffix}@test.local",
+				panNo: $"ABCDE{Random.Shared.Next(1000, 9999)}F",
+				adharNo: $"8{Random.Shared.NextInt64(10_000_000_000, 99_999_999_999)}",
+				dateOfJoining: new DateOnly(2026, 4, 1),
+				employeeGroup: EmployeeGroupType.Teaching);
+
+			return await _employeeRepository.InsertAsync(employee, autoSave: true);
 		});
 	}
 

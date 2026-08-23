@@ -10,6 +10,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Users;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 
@@ -27,6 +28,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     private readonly RoomConflictService _conflictService;
     private readonly RoomRecommendationService _recommendationService;
     private readonly IRepository<Employee, Guid> _employeeRepository;
+    private readonly IUserScopeAccessService _userScopeAccessService;
+    private readonly IClassTeacherAccessService _classTeacherAccessService;
 
     public RoomAvailabilityAppService(
         IRepository<Room, Guid> roomRepository,
@@ -39,7 +42,9 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         IRepository<TenantSettings.RoomsManagement.RoomTypes.RoomType, Guid> roomTypeRepository,
         RoomConflictService conflictService,
         RoomRecommendationService recommendationService,
-        IRepository<Employee, Guid> employeeRepository)
+        IRepository<Employee, Guid> employeeRepository,
+        IUserScopeAccessService userScopeAccessService,
+        IClassTeacherAccessService classTeacherAccessService)
     {
         _roomRepository = roomRepository;
         _reservationRepository = reservationRepository;
@@ -52,6 +57,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         _conflictService = conflictService;
         _recommendationService = recommendationService;
         _employeeRepository = employeeRepository;
+        _userScopeAccessService = userScopeAccessService;
+        _classTeacherAccessService = classTeacherAccessService;
     }
 
     public async Task<List<RoomAvailabilityDto>> GetAvailabilityAsync(RoomAvailabilityFilterDto input)
@@ -273,6 +280,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                     subReservation.Approve(approverId);
                 }
 
+                await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(subReservation, operation: "room-reservation-create");
                 await _reservationRepository.InsertAsync(subReservation);
             }
         }
@@ -289,6 +297,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             mainReservation.Approve(approverId);
         }
 
+        await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(mainReservation, operation: "room-reservation-create");
         await _reservationRepository.InsertAsync(mainReservation);
 
         var creationAuditLog = new RoomAuditLog(
@@ -341,6 +350,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     {
         var reservations = await _reservationRepository.GetListAsync(r =>
             !r.RecurringConfigId.HasValue || r.IsRecurring);
+		var scope = await _userScopeAccessService.GetCurrentUserScopeAsync();
+		reservations = reservations.FilterByUserScope(scope).ToList();
 
         if (input.CreatedDate.HasValue)
         {
@@ -351,7 +362,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         var currentUserId = CurrentUser.GetId();
         var isAdmin = IsAdministrator();
 
-        if (!isAdmin)
+        if (!isAdmin && !await HasClassTeacherAccessAsync())
         {
             var visibleUserIds = await GetVisibleReservationUserIdsAsync(currentUserId);
             reservations = reservations
@@ -421,6 +432,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     public async Task<RoomReservationDto> UpdateReservationAsync(Guid id, CreateRoomReservationDto input)
     {
         var reservation = await _reservationRepository.GetAsync(id);
+		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(reservation, operation: "room-reservation-update");
 
         var conflicts = await _conflictService.CheckConflictsAsync(
             input.RoomId, input.Date, input.StartTime, input.EndTime, id,
@@ -448,6 +460,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             input.ReservedFor,
             input.Remarks
         );
+		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(reservation, operation: "room-reservation-update");
 
         await _reservationRepository.UpdateAsync(reservation);
 
@@ -474,6 +487,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     public async Task CancelReservationAsync(Guid id, string reason)
     {
         var reservation = await _reservationRepository.GetAsync(id);
+		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(reservation, operation: "room-reservation-cancel");
         var oldValJson = JsonSerializer.Serialize(reservation);
 
         reservation.Cancel(CurrentUser.Id ?? Guid.Empty, reason);
@@ -540,6 +554,11 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase));
 
+	private Task<bool> HasClassTeacherAccessAsync() =>
+		CurrentUser.Id.HasValue
+			? _classTeacherAccessService.HasAssignmentAsync(CurrentUser.Id.Value)
+			: Task.FromResult(false);
+
     private async Task<HashSet<Guid>> GetVisibleReservationUserIdsAsync(Guid currentUserId)
     {
         var employees = await _employeeRepository.GetListAsync();
@@ -580,6 +599,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     public async Task ApproveReservationAsync(Guid id)
     {
         var reservation = await _reservationRepository.GetAsync(id);
+		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(reservation, operation: "room-reservation-approve");
         await EnsureUserIsAuthorizedApproverAsync(reservation);
         var oldValJson = JsonSerializer.Serialize(reservation);
 
@@ -685,6 +705,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     {
         var normalizedReason = NormalizeRequiredReason(reason, "Rejection reason is required.");
         var reservation = await _reservationRepository.GetAsync(id);
+		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(reservation, operation: "room-reservation-reject");
         await EnsureUserIsAuthorizedApproverAsync(reservation);
         var oldValJson = JsonSerializer.Serialize(reservation);
 

@@ -1,10 +1,11 @@
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Academic.Timetable.Substitutions;
 
-public class SubstitutionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class SubstitutionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
     public Guid? TenantId { get; private set; }
     public Guid? AcademicYearId { get; private set; }
@@ -45,6 +46,13 @@ public class SubstitutionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public DateTime? AcknowledgedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
     public string? Remarks { get; private set; }
+
+    Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
+    Guid? IUserScopedEntity.EducationBoardId => null;
+    Guid? IUserScopedEntity.EducationMediumId => null;
+    Guid? IUserScopedEntity.EducationMediumStageId => null;
+    Guid? IUserScopedEntity.StandardId => StandardId;
+    Guid? IUserScopedEntity.DivisionId => DivisionId;
 
     private SubstitutionRequest()
     {

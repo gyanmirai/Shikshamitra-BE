@@ -22,6 +22,93 @@ public class QuestionPaperAppService_Tests : ShikshaMitraApplicationTestBase<Shi
 	}
 
 	[Fact]
+	public async Task SubmitAsync_Should_Allow_An_Empty_Optional_Chapter_Blueprint()
+	{
+		using (_currentTenant.Change(null))
+		{
+			var academicYearId = Guid.NewGuid();
+			var standardId = Guid.NewGuid();
+			var subjectId = Guid.NewGuid();
+			var question = await _questionBankAppService.CreateQuestionAsync(new CreateUpdateQuestionDto
+			{
+				AcademicYearId = academicYearId,
+				StandardId = standardId,
+				SubjectId = subjectId,
+				ChapterId = Guid.NewGuid(),
+				QuestionText = "What is photosynthesis?",
+				QuestionType = QuestionType.ShortAnswer,
+				DifficultyLevel = DifficultyLevel.Medium,
+				Marks = 5,
+				AnswerKey = "The process plants use to make food.",
+				Visibility = QuestionVisibility.Department
+			});
+			await _questionBankAppService.SubmitQuestionAsync(question.Id);
+			await _questionBankAppService.ApproveQuestionAsync(question.Id, new QuestionReviewDto { Comment = "Approved" });
+
+			var paper = await _questionPaperAppService.CreatePaperAsync(new CreateUpdateQuestionPaperDto
+			{
+				AcademicYearId = academicYearId,
+				StandardId = standardId,
+				SubjectId = subjectId,
+				PaperTitle = "Science Quiz",
+				TotalMarks = 5,
+				DurationMinutes = 30,
+				CreationMode = "Manual",
+				Sections = [new QuestionPaperSectionDto { SectionName = "Section A", Marks = 5, SortOrder = 1 }]
+			});
+			await _questionPaperAppService.AddQuestionAsync(paper.Id, new AddPaperQuestionDto
+			{
+				QuestionPaperSectionId = paper.Sections[0].Id!.Value,
+				QuestionBankItemId = question.Id,
+				QuestionNumber = 1,
+				Marks = 5,
+				SortOrder = 1
+			});
+			await _questionPaperAppService.SaveBlueprintAsync(paper.Id, new QuestionPaperBlueprintDto
+			{
+				QuestionPaperId = paper.Id,
+				TotalMarks = 5
+			});
+
+			var submitted = await _questionPaperAppService.SubmitAsync(paper.Id);
+
+			submitted.Status.ShouldBe(QuestionPaperStatus.Submitted);
+		}
+	}
+
+	[Fact]
+	public async Task GetPapersAsync_Should_Return_Paginated_Papers_For_Academic_Year()
+	{
+		using (_currentTenant.Change(null))
+		{
+			var academicYearId = Guid.NewGuid();
+			var paper = await _questionPaperAppService.CreatePaperAsync(new CreateUpdateQuestionPaperDto
+			{
+				AcademicYearId = academicYearId,
+				StandardId = Guid.NewGuid(),
+				SubjectId = Guid.NewGuid(),
+				PaperTitle = "Science Midterm",
+				TotalMarks = 25,
+				DurationMinutes = 60,
+				CreationMode = "Manual"
+			});
+
+			var result = await _questionPaperAppService.GetPapersAsync(new QuestionPaperSearchInput
+			{
+				AcademicYearId = academicYearId,
+				Page = 1,
+				PageSize = 50
+			});
+
+			result.TotalCount.ShouldBe(1);
+			result.CurrentPage.ShouldBe(1);
+			result.PageSize.ShouldBe(50);
+			result.Items.Count.ShouldBe(1);
+			result.Items[0].Id.ShouldBe(paper.Id);
+		}
+	}
+
+	[Fact]
 	public async Task GetPaperAsync_Should_Populate_Question_Text_From_Question_Bank()
 	{
 		using (_currentTenant.Change(null))

@@ -245,7 +245,7 @@ public class QuestionPaperAppService(
             QuestionCount = paper.Questions.Count
         };
         var chapterTotal = blueprint.ChapterRules.Sum(x => x.Marks);
-        if (chapterTotal != paper.TotalMarks)
+        if (blueprint.ChapterRules.Count > 0 && chapterTotal != paper.TotalMarks)
         {
             result.Errors.Add($"Chapter marks total {chapterTotal} must equal paper total {paper.TotalMarks}.");
         }
@@ -730,18 +730,19 @@ public class QuestionPaperAppService(
         var subjectQuery = await subjectRepository.GetQueryableAsync();
         var examQuery = await examRepository.GetQueryableAsync();
 
-        var standardTask = asyncExecuter.ToListAsync(
+        // EF Core DbContexts do not support multiple active operations. All three
+        // repositories share this request's scoped context, so execute the lookup
+        // queries in sequence rather than concurrently.
+        var standards = await asyncExecuter.ToListAsync(
             standardQuery.Where(x => standardIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
-        var subjectTask = asyncExecuter.ToListAsync(
+        var subjects = await asyncExecuter.ToListAsync(
             subjectQuery.Where(x => subjectIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
-        var examTask = asyncExecuter.ToListAsync(
+        var exams = await asyncExecuter.ToListAsync(
             examQuery.Where(x => examIds.Contains(x.Id)).Select(x => new { x.Id, x.ExamName }));
 
-        await Task.WhenAll(standardTask, subjectTask, examTask);
-
-        var standardNames = standardTask.Result.ToDictionary(x => x.Id, x => x.Name);
-        var subjectNames = subjectTask.Result.ToDictionary(x => x.Id, x => x.Name);
-        var examNames = examTask.Result.ToDictionary(x => x.Id, x => x.ExamName);
+        var standardNames = standards.ToDictionary(x => x.Id, x => x.Name);
+        var subjectNames = subjects.ToDictionary(x => x.Id, x => x.Name);
+        var examNames = exams.ToDictionary(x => x.Id, x => x.ExamName);
 
         foreach (var paper in papers)
         {

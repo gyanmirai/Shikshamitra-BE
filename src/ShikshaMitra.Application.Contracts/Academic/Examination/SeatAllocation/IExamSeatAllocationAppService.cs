@@ -17,6 +17,7 @@ public interface IExamSeatAllocationAppService
     Task DeleteSeatingPlanScopeAsync(Guid examId, Guid seatingPlanId);
     Task<SeatingPlanDraftResponseDto> GetSeatingPlanDraftAsync(Guid examId, Guid? seatingPlanId = null);
     Task<SeatingPlanDraftResponseDto> SaveSeatingPlanDraftAsync(Guid examId, SaveSeatingPlanDraftInputDto input);
+    Task<SeatingPlanDraftResponseDto> SaveSeatingPlanBulkAsync(Guid examId, SaveSeatingPlanBulkInputDto input);
     Task<SeatingValidationResponseDto> ValidateSeatingPlanAsync(Guid examId, Guid? seatingPlanId = null);
     Task<SeatingRoomSummaryResponseDto> GetSeatingRoomSummaryAsync(Guid examId, Guid? seatingPlanId = null);
     Task<SeatingPlanDraftResponseDto> FinalizeSeatingPlanAsync(Guid examId, Guid? seatingPlanId = null);

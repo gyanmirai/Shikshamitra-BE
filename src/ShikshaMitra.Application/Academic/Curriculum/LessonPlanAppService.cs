@@ -151,7 +151,12 @@ public class LessonPlanAppService(
                         var standard = standards.FirstOrDefault(s => s.Id == timetable.StandardId);
                         var division = divisions.FirstOrDefault(d => d.Id == timetable.DivisionId);
                         var subject = subjects.FirstOrDefault(sub => sub.Id == slotSubject.SubjectId);
-                        var plan = lessonPlans.FirstOrDefault(lp => lp.TimetableSlotId == slot.Id);
+                        var slotStartTime = slot.StartTime.ToString("hh:mm tt");
+                        var slotEndTime = slot.EndTime.ToString("hh:mm tt");
+                        var plan = lessonPlans.FirstOrDefault(lp =>
+                            !matchedPlanIds.Contains(lp.Id) &&
+                            lp.TimetableSlotId == slot.Id &&
+                            MatchesTimelineContext(lp, targetTeacherId, timetable.StandardId, timetable.DivisionId, slotSubject.SubjectId));
 
                         // Timetable slots used to be recreated when a timetable was saved. If a
                         // lesson plan still points at the previous slot id, recover it only when
@@ -167,7 +172,22 @@ public class LessonPlanAppService(
                                     lp.TimetableSlotId != slot.Id)
                                 .ToList();
 
-                            if (contextualPlans.Count == 1)
+                            // A recreated timetable can have more than one occurrence of the
+                            // same subject for a class/division. Match the old slot's time first
+                            // so each plan is attached to its original period rather than being
+                            // left unmapped or assigned to an arbitrary slot.
+                            var timeMatchedPlans = contextualPlans
+                                .Where(lp =>
+                                    mappedById.TryGetValue(lp.Id, out var dto) &&
+                                    dto.StartTime == slotStartTime &&
+                                    dto.EndTime == slotEndTime)
+                                .ToList();
+
+                            if (timeMatchedPlans.Count == 1)
+                            {
+                                plan = timeMatchedPlans[0];
+                            }
+                            else if (contextualPlans.Count == 1)
                             {
                                 plan = contextualPlans[0];
                             }
@@ -191,8 +211,8 @@ public class LessonPlanAppService(
                         {
                             TimetableSlotId = slot.Id,
                             PeriodName = $"Period {slot.Sequence}",
-                            StartTime = slot.StartTime.ToString("hh:mm tt"),
-                            EndTime = slot.EndTime.ToString("hh:mm tt"),
+                            StartTime = slotStartTime,
+                            EndTime = slotEndTime,
                             StandardId = timetable.StandardId,
                             StandardName = standard?.Name ?? "Class",
                             DivisionId = timetable.DivisionId,
@@ -271,6 +291,17 @@ public class LessonPlanAppService(
 
         return (await MapLessonPlansAsync(new[] { plan })).Single();
     }
+
+    private static bool MatchesTimelineContext(
+        LessonPlan plan,
+        Guid teacherId,
+        Guid standardId,
+        Guid divisionId,
+        Guid subjectId) =>
+        plan.TeacherId == teacherId &&
+        plan.StandardId == standardId &&
+        plan.DivisionId == divisionId &&
+        plan.SubjectId == subjectId;
 
     public async Task<LessonPlanDto> CreateAsync(CreateLessonPlanDto input)
     {

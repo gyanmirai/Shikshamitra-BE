@@ -95,6 +95,49 @@ public class StudentAcademic360AppService(
         };
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Dashboard.View)]
+    public async Task<StudentAcademic360Dto> GetTabAsync(Guid studentId, string tab, StudentAcademic360Input input)
+    {
+        input = NormalizeInput(input);
+        var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(GetTabAsync), includeDetails: true);
+        var academicYearId = await ResolveAcademicYearAsync(student, input);
+        var response = new StudentAcademic360Dto
+        {
+            GeneratedAtUtc = Clock.Now.ToUniversalTime(),
+            Student = await MapStudentAsync(student)
+        };
+
+        switch (tab.Trim().ToLowerInvariant())
+        {
+            case "overview":
+                return await GetAsync(studentId, input);
+            case "attendance":
+                response.Attendance = await BuildAttendanceAsync(studentId, input, academicYearId);
+                break;
+            case "learning":
+                response.LearningTasks = await BuildLearningTasksAsync(student, input, academicYearId);
+                break;
+            case "exams":
+                response.Exams = await BuildExamResultsAsync(student, input, academicYearId);
+                response.SubjectPerformance = BuildSubjectPerformance(response.Exams);
+                break;
+            case "timetable":
+                response.Timetable = await BuildTimetableAsync(student.StandardId, student.DivisionId);
+                break;
+            case "timeline":
+                var attendance = await BuildAttendanceAsync(studentId, input, academicYearId);
+                var learningTasks = await BuildLearningTasksAsync(student, input, academicYearId);
+                var exams = await BuildExamResultsAsync(student, input, academicYearId);
+                var timetable = await BuildTimetableAsync(student.StandardId, student.DivisionId);
+                response.Timeline = BuildTimeline(attendance, learningTasks, exams, BuildAlerts(attendance, learningTasks, exams, timetable));
+                break;
+            default:
+                throw new UserFriendlyException("Unsupported Student Academic 360 tab.");
+        }
+
+        return response;
+    }
+
     private static StudentAcademic360Input NormalizeInput(StudentAcademic360Input? input)
     {
         input ??= new StudentAcademic360Input();

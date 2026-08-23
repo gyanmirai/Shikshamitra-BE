@@ -12,6 +12,7 @@ using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.QuestionBank;
 using ShikshaMitra.Academic.QuestionPapers;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -27,7 +28,8 @@ public class ChapterAppService(
 	IRepository<TeacherDiary, Guid> teacherDiaryRepository,
 	IRepository<QuestionBankItem, Guid> questionBankRepository,
 	IRepository<QuestionPaperBlueprintChapterRule, Guid> blueprintChapterRuleRepository,
-	IRepository<Division, Guid> divisionRepository
+	IRepository<Division, Guid> divisionRepository,
+	IUserScopeAccessService userScopeAccessService
 ) : ApplicationService, IChapterAppService
 {
 	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, List<CreateChapterDto> input)
@@ -37,6 +39,7 @@ public class ChapterAppService(
 				includeDetails: true
 			)).FirstOrDefault()
 			?? throw new BusinessException("Academic:Chapter:001", "Subject not assigned to this class");
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-create");
 
 		if (input.Select(x => x.ChapterNo).Distinct().Count() != input.Count)
 		{
@@ -75,6 +78,7 @@ public class ChapterAppService(
 				includeDetails: true
 			)).FirstOrDefault()
 			?? throw new BusinessException("Academic:Chapter:002", "Subject not assigned to this class");
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-read");
 
 		if (divisionId.HasValue)
 		{
@@ -108,6 +112,7 @@ public class ChapterAppService(
 				includeDetails: true
 			)
 			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-update");
 
 		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
 		chapter.UpdateDetails(
@@ -170,6 +175,7 @@ public class ChapterAppService(
 				includeDetails: true
 			)
 			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-delete");
 
 		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
 

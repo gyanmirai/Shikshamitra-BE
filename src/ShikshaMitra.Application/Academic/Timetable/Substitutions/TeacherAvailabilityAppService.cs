@@ -10,6 +10,7 @@ using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -28,7 +29,8 @@ public class TeacherAvailabilityAppService(
     IRepository<Room, Guid> roomRepository,
     IRepository<Employee, Guid> employeeRepository,
     IEmployeeAttendanceRepository employeeAttendanceRepository,
-    IRepository<AcademicYear, Guid> academicYearRepository
+    IRepository<AcademicYear, Guid> academicYearRepository,
+    IUserScopeAccessService userScopeAccessService
 ) : ApplicationService, ITeacherAvailabilityAppService
 {
     private const string AvailabilityOverlapMessage =
@@ -43,17 +45,9 @@ public class TeacherAvailabilityAppService(
 
         if (!IsAdminUser())
         {
-            var currentUserId = CurrentUser.Id;
-            if (currentUserId.HasValue)
-            {
-                var visibleTeacherIds = await GetVisibleTeacherReferenceIdsAsync(currentUserId.Value);
-                filtered = filtered.Where(x =>
-                    x.TeacherId.HasValue && visibleTeacherIds.Contains(x.TeacherId.Value));
-            }
-            else
-            {
-                filtered = Enumerable.Empty<TeacherAvailability>();
-            }
+            var visibleTeacherIds = await GetScopeVisibleTeacherReferenceIdsAsync();
+            filtered = filtered.Where(x =>
+                x.TeacherId.HasValue && visibleTeacherIds.Contains(x.TeacherId.Value));
         }
 
         if (input.AcademicYearId.HasValue) filtered = filtered.Where(x => x.AcademicYearId == input.AcademicYearId);
@@ -594,40 +588,31 @@ public class TeacherAvailabilityAppService(
             string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
     }
 
-    private async Task<HashSet<Guid>> GetVisibleTeacherReferenceIdsAsync(Guid currentUserId)
+    private async Task<HashSet<Guid>> GetScopeVisibleTeacherReferenceIdsAsync()
     {
-        var allEmployees = await employeeRepository.GetListAsync();
-        var currentEmployee = allEmployees.FirstOrDefault(x => x.UserId == currentUserId);
-        var result = new HashSet<Guid> { currentUserId };
-        if (currentEmployee == null)
+        var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+        if (!scope.HasAnyAccess)
         {
-            return result;
+            return [];
         }
 
-        var visited = new HashSet<Guid>();
-        var queue = new Queue<Guid>();
-        queue.Enqueue(currentEmployee.Id);
-        while (queue.Count > 0)
+        var timetables = await timetableRepository.GetAllWithSlotsAsync();
+        var scopedTimetables = timetables.FilterByUserScope(scope);
+        var teacherIds = scopedTimetables
+            .SelectMany(timetable => timetable.Slots)
+            .SelectMany(slot => slot.Subjects)
+            .Where(subject => subject.TeacherId.HasValue)
+            .Select(subject => subject.TeacherId!.Value)
+            .ToHashSet();
+        if (teacherIds.Count == 0)
         {
-            var managerId = queue.Dequeue();
-            if (!visited.Add(managerId))
-            {
-                continue;
-            }
-
-            var manager = allEmployees.First(x => x.Id == managerId);
-            result.Add(manager.Id);
-            if (manager.UserId.HasValue)
-            {
-                result.Add(manager.UserId.Value);
-            }
-
-            foreach (var child in allEmployees.Where(x => x.ReportingManagerId == managerId))
-            {
-                queue.Enqueue(child.Id);
-            }
+            return [];
         }
 
-        return result;
+        var employees = await employeeRepository.GetListAsync(employee => teacherIds.Contains(employee.Id));
+        return employees
+            .SelectMany(employee => new[] { employee.Id, employee.UserId ?? Guid.Empty })
+            .Where(id => id != Guid.Empty)
+            .ToHashSet();
     }
 }

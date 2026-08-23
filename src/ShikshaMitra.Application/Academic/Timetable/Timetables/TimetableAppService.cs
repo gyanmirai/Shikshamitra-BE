@@ -13,6 +13,7 @@ using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
@@ -38,12 +39,14 @@ public class TimetableAppService(
     IRepository<StudentElectiveSelection, Guid> studentElectiveSelectionRepository,
     TimetableReportPdfService timetableReportPdfService,
     ITenantRepository tenantRepository,
-    IRepository<Employee, Guid> employeeRepository
+    IRepository<Employee, Guid> employeeRepository,
+    IUserScopeAccessService userScopeAccessService
 ) : ApplicationService, ITimetableAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public async Task<TimetableResponseDto> GetByStandardAndDivisionAsync(Guid standardId, Guid divisionId)
     {
+        await EnsureCurrentUserCanAccessAsync(standardId, divisionId, "timetable-read");
         var timetable = await timetableRepository.FindByStandardAndDivisionAsync(standardId, divisionId);
         var slotConfig = await lectureSlotConfigRepository.FindByStandardIdAsync(standardId);
 
@@ -361,6 +364,8 @@ public class TimetableAppService(
     {
         var employee = await employeeRepository.FindAsync(employeeId);
         var timetables = await timetableRepository.GetByEmployeeIdAsync(employeeId, academicYearId);
+        var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+        timetables = timetables.FilterByUserScope(scope).ToList();
 
         var standardIds = timetables.Select(t => t.StandardId).Distinct().ToList();
         var divisionIds = timetables.Select(t => t.DivisionId).Distinct().ToList();
@@ -502,6 +507,7 @@ public class TimetableAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public async Task SaveAsync(Guid standardId, Guid divisionId, SaveTimetableDto input)
     {
+        await EnsureCurrentUserCanAccessAsync(standardId, divisionId, "timetable-save");
         var timetable = await timetableRepository.FindByStandardAndDivisionAsync(standardId, divisionId);
 
         if (timetable is null)
@@ -540,6 +546,7 @@ public class TimetableAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public async Task ValidateAsync(Guid standardId, Guid divisionId, SaveTimetableDto input)
     {
+        await EnsureCurrentUserCanAccessAsync(standardId, divisionId, "timetable-validate");
         var timetable = new Timetable(
             GuidGenerator.Create(),
             CurrentTenant.Id,
@@ -554,12 +561,21 @@ public class TimetableAppService(
     public async Task<TimetableManagementResponseDto> GetManagementByStandardAsync(
         Guid standardId, GetTimetableManagementInput input)
     {
+        var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
         var lectureSlotConfig = await lectureSlotConfigRepository.FindByStandardIdAsync(standardId);
 
         var standard = await standardRepository.GetAsync(standardId);
         var divisionQueryable = await divisionRepository.GetQueryableAsync();
         var divisions = await AsyncExecuter.ToListAsync(
             divisionQueryable.Where(d => d.StandardId == standardId).OrderBy(d => d.Name));
+
+        if (!scope.IsAdmin && !scope.HasTenantWideScope())
+        {
+            divisions = divisions
+                .Where(division => UserScopeQueryExtensions.HasAccessToEntity(
+                    new Timetable(Guid.Empty, CurrentTenant.Id, standardId, division.Id), scope))
+                .ToList();
+        }
 
         if (!string.IsNullOrWhiteSpace(input.Search))
         {
@@ -813,6 +829,7 @@ public class TimetableAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public async Task AssignTeachersAsync(AssignTeachersDto input)
     {
+        await EnsureCurrentUserCanAccessAsync(input.StandardId, input.DivisionId, "timetable-assign-teachers");
         var day = Enum.Parse<TimetableDayOfWeek>(input.Day, ignoreCase: true);
         var startTime = input.StartTime;
         var endTime = input.EndTime;
@@ -847,6 +864,7 @@ public class TimetableAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public async Task AssignRoomsAsync(AssignRoomsDto input)
     {
+        await EnsureCurrentUserCanAccessAsync(input.StandardId, input.DivisionId, "timetable-assign-rooms");
         var day = Enum.Parse<TimetableDayOfWeek>(input.Day, ignoreCase: true);
         var startTime = input.StartTime;
         var endTime = input.EndTime;
@@ -1265,6 +1283,7 @@ public class TimetableAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public async Task<byte[]> GetClasswiseTimetablePdfAsync(Guid standardId, Guid divisionId)
     {
+        await EnsureCurrentUserCanAccessAsync(standardId, divisionId, "timetable-export");
         var standard = await standardRepository.GetAsync(standardId);
         var division = await divisionRepository.GetAsync(divisionId);
 
@@ -1346,6 +1365,7 @@ public class TimetableAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public async Task<SlotConfigResponseDto> GetSlotConfigByStandardAsync(Guid standardId)
     {
+        await EnsureCurrentUserCanAccessStandardAsync(standardId, "timetable-slot-config-read");
         var config = await lectureSlotConfigRepository.FindByStandardIdAsync(standardId);
         if (config is null)
         {
@@ -1373,5 +1393,35 @@ public class TimetableAppService(
                 }).ToList()
             }).ToList()
         };
+    }
+
+    private async Task EnsureCurrentUserCanAccessAsync(
+        Guid standardId,
+        Guid divisionId,
+        string operation)
+    {
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+            new Timetable(Guid.Empty, CurrentTenant.Id, standardId, divisionId),
+            operation: operation);
+    }
+
+    private async Task EnsureCurrentUserCanAccessStandardAsync(Guid standardId, string operation)
+    {
+        var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+        if (scope.IsAdmin || scope.HasTenantWideScope())
+        {
+            return;
+        }
+
+        var divisions = await divisionRepository.GetListAsync(division => division.StandardId == standardId);
+        var hasAccess = divisions.Any(division => UserScopeQueryExtensions.HasAccessToEntity(
+            new Timetable(Guid.Empty, CurrentTenant.Id, standardId, division.Id), scope));
+
+        if (!hasAccess)
+        {
+            throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+                .WithData("Operation", operation)
+                .WithData("StandardId", standardId);
+        }
     }
 }

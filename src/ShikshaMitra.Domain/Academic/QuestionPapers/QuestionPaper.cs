@@ -5,10 +5,11 @@ using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 using ShikshaMitra.Academic.QuestionBank;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Academic.QuestionPapers;
 
-public class QuestionPaper : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class QuestionPaper : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
     public Guid? TenantId { get; private set; }
     public Guid AcademicYearId { get; set; }
@@ -27,6 +28,13 @@ public class QuestionPaper : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public bool IsLocked { get; set; }
     public ICollection<QuestionPaperSection> Sections { get; private set; }
     public ICollection<QuestionPaperQuestion> Questions { get; private set; }
+
+    Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
+    Guid? IUserScopedEntity.EducationBoardId => null;
+    Guid? IUserScopedEntity.EducationMediumId => null;
+    Guid? IUserScopedEntity.EducationMediumStageId => null;
+    Guid? IUserScopedEntity.StandardId => StandardId;
+    Guid? IUserScopedEntity.DivisionId => null;
 
     private QuestionPaper()
     {

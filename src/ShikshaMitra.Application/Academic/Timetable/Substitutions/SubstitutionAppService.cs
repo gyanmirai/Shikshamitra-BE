@@ -13,6 +13,7 @@ using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -34,16 +35,20 @@ public class SubstitutionAppService(
     IRepository<Room, Guid> roomRepository,
     IRepository<Employee, Guid> employeeRepository,
     TakeAttendanceTeacherAvailabilitySyncService teacherAvailabilitySyncService,
-    IRepository<AcademicYear, Guid> academicYearRepository
+    IRepository<AcademicYear, Guid> academicYearRepository,
+    IUserScopeAccessService userScopeAccessService,
+    IClassTeacherAccessService classTeacherAccessService
 ) : ApplicationService, ISubstitutionAppService
 {
     public async Task<PagedResultDto<SubstitutionDto>> GetListAsync(GetSubstitutionsInput input)
     {
         var rows = await substitutionRepository.GetListAsync();
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		rows = rows.FilterByUserScope(scope).ToList();
         await BackfillAcademicYearAsync(rows, input.AcademicYearId);
         rows = await FilterByAcademicMediumAsync(rows, input.AcademicMediumId);
 
-        if (!IsAdminUser())
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             var currentUserId = CurrentUser.Id;
             if (currentUserId.HasValue)
@@ -83,6 +88,8 @@ public class SubstitutionAppService(
         await teacherAvailabilitySyncService.SyncDateRangeAsync(target, target);
 
         var substitutions = await substitutionRepository.GetListAsync(x => x.Date == target);
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		substitutions = substitutions.FilterByUserScope(scope).ToList();
         await BackfillAcademicYearAsync(substitutions, academicYearId);
         if (academicYearId.HasValue)
         {
@@ -90,7 +97,7 @@ public class SubstitutionAppService(
         }
         substitutions = await FilterByAcademicMediumAsync(substitutions, academicMediumId);
 
-        if (!IsAdminUser())
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             var currentUserId = CurrentUser.Id;
             if (currentUserId.HasValue)
@@ -230,6 +237,7 @@ public class SubstitutionAppService(
             input.SubjectName,
             input.Remarks);
 
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-create");
         await substitutionRepository.InsertAsync(entity, autoSave: true);
         await WriteAuditAsync(entity.Id, "Created", "Substitution request created.");
 
@@ -275,6 +283,7 @@ public class SubstitutionAppService(
     {
         await EnsureAdminAsync("update substitutions");
         var entity = await substitutionRepository.GetAsync(id);
+		await EnsureCanViewSubstitutionAsync(entity);
         if (entity.Status is SubstitutionStatus.Completed or SubstitutionStatus.Cancelled)
         {
             throw new UserFriendlyException("Completed or cancelled substitutions cannot be edited.");
@@ -353,6 +362,7 @@ public class SubstitutionAppService(
             input.OriginalRoomId,
             input.SubjectName,
             input.Remarks);
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-update");
 
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Updated", "Substitution details updated.");
@@ -368,6 +378,7 @@ public class SubstitutionAppService(
         }
 
         var entity = await substitutionRepository.GetAsync(id);
+		await EnsureCanViewSubstitutionAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot assign a substitute after the period has ended.");
         var suggestions = await GetSuggestedTeachersAsync(id);
         var selected = suggestions.FirstOrDefault(x =>
@@ -422,6 +433,7 @@ public class SubstitutionAppService(
     {
         await EnsureAdminAsync("send reminders");
         var entity = await substitutionRepository.GetAsync(id);
+		await EnsureCanViewSubstitutionAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot send a reminder after the period has ended.");
         if (string.IsNullOrWhiteSpace(entity.SubstituteTeacherName))
         {
@@ -460,6 +472,7 @@ public class SubstitutionAppService(
     {
         await EnsureAdminAsync("cancel substitutions");
         var entity = await substitutionRepository.GetAsync(id);
+		await EnsureCanViewSubstitutionAsync(entity);
         entity.Cancel(input.Reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Cancelled", input.Reason);
@@ -1634,17 +1647,22 @@ public class SubstitutionAppService(
             string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
     }
 
-    private Task EnsureAdminAsync(string action)
+    private async Task EnsureAdminAsync(string action)
     {
-        if (!IsAdminUser())
+		if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             throw new UserFriendlyException($"Only administrators can {action}.");
         }
-        return Task.CompletedTask;
     }
 
     private async Task EnsureCanViewSubstitutionAsync(SubstitutionRequest entity)
     {
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-read");
+		if (await HasClassTeacherAccessAsync())
+		{
+			return;
+		}
+
         if (IsAdminUser() || !CurrentUser.Id.HasValue)
         {
             return;
@@ -1696,6 +1714,11 @@ public class SubstitutionAppService(
 
         return visibleTeacherIds;
     }
+
+	private Task<bool> HasClassTeacherAccessAsync() =>
+		CurrentUser.Id.HasValue
+			? classTeacherAccessService.HasAssignmentAsync(CurrentUser.Id.Value)
+			: Task.FromResult(false);
 
     private async Task EnsureCanActAsSubstituteAsync(SubstitutionRequest entity)
     {

@@ -6,6 +6,8 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Reports;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.Divisions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BackgroundJobs;
@@ -23,7 +25,10 @@ public class AcademicReportAppService(
     IRepository<ShikshaMitra.HR.Reports.HrReportExportJob, Guid> exportJobRepository,
     IBackgroundJobManager backgroundJobManager,
     IBlobContainer blobContainer,
-    IGuidGenerator guidGenerator) : ApplicationService, IAcademicReportAppService
+    IGuidGenerator guidGenerator,
+    IUserScopeService userScopeService,
+    IClassTeacherAccessService classTeacherAccessService,
+    IRepository<Division, Guid> divisionRepository) : ApplicationService, IAcademicReportAppService
 {
     public async Task<AcademicReportOptionsDto> GetOptionsAsync()
     {
@@ -35,6 +40,7 @@ public class AcademicReportAppService(
     {
         var userId = CurrentUser.Id ?? throw new BusinessException("Academic:Reports:050003");
         input = reportGenerator.NormalizeAndValidateRequest(input, exportAllRows: false);
+        await ApplyClassTeacherScopeAsync(input, userId);
         return await reportGenerator.GenerateAsync(input, userId, CurrentTenant.Id, exportAllRows: false);
     }
 
@@ -43,6 +49,7 @@ public class AcademicReportAppService(
         var tenantId = CurrentTenant.Id;
         var userId = CurrentUser.Id ?? throw new BusinessException("Academic:Reports:050003");
         input = reportGenerator.NormalizeAndValidateRequest(input, exportAllRows: true);
+        await ApplyClassTeacherScopeAsync(input, userId);
         var jobId = guidGenerator.Create();
         var expiresAt = DateTime.UtcNow.AddDays(7);
 
@@ -142,6 +149,50 @@ public class AcademicReportAppService(
         }
 
         return job;
+    }
+
+    private async Task ApplyClassTeacherScopeAsync(AcademicReportRequestDto input, Guid userId)
+    {
+        if (!await classTeacherAccessService.HasAssignmentAsync(userId))
+        {
+            return;
+        }
+
+        var scope = await userScopeService.GetUserScopeAsync(userId);
+        var allowedDivisionIds = scope.DivisionIds.Distinct().ToList();
+        if (allowedDivisionIds.Count == 0)
+        {
+            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+        }
+
+        var requestedDivisionIds = input.Filters.DivisionIds;
+        var visibleDivisionIds = requestedDivisionIds is { Count: > 0 }
+            ? requestedDivisionIds.Where(allowedDivisionIds.Contains).Distinct().ToList()
+            : allowedDivisionIds;
+        if (visibleDivisionIds.Count == 0)
+        {
+            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+        }
+
+        var visibleDivisions = await divisionRepository.GetListAsync(
+            division => visibleDivisionIds.Contains(division.Id));
+        var allowedClassIds = visibleDivisions.Select(division => division.StandardId).Distinct().ToList();
+        if (allowedClassIds.Count == 0)
+        {
+            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+        }
+
+        var requestedClassIds = input.Filters.ClassIds;
+        var visibleClassIds = requestedClassIds is { Count: > 0 }
+            ? requestedClassIds.Where(allowedClassIds.Contains).Distinct().ToList()
+            : allowedClassIds;
+        if (visibleClassIds.Count == 0)
+        {
+            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+        }
+
+        input.Filters.DivisionIds = visibleDivisionIds;
+        input.Filters.ClassIds = visibleClassIds;
     }
 
     private static AcademicReportExportJobDto MapJob(ShikshaMitra.HR.Reports.HrReportExportJob job, bool includeRequestJson = true)

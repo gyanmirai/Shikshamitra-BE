@@ -9,6 +9,7 @@ using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.QuestionPapers;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -29,7 +30,8 @@ public class QuestionBankAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<AssignedSubjectChapter, Guid> chapterRepository,
     IExcelService excelService,
-    IAsyncQueryableExecuter asyncExecuter
+    IAsyncQueryableExecuter asyncExecuter,
+    IUserScopeAccessService userScopeAccessService
 ) : ApplicationService, IQuestionBankAppService
 {
     public async Task<QuestionBankSettingDto> GetSettingsAsync(Guid academicYearId)
@@ -118,6 +120,7 @@ public class QuestionBankAppService(
     public async Task<QuestionListResponseDto> GetQuestionsAsync(QuestionSearchInput input)
     {
         var query = await questionRepository.WithDetailsAsync(x => x.Options, x => x.Tags);
+        query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
         query = ApplySearch(query, input).Where(x => !x.IsArchived);
 
         var total = await asyncExecuter.CountAsync(query);
@@ -164,6 +167,7 @@ public class QuestionBankAppService(
             input.Visibility ?? setting.DefaultVisibility);
 
         Apply(input, question);
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(question, operation: "question-bank-create");
         SyncChildren(question, input);
         await questionRepository.InsertAsync(question, autoSave: true);
         return Map(question, 0);
@@ -207,6 +211,7 @@ public class QuestionBankAppService(
         }
 
         Apply(input, question);
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(question, operation: "question-bank-update");
         await optionRepository.DeleteDirectAsync(x => x.QuestionBankItemId == question.Id);
         await tagRepository.DeleteDirectAsync(x => x.QuestionBankItemId == question.Id);
         question.Options.Clear();
@@ -303,6 +308,7 @@ public class QuestionBankAppService(
         var setting = await GetSettingsEntityAsync(input.AcademicYearId);
         var normalized = QuestionBankItem.Normalize(input.QuestionText);
         var query = await questionRepository.WithDetailsAsync(x => x.Options, x => x.Tags);
+        query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
         query = query.Where(x =>
             x.AcademicYearId == input.AcademicYearId &&
             x.StandardId == input.StandardId &&
@@ -318,6 +324,7 @@ public class QuestionBankAppService(
         var exactMatches = await asyncExecuter.ToListAsync(query.Take(10));
 
         var similarQuery = await questionRepository.WithDetailsAsync(x => x.Options, x => x.Tags);
+        similarQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(similarQuery);
         var similarCandidates = await asyncExecuter.ToListAsync(similarQuery
             .Where(x =>
                 x.AcademicYearId == input.AcademicYearId &&
@@ -362,6 +369,7 @@ public class QuestionBankAppService(
     public async Task<QuestionBankDashboardDto> GetDashboardAsync(Guid academicYearId)
     {
         var rows = await questionRepository.GetListAsync(x => x.AcademicYearId == academicYearId && !x.IsArchived);
+        rows = (await userScopeAccessService.ApplyCurrentUserScopeAsync(rows.AsQueryable())).ToList();
         var rowIds = rows.Select(r => r.Id).ToList();
         var usageRows = await usageRepository.GetListAsync(x => rowIds.Contains(x.QuestionBankItemId));
         var paperQuestionRows = await paperQuestionRepository.GetListAsync(x => rowIds.Contains(x.QuestionBankItemId));
@@ -415,6 +423,7 @@ public class QuestionBankAppService(
 
         foreach (var row in rows)
         {
+            await userScopeAccessService.EnsureCurrentUserCanAccessAsync(row, operation: "question-bank-review");
             EnsureCanReview(row);
             row.SetReview(status, CurrentUser.Id ?? Guid.Empty, input.Comment);
         }
@@ -432,6 +441,7 @@ public class QuestionBankAppService(
     private async Task<QuestionBankItem> GetQuestionEntityAsync(Guid id)
     {
         var query = await questionRepository.WithDetailsAsync(x => x.Options, x => x.Tags);
+        query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
         return await asyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == id))
             ?? throw new BusinessException("ShikshaMitra.QuestionBank:NotFound").WithData("Id", id);
     }

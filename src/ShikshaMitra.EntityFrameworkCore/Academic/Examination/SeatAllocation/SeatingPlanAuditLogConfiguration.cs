@@ -13,6 +13,7 @@ public class SeatingPlanAuditLogConfiguration : IEntityTypeConfiguration<Seating
         builder.ConfigureByConvention();
 
         builder.Property(x => x.ExamId).IsRequired();
+        builder.Property(x => x.SeatingPlanId).IsRequired();
         builder.Property(x => x.Action).IsRequired();
         builder.Property(x => x.ActorUserId).IsRequired();
         builder.Property(x => x.ActorNameSnapshot).HasMaxLength(256).IsRequired(false);
@@ -20,5 +21,6 @@ public class SeatingPlanAuditLogConfiguration : IEntityTypeConfiguration<Seating
         builder.Property(x => x.AssignmentsSnapshotJson).HasColumnType("text").IsRequired(false);
 
         builder.HasIndex(x => x.ExamId);
+        builder.HasIndex(x => new { x.ExamId, x.SeatingPlanId });
     }
 }

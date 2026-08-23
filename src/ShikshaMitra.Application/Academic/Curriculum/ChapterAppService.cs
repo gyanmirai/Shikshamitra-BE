@@ -336,7 +336,6 @@ public class ChapterAppService(
 		{
 			var summary = linkedByChapter[lessonPlan.ChapterId];
 			summary.LessonPlans++;
-			summary.LessonPlanIds.Add(lessonPlan.Id);
 			// The lesson plan is the progress fallback until a submitted
 			// Teacher Diary provides the actual delivered-lesson progress.
 			summary.CompletionValues.Add(Math.Clamp(lessonPlan.PlannedCompletionPercentage, 0, 100));
@@ -351,18 +350,16 @@ public class ChapterAppService(
 			var diaryByLessonPlan = submittedDiaries
 				.GroupBy(diary => diary.LessonPlanId)
 				.ToDictionary(group => group.Key, group => group.OrderByDescending(diary => diary.CreationTime).First());
+			var lessonPlanById = lessonPlans.ToDictionary(lessonPlan => lessonPlan.Id);
 
-			foreach (var lessonPlan in lessonPlans)
+			foreach (var diaryGroup in diaryByLessonPlan.Values.GroupBy(diary => lessonPlanById[diary.LessonPlanId].ChapterId))
 			{
-				if (diaryByLessonPlan.TryGetValue(lessonPlan.Id, out var diary))
-				{
-					var summary = linkedByChapter[lessonPlan.ChapterId];
-					var planIndex = summary.LessonPlanIds.IndexOf(lessonPlan.Id);
-					if (planIndex >= 0)
-					{
-						summary.CompletionValues[planIndex] = diary.ActualCompletionPercentage;
-					}
-				}
+				var summary = linkedByChapter[diaryGroup.Key];
+				// Submitted diaries record actual delivery and therefore take precedence for
+				// the entire chapter. Planned values are used only when no diary was submitted.
+				summary.CompletionValues.Clear();
+				summary.CompletionValues.AddRange(diaryGroup.Select(diary =>
+					Math.Clamp(diary.ActualCompletionPercentage, 0, 100)));
 			}
 		}
 
@@ -510,7 +507,6 @@ public class ChapterAppService(
 	private sealed class ChapterLinkSummary
 	{
 		public int LessonPlans { get; set; }
-		public List<Guid> LessonPlanIds { get; } = new();
 		public List<int> CompletionValues { get; } = new();
 		public int Homeworks { get; set; }
 		public int Assessments { get; set; }

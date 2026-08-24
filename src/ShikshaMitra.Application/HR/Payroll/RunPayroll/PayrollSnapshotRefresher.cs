@@ -3,6 +3,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -35,6 +36,8 @@ public class PayrollSnapshotRefresher(
 	PayrollBasisPreviewResolver basisPreviewResolver,
 	PayrollSnapshotRefreshLookupReader lookupReader,
 	PayrollProvidentFundComponentBuilder providentFundComponentBuilder,
+	PayrollCompensationRevisionResolver compensationRevisionResolver,
+	PayrollEsiContextResolver esiContextResolver,
 	IProfessionalTaxRepository professionalTaxRepository,
 	ILogger<PayrollSnapshotRefresher> logger)
 	: ITransientDependency
@@ -125,6 +128,14 @@ public class PayrollSnapshotRefresher(
 		var resolvedComponentsByEmployee = await componentVersionResolver.ResolveByEmployeeAsync(
 			componentsByEmployee,
 			internalMonthYear);
+		var compensationByEmployee = await compensationRevisionResolver.ResolveAsync(
+			employeeIds,
+			year,
+			month,
+			resolvedComponentsByEmployee);
+		var compensationComponentsByEmployee = compensationByEmployee.Values
+			.SelectMany(x => x.Components)
+			.ToLookup(x => x.EmployeeId);
 		var adjustmentsByEmployee = await adjustmentReader.GetByEmployeeAsync(internalMonthYear, employeeIds);
 		var statutoryEffectiveDate = new DateTime(year, month, 1);
 		var professionalTaxSlabs = await professionalTaxRepository.GetListAsync(x =>
@@ -132,6 +143,11 @@ public class PayrollSnapshotRefresher(
 			x.JurisdictionCode == "IN-GJ" &&
 			x.EffectiveFrom <= statutoryEffectiveDate &&
 			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= statutoryEffectiveDate));
+		var esiContexts = await esiContextResolver.ResolveAsync(
+			year,
+			month,
+			employeeIds,
+			compensationComponentsByEmployee);
 
 		var computedItems = new List<RunPayrollItem>();
 		var payrollContextByEmployee = new Dictionary<Guid, PayrollEmployeeComputationContext>();
@@ -181,8 +197,13 @@ public class PayrollSnapshotRefresher(
 					ex.Code);
 				var payrollDetails = payrollDetailsByEmployee.GetValueOrDefault(employee.Id);
 				var payrollComponents = await GetPayrollComponentsAsync(
-					payrollDetailsByEmployee, resolvedComponentsByEmployee, employee.Id, year, month);
-				var pfRule = await providentFundComponentBuilder.ResolveRuleAsync(payrollDetails, year, month);
+					compensationByEmployee, employee.Id, year, month);
+				var revision = compensationByEmployee.GetValueOrDefault(employee.Id)?.Revision;
+				var pfRule = await providentFundComponentBuilder.ResolveRuleAsync(
+					revision?.PfRuleId,
+					employee.Id,
+					year,
+					month);
 				computedItems.Add(PayrollRunItemBuilder.BuildPayrollSetupIssueItem(
 					employee,
 					attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
@@ -195,12 +216,16 @@ public class PayrollSnapshotRefresher(
 					reviewByEmployee.GetValueOrDefault(employee.Id),
 					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
 					leaveUnitsByDate: null,
-					new[] { IssueCodes.PayrollPolicyConfiguration },
+					revision == null
+						? new[] { IssueCodes.PayrollPolicyConfiguration, IssueCodes.CompensationRevisionRequired }
+						: new[] { IssueCodes.PayrollPolicyConfiguration },
 					PayrollRunRules.GetEffectiveEmploymentStartDate(employee),
 					new PayrollStatutoryRuleSet(
 						pfRule,
 						professionalTaxSlabs,
-						IsEmploymentCessationMonth(employee, year, month))));
+						IsEmploymentCessationMonth(employee, year, month),
+						esiContexts.GetValueOrDefault(employee.Id)),
+					revision));
 			}
 		}
 
@@ -231,8 +256,18 @@ public class PayrollSnapshotRefresher(
 
 			var payrollDetails = payrollDetailsByEmployee.GetValueOrDefault(employee.Id);
 			var payrollComponents = await GetPayrollComponentsAsync(
-				payrollDetailsByEmployee, resolvedComponentsByEmployee, employee.Id, year, month);
-			var pfRule = await providentFundComponentBuilder.ResolveRuleAsync(payrollDetails, year, month);
+				compensationByEmployee, employee.Id, year, month);
+			var revision = compensationByEmployee.GetValueOrDefault(employee.Id)?.Revision;
+			var pfRule = await providentFundComponentBuilder.ResolveRuleAsync(
+				revision?.PfRuleId,
+				employee.Id,
+				year,
+				month);
+			var itemIssueCodes = payrollContext.PayrollPolicyIssueCodes.ToList();
+			if (revision == null)
+			{
+				itemIssueCodes.Add(IssueCodes.CompensationRevisionRequired);
+			}
 			computedItems.Add(PayrollRunItemBuilder.BuildPayrollItem(
 				employee,
 				attendanceByEmployee.GetValueOrDefault(employee.Id) ?? new List<EmployeeAttendance>(),
@@ -249,13 +284,15 @@ public class PayrollSnapshotRefresher(
 				finalizedEmployeeIds.Contains(employee.Id),
 				reviewByEmployee.GetValueOrDefault(employee.Id),
 				previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
-				payrollContext.PayrollPolicyIssueCodes,
+				itemIssueCodes,
 				PayrollRunRules.GetEffectiveEmploymentStartDate(employee),
 				ResolveShift(employee, shiftsById),
 				new PayrollStatutoryRuleSet(
 					pfRule,
 					professionalTaxSlabs,
-					IsEmploymentCessationMonth(employee, year, month))
+					IsEmploymentCessationMonth(employee, year, month),
+					esiContexts.GetValueOrDefault(employee.Id)),
+				revision
 			));
 		}
 
@@ -282,15 +319,16 @@ public class PayrollSnapshotRefresher(
 		PayrollComponentMonthScope.FilterForMonth(resolvedComponentsByEmployee[employeeId], year, month);
 
 	private async Task<List<EmployeePayrollComponent>> GetPayrollComponentsAsync(
-		IReadOnlyDictionary<Guid, EmployeePayrollDetails> payrollDetailsByEmployee,
-		ILookup<Guid, EmployeePayrollComponent> resolvedComponentsByEmployee,
+		IReadOnlyDictionary<Guid, PayrollCompensationRevisionResolution> compensationByEmployee,
 		Guid employeeId,
 		int year,
 		int month)
 	{
-		var components = GetResolvedComponents(resolvedComponentsByEmployee, employeeId, year, month);
+		var resolution = compensationByEmployee.GetValueOrDefault(employeeId);
+		var components = resolution?.Components.ToList() ?? [];
 		return await providentFundComponentBuilder.AddProvidentFundDeductionAsync(
-			payrollDetailsByEmployee.GetValueOrDefault(employeeId),
+			employeeId,
+			resolution?.Revision.PfRuleId,
 			components,
 			year,
 			month);

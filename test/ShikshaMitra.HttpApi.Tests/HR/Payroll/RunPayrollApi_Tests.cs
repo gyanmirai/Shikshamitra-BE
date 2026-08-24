@@ -15,9 +15,11 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.HR.Payroll.RunPayroll;
+using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
@@ -57,7 +59,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Payroll_Register_Should_Recognize_Saved_Components_Without_Payroll_Metadata()
+	public async Task Payroll_Register_Should_Require_Approved_Revision_Instead_Of_Legacy_Recurring_Components()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
@@ -109,8 +111,9 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			$"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=true");
 		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
 
-		item.EarningComponents.ShouldNotBeEmpty();
-		item.IssueCodes.ShouldNotContain(IssueCodes.MissingSalaryStructure);
+		item.EarningComponents.ShouldBeEmpty();
+		item.IssueCodes.ShouldContain("COMPENSATION_REVISION_REQUIRED");
+		item.IssueCodes.ShouldContain(IssueCodes.MissingSalaryStructure);
 	}
 
 	[Fact]
@@ -689,6 +692,12 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			$"PayrollPfRule{Guid.NewGuid():N}",
 			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 		var pfRule = await PayrollTestHelper.CreatePfRuleAsync(Client, "PayrollPFRule");
+		var savedRule = await Client.GetFromJsonAsync<ProvidentFundDto>(
+			$"/api/payroll/pf-rules/{pfRule.Id}",
+			JsonOptions);
+		savedRule.ShouldNotBeNull();
+		savedRule.IsActive.ShouldBeTrue();
+		savedRule.EffectiveFrom.ShouldBeLessThanOrEqualTo(new DateTime(2026, 6, 1));
 		await EnsureActiveDefaultLeavePolicyAsync(new DateTime(2026, 6, 1));
 		await AssignSalaryStructureAsync(
 			employee.Id,
@@ -697,6 +706,12 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			deductionAmount: 0m,
 			useMasterComponents: false,
 			pfRuleId: pfRule.Id);
+		var savedPayroll = await Client.GetFromJsonAsync<EmployeePayrollResponse>(
+			$"/api/employees/{employee.Id}/payroll",
+			JsonOptions);
+		savedPayroll.ShouldNotBeNull();
+		savedPayroll.SalaryDetails.ShouldNotBeNull();
+		savedPayroll.SalaryDetails.PfRuleId.ShouldBe(pfRule.Id);
 		await MarkAttendanceAsync(employee.Id, "10-06-2026");
 
 		var preview = await GetPayrollPreviewAsync(month, forceRefresh: true);
@@ -706,7 +721,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		pfDeduction.Amount.ShouldBeGreaterThan(0d);
 		pfDeduction.Description.ShouldNotBeNull();
-		pfDeduction.Description.ShouldContain("12");
+		pfDeduction.Description.ShouldBe("System-calculated statutory deduction");
 		item.TotalDeduction.ShouldBe(pfDeduction.Amount);
 		item.NetPay.ShouldBe(item.GrossSalary - pfDeduction.Amount);
 
@@ -1893,6 +1908,96 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var body = await response.Content.ReadAsStringAsync();
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+		await CreateApprovedCompensationRevisionAsync(
+			employeeId,
+			earningComponent?.Id,
+			earningComponent?.Name ?? $"{suffix}CustomEarn",
+			earningAmount,
+			deductionComponent?.Id,
+			deductionComponent?.Name ?? $"{suffix}CustomDed",
+			deductionAmount,
+			pfRuleId);
+	}
+
+	private async Task CreateApprovedCompensationRevisionAsync(
+		Guid employeeId,
+		Guid? earningComponentId,
+		string earningName,
+		decimal earningAmount,
+		Guid? deductionComponentId,
+		string deductionName,
+		decimal deductionAmount,
+		Guid? pfRuleId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var revisionRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<EmployeeCompensationRevision, Guid>>();
+		var lineRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<EmployeeCompensationRevisionLine, Guid>>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var existing = await revisionRepository.GetListAsync(x => x.EmployeeId == employeeId);
+			foreach (var item in existing)
+			{
+				await revisionRepository.DeleteAsync(item, autoSave: false);
+			}
+
+			var revision = new EmployeeCompensationRevision(
+				Guid.NewGuid(), tenantId, employeeId, 1,
+				new DateTime(2022, 4, 1, 0, 0, 0, DateTimeKind.Utc));
+			var statutoryDeductions = pfRuleId.HasValue
+				? new object[]
+				{
+					new
+					{
+						ComponentId = Guid.Empty,
+						Name = "Provident Fund - Auto",
+						IsStatutory = true,
+						SemanticType = "EMPLOYEE_PROVIDENT_FUND"
+					}
+				}
+				: [];
+			revision.ReplaceDraft(
+				revision.EffectiveMonth,
+				SalaryInputBasis.Gross,
+				CompensationProtectionPolicy.ProtectGross,
+				earningAmount,
+				earningAmount,
+				earningAmount,
+				Math.Max(0m, earningAmount - deductionAmount),
+				earningAmount,
+				null,
+				null,
+				null,
+				pfRuleId,
+				"IN-GJ",
+				JsonSerializer.Serialize(new { Deductions = statutoryDeductions, PfRuleId = pfRuleId }));
+			var submitterId = Guid.NewGuid();
+			revision.Submit(submitterId, DateTime.UtcNow);
+			revision.Approve(Guid.NewGuid(), DateTime.UtcNow);
+			await revisionRepository.InsertAsync(revision, autoSave: false);
+			var lines = new List<EmployeeCompensationRevisionLine>
+			{
+				new(
+					Guid.NewGuid(), tenantId, revision.Id, employeeId, earningComponentId,
+					earningName, null, earningAmount, isEarning: true,
+					PayrollComponentSemanticType.Basic, CompensationLineSource.Template, 0)
+			};
+			if (deductionAmount > 0m)
+			{
+				lines.Add(new EmployeeCompensationRevisionLine(
+					Guid.NewGuid(), tenantId, revision.Id, employeeId, deductionComponentId,
+					deductionName, null, deductionAmount, isEarning: false,
+					PayrollComponentSemanticType.Ordinary, CompensationLineSource.Template, 1));
+			}
+			await lineRepository.InsertManyAsync(lines, autoSave: false);
+			await uow.CompleteAsync();
+		}
 	}
 
 	private async Task MarkAttendanceAsync(Guid employeeId, string attendanceDate)

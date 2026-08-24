@@ -104,7 +104,6 @@ public partial class HRSeederContributor
 				["Provident Fund (PF)"] = pf,
 				["Professional Tax"] = professionalTax,
 				["Income Tax (TDS)"] = tds,
-				["Employee State Insurance (ESI)"] = 0m,
 				["Loan Repayment"] = loan,
 				["Advance Salary Deduction"] = advance,
 				["Loss of Pay (LOP)"] = 0m

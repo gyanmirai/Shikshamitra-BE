@@ -1,6 +1,7 @@
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Templates;
 using Shouldly;
 using System;
@@ -31,6 +32,38 @@ public class SalaryTemplateCalculator_Tests
 		result.TotalDeductions.ShouldBe(1_100m);
 		result.Net.ShouldBe(28_900m);
 		result.EmployerContributionTotal.ShouldBe(900m);
+	}
+
+	[Theory]
+	[InlineData(SalaryInputBasis.EmployerCost, 20000, 19370, 146, 630, 19224, 20000)]
+	[InlineData(SalaryInputBasis.Gross, 20000, 20000, 150, 650, 19850, 20650)]
+	[InlineData(SalaryInputBasis.TakeHome, 20000, 20152, 152, 655, 20000, 20807)]
+	public void Should_solve_all_quote_bases_with_employee_and_employer_esi(
+		SalaryInputBasis salaryBasis,
+		decimal target,
+		decimal expectedGross,
+		decimal expectedEmployeeEsi,
+		decimal expectedEmployerEsi,
+		decimal expectedNet,
+		decimal expectedEmployerCost)
+	{
+		var fixture = BuildFixture(employeePfPercentage: 0m, employerPfPercentage: 0m, wageCeiling: null);
+		var esiContext = BuildEsiContext(fixture.Components.Keys);
+
+		var result = SalaryTemplateCalculator.Calculate(
+			salaryBasis,
+			target,
+			fixture.Rules,
+			fixture.Components,
+			pfRule: null,
+			professionalTaxSlabs: [],
+			esiContext);
+
+		result.Gross.ShouldBe(expectedGross);
+		result.Deductions.Single(x => x.Code == "EMPLOYEE_ESI").Amount.ShouldBe(expectedEmployeeEsi);
+		result.EmployerContributions.Single(x => x.Code == "EMPLOYER_ESI").Amount.ShouldBe(expectedEmployerEsi);
+		result.Net.ShouldBe(expectedNet);
+		result.EmployerCost.ShouldBe(expectedEmployerCost);
 	}
 
 	[Fact]
@@ -336,6 +369,41 @@ public class SalaryTemplateCalculator_Tests
 		};
 
 		return new SalaryFixture(rules, components, pfRule, ptSlabs);
+	}
+
+	private static SalaryTemplateEsiEvaluationContext BuildEsiContext(IEnumerable<Guid> componentIds)
+	{
+		var tenantId = Guid.NewGuid();
+		var rule = new StatutoryRuleVersion(
+			Guid.NewGuid(), tenantId, StatutorySchemeCodes.EmployeeStateInsurance, "IN-GJ", 1,
+			new DateTime(2025, 11, 21), null, 10, 21_000m, 25_000m, 0.75m, 3.25m,
+			50m, 15m, StatutoryRoundingPolicy.NextHigherRupee,
+			"https://www.labour.gov.in/", new DateTime(2026, 8, 18));
+		var establishment = new StatutoryEstablishment(
+			Guid.NewGuid(), tenantId, StatutorySchemeCodes.EmployeeStateInsurance, "IN-GJ");
+		establishment.Configure("IN-GJ", "ESIC-GJ-001", 18, new DateTime(2026, 1, 1),
+			new DateTime(2026, 1, 1), "Registration certificate");
+		establishment.Activate(Guid.NewGuid(), new DateTime(2026, 1, 1));
+		var enrollment = new EmployeeStatutoryEnrollment(
+			Guid.NewGuid(), tenantId, Guid.NewGuid(), StatutorySchemeCodes.EmployeeStateInsurance);
+		enrollment.Update(
+			EmployeeStatutoryEnrollmentStatus.Covered,
+			StatutoryWageCeilingCategory.Standard,
+			"ESI-1001",
+			new DateTime(2026, 4, 1),
+			null,
+			null,
+			null);
+
+		return new SalaryTemplateEsiEvaluationContext(
+			new DateTime(2026, 8, 1),
+			rule,
+			establishment,
+			enrollment,
+			componentIds.ToDictionary(x => x, _ => StatutoryWageTreatment.Included),
+			[],
+			Guid.NewGuid(),
+			"Employee State Insurance (ESI)");
 	}
 
 	private sealed record SalaryFixture(

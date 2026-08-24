@@ -24,6 +24,8 @@ public class SalaryStructureTemplateVersionConfiguration : IEntityTypeConfigurat
 		builder.ToTable("HR_SalaryStructureTemplateVersions");
 		builder.ConfigureByConvention();
 		builder.Property(x => x.RulesJson).IsRequired().HasColumnType("jsonb");
+		builder.Property(x => x.DefaultSalaryBasis).IsRequired();
+		builder.Property(x => x.DefaultProtectionPolicy).IsRequired();
 		builder.HasOne<SalaryStructureTemplate>()
 			.WithMany()
 			.HasForeignKey(x => x.TemplateId)

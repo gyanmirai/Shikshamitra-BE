@@ -7,6 +7,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Policies;
@@ -35,7 +36,8 @@ internal static class PayrollRunItemBuilder
 		IReadOnlyList<string>? additionalIssueCodes = null,
 		DateOnly? employmentStartDate = null,
 		ShiftManagement? shift = null,
-		PayrollStatutoryRuleSet? statutoryRules = null)
+		PayrollStatutoryRuleSet? statutoryRules = null,
+		EmployeeCompensationRevision? compensationRevision = null)
 	{
 		var resolvedShift = shift ?? employee.Shift;
 		var itemAttendancePolicyWarnings = new List<string>();
@@ -68,6 +70,11 @@ internal static class PayrollRunItemBuilder
 			resolvedShift,
 			resolvedPolicies.AttendancePolicy,
 			statutoryRules);
+		var compensation = BuildCompensationProjection(compensationRevision, components, statutoryRules);
+		if (compensation?.HasVariance == true)
+		{
+			issueCodes.Add(IssueCodes.CompensationTargetVariance);
+		}
 
 		return new RunPayrollItem
 		{
@@ -84,11 +91,21 @@ internal static class PayrollRunItemBuilder
 			FullGrossSalary = (double)preview.Computation.FullGrossSalary,
 			TotalDeduction = (double)preview.Computation.TotalDeduction,
 			EmployerContributionTotal = (double)preview.Computation.EmployerContributionTotal,
+			EmployerCost = (double)(preview.Computation.GrossSalary + preview.Computation.EmployerContributionTotal),
+			CompensationRevisionId = compensationRevision?.Id,
+			CompensationRevisionNumber = compensationRevision?.RevisionNumber,
+			CompensationSalaryBasis = compensationRevision == null ? null : ToContractEnum(compensationRevision.SalaryBasis.ToString()),
+			CompensationProtectionPolicy = compensationRevision == null ? null : ToContractEnum(compensationRevision.ProtectionPolicy.ToString()),
+			CompensationQuotedAmount = compensationRevision == null ? null : (double)compensationRevision.QuotedMonthlyAmount,
+			CompensationProtectedAmount = compensationRevision == null ? null : (double)compensationRevision.ProtectedMonthlyAmount,
+			CompensationNormalizedProtectedAmount = compensation == null ? null : (double)compensation.NormalizedProtectedAmount,
+			CompensationTargetDifference = compensation == null ? null : (double)compensation.Difference,
 			NetPay = (double)preview.Computation.NetPay,
 			PreviousMonthNetPay = previousMonthNetPay.HasValue ? (double)previousMonthNetPay.Value : null,
 			NetPayDelta = preview.NetPayDelta.HasValue ? (double)preview.NetPayDelta.Value : null,
 			NetPayDeltaPercent = preview.NetPayDeltaPercent.HasValue ? (double)preview.NetPayDeltaPercent.Value : null,
 			IssueCodes = issueCodes
+				.Concat(preview.Computation.StatutoryIssueCodes)
 				.Concat(PayrollIssueCodeBuilder.Build(payrollDetails, components, basis.BasisDays, preview.Computation.PayableDays, preview.Computation.NetPay, previousMonthNetPay, preview.NetPayDeltaPercent, preview.HasAttendanceOrPaidLeave))
 				.Distinct()
 				.ToList(),
@@ -117,6 +134,14 @@ internal static class PayrollRunItemBuilder
 			ProvidentFundRuleVersion = preview.Computation.ProvidentFundRuleVersion,
 			ProfessionalTaxRuleId = preview.Computation.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = preview.Computation.ProfessionalTaxRuleVersion,
+			EmployeeStateInsuranceRuleId = preview.Computation.EmployeeStateInsuranceRuleId,
+			EmployeeStateInsuranceRuleVersion = preview.Computation.EmployeeStateInsuranceRuleVersion,
+			EmployeeStateInsuranceWages = (double)preview.Computation.EmployeeStateInsuranceWages,
+			EmployeeStateInsuranceGovernmentContribution = (double)preview.Computation.EmployeeStateInsuranceGovernmentContribution,
+			EmployeeStateInsuranceCoverageDecision = preview.Computation.EmployeeStateInsuranceCoverageDecision,
+			EmployeeStateInsuranceNumber = preview.Computation.EmployeeStateInsuranceNumber,
+			EmployeeStateInsuranceContributionPeriodStart = preview.Computation.EmployeeStateInsuranceContributionPeriodStart,
+			EmployeeStateInsuranceContributionPeriodEnd = preview.Computation.EmployeeStateInsuranceContributionPeriodEnd,
 			PayrollAdjustments = adjustments.Select(PayrollRunProjection.ToAdjustmentDto).ToList()
 		};
 	}
@@ -135,7 +160,8 @@ internal static class PayrollRunItemBuilder
 		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate,
 		IReadOnlyList<string> issueCodes,
 		DateOnly? employmentStartDate = null,
-		PayrollStatutoryRuleSet? statutoryRules = null)
+		PayrollStatutoryRuleSet? statutoryRules = null,
+		EmployeeCompensationRevision? compensationRevision = null)
 	{
 		var basis = new PayrollBasisDaysResult(
 			DateTime.DaysInMonth(year, month),
@@ -154,6 +180,12 @@ internal static class PayrollRunItemBuilder
 			previousMonthNetPay,
 			employmentStartDate,
 			statutoryRules: statutoryRules);
+		var compensation = BuildCompensationProjection(compensationRevision, components, statutoryRules);
+		var resolvedIssueCodes = issueCodes.ToList();
+		if (compensation?.HasVariance == true)
+		{
+			resolvedIssueCodes.Add(IssueCodes.CompensationTargetVariance);
+		}
 
 		return new RunPayrollItem
 		{
@@ -170,11 +202,21 @@ internal static class PayrollRunItemBuilder
 			FullGrossSalary = (double)preview.Computation.FullGrossSalary,
 			TotalDeduction = (double)preview.Computation.TotalDeduction,
 			EmployerContributionTotal = (double)preview.Computation.EmployerContributionTotal,
+			EmployerCost = (double)(preview.Computation.GrossSalary + preview.Computation.EmployerContributionTotal),
+			CompensationRevisionId = compensationRevision?.Id,
+			CompensationRevisionNumber = compensationRevision?.RevisionNumber,
+			CompensationSalaryBasis = compensationRevision == null ? null : ToContractEnum(compensationRevision.SalaryBasis.ToString()),
+			CompensationProtectionPolicy = compensationRevision == null ? null : ToContractEnum(compensationRevision.ProtectionPolicy.ToString()),
+			CompensationQuotedAmount = compensationRevision == null ? null : (double)compensationRevision.QuotedMonthlyAmount,
+			CompensationProtectedAmount = compensationRevision == null ? null : (double)compensationRevision.ProtectedMonthlyAmount,
+			CompensationNormalizedProtectedAmount = compensation == null ? null : (double)compensation.NormalizedProtectedAmount,
+			CompensationTargetDifference = compensation == null ? null : (double)compensation.Difference,
 			NetPay = (double)preview.Computation.NetPay,
 			PreviousMonthNetPay = previousMonthNetPay.HasValue ? (double)previousMonthNetPay.Value : null,
 			NetPayDelta = preview.NetPayDelta.HasValue ? (double)preview.NetPayDelta.Value : null,
 			NetPayDeltaPercent = preview.NetPayDeltaPercent.HasValue ? (double)preview.NetPayDeltaPercent.Value : null,
-			IssueCodes = issueCodes
+			IssueCodes = resolvedIssueCodes
+				.Concat(preview.Computation.StatutoryIssueCodes)
 				.Concat(PayrollIssueCodeBuilder.Build(payrollDetails, components, basis.BasisDays, preview.Computation.PayableDays, preview.Computation.NetPay, previousMonthNetPay, preview.NetPayDeltaPercent, preview.HasAttendanceOrPaidLeave))
 				.Distinct()
 				.ToList(),
@@ -196,6 +238,14 @@ internal static class PayrollRunItemBuilder
 			ProvidentFundRuleVersion = preview.Computation.ProvidentFundRuleVersion,
 			ProfessionalTaxRuleId = preview.Computation.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = preview.Computation.ProfessionalTaxRuleVersion,
+			EmployeeStateInsuranceRuleId = preview.Computation.EmployeeStateInsuranceRuleId,
+			EmployeeStateInsuranceRuleVersion = preview.Computation.EmployeeStateInsuranceRuleVersion,
+			EmployeeStateInsuranceWages = (double)preview.Computation.EmployeeStateInsuranceWages,
+			EmployeeStateInsuranceGovernmentContribution = (double)preview.Computation.EmployeeStateInsuranceGovernmentContribution,
+			EmployeeStateInsuranceCoverageDecision = preview.Computation.EmployeeStateInsuranceCoverageDecision,
+			EmployeeStateInsuranceNumber = preview.Computation.EmployeeStateInsuranceNumber,
+			EmployeeStateInsuranceContributionPeriodStart = preview.Computation.EmployeeStateInsuranceContributionPeriodStart,
+			EmployeeStateInsuranceContributionPeriodEnd = preview.Computation.EmployeeStateInsuranceContributionPeriodEnd,
 			PayrollAdjustments = adjustments.Select(PayrollRunProjection.ToAdjustmentDto).ToList()
 		};
 	}
@@ -219,4 +269,44 @@ internal static class PayrollRunItemBuilder
 
 		return JsonSerializer.Serialize(items);
 	}
+
+	private static CompensationProjection? BuildCompensationProjection(
+		EmployeeCompensationRevision? revision,
+		IReadOnlyList<EmployeePayrollComponent> components,
+		PayrollStatutoryRuleSet? statutoryRules)
+	{
+		if (revision == null)
+		{
+			return null;
+		}
+
+		var recurringComponents = components.Where(x => !x.IsTemp).ToList();
+		var normalized = PayrollComputation.Calculate(
+			presentDays: 1,
+			halfWorkingDays: 0,
+			payableDays: 1m,
+			basisDays: 1m,
+			recurringComponents,
+			statutoryRules);
+		var normalizedProtectedAmount = revision.ProtectionPolicy switch
+		{
+			ShikshaMitra.HR.Payroll.Templates.CompensationProtectionPolicy.ProtectTakeHome => normalized.NetPay,
+			ShikshaMitra.HR.Payroll.Templates.CompensationProtectionPolicy.ProtectEmployerCost => normalized.GrossSalary + normalized.EmployerContributionTotal,
+			_ => normalized.GrossSalary
+		};
+		var difference = Math.Round(
+			normalizedProtectedAmount - revision.ProtectedMonthlyAmount,
+			2,
+			MidpointRounding.AwayFromZero);
+		return new CompensationProjection(normalizedProtectedAmount, difference, Math.Abs(difference) > 0.01m);
+	}
+
+	private static string ToContractEnum(string value) =>
+		string.Concat(value.Select((character, index) => index > 0 && char.IsUpper(character) ? "_" + character : character.ToString()))
+			.ToUpperInvariant();
+
+	private sealed record CompensationProjection(
+		decimal NormalizedProtectedAmount,
+		decimal Difference,
+		bool HasVariance);
 }

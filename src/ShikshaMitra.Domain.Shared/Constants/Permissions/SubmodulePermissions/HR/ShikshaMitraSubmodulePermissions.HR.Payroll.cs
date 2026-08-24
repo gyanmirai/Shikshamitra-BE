@@ -200,6 +200,31 @@ public static partial class ShikshaMitraSubmodulePermissions
 			};
 		}
 
+		public static class PayrollManagement_CompensationRevisions
+		{
+			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.CompensationRevisions";
+			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.CompensationRevisions";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Create = $"{SubmoduleName}.Create";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string Submit = $"{SubmoduleName}.Submit";
+			public const string Approve = $"{SubmoduleName}.Approve";
+			public const string ViewAudit = $"{SubmoduleName}.ViewAudit";
+
+			public static readonly string[] All = { View, Create, Edit, Submit, Approve, ViewAudit };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Create, $"{SubmoduleDisplayName}.Create" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Submit, $"{SubmoduleDisplayName}.Submit" },
+				{ Approve, $"{SubmoduleDisplayName}.Approve" },
+				{ ViewAudit, $"{SubmoduleDisplayName}.ViewAudit" }
+			};
+		}
+
 		public static class PayrollManagement_SettingsTds
 		{
 			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.Tds";
@@ -216,6 +241,29 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
+		public static class PayrollManagement_SettingsStatutorySchemes
+		{
+			private const string SubmoduleName = $"{ModuleName}.PayrollManagement.Settings.StatutorySchemes";
+			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.Settings.StatutorySchemes";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string Activate = $"{SubmoduleName}.Activate";
+			public const string ManageEnrollment = $"{SubmoduleName}.ManageEnrollment";
+			public const string ApproveOverride = $"{SubmoduleName}.ApproveOverride";
+
+			public static readonly string[] All = { View, Edit, Activate, ManageEnrollment, ApproveOverride };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Activate, $"{SubmoduleDisplayName}.Activate" },
+				{ ManageEnrollment, $"{SubmoduleDisplayName}.ManageEnrollment" },
+				{ ApproveOverride, $"{SubmoduleDisplayName}.ApproveOverride" }
 			};
 		}
 

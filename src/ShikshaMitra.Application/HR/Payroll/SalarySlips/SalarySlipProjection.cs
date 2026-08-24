@@ -61,7 +61,23 @@ internal static class SalarySlipProjection
 			ProvidentFundRuleId = salarySlip.ProvidentFundRuleId,
 			ProvidentFundRuleVersion = salarySlip.ProvidentFundRuleVersion,
 			ProfessionalTaxRuleId = salarySlip.ProfessionalTaxRuleId,
-			ProfessionalTaxRuleVersion = salarySlip.ProfessionalTaxRuleVersion
+			ProfessionalTaxRuleVersion = salarySlip.ProfessionalTaxRuleVersion,
+			EmployeeStateInsuranceRuleId = salarySlip.EmployeeStateInsuranceRuleId,
+			EmployeeStateInsuranceRuleVersion = salarySlip.EmployeeStateInsuranceRuleVersion,
+			EmployeeStateInsuranceWages = salarySlip.EmployeeStateInsuranceWages,
+			EmployeeStateInsuranceGovernmentContribution = salarySlip.EmployeeStateInsuranceGovernmentContribution,
+			EmployeeStateInsuranceCoverageDecision = salarySlip.EmployeeStateInsuranceCoverageDecision,
+			EmployeeStateInsuranceNumber = salarySlip.EmployeeStateInsuranceNumber,
+			EmployeeStateInsuranceContributionPeriodStart = salarySlip.EmployeeStateInsuranceContributionPeriodStart,
+			EmployeeStateInsuranceContributionPeriodEnd = salarySlip.EmployeeStateInsuranceContributionPeriodEnd,
+			CompensationRevisionId = salarySlip.CompensationRevisionId,
+			CompensationRevisionNumber = salarySlip.CompensationRevisionNumber,
+			CompensationSalaryBasis = salarySlip.CompensationSalaryBasis,
+			CompensationProtectionPolicy = salarySlip.CompensationProtectionPolicy,
+			CompensationQuotedAmount = salarySlip.CompensationQuotedAmount,
+			CompensationProtectedAmount = salarySlip.CompensationProtectedAmount,
+			CompensationNormalizedProtectedAmount = salarySlip.CompensationNormalizedProtectedAmount,
+			CompensationTargetDifference = salarySlip.CompensationTargetDifference
 		};
 	}
 

@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.QuestionBank;
+using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
@@ -33,7 +35,11 @@ public class QuestionPaperAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<Exam, Guid> examRepository,
     IAsyncQueryableExecuter asyncExecuter,
-    IUserScopeAccessService userScopeAccessService
+    IUserScopeAccessService userScopeAccessService,
+    IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+    IRepository<Employee, Guid> employeeRepository,
+    IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
+    IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, IQuestionPaperAppService
 {
     public async Task<QuestionPaperSettingDto> GetSettingsAsync(Guid academicYearId)
@@ -84,7 +90,7 @@ public class QuestionPaperAppService(
 
     public async Task<QuestionPaperDto> GetPaperAsync(Guid id)
     {
-        var paper = await GetPaperEntityAsync(id);
+        var paper = await GetPaperEntityAsync(id, allowTeacherSubjectRead: true);
         var questionTextMap = await GetQuestionTextMapAsync(paper);
         return Map(paper, questionTextMap);
     }
@@ -570,13 +576,55 @@ public class QuestionPaperAppService(
             ?? new QuestionPaperSetting(GuidGenerator.Create(), CurrentTenant.Id, academicYearId);
     }
 
-    private async Task<QuestionPaper> GetPaperEntityAsync(Guid id)
+    private async Task<QuestionPaper> GetPaperEntityAsync(Guid id, bool allowTeacherSubjectRead = false)
     {
         var query = await paperRepository.WithDetailsAsync(x => x.Sections, x => x.Questions);
         var paper = await asyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == id))
             ?? throw new BusinessException("ShikshaMitra.QuestionPapers:NotFound").WithData("Id", id);
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(paper, operation: "question-paper-access");
+		if (!allowTeacherSubjectRead || !await HasTeacherSubjectReadAccessAsync(paper))
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(paper, operation: "question-paper-access");
+		}
 		return paper;
+    }
+
+    private async Task<bool> HasTeacherSubjectReadAccessAsync(QuestionPaper paper)
+    {
+        if (!CurrentUser.Id.HasValue || await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
+        {
+            return false;
+        }
+
+        var employee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == CurrentUser.Id.Value);
+        var employeeIds = new HashSet<Guid>();
+        if (employee != null)
+        {
+            employeeIds.Add(employee.Id);
+        }
+
+        employeeIds.UnionWith(await reportingManagerAccessService.GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value));
+        if (employeeIds.Count == 0)
+        {
+            return false;
+        }
+
+        var assignedSubject = (await assignedSubjectRepository.GetListAsync(
+            x => x.StandardId == paper.StandardId && x.SubjectId == paper.SubjectId,
+            includeDetails: true)).FirstOrDefault();
+        if (assignedSubject == null)
+        {
+            return false;
+        }
+
+        if (assignedSubject.Teachers.Any(x => employeeIds.Contains(x.TeacherId)))
+        {
+            return true;
+        }
+
+        return await teacherSubjectAllocationRepository.AnyAsync(x =>
+            x.StandardId == paper.StandardId &&
+            x.SubjectId == paper.SubjectId &&
+            x.Teachers.Any(teacher => employeeIds.Contains(teacher.TeacherId)));
     }
 
     private async Task<Dictionary<Guid, string>> GetQuestionTextMapAsync(QuestionPaper paper)

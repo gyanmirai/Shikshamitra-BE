@@ -13,6 +13,7 @@ using ShikshaMitra.Academic.QuestionBank;
 using ShikshaMitra.Academic.QuestionPapers;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.HR.Employees;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -29,7 +30,10 @@ public class ChapterAppService(
 	IRepository<QuestionBankItem, Guid> questionBankRepository,
 	IRepository<QuestionPaperBlueprintChapterRule, Guid> blueprintChapterRuleRepository,
 	IRepository<Division, Guid> divisionRepository,
-	IUserScopeAccessService userScopeAccessService
+	IUserScopeAccessService userScopeAccessService,
+	IRepository<Employee, Guid> employeeRepository,
+	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
+	IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, IChapterAppService
 {
 	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, List<CreateChapterDto> input)
@@ -73,12 +77,22 @@ public class ChapterAppService(
 
 	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId, Guid? divisionId = null)
 	{
-		var assignedSubject = (await assignedSubjectRepository.GetListAsync(
-				a => a.StandardId == standardId && a.SubjectId == subjectId,
-				includeDetails: true
-			)).FirstOrDefault()
+		var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(
+			a => a.Chapters,
+			a => a.Teachers
+		);
+		var assignedSubject = await AsyncExecuter.FirstOrDefaultAsync(
+			assignedSubjectQuery.Where(a => a.StandardId == standardId && a.SubjectId == subjectId)
+		)
 			?? throw new BusinessException("Academic:Chapter:002", "Subject not assigned to this class");
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-read");
+		// A subject teacher may read every chapter of a subject they are assigned to,
+		// even when they do not have a separate class/division UserScope assignment.
+		// Reporting managers inherit the same read visibility for their reportees'
+		// subject allocations.
+		if (!await HasTeacherSubjectReadAccessAsync(assignedSubject))
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-read");
+		}
 
 		if (divisionId.HasValue)
 		{
@@ -102,6 +116,41 @@ public class ChapterAppService(
 		await EnrichLinkedPlanningStatusesAsync(assignedSubject, dtos, divisionId);
 
 		return dtos;
+	}
+
+	private async Task<bool> HasTeacherSubjectReadAccessAsync(AssignedSubject assignedSubject)
+	{
+		if (!CurrentUser.Id.HasValue || await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
+		{
+			return false;
+		}
+
+		var employee = await employeeRepository.FirstOrDefaultAsync(
+			candidate => candidate.UserId == CurrentUser.Id.Value);
+		var employeeIds = new HashSet<Guid>();
+		employeeIds.Add(CurrentUser.Id.Value);
+		if (employee != null)
+		{
+			employeeIds.Add(employee.Id);
+		}
+
+		var reporteeEmployeeIds = await reportingManagerAccessService
+			.GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value);
+		employeeIds.UnionWith(reporteeEmployeeIds);
+		if (employeeIds.Count == 0)
+		{
+			return false;
+		}
+
+		if (assignedSubject.Teachers?.Any(teacher => employeeIds.Contains(teacher.TeacherId)) == true)
+		{
+			return true;
+		}
+
+		return await teacherSubjectAllocationRepository.AnyAsync(allocation =>
+			allocation.StandardId == assignedSubject.StandardId &&
+			allocation.SubjectId == assignedSubject.SubjectId &&
+			allocation.Teachers.Any(teacher => employeeIds.Contains(teacher.TeacherId)));
 	}
 
 	public async Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto updateChapterDto)

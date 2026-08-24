@@ -144,9 +144,9 @@ public class StudentAcademic360AppService(
         input.RecentTaskCount = Math.Clamp(input.RecentTaskCount <= 0 ? 10 : input.RecentTaskCount, 1, 25);
         input.RecentExamCount = Math.Clamp(input.RecentExamCount <= 0 ? 5 : input.RecentExamCount, 1, 10);
         input.TaskSkipCount = Math.Max(0, input.TaskSkipCount);
-        input.TaskMaxResultCount = Math.Clamp(input.TaskMaxResultCount <= 0 ? input.RecentTaskCount : input.TaskMaxResultCount, 1, 100);
+        input.TaskMaxResultCount = input.TaskMaxResultCount < 0 ? 0 : Math.Min(input.TaskMaxResultCount, 10000);
         input.ExamSkipCount = Math.Max(0, input.ExamSkipCount);
-        input.ExamMaxResultCount = Math.Clamp(input.ExamMaxResultCount <= 0 ? input.RecentExamCount : input.ExamMaxResultCount, 1, 50);
+        input.ExamMaxResultCount = input.ExamMaxResultCount < 0 ? 0 : Math.Min(input.ExamMaxResultCount, 10000);
 
         if (input.AttendanceStartDate.HasValue && input.AttendanceEndDate.HasValue)
         {
@@ -371,8 +371,13 @@ public class StudentAcademic360AppService(
                 Title = homework.Title,
                 SubjectId = homework.SubjectId,
                 SubjectName = subjectNames.GetValueOrDefault(homework.SubjectId, "Subject"),
+                AssignedDate = schedule?.PublishedAt ?? schedule?.PublishDate ?? homework.CreationTime,
                 DueDate = schedule?.DueDate ?? homework.DueDate ?? homework.CreationTime,
                 Status = status.ToString(),
+                SubmissionStatus = status.ToString(),
+                EvaluationStatus = ResolveEvaluationStatus(submission),
+                SubmissionDate = submission?.SubmissionDate?.DateTime,
+                EvaluationDate = submission?.ReviewedAt?.DateTime ?? submission?.GradedDate?.DateTime,
                 StatusCode = (int)status,
                 Marks = submission?.Marks,
                 TotalMarks = submission?.TotalMarks,
@@ -397,8 +402,13 @@ public class StudentAcademic360AppService(
                 Title = assignment.Title,
                 SubjectId = assignment.SubjectId,
                 SubjectName = subjectNames.GetValueOrDefault(assignment.SubjectId, "Subject"),
+                AssignedDate = schedule.PublishedAt ?? schedule.PublishDate ?? assignment.CreationTime,
                 DueDate = schedule.DueDate,
                 Status = status.ToString(),
+                SubmissionStatus = status.ToString(),
+                EvaluationStatus = ResolveEvaluationStatus(submission),
+                SubmissionDate = submission?.SubmissionDate?.DateTime,
+                EvaluationDate = submission?.ReviewedAt?.DateTime ?? submission?.GradedDate?.DateTime,
                 StatusCode = (int)status,
                 Marks = submission?.Marks,
                 TotalMarks = submission?.TotalMarks ?? assignment.TotalMarks,
@@ -408,6 +418,10 @@ public class StudentAcademic360AppService(
 
         var ordered = tasks.OrderByDescending(t => t.DueDate).ToList();
 
+        var requestedTasks = input.TaskMaxResultCount <= 0
+            ? ordered.Skip(input.TaskSkipCount).ToList()
+            : ordered.Skip(input.TaskSkipCount).Take(input.TaskMaxResultCount).ToList();
+
         return new StudentAcademic360LearningTaskSummaryDto
         {
             TotalAssigned = ordered.Count,
@@ -416,10 +430,8 @@ public class StudentAcademic360AppService(
             Late = ordered.Count(t => t.StatusCode == (int)SubmissionStatus.Late),
             Reviewed = ordered.Count(t => t.StatusCode == (int)SubmissionStatus.Reviewed),
             PendingEvaluation = ordered.Count(t => t.StatusCode is (int)SubmissionStatus.Submitted or (int)SubmissionStatus.NeedsReview or (int)SubmissionStatus.Late),
-            RecentTasks = ordered
-                .Skip(input.TaskSkipCount)
-                .Take(input.TaskMaxResultCount)
-                .ToList()
+            Tasks = requestedTasks,
+            RecentTasks = ordered.Take(input.RecentTaskCount).ToList()
         };
     }
 
@@ -464,8 +476,12 @@ public class StudentAcademic360AppService(
                 publishedResultExamIds.Contains(e.Id) ||
                 publishedMarkExamIds.Contains(e.Id))
             .Skip(input.ExamSkipCount)
-            .Take(input.ExamMaxResultCount)
             .ToList();
+
+        if (input.ExamMaxResultCount > 0)
+        {
+            exams = exams.Take(input.ExamMaxResultCount).ToList();
+        }
 
         if (exams.Count == 0)
         {
@@ -496,11 +512,24 @@ public class StudentAcademic360AppService(
             var obtained = detail?.TotalObtainedMarks ?? examMarks.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
             var percentage = detail?.Percentage ?? (totalMarks <= 0 ? 0 : Math.Round(obtained * 100d / totalMarks, 2));
 
+            var examStart = exam.ExamSubjects.Where(s => s.StartTime.HasValue).Select(s => s.StartTime!.Value).OrderBy(x => x).FirstOrDefault();
+            var examEnd = exam.ExamSubjects.Where(s => s.EndTime.HasValue).Select(s => s.EndTime!.Value).OrderByDescending(x => x).FirstOrDefault();
+            var examDate = exam.ExamSubjects.Where(s => s.ExamDate.HasValue).Select(s => s.ExamDate!.Value).OrderBy(x => x).FirstOrDefault();
+            var examStatus = ResolveExamStatus(exam.Status, examDate, examStart, examEnd);
+            var gradingStatus = ResolveGradingStatus(examStatus, header?.Status);
+
             return new StudentAcademic360ExamResultDto
             {
                 ExamId = exam.Id,
                 ExamName = exam.ExamName,
-                ResultStatus = detail?.ResultStatus.ToString() ?? header?.Status.ToString() ?? exam.Status.ToString(),
+                ExamStatus = examStatus,
+                GradingStatus = gradingStatus,
+                ExamDate = examDate == default ? null : examDate,
+                StartDate = examStart == default ? null : examStart,
+                EndDate = examEnd == default ? null : examEnd,
+                ResultAvailable = header?.Status is ExamResultStatus.Published or ExamResultStatus.Frozen,
+                ResultPublishedDate = header?.PublishedOn,
+                ResultStatus = gradingStatus,
                 Rank = detail?.ClassRank,
                 TotalMarks = totalMarks,
                 ObtainedMarks = obtained,
@@ -521,6 +550,58 @@ public class StudentAcademic360AppService(
                 }).ToList()
             };
         }).ToList();
+    }
+
+    private static string ResolveExamStatus(
+        ExamStatus persistedStatus,
+        DateTime? examDate,
+        DateTime? startTime,
+        DateTime? endTime)
+    {
+        if (persistedStatus == ExamStatus.Cancelled)
+        {
+            return "Cancelled";
+        }
+
+        if (persistedStatus == ExamStatus.Completed)
+        {
+            return "Completed";
+        }
+
+        if (!examDate.HasValue)
+        {
+            return persistedStatus == ExamStatus.Ongoing ? "Ongoing" : "Scheduled";
+        }
+
+        var start = examDate.Value.Date.Add(startTime?.TimeOfDay ?? TimeSpan.Zero);
+        var end = examDate.Value.Date.Add(endTime?.TimeOfDay ?? TimeSpan.FromDays(1).Subtract(TimeSpan.FromTicks(1)));
+        var now = DateTime.Now;
+        if (now >= end)
+        {
+            return "Completed";
+        }
+
+        if (now >= start)
+        {
+            return "Ongoing";
+        }
+
+        return "Scheduled";
+    }
+
+    private static string ResolveGradingStatus(string examStatus, ExamResultStatus? resultStatus)
+    {
+        if (examStatus is "Scheduled" or "Ongoing")
+        {
+            return "Not Applicable";
+        }
+
+        return resultStatus switch
+        {
+            ExamResultStatus.Generated => "In Progress",
+            ExamResultStatus.Published or ExamResultStatus.Frozen => "Completed",
+            _ => "Not Started"
+        };
     }
 
     private static List<StudentAcademic360SubjectPerformanceDto> BuildSubjectPerformance(
@@ -707,6 +788,18 @@ public class StudentAcademic360AppService(
         }));
 
         return items.OrderBy(i => i.Date).ThenBy(i => i.Time).Take(12).ToList();
+    }
+
+    private static string ResolveEvaluationStatus(StudentSubmissionEntity? submission)
+    {
+        if (submission == null || submission.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft)
+        {
+            return "Not Started";
+        }
+
+        return submission.Status == SubmissionStatus.Reviewed || submission.Marks.HasValue
+            ? "Completed"
+            : "In Progress";
     }
 
     private static List<StudentAcademic360TimelineEventDto> BuildTimeline(

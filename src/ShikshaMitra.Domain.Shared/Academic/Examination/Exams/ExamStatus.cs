@@ -6,5 +6,6 @@ public enum ExamStatus
     Published = 1,
     Completed = 2,
     /// <summary>Computed schedule view status; it is not persisted as a lifecycle transition.</summary>
-    Ongoing = 3
+    Ongoing = 3,
+    Cancelled = 4
 }

@@ -14,9 +14,9 @@ public class StudentAcademic360Input
     public DateTime? AttendanceEndDate { get; set; }
     public bool IncludeHistorical { get; set; }
     public int TaskSkipCount { get; set; }
-    public int TaskMaxResultCount { get; set; } = 10;
+    public int TaskMaxResultCount { get; set; }
     public int ExamSkipCount { get; set; }
-    public int ExamMaxResultCount { get; set; } = 5;
+    public int ExamMaxResultCount { get; set; }
     public int RecentTaskCount { get; set; } = 10;
     public int RecentExamCount { get; set; } = 5;
 }
@@ -89,6 +89,7 @@ public class StudentAcademic360LearningTaskSummaryDto
     public int Late { get; set; }
     public int Reviewed { get; set; }
     public int PendingEvaluation { get; set; }
+    public List<StudentAcademic360LearningTaskDto> Tasks { get; set; } = [];
     public List<StudentAcademic360LearningTaskDto> RecentTasks { get; set; } = [];
 }
 
@@ -99,8 +100,13 @@ public class StudentAcademic360LearningTaskDto
     public string Title { get; set; } = string.Empty;
     public Guid SubjectId { get; set; }
     public string SubjectName { get; set; } = string.Empty;
+    public DateTime AssignedDate { get; set; }
     public DateTime DueDate { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string SubmissionStatus { get; set; } = string.Empty;
+    public string EvaluationStatus { get; set; } = "Not Started";
+    public DateTime? SubmissionDate { get; set; }
+    public DateTime? EvaluationDate { get; set; }
     public int StatusCode { get; set; }
     public decimal? Marks { get; set; }
     public decimal? TotalMarks { get; set; }
@@ -111,6 +117,13 @@ public class StudentAcademic360ExamResultDto
 {
     public Guid ExamId { get; set; }
     public string ExamName { get; set; } = string.Empty;
+    public string ExamStatus { get; set; } = string.Empty;
+    public string GradingStatus { get; set; } = "Not Started";
+    public DateTime? ExamDate { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public bool ResultAvailable { get; set; }
+    public DateTime? ResultPublishedDate { get; set; }
     public string ResultStatus { get; set; } = string.Empty;
     public int? Rank { get; set; }
     public double TotalMarks { get; set; }

@@ -168,8 +168,47 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 
 		foreach (var permissionDto in input.Permissions)
 		{
-			await PermissionManager.SetAsync(permissionDto.Name, providerName, providerKey, permissionDto.IsGranted);
+			var permissionName = await ResolveCrudPermissionNameAsync(permissionDto.Name);
+			if (permissionName == null)
+			{
+				continue;
+			}
+
+			await PermissionManager.SetAsync(permissionName, providerName, providerKey, permissionDto.IsGranted);
 		}
+	}
+
+	private async Task<string?> ResolveCrudPermissionNameAsync(string permissionName)
+	{
+		if (await PermissionDefinitionManager.GetOrNullAsync(permissionName) != null)
+		{
+			return permissionName;
+		}
+
+		var separator = permissionName.LastIndexOf('.');
+		if (separator < 0)
+		{
+			return null;
+		}
+
+		var baseName = permissionName[..separator];
+		var action = permissionName[(separator + 1)..];
+		var candidates = action switch
+		{
+			"Add" => new[] { $"{baseName}.Create", $"{baseName}.Edit" },
+			"View" => new[] { baseName },
+			_ => Array.Empty<string>()
+		};
+
+		foreach (var candidate in candidates)
+		{
+			if (await PermissionDefinitionManager.GetOrNullAsync(candidate) != null)
+			{
+				return candidate;
+			}
+		}
+
+		return null;
 	}
 
 	protected virtual async Task CheckProviderPolicy(

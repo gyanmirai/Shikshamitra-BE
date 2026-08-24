@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Users;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.HR.Employees.ReportingManager;
 
@@ -14,7 +16,9 @@ public class ReportingManagerAppService(
 	IEmployeeRepository employeeRepository,
 	EmployeeReportingManager reportingManager,
 	ICurrentUser currentUser,
-	IEmployeeAuthorizationService employeeAuthorizationService)
+	IEmployeeAuthorizationService employeeAuthorizationService,
+	IUserScopeService userScopeService,
+	IReportingManagerAccessService reportingManagerAccessService)
 	: ApplicationService, IReportingManagerAppService
 {
 	private const int MaxHierarchyDepth = 64;
@@ -25,6 +29,15 @@ public class ReportingManagerAppService(
 	{
 		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 		await reportingManager.AssignReportingManagerAsync(employeeId, input.ReportingManagerId);
+		var affectedUserIds = (await employeeRepository.GetListAsync())
+			.Where(employee => employee.UserId.HasValue)
+			.Select(employee => employee.UserId!.Value)
+			.ToList();
+		foreach (var affectedUserId in affectedUserIds)
+		{
+			await userScopeService.InvalidateUserScopeCacheAsync(affectedUserId);
+		}
+		await reportingManagerAccessService.InvalidateAsync(affectedUserIds);
 		var updatedEmployee = await employeeRepository.GetWithReportingManagerAsync(employeeId);
 
 		return ReportingManagerProjection.ToReportingResponse(updatedEmployee!);

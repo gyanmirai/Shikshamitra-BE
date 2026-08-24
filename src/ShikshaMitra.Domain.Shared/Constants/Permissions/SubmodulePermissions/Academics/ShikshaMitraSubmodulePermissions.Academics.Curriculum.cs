@@ -32,6 +32,28 @@ public static partial class ShikshaMitraSubmodulePermissions
 		}
 
 		/// <summary>
+		/// Curriculum Management - Elective Assignment permissions
+		/// </summary>
+		public static class CurriculumManagement_ElectiveAssignment
+		{
+			private const string SubmoduleName = $"{ModuleName}.CurriculumManagement.ElectiveAssignment";
+			private const string SubmoduleDisplayName = $"{DisplayName}.CurriculumManagement.ElectiveAssignment";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
+		/// <summary>
 		/// Curriculum Management - Chapter Management permissions
 		/// </summary>
 		public static class CurriculumManagement_ChapterManagement

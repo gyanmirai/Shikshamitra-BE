@@ -38,6 +38,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 
 	private readonly ICurrentUser _currentUser;
 	private readonly IClassTeacherAccessService _classTeacherAccessService;
+	private readonly IReportingManagerAccessService _reportingManagerAccessService;
 
 	public ShikshaMitraPermissionChecker(
 		ICurrentPrincipalAccessor currentPrincipalAccessor,
@@ -46,11 +47,13 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 		IPermissionValueProviderManager permissionValueProviderManager,
 		ISimpleStateCheckerManager<PermissionDefinition> stateCheckerManager,
 		ICurrentUser currentUser,
-		IClassTeacherAccessService classTeacherAccessService)
+		IClassTeacherAccessService classTeacherAccessService,
+		IReportingManagerAccessService reportingManagerAccessService)
 		: base(currentPrincipalAccessor, permissionDefinitionManager, currentTenant, permissionValueProviderManager, stateCheckerManager)
 	{
 		_currentUser = currentUser;
 		_classTeacherAccessService = classTeacherAccessService;
+		_reportingManagerAccessService = reportingManagerAccessService;
 	}
 
 	public override async Task<bool> IsGrantedAsync(string name)
@@ -111,7 +114,8 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 		}
 
 		return _currentUser.Id.HasValue &&
-			await IsDerivedClassTeacherPermissionAsync(_currentUser.Id.Value, name);
+			(await IsDerivedClassTeacherPermissionAsync(_currentUser.Id.Value, name) ||
+			 await IsDerivedReportingManagerPermissionAsync(_currentUser.Id.Value, name));
 	}
 
 	public override async Task<bool> IsGrantedAsync(ClaimsPrincipal? claimsPrincipal, string name)
@@ -172,7 +176,8 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 		}
 
 		return TryGetUserId(claimsPrincipal, out var userId) &&
-			await IsDerivedClassTeacherPermissionAsync(userId, name);
+			(await IsDerivedClassTeacherPermissionAsync(userId, name) ||
+			 await IsDerivedReportingManagerPermissionAsync(userId, name));
 	}
 
 	private async Task<bool> IsDerivedClassTeacherPermissionAsync(Guid userId, string permissionName)
@@ -183,6 +188,13 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 		}
 
 		return await _classTeacherAccessService.HasAssignmentAsync(userId);
+	}
+
+	private async Task<bool> IsDerivedReportingManagerPermissionAsync(Guid userId, string permissionName)
+	{
+		return permissionName.EndsWith(".View", StringComparison.Ordinal) &&
+			IsClassTeacherOperationalAcademicPermission(permissionName) &&
+			await _reportingManagerAccessService.HasReporteesAsync(userId);
 	}
 
 	private static bool IsClassTeacherOperationalAcademicPermission(string permissionName)

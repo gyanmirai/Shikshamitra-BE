@@ -43,7 +43,8 @@ public class SubjectAssignmentAppService(
 	IClassTeacherAccessService classTeacherAccessService,
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<Employee, Guid> employeeRepository,
-	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository
+	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
+	IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -191,6 +192,9 @@ public class SubjectAssignmentAppService(
 		var query = await assignmentRepository.WithDetailsAsync(a => a.Chapters, a => a.Teachers);
 		var hasTenantWideScope = await userScopeAccessService.CurrentUserHasTenantWideScopeAsync();
 		var hasClassTeacherAccess = await HasClassTeacherAccessAsync();
+		var reportingEmployeeIds = CurrentUser.Id.HasValue
+			? await reportingManagerAccessService.GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value)
+			: [];
 		Guid? currentEmployeeId = null;
 
 		// AssignedSubjectTeacher.TeacherId is an HR Employee ID, not an identity User ID.
@@ -199,7 +203,12 @@ public class SubjectAssignmentAppService(
 		if (!hasTenantWideScope && !hasClassTeacherAccess)
 		{
 			currentEmployeeId = await GetCurrentEmployeeIdAsync();
-			if (!currentEmployeeId.HasValue)
+			var eligibleTeacherIds = reportingEmployeeIds.ToHashSet();
+			if (currentEmployeeId.HasValue)
+			{
+				eligibleTeacherIds.Add(currentEmployeeId.Value);
+			}
+			if (eligibleTeacherIds.Count == 0)
 			{
 				query = query.Where(_ => false);
 			}
@@ -213,12 +222,12 @@ public class SubjectAssignmentAppService(
 					allocationQuery
 						.Where(allocation =>
 							allocation.StandardId == classId &&
-							allocation.Teachers.Any(teacher => teacher.TeacherId == currentEmployeeId.Value))
+							allocation.Teachers.Any(teacher => eligibleTeacherIds.Contains(teacher.TeacherId)))
 						.Select(allocation => allocation.SubjectId)
 						.Distinct());
 
 				query = query.Where(assignment =>
-					assignment.Teachers.Any(teacher => teacher.TeacherId == currentEmployeeId.Value) ||
+					assignment.Teachers.Any(teacher => eligibleTeacherIds.Contains(teacher.TeacherId)) ||
 					allocatedSubjectIds.Contains(assignment.SubjectId));
 			}
 		}
@@ -1798,6 +1807,18 @@ public class SubjectAssignmentAppService(
 			if (currentEmployeeId.HasValue && await IsTeacherAssignedToSubjectAsync(assignment, currentEmployeeId.Value))
 			{
 				return;
+			}
+
+			if (CurrentUser.Id.HasValue)
+			{
+				var reporteeEmployeeIds = await reportingManagerAccessService.GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value);
+				foreach (var reporteeEmployeeId in reporteeEmployeeIds)
+				{
+					if (await IsTeacherAssignedToSubjectAsync(assignment, reporteeEmployeeId))
+					{
+						return;
+					}
+				}
 			}
 		}
 

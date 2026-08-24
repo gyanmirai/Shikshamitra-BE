@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Caching;
 using Volo.Abp.Domain.Services;
@@ -25,6 +26,7 @@ public class UserScopeService : DomainService, IUserScopeService
     private readonly IIdentityUserRepositoryExtensions _userRepositoryExtensions;
     private readonly IIdentityRoleRepository _roleRepository;
     private readonly ICurrentUser _currentUser;
+    private readonly IEmployeeRepository _employeeRepository;
     private readonly ILogger<UserScopeService> _logger;
     private readonly UserScopeOptions _options;
 
@@ -35,6 +37,7 @@ public class UserScopeService : DomainService, IUserScopeService
         IIdentityUserRepositoryExtensions userRepositoryExtensions,
         IIdentityRoleRepository roleRepository,
         ICurrentUser currentUser,
+        IEmployeeRepository employeeRepository,
         ILogger<UserScopeService> logger,
         IOptions<UserScopeOptions> options)
     {
@@ -44,6 +47,7 @@ public class UserScopeService : DomainService, IUserScopeService
         _userRepositoryExtensions = userRepositoryExtensions;
         _roleRepository = roleRepository;
         _currentUser = currentUser;
+        _employeeRepository = employeeRepository;
         _logger = logger;
         _options = options.Value;
     }
@@ -75,8 +79,16 @@ public class UserScopeService : DomainService, IUserScopeService
             return adminScope;
         }
 
-        // Get user's scope assignments
+        // Get the user's direct scope assignments and inherit the scopes of all
+        // direct and indirect reportees. The reporting hierarchy grants only the
+        // same data visibility those employees already possess; it never creates
+        // any independent scope of its own.
         var assignments = await _scopeRepository.GetUserAssignmentsAsync(userId, cancellationToken);
+        var reporteeUserIds = await GetReporteeUserIdsAsync(userId, cancellationToken);
+        foreach (var reporteeUserId in reporteeUserIds)
+        {
+            assignments.AddRange(await _scopeRepository.GetUserAssignmentsAsync(reporteeUserId, cancellationToken));
+        }
 
         if (!assignments.Any())
         {
@@ -237,6 +249,50 @@ public class UserScopeService : DomainService, IUserScopeService
     private string GetCacheKey(Guid userId)
     {
         return $"UserScope:v2:{CurrentTenant.Id}:{userId}";
+    }
+
+    private async Task<List<Guid>> GetReporteeUserIdsAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var manager = await _employeeRepository.GetEmployeeByUserIdAsync(userId, cancellationToken);
+        if (manager == null)
+        {
+            return [];
+        }
+
+        var employees = await _employeeRepository.GetListAsync(cancellationToken: cancellationToken);
+        var reporteesByManager = employees
+            .Where(employee => employee.ReportingManagerId.HasValue)
+            .GroupBy(employee => employee.ReportingManagerId!.Value)
+            .ToDictionary(group => group.Key, group => group.ToList());
+        var visited = new HashSet<Guid> { manager.Id };
+        var pendingManagers = new Queue<Guid>();
+        var reporteeUserIds = new List<Guid>();
+        pendingManagers.Enqueue(manager.Id);
+
+        while (pendingManagers.Count > 0)
+        {
+            var managerId = pendingManagers.Dequeue();
+            if (!reporteesByManager.TryGetValue(managerId, out var directReportees))
+            {
+                continue;
+            }
+
+            foreach (var reportee in directReportees)
+            {
+                if (!visited.Add(reportee.Id))
+                {
+                    continue;
+                }
+
+                pendingManagers.Enqueue(reportee.Id);
+                if (reportee.UserId.HasValue)
+                {
+                    reporteeUserIds.Add(reportee.UserId.Value);
+                }
+            }
+        }
+
+        return reporteeUserIds;
     }
 
     #endregion

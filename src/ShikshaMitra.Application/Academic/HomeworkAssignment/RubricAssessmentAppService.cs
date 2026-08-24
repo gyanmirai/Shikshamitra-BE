@@ -66,10 +66,11 @@ public class RubricAssessmentAppService(
 			(!input.AcademicMediumId.HasValue || !r.AcademicMediumId.HasValue || r.AcademicMediumId == input.AcademicMediumId.Value) &&
 			(!input.HomeworkId.HasValue || r.HomeworkId == input.HomeworkId.Value) &&
 			(!input.AssignmentId.HasValue || r.AssignmentId == input.AssignmentId.Value) &&
-			(!input.HomeworkTypeId.HasValue || r.HomeworkTypeId == input.HomeworkTypeId.Value) &&
-			(!input.AssignmentTypeId.HasValue || r.AssignmentTypeId == input.AssignmentTypeId.Value) &&
+			(!input.HomeworkTypeId.HasValue || !r.HomeworkTypeId.HasValue || r.HomeworkTypeId == input.HomeworkTypeId.Value) &&
+			(!input.AssignmentTypeId.HasValue || !r.AssignmentTypeId.HasValue || r.AssignmentTypeId == input.AssignmentTypeId.Value) &&
 			(!input.IsTemplate.HasValue || r.IsTemplate == input.IsTemplate.Value) &&
-			(!input.AppliesToWorkType.HasValue || !r.AppliesToWorkType.HasValue || r.AppliesToWorkType == input.AppliesToWorkType.Value) &&
+			(!input.AppliesToWorkType.HasValue || !r.AppliesToWorkType.HasValue ||
+				r.AppliesToWorkType == input.AppliesToWorkType.Value || r.AppliesToWorkType == WorkType.Both) &&
 			(!input.Status.HasValue || r.Status == input.Status.Value));
 
 		if (!string.IsNullOrWhiteSpace(input.Search))
@@ -131,6 +132,13 @@ public class RubricAssessmentAppService(
 
 	public async Task<AssessmentRubricDto> CreateFromTemplateAsync(Guid templateId, CreateRubricFromTemplateDto input)
 	{
+		var hasHomework = input.HomeworkId.HasValue;
+		var hasAssignment = input.AssignmentId.HasValue;
+		if (hasHomework == hasAssignment)
+		{
+			throw new BusinessException("AssessmentRubric:ExactlyOneTaskRequired");
+		}
+
 		var template = await rubricRepository.GetAsync(templateId);
 		if (!template.IsTemplate)
 		{
@@ -143,8 +151,10 @@ public class RubricAssessmentAppService(
 		}
 
 		await LoadCriteriaAsync([template]);
-		var targetWorkType = input.HomeworkId.HasValue ? WorkType.Homework : WorkType.Assignment;
-		if (template.AppliesToWorkType.HasValue && template.AppliesToWorkType.Value != targetWorkType)
+		var targetWorkType = hasHomework ? WorkType.Homework : WorkType.Assignment;
+		if (template.AppliesToWorkType.HasValue &&
+			template.AppliesToWorkType.Value != targetWorkType &&
+			template.AppliesToWorkType.Value != WorkType.Both)
 		{
 			throw new BusinessException("AssessmentRubric:TemplateWorkTypeMismatch");
 		}
@@ -172,6 +182,9 @@ public class RubricAssessmentAppService(
 				{
 					Title = c.Title,
 					Description = c.Description,
+					StudentDescription = c.StudentDescription,
+					TeacherGuidance = c.TeacherGuidance,
+					IsRequired = c.IsRequired,
 					MaxMarks = c.MaxMarks,
 					DisplayOrder = c.DisplayOrder
 				})
@@ -340,7 +353,7 @@ public class RubricAssessmentAppService(
 		submission.UpdateFeedback(
 			evaluation.TotalMarks,
 			rubric.TotalMarks,
-			null,
+			evaluation.Remarks,
 			evaluation.Remarks,
 			SubmissionStatus.Reviewed,
 			CurrentUser.Id ?? Guid.Empty);
@@ -436,7 +449,8 @@ public class RubricAssessmentAppService(
 	private static void EnsureScoresAreValid(AssessmentRubric rubric, IReadOnlyCollection<RubricEvaluationScoreInputDto> scores)
 	{
 		var criteria = rubric.Criteria.ToDictionary(c => c.Id);
-		if (scores.Count != criteria.Count)
+		var scoredCriterionIds = scores.Select(score => score.CriterionId).ToHashSet();
+		if (criteria.Values.Any(criterion => criterion.IsRequired && !scoredCriterionIds.Contains(criterion.Id)))
 		{
 			throw new BusinessException("AssessmentRubric:AllCriteriaMustBeScored");
 		}
@@ -544,6 +558,9 @@ public class RubricAssessmentAppService(
 				rubricId,
 				c.Title,
 				c.Description,
+				c.StudentDescription,
+				c.TeacherGuidance,
+				c.IsRequired,
 				c.MaxMarks,
 				c.DisplayOrder > 0 ? c.DisplayOrder : index + 1))
 			.ToList();
@@ -601,6 +618,9 @@ public class RubricAssessmentAppService(
 					RubricId = c.RubricId,
 					Title = c.Title,
 					Description = c.Description,
+					StudentDescription = c.StudentDescription,
+					TeacherGuidance = c.TeacherGuidance,
+					IsRequired = c.IsRequired,
 					MaxMarks = c.MaxMarks,
 					DisplayOrder = c.DisplayOrder
 				})

@@ -122,6 +122,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			// Curriculum Management submodules (defined in Academics.Curriculum.cs)
 			{ "Academics.CurriculumManagement.SubjectAssignment", new SubmoduleInfo(CurriculumManagement_SubjectAssignment.All, CurriculumManagement_SubjectAssignment.DisplayNames) },
+			{ "Academics.CurriculumManagement.ElectiveAssignment", new SubmoduleInfo(CurriculumManagement_ElectiveAssignment.All, CurriculumManagement_ElectiveAssignment.DisplayNames) },
 			{ "Academics.CurriculumManagement.ChapterManagement", new SubmoduleInfo(CurriculumManagement_ChapterManagement.All, CurriculumManagement_ChapterManagement.DisplayNames) },
 			{ "Academics.CurriculumManagement.Resources", new SubmoduleInfo(CurriculumManagement_Resources.All, CurriculumManagement_Resources.DisplayNames) },
 			{ "Academics.CurriculumManagement.Reports", new SubmoduleInfo(CurriculumManagement_Reports.All, CurriculumManagement_Reports.DisplayNames) },

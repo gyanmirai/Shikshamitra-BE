@@ -51,6 +51,7 @@ public interface IAcademicCalendarAppService : IApplicationService
     Task<List<AcademicCalendarAuditLogDto>> GetAuditLogsByCalendarAsync(Guid calendarId);
     Task<List<AcademicCalendarAuditLogDto>> GetAuditLogsByDayAsync(Guid calendarDayId);
     Task<AcademicCalendarAuditSummaryDto> GetAuditLogsSummaryAsync();
+    Task<AuditLogReviewNoteDto> AddAuditLogReviewNoteAsync(Guid auditLogId, AddAuditLogReviewNoteDto input);
 
     // Settings
     Task<AcademicCalendarSettingDto> GetCalendarSettingsAsync(Guid academicMediumId);

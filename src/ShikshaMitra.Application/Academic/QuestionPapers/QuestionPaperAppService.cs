@@ -4,7 +4,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.QuestionBank;
+using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -25,7 +31,15 @@ public class QuestionPaperAppService(
     IRepository<QuestionPaperBlueprintBloomRule, Guid> bloomRuleRepository,
     IRepository<QuestionBankItem, Guid> questionRepository,
     IRepository<QuestionUsageLog, Guid> usageRepository,
-    IAsyncQueryableExecuter asyncExecuter
+    IRepository<Standard, Guid> standardRepository,
+    IRepository<Subject, Guid> subjectRepository,
+    IRepository<Exam, Guid> examRepository,
+    IAsyncQueryableExecuter asyncExecuter,
+    IUserScopeAccessService userScopeAccessService,
+    IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+    IRepository<Employee, Guid> employeeRepository,
+    IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
+    IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, IQuestionPaperAppService
 {
     public async Task<QuestionPaperSettingDto> GetSettingsAsync(Guid academicYearId)
@@ -57,26 +71,36 @@ public class QuestionPaperAppService(
     {
         var query = await paperRepository.WithDetailsAsync(x => x.Sections, x => x.Questions);
         query = ApplySearch(query, input);
+		query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
         var total = await asyncExecuter.CountAsync(query);
         var page = Math.Max(1, input.Page);
         var pageSize = Math.Clamp(input.PageSize, 5, 100);
         var items = await asyncExecuter.ToListAsync(query.OrderByDescending(x => x.CreationTime).Skip((page - 1) * pageSize).Take(pageSize));
+        var mappedItems = items.Select(x => Map(x)).ToList();
+        await EnrichDisplayFieldsAsync(mappedItems);
+
         return new QuestionPaperListResponseDto
         {
             TotalCount = total,
             CurrentPage = page,
             PageSize = pageSize,
-            Items = items.Select(Map).ToList()
+            Items = mappedItems
         };
     }
 
-    public async Task<QuestionPaperDto> GetPaperAsync(Guid id) => Map(await GetPaperEntityAsync(id));
+    public async Task<QuestionPaperDto> GetPaperAsync(Guid id)
+    {
+        var paper = await GetPaperEntityAsync(id, allowTeacherSubjectRead: true);
+        var questionTextMap = await GetQuestionTextMapAsync(paper);
+        return Map(paper, questionTextMap);
+    }
 
     public async Task<QuestionPaperDto> CreatePaperAsync(CreateUpdateQuestionPaperDto input)
     {
         ValidatePaperInput(input);
         var paper = new QuestionPaper(GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId, input.StandardId, input.SubjectId, input.PaperTitle, input.TotalMarks, input.DurationMinutes, input.CreationMode);
         Apply(input, paper);
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(paper, operation: "question-paper-create");
         foreach (var section in input.Sections.OrderBy(x => x.SortOrder))
         {
             paper.Sections.Add(new QuestionPaperSection(section.Id ?? GuidGenerator.Create(), paper.Id, section.SectionName, section.Marks, section.SortOrder, section.Instructions));
@@ -92,6 +116,7 @@ public class QuestionPaperAppService(
         EnsureEditable(paper);
         ValidatePaperInput(input);
         Apply(input, paper);
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(paper, operation: "question-paper-update");
         await sectionRepository.DeleteManyAsync(paper.Sections.ToList());
         paper.Sections.Clear();
         foreach (var section in input.Sections.OrderBy(x => x.SortOrder))
@@ -231,7 +256,7 @@ public class QuestionPaperAppService(
             QuestionCount = paper.Questions.Count
         };
         var chapterTotal = blueprint.ChapterRules.Sum(x => x.Marks);
-        if (chapterTotal != paper.TotalMarks)
+        if (blueprint.ChapterRules.Count > 0 && chapterTotal != paper.TotalMarks)
         {
             result.Errors.Add($"Chapter marks total {chapterTotal} must equal paper total {paper.TotalMarks}.");
         }
@@ -402,8 +427,7 @@ public class QuestionPaperAppService(
     public async Task<QuestionPaperPreviewDto> GetPreviewAsync(Guid paperId)
     {
         var paper = await GetPaperEntityAsync(paperId);
-        var questionIds = paper.Questions.Select(x => x.QuestionBankItemId).Distinct().ToList();
-        var questionMap = (await questionRepository.GetListAsync(x => questionIds.Contains(x.Id))).ToDictionary(x => x.Id, x => x.QuestionText);
+        var questionMap = await GetQuestionTextMapAsync(paper);
         var html = new StringBuilder();
         html.Append($"<h1>{paper.PaperTitle}</h1><p>Duration: {paper.DurationMinutes} minutes | Total Marks: {paper.TotalMarks}</p>");
         if (!string.IsNullOrWhiteSpace(paper.GeneralInstructions)) html.Append($"<p>{paper.GeneralInstructions}</p>");
@@ -419,7 +443,7 @@ public class QuestionPaperAppService(
             }
         }
 
-        return new QuestionPaperPreviewDto { Paper = Map(paper), PrintHtml = html.ToString() };
+        return new QuestionPaperPreviewDto { Paper = Map(paper, questionMap), PrintHtml = html.ToString() };
     }
 
     public async Task<QuestionPaperDashboardDto> GetDashboardAsync(Guid academicYearId)
@@ -552,11 +576,70 @@ public class QuestionPaperAppService(
             ?? new QuestionPaperSetting(GuidGenerator.Create(), CurrentTenant.Id, academicYearId);
     }
 
-    private async Task<QuestionPaper> GetPaperEntityAsync(Guid id)
+    private async Task<QuestionPaper> GetPaperEntityAsync(Guid id, bool allowTeacherSubjectRead = false)
     {
         var query = await paperRepository.WithDetailsAsync(x => x.Sections, x => x.Questions);
-        return await asyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == id))
+        var paper = await asyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == id))
             ?? throw new BusinessException("ShikshaMitra.QuestionPapers:NotFound").WithData("Id", id);
+		if (!allowTeacherSubjectRead || !await HasTeacherSubjectReadAccessAsync(paper))
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(paper, operation: "question-paper-access");
+		}
+		return paper;
+    }
+
+    private async Task<bool> HasTeacherSubjectReadAccessAsync(QuestionPaper paper)
+    {
+        if (!CurrentUser.Id.HasValue || await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
+        {
+            return false;
+        }
+
+        var employee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == CurrentUser.Id.Value);
+        var employeeIds = new HashSet<Guid>();
+        if (employee != null)
+        {
+            employeeIds.Add(employee.Id);
+        }
+
+        employeeIds.UnionWith(await reportingManagerAccessService.GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value));
+        if (employeeIds.Count == 0)
+        {
+            return false;
+        }
+
+        var assignedSubject = (await assignedSubjectRepository.GetListAsync(
+            x => x.StandardId == paper.StandardId && x.SubjectId == paper.SubjectId,
+            includeDetails: true)).FirstOrDefault();
+        if (assignedSubject == null)
+        {
+            return false;
+        }
+
+        if (assignedSubject.Teachers.Any(x => employeeIds.Contains(x.TeacherId)))
+        {
+            return true;
+        }
+
+        return await teacherSubjectAllocationRepository.AnyAsync(x =>
+            x.StandardId == paper.StandardId &&
+            x.SubjectId == paper.SubjectId &&
+            x.Teachers.Any(teacher => employeeIds.Contains(teacher.TeacherId)));
+    }
+
+    private async Task<Dictionary<Guid, string>> GetQuestionTextMapAsync(QuestionPaper paper)
+    {
+        var questionIds = paper.Questions
+            .Select(x => x.QuestionBankItemId)
+            .Distinct()
+            .ToList();
+        if (questionIds.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return (await questionRepository.GetListAsync(x => questionIds.Contains(x.Id)))
+            .ToDictionary(x => x.Id, x => x.QuestionText);
     }
 
     private async Task<QuestionPaperBlueprint?> GetBlueprintEntityAsync(Guid paperId, bool required)
@@ -652,7 +735,9 @@ public class QuestionPaperAppService(
         paper.GeneralInstructions = input.GeneralInstructions;
     }
 
-    private static QuestionPaperDto Map(QuestionPaper paper) => new()
+    private static QuestionPaperDto Map(
+        QuestionPaper paper,
+        IReadOnlyDictionary<Guid, string>? questionTextMap = null) => new()
     {
         Id = paper.Id,
         AcademicYearId = paper.AcademicYearId,
@@ -663,14 +748,79 @@ public class QuestionPaperAppService(
         PaperTitle = paper.PaperTitle,
         TotalMarks = paper.TotalMarks,
         DurationMinutes = paper.DurationMinutes,
+        UpdatedAt = paper.LastModificationTime ?? paper.CreationTime,
         CreationMode = paper.CreationMode,
         GeneralInstructions = paper.GeneralInstructions,
         Status = paper.Status,
         VersionNumber = paper.VersionNumber,
         IsLocked = paper.IsLocked,
         Sections = paper.Sections.OrderBy(x => x.SortOrder).Select(x => new QuestionPaperSectionDto { Id = x.Id, SectionName = x.SectionName, Instructions = x.Instructions, Marks = x.Marks, SortOrder = x.SortOrder }).ToList(),
-        Questions = paper.Questions.OrderBy(x => x.SortOrder).Select(x => new QuestionPaperQuestionDto { Id = x.Id, QuestionPaperSectionId = x.QuestionPaperSectionId, QuestionBankItemId = x.QuestionBankItemId, Marks = x.Marks, QuestionNumber = x.QuestionNumber, SortOrder = x.SortOrder, ChoiceGroupCode = x.ChoiceGroupCode }).ToList()
+        Questions = paper.Questions.OrderBy(x => x.SortOrder).Select(x => new QuestionPaperQuestionDto
+        {
+            Id = x.Id,
+            QuestionPaperSectionId = x.QuestionPaperSectionId,
+            QuestionBankItemId = x.QuestionBankItemId,
+            Marks = x.Marks,
+            QuestionNumber = x.QuestionNumber,
+            SortOrder = x.SortOrder,
+            ChoiceGroupCode = x.ChoiceGroupCode,
+            QuestionText = questionTextMap != null && questionTextMap.TryGetValue(x.QuestionBankItemId, out var questionText)
+                ? questionText
+                : null
+        }).ToList()
     };
+
+    private async Task EnrichDisplayFieldsAsync(IReadOnlyCollection<QuestionPaperDto> papers)
+    {
+        if (papers.Count == 0)
+        {
+            return;
+        }
+
+        var standardIds = papers.Select(x => x.StandardId).Distinct().ToList();
+        var subjectIds = papers.Select(x => x.SubjectId).Distinct().ToList();
+        var examIds = papers.Where(x => x.ExamId.HasValue).Select(x => x.ExamId!.Value).Distinct().ToList();
+
+        var standardQuery = await standardRepository.GetQueryableAsync();
+        var subjectQuery = await subjectRepository.GetQueryableAsync();
+        var examQuery = await examRepository.GetQueryableAsync();
+
+        // EF Core DbContexts do not support multiple active operations. All three
+        // repositories share this request's scoped context, so execute the lookup
+        // queries in sequence rather than concurrently.
+        var standards = await asyncExecuter.ToListAsync(
+            standardQuery.Where(x => standardIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
+        var subjects = await asyncExecuter.ToListAsync(
+            subjectQuery.Where(x => subjectIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
+        var exams = await asyncExecuter.ToListAsync(
+            examQuery.Where(x => examIds.Contains(x.Id)).Select(x => new { x.Id, x.ExamName }));
+
+        var standardNames = standards.ToDictionary(x => x.Id, x => x.Name);
+        var subjectNames = subjects.ToDictionary(x => x.Id, x => x.Name);
+        var examNames = exams.ToDictionary(x => x.Id, x => x.ExamName);
+
+        foreach (var paper in papers)
+        {
+            if (standardNames.TryGetValue(paper.StandardId, out var standardName))
+            {
+                paper.StandardName = standardName;
+            }
+
+            if (subjectNames.TryGetValue(paper.SubjectId, out var subjectName))
+            {
+                paper.SubjectName = subjectName;
+            }
+
+            if (paper.ExamId.HasValue)
+            {
+                if (examNames.TryGetValue(paper.ExamId.Value, out var examName))
+                {
+                    paper.ExamName = examName;
+                    paper.ExamTitle = examName;
+                }
+            }
+        }
+    }
 
     private static QuestionPaperBlueprintDto Map(QuestionPaperBlueprint blueprint) => new()
     {

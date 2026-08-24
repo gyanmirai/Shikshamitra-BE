@@ -22,4 +22,14 @@ public class StudentAcademic360Controller(
     {
         return await studentAcademic360AppService.GetAsync(studentId, input);
     }
+
+    [HttpGet("{studentId:guid}/tabs/{tab}")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Dashboard.View)]
+    public async Task<StudentAcademic360Dto> GetTabAsync(
+        [FromRoute] Guid studentId,
+        [FromRoute] string tab,
+        [FromQuery] StudentAcademic360Input input)
+    {
+        return await studentAcademic360AppService.GetTabAsync(studentId, tab, input);
+    }
 }

@@ -26,6 +26,7 @@ public class PublishSeatingPlanInputDto
 public class SeatingPlanAuditLogDto
 {
     public Guid Id { get; set; }
+    public Guid SeatingPlanId { get; set; }
     public SeatingPlanAuditAction Action { get; set; }
     public Guid ActorUserId { get; set; }
     public string? ActorNameSnapshot { get; set; }

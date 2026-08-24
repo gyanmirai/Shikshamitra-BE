@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
 	#region Properties
 	public Guid? TenantId { get; private set; }
@@ -119,6 +120,13 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public ICollection<AssignedSubjectChapter> Chapters { get; set; } =
 		new HashSet<AssignedSubjectChapter>();
+
+	Guid? IUserScopedEntity.AcademicYearId => null;
+	Guid? IUserScopedEntity.EducationBoardId => null;
+	Guid? IUserScopedEntity.EducationMediumId => null;
+	Guid? IUserScopedEntity.EducationMediumStageId => null;
+	Guid? IUserScopedEntity.StandardId => StandardId;
+	Guid? IUserScopedEntity.DivisionId => null;
 	#endregion
 
 	#region Constructors

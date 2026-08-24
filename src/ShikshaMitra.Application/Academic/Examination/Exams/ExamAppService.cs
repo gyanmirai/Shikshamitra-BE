@@ -22,6 +22,7 @@ using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
 using ShikshaMitra.Academic.Examination.SeatAllocation;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
 
@@ -46,12 +47,14 @@ public class ExamAppService(
 	ExamManager examManager,
 	IRepository<ExamSeatAllocation, Guid> examSeatAllocationRepository,
 	IRepository<AcademicCalendar, Guid> calendarRepository,
-	IRepository<AcademicCalendarDay, Guid> calendarDayRepository) : ApplicationService, IExamAppService
+	IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
+	IUserScopeAccessService userScopeAccessService) : ApplicationService, IExamAppService
 {
 	private const string CalendarSyncDescriptionPrefix = "Auto-created from examination schedule. ExamId: ";
 
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
 	{
+		await EnsureCanAccessClassDivisionsAsync(input.StandardId, input.DivisionIds);
 		await EnsureElectiveAssignmentsReadyAsync(input.StandardId, input.DivisionIds, input.SubjectIds);
 		await EnsureExamSettingsAvailableForFutureUseAsync(input.ExamTypeId, input.GradingScaleId);
 
@@ -71,6 +74,7 @@ public class ExamAppService(
 	public async Task UpdateBasicDetailsAsync(Guid examId, ExamBasicDetailsRequestDto input)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 		EnsureExamSetupEditable(exam);
 		await EnsureElectiveAssignmentsReadyAsync(input.StandardId, input.DivisionIds, input.SubjectIds);
 		await EnsureExamSettingsAvailableForFutureUseAsync(input.ExamTypeId, input.GradingScaleId);
@@ -91,6 +95,7 @@ public class ExamAppService(
 	public async Task<ExamBasicDetailsResponseDto> GetBasicDetailsAsync(Guid examId)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 
 		return new ExamBasicDetailsResponseDto
 		{
@@ -106,6 +111,7 @@ public class ExamAppService(
 	public async Task SaveScheduleAsync(Guid examId, ExamScheduleRequestDto input)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 		EnsureExamSetupEditable(exam);
 		await AttachMissingElectiveScheduleSubjectsAsync(exam, input);
 		var normalizedSubjects = NormalizeScheduleRows(input.Subjects);
@@ -139,6 +145,7 @@ public class ExamAppService(
 	public async Task<ExamScheduleResponseDto> GetScheduleAsync(Guid examId)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 
 		var subjectIds = exam.ExamSubjects.Select(s => s.SubjectId).Distinct().ToList();
 
@@ -337,6 +344,7 @@ public class ExamAppService(
 	public async Task AssignRoomsAsync(Guid examId, ExamRoomAssignmentRequestDto input)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 		EnsureExamSetupEditable(exam);
 
 		if (!input.IsRoomAssigned)
@@ -366,6 +374,7 @@ public class ExamAppService(
 	public async Task<ExamRoomAssignmentResponseDto> GetRoomAssignmentsAsync(Guid examId)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 
 		// Assumption: IsRoomAssigned flag is not persisted in Exam entity based on current knowledge.
 		// Returning true if there are any room assignments or false otherwise, or strictly following what was decided.
@@ -393,6 +402,7 @@ public class ExamAppService(
 	public async Task<List<ExamSubjectResponseDto>> GetSubjectsAsync(Guid examId)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 
 		var examSubjectBySubjectId = exam.ExamSubjects
 			.GroupBy(x => x.SubjectId)
@@ -476,10 +486,16 @@ public class ExamAppService(
 
 	public async Task<List<QuestionPaperExamLookupDto>> GetQuestionPaperLookupAsync(QuestionPaperExamLookupInput input)
 	{
-		if (input.AcademicMediumId == Guid.Empty || input.StandardId == Guid.Empty || input.SubjectId == Guid.Empty)
+		if (input.StandardId == Guid.Empty || input.SubjectId == Guid.Empty)
 		{
 			return [];
 		}
+
+		// Exam does not persist AcademicYearId. Its scope is determined by the
+		// selected standard's education medium. AcademicYearId is still part of
+		// the public lookup contract because it is the context sent by the
+		// question-paper wizard.
+		var academicMediumId = await GetAcademicMediumIdForStandardAsync(input.StandardId);
 
 		var schedulableSubjectIds = new HashSet<Guid> { input.SubjectId };
 		var electiveGroupIdsBySubject = await GetElectiveGroupIdsBySubjectAsync(input.StandardId, [input.SubjectId]);
@@ -497,16 +513,19 @@ public class ExamAppService(
 					join standard in standardQuery on exam.StandardId equals standard.Id
 					join stage in stageQuery on standard.EducationMediumStageId equals stage.Id
 					join examType in examTypeQuery on exam.ExamTypeId equals examType.Id
-					where stage.EducationMediumId == input.AcademicMediumId &&
+					where stage.EducationMediumId == academicMediumId &&
 						exam.StandardId == input.StandardId &&
 						exam.ExamSubjects.Any(subject =>
 							schedulableSubjectIds.Contains(subject.SubjectId) &&
 							subject.ExamDate.HasValue &&
 							subject.StartTime.HasValue &&
 							subject.EndTime.HasValue)
-					select new { exam, examType };
+					select new { exam, standard, stage, examType };
 
-		var rows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.exam.ExamName));
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		var rows = (await AsyncExecuter.ToListAsync(query.OrderBy(x => x.exam.ExamName)))
+			.Where(row => CanAccessExam(row.exam, row.standard, row.stage, scope))
+			.ToList();
 
 		return rows
 			.Where(row => GetEffectiveScheduleStatus(row.exam) != ExamStatus.Completed)
@@ -521,6 +540,8 @@ public class ExamAppService(
 					ExamId = row.exam.Id,
 					ExamSubjectId = subject.Id,
 					ExamName = row.exam.ExamName,
+					StandardId = row.exam.StandardId,
+					SubjectId = input.SubjectId,
 					ExamTypeName = row.examType.Name,
 					ExamDate = subject.ExamDate!.Value,
 					StartTime = subject.StartTime,
@@ -538,6 +559,7 @@ public class ExamAppService(
 	public async Task DeleteAsync(Guid examId)
 	{
 		var exam = await examRepository.GetAsync(examId);
+		await EnsureCanAccessExamAsync(exam);
 
 		if (exam.Status != ExamStatus.Pending)
 		{
@@ -571,6 +593,7 @@ public class ExamAppService(
 	public async Task ChangeStatusAsync(Guid examId, ExamStatus status)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 		await EnsureValidExamStatusTransitionAsync(exam, status);
 		exam.ChangeStatus(status);
 		await examRepository.UpdateAsync(exam);
@@ -588,7 +611,7 @@ public class ExamAppService(
 						join stage in stageQuery on standard.EducationMediumStageId equals stage.Id
 						join examType in examTypeQuery on exam.ExamTypeId equals examType.Id
 						where stage.EducationMediumId == input.AcademicMediumId
-						select new { exam, standard, examType };
+						select new { exam, standard, stage, examType };
 
 		var query = baseQuery;
 
@@ -624,6 +647,13 @@ public class ExamAppService(
 		}
 
 		var allRows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.exam.CreationTime));
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		if (!scope.IsAdmin)
+		{
+			allRows = allRows
+				.Where(row => CanAccessExam(row.exam, row.standard, row.stage, scope))
+				.ToList();
+		}
 		var rowsWithEffectiveStatus = allRows
 			.Select(x => new
 			{
@@ -636,6 +666,7 @@ public class ExamAppService(
 
 		var pendingCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Pending);
 		var publishedCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Published);
+		var ongoingCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Ongoing);
 		var completedCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Completed);
 
 		var filteredRows = rowsWithEffectiveStatus
@@ -707,14 +738,79 @@ public class ExamAppService(
 			Items = items,
 			PendingCount = pendingCount,
 			PublishedCount = publishedCount,
+			OngoingCount = ongoingCount,
 			CompletedCount = completedCount
 		};
+	}
+
+	private static bool CanAccessExam(
+		Exam exam,
+		Standard standard,
+		EducationMediumStage stage,
+		UserScopeContext scope)
+	{
+		if (scope.IsAdmin || scope.HasWildcardAcademicYear)
+		{
+			return true;
+		}
+
+		if (exam.ExamDivisions.Any(division => scope.DivisionIds.Contains(division.DivisionId)))
+		{
+			return true;
+		}
+
+		if (scope.WildcardDivisionStandardIds.Contains(exam.StandardId) ||
+			(scope.HasWildcardStandard && scope.WildcardStandardMediumStageIds.Contains(standard.EducationMediumStageId)) ||
+			(scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(stage.EducationMediumId)))
+		{
+			return true;
+		}
+
+		return scope.HasWildcardMedium && scope.MediumIds.Contains(stage.EducationMediumId);
+	}
+
+	private async Task EnsureCanAccessExamAsync(Exam exam)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		if (scope.IsAdmin)
+		{
+			return;
+		}
+
+		var standard = await standardRepository.GetAsync(exam.StandardId);
+		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
+		if (!CanAccessExam(exam, standard, stage, scope))
+		{
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+		}
+	}
+
+	private async Task EnsureCanAccessClassDivisionsAsync(Guid standardId, IReadOnlyCollection<Guid> divisionIds)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		if (scope.IsAdmin)
+		{
+			return;
+		}
+
+		var standard = await standardRepository.GetAsync(standardId);
+		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
+		foreach (var divisionId in divisionIds)
+		{
+			var scopeProbe = new Exam(Guid.NewGuid(), Guid.NewGuid(), "scope-probe", standardId);
+			scopeProbe.AddDivision(Guid.NewGuid(), divisionId);
+			if (!CanAccessExam(scopeProbe, standard, stage, scope))
+			{
+				throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+			}
+		}
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
 	public async Task<GetExamMarksResponseDto> GetMarksAsync(GetExamMarksInput input)
 	{
 		var exam = await examRepository.GetAsync(input.ExamId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 
 		var examSubject = exam.ExamSubjects.FirstOrDefault(s => s.SubjectId == input.SubjectId)
 			?? throw new UserFriendlyException("Subject not found in this exam");
@@ -825,6 +921,7 @@ public class ExamAppService(
 	public async Task<UpdateStudentMarksResponseDto> UpdateStudentMarksAsync(Guid examId, Guid studentId, Guid subjectId, UpdateStudentMarksDto input)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 
 		var examSubject = exam.ExamSubjects.FirstOrDefault(s => s.SubjectId == subjectId)
 			?? throw new UserFriendlyException("Subject not found in this exam");
@@ -929,6 +1026,7 @@ public class ExamAppService(
 	public async Task<PublishMarksResponseDto> PublishMarksAsync(Guid examId, Guid divisionId)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 		EnsureDivisionBelongsToExam(exam, divisionId);
 
 		var existingMarks = await examMarkRepository.GetListAsync(m =>
@@ -1064,7 +1162,7 @@ public class ExamAppService(
 
 	private async Task EnsureValidExamStatusTransitionAsync(Exam exam, ExamStatus requestedStatus)
 	{
-		if (!Enum.IsDefined(requestedStatus))
+		if (!Enum.IsDefined(requestedStatus) || requestedStatus == ExamStatus.Ongoing)
 		{
 			throw new BusinessException("ShikshaMitra.Exam:InvalidStatus");
 		}
@@ -1222,14 +1320,39 @@ public class ExamAppService(
 
 	private ExamStatus GetEffectiveScheduleStatus(Exam exam)
 	{
-		if (exam.Status != ExamStatus.Completed)
+		if (exam.Status == ExamStatus.Pending)
 		{
-			return exam.Status;
+			return ExamStatus.Pending;
 		}
 
-		return HasExamScheduleEnded(exam, Clock.Now)
-			? ExamStatus.Completed
-			: ExamStatus.Published;
+		var now = Clock.Now;
+		var start = GetExamStartDateTime(exam);
+		var end = GetExamFinalEndAt(exam);
+
+		if (start.HasValue && end.HasValue && now >= start.Value && now <= end.Value)
+		{
+			return ExamStatus.Ongoing;
+		}
+
+		// Once the final scheduled slot is over, an exam must leave Published and
+		// Ongoing views even if its persisted lifecycle state has not been updated.
+		if (end.HasValue && now > end.Value)
+		{
+			return ExamStatus.Completed;
+		}
+
+		return exam.Status;
+	}
+
+	private static DateTime? GetExamStartDateTime(Exam exam)
+	{
+		var starts = exam.ExamSubjects
+			.Where(subject => subject.ExamDate.HasValue)
+			.Select(subject => subject.ExamDate!.Value.Date.Add(
+				subject.StartTime?.TimeOfDay ?? TimeSpan.Zero))
+			.ToList();
+
+		return starts.Count == 0 ? null : starts.Min();
 	}
 
 	private static bool HasExamScheduleEnded(Exam exam, DateTime currentAt)
@@ -1254,7 +1377,7 @@ public class ExamAppService(
 			.Where(subject => subject.ExamDate.HasValue)
 			.Select(subject => subject.EndTime.HasValue
 				? subject.ExamDate!.Value.Date.Add(subject.EndTime!.Value.TimeOfDay)
-				: subject.ExamDate!.Value.Date)
+				: subject.ExamDate!.Value.Date.AddDays(1).AddTicks(-1))
 			.ToList();
 
 		return endTimes.Count == 0 ? null : endTimes.Max();
@@ -2028,6 +2151,7 @@ public class ExamAppService(
 	private async Task<Exam> EnsureMarksWorkflowTargetAsync(Guid examId, Guid subjectId, Guid divisionId)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
+		await EnsureCanAccessExamAsync(exam);
 		EnsureDivisionBelongsToExam(exam, divisionId);
 
 		if (exam.ExamSubjects.All(s => s.SubjectId != subjectId))
@@ -2543,6 +2667,7 @@ public class ExamAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
 	public async Task<List<GradeEntryAuditLogDto>> GetAuditLogsAsync(Guid examId, Guid subjectId, Guid divisionId)
 	{
+		await EnsureMarksWorkflowTargetAsync(examId, subjectId, divisionId);
 		var result = new List<GradeEntryAuditLogDto>();
 
 		var marks = await examMarkRepository.GetListAsync(m =>
@@ -2597,9 +2722,11 @@ public class ExamAppService(
 
 	public async Task<List<SubjectAssignmentGroupDto>> GetSubjectsLookupAsync(Guid classId, List<Guid> divisionIds)
 	{
-		var assignments = await assignmentRepository.GetListAsync(a =>
+		var assignmentsQuery = await assignmentRepository.GetQueryableAsync();
+		assignmentsQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(assignmentsQuery);
+		var assignments = await AsyncExecuter.ToListAsync(assignmentsQuery.Where(a =>
 			a.StandardId == classId &&
-			a.Status == SubjectStatus.Published);
+			a.Status == SubjectStatus.Published));
 
 		var groupedAssignments = new List<SubjectAssignmentGroupDto>();
 

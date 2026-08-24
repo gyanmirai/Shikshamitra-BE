@@ -15,7 +15,7 @@ public class SeatLayoutItemDto
     public int? RollNo { get; set; }
     public string? RoomNumber { get; set; }
     public bool IsRoomAssign { get; set; }
-    public Guid BenchId { get; set; }
+    public Guid? BenchId { get; set; }
     public bool IsExternalExamOccupied { get; set; }
 }
 
@@ -153,4 +153,16 @@ public class SaveSeatAllocationResponseDto
     public Guid ExamId { get; set; }
     public Guid RoomId { get; set; }
     public int SavedCount { get; set; }
+}
+
+public class SaveSeatingPlanBulkRoomDto
+{
+    public Guid RoomId { get; set; }
+    public List<SaveSeatStudentDto> Students { get; set; } = [];
+}
+
+public class SaveSeatingPlanBulkInputDto : SaveSeatingPlanDraftInputDto
+{
+    /// <summary>Only rooms loaded/edited by the client are replaced; omitted rooms remain unchanged.</summary>
+    public List<SaveSeatingPlanBulkRoomDto> Rooms { get; set; } = [];
 }

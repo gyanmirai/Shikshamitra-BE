@@ -120,6 +120,16 @@ public class SeatAllocationController(
         return await seatAllocationAppService.SaveSeatingPlanDraftAsync(examId, input);
     }
 
+    /// <summary>PUT /api/academics/exams/{examId}/seating-plan/bulk-save — atomic draft and loaded-room save</summary>
+    [HttpPut("{examId}/seating-plan/bulk-save")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SeatAllocation.Add)]
+    public async Task<SeatingPlanDraftResponseDto> SaveSeatingPlanBulkAsync(
+        Guid examId,
+        SaveSeatingPlanBulkInputDto input)
+    {
+        return await seatAllocationAppService.SaveSeatingPlanBulkAsync(examId, input);
+    }
+
     /// <summary>POST /api/academics/exams/{examId}/seating-plan/validate — capacity/conflict validation</summary>
     [HttpPost("{examId}/seating-plan/validate")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SeatAllocation.View)]

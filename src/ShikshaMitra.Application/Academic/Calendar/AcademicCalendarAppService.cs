@@ -27,6 +27,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     private readonly IRepository<AcademicCalendarSetting, Guid> _settingRepository;
     private readonly IRepository<CalendarImpactLog, Guid> _impactLogRepository;
     private readonly IRepository<AcademicCalendarAuditLog, Guid> _auditLogRepository;
+    private readonly IRepository<AcademicCalendarAuditReviewNote, Guid> _auditReviewNoteRepository;
     private readonly IAcademicYearRepository _academicYearRepository;
     private readonly IRepository<EducationMedium, Guid> _academicMediumRepository;
     private readonly IAcademicCalendarManager _calendarManager;
@@ -44,6 +45,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         IRepository<AcademicCalendarSetting, Guid> settingRepository,
         IRepository<CalendarImpactLog, Guid> impactLogRepository,
         IRepository<AcademicCalendarAuditLog, Guid> auditLogRepository,
+        IRepository<AcademicCalendarAuditReviewNote, Guid> auditReviewNoteRepository,
         IAcademicYearRepository academicYearRepository,
         IRepository<EducationMedium, Guid> academicMediumRepository,
         IAcademicCalendarManager calendarManager,
@@ -60,6 +62,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         _settingRepository = settingRepository;
         _impactLogRepository = impactLogRepository;
         _auditLogRepository = auditLogRepository;
+        _auditReviewNoteRepository = auditReviewNoteRepository;
         _academicYearRepository = academicYearRepository;
         _academicMediumRepository = academicMediumRepository;
         _calendarManager = calendarManager;
@@ -1662,7 +1665,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
         return new PagedResultDto<AcademicCalendarAuditLogDto>(
             totalCount,
-            items.Select(AcademicCalendarAuditLogProjector.ToDto).ToList()
+            await MapAuditLogsWithReviewNotesAsync(items)
         );
     }
 
@@ -1671,7 +1674,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var items = await _auditLogRepository.GetListAsync(x =>
             x.AcademicCalendarId == calendarId &&
             (x.Module == "CalendarManagement" || x.Module == "EmergencyClosure"));
-        return items.OrderByDescending(x => x.ChangedAt).Select(AcademicCalendarAuditLogProjector.ToDto).ToList();
+        return await MapAuditLogsWithReviewNotesAsync(items.OrderByDescending(x => x.ChangedAt));
     }
 
     public async Task<List<AcademicCalendarAuditLogDto>> GetAuditLogsByDayAsync(Guid calendarDayId)
@@ -1679,8 +1682,64 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var items = await _auditLogRepository.GetListAsync(x =>
             x.AcademicCalendarDayId == calendarDayId &&
             (x.Module == "CalendarManagement" || x.Module == "EmergencyClosure"));
-        return items.OrderByDescending(x => x.ChangedAt).Select(AcademicCalendarAuditLogProjector.ToDto).ToList();
+        return await MapAuditLogsWithReviewNotesAsync(items.OrderByDescending(x => x.ChangedAt));
     }
+
+    public async Task<AuditLogReviewNoteDto> AddAuditLogReviewNoteAsync(Guid auditLogId, AddAuditLogReviewNoteDto input)
+    {
+        var auditLog = await _auditLogRepository.GetAsync(auditLogId);
+        var noteText = input.Note.Trim();
+        if (noteText.Length == 0)
+        {
+            throw new UserFriendlyException("Review note cannot be empty.");
+        }
+
+        var userId = CurrentUser.Id ?? throw new Volo.Abp.Authorization.AbpAuthorizationException(
+            "A signed-in user is required to add a review note.");
+        var note = new AcademicCalendarAuditReviewNote(
+            GuidGenerator.Create(),
+            CurrentTenant.Id,
+            auditLog.Id,
+            userId,
+            noteText,
+            CurrentUser.Name ?? CurrentUser.UserName,
+            CurrentUser.Roles.FirstOrDefault());
+
+        await _auditReviewNoteRepository.InsertAsync(note, autoSave: true);
+        return MapReviewNote(note);
+    }
+
+    private async Task<List<AcademicCalendarAuditLogDto>> MapAuditLogsWithReviewNotesAsync(IEnumerable<AcademicCalendarAuditLog> items)
+    {
+        var dtos = items.Select(AcademicCalendarAuditLogProjector.ToDto).ToList();
+        if (dtos.Count == 0)
+        {
+            return dtos;
+        }
+
+        var auditLogIds = dtos.Select(x => x.Id).ToList();
+        var notes = await _auditReviewNoteRepository.GetListAsync(x => auditLogIds.Contains(x.AuditLogId));
+        var notesByAuditLog = notes
+            .OrderBy(x => x.CreatedAt)
+            .GroupBy(x => x.AuditLogId)
+            .ToDictionary(x => x.Key, x => x.Select(MapReviewNote).ToList());
+
+        foreach (var dto in dtos)
+        {
+            dto.ReviewNotes = notesByAuditLog.GetValueOrDefault(dto.Id) ?? new List<AuditLogReviewNoteDto>();
+        }
+
+        return dtos;
+    }
+
+    private static AuditLogReviewNoteDto MapReviewNote(AcademicCalendarAuditReviewNote note) => new()
+    {
+        Id = note.Id,
+        Note = note.Note,
+        CreatedBy = note.CreatedByName ?? "Unknown",
+        CreatedByRole = note.CreatedByRole,
+        CreatedAt = note.CreatedAt
+    };
 
     public async Task<AcademicCalendarAuditSummaryDto> GetAuditLogsSummaryAsync()
     {

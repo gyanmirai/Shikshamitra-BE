@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.Academic.ClassTeacher;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
@@ -30,12 +32,15 @@ public class AcademicPermissionUserScopeSyncer(
 	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
+	IRepository<ClassTeacher, Guid> classTeacherRepository,
+	IRepository<Employee, Guid> employeeRepository,
 	IRepository<UserScopeAssignment, Guid> userScopeRepository,
 	IUserScopeService userScopeService,
 	ILogger<AcademicPermissionUserScopeSyncer> logger)
 	: DomainService
 {
-	private const string DerivedScopeDescription = "Derived from Academic Permissions.";
+	private const string DerivedScopeDescription = "Derived from Academic Access.";
+	private const string LegacyAcademicPermissionScopeDescription = "Derived from Academic Permissions.";
 
 	public async Task<int> SyncAsync()
 	{
@@ -62,7 +67,7 @@ public class AcademicPermissionUserScopeSyncer(
 				!x.IsActive &&
 				!x.IsDeleted &&
 				x.UserId.HasValue &&
-				string.Equals(x.Description, DerivedScopeDescription, StringComparison.Ordinal))
+				IsDerivedScope(x))
 			.GroupBy(ScopeKey.FromAssignment)
 			.ToDictionary(x => x.Key, x => x.First());
 		var assignmentsToInsert = new List<UserScopeAssignment>();
@@ -76,7 +81,7 @@ public class AcademicPermissionUserScopeSyncer(
 
 			if (inactiveDerivedScopesByKey.TryGetValue(desiredScope, out var inactiveScope))
 			{
-				inactiveScope.Activate();
+				inactiveScope.Activate().UpdateDescription(DerivedScopeDescription);
 				await userScopeRepository.UpdateAsync(inactiveScope, autoSave: false);
 				existingKeys.Add(desiredScope);
 				changedUserIds.Add(desiredScope.UserId);
@@ -125,7 +130,7 @@ public class AcademicPermissionUserScopeSyncer(
 				x.IsActive &&
 				!x.IsDeleted &&
 				x.UserId.HasValue &&
-				string.Equals(x.Description, DerivedScopeDescription, StringComparison.Ordinal) &&
+				IsDerivedScope(x) &&
 				!desiredScopes.Contains(ScopeKey.FromAssignment(x)))
 			.ToList();
 
@@ -164,6 +169,10 @@ public class AcademicPermissionUserScopeSyncer(
 		 description.StartsWith("Seeded GSEB board scope", StringComparison.OrdinalIgnoreCase) ||
 		 description.StartsWith("Seeded CBSE board scope", StringComparison.OrdinalIgnoreCase) ||
 		 description.StartsWith("Seeded academic scope for linked student login", StringComparison.OrdinalIgnoreCase));
+
+	private static bool IsDerivedScope(UserScopeAssignment assignment) =>
+		string.Equals(assignment.Description, DerivedScopeDescription, StringComparison.Ordinal) ||
+		string.Equals(assignment.Description, LegacyAcademicPermissionScopeDescription, StringComparison.Ordinal);
 
 	private async Task<HashSet<ScopeKey>> BuildDesiredScopesAsync()
 	{
@@ -225,6 +234,16 @@ public class AcademicPermissionUserScopeSyncer(
 			}
 		}
 
+		var classTeacherAssignments = await classTeacherRepository.GetListAsync();
+		var classTeacherEmployeeIds = classTeacherAssignments
+			.Select(x => x.TeacherId)
+			.Distinct()
+			.ToList();
+		var employeesById = classTeacherEmployeeIds.Count == 0
+			? new Dictionary<Guid, Employee>()
+			: (await employeeRepository.GetListAsync(x => classTeacherEmployeeIds.Contains(x.Id)))
+				.ToDictionary(x => x.Id);
+
 		var standardPermissions = await standardPermissionRepository.GetListAsync();
 		logger.LogInformation(
 			"[AcademicPermissionUserScopeSyncer] Loaded standard permissions. Count={PermissionCount}",
@@ -233,7 +252,7 @@ public class AcademicPermissionUserScopeSyncer(
 		logger.LogInformation(
 			"[AcademicPermissionUserScopeSyncer] Loaded division permissions. Count={PermissionCount}",
 			divisionPermissions.Count);
-		var standards = standardPermissions.Count == 0 && divisionPermissions.Count == 0
+		var standards = standardPermissions.Count == 0 && divisionPermissions.Count == 0 && classTeacherAssignments.Count == 0
 			? new Dictionary<Guid, Standard>()
 			: (await standardRepository.GetListAsync()).ToDictionary(x => x.Id);
 		foreach (var permission in standardPermissions)
@@ -262,6 +281,28 @@ public class AcademicPermissionUserScopeSyncer(
 			{
 				scopes.Add(new ScopeKey(permission.UserId.Value, board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, division.Id));
 			}
+		}
+
+		foreach (var assignment in classTeacherAssignments)
+		{
+			if (!employeesById.TryGetValue(assignment.TeacherId, out var employee) ||
+				!employee.UserId.HasValue ||
+				!standards.TryGetValue(assignment.StandardId, out var standard) ||
+				!stages.TryGetValue(standard.EducationMediumStageId, out var stage) ||
+				!mediums.TryGetValue(stage.EducationMediumId, out var medium) ||
+				!boards.TryGetValue(medium.EducationBoardId, out var board))
+			{
+				continue;
+			}
+
+			scopes.Add(new ScopeKey(
+				employee.UserId.Value,
+				board.AcademicYearId,
+				board.Id,
+				medium.Id,
+				stage.Id,
+				standard.Id,
+				assignment.DivisionId));
 		}
 
 		return scopes;

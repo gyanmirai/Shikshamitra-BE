@@ -14,6 +14,7 @@ public class SeatingPlanAuditLog : FullAuditedEntity<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
     public Guid ExamId { get; private set; }
+    public Guid SeatingPlanId { get; private set; }
     public SeatingPlanAuditAction Action { get; private set; }
     public Guid ActorUserId { get; private set; }
     public string? ActorNameSnapshot { get; private set; }
@@ -29,6 +30,7 @@ public class SeatingPlanAuditLog : FullAuditedEntity<Guid>, IMultiTenant
         Guid id,
         Guid? tenantId,
         Guid examId,
+        Guid seatingPlanId,
         SeatingPlanAuditAction action,
         Guid actorUserId,
         string? actorNameSnapshot,
@@ -37,6 +39,7 @@ public class SeatingPlanAuditLog : FullAuditedEntity<Guid>, IMultiTenant
     {
         TenantId = tenantId;
         ExamId = examId;
+        SeatingPlanId = seatingPlanId;
         Action = action;
         ActorUserId = actorUserId;
         ActorNameSnapshot = actorNameSnapshot;

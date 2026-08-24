@@ -11,6 +11,9 @@ using Volo.Abp.Guids;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.QuestionBank;
 using ShikshaMitra.Academic.QuestionPapers;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.HR.Employees;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -25,7 +28,12 @@ public class ChapterAppService(
 	IRepository<LessonPlan, Guid> lessonPlanRepository,
 	IRepository<TeacherDiary, Guid> teacherDiaryRepository,
 	IRepository<QuestionBankItem, Guid> questionBankRepository,
-	IRepository<QuestionPaperBlueprintChapterRule, Guid> blueprintChapterRuleRepository
+	IRepository<QuestionPaperBlueprintChapterRule, Guid> blueprintChapterRuleRepository,
+	IRepository<Division, Guid> divisionRepository,
+	IUserScopeAccessService userScopeAccessService,
+	IRepository<Employee, Guid> employeeRepository,
+	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
+	IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, IChapterAppService
 {
 	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, List<CreateChapterDto> input)
@@ -35,6 +43,7 @@ public class ChapterAppService(
 				includeDetails: true
 			)).FirstOrDefault()
 			?? throw new BusinessException("Academic:Chapter:001", "Subject not assigned to this class");
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-create");
 
 		if (input.Select(x => x.ChapterNo).Distinct().Count() != input.Count)
 		{
@@ -66,25 +75,82 @@ public class ChapterAppService(
 		return new ApiSuccessResponseDto { Message = "Chapters created successfully." };
 	}
 
-	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId)
+	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId, Guid? divisionId = null)
 	{
-		var assignedSubject = (await assignedSubjectRepository.GetListAsync(
-				a => a.StandardId == standardId && a.SubjectId == subjectId,
-				includeDetails: true
-			)).FirstOrDefault()
+		var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(
+			a => a.Chapters,
+			a => a.Teachers
+		);
+		var assignedSubject = await AsyncExecuter.FirstOrDefaultAsync(
+			assignedSubjectQuery.Where(a => a.StandardId == standardId && a.SubjectId == subjectId)
+		)
 			?? throw new BusinessException("Academic:Chapter:002", "Subject not assigned to this class");
+		// A subject teacher may read every chapter of a subject they are assigned to,
+		// even when they do not have a separate class/division UserScope assignment.
+		// Reporting managers inherit the same read visibility for their reportees'
+		// subject allocations.
+		if (!await HasTeacherSubjectReadAccessAsync(assignedSubject))
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-read");
+		}
+
+		if (divisionId.HasValue)
+		{
+			var divisionExists = await divisionRepository.AnyAsync(
+				division => division.Id == divisionId.Value && division.StandardId == standardId);
+			if (!divisionExists)
+			{
+				throw new BusinessException("Academic:Chapter:006", "Division does not belong to the selected class.");
+			}
+		}
 
 		var chapters = assignedSubject.Chapters.OrderBy(c => c.ChapterNumber).ToList();
 		var dtos = ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);
+		ApplyResourceStatusFallback(dtos);
 		foreach (var dto in dtos)
 		{
 			dto.StandardId = assignedSubject.StandardId;
 			dto.SubjectId = assignedSubject.SubjectId;
 		}
 
-		await EnrichLinkedPlanningStatusesAsync(assignedSubject, dtos);
+		await EnrichLinkedPlanningStatusesAsync(assignedSubject, dtos, divisionId);
 
 		return dtos;
+	}
+
+	private async Task<bool> HasTeacherSubjectReadAccessAsync(AssignedSubject assignedSubject)
+	{
+		if (!CurrentUser.Id.HasValue || await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
+		{
+			return false;
+		}
+
+		var employee = await employeeRepository.FirstOrDefaultAsync(
+			candidate => candidate.UserId == CurrentUser.Id.Value);
+		var employeeIds = new HashSet<Guid>();
+		employeeIds.Add(CurrentUser.Id.Value);
+		if (employee != null)
+		{
+			employeeIds.Add(employee.Id);
+		}
+
+		var reporteeEmployeeIds = await reportingManagerAccessService
+			.GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value);
+		employeeIds.UnionWith(reporteeEmployeeIds);
+		if (employeeIds.Count == 0)
+		{
+			return false;
+		}
+
+		if (assignedSubject.Teachers?.Any(teacher => employeeIds.Contains(teacher.TeacherId)) == true)
+		{
+			return true;
+		}
+
+		return await teacherSubjectAllocationRepository.AnyAsync(allocation =>
+			allocation.StandardId == assignedSubject.StandardId &&
+			allocation.SubjectId == assignedSubject.SubjectId &&
+			allocation.Teachers.Any(teacher => employeeIds.Contains(teacher.TeacherId)));
 	}
 
 	public async Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto updateChapterDto)
@@ -95,6 +161,7 @@ public class ChapterAppService(
 				includeDetails: true
 			)
 			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-update");
 
 		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
 		chapter.UpdateDetails(
@@ -142,9 +209,10 @@ public class ChapterAppService(
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 
 		var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
+		ApplyResourceStatusFallback(new List<ChapterDto> { dto });
 		dto.StandardId = assignedSubject.StandardId;
 		dto.SubjectId = assignedSubject.SubjectId;
-		await EnrichLinkedPlanningStatusesAsync(assignedSubject, new List<ChapterDto> { dto });
+		await EnrichLinkedPlanningStatusesAsync(assignedSubject, new List<ChapterDto> { dto }, divisionId: null);
 		return dto;
 	}
 
@@ -156,6 +224,7 @@ public class ChapterAppService(
 				includeDetails: true
 			)
 			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-delete");
 
 		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
 
@@ -299,7 +368,10 @@ public class ChapterAppService(
 		);
 	}
 
-	private async Task EnrichLinkedPlanningStatusesAsync(AssignedSubject assignedSubject, List<ChapterDto> dtos)
+	private async Task EnrichLinkedPlanningStatusesAsync(
+		AssignedSubject assignedSubject,
+		List<ChapterDto> dtos,
+		Guid? divisionId)
 	{
 		if (dtos.Count == 0)
 		{
@@ -313,15 +385,15 @@ public class ChapterAppService(
 			lp.StandardId == assignedSubject.StandardId &&
 			lp.SubjectId == assignedSubject.SubjectId &&
 			chapterIds.Contains(lp.ChapterId) &&
+			(!divisionId.HasValue || lp.DivisionId == divisionId.Value) &&
 			lp.Status != LessonPlanStatus.Rejected);
 		foreach (var lessonPlan in lessonPlans)
 		{
 			var summary = linkedByChapter[lessonPlan.ChapterId];
 			summary.LessonPlans++;
-			summary.LessonPlanIds.Add(lessonPlan.Id);
-			summary.CompletionValues.Add(lessonPlan.Status == LessonPlanStatus.Approved
-				? lessonPlan.PlannedCompletionPercentage
-				: 0);
+			// The lesson plan is the progress fallback until a submitted
+			// Teacher Diary provides the actual delivered-lesson progress.
+			summary.CompletionValues.Add(Math.Clamp(lessonPlan.PlannedCompletionPercentage, 0, 100));
 		}
 
 		if (lessonPlans.Count > 0)
@@ -333,24 +405,25 @@ public class ChapterAppService(
 			var diaryByLessonPlan = submittedDiaries
 				.GroupBy(diary => diary.LessonPlanId)
 				.ToDictionary(group => group.Key, group => group.OrderByDescending(diary => diary.CreationTime).First());
+			var lessonPlanById = lessonPlans.ToDictionary(lessonPlan => lessonPlan.Id);
 
-			foreach (var lessonPlan in lessonPlans)
+			foreach (var diaryGroup in diaryByLessonPlan.Values.GroupBy(diary => lessonPlanById[diary.LessonPlanId].ChapterId))
 			{
-				if (diaryByLessonPlan.TryGetValue(lessonPlan.Id, out var diary))
-				{
-					var summary = linkedByChapter[lessonPlan.ChapterId];
-					var planIndex = summary.LessonPlanIds.IndexOf(lessonPlan.Id);
-					if (planIndex >= 0)
-					{
-						summary.CompletionValues[planIndex] = diary.ActualCompletionPercentage;
-					}
-				}
+				var summary = linkedByChapter[diaryGroup.Key];
+				// Submitted diaries record actual delivery and therefore take precedence for
+				// the entire chapter. Planned values are used only when no diary was submitted.
+				summary.CompletionValues.Clear();
+				summary.CompletionValues.AddRange(diaryGroup.Select(diary =>
+					Math.Clamp(diary.ActualCompletionPercentage, 0, 100)));
 			}
 		}
 
 		var homeworks = await homeworkRepository.GetListAsync(hw =>
 			hw.StandardId == assignedSubject.StandardId &&
-			hw.SubjectId == assignedSubject.SubjectId);
+			hw.SubjectId == assignedSubject.SubjectId &&
+			(!divisionId.HasValue ||
+				hw.DivisionId == divisionId.Value ||
+				hw.DivisionSchedules.Any(schedule => schedule.DivisionId == divisionId.Value)));
 		var homeworkChapterLinks = new Dictionary<Guid, List<Guid>>();
 		foreach (var homework in homeworks)
 		{
@@ -363,7 +436,10 @@ public class ChapterAppService(
 
 		var assignments = await assignmentRepository.GetListAsync(assignment =>
 			assignment.StandardId == assignedSubject.StandardId &&
-			assignment.SubjectId == assignedSubject.SubjectId);
+			assignment.SubjectId == assignedSubject.SubjectId &&
+			(!divisionId.HasValue ||
+				assignment.DivisionId == divisionId.Value ||
+				assignment.DivisionSchedules.Any(schedule => schedule.DivisionId == divisionId.Value)));
 		var assignmentChapterLinks = new Dictionary<Guid, List<Guid>>();
 		foreach (var assignment in assignments)
 		{
@@ -473,10 +549,19 @@ public class ChapterAppService(
 	private static string DefaultStatus(string? currentStatus, string fallback) =>
 		string.IsNullOrWhiteSpace(currentStatus) ? fallback : currentStatus;
 
+	private static void ApplyResourceStatusFallback(IEnumerable<ChapterDto> dtos)
+	{
+		foreach (var dto in dtos)
+		{
+			dto.ResourceStatus = DefaultStatus(
+				dto.ResourceStatus,
+				dto.Documents.Count > 0 ? "Ready" : "Missing");
+		}
+	}
+
 	private sealed class ChapterLinkSummary
 	{
 		public int LessonPlans { get; set; }
-		public List<Guid> LessonPlanIds { get; } = new();
 		public List<int> CompletionValues { get; } = new();
 		public int Homeworks { get; set; }
 		public int Assessments { get; set; }

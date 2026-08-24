@@ -174,6 +174,22 @@ public class AcademicCalendarAuditLogDto : EntityDto<Guid>
     public bool HasDiff { get; set; }
     public List<AuditLogDiffDto> Diff { get; set; } = new();
     public AuditLogMetadataDto? Metadata { get; set; }
+    public List<AuditLogReviewNoteDto> ReviewNotes { get; set; } = new();
+}
+
+public class AddAuditLogReviewNoteDto
+{
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.MaxLength(4000)]
+    public string Note { get; set; } = string.Empty;
+}
+
+public class AuditLogReviewNoteDto : EntityDto<Guid>
+{
+    public string Note { get; set; } = string.Empty;
+    public string CreatedBy { get; set; } = string.Empty;
+    public string? CreatedByRole { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public class AuditLogDiffDto

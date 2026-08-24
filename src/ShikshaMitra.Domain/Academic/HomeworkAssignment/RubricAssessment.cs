@@ -149,9 +149,24 @@ public class AssessmentRubric : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException("AssessmentRubric:TemplateCannotBeTaskLinked");
 		}
 
+		if (isTemplate && !appliesToWorkType.HasValue)
+		{
+			throw new BusinessException("AssessmentRubric:TemplateWorkTypeRequired");
+		}
+
 		if (homeworkTypeId.HasValue && assignmentTypeId.HasValue)
 		{
 			throw new BusinessException("AssessmentRubric:OnlyOneTypeLinkAllowed");
+		}
+
+		if (homeworkTypeId.HasValue && appliesToWorkType is not (WorkType.Homework or WorkType.Both))
+		{
+			throw new BusinessException("AssessmentRubric:HomeworkTypeWorkTypeMismatch");
+		}
+
+		if (assignmentTypeId.HasValue && appliesToWorkType is not (WorkType.Assignment or WorkType.Both))
+		{
+			throw new BusinessException("AssessmentRubric:AssignmentTypeWorkTypeMismatch");
 		}
 
 		if (!isTemplate && (!standardId.HasValue || standardId.Value == Guid.Empty ||
@@ -235,18 +250,34 @@ public class AssessmentRubricCriterion : FullAuditedEntity<Guid>, IMultiTenant
 	public Guid RubricId { get; private set; }
 	public string Title { get; private set; } = string.Empty;
 	public string? Description { get; private set; }
+	public string? StudentDescription { get; private set; }
+	public string? TeacherGuidance { get; private set; }
+	public bool IsRequired { get; private set; }
 	public decimal MaxMarks { get; private set; }
 	public int DisplayOrder { get; private set; }
 
 	private AssessmentRubricCriterion() { }
 
-	public AssessmentRubricCriterion(Guid id, Guid? tenantId, Guid rubricId, string title, string? description, decimal maxMarks, int displayOrder)
+	public AssessmentRubricCriterion(
+		Guid id,
+		Guid? tenantId,
+		Guid rubricId,
+		string title,
+		string? description,
+		string? studentDescription,
+		string? teacherGuidance,
+		bool isRequired,
+		decimal maxMarks,
+		int displayOrder)
 		: base(id)
 	{
 		TenantId = tenantId;
 		RubricId = rubricId;
 		Title = title.Trim();
 		Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+		StudentDescription = string.IsNullOrWhiteSpace(studentDescription) ? null : studentDescription.Trim();
+		TeacherGuidance = string.IsNullOrWhiteSpace(teacherGuidance) ? null : teacherGuidance.Trim();
+		IsRequired = isRequired;
 		MaxMarks = maxMarks;
 		DisplayOrder = displayOrder;
 		if (MaxMarks <= 0) throw new BusinessException("AssessmentRubric:CriterionMarksRequired");

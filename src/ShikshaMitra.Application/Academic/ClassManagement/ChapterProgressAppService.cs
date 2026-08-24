@@ -6,8 +6,10 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -25,8 +27,11 @@ public class ChapterProgressAppService(
 	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
+	IUserScopeService userScopeService,
 	IGuidGenerator guidGenerator,
-	ILogger<ChapterProgressAppService> logger
+	ILogger<ChapterProgressAppService> logger,
+	IRepository<Employee, Guid> employeeRepository,
+	IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, IChapterProgressAppService
 {
 	public async Task<List<ClassDivisionSubjectDto>> GetSubjectsForClassDivisionAsync(
@@ -51,6 +56,12 @@ public class ChapterProgressAppService(
 			throw new ArgumentException("Division ID cannot be empty", nameof(divisionId));
 		}
 
+		var hasSubjectAllocationAccess = await HasAnyTeacherSubjectAccessAsync(classId, divisionId);
+		if (!hasSubjectAllocationAccess)
+		{
+			await EnsureCurrentUserCanAccessClassDivisionAsync(classId, divisionId);
+		}
+
 		logger.LogInformation(
 			"Getting subjects for class {ClassId}, division {DivisionId}",
 			classId, divisionId
@@ -60,6 +71,11 @@ public class ChapterProgressAppService(
 		var assignments = await subjectAssignmentRepository.GetListAsync(a =>
 			a.StandardId == classId
 		);
+		if (hasSubjectAllocationAccess)
+		{
+			var accessibleSubjectIds = await GetTeacherSubjectIdsAsync(classId, divisionId);
+			assignments = assignments.Where(a => accessibleSubjectIds.Contains(a.SubjectId)).ToList();
+		}
 
 		var result = new List<ClassDivisionSubjectDto>();
 		if (!assignments.Any())
@@ -196,6 +212,11 @@ public class ChapterProgressAppService(
 			throw new ArgumentException("Subject ID cannot be empty", nameof(subjectId));
 		}
 
+		if (!await HasTeacherSubjectAccessAsync(classId, subjectId, divisionId))
+		{
+			await EnsureCurrentUserCanAccessClassDivisionAsync(classId, divisionId);
+		}
+
 		logger.LogInformation(
 			"Getting chapter progress for subject {SubjectId}, division {DivisionId}, class {ClassId}, academicMedium {AcademicMediumId}",
 			subjectId, divisionId, classId, academicMediumId
@@ -305,11 +326,24 @@ public class ChapterProgressAppService(
 			throw new BusinessException("ClassManagement:DivisionRequired");
 		}
 
-		var chapterExists = await chapterRepository.AnyAsync(chapter => chapter.Id == chapterId);
-		if (!chapterExists)
+		var chapter = await chapterRepository.FirstOrDefaultAsync(candidate => candidate.Id == chapterId);
+		if (chapter == null)
 		{
 			throw new BusinessException("ClassManagement:ChapterNotFound")
 				.WithData("ChapterId", chapterId);
+		}
+
+		var assignment = await subjectAssignmentRepository.FirstOrDefaultAsync(
+			candidate => candidate.Id == chapter.AssignedSubjectId);
+		if (assignment == null)
+		{
+			throw new BusinessException("ClassManagement:ChapterNotFound")
+				.WithData("ChapterId", chapterId);
+		}
+
+		if (!await HasTeacherSubjectAccessAsync(assignment.StandardId, assignment.SubjectId, input.DivisionId))
+		{
+			await EnsureCurrentUserCanAccessClassDivisionAsync(assignment.StandardId, input.DivisionId);
 		}
 
 		logger.LogInformation(
@@ -418,6 +452,106 @@ public class ChapterProgressAppService(
 				"Failed to update chapter progress. Please try again later."
 			);
 		}
+	}
+
+	private async Task EnsureCurrentUserCanAccessClassDivisionAsync(Guid standardId, Guid divisionId)
+	{
+		if (!CurrentUser.Id.HasValue)
+		{
+			throw new BusinessException(UserScopeErrorCodes.NoCurrentUser);
+		}
+
+		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+		if (CanAccessClassDivision(scope, standardId, divisionId))
+		{
+			return;
+		}
+
+		throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+	}
+
+	private async Task<bool> HasAnyTeacherSubjectAccessAsync(Guid standardId, Guid divisionId)
+	{
+		return (await GetTeacherSubjectIdsAsync(standardId, divisionId)).Count > 0;
+	}
+
+	private async Task<bool> HasTeacherSubjectAccessAsync(Guid standardId, Guid subjectId, Guid divisionId)
+	{
+		var subjectIds = await GetTeacherSubjectIdsAsync(standardId, divisionId);
+		return subjectIds.Contains(subjectId);
+	}
+
+	private async Task<HashSet<Guid>> GetTeacherSubjectIdsAsync(Guid standardId, Guid divisionId)
+	{
+		if (!CurrentUser.Id.HasValue)
+		{
+			return [];
+		}
+
+		var employee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == CurrentUser.Id.Value);
+		var employeeIds = new HashSet<Guid>();
+		employeeIds.Add(CurrentUser.Id.Value);
+		if (employee != null)
+		{
+			employeeIds.Add(employee.Id);
+		}
+		employeeIds.UnionWith(await reportingManagerAccessService.GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value));
+		if (employeeIds.Count == 0)
+		{
+			return [];
+		}
+
+		var allocationQuery = await teacherSubjectAllocationRepository.GetQueryableAsync();
+		var allocatedSubjectIds = (await AsyncExecuter.ToListAsync(allocationQuery
+			.Where(x => x.StandardId == standardId &&
+				(divisionId == Guid.Empty || x.DivisionId == divisionId) &&
+				x.Teachers.Any(teacher => employeeIds.Contains(teacher.TeacherId)))
+			.Select(x => x.SubjectId)
+			.Distinct())).ToHashSet();
+
+		var assignmentQuery = await subjectAssignmentRepository.GetQueryableAsync();
+		var directlyAssignedSubjectIds = await AsyncExecuter.ToListAsync(assignmentQuery
+			.Where(x => x.StandardId == standardId &&
+				x.Teachers.Any(teacher => employeeIds.Contains(teacher.TeacherId)))
+			.Select(x => x.SubjectId)
+			.Distinct());
+		allocatedSubjectIds.UnionWith(directlyAssignedSubjectIds);
+		return allocatedSubjectIds;
+	}
+
+	private async Task EnsureCurrentUserCanAccessStandardAsync(Guid standardId)
+	{
+		if (!CurrentUser.Id.HasValue)
+		{
+			throw new BusinessException(UserScopeErrorCodes.NoCurrentUser);
+		}
+
+		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+		if (scope.IsAdmin ||
+			scope.HasTenantWideScope() ||
+			scope.StandardIds.Contains(standardId) ||
+			scope.WildcardDivisionStandardIds.Contains(standardId))
+		{
+			return;
+		}
+
+		var divisions = await divisionRepository.GetListAsync(
+			division => division.StandardId == standardId);
+		if (divisions.Any(division => scope.DivisionIds.Contains(division.Id)))
+		{
+			return;
+		}
+
+		throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+	}
+
+	private static bool CanAccessClassDivision(UserScopeContext scope, Guid standardId, Guid divisionId)
+	{
+		return scope.IsAdmin ||
+			scope.HasTenantWideScope() ||
+			scope.DivisionIds.Contains(divisionId) ||
+			scope.StandardIds.Contains(standardId) ||
+			scope.WildcardDivisionStandardIds.Contains(standardId);
 	}
 
 	/// <summary>
@@ -825,6 +959,29 @@ public class ChapterProgressAppService(
 
 	public async Task<List<ChapterProgressLogDto>> GetChapterProgressLogsAsync(Guid chapterId, Guid divisionId)
 	{
+		var chapter = await chapterRepository.FirstOrDefaultAsync(candidate => candidate.Id == chapterId);
+		if (chapter == null)
+		{
+			throw new BusinessException("ClassManagement:ChapterNotFound")
+				.WithData("ChapterId", chapterId);
+		}
+
+		var assignment = await subjectAssignmentRepository.FirstOrDefaultAsync(
+			candidate => candidate.Id == chapter.AssignedSubjectId);
+		if (assignment == null)
+		{
+			throw new BusinessException("ClassManagement:ChapterNotFound")
+				.WithData("ChapterId", chapterId);
+		}
+
+		// Progress logs belong to the chapter's subject. A teacher with subject
+		// access must be able to read them even when no separate class/division
+		// scope entry exists.
+		if (!await HasTeacherSubjectAccessAsync(assignment.StandardId, assignment.SubjectId, divisionId))
+		{
+			await EnsureCurrentUserCanAccessClassDivisionAsync(assignment.StandardId, divisionId);
+		}
+
 		logger.LogInformation(
 			"Getting progress logs for chapter {ChapterId}, division {DivisionId}",
 			chapterId, divisionId
@@ -843,9 +1000,20 @@ public class ChapterProgressAppService(
 
 	public async Task<List<SubjectForChaptersDto>> GetSubjectsForStandardAsync(Guid standardId)
 	{
+		var hasSubjectAccess = await HasAnyTeacherSubjectAccessAsync(standardId, Guid.Empty);
+		if (!hasSubjectAccess)
+		{
+			await EnsureCurrentUserCanAccessStandardAsync(standardId);
+		}
+
 		logger.LogInformation("Getting subjects for standard {StandardId}", standardId);
 
 		var assignments = await subjectAssignmentRepository.GetListAsync(a => a.StandardId == standardId);
+		if (hasSubjectAccess)
+		{
+			var accessibleSubjectIds = await GetTeacherSubjectIdsAsync(standardId, Guid.Empty);
+			assignments = assignments.Where(a => accessibleSubjectIds.Contains(a.SubjectId)).ToList();
+		}
 
 		if (!assignments.Any())
 		{
@@ -955,6 +1123,11 @@ public class ChapterProgressAppService(
 		if (divisionId == Guid.Empty)
 		{
 			throw new ArgumentException("Division ID cannot be empty", nameof(divisionId));
+		}
+
+		if (!await HasAnyTeacherSubjectAccessAsync(classId, divisionId))
+		{
+			await EnsureCurrentUserCanAccessClassDivisionAsync(classId, divisionId);
 		}
 
 		logger.LogInformation(

@@ -1,10 +1,11 @@
 using System;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
-public class LessonPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class LessonPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
     public Guid? TenantId { get; private set; }
     public Guid AcademicYearId { get; private set; }
@@ -28,6 +29,13 @@ public class LessonPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public DateTime? ReviewedAt { get; private set; }
     public bool IsAiGenerated { get; private set; }
     public TeacherDiary? TeacherDiary { get; private set; }
+
+    Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
+    Guid? IUserScopedEntity.EducationBoardId => null;
+    Guid? IUserScopedEntity.EducationMediumId => null;
+    Guid? IUserScopedEntity.EducationMediumStageId => null;
+    Guid? IUserScopedEntity.StandardId => StandardId;
+    Guid? IUserScopedEntity.DivisionId => DivisionId;
 
     protected LessonPlan() { }
 

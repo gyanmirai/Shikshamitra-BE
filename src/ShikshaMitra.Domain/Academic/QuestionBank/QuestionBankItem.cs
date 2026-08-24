@@ -4,10 +4,11 @@ using System.Collections.ObjectModel;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Academic.QuestionBank;
 
-public class QuestionBankItem : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class QuestionBankItem : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
     public Guid? TenantId { get; private set; }
     public Guid AcademicYearId { get; set; }
@@ -42,6 +43,13 @@ public class QuestionBankItem : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public ICollection<QuestionOption> Options { get; private set; }
     public ICollection<QuestionAttachment> Attachments { get; private set; }
     public ICollection<QuestionTag> Tags { get; private set; }
+
+    Guid? IUserScopedEntity.AcademicYearId => AcademicYearId;
+    Guid? IUserScopedEntity.EducationBoardId => BoardId;
+    Guid? IUserScopedEntity.EducationMediumId => MediumId;
+    Guid? IUserScopedEntity.EducationMediumStageId => null;
+    Guid? IUserScopedEntity.StandardId => StandardId;
+    Guid? IUserScopedEntity.DivisionId => null;
 
     private QuestionBankItem()
     {

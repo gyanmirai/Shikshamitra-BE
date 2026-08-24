@@ -54,12 +54,18 @@ public class QuestionPaperDto
     public Guid Id { get; set; }
     public Guid AcademicYearId { get; set; }
     public Guid? ExamId { get; set; }
+    public string? ExamName { get; set; }
+    // Compatibility alias used by the existing question-paper list client.
+    public string? ExamTitle { get; set; }
     public Guid? ExamScheduleId { get; set; }
     public Guid StandardId { get; set; }
+    public string? StandardName { get; set; }
     public Guid SubjectId { get; set; }
+    public string? SubjectName { get; set; }
     public string PaperTitle { get; set; } = string.Empty;
     public decimal TotalMarks { get; set; }
     public int DurationMinutes { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public string CreationMode { get; set; } = "Manual";
     public string? GeneralInstructions { get; set; }
     public QuestionPaperStatus Status { get; set; }

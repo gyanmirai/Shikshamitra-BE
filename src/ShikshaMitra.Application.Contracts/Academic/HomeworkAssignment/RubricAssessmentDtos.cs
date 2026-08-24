@@ -40,6 +40,9 @@ public class RubricCriterionInputDto
 {
 	public string Title { get; set; } = string.Empty;
 	public string? Description { get; set; }
+	public string? StudentDescription { get; set; }
+	public string? TeacherGuidance { get; set; }
+	public bool IsRequired { get; set; } = true;
 	public decimal MaxMarks { get; set; }
 	public int DisplayOrder { get; set; }
 }
@@ -88,6 +91,9 @@ public class AssessmentRubricCriterionDto
 	public Guid RubricId { get; set; }
 	public string Title { get; set; } = string.Empty;
 	public string? Description { get; set; }
+	public string? StudentDescription { get; set; }
+	public string? TeacherGuidance { get; set; }
+	public bool IsRequired { get; set; }
 	public decimal MaxMarks { get; set; }
 	public int DisplayOrder { get; set; }
 }

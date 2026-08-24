@@ -16,6 +16,8 @@ using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.TenantSettings.Divisions;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -37,7 +39,12 @@ public class SubjectAssignmentAppService(
 	IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
 	IRepository<AssignmentEntity, Guid> learningTaskAssignmentRepository,
 	IRepository<LessonPlan, Guid> lessonPlanRepository,
-	IRepository<TeacherDiary, Guid> teacherDiaryRepository
+	IRepository<TeacherDiary, Guid> teacherDiaryRepository,
+	IClassTeacherAccessService classTeacherAccessService,
+	IRepository<Division, Guid> divisionRepository,
+	IRepository<Employee, Guid> employeeRepository,
+	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
+	IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -99,6 +106,9 @@ public class SubjectAssignmentAppService(
 				}
 
 				assignedSubject.RecalculateSetupHealth();
+				await EnsureCurrentUserCanAccessAssignmentAsync(
+					assignedSubject,
+					operation: "subject-assignment-create");
 				assignedSubjects.Add(assignedSubject);
 			}
 
@@ -180,6 +190,51 @@ public class SubjectAssignmentAppService(
 	)
 	{
 		var query = await assignmentRepository.WithDetailsAsync(a => a.Chapters, a => a.Teachers);
+		var hasTenantWideScope = await userScopeAccessService.CurrentUserHasTenantWideScopeAsync();
+		var hasClassTeacherAccess = await HasClassTeacherAccessAsync();
+		var reportingEmployeeIds = CurrentUser.Id.HasValue
+			? await reportingManagerAccessService.GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value)
+			: [];
+		Guid? currentEmployeeId = null;
+
+		// AssignedSubjectTeacher.TeacherId is an HR Employee ID, not an identity User ID.
+		// A subject teacher may read their own assignments even when they have no broader
+		// class/division scope; all other records still use the normal scope filter.
+		if (!hasTenantWideScope && !hasClassTeacherAccess)
+		{
+			currentEmployeeId = await GetCurrentEmployeeIdAsync();
+			var eligibleTeacherIds = reportingEmployeeIds.ToHashSet();
+			if (currentEmployeeId.HasValue)
+			{
+				eligibleTeacherIds.Add(currentEmployeeId.Value);
+			}
+			if (eligibleTeacherIds.Count == 0)
+			{
+				query = query.Where(_ => false);
+			}
+			else
+			{
+				// Teacher Assignment stores the effective class/division/subject allocation
+				// separately from the optional teacher list on AssignedSubject. Both sources
+				// must grant read access to the assigned subject.
+				var allocationQuery = await teacherSubjectAllocationRepository.GetQueryableAsync();
+				var allocatedSubjectIds = await AsyncExecuter.ToListAsync(
+					allocationQuery
+						.Where(allocation =>
+							allocation.StandardId == classId &&
+							allocation.Teachers.Any(teacher => eligibleTeacherIds.Contains(teacher.TeacherId)))
+						.Select(allocation => allocation.SubjectId)
+						.Distinct());
+
+				query = query.Where(assignment =>
+					assignment.Teachers.Any(teacher => eligibleTeacherIds.Contains(teacher.TeacherId)) ||
+					allocatedSubjectIds.Contains(assignment.SubjectId));
+			}
+		}
+		else
+		{
+			query = await ApplyCurrentUserAssignmentScopeAsync(query);
+		}
 
 		query = query.Where(a => a.StandardId == classId);
 		if (status.HasValue)
@@ -192,12 +247,6 @@ public class SubjectAssignmentAppService(
 		}
 
 		// Non-admin users only see subjects they are personally assigned to teach.
-		if (!await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
-		{
-			var userId = CurrentUser.Id!.Value;
-			query = query.Where(a => a.Teachers.Any(t => t.TeacherId == userId));
-		}
-
 		var assignments = await AsyncExecuter.ToListAsync(query);
 		var readMetrics = await BuildSubjectAssignmentReadMetricsAsync(assignments, classId);
 
@@ -413,6 +462,7 @@ public class SubjectAssignmentAppService(
 		var assignment = await AsyncExecuter.FirstOrDefaultAsync(
 			baseQuery.Where(a => a.Id == assignmentId)
 		) ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(AssignedSubject), assignmentId);
+		await EnsureCurrentUserCanAccessAssignmentAsync(assignment, operation: "subject-assignment-read");
 
 		List<AssignedSubject> groupAssignments;
 		if (assignment.ElectiveGroupId.HasValue)
@@ -510,6 +560,7 @@ public class SubjectAssignmentAppService(
 		var existingEntity = await AsyncExecuter.FirstOrDefaultAsync(
 			baseQuery.Where(a => a.Id == assignmentId)
 		) ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(AssignedSubject), assignmentId);
+		await EnsureCurrentUserCanAccessAssignmentAsync(existingEntity, operation: "subject-assignment-update");
 
 		List<AssignedSubject> existingGroup;
 
@@ -619,6 +670,7 @@ public class SubjectAssignmentAppService(
 				}
 
 				newSubject.RecalculateSetupHealth();
+				await EnsureCurrentUserCanAccessAssignmentAsync(newSubject, operation: "subject-assignment-create");
 				await assignmentRepository.InsertAsync(newSubject);
 				existingGroup.Add(newSubject); // Add to local list for return mapping
 			}
@@ -667,6 +719,7 @@ public class SubjectAssignmentAppService(
 		var query = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents, a => a.Chapters, a => a.Subject);
 		var assignment = await AsyncExecuter.FirstOrDefaultAsync(query.Where(a => a.Id == assignmentId))
 			?? throw new BusinessException("SubjectAssignment:NotFound").WithData("AssignmentId", assignmentId);
+		await EnsureCurrentUserCanAccessAssignmentAsync(assignment, operation: "subject-assignment-status");
 
 		if (!Enum.IsDefined(typeof(SubjectStatus), input.Status))
 		{
@@ -725,6 +778,11 @@ public class SubjectAssignmentAppService(
 					.WithData("AssignmentIds", JsonSerializer.Serialize(assignmentIds));
 			}
 
+			foreach (var assignment in assignments)
+			{
+				await EnsureCurrentUserCanAccessAssignmentAsync(assignment, operation: "subject-assignment-publish");
+			}
+
 			foreach (var classGroup in assignments.GroupBy(a => a.StandardId))
 			{
 				await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(classGroup.ToList(), classGroup.Key);
@@ -761,6 +819,7 @@ public class SubjectAssignmentAppService(
 	public async Task DeleteAsync(Guid assignmentId)
 	{
 		var assignment = await assignmentRepository.GetAsync(assignmentId);
+		await EnsureCurrentUserCanAccessAssignmentAsync(assignment, operation: "subject-assignment-delete");
 
 		List<AssignedSubject> groupAssignments;
 		if (assignment.ElectiveGroupId.HasValue)
@@ -1720,6 +1779,105 @@ public class SubjectAssignmentAppService(
 		var text = System.Text.RegularExpressions.Regex.Replace(value, "<.*?>", string.Empty);
 		text = text.Replace("&nbsp;", " ").Trim();
 		return !string.IsNullOrWhiteSpace(text);
+	}
+
+	private async Task<IQueryable<AssignedSubject>> ApplyCurrentUserAssignmentScopeAsync(
+		IQueryable<AssignedSubject> query)
+	{
+		if (!await HasClassTeacherAccessAsync())
+		{
+			return await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+		}
+
+		var standardIds = await GetCurrentUserClassTeacherStandardIdsAsync();
+		return standardIds.Count == 0
+			? query.Where(_ => false)
+			: query.Where(assignment => standardIds.Contains(assignment.StandardId));
+	}
+
+	private async Task EnsureCurrentUserCanAccessAssignmentAsync(
+		AssignedSubject assignment,
+		string operation)
+	{
+		if (!await userScopeAccessService.CurrentUserHasTenantWideScopeAsync() &&
+			!await HasClassTeacherAccessAsync() &&
+			operation == "subject-assignment-read")
+		{
+			var currentEmployeeId = await GetCurrentEmployeeIdAsync();
+			if (currentEmployeeId.HasValue && await IsTeacherAssignedToSubjectAsync(assignment, currentEmployeeId.Value))
+			{
+				return;
+			}
+
+			if (CurrentUser.Id.HasValue)
+			{
+				var reporteeEmployeeIds = await reportingManagerAccessService.GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value);
+				foreach (var reporteeEmployeeId in reporteeEmployeeIds)
+				{
+					if (await IsTeacherAssignedToSubjectAsync(assignment, reporteeEmployeeId))
+					{
+						return;
+					}
+				}
+			}
+		}
+
+		if (!await HasClassTeacherAccessAsync())
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignment, operation: operation);
+			return;
+		}
+
+		var standardIds = await GetCurrentUserClassTeacherStandardIdsAsync();
+		if (!standardIds.Contains(assignment.StandardId))
+		{
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+		}
+	}
+
+	private async Task<HashSet<Guid>> GetCurrentUserClassTeacherStandardIdsAsync()
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		if (scope.IsAdmin || scope.HasTenantWideScope())
+		{
+			return (await divisionRepository.GetListAsync()).Select(division => division.StandardId).ToHashSet();
+		}
+
+		var divisions = await divisionRepository.GetListAsync(
+			division => scope.DivisionIds.Contains(division.Id));
+		return divisions.Select(division => division.StandardId).ToHashSet();
+	}
+
+	private Task<bool> HasClassTeacherAccessAsync() =>
+		CurrentUser.Id.HasValue
+			? classTeacherAccessService.HasAssignmentAsync(CurrentUser.Id.Value)
+			: Task.FromResult(false);
+
+	private async Task<Guid?> GetCurrentEmployeeIdAsync()
+	{
+		if (!CurrentUser.Id.HasValue)
+		{
+			return null;
+		}
+
+		var employee = await employeeRepository.FirstOrDefaultAsync(
+			candidate => candidate.UserId == CurrentUser.Id.Value);
+		return employee?.Id;
+	}
+
+	private async Task<bool> IsTeacherAssignedToSubjectAsync(
+		AssignedSubject assignment,
+		Guid employeeId)
+	{
+		if (assignment.Teachers.Any(teacher => teacher.TeacherId == employeeId))
+		{
+			return true;
+		}
+
+		return await teacherSubjectAllocationRepository.AnyAsync(allocation =>
+			allocation.StandardId == assignment.StandardId &&
+			allocation.SubjectId == assignment.SubjectId &&
+			allocation.Teachers.Any(teacher => teacher.TeacherId == employeeId));
 	}
 
 	private sealed record SubjectAssignmentReadMetrics(int WeeklyPeriods, int SetupHealthScore)

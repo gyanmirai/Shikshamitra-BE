@@ -4,4 +4,5 @@ public enum WorkType
 {
 	Homework = 0,
 	Assignment = 1,
+	Both = 2,
 }

@@ -10,6 +10,7 @@ using ShikshaMitra.Academic.Timetable;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -37,7 +38,9 @@ public class LessonPlanAppService(
     IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
     IRepository<EmployeeLeave, Guid> employeeLeaveRepository,
     IRepository<EducationMediumStage, Guid> mediumStageRepository,
-    IHomeworkAppService homeworkAppService
+    IHomeworkAppService homeworkAppService,
+    IUserScopeAccessService userScopeAccessService,
+    IClassTeacherAccessService classTeacherAccessService
 ) : ApplicationService, ILessonPlanAppService
 {
     private static readonly string[] LessonPlanReviewerRoles =
@@ -52,8 +55,9 @@ public class LessonPlanAppService(
     {
         var query = await lessonPlanRepository.GetQueryableAsync();
         query = await ApplyLessonPlanFiltersAsync(query, input);
+		query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
-        if (!IsAdminUser())
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             var currentUserId = CurrentUser.GetId();
             var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
@@ -82,7 +86,7 @@ public class LessonPlanAppService(
     {
         var targetTeacherId = await ResolveTimelineTeacherIdAsync(teacherId);
 
-        if (!IsAdminUser())
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             var currentUserId = CurrentUser.GetId();
             var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
@@ -101,6 +105,7 @@ public class LessonPlanAppService(
             }
         }
         var lessonPlansQuery = await lessonPlanRepository.GetQueryableAsync();
+		lessonPlansQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(lessonPlansQuery);
         lessonPlansQuery = lessonPlansQuery.Where(x => x.TeacherId == targetTeacherId && x.PlannedDate.Date == date.DateTime.Date);
 
         List<Guid>? allowedStandardIds = null;
@@ -151,7 +156,48 @@ public class LessonPlanAppService(
                         var standard = standards.FirstOrDefault(s => s.Id == timetable.StandardId);
                         var division = divisions.FirstOrDefault(d => d.Id == timetable.DivisionId);
                         var subject = subjects.FirstOrDefault(sub => sub.Id == slotSubject.SubjectId);
-                        var plan = lessonPlans.FirstOrDefault(lp => lp.TimetableSlotId == slot.Id);
+                        var slotStartTime = slot.StartTime.ToString("hh:mm tt");
+                        var slotEndTime = slot.EndTime.ToString("hh:mm tt");
+                        var plan = lessonPlans.FirstOrDefault(lp =>
+                            !matchedPlanIds.Contains(lp.Id) &&
+                            lp.TimetableSlotId == slot.Id &&
+                            MatchesTimelineContext(lp, targetTeacherId, timetable.StandardId, timetable.DivisionId, slotSubject.SubjectId));
+
+                        // Timetable slots used to be recreated when a timetable was saved. If a
+                        // lesson plan still points at the previous slot id, recover it only when
+                        // there is one unambiguous plan for this teacher/date/context.
+                        if (plan == null)
+                        {
+                            var contextualPlans = lessonPlans
+                                .Where(lp =>
+                                    !matchedPlanIds.Contains(lp.Id) &&
+                                    lp.StandardId == timetable.StandardId &&
+                                    lp.DivisionId == timetable.DivisionId &&
+                                    lp.SubjectId == slotSubject.SubjectId &&
+                                    lp.TimetableSlotId != slot.Id)
+                                .ToList();
+
+                            // A recreated timetable can have more than one occurrence of the
+                            // same subject for a class/division. Match the old slot's time first
+                            // so each plan is attached to its original period rather than being
+                            // left unmapped or assigned to an arbitrary slot.
+                            var timeMatchedPlans = contextualPlans
+                                .Where(lp =>
+                                    mappedById.TryGetValue(lp.Id, out var dto) &&
+                                    dto.StartTime == slotStartTime &&
+                                    dto.EndTime == slotEndTime)
+                                .ToList();
+
+                            if (timeMatchedPlans.Count == 1)
+                            {
+                                plan = timeMatchedPlans[0];
+                            }
+                            else if (contextualPlans.Count == 1)
+                            {
+                                plan = contextualPlans[0];
+                            }
+                        }
+
                         LessonPlanDto? mappedPlan = null;
                         if (plan != null && mappedById.TryGetValue(plan.Id, out var dto))
                         {
@@ -170,8 +216,8 @@ public class LessonPlanAppService(
                         {
                             TimetableSlotId = slot.Id,
                             PeriodName = $"Period {slot.Sequence}",
-                            StartTime = slot.StartTime.ToString("hh:mm tt"),
-                            EndTime = slot.EndTime.ToString("hh:mm tt"),
+                            StartTime = slotStartTime,
+                            EndTime = slotEndTime,
                             StandardId = timetable.StandardId,
                             StandardName = standard?.Name ?? "Class",
                             DivisionId = timetable.DivisionId,
@@ -228,8 +274,9 @@ public class LessonPlanAppService(
     public async Task<LessonPlanDto> GetAsync(Guid id)
     {
         var plan = await lessonPlanRepository.GetAsync(id);
+		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "lesson-plan-read");
 
-        if (!IsAdminUser())
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             var currentUserId = CurrentUser.GetId();
             var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
@@ -251,9 +298,20 @@ public class LessonPlanAppService(
         return (await MapLessonPlansAsync(new[] { plan })).Single();
     }
 
+    private static bool MatchesTimelineContext(
+        LessonPlan plan,
+        Guid teacherId,
+        Guid standardId,
+        Guid divisionId,
+        Guid subjectId) =>
+        plan.TeacherId == teacherId &&
+        plan.StandardId == standardId &&
+        plan.DivisionId == divisionId &&
+        plan.SubjectId == subjectId;
+
     public async Task<LessonPlanDto> CreateAsync(CreateLessonPlanDto input)
     {
-        EnsureOwnTeacherRecord(input.TeacherId, "create");
+        await EnsureOwnTeacherRecordAsync(input.TeacherId, "create");
         await EnsureChapterMatchesPlanTargetAsync(input.ChapterId, input.StandardId, input.SubjectId);
 
         await EnsureLessonPlanCanBeCreatedForDateAsync(input.TeacherId, input.PlannedDate, input.StandardId, input.DivisionId);
@@ -289,6 +347,7 @@ public class LessonPlanAppService(
             lessonPlan.Submit();
         }
 
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-create");
         var inserted = await lessonPlanRepository.InsertAsync(lessonPlan, autoSave: true);
         return (await MapLessonPlansAsync(new[] { inserted })).Single();
     }
@@ -296,7 +355,8 @@ public class LessonPlanAppService(
     public async Task<LessonPlanDto> UpdateAsync(Guid id, UpdateLessonPlanDto input)
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        EnsureOwnTeacherRecord(lessonPlan.TeacherId, "modify");
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-update");
+        await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "modify");
         EnsureLessonPlanEditable(lessonPlan);
         await EnsureChapterMatchesPlanTargetAsync(input.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
 
@@ -324,7 +384,8 @@ public class LessonPlanAppService(
     public async Task<LessonPlanDto> SubmitAsync(Guid id)
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        EnsureOwnTeacherRecord(lessonPlan.TeacherId, "submit");
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-submit");
+        await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "submit");
         EnsureLessonPlanSubmittable(lessonPlan);
         await EnsureChapterMatchesPlanTargetAsync(lessonPlan.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
         await EnsureLessonPlanCanBeCreatedForDateAsync(lessonPlan.TeacherId, lessonPlan.PlannedDate, lessonPlan.StandardId, lessonPlan.DivisionId);
@@ -340,7 +401,8 @@ public class LessonPlanAppService(
         foreach (var id in input.LessonPlanIds)
         {
             var plan = await lessonPlanRepository.GetAsync(id);
-            EnsureOwnTeacherRecord(plan.TeacherId, "submit");
+            await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "lesson-plan-submit");
+            await EnsureOwnTeacherRecordAsync(plan.TeacherId, "submit");
             EnsureLessonPlanSubmittable(plan);
             await EnsureChapterMatchesPlanTargetAsync(plan.ChapterId, plan.StandardId, plan.SubjectId);
             await EnsureLessonPlanCanBeCreatedForDateAsync(plan.TeacherId, plan.PlannedDate, plan.StandardId, plan.DivisionId);
@@ -354,10 +416,11 @@ public class LessonPlanAppService(
     {
         await EnsureCanReviewLessonPlansAsync();
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-approve");
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
         EnsurePlanIsAwaitingReview(lessonPlan);
 
-        if (!await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
+        if (!await HasClassTeacherAccessAsync() && !await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
         {
             throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
         }
@@ -372,10 +435,11 @@ public class LessonPlanAppService(
         await EnsureCanReviewLessonPlansAsync();
         EnsureReviewCommentPresent(input, "reject");
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-reject");
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
         EnsurePlanIsAwaitingReview(lessonPlan);
 
-        if (!await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
+        if (!await HasClassTeacherAccessAsync() && !await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
         {
             throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
         }
@@ -390,10 +454,11 @@ public class LessonPlanAppService(
         await EnsureCanReviewLessonPlansAsync();
         EnsureReviewCommentPresent(input, "request changes for");
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-request-changes");
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
         EnsurePlanIsAwaitingReview(lessonPlan);
 
-        if (!await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
+        if (!await HasClassTeacherAccessAsync() && !await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
         {
             throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
         }
@@ -406,7 +471,8 @@ public class LessonPlanAppService(
     public async Task<HomeworkCreateResponseDto> CreateHomeworkFromLessonPlanAsync(Guid id, CreateHomeworkFromLessonPlanDto input)
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        EnsureOwnTeacherRecord(lessonPlan.TeacherId, "create homework from");
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-create-homework");
+        await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "create homework from");
 
         if (lessonPlan.Status != LessonPlanStatus.Approved)
         {
@@ -449,6 +515,7 @@ public class LessonPlanAppService(
     {
         var diaryQuery = await teacherDiaryRepository.GetQueryableAsync();
         var planQuery = await lessonPlanRepository.GetQueryableAsync();
+        planQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(planQuery);
 
         var query =
             from diary in diaryQuery
@@ -481,7 +548,7 @@ public class LessonPlanAppService(
         if (input.FromDate.HasValue) query = query.Where(x => x.diary.ActualDate.Date >= input.FromDate.Value.Date);
         if (input.ToDate.HasValue) query = query.Where(x => x.diary.ActualDate.Date <= input.ToDate.Value.Date);
 
-        if (!IsAdminUser())
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             var currentUserId = CurrentUser.GetId();
             var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
@@ -509,8 +576,10 @@ public class LessonPlanAppService(
     public async Task<TeacherDiaryDto> GetTeacherDiaryAsync(Guid id)
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
+        var diaryPlan = await lessonPlanRepository.GetAsync(diary.LessonPlanId);
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(diaryPlan, operation: "teacher-diary-read");
 
-        if (!IsAdminUser())
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             var currentUserId = CurrentUser.GetId();
             var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
@@ -535,7 +604,8 @@ public class LessonPlanAppService(
     public async Task<TeacherDiaryDto> CreateTeacherDiaryAsync(CreateUpdateTeacherDiaryDto input)
     {
         var plan = await lessonPlanRepository.GetAsync(input.LessonPlanId);
-        EnsureOwnTeacherRecord(plan.TeacherId, "create a diary for");
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "teacher-diary-create");
+        await EnsureOwnTeacherRecordAsync(plan.TeacherId, "create a diary for");
         await EnsureTeacherDiaryAllowedAsync(plan, input);
 
         var existing = await teacherDiaryRepository.FirstOrDefaultAsync(x => x.LessonPlanId == input.LessonPlanId);
@@ -555,7 +625,9 @@ public class LessonPlanAppService(
     public async Task<TeacherDiaryDto> UpdateTeacherDiaryAsync(Guid id, CreateUpdateTeacherDiaryDto input)
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
-        EnsureOwnTeacherRecord(diary.TeacherId, "modify");
+        var existingPlan = await lessonPlanRepository.GetAsync(diary.LessonPlanId);
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(existingPlan, operation: "teacher-diary-update");
+        await EnsureOwnTeacherRecordAsync(diary.TeacherId, "modify");
 
         if (input.LessonPlanId != diary.LessonPlanId)
         {
@@ -574,7 +646,9 @@ public class LessonPlanAppService(
     public async Task<TeacherDiaryDto> SubmitTeacherDiaryAsync(Guid id)
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
-        EnsureOwnTeacherRecord(diary.TeacherId, "submit");
+        var plan = await lessonPlanRepository.GetAsync(diary.LessonPlanId);
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "teacher-diary-submit");
+        await EnsureOwnTeacherRecordAsync(diary.TeacherId, "submit");
         diary.Submit();
 
         await teacherDiaryRepository.UpdateAsync(diary);
@@ -737,8 +811,13 @@ public class LessonPlanAppService(
         );
     }
 
-    private void EnsureOwnTeacherRecord(Guid teacherId, string action)
+    private async Task EnsureOwnTeacherRecordAsync(Guid teacherId, string action)
     {
+        if (await HasClassTeacherAccessAsync())
+        {
+            return;
+        }
+
         if (teacherId != CurrentUser.GetId())
         {
             throw new UserFriendlyException($"You can only {action} your own lesson records.");
@@ -751,6 +830,11 @@ public class LessonPlanAppService(
             string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
     }
+
+	private Task<bool> HasClassTeacherAccessAsync() =>
+		CurrentUser.Id.HasValue
+			? classTeacherAccessService.HasAssignmentAsync(CurrentUser.Id.Value)
+			: Task.FromResult(false);
 
     private async Task<List<Guid>> GetReportingEmployeesAsync(Guid managerEmployeeId)
     {

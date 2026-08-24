@@ -63,6 +63,9 @@ public class AssessmentRubricCriterionConfiguration : IEntityTypeConfiguration<A
 		builder.Property(x => x.RubricId).IsRequired();
 		builder.Property(x => x.Title).IsRequired().HasMaxLength(256);
 		builder.Property(x => x.Description).HasMaxLength(1024);
+		builder.Property(x => x.StudentDescription).HasMaxLength(1024);
+		builder.Property(x => x.TeacherGuidance).HasMaxLength(1024);
+		builder.Property(x => x.IsRequired).IsRequired().HasDefaultValue(true);
 		builder.Property(x => x.MaxMarks).HasPrecision(10, 2);
 		builder.Property(x => x.DisplayOrder).IsRequired();
 

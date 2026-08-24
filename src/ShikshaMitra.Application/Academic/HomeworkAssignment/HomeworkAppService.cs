@@ -30,7 +30,7 @@ public class HomeworkAppService(
     IRepository<AssignedSubjectChapter, Guid> chapterRepository,
     IHomeworkTypeRepository homeworkTypeRepository,
     IRepository<IdentityUser, Guid> userRepository,
-    IUserScopeService userScopeService,
+    IUserScopeAccessService userScopeAccessService,
     HomeworkManager homeworkManager,
     IAsyncQueryableExecuter asyncExecuter,
     IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository,
@@ -52,6 +52,11 @@ public class HomeworkAppService(
     {
         if (academicMediumId == Guid.Empty)
             throw new BusinessException("ShikshaMitra.Homework:InvalidAcademicMedium");
+
+        await EnsureCurrentUserCanAccessTargetAsync(
+            academicMediumId,
+            input.StandardId,
+            input.DivisionSchedules.Select(schedule => schedule.DivisionId));
 
         await homeworkManager.ValidateHomeworkTypeAsync(input.HomeworkTypeId);
         await ValidateHomeworkScheduleDatesAsync(input.StandardId, input.DivisionSchedules);
@@ -132,6 +137,7 @@ public class HomeworkAppService(
             .Where(h => h.EducationMediumId == academicMediumId)
             .Where(h => h.StandardId == filter.StandardId)
             .Where(h => h.SubjectId == filter.SubjectId);
+        query = await ApplyCurrentUserScopeAsync(query);
 
         if (filter.HomeworkDate.HasValue)
         {
@@ -282,6 +288,8 @@ public class HomeworkAppService(
         if (academicMediumId.HasValue && homework.EducationMediumId != academicMediumId.Value)
             throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
 
+        await EnsureCurrentUserCanAccessHomeworkAsync(homework, nameof(GetAsync));
+
         var dto = await MapToHomeworkDtoAsync(homework, homework.EducationMediumId ?? Guid.Empty);
         return new HomeworkResponseDto { Data = dto };
     }
@@ -300,6 +308,12 @@ public class HomeworkAppService(
         var q = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
         var homework = await asyncExecuter.FirstOrDefaultAsync(q.Where(h => h.Id == homeworkId))
             ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
+
+        await EnsureCurrentUserCanAccessHomeworkAsync(homework, nameof(UpdateAsync));
+        await EnsureCurrentUserCanAccessTargetAsync(
+            homework.EducationMediumId ?? Guid.Empty,
+            input.StandardId,
+            input.DivisionSchedules.Select(schedule => schedule.DivisionId));
 
         if (homework.Status != HomeworkStatus.Draft)
             throw new BusinessException("ShikshaMitra.Homework:CannotUpdatePublished")
@@ -370,6 +384,8 @@ public class HomeworkAppService(
         var homework = await asyncExecuter.FirstOrDefaultAsync(q.Where(h => h.Id == homeworkId))
             ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
 
+        await EnsureCurrentUserCanAccessHomeworkAsync(homework, nameof(DeleteAsync));
+
         if (homework.Status != HomeworkStatus.Draft || homework.IsPublished || homework.HasPublishedDivisions)
         {
             throw new BusinessException("ShikshaMitra.Homework:CannotDeletePublished")
@@ -400,6 +416,8 @@ public class HomeworkAppService(
         var q = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
         var homework = await asyncExecuter.FirstOrDefaultAsync(q.Where(h => h.Id == homeworkId))
             ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
+
+        await EnsureCurrentUserCanAccessHomeworkAsync(homework, nameof(ChangeStatusAsync));
 
         var previousStatus = homework.Status;
         var newStatus = (HomeworkStatus)input.Status;
@@ -454,6 +472,7 @@ public class HomeworkAppService(
         var asOfDate = (input.AsOfDate ?? DateTime.UtcNow).Date;
         var query = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
         query = query.Where(h => h.EducationMediumId == academicMediumId);
+        query = await ApplyCurrentUserScopeAsync(query);
 
         if (input.StandardId.HasValue) query = query.Where(h => h.StandardId == input.StandardId.Value);
         if (input.SubjectId.HasValue) query = query.Where(h => h.SubjectId == input.SubjectId.Value);
@@ -504,6 +523,8 @@ public class HomeworkAppService(
         var homework = await asyncExecuter.FirstOrDefaultAsync(query.Where(h => h.Id == homeworkId))
             ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
 
+        await EnsureCurrentUserCanAccessHomeworkAsync(homework, nameof(SendReminderAsync));
+
         var targetSchedules = homework.DivisionSchedules
             .Where(s => s.IsPublished)
             .Where(s => !input.DivisionId.HasValue || s.DivisionId == input.DivisionId.Value)
@@ -542,6 +563,8 @@ public class HomeworkAppService(
         var query = await homeworkRepository.WithDetailsAsync(h => h.DivisionSchedules);
         var homework = await asyncExecuter.FirstOrDefaultAsync(query.Where(h => h.Id == homeworkId))
             ?? throw new BusinessException("ShikshaMitra.Homework:NotFound").WithData("Id", homeworkId);
+
+        await EnsureCurrentUserCanAccessHomeworkAsync(homework, nameof(GetHistoryAsync));
 
         var items = new List<LearningTaskHistoryItemDto>
         {
@@ -597,6 +620,74 @@ public class HomeworkAppService(
             TaskType = "homework",
             Items = items.OrderByDescending(i => i.OccurredAt).ToList()
         };
+    }
+
+    private async Task<IQueryable<HomeworkAssignmentEntity>> ApplyCurrentUserScopeAsync(
+        IQueryable<HomeworkAssignmentEntity> query)
+    {
+        var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+        if (scope.IsAdmin || scope.HasTenantWideScope())
+        {
+            return query;
+        }
+
+        var scopeFilteredQuery = userScopeAccessService.ApplyScope(query, scope);
+        if (scope.DivisionIds.Count == 0)
+        {
+            return scopeFilteredQuery;
+        }
+
+        // Homework can target multiple divisions while the legacy aggregate has no single
+        // DivisionId. An exact division-scoped user may only see a homework when every
+        // target division is inside their assigned scope.
+        var divisionScopedQuery = query.Where(homework =>
+            homework.DivisionSchedules.Any() &&
+            homework.DivisionSchedules.All(schedule => scope.DivisionIds.Contains(schedule.DivisionId)));
+
+        return scopeFilteredQuery.Concat(divisionScopedQuery).Distinct();
+    }
+
+    private async Task EnsureCurrentUserCanAccessHomeworkAsync(
+        HomeworkAssignmentEntity homework,
+        string operation)
+    {
+        var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+        if (scope.IsAdmin || scope.HasTenantWideScope() ||
+            (homework.DivisionSchedules.Count > 0 &&
+             homework.DivisionSchedules.All(schedule => scope.DivisionIds.Contains(schedule.DivisionId))))
+        {
+            return;
+        }
+
+        userScopeAccessService.EnsureCanAccess(homework, scope, operation: operation);
+    }
+
+    private async Task EnsureCurrentUserCanAccessTargetAsync(
+        Guid academicMediumId,
+        Guid standardId,
+        IEnumerable<Guid> divisionIds)
+    {
+        var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+        var targetDivisionIds = divisionIds.Distinct().ToList();
+        if (scope.IsAdmin || scope.HasTenantWideScope() ||
+            (targetDivisionIds.Count > 0 && targetDivisionIds.All(scope.DivisionIds.Contains)))
+        {
+            return;
+        }
+
+        // A synthetic aggregate deliberately has no DivisionId: a single matching division
+        // must not grant access to a multi-division target outside the user's scope.
+        var target = new HomeworkAssignmentEntity(
+            GuidGenerator.Create(),
+            standardId,
+            Guid.Empty,
+            string.Empty,
+            string.Empty,
+            Guid.Empty,
+            SubmissionType.OnlineText,
+            CurrentTenant.Id,
+            educationMediumId: academicMediumId);
+        userScopeAccessService.EnsureCanAccess(target, scope, operation: "homework-target");
     }
 
     private async Task<List<LearningTaskDashboardItemDto>> BuildHomeworkDashboardRowsAsync(List<HomeworkAssignmentEntity> homeworks)

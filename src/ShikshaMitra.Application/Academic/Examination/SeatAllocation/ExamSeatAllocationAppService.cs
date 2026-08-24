@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Examination.SeatAllocation.Dtos;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Curriculum.Settings;
@@ -10,6 +11,7 @@ using ShikshaMitra.Common.Excel;
 using ShikshaMitra.Common.Excel.Elements;
 using ShikshaMitra.Common.PDF;
 using ShikshaMitra.Students;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
@@ -18,6 +20,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.Examination.SeatAllocation;
 
@@ -29,6 +32,7 @@ public class ExamSeatAllocationAppService(
     IRepository<SeatingPlanAuditLog, Guid> auditLogRepository,
     IRepository<Exam, Guid> examRepository,
     IRepository<Student, Guid> studentRepository,
+    IRepository<StudentElectiveSelection, Guid> studentElectiveSelectionRepository,
     IRepository<Room, Guid> roomRepository,
     IRepository<Division, Guid> divisionRepository,
     IRepository<Standard, Guid> standardRepository,
@@ -38,9 +42,42 @@ public class ExamSeatAllocationAppService(
     IDataFilter dataFilter,
     IPdfService pdfService,
     IExcelService excelService,
-    ISeatingPlanNotifier seatingPlanNotifier
+    ISeatingPlanNotifier seatingPlanNotifier,
+    IUserScopeService userScopeService
 ) : ApplicationService, IExamSeatAllocationAppService
 {
+    private async Task<Exam> GetScopedExamAsync(Guid examId)
+    {
+        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        if (!CurrentUser.Id.HasValue)
+        {
+            throw new BusinessException(UserScopeErrorCodes.NoCurrentUser);
+        }
+
+        var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+        if (CanAccessExam(exam, scope))
+        {
+            return exam;
+        }
+
+        throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+            .WithData("ExamId", examId)
+            .WithData("Operation", "exam-seat-allocation");
+    }
+
+    private static bool CanAccessExam(Exam exam, UserScopeContext scope)
+    {
+        if (scope.IsAdmin || scope.HasTenantWideScope() ||
+            scope.StandardIds.Contains(exam.StandardId) ||
+            scope.WildcardDivisionStandardIds.Contains(exam.StandardId))
+        {
+            return true;
+        }
+
+        var examDivisionIds = exam.ExamDivisions.Select(row => row.DivisionId).Distinct().ToList();
+        return examDivisionIds.Count > 0 && examDivisionIds.All(scope.DivisionIds.Contains);
+    }
+
     /// <summary>
     /// Single source of truth for total/allocated/pending counts for one exam — used by both
     /// the dashboard list (<see cref="GetSeatAllocationTableAsync"/>) and the seating-plan draft
@@ -48,13 +85,9 @@ public class ExamSeatAllocationAppService(
     /// </summary>
     private async Task<(int total, int allocated)> ComputeCountsAsync(Exam exam, Guid? seatingPlanId = null)
     {
-        var examDivisionIds = exam.ExamDivisions.Select(d => d.DivisionId).ToList();
-        var studentsInDivisions = examDivisionIds.Count > 0
-            ? await studentRepository.GetListAsync(s =>
-                s.StandardId == exam.StandardId &&
-                s.DivisionId.HasValue &&
-                examDivisionIds.Contains(s.DivisionId!.Value))
-            : new List<Student>();
+        var studentsInDivisions = seatingPlanId.HasValue
+            ? await GetEligibleStudentsForPlanAsync(exam, await seatingPlanRepository.GetAsync(seatingPlanId.Value))
+            : await GetEligibleStudentsForExamAsync(exam);
         var total = studentsInDivisions.Count;
 
         var allocated = seatingPlanId.HasValue
@@ -62,6 +95,59 @@ public class ExamSeatAllocationAppService(
             : await seatAllocationRepository.CountAsync(a => a.ExamId == exam.Id);
 
         return (total, allocated);
+    }
+
+    private async Task<List<Student>> GetEligibleStudentsForPlanAsync(Exam exam, ExamSeatingPlan plan)
+    {
+        var planSubjectIds = (await GetPlanSubjectsAsync(plan.Id)).Select(s => s.ExamSubjectId).ToHashSet();
+        var divisionIds = exam.ExamSubjects
+            .Where(s => planSubjectIds.Contains(s.Id))
+            .SelectMany(s => s.RoomAssignments)
+            .Select(a => a.DivisionId)
+            .ToHashSet();
+
+        // Preserve compatibility with old drafts that have no subject room metadata.
+        if (divisionIds.Count == 0)
+            divisionIds = exam.ExamDivisions.Select(d => d.DivisionId).ToHashSet();
+
+        var students = divisionIds.Count == 0
+            ? new List<Student>()
+            : await studentRepository.GetListAsync(s =>
+                s.StandardId == exam.StandardId && s.DivisionId.HasValue && divisionIds.Contains(s.DivisionId.Value));
+        return await FilterSubjectWiseStudentsAsync(plan, students);
+    }
+
+    private async Task<List<Student>> GetEligibleStudentsForExamAsync(Exam exam)
+    {
+        var divisionIds = exam.ExamDivisions.Select(d => d.DivisionId).ToHashSet();
+        return divisionIds.Count == 0
+            ? new List<Student>()
+            : await studentRepository.GetListAsync(s =>
+                s.StandardId == exam.StandardId && s.DivisionId.HasValue && divisionIds.Contains(s.DivisionId.Value));
+    }
+
+    private async Task<List<Student>> FilterSubjectWiseStudentsAsync(
+        ExamSeatingPlan plan,
+        List<Student> candidates)
+    {
+        var excludedIds = ParseGuidCsv(plan.ExcludedStudentIdsCsv).ToHashSet();
+        candidates = candidates.Where(s => !excludedIds.Contains(s.Id)).ToList();
+        var subjectIds = (await GetPlanSubjectsAsync(plan.Id)).Select(s => s.SubjectId).Distinct().ToList();
+        if (subjectIds.Count == 0)
+            return candidates;
+
+        var candidateIds = candidates.Select(s => s.Id).ToHashSet();
+        var selections = await studentElectiveSelectionRepository.GetListAsync(s =>
+            subjectIds.Contains(s.SelectedSubjectId) && candidateIds.Contains(s.StudentId));
+
+        // Core subjects have no elective-selection rows. If any selected subject is core,
+        // retaining all candidates is safer than excluding valid core-subject students.
+        var selectedSubjectIds = selections.Select(s => s.SelectedSubjectId).ToHashSet();
+        if (selections.Count == 0 || selectedSubjectIds.Count != subjectIds.Count)
+            return candidates;
+
+        var selectedIds = selections.Select(s => s.StudentId).ToHashSet();
+        return candidates.Where(s => selectedIds.Contains(s.Id)).ToList();
     }
 
     private static SeatingPlanStatus ComputeStatus(int total, int allocated, bool isLocked, bool isPublished)
@@ -209,7 +295,7 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatingPlanDraftResponseDto> GetSeatingPlanDraftAsync(Guid examId, Guid? seatingPlanId = null)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, seatingPlanId);
         var planSubjects = await GetPlanSubjectsAsync(plan.Id);
 
@@ -242,7 +328,7 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatingPlanDraftResponseDto> SaveSeatingPlanDraftAsync(Guid examId, SaveSeatingPlanDraftInputDto input)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, input.SeatingPlanId);
 
         if (input.LastKnownModifiedTime.HasValue &&
@@ -287,12 +373,80 @@ public class ExamSeatAllocationAppService(
             await EnsurePlanSubjectsAsync(exam, plan, nextExamSubjectIds);
         }
 
+        // Validate rooms against the effective subject set, not the plan's old subject set.
+        // This matters when a subject-wise plan is switched from one subject to another.
+        var effectiveSubjectIdsForRooms = (await GetPlanSubjectsAsync(plan.Id))
+            .Select(s => s.ExamSubjectId)
+            .ToHashSet();
+        var allowedRoomIdsForPlan = exam.ExamSubjects
+            .Where(s => effectiveSubjectIdsForRooms.Contains(s.Id))
+            .SelectMany(s => s.RoomAssignments)
+            .SelectMany(a => a.RoomIds)
+            .ToHashSet();
+        if (input.RoomIds.Any(roomId => !allowedRoomIdsForPlan.Contains(roomId)))
+            throw new UserFriendlyException("One or more selected rooms are not assigned to this seating plan's subjects.");
+
         var (total, allocated) = await ComputeCountsAsync(exam, plan.Id);
         var status = ComputeStatus(total, allocated, plan.IsLocked, plan.Status == SeatingPlanStatus.Published);
 
         plan.SaveDraft(ToCsv(input.RoomIds), input.AllocationRulesJson, ToCsv(input.ExcludedStudentIds), ToCsv(input.SpecialRequirementStudentIds), status);
         await seatingPlanRepository.UpdateAsync(plan, autoSave: true);
 
+        return await GetSeatingPlanDraftAsync(examId, plan.Id);
+    }
+
+    public async Task<SeatingPlanDraftResponseDto> SaveSeatingPlanBulkAsync(Guid examId, SaveSeatingPlanBulkInputDto input)
+    {
+        // Keep room replacement and plan metadata in one transaction. The room list is intentionally
+        // patch-like: rooms not loaded by the workspace are preserved instead of being cleared.
+        using var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true);
+        var exam = await GetScopedExamAsync(examId);
+        var plan = await ResolvePlanAsync(exam, input.SeatingPlanId);
+
+        if (input.LastKnownModifiedTime.HasValue && plan.LastModificationTime.HasValue &&
+            plan.LastModificationTime.Value != input.LastKnownModifiedTime.Value)
+        {
+            throw new UserFriendlyException("This seating plan was modified by someone else since you last loaded it. Refresh to see the latest changes before saving.")
+            { Code = "SEATING_PLAN_CONCURRENCY_CONFLICT" };
+        }
+        if (plan.IsLocked)
+            throw new UserFriendlyException("Unlock this seating plan before modifying it.");
+
+        var submittedStudentIds = input.Rooms.SelectMany(r => r.Students).Select(s => s.StudentId).ToList();
+        if (submittedStudentIds.Count != submittedStudentIds.Distinct().Count())
+            throw new UserFriendlyException("A student may appear in only one submitted room.");
+
+        // Apply the subject scope before validating room students. Eligibility is derived from
+        // the persisted plan subjects, so validating rooms first rejects valid students when the
+        // request is creating or changing a subject-wise plan.
+        var draftInput = new SaveSeatingPlanDraftInputDto
+        {
+            SeatingPlanId = plan.Id,
+            Name = input.Name,
+            ScopeType = input.ScopeType,
+            ExamSubjectIds = input.ExamSubjectIds,
+            RoomIds = input.RoomIds,
+            AllocationRulesJson = input.AllocationRulesJson,
+            ExcludedStudentIds = input.ExcludedStudentIds,
+            SpecialRequirementStudentIds = input.SpecialRequirementStudentIds
+        };
+        await SaveSeatingPlanDraftAsync(examId, draftInput);
+
+        foreach (var room in input.Rooms)
+        {
+            await SaveSeatAllocationAsync(examId, new SaveSeatAllocationRequestDto
+            {
+                SeatingPlanId = plan.Id,
+                RoomId = room.RoomId,
+                Students = room.Students
+            });
+        }
+
+        // Recompute status/counts after the room allocations have been applied.
+        await SaveSeatingPlanDraftAsync(examId, draftInput);
+
+        await CurrentUnitOfWork!.SaveChangesAsync();
+        await uow.CompleteAsync();
         return await GetSeatingPlanDraftAsync(examId, plan.Id);
     }
 
@@ -316,7 +470,7 @@ public class ExamSeatAllocationAppService(
 
     private async Task<List<Room>> GetRoomsInScopeAsync(Guid examId)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, null);
         var roomIds = ParseGuidCsv(plan.RoomIdsCsv);
         return roomIds.Count > 0
@@ -326,7 +480,7 @@ public class ExamSeatAllocationAppService(
 
     private async Task<List<Room>> GetRoomsInScopeAsync(Guid examId, Guid? seatingPlanId)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, seatingPlanId);
         var roomIds = ParseGuidCsv(plan?.RoomIdsCsv);
         return roomIds.Count > 0
@@ -387,7 +541,7 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatingPlanScopeListResponseDto> GetSeatingPlanScopesAsync(Guid examId)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         await EnsureDefaultPlanAsync(exam);
         var plans = await seatingPlanRepository.GetListAsync(p => p.ExamId == examId);
         var items = new List<SeatingPlanScopeDto>();
@@ -406,7 +560,7 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatingPlanScopeDto> SaveSeatingPlanScopeAsync(Guid examId, SaveSeatingPlanScopeInputDto input)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var examSubjectIds = NormalizeExamSubjectIds(exam, input.ScopeType, input.ExamSubjectIds);
 
         ExamSeatingPlan plan;
@@ -518,12 +672,38 @@ public class ExamSeatAllocationAppService(
     {
         var blockers = new List<SeatingValidationIssueDto>();
         var warnings = new List<SeatingValidationIssueDto>();
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, seatingPlanId);
 
         var rooms = await GetRoomsInScopeAsync(examId, plan.Id);
         var roomsById = rooms.ToDictionary(r => r.Id);
         var allocations = await seatAllocationRepository.GetListAsync(a => a.ExamId == examId && a.SeatingPlanId == plan.Id);
+        var eligibleStudents = await GetEligibleStudentsForPlanAsync(exam, plan);
+        var eligibleStudentIds = eligibleStudents.Select(s => s.Id).ToHashSet();
+
+        if (eligibleStudentIds.Count == 0)
+            blockers.Add(new SeatingValidationIssueDto { Code = "NO_ELIGIBLE_STUDENTS", Message = "This seating plan has no eligible students." });
+        if (rooms.Count == 0)
+            blockers.Add(new SeatingValidationIssueDto { Code = "NO_ROOMS_IN_SCOPE", Message = "Select at least one room before finalizing the seating plan." });
+
+        foreach (var alloc in allocations.Where(a => !eligibleStudentIds.Contains(a.StudentId)))
+            blockers.Add(new SeatingValidationIssueDto
+            {
+                Code = "STUDENT_NOT_ELIGIBLE",
+                Message = "An allocation belongs to a student outside this plan's eligible subject/division scope.",
+                StudentId = alloc.StudentId,
+                RoomId = alloc.RoomId,
+                SeatId = $"{alloc.RoomId}:{alloc.SeatNumber}"
+            });
+
+        var assignedStudentIds = allocations.Select(a => a.StudentId).ToHashSet();
+        foreach (var missingStudentId in eligibleStudentIds.Except(assignedStudentIds))
+            blockers.Add(new SeatingValidationIssueDto
+            {
+                Code = "STUDENT_NOT_ALLOCATED",
+                Message = "An eligible student has not been assigned a seat.",
+                StudentId = missingStudentId
+            });
 
         // Two students on the same seat in the same room.
         var bySeat = allocations.GroupBy(a => (a.RoomId, a.SeatNumber));
@@ -563,6 +743,25 @@ public class ExamSeatAllocationAppService(
                     Code = "ROOM_LOW_UTILIZATION",
                     Message = $"Room {room.RoomName} utilization is below 40%.",
                     RoomId = room.Id
+                });
+            }
+        }
+
+        foreach (var alloc in allocations.Where(a => roomsById.ContainsKey(a.RoomId)))
+        {
+            var room = roomsById[alloc.RoomId];
+            var totalSeats = room.TotalBenches > 0 ? room.TotalBenches * room.BenchCapacity : room.Capacity;
+            if (alloc.SeatNumber <= 0 || alloc.SeatNumber > totalSeats ||
+                ParseIntCsv(room.DisabledSeatNumbersCsv).Contains(alloc.SeatNumber) ||
+                ParseIntCsv(room.ReservedSeatNumbersCsv).Contains(alloc.SeatNumber))
+            {
+                blockers.Add(new SeatingValidationIssueDto
+                {
+                    Code = "SEAT_UNAVAILABLE",
+                    Message = "An allocation uses a seat outside the room layout or an unavailable seat.",
+                    StudentId = alloc.StudentId,
+                    RoomId = alloc.RoomId,
+                    SeatId = $"{alloc.RoomId}:{alloc.SeatNumber}"
                 });
             }
         }
@@ -626,7 +825,7 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatingRoomSummaryResponseDto> GetSeatingRoomSummaryAsync(Guid examId, Guid? seatingPlanId = null)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, seatingPlanId);
         var rooms = await GetRoomsInScopeAsync(examId, plan.Id);
         var allocations = await seatAllocationRepository.GetListAsync(a => a.ExamId == examId && a.SeatingPlanId == plan.Id);
@@ -658,19 +857,27 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatingPlanDraftResponseDto> FinalizeSeatingPlanAsync(Guid examId, Guid? seatingPlanId = null)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, seatingPlanId);
 
         var validation = await ValidateSeatingPlanAsync(examId, plan.Id);
         if (!validation.IsValid)
-            throw new UserFriendlyException("Cannot finalize while blocking issues remain. Resolve them in the review screen first.");
+        {
+            var blockerSummary = string.Join(
+                " ",
+                validation.Blockers
+                    .Take(5)
+                    .Select(issue => $"[{issue.Code}] {issue.Message}"));
+            throw new UserFriendlyException(
+                $"Cannot finalize while blocking issues remain. {blockerSummary}");
+        }
 
         var now = DateTime.UtcNow;
         plan.Finalize(CurrentUser.Id ?? Guid.Empty, now);
         await seatingPlanRepository.UpdateAsync(plan, autoSave: true);
 
         await auditLogRepository.InsertAsync(new SeatingPlanAuditLog(
-            guidGenerator.Create(), CurrentTenant.Id, examId, SeatingPlanAuditAction.Finalized,
+            guidGenerator.Create(), CurrentTenant.Id, examId, plan.Id, SeatingPlanAuditAction.Finalized,
             CurrentUser.Id ?? Guid.Empty, CurrentUser.Name, null, await SnapshotAssignmentsJsonAsync(examId, plan.Id)),
             autoSave: true);
 
@@ -679,7 +886,7 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatingPlanDraftResponseDto> PublishSeatingPlanAsync(Guid examId, PublishSeatingPlanInputDto input, Guid? seatingPlanId = null)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, seatingPlanId);
 
         if (!plan.IsLocked)
@@ -690,7 +897,7 @@ public class ExamSeatAllocationAppService(
         await seatingPlanRepository.UpdateAsync(plan, autoSave: true);
 
         await auditLogRepository.InsertAsync(new SeatingPlanAuditLog(
-            guidGenerator.Create(), CurrentTenant.Id, examId, SeatingPlanAuditAction.Published,
+            guidGenerator.Create(), CurrentTenant.Id, examId, plan.Id, SeatingPlanAuditAction.Published,
             CurrentUser.Id ?? Guid.Empty, CurrentUser.Name, null, null),
             autoSave: true);
 
@@ -704,14 +911,14 @@ public class ExamSeatAllocationAppService(
         if (string.IsNullOrWhiteSpace(input.Reason))
             throw new UserFriendlyException("A reason is required to unlock a finalized seating plan.");
 
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, seatingPlanId);
 
         plan.Unlock();
         await seatingPlanRepository.UpdateAsync(plan, autoSave: true);
 
         await auditLogRepository.InsertAsync(new SeatingPlanAuditLog(
-            guidGenerator.Create(), CurrentTenant.Id, examId, SeatingPlanAuditAction.Unlocked,
+            guidGenerator.Create(), CurrentTenant.Id, examId, plan.Id, SeatingPlanAuditAction.Unlocked,
             CurrentUser.Id ?? Guid.Empty, CurrentUser.Name, input.Reason, null),
             autoSave: true);
 
@@ -720,12 +927,14 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatingPlanAuditLogResponseDto> GetSeatingPlanAuditLogAsync(Guid examId, Guid? seatingPlanId = null)
     {
-        var logs = await auditLogRepository.GetListAsync(l => l.ExamId == examId);
+        var logs = await auditLogRepository.GetListAsync(l =>
+            l.ExamId == examId && (!seatingPlanId.HasValue || l.SeatingPlanId == seatingPlanId.Value));
         return new SeatingPlanAuditLogResponseDto
         {
             Items = logs.OrderByDescending(l => l.ChangedAt).Select(l => new SeatingPlanAuditLogDto
             {
                 Id = l.Id,
+                SeatingPlanId = l.SeatingPlanId,
                 Action = l.Action,
                 ActorUserId = l.ActorUserId,
                 ActorNameSnapshot = l.ActorNameSnapshot,
@@ -738,7 +947,7 @@ public class ExamSeatAllocationAppService(
     /// <summary>Flat per-seat rows for the room seating chart print view and master seating list export.</summary>
     public async Task<SeatingPrintDataResponseDto> GetSeatingPrintDataAsync(Guid examId, Guid? seatingPlanId = null)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, seatingPlanId);
         var allocations = await seatAllocationRepository.GetListAsync(a => a.ExamId == examId && a.SeatingPlanId == plan.Id);
 
@@ -865,16 +1074,9 @@ public class ExamSeatAllocationAppService(
     /// </summary>
     public async Task<AutoAllocateResponseDto> AutoAllocatePreviewAsync(Guid examId, AutoAllocateRequestDto input)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, input.SeatingPlanId);
-        var examDivisionIds = exam.ExamDivisions.Select(d => d.DivisionId).ToList();
-
-        var eligibleStudents = examDivisionIds.Count > 0
-            ? await studentRepository.GetListAsync(s =>
-                s.StandardId == exam.StandardId &&
-                s.DivisionId.HasValue &&
-                examDivisionIds.Contains(s.DivisionId!.Value))
-            : new List<Student>();
+        var eligibleStudents = await GetEligibleStudentsForPlanAsync(exam, plan);
 
         var excluded = input.ExcludedStudentIds.ToHashSet();
         var alreadyAllocated = (await seatAllocationRepository.GetListAsync(a => a.ExamId == examId && a.SeatingPlanId == plan.Id))
@@ -968,7 +1170,7 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatLayoutResponseDto> GetSeatLayoutAsync(Guid examId, GetSeatLayoutInput input)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, input.SeatingPlanId);
         var room = await roomRepository.FindAsync(input.RoomId)
             ?? throw new UserFriendlyException("Room not found.");
@@ -1025,7 +1227,7 @@ public class ExamSeatAllocationAppService(
                 RollNo = (alloc != null && alloc.ExamId != examId) ? null : student?.RollNo,
                 RoomNumber = room.RoomName,
                 IsRoomAssign = alloc?.IsRoomAssign ?? false,
-                BenchId = alloc?.BenchId ?? Guid.Empty,
+                BenchId = alloc?.BenchId,
                 IsExternalExamOccupied = alloc != null && alloc.ExamId != examId
             });
         }
@@ -1060,11 +1262,23 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatStudentPagedResponseDto> GetStudentsForDivisionAsync(Guid examId, Guid divisionId, GetSeatStudentsInput input)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, input.SeatingPlanId);
 
         var studentsQuery = await studentRepository.GetQueryableAsync();
         var query = studentsQuery.Where(s => s.DivisionId == divisionId && s.StandardId == exam.StandardId);
+
+        if (plan.ScopeType == SeatingPlanScopeType.SingleSubject)
+        {
+            var subjectIds = (await GetPlanSubjectsAsync(plan.Id)).Select(s => s.SubjectId).Distinct().ToList();
+            if (subjectIds.Count == 1)
+            {
+                var selectedStudentIds = (await studentElectiveSelectionRepository.GetListAsync(s =>
+                    s.SelectedSubjectId == subjectIds[0])).Select(s => s.StudentId).ToHashSet();
+                if (selectedStudentIds.Count > 0)
+                    query = query.Where(s => selectedStudentIds.Contains(s.Id));
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(input.Search))
         {
@@ -1122,8 +1336,33 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SaveSeatAllocationResponseDto> SaveSeatAllocationAsync(Guid examId, SaveSeatAllocationRequestDto input)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, input.SeatingPlanId);
+        if (plan.IsLocked)
+            throw new UserFriendlyException("Unlock this seating plan before modifying it.");
+
+        var room = await roomRepository.FindAsync(input.RoomId)
+            ?? throw new UserFriendlyException("Room not found.");
+        var planSubjectIds = (await GetPlanSubjectsAsync(plan.Id)).Select(s => s.ExamSubjectId).ToHashSet();
+        var allowedRoomIds = ParseGuidCsv(plan.RoomIdsCsv).ToHashSet();
+        allowedRoomIds.UnionWith(exam.ExamSubjects
+            .Where(s => planSubjectIds.Contains(s.Id))
+            .SelectMany(s => s.RoomAssignments)
+            .SelectMany(a => a.RoomIds));
+        if (!allowedRoomIds.Contains(room.Id))
+            throw new UserFriendlyException("The selected room is not available for this seating plan.");
+
+        var eligibleStudents = await GetEligibleStudentsForPlanAsync(exam, plan);
+        var eligibleStudentIds = eligibleStudents.Select(s => s.Id).ToHashSet();
+        if (input.Students.Any(s => !eligibleStudentIds.Contains(s.StudentId)))
+            throw new UserFriendlyException("One or more students are not eligible for this seating plan.");
+
+        var disabledSeats = ParseIntCsv(room.DisabledSeatNumbersCsv);
+        var reservedSeats = ParseIntCsv(room.ReservedSeatNumbersCsv);
+        var totalSeats = room.TotalBenches > 0 ? room.TotalBenches * room.BenchCapacity : room.Capacity;
+        if (input.Students.Any(s => s.SeatNumber > totalSeats || disabledSeats.Contains(s.SeatNumber) || reservedSeats.Contains(s.SeatNumber)))
+            throw new UserFriendlyException("One or more selected seats are outside the room layout or unavailable.");
+
         var incomingStudentIds = input.Students.Select(s => s.StudentId).ToHashSet();
 
         // Load by studentId (not roomId) to respect the unique index on {ExamId, StudentId}.
@@ -1196,7 +1435,7 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatAllocationDivisionsResponseDto> GetDivisionsForExamAsync(Guid examId, GetExamDivisionsInput input)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
 
         var divisionIds = exam.ExamDivisions.Select(d => d.DivisionId).ToList();
         var divisions = await divisionRepository.GetListAsync(d =>
@@ -1242,16 +1481,26 @@ public class ExamSeatAllocationAppService(
         }
 
         // Fetch supporting data
-        var examIds = exams.Select(e => e.Id).ToList();
-        var examTypeIds = exams.Select(e => e.ExamTypeId).Distinct().ToList();
+        var candidateExamIds = exams.Select(e => e.Id).ToList();
+        var allExamsWithDetails = await examRepository.GetListAsync(
+            e => candidateExamIds.Contains(e.Id), includeDetails: true);
+
+        if (!CurrentUser.Id.HasValue)
+        {
+            return new SeatAllocationDashboardResponseDto();
+        }
+
+        var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+        allExamsWithDetails = allExamsWithDetails
+            .Where(exam => CanAccessExam(exam, scope))
+            .ToList();
+
+        var examIds = allExamsWithDetails.Select(e => e.Id).ToList();
+        var examTypeIds = allExamsWithDetails.Select(e => e.ExamTypeId).Distinct().ToList();
         var examTypes = await examTypeRepository.GetListAsync(t => examTypeIds.Contains(t.Id));
         var examTypesDict = examTypes.ToDictionary(t => t.Id);
 
         var standard = await standardRepository.FindAsync(input.StandardId);
-
-        // Get all division IDs used by these exams
-        var allExamsWithDetails = await examRepository.GetListAsync(
-            e => examIds.Contains(e.Id), includeDetails: true);
         var allDivisionIds = allExamsWithDetails
             .SelectMany(e => e.ExamDivisions.Select(d => d.DivisionId))
             .Distinct().ToList();
@@ -1388,7 +1637,7 @@ public class ExamSeatAllocationAppService(
 
     public async Task<ExamRoomPagedResponseDto> GetRoomsForExamAndDivisionAsync(Guid examId, Guid divisionId, GetExamRoomsInput input)
     {
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, input.SeatingPlanId);
         var planExamSubjectIds = (await GetPlanSubjectsAsync(plan.Id)).Select(s => s.ExamSubjectId).ToHashSet();
 
@@ -1454,7 +1703,7 @@ public class ExamSeatAllocationAppService(
         var planSubjects = await seatingPlanSubjectRepository.GetListAsync(s => s.SeatingPlanId == planId);
         var planSubjectIds = planSubjects.Select(s => s.ExamSubjectId).ToHashSet();
         
-        var exam = await examRepository.GetAsync(examId, includeDetails: true);
+        var exam = await GetScopedExamAsync(examId);
         var currentSubjects = exam.ExamSubjects.Where(s => planSubjectIds.Contains(s.Id)).ToList();
         
         var activeTimeSlots = currentSubjects

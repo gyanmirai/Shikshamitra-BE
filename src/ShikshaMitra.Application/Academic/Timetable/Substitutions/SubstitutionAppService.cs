@@ -42,6 +42,13 @@ public class SubstitutionAppService(
 {
     public async Task<PagedResultDto<SubstitutionDto>> GetListAsync(GetSubstitutionsInput input)
     {
+        return await GetListAsync(input, null);
+    }
+
+    private async Task<PagedResultDto<SubstitutionDto>> GetListAsync(
+        GetSubstitutionsInput input,
+        IReadOnlySet<Guid>? substituteTeacherReferenceIds)
+    {
         var rows = await substitutionRepository.GetListAsync();
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
 		rows = rows.FilterByUserScope(scope).ToList();
@@ -64,14 +71,22 @@ public class SubstitutionAppService(
             }
         }
 
-        var filtered = ApplyFilters(rows, input)
+        var filtered = ApplyFilters(rows, input);
+        if (substituteTeacherReferenceIds is { Count: > 0 })
+        {
+            filtered = filtered.Where(x =>
+                x.SubstituteTeacherId.HasValue &&
+                substituteTeacherReferenceIds.Contains(x.SubstituteTeacherId.Value));
+        }
+
+        var ordered = filtered
             .OrderBy(x => x.Date)
             .ThenBy(x => x.StartTime)
             .ToList();
 
-        var total = filtered.Count;
+        var total = ordered.Count;
         var max = input.MaxResultCount <= 0 ? 50 : input.MaxResultCount;
-        var paged = filtered.Skip(input.SkipCount).Take(max).ToList();
+        var paged = ordered.Skip(input.SkipCount).Take(max).ToList();
         var audits = await GetAuditLookupAsync(paged.Select(x => x.Id).ToList());
         var dtoRows = new List<SubstitutionDto>();
         foreach (var row in paged)
@@ -189,6 +204,12 @@ public class SubstitutionAppService(
         var originalTeacherName = string.IsNullOrWhiteSpace(input.OriginalTeacherName)
             ? originalTeacher?.EmployeeName ?? string.Empty
             : input.OriginalTeacherName;
+        var substituteTeacher = ResolveEmployeeByTeacherReference(
+            employees,
+            input.SubstituteTeacherId,
+            input.SubstituteTeacherName);
+        var substituteTeacherId = substituteTeacher?.Id ?? input.SubstituteTeacherId;
+        var substituteTeacherName = substituteTeacher?.EmployeeName ?? input.SubstituteTeacherName;
 
         if (input.TimetableSlotSubjectId.HasValue || originalTeacherId.HasValue)
         {
@@ -250,8 +271,8 @@ public class SubstitutionAppService(
                 originalTeacherId,
                 originalTeacherName,
                 input.SubjectName,
-                input.SubstituteTeacherId,
-                input.SubstituteTeacherName,
+                substituteTeacherId,
+                substituteTeacherName,
                 null,
                 input.AcademicMediumId);
         await EnsureAssignedRoomAvailableAsync(
@@ -263,8 +284,8 @@ public class SubstitutionAppService(
                 entity.Id);
 
         entity.Assign(
-                input.SubstituteTeacherId ?? selected.TeacherId,
-                string.IsNullOrWhiteSpace(input.SubstituteTeacherName) ? selected.TeacherName : input.SubstituteTeacherName,
+                selected.TeacherId,
+                selected.TeacherName,
                 input.AssignedRoomId,
                 input.AssignedRoomName,
                 selected.Score,
@@ -380,12 +401,14 @@ public class SubstitutionAppService(
         var entity = await substitutionRepository.GetAsync(id);
 		await EnsureCanViewSubstitutionAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot assign a substitute after the period has ended.");
-        var suggestions = await GetSuggestedTeachersAsync(id);
-        var selected = suggestions.FirstOrDefault(x =>
-            (input.SubstituteTeacherId.HasValue && x.TeacherId == input.SubstituteTeacherId) ||
-            string.Equals(x.TeacherName, input.SubstituteTeacherName, StringComparison.OrdinalIgnoreCase));
-
-        selected = await EnsureSubstituteCanBeAssignedAsync(
+        var employees = await employeeRepository.GetListAsync();
+        var substituteTeacher = ResolveEmployeeByTeacherReference(
+            employees,
+            input.SubstituteTeacherId,
+            input.SubstituteTeacherName);
+        var substituteTeacherId = substituteTeacher?.Id ?? input.SubstituteTeacherId;
+        var substituteTeacherName = substituteTeacher?.EmployeeName ?? input.SubstituteTeacherName;
+        var selected = await EnsureSubstituteCanBeAssignedAsync(
             entity.Date,
             entity.StartTime,
             entity.EndTime,
@@ -394,8 +417,8 @@ public class SubstitutionAppService(
             entity.OriginalTeacherId,
             entity.OriginalTeacherName,
             entity.DepartmentName,
-            input.SubstituteTeacherId,
-            input.SubstituteTeacherName,
+            substituteTeacherId,
+            substituteTeacherName,
             id,
             await ResolveAcademicMediumIdAsync(entity.SubjectId));
         await EnsureAssignedRoomAvailableAsync(
@@ -412,8 +435,8 @@ public class SubstitutionAppService(
         }
 
         entity.Assign(
-            input.SubstituteTeacherId ?? selected?.TeacherId,
-            string.IsNullOrWhiteSpace(input.SubstituteTeacherName) ? selected?.TeacherName ?? string.Empty : input.SubstituteTeacherName,
+            selected.TeacherId,
+            selected.TeacherName,
             input.AssignedRoomId,
             input.AssignedRoomName,
             selected?.Score,
@@ -987,8 +1010,11 @@ public class SubstitutionAppService(
             return new PagedResultDto<SubstitutionDto>(0, []);
         }
 
-        input.SubstituteTeacherId = employee.Id;
-        return await GetListAsync(input);
+        // Older rows may contain the ABP user ID while current rows use the canonical Employee ID.
+        // Match both references so existing duties remain visible after ID normalization.
+        var teacherReferenceIds = GetTeacherReferenceIds(employee, CurrentUser.Id).ToHashSet();
+        input.SubstituteTeacherId = null;
+        return await GetListAsync(input, teacherReferenceIds);
     }
 
     public async Task<SubstitutionDailySheetDto> GetDailySheetAsync(SubstitutionDailySheetInput input)

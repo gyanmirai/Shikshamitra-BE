@@ -23,6 +23,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
 using ShikshaMitra.Academic.Examination.SeatAllocation;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.HR.Employees;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
 
@@ -48,6 +49,8 @@ public class ExamAppService(
 	IRepository<ExamSeatAllocation, Guid> examSeatAllocationRepository,
 	IRepository<AcademicCalendar, Guid> calendarRepository,
 	IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
+	IRepository<Employee, Guid> employeeRepository,
+	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
 	IUserScopeAccessService userScopeAccessService) : ApplicationService, IExamAppService
 {
 	private const string CalendarSyncDescriptionPrefix = "Auto-created from examination schedule. ExamId: ";
@@ -2778,10 +2781,20 @@ public class ExamAppService(
 	public async Task<List<SubjectAssignmentGroupDto>> GetSubjectsLookupAsync(Guid classId, List<Guid> divisionIds)
 	{
 		var assignmentsQuery = await assignmentRepository.GetQueryableAsync();
-		assignmentsQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(assignmentsQuery);
-		var assignments = await AsyncExecuter.ToListAsync(assignmentsQuery.Where(a =>
+		var classAssignmentsQuery = assignmentsQuery.Where(a =>
 			a.StandardId == classId &&
-			a.Status == SubjectStatus.Published));
+			a.Status == SubjectStatus.Published);
+		var scopedAssignmentsQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(classAssignmentsQuery);
+
+		var assignedSubjectIds = await GetCurrentTeacherAssignedSubjectIdsAsync(classId, divisionIds);
+		if (assignedSubjectIds.Count > 0)
+		{
+			scopedAssignmentsQuery = scopedAssignmentsQuery
+				.Concat(classAssignmentsQuery.Where(assignment => assignedSubjectIds.Contains(assignment.Id)))
+				.Distinct();
+		}
+
+		var assignments = await AsyncExecuter.ToListAsync(scopedAssignmentsQuery);
 
 		var groupedAssignments = new List<SubjectAssignmentGroupDto>();
 
@@ -2922,6 +2935,58 @@ public class ExamAppService(
 		}
 
 		return groupedAssignments;
+	}
+
+	private async Task<HashSet<Guid>> GetCurrentTeacherAssignedSubjectIdsAsync(
+		Guid classId,
+		IReadOnlyCollection<Guid>? divisionIds)
+	{
+		if (!CurrentUser.Id.HasValue || CurrentUser.Roles.Any(role =>
+			string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase)))
+		{
+			return new HashSet<Guid>();
+		}
+
+		var currentEmployee = await employeeRepository.FirstOrDefaultAsync(
+			employee => employee.UserId == CurrentUser.Id.Value);
+		if (currentEmployee == null)
+		{
+			return new HashSet<Guid>();
+		}
+
+		var assignmentsWithTeachersQuery = await assignmentRepository.WithDetailsAsync(
+			assignment => assignment.Teachers);
+		var assignedSubjectIds = (await AsyncExecuter.ToListAsync(
+			assignmentsWithTeachersQuery.Where(assignment =>
+				assignment.StandardId == classId &&
+				assignment.Status == SubjectStatus.Published &&
+				assignment.Teachers.Any(teacher => teacher.TeacherId == currentEmployee.Id))))
+			.Select(assignment => assignment.Id)
+			.ToHashSet();
+
+		var validDivisionIds = (divisionIds ?? Array.Empty<Guid>())
+			.Where(id => id != Guid.Empty)
+			.ToHashSet();
+		var allocations = await teacherSubjectAllocationRepository.GetListAsync(allocation =>
+			allocation.StandardId == classId &&
+			(!validDivisionIds.Any() || validDivisionIds.Contains(allocation.DivisionId)) &&
+			allocation.Teachers.Any(teacher => teacher.TeacherId == currentEmployee.Id));
+		var allocatedSubjectIds = allocations.Select(allocation => allocation.SubjectId).ToHashSet();
+
+		if (allocatedSubjectIds.Count > 0)
+		{
+			var allocatedAssignmentIds = await AsyncExecuter.ToListAsync(
+				assignmentsWithTeachersQuery
+					.Where(assignment =>
+						assignment.StandardId == classId &&
+						assignment.Status == SubjectStatus.Published &&
+						allocatedSubjectIds.Contains(assignment.SubjectId))
+					.Select(assignment => assignment.Id));
+			assignedSubjectIds.UnionWith(allocatedAssignmentIds);
+		}
+
+		return assignedSubjectIds;
 	}
 
 	private sealed record NormalizedExamSubjectSchedule(

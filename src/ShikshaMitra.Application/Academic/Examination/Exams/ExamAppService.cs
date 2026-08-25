@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -601,6 +601,26 @@ public class ExamAppService(
 
 	public async Task<ExamListResultDto> GetListAsync(GetExamsInput input)
 	{
+		if (input.StartDate.HasValue && input.EndDate.HasValue && input.StartDate > input.EndDate)
+			throw new UserFriendlyException("StartDate cannot be greater than EndDate.");
+
+		var isDefaultDateRange = !input.StartDate.HasValue && !input.EndDate.HasValue;
+		var filterStartDate = input.StartDate?.DateTime;
+		var filterEndDate = input.EndDate?.DateTime;
+		if (isDefaultDateRange)
+		{
+			var today = Clock.Now.Date;
+			var daysFromMonday = ((int)today.DayOfWeek + 6) % 7;
+			filterStartDate = today.AddDays(-daysFromMonday);
+			filterEndDate = filterStartDate.Value.AddDays(7).AddTicks(-1);
+		}
+		else
+		{
+			// Be tolerant of a one-sided range while retaining the explicit bound.
+			filterStartDate ??= DateTime.MinValue;
+			filterEndDate ??= DateTime.MaxValue;
+		}
+
 		var examQuery = await examRepository.WithDetailsAsync();
 		var standardQuery = await standardRepository.GetQueryableAsync();
 		var stageQuery = await educationMediumStageRepository.GetQueryableAsync();
@@ -610,7 +630,7 @@ public class ExamAppService(
 						join standard in standardQuery on exam.StandardId equals standard.Id
 						join stage in stageQuery on standard.EducationMediumStageId equals stage.Id
 						join examType in examTypeQuery on exam.ExamTypeId equals examType.Id
-						where stage.EducationMediumId == input.AcademicMediumId
+						where !input.AcademicMediumId.HasValue || stage.EducationMediumId == input.AcademicMediumId.Value
 						select new { exam, standard, stage, examType };
 
 		var query = baseQuery;
@@ -654,6 +674,13 @@ public class ExamAppService(
 				.Where(row => CanAccessExam(row.exam, row.standard, row.stage, scope))
 				.ToList();
 		}
+
+		// Exam dates are derived from subject schedules, so apply the date filter
+		// after loading the detailed exam aggregate but before status counts and paging.
+		allRows = allRows
+			.Where(row => IsExamInDateRange(row.exam, filterStartDate!.Value, filterEndDate!.Value, isDefaultDateRange))
+			.ToList();
+
 		var rowsWithEffectiveStatus = allRows
 			.Select(x => new
 			{
@@ -670,7 +697,7 @@ public class ExamAppService(
 		var completedCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Completed);
 
 		var filteredRows = rowsWithEffectiveStatus
-			.Where(x => x.EffectiveStatus == input.Status)
+			.Where(x => !input.Status.HasValue || x.EffectiveStatus == input.Status.Value)
 			.ToList();
 
 		var totalCount = filteredRows.Count;
@@ -1328,6 +1355,12 @@ public class ExamAppService(
 		var now = Clock.Now;
 		var start = GetExamStartDateTime(exam);
 		var end = GetExamFinalEndAt(exam);
+		if (!start.HasValue || !end.HasValue)
+		{
+			// An exam without a complete schedule remains pending, including
+			// records whose subject dates are both null.
+			return ExamStatus.Pending;
+		}
 
 		if (start.HasValue && end.HasValue && now >= start.Value && now <= end.Value)
 		{
@@ -1369,6 +1402,28 @@ public class ExamAppService(
 			.ToList();
 
 		return dates.Count == 0 ? null : dates.Min();
+	}
+
+	private static bool IsExamInDateRange(
+		Exam exam,
+		DateTime filterStartDate,
+		DateTime filterEndDate,
+		bool includeUndatedExams)
+	{
+		var scheduledDates = exam.ExamSubjects
+			.Where(subject => subject.ExamDate.HasValue)
+			.Select(subject => subject.ExamDate!.Value.Date)
+			.ToList();
+
+		if (scheduledDates.Count == 0)
+			return includeUndatedExams;
+
+		var examStartDate = scheduledDates.Min();
+		var examEndDate = GetExamFinalEndAt(exam)!.Value;
+
+		// Inclusive overlap: an exam that starts or ends on a filter boundary
+		// is applicable to that date range.
+		return examStartDate <= filterEndDate && examEndDate >= filterStartDate;
 	}
 
 	private static DateTime? GetExamFinalEndAt(Exam exam)

@@ -34,6 +34,7 @@ public class LessonPlanAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<AssignedSubject, Guid> assignedSubjectRepository,
     IRepository<AssignedSubjectChapter, Guid> chapterRepository,
+    IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
     IRepository<Employee, Guid> employeeRepository,
     IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
     IRepository<EmployeeLeave, Guid> employeeLeaveRepository,
@@ -54,8 +55,16 @@ public class LessonPlanAppService(
     public async Task<PagedResultDto<LessonPlanDto>> GetListAsync(GetLessonPlansInput input)
     {
         var query = await lessonPlanRepository.GetQueryableAsync();
-        query = await ApplyLessonPlanFiltersAsync(query, input);
+		query = await ApplyLessonPlanFiltersAsync(query, input);
+		var unscopedQuery = query;
 		query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+		var subjectOwnedPlanIds = await GetCurrentTeacherSubjectOwnedPlanIdsAsync(unscopedQuery);
+		if (subjectOwnedPlanIds.Count > 0)
+		{
+			query = query
+				.Concat(unscopedQuery.Where(plan => subjectOwnedPlanIds.Contains(plan.Id)))
+				.Distinct();
+		}
 
         if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
@@ -105,7 +114,6 @@ public class LessonPlanAppService(
             }
         }
         var lessonPlansQuery = await lessonPlanRepository.GetQueryableAsync();
-		lessonPlansQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(lessonPlansQuery);
         lessonPlansQuery = lessonPlansQuery.Where(x => x.TeacherId == targetTeacherId && x.PlannedDate.Date == date.DateTime.Date);
 
         List<Guid>? allowedStandardIds = null;
@@ -123,6 +131,16 @@ public class LessonPlanAppService(
 
             lessonPlansQuery = lessonPlansQuery.Where(lp => allowedStandardIds.Contains(lp.StandardId));
         }
+
+        var unscopedLessonPlansQuery = lessonPlansQuery;
+		lessonPlansQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(lessonPlansQuery);
+		var subjectOwnedPlanIds = await GetCurrentTeacherSubjectOwnedPlanIdsAsync(unscopedLessonPlansQuery);
+		if (subjectOwnedPlanIds.Count > 0)
+		{
+			lessonPlansQuery = lessonPlansQuery
+				.Concat(unscopedLessonPlansQuery.Where(plan => subjectOwnedPlanIds.Contains(plan.Id)))
+				.Distinct();
+		}
 
         var lessonPlans = await AsyncExecuter.ToListAsync(lessonPlansQuery);
         var mappedPlans = await MapLessonPlansAsync(lessonPlans);
@@ -274,7 +292,7 @@ public class LessonPlanAppService(
     public async Task<LessonPlanDto> GetAsync(Guid id)
     {
         var plan = await lessonPlanRepository.GetAsync(id);
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "lesson-plan-read");
+        await EnsureLessonPlanAccessAsync(plan, "lesson-plan-read");
 
         if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
@@ -347,7 +365,7 @@ public class LessonPlanAppService(
             lessonPlan.Submit();
         }
 
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-create");
+        await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-create");
         var inserted = await lessonPlanRepository.InsertAsync(lessonPlan, autoSave: true);
         return (await MapLessonPlansAsync(new[] { inserted })).Single();
     }
@@ -355,7 +373,7 @@ public class LessonPlanAppService(
     public async Task<LessonPlanDto> UpdateAsync(Guid id, UpdateLessonPlanDto input)
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-update");
+        await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-update");
         await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "modify");
         EnsureLessonPlanEditable(lessonPlan);
         await EnsureChapterMatchesPlanTargetAsync(input.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
@@ -384,7 +402,7 @@ public class LessonPlanAppService(
     public async Task<LessonPlanDto> SubmitAsync(Guid id)
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-submit");
+        await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-submit");
         await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "submit");
         EnsureLessonPlanSubmittable(lessonPlan);
         await EnsureChapterMatchesPlanTargetAsync(lessonPlan.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
@@ -401,7 +419,7 @@ public class LessonPlanAppService(
         foreach (var id in input.LessonPlanIds)
         {
             var plan = await lessonPlanRepository.GetAsync(id);
-            await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "lesson-plan-submit");
+            await EnsureLessonPlanAccessAsync(plan, "lesson-plan-submit");
             await EnsureOwnTeacherRecordAsync(plan.TeacherId, "submit");
             EnsureLessonPlanSubmittable(plan);
             await EnsureChapterMatchesPlanTargetAsync(plan.ChapterId, plan.StandardId, plan.SubjectId);
@@ -811,17 +829,121 @@ public class LessonPlanAppService(
         );
     }
 
+    private async Task EnsureLessonPlanAccessAsync(LessonPlan lessonPlan, string operation)
+    {
+        try
+        {
+            await userScopeAccessService.EnsureCurrentUserCanAccessAsync(
+                lessonPlan,
+                operation: operation);
+            return;
+        }
+        catch (BusinessException exception) when (exception.Code == UserScopeErrorCodes.AccessDenied)
+        {
+            // Subject ownership is a valid lesson-plan scope, but it is not represented
+            // by the generic academic-year/standard/division UserScope entity mapping.
+        }
+
+        var currentEmployee = await GetCurrentEmployeeAsync();
+        if (currentEmployee == null || currentEmployee.Id != lessonPlan.TeacherId)
+        {
+            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+        }
+
+        var assignmentQuery = await assignedSubjectRepository.WithDetailsAsync(
+            assignment => assignment.Teachers);
+        var assignment = await AsyncExecuter.FirstOrDefaultAsync(
+            assignmentQuery.Where(candidate =>
+                candidate.StandardId == lessonPlan.StandardId &&
+                candidate.SubjectId == lessonPlan.SubjectId));
+
+        var assignedBySubject = assignment != null &&
+            assignment.Teachers.Any(teacher => teacher.TeacherId == currentEmployee.Id);
+
+        var assignedByDivisionAllocation = await teacherSubjectAllocationRepository.AnyAsync(
+            allocation =>
+                allocation.StandardId == lessonPlan.StandardId &&
+                allocation.DivisionId == lessonPlan.DivisionId &&
+                allocation.SubjectId == lessonPlan.SubjectId &&
+                allocation.Teachers.Any(teacher => teacher.TeacherId == currentEmployee.Id));
+
+        if (!assignedBySubject && !assignedByDivisionAllocation)
+        {
+            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+        }
+    }
+
+    private Task<Employee?> GetCurrentEmployeeAsync()
+    {
+        if (!CurrentUser.Id.HasValue)
+        {
+            return Task.FromResult<Employee?>(null);
+        }
+
+        return employeeRepository.FirstOrDefaultAsync(x => x.UserId == CurrentUser.Id.Value);
+    }
+
+    private async Task<HashSet<Guid>> GetCurrentTeacherSubjectOwnedPlanIdsAsync(
+        IQueryable<LessonPlan> unscopedQuery)
+    {
+        if (IsAdminUser() || !CurrentUser.Id.HasValue)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var currentEmployee = await GetCurrentEmployeeAsync();
+        if (currentEmployee == null)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(
+            assignment => assignment.Teachers);
+        var assignedSubjects = await AsyncExecuter.ToListAsync(
+            assignedSubjectQuery.Where(assignment =>
+                assignment.Teachers.Any(teacher => teacher.TeacherId == currentEmployee.Id)));
+        var assignedSubjectKeys = assignedSubjects
+            .Select(assignment => (assignment.StandardId, assignment.SubjectId))
+            .ToHashSet();
+
+        var allocations = await teacherSubjectAllocationRepository.GetListAsync(
+            allocation => allocation.Teachers.Any(teacher => teacher.TeacherId == currentEmployee.Id));
+        var allocatedSubjectKeys = allocations
+            .Select(allocation => (allocation.StandardId, allocation.DivisionId, allocation.SubjectId))
+            .ToHashSet();
+
+        var teacherPlans = await AsyncExecuter.ToListAsync(
+            unscopedQuery.Where(plan => plan.TeacherId == currentEmployee.Id));
+
+        return teacherPlans
+            .Where(plan =>
+                assignedSubjectKeys.Contains((plan.StandardId, plan.SubjectId)) ||
+                allocatedSubjectKeys.Contains((plan.StandardId, plan.DivisionId, plan.SubjectId)))
+            .Select(plan => plan.Id)
+            .ToHashSet();
+    }
+
     private async Task EnsureOwnTeacherRecordAsync(Guid teacherId, string action)
     {
-        if (await HasClassTeacherAccessAsync())
+        if (IsAdminUser() || await HasClassTeacherAccessAsync())
         {
             return;
         }
 
-        if (teacherId != CurrentUser.GetId())
+        var currentEmployee = await GetCurrentEmployeeAsync();
+
+        if (currentEmployee?.Id == teacherId)
         {
-            throw new UserFriendlyException($"You can only {action} your own lesson records.");
+            return;
         }
+
+        if (currentEmployee == null)
+        {
+            throw new AbpAuthorizationException(
+                "Your authenticated user is not linked to an employee record, so lesson records cannot be created or changed.");
+        }
+
+        throw new AbpAuthorizationException($"You can only {action} your own lesson records.");
     }
 
     private bool IsAdminUser()

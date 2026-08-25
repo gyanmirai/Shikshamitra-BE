@@ -43,6 +43,8 @@ public class UpdateSalaryTemplateDraftDto
 {
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
+	public string DefaultSalaryBasis { get; set; } = "GROSS";
+	public string DefaultProtectionPolicy { get; set; } = "PROTECT_GROSS";
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
 }
 
@@ -51,6 +53,8 @@ public class SalaryTemplateVersionDto : EntityDto<Guid>
 	public int VersionNumber { get; set; }
 	public string Status { get; set; } = "DRAFT";
 	public DateTime? PublishedAt { get; set; }
+	public string DefaultSalaryBasis { get; set; } = "GROSS";
+	public string DefaultProtectionPolicy { get; set; } = "PROTECT_GROSS";
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
 }
 
@@ -74,7 +78,10 @@ public class SalaryTemplateListDto
 public class CalculateSalaryTemplateRequestDto
 {
 	public string SalaryBasis { get; set; } = "GROSS";
+	public string ProtectionPolicy { get; set; } = "PROTECT_GROSS";
 	public decimal MonthlyAmount { get; set; }
+	public DateTime EffectiveMonth { get; set; } = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+	public Guid? EmployeeId { get; set; }
 	public Guid? PfRuleId { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
 }
@@ -88,6 +95,32 @@ public class CalculatedSalaryLineDto
 	public string SemanticType { get; set; } = "ORDINARY";
 	public string FormulaType { get; set; } = "FIXED_AMOUNT";
 	public bool IsStatutory { get; set; }
+	public string LineSource { get; set; } = "TEMPLATE";
+	public bool Persistable { get; set; } = true;
+}
+
+public class SalaryTemplateTargetResultDto
+{
+	public decimal Requested { get; set; }
+	public decimal Achieved { get; set; }
+	public decimal Difference { get; set; }
+	public bool IsExact { get; set; }
+}
+
+public class SalaryTemplateEsiPreviewDto
+{
+	public bool IsConfigured { get; set; }
+	public bool IsCovered { get; set; }
+	public bool CanCalculate { get; set; }
+	public string? CoverageDecision { get; set; }
+	public decimal StatutoryWages { get; set; }
+	public decimal WageCeiling { get; set; }
+	public decimal EmployeeContribution { get; set; }
+	public decimal EmployerContribution { get; set; }
+	public decimal GovernmentContribution { get; set; }
+	public Guid? RuleId { get; set; }
+	public int? RuleVersion { get; set; }
+	public List<string> IssueCodes { get; set; } = [];
 }
 
 public class SalaryTemplateCalculationDto
@@ -96,13 +129,18 @@ public class SalaryTemplateCalculationDto
 	public Guid TemplateVersionId { get; set; }
 	public int TemplateVersion { get; set; }
 	public string SalaryBasis { get; set; } = "GROSS";
+	public string ProtectionPolicy { get; set; } = "PROTECT_GROSS";
 	public decimal QuotedMonthlyAmount { get; set; }
+	public DateTime EffectiveMonth { get; set; }
 	public decimal GrossSalary { get; set; }
 	public decimal BasicSalary { get; set; }
 	public decimal TotalDeductions { get; set; }
 	public decimal NetSalary { get; set; }
 	public decimal EmployerContributionTotal { get; set; }
 	public decimal EmployerCost { get; set; }
+	public decimal ProtectedMonthlyAmount { get; set; }
+	public SalaryTemplateTargetResultDto TargetResult { get; set; } = new();
+	public SalaryTemplateEsiPreviewDto EmployeeStateInsurance { get; set; } = new();
 	public List<CalculatedSalaryLineDto> Earnings { get; set; } = [];
 	public List<CalculatedSalaryLineDto> Deductions { get; set; } = [];
 	public List<CalculatedSalaryLineDto> EmployerContributions { get; set; } = [];
@@ -145,8 +183,18 @@ public class UpdateSalaryTemplateDraftDtoValidator : AbstractValidator<UpdateSal
 	{
 		RuleFor(x => x.Name).NotEmpty().MaximumLength(160);
 		RuleFor(x => x.Description).MaximumLength(500);
+		RuleFor(x => x.DefaultSalaryBasis).Must(BeSalaryBasis);
+		RuleFor(x => x.DefaultProtectionPolicy).Must(BeProtectionPolicy);
 		RuleForEach(x => x.Rules).SetValidator(new SalaryTemplateRuleDtoValidator());
 	}
+
+	private static bool BeSalaryBasis(string value) =>
+		Enum.TryParse<SalaryInputBasis>(Normalize(value), true, out _);
+
+	private static bool BeProtectionPolicy(string value) =>
+		Enum.TryParse<CompensationProtectionPolicy>(Normalize(value), true, out _);
+
+	private static string Normalize(string? value) => value?.Replace("_", string.Empty).Replace("-", string.Empty) ?? string.Empty;
 }
 
 public class SalaryTemplateRuleDtoValidator : AbstractValidator<SalaryTemplateRuleDto>
@@ -180,8 +228,12 @@ public class CalculateSalaryTemplateRequestDtoValidator : AbstractValidator<Calc
 {
 	public CalculateSalaryTemplateRequestDtoValidator()
 	{
-		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME");
+		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME" or "EMPLOYER_COST");
+		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_GROSS" or "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
+		RuleFor(x => x.EffectiveMonth)
+			.Must(x => x.Day == 1)
+			.WithMessage("EffectiveMonth must be the first day of a month.");
 		RuleFor(x => x.StatutoryProfile).Equal("IN-GJ");
 	}
 }

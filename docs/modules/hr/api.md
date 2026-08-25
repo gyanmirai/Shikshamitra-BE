@@ -106,9 +106,11 @@ Payroll APIs manage setup, preview, review, lock, and salary slips:
 | Provident fund rules | `/api/payroll/pf-rules` | `HR.PayrollManagement.Settings.PfRule.*` | Implemented |
 | Salary structure templates | `/api/payroll/salary-templates*` | `HR.PayrollManagement.Settings.SalaryTemplates.*` | Implemented |
 | Gujarat professional-tax rules | `/api/payroll/professional-taxes` | `HR.PayrollManagement.Settings.ProfessionalTax.*` | Implemented |
+| ESI statutory scheme | `/api/payroll/statutory-schemes/esi*` | `HR.PayrollManagement.Settings.StatutorySchemes.*` | Implemented |
 | Pay elements | `/api/payroll/pay-elements` | Class-level authorization | Implemented |
 | Payroll policies | `/api/hr/payroll/policies` | `HR.PayrollManagement.Settings.PayrollPolicies.*` | Implemented |
 | Salary structure | `/api/payroll/employees/{employeeId}/salary-structure` | `HR.Employee.EmployeeList.*` | Implemented |
+| Compensation revisions | `/api/payroll/employees/{employeeId}/compensation-revisions*` | `HR.PayrollManagement.CompensationRevisions.*` | Implemented |
 | Run payroll | `/api/payroll/run` | `HR.PayrollManagement.RunPayroll.*` | Implemented |
 | Salary slips | `/api/payroll/salary-slips` | `HR.PayrollManagement.GenerateSalarySlip.*` | Implemented |
 | Payroll attendance imports | `/api/payroll/attendance-imports*` | `HR.PayrollManagement.RunPayroll.View` | Implemented |
@@ -119,13 +121,33 @@ Payroll lock is idempotent for an already locked month and returns the documente
 Finalized and Paid salary slips are immutable and are both included in month-lock and dependency-impact checks.
 Saved employee salary-component rows satisfy salary-structure readiness even when optional employee payroll metadata has not been saved.
 
-Salary structure templates are tenant-scoped, versioned smart fillers.
-Published versions are immutable, and applying or reapplying a template writes ordinary employee salary-component rows without creating a persistent employee-template assignment.
-The calculate endpoint accepts Gross or Take-home basis and returns earnings, employee deductions, employer contributions, statutory references, warnings, and a formula trace.
+Salary structure templates are tenant-scoped, versioned calculation definitions.
+Published versions are immutable and carry a default quote basis and protection policy.
+The calculate endpoint accepts Gross, Take-home, or Employer Cost, an effective month, a protection policy, and optional employee context.
+It returns earnings, employee deductions, employer contributions, ESI coverage and contribution details, statutory references, target variance, warnings, and a formula trace.
 `GET /api/payroll/salary-templates/published` exposes only the current published versions to payroll-structure users, while the settings list also returns the latest draft and current published version.
 `GET /api/payroll/salary-templates/component-catalog` returns active tenant earning and deduction components to Salary Template View users.
 Creating a salary template produces a blank draft, and draft updates accept variable component rules keyed by component IDs while the server controls internal dependency codes.
 Payroll preview recalculates employee PF from prorated eligible wages and Gujarat professional tax from actual monthly gross.
+Payroll preview evaluates ESI independently from salary templates after the tenant activates its establishment profile.
+ESI uses effective-dated component wage classifications, the employee coverage record, the standard or disability ceiling, contribution-period continuation, and audited overrides.
+The wage-mapping catalog includes active master earnings and employee-specific earnings applicable to the selected month so a custom salary line cannot become an unresolvable payroll blocker.
+`GET` and `POST /api/payroll/statutory-schemes/esi/employees/{employeeId}/overrides` expose immutable exception history and add permission-controlled exceptions.
+When exceptions overlap, the newest applicable coverage or amount exception is authoritative.
+Unclassified wages, pending enrollment review, and missing required insurance numbers block payroll lock.
+Locked salary slips retain the ESI rule version, statutory wages, coverage decision, insurance number, contribution period, employee deduction, and employer contribution.
+PwD employer-share relief requires the PwD wage-ceiling category, an effective start date, and a disability evidence reference.
+Valid relief moves the employer ESI share to the government contribution ledger and does not reduce the employee deduction.
+Invalid PwD relief data is rejected before enrollment is saved.
+Recurring employee compensation is stored as effective-dated immutable revisions with Draft, Pending Approval, Approved, Rejected, and Superseded states.
+Create, update, submit, approve, and reject operations are separate permissioned endpoints.
+Employee enrollment and override endpoints enforce the employee scope in addition to the route permission.
+Impact preview returns only employees in the caller's HR scope, while tenant-wide statutory writes and activation require HR-wide scope.
+Compensation audit identities, timestamps, rejection reasons, and calculation snapshots require `HR.PayrollManagement.CompensationRevisions.ViewAudit`.
+The creator or submitter cannot approve the same revision.
+Payroll resolves the latest approved revision for the month and keeps one-time salary components separate.
+Locked payroll at or after the effective month prevents compensation revision changes.
+Payroll records quote provenance and warns when the normalized protected amount differs from the approved target without changing salary or blocking lock.
 The selected effective professional-tax slab also controls whether tax is deducted in an employee's employment cessation month.
 Employer PF is stored separately and never reduces employee net pay.
 Percentage-based earning components with a custom-component base may reference only an active earning component in the current tenant and may not create a self-reference or dependency cycle.

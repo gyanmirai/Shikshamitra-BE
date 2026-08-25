@@ -71,6 +71,11 @@ public static class PayrollLockPreconditionGuard
 		       || issues.Contains(IssueCodes.NegativeNetPay)
 		       || issues.Contains(IssueCodes.AttendanceSalaryDeductionConfiguration)
 		       || issues.Contains(IssueCodes.PayrollPolicyConfiguration)
-		       || issues.Contains(IssueCodes.NoWorkingDays);
+		       || issues.Contains(IssueCodes.NoWorkingDays)
+		       || issues.Contains(IssueCodes.EsiEstablishmentInactive)
+		       || issues.Contains(IssueCodes.EsiWageClassificationRequired)
+		       || issues.Contains(IssueCodes.EsiEnrollmentReviewRequired)
+		       || issues.Contains(IssueCodes.EsiInsuranceNumberRequired)
+		       || issues.Contains(IssueCodes.CompensationRevisionRequired);
 	}
 }

@@ -2,11 +2,22 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Statutory;
 using Volo.Abp;
 
 namespace ShikshaMitra.HR.Payroll.Templates;
 
 internal sealed record SalaryTemplateComponent(Guid Id, string Name);
+
+internal sealed record SalaryTemplateEsiEvaluationContext(
+	DateTime EffectiveMonth,
+	StatutoryRuleVersion Rule,
+	StatutoryEstablishment Establishment,
+	EmployeeStatutoryEnrollment? Enrollment,
+	IReadOnlyDictionary<Guid, StatutoryWageTreatment> ComponentTreatments,
+	IReadOnlyList<StatutoryOverride> Overrides,
+	Guid DeductionComponentId,
+	string DeductionComponentName);
 
 internal sealed record SalaryTemplateEvaluation(
 	decimal Gross,
@@ -17,7 +28,11 @@ internal sealed record SalaryTemplateEvaluation(
 	List<CalculatedSalaryLineDto> Earnings,
 	List<CalculatedSalaryLineDto> Deductions,
 	List<CalculatedSalaryLineDto> EmployerContributions,
-	List<string> Trace);
+	List<string> Trace,
+	EsiStatutoryCalculationResult? EmployeeStateInsurance)
+{
+	public decimal EmployerCost => Math.Round(Gross + EmployerContributionTotal, 2, MidpointRounding.AwayFromZero);
+}
 
 internal static class SalaryTemplateCalculator
 {
@@ -193,54 +208,111 @@ internal static class SalaryTemplateCalculator
 		IReadOnlyList<SalaryTemplateRule> rules,
 		IReadOnlyDictionary<Guid, SalaryTemplateComponent> components,
 		ProvidentFund? pfRule,
-		IReadOnlyList<ProfessionalTax> professionalTaxSlabs)
+		IReadOnlyList<ProfessionalTax> professionalTaxSlabs,
+		SalaryTemplateEsiEvaluationContext? esiContext = null)
 	{
 		ValidateRules(rules);
 		var gross = inputBasis == SalaryInputBasis.Gross
 			? Round(monthlyAmount)
-			: SolveGross(monthlyAmount, rules, components, pfRule, professionalTaxSlabs);
-		return EvaluateGross(gross, rules, components, pfRule, professionalTaxSlabs);
+			: SolveGross(inputBasis, monthlyAmount, rules, components, pfRule, professionalTaxSlabs, esiContext);
+		return EvaluateGross(gross, rules, components, pfRule, professionalTaxSlabs, esiContext: esiContext);
 	}
 
 	private static decimal SolveGross(
-		decimal targetNet,
+		SalaryInputBasis inputBasis,
+		decimal target,
 		IReadOnlyList<SalaryTemplateRule> rules,
 		IReadOnlyDictionary<Guid, SalaryTemplateComponent> components,
 		ProvidentFund? pfRule,
-		IReadOnlyList<ProfessionalTax> slabs)
+		IReadOnlyList<ProfessionalTax> slabs,
+		SalaryTemplateEsiEvaluationContext? esiContext)
 	{
-		var taxAmounts = slabs.Select(x => x.TaxAmount).Append(0m).Distinct().OrderBy(x => x).ToList();
-		var candidates = new List<decimal>();
-		foreach (var forcedTax in taxAmounts)
+		var upperBound = inputBasis == SalaryInputBasis.EmployerCost
+			? Round(target)
+			: Round(Math.Min(100_000_000m, Math.Max(target * 2m + 100_000m, target + 1_000_000m)));
+		var breakpoints = new SortedSet<decimal> { 0.01m, upperBound };
+		foreach (var slab in slabs)
 		{
-			var gross = Math.Max(0.01m, targetNet + forcedTax);
-			for (var iteration = 0; iteration < 100; iteration++)
+			AddBreakpoint(breakpoints, slab.FromSalary, upperBound);
+			if (slab.ToSalary.HasValue)
 			{
-				var evaluation = EvaluateGross(gross, rules, components, pfRule, slabs, forcedTax);
-				var next = Round(targetNet + evaluation.TotalDeductions);
-				if (Math.Abs(next - gross) <= 0.01m)
+				AddBreakpoint(breakpoints, slab.ToSalary.Value + 0.01m, upperBound);
+			}
+		}
+
+		AddEsiCoverageBreakpoints(
+			breakpoints,
+			upperBound,
+			rules,
+			components,
+			pfRule,
+			slabs,
+			esiContext);
+
+		var candidates = new Dictionary<decimal, SalaryTemplateEvaluation>();
+		var boundaries = breakpoints.OrderBy(x => x).ToList();
+		for (var index = 0; index < boundaries.Count - 1; index++)
+		{
+			var low = boundaries[index];
+			var high = boundaries[index + 1];
+			AddCandidate(candidates, low, rules, components, pfRule, slabs, esiContext);
+			AddCandidate(candidates, high, rules, components, pfRule, slabs, esiContext);
+
+			var lowPaise = ToPaise(low);
+			var highPaise = ToPaise(high);
+			while (lowPaise <= highPaise)
+			{
+				var midPaise = lowPaise + (highPaise - lowPaise) / 2;
+				var midGross = FromPaise(midPaise);
+				var evaluation = TryEvaluateGross(midGross, rules, components, pfRule, slabs, esiContext);
+				if (evaluation == null)
 				{
-					gross = next;
-					break;
+					lowPaise = midPaise + 1;
+					continue;
 				}
 
-				gross = next;
+				candidates[midGross] = evaluation;
+				var achieved = inputBasis == SalaryInputBasis.TakeHome ? evaluation.Net : evaluation.EmployerCost;
+				if (inputBasis == SalaryInputBasis.TakeHome)
+				{
+					if (achieved >= target)
+					{
+						highPaise = midPaise - 1;
+					}
+					else
+					{
+						lowPaise = midPaise + 1;
+					}
+				}
+				else if (achieved <= target)
+				{
+					lowPaise = midPaise + 1;
+				}
+				else
+				{
+					highPaise = midPaise - 1;
+				}
 			}
 
-			var actual = EvaluateGross(gross, rules, components, pfRule, slabs);
-			if (Math.Abs(actual.Net - targetNet) <= 0.01m)
+			for (var paise = Math.Max(ToPaise(low), highPaise - 2); paise <= Math.Min(ToPaise(high), lowPaise + 2); paise++)
 			{
-				candidates.Add(gross);
+				AddCandidate(candidates, FromPaise(paise), rules, components, pfRule, slabs, esiContext);
 			}
 		}
 
-		if (candidates.Count == 0)
+		var feasible = candidates.Values.Where(evaluation => inputBasis == SalaryInputBasis.TakeHome
+			? evaluation.Net >= target
+			: evaluation.EmployerCost <= target).ToList();
+		if (feasible.Count == 0)
 		{
-			throw new BusinessException("HR:Payroll:TakeHomeTargetNotSolvable")
-				.WithData("targetNet", targetNet);
+			throw new BusinessException("HR:Payroll:CompensationTargetNotSolvable")
+				.WithData("salaryBasis", inputBasis.ToString())
+				.WithData("target", target);
 		}
 
-		return candidates.Min();
+		return inputBasis == SalaryInputBasis.TakeHome
+			? feasible.OrderBy(x => x.Gross).ThenBy(x => x.Net - target).First().Gross
+			: feasible.OrderByDescending(x => x.Gross).ThenBy(x => target - x.EmployerCost).First().Gross;
 	}
 
 	private static SalaryTemplateEvaluation EvaluateGross(
@@ -249,7 +321,8 @@ internal static class SalaryTemplateCalculator
 		IReadOnlyDictionary<Guid, SalaryTemplateComponent> components,
 		ProvidentFund? pfRule,
 		IReadOnlyList<ProfessionalTax> professionalTaxSlabs,
-		decimal? forcedProfessionalTax = null)
+		decimal? forcedProfessionalTax = null,
+		SalaryTemplateEsiEvaluationContext? esiContext = null)
 	{
 		var values = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 		var earnings = new List<CalculatedSalaryLineDto>();
@@ -314,7 +387,9 @@ internal static class SalaryTemplateCalculator
 						Amount = employerAmount,
 						SemanticType = ToContractEnum(PayrollComponentSemanticType.EmployeeProvidentFund.ToString()),
 						FormulaType = ToContractEnum(rule.FormulaType.ToString()),
-						IsStatutory = true
+						IsStatutory = true,
+						LineSource = "SYSTEM_STATUTORY",
+						Persistable = false
 					});
 					trace.Add($"Employee PF = {eligibleWage:0.00} x {pfRule.EmployeePercentage:0.####}% = {amount:0.00}");
 					break;
@@ -330,22 +405,175 @@ internal static class SalaryTemplateCalculator
 
 			var line = ToLine(rule, components, amount);
 			line.IsStatutory = rule.FormulaType is SalaryTemplateFormulaType.EmployeeProvidentFund or SalaryTemplateFormulaType.ProfessionalTax;
+			if (line.IsStatutory)
+			{
+				line.LineSource = "SYSTEM_STATUTORY";
+				line.Persistable = false;
+			}
 			deductions.Add(line);
 			values[rule.Code] = amount;
 		}
 
+		EsiStatutoryCalculationResult? esiResult = null;
+		if (esiContext != null)
+		{
+			var wageLines = earnings.Select(line => new StatutoryWageLine(
+				line.ComponentId,
+				line.Name,
+				line.Amount,
+				esiContext.ComponentTreatments.GetValueOrDefault(line.ComponentId, StatutoryWageTreatment.Unclassified)))
+				.ToList();
+			esiResult = EsiStatutoryCalculator.Calculate(
+				esiContext.EffectiveMonth,
+				esiContext.Rule,
+				esiContext.Establishment,
+				esiContext.Enrollment,
+				wageLines,
+				esiContext.Overrides);
+			if (esiResult.IsCovered && esiResult.CanCalculate)
+			{
+				deductions.Add(new CalculatedSalaryLineDto
+				{
+					ComponentId = esiContext.DeductionComponentId,
+					Code = "EMPLOYEE_ESI",
+					Name = esiContext.DeductionComponentName,
+					Amount = esiResult.EmployeeContribution,
+					SemanticType = "EMPLOYEE_STATE_INSURANCE",
+					FormulaType = "EMPLOYEE_STATE_INSURANCE",
+					IsStatutory = true,
+					LineSource = "SYSTEM_STATUTORY",
+					Persistable = false
+				});
+				employerContributions.Add(new CalculatedSalaryLineDto
+				{
+					ComponentId = esiContext.DeductionComponentId,
+					Code = "EMPLOYER_ESI",
+					Name = "Employer State Insurance (ESI)",
+					Amount = esiResult.EmployerContribution,
+					SemanticType = "EMPLOYEE_STATE_INSURANCE",
+					FormulaType = "EMPLOYEE_STATE_INSURANCE",
+					IsStatutory = true,
+					LineSource = "SYSTEM_STATUTORY",
+					Persistable = false
+				});
+				trace.Add($"Employee ESI = {esiResult.EmployeeContribution:0.00}; employer ESI = {esiResult.EmployerContribution:0.00}");
+			}
+		}
+
 		var totalDeductions = Round(deductions.Sum(x => x.Amount));
+		var displayOrderByCode = rules.ToDictionary(x => x.Code, x => x.DisplayOrder, StringComparer.OrdinalIgnoreCase);
 		return new SalaryTemplateEvaluation(
 			gross,
 			basic,
 			totalDeductions,
 			Round(gross - totalDeductions),
 			Round(employerContributions.Sum(x => x.Amount)),
-			earnings.OrderBy(x => rules.Single(r => r.Code == x.Code).DisplayOrder).ToList(),
-			deductions.OrderBy(x => rules.Single(r => r.Code == x.Code).DisplayOrder).ToList(),
+			earnings.OrderBy(x => displayOrderByCode.GetValueOrDefault(x.Code, int.MaxValue)).ToList(),
+			deductions.OrderBy(x => displayOrderByCode.GetValueOrDefault(x.Code, int.MaxValue)).ToList(),
 			employerContributions,
-			trace);
+			trace,
+			esiResult);
 	}
+
+	private static void AddEsiCoverageBreakpoints(
+		ISet<decimal> breakpoints,
+		decimal upperBound,
+		IReadOnlyList<SalaryTemplateRule> rules,
+		IReadOnlyDictionary<Guid, SalaryTemplateComponent> components,
+		ProvidentFund? pfRule,
+		IReadOnlyList<ProfessionalTax> slabs,
+		SalaryTemplateEsiEvaluationContext? esiContext)
+	{
+		if (esiContext == null || upperBound <= 0.01m)
+		{
+			return;
+		}
+
+		const int samples = 128;
+		decimal? previousGross = null;
+		bool? previousCoverage = null;
+		for (var index = 0; index <= samples; index++)
+		{
+			var gross = Round(0.01m + (upperBound - 0.01m) * index / samples);
+			var evaluation = TryEvaluateGross(gross, rules, components, pfRule, slabs, esiContext);
+			if (evaluation?.EmployeeStateInsurance == null)
+			{
+				continue;
+			}
+
+			var coverage = evaluation.EmployeeStateInsurance.IsCovered;
+			if (previousCoverage.HasValue && previousCoverage.Value != coverage && previousGross.HasValue)
+			{
+				var low = ToPaise(previousGross.Value);
+				var high = ToPaise(gross);
+				while (low < high)
+				{
+					var mid = low + (high - low) / 2;
+					var midEvaluation = TryEvaluateGross(FromPaise(mid), rules, components, pfRule, slabs, esiContext);
+					if (midEvaluation?.EmployeeStateInsurance?.IsCovered == previousCoverage.Value)
+					{
+						low = mid + 1;
+					}
+					else
+					{
+						high = mid;
+					}
+				}
+
+				AddBreakpoint(breakpoints, FromPaise(low), upperBound);
+			}
+
+			previousGross = gross;
+			previousCoverage = coverage;
+		}
+	}
+
+	private static void AddCandidate(
+		IDictionary<decimal, SalaryTemplateEvaluation> candidates,
+		decimal gross,
+		IReadOnlyList<SalaryTemplateRule> rules,
+		IReadOnlyDictionary<Guid, SalaryTemplateComponent> components,
+		ProvidentFund? pfRule,
+		IReadOnlyList<ProfessionalTax> slabs,
+		SalaryTemplateEsiEvaluationContext? esiContext)
+	{
+		var evaluation = TryEvaluateGross(gross, rules, components, pfRule, slabs, esiContext);
+		if (evaluation != null)
+		{
+			candidates[gross] = evaluation;
+		}
+	}
+
+	private static SalaryTemplateEvaluation? TryEvaluateGross(
+		decimal gross,
+		IReadOnlyList<SalaryTemplateRule> rules,
+		IReadOnlyDictionary<Guid, SalaryTemplateComponent> components,
+		ProvidentFund? pfRule,
+		IReadOnlyList<ProfessionalTax> slabs,
+		SalaryTemplateEsiEvaluationContext? esiContext)
+	{
+		try
+		{
+			return EvaluateGross(gross, rules, components, pfRule, slabs, esiContext: esiContext);
+		}
+		catch (BusinessException exception) when (exception.Code == "HR:Payroll:SalaryTemplateEarningsExceedGross")
+		{
+			return null;
+		}
+	}
+
+	private static void AddBreakpoint(ISet<decimal> breakpoints, decimal value, decimal upperBound)
+	{
+		var rounded = Round(value);
+		if (rounded >= 0.01m && rounded <= upperBound)
+		{
+			breakpoints.Add(rounded);
+		}
+	}
+
+	private static long ToPaise(decimal value) => decimal.ToInt64(Round(value) * 100m);
+
+	private static decimal FromPaise(long value) => value / 100m;
 
 	private static decimal CalculateOrdinaryAmount(
 		SalaryTemplateRule rule,

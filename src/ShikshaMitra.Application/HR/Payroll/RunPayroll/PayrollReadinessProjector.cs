@@ -63,6 +63,12 @@ internal static class PayrollReadinessProjector
 			recommendedActions.Add("review-payroll-rows");
 		}
 
+		if (items.Any(x => x.IssueCodes.Contains(IssueCodes.CompensationRevisionRequired)))
+		{
+			blockingIssues.Add(IssueCodes.CompensationRevisionRequired);
+			recommendedActions.Add("approve-compensation-revision");
+		}
+
 		return new RunPayrollReadinessSummary
 		{
 			Month = month,

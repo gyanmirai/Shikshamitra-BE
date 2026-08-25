@@ -108,7 +108,7 @@ public class EmployeeSalaryStructureUpdateWorkflow(
 			details.AccountHolderName,
 			details.AccountNumber,
 			details.IfscCode,
-			input.PfRuleId?.ToString(),
+			input.PfRuleId?.ToString() ?? details.PfRule,
 			details.EpfNumber,
 			details.UanNumber,
 			details.PunchId,

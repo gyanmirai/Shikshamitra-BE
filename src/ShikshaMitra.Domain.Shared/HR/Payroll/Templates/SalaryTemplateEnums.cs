@@ -14,7 +14,15 @@ public enum SalaryTemplateStatus
 public enum SalaryInputBasis
 {
 	Gross = 0,
-	TakeHome = 1
+	TakeHome = 1,
+	EmployerCost = 2
+}
+
+public enum CompensationProtectionPolicy
+{
+	ProtectGross = 0,
+	ProtectTakeHome = 1,
+	ProtectEmployerCost = 2
 }
 
 public enum SalaryTemplateLineKind
@@ -42,7 +50,8 @@ public enum PayrollComponentSemanticType
 	BalancingEarning = 2,
 	EmployeeProvidentFund = 3,
 	ProfessionalTax = 4,
-	DearnessAllowance = 5
+	DearnessAllowance = 5,
+	EmployeeStateInsurance = 6
 }
 
 public static class PayrollComponentSemanticTypeCodes
@@ -55,6 +64,7 @@ public static class PayrollComponentSemanticTypeCodes
 		PayrollComponentSemanticType.EmployeeProvidentFund => "EMPLOYEE_PROVIDENT_FUND",
 		PayrollComponentSemanticType.ProfessionalTax => "PROFESSIONAL_TAX",
 		PayrollComponentSemanticType.DearnessAllowance => "DEARNESS_ALLOWANCE",
+		PayrollComponentSemanticType.EmployeeStateInsurance => "EMPLOYEE_STATE_INSURANCE",
 		_ => throw new ArgumentOutOfRangeException(nameof(value), value, "Invalid payroll component semantic type.")
 	};
 

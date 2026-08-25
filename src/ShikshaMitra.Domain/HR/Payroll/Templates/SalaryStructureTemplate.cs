@@ -72,6 +72,8 @@ public class SalaryStructureTemplateVersion : FullAuditedAggregateRoot<Guid>, IM
 	public int VersionNumber { get; private set; }
 	public SalaryTemplateStatus Status { get; private set; }
 	public string RulesJson { get; private set; } = "[]";
+	public SalaryInputBasis DefaultSalaryBasis { get; private set; }
+	public CompensationProtectionPolicy DefaultProtectionPolicy { get; private set; }
 	public DateTime? PublishedAt { get; private set; }
 
 	protected SalaryStructureTemplateVersion()
@@ -83,12 +85,16 @@ public class SalaryStructureTemplateVersion : FullAuditedAggregateRoot<Guid>, IM
 		Guid? tenantId,
 		Guid templateId,
 		int versionNumber,
-		IReadOnlyList<SalaryTemplateRule> rules) : base(id)
+		IReadOnlyList<SalaryTemplateRule> rules,
+		SalaryInputBasis defaultSalaryBasis = SalaryInputBasis.Gross,
+		CompensationProtectionPolicy defaultProtectionPolicy = CompensationProtectionPolicy.ProtectGross) : base(id)
 	{
 		TenantId = tenantId;
 		TemplateId = templateId;
 		VersionNumber = versionNumber;
 		Status = SalaryTemplateStatus.Draft;
+		DefaultSalaryBasis = defaultSalaryBasis;
+		DefaultProtectionPolicy = defaultProtectionPolicy;
 		SetRules(rules);
 	}
 
@@ -103,6 +109,19 @@ public class SalaryStructureTemplateVersion : FullAuditedAggregateRoot<Guid>, IM
 		}
 
 		RulesJson = JsonSerializer.Serialize(rules ?? []);
+	}
+
+	public void SetQuoteDefaults(
+		SalaryInputBasis defaultSalaryBasis,
+		CompensationProtectionPolicy defaultProtectionPolicy)
+	{
+		if (Status != SalaryTemplateStatus.Draft)
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplateVersionImmutable");
+		}
+
+		DefaultSalaryBasis = defaultSalaryBasis;
+		DefaultProtectionPolicy = defaultProtectionPolicy;
 	}
 
 	public void Publish(DateTime publishedAt)

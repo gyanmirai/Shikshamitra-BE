@@ -42,7 +42,9 @@ public partial class HRSeederContributor
 			CurrentTenant.Id,
 			template.Id,
 			1,
-			rules);
+			rules,
+			SalaryInputBasis.EmployerCost,
+			CompensationProtectionPolicy.ProtectEmployerCost);
 
 		version.Publish(new DateTime(2022, 4, 1));
 		template.MarkPublished(1);

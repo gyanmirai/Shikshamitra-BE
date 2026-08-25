@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.Templates;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -13,7 +14,9 @@ namespace ShikshaMitra.Controllers.HR.Payroll;
 [RemoteService(Name = "Default")]
 [Route("api/payroll/salary-templates")]
 [Authorize]
-public class SalaryTemplateController(ISalaryTemplateAppService appService) : AbpControllerBase
+public class SalaryTemplateController(
+	ISalaryTemplateAppService appService,
+	IEmployeeAuthorizationService employeeAuthorizationService) : AbpControllerBase
 {
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
@@ -70,7 +73,15 @@ public class SalaryTemplateController(ISalaryTemplateAppService appService) : Ab
 
 	[HttpPost("versions/{templateVersionId:guid}/calculate")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
-	public Task<SalaryTemplateCalculationDto> CalculateAsync(
+	public async Task<SalaryTemplateCalculationDto> CalculateAsync(
 		Guid templateVersionId,
-		CalculateSalaryTemplateRequestDto input) => appService.CalculateAsync(templateVersionId, input);
+		CalculateSalaryTemplateRequestDto input)
+	{
+		if (input.EmployeeId.HasValue)
+		{
+			await employeeAuthorizationService.CheckEmployeeAccessAsync(input.EmployeeId.Value, requireOwnership: true);
+		}
+
+		return await appService.CalculateAsync(templateVersionId, input);
+	}
 }

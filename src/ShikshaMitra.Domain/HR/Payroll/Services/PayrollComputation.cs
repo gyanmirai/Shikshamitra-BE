@@ -4,6 +4,7 @@ using System.Linq;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.SalarySlips;
+using ShikshaMitra.HR.Payroll.Statutory;
 
 namespace ShikshaMitra.HR.Payroll.Services;
 
@@ -50,7 +51,9 @@ public static class PayrollComputation
 		var basicSalary = PayrollProrationCalculator.ProrateAmount(basicSalaryBase, isTemp: false, factor);
 
 		foreach (var component in components.Where(x => !x.IsEarning &&
-			x.SemanticType is not (Templates.PayrollComponentSemanticType.EmployeeProvidentFund or Templates.PayrollComponentSemanticType.ProfessionalTax)))
+			x.SemanticType is not (Templates.PayrollComponentSemanticType.EmployeeProvidentFund or
+				Templates.PayrollComponentSemanticType.ProfessionalTax or
+				Templates.PayrollComponentSemanticType.EmployeeStateInsurance)))
 		{
 			var amount = PayrollProrationCalculator.ProrateAmount(component.Amount, component.IsTemp, factor);
 			deductions.Add(new PayrollComputedLineItem(component, amount));
@@ -70,6 +73,10 @@ public static class PayrollComputation
 				contributionBase += earnings
 					.Where(x => x.Source.SemanticType == Templates.PayrollComponentSemanticType.DearnessAllowance)
 					.Sum(x => x.Amount);
+			}
+			if (contributionBase <= 0m)
+			{
+				contributionBase = grossSalary;
 			}
 			if (pfRule.WageCeiling.HasValue)
 			{
@@ -115,6 +122,64 @@ public static class PayrollComputation
 			}
 		}
 
+		Guid? esiRuleId = null;
+		int? esiRuleVersion = null;
+		var esiWages = 0m;
+		var esiGovernmentContribution = 0m;
+		string? esiCoverageDecision = null;
+		string? esiInsuranceNumber = null;
+		DateTime? esiContributionPeriodStart = null;
+		DateTime? esiContributionPeriodEnd = null;
+		var statutoryIssueCodes = new List<string>();
+		var esiContext = statutoryRules?.EmployeeStateInsurance;
+		if (esiContext != null)
+		{
+			var wageLines = earnings
+				.Select(x => new StatutoryWageLine(
+					x.Source.ComponentId ?? x.Source.Id,
+					x.Source.Name,
+					x.Amount,
+					esiContext.ComponentTreatments.TryGetValue(x.Source.ComponentId ?? x.Source.Id, out var treatment)
+						? treatment
+						: StatutoryWageTreatment.Unclassified))
+				.ToList();
+			var esiResult = EsiStatutoryCalculator.Calculate(
+				esiContext.PayrollMonth,
+				esiContext.Rule,
+				esiContext.Establishment,
+				esiContext.Enrollment,
+				wageLines,
+				esiContext.Overrides);
+
+			esiRuleId = esiContext.Rule.Id;
+			esiRuleVersion = esiContext.Rule.Version;
+			esiWages = esiResult.StatutoryWages;
+			esiGovernmentContribution = esiResult.GovernmentContribution;
+			esiCoverageDecision = esiResult.CoverageDecision;
+			esiInsuranceNumber = esiContext.Enrollment?.InsuranceNumber;
+			esiContributionPeriodStart = esiResult.ContributionPeriodStart;
+			esiContributionPeriodEnd = esiResult.ContributionPeriodEnd;
+			statutoryIssueCodes.AddRange(esiResult.IssueCodes);
+
+			if (esiResult.IsCovered && esiResult.CanCalculate)
+			{
+				if (esiResult.EmployeeContribution > 0m)
+				{
+					deductions.Add(new PayrollComputedLineItem(
+						esiContext.DeductionSource,
+						esiResult.EmployeeContribution));
+				}
+				if (esiResult.EmployerContribution > 0m)
+				{
+					employerContributions.Add(new PayrollComputedEmployerContribution(
+						"Employer State Insurance (ESI)",
+						esiResult.EmployerContribution,
+						esiContext.Rule.Id,
+						esiContext.Rule.Version));
+				}
+			}
+		}
+
 		var totalDeduction = deductions.Sum(x => x.Amount);
 		var employerContributionTotal = employerContributions.Sum(x => x.Amount);
 
@@ -135,7 +200,16 @@ public static class PayrollComputation
 			pfRuleId,
 			pfRuleVersion,
 			ptRuleId,
-			ptRuleVersion);
+			ptRuleVersion,
+			esiRuleId,
+			esiRuleVersion,
+			esiWages,
+			esiGovernmentContribution,
+			esiCoverageDecision,
+			esiInsuranceNumber,
+			esiContributionPeriodStart,
+			esiContributionPeriodEnd,
+			statutoryIssueCodes);
 	}
 
 	public static SalarySlipLineItem ToSalarySlipLineItem(PayrollComputedLineItem item) =>

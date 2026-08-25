@@ -43,7 +43,10 @@ public class ChapterAppService(
 				includeDetails: true
 			)).FirstOrDefault()
 			?? throw new BusinessException("Academic:Chapter:001", "Subject not assigned to this class");
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-create");
+		if (!await HasTeacherSubjectAccessAsync(assignedSubject))
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-create");
+		}
 
 		if (input.Select(x => x.ChapterNo).Distinct().Count() != input.Count)
 		{
@@ -89,7 +92,7 @@ public class ChapterAppService(
 		// even when they do not have a separate class/division UserScope assignment.
 		// Reporting managers inherit the same read visibility for their reportees'
 		// subject allocations.
-		if (!await HasTeacherSubjectReadAccessAsync(assignedSubject))
+		if (!await HasTeacherSubjectAccessAsync(assignedSubject))
 		{
 			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-read");
 		}
@@ -118,7 +121,7 @@ public class ChapterAppService(
 		return dtos;
 	}
 
-	private async Task<bool> HasTeacherSubjectReadAccessAsync(AssignedSubject assignedSubject)
+	private async Task<bool> HasTeacherSubjectAccessAsync(AssignedSubject assignedSubject)
 	{
 		if (!CurrentUser.Id.HasValue || await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
 		{
@@ -161,7 +164,10 @@ public class ChapterAppService(
 				includeDetails: true
 			)
 			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-update");
+		if (!await HasTeacherSubjectAccessAsync(assignedSubject))
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-update");
+		}
 
 		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
 		chapter.UpdateDetails(
@@ -224,7 +230,10 @@ public class ChapterAppService(
 				includeDetails: true
 			)
 			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-delete");
+		if (!await HasTeacherSubjectAccessAsync(assignedSubject))
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-delete");
+		}
 
 		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
 

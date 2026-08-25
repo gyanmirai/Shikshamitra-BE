@@ -436,12 +436,18 @@ public class LessonPlanAppService(
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-approve");
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
-        EnsurePlanIsAwaitingReview(lessonPlan);
 
         if (!await HasClassTeacherAccessAsync() && !await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
         {
             throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
         }
+
+        if (lessonPlan.Status == LessonPlanStatus.Approved)
+        {
+            return await GetAsync(id);
+        }
+
+        EnsurePlanIsAwaitingReview(lessonPlan);
 
         lessonPlan.Approve(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
@@ -455,12 +461,18 @@ public class LessonPlanAppService(
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-reject");
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
-        EnsurePlanIsAwaitingReview(lessonPlan);
 
         if (!await HasClassTeacherAccessAsync() && !await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
         {
             throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
         }
+
+        if (lessonPlan.Status == LessonPlanStatus.Rejected)
+        {
+            return await GetAsync(id);
+        }
+
+        EnsurePlanIsAwaitingReview(lessonPlan);
 
         lessonPlan.Reject(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
@@ -474,12 +486,18 @@ public class LessonPlanAppService(
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-request-changes");
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
-        EnsurePlanIsAwaitingReview(lessonPlan);
 
         if (!await HasClassTeacherAccessAsync() && !await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
         {
             throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
         }
+
+        if (lessonPlan.Status == LessonPlanStatus.NeedsChanges)
+        {
+            return await GetAsync(id);
+        }
+
+        EnsurePlanIsAwaitingReview(lessonPlan);
 
         lessonPlan.RequestChanges(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
@@ -622,7 +640,7 @@ public class LessonPlanAppService(
     public async Task<TeacherDiaryDto> CreateTeacherDiaryAsync(CreateUpdateTeacherDiaryDto input)
     {
         var plan = await lessonPlanRepository.GetAsync(input.LessonPlanId);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "teacher-diary-create");
+        await EnsureLessonPlanAccessAsync(plan, "teacher-diary-create");
         await EnsureOwnTeacherRecordAsync(plan.TeacherId, "create a diary for");
         await EnsureTeacherDiaryAllowedAsync(plan, input);
 
@@ -644,7 +662,7 @@ public class LessonPlanAppService(
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
         var existingPlan = await lessonPlanRepository.GetAsync(diary.LessonPlanId);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(existingPlan, operation: "teacher-diary-update");
+        await EnsureLessonPlanAccessAsync(existingPlan, "teacher-diary-update");
         await EnsureOwnTeacherRecordAsync(diary.TeacherId, "modify");
 
         if (input.LessonPlanId != diary.LessonPlanId)
@@ -665,7 +683,7 @@ public class LessonPlanAppService(
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
         var plan = await lessonPlanRepository.GetAsync(diary.LessonPlanId);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "teacher-diary-submit");
+        await EnsureLessonPlanAccessAsync(plan, "teacher-diary-submit");
         await EnsureOwnTeacherRecordAsync(diary.TeacherId, "submit");
         diary.Submit();
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using Shouldly;
 using Volo.Abp;
@@ -21,6 +22,8 @@ public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<
     private readonly IRepository<TenantSettings.RoomsManagement.Buildings.Building, Guid> _buildingRepository;
     private readonly IRepository<TenantSettings.RoomsManagement.Buildings.Floor, Guid> _floorRepository;
     private readonly IRepository<TenantSettings.RoomsManagement.RoomTypes.RoomType, Guid> _roomTypeRepository;
+    private readonly IRepository<UserScopeAssignment, Guid> _userScopeAssignmentRepository;
+    private readonly IUserScopeService _userScopeService;
     private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
 
     public RoomAvailabilityAppService_Tests()
@@ -31,6 +34,8 @@ public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<
         _buildingRepository = GetRequiredService<IRepository<TenantSettings.RoomsManagement.Buildings.Building, Guid>>();
         _floorRepository = GetRequiredService<IRepository<TenantSettings.RoomsManagement.Buildings.Floor, Guid>>();
         _roomTypeRepository = GetRequiredService<IRepository<TenantSettings.RoomsManagement.RoomTypes.RoomType, Guid>>();
+        _userScopeAssignmentRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+        _userScopeService = GetRequiredService<IUserScopeService>();
         _currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
     }
 
@@ -109,6 +114,42 @@ public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<
             // Assert
             created.Status.ShouldBe(RoomReservationStatus.Approved);
             created.CreatorId.ShouldBe(adminUserId);
+        }
+    }
+
+    [Fact]
+    public async Task CreateReservation_Should_Allow_InstituteWide_Booking_For_Scoped_Hod()
+    {
+        var seedUserId = Guid.NewGuid();
+        var (room, _) = await SeedRoomAndReservationAsync(seedUserId);
+        var hodUserId = Guid.NewGuid();
+
+        await _userScopeAssignmentRepository.InsertAsync(
+            new UserScopeAssignment(
+                Guid.NewGuid(),
+                null,
+                userId: hodUserId,
+                description: "Organization-wide room reservation test"),
+            autoSave: true);
+        await _userScopeService.InvalidateUserScopeCacheAsync(hodUserId);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(hodUserId, "HOD")))
+        {
+            var created = await _roomAvailabilityAppService.CreateReservationAsync(new CreateRoomReservationDto
+            {
+                RoomId = room.Id,
+                Date = DateTime.UtcNow.Date,
+                StartTime = new TimeSpan(12, 0, 0),
+                EndTime = new TimeSpan(13, 0, 0),
+                Purpose = "Yoga session",
+                ReservationType = RoomReservationType.Class
+            });
+
+            created.Status.ShouldBe(RoomReservationStatus.PendingApproval);
+
+            var visibleReservations = await _roomAvailabilityAppService.GetReservationsAsync(
+                new GetReservationsInputDto());
+            visibleReservations.ShouldContain(item => item.Id == created.Id);
         }
     }
 

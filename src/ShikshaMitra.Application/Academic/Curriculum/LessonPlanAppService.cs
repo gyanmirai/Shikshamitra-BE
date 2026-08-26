@@ -551,7 +551,15 @@ public class LessonPlanAppService(
     {
         var diaryQuery = await teacherDiaryRepository.GetQueryableAsync();
         var planQuery = await lessonPlanRepository.GetQueryableAsync();
+        var unscopedPlanQuery = planQuery;
         planQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(planQuery);
+        var subjectOwnedPlanIds = await GetCurrentTeacherSubjectOwnedPlanIdsAsync(unscopedPlanQuery);
+        if (subjectOwnedPlanIds.Count > 0)
+        {
+            planQuery = planQuery
+                .Concat(unscopedPlanQuery.Where(plan => subjectOwnedPlanIds.Contains(plan.Id)))
+                .Distinct();
+        }
 
         var query =
             from diary in diaryQuery
@@ -613,7 +621,7 @@ public class LessonPlanAppService(
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
         var diaryPlan = await lessonPlanRepository.GetAsync(diary.LessonPlanId);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(diaryPlan, operation: "teacher-diary-read");
+        await EnsureLessonPlanAccessAsync(diaryPlan, "teacher-diary-read");
 
         if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
@@ -652,7 +660,6 @@ public class LessonPlanAppService(
 
         var diary = new TeacherDiary(GuidGenerator.Create(), CurrentTenant.Id, plan.Id, plan.TeacherId, input.ActualDate);
         ApplyDiaryInput(diary, input);
-        diary.Submit();
 
         var inserted = await teacherDiaryRepository.InsertAsync(diary, autoSave: true);
         return (await MapTeacherDiariesAsync(new[] { inserted })).Single();
@@ -673,7 +680,6 @@ public class LessonPlanAppService(
         var plan = await lessonPlanRepository.GetAsync(input.LessonPlanId);
         await EnsureTeacherDiaryAllowedAsync(plan, input);
         ApplyDiaryInput(diary, input);
-        diary.Submit();
 
         await teacherDiaryRepository.UpdateAsync(diary);
         return await GetTeacherDiaryAsync(id);
@@ -849,23 +855,22 @@ public class LessonPlanAppService(
 
     private async Task EnsureLessonPlanAccessAsync(LessonPlan lessonPlan, string operation)
     {
-        try
+        var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+        if (UserScopeQueryExtensions.HasAccessToEntity(lessonPlan, scope))
         {
-            await userScopeAccessService.EnsureCurrentUserCanAccessAsync(
-                lessonPlan,
-                operation: operation);
             return;
         }
-        catch (BusinessException exception) when (exception.Code == UserScopeErrorCodes.AccessDenied)
+
+        if (IsAdminUser() || await HasClassTeacherAccessAsync())
         {
-            // Subject ownership is a valid lesson-plan scope, but it is not represented
-            // by the generic academic-year/standard/division UserScope entity mapping.
+            return;
         }
 
         var currentEmployee = await GetCurrentEmployeeAsync();
         if (currentEmployee == null || currentEmployee.Id != lessonPlan.TeacherId)
         {
-            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+            userScopeAccessService.EnsureCanAccess(lessonPlan, scope, operation: operation);
+            return;
         }
 
         var assignmentQuery = await assignedSubjectRepository.WithDetailsAsync(
@@ -887,7 +892,7 @@ public class LessonPlanAppService(
 
         if (!assignedBySubject && !assignedByDivisionAllocation)
         {
-            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+            userScopeAccessService.EnsureCanAccess(lessonPlan, scope, operation: operation);
         }
     }
 

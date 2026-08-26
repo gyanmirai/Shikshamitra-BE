@@ -123,7 +123,12 @@ public class ChapterAppService(
 
 	private async Task<bool> HasTeacherSubjectAccessAsync(AssignedSubject assignedSubject)
 	{
-		if (!CurrentUser.Id.HasValue || await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
+		// Subject allocation is an explicit resource-level grant. It must be checked
+		// before the hierarchical UserScope fallback, including for users who also
+		// have tenant-wide scope (for example HODs/teachers with broad permissions).
+		// Returning early for tenant-wide scope made the explicit teacher assignment
+		// unusable and caused valid chapter requests to be rejected by UserScope.
+		if (!CurrentUser.Id.HasValue)
 		{
 			return false;
 		}

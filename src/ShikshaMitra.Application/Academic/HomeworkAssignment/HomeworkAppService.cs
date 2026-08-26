@@ -7,6 +7,7 @@ using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
@@ -27,6 +28,7 @@ public class HomeworkAppService(
     IRepository<Standard, Guid> standardRepository,
     IRepository<Subject, Guid> subjectRepository,
     IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+    IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
     IRepository<AssignedSubjectChapter, Guid> chapterRepository,
     IHomeworkTypeRepository homeworkTypeRepository,
     IRepository<IdentityUser, Guid> userRepository,
@@ -34,7 +36,9 @@ public class HomeworkAppService(
     HomeworkManager homeworkManager,
     IAsyncQueryableExecuter asyncExecuter,
     IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository,
-    IRepository<AcademicCalendarDay, Guid> calendarDayRepository
+    IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
+    IRepository<Employee, Guid> employeeRepository,
+    IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, IHomeworkAppService
 {
 
@@ -56,6 +60,7 @@ public class HomeworkAppService(
         await EnsureCurrentUserCanAccessTargetAsync(
             academicMediumId,
             input.StandardId,
+            input.SubjectId,
             input.DivisionSchedules.Select(schedule => schedule.DivisionId));
 
         await homeworkManager.ValidateHomeworkTypeAsync(input.HomeworkTypeId);
@@ -313,6 +318,7 @@ public class HomeworkAppService(
         await EnsureCurrentUserCanAccessTargetAsync(
             homework.EducationMediumId ?? Guid.Empty,
             input.StandardId,
+            input.SubjectId,
             input.DivisionSchedules.Select(schedule => schedule.DivisionId));
 
         if (homework.Status != HomeworkStatus.Draft)
@@ -632,9 +638,14 @@ public class HomeworkAppService(
         }
 
         var scopeFilteredQuery = userScopeAccessService.ApplyScope(query, scope);
+        var accessibleHomeworkIds = await GetCurrentTeacherSubjectOwnedHomeworkIdsAsync(query);
+        accessibleHomeworkIds.UnionWith(await asyncExecuter.ToListAsync(
+            scopeFilteredQuery.Select(homework => homework.Id)));
         if (scope.DivisionIds.Count == 0)
         {
-            return scopeFilteredQuery;
+            // Explicit subject ownership remains valid without a separate generic
+            // division scope. This is the normal case for subject teachers/HODs.
+            return query.Where(homework => accessibleHomeworkIds.Contains(homework.Id));
         }
 
         // Homework can target multiple divisions while the legacy aggregate has no single
@@ -643,8 +654,10 @@ public class HomeworkAppService(
         var divisionScopedQuery = query.Where(homework =>
             homework.DivisionSchedules.Any() &&
             homework.DivisionSchedules.All(schedule => scope.DivisionIds.Contains(schedule.DivisionId)));
+        accessibleHomeworkIds.UnionWith(await asyncExecuter.ToListAsync(
+            divisionScopedQuery.Select(homework => homework.Id)));
 
-        return scopeFilteredQuery.Concat(divisionScopedQuery).Distinct();
+        return query.Where(homework => accessibleHomeworkIds.Contains(homework.Id));
     }
 
     private async Task EnsureCurrentUserCanAccessHomeworkAsync(
@@ -659,18 +672,35 @@ public class HomeworkAppService(
             return;
         }
 
+        if (await HasTeacherSubjectAccessAsync(
+                homework.StandardId,
+                homework.SubjectId,
+                homework.DivisionSchedules.Select(schedule => schedule.DivisionId).Distinct().ToList()))
+        {
+            return;
+        }
+
         userScopeAccessService.EnsureCanAccess(homework, scope, operation: operation);
     }
 
     private async Task EnsureCurrentUserCanAccessTargetAsync(
         Guid academicMediumId,
         Guid standardId,
+        Guid subjectId,
         IEnumerable<Guid> divisionIds)
     {
         var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
         var targetDivisionIds = divisionIds.Distinct().ToList();
         if (scope.IsAdmin || scope.HasTenantWideScope() ||
             (targetDivisionIds.Count > 0 && targetDivisionIds.All(scope.DivisionIds.Contains)))
+        {
+            return;
+        }
+
+        // A subject assignment is an explicit resource-level grant. Teachers and
+        // reporting managers may create homework for that subject even when their
+        // generic UserScope does not separately contain the target division.
+        if (await HasTeacherSubjectAccessAsync(standardId, subjectId, targetDivisionIds))
         {
             return;
         }
@@ -688,6 +718,101 @@ public class HomeworkAppService(
             CurrentTenant.Id,
             educationMediumId: academicMediumId);
         userScopeAccessService.EnsureCanAccess(target, scope, operation: "homework-target");
+    }
+
+    private async Task<bool> HasTeacherSubjectAccessAsync(
+        Guid standardId,
+        Guid subjectId,
+        IReadOnlyCollection<Guid> divisionIds)
+    {
+        var teacherIds = await GetCurrentAccessibleTeacherIdsAsync();
+        if (teacherIds.Count == 0)
+        {
+            return false;
+        }
+
+        var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(
+            assignment => assignment.Teachers);
+        var hasClassSubjectAssignment = await asyncExecuter.AnyAsync(
+            assignedSubjectQuery.Where(assignment =>
+                assignment.StandardId == standardId &&
+                assignment.SubjectId == subjectId &&
+                assignment.Teachers.Any(teacher => teacherIds.Contains(teacher.TeacherId))));
+        if (hasClassSubjectAssignment)
+        {
+            return true;
+        }
+
+        if (divisionIds.Count == 0)
+        {
+            return false;
+        }
+
+        var allocations = await teacherSubjectAllocationRepository.GetListAsync(allocation =>
+            allocation.StandardId == standardId &&
+            allocation.SubjectId == subjectId &&
+            divisionIds.Contains(allocation.DivisionId) &&
+            allocation.Teachers.Any(teacher => teacherIds.Contains(teacher.TeacherId)));
+        var allocatedDivisionIds = allocations.Select(allocation => allocation.DivisionId).ToHashSet();
+
+        // Multi-division homework must be authorized for every selected division.
+        return divisionIds.All(allocatedDivisionIds.Contains);
+    }
+
+    private async Task<HashSet<Guid>> GetCurrentAccessibleTeacherIdsAsync()
+    {
+        var teacherIds = new HashSet<Guid>();
+        if (!CurrentUser.Id.HasValue)
+        {
+            return teacherIds;
+        }
+
+        teacherIds.Add(CurrentUser.Id.Value);
+        var employee = await employeeRepository.FirstOrDefaultAsync(
+            candidate => candidate.UserId == CurrentUser.Id.Value);
+        if (employee != null)
+        {
+            teacherIds.Add(employee.Id);
+        }
+
+        teacherIds.UnionWith(await reportingManagerAccessService
+            .GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value));
+        return teacherIds;
+    }
+
+    private async Task<HashSet<Guid>> GetCurrentTeacherSubjectOwnedHomeworkIdsAsync(
+        IQueryable<HomeworkAssignmentEntity> unscopedQuery)
+    {
+        var teacherIds = await GetCurrentAccessibleTeacherIdsAsync();
+        if (teacherIds.Count == 0)
+        {
+            return [];
+        }
+
+        var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(
+            assignment => assignment.Teachers);
+        var assignedSubjects = await asyncExecuter.ToListAsync(
+            assignedSubjectQuery.Where(assignment =>
+                assignment.Teachers.Any(teacher => teacherIds.Contains(teacher.TeacherId))));
+        var assignedSubjectKeys = assignedSubjects
+            .Select(assignment => (assignment.StandardId, assignment.SubjectId))
+            .ToHashSet();
+
+        var allocations = await teacherSubjectAllocationRepository.GetListAsync(allocation =>
+            allocation.Teachers.Any(teacher => teacherIds.Contains(teacher.TeacherId)));
+        var allocatedSubjectKeys = allocations
+            .Select(allocation => (allocation.StandardId, allocation.DivisionId, allocation.SubjectId))
+            .ToHashSet();
+
+        var candidates = await asyncExecuter.ToListAsync(unscopedQuery);
+        return candidates
+            .Where(homework =>
+                assignedSubjectKeys.Contains((homework.StandardId, homework.SubjectId)) ||
+                (homework.DivisionSchedules.Count > 0 &&
+                 homework.DivisionSchedules.All(schedule =>
+                     allocatedSubjectKeys.Contains((homework.StandardId, schedule.DivisionId, homework.SubjectId)))))
+            .Select(homework => homework.Id)
+            .ToHashSet();
     }
 
     private async Task<List<LearningTaskDashboardItemDto>> BuildHomeworkDashboardRowsAsync(List<HomeworkAssignmentEntity> homeworks)

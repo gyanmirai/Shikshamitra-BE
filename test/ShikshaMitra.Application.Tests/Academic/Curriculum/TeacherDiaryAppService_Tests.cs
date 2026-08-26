@@ -26,6 +26,34 @@ public class TeacherDiaryAppService_Tests : ShikshaMitraApplicationTestBase<Shik
 	}
 
 	[Fact]
+	public async Task CreateTeacherDiaryAsync_Should_Save_Draft_Until_Explicit_Submit()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var plan = await CreateApprovedLessonPlanAsync();
+				var created = await _lessonPlanAppService.CreateTeacherDiaryAsync(
+					new CreateUpdateTeacherDiaryDto
+					{
+						LessonPlanId = plan.Id,
+						ActualDate = plan.PlannedDate,
+						ClassConducted = true,
+						ActualTopicCovered = "Draft diary topic",
+						ActualCompletionPercentage = 50
+					});
+
+				created.Status.ShouldBe(TeacherDiaryStatus.Draft);
+				created.SubmittedAt.ShouldBeNull();
+
+				var submitted = await _lessonPlanAppService.SubmitTeacherDiaryAsync(created.Id);
+				submitted.Status.ShouldBe(TeacherDiaryStatus.Submitted);
+				submitted.SubmittedAt.ShouldNotBeNull();
+			}
+		});
+	}
+
+	[Fact]
 	public async Task UpdateTeacherDiaryAsync_Should_Save_Changes_When_Diary_Is_Submitted()
 	{
 		await WithUnitOfWorkAsync(async () =>

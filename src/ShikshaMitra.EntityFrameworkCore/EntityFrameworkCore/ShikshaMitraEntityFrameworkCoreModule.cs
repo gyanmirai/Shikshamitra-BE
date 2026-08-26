@@ -86,7 +86,8 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
                 opt.DefaultWithDetailsFunc = query =>
                     query.Include(x => x.Chapters)
                          .ThenInclude(c => c.Documents)
-                         .Include(x => x.Documents);
+                         .Include(x => x.Documents)
+                         .Include(x => x.Teachers);
             });
 
             options.Entity<Standard>(opt =>

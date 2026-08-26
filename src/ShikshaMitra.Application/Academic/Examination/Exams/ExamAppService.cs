@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -612,7 +612,7 @@ public class ExamAppService(
 		var filterEndDate = input.EndDate?.DateTime;
 		if (isDefaultDateRange)
 		{
-			var today = Clock.Now.Date;
+			var today = DateTime.Now.Date;
 			var daysFromMonday = ((int)today.DayOfWeek + 6) % 7;
 			filterStartDate = today.AddDays(-daysFromMonday);
 			filterEndDate = filterStartDate.Value.AddDays(7).AddTicks(-1);
@@ -1306,12 +1306,12 @@ public class ExamAppService(
 				.WithData("ExamId", exam.Id);
 		}
 
-		if (Clock.Now <= finalEndAt.Value)
+		if (DateTime.Now <= finalEndAt.Value)
 		{
 			throw new BusinessException("ShikshaMitra.Exam:CompletionBeforeScheduleEnd")
 				.WithData("ExamId", exam.Id)
 				.WithData("FinalSubjectEndAt", finalEndAt.Value.ToString("yyyy-MM-dd HH:mm"))
-				.WithData("CurrentAt", Clock.Now.ToString("yyyy-MM-dd HH:mm"));
+				.WithData("CurrentAt", DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
 		}
 
 		var divisionIds = exam.ExamDivisions.Select(x => x.DivisionId).ToList();
@@ -1355,7 +1355,7 @@ public class ExamAppService(
 			return ExamStatus.Pending;
 		}
 
-		var now = Clock.Now;
+		var now = DateTime.Now;
 		var start = GetExamStartDateTime(exam);
 		var end = GetExamFinalEndAt(exam);
 		if (!start.HasValue || !end.HasValue)

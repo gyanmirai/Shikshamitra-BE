@@ -16,6 +16,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 
 namespace ShikshaMitra.Academic.Audit;
 
@@ -30,7 +31,8 @@ public class AcademicAuditTrailAppService(
 	IRepository<SubstitutionAuditLog, Guid> substitutionAuditRepository,
 	IRepository<SubstitutionRequest, Guid> substitutionRepository,
 	IRepository<SeatingPlanAuditLog, Guid> seatingPlanAuditRepository,
-	IRepository<ExamResultAuditLog, Guid> examResultAuditRepository)
+	IRepository<ExamResultAuditLog, Guid> examResultAuditRepository,
+	IRepository<IdentityUser, Guid> identityUserRepository)
 	: ApplicationService, IAcademicAuditTrailAppService
 {
 	private const int MaxSourceRows = 500;
@@ -47,6 +49,7 @@ public class AcademicAuditTrailAppService(
 		events.AddRange(await GetSubstitutionEventsAsync(input));
 		events.AddRange(await GetSeatingPlanEventsAsync(input));
 		events.AddRange(await GetResultEventsAsync(input));
+		await EnrichUserReferencesAsync(events);
 
 		var filtered = ApplyCommonFilters(events, input).ToList();
 		var total = filtered.Count;
@@ -56,6 +59,42 @@ public class AcademicAuditTrailAppService(
 			.ToList();
 
 		return new PagedResultDto<AcademicAuditEventDto>(total, sorted);
+	}
+
+	private async Task EnrichUserReferencesAsync(List<AcademicAuditEventDto> events)
+	{
+		var userIds = events.Where(x => x.ActorUserId.HasValue).Select(x => x.ActorUserId!.Value)
+			.Concat(events.SelectMany(x => x.ChangedFields)
+				.Where(x => x.Field.EndsWith("UserId", StringComparison.OrdinalIgnoreCase)
+					|| x.Field.EndsWith("CreatorId", StringComparison.OrdinalIgnoreCase)
+					|| x.Field.EndsWith("ModifierId", StringComparison.OrdinalIgnoreCase))
+				.SelectMany(x => new[] { x.OldValue, x.NewValue })
+				.Where(x => Guid.TryParse(x, out _)).Select(Guid.Parse))
+			.Distinct().ToList();
+		if (userIds.Count == 0) return;
+
+		var users = await identityUserRepository.GetListAsync(x => userIds.Contains(x.Id));
+		var names = users.ToDictionary(x => x.Id, x =>
+		{
+			var fullName = string.Join(" ", new[] { x.Name, x.Surname }.Where(n => !string.IsNullOrWhiteSpace(n)));
+			return string.IsNullOrWhiteSpace(fullName) ? x.UserName : fullName;
+		});
+
+		foreach (var auditEvent in events)
+		{
+			if (auditEvent.ActorUserId.HasValue && names.TryGetValue(auditEvent.ActorUserId.Value, out var actorName)
+				&& (string.IsNullOrWhiteSpace(auditEvent.ActorNameSnapshot) || Guid.TryParse(auditEvent.ActorDisplayName, out _)))
+				auditEvent.ActorDisplayName = actorName;
+
+			foreach (var field in auditEvent.ChangedFields.Where(x => x.Field.EndsWith("UserId", StringComparison.OrdinalIgnoreCase)
+				|| x.Field.EndsWith("CreatorId", StringComparison.OrdinalIgnoreCase)
+				|| x.Field.EndsWith("ModifierId", StringComparison.OrdinalIgnoreCase)))
+			{
+				field.DisplayName = field.DisplayName.Replace(" Id", string.Empty, StringComparison.OrdinalIgnoreCase);
+				if (Guid.TryParse(field.OldValue, out var oldId) && names.TryGetValue(oldId, out var oldName)) field.OldValue = oldName;
+				if (Guid.TryParse(field.NewValue, out var newId) && names.TryGetValue(newId, out var newName)) field.NewValue = newName;
+			}
+		}
 	}
 
 	public async Task<AcademicAuditEventDto> GetAsync(Guid id)
@@ -110,7 +149,7 @@ public class AcademicAuditTrailAppService(
 				entityName,
 				x.Action.ToString(),
 				x.ChangedAt,
-				$"{ToLabel(x.Action.ToString())} {entityName}",
+				$"{ToLabel(x.Action.ToString())}: {entityName}",
 				x.Id,
 				academicYearId,
 				x.ChangedByUserId,
@@ -393,7 +432,9 @@ public class AcademicAuditTrailAppService(
 	private static string Normalize(string value) => value.Trim().ToLowerInvariant().Replace("-", "_");
 
 	private static string ToLabel(string value) =>
-		System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(Normalize(value).Replace("_", " "));
+		System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(
+			System.Text.RegularExpressions.Regex.Replace(value.Trim(), "([a-z])([A-Z])", "$1 $2")
+				.Replace("_", " ").Replace("-", " ").ToLowerInvariant());
 
 	private static string BuildJson<T>(T value) => JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }

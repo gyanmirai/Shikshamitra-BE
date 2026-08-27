@@ -18,4 +18,14 @@ public interface IAdmissionApplicationAppService : IApplicationService
 	Task<AdmissionApplicationFormDto> ReopenFormAsync(Guid id);
 	Task<List<AdmissionFormChangeHistoryDto>> GetFormHistoryAsync(Guid id);
 	Task<AdmissionApplicationWorkflowDto> AdvanceWorkflowAsync(Guid id, AdvanceAdmissionWorkflowDto input);
+	Task<AdmissionApplicationDto> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input);
+	Task<AdmissionApplicationDto> ApproveAsync(Guid id, AdmissionApplicationDecisionDto input);
+	Task<AdmissionApplicationDto> RejectAsync(Guid id, AdmissionApplicationDecisionDto input);
+	Task<AdmissionApplicationDto> WaitlistAsync(Guid id, AdmissionApplicationDecisionDto input);
+	Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
+	Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
+	Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
+	Task<AdmissionEnrollmentResultDto> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input);
+	Task<AdmissionEnrollmentOptionsDto> GetEnrollmentOptionsAsync(Guid id);
+	Task<List<AdmissionApplicationDecisionHistoryDto>> GetDecisionHistoryAsync(Guid id);
 }

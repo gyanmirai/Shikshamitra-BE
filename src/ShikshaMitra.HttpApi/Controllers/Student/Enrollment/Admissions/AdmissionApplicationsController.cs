@@ -57,4 +57,44 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance)]
 	public async Task<Result<AdmissionApplicationWorkflowDto>> AdvanceWorkflowAsync(Guid id, AdvanceAdmissionWorkflowDto input) =>
 		Result.Success(await service.AdvanceWorkflowAsync(id, input));
+
+	[HttpGet("{id:guid}/decision-history")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<System.Collections.Generic.List<AdmissionApplicationDecisionHistoryDto>>> GetDecisionHistoryAsync(Guid id) => Result.Success(await service.GetDecisionHistoryAsync(id));
+
+	[HttpPost("{id:guid}/decision/review")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public async Task<Result<AdmissionApplicationDto>> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.MarkInReviewAsync(id, input));
+
+	[HttpPost("{id:guid}/decision/approve")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public async Task<Result<AdmissionApplicationDto>> ApproveAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.ApproveAsync(id, input));
+
+	[HttpPost("{id:guid}/decision/reject")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public async Task<Result<AdmissionApplicationDto>> RejectAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.RejectAsync(id, input));
+
+	[HttpPost("{id:guid}/decision/waitlist")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public async Task<Result<AdmissionApplicationDto>> WaitlistAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.WaitlistAsync(id, input));
+
+	[HttpPost("{id:guid}/offer")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
+	public async Task<Result<AdmissionApplicationDto>> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.IssueOfferAsync(id, input));
+
+	[HttpPost("{id:guid}/offer/accept")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
+	public async Task<Result<AdmissionApplicationDto>> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.AcceptOfferAsync(id, input));
+
+	[HttpPost("{id:guid}/offer/decline")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
+	public async Task<Result<AdmissionApplicationDto>> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.DeclineOfferAsync(id, input));
+
+	[HttpPost("{id:guid}/enroll")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
+	public async Task<Result<AdmissionEnrollmentResultDto>> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input) => Result.Success(await service.EnrollAsync(id, input));
+
+	[HttpGet("{id:guid}/enrollment-options")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
+	public async Task<Result<AdmissionEnrollmentOptionsDto>> GetEnrollmentOptionsAsync(Guid id) => Result.Success(await service.GetEnrollmentOptionsAsync(id));
 }

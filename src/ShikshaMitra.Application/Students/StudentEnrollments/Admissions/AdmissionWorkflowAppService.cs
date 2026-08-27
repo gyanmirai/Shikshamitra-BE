@@ -30,7 +30,7 @@ public class AdmissionWorkflowAppService(
 		commandService.UpdateAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Delete)]
-	public Task DeleteAsync(Guid id) => commandService.DeleteAsync(id);
+	public Task DeleteAsync(Guid id, string? concurrencyStamp = null) => commandService.DeleteAsync(id, concurrencyStamp);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Clone)]
 	public Task<AdmissionWorkflowDto> CloneAsync(Guid id, CloneAdmissionWorkflowDto input) =>
@@ -49,7 +49,7 @@ public class AdmissionWorkflowAppService(
 		commandService.PublishAsync(id, concurrencyStamp);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Archive)]
-	public Task<AdmissionWorkflowDto> ArchiveAsync(Guid id) => commandService.ArchiveAsync(id);
+	public Task<AdmissionWorkflowDto> ArchiveAsync(Guid id, string? concurrencyStamp = null) => commandService.ArchiveAsync(id, concurrencyStamp);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
 	public Task<List<AdmissionWorkflowDto>> GetVersionHistoryAsync(Guid id) =>

@@ -145,7 +145,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Advance = $"{SubmoduleName}.Advance";
 			public const string SkipStage = $"{SubmoduleName}.SkipStage";
 			public const string OverrideWorkflow = $"{SubmoduleName}.OverrideWorkflow";
-			public static readonly string[] All = { View, Start, Edit, Submit, Reopen, Advance, SkipStage, OverrideWorkflow };
+			public const string Decide = $"{SubmoduleName}.Decide";
+			public const string Offer = $"{SubmoduleName}.Offer";
+			public const string Enroll = $"{SubmoduleName}.Enroll";
+			public static readonly string[] All = { View, Start, Edit, Submit, Reopen, Advance, SkipStage, OverrideWorkflow, Decide, Offer, Enroll };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ View, $"{SubmoduleDisplayName}.View" },
@@ -156,6 +159,9 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Advance, $"{SubmoduleDisplayName}.Advance" },
 				{ SkipStage, $"{SubmoduleDisplayName}.SkipStage" },
 				{ OverrideWorkflow, $"{SubmoduleDisplayName}.OverrideWorkflow" }
+				, { Decide, $"{SubmoduleDisplayName}.Decide" }
+				, { Offer, $"{SubmoduleDisplayName}.Offer" }
+				, { Enroll, $"{SubmoduleDisplayName}.Enroll" }
 			};
 		}
 

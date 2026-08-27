@@ -11,7 +11,7 @@ public interface IAdmissionCycleAppService : IApplicationService
 	Task<AdmissionCycleDto> GetAsync(Guid id);
 	Task<AdmissionCycleDto> CreateAsync(CreateUpdateAdmissionCycleDto input);
 	Task<AdmissionCycleDto> UpdateAsync(Guid id, CreateUpdateAdmissionCycleDto input);
-	Task<AdmissionCycleDto> PublishAsync(Guid id);
-	Task<AdmissionCycleDto> CloseAsync(Guid id);
-	Task<AdmissionCycleDto> ArchiveAsync(Guid id);
+	Task<AdmissionCycleDto> PublishAsync(Guid id, string? concurrencyStamp = null);
+	Task<AdmissionCycleDto> CloseAsync(Guid id, string? concurrencyStamp = null);
+	Task<AdmissionCycleDto> ArchiveAsync(Guid id, string? concurrencyStamp = null);
 }

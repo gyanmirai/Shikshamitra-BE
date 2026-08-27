@@ -48,10 +48,11 @@ public class AdmissionWorkflowCommandService(
 		return await definitionStore.GetDtoAsync(workflow);
 	}
 
-	public async Task DeleteAsync(Guid id)
+	public async Task DeleteAsync(Guid id, string? concurrencyStamp = null)
 	{
 		var workflow = await definitionStore.GetAsync(id);
 		workflow.EnsureDraft();
+		EnsureConcurrency(workflow, concurrencyStamp);
 		if (!(await readService.GetUsageAsync(id)).CanDelete)
 		{
 			throw new BusinessException(AdmissionWorkflowErrorCodes.WorkflowInUse,
@@ -116,9 +117,10 @@ public class AdmissionWorkflowCommandService(
 		return await definitionStore.GetDtoAsync(workflow);
 	}
 
-	public async Task<AdmissionWorkflowDto> ArchiveAsync(Guid id)
+	public async Task<AdmissionWorkflowDto> ArchiveAsync(Guid id, string? concurrencyStamp = null)
 	{
 		var workflow = await definitionStore.GetAsync(id);
+		EnsureConcurrency(workflow, concurrencyStamp);
 		var query = await offeringRepository.GetQueryableAsync();
 		if (await AsyncExecuter.AnyAsync(query.Where(offering => offering.WorkflowDefinitionId == id && offering.IsActive)))
 		{
@@ -145,7 +147,7 @@ public class AdmissionWorkflowCommandService(
 
 	private static void EnsureConcurrency(AdmissionWorkflowDefinition workflow, string? stamp)
 	{
-		if (!string.IsNullOrWhiteSpace(stamp) &&
+		if (string.IsNullOrWhiteSpace(stamp) ||
 			!string.Equals(workflow.ConcurrencyStamp, stamp, StringComparison.Ordinal))
 		{
 			throw new BusinessException(AdmissionWorkflowErrorCodes.ConcurrencyConflict,

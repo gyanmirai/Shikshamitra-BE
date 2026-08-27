@@ -13,8 +13,8 @@ public interface IAdmissionFormAppService : IApplicationService
 	Task<AdmissionFormDto> UpdateAsync(Guid id, CreateUpdateAdmissionFormDto input);
 	Task<AdmissionFormDto> CloneAsync(Guid id, CloneAdmissionFormDto input);
 	Task<AdmissionFormDto> CreateNewVersionAsync(Guid id);
-	Task DeleteAsync(Guid id);
-	Task<AdmissionFormDto> ArchiveAsync(Guid id);
+	Task DeleteAsync(Guid id, string? concurrencyStamp = null);
+	Task<AdmissionFormDto> ArchiveAsync(Guid id, string? concurrencyStamp = null);
 	Task<AdmissionFormValidationResultDto> ValidateAsync(Guid id);
 	Task<AdmissionFormDto> PublishAsync(Guid id, string? concurrencyStamp = null);
 	Task<AdmissionFormUsageDto> GetUsageAsync(Guid id);

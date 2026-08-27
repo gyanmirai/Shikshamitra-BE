@@ -14,7 +14,8 @@ public class AdmissionApplicationAppService(
 	AdmissionApplicationLifecycleService lifecycleService,
 	AdmissionApplicationWorkflowReadService workflowReadService,
 	AdmissionApplicationWorkflowService workflowService,
-	AdmissionApplicationFormService formService)
+	AdmissionApplicationFormService formService,
+	AdmissionApplicationDecisionService decisionService)
 	: ApplicationService, IAdmissionApplicationAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
@@ -62,4 +63,34 @@ public class AdmissionApplicationAppService(
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<List<AdmissionFormChangeHistoryDto>> GetFormHistoryAsync(Guid id) => formService.GetHistoryAsync(id);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public Task<AdmissionApplicationDto> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.MarkInReviewAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public Task<AdmissionApplicationDto> ApproveAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.ApproveAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public Task<AdmissionApplicationDto> RejectAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.RejectAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public Task<AdmissionApplicationDto> WaitlistAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.WaitlistAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
+	public Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.IssueOfferAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
+	public Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.AcceptOfferAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
+	public Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.DeclineOfferAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
+	public Task<AdmissionEnrollmentResultDto> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input) => decisionService.EnrollAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
+	public Task<AdmissionEnrollmentOptionsDto> GetEnrollmentOptionsAsync(Guid id) => decisionService.GetEnrollmentOptionsAsync(id);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public Task<List<AdmissionApplicationDecisionHistoryDto>> GetDecisionHistoryAsync(Guid id) => decisionService.GetDecisionHistoryAsync(id);
 }

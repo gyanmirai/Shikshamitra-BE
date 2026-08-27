@@ -135,18 +135,20 @@ public class AdmissionFormAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
-	public async Task DeleteAsync(Guid id)
+	public async Task DeleteAsync(Guid id, string? concurrencyStamp = null)
 	{
 		var form = await GetFormAsync(id);
+		EnsureConcurrency(form, concurrencyStamp);
 		if (form.Status != AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.DraftRequired);
 		if (!(await GetUsageAsync(id)).CanDelete) throw new BusinessException(AdmissionFormErrorCodes.FormInUse);
 		await formRepository.DeleteAsync(form, autoSave: true);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Archive)]
-	public async Task<AdmissionFormDto> ArchiveAsync(Guid id)
+	public async Task<AdmissionFormDto> ArchiveAsync(Guid id, string? concurrencyStamp = null)
 	{
 		var form = await GetFormAsync(id);
+		EnsureConcurrency(form, concurrencyStamp);
 		form.Archive();
 		await formRepository.UpdateAsync(form, autoSave: true);
 		return await MapAsync(form);
@@ -441,5 +443,5 @@ public class AdmissionFormAppService(
 		return dto;
 	}
 	private static AdmissionFormDto Map(AdmissionFormDefinition form, List<AdmissionFormSectionDefinition> sections, List<AdmissionFormFieldDefinition> fields) => new() { Id = form.Id, Name = form.Name, Code = form.Code, Description = form.Description, Version = form.Version, Status = form.Status, LayoutType = form.LayoutType, FieldsPerRow = form.FieldsPerRow, ParentVersionId = form.ParentVersionId, PublishedAt = form.PublishedAt, PublishedBy = form.PublishedBy, ConcurrencyStamp = form.ConcurrencyStamp, CreationTime = form.CreationTime, CreatorId = form.CreatorId, LastModificationTime = form.LastModificationTime, LastModifierId = form.LastModifierId, SectionCount = sections.Count, Sections = sections.Select(section => new AdmissionFormSectionDto { Id = section.Id, FormDefinitionId = section.FormDefinitionId, Code = section.Code, Name = section.Name, DisplayOrder = section.DisplayOrder, VisibilityRuleJson = section.VisibilityRuleJson, StepId = section.StepId, StepCode = section.StepCode, StepName = section.StepName, StepDisplayOrder = section.StepDisplayOrder, StepVisibilityRuleJson = section.StepVisibilityRuleJson, Fields = fields.Where(field => field.SectionId == section.Id).Select(field => new AdmissionFormFieldDto { Id = field.Id, FormDefinitionId = field.FormDefinitionId, SectionId = field.SectionId, Code = field.Code, Label = field.Label, FieldType = field.FieldType, BindingType = field.BindingType, BindingKey = field.BindingKey, Placeholder = field.Placeholder, HelpText = field.HelpText, DefaultValue = field.DefaultValue, OptionsJson = field.OptionsJson, Required = field.Required, ReadOnly = field.ReadOnly, DisplayOrder = field.DisplayOrder, ValidationJson = field.ValidationJson, VisibilityRuleJson = field.VisibilityRuleJson }).ToList() }).ToList() };
-	private static void EnsureConcurrency(AdmissionFormDefinition form, string? stamp) { if (!string.IsNullOrWhiteSpace(stamp) && !string.Equals(form.ConcurrencyStamp, stamp, StringComparison.Ordinal)) throw new BusinessException("Admissions.FormConcurrencyConflict"); }
+	private static void EnsureConcurrency(AdmissionFormDefinition form, string? stamp) { if (string.IsNullOrWhiteSpace(stamp) || !string.Equals(form.ConcurrencyStamp, stamp, StringComparison.Ordinal)) throw new BusinessException("Admissions.FormConcurrencyConflict", "The form changed after it was opened. Reload and try again."); }
 }

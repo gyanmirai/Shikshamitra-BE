@@ -35,7 +35,7 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     private StudentEnrollment() { /* For ORM */ }
 
-    internal StudentEnrollment(
+    private StudentEnrollment(
         Guid id,
         Guid? tenantId,
         Guid studentId,
@@ -52,9 +52,19 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
         IsActive      = true;
     }
 
+    public static StudentEnrollment Create(
+        Guid id,
+        Guid? tenantId,
+        Guid studentId,
+        Guid academicYearId,
+        Guid? standardId,
+        Guid? divisionId) => new(id, tenantId, studentId, academicYearId, standardId, divisionId);
+
     /// <summary>Marks this enrollment as inactive (e.g. student transferred out).</summary>
     public void Deactivate() => IsActive = false;
 
     /// <summary>Re-activates a previously deactivated enrollment.</summary>
     public void Activate() => IsActive = true;
+
+    public void AssignDivision(Guid? divisionId) => DivisionId = divisionId;
 }

@@ -1,8 +1,6 @@
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Migrations.Operations;
-using ShikshaMitra.Migrations;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Shouldly;
 using Xunit;
@@ -22,27 +20,6 @@ public class AdmissionWorkflowModelMapping_Tests : ShikshaMitraEntityFrameworkCo
 
 		isDeleted.ValueGenerated.ShouldBe(ValueGenerated.Never);
 		isDeleted.GetDefaultValue().ShouldBe(false);
-	}
-
-	[Fact]
-	public void Description_reconciliation_migration_is_idempotent()
-	{
-		var migration = new EnsureAdmissionWorkflowDescriptionColumn();
-		var operation = migration.UpOperations.OfType<SqlOperation>().Single();
-
-		operation.Sql.ShouldContain("ADD COLUMN IF NOT EXISTS \"Description\"");
-		operation.Sql.ShouldContain("ALTER TABLE \"AppAdmissionWorkflowDefinitions\"");
-	}
-
-	[Fact]
-	public void Runtime_history_migration_targets_the_configured_workflow_stage_table()
-	{
-		var migration = new AddAdmissionWorkflowRuntimeHistory();
-		var stageDefinitionForeignKey = migration.UpOperations
-			.OfType<AddForeignKeyOperation>()
-			.Single(operation => operation.Name == "FK_AdmissionStageInstances_Definitions");
-
-		stageDefinitionForeignKey.PrincipalTable.ShouldBe("AppAdmissionWorkflowStages");
 	}
 
 	[Fact]

@@ -12,8 +12,8 @@ public class CreateUpdateAdmissionWorkflowDtoValidator : AbstractValidator<Creat
 		RuleFor(input => input.Code)
 			.NotEmpty()
 			.MaximumLength(AdmissionWorkflowConsts.MaxCodeLength)
-			.Matches("^[A-Za-z][A-Za-z0-9_]*$")
-			.WithMessage("Workflow code must start with a letter and contain only letters, numbers, and underscores.");
+			.Matches("^[A-Za-z][A-Za-z0-9_-]*$")
+			.WithMessage("Workflow code must start with a letter and contain only letters, numbers, underscores, or hyphens.");
 		RuleFor(input => input.Description)
 			.MaximumLength(AdmissionWorkflowConsts.MaxDescriptionLength);
 		RuleForEach(input => input.Stages)
@@ -30,7 +30,7 @@ public class CreateUpdateAdmissionWorkflowStageDtoValidator : AbstractValidator<
 		RuleFor(stage => stage.Code)
 			.NotEmpty()
 			.MaximumLength(AdmissionWorkflowConsts.MaxCodeLength)
-			.Matches("^[A-Za-z][A-Za-z0-9_]*$");
+			.Matches("^[A-Za-z][A-Za-z0-9_-]*$");
 		RuleFor(stage => stage.Name)
 			.NotEmpty()
 			.MaximumLength(AdmissionWorkflowConsts.MaxNameLength);

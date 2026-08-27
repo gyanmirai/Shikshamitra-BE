@@ -35,13 +35,16 @@ public class AdmissionCyclesController(IAdmissionCycleAppService appService) : A
 
 	[HttpPost("{id:guid}/publish")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Publish)]
-	public async Task<Result<AdmissionCycleDto>> Publish(Guid id) => Result.Success(await appService.PublishAsync(id));
+	public async Task<Result<AdmissionCycleDto>> Publish(Guid id, [FromQuery] string? concurrencyStamp = null) =>
+		Result.Success(await appService.PublishAsync(id, concurrencyStamp));
 
 	[HttpPost("{id:guid}/close")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Close)]
-	public async Task<Result<AdmissionCycleDto>> Close(Guid id) => Result.Success(await appService.CloseAsync(id));
+	public async Task<Result<AdmissionCycleDto>> Close(Guid id, [FromQuery] string? concurrencyStamp = null) =>
+		Result.Success(await appService.CloseAsync(id, concurrencyStamp));
 
 	[HttpPost("{id:guid}/archive")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Archive)]
-	public async Task<Result<AdmissionCycleDto>> Archive(Guid id) => Result.Success(await appService.ArchiveAsync(id));
+	public async Task<Result<AdmissionCycleDto>> Archive(Guid id, [FromQuery] string? concurrencyStamp = null) =>
+		Result.Success(await appService.ArchiveAsync(id, concurrencyStamp));
 }

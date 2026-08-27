@@ -6,6 +6,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionCycleDto : AuditedEntityDto<Guid>
 {
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public string Name { get; set; } = string.Empty;
 	public string Code { get; set; } = string.Empty;
 	public Guid AcademicYearId { get; set; }
@@ -17,6 +18,7 @@ public class AdmissionCycleDto : AuditedEntityDto<Guid>
 
 public class CreateUpdateAdmissionCycleDto
 {
+	public string? ConcurrencyStamp { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public string Code { get; set; } = string.Empty;
 	public Guid AcademicYearId { get; set; }

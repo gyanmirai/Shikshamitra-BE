@@ -45,15 +45,26 @@ public class AdmissionWorkflowDefinitionStore(
 	{
 		var existingStages = await GetStagesAsync(workflowId);
 		var existingStagesById = existingStages.ToDictionary(stage => stage.Id);
-		var retainedStageIds = new HashSet<Guid>();
 		var stageIdMap = new Dictionary<Guid, Guid>();
+		var stagesToDelete = existingStages
+			.Where(stage => input.Stages.All(candidate => candidate.Id != stage.Id))
+			.ToList();
+		if (stagesToDelete.Count > 0)
+		{
+			var deletedStageIds = stagesToDelete.Select(stage => stage.Id).ToHashSet();
+			foreach (var transition in (await GetTransitionsAsync(workflowId))
+				.Where(transition => deletedStageIds.Contains(transition.FromStageId) || deletedStageIds.Contains(transition.ToStageId)))
+				await transitionRepository.DeleteAsync(transition, autoSave: false);
+			foreach (var stage in stagesToDelete)
+				await stageRepository.DeleteAsync(stage, autoSave: false);
+			await CurrentUnitOfWork!.SaveChangesAsync();
+		}
 		foreach (var inputStage in input.Stages.OrderBy(stage => stage.DisplayOrder))
 		{
 			var requestedId = inputStage.Id.GetValueOrDefault();
 			var stageId = requestedId != Guid.Empty && existingStagesById.ContainsKey(requestedId)
 				? requestedId : GuidGenerator.Create();
 			if (requestedId != Guid.Empty) stageIdMap[requestedId] = stageId;
-			retainedStageIds.Add(stageId);
 			if (existingStagesById.TryGetValue(stageId, out var existingStage))
 			{
 				existingStage.Update(
@@ -70,10 +81,6 @@ public class AdmissionWorkflowDefinitionStore(
 
 		await ReplaceTransitionsAsync(workflowId, input.Transitions, stageIdMap);
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		foreach (var stage in existingStages.Where(stage => !retainedStageIds.Contains(stage.Id)))
-		{
-			await stageRepository.DeleteAsync(stage, autoSave: false);
-		}
 	}
 
 	public async Task CopyChildrenAsync(Guid sourceWorkflowId, Guid targetWorkflowId)

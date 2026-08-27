@@ -47,7 +47,7 @@ public class AdmissionWorkflowsController(IAdmissionWorkflowAppService appServic
 	public async Task<Result<AdmissionWorkflowDto>> Publish(Guid id, [FromQuery] string? concurrencyStamp = null) => Result.Success(await appService.PublishAsync(id, concurrencyStamp));
 	[HttpPost("{id:guid}/archive")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Archive)]
-	public async Task<Result<AdmissionWorkflowDto>> Archive(Guid id) => Result.Success(await appService.ArchiveAsync(id));
+	public async Task<Result<AdmissionWorkflowDto>> Archive(Guid id, [FromQuery] string? concurrencyStamp = null) => Result.Success(await appService.ArchiveAsync(id, concurrencyStamp));
 	[HttpGet("{id:guid}/versions")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
 	public async Task<Result<System.Collections.Generic.List<AdmissionWorkflowDto>>> GetVersionHistory(Guid id) => Result.Success(await appService.GetVersionHistoryAsync(id));

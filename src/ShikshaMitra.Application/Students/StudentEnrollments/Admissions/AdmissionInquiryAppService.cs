@@ -9,6 +9,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
@@ -22,7 +23,8 @@ public class AdmissionInquiryAppService(
 	AdmissionOfferingRuntimeService offeringRuntimeService,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
 	IRepository<AdmissionFormFieldDefinition, Guid> formFieldRepository,
-	IRepository<AdmissionActivity, Guid> activityRepository) : ApplicationService, IAdmissionInquiryAppService
+	IRepository<AdmissionActivity, Guid> activityRepository,
+	IRepository<IdentityUser, Guid> userRepository) : ApplicationService, IAdmissionInquiryAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
 	public async Task<PagedResultDto<AdmissionInquiryDto>> GetListAsync(AdmissionInquiryListInput input)
@@ -45,7 +47,8 @@ public class AdmissionInquiryAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Create)]
 	public async Task<AdmissionInquiryDto> CreateAsync(CreateAdmissionInquiryDto input)
 	{
-		if (await cycleRepository.FindAsync(input.AdmissionCycleId) == null)
+		var cycle = await cycleRepository.FindAsync(input.AdmissionCycleId);
+		if (cycle == null)
 			throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotFound);
 		var values = input.FormValues.ToDictionary(x => x.FieldCode, x => UnwrapValue(x.ValueJson), StringComparer.OrdinalIgnoreCase);
 		var inquiryFields = new List<AdmissionFormFieldDefinition>();
@@ -65,6 +68,11 @@ public class AdmissionInquiryAppService(
 				var missing = fields.Where(x => x.Required && IsVisible(x.VisibilityRuleJson, values) && (!values.TryGetValue(x.Code, out var value) || string.IsNullOrWhiteSpace(value)) && string.IsNullOrWhiteSpace(x.DefaultValue)).Select(x => x.Code).ToList();
 				if (missing.Count > 0) throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed).WithData("Fields", string.Join(", ", missing));
 			}
+		}
+		else if (cycle.Status != AdmissionCycleStatus.Published || Clock.Now.Date < cycle.StartDate.Date || Clock.Now.Date > cycle.EndDate.Date)
+		{
+			throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotOpen,
+				"The admission cycle is not currently accepting inquiries.");
 		}
 		input.ApplicantFirstName = ResolveBinding(values, inquiryFields, "Applicant.FirstName", input.ApplicantFirstName) ?? input.ApplicantFirstName;
 		input.ApplicantLastName = ResolveBinding(values, inquiryFields, "Applicant.LastName", input.ApplicantLastName);
@@ -138,17 +146,32 @@ public class AdmissionInquiryAppService(
 		if (input.Mode == AdmissionCounsellorAssignmentMode.Manual)
 		{
 			counsellorId = input.CounsellorId ?? throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorRequired);
+			await EnsureActiveCounsellorAsync(counsellorId);
 		}
 		else
 		{
 			if (input.CandidateCounsellorIds.Count == 0) throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorCandidatesRequired);
+			var candidateIds = input.CandidateCounsellorIds.Distinct().ToList();
+			var activeCandidates = await AsyncExecuter.ToListAsync((await userRepository.GetQueryableAsync())
+				.Where(user => candidateIds.Contains(user.Id) && user.IsActive)
+				.Select(user => user.Id));
+			if (activeCandidates.Count != candidateIds.Count)
+				throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid,
+					"Every counsellor candidate must be an active tenant user.");
 			var assigned = await AsyncExecuter.ToListAsync((await inquiryRepository.GetQueryableAsync()).Where(x => x.AssignedCounsellorId.HasValue && input.CandidateCounsellorIds.Contains(x.AssignedCounsellorId.Value)).GroupBy(x => x.AssignedCounsellorId).Select(x => new { Id = x.Key!.Value, Count = x.Count() }));
-			counsellorId = input.CandidateCounsellorIds.OrderBy(x => assigned.FirstOrDefault(a => a.Id == x)?.Count ?? 0).ThenBy(x => x).First();
+			counsellorId = candidateIds.OrderBy(x => assigned.FirstOrDefault(a => a.Id == x)?.Count ?? 0).ThenBy(x => x).First();
 		}
 		inquiry.AssignCounsellor(counsellorId); await inquiryRepository.UpdateAsync(inquiry, false); await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "CounsellorAssigned", $"Counsellor assigned: {counsellorId}", inquiry.ApplicantId, null, inquiry.Id), true); return Map(inquiry);
 	}
 
 	private async Task<AdmissionInquiry> GetInquiryAsync(Guid id) => await inquiryRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionInquiry), id);
+	private async Task EnsureActiveCounsellorAsync(Guid id)
+	{
+		var user = await userRepository.FindAsync(id);
+		if (user == null || !user.IsActive)
+			throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid,
+				"The counsellor must be an active tenant user.");
+	}
 	private static AdmissionInquiryDto Map(AdmissionInquiry x) => new()
 	{
 		Id = x.Id, InquiryNumber = x.InquiryNumber, AdmissionCycleId = x.AdmissionCycleId, AdmissionOfferingId = x.AdmissionOfferingId, FamilyId = x.FamilyId, ApplicantId = x.ApplicantId, AssignedCounsellorId = x.AssignedCounsellorId,

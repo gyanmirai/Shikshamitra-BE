@@ -7,6 +7,7 @@ using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
+using ShikshaMitra.Students.StudentEnrollments;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -27,6 +28,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<StudentIdentityCompliance> StudentIdentityCompliances { get; set; }
     public DbSet<StudentDocumentAccessAudit> StudentDocumentAccessAudits { get; set; }
     public DbSet<StudentNote> StudentNotes { get; set; }
+    public DbSet<StudentEnrollment> StudentEnrollments { get; set; }
 
     // ───────────────────────────────────────────────
     // Students — Document and admission-support settings
@@ -58,6 +60,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<AdmissionFormChangeHistory> AdmissionFormChangeHistories { get; set; }
 	public DbSet<AdmissionActivity> AdmissionActivities { get; set; }
 	public DbSet<AdmissionNote> AdmissionNotes { get; set; }
+	public DbSet<AdmissionApplicationDecisionHistory> AdmissionApplicationDecisionHistories { get; set; }
 
     // ───────────────────────────────────────────────
     // Students — Records

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -16,6 +17,13 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid WorkflowDefinitionId { get; private set; }
 	public Guid FormDefinitionId { get; private set; }
 	public AdmissionApplicationStatus Status { get; private set; }
+	public string? DecisionReason { get; private set; }
+	public Guid? DecisionBy { get; private set; }
+	public DateTime? DecisionAt { get; private set; }
+	public DateTime? OfferExpiresAt { get; private set; }
+	public DateTime? OfferAcceptedAt { get; private set; }
+	public Guid? EnrolledStudentId { get; private set; }
+	public Guid? StudentEnrollmentId { get; private set; }
 	public Guid? CurrentStageInstanceId { get; private set; }
 	public DateTime? LastSavedAt { get; private set; }
 	public DateTime? SubmittedAt { get; private set; }
@@ -46,4 +54,78 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void SaveDraft() { if (Status != AdmissionApplicationStatus.Draft) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); LastSavedAt = DateTime.UtcNow; }
 	public void Submit() { if (Status != AdmissionApplicationStatus.Draft) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); Status = AdmissionApplicationStatus.Submitted; SubmittedAt = DateTime.UtcNow; LastSavedAt = SubmittedAt; }
 	public void Reopen() { if (Status != AdmissionApplicationStatus.Submitted) throw new BusinessException(AdmissionApplicationErrorCodes.FormNotSubmitted); Status = AdmissionApplicationStatus.Draft; LastSavedAt = DateTime.UtcNow; }
+
+	public void MarkInReview(Guid? actorId, string? reason)
+	{
+		EnsureStatus(AdmissionApplicationStatus.Submitted);
+		SetDecision(AdmissionApplicationStatus.InReview, actorId, reason, requireReason: false);
+	}
+
+	public void Approve(Guid? actorId, string? reason)
+	{
+		EnsureStatus(AdmissionApplicationStatus.Submitted, AdmissionApplicationStatus.InReview, AdmissionApplicationStatus.Waitlisted);
+		SetDecision(AdmissionApplicationStatus.Approved, actorId, reason, requireReason: false);
+	}
+
+	public void Reject(Guid? actorId, string reason)
+	{
+		EnsureStatus(AdmissionApplicationStatus.Submitted, AdmissionApplicationStatus.InReview, AdmissionApplicationStatus.Waitlisted, AdmissionApplicationStatus.Approved);
+		SetDecision(AdmissionApplicationStatus.Rejected, actorId, reason, requireReason: true);
+	}
+
+	public void Waitlist(Guid? actorId, string reason)
+	{
+		EnsureStatus(AdmissionApplicationStatus.Submitted, AdmissionApplicationStatus.InReview);
+		SetDecision(AdmissionApplicationStatus.Waitlisted, actorId, reason, requireReason: true);
+	}
+
+	public void IssueOffer(DateTime expiresAt, Guid? actorId, string? reason)
+	{
+		EnsureStatus(AdmissionApplicationStatus.Approved);
+		if (expiresAt <= DateTime.UtcNow)
+			throw new BusinessException(AdmissionErrorCodes.ApplicationOfferExpiryInvalid);
+		OfferExpiresAt = expiresAt;
+		SetDecision(AdmissionApplicationStatus.Offered, actorId, reason, requireReason: false);
+	}
+
+	public void AcceptOffer(Guid? actorId, string? reason)
+	{
+		EnsureStatus(AdmissionApplicationStatus.Offered);
+		if (OfferExpiresAt.HasValue && OfferExpiresAt.Value <= DateTime.UtcNow)
+			throw new BusinessException(AdmissionErrorCodes.ApplicationOfferExpiryInvalid);
+		OfferAcceptedAt = DateTime.UtcNow;
+		SetDecision(AdmissionApplicationStatus.OfferAccepted, actorId, reason, requireReason: false);
+	}
+
+	public void DeclineOffer(Guid? actorId, string reason)
+	{
+		EnsureStatus(AdmissionApplicationStatus.Offered);
+		SetDecision(AdmissionApplicationStatus.OfferDeclined, actorId, reason, requireReason: true);
+	}
+
+	public void MarkEnrolled(Guid studentId, Guid studentEnrollmentId)
+	{
+		EnsureStatus(AdmissionApplicationStatus.OfferAccepted);
+		if (EnrolledStudentId.HasValue || StudentEnrollmentId.HasValue)
+			throw new BusinessException(AdmissionErrorCodes.ApplicationAlreadyEnrolled);
+		EnrolledStudentId = Check.NotDefaultOrNull<Guid>(studentId, nameof(studentId));
+		StudentEnrollmentId = Check.NotDefaultOrNull<Guid>(studentEnrollmentId, nameof(studentEnrollmentId));
+		Status = AdmissionApplicationStatus.Enrolled;
+	}
+
+	private void SetDecision(AdmissionApplicationStatus status, Guid? actorId, string? reason, bool requireReason)
+	{
+		if (requireReason && string.IsNullOrWhiteSpace(reason))
+			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionReasonRequired);
+		Status = status;
+		DecisionBy = actorId;
+		DecisionAt = DateTime.UtcNow;
+		DecisionReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+	}
+
+	private void EnsureStatus(params AdmissionApplicationStatus[] allowed)
+	{
+		if (!allowed.Contains(Status))
+			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionInvalidState);
+	}
 }

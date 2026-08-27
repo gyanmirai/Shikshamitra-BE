@@ -5,7 +5,14 @@ public enum AdmissionApplicationStatus
 	Draft = 0,
 	Submitted = 1,
 	Withdrawn = 2,
-	Rejected = 3
+	Rejected = 3,
+	InReview = 4,
+	Waitlisted = 5,
+	Approved = 6,
+	Offered = 7,
+	OfferAccepted = 8,
+	OfferDeclined = 9,
+	Enrolled = 10
 }
 
 public enum AdmissionRuntimeStageStatus

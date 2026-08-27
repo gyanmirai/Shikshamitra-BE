@@ -41,7 +41,7 @@ public class AdmissionCycleAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Create)]
 	public async Task<AdmissionCycleDto> CreateAsync(CreateUpdateAdmissionCycleDto input)
 	{
-		await EnsureAcademicYearExistsAsync(input.AcademicYearId);
+		await EnsureAcademicYearExistsAsync(input.AcademicYearId, input.StartDate, input.EndDate);
 		await EnsureCodeIsUniqueAsync(input.Code);
 
 		var cycle = new AdmissionCycle(GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code,
@@ -54,7 +54,8 @@ public class AdmissionCycleAppService(
 	public async Task<AdmissionCycleDto> UpdateAsync(Guid id, CreateUpdateAdmissionCycleDto input)
 	{
 		var cycle = await GetCycleAsync(id);
-		await EnsureAcademicYearExistsAsync(input.AcademicYearId);
+		EnsureConcurrency(cycle, input.ConcurrencyStamp);
+		await EnsureAcademicYearExistsAsync(input.AcademicYearId, input.StartDate, input.EndDate);
 		await EnsureCodeIsUniqueAsync(input.Code, id);
 		cycle.UpdateDetails(input.Name, input.Code, input.AcademicYearId, input.StartDate, input.EndDate);
 		await cycleRepository.UpdateAsync(cycle, autoSave: true);
@@ -62,27 +63,30 @@ public class AdmissionCycleAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Publish)]
-	public async Task<AdmissionCycleDto> PublishAsync(Guid id)
+	public async Task<AdmissionCycleDto> PublishAsync(Guid id, string? concurrencyStamp = null)
 	{
 		var cycle = await GetCycleAsync(id);
+		EnsureConcurrency(cycle, concurrencyStamp);
 		cycle.Publish(CurrentUser.Id, Clock.Now);
 		await cycleRepository.UpdateAsync(cycle, autoSave: true);
 		return Map(cycle);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Close)]
-	public async Task<AdmissionCycleDto> CloseAsync(Guid id)
+	public async Task<AdmissionCycleDto> CloseAsync(Guid id, string? concurrencyStamp = null)
 	{
 		var cycle = await GetCycleAsync(id);
+		EnsureConcurrency(cycle, concurrencyStamp);
 		cycle.Close();
 		await cycleRepository.UpdateAsync(cycle, autoSave: true);
 		return Map(cycle);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Archive)]
-	public async Task<AdmissionCycleDto> ArchiveAsync(Guid id)
+	public async Task<AdmissionCycleDto> ArchiveAsync(Guid id, string? concurrencyStamp = null)
 	{
 		var cycle = await GetCycleAsync(id);
+		EnsureConcurrency(cycle, concurrencyStamp);
 		cycle.Archive();
 		await cycleRepository.UpdateAsync(cycle, autoSave: true);
 		return Map(cycle);
@@ -91,11 +95,18 @@ public class AdmissionCycleAppService(
 	private async Task<AdmissionCycle> GetCycleAsync(Guid id) =>
 		await cycleRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionCycle), id);
 
-	private async Task EnsureAcademicYearExistsAsync(Guid id)
+	private async Task EnsureAcademicYearExistsAsync(Guid id, DateTime startDate, DateTime endDate)
 	{
-		if (id == Guid.Empty || await academicYearRepository.FindAsync(id) == null)
+		var academicYear = id == Guid.Empty ? null : await academicYearRepository.FindAsync(id);
+		if (academicYear == null)
 		{
 			throw new EntityNotFoundException(typeof(AcademicYear), id);
+		}
+		if (startDate.Date < academicYear.StartDate.Date || endDate.Date > academicYear.EndDate.Date)
+		{
+			throw new BusinessException(AdmissionErrorCodes.CycleOutsideAcademicYear)
+				.WithData("AcademicYearStartDate", academicYear.StartDate.Date)
+				.WithData("AcademicYearEndDate", academicYear.EndDate.Date);
 		}
 	}
 
@@ -113,6 +124,7 @@ public class AdmissionCycleAppService(
 
 	private static AdmissionCycleDto Map(AdmissionCycle cycle) => new()
 	{
+		ConcurrencyStamp = cycle.ConcurrencyStamp,
 		Id = cycle.Id,
 		Name = cycle.Name,
 		Code = cycle.Code,
@@ -126,4 +138,13 @@ public class AdmissionCycleAppService(
 		LastModificationTime = cycle.LastModificationTime,
 		LastModifierId = cycle.LastModifierId
 	};
+
+	private static void EnsureConcurrency(AdmissionCycle cycle, string? stamp)
+	{
+		if (string.IsNullOrWhiteSpace(stamp) || !string.Equals(cycle.ConcurrencyStamp, stamp, StringComparison.Ordinal))
+		{
+			throw new BusinessException(AdmissionErrorCodes.CycleConcurrencyConflict,
+				"The admission cycle changed after it was opened. Reload and try again.");
+		}
+	}
 }

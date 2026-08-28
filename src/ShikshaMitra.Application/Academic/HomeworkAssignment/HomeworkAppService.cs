@@ -689,6 +689,11 @@ public class HomeworkAppService(
         Guid subjectId,
         IEnumerable<Guid> divisionIds)
     {
+        if (IsAdminUser())
+        {
+            return;
+        }
+
         var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
         var targetDivisionIds = divisionIds.Distinct().ToList();
         if (scope.IsAdmin || scope.HasTenantWideScope() ||
@@ -778,6 +783,15 @@ public class HomeworkAppService(
         teacherIds.UnionWith(await reportingManagerAccessService
             .GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value));
         return teacherIds;
+    }
+
+    private bool IsAdminUser()
+    {
+        return CurrentUser.Roles.Any(role =>
+            string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase)) ||
+            CurrentUser.IsInRole("admin") ||
+            CurrentUser.IsInRole("administrator");
     }
 
     private async Task<HashSet<Guid>> GetCurrentTeacherSubjectOwnedHomeworkIdsAsync(

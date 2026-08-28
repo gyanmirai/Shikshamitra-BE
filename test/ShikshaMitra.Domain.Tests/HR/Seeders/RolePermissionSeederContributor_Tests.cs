@@ -21,8 +21,24 @@ public class RolePermissionSeederContributor_Tests
 	public void Permission_Grant_Changes_Should_Use_The_Current_Seeder_Marker_Version()
 	{
 		RolePermissionSeederContributor.StepName.ShouldBe("RolePermissionSeeder");
-		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v13");
+		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v14");
 		RolePermissionSeederContributor.StepOrder.ShouldBe(120);
+	}
+
+	[Fact]
+	public void Academic_Staff_Should_Receive_Dedicated_Lesson_Plan_Permissions()
+	{
+		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
+
+		foreach (var roleName in new[] { "admin", "HOD", "Teacher" })
+		{
+			var permissions = rolePermissions[roleName];
+
+			foreach (var permission in ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.All)
+			{
+				permissions.ShouldContain(permission);
+			}
+		}
 	}
 
 	[Fact]
@@ -162,5 +178,37 @@ public class RolePermissionSeederContributor_Tests
 
 		rolePermissions["Teacher"].ShouldNotContain(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View);
 		rolePermissions["Finance Officer"].ShouldNotContain(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View);
+	}
+
+	[Fact]
+	public void Question_Bank_And_Question_Papers_Should_Include_Standard_Permissions_And_Be_Granted_To_Admin()
+	{
+		// Verify QuestionBank standard permissions
+		ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.All
+			.ShouldContain(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.View);
+		ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.All
+			.ShouldContain(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add);
+		ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.All
+			.ShouldContain(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Delete);
+
+		// Verify QuestionPapers standard permissions
+		ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionPapers.All
+			.ShouldContain(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionPapers.View);
+		ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionPapers.All
+			.ShouldContain(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionPapers.Add);
+		ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionPapers.All
+			.ShouldContain(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionPapers.Delete);
+
+		// Verify Admin role receives all of them
+		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
+		var adminPermissions = rolePermissions["admin"];
+
+		adminPermissions.ShouldContain("Academics.Examination.QuestionBank.View");
+		adminPermissions.ShouldContain("Academics.Examination.QuestionBank.Add");
+		adminPermissions.ShouldContain("Academics.Examination.QuestionBank.Delete");
+
+		adminPermissions.ShouldContain("Academics.Examination.QuestionPapers.View");
+		adminPermissions.ShouldContain("Academics.Examination.QuestionPapers.Add");
+		adminPermissions.ShouldContain("Academics.Examination.QuestionPapers.Delete");
 	}
 }

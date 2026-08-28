@@ -366,10 +366,11 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
         var currentUserId = CurrentUser.GetId();
         var isAdmin = IsAdministrator();
+        var isPrivilegedRoomOperator = IsPrivilegedRoomOperator();
+        var visibleUserIds = await GetVisibleReservationUserIdsAsync(currentUserId);
 
         if (!isAdmin && !await HasClassTeacherAccessAsync())
         {
-            var visibleUserIds = await GetVisibleReservationUserIdsAsync(currentUserId);
             reservations = reservations
                 .Where(r => r.CreatorId.HasValue && visibleUserIds.Contains(r.CreatorId.Value))
                 .ToList();
@@ -415,6 +416,17 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                     dto.RequestedBy = creatorName;
                 }
             }
+        }
+
+        foreach (var dto in dtos)
+        {
+            dto.CanReview = dto.Status == RoomReservationStatus.PendingApproval &&
+                dto.CreatorId.HasValue &&
+                CanReviewReservation(
+                    dto.CreatorId.Value,
+                    currentUserId,
+                    isPrivilegedRoomOperator,
+                    visibleUserIds);
         }
 
         var configIds = dtos.Where(d => d.RecurringConfigId.HasValue).Select(d => d.RecurringConfigId.Value).Distinct().ToList();
@@ -529,25 +541,34 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
     private async Task EnsureUserIsAuthorizedApproverAsync(RoomReservation reservation)
     {
-        var isAuthorized = IsPrivilegedRoomOperator();
-
-        if (!isAuthorized && reservation.CreatorId.HasValue)
-        {
-            var visibleUserIds = await GetVisibleReservationUserIdsAsync(CurrentUser.GetId());
-            isAuthorized = reservation.CreatorId.Value != CurrentUser.GetId() &&
-                          visibleUserIds.Contains(reservation.CreatorId.Value);
-        }
+        var currentUserId = CurrentUser.GetId();
+        var isPrivilegedRoomOperator = IsPrivilegedRoomOperator();
+        var visibleUserIds = await GetVisibleReservationUserIdsAsync(currentUserId);
+        var isAuthorized = isPrivilegedRoomOperator ||
+            reservation.CreatorId.HasValue && CanReviewReservation(
+                reservation.CreatorId.Value,
+                currentUserId,
+                isPrivilegedRoomOperator,
+                visibleUserIds);
 
         if (!isAuthorized)
         {
             throw new Volo.Abp.Authorization.AbpAuthorizationException("You are not authorized to approve or reject room reservations.");
         }
 
-        if (reservation.CreatorId.HasValue && reservation.CreatorId.Value == CurrentUser.Id)
+        if (reservation.CreatorId.HasValue && reservation.CreatorId.Value == currentUserId)
         {
             throw new Volo.Abp.UserFriendlyException("Self-approval is not allowed. You cannot approve or reject your own room reservation requests.");
         }
     }
+
+    private static bool CanReviewReservation(
+        Guid creatorUserId,
+        Guid currentUserId,
+        bool isPrivilegedRoomOperator,
+        IReadOnlySet<Guid> visibleUserIds) =>
+        creatorUserId != currentUserId &&
+        (isPrivilegedRoomOperator || visibleUserIds.Contains(creatorUserId));
 
     private bool IsAdministrator() => CurrentUser.Roles.Any(role =>
         string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase) ||

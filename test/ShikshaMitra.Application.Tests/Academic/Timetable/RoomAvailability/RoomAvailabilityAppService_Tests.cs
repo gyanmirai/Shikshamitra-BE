@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using Shouldly;
@@ -9,6 +12,7 @@ using Volo.Abp;
 using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.Security.Claims;
 using Xunit;
 
@@ -22,6 +26,9 @@ public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<
     private readonly IRepository<TenantSettings.RoomsManagement.Buildings.Building, Guid> _buildingRepository;
     private readonly IRepository<TenantSettings.RoomsManagement.Buildings.Floor, Guid> _floorRepository;
     private readonly IRepository<TenantSettings.RoomsManagement.RoomTypes.RoomType, Guid> _roomTypeRepository;
+    private readonly IRepository<Employee, Guid> _employeeRepository;
+    private readonly IRepository<IdentityRole, Guid> _roleRepository;
+    private readonly IRepository<IdentityUser, Guid> _identityUserRepository;
     private readonly IRepository<UserScopeAssignment, Guid> _userScopeAssignmentRepository;
     private readonly IUserScopeService _userScopeService;
     private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
@@ -34,6 +41,9 @@ public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<
         _buildingRepository = GetRequiredService<IRepository<TenantSettings.RoomsManagement.Buildings.Building, Guid>>();
         _floorRepository = GetRequiredService<IRepository<TenantSettings.RoomsManagement.Buildings.Floor, Guid>>();
         _roomTypeRepository = GetRequiredService<IRepository<TenantSettings.RoomsManagement.RoomTypes.RoomType, Guid>>();
+        _employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
+        _roleRepository = GetRequiredService<IRepository<IdentityRole, Guid>>();
+        _identityUserRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
         _userScopeAssignmentRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
         _userScopeService = GetRequiredService<IUserScopeService>();
         _currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
@@ -209,6 +219,107 @@ public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<
         updated.Status.ShouldBe(RoomReservationStatus.Rejected);
         updated.RejectionReason.ShouldBe("Conflict resolved elsewhere");
         updated.ApprovedByUserId.ShouldBe(approverUserId);
+    }
+
+    [Fact]
+    public async Task Reporting_Manager_Should_Receive_Review_Actions_For_A_Direct_Report_Request()
+    {
+        var requesterUserId = Guid.NewGuid();
+        var reportingManagerUserId = Guid.NewGuid();
+        var (_, reservation) = await SeedRoomAndReservationAsync(requesterUserId);
+        await SeedReportingRelationshipAsync(reportingManagerUserId, requesterUserId);
+
+        await _userScopeAssignmentRepository.InsertAsync(
+            new UserScopeAssignment(
+                Guid.NewGuid(),
+                null,
+                userId: reportingManagerUserId,
+                description: "Room reservation reporting manager test"),
+            autoSave: true);
+        await _userScopeService.InvalidateUserScopeCacheAsync(reportingManagerUserId);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(reportingManagerUserId, "teacher")))
+        {
+            var queue = await _roomAvailabilityAppService.GetReservationsAsync(
+                new GetReservationsInputDto { IsApprovalView = true });
+
+            var queuedReservation = queue.Single(item => item.Id == reservation.Id);
+            queuedReservation.CanReview.ShouldBeTrue();
+
+            await _roomAvailabilityAppService.ApproveReservationAsync(reservation.Id);
+        }
+
+        var updated = await _reservationRepository.GetAsync(reservation.Id);
+        updated.Status.ShouldBe(RoomReservationStatus.Approved);
+        updated.ApprovedByUserId.ShouldBe(reportingManagerUserId);
+    }
+
+    private async Task SeedReportingRelationshipAsync(Guid managerUserId, Guid requesterUserId)
+    {
+        var manager = await CreateEmployeeAsync(managerUserId, "Manager");
+        var requester = await CreateEmployeeAsync(requesterUserId, "Requester");
+        requester.AssignReportingManager(manager.Id);
+        await _employeeRepository.UpdateAsync(requester, autoSave: true);
+    }
+
+    private async Task<Employee> CreateEmployeeAsync(Guid userId, string firstName)
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+        var roleId = Guid.NewGuid();
+        await _identityUserRepository.InsertAsync(
+            new IdentityUser(
+                userId,
+                $"room-review-{suffix[..8]}",
+                $"{suffix[..12]}@test.local",
+                tenantId: null),
+            autoSave: true);
+        await _roleRepository.InsertAsync(
+            new IdentityRole(roleId, $"room-review-{suffix[..8]}", tenantId: null),
+            autoSave: true);
+
+        var employee = new Employee(
+            Guid.NewGuid(),
+            tenantId: null,
+            userId: userId,
+            employeeCode: $"ROOM{suffix[..10]}",
+            basicInfo: new EmployeeBasicInfo(
+                ProfilePictureBlobName: null,
+                LastName: "Test",
+                FirstName: firstName,
+                MiddleName: null,
+                ShortName: firstName,
+                EmployeeStatusType: EmployeeStatusType.Active,
+                DateOfBirth: new DateOnly(1990, 1, 1),
+                FamilyCast: null,
+                CastType: null,
+                GenderType: null,
+                Religion: null,
+                MaritalStatus: null,
+                BloodGroup: null,
+                MobileNo: null,
+                SecondaryMobileNo: null,
+                Email: $"{suffix[..12]}@test.local",
+                PanNo: $"ABCDE{suffix[..4].ToUpperInvariant()}F",
+                AdharNo: $"1{Math.Abs((long)suffix.GetHashCode()):D11}"[..12],
+                Address1: null,
+                Address2: null,
+                Address3: null,
+                Department: "Academics",
+                Designation: "Teacher",
+                DateOfJoining: new DateOnly(2025, 1, 1),
+                EmployeeGroup: null,
+                Qualification: null,
+                RoleId: roleId,
+                IdentificationMark1: null,
+                City: null,
+                State: null,
+                Country: null,
+                PinCode: null,
+                ShiftId: null),
+            bankDetails: new BankDetails(null, null, null, null, null),
+            workExperiences: null);
+
+        return await _employeeRepository.InsertAsync(employee, autoSave: true);
     }
 
     private async Task<(Room room, RoomReservation reservation)> SeedRoomAndReservationAsync(Guid creatorUserId)

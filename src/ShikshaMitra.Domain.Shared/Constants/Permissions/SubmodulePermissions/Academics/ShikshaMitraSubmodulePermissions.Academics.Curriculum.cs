@@ -76,6 +76,28 @@ public static partial class ShikshaMitraSubmodulePermissions
 		}
 
 		/// <summary>
+		/// Curriculum Management - Lesson Plan / Teacher Diary permissions
+		/// </summary>
+		public static class CurriculumManagement_LessonPlan
+		{
+			private const string SubmoduleName = $"{ModuleName}.CurriculumManagement.LessonPlan";
+			private const string SubmoduleDisplayName = $"{DisplayName}.CurriculumManagement.LessonPlan";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
+		/// <summary>
 		/// Curriculum Management - Resources permissions
 		/// </summary>
 		public static class CurriculumManagement_Resources

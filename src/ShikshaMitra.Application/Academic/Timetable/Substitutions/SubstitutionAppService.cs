@@ -47,15 +47,26 @@ public class SubstitutionAppService(
 
     private async Task<PagedResultDto<SubstitutionDto>> GetListAsync(
         GetSubstitutionsInput input,
-        IReadOnlySet<Guid>? substituteTeacherReferenceIds)
+        IReadOnlySet<Guid>? substituteTeacherReferenceIds,
+        bool applyUserScope = true)
     {
         var rows = await substitutionRepository.GetListAsync();
-		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-		rows = rows.FilterByUserScope(scope).ToList();
+        if (substituteTeacherReferenceIds is { Count: > 0 })
+        {
+            rows = rows.Where(x =>
+                x.SubstituteTeacherId.HasValue &&
+                substituteTeacherReferenceIds.Contains(x.SubstituteTeacherId.Value)).ToList();
+        }
+
+        if (applyUserScope)
+        {
+			var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+			rows = rows.FilterByUserScope(scope).ToList();
+        }
         await BackfillAcademicYearAsync(rows, input.AcademicYearId);
         rows = await FilterByAcademicMediumAsync(rows, input.AcademicMediumId);
 
-        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
+        if (applyUserScope && !IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             var currentUserId = CurrentUser.Id;
             if (currentUserId.HasValue)
@@ -72,12 +83,6 @@ public class SubstitutionAppService(
         }
 
         var filtered = ApplyFilters(rows, input);
-        if (substituteTeacherReferenceIds is { Count: > 0 })
-        {
-            filtered = filtered.Where(x =>
-                x.SubstituteTeacherId.HasValue &&
-                substituteTeacherReferenceIds.Contains(x.SubstituteTeacherId.Value));
-        }
 
         var ordered = filtered
             .OrderBy(x => x.Date)
@@ -1014,7 +1019,10 @@ public class SubstitutionAppService(
         // Match both references so existing duties remain visible after ID normalization.
         var teacherReferenceIds = GetTeacherReferenceIds(employee, CurrentUser.Id).ToHashSet();
         input.SubstituteTeacherId = null;
-        return await GetListAsync(input, teacherReferenceIds);
+        // Personal duties are authorized by the exact substitute employee/user references.
+        // Applying class/division scope first can hide a valid assignment outside the
+        // substitute's normal teaching scope.
+        return await GetListAsync(input, teacherReferenceIds, applyUserScope: false);
     }
 
     public async Task<SubstitutionDailySheetDto> GetDailySheetAsync(SubstitutionDailySheetInput input)

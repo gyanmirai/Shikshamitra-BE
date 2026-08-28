@@ -179,6 +179,7 @@ public class RoomReservationDto
     public DateTime CreationTime { get; set; }
     public string RequestedBy { get; set; } = string.Empty;
     public Guid? CreatorId { get; set; }
+    public bool CanReview { get; set; }
 }
 
 public class UpdateRoomReservationStatusDto

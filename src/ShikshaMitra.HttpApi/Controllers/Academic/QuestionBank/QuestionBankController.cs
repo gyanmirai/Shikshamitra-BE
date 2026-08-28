@@ -19,11 +19,11 @@ public class QuestionBankController(IQuestionBankAppService service) : AbpContro
     public Task<QuestionBankSettingDto> GetSettings([FromQuery] Guid academicYearId) => service.GetSettingsAsync(academicYearId);
 
     [HttpPost("settings")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Create)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add)]
     public Task<QuestionBankSettingDto> SaveSettings([FromBody] QuestionBankSettingDto input) => service.SaveSettingsAsync(input);
 
     [HttpPut("settings/{id:guid}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Edit)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add)]
     public Task<QuestionBankSettingDto> UpdateSettings(Guid id, [FromBody] QuestionBankSettingDto input)
     {
         input.Id = id;
@@ -56,11 +56,11 @@ public class QuestionBankController(IQuestionBankAppService service) : AbpContro
     public Task<QuestionBankItemDto> GetQuestion(Guid id) => service.GetQuestionAsync(id);
 
     [HttpPost("questions")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Create)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add)]
     public Task<QuestionBankItemDto> CreateQuestion([FromBody] CreateUpdateQuestionDto input) => service.CreateQuestionAsync(input);
 
     [HttpPut("questions/{id:guid}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Edit)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add)]
     public Task<QuestionBankItemDto> UpdateQuestion(Guid id, [FromBody] CreateUpdateQuestionDto input) => service.UpdateQuestionAsync(id, input);
 
     [HttpDelete("questions/{id:guid}")]
@@ -72,23 +72,23 @@ public class QuestionBankController(IQuestionBankAppService service) : AbpContro
     }
 
     [HttpPost("questions/{id:guid}/submit")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Submit)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add)]
     public Task<QuestionBankItemDto> SubmitQuestion(Guid id) => service.SubmitQuestionAsync(id);
 
     [HttpPost("questions/{id:guid}/approve")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Approve)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add)]
     public Task<QuestionBankItemDto> ApproveQuestion(Guid id, [FromBody] QuestionReviewDto input) => service.ApproveQuestionAsync(id, input);
 
     [HttpPost("questions/{id:guid}/reject")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Reject)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add)]
     public Task<QuestionBankItemDto> RejectQuestion(Guid id, [FromBody] QuestionReviewDto input) => service.RejectQuestionAsync(id, input);
 
     [HttpPost("questions/{id:guid}/archive")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Archive)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Delete)]
     public Task<QuestionBankItemDto> ArchiveQuestion(Guid id) => service.ArchiveQuestionAsync(id);
 
     [HttpPost("questions/{id:guid}/duplicate")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Duplicate)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add)]
     public Task<QuestionBankItemDto> DuplicateQuestion(Guid id) => service.DuplicateQuestionAsync(id);
 
     [HttpPost("questions/check-duplicate")]
@@ -96,10 +96,10 @@ public class QuestionBankController(IQuestionBankAppService service) : AbpContro
     public Task<DuplicateQuestionResultDto> CheckDuplicate([FromBody] CheckDuplicateQuestionDto input) => service.CheckDuplicateAsync(input);
 
     [HttpPost("questions/bulk-approve")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Approve)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add)]
     public Task<BulkQuestionWorkflowResultDto> BulkApprove([FromBody] BulkQuestionReviewDto input) => service.BulkApproveAsync(input);
 
     [HttpPost("questions/bulk-reject")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Reject)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_QuestionBank.Add)]
     public Task<BulkQuestionWorkflowResultDto> BulkReject([FromBody] BulkQuestionReviewDto input) => service.BulkRejectAsync(input);
 }

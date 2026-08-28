@@ -1,15 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
+using Volo.Abp.PermissionManagement;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.Data;
 using Xunit;
@@ -165,6 +168,22 @@ public class TenantAuthorizationApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task User_Should_Not_Read_Another_Users_Permissions_Without_ManagePermissions()
+	{
+		using var client = CreateClient(
+			tenantId: TestTenantId.ToString(),
+			userId: TestAuthHandler.TestUserId,
+			roles: "Principal",
+			permissions: "");
+
+		var response = await client.GetAsync(
+			$"/api/permission-management/permissions?providerName=U&providerKey={Guid.NewGuid()}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Principal_Should_Not_Update_Permission_Management_Apis()
 	{
 		using var client = CreateClient(
@@ -209,6 +228,41 @@ public class TenantAuthorizationApi_Tests : ShikshaMitraApiTestBase
 		var response = await client.GetAsync($"/api/permission-management/permissions?providerName=U&providerKey={Guid.NewGuid()}");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Tenant_Admin_Should_Update_And_Read_User_Module_Visibility()
+	{
+		using var client = CreateClient(
+			tenantId: TestTenantId.ToString(),
+			roles: "admin",
+			permissions: IdentityPermissions.Users.ManagePermissions);
+		var targetUserId = Guid.NewGuid();
+		var url = $"/api/permission-management/permissions?providerName=U&providerKey={targetUserId}";
+
+		var updateResponse = await client.PutAsJsonAsync(
+			url,
+			new
+			{
+				Permissions = new[]
+				{
+					new { Name = ShikshaMitraModulePermissions.HR, IsGranted = true }
+				}
+			},
+			JsonOptions);
+
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent, await updateResponse.Content.ReadAsStringAsync());
+
+		var getResponse = await client.GetAsync(url);
+
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await getResponse.Content.ReadAsStringAsync());
+		var permissions = await getResponse.Content.ReadFromJsonAsync<GetPermissionListResultDto>(JsonOptions);
+		permissions.ShouldNotBeNull();
+		permissions.Groups
+			.SelectMany(group => group.Permissions)
+			.Single(permission => permission.Name == ShikshaMitraModulePermissions.HR)
+			.IsGranted.ShouldBeTrue();
 	}
 
 	[Fact]

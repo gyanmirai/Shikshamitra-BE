@@ -265,6 +265,7 @@ public class AcademicCalendarAuditWriter(
 
     private static bool TryGetCalendarDate(string? value, out DateOnly date)
     {
+        date = default;
         var normalized = value?.Trim('"');
         return normalized?.Length >= 10
             && DateOnly.TryParseExact(normalized[..10], "yyyy-MM-dd", out date);

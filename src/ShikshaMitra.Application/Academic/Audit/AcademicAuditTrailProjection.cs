@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -129,6 +130,7 @@ public static class AcademicAuditTrailProjection
 
 	private static bool TryParseDate(string? value, out DateOnly date)
 	{
+		date = default;
 		var normalized = value?.Trim('"');
 		return normalized?.Length >= 10 && DateOnly.TryParseExact(normalized[..10], "yyyy-MM-dd", out date);
 	}

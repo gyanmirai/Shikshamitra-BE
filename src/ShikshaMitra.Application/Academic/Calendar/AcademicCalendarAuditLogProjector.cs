@@ -84,6 +84,9 @@ public static class AcademicCalendarAuditLogProjector
             && oldDate == newDate;
     }
 
-    private static bool TryGetCalendarDate(string value, out DateOnly date) =>
-        value.Length >= 10 && DateOnly.TryParseExact(value[..10], "yyyy-MM-dd", out date);
+    private static bool TryGetCalendarDate(string value, out DateOnly date)
+    {
+        date = default;
+        return value.Length >= 10 && DateOnly.TryParseExact(value[..10], "yyyy-MM-dd", out date);
+    }
 }

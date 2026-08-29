@@ -484,16 +484,28 @@ public class SubjectAssignmentAppService(
 			electiveGroup = await electiveGroupRepository.FindAsync(assignment.ElectiveGroupId.Value);
 		}
 
-		// Load teacher info in bulk
+		// AssignedSubjectTeacher stores HR employee IDs. Resolve employees first,
+		// then their linked identity users, so profile data is joined using the
+		// correct identifier domain without introducing per-teacher queries.
 		var allTeacherIds = groupAssignments
 			.SelectMany(a => a.Teachers)
 			.Select(t => t.TeacherId)
 			.Distinct()
 			.ToList();
-		var teachersDict = allTeacherIds.Count > 0
-			? (await userRepository.GetListByIdsAsync(allTeacherIds))
-				.ToDictionary(u => u.Id, u => $"{u.Name} {u.Surname}".Trim())
-			: new Dictionary<Guid, string>();
+		var employeesById = allTeacherIds.Count > 0
+			? (await employeeRepository.GetListAsync(employee => allTeacherIds.Contains(employee.Id)))
+				.ToDictionary(employee => employee.Id)
+			: new Dictionary<Guid, Employee>();
+		var identityUserIds = employeesById.Values
+			.Where(employee => employee.UserId.HasValue)
+			.Select(employee => employee.UserId!.Value)
+			.Concat(allTeacherIds)
+			.Distinct()
+			.ToList();
+		var identityUsersById = identityUserIds.Count > 0
+			? (await userRepository.GetListByIdsAsync(identityUserIds)).ToDictionary(user => user.Id)
+			: new Dictionary<Guid, IdentityUser>();
+		var experienceAsOf = DateOnly.FromDateTime(Clock.Now);
 
 		var first = groupAssignments.First();
 
@@ -519,16 +531,20 @@ public class SubjectAssignmentAppService(
 					Color = a.Subject?.Color,
 					SubjectType = a.SubjectType,
 					ElectiveGroupId = a.ElectiveGroupId,
-					PrimaryTeacher = primaryTeacherEntry == null ? null : new TeacherInfoDto
-					{
-						Id = primaryTeacherEntry.TeacherId.ToString(),
-						Name = teachersDict.GetValueOrDefault(primaryTeacherEntry.TeacherId, string.Empty)
-					},
-					SecondaryTeachers = secondaryTeacherEntries.Select(t => new TeacherInfoDto
-					{
-						Id = t.TeacherId.ToString(),
-						Name = teachersDict.GetValueOrDefault(t.TeacherId, string.Empty)
-					}).ToList(),
+					PrimaryTeacher = primaryTeacherEntry == null
+						? null
+						: BuildTeacherInfo(
+							primaryTeacherEntry.TeacherId,
+							employeesById,
+							identityUsersById,
+							experienceAsOf),
+					SecondaryTeachers = secondaryTeacherEntries
+						.Select(teacher => BuildTeacherInfo(
+							teacher.TeacherId,
+							employeesById,
+							identityUsersById,
+							experienceAsOf))
+						.ToList(),
 					LearningGoals = a.LearningGoals,
 					Prerequisites = a.Prerequisites,
 					Description = a.Description,
@@ -544,6 +560,88 @@ public class SubjectAssignmentAppService(
 				};
 			}).ToList()
 		};
+	}
+
+	private static TeacherInfoDto BuildTeacherInfo(
+		Guid teacherId,
+		IReadOnlyDictionary<Guid, Employee> employeesById,
+		IReadOnlyDictionary<Guid, IdentityUser> identityUsersById,
+		DateOnly experienceAsOf)
+	{
+		employeesById.TryGetValue(teacherId, out var employee);
+		var identityUserId = employee?.UserId ?? teacherId;
+		identityUsersById.TryGetValue(identityUserId, out var identityUser);
+		var employeeName = employee?.EmployeeName;
+
+		return new TeacherInfoDto
+		{
+			Id = teacherId.ToString(),
+			Name = !string.IsNullOrWhiteSpace(employeeName)
+				? employeeName
+				: $"{identityUser?.Name} {identityUser?.Surname}".Trim(),
+			Email = !string.IsNullOrWhiteSpace(employee?.Email)
+				? employee.Email
+				: identityUser?.Email,
+			Experience = FormatExperience(employee, experienceAsOf)
+		};
+	}
+
+	private static string? FormatExperience(Employee? employee, DateOnly asOf)
+	{
+		if (employee == null)
+		{
+			return null;
+		}
+
+		var periods = employee.WorkExperiences
+			.Where(experience => experience.FromDate.HasValue)
+			.Select(experience => (
+				Start: experience.FromDate!.Value,
+				End: experience.ToDate.HasValue && experience.ToDate.Value < asOf
+					? experience.ToDate.Value
+					: asOf))
+			.ToList();
+		if (employee.DateOfJoining.HasValue)
+		{
+			periods.Add((employee.DateOfJoining.Value, asOf));
+		}
+
+		var validPeriods = periods.Where(period => period.End >= period.Start).ToList();
+		if (validPeriods.Count == 0)
+		{
+			return null;
+		}
+
+		var totalMonths = validPeriods.Sum(period => GetCompletedMonths(period.Start, period.End));
+		if (totalMonths == 0)
+		{
+			return "Less than 1 month";
+		}
+
+		var years = totalMonths / 12;
+		var months = totalMonths % 12;
+		var parts = new List<string>();
+		if (years > 0)
+		{
+			parts.Add($"{years} {(years == 1 ? "year" : "years")}");
+		}
+		if (months > 0)
+		{
+			parts.Add($"{months} {(months == 1 ? "month" : "months")}");
+		}
+
+		return string.Join(" ", parts);
+	}
+
+	private static int GetCompletedMonths(DateOnly start, DateOnly end)
+	{
+		var months = ((end.Year - start.Year) * 12) + end.Month - start.Month;
+		if (end.Day < start.Day)
+		{
+			months--;
+		}
+
+		return Math.Max(months, 0);
 	}
 
 	public async Task<SubjectAssignmentDto> UpdateAsync(

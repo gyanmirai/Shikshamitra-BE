@@ -64,6 +64,7 @@ public class SubstitutionDto : EntityDto<Guid>
     public bool IsAiSuggested { get; set; }
     public string WorkloadStatus { get; set; } = string.Empty;
     public bool AcknowledgementRequired { get; set; }
+    public bool IsResponseWindowOpen { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? AcknowledgedAt { get; set; }
     public string? CompletedAt { get; set; }

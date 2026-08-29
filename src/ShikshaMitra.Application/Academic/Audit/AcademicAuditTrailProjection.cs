@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ShikshaMitra.Audit;
+using ShikshaMitra.Academic.Calendar;
 
 namespace ShikshaMitra.Academic.Audit;
 
@@ -34,7 +35,9 @@ public static class AcademicAuditTrailProjection
 		var normalizedAction = Normalize(action);
 		var normalizedSubModule = Normalize(subModuleCode);
 		var normalizedEntityType = Normalize(entityType);
-		var changedFields = DeserializeChangedFields(changedFieldsJson);
+		var changedFields = DeserializeChangedFields(changedFieldsJson)
+			.Where(x => !AreEquivalentDateValues(x))
+			.ToList();
 
 		return new AcademicAuditEventDto
 		{
@@ -58,7 +61,9 @@ public static class AcademicAuditTrailProjection
 			OccurredAtDisplay = AuditTimestampDisplay.FormatInstitutionTime(occurredAt),
 			ChangedFields = changedFields,
 			ChangedFieldCount = changedFields.Count,
-			ContextJson = contextJson,
+			// The event already contains the human-readable entity and field changes. Do not return
+			// raw before/after snapshots here: they expose internal GUID references to the UI.
+			ContextJson = ExtractMetadataContext(contextJson),
 			CorrelationId = correlationId,
 			SourceAuditLogId = sourceAuditLogId,
 			Source = source
@@ -72,27 +77,73 @@ public static class AcademicAuditTrailProjection
 
 		try
 		{
-			return JsonSerializer.Deserialize<List<AcademicAuditChangedFieldDto>>(json, JsonOptions) ?? [];
+			var direct = JsonSerializer.Deserialize<List<AcademicAuditChangedFieldDto>>(json, JsonOptions) ?? [];
+			if (direct.Count == 0 || direct.Any(x => string.IsNullOrWhiteSpace(x.Field)))
+			{
+				var calendarDiff = JsonSerializer.Deserialize<List<CalendarAuditDiffShape>>(json, JsonOptions) ?? [];
+				if (calendarDiff.Count > 0)
+					return calendarDiff.ConvertAll(MapCalendarDiff);
+			}
+			return direct;
 		}
 		catch (JsonException)
 		{
 			try
 			{
 				var calendarDiff = JsonSerializer.Deserialize<List<CalendarAuditDiffShape>>(json, JsonOptions) ?? [];
-				return calendarDiff.ConvertAll(x => new AcademicAuditChangedFieldDto
-				{
-					Field = x.FieldName,
-					DisplayName = string.IsNullOrWhiteSpace(x.DisplayName) ? ToLabel(x.FieldName) : x.DisplayName,
-					OldValue = x.OldValue,
-					NewValue = x.NewValue,
-					ChangeType = string.IsNullOrWhiteSpace(x.ChangeType) ? "updated" : x.ChangeType
-				});
+				return calendarDiff.ConvertAll(MapCalendarDiff);
 			}
 			catch (JsonException)
 			{
 				return [];
 			}
 		}
+	}
+
+	private static AcademicAuditChangedFieldDto MapCalendarDiff(CalendarAuditDiffShape x) => new()
+	{
+		Field = x.FieldName,
+		DisplayName = string.IsNullOrWhiteSpace(x.DisplayName) ? ToLabel(x.FieldName) : x.DisplayName,
+		OldValue = FormatCalendarValue(x.FieldName, x.OldValue),
+		NewValue = FormatCalendarValue(x.FieldName, x.NewValue),
+		ChangeType = string.IsNullOrWhiteSpace(x.ChangeType) ? "updated" : x.ChangeType
+	};
+
+	private static bool AreEquivalentDateValues(AcademicAuditChangedFieldDto field) =>
+		field.Field.EndsWith("Date", StringComparison.OrdinalIgnoreCase)
+		&& TryParseDate(field.OldValue, out var oldDate)
+		&& TryParseDate(field.NewValue, out var newDate)
+		&& oldDate == newDate;
+
+	private static string? FormatCalendarValue(string fieldName, string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value)) return value;
+		if (fieldName.Equals("HolidayCategory", StringComparison.OrdinalIgnoreCase)
+			&& int.TryParse(value, out var category)
+			&& Enum.IsDefined(typeof(HolidayCategory), category))
+			return ((HolidayCategory)category).ToString();
+		return fieldName.EndsWith("Date", StringComparison.OrdinalIgnoreCase) && TryParseDate(value, out var date)
+			? date.ToString("dd-MM-yyyy")
+			: value;
+	}
+
+	private static bool TryParseDate(string? value, out DateOnly date)
+	{
+		var normalized = value?.Trim('"');
+		return normalized?.Length >= 10 && DateOnly.TryParseExact(normalized[..10], "yyyy-MM-dd", out date);
+	}
+
+	private static string? ExtractMetadataContext(string? contextJson)
+	{
+		if (string.IsNullOrWhiteSpace(contextJson)) return null;
+		try
+		{
+			using var document = JsonDocument.Parse(contextJson);
+			return document.RootElement.TryGetProperty("metadata", out var metadata)
+				? metadata.GetRawText()
+				: null;
+		}
+		catch (JsonException) { return null; }
 	}
 
 	private static string ToSubModuleDisplayName(string value) => value switch
@@ -108,7 +159,9 @@ public static class AcademicAuditTrailProjection
 	};
 
 	private static string ToLabel(string value) =>
-		CultureInfo.InvariantCulture.TextInfo.ToTitleCase(Normalize(value).Replace("_", " "));
+		CultureInfo.InvariantCulture.TextInfo.ToTitleCase(
+			System.Text.RegularExpressions.Regex.Replace(value.Trim(), "([a-z])([A-Z])", "$1 $2")
+				.Replace("_", " ").Replace("-", " ").ToLowerInvariant());
 
 	private static string Normalize(string value) => value.Trim().ToLowerInvariant().Replace("-", "_");
 

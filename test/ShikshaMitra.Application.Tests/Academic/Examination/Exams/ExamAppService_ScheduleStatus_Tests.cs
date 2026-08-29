@@ -126,6 +126,38 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 	}
 
 	[Fact]
+	public async Task GetListAsync_Should_Return_Undated_Pending_Exam_When_Explicit_Date_Range_Is_Used()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var (exam, mediumId) = await CreateScheduledExamAsync(ExamStatus.Pending);
+				foreach (var subject in exam.ExamSubjects)
+				{
+					subject.UpdateSchedule(null, null, null, null, null, notes: null);
+				}
+				await _examRepository.UpdateAsync(exam, autoSave: true);
+
+				var today = DateTime.Today;
+				var result = await _examAppService.GetListAsync(new GetExamsInput
+				{
+					AcademicMediumId = mediumId,
+					Status = ExamStatus.Pending,
+					StartDate = today,
+					EndDate = today.AddDays(6),
+					MaxResultCount = 10
+				});
+
+				var item = result.Items.Single(item => item.ExamId == exam.Id);
+				item.Status.ShouldBe(ExamStatus.Pending);
+				item.StartDate.ShouldBeNull();
+				item.EndDate.ShouldBeNull();
+			}
+		});
+	}
+
+	[Fact]
 	public async Task GetListAsync_Should_Return_Correct_Subject_Count_For_Assigned_Subjects()
 	{
 		await WithUnitOfWorkAsync(async () =>

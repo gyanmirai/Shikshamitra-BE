@@ -604,13 +604,21 @@ public class ExamAppService(
 
 	public async Task<ExamListResultDto> GetListAsync(GetExamsInput input)
 	{
-		if (input.StartDate.HasValue && input.EndDate.HasValue && input.StartDate > input.EndDate)
+		var isPendingStatus = input.Status == ExamStatus.Pending;
+		if (!isPendingStatus && input.StartDate.HasValue && input.EndDate.HasValue && input.StartDate > input.EndDate)
 			throw new UserFriendlyException("StartDate cannot be greater than EndDate.");
 
-		var isDefaultDateRange = !input.StartDate.HasValue && !input.EndDate.HasValue;
+		// Pending is the planning queue. It must not be constrained by a
+		// schedule-date range because step 2 may not have supplied dates yet.
+		var isDefaultDateRange = !isPendingStatus && !input.StartDate.HasValue && !input.EndDate.HasValue;
 		var filterStartDate = input.StartDate?.DateTime;
 		var filterEndDate = input.EndDate?.DateTime;
-		if (isDefaultDateRange)
+		if (isPendingStatus)
+		{
+			filterStartDate = DateTime.MinValue;
+			filterEndDate = DateTime.MaxValue;
+		}
+		else if (isDefaultDateRange)
 		{
 			var today = DateTime.Now.Date;
 			var daysFromMonday = ((int)today.DayOfWeek + 6) % 7;
@@ -1419,7 +1427,12 @@ public class ExamAppService(
 			.ToList();
 
 		if (scheduledDates.Count == 0)
-			return includeUndatedExams;
+		{
+			// Pending exams are planning records until step 2 supplies subject
+			// dates. Keep them visible in the planning list even when the UI sends
+			// the current-week date range explicitly.
+			return includeUndatedExams || exam.Status == ExamStatus.Pending;
+		}
 
 		var examStartDate = scheduledDates.Min();
 		var examEndDate = GetExamFinalEndAt(exam)!.Value;

@@ -14,4 +14,14 @@ public class TeacherInfoDto
 	/// Teacher full name
 	/// </summary>
 	public string Name { get; set; }
+
+	/// <summary>
+	/// Teacher email address from the linked employee or identity user.
+	/// </summary>
+	public string? Email { get; set; }
+
+	/// <summary>
+	/// Human-readable total professional experience.
+	/// </summary>
+	public string? Experience { get; set; }
 }

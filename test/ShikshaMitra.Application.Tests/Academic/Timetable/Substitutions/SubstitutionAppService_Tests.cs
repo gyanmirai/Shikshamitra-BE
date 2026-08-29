@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.Security.Claims;
@@ -82,7 +83,81 @@ public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<Shik
             duty.OriginalTeacherName.ShouldBe("Dharmik Jinjala");
             duty.SubstituteTeacherId.ShouldBe(substitute.Id);
             duty.SubstituteTeacherName.ShouldBe("Akshay Patel");
+            duty.IsResponseWindowOpen.ShouldBeFalse();
         }
+    }
+
+    [Fact]
+    public async Task AcknowledgeAsync_Should_Allow_Assigned_Substitute_Outside_Class_Scope()
+    {
+        var substituteUserId = Guid.NewGuid();
+        var substitute = await CreateEmployeeAsync(substituteUserId, "Assigned", "Teacher");
+        var substitution = await CreateAssignedSubstitutionAsync(substitute);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(substituteUserId)))
+        {
+            var result = await _substitutionAppService.AcknowledgeAsync(
+                substitution.Id,
+                new SubstitutionActionDto { Reason = "I accept this duty." });
+
+            result.Status.ShouldBe("Acknowledged");
+            result.AcknowledgementStatus.ShouldBe("Accepted");
+            result.Remarks.ShouldBe("I accept this duty.");
+        }
+    }
+
+    [Fact]
+    public async Task AcknowledgeAsync_Should_Reject_User_Who_Is_Not_The_Assigned_Substitute()
+    {
+        var assignedUserId = Guid.NewGuid();
+        var assignedSubstitute = await CreateEmployeeAsync(assignedUserId, "Assigned", "Teacher");
+        var otherUserId = Guid.NewGuid();
+        await CreateEmployeeAsync(otherUserId, "Other", "Teacher");
+        var substitution = await CreateAssignedSubstitutionAsync(assignedSubstitute);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(otherUserId)))
+        {
+            var exception = await Should.ThrowAsync<UserFriendlyException>(() =>
+                _substitutionAppService.AcknowledgeAsync(substitution.Id));
+
+            exception.Message.ShouldBe("Only the assigned substitute teacher or administrators can perform this action.");
+        }
+    }
+
+    private async Task<SubstitutionRequest> CreateAssignedSubstitutionAsync(Employee substitute)
+    {
+        var substitution = new SubstitutionRequest(
+            Guid.NewGuid(),
+            tenantId: null,
+            date: DateTime.UtcNow.Date.AddDays(1),
+            period: "Period 2",
+            startTime: new TimeOnly(13, 0),
+            endTime: new TimeOnly(13, 30),
+            className: "LKG",
+            divisionName: "A",
+            subjectName: "Science",
+            originalTeacherName: "Original Teacher",
+            roomName: "B106",
+            reason: "Original teacher unavailable.",
+            priority: SubstitutionPriority.Normal,
+            source: SubstitutionSource.HrLeave,
+            acknowledgementRequired: true,
+            standardId: Guid.NewGuid(),
+            divisionId: Guid.NewGuid(),
+            subjectId: Guid.NewGuid(),
+            originalTeacherId: Guid.NewGuid());
+        substitution.Assign(
+            substitute.Id,
+            substitute.EmployeeName,
+            assignedRoomId: null,
+            assignedRoomName: null,
+            suggestionScore: null,
+            workloadStatus: "Low",
+            conflictStatus: SubstitutionConflictStatus.Clear,
+            conflictReason: null,
+            sendNotification: true);
+
+        return await _substitutionRepository.InsertAsync(substitution, autoSave: true);
     }
 
     private async Task<Employee> CreateEmployeeAsync(Guid userId, string firstName, string lastName)

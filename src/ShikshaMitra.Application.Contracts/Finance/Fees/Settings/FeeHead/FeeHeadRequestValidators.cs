@@ -13,7 +13,9 @@ public class FeeHeadCreateRequestValidator : AbstractValidator<FeeHeadCreateRequ
             .NotEmpty()
             .Length(3, 40);
 
-        RuleFor(x => x.Module).IsInEnum();
+        RuleFor(x => x.Module)
+            .IsInEnum()
+            .When(x => x.Module.HasValue);
 
         RuleFor(x => x.Description)
             .MaximumLength(500);
@@ -30,7 +32,9 @@ public class FeeHeadUpdateRequestValidator : AbstractValidator<FeeHeadUpdateRequ
             .NotEmpty()
             .Length(3, 40);
 
-        RuleFor(x => x.Module).IsInEnum();
+        RuleFor(x => x.Module)
+            .IsInEnum()
+            .When(x => x.Module.HasValue);
 
         RuleFor(x => x.Description)
             .MaximumLength(500);

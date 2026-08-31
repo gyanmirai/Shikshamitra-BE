@@ -3,7 +3,7 @@ module: finance
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-08-31
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -38,6 +38,10 @@ Treat incorrect Finance reports or due balances as production defects.
 | Cash returned to parents uses refunds | Fee adjustments are not cash refunds |
 | Maker-checker rules protect approvals | Creators cannot approve or reject their own charge, concession, or adjustment where the domain enforces it |
 | Receipt numbers and payment records must remain auditable | Do not silently mutate payment history |
+
+## Fee-head module field
+
+The fee-head `Module` identifies the product module associated with that fee head. It is optional: `null` means the fee head is not associated with a specific product module. When present, it must be a valid `FeeHeadModule` enum value. Existing fee-head dependencies and edit restrictions are unchanged.
 
 ## Partial surfaces
 

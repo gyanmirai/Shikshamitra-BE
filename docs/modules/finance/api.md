@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-08-31
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -30,6 +30,8 @@ Mutations must enforce backend permissions and audit important financial actions
 | Fee refunds | `Controllers/Finance/Fees/Refunds/FeeRefundController.cs` | Fee refund routes |
 | Student fee assignment | `Controllers/Finance/Fees/StudentFeeAssignment/StudentFeeStructureController.cs` | Student fee structure routes |
 | Fee settings | `Controllers/Finance/Fees/Settings/**` | Fee category, fee head, fee structure, receipt book, concession type, and charge category routes |
+
+Fee-category and fee-head create/update contracts accept `module` as an optional numeric `FeeHeadModule` enum value. Send `null` or omit the property when no module applies. The fee-head module lookup returns numeric `value` fields with user-facing `displayName` labels.
 
 ## Accounts API families
 

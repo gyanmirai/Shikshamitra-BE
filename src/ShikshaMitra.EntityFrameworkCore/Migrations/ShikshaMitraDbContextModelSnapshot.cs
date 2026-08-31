@@ -8157,7 +8157,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("LastModifierId");
 
                     b.Property<string>("Module")
-                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 

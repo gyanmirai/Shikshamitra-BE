@@ -11,7 +11,7 @@ public class FeeHeadCreateRequest
     [Required]
     public string Name { get; set; }
 
-    public FeeHeadModule Module { get; set; }
+    public FeeHeadModule? Module { get; set; }
 
     public bool IsConcessionApplied { get; set; }
 

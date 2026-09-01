@@ -8432,7 +8432,10 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "AcademicYearId", "Code")
                         .IsUnique();
 
-                    b.HasIndex("TenantId", "AcademicYearId", "BoardId", "IsDefault");
+                    b.HasIndex("TenantId", "AcademicYearId", "BoardId")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false AND \"IsDefault\" = true")
+                        .HasDatabaseName("IX_Finance_PaymentTerms_OneDefaultPerBoard");
 
                     b.ToTable("Finance_PaymentTerms", (string)null);
                 });
@@ -8522,6 +8525,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("EffectiveTo")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("DemandGenerationRule")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("DemandOffsetDays")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -8529,6 +8538,9 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid>("PaymentTermId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("HolidayShiftingMethod")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("PublishedAt")
                         .HasColumnType("timestamp with time zone");

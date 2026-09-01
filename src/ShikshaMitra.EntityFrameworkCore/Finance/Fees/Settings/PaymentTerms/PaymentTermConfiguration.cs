@@ -23,7 +23,10 @@ public class PaymentTermConfiguration : IEntityTypeConfiguration<PaymentTerm>
 		builder.Property(x => x.InitialDemandStatus).HasConversion<int>();
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Code }).IsUnique();
-		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.BoardId, x.IsDefault });
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.BoardId })
+			.IsUnique()
+			.HasFilter("\"IsDeleted\" = false AND \"IsDefault\" = true")
+			.HasDatabaseName("IX_Finance_PaymentTerms_OneDefaultPerBoard");
 
 		builder.HasMany(x => x.Versions)
 			.WithOne()

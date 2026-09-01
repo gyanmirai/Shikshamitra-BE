@@ -33,4 +33,9 @@ public static class PaymentTermErrorCodes
 	public const string AdoptionReasonRequired = $"{Prefix}:000030";
 	public const string AdoptionTargetNotPublished = $"{Prefix}:000031";
 	public const string AllocationPercentageExceeds100 = $"{Prefix}:000032";
+	public const string DemandDateRequired = $"{Prefix}:000033";
+	public const string DueDateOutsideCoverage = $"{Prefix}:000034";
+	public const string InstallmentDateOutsideBoardPeriod = $"{Prefix}:000035";
+	public const string EffectiveDateRequired = $"{Prefix}:000036";
+	public const string DefaultTermRequired = $"{Prefix}:000037";
 }

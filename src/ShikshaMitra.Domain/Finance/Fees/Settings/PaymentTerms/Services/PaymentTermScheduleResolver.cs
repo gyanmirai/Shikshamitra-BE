@@ -74,6 +74,19 @@ public class PaymentTermScheduleResolver(
 				}
 			}
 
+			// A structure override may move the period or due date. Recalculate all
+			// derived bill dates from the owning term rule; only SpecificDate remains
+			// an explicit per-installment date.
+			if (version.DemandGenerationRule != DemandGenerationRule.SpecificDate)
+			{
+				demandDate = PaymentTermDemandDateCalculator.Calculate(
+					version.DemandGenerationRule,
+					coverageStart,
+					dueDate,
+					version.DemandOffsetDays,
+					null);
+			}
+
 			decimal calculatedAmount;
 			if (index == masterInstallments.Count - 1)
 			{

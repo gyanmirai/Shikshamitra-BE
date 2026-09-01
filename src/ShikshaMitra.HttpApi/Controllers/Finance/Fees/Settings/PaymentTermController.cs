@@ -33,6 +33,13 @@ public class PaymentTermController(
 	public async Task<PaymentTermDto> GetAsync(Guid paymentTermId)
 		=> await paymentTermAppService.GetAsync(paymentTermId);
 
+	[HttpGet("{paymentTermId}/versions")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.View)]
+	public async Task<PagedResultDto<PaymentTermVersionHistoryDto>> GetVersionHistoryAsync(
+		Guid paymentTermId,
+		PagedAndSortedResultRequestDto input)
+		=> await paymentTermAppService.GetVersionHistoryAsync(paymentTermId, input);
+
 	[HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.Add)]
 	public async Task<PaymentTermDto> CreateAsync(CreatePaymentTermDto input)
@@ -55,11 +62,11 @@ public class PaymentTermController(
 
 	[HttpPost("{paymentTermId}/versions/{versionId}/publish")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.Add)]
-	public async Task<PublishResultDto> PublishVersionAsync(Guid paymentTermId, Guid versionId, PublishVersionDto input)
-		=> await paymentTermAppService.PublishVersionAsync(paymentTermId, versionId, input);
+	public async Task<PublishResultDto> PublishVersionAsync(Guid paymentTermId, Guid versionId)
+		=> await paymentTermAppService.PublishVersionAsync(paymentTermId, versionId);
 
 	[HttpPatch("{paymentTermId}/archive")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.Add)]
 	public async Task ArchiveAsync(Guid paymentTermId, ArchivePaymentTermDto input)
 		=> await paymentTermAppService.ArchiveAsync(paymentTermId, input);
 

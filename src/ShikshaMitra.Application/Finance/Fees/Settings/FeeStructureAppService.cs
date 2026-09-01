@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
@@ -66,6 +67,9 @@ public class FeeStructureAppService(
                 // Attach Payment Term if provided
                 if (feeHead.PaymentTermId.HasValue && feeHead.PaymentTermVersionId.HasValue)
                 {
+					await EnsureAssignablePaymentTermAsync(
+						feeHead.PaymentTermId.Value,
+						feeHead.PaymentTermVersionId.Value);
                     if (feeHead.InstallmentOverrides != null && feeHead.InstallmentOverrides.Count > 0)
                     {
                         var overrides = feeHead.InstallmentOverrides.Select(o => new FeeStructureDetailScheduleOverride(
@@ -134,6 +138,9 @@ public class FeeStructureAppService(
                 // Attach Payment Term if provided
                 if (feeHead.PaymentTermId.HasValue && feeHead.PaymentTermVersionId.HasValue)
                 {
+					await EnsureAssignablePaymentTermAsync(
+						feeHead.PaymentTermId.Value,
+						feeHead.PaymentTermVersionId.Value);
                     if (feeHead.InstallmentOverrides != null && feeHead.InstallmentOverrides.Count > 0)
                     {
                         var overrides = feeHead.InstallmentOverrides.Select(o => new FeeStructureDetailScheduleOverride(
@@ -286,4 +293,22 @@ public class FeeStructureAppService(
 
         return result;
     }
+
+	private async Task EnsureAssignablePaymentTermAsync(Guid paymentTermId, Guid versionId)
+	{
+		var term = await paymentTermRepository.FindAsync(paymentTermId);
+		if (term == null)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.NotFound)
+				.WithData("PaymentTermId", paymentTermId);
+		}
+
+		var published = term.GetPublishedVersion();
+		if (term.Status != PaymentTermStatus.Active || published == null || published.Id != versionId)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.VersionNotPublished)
+				.WithData("PaymentTermId", paymentTermId)
+				.WithData("VersionId", versionId);
+		}
+	}
 }

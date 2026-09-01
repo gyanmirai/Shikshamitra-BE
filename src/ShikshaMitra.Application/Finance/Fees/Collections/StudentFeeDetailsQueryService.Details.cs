@@ -178,6 +178,7 @@ public partial class StudentFeeDetailsQueryService
 		var currentYear = now.Year;
 		var currentMonth = now.Month - 1;
 		return dueFees.Where(d => d.OutstandingAmount > 0d
+			&& d.IsBillGeneratedOn(now.Date)
 			&& (d.Year < currentYear || (d.Year == currentYear && (int)d.Month < currentMonth)))
 			.Sum(d => d.OutstandingAmount);
 	}

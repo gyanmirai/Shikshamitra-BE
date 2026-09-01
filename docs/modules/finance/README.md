@@ -22,6 +22,7 @@ Finance covers fees, collections, concessions, adjustments, refunds, receipts, a
 | 3 | [architecture.md](./architecture.md) | Locate source paths and domain boundaries |
 | 4 | [workflows.md](./workflows.md) | Trace charge, concession, adjustment, collection, refund, and reconciliation flows |
 | 5 | [testing.md](./testing.md) | Pick focused Finance validation commands |
+| 6 | [Concession policy flow](./references/concession-policy-flow.md) | Review the proposed versioned concession policy, fee assignment, request, approval, allocation, and correction design |
 
 ## Source of truth
 
@@ -45,6 +46,7 @@ Use this table before searching code:
 | Where is the code? | [architecture.md](./architecture.md) |
 | Which workflow should I trace? | [workflows.md](./workflows.md) |
 | Which tests should I run? | [testing.md](./testing.md) |
+| How should Concession Policy integrate with fee structures and student requests? | [Concession policy flow](./references/concession-policy-flow.md) |
 
 ## Validation
 

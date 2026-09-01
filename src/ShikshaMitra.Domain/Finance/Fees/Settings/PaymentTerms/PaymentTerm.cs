@@ -153,10 +153,9 @@ public class PaymentTerm : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ArchiveReason = reason.Trim();
 		IsDefault = false;
 
-		foreach (var version in Versions.Where(v => v.Status != PaymentTermVersionStatus.Archived))
-		{
-			version.Archive();
-		}
+		// Version snapshots keep their lifecycle state. Archiving the master only
+		// removes it from new use; restore can therefore re-enable the same audited
+		// published schedule without mutating history.
 	}
 
 	public void Restore()

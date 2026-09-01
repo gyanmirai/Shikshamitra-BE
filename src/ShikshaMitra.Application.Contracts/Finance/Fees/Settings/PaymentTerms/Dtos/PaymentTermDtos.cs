@@ -1,6 +1,7 @@
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
@@ -25,12 +26,15 @@ public class PaymentTermInstallmentDto : EntityDto<Guid>
 
 public class CreatePaymentTermInstallmentDto
 {
+	[Range(1, int.MaxValue)]
 	public int Sequence { get; set; }
+	[Required, StringLength(100)]
 	public string Name { get; set; } = string.Empty;
 	public DateTime CoverageStartDate { get; set; }
 	public DateTime CoverageEndDate { get; set; }
-	public DateTime DemandDate { get; set; }
+	public DateTime? DemandDate { get; set; }
 	public DateTime DueDate { get; set; }
+	[Range(typeof(decimal), "0.01", "100")]
 	public decimal AllocationPercentage { get; set; }
 	public bool DemandEnabled { get; set; }
 	public bool ReminderEnabled { get; set; }
@@ -45,11 +49,29 @@ public class PaymentTermVersionDto : EntityDto<Guid>
 {
 	public int VersionNumber { get; set; }
 	public PaymentTermVersionStatus Status { get; set; }
+	public HolidayShiftingMethod HolidayShiftingMethod { get; set; }
+	public DemandGenerationRule DemandGenerationRule { get; set; }
+	public int? DemandOffsetDays { get; set; }
 	public DateTime? EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public DateTime? PublishedAt { get; set; }
 	public string? ChangeReason { get; set; }
 	public List<PaymentTermInstallmentDto> Installments { get; set; } = new();
+}
+
+/// <summary>
+/// Lightweight audit projection used by the payment-term version-history drawer.
+/// The full version snapshot remains available from <see cref="PaymentTermDto.Versions"/>.
+/// </summary>
+public class PaymentTermVersionHistoryDto : EntityDto<Guid>
+{
+	public int VersionNumber { get; set; }
+	public PaymentTermVersionStatus Status { get; set; }
+	public string ChangeAction { get; set; } = string.Empty;
+	public string? ChangeReason { get; set; }
+	public DateTime CreationTime { get; set; }
+	public Guid? CreatorId { get; set; }
+	public string? CreatedByName { get; set; }
 }
 
 // ── Master DTOs ───────────────────────────────────────────────────────────────
@@ -63,7 +85,7 @@ public class PaymentTermDto : EntityDto<Guid>
 	public string Name { get; set; } = string.Empty;
 	public string Code { get; set; } = string.Empty;
 	public string? Description { get; set; }
-	public PaymentTermStatus Status { get; set; }
+	public PaymentTermLifecycleStatus Status { get; set; }
 	public bool IsDefault { get; set; }
 
 	public HolidayShiftingMethod HolidayShiftingMethod { get; set; }
@@ -88,9 +110,11 @@ public class PaymentTermListDto : EntityDto<Guid>
 	public string Code { get; set; } = string.Empty;
 	public Guid AcademicYearId { get; set; }
 	public Guid BoardId { get; set; }
-	public PaymentTermStatus Status { get; set; }
+	public PaymentTermLifecycleStatus Status { get; set; }
 	public bool IsDefault { get; set; }
 	public int CurrentVersionNumber { get; set; }
+	public bool HasDraft { get; set; }
+	public bool HasPublishedVersion { get; set; }
 	public int InstallmentCount { get; set; }
 	public int ReferencedStructureCount { get; set; }
 	public bool CanDirectEdit { get; set; }
@@ -102,42 +126,47 @@ public class CreatePaymentTermDto
 {
 	public Guid AcademicYearId { get; set; }
 	public Guid BoardId { get; set; }
+	[Required, StringLength(100, MinimumLength = 3)]
 	public string Name { get; set; } = string.Empty;
+	[Required, StringLength(24, MinimumLength = 3)]
+	[RegularExpression("^[A-Z0-9-]+$")]
 	public string Code { get; set; } = string.Empty;
+	[StringLength(500)]
 	public string? Description { get; set; }
 	public bool IsDefault { get; set; }
+	public PaymentTermSaveStatus Status { get; set; } = PaymentTermSaveStatus.Draft;
 
 	public HolidayShiftingMethod HolidayShiftingMethod { get; set; } = HolidayShiftingMethod.None;
-	public DemandGenerationRule DemandGenerationRule { get; set; } = DemandGenerationRule.Immediately;
+	public DemandGenerationRule DemandGenerationRule { get; set; } = DemandGenerationRule.OnInstallmentStartDate;
 	public int? DemandOffsetDays { get; set; }
-	public InitialDemandStatus InitialDemandStatus { get; set; }
 
 	public List<CreatePaymentTermInstallmentDto> Installments { get; set; } = new();
 }
 
 public class UpdatePaymentTermDraftDto
 {
+	[Required, StringLength(100, MinimumLength = 3)]
 	public string Name { get; set; } = string.Empty;
+	[Required, StringLength(24, MinimumLength = 3)]
+	[RegularExpression("^[A-Z0-9-]+$")]
 	public string Code { get; set; } = string.Empty;
+	[StringLength(500)]
 	public string? Description { get; set; }
+	public bool IsDefault { get; set; }
+	public PaymentTermSaveStatus Status { get; set; } = PaymentTermSaveStatus.Draft;
 
 	public HolidayShiftingMethod HolidayShiftingMethod { get; set; }
 	public DemandGenerationRule DemandGenerationRule { get; set; }
 	public int? DemandOffsetDays { get; set; }
-	public InitialDemandStatus InitialDemandStatus { get; set; }
 
 	public List<CreatePaymentTermInstallmentDto> Installments { get; set; } = new();
 }
 
 public class CreateRevisionDto
 {
+	[Required, StringLength(500)]
 	public string ChangeReason { get; set; } = string.Empty;
 	public Guid? SourceVersionId { get; set; }
-}
-
-public class PublishVersionDto
-{
-	public DateTime EffectiveFrom { get; set; }
 }
 
 public class ClonePaymentTermsDto
@@ -149,6 +178,7 @@ public class ClonePaymentTermsDto
 
 public class ArchivePaymentTermDto
 {
+	[Required, StringLength(500)]
 	public string Reason { get; set; } = string.Empty;
 }
 

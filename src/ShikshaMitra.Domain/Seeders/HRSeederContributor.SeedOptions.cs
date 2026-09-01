@@ -62,4 +62,15 @@ public partial class HRSeederContributor
 		var defaultValue = profile == ShikshaMitraSeederProfile.FullDemo;
 		return _configuration.GetValue(SeedRichAssetsConfigKey, defaultValue);
 	}
+
+	private bool ShouldSeedEsiFullDemoSalaryScenarios() =>
+		ResolveShouldSeedEsiFullDemoSalaryScenarios(_configuration);
+
+	internal static bool ResolveShouldSeedEsiFullDemoSalaryScenarios(IConfiguration configuration)
+	{
+		var profile = ShikshaMitraSeederProfile.Normalize(
+			configuration[ShikshaMitraSeederProfile.ContextPropertyName] ??
+			configuration["ShikshaMitra:Seeders:Profile"]);
+		return string.Equals(profile, ShikshaMitraSeederProfile.FullDemo, StringComparison.OrdinalIgnoreCase);
+	}
 }

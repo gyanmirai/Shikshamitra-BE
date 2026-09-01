@@ -37,6 +37,56 @@ namespace ShikshaMitra.Seeders;
 
 public partial class HRSeederContributor
 {
+	internal async Task EnsureFullDemoEmployeeStatusAndCompensationAsync()
+	{
+		var seededEmails = BuildSuratSeedEmployeeProfiles().Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var employees = (await _employeeRepository.GetListAsync())
+			.Where(x =>
+				!string.IsNullOrWhiteSpace(x.Email) &&
+				seededEmails.Contains(x.Email))
+			.OrderBy(x => x.EmployeeCode)
+			.ToList();
+		var activeEmployeeIds = await EnsureEmployeeStatusDistributionAsync(
+			employees.Select(x => x.Id).ToList());
+		var pfRuleId = await ResolveSeedProvidentFundRuleIdAsync();
+		foreach (var employeeId in activeEmployeeIds)
+		{
+			await SeedSamplePayrollForEmployeeIfNeededAsync(employeeId, pfRuleId);
+		}
+	}
+
+	internal async Task EnsureFullDemoInactiveEmployeeExitDatesAsync()
+	{
+		var seededEmails = BuildSuratSeedEmployeeProfiles().Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var inactiveEmployees = (await _employeeRepository.GetListAsync())
+			.Where(x =>
+				x.EmployeeStatusType == EmployeeStatusType.Inactive &&
+				!string.IsNullOrWhiteSpace(x.Email) &&
+				seededEmails.Contains(x.Email))
+			.ToList();
+		var exitedOn = DateOnly.FromDateTime(EsiFullDemoSeedCatalog.RuleEffectiveFrom).AddDays(-1);
+		var updatedCount = 0;
+		foreach (var employee in inactiveEmployees)
+		{
+			if (employee.StatusEffectiveDate == exitedOn)
+			{
+				continue;
+			}
+
+			await _employeeManager.UpdateEmployeeStatusAsync(
+				employee.Id,
+				EmployeeStatusType.Inactive,
+				"Synthetic FullDemo employee exited before ESI demo coverage",
+				exitedOn);
+			updatedCount++;
+		}
+
+		if (updatedCount > 0)
+		{
+			await CurrentUnitOfWork.SaveChangesAsync();
+		}
+	}
+
 	private async Task<List<Guid>> SeedSampleEmployeePayrollAndAttendanceAsync(List<Guid> activeEmployeeIds)
 	{
 		var payrollEmployeeIds = await ResolvePayrollStructureEmployeeIdsAsync(activeEmployeeIds);

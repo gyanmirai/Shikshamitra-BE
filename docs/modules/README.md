@@ -5,6 +5,7 @@ New or refactored modules should follow the [module docs standard](../common/sta
 
 | Module | Canonical Index |
 |---|---|
+| Examination | [docs/modules/examination/README.md](./examination/README.md) |
 | Finance | [docs/modules/finance/README.md](./finance/README.md) |
 | HR | [docs/modules/hr/README.md](./hr/README.md) |
 | Institute Setup | [docs/modules/institute-setup/README.md](./institute-setup/README.md) |

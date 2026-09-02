@@ -6,6 +6,12 @@ namespace ShikshaMitra.Academic.Examination.SeatAllocation;
 
 public interface IExamSeatAllocationAppService
 {
+    Task<SeatingPlanWorkspaceDto> GetSeatingPlanWorkspaceAsync(Guid examId, Guid? seatingPlanId = null);
+    Task<SeatingPlanWorkspaceDto> PrepareSeatingPlanAsync(Guid examId, PrepareSeatingPlanInputDto input);
+    Task<SeatingPlanWorkspaceDto> PrepareSessionSeatingPlanAsync(Guid examId, PrepareSessionSeatingPlanInputDto input);
+    Task<ExaminationSeatingReadinessDto> ValidateExaminationSeatingAsync(Guid examId);
+    Task<SeatingPlanWorkspaceDto> ResetExaminationSeatingDraftAsync(Guid examId, ResetExaminationSeatingDraftInputDto input);
+    Task<SeatingPlanWorkspaceDto> PublishExaminationSeatingAsync(Guid examId, PublishSeatingPlanInputDto input);
     Task<SeatLayoutResponseDto> GetSeatLayoutAsync(Guid examId, GetSeatLayoutInput input);
     Task<SeatStudentPagedResponseDto> GetStudentsForDivisionAsync(Guid examId, Guid divisionId, GetSeatStudentsInput input);
     Task<SaveSeatAllocationResponseDto> SaveSeatAllocationAsync(Guid examId, SaveSeatAllocationRequestDto input);
@@ -30,4 +36,5 @@ public interface IExamSeatAllocationAppService
 
     /// <summary>Computes a proposed allocation without persisting it (spec §12.3 preview-before-apply).</summary>
     Task<AutoAllocateResponseDto> AutoAllocatePreviewAsync(Guid examId, AutoAllocateRequestDto input);
+    Task<SeatingPlanDraftResponseDto> ApplyAutoAllocatePreviewAsync(Guid examId, ApplyAutoAllocatePreviewInputDto input);
 }

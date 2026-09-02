@@ -13,8 +13,14 @@ using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
+using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
+using ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
 using Shouldly;
+using Volo.Abp;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Xunit;
 
@@ -23,6 +29,7 @@ namespace ShikshaMitra.Academic.Examination.SeatAllocation;
 public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+	private static readonly Guid FakeAdminUserId = Guid.Parse("2e701e62-0953-4dd3-910b-dc6cc93ccb0d");
 
 	private readonly IExamSeatAllocationAppService _seatAllocationAppService;
 	private readonly IRepository<EducationMediumStage, Guid> _stageRepository;
@@ -34,7 +41,16 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 	private readonly IRepository<Exam, Guid> _examRepository;
 	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly IRepository<ExamSeatingPlan, Guid> _seatingPlanRepository;
+	private readonly IRepository<ExamSeatingPlanSubject, Guid> _seatingPlanSubjectRepository;
 	private readonly IRepository<ExamSeatAllocation, Guid> _seatAllocationRepository;
+	private readonly IRepository<ExamSeatingPublication, Guid> _seatingPublicationRepository;
+	private readonly IRepository<SeatingPlanAuditLog, Guid> _auditLogRepository;
+	private readonly IRepository<IdentityUser, Guid> _identityUserRepository;
+	private readonly IRepository<IdentityRole, Guid> _identityRoleRepository;
+	private readonly IRepository<Building, Guid> _buildingRepository;
+	private readonly IRepository<Floor, Guid> _floorRepository;
+	private readonly IRepository<RoomType, Guid> _roomTypeRepository;
+	private readonly IRepository<Room, Guid> _roomRepository;
 	private readonly StandardManager _standardManager;
 	private readonly DivisionManager _divisionManager;
 	private readonly ExamTypeManager _examTypeManager;
@@ -53,12 +69,277 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 		_examRepository = GetRequiredService<IRepository<Exam, Guid>>();
 		_studentRepository = GetRequiredService<IRepository<Student, Guid>>();
 		_seatingPlanRepository = GetRequiredService<IRepository<ExamSeatingPlan, Guid>>();
+		_seatingPlanSubjectRepository = GetRequiredService<IRepository<ExamSeatingPlanSubject, Guid>>();
 		_seatAllocationRepository = GetRequiredService<IRepository<ExamSeatAllocation, Guid>>();
+		_seatingPublicationRepository = GetRequiredService<IRepository<ExamSeatingPublication, Guid>>();
+		_auditLogRepository = GetRequiredService<IRepository<SeatingPlanAuditLog, Guid>>();
+		_identityUserRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
+		_identityRoleRepository = GetRequiredService<IRepository<IdentityRole, Guid>>();
+		_buildingRepository = GetRequiredService<IRepository<Building, Guid>>();
+		_floorRepository = GetRequiredService<IRepository<Floor, Guid>>();
+		_roomTypeRepository = GetRequiredService<IRepository<RoomType, Guid>>();
+		_roomRepository = GetRequiredService<IRepository<Room, Guid>>();
 		_standardManager = GetRequiredService<StandardManager>();
 		_divisionManager = GetRequiredService<DivisionManager>();
 		_examTypeManager = GetRequiredService<ExamTypeManager>();
 		_examManager = GetRequiredService<ExamManager>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
+	}
+
+	[Fact]
+	public async Task GetSeatingPlanWorkspaceAsync_Should_Group_Subjects_In_The_Same_Session()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, examSubjectIds) = await CreateSessionExamAsync(scheduleSecondSubject: true);
+
+				var result = await _seatAllocationAppService.GetSeatingPlanWorkspaceAsync(exam.Id);
+
+				result.Sessions.Count.ShouldBe(1);
+				result.Sessions.Single().Subjects
+					.Select(subject => subject.ExamSubjectId)
+					.ToHashSet()
+					.SetEquals(examSubjectIds)
+					.ShouldBeTrue();
+				result.Sessions.Single().HasCompleteSchedule.ShouldBeTrue();
+			}
+		});
+	}
+
+	[Fact]
+	public async Task GetSeatingPlanWorkspaceAsync_Should_Block_An_Unscheduled_Subject()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, _) = await CreateSessionExamAsync(scheduleSecondSubject: false);
+
+				var result = await _seatAllocationAppService.GetSeatingPlanWorkspaceAsync(exam.Id);
+
+				var unscheduledSession = result.Sessions.Single(session => !session.HasCompleteSchedule);
+				unscheduledSession.CanPrepare.ShouldBeFalse();
+				unscheduledSession.Issues.ShouldContain(issue => issue.Code == "INCOMPLETE_SCHEDULE");
+			}
+		});
+	}
+
+	[Fact]
+	public async Task PrepareSessionSeatingPlanAsync_Should_Create_One_Plan_And_Return_It_On_Repeat()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, examSubjectIds) = await CreateSessionExamAsync(scheduleSecondSubject: true);
+				var input = new PrepareSessionSeatingPlanInputDto
+				{
+					Name = "Morning session",
+					ExamSubjectIds = examSubjectIds
+				};
+
+				var first = await _seatAllocationAppService.PrepareSessionSeatingPlanAsync(exam.Id, input);
+				var second = await _seatAllocationAppService.PrepareSessionSeatingPlanAsync(exam.Id, input);
+
+				first.SelectedSeatingPlanId.ShouldNotBeNull();
+				second.SelectedSeatingPlanId.ShouldBe(first.SelectedSeatingPlanId);
+				(await _seatingPlanRepository.CountAsync(plan => plan.ExamId == exam.Id)).ShouldBe(1);
+				var plan = await _seatingPlanRepository.GetAsync(first.SelectedSeatingPlanId!.Value);
+				plan.SessionKey.ShouldBe(first.Sessions.Single().SessionKey);
+
+				var planSubjects = await _seatingPlanSubjectRepository.GetListAsync(subject =>
+					subject.SeatingPlanId == first.SelectedSeatingPlanId!.Value);
+				planSubjects.Select(subject => subject.ExamSubjectId).ToHashSet()
+					.SetEquals(examSubjectIds)
+					.ShouldBeTrue();
+			}
+		});
+	}
+
+	[Fact]
+	public async Task PrepareSeatingPlanAsync_Should_Create_An_Individual_Subject_Plan()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, examSubjectIds) = await CreateSessionExamAsync(scheduleSecondSubject: true);
+
+				var result = await _seatAllocationAppService.PrepareSeatingPlanAsync(
+					exam.Id,
+					new PrepareSeatingPlanInputDto { ExamSubjectIds = [examSubjectIds[0]] });
+
+				result.SelectedSeatingPlanId.ShouldNotBeNull();
+				var plan = result.Plans.Single(item => item.SeatingPlanId == result.SelectedSeatingPlanId);
+				plan.ScopeType.ShouldBe(SeatingPlanScopeType.SingleSubject);
+				plan.Subjects.Select(subject => subject.ExamSubjectId).ShouldBe([examSubjectIds[0]]);
+				plan.ScheduleCount.ShouldBe(1);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task PrepareSeatingPlanAsync_Should_Share_One_Plan_Across_Multiple_Subject_Schedules()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, examSubjectIds) = await CreateSessionExamAsync(
+					scheduleSecondSubject: true,
+					secondSubjectOnDifferentDate: true);
+
+				var result = await _seatAllocationAppService.PrepareSeatingPlanAsync(
+					exam.Id,
+					new PrepareSeatingPlanInputDto
+					{
+						Name = "Shared science plan",
+						ExamSubjectIds = examSubjectIds
+					});
+
+				result.Plans.Count.ShouldBe(1);
+				var plan = result.Plans.Single();
+				plan.Name.ShouldBe("Shared science plan");
+				plan.ScopeType.ShouldBe(SeatingPlanScopeType.SelectedSubjects);
+				plan.Subjects.Count.ShouldBe(2);
+				plan.ScheduleCount.ShouldBe(2);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task PrepareSeatingPlanAsync_Should_Reject_A_Subject_Already_Owned_By_Another_Plan()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, examSubjectIds) = await CreateSessionExamAsync(scheduleSecondSubject: true);
+				await _seatAllocationAppService.PrepareSeatingPlanAsync(
+					exam.Id,
+					new PrepareSeatingPlanInputDto { ExamSubjectIds = [examSubjectIds[0]] });
+
+				var exception = await Should.ThrowAsync<UserFriendlyException>(() =>
+					_seatAllocationAppService.PrepareSeatingPlanAsync(
+						exam.Id,
+						new PrepareSeatingPlanInputDto { ExamSubjectIds = examSubjectIds }));
+
+				exception.Message.ShouldContain("already belong to another seating plan");
+			}
+		});
+	}
+
+	[Fact]
+	public async Task ApplyAutoAllocatePreviewAsync_Should_Preserve_Existing_Seats_And_Be_Idempotent()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, examSubjectIds) = await CreateSessionExamAsync(scheduleSecondSubject: true);
+				var divisionId = exam.ExamDivisions.Single().DivisionId;
+				var room = await CreateRoomAsync();
+				foreach (var subject in exam.ExamSubjects)
+				{
+					subject.AddRoomAssignment(new ExamSubjectDivision(
+						Guid.NewGuid(), subject.Id, divisionId, room.Capacity, [room.Id]));
+				}
+				await _examRepository.UpdateAsync(exam, autoSave: true);
+
+				var standard = await _standardRepository.GetAsync(exam.StandardId);
+				var stage = await _stageRepository.GetAsync(standard.EducationMediumStageId);
+				var medium = await _educationMediumRepository.GetAsync(stage.EducationMediumId);
+				var board = await _educationBoardRepository.GetAsync(medium.EducationBoardId);
+				var unique = Guid.NewGuid().ToString("N");
+				var students = new[]
+				{
+					CreateStudent(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, divisionId, 1, unique),
+					CreateStudent(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, divisionId, 2, unique)
+				};
+				await _studentRepository.InsertManyAsync(students, autoSave: true);
+
+				var prepared = await _seatAllocationAppService.PrepareSessionSeatingPlanAsync(
+					exam.Id,
+					new PrepareSessionSeatingPlanInputDto { ExamSubjectIds = examSubjectIds });
+				var planId = prepared.SelectedSeatingPlanId!.Value;
+				await _seatAllocationRepository.InsertAsync(new ExamSeatAllocation(
+					Guid.NewGuid(), TestTenantId, planId, exam.Id, students[0].Id, room.Id, 1, null, true),
+					autoSave: true);
+
+				var input = new ApplyAutoAllocatePreviewInputDto
+				{
+					SeatingPlanId = planId,
+					RoomIds = [room.Id],
+					AllocationRulesJson = "{}",
+					Assignments =
+					[
+						new AutoAllocateProposedAssignmentDto
+						{
+							StudentId = students[1].Id,
+							RoomId = room.Id,
+							SeatNumber = 2
+						}
+					]
+				};
+
+				await _seatAllocationAppService.ApplyAutoAllocatePreviewAsync(exam.Id, input);
+				await _seatAllocationAppService.ApplyAutoAllocatePreviewAsync(exam.Id, input);
+
+				var allocations = await _seatAllocationRepository.GetListAsync(row =>
+					row.ExamId == exam.Id && row.SeatingPlanId == planId);
+				allocations.Count.ShouldBe(2);
+				allocations.ShouldContain(row => row.StudentId == students[0].Id && row.SeatNumber == 1);
+				allocations.ShouldContain(row => row.StudentId == students[1].Id && row.SeatNumber == 2);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task SaveSeatingPlanDraftAsync_Should_Reject_An_Old_Opaque_Version()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, examSubjectIds) = await CreateSessionExamAsync(scheduleSecondSubject: true);
+				var prepared = await _seatAllocationAppService.PrepareSessionSeatingPlanAsync(
+					exam.Id,
+					new PrepareSessionSeatingPlanInputDto { ExamSubjectIds = examSubjectIds });
+				var planId = prepared.SelectedSeatingPlanId!.Value;
+				var original = await _seatAllocationAppService.GetSeatingPlanDraftAsync(exam.Id, planId);
+
+				var updated = await _seatAllocationAppService.SaveSeatingPlanDraftAsync(
+					exam.Id,
+					new SaveSeatingPlanDraftInputDto
+					{
+						SeatingPlanId = planId,
+						AllocationRulesJson = "{}",
+						Version = original.Version
+					});
+
+				updated.Version.ShouldNotBe(original.Version);
+				var exception = await Should.ThrowAsync<UserFriendlyException>(() =>
+					_seatAllocationAppService.SaveSeatingPlanDraftAsync(
+						exam.Id,
+						new SaveSeatingPlanDraftInputDto
+						{
+							SeatingPlanId = planId,
+							AllocationRulesJson = "{}",
+							Version = original.Version
+						}));
+				exception.Code.ShouldBe("SEATING_PLAN_CONCURRENCY_CONFLICT");
+			}
+		});
 	}
 
 	[Fact]
@@ -68,6 +349,7 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 		{
 			using (_currentTenant.Change(TestTenantId))
 			{
+				await EnsureAdminUserExistsAsync();
 				var (exam, division) = await CreateScheduledExamAsync();
 
 				var result = await _seatAllocationAppService.GetDivisionsForExamAsync(
@@ -91,6 +373,7 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 		{
 			using (_currentTenant.Change(TestTenantId))
 			{
+				await EnsureAdminUserExistsAsync();
 				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 				var stage = await _stageRepository.GetAsync(stageId);
 				var unique = Guid.NewGuid().ToString("N");
@@ -147,6 +430,7 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 		{
 			using (_currentTenant.Change(TestTenantId))
 			{
+				await EnsureAdminUserExistsAsync();
 				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 				var stage = await _stageRepository.GetAsync(stageId);
 				var medium = await _educationMediumRepository.GetAsync(stage.EducationMediumId);
@@ -229,6 +513,418 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 		});
 	}
 
+	[Fact]
+	public async Task GetSeatAllocationTableAsync_Should_Report_Published_Selected_Subject_Session()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, planId, room, students) = await CreateAllocatedSessionPlanAsync();
+
+				await _seatAllocationAppService.FinalizeSeatingPlanAsync(exam.Id, planId);
+				await _seatAllocationAppService.PublishSeatingPlanAsync(
+					exam.Id,
+					new PublishSeatingPlanInputDto(),
+					planId);
+
+				var result = await _seatAllocationAppService.GetSeatAllocationTableAsync(
+					new GetSeatAllocationTableInput { StandardId = exam.StandardId });
+				var row = result.Items.Single(item => item.ExamId == exam.Id);
+				var session = row.Sessions.Single();
+
+				session.SeatingPlanId.ShouldBe(planId);
+				session.Status.ShouldBe((int)SeatingPlanStatus.Published);
+				session.TotalStudents.ShouldBe(students.Count);
+				session.AllocatedStudents.ShouldBe(students.Count);
+				session.PendingStudents.ShouldBe(0);
+				session.RoomsUsed.ShouldBe(1);
+				session.UsableCapacity.ShouldBe(room.Capacity);
+				session.EmptySeats.ShouldBe(room.Capacity - students.Count);
+				row.Status.ShouldBe((int)SeatingPlanStatus.Published);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task Finalize_And_Publish_Should_Be_Idempotent_On_Retry()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, planId, _, _) = await CreateAllocatedSessionPlanAsync();
+
+				await _seatAllocationAppService.FinalizeSeatingPlanAsync(exam.Id, planId);
+				await _seatAllocationAppService.FinalizeSeatingPlanAsync(exam.Id, planId);
+				await _seatAllocationAppService.PublishSeatingPlanAsync(
+					exam.Id,
+					new PublishSeatingPlanInputDto(),
+					planId);
+				await _seatAllocationAppService.PublishSeatingPlanAsync(
+					exam.Id,
+					new PublishSeatingPlanInputDto(),
+					planId);
+
+				var auditLogs = await _auditLogRepository.GetListAsync(log => log.SeatingPlanId == planId);
+				auditLogs.Count(log => log.Action == SeatingPlanAuditAction.Finalized).ShouldBe(1);
+				auditLogs.Count(log => log.Action == SeatingPlanAuditAction.ExaminationPublished).ShouldBe(1);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task PublishExaminationSeatingAsync_Should_Block_When_Any_Subject_Is_Unplanned()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, examSubjectIds) = await CreateSessionExamAsync(
+					scheduleSecondSubject: true,
+					secondSubjectOnDifferentDate: true);
+				await _seatAllocationAppService.PrepareSessionSeatingPlanAsync(
+					exam.Id,
+					new PrepareSessionSeatingPlanInputDto { ExamSubjectIds = [examSubjectIds[0]] });
+
+				var readiness = await _seatAllocationAppService.ValidateExaminationSeatingAsync(exam.Id);
+				readiness.IsReadyToPublish.ShouldBeFalse();
+				readiness.Blockers.ShouldContain(issue => issue.Code == "UNPLANNED_SUBJECTS");
+
+				var exception = await Should.ThrowAsync<UserFriendlyException>(() =>
+					_seatAllocationAppService.PublishExaminationSeatingAsync(
+						exam.Id,
+						new PublishSeatingPlanInputDto()));
+				exception.Code.ShouldBe("EXAMINATION_SEATING_NOT_READY");
+				(await _seatingPublicationRepository.GetListAsync(publication => publication.ExamId == exam.Id))
+					.Count.ShouldBe(0);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task PublishExaminationSeatingAsync_Should_Publish_All_Plans_Atomically_And_Only_Once()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, planIds, _, _) = await CreateAllocatedSeparateSessionPlansAsync();
+
+				var readiness = await _seatAllocationAppService.ValidateExaminationSeatingAsync(exam.Id);
+				readiness.IsReadyToPublish.ShouldBeTrue();
+				readiness.ReadyPlanCount.ShouldBe(2);
+
+				var first = await _seatAllocationAppService.PublishExaminationSeatingAsync(
+					exam.Id,
+					new PublishSeatingPlanInputDto());
+				var retry = await _seatAllocationAppService.PublishExaminationSeatingAsync(
+					exam.Id,
+					new PublishSeatingPlanInputDto());
+
+				first.Readiness.IsPublished.ShouldBeTrue();
+				retry.Readiness.IsPublished.ShouldBeTrue();
+				(await _seatingPublicationRepository.GetListAsync(publication => publication.ExamId == exam.Id))
+					.Count.ShouldBe(1);
+				var plans = await _seatingPlanRepository.GetListAsync(plan => planIds.Contains(plan.Id));
+				plans.Count.ShouldBe(2);
+				plans.ShouldAllBe(plan => plan.Status == SeatingPlanStatus.Published && plan.IsLocked);
+				var publicationAudits = await _auditLogRepository.GetListAsync(log =>
+					log.ExamId == exam.Id && log.Action == SeatingPlanAuditAction.ExaminationPublished);
+				publicationAudits.Count.ShouldBe(2);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task ResetExaminationSeatingDraftAsync_Should_Remove_All_Draft_Plans_And_Allocations()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, _, _, _) = await CreateAllocatedSeparateSessionPlansAsync();
+
+				var workspace = await _seatAllocationAppService.ResetExaminationSeatingDraftAsync(
+					exam.Id,
+					new ResetExaminationSeatingDraftInputDto { Reason = "Regroup all examination subjects" });
+
+				workspace.Plans.ShouldBeEmpty();
+				workspace.Readiness.CanResetDraft.ShouldBeFalse();
+				workspace.Readiness.PlannedSubjectCount.ShouldBe(0);
+				(await _seatingPlanRepository.GetListAsync(plan => plan.ExamId == exam.Id)).Count.ShouldBe(0);
+				(await _seatingPlanSubjectRepository.GetListAsync(subject => subject.ExamId == exam.Id)).Count.ShouldBe(0);
+				(await _seatAllocationRepository.GetListAsync(allocation => allocation.ExamId == exam.Id)).Count.ShouldBe(0);
+				var resetAudits = await _auditLogRepository.GetListAsync(log =>
+					log.ExamId == exam.Id && log.Action == SeatingPlanAuditAction.DraftReset);
+				resetAudits.Count.ShouldBe(2);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task Published_Examination_Seating_Should_Reject_Reset_Unlock_And_Replanning()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, planId, _, _) = await CreateAllocatedSessionPlanAsync();
+				await _seatAllocationAppService.PublishExaminationSeatingAsync(
+					exam.Id,
+					new PublishSeatingPlanInputDto());
+
+				var resetException = await Should.ThrowAsync<UserFriendlyException>(() =>
+					_seatAllocationAppService.ResetExaminationSeatingDraftAsync(
+						exam.Id,
+						new ResetExaminationSeatingDraftInputDto { Reason = "Try to reopen publication" }));
+				resetException.Code.ShouldBe("EXAMINATION_SEATING_PUBLISHED");
+
+				var unlockException = await Should.ThrowAsync<UserFriendlyException>(() =>
+					_seatAllocationAppService.UnlockSeatingPlanAsync(
+						exam.Id,
+						new UnlockSeatingPlanInputDto { Reason = "Try to unlock publication" },
+						planId));
+				unlockException.Code.ShouldBe("EXAMINATION_SEATING_PUBLISHED");
+
+				var prepareException = await Should.ThrowAsync<UserFriendlyException>(() =>
+					_seatAllocationAppService.PrepareSessionSeatingPlanAsync(
+						exam.Id,
+						new PrepareSessionSeatingPlanInputDto
+						{
+							ExamSubjectIds = exam.ExamSubjects.Select(subject => subject.Id).ToList()
+						}));
+				prepareException.Code.ShouldBe("EXAMINATION_SEATING_PUBLISHED");
+			}
+		});
+	}
+
+	[Fact]
+	public async Task Editing_A_Populated_Draft_Group_Should_Require_And_Honor_Explicit_Seat_Reset()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, planId, _, students) = await CreateAllocatedSessionPlanAsync();
+				var firstSubjectId = exam.ExamSubjects.First().Id;
+				var input = new SaveSeatingPlanScopeInputDto
+				{
+					SeatingPlanId = planId,
+					Name = "Regrouped subject plan",
+					ScopeType = SeatingPlanScopeType.SingleSubject,
+					ExamSubjectIds = [firstSubjectId]
+				};
+
+				var confirmationException = await Should.ThrowAsync<UserFriendlyException>(() =>
+					_seatAllocationAppService.SaveSeatingPlanScopeAsync(exam.Id, input));
+				confirmationException.Message.ShouldContain("Confirm the reset");
+				(await _seatAllocationRepository.GetListAsync(allocation => allocation.SeatingPlanId == planId))
+					.Count.ShouldBe(students.Count);
+
+				input.ResetAllocationsWhenSubjectsChange = true;
+				var updated = await _seatAllocationAppService.SaveSeatingPlanScopeAsync(exam.Id, input);
+
+				updated.Subjects.Select(subject => subject.ExamSubjectId).ShouldBe([firstSubjectId]);
+				updated.AllocatedStudents.ShouldBe(0);
+				(await _seatAllocationRepository.GetListAsync(allocation => allocation.SeatingPlanId == planId))
+					.ShouldBeEmpty();
+				var readiness = await _seatAllocationAppService.ValidateExaminationSeatingAsync(exam.Id);
+				readiness.Blockers.ShouldContain(issue => issue.Code == "UNPLANNED_SUBJECTS");
+			}
+		});
+	}
+
+	[Fact]
+	public async Task Legacy_PerPlan_Publication_Without_Global_Publication_Should_Remain_Editable()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, planId, _, _) = await CreateAllocatedSessionPlanAsync();
+				var legacyPlan = await _seatingPlanRepository.GetAsync(planId);
+				var now = DateTime.UtcNow;
+				legacyPlan.Finalize(FakeAdminUserId, now);
+				legacyPlan.Publish(FakeAdminUserId, now);
+				await _seatingPlanRepository.UpdateAsync(legacyPlan, autoSave: true);
+
+				var draftWorkspace = await _seatAllocationAppService.GetSeatingPlanWorkspaceAsync(exam.Id, planId);
+				draftWorkspace.Readiness.IsPublished.ShouldBeFalse();
+				draftWorkspace.Plans.Single().Status.ShouldBe(SeatingPlanStatus.Ready);
+				draftWorkspace.Plans.Single().IsLocked.ShouldBeFalse();
+
+				var retainedSubjectId = exam.ExamSubjects.First().Id;
+				var updated = await _seatAllocationAppService.SaveSeatingPlanScopeAsync(
+					exam.Id,
+					new SaveSeatingPlanScopeInputDto
+					{
+						SeatingPlanId = planId,
+						Name = "Reopened legacy draft",
+						ScopeType = SeatingPlanScopeType.SingleSubject,
+						ExamSubjectIds = [retainedSubjectId],
+						ResetAllocationsWhenSubjectsChange = true
+					});
+
+				updated.Subjects.Select(subject => subject.ExamSubjectId).ShouldBe([retainedSubjectId]);
+				updated.AllocatedStudents.ShouldBe(0);
+				var reopenedPlan = await _seatingPlanRepository.GetAsync(planId);
+				reopenedPlan.IsLocked.ShouldBeFalse();
+				reopenedPlan.Status.ShouldNotBe(SeatingPlanStatus.Published);
+				reopenedPlan.PublishedAt.ShouldBeNull();
+				(await _seatingPublicationRepository.GetListAsync(publication => publication.ExamId == exam.Id))
+					.ShouldBeEmpty();
+			}
+		});
+	}
+
+	private async Task<(Exam exam, Guid planId, Room room, List<Student> students)>
+		CreateAllocatedSessionPlanAsync()
+	{
+		var (exam, planIds, room, students) = await CreateAllocatedPlansAsync(separateSessions: false);
+		return (exam, planIds.Single(), room, students);
+	}
+
+	private Task<(Exam exam, List<Guid> planIds, Room room, List<Student> students)>
+		CreateAllocatedSeparateSessionPlansAsync()
+	{
+		return CreateAllocatedPlansAsync(separateSessions: true);
+	}
+
+	private async Task<(Exam exam, List<Guid> planIds, Room room, List<Student> students)>
+		CreateAllocatedPlansAsync(bool separateSessions)
+	{
+		var (exam, examSubjectIds) = await CreateSessionExamAsync(
+			scheduleSecondSubject: true,
+			secondSubjectOnDifferentDate: separateSessions);
+		var divisionId = exam.ExamDivisions.Single().DivisionId;
+		var room = await CreateRoomAsync();
+		foreach (var subject in exam.ExamSubjects)
+		{
+			subject.AddRoomAssignment(new ExamSubjectDivision(
+				Guid.NewGuid(), subject.Id, divisionId, room.Capacity, [room.Id]));
+		}
+		await _examRepository.UpdateAsync(exam, autoSave: true);
+
+		var standard = await _standardRepository.GetAsync(exam.StandardId);
+		var stage = await _stageRepository.GetAsync(standard.EducationMediumStageId);
+		var medium = await _educationMediumRepository.GetAsync(stage.EducationMediumId);
+		var board = await _educationBoardRepository.GetAsync(medium.EducationBoardId);
+		var unique = Guid.NewGuid().ToString("N");
+		var students = new List<Student>
+		{
+			CreateStudent(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, divisionId, 1, unique),
+			CreateStudent(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, divisionId, 2, unique)
+		};
+		await _studentRepository.InsertManyAsync(students, autoSave: true);
+
+		var planSubjectGroups = separateSessions
+			? examSubjectIds.Select(examSubjectId => new List<Guid> { examSubjectId }).ToList()
+			: [examSubjectIds];
+		var planIds = new List<Guid>();
+		foreach (var planSubjectIds in planSubjectGroups)
+		{
+			var prepared = await _seatAllocationAppService.PrepareSessionSeatingPlanAsync(
+				exam.Id,
+				new PrepareSessionSeatingPlanInputDto { ExamSubjectIds = planSubjectIds });
+			var planId = prepared.SelectedSeatingPlanId!.Value;
+			planIds.Add(planId);
+			await _seatAllocationAppService.ApplyAutoAllocatePreviewAsync(
+				exam.Id,
+				new ApplyAutoAllocatePreviewInputDto
+				{
+					SeatingPlanId = planId,
+					RoomIds = [room.Id],
+					AllocationRulesJson = "{}",
+					Assignments = students.Select((student, index) =>
+						new AutoAllocateProposedAssignmentDto
+						{
+							StudentId = student.Id,
+							RoomId = room.Id,
+							SeatNumber = index + 1
+						}).ToList()
+				});
+		}
+
+		return (exam, planIds, room, students);
+	}
+
+	private async Task EnsureAdminUserExistsAsync()
+	{
+		if (await _identityUserRepository.FindAsync(FakeAdminUserId) is not null)
+		{
+			return;
+		}
+
+		var adminRole = (await _identityRoleRepository.GetListAsync(role => role.Name == "admin"))
+			.FirstOrDefault();
+		if (adminRole is null)
+		{
+			adminRole = new IdentityRole(Guid.NewGuid(), "admin", TestTenantId);
+			await _identityRoleRepository.InsertAsync(adminRole, autoSave: true);
+		}
+
+		var user = new IdentityUser(FakeAdminUserId, "admin", "admin@test.local", TestTenantId);
+		user.AddRole(adminRole.Id);
+		await _identityUserRepository.InsertAsync(user, autoSave: true);
+	}
+
+	private async Task<Room> CreateRoomAsync()
+	{
+		var suffix = Guid.NewGuid().ToString("N")[..8];
+		var building = new Building
+		{
+			TenantId = TestTenantId,
+			BuildingName = $"Exam Building {suffix}",
+			TotalFloors = 1
+		};
+		SetEntityId(building, Guid.NewGuid());
+		await _buildingRepository.InsertAsync(building, autoSave: true);
+
+		var floor = new Floor { BuildingId = building.Id, FloorName = "First", FloorNo = 1 };
+		SetEntityId(floor, Guid.NewGuid());
+		await _floorRepository.InsertAsync(floor, autoSave: true);
+
+		var roomType = new RoomType
+		{
+			TenantId = TestTenantId,
+			RoomTypeName = $"Exam {suffix}",
+			ShortName = $"E{suffix[..3]}"
+		};
+		SetEntityId(roomType, Guid.NewGuid());
+		await _roomTypeRepository.InsertAsync(roomType, autoSave: true);
+
+		var room = new Room
+		{
+			TenantId = TestTenantId,
+			RoomName = $"R-{suffix}",
+			BuildingId = building.Id,
+			FloorId = floor.Id,
+			RoomTypeId = roomType.Id,
+			Capacity = 5,
+			TotalBenches = 5,
+			BenchCapacity = 1,
+			BenchesPerColumn = 5,
+			BenchesPerRow = 1
+		};
+		SetEntityId(room, Guid.NewGuid());
+		return await _roomRepository.InsertAsync(room, autoSave: true);
+	}
+
+	private static void SetEntityId<TEntity>(TEntity entity, Guid id)
+		where TEntity : Entity<Guid>
+	{
+		typeof(TEntity).GetProperty(nameof(Entity<Guid>.Id))?.SetValue(entity, id);
+	}
+
 	private async Task<(Exam exam, Division division)> CreateScheduledExamAsync()
 	{
 		using (_currentTenant.Change(TestTenantId))
@@ -274,6 +970,69 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 
 			return (exam, division);
 		}
+	}
+
+	private async Task<(Exam exam, List<Guid> examSubjectIds)> CreateSessionExamAsync(
+		bool scheduleSecondSubject,
+		bool secondSubjectOnDifferentDate = false)
+	{
+		var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+		var stage = await _stageRepository.GetAsync(stageId);
+		var unique = Guid.NewGuid().ToString("N");
+
+		var standard = await _standardManager.CreateAsync(
+			stageId,
+			$"Session Std {unique}"[..30],
+			8,
+			shiftId: null);
+		await _standardRepository.InsertAsync(standard, autoSave: true);
+
+		var division = await _divisionManager.CreateAsync(standard.Id, $"A-{unique}"[..30], 30);
+		await _divisionRepository.InsertAsync(division, autoSave: true);
+
+		var subjects = new[]
+		{
+			new Subject(Guid.NewGuid(), TestTenantId, $"Math {unique}"[..30], "#00A76F", stage.EducationMediumId),
+			new Subject(Guid.NewGuid(), TestTenantId, $"Science {unique}"[..30], "#6750A4", stage.EducationMediumId)
+		};
+		await _subjectRepository.InsertManyAsync(subjects, autoSave: true);
+
+		var examType = await _examTypeManager.CreateAsync(
+			$"Session Exam {unique}"[..30],
+			description: null,
+			stage.EducationMediumId);
+		var exam = _examManager.Create(
+			examType.Id,
+			$"Session Seating {unique}"[..40],
+			standard.Id,
+			new List<Guid> { division.Id },
+			subjects.Select(subject => subject.Id).ToList());
+
+		var examDate = DateTime.Now.Date.AddDays(10);
+		var sessionSubjects = exam.ExamSubjects.ToList();
+		sessionSubjects[0].UpdateSchedule(
+			examDate,
+			examDate.AddHours(9),
+			examDate.AddHours(12),
+			100,
+			33,
+			notes: null);
+		if (scheduleSecondSubject)
+		{
+			var secondExamDate = secondSubjectOnDifferentDate ? examDate.AddDays(1) : examDate;
+			sessionSubjects[1].UpdateSchedule(
+				secondExamDate,
+				secondExamDate.AddHours(9),
+				secondExamDate.AddHours(12),
+				100,
+				33,
+				notes: null);
+		}
+
+		exam.ChangeStatus(ExamStatus.Published);
+		await _examRepository.InsertAsync(exam, autoSave: true);
+
+		return (exam, sessionSubjects.Select(subject => subject.Id).ToList());
 	}
 
 	private static Student CreateStudent(

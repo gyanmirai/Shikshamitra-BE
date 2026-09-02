@@ -41,4 +41,5 @@ public class SaveSeatingPlanScopeInputDto
     public string Name { get; set; } = string.Empty;
     public SeatingPlanScopeType ScopeType { get; set; }
     public List<Guid> ExamSubjectIds { get; set; } = [];
+    public bool ResetAllocationsWhenSubjectsChange { get; set; }
 }

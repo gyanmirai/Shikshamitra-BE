@@ -18,6 +18,6 @@ public class ExamSeatingPlanSubjectConfiguration : IEntityTypeConfiguration<Exam
         builder.Property(x => x.SubjectId).IsRequired();
 
         builder.HasIndex(x => new { x.SeatingPlanId, x.ExamSubjectId }).IsUnique();
-        builder.HasIndex(x => new { x.ExamId, x.ExamSubjectId });
+        builder.HasIndex(x => new { x.ExamId, x.ExamSubjectId }).IsUnique();
     }
 }

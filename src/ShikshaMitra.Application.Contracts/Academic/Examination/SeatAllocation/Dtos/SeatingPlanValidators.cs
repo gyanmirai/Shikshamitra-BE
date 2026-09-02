@@ -44,6 +44,30 @@ public sealed class SaveSeatingPlanScopeInputDtoValidator : AbstractValidator<Sa
     }
 }
 
+public sealed class PrepareSessionSeatingPlanInputDtoValidator : AbstractValidator<PrepareSessionSeatingPlanInputDto>
+{
+    public PrepareSessionSeatingPlanInputDtoValidator()
+    {
+        RuleFor(x => x.Name).MaximumLength(160);
+        RuleFor(x => x.ExamSubjectIds)
+            .NotEmpty()
+            .Must(ids => ids.Distinct().Count() == ids.Count)
+            .WithMessage("ExamSubjectIds must be unique.");
+    }
+}
+
+public sealed class PrepareSeatingPlanInputDtoValidator : AbstractValidator<PrepareSeatingPlanInputDto>
+{
+    public PrepareSeatingPlanInputDtoValidator()
+    {
+        RuleFor(x => x.Name).MaximumLength(128);
+        RuleFor(x => x.ExamSubjectIds)
+            .NotEmpty()
+            .Must(ids => ids.Distinct().Count() == ids.Count)
+            .WithMessage("ExamSubjectIds must be unique.");
+    }
+}
+
 public sealed class SaveSeatingPlanDraftInputDtoValidator : AbstractValidator<SaveSeatingPlanDraftInputDto>
 {
     public SaveSeatingPlanDraftInputDtoValidator()
@@ -109,7 +133,33 @@ public sealed class AutoAllocateRequestDtoValidator : AbstractValidator<AutoAllo
     }
 }
 
+public sealed class ApplyAutoAllocatePreviewInputDtoValidator : AbstractValidator<ApplyAutoAllocatePreviewInputDto>
+{
+    public ApplyAutoAllocatePreviewInputDtoValidator()
+    {
+        Include(new SaveSeatingPlanDraftInputDtoValidator());
+        RuleFor(x => x.SeatingPlanId).NotEmpty();
+        RuleFor(x => x.Assignments).NotNull();
+        RuleFor(x => x.Assignments)
+            .Must(assignments => assignments != null &&
+                assignments.Select(row => row.StudentId).Distinct().Count() == assignments.Count)
+            .WithMessage("A student can appear only once in an allocation preview.");
+        RuleFor(x => x.Assignments)
+            .Must(assignments => assignments != null && assignments
+                .Select(row => new { row.RoomId, row.SeatNumber })
+                .Distinct()
+                .Count() == assignments.Count)
+            .WithMessage("A room seat can appear only once in an allocation preview.");
+    }
+}
+
 public sealed class UnlockSeatingPlanInputDtoValidator : AbstractValidator<UnlockSeatingPlanInputDto>
 {
     public UnlockSeatingPlanInputDtoValidator() => RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
+}
+
+public sealed class ResetExaminationSeatingDraftInputDtoValidator : AbstractValidator<ResetExaminationSeatingDraftInputDto>
+{
+    public ResetExaminationSeatingDraftInputDtoValidator() =>
+        RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
 }

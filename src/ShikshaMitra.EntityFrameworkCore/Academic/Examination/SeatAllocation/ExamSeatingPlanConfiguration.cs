@@ -16,6 +16,7 @@ public class ExamSeatingPlanConfiguration : IEntityTypeConfiguration<ExamSeating
         builder.Property(x => x.Name).HasMaxLength(160).IsRequired();
         builder.Property(x => x.ScopeType).IsRequired();
         builder.Property(x => x.Status).IsRequired();
+        builder.Property(x => x.SessionKey).HasMaxLength(80).IsRequired(false);
         builder.Property(x => x.RoomIdsCsv).HasMaxLength(4000).IsRequired(false);
         builder.Property(x => x.AllocationRulesJson).HasMaxLength(2000).IsRequired(false);
         builder.Property(x => x.ExcludedStudentIdsCsv).HasMaxLength(4000).IsRequired(false);
@@ -23,5 +24,6 @@ public class ExamSeatingPlanConfiguration : IEntityTypeConfiguration<ExamSeating
         builder.Property(x => x.IsLocked).IsRequired();
 
         builder.HasIndex(x => x.ExamId);
+        builder.HasIndex(x => new { x.TenantId, x.ExamId, x.SessionKey }).IsUnique();
     }
 }

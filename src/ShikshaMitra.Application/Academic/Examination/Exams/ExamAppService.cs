@@ -102,6 +102,7 @@ public class ExamAppService(
 
 		return new ExamBasicDetailsResponseDto
 		{
+			Id = exam.Id,
 			ExamTypeId = exam.ExamTypeId,
 			ExamName = exam.ExamName,
 			StandardId = exam.StandardId,

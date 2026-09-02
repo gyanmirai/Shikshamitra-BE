@@ -17,6 +17,7 @@ public class ExamSeatingPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public string Name { get; private set; } = string.Empty;
     public SeatingPlanScopeType ScopeType { get; private set; }
     public SeatingPlanStatus Status { get; private set; }
+    public string? SessionKey { get; private set; }
 
     /// <summary>Comma-separated room ids currently in scope for this plan.</summary>
     public string RoomIdsCsv { get; private set; } = string.Empty;
@@ -42,13 +43,29 @@ public class ExamSeatingPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     private ExamSeatingPlan() { }
 
-    public ExamSeatingPlan(Guid id, Guid? tenantId, Guid examId, string name, SeatingPlanScopeType scopeType) : base(id)
+    public ExamSeatingPlan(
+        Guid id,
+        Guid? tenantId,
+        Guid examId,
+        string name,
+        SeatingPlanScopeType scopeType,
+        string? sessionKey = null) : base(id)
     {
         TenantId = tenantId;
         ExamId = examId;
         Name = name;
         ScopeType = scopeType;
+        SessionKey = sessionKey;
         Status = SeatingPlanStatus.NotStarted;
+    }
+
+    public void AssignSessionKey(string sessionKey)
+    {
+        if (string.IsNullOrWhiteSpace(sessionKey))
+            throw new ArgumentException("Session key is required.", nameof(sessionKey));
+        if (SessionKey != null && !string.Equals(SessionKey, sessionKey, StringComparison.Ordinal))
+            throw new InvalidOperationException("A seating plan cannot be moved to another examination session.");
+        SessionKey = sessionKey;
     }
 
     public void UpdateScope(string name, SeatingPlanScopeType scopeType)
@@ -98,5 +115,20 @@ public class ExamSeatingPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Status = SeatingPlanStatus.Completed;
         FinalizedAt = null;
         FinalizedByUserId = null;
+    }
+
+    /// <summary>
+    /// Reopens a legacy plan that was finalized or published before examination-wide
+    /// publication existed. The application service may call this only while the
+    /// examination has no <see cref="ExamSeatingPublication"/> boundary.
+    /// </summary>
+    public void ReopenDraft()
+    {
+        IsLocked = false;
+        Status = SeatingPlanStatus.Completed;
+        FinalizedAt = null;
+        FinalizedByUserId = null;
+        PublishedAt = null;
+        PublishedByUserId = null;
     }
 }

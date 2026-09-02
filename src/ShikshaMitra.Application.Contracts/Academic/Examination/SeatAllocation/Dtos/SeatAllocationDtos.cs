@@ -84,10 +84,44 @@ public class SeatAllocationSummaryDto
     public int TotalStudents { get; set; }
     public int AllocatedStudents { get; set; }
     public int PendingStudents { get; set; }
+    public int RoomsUsed { get; set; }
     public int SeatingPlanCount { get; set; }
     public int SubjectCount { get; set; }
-    /// <summary>0 = Pending, 1 = Updated, 2 = Allocated</summary>
+    public int PlannedSubjectCount { get; set; }
+    public List<string> SubjectNames { get; set; } = [];
+    public List<SeatAllocationSessionSummaryDto> Sessions { get; set; } = [];
+    /// <summary>See <see cref="SeatingPlanStatus"/>.</summary>
     public int Status { get; set; }
+}
+
+/// <summary>
+/// One scheduled examination time slot in the seating-plan inbox. All progress, capacity and
+/// lifecycle values are calculated from the same exact session plan so the list and workspace
+/// cannot disagree.
+/// </summary>
+public class SeatAllocationSessionSummaryDto
+{
+    public string SessionKey { get; set; } = string.Empty;
+    public Guid? SeatingPlanId { get; set; }
+    public string? SeatingPlanName { get; set; }
+    public DateTime? ExamDate { get; set; }
+    public DateTime? StartTime { get; set; }
+    public DateTime? EndTime { get; set; }
+    public List<string> SubjectNames { get; set; } = [];
+    public List<string> Divisions { get; set; } = [];
+    public List<SeatAllocationDivisionProgressDto> DivisionProgress { get; set; } = [];
+    public int TotalStudents { get; set; }
+    public int AllocatedStudents { get; set; }
+    public int PendingStudents { get; set; }
+    public int RoomsUsed { get; set; }
+    public int UsableCapacity { get; set; }
+    public int EmptySeats { get; set; }
+    public int Utilization { get; set; }
+    public int Status { get; set; }
+    public bool HasCompleteSchedule { get; set; }
+    public bool CanPrepare { get; set; }
+    public bool RequiresMigration { get; set; }
+    public int BlockingIssueCount { get; set; }
 }
 
 public class SeatAllocationDivisionProgressDto

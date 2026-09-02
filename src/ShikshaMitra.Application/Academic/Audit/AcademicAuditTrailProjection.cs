@@ -141,6 +141,9 @@ public static class AcademicAuditTrailProjection
 		try
 		{
 			using var document = JsonDocument.Parse(contextJson);
+			if (document.RootElement.ValueKind != JsonValueKind.Object)
+				return null;
+
 			return document.RootElement.TryGetProperty("metadata", out var metadata)
 				? metadata.GetRawText()
 				: null;

@@ -117,15 +117,69 @@ public class QuestionPaperAppService(
         ValidatePaperInput(input);
         Apply(input, paper);
 		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(paper, operation: "question-paper-update");
-        await sectionRepository.DeleteManyAsync(paper.Sections.ToList());
-        paper.Sections.Clear();
-        foreach (var section in input.Sections.OrderBy(x => x.SortOrder))
-        {
-            paper.Sections.Add(new QuestionPaperSection(section.Id ?? GuidGenerator.Create(), paper.Id, section.SectionName, section.Marks, section.SortOrder, section.Instructions));
-        }
+        await ReconcileSectionsAsync(paper, input.Sections);
 
         await paperRepository.UpdateAsync(paper, autoSave: true);
         return Map(paper);
+    }
+
+    private async Task ReconcileSectionsAsync(
+        QuestionPaper paper,
+        IReadOnlyCollection<QuestionPaperSectionDto> requestedSections)
+    {
+        var requestedIds = requestedSections
+            .Where(section => section.Id.HasValue)
+            .Select(section => section.Id!.Value)
+            .ToList();
+        if (requestedIds.Count != requestedIds.Distinct().Count())
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:DuplicateSectionId");
+        }
+
+        var existingById = paper.Sections.ToDictionary(section => section.Id);
+        if (requestedIds.Any(id => !existingById.ContainsKey(id)))
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:SectionNotFound");
+        }
+
+        var sectionsToRemove = paper.Sections
+            .Where(section => !requestedIds.Contains(section.Id))
+            .ToList();
+        if (sectionsToRemove.Any(section => paper.Questions.Any(question =>
+                question.QuestionPaperSectionId == section.Id)))
+        {
+            throw new BusinessException("ShikshaMitra.QuestionPapers:CannotRemoveNonEmptySection");
+        }
+
+        if (sectionsToRemove.Count > 0)
+        {
+            await sectionRepository.DeleteManyAsync(sectionsToRemove);
+            foreach (var section in sectionsToRemove)
+            {
+                paper.Sections.Remove(section);
+            }
+        }
+
+        foreach (var requested in requestedSections.OrderBy(section => section.SortOrder))
+        {
+            if (requested.Id.HasValue)
+            {
+                var existing = existingById[requested.Id.Value];
+                existing.SectionName = requested.SectionName;
+                existing.Marks = requested.Marks;
+                existing.SortOrder = requested.SortOrder;
+                existing.Instructions = requested.Instructions;
+                continue;
+            }
+
+            paper.Sections.Add(new QuestionPaperSection(
+                GuidGenerator.Create(),
+                paper.Id,
+                requested.SectionName,
+                requested.Marks,
+                requested.SortOrder,
+                requested.Instructions));
+        }
     }
 
     public async Task DeletePaperAsync(Guid id)

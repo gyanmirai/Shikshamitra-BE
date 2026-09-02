@@ -153,12 +153,18 @@ public class AcademicReportAppService(
 
     private async Task ApplyClassTeacherScopeAsync(AcademicReportRequestDto input, Guid userId)
     {
-        if (!await classTeacherAccessService.HasAssignmentAsync(userId))
+        var hasClassTeacherAssignment = await classTeacherAccessService.HasAssignmentAsync(userId);
+        if (!hasClassTeacherAssignment)
         {
             return;
         }
 
         var scope = await userScopeService.GetUserScopeAsync(userId);
+        if (!ShouldApplyClassTeacherRestriction(hasClassTeacherAssignment, scope))
+        {
+            return;
+        }
+
         var allowedDivisionIds = scope.DivisionIds.Distinct().ToList();
         if (allowedDivisionIds.Count == 0)
         {
@@ -194,6 +200,11 @@ public class AcademicReportAppService(
         input.Filters.DivisionIds = visibleDivisionIds;
         input.Filters.ClassIds = visibleClassIds;
     }
+
+    internal static bool ShouldApplyClassTeacherRestriction(
+        bool hasClassTeacherAssignment,
+        UserScopeContext scope) =>
+        hasClassTeacherAssignment && !scope.HasTenantWideScope();
 
     private static AcademicReportExportJobDto MapJob(ShikshaMitra.HR.Reports.HrReportExportJob job, bool includeRequestJson = true)
     {

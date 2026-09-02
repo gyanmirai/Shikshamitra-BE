@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.Academic.Audit;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.HR.Audit;
 using Shouldly;
@@ -110,5 +111,40 @@ public class AuditTimestampDisplay_Tests
 
 		dto.OccurredAtUtc.ShouldBe(occurredAt);
 		dto.OccurredAtDisplay.ShouldBe("08 Jun 2026, 11:21 PM");
+	}
+
+	[Fact]
+	public void Academic_Audit_Projection_Should_Accept_Array_Context_Snapshots()
+	{
+		var dto = AcademicAuditTrailProjection.Create(
+			"seating_plan_audit",
+			"seating_plan",
+			"exam",
+			Guid.NewGuid(),
+			"Exam seating plan",
+			"published",
+			DateTime.UtcNow,
+			"Published seating plan",
+			contextJson: """[{"studentId":"00000000-0000-0000-0000-000000000001"}]""");
+
+		dto.ContextJson.ShouldBeNull();
+		dto.Summary.ShouldBe("Published seating plan");
+	}
+
+	[Fact]
+	public void Academic_Audit_Projection_Should_Keep_Object_Metadata()
+	{
+		var dto = AcademicAuditTrailProjection.Create(
+			"calendar_audit",
+			"academic_calendar",
+			"calendar",
+			Guid.NewGuid(),
+			"Calendar",
+			"updated",
+			DateTime.UtcNow,
+			"Updated calendar",
+			contextJson: """{"metadata":{"requestPath":"/api/academic/calendar"}}""");
+
+		dto.ContextJson.ShouldBe("""{"requestPath":"/api/academic/calendar"}""");
 	}
 }

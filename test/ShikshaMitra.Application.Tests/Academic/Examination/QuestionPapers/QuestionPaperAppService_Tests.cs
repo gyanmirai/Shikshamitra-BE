@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using ShikshaMitra.Academic.QuestionBank;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Security.Claims;
 using Xunit;
 
 namespace ShikshaMitra.Academic.QuestionPapers;
@@ -13,12 +17,18 @@ public class QuestionPaperAppService_Tests : ShikshaMitraApplicationTestBase<Shi
 	private readonly IQuestionPaperAppService _questionPaperAppService;
 	private readonly IQuestionBankAppService _questionBankAppService;
 	private readonly ICurrentTenant _currentTenant;
+	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
+	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
+	private readonly IUserScopeService _userScopeService;
 
 	public QuestionPaperAppService_Tests()
 	{
 		_questionPaperAppService = GetRequiredService<IQuestionPaperAppService>();
 		_questionBankAppService = GetRequiredService<IQuestionBankAppService>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
+		_currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
+		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		_userScopeService = GetRequiredService<IUserScopeService>();
 	}
 
 	[Fact]
@@ -164,5 +174,92 @@ public class QuestionPaperAppService_Tests : ShikshaMitraApplicationTestBase<Shi
 			preview.Paper.Questions[0].QuestionText.ShouldBe(questionText);
 			preview.PrintHtml.ShouldContain(questionText);
 		}
+	}
+
+	[Fact]
+	public async Task UpdatePaperAsync_Should_Update_Tracked_Section_In_Place()
+	{
+		using (_currentTenant.Change(null))
+		{
+			var academicYearId = Guid.NewGuid();
+			var standardId = Guid.NewGuid();
+			var subjectId = Guid.NewGuid();
+			var userId = Guid.NewGuid();
+			await SeedAcademicYearScopeAsync(userId, academicYearId);
+
+			using (_currentPrincipalAccessor.Change(BuildPrincipal(userId)))
+			{
+				var paper = await _questionPaperAppService.CreatePaperAsync(new CreateUpdateQuestionPaperDto
+				{
+					AcademicYearId = academicYearId,
+					StandardId = standardId,
+					SubjectId = subjectId,
+					PaperTitle = "Gujarati Test",
+					TotalMarks = 50,
+					DurationMinutes = 120,
+					CreationMode = "Manual",
+					Sections = [new QuestionPaperSectionDto
+					{
+						SectionName = "Section A",
+						Marks = 50,
+						SortOrder = 1
+					}]
+				});
+				var sectionId = paper.Sections[0].Id!.Value;
+
+				var updated = await _questionPaperAppService.UpdatePaperAsync(paper.Id, new CreateUpdateQuestionPaperDto
+				{
+					AcademicYearId = academicYearId,
+					StandardId = standardId,
+					SubjectId = subjectId,
+					PaperTitle = "Gujarati Test Updated",
+					TotalMarks = 50,
+					DurationMinutes = 120,
+					CreationMode = "Manual",
+					Sections = [new QuestionPaperSectionDto
+					{
+						Id = sectionId,
+						SectionName = "Main Section",
+						Marks = 50,
+						SortOrder = 1,
+						Instructions = "Answer every question."
+					}]
+				});
+
+				updated.Sections.Count.ShouldBe(1);
+				updated.Sections[0].Id.ShouldBe(sectionId);
+				updated.Sections[0].SectionName.ShouldBe("Main Section");
+				updated.Sections[0].Instructions.ShouldBe("Answer every question.");
+			}
+		}
+	}
+
+	private async Task SeedAcademicYearScopeAsync(Guid userId, Guid academicYearId)
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			await _scopeRepository.InsertAsync(
+				new UserScopeAssignment(
+					Guid.NewGuid(),
+					_currentTenant.Id,
+					userId: userId,
+					academicYearId: academicYearId,
+					description: "Question paper section reconciliation regression test"),
+				autoSave: true);
+
+			await _userScopeService.InvalidateUserScopeCacheAsync(userId);
+		});
+	}
+
+	private ClaimsPrincipal BuildPrincipal(Guid userId)
+	{
+		var claims = new List<Claim>
+		{
+			new(AbpClaimTypes.UserId, userId.ToString()),
+			new(AbpClaimTypes.UserName, $"question-paper-{userId:N}"),
+			new(AbpClaimTypes.Email, $"question-paper-{userId:N}@test.local")
+		};
+
+		return new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
 	}
 }

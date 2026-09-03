@@ -13,6 +13,8 @@ public class PaymentTermVersionConfiguration : IEntityTypeConfiguration<PaymentT
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.Status).HasConversion<int>();
+		builder.Property(x => x.HolidayShiftingMethod).HasConversion<int>();
+		builder.Property(x => x.DemandGenerationRule).HasConversion<int>();
 		builder.Property(x => x.ChangeReason).HasMaxLength(500);
 		builder.Property(x => x.SnapshotHash).HasMaxLength(128);
 

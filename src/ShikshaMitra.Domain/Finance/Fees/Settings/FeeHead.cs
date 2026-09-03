@@ -17,7 +17,7 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
     [Required]
     public string Name { get; private set; }
 
-    public FeeHeadModule Module { get; private set; }
+    public FeeHeadModule? Module { get; private set; }
 
     public bool IsConcessionApplied { get; private set; }
 
@@ -37,7 +37,7 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Guid academicYearId,
         Guid feeCategoryId,
         string name,
-        FeeHeadModule module,
+        FeeHeadModule? module,
         bool isConcessionApplied,
         string? description,
         bool isActive = true) : base(id)
@@ -52,7 +52,7 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
         IsActive = isActive;
     }
 
-    public void Update(Guid feeCategoryId, string name, FeeHeadModule module, bool isConcessionApplied, string? description)
+    public void Update(Guid feeCategoryId, string name, FeeHeadModule? module, bool isConcessionApplied, string? description)
     {
         FeeCategoryId = feeCategoryId;
         Name = name;

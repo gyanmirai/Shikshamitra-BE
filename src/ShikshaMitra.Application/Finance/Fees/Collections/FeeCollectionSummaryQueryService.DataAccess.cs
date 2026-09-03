@@ -3,6 +3,7 @@ using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Students;
 using System;
 using System.Collections.Generic;
@@ -40,7 +41,7 @@ public partial class FeeCollectionSummaryQueryService
 		var dueFeeQ = await dueFeeRepository.GetQueryableAsync();
 
 		var (feeAggs, overdueAggs) = await GetStudentFeeAggregatesAsync(
-			dueFeeQ, studentIds, currentYear, currentMonth, cancellationToken);
+			dueFeeQ, studentIds, now.Date, currentYear, currentMonth, cancellationToken);
 
 		var chargeAggDict = await BuildChargeAggregatesByStudentAsync(
 			studentIds, input.AcademicYearId, cancellationToken);
@@ -98,6 +99,7 @@ public partial class FeeCollectionSummaryQueryService
 	)> GetStudentFeeAggregatesAsync(
 		IQueryable<DueFee> dueFeeQ,
 		ICollection<Guid> studentIds,
+		DateTime currentDate,
 		int currentYear,
 		int currentMonth,
 		CancellationToken cancellationToken)
@@ -111,7 +113,10 @@ public partial class FeeCollectionSummaryQueryService
 					StudentId   = g.Key,
 					Total       = (double?)g.Sum(d => (double?)d.OriginalAmount) ?? 0d,
 					Paid        = (double?)g.Sum(d => (double?)d.PaidAmount) ?? 0d,
-					Outstanding = (double?)g.Sum(d => (double?)d.OutstandingAmount) ?? 0d,
+					Outstanding = (double?)g.Sum(d =>
+						d.ScheduleSource == ScheduleSource.Legacy || !d.DemandDate.HasValue || d.DemandDate.Value <= currentDate
+							? (double?)d.OutstandingAmount
+							: 0d) ?? 0d,
 				}),
 			cancellationToken);
 
@@ -119,6 +124,7 @@ public partial class FeeCollectionSummaryQueryService
 			dueFeeQ
 				.Where(d => studentIds.Contains(d.StudentId)
 						 && d.OutstandingAmount > 0d
+						 && (d.ScheduleSource == ScheduleSource.Legacy || !d.DemandDate.HasValue || d.DemandDate.Value <= currentDate)
 						 && (d.Year < currentYear
 						 || (d.Year == currentYear && (int)d.Month < currentMonth)))
 				.GroupBy(d => d.StudentId)

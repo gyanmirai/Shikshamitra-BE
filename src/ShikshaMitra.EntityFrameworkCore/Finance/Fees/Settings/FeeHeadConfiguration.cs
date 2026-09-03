@@ -13,7 +13,7 @@ public class FeeHeadConfiguration : IEntityTypeConfiguration<FeeHead>
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.Name).HasMaxLength(40).IsRequired();
-		builder.Property(x => x.Module).HasConversion<string>().HasMaxLength(50);
+		builder.Property(x => x.Module).HasConversion<string>().HasMaxLength(50).IsRequired(false);
 		builder.Property(x => x.Description).HasMaxLength(500);
 		builder.Property(x => x.DeactivationReason).HasMaxLength(500);
 

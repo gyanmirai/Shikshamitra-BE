@@ -134,6 +134,14 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		return $"{Month} {Year}";
 	}
 
+	/// <summary>
+	/// A Payment Term row is created as an immutable schedule snapshot when the
+	/// structure is assigned, but it becomes a collectable bill only on its
+	/// demand date. Legacy rows remain immediately collectable.
+	/// </summary>
+	public bool IsBillGeneratedOn(DateTime date) =>
+		ScheduleSource == ScheduleSource.Legacy || !DemandDate.HasValue || DemandDate.Value.Date <= date.Date;
+
 	public static string BuildScheduleInstanceKey(
 		ScheduleSource scheduleSource,
 		Guid feeHeadId,

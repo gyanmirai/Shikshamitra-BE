@@ -11,4 +11,5 @@ public static class DueFeeErrorCodes
 	public const string DueFeeNotFound                 = Prefix + "10005";
 	public const string ReverseAmountMustBePositive    = Prefix + "10006";
 	public const string ReverseExceedsPaidAmount       = Prefix + "10007";
+	public const string BillNotGeneratedYet            = Prefix + "10008";
 }

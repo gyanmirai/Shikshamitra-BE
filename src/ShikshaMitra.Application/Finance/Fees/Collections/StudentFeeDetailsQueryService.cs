@@ -81,13 +81,15 @@ public partial class StudentFeeDetailsQueryService(
 				.ThenBy(d => d.InstallmentSequence ?? 0)
 				.ThenBy(d => d.Year).ThenBy(d => d.Month)
 				.ToList();
+			var today = clock.Now.Date;
+			var generatedDueFees = dueFees.Where(d => d.IsBillGeneratedOn(today)).ToList();
 
-			var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
+			var feeHeadIds = generatedDueFees.Select(d => d.FeeHeadId).Distinct().ToList();
 			var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
 			var feeHeadNameMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
 			var reconByDueFee = await GetInReconciliationByDueFeeAsync(studentId);
 
-			var grouped = dueFees.GroupBy(d => (d.Year, d.Month))
+			var grouped = generatedDueFees.GroupBy(d => (d.Year, d.Month))
 				.OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month);
 
 			var concessions = await concessionRequestRepository.GetListAsync(c => c.StudentId == studentId
@@ -102,8 +104,7 @@ public partial class StudentFeeDetailsQueryService(
 				studentId, feeStructureAssignment.FeeStructureStandardId);
 			allowOnlineCollection = effectiveRules.Policy?.AllowOnlineCollection ?? true;
 
-			var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(dueFees.Select(d => d.Id).ToList());
-			var today = clock.Now.Date;
+			var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(generatedDueFees.Select(d => d.Id).ToList());
 
 			// Resolved once for the whole collect-form call, same rationale as the policy
 			// resolution above — an exception window doesn't vary by fee head/due line.
@@ -156,7 +157,7 @@ public partial class StudentFeeDetailsQueryService(
 			{
 				TotalFee = dueFees.Sum(d => d.OriginalAmount),
 				PaidFee = dueFees.Sum(d => d.PaidAmount),
-				PendingFee = dueFees.Sum(d => d.OutstandingAmount),
+				PendingFee = generatedDueFees.Sum(d => d.OutstandingAmount),
 				ReconciliationAmount = reconByDueFee.Values.Sum(),
 			};
 		}

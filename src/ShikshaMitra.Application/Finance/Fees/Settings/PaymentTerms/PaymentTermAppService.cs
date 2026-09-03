@@ -14,6 +14,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 
 namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 
@@ -24,6 +25,7 @@ public class PaymentTermAppService(
 	IRepository<FeeStructure, Guid> feeStructureRepository,
 	IRepository<EducationBoard, Guid> boardRepository,
 	IAcademicYearRepository academicYearRepository,
+	IRepository<IdentityUser, Guid> userRepository,
 	PaymentTermScheduleResolver scheduleResolver
 ) : ApplicationService, IPaymentTermAppService
 {
@@ -74,13 +76,64 @@ public class PaymentTermAppService(
 		return await MapDetailDtoAsync(term, referenceCount);
 	}
 
+	public async Task<PagedResultDto<PaymentTermVersionHistoryDto>> GetVersionHistoryAsync(
+		Guid paymentTermId,
+		PagedAndSortedResultRequestDto input)
+	{
+		var term = await GetTermWithVersionsAsync(paymentTermId);
+		var totalCount = term.Versions.Count;
+		var maxResultCount = input.MaxResultCount <= 0 ? 20 : input.MaxResultCount;
+		var versions = term.Versions
+			.OrderByDescending(version => version.VersionNumber)
+			.Skip(input.SkipCount)
+			.Take(maxResultCount)
+			.Select(MapVersionHistoryDto)
+			.ToList();
+
+		var creatorIds = versions
+			.Where(version => version.CreatorId.HasValue)
+			.Select(version => version.CreatorId!.Value)
+			.Distinct()
+			.ToList();
+		if (creatorIds.Count > 0)
+		{
+			var users = await AsyncExecuter.ToListAsync(
+				(await userRepository.GetQueryableAsync()).Where(user => creatorIds.Contains(user.Id)));
+			var namesById = users.ToDictionary(
+				user => user.Id,
+				user => string.IsNullOrWhiteSpace(user.Name) ? user.UserName : user.Name);
+			foreach (var version in versions.Where(version => version.CreatorId.HasValue))
+			{
+				version.CreatedByName = namesById.GetValueOrDefault(version.CreatorId!.Value) ?? "Unknown user";
+			}
+		}
+
+		return new PagedResultDto<PaymentTermVersionHistoryDto>(totalCount, versions);
+	}
+
 	public async Task<PaymentTermDto> CreateAsync(CreatePaymentTermDto input)
 	{
-		PaymentTermInstallmentValidator.Validate(input.Installments);
+		var board = await boardRepository.GetAsync(input.BoardId);
+		if (board.AcademicYearId != input.AcademicYearId)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.TermYearMismatch);
+		}
+
+		PaymentTermInstallmentValidator.PrepareAndValidate(
+			input.DemandGenerationRule,
+			input.DemandOffsetDays,
+			input.Installments,
+			board.StartDate,
+			board.EndDate);
+		EnsureSaveStatus(input.Status);
 		await EnsureUniqueCodeAsync(input.AcademicYearId, input.Code, excludeId: null);
+		if (input.IsDefault)
+		{
+			await ClearDefaultForYearBoardAsync(input.AcademicYearId, input.BoardId, excludeId: null);
+		}
 
 		if (input.DemandGenerationRule == DemandGenerationRule.XDaysBeforeDue &&
-			(!input.DemandOffsetDays.HasValue || input.DemandOffsetDays.Value < 0))
+			(!input.DemandOffsetDays.HasValue || input.DemandOffsetDays.Value < 1))
 		{
 			throw new BusinessException(PaymentTermErrorCodes.DemandOffsetDaysMustBeNonNegative);
 		}
@@ -97,12 +150,7 @@ public class PaymentTermAppService(
 			input.HolidayShiftingMethod,
 			input.DemandGenerationRule,
 			input.DemandOffsetDays,
-			input.InitialDemandStatus);
-
-		if (input.IsDefault)
-		{
-			await ClearDefaultForYearBoardAsync(input.AcademicYearId, input.BoardId, excludeId: null);
-		}
+			InitialDemandStatus.Published);
 
 		var version = new PaymentTermVersion(
 			GuidGenerator.Create(),
@@ -110,14 +158,18 @@ public class PaymentTermAppService(
 			term.Id,
 			versionNumber: 1,
 			PaymentTermVersionStatus.Draft,
+			input.HolidayShiftingMethod,
+			input.DemandGenerationRule,
+			input.DemandOffsetDays,
 			effectiveFrom: null,
 			effectiveTo: null);
 
 		version.SetInstallments(BuildInstallments(version.Id, input.Installments));
-		// First version is published immediately so the term can be attached to fee structures.
-		version.Publish(Clock.Now, CurrentUser.Id ?? Guid.Empty);
 		term.AddVersion(version);
-		term.SetCurrentVersion(version.Id);
+		if (input.Status == PaymentTermSaveStatus.Active)
+		{
+			await PublishDraftAsync(term, version, board);
+		}
 
 		await paymentTermRepository.InsertAsync(term, autoSave: true);
 		return await GetAsync(term.Id);
@@ -125,14 +177,36 @@ public class PaymentTermAppService(
 
 	public async Task<PaymentTermDto> UpdateDraftAsync(Guid paymentTermId, UpdatePaymentTermDraftDto input)
 	{
-		PaymentTermInstallmentValidator.Validate(input.Installments);
-
 		var term = await GetTermWithVersionsAsync(paymentTermId);
 		if (term.Status == PaymentTermStatus.Archived)
 		{
 			throw new BusinessException(PaymentTermErrorCodes.ArchiveInUse)
 				.WithData("PaymentTermId", paymentTermId);
 		}
+		if (term.IsDefault && !input.IsDefault)
+		{
+			var hasOtherDefault = await paymentTermRepository.AnyAsync(item =>
+				item.Id != term.Id &&
+				item.AcademicYearId == term.AcademicYearId &&
+				item.BoardId == term.BoardId &&
+				item.IsDefault &&
+				item.Status != PaymentTermStatus.Archived);
+			if (!hasOtherDefault)
+			{
+				throw new BusinessException(PaymentTermErrorCodes.DefaultTermRequired)
+					.WithData("PaymentTermId", paymentTermId)
+					.WithData("BoardId", term.BoardId);
+			}
+		}
+
+		var board = await boardRepository.GetAsync(term.BoardId);
+		PaymentTermInstallmentValidator.PrepareAndValidate(
+			input.DemandGenerationRule,
+			input.DemandOffsetDays,
+			input.Installments,
+			board.StartDate,
+			board.EndDate);
+		EnsureSaveStatus(input.Status);
 
 		await EnsureUniqueCodeAsync(term.AcademicYearId, input.Code, paymentTermId);
 
@@ -151,6 +225,9 @@ public class PaymentTermAppService(
 				term.Id,
 				nextVersionNumber,
 				PaymentTermVersionStatus.Draft,
+				input.HolidayShiftingMethod,
+				input.DemandGenerationRule,
+				input.DemandOffsetDays,
 				effectiveFrom: null,
 				effectiveTo: null,
 				changeReason: "Edited published schedule");
@@ -164,18 +241,21 @@ public class PaymentTermAppService(
 			input.HolidayShiftingMethod,
 			input.DemandGenerationRule,
 			input.DemandOffsetDays,
-			input.InitialDemandStatus);
+			InitialDemandStatus.Published);
 
+		draft.UpdateBillingConfiguration(
+			input.HolidayShiftingMethod,
+			input.DemandGenerationRule,
+			input.DemandOffsetDays);
 		draft.SetInstallments(BuildInstallments(draft.Id, input.Installments));
-
-		// If the term is not yet referenced, publishing the draft keeps assignment simple.
-		var referenceCount = (await GetReferenceCountsAsync(new[] { term.Id })).GetValueOrDefault(term.Id);
-		if (referenceCount == 0 && draft.Status == PaymentTermVersionStatus.Draft)
+		if (input.IsDefault)
 		{
-			var previousPublished = term.GetPublishedVersion();
-			draft.Publish(Clock.Now, CurrentUser.Id ?? Guid.Empty);
-			previousPublished?.Supersede(Clock.Now.Date.AddDays(-1));
-			term.SetCurrentVersion(draft.Id);
+			await ClearDefaultForYearBoardAsync(term.AcademicYearId, term.BoardId, term.Id);
+		}
+		term.SetDefault(input.IsDefault);
+		if (input.Status == PaymentTermSaveStatus.Active)
+		{
+			await PublishDraftAsync(term, draft, board);
 		}
 
 		await paymentTermRepository.UpdateAsync(term, autoSave: true);
@@ -185,6 +265,11 @@ public class PaymentTermAppService(
 	public async Task DeleteAsync(Guid paymentTermId)
 	{
 		var term = await GetTermWithVersionsAsync(paymentTermId);
+		if (term.GetPublishedVersion() != null)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.DeleteWithReferences)
+				.WithData("Reason", "Published payment terms must be archived, not deleted.");
+		}
 		var referenceCount = (await GetReferenceCountsAsync(new[] { term.Id })).GetValueOrDefault(term.Id);
 		if (referenceCount > 0)
 		{
@@ -225,6 +310,9 @@ public class PaymentTermAppService(
 			term.Id,
 			nextVersionNumber,
 			PaymentTermVersionStatus.Draft,
+			source.HolidayShiftingMethod,
+			source.DemandGenerationRule,
+			source.DemandOffsetDays,
 			effectiveFrom: null,
 			effectiveTo: null,
 			changeReason: input.ChangeReason);
@@ -254,9 +342,10 @@ public class PaymentTermAppService(
 		return await GetAsync(term.Id);
 	}
 
-	public async Task<PublishResultDto> PublishVersionAsync(Guid paymentTermId, Guid versionId, PublishVersionDto input)
+	public async Task<PublishResultDto> PublishVersionAsync(Guid paymentTermId, Guid versionId)
 	{
 		var term = await GetTermWithVersionsAsync(paymentTermId);
+		var board = await boardRepository.GetAsync(term.BoardId);
 		var version = term.Versions.FirstOrDefault(v => v.Id == versionId)
 			?? throw new BusinessException(PaymentTermErrorCodes.NotFound)
 				.WithData("VersionId", versionId);
@@ -265,12 +354,14 @@ public class PaymentTermAppService(
 			.OrderBy(i => i.Sequence)
 			.Select(MapInstallmentToCreateDto)
 			.ToList();
-		PaymentTermInstallmentValidator.Validate(installmentDtos);
+		PaymentTermInstallmentValidator.PrepareAndValidate(
+			version.DemandGenerationRule,
+			version.DemandOffsetDays,
+			installmentDtos,
+			board.StartDate,
+			board.EndDate);
 
-		var previousPublished = term.GetPublishedVersion();
-		version.Publish(input.EffectiveFrom, CurrentUser.Id ?? Guid.Empty);
-		previousPublished?.Supersede(input.EffectiveFrom.Date.AddDays(-1));
-		term.SetCurrentVersion(version.Id);
+		await PublishDraftAsync(term, version, board);
 
 		await paymentTermRepository.UpdateAsync(term, autoSave: true);
 
@@ -286,6 +377,12 @@ public class PaymentTermAppService(
 	public async Task ArchiveAsync(Guid paymentTermId, ArchivePaymentTermDto input)
 	{
 		var term = await GetTermWithVersionsAsync(paymentTermId);
+		var referenceCount = (await GetReferenceCountsAsync(new[] { term.Id })).GetValueOrDefault(term.Id);
+		if (referenceCount > 0)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.ArchiveInUse)
+				.WithData("ReferencedStructureCount", referenceCount);
+		}
 		term.Archive(input.Reason);
 		await paymentTermRepository.UpdateAsync(term, autoSave: true);
 	}
@@ -305,7 +402,9 @@ public class PaymentTermAppService(
 			throw new BusinessException("Source and target academic years must be different.");
 		}
 
-		_ = await academicYearRepository.GetAsync(input.TargetAcademicYearId);
+		var sourceAcademicYear = await academicYearRepository.GetAsync(input.SourceAcademicYearId);
+		var targetAcademicYear = await academicYearRepository.GetAsync(input.TargetAcademicYearId);
+		var yearShift = targetAcademicYear.StartDate.Year - sourceAcademicYear.StartDate.Year;
 
 		var query = await paymentTermRepository.GetQueryableAsync();
 		query = query.Where(t => t.AcademicYearId == input.SourceAcademicYearId);
@@ -326,9 +425,18 @@ public class PaymentTermAppService(
 				continue;
 			}
 
+			var sourceBoard = await boardRepository.GetAsync(source.BoardId);
+			var targetBoard = await boardRepository.FirstOrDefaultAsync(board =>
+				board.AcademicYearId == input.TargetAcademicYearId && board.Type == sourceBoard.Type);
+			if (targetBoard == null)
+			{
+				result.DateRangesRequiringReview.Add(
+					$"{source.Code}: matching {sourceBoard.Type} board is not configured in the target year");
+				continue;
+			}
+
 			var existing = await paymentTermRepository.FirstOrDefaultAsync(t =>
 				t.AcademicYearId == input.TargetAcademicYearId &&
-				t.BoardId == source.BoardId &&
 				t.Code == source.Code);
 
 			if (existing != null)
@@ -341,14 +449,14 @@ public class PaymentTermAppService(
 				GuidGenerator.Create(),
 				CurrentTenant.Id,
 				input.TargetAcademicYearId,
-				source.BoardId,
+				targetBoard.Id,
 				source.Name,
 				source.Code,
 				source.Description,
 				isDefault: false,
-				source.HolidayShiftingMethod,
-				source.DemandGenerationRule,
-				source.DemandOffsetDays,
+				sourceVersion.HolidayShiftingMethod,
+				sourceVersion.DemandGenerationRule,
+				sourceVersion.DemandOffsetDays,
 				source.InitialDemandStatus);
 
 			var version = new PaymentTermVersion(
@@ -357,6 +465,9 @@ public class PaymentTermAppService(
 				clone.Id,
 				1,
 				PaymentTermVersionStatus.Draft,
+				sourceVersion.HolidayShiftingMethod,
+				sourceVersion.DemandGenerationRule,
+				sourceVersion.DemandOffsetDays,
 				null,
 				null,
 				changeReason: $"Cloned from academic year {input.SourceAcademicYearId}");
@@ -369,14 +480,14 @@ public class PaymentTermAppService(
 						version.Id,
 						i.Sequence,
 						i.Name,
-						i.CoverageStartDate,
-						i.CoverageEndDate,
-						i.DemandDate,
-						i.DueDate,
+						i.CoverageStartDate.AddYears(yearShift),
+						i.CoverageEndDate.AddYears(yearShift),
+						i.DemandDate.AddYears(yearShift),
+						i.DueDate.AddYears(yearShift),
 						i.AllocationPercentage,
 						i.DemandEnabled,
 						i.ReminderEnabled,
-						i.ReminderDate,
+						i.ReminderDate?.AddYears(yearShift),
 						i.AllowPartialOverride,
 						i.GracePeriodDaysOverride))
 					.ToList());
@@ -384,7 +495,7 @@ public class PaymentTermAppService(
 			clone.AddVersion(version);
 			await paymentTermRepository.InsertAsync(clone, autoSave: true);
 			result.ClonedTermIds.Add(clone.Id);
-			result.DateRangesRequiringReview.Add($"{clone.Code}: review installment dates for target year");
+			result.DateRangesRequiringReview.Add($"{clone.Code}: dates shifted by {yearShift} year(s); review before publishing");
 		}
 
 		return result;
@@ -509,7 +620,7 @@ public class PaymentTermAppService(
 		foreach (var item in defaults)
 		{
 			item.SetDefault(false);
-			await paymentTermRepository.UpdateAsync(item);
+			await paymentTermRepository.UpdateAsync(item, autoSave: true);
 		}
 	}
 
@@ -545,7 +656,7 @@ public class PaymentTermAppService(
 				i.Name.Trim(),
 				i.CoverageStartDate,
 				i.CoverageEndDate,
-				i.DemandDate,
+				i.DemandDate!.Value,
 				i.DueDate,
 				i.AllocationPercentage,
 				i.DemandEnabled,
@@ -572,9 +683,60 @@ public class PaymentTermAppService(
 		GracePeriodDaysOverride = i.GracePeriodDaysOverride
 	};
 
+	private static void EnsureSaveStatus(PaymentTermSaveStatus status)
+	{
+		if (!Enum.IsDefined(status))
+		{
+			throw new BusinessException(PaymentTermErrorCodes.VersionNotPublishable)
+				.WithData("Status", status);
+		}
+	}
+
+	private async Task PublishDraftAsync(
+		PaymentTerm term,
+		PaymentTermVersion draft,
+		EducationBoard board)
+	{
+		var effectiveFrom = ResolveActivationDate(term, board);
+		var previousPublished = term.GetPublishedVersion();
+
+		draft.Publish(effectiveFrom, CurrentUser.Id ?? Guid.Empty);
+		previousPublished?.Supersede(effectiveFrom.AddDays(-1));
+		term.SetCurrentVersion(draft.Id);
+		if (term.IsDefault)
+		{
+			await ClearDefaultForYearBoardAsync(term.AcademicYearId, term.BoardId, term.Id);
+		}
+	}
+
+	private DateTime ResolveActivationDate(PaymentTerm term, EducationBoard board)
+	{
+		var effectiveFrom = Clock.Now.Date < board.StartDate.Date
+			? board.StartDate.Date
+			: Clock.Now.Date;
+		var previousPublished = term.GetPublishedVersion();
+		if (previousPublished?.EffectiveFrom != null &&
+			effectiveFrom <= previousPublished.EffectiveFrom.Value.Date)
+		{
+			effectiveFrom = previousPublished.EffectiveFrom.Value.Date.AddDays(1);
+		}
+
+		if (effectiveFrom > board.EndDate.Date)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.EffectiveDateRequired)
+				.WithData("Reason", "No activation date remains inside the selected board period.")
+				.WithData("BoardStart", board.StartDate.Date)
+				.WithData("BoardEnd", board.EndDate.Date);
+		}
+
+		return effectiveFrom;
+	}
+
 	private static PaymentTermListDto MapListDto(PaymentTerm term, int referencedCount)
 	{
-		var current = term.GetCurrentVersion();
+		var draft = term.GetDraftVersion();
+		var published = term.GetPublishedVersion();
+		var latest = draft ?? published ?? term.GetCurrentVersion();
 		return new PaymentTermListDto
 		{
 			Id = term.Id,
@@ -582,14 +744,34 @@ public class PaymentTermAppService(
 			Code = term.Code,
 			AcademicYearId = term.AcademicYearId,
 			BoardId = term.BoardId,
-			Status = term.Status,
+			Status = ResolveLifecycleStatus(term),
 			IsDefault = term.IsDefault,
-			CurrentVersionNumber = current?.VersionNumber ?? 0,
-			InstallmentCount = current?.Installments.Count ?? 0,
+			CurrentVersionNumber = latest?.VersionNumber ?? 0,
+			HasDraft = draft != null,
+			HasPublishedVersion = published != null,
+			InstallmentCount = latest?.Installments.Count ?? 0,
 			ReferencedStructureCount = referencedCount,
 			CanDirectEdit = term.Status == PaymentTermStatus.Active && referencedCount == 0
 		};
 	}
+
+	private static PaymentTermVersionHistoryDto MapVersionHistoryDto(PaymentTermVersion version) => new()
+	{
+		Id = version.Id,
+		VersionNumber = version.VersionNumber,
+		Status = version.Status,
+		ChangeAction = version.Status switch
+		{
+			PaymentTermVersionStatus.Draft => version.VersionNumber == 1 ? "created" : "revision_created",
+			PaymentTermVersionStatus.Published => "published",
+			PaymentTermVersionStatus.Superseded => "superseded",
+			PaymentTermVersionStatus.Archived => "archived",
+			_ => "updated"
+		},
+		ChangeReason = version.ChangeReason,
+		CreationTime = version.CreationTime,
+		CreatorId = version.CreatorId
+	};
 
 	private async Task<PaymentTermDto> MapDetailDtoAsync(PaymentTerm term, int referencedCount)
 	{
@@ -618,7 +800,7 @@ public class PaymentTermAppService(
 			Name = term.Name,
 			Code = term.Code,
 			Description = term.Description,
-			Status = term.Status,
+			Status = ResolveLifecycleStatus(term),
 			IsDefault = term.IsDefault,
 			HolidayShiftingMethod = term.HolidayShiftingMethod,
 			DemandGenerationRule = term.DemandGenerationRule,
@@ -626,7 +808,7 @@ public class PaymentTermAppService(
 			InitialDemandStatus = term.InitialDemandStatus,
 			CurrentVersionId = term.CurrentVersionId,
 			ArchivedAt = term.ArchivedAt,
-			TotalInstallments = term.GetCurrentVersion()?.Installments.Count ?? 0,
+			TotalInstallments = (term.GetDraftVersion() ?? term.GetCurrentVersion())?.Installments.Count ?? 0,
 			VersionCount = term.Versions.Count,
 			IsUsedInFeeStructures = referencedCount > 0,
 			CanDirectEdit = term.Status == PaymentTermStatus.Active && referencedCount == 0,
@@ -637,6 +819,9 @@ public class PaymentTermAppService(
 					Id = v.Id,
 					VersionNumber = v.VersionNumber,
 					Status = v.Status,
+					HolidayShiftingMethod = v.HolidayShiftingMethod,
+					DemandGenerationRule = v.DemandGenerationRule,
+					DemandOffsetDays = v.DemandOffsetDays,
 					EffectiveFrom = v.EffectiveFrom,
 					EffectiveTo = v.EffectiveTo,
 					PublishedAt = v.PublishedAt,
@@ -661,5 +846,17 @@ public class PaymentTermAppService(
 						}).ToList()
 				}).ToList()
 		};
+	}
+
+	private static PaymentTermLifecycleStatus ResolveLifecycleStatus(PaymentTerm term)
+	{
+		if (term.Status == PaymentTermStatus.Archived)
+		{
+			return PaymentTermLifecycleStatus.Archived;
+		}
+
+		return term.GetDraftVersion() != null
+			? PaymentTermLifecycleStatus.Draft
+			: PaymentTermLifecycleStatus.Active;
 	}
 }

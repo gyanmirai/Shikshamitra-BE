@@ -12,6 +12,10 @@ public interface IPaymentTermAppService : IApplicationService
 
 	Task<PaymentTermDto> GetAsync(Guid paymentTermId);
 
+	Task<PagedResultDto<PaymentTermVersionHistoryDto>> GetVersionHistoryAsync(
+		Guid paymentTermId,
+		PagedAndSortedResultRequestDto input);
+
 	Task<PaymentTermDto> CreateAsync(CreatePaymentTermDto input);
 
 	Task<PaymentTermDto> UpdateDraftAsync(Guid paymentTermId, UpdatePaymentTermDraftDto input);
@@ -20,7 +24,7 @@ public interface IPaymentTermAppService : IApplicationService
 
 	Task<PaymentTermDto> CreateRevisionAsync(Guid paymentTermId, CreateRevisionDto input);
 
-	Task<PublishResultDto> PublishVersionAsync(Guid paymentTermId, Guid versionId, PublishVersionDto input);
+	Task<PublishResultDto> PublishVersionAsync(Guid paymentTermId, Guid versionId);
 
 	Task ArchiveAsync(Guid paymentTermId, ArchivePaymentTermDto input);
 

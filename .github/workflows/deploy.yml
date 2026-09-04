@@ -47,6 +47,8 @@ jobs:
             - name: Run DbMigrator
               env:
                   ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
+                  ShikshaMitra__Seeders__Enabled: 'true'
+                  ShikshaMitra__Seeders__Profile: FullDemo
               run: |
                   cd src/ShikshaMitra.DbMigrator
                   dotnet run --configuration Release --no-launch-profile

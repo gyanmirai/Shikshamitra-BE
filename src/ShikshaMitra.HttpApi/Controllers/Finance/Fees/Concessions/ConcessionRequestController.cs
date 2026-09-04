@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
+using ShikshaMitra.Models;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
@@ -53,6 +55,29 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 	{
 		await concessionRequestAppService.UploadDocumentsAsync(id, input);
 		return NoContent();
+	}
+
+	[HttpPost("types/{concessionTypeId:guid}/documents/{documentId:guid}/file")]
+	[Consumes("multipart/form-data")]
+	// Leave room for multipart headers; the application service still enforces the 20 MB file limit.
+	[RequestFormLimits(MultipartBodyLengthLimit = 21L * 1024 * 1024)]
+	[ProducesResponseType(typeof(ConcessionDocumentFileUploadResponseDto), StatusCodes.Status200OK)]
+	public async Task<ConcessionDocumentFileUploadResponseDto> UploadDocumentFileAsync(
+		Guid concessionTypeId,
+		Guid documentId,
+		[FromForm] ConcessionDocumentUploadRequest input)
+	{
+		using var stream = new MemoryStream();
+		await input.File.CopyToAsync(stream);
+		return await concessionRequestAppService.UploadDocumentFileAsync(
+			concessionTypeId,
+			documentId,
+			new UploadConcessionDocumentFileDto
+			{
+				FileName = input.File.FileName,
+				ContentType = input.File.ContentType,
+				Content = stream.ToArray()
+			});
 	}
 
 	[HttpGet("concession-applications")]

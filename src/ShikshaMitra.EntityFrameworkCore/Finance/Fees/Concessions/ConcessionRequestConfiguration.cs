@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.EntityFrameworkCore.Finance.Fees.ConcessionRequests;
@@ -15,6 +16,11 @@ public class ConcessionRequestConfiguration : IEntityTypeConfiguration<Concessio
 		builder.Property(x => x.Remarks).HasMaxLength(2000);
 		builder.Property(x => x.RejectionReason).HasMaxLength(2000);
 		builder.Property(x => x.ApproverMessage).HasMaxLength(1000);
+
+		builder.HasOne<ConcessionType>()
+			.WithMany()
+			.HasForeignKey(x => x.ConcessionTypeId)
+			.OnDelete(DeleteBehavior.Restrict);
 
 		builder.HasMany(x => x.ConcessionFeeHeadMappings)
 			.WithOne()

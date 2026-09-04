@@ -1,6 +1,7 @@
 using System;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
+using ShikshaMitra.Common.Files;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Common;
@@ -34,6 +35,7 @@ public partial class ConcessionRequestAppService(
 	ICurrentUser currentUser,
 	IGuidGenerator guidGenerator,
 	IUnitOfWorkManager unitOfWorkManager,
+	IFileStorageAppService fileStorageAppService,
 	Volo.Abp.EventBus.Distributed.IDistributedEventBus eventBus)
 	: ApplicationService, IConcessionRequestAppService
 {

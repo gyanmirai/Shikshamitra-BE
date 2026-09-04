@@ -248,6 +248,12 @@ public class ConcessionRequestManager(
 			throw new BusinessException(FinanceConcessionErrorCodes.ConcessionTypeNotFound);
 		}
 
+		if (!type.IsActive)
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.Inactive)
+				.WithData("ConcessionTypeId", concessionTypeId);
+		}
+
 		return type;
 	}
 }

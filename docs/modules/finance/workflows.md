@@ -24,6 +24,16 @@ TL;DR: use this page to understand how Finance changes affect due rows, approval
 | Reconciliation | Create or review reconciliation records, approve, or reject | Bank/account consistency and approval audit |
 | Finance reports | Select report filters, preview, export, and audit output | Preview/export parity and tenant isolation |
 
+## Concession Type lifecycle
+
+1. Finance creates a type for one academic year with a normalized unique name, optional description, and zero or more evidence definitions.
+2. Each definition records a mandatory/optional flag, maximum size in bytes, and accepted formats. Defaults are 5 MB and PDF/JPG/JPEG/PNG.
+3. New concession requests can select active types only. Existing requests retain and display their type even if it is later deactivated.
+4. Deactivation requires a reason; reactivation clears that reason. Deactivation does not interrupt an already pending request.
+5. Active types cannot be deleted. An inactive type may be deleted only while unused. Once any request references a type, its evidence definitions are locked and it remains undeletable; name and description may still be corrected.
+6. Approval checks only mandatory definitions. Optional documents may be absent, but any uploaded file is always checked against its configured definition.
+7. Create, update, and status changes are captured through entity history and exposed as paged version history for the settings action drawer.
+
 ## Integration rules
 
 | Integration | Rule |

@@ -8,596 +8,501 @@ owner: product-and-engineering
 audience: humans-and-agents
 ---
 
-# Design the concession policy and student fee flow
+# Design the Concession Policy and student fee flow
 
-TL;DR: keep concession type, reusable policy, student request, approval, ledger allocation, and refund as separate concepts.
-A fee-structure assignment may snapshot which published concession policies are available to the student, but it must not silently reduce the original obligation.
-An approved request creates immutable concession allocations against eligible due rows, and every calculation is performed again by the backend.
+TL;DR: a Concession Policy is an academic-year rule set attached to one or more fee structures. A fee structure has one attached active policy version. When that structure is assigned to a student, the exact policy version is snapshotted automatically. Staff select a Concession Type only while creating a student request; the system resolves the policy, calculates the allowed concession on the server, and applies it only after approval. Policy status follows the HR Attendance Policy pattern: Draft, Active, and Archived.
 
-## Decision summary
+## Final product decisions
+
+These decisions are authoritative for this design:
 
 | Decision | Required behavior |
 |---|---|
-| Concession type | Describes the business reason and evidence category, such as sibling, staff ward, merit, sports, or financial need |
-| Concession policy | Versioned rule that defines eligibility scope, calculation, fee-head scope, caps, timing, stacking, and approval controls |
-| Fee structure | Defines gross fee heads and schedules; it may allow or recommend multiple concession policy versions but does not contain a student's award |
-| Student assignment | Snapshots gross obligations, payment-term versions, and resolved eligible concession policy versions |
-| Concession request | Student-specific application with evidence and a server-calculated proposal based on one policy version |
-| Approval | Maker-checker decision that atomically records immutable allocations and reduces eligible outstanding due rows |
-| Paid fees | A concession never returns cash; any approved retroactive benefit beyond outstanding becomes a separate credit-balance or refund workflow |
-| Late fee | Collection Policy owns late-fee waivers; Concession Policy normally applies only to principal fee obligations |
-| History | Published policy versions, approved requests, allocations, reversals, receipts, and reports retain the exact version and calculation snapshot |
+| Policy scope | Tenant and Academic Year only |
+| Policy status | Keep the Status field and mirror HR Attendance Policy: Draft/Active in the form, Archive as a separate action, Restore to Draft |
+| Effective dates | Do not configure separate start/end dates; Academic Year and Status define availability, and assignment snapshots the exact attached version |
+| Not policy scope | No board, medium, class, standard, division, or student filters on a policy |
+| Fee Structure relationship | Each fee-structure version has zero or one Active Concession Policy version; one policy may be reused by many structures in the same academic year |
+| Concession Type | Selected only in the Concession Request; it is not stored on or assigned to the policy |
+| Type ownership | Defines the reason/category and its mandatory or optional supporting documents |
+| Request policy selection | Staff do not select a policy; the backend resolves it from the student's assigned fee structure snapshot |
+| Student assignment | Snapshots the attached policy version but does not automatically grant a discount |
+| Calculation | The backend is authoritative; the browser only displays server preview results |
+| Approval | An approved request creates immutable allocations against eligible outstanding due rows |
+| Version history | Every saved policy change increments/captures a version; student assignments and requests retain the exact version used |
 
-## Current shipped baseline
+## Why this model is simple for school staff
 
-The current repository has a complete request-to-due-allocation flow, but it does not yet have a backend Concession Policy aggregate or API.
+The school configures a policy once per academic year, attaches it while preparing a fee structure, and then does not select it again for every student. During a request, staff only:
 
-| Area | Current behavior | Consequence |
+1. Search for the student.
+2. Select the Concession Type.
+3. Upload the documents required by that Type.
+4. Enter a concession value only when the policy allows request-level values.
+5. Review the server-calculated impact and submit.
+
+The system determines the structure, policy version, eligible fee heads, eligible due rows, limits, and approval route.
+
+## Concept ownership
+
+| Concept | Owns | Must not own |
 |---|---|---|
-| Concession Type | Stores name, description, and required document definitions for an academic year | It is an evidence category, not a calculation policy |
-| Concession request | Accepts student, type, remarks, and manually entered amount or percentage for selected fee heads | The requester currently chooses the monetary rule |
-| Request calculation | Backend recalculates fee-head discount from generated `DueFee.OriginalAmount` rows | Client `netAmount` is not trusted for the stored discount |
-| Approval | Approver selects due rows and sends allocations; backend validates row ownership, fee head, positive amount, allocation sum, and outstanding balance | Approved concession reduces pending dues atomically |
-| Documents | Approval checks all documents configured on the Concession Type | Evidence requirements are enforced at approval time |
-| Maker-checker | Request creator is blocked from approval unless the current legacy privileged-role exception applies | The role-name exception is migration debt; permission-based authority is required |
-| Cancellation | Pending requests may be cancelled; approved and rejected requests cannot be cancelled | There is no approved-concession reversal flow yet |
-| Due ledger | `DueFee.NetAmount` currently combines concession and adjustment credits and uses `double` money fields | Migrate to distinct decimal monetary facts before extending the policy engine |
-| Generic policy versions | `FinancePolicyVersion` exists and Collection Policy uses it | Concession Policy can reuse the version table but still needs a typed aggregate and contracts |
-| Concession policy API | No dedicated controller, service, DTO, aggregate, resolver, or persistence mapping exists | The frontend `/finance-policies` integration is not a shipped contract |
+| Concession Type | Academic year, code/name, description, active state, document definitions, required/optional flag, formats and size limits | Percentage, fixed amount, policy reference, due allocation, or approval result |
+| Concession Policy | Academic year, status, reusable calculation guardrails, eligible fee heads, due timing, caps, rounding, approval controls, and version | Type/category, student documents, class/medium scope, student-specific award |
+| Fee Structure Version | Gross fee heads, payment schedule, and the single attached Active policy version | A student's concession amount |
+| Student Fee Assignment | Student-specific gross obligation and immutable snapshots of the fee structure, payment terms, and policy version | Editable reference to the latest policy |
+| Concession Request | Student, assignment, selected Type, resolved policy version, evidence, requested input, calculation snapshot, workflow state | Direct uncontrolled mutation of dues |
+| Concession Grant/Allocation | Approved amount, exact due-row allocations, approver, timestamp, request and policy references | Editable formula or evidence definition |
+| Refund/Credit | Settlement of an overpayment through its own controlled workflow | A hidden paid-fee option inside Concession Policy |
 
-Current source paths:
+## Current repository baseline
 
-- `src/ShikshaMitra.Domain/Finance/Fees/Concessions/**`
-- `src/ShikshaMitra.Application/Finance/Fees/Concessions/**`
-- `src/ShikshaMitra.Application.Contracts/Finance/Fees/Concessions/**`
-- `src/ShikshaMitra.Domain/Finance/Fees/Settings/ConcessionTypes/**`
-- `src/ShikshaMitra.Domain/Finance/Fees/Collections/Aggregates/DueFee.cs`
-- `src/ShikshaMitra.Domain/Finance/Policies/FinancePolicyVersion.cs`
+The request and approval flow exists, but the policy chain does not yet exist.
 
-## Terminology and ownership
-
-| Concept | Owner | Contains | Must not contain |
-|---|---|---|---|
-| Concession Type | Finance fee settings | Stable code, name, description, evidence definitions, active/archive status | Percentage, amount, due allocation, or approval outcome |
-| Concession Policy | Finance policies | Scope, eligibility, formula, caps, eligible heads, timing, stacking, approval rules | Student-specific evidence or approved money |
-| Policy Version | Finance policies | Immutable serialized and queryable snapshot used for decisions | Mutable pointer to today's policy values |
-| Policy Attachment | Fee setup | Fee-structure-to-policy-version eligibility relationship and precedence | Student award amount |
-| Concession Entitlement | Admission/HR/Student source plus Finance handoff | Verified fact that may initiate a request, such as staff ward or admission promise | Direct mutation of Finance dues |
-| Concession Request | Finance concessions | Student, policy version, type, evidence, reason, calculation snapshot, state | Cash return |
-| Concession Grant | Finance concessions | Approved header, allocations, approver, applied time, policy snapshot | Editable historical formula |
-| Refund or credit balance | Finance refunds/accounts | Settlement of an approved amount that cannot reduce outstanding dues | Reclassification as a concession allocation |
-
-## Policy lifecycle
-
-Use this lifecycle instead of an editable `Active` record:
-
-`Draft` -> `Published` -> `Superseded` -> `Archived`
-
-| State | Editable | Assignable/resolvable | Rules |
-|---|---|---|---|
-| Draft | Yes, by Edit permission | No | May be simulated but cannot be used by new requests or assignments |
-| Published | No | Yes while effective | Publishing creates an immutable version and validates every dependency |
-| Superseded | No | Existing snapshots only | A newer published version replaced it; historical requests retain it |
-| Archived | No | No new use | Archive requires a reason and does not change historical grants |
-
-Publishing must validate tenant, academic year, academic scope, unique code, effective dates, calculation, eligible heads, caps, stacking rules, approval thresholds, and every referenced active identifier.
-Editing a published policy creates a new draft version.
-Only one open draft version per policy is recommended.
-
-### Effective dates
-
-- `effectiveFrom` and `effectiveTo` use date-only school semantics.
-- `effectiveTo = null` means through the owning academic year's end, not forever across years.
-- A request uses the policy effective on its submission date unless a privileged backdated-request flow explicitly supplies an `asOfDate` and reason.
-- Two published versions of the same policy must not overlap.
-- Fee-structure attachments may point only to a published version effective within the same academic year.
-
-### Default behavior
-
-Do not use one ambiguous `isDefault` flag.
-
-| Field | Meaning |
-|---|---|
-| `isRequestDefault` | Preselect this policy in a new request after scope and eligibility filtering; never auto-grants money |
-| `assignmentMode` | `AvailableOnRequest` by default; `AutoCreateRequest` only for an explicitly supported entitlement flow |
-| `isAcademicYearFallback` | Makes the policy available when no fee-structure attachment is present; unique within its type and scope |
-
-There can be at most one request default for the same concession type, academic scope, and effective date.
-
-## Policy resolution and precedence
-
-Resolution determines which policy version may be used; it does not itself grant a concession.
-
-Use this deterministic precedence:
-
-1. A valid student-specific entitlement or approved override naming a policy version.
-2. A matching policy version explicitly attached to the student's assigned fee structure.
-3. A published scoped policy matching academic year, board, medium, stage/class/division, and concession type.
-4. The matching academic-year fallback policy.
-5. No policy available.
-
-Within one level, choose the most specific academic scope, then the highest explicit priority, then the newest effective-from date.
-If two policies still tie, fail with an ambiguous-policy configuration error instead of selecting by creation order.
-
-The resolver returns all policies available for a request and identifies at most one request default.
-It must never return an inactive, out-of-year, out-of-scope, expired, or wrong-tenant version.
-
-## Policy field contract
-
-### Identity and scope
-
-| Field | Required/default | Validation and meaning | Downstream use |
-|---|---|---|---|
-| `id` | Server generated | Stable policy master identifier | URLs, attachments, audit |
-| `policyCode` | Required | Tenant and academic-year unique, 3-30 uppercase letters/numbers/hyphens; generated by server or confirmed by user | Search, exports, integration |
-| `policyName` | Required | Trimmed, 3-100 characters, unique within academic year | User selection and receipts/reports |
-| `description` | Optional | Sanitized, maximum 500 characters | Explanation and audit; never a calculation source |
-| `academicYearId` | Required | Same tenant, active, and accessible | Scope and reporting |
-| `concessionTypeId` | Required | Active Concession Type in the same academic year | Evidence requirements and classification |
-| `boardId`, `mediumId`, `stageId`, `standardId`, `divisionId` | Optional; null means all at that level | Hierarchy must be internally consistent and user-accessible | Eligibility filtering |
-| `effectiveFrom`, `effectiveTo` | Required/from year; optional/to year end | Inside academic year and non-overlapping | Version resolution |
-| `priority` | Default 0 | Bounded integer; used only after scope specificity | Deterministic resolution |
-| `isRequestDefault` | Default false | Unique within type/scope/effective window | Request preselection only |
-
-### Eligibility
-
-Start with controlled strategies instead of an unrestricted expression builder.
-
-| Field | Values | Rule |
+| Area | Current behavior | Required correction |
 |---|---|---|
-| `eligibilityMode` | `ManualReview`, `RuleValidated`, `VerifiedEntitlement` | Controls whether the system can prove eligibility or requires a reviewer |
-| `studentCategoryIds` | Zero or more | Empty means no category restriction; IDs are server validated |
-| `admissionCategoryIds` | Zero or more | Optional restriction sourced from enrollment/admission |
-| `minimumMeritScore` | Optional decimal percentage | Only valid for a merit strategy and must name the score source and assessment period |
-| `maximumHouseholdIncome` | Optional decimal money | Requires currency and verified income evidence |
-| `minimumSiblingCount` | Optional positive integer | Uses verified active sibling relationships in the same tenant/year |
-| `employeeRelationshipRequired` | Optional boolean | Uses an active employee-dependent relationship; never a typed free-text claim |
-| `requiredDocumentIds` | Derived from type plus optional policy additions | Missing evidence blocks submission or approval according to configured stage |
-| `eligibilityReasonRequired` | Default true for manual review | Sanitized reason, 10-1000 characters, audit visible |
+| Policy frontend | Rich drawer backed by generic `/finance-policies` assumptions | Add a dedicated typed Concession Policy contract and remove unsupported generic behavior |
+| Policy backend | No Concession Policy aggregate, controller, app service, DTOs, resolver, or persistence mapping | Implement the aggregate, versions, attachment, resolver, preview, status flow, permissions, and audit |
+| Concession Type | Academic-year category with document definitions | Keep it separate; the current mandatory/optional document work is correct |
+| Request | Staff choose Type, fee heads, and amount/percentage | Resolve policy automatically, restrict inputs through policy, and preview on the server |
+| Approval | Backend validates and allocates against `DueFee` rows | Add policy snapshot/cap checks, concurrency, immutable grant history, and reversal |
+| Fee Structure | Payment, collection, refund, and proration policy UI exists | Add one Concession Policy attachment per fee-structure version |
+| Student assignment | Generates due rows without a policy snapshot | Snapshot the exact attached Concession Policy version |
+| Ledger | `DueFee.NetAmount` combines concession and adjustment and uses `double` values | Use decimal and separate original, concession, adjustment, paid, late fee, and outstanding facts |
+| Permissions | Backend has only Concession Policy View/Add/Delete; request flow reuses fee-collection authority in places | Introduce edit, clone, archive/restore, request, approval, override, attachment, and reversal permissions |
 
-Every rule must name its source fact and behavior when the source is missing.
-Missing data means not automatically eligible; it must not be treated as zero or false silently.
+## Status and version flow
 
-### Calculation
+Follow the HR Attendance Policy status model exactly:
 
-| Field | Values/default | Rule |
+`Draft <-> Active -> Archived -> Draft (Restore)`
+
+| Status | Selectable in form | Editable | Can attach to a structure | Can be used by a request |
+|---|---:|---:|---:|---:|
+| Draft | Yes | Yes | No | No for new assignments/requests |
+| Active | Yes | Yes with impact preview/confirmation | Yes, when in the same academic year | Yes through an assignment snapshot |
+| Archived | No; separate Archive action | No | No | Historical snapshots only |
+
+Rules matching Attendance Policy:
+
+- The Status field remains in create/edit with only Draft and Active options.
+- Archived is rejected by create/update DTO validation; the dedicated Archive action is required.
+- Creating as Active validates the complete policy before save.
+- Changing Draft to Active validates dependencies and makes the policy available to Fee Structure.
+- Active policy edits require impact preview/confirmation and capture a new version.
+- Changing Active to Draft requires impact preview and is blocked until it is detached or replaced on fee structures used for new assignments.
+- Archived policies cannot be edited.
+- Archive is dependency/impact guarded and never deletes history.
+- Restore/Unarchive changes Archived to Draft; it does not reactivate automatically.
+- Every effective change increments the policy version and writes version/audit history.
+- Existing student assignments and requests retain the version they snapshotted even when the current policy is edited, drafted, archived, or restored.
+- Unlike Attendance Policy, Concession Policy has no Default toggle because Fee Structure attachment is the explicit selection mechanism.
+
+## Recommended policy form
+
+### 1. General information
+
+| Field | Required | Behavior |
+|---|---:|---|
+| Policy Name | Yes | Unique after trim and case normalization within tenant + academic year |
+| Policy Code | Yes | Generated and uniqueness-enforced by the backend; display as read-only with an optional privileged override |
+| Academic Year | Yes | Taken from the active Finance context and shown read-only |
+| Description | No | Short operational explanation |
+| Status | Yes | Selectable Draft/Active; Archived is displayed read-only and managed through Archive/Restore actions |
+| Version | System | Incremented/captured on effective change and shown read-only |
+
+Do not add Effective From or Effective To. The active Academic Year provides the time boundary, Status controls whether a policy can be selected for new setup, and the Student Fee Assignment stores the exact policy version for later requests.
+
+Do not add medium, board, standard, class, division, student, or Concession Type fields.
+
+### 2. Request value rule
+
+Because Concession Type is not connected to a formula, one attached policy must support all request categories. Add an explicit value-source decision:
+
+| Value source | Use when | Request behavior |
 |---|---|---|
-| `calculationMethod` | `Percentage`, `FixedTotal`, `FullWaiver`, `ManualCapped` | `ManualCapped` requires an entered request amount and stricter permission |
-| `percentageValue` | Required for percentage | Decimal where `10` means 10%; greater than 0 and at most 100 |
-| `fixedAmount` | Required for fixed total | Positive decimal in policy currency |
-| `calculationBase` | `OriginalEligibleAmount` or `OutstandingEligibleAmount` | `FeeHeadAmount` is not a separate base; fee-head scope already determines eligible lines |
-| `roundingMethod` | `None`, `NearestCurrencyUnit`, `RoundUp`, `RoundDown` | Central backend service; define precision before rounding |
-| `maximumPerRequest` | Optional | Hard cap after formula and before allocation |
-| `maximumPerStudentAcademicYear` | Optional | Includes approved, non-reversed grants under the configured stacking group |
-| `maximumPercentageOfEligibleBase` | Optional | Protects fixed/manual policies from exceeding a share of eligible fees |
-| `minimumQualifyingBase` | Optional | Request is ineligible below this base; safer than forcing a minimum award |
-| `manualMaximumAmount` | Required for manual capped | Requester cannot enter more; approver may reduce but not increase without override permission |
+| Fixed by Policy | Every request under the structure receives the same percentage/fixed/full-waiver formula | Monetary value is read-only in the request |
+| Entered in Request within Policy Limits | Sibling, merit, staff ward, need-based, and other Types may receive different values | Staff may enter an allowed percentage or amount; backend enforces caps |
 
-Remove the current `minimumConcession` floor unless the school has a real minimum-award rule.
-A floor can exceed the eligible balance and is usually confused with `minimumQualifyingBase`.
+For `Fixed by Policy`, configure Percentage, Fixed Total Amount, or Full Waiver. For `Entered in Request within Policy Limits`, configure allowed input methods, an optional default, maximum percentage, maximum amount per request, and maximum approved amount per student for the academic year.
 
-### Fee-head and due scope
+The ordinary form must not expose `Original Fee`, `Outstanding Amount`, and `Fee Head Amount` as interchangeable calculation bases. The authoritative base is the sum of eligible outstanding principal due rows selected by the policy timing and fee-head rules.
 
-| Field | Values/default | Rule |
+### 3. Applicable fees
+
+| Field | Recommended values | Notes |
 |---|---|---|
-| `feeHeadScope` | `SelectedFeeHeads` recommended; `AllEligibleFeeHeads` allowed | All still excludes non-concessionable and policy-excluded heads |
-| `feeHeadIds` | Required for selected scope | Must belong to the academic year and be present in compatible fee structures |
-| `excludeOptionalHeads` | Default false | Makes treatment of optional services explicit |
-| `excludeExternalModuleHeads` | Default true | Transport/hostel/library heads require an explicit Finance mapping and policy permission |
-| `applicationTiming` | `AllOutstanding`, `CurrentInstallment`, `FutureInstallments` | Replace overlapping values such as paid-only, paid-plus-pending, and entire-structure |
-| `futureDefinition` | Server derived | A due row whose coverage or demand date is after the request `asOfDate`; define one project-wide rule |
-| `allocationMethod` | `OldestDueFirst`, `NewestDueFirst`, `ProRataOutstanding`, `InstallmentPriority` | Required for fixed totals and remainders |
+| Fee Head Scope | All concession-eligible heads / Selected heads | A selected head must belong to the academic year and have `IsConcessionApplied = true` |
+| Due Timing | All Outstanding / Current Installment / Future Installments | Default to All Outstanding; do not include paid fees |
+| Allocation Order | Oldest due first / Pro-rata | Keep under Advanced; default to oldest due first |
+| Rounding | None / Nearest Rupee / Down / Up | Apply once at a documented stage using decimal arithmetic |
 
-`EntireFeeStructure` belongs to fee-head scope, not application timing.
-`PaidFeesOnly` is not a valid ordinary concession target because paid money requires a credit/refund settlement.
+`Entire Fee Structure` belongs to fee-head scope, not due timing. `Pending Fees Only` is renamed to `All Outstanding` for clearer school terminology.
 
-### Stacking, budget, and approval
+### 4. Limits and approvals
 
-| Field | Required/default | Rule |
-|---|---|---|---|
-| `stackingMode` | Default `Exclusive` | `Exclusive`, `DifferentGroupsOnly`, or `AllowedWithinCap` |
-| `stackingGroupCode` | Required unless globally exclusive | Policies in the same group compete for the same annual cap |
-| `maximumActiveGrants` | Default 1 per type/year | Prevents duplicate benefit |
-| `budgetId` | Optional | Approved grants reserve/consume budget atomically if budgeting is enabled |
-| `approvalMode` | Default `SingleApprover` | `SingleApprover`, `TwoLevel`, or controlled `AutoApprove` |
-| `approvalThresholdAmount` | Optional | Above threshold requires a dedicated permission or second level |
-| `autoApprovalEligibilityMode` | Optional | Auto approval allowed only when every eligibility fact is system verified |
-| `requestWindowFrom`, `requestWindowTo` | Optional | Submission window inside effective period |
-| `renewalMode` | Default `NewRequestEachAcademicYear` | Never silently carry an award across academic years |
+| Field | Recommended default | Rule |
+|---|---:|---|
+| Approval required | Yes | A concession cannot directly mutate dues from the request screen |
+| Approval threshold amount | Blank | Above the threshold requires an additional permission or approval level |
+| Allow multiple approved concessions | No | When enabled, enforce the annual cap and remaining eligible balance |
+| Maximum per student/year | Blank | Applies across all Types under this policy |
+| Request remarks required | Yes | Capture why the value was requested; evidence fields still come from Type |
 
-## Monetary equations
+Documents must not be configured in the policy. Each Concession Type document definition remains mandatory or optional; submission/approval checks only mandatory definitions while optional evidence remains attachable.
 
-Keep these facts distinct for every due row:
+## Fields to remove from the current form
 
-`outstanding = max(0, original principal + posted late fee - paid principal - concession - adjustment credit - other authorized credits)`
+Remove these because they make the flow ambiguous, duplicate another domain, or cannot be implemented safely as simple policy settings:
 
-Late-fee waiver is stored separately from concession and is owned by Collection Policy.
-Refunded cash does not increase or decrease the original concession; it changes refundable/settled balances through the refund ledger.
+- Archived as a selectable Status option. Keep the Status field with Draft and Active only.
+- Default Concession Policy toggle.
+- Hidden or visible Concession Type on the policy.
+- Any eligibility scope for board, medium, class, standard, division, or student.
+- Calculation Base selector from the basic form.
+- Minimum Concession; use an optional request default and maximum guardrails instead.
+- Paid Fees Only and Paid + Pending.
+- Refund, Credit Note, Student Wallet, Future Fee Adjustment, and Manual Decision.
+- Pending Fee Handling and Recalculate Installments.
+- Duplicate Entire Fee Structure timing value.
+- Future-installment strategy separate from the deterministic allocation order.
+- Any frontend fallback/dummy fee heads.
 
-### Eligible base
+Paid money is not silently changed by a concession. If a school needs to return or credit money, the approved concession may create a separately authorized refund or credit workflow with its own ledger entries.
 
-For each candidate due row:
+## End-to-end workflow
 
-1. Confirm tenant, student assignment, academic year, policy version, fee head, application timing, and state.
-2. Exclude reversed, cancelled, fully settled, non-concessionable, and already consumed amounts.
-3. Use original principal for `OriginalEligibleAmount`.
-4. Use current principal outstanding for `OutstandingEligibleAmount`.
-5. Exclude late fee unless an explicitly separate waiver policy is being evaluated.
+```text
+Academic Year
+   |
+   +--> Configure Concession Types (reason + document requirements)
+   |
+   +--> Create Concession Policy (Draft or Active)
+           |
+           +--> Server simulate / validate
+           +--> Set Status = Active
+                     |
+                     v
+              Attach one version to Fee Structure Version
+                     |
+                     v
+              Assign Fee Structure to Student
+                     |
+                     +--> Generate gross DueFee rows
+                     +--> Snapshot policy id + version id
+                                  |
+                                  v
+                     Create Concession Request
+                     - choose Type only
+                     - resolved policy is read-only
+                     - upload Type documents
+                     - enter value only if permitted
+                     - server preview and submit
+                                  |
+                                  v
+                       Approve / Reject (maker-checker)
+                                  |
+                                  v
+                       Immutable grant + DueFee allocations
+                                  |
+                    +-------------+-------------+
+                    v                           v
+             Collections/receipts        Reports/audit/reversal
+```
 
-`totalEligibleBase = sum(eligible line bases)`
+### Setup and attachment
 
-### Percentage
+1. Finance staff creates a policy for the active academic year and changes its Status to Active when configuration is complete.
+2. Fee-structure setup lists only Active policies from the same academic year.
+3. The user attaches exactly one version to the fee-structure version.
+4. The backend validates that selected policy fee heads exist in the structure or uses the valid intersection for `All eligible heads`.
+5. The locked fee-structure version stores both `ConcessionPolicyId` and the exact active `ConcessionPolicyVersionId`.
 
-`rawAward = totalEligibleBase * percentageValue / 100`
+If concessions are mandatory for the school, structure locking must fail without an attachment. Otherwise, an unattached structure is allowed but concession requests for its assignments are disabled with a clear setup message.
 
-Apply annual cap, request cap, maximum percent cap, and remaining budget before allocation.
-Calculate with decimal precision, allocate to lines using the configured method, and place the final rounding remainder on the deterministic last eligible line.
+### Student fee-structure assignment
 
-### Fixed total
+Assignment is the financial snapshot boundary:
 
-`rawAward = fixedAmount`
+1. Validate tenant, academic year, student, fee structure, lock state, and payment schedule.
+2. Copy the fee heads and amounts into the student's assignment snapshot.
+3. Generate gross due rows; do not reduce them automatically.
+4. Copy the attached policy ID and exact active version ID into the assignment.
+5. Return a read-only policy summary in the assignment response and audit event.
 
-`approvedAward <= min(rawAward, totalEligibleBase, remainingRequestCap, remainingAnnualCap, remainingBudget)`
+"Automatically apply" at assignment means automatically resolve and snapshot the attached policy rules. It does not mean automatically reduce the student's fees. The monetary concession is created only after a Concession Request is submitted and approved.
 
-A fixed amount is a total award, not an amount repeated for every selected fee head.
+If a policy is later edited, drafted, archived, or restored, existing student assignments retain their old version. A separate impact-previewed and audited bulk action may move eligible assignments to a newer Active version; it must never silently rewrite submitted/approved requests.
 
-### Full waiver
+### Request creation
 
-`rawAward = totalEligibleBase`
+1. Search for the student within the active academic year.
+2. Backend returns a `request-context` containing the active student fee assignment, snapshotted policy version, eligible fee heads/due rows, remaining limits, and available active Concession Types.
+3. If the assignment has no policy snapshot, return a stable `ConcessionPolicyNotConfigured` error and setup guidance.
+4. Staff chooses a Concession Type. The UI loads that Type's mandatory and optional documents.
+5. Staff enters an amount/percentage only if the policy value source allows it.
+6. UI sends the proposed input to the preview endpoint.
+7. Backend recalculates eligible balances, caps, rounding, and allocation; returns totals, warnings, and a short-lived context version/hash.
+8. Staff saves a Draft or submits the request.
 
-Full waiver still obeys fee-head scope, application timing, stacking, budget, and any explicitly configured cap.
+Never accept a browser-calculated `NetAmount` as a financial fact.
 
-### Manual capped
+### Submission and approval
 
-`rawAward = requestedManualAmount`
+Recommended request lifecycle:
 
-The server validates the manual maximum and every normal cap.
-The approver may reduce a requested amount.
-Increasing above the request requires an override permission, reason, and a new server preview.
+`Draft -> Submitted -> UnderReview -> Approved | Rejected | Withdrawn`
 
-## Fee structure and student assignment flow
+On submit, validate:
 
-### Configure a fee structure
+- Type is active and belongs to the request academic year.
+- All mandatory Type documents are uploaded and valid; optional documents are allowed.
+- Policy and assignment snapshot exist and belong to the same academic year.
+- Request input is permitted by the policy.
+- Eligible outstanding principal and caps still support the preview.
+- Duplicate/pending/approved request rules are satisfied.
 
-1. Build and validate gross fee heads and Payment Term version snapshots.
-2. Attach zero or more published concession policy versions to the fee structure.
-3. Mark at most one attachment per concession type as the request default.
-4. Validate every selected policy's academic scope and fee-head compatibility.
-5. Lock/publish the fee structure version.
+On approve, inside one transaction:
 
-Use a many-to-many attachment.
-A single `concessionPolicyId` is insufficient because a structure can allow sibling, merit, staff, sports, and need-based programs simultaneously.
+1. Lock or concurrency-check the request and affected due rows.
+2. Enforce maker-checker using actor ID and permissions, never role-name exceptions.
+3. Recalculate from current due balances and the snapshotted policy version.
+4. Reject stale or now-invalid previews with a stable conflict response and a refreshed calculation.
+5. Permit an approver to reduce the requested amount; increasing it requires an explicit override and a new preview.
+6. Create the immutable grant and allocations.
+7. Update separate concession totals on due rows.
+8. Write Finance audit and outbox events.
 
-### Assign a fee structure to a student
+### Collections, receipts, reporting, and corrections
 
-The assignment command must run in one transaction:
+Every due/receipt view must keep these monetary facts distinct:
 
-1. Validate the student's academic scope and the locked fee-structure version.
-2. Snapshot selected fee heads, amounts, optional selections, Payment Term versions, and schedule rows.
-3. Generate idempotent `DueFee` obligations at gross principal amounts.
-4. Resolve all published concession policy versions available to this assignment.
-5. Snapshot their IDs, version numbers, resolution source, and effective window on the student fee assignment.
-6. Evaluate verified entitlements supplied by Admission, HR, or Student modules.
-7. For `AvailableOnRequest`, show eligibility only; do not change dues.
-8. For a deliberately configured `AutoCreateRequest`, create an idempotent system request/grant record and apply it through the same concession service and audit path.
-9. Return a server preview showing gross assigned fees, approved concession already applied, and net outstanding.
+```text
+Gross principal
+- Approved concession
+- Approved adjustment
++ Late fee
+- Paid amount
+= Outstanding amount
+```
 
-The idempotency key should include tenant, student, academic year, fee-structure version, policy version, and entitlement reference where applicable.
+Reports must expose Policy Code/Version, Concession Type, Request ID, Grant ID, student, fee structure, fee head, due period, requested/approved/reversed amounts, requester, approver, and timestamps.
 
-### Reassignment or enrollment change
+An approved concession is never edited or cancelled. Corrections use a reversal record linked to the original grant, with reason, permission, allocations, audit event, and protection against reversing amounts already made impossible by later settlements.
 
-Do not overwrite the old assignment or regenerate all dues blindly.
+## Calculation contract
 
-1. Produce an impact preview that separates paid, concessioned, adjusted, and untouched due rows.
-2. Preserve paid and approved history.
-3. Cancel or reverse only eligible future/unpaid rows through named transitions.
-4. Create a new assignment/version snapshot.
-5. Re-evaluate available policies.
-6. Carry forward an approved concession only when its policy explicitly permits it; otherwise require review.
-7. Link old and new assignments, allocations, and correction reason.
+Use decimal arithmetic end to end.
 
-## Concession request flow
+```text
+EligibleRows = unpaid principal rows
+               within policy fee-head scope
+               and policy due timing
 
-### Create and submit
+EligibleBase = sum(max(0, OriginalPrincipal
+                          - ApprovedConcession
+                          - ApprovedAdjustment
+                          - PaidPrincipal))
 
-1. Select academic year and student; the student must have a fee assignment and generated dues.
-2. Load policies from the canonical resolver, filtered by scope, request window, type, stacking, and eligibility.
-3. Preselect only `isRequestDefault`; the user may choose another available policy.
-4. Display the Concession Type and required evidence derived from the selected policy version.
-5. Load eligible due rows, not only annual fee-head totals.
-6. Capture reason and evidence.
-7. For manual-capped policies only, capture the requested amount.
-8. Call server preview; show gross eligible base, excluded amounts and reasons, formula, caps, line allocation, prior grants, and net outstanding.
-9. Submit with policy version ID, selected eligible line IDs where user choice is allowed, evidence references, concurrency token, and idempotency key.
-10. Server recalculates and stores the immutable request calculation snapshot.
+RawConcession =
+  Percentage: EligibleBase * percentage / 100
+  Fixed:      requested-or-policy fixed amount
+  FullWaiver: EligibleBase
 
-### Review and approve
+Capped = min(RawConcession,
+             EligibleBase,
+             remaining per-request cap,
+             remaining student/year cap)
 
-The approval screen must show:
+ApprovedTotal = apply documented rounding to Capped
+```
 
-- student, academic year, assignment, policy name/code/version, and Concession Type;
-- eligibility checks with source and result;
-- evidence checklist;
-- original, paid, existing concession, adjustment, late fee, and outstanding by due row;
-- requested formula/value and server-calculated proposal;
-- caps, stacking, budget, and threshold effects;
-- final proposed allocations and post-approval outstanding;
-- requester identity and maker-checker result.
+Allocation must be deterministic and its final row must absorb any rounding remainder without exceeding that row's outstanding principal.
 
-Approval re-runs the calculation using locked/concurrency-checked due balances.
-If balances changed, return a conflict with a refreshed preview rather than silently reducing or reallocating the award.
+## Backend data model
 
-Approval and due mutations are one local transaction.
-Publish the integration event only after commit.
+Names may follow repository conventions, but the relationships are required.
 
-### Request state machine
-
-`Draft` -> `Submitted` -> `UnderReview` -> `ApprovedApplied`
-
-Alternative terminal paths are `Rejected`, `Withdrawn`, `Expired`, and `Reversed`.
-
-| Transition | Actor and precondition | Required evidence |
-|---|---|---|
-| Create draft | Request creator; student has assignment | Policy version and student snapshot |
-| Submit | Request creator; complete fields/evidence | Calculation preview hash and idempotency key |
-| Start review | Reviewer with scoped view/review permission | Audit event |
-| Approve and apply | Different authorized checker; balances unchanged | Approval reason/message and immutable allocations |
-| Reject | Checker | Mandatory 10-1000 character reason |
-| Withdraw | Requester before approval | Reason |
-| Expire | System after request/policy window | System audit event |
-| Reverse approved grant | Dedicated authority; open-period/correction checks | Reason, original grant link, reversing allocations |
-
-An approved request is never edited or cancelled.
-Corrections create linked reversing allocations and, when needed, a new request.
-
-## Paid fee and retroactive benefit flow
-
-Remove ordinary `PaidFeesOnly`, `Paid + Pending`, `Refund`, `StudentWallet`, `CreditNote`, and `ManualDecision` choices from the core policy form until the corresponding ledgers exist.
-
-If the product supports a retroactive benefit:
-
-1. Calculate the policy award against the permitted original base.
-2. Apply as much as possible to eligible principal outstanding.
-3. Record any excess as an approved student credit balance, never a negative due.
-4. Let a separate permissioned workflow either retain the credit for future fees or create a refund request.
-5. A refund requires refundable payment validation, payout evidence, and Refund Policy.
-6. Link the grant, credit, refund, receipt/payment, and audit records.
-
-The concession approval transaction must not pretend that a refund has been paid.
-
-## Data model
-
-| Aggregate/entity | Important fields |
+| Aggregate/table | Required additions |
 |---|---|
-| `ConcessionPolicy` | Tenant, academic year, code, name, type ID, scope, current draft/published pointers, status |
-| `ConcessionPolicyVersion` or typed snapshot in `FinancePolicyVersion` | Version, effective dates, formula, caps, timing, eligibility, stacking, approval, snapshot JSON |
-| `ConcessionPolicyFeeHead` | Policy version ID, fee head ID, include/exclude, optional per-head cap or priority |
-| `FeeStructureConcessionPolicyAttachment` | Fee-structure version ID, policy version ID, source, priority, request-default flag |
-| `StudentFeeAssignmentPolicySnapshot` | Student assignment ID, policy version ID, resolution source, eligibility status/time |
-| `ConcessionRequest` | Student, assignment, type, policy/version, state, reason, requester, calculation snapshot, concurrency |
-| `ConcessionRequestEvidence` | Requirement ID, document reference, verification status, verifier, time |
-| `ConcessionGrant` | Request, approved amount, approver, applied time, policy snapshot, reversal state |
-| `ConcessionGrantAllocation` | Grant, due row, fee head, eligible base, amount, before/after outstanding |
-| `ConcessionGrantReversal` | Original allocation, reversed amount, reason, actor, time |
+| `ConcessionPolicy` | TenantId, AcademicYearId, Code, Name, Description, Status (Draft/Active/Archived), current version, concurrency stamp |
+| `FinancePolicyVersion` or typed version | PolicyId, version number, immutable rule snapshot plus queryable rule columns, status-at-capture, changed metadata |
+| Fee-structure version | Nullable ConcessionPolicyId and ConcessionPolicyVersionId; enforce one attachment |
+| Student fee assignment | Snapshotted ConcessionPolicyId and ConcessionPolicyVersionId |
+| `ConcessionRequest` | StudentFeeAssignmentId, ConcessionTypeId, PolicyId, PolicyVersionId, requested input, calculated totals, calculation snapshot/hash, lifecycle metadata |
+| Concession grant/allocation | RequestId, DueFeeId, FeeHeadId, approved amount, policy version, approver, applied time, reversal metadata |
+| `DueFee` | Decimal OriginalPrincipal, ConcessionAmount, AdjustmentAmount, PaidPrincipal, LateFeeAmount, OutstandingAmount or an equivalent derived invariant |
 
-Database constraints should enforce tenant-aware code uniqueness, non-overlapping effective versions, one request default per scope/type window, unique pending request per student/policy when configured, unique grant per request, and unique allocation per grant/due row.
+Database constraints/indexes:
 
-### Due ledger migration
+- Unique normalized policy code per tenant + academic year.
+- Unique normalized policy name per tenant + academic year.
+- One version number per policy.
+- One current version pointer per policy; every prior captured version remains immutable.
+- One Concession Policy version per fee-structure version.
+- Request references an assignment, Type, policy, and version from the same tenant/year.
+- Allocation amount is positive and cannot exceed the due row's available balance.
+- Index requests by tenant/year/student/status and policy version.
 
-The target due model keeps decimal fields separate:
+## Dedicated API surface
 
-- `originalPrincipalAmount`
-- `paidPrincipalAmount`
-- `concessionAmount`
-- `adjustmentCreditAmount`
-- `lateFeeAmount`
-- `lateFeeWaiverAmount`
-- `refundedAmount`
-- `outstandingAmount` as a canonical derived/stored-and-validated value
+Do not reuse a loosely typed generic `/finance-policies` contract.
 
-Do not extend the current `double` fields or the overloaded `NetAmount` meaning for new concession behavior.
+### Policy setup
 
-## API contract
+```text
+GET    /api/finance/concession-policies
+GET    /api/finance/concession-policies/{id}
+POST   /api/finance/concession-policies
+PUT    /api/finance/concession-policies/{id}
+POST   /api/finance/concession-policies/{id}/clone
+POST   /api/finance/concession-policies/{id}/simulate
+GET    /api/finance/concession-policies/{id}/versions
+DELETE /api/finance/concession-policies/{id}             # archive, never hard-delete history
+POST   /api/finance/concession-policies/{id}/unarchive   # restores as Draft
+```
 
-Use dedicated typed endpoints instead of generic `any` policy payloads.
+### Fee structure and assignment
 
-### Policy endpoints
+```text
+GET /api/finance/fee-structures/{id}/available-concession-policies
+PUT /api/finance/fee-structures/{id}/concession-policy
+GET /api/finance/student-fee-assignments/{id}  # includes policy snapshot summary
+```
 
-| Method and route | Purpose |
+### Student requests
+
+```text
+GET  /api/finance/concession-requests/context?studentId=...&academicYearId=...
+POST /api/finance/concession-requests/preview
+POST /api/finance/concession-requests
+PUT  /api/finance/concession-requests/{id}
+POST /api/finance/concession-requests/{id}/submit
+POST /api/finance/concession-requests/{id}/approve
+POST /api/finance/concession-requests/{id}/reject
+POST /api/finance/concession-requests/{id}/withdraw
+POST /api/finance/concession-requests/{id}/reverse
+```
+
+Every write returns the persisted resource, concurrency token, Status, Version, and calculation/audit identifiers. Errors use stable business codes and field metadata.
+
+## Permission model
+
+The current `Policies_ConcessionPolicy` View/Add/Delete family is insufficient. Use action-specific permissions:
+
+```text
+Finance.Policies.ConcessionPolicy.View
+Finance.Policies.ConcessionPolicy.Add
+Finance.Policies.ConcessionPolicy.Edit
+Finance.Policies.ConcessionPolicy.Clone
+Finance.Policies.ConcessionPolicy.Simulate
+Finance.Policies.ConcessionPolicy.Archive
+Finance.Policies.ConcessionPolicy.Unarchive
+Finance.Policies.ConcessionPolicy.ViewVersions
+Finance.Policies.ConcessionPolicy.ManageAttachment
+
+Finance.Fees.ConcessionRequest.View
+Finance.Fees.ConcessionRequest.Create
+Finance.Fees.ConcessionRequest.EditDraft
+Finance.Fees.ConcessionRequest.Submit
+Finance.Fees.ConcessionRequest.Withdraw
+Finance.Fees.ConcessionRequest.Approve
+Finance.Fees.ConcessionRequest.ApproveAboveThreshold
+Finance.Fees.ConcessionRequest.Reject
+Finance.Fees.ConcessionRequest.Reverse
+```
+
+Frontend route, button, controller, app-service, and domain authorization must use the same permission family. Do not alias Concession Policy to Fee Collections.
+
+Suggested segregation:
+
+- Fee setup staff: View, Add, Edit, Clone, Simulate, ManageAttachment.
+- Finance manager/principal: Archive, Unarchive, ApproveAboveThreshold, Reverse.
+- Request maker: View, Create, EditDraft, Submit, Withdraw.
+- Request checker: View, Approve, Reject.
+
+## Stable business errors
+
+At minimum define:
+
+| Code | Meaning |
 |---|---|
-| `GET /api/concession-policies` | Scoped, paged list with status, year, type, and search filters |
-| `POST /api/concession-policies` | Create draft master/version |
-| `GET /api/concession-policies/{id}` | Full draft/published detail with dependency counts |
-| `PUT /api/concession-policies/{id}/draft` | Update draft with concurrency token |
-| `POST /api/concession-policies/{id}/simulate` | Server-authoritative scenario preview |
-| `POST /api/concession-policies/{id}/publish` | Validate and publish immutable version with reason |
-| `POST /api/concession-policies/{id}/archive` | Archive with reason and dependency checks |
-| `POST /api/concession-policies/{id}/restore` | Restore master without republishing an old version |
-| `GET /api/concession-policies/{id}/versions` | Version history |
-| `POST /api/concession-policies/{id}/clone` | Create a draft in the selected academic year |
+| `ConcessionPolicyNotConfigured` | Student assignment has no policy snapshot |
+| `ConcessionPolicyNotActive` | Policy selected for a new attachment/assignment is not Active |
+| `ConcessionPolicyArchiveRequiresWorkflow` | Archived cannot be sent through create/update Status |
+| `ArchivedConcessionPolicyCannotBeEdited` | An Archived policy was sent to update |
+| `ConcessionPolicyAcademicYearMismatch` | Policy, structure, assignment, Type, or request years differ |
+| `ConcessionPolicyFeeHeadMismatch` | Requested head is not eligible under policy/structure |
+| `ConcessionPolicyLimitExceeded` | Request or annual cap would be exceeded |
+| `ConcessionPolicyInputNotAllowed` | Request supplied an amount/method not permitted by the policy |
+| `ConcessionRequestDocumentsMissing` | One or more mandatory Type documents are absent |
+| `ConcessionRequestStalePreview` | Due balance or policy context changed since preview |
+| `ConcessionRequestMakerCheckerViolation` | Creator attempted to approve without a permitted exception |
+| `ConcessionRequestAlreadyDecided` | A terminal request was mutated |
+| `ConcessionAllocationExceedsOutstanding` | An allocation exceeds current eligible principal |
 
-### Assignment and request endpoints
+## Migration and rollout
 
-| Method and route | Purpose |
-|---|---|
-| `GET /api/fee-structures/{id}/available-concession-policies` | Compatible published versions for attachment |
-| `PUT /api/fee-structures/{id}/concession-policy-attachments` | Replace attachments on an editable structure version |
-| `GET /api/students/{studentId}/concession-options` | Resolver output with eligibility and exclusion reasons |
-| `POST /api/concession-requests/preview` | Canonical calculation and allocation preview |
-| `POST /api/concession-requests` | Create idempotent draft/submitted request |
-| `POST /api/concession-requests/{id}/submit` | Submit a complete draft |
-| `POST /api/concession-requests/{id}/approve` | Recalculate, approve, allocate, and apply atomically |
-| `POST /api/concession-requests/{id}/reject` | Reject with reason |
-| `POST /api/concession-requests/{id}/withdraw` | Withdraw before approval |
-| `POST /api/concession-grants/{id}/reverse` | Reverse an approved grant through linked allocations |
-
-The API never accepts client totals as truth.
-Preview and approval responses include a calculation hash/version so changed balances produce a concurrency conflict.
-
-## Permission map
-
-The current Concession Policy permission family only exposes View, Add, and Delete, while request approval and rejection currently reuse `Finance.Fees.Concession.Add`.
-Replace that coarse mapping with action-level permissions.
-
-| Area | Permissions |
-|---|---|
-| Policy | View, CreateDraft, EditDraft, Simulate, Publish, Archive, Restore, Clone, ViewVersions, ViewAudit |
-| Attachment | ViewAttachment, ManageAttachment |
-| Request | View, CreateDraft, EditDraft, Submit, Withdraw, Review, Approve, Reject |
-| Exception | ManualAmount, OverrideEligibility, ApproveAboveThreshold, OverrideCap, ReverseGrant |
-| Evidence/report | VerifyEvidence, ViewSensitiveEvidence, Export, ViewAudit, ViewReports |
-
-Backend permissions, seeded grants, frontend constants, menu/layout guards, action visibility, and denied API tests must use the exact same names.
-Production authorization must not branch on role-name strings.
-
-## User interface flow
-
-### Policy drawer
-
-Use sections in this order:
-
-1. Identity, academic year, Concession Type, and lifecycle.
-2. Academic and student eligibility scope.
-3. Calculation and caps.
-4. Fee-head and installment scope.
-5. Stacking, budget, and request window.
-6. Approval and evidence behavior.
-7. Server simulation and validation summary.
-
-The footer must distinguish `Save Draft` from `Publish`.
-Archive is a row/detail action with a mandatory reason, not a form status value.
-
-### Student request
-
-Use this sequence:
-
-1. Student and assignment context.
-2. Eligible policy selection with exclusion explanations.
-3. Evidence and reason.
-4. Eligible due lines.
-5. Server preview.
-6. Save Draft or Submit.
-
-Do not let normal requesters switch independently between amount and percentage when a published policy defines the method.
-
-### Fee assignment
-
-Show three totals separately:
-
-- gross fee assignment;
-- already approved concession grant applied during this transaction, normally zero;
-- net outstanding after approved grants.
-
-Potential or merely eligible concession must be labelled `Available programs`, not deducted from payable fees.
-
-## Audit, events, notifications, and reports
-
-Audit events must include policy/version, request/grant/allocation IDs, tenant/year/student/assignment, actor, old/new state, reason, calculation summary, before/after due balances, correlation ID, and idempotency key.
-
-Recommended events:
-
-- `ConcessionPolicyPublishedEto`
-- `StudentConcessionOptionsSnapshottedEto`
-- `ConcessionRequestSubmittedEto`
-- `ConcessionRequestApprovedEto`
-- `ConcessionGrantAppliedEto`
-- `ConcessionGrantReversedEto`
-- `RetroactiveConcessionCreditCreatedEto`
-
-Notifications consume committed events and do not invent amounts or statuses.
-
-Reports must reconcile these grains:
-
-| Report | Grain and totals |
-|---|---|
-| Policy utilization | Policy version by academic scope: submitted, approved, rejected, reversed, amount |
-| Student concession register | One grant with allocation drill-down and evidence status |
-| Fee-head impact | Fee head and due period: original, concession, paid, adjusted, outstanding |
-| Budget utilization | Budget/policy: reserved, approved, reversed, remaining |
-| Exception report | Manual amount, eligibility override, cap override, retroactive credit, reversal |
-
-## Failure and correction behavior
-
-| Failure | Required response |
-|---|---|
-| Policy changed after preview | Conflict; reload the effective version and preview |
-| Due balance changed after preview | Conflict with changed lines; do not partially apply |
-| Duplicate submit/approve retry | Return the original idempotent outcome |
-| Missing evidence | Validation error naming each missing requirement |
-| Ambiguous resolver result | Configuration error; no fallback by creation order |
-| Budget exhausted | Reject atomically or require authorized override |
-| Event publication failure after commit | Retry through outbox; do not roll back committed local ledger by external call |
-| Approved grant mistake | Linked reversal, never edit/delete the grant or decrement fields without evidence |
-
-## Migration plan
-
-### Phase 0: protect the current surface
-
-- Mark the frontend Concession Policy route as partial until a dedicated backend contract exists.
-- Do not treat the current client simulation or generic `/finance-policies` payload as authoritative.
-- Keep the existing request and approval APIs working while new policy IDs remain nullable.
-
-### Phase 1: ledger and contract foundation
-
-- Migrate due monetary fields to decimal and distinct concession/adjustment facts.
-- Add exact permissions, error codes, audit events, concurrency tokens, and idempotency.
-- Add typed policy enums and DTOs.
-
-### Phase 2: policy lifecycle
-
-- Implement typed aggregate, immutable versions, effective dates, resolver, simulation, publish/archive, and tests.
-- Backfill no automatic defaults.
-
-### Phase 3: fee structure and assignment
-
-- Add many-to-many policy attachments.
-- Snapshot available policy versions during assignment.
-- Keep gross dues unchanged unless an explicit auto-entitlement is materialized through a grant.
-
-### Phase 4: request integration
-
-- Add policy selection, server preview, eligibility/evidence checks, calculation snapshot, thresholds, stacking, and budget rules.
-- Migrate current requests with `policyVersionId = null` and a `LegacyManual` snapshot so history keeps its original meaning.
-
-### Phase 5: corrections and retroactive settlement
-
-- Add grant reversal.
-- Add student credit balance and linked refund flow before enabling paid-fee modes.
-
-### Phase 6: reporting and rollout
-
-- Reconcile operational screens, exports, dashboards, notifications, and audit.
-- Enable policies tenant by tenant behind a migration/readiness check.
+1. Introduce the typed aggregate, version storage, permissions, DTOs, preview engine, and audit events behind a feature flag.
+2. Add the singular policy attachment to fee-structure versions.
+3. Add the policy snapshot to student fee assignments and request context.
+4. Backfill existing assignments only when one deterministic same-year Active attachment exists; otherwise leave the snapshot null and block new requests with setup guidance.
+5. Preserve existing requests as `LegacyManual` calculation snapshots with a nullable policy version; do not invent historical policy meaning.
+6. Move money fields and calculations to decimal and separate concession/adjustment facts before enabling policy-based approval broadly.
+7. Replace role-name approval exceptions with explicit permissions.
+8. Enable create/status/attach, then request preview, then approval/reversal after reconciliation testing.
 
 ## Required tests
 
-| Risk | Minimum scenarios |
-|---|---|
-| Formula | 0/100 percent, decimal rounding, fixed amount below/equal/above base, caps, full waiver, manual maximum |
-| Allocation | One/many heads, one/many installments, deterministic remainder, line cap, stable ordering |
-| Eligibility | Every scope level, missing source fact, document requirement, request window, entitlement handoff |
-| Resolution | Attachment, scoped, fallback, specificity, priority, expiry, ambiguity, cross-tenant denial |
-| Stacking | Same type duplicate, exclusive group, annual cap, reversal releasing cap/budget |
-| State | Every allowed and denied policy/request/grant transition |
-| Maker-checker | Creator denial, normal approval, above-threshold permission, no role-name bypass |
-| Concurrency | Preview then payment, duplicate approval retry, two simultaneous approvals, budget race |
-| Assignment | Snapshot version, no silent discount, optional heads, bulk per-item outcome, late assignment |
-| Correction | Reversal with paid/adjusted lines, linked evidence, report reconciliation |
-| End to end | Setup -> publish -> attach -> assign -> request -> approve -> collect -> receipt -> report |
+### Domain and application
 
-## Acceptance checklist
+- Policy name/code uniqueness after normalization.
+- No separate policy dates are required; policy, structure, assignment, Type, and request remain in the same academic year.
+- No cross-tenant/year references.
+- Archived policies cannot be edited; restoring sets Status to Draft.
+- Active edits and Active-to-Draft transitions require impact preview/confirmation and capture a new immutable version snapshot.
+- Exactly one attachment per fee-structure version.
+- Assignment snapshots the exact policy version and does not auto-discount.
+- Policy supersession does not change existing assignments or requests.
+- Request Type is active and same-year; mandatory documents are enforced and optional documents remain optional.
+- Percentage, fixed, full waiver, caps, rounding, and deterministic allocation.
+- Paid and late-fee amounts are excluded.
+- Multiple concession and annual-cap enforcement.
+- Maker-checker and above-threshold permissions.
+- Concurrent approval/payment conflict.
+- Reversal integrity and audit/outbox events.
 
-- [ ] Concession Type and Concession Policy have different documented meanings.
-- [ ] Every policy field has a source, unit, validation, state editability, downstream use, and audit rule.
-- [ ] Draft/publish/version/effective/archive behavior is implemented.
-- [ ] Fee structures can attach multiple compatible published versions.
-- [ ] Assignment snapshots policies but does not silently grant money.
-- [ ] Request options come from one deterministic resolver.
-- [ ] Server preview and approval use one calculation engine.
-- [ ] Original, paid, concession, adjustment, late fee, refund, and outstanding remain distinct.
-- [ ] Paid-fee settlement uses credit/refund, not a negative due.
-- [ ] Approval is transactional, idempotent, concurrency-safe, and maker-checker protected.
-- [ ] Approved grants have a reversal path.
-- [ ] Exact permissions and frontend parity tests exist.
-- [ ] Audit, notifications, receipts, reports, and exports use canonical records.
-- [ ] Legacy requests are backfilled without reinterpreting their amounts.
+### Contract and frontend
+
+- Typed serialization for every policy method and state.
+- Preview output matches approval calculation for unchanged inputs.
+- Stable error codes map to the correct fields/actions.
+- Fee-structure selector lists only same-year Active policy versions.
+- Assignment displays its snapshot read-only.
+- Request never asks staff to select a policy.
+- Request fields change correctly for fixed-policy versus request-entered value source.
+- Missing policy, stale preview, cap, document, permission, and conflict journeys.
+
+## Acceptance criteria
+
+The flow is ready only when all of these are true:
+
+- A policy contains no medium/class/division/student scope and no Concession Type.
+- A fee-structure version has at most one Active same-year policy attachment.
+- Student assignment snapshots that exact policy version and leaves gross fees unchanged.
+- Request staff select a Concession Type, never a policy.
+- Type document definitions drive mandatory and optional uploads.
+- The backend calculates preview and approval from current eligible due rows.
+- Paid fees, refunds, wallets, credit notes, and late-fee waivers are outside the ordinary policy form.
+- Policy version snapshots and approved allocations are immutable and fully auditable.
+- Permissions match across frontend and backend.
+- Collection, receipt, audit, reversal, and reporting screens preserve separate monetary facts.
+
+## Related documentation
+
+- [Finance product behavior](../product.md)
+- [Finance API families](../api.md)
+- [Finance workflows](../workflows.md)
+- [Finance testing](../testing.md)
+- [Finance Engineering Constitution](./constitution.md)
+- [Frontend Concession Policy review](../../../../../Shikshamitra-FE/docs/finance/references/concession-policy-frontend-review.md)

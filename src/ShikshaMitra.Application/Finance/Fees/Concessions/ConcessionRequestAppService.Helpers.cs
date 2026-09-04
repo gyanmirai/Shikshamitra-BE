@@ -27,6 +27,9 @@ public partial class ConcessionRequestAppService
         var requiredDocs = type.ConcessionTypeDocuments.Select(d => new ConcessionDocumentRequirementDto
         {
             DocumentId = d.Id, DocumentName = d.DocumentName,
+			IsRequired = d.IsRequired,
+			MaxFileSizeBytes = d.MaxFileSizeBytes,
+			AcceptedFormats = d.AcceptedFormats.Select(format => format.DocumentType).ToList(),
             IsUploaded = request.ConcessionRequestDocuments.Any(rd => rd.DocumentId == d.Id),
         }).ToList();
 
@@ -74,6 +77,9 @@ public partial class ConcessionRequestAppService
             RequiredDocuments = type?.ConcessionTypeDocuments.Select(d => new ConcessionDocumentRequirementDto
             {
                 DocumentId = d.Id, DocumentName = d.DocumentName,
+				IsRequired = d.IsRequired,
+				MaxFileSizeBytes = d.MaxFileSizeBytes,
+				AcceptedFormats = d.AcceptedFormats.Select(format => format.DocumentType).ToList(),
                 IsUploaded = request.ConcessionRequestDocuments.Any(rd => rd.DocumentId == d.Id),
                 Url = request.ConcessionRequestDocuments.FirstOrDefault(rd => rd.DocumentId == d.Id)?.Url
             }).ToList() ?? [],

@@ -9848,6 +9848,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ConcessionTypeId");
+
                     b.ToTable("Finance_ConcessionRequests", (string)null);
                 });
 
@@ -11074,8 +11076,13 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<string>("DeactivationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Description")
-                        .HasColumnType("text");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int?>("DiscountType")
                         .HasColumnType("integer");
@@ -11091,6 +11098,11 @@ namespace ShikshaMitra.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("LastModificationTime");
@@ -11101,13 +11113,24 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Finance_ConcessionTypes_Tenant_Year_NormalizedName")
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("Finance_ConcessionTypes", (string)null);
                 });
@@ -11122,9 +11145,15 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("DocumentName")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
-                    b.Property<long>("DocumentSize")
+                    b.Property<bool>("IsRequired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<long>("MaxFileSizeBytes")
                         .HasColumnType("bigint");
 
                     b.HasKey("Id");
@@ -11147,7 +11176,9 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ConcessionTypeDocumentId");
+                    b.HasIndex("ConcessionTypeDocumentId", "DocumentType")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Finance_ConcessionTypeDocumentFormats_Document_Format");
 
                     b.ToTable("Finance_ConcessionTypeDocumentFormats", (string)null);
                 });
@@ -35313,6 +35344,15 @@ namespace ShikshaMitra.Migrations
                         .WithMany("ConcessionDueFeeAllocations")
                         .HasForeignKey("ConcessionRequestId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionRequest", b =>
+                {
+                    b.HasOne("ShikshaMitra.Finance.Fees.Settings.ConcessionTypes.ConcessionType", null)
+                        .WithMany()
+                        .HasForeignKey("ConcessionTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

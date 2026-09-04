@@ -11,5 +11,8 @@ public class ConcessionTypeDocumentFormatConfiguration : IEntityTypeConfiguratio
 		builder.ToTable("Finance_ConcessionTypeDocumentFormats", ShikshaMitraConsts.DbSchema);
 
 		builder.ConfigureByConvention();
+		builder.HasIndex(x => new { x.ConcessionTypeDocumentId, x.DocumentType })
+			.IsUnique()
+			.HasDatabaseName("UX_Finance_ConcessionTypeDocumentFormats_Document_Format");
 	}
 }

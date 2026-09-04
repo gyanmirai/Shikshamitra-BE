@@ -37,6 +37,9 @@ public class ConcessionDocumentRequirementDto
 {
 	public Guid DocumentId { get; set; }
 	public string DocumentName { get; set; } = string.Empty;
+	public bool IsRequired { get; set; }
+	public long MaxFileSizeBytes { get; set; }
+	public List<ShikshaMitra.Common.DocumentType> AcceptedFormats { get; set; } = [];
 	public string? Url { get; set; }
 	public bool IsUploaded { get; set; }
 }
@@ -83,6 +86,18 @@ public class UploadConcessionDocumentEntryDto
 public class UploadConcessionDocumentsDto
 {
 	public List<UploadConcessionDocumentEntryDto> Documents { get; set; } = [];
+}
+
+public class UploadConcessionDocumentFileDto
+{
+	public string FileName { get; set; } = string.Empty;
+	public string ContentType { get; set; } = string.Empty;
+	public byte[] Content { get; set; } = [];
+}
+
+public class ConcessionDocumentFileUploadResponseDto
+{
+	public string Url { get; set; } = string.Empty;
 }
 
 public class ConcessionApplicationItemDto

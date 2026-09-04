@@ -38,6 +38,9 @@ Treat incorrect Finance reports or due balances as production defects.
 | Cash returned to parents uses refunds | Fee adjustments are not cash refunds |
 | Maker-checker rules protect approvals | Creators cannot approve or reject their own charge, concession, or adjustment where the domain enforces it |
 | Receipt numbers and payment records must remain auditable | Do not silently mutate payment history |
+| Concession type names are unique per tenant and academic year after normalization | Duplicate labels cannot create ambiguous request classifications |
+| Concession types are lifecycle-controlled master data | Active types cannot be deleted; inactive unused types may be deleted, while used types remain resolvable in requests, reports, and version history |
+| Concession evidence definitions are server-enforced | Each document declares mandatory/optional, maximum bytes, and accepted formats; only mandatory evidence blocks approval |
 
 ## Fee-head module field
 

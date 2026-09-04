@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using Volo.Abp;
 using Volo.Abp.Uow;
 
@@ -52,12 +54,71 @@ public partial class ConcessionRequestAppService
 	{
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		request.EnsurePending();
+		var type = await concessionTypeRepository.GetAsync(request.ConcessionTypeId);
+		var allowedDocumentIds = type.ConcessionTypeDocuments.Select(document => document.Id).ToHashSet();
+		if (input.Documents.Select(document => document.DocumentId).Distinct().Count() != input.Documents.Count ||
+			input.Documents.Any(document =>
+				!allowedDocumentIds.Contains(document.DocumentId) ||
+				string.IsNullOrWhiteSpace(document.Url) ||
+				!document.Url.StartsWith("/api/files/", StringComparison.Ordinal)))
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.InvalidDocument);
+		}
 
 		var docs = input.Documents.Select(d => new ConcessionRequestDocument(
-			guidGenerator.Create(), CurrentTenant.Id, id, d.DocumentId, d.Url, d.Status)).ToList();
+			guidGenerator.Create(), CurrentTenant.Id, id, d.DocumentId, d.Url, status: 1)).ToList();
 
 		request.ReplaceDocuments(docs);
 		await concessionRequestRepository.UpdateAsync(request, autoSave: true);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Add)]
+	public async Task<ConcessionDocumentFileUploadResponseDto> UploadDocumentFileAsync(
+		Guid concessionTypeId,
+		Guid documentId,
+		UploadConcessionDocumentFileDto input)
+	{
+		var type = await concessionTypeRepository.GetAsync(concessionTypeId);
+		var requirement = type.ConcessionTypeDocuments.FirstOrDefault(document => document.Id == documentId)
+			?? throw new BusinessException(ConcessionTypeErrorCodes.InvalidDocument);
+
+		if (input.Content.Length == 0 || input.Content.Length > requirement.MaxFileSizeBytes)
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.FileTooLarge)
+				.WithData("MaxFileSizeBytes", requirement.MaxFileSizeBytes);
+		}
+
+		var safeFileName = Path.GetFileName(input.FileName);
+		if (!string.Equals(safeFileName, input.FileName, StringComparison.Ordinal))
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.InvalidDocument);
+		}
+
+		var extension = Path.GetExtension(safeFileName).ToLowerInvariant();
+		var documentType = ConcessionTypeConsts.GetDocumentType(extension);
+		var acceptedTypes = requirement.AcceptedFormats.Select(format => format.DocumentType).ToHashSet();
+		if (!documentType.HasValue ||
+			!acceptedTypes.Contains(documentType.Value) ||
+			!FileValidationService.IsMatchingDocumentContentType(extension, input.ContentType))
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.InvalidFileFormat)
+				.WithData("AcceptedFormats", string.Join(", ", acceptedTypes.Select(ConcessionTypeConsts.GetExtension)));
+		}
+
+		try
+		{
+			FileValidationService.ValidateDocumentFileSignature(input.Content, extension);
+		}
+		catch (BusinessException)
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.InvalidFileFormat);
+		}
+
+		var storedFileName = await fileStorageAppService.UploadAsync(safeFileName, input.Content);
+		return new ConcessionDocumentFileUploadResponseDto
+		{
+			Url = $"/api/files/{Uri.EscapeDataString(storedFileName)}"
+		};
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Add)]
@@ -73,10 +134,13 @@ public partial class ConcessionRequestAppService
 		var type = await concessionTypeRepository.GetAsync(request.ConcessionTypeId);
 		if (type != null)
 		{
-			var requiredDocuments = type.ConcessionTypeDocuments;
+			var requiredDocuments = type.ConcessionTypeDocuments.Where(document => document.IsRequired);
 			foreach (var doc in requiredDocuments)
 			{
-				if (!request.ConcessionRequestDocuments.Any(d => d.DocumentId == doc.Id))
+				if (!request.ConcessionRequestDocuments.Any(d =>
+					d.DocumentId == doc.Id &&
+					d.Status == 1 &&
+					!string.IsNullOrWhiteSpace(d.Url)))
 				{
 					throw new BusinessException(FinanceConcessionErrorCodes.MissingRequiredDocuments);
 				}

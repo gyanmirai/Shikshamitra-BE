@@ -15,6 +15,10 @@ public interface IConcessionRequestAppService : IApplicationService
 	Task DeleteAsync(Guid id);
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> GetAsync(Guid id);
 	Task UploadDocumentsAsync(Guid id, UploadConcessionDocumentsDto input);
+	Task<ConcessionDocumentFileUploadResponseDto> UploadDocumentFileAsync(
+		Guid concessionTypeId,
+		Guid documentId,
+		UploadConcessionDocumentFileDto input);
 	Task<ConcessionApplicationsDto> GetApplicationsAsync(GetConcessionApplicationsInput input);
 	Task<StudentConcessionRequestsDto> GetStudentRequestsAsync(Guid studentId, PagedResultRequestDto input);
 	Task<ConcessionApprovalContextDto> GetApprovalContextAsync(Guid id);

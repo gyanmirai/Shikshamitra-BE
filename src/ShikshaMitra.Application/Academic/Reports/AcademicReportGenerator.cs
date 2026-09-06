@@ -38,6 +38,7 @@ public class AcademicReportGenerator(
     IRepository<ExamMark, Guid> examMarkRepository,
     IRepository<Exam, Guid> examRepository,
     IRepository<Student, Guid> studentRepository,
+    StudentExamSubjectApplicabilityResolver subjectApplicabilityResolver,
     IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
     IRepository<StudentSubmissionEntity, Guid> submissionRepository,
     IRepository<AssignmentEntity, Guid> assignmentRepository,
@@ -1596,6 +1597,7 @@ public class AcademicReportGenerator(
         List<ExamMark> Marks,
         Dictionary<Guid, Student> StudentMap,
         Dictionary<Guid, string> SubjectNames,
+        Dictionary<Guid, HashSet<Guid>> ApplicableSubjectIdsByStudent,
         IReadOnlyCollection<GradeRange>? DefaultGradeRanges);
 
     private async Task<ExamReportData?> LoadExamReportDataAsync(Guid examId, AcademicReportFilterDto filters)
@@ -1629,6 +1631,9 @@ public class AcademicReportGenerator(
         }
 
         var studentMap = studentList.ToDictionary(s => s.Id);
+        var applicableSubjectIdsByStudent = await subjectApplicabilityResolver.ResolveAsync(
+            examWithSubjects,
+            studentList);
 
         var subjectIds = examSubjects.Select(s => s.SubjectId).ToList();
         var subjectQuery = await subjectRepository.GetQueryableAsync();
@@ -1645,7 +1650,15 @@ public class AcademicReportGenerator(
             defaultGradeRanges = scale?.GradeRanges?.ToList()?.AsReadOnly();
         }
 
-        return new ExamReportData(examSubjects, totalMaxMarks, totalPassMarks, marks, studentMap, subjectNames, defaultGradeRanges);
+        return new ExamReportData(
+            examSubjects,
+            totalMaxMarks,
+            totalPassMarks,
+            marks,
+            studentMap,
+            subjectNames,
+            applicableSubjectIdsByStudent,
+            defaultGradeRanges);
     }
 
     // ─── Standard Result Lists ────────────────────────────────────────────────
@@ -1904,6 +1917,11 @@ public class AcademicReportGenerator(
             .OrderBy(s => s.RollNo)
             .Select(student =>
             {
+                var applicableSubjectIds = data.ApplicableSubjectIdsByStudent[student.Id];
+                var applicableExamSubjects = data.ExamSubjects
+                    .Where(subject => applicableSubjectIds.Contains(subject.SubjectId))
+                    .ToList();
+                var studentTotalMaxMarks = applicableExamSubjects.Sum(subject => subject.TotalMarks ?? 0);
                 var addressParts = new[] { student.ContactDetail?.Address1, student.ContactDetail?.Address2, student.ContactDetail?.City, student.ContactDetail?.Pincode }
                     .Where(p => !string.IsNullOrWhiteSpace(p));
                 var address = addressParts.Any() ? string.Join(", ", addressParts) : "—";
@@ -1922,13 +1940,22 @@ public class AcademicReportGenerator(
                     { "Email", student.ContactDetail?.Email ?? "—" },
                     { "Address", address },
                     { "Session", student.AcademicYear?.Name ?? "—" },
-                    { "TotalMaxMarks", data.TotalMaxMarks.ToString("F2") }
+                    { "TotalMaxMarks", studentTotalMaxMarks.ToString("F2") }
                 };
 
                 double total = 0;
                 var hasFailedSubject = false;
                 foreach (var (subjectId, _) in orderedSubjects)
                 {
+                    if (!applicableSubjectIds.Contains(subjectId))
+                    {
+                        row[$"subj_{subjectId}"] = "—";
+                        row[$"subj_{subjectId}_Max"] = "—";
+                        row[$"subj_{subjectId}_Grade"] = "—";
+                        row[$"subj_{subjectId}_Remarks"] = "Not applicable";
+                        continue;
+                    }
+
                     markIndex.TryGetValue((student.Id, subjectId), out var mark);
                     var val = mark is null ? "—" : mark.IsAbsent ? "Ab" : (mark.MarksObtained ?? 0).ToString("F2");
                     if (mark is { IsAbsent: false })
@@ -1956,10 +1983,10 @@ public class AcademicReportGenerator(
                     }
                 }
 
-                var pct = data.TotalMaxMarks > 0 ? Math.Round(total / data.TotalMaxMarks * 100, 2) : 0;
+                var pct = studentTotalMaxMarks > 0 ? Math.Round(total / studentTotalMaxMarks * 100, 2) : 0;
                 row["Total"] = total.ToString("F2");
                 row["Percentage"] = $"{pct}%";
-                row["Grade"] = ComputeGrade(total, data.TotalMaxMarks, data.DefaultGradeRanges);
+                row["Grade"] = ComputeGrade(total, studentTotalMaxMarks, data.DefaultGradeRanges);
                 row["Status"] = hasFailedSubject ? "Failed" : "Passed";
                 return row;
             }).ToList();

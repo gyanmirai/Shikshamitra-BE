@@ -2,9 +2,11 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.Seeders;
 using Shouldly;
 using Volo.Abp.Data;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.MultiTenancy;
 using Xunit;
@@ -17,6 +19,7 @@ public class PayrollStatutorySettingsBackfillSeederContributor_Integration_Tests
 	private readonly PayrollStatutorySettingsBackfillSeederContributor _seeder;
 	private readonly IProvidentFundRepository _providentFundRepository;
 	private readonly IProfessionalTaxRepository _professionalTaxRepository;
+	private readonly IRepository<StatutoryRuleVersion, Guid> _statutoryRuleRepository;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
 
@@ -25,6 +28,7 @@ public class PayrollStatutorySettingsBackfillSeederContributor_Integration_Tests
 		_seeder = GetRequiredService<PayrollStatutorySettingsBackfillSeederContributor>();
 		_providentFundRepository = GetRequiredService<IProvidentFundRepository>();
 		_professionalTaxRepository = GetRequiredService<IProfessionalTaxRepository>();
+		_statutoryRuleRepository = GetRequiredService<IRepository<StatutoryRuleVersion, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 	}
@@ -71,6 +75,7 @@ public class PayrollStatutorySettingsBackfillSeederContributor_Integration_Tests
 		{
 			var providentFunds = await _providentFundRepository.GetListAsync();
 			var professionalTaxes = await _professionalTaxRepository.GetListAsync();
+			var statutoryRules = await _statutoryRuleRepository.GetListAsync();
 
 			providentFunds.Count.ShouldBe(2);
 			providentFunds.ShouldAllBe(rule => rule.TenantId == firstTenantId);
@@ -82,12 +87,14 @@ public class PayrollStatutorySettingsBackfillSeederContributor_Integration_Tests
 			professionalTaxes.ShouldContain(rule =>
 				rule.EffectiveFrom == new DateTime(2025, 4, 1) && rule.TaxAmount == 100m);
 			AssertGujaratProfessionalTaxSchedule(professionalTaxes);
+			AssertEmployeeStateInsuranceRule(statutoryRules.Single());
 		});
 
 		await WithTenantAsync(secondTenantId, async () =>
 		{
 			var providentFunds = await _providentFundRepository.GetListAsync();
 			var professionalTaxes = await _professionalTaxRepository.GetListAsync();
+			var statutoryRules = await _statutoryRuleRepository.GetListAsync();
 
 			providentFunds.Count.ShouldBe(1);
 			providentFunds.ShouldAllBe(rule => rule.TenantId == secondTenantId);
@@ -96,6 +103,7 @@ public class PayrollStatutorySettingsBackfillSeederContributor_Integration_Tests
 			professionalTaxes.Count.ShouldBe(2);
 			professionalTaxes.ShouldAllBe(rule => rule.TenantId == secondTenantId);
 			AssertGujaratProfessionalTaxSchedule(professionalTaxes);
+			AssertEmployeeStateInsuranceRule(statutoryRules.Single());
 		});
 	}
 
@@ -137,5 +145,15 @@ public class PayrollStatutorySettingsBackfillSeederContributor_Integration_Tests
 			rule.FromSalary == 12_000.01m &&
 			rule.ToSalary == null &&
 			rule.TaxAmount == 200m);
+	}
+
+	private static void AssertEmployeeStateInsuranceRule(StatutoryRuleVersion rule)
+	{
+		rule.SchemeCode.ShouldBe(StatutorySchemeCodes.EmployeeStateInsurance);
+		rule.JurisdictionCode.ShouldBe("IN-GJ");
+		rule.Version.ShouldBe(1);
+		rule.EffectiveFrom.ShouldBe(new DateTime(2025, 11, 21));
+		rule.IsActive.ShouldBeTrue();
+		rule.StandardWageCeiling.ShouldBe(21_000m);
 	}
 }

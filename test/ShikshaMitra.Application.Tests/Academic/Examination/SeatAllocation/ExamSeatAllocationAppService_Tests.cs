@@ -238,7 +238,7 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 	}
 
 	[Fact]
-	public async Task ApplyAutoAllocatePreviewAsync_Should_Preserve_Existing_Seats_And_Be_Idempotent()
+	public async Task ApplyAutoAllocatePreviewAsync_Should_Replace_Existing_Seats_And_Be_Idempotent()
 	{
 		await WithUnitOfWorkAsync(async () =>
 		{
@@ -271,8 +271,9 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 					exam.Id,
 					new PrepareSessionSeatingPlanInputDto { ExamSubjectIds = examSubjectIds });
 				var planId = prepared.SelectedSeatingPlanId!.Value;
-				await _seatAllocationRepository.InsertAsync(new ExamSeatAllocation(
-					Guid.NewGuid(), TestTenantId, planId, exam.Id, students[0].Id, room.Id, 1, null, true),
+				await _seatAllocationRepository.InsertManyAsync(
+					students.Select((student, index) => new ExamSeatAllocation(
+						Guid.NewGuid(), TestTenantId, planId, exam.Id, student.Id, room.Id, index + 1, null, true)),
 					autoSave: true);
 
 				var input = new ApplyAutoAllocatePreviewInputDto
@@ -284,9 +285,15 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 					[
 						new AutoAllocateProposedAssignmentDto
 						{
-							StudentId = students[1].Id,
+							StudentId = students[0].Id,
 							RoomId = room.Id,
 							SeatNumber = 2
+						},
+						new AutoAllocateProposedAssignmentDto
+						{
+							StudentId = students[1].Id,
+							RoomId = room.Id,
+							SeatNumber = 1
 						}
 					]
 				};
@@ -297,8 +304,189 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 				var allocations = await _seatAllocationRepository.GetListAsync(row =>
 					row.ExamId == exam.Id && row.SeatingPlanId == planId);
 				allocations.Count.ShouldBe(2);
-				allocations.ShouldContain(row => row.StudentId == students[0].Id && row.SeatNumber == 1);
-				allocations.ShouldContain(row => row.StudentId == students[1].Id && row.SeatNumber == 2);
+				allocations.ShouldContain(row => row.StudentId == students[0].Id && row.SeatNumber == 2);
+				allocations.ShouldContain(row => row.StudentId == students[1].Id && row.SeatNumber == 1);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task AutoAllocatePreviewAsync_Should_Repropose_Students_Already_Seated_In_The_Current_Plan()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, examSubjectIds) = await CreateSessionExamAsync(scheduleSecondSubject: true);
+				var divisionId = exam.ExamDivisions.Single().DivisionId;
+				var room = await CreateRoomAsync();
+				foreach (var subject in exam.ExamSubjects)
+				{
+					subject.AddRoomAssignment(new ExamSubjectDivision(
+						Guid.NewGuid(), subject.Id, divisionId, room.Capacity, [room.Id]));
+				}
+				await _examRepository.UpdateAsync(exam, autoSave: true);
+
+				var standard = await _standardRepository.GetAsync(exam.StandardId);
+				var stage = await _stageRepository.GetAsync(standard.EducationMediumStageId);
+				var medium = await _educationMediumRepository.GetAsync(stage.EducationMediumId);
+				var board = await _educationBoardRepository.GetAsync(medium.EducationBoardId);
+				var unique = Guid.NewGuid().ToString("N");
+				var students = new[]
+				{
+					CreateStudent(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, divisionId, 1, unique),
+					CreateStudent(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, divisionId, 2, unique),
+					CreateStudent(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, divisionId, 3, unique)
+				};
+				await _studentRepository.InsertManyAsync(students, autoSave: true);
+
+				var prepared = await _seatAllocationAppService.PrepareSessionSeatingPlanAsync(
+					exam.Id,
+					new PrepareSessionSeatingPlanInputDto { ExamSubjectIds = examSubjectIds });
+				var planId = prepared.SelectedSeatingPlanId!.Value;
+				await _seatAllocationRepository.InsertManyAsync(
+					students.Select((student, index) => new ExamSeatAllocation(
+						Guid.NewGuid(),
+						TestTenantId,
+						planId,
+						exam.Id,
+						student.Id,
+						room.Id,
+						index + 4,
+						benchId: null,
+						isRoomAssign: true)),
+					autoSave: true);
+
+				var preview = await _seatAllocationAppService.AutoAllocatePreviewAsync(
+					exam.Id,
+					new AutoAllocateRequestDto
+					{
+						SeatingPlanId = planId,
+						RoomIds = [room.Id]
+					});
+
+				preview.TotalStudents.ShouldBe(3);
+				preview.Assignments.Count.ShouldBe(3);
+				preview.Assignments.Select(row => row.StudentId).ToHashSet()
+					.ShouldBe(students.Select(student => student.Id).ToHashSet(), ignoreOrder: true);
+				preview.Assignments.Select(row => row.SeatNumber).ShouldBe([1, 2, 3], ignoreOrder: true);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task GetSeatLayoutAsync_Should_Block_Seats_From_An_Overlapping_Sibling_Plan()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var fixture = await CreateSameRoomSingleSubjectPlansAsync(secondSubjectOnDifferentDate: false);
+
+				var layout = await _seatAllocationAppService.GetSeatLayoutAsync(
+					fixture.Exam.Id,
+					new GetSeatLayoutInput
+					{
+						SeatingPlanId = fixture.SecondPlanId,
+						DivisionId = fixture.DivisionId,
+						RoomId = fixture.Room.Id,
+						PageSize = 100
+					});
+
+				var occupiedSeat = layout.Items.Single(item => item.SeatNumber == 1);
+				occupiedSeat.StudentId.ShouldBe(fixture.Students[0].Id);
+				occupiedSeat.IsOtherPlanOccupied.ShouldBeTrue();
+				occupiedSeat.IsExternalExamOccupied.ShouldBeFalse();
+				occupiedSeat.SeatingPlanId.ShouldBe(fixture.FirstPlanId);
+				occupiedSeat.SeatingPlanName.ShouldBe("English seating plan");
+				occupiedSeat.SubjectNames.ShouldContain(fixture.FirstSubjectName);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task GetSeatLayoutAsync_Should_Not_Block_Seats_From_A_NonOverlapping_Sibling_Plan()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var fixture = await CreateSameRoomSingleSubjectPlansAsync(secondSubjectOnDifferentDate: true);
+
+				var layout = await _seatAllocationAppService.GetSeatLayoutAsync(
+					fixture.Exam.Id,
+					new GetSeatLayoutInput
+					{
+						SeatingPlanId = fixture.SecondPlanId,
+						DivisionId = fixture.DivisionId,
+						RoomId = fixture.Room.Id,
+						PageSize = 100
+					});
+
+				var reusableSeat = layout.Items.Single(item => item.SeatNumber == 1);
+				reusableSeat.StudentId.ShouldBeNull();
+				reusableSeat.IsOtherPlanOccupied.ShouldBeFalse();
+			}
+		});
+	}
+
+	[Fact]
+	public async Task AutoAllocatePreviewAsync_Should_Skip_Seats_From_An_Overlapping_Sibling_Plan()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var fixture = await CreateSameRoomSingleSubjectPlansAsync(secondSubjectOnDifferentDate: false);
+
+				var preview = await _seatAllocationAppService.AutoAllocatePreviewAsync(
+					fixture.Exam.Id,
+					new AutoAllocateRequestDto
+					{
+						SeatingPlanId = fixture.SecondPlanId,
+						RoomIds = [fixture.Room.Id]
+					});
+
+				preview.Assignments.ShouldNotContain(assignment =>
+					assignment.RoomId == fixture.Room.Id && assignment.SeatNumber == 1);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task SaveSeatAllocationAsync_Should_Reject_A_Seat_From_An_Overlapping_Sibling_Plan()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var fixture = await CreateSameRoomSingleSubjectPlansAsync(secondSubjectOnDifferentDate: false);
+
+				var exception = await Should.ThrowAsync<UserFriendlyException>(() =>
+					_seatAllocationAppService.SaveSeatAllocationAsync(
+						fixture.Exam.Id,
+						new SaveSeatAllocationRequestDto
+						{
+							SeatingPlanId = fixture.SecondPlanId,
+							RoomId = fixture.Room.Id,
+							Students =
+							[
+								new SaveSeatStudentDto
+								{
+									StudentId = fixture.Students[1].Id,
+									SeatNumber = 1,
+									IsRoomAssign = true
+								}
+							]
+						}));
+
+				exception.Code.ShouldBe("ROOM_SEAT_TIME_CONFLICT");
+				exception.Message.ShouldContain("English seating plan");
 			}
 		});
 	}
@@ -791,6 +979,80 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 	{
 		var (exam, planIds, room, students) = await CreateAllocatedPlansAsync(separateSessions: false);
 		return (exam, planIds.Single(), room, students);
+	}
+
+	private async Task<(
+		Exam Exam,
+		Guid DivisionId,
+		Guid FirstPlanId,
+		Guid SecondPlanId,
+		string FirstSubjectName,
+		Room Room,
+		List<Student> Students)> CreateSameRoomSingleSubjectPlansAsync(bool secondSubjectOnDifferentDate)
+	{
+		var (exam, examSubjectIds) = await CreateSessionExamAsync(
+			scheduleSecondSubject: true,
+			secondSubjectOnDifferentDate: secondSubjectOnDifferentDate);
+		var divisionId = exam.ExamDivisions.Single().DivisionId;
+		var room = await CreateRoomAsync();
+		foreach (var subject in exam.ExamSubjects)
+		{
+			subject.AddRoomAssignment(new ExamSubjectDivision(
+				Guid.NewGuid(), subject.Id, divisionId, room.Capacity, [room.Id]));
+		}
+		await _examRepository.UpdateAsync(exam, autoSave: true);
+
+		var standard = await _standardRepository.GetAsync(exam.StandardId);
+		var stage = await _stageRepository.GetAsync(standard.EducationMediumStageId);
+		var medium = await _educationMediumRepository.GetAsync(stage.EducationMediumId);
+		var board = await _educationBoardRepository.GetAsync(medium.EducationBoardId);
+		var unique = Guid.NewGuid().ToString("N");
+		var students = new List<Student>
+		{
+			CreateStudent(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, divisionId, 1, unique),
+			CreateStudent(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, divisionId, 2, unique)
+		};
+		await _studentRepository.InsertManyAsync(students, autoSave: true);
+
+		var firstWorkspace = await _seatAllocationAppService.PrepareSeatingPlanAsync(
+			exam.Id,
+			new PrepareSeatingPlanInputDto
+			{
+				Name = "English seating plan",
+				ExamSubjectIds = [examSubjectIds[0]]
+			});
+		var secondWorkspace = await _seatAllocationAppService.PrepareSeatingPlanAsync(
+			exam.Id,
+			new PrepareSeatingPlanInputDto
+			{
+				Name = "Computer Science seating plan",
+				ExamSubjectIds = [examSubjectIds[1]]
+			});
+		var firstPlanId = firstWorkspace.SelectedSeatingPlanId!.Value;
+		var secondPlanId = secondWorkspace.SelectedSeatingPlanId!.Value;
+		await _seatAllocationRepository.InsertAsync(
+			new ExamSeatAllocation(
+				Guid.NewGuid(),
+				TestTenantId,
+				firstPlanId,
+				exam.Id,
+				students[0].Id,
+				room.Id,
+				seatNumber: 1,
+				benchId: null,
+				isRoomAssign: true),
+			autoSave: true);
+
+		var firstExamSubject = exam.ExamSubjects.Single(subject => subject.Id == examSubjectIds[0]);
+		var firstSubject = await _subjectRepository.GetAsync(firstExamSubject.SubjectId);
+		return (
+			exam,
+			divisionId,
+			firstPlanId,
+			secondPlanId,
+			firstSubject.Name,
+			room,
+			students);
 	}
 
 	private Task<(Exam exam, List<Guid> planIds, Room room, List<Student> students)>

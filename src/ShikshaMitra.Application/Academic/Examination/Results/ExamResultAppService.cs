@@ -10,7 +10,6 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.Divisions;
-using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
@@ -31,6 +30,7 @@ public class ExamResultAppService(
     IRepository<GradingScale, Guid> gradingScaleRepository,
     IRepository<Student, Guid> studentRepository,
     IRepository<Subject, Guid> subjectRepository,
+    StudentExamSubjectApplicabilityResolver subjectApplicabilityResolver,
     IRepository<Standard, Guid> standardRepository,
     IRepository<Division, Guid> divisionRepository,
     IUserScopeService userScopeService) : ApplicationService, IExamResultAppService
@@ -45,6 +45,14 @@ public class ExamResultAppService(
         var checks = new List<ReadinessCheckDto>();
 
         var exam = await GetScopedExamAsync(examId, divisionId);
+        var enrolledStudents = await studentRepository.GetListAsync(s =>
+            s.DivisionId == divisionId &&
+            s.Status == StudentLifeCycleStatusEnum.Enrolled &&
+            !s.IsDeleted);
+        var applicableSubjectIdsByStudent = await subjectApplicabilityResolver.ResolveAsync(exam, enrolledStudents);
+        var requiredSubjectIds = applicableSubjectIdsByStudent.Values
+            .SelectMany(subjectIds => subjectIds)
+            .ToHashSet();
 
         // Check 1: At least one subject configured
         checks.Add(new ReadinessCheckDto
@@ -59,15 +67,14 @@ public class ExamResultAppService(
         // Check 2: All marks published/locked
         var workflowStates = await workflowStateRepository.GetListAsync(
             s => s.ExamId == examId && s.DivisionId == divisionId);
-        var examSubjectIds = exam.ExamSubjects.Select(s => s.SubjectId).ToHashSet();
         var verifiedSubjectIds = workflowStates
-            .Where(s => s.Status == ExamMarksWorkflowStatus.Published && examSubjectIds.Contains(s.SubjectId))
+            .Where(s => s.Status == ExamMarksWorkflowStatus.Published && requiredSubjectIds.Contains(s.SubjectId))
             .Select(s => s.SubjectId)
             .ToHashSet();
         var verifiedCount = verifiedSubjectIds.Count;
-        var totalSubjects = exam.ExamSubjects.Count;
+        var totalSubjects = requiredSubjectIds.Count;
         var pendingSubjectIds = exam.ExamSubjects
-            .Where(s => !verifiedSubjectIds.Contains(s.SubjectId))
+            .Where(s => requiredSubjectIds.Contains(s.SubjectId) && !verifiedSubjectIds.Contains(s.SubjectId))
             .Select(s => s.SubjectId)
             .ToList();
         var pendingSubjects = pendingSubjectIds.Count == 0
@@ -77,7 +84,6 @@ public class ExamResultAppService(
                 .OrderBy(name => name)
                 .ToList();
         var completedSubjects = Math.Min(verifiedCount, totalSubjects);
-        var missingMarks = Math.Max(totalSubjects - verifiedCount, 0);
         var allMarksVerified = totalSubjects > 0 && verifiedCount >= totalSubjects;
         checks.Add(new ReadinessCheckDto
         {
@@ -91,23 +97,27 @@ public class ExamResultAppService(
         });
 
         // Check 3: Marks entries exist
-        var marksCount = await examMarkRepository.CountAsync(
+        var marks = await examMarkRepository.GetListAsync(
             m => m.ExamId == examId && m.DivisionId == divisionId);
-        var hasMarks = marksCount > 0;
-        var enrolledStudents = await studentRepository.GetListAsync(s =>
-            s.DivisionId == divisionId &&
-            s.Status == StudentLifeCycleStatusEnum.Enrolled &&
-            !s.IsDeleted);
-        var expectedMarkRows = enrolledStudents.Count * totalSubjects;
-        var hasAllMarkRows = totalSubjects == 0 || marksCount >= expectedMarkRows;
+        var expectedMarkRows = applicableSubjectIdsByStudent.Values.Sum(subjectIds => subjectIds.Count);
+        var markKeys = marks
+            .Where(mark => applicableSubjectIdsByStudent.TryGetValue(mark.StudentId, out var subjectIds) &&
+                subjectIds.Contains(mark.SubjectId))
+            .Select(mark => (mark.StudentId, mark.SubjectId))
+            .ToHashSet();
+        var availableMarkRows = applicableSubjectIdsByStudent.Sum(entry =>
+            entry.Value.Count(subjectId => markKeys.Contains((entry.Key, subjectId))));
+        var missingMarks = Math.Max(expectedMarkRows - availableMarkRows, 0);
+        var hasMarks = availableMarkRows > 0;
+        var hasAllMarkRows = expectedMarkRows > 0 && missingMarks == 0;
         checks.Add(new ReadinessCheckDto
         {
             Label = "Marks data available",
             Passed = hasMarks && hasAllMarkRows,
-            Hint = marksCount == 0
+            Hint = availableMarkRows == 0
                 ? "No marks found for this division."
                 : !hasAllMarkRows
-                    ? $"{Math.Max(expectedMarkRows - marksCount, 0)} student-subject mark row(s) are missing."
+                    ? $"{missingMarks} student-subject mark row(s) are missing."
                     : null,
             Severity = hasMarks && hasAllMarkRows ? "success" : "blocker",
             FixTarget = hasMarks && hasAllMarkRows ? null : "grade-entry"
@@ -192,9 +202,6 @@ public class ExamResultAppService(
             }
         }
 
-        var totalMaxMarks = exam.ExamSubjects.Sum(s => s.TotalMarks ?? 0);
-        var totalPassMarks = exam.ExamSubjects.Sum(s => s.PassingMarks ?? ((s.TotalMarks ?? 100.0) * 0.33));
-
         // Load marks
         var marks = await examMarkRepository.GetListAsync(
             m => m.ExamId == input.ExamId && m.DivisionId == input.DivisionId);
@@ -220,20 +227,33 @@ public class ExamResultAppService(
         var marksByStudent = marks
             .GroupBy(m => m.StudentId)
             .ToDictionary(g => g.Key, g => g.ToList());
+        var applicableSubjectIdsByStudent = await subjectApplicabilityResolver.ResolveAsync(exam, enrolledStudents);
 
         var studentResults = enrolledStudents
             .Select(g =>
             {
                 marksByStudent.TryGetValue(g.Id, out var studentMarks);
                 studentMarks ??= new List<ExamMark>();
+                var applicableSubjectIds = applicableSubjectIdsByStudent[g.Id];
+                var applicableExamSubjects = exam.ExamSubjects
+                    .Where(subject => applicableSubjectIds.Contains(subject.SubjectId))
+                    .ToList();
+                studentMarks = studentMarks
+                    .Where(mark => applicableSubjectIds.Contains(mark.SubjectId))
+                    .ToList();
 
-                var isAbsent = studentMarks.Count == 0 || studentMarks.All(m => m.IsAbsent);
+                var totalMaxMarks = applicableExamSubjects.Sum(s => s.TotalMarks ?? 0);
+                var totalPassMarks = applicableExamSubjects.Sum(s =>
+                    s.PassingMarks ?? ((s.TotalMarks ?? 100.0) * 0.33));
+                var isAbsent = applicableExamSubjects.Count == 0 ||
+                    studentMarks.Count == 0 ||
+                    studentMarks.All(m => m.IsAbsent);
                 var obtained = isAbsent ? 0.0 : studentMarks.Where(m => !m.IsAbsent).Sum(m => m.MarksObtained ?? 0);
                 var pct = totalMaxMarks > 0 ? Math.Round(obtained / totalMaxMarks * 100, 2) : 0;
                 var grade = isAbsent ? "—" : ComputeGrade(obtained, totalMaxMarks, gradeRanges, scaleTotal);
 
                 // Check if they failed any subject (missing mark, absent, or obtained < passing marks)
-                var failedAnySubject = !isAbsent && exam.ExamSubjects.Any(s =>
+                var failedAnySubject = !isAbsent && applicableExamSubjects.Any(s =>
                 {
                     var mark = studentMarks.FirstOrDefault(m => m.SubjectId == s.SubjectId);
                     if (mark == null || mark.IsAbsent) return true;
@@ -248,34 +268,36 @@ public class ExamResultAppService(
                 return new
                 {
                     StudentId = g.Id,
+                    TotalMaxMarks = totalMaxMarks,
                     TotalObtainedMarks = obtained,
                     Percentage = pct,
                     Grade = grade,
                     Status = status
                 };
             })
-            .OrderByDescending(x => x.TotalObtainedMarks)
+            .OrderByDescending(x => x.Percentage)
+            .ThenByDescending(x => x.TotalObtainedMarks)
             .ToList();
 
         // Assign class rank (ties share rank, next rank skips)
-        var rankedResults = new List<(Guid StudentId, double Obtained, double Pct, string Grade,
+        var rankedResults = new List<(Guid StudentId, double TotalMaxMarks, double Obtained, double Pct, string Grade,
             ExamStudentResultStatus Status, int? Rank)>();
-        int rank = 1, tieStart = 0;
-        double lastMarks = -1;
+        int rank = 1;
+        double lastPercentage = -1;
         for (int i = 0; i < studentResults.Count; i++)
         {
             var r = studentResults[i];
             if (r.Status == ExamStudentResultStatus.Absent)
             {
-                rankedResults.Add((r.StudentId, r.TotalObtainedMarks, r.Percentage, r.Grade, r.Status, null));
+                rankedResults.Add((r.StudentId, r.TotalMaxMarks, r.TotalObtainedMarks, r.Percentage, r.Grade, r.Status, null));
                 continue;
             }
-            if (r.TotalObtainedMarks != lastMarks)
+            if (r.Percentage != lastPercentage)
             {
                 rank = i + 1;
-                lastMarks = r.TotalObtainedMarks;
+                lastPercentage = r.Percentage;
             }
-            rankedResults.Add((r.StudentId, r.TotalObtainedMarks, r.Percentage, r.Grade, r.Status, rank));
+            rankedResults.Add((r.StudentId, r.TotalMaxMarks, r.TotalObtainedMarks, r.Percentage, r.Grade, r.Status, rank));
         }
 
         // Upsert ExamResultHeader
@@ -304,7 +326,7 @@ public class ExamResultAppService(
                 input.ExamId,
                 r.StudentId,
                 input.DivisionId,
-                totalMaxMarks,
+                r.TotalMaxMarks,
                 r.Obtained,
                 r.Pct,
                 r.Grade,
@@ -567,7 +589,14 @@ public class ExamResultAppService(
         var marks = await examMarkRepository.GetListAsync(
             m => m.ExamId == examId && m.StudentId == studentId);
 
-        var subjectIds = exam.ExamSubjects.Select(s => s.SubjectId).ToList();
+        var applicableSubjectIdsByStudent = await subjectApplicabilityResolver.ResolveAsync(exam, [student]);
+        var applicableSubjectIds = applicableSubjectIdsByStudent[student.Id];
+        var applicableExamSubjects = exam.ExamSubjects
+            .Where(subject => applicableSubjectIds.Contains(subject.SubjectId))
+            .ToList();
+        marks = marks.Where(mark => applicableSubjectIds.Contains(mark.SubjectId)).ToList();
+
+        var subjectIds = applicableExamSubjects.Select(s => s.SubjectId).ToList();
         var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
         var subjectMap = subjects.ToDictionary(s => s.Id, s => s.Name);
 
@@ -595,10 +624,10 @@ public class ExamResultAppService(
         }
 
         var subjectMarks = new List<StudentSubjectMarkDto>();
-        double totalMaxMarks = exam.ExamSubjects.Sum(s => s.TotalMarks ?? 0);
+        double totalMaxMarks = applicableExamSubjects.Sum(s => s.TotalMarks ?? 0);
         double totalObtainedMarks = 0;
 
-        foreach (var examSub in exam.ExamSubjects)
+        foreach (var examSub in applicableExamSubjects)
         {
             var mark = marks.FirstOrDefault(m => m.SubjectId == examSub.SubjectId);
             var subName = subjectMap.GetValueOrDefault(examSub.SubjectId, "—");
@@ -674,14 +703,14 @@ public class ExamResultAppService(
         else
         {
             // If result header not generated, compute overall dynamically
-            var isAbsent = marks.All(m => m.IsAbsent);
+            var isAbsent = applicableExamSubjects.Count == 0 || marks.Count == 0 || marks.All(m => m.IsAbsent);
             if (!isAbsent && totalMaxMarks > 0)
             {
                 var pct = Math.Round(totalObtainedMarks / totalMaxMarks * 100, 2);
                 overallPct = $"{pct}%";
                 overallGrade = ComputeGrade(totalObtainedMarks, totalMaxMarks, gradeRanges, scaleTotal);
 
-                var failedAnySubject = exam.ExamSubjects.Any(s =>
+                var failedAnySubject = applicableExamSubjects.Any(s =>
                 {
                     var mark = marks.FirstOrDefault(m => m.SubjectId == s.SubjectId);
                     if (mark == null || mark.IsAbsent) return true;

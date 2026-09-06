@@ -17,6 +17,10 @@ public class SeatLayoutItemDto
     public bool IsRoomAssign { get; set; }
     public Guid? BenchId { get; set; }
     public bool IsExternalExamOccupied { get; set; }
+    public bool IsOtherPlanOccupied { get; set; }
+    public Guid? SeatingPlanId { get; set; }
+    public string? SeatingPlanName { get; set; }
+    public List<string> SubjectNames { get; set; } = [];
 }
 
 public class SeatLayoutResponseDto

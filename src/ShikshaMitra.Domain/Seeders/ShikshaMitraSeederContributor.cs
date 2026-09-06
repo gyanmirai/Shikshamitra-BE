@@ -281,20 +281,35 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 			await MarkCompletedAsync(markerRepository, step, tenantId, options.Profile, stopwatch.ElapsedMilliseconds);
 			summary.RanCount++;
 			summary.ElapsedMilliseconds += stopwatch.ElapsedMilliseconds;
-		}
-		catch (Exception ex)
-		{
-			stopwatch.Stop();
-			await MarkFailedAsync(markerRepository, step, tenantId, options.Profile, stopwatch.ElapsedMilliseconds, ex);
-			throw;
-		}
-		finally
-		{
 			_logger.LogInformation(
 				"[SeederTiming] {SeederName} completed for TenantId={TenantId} in {ElapsedMs} ms",
 				step.Name,
 				tenantId,
 				stopwatch.ElapsedMilliseconds);
+		}
+		catch (Exception ex)
+		{
+			stopwatch.Stop();
+			try
+			{
+				await MarkFailedAsync(markerRepository, step, tenantId, options.Profile, stopwatch.ElapsedMilliseconds, ex);
+			}
+			catch (Exception markerException)
+			{
+				_logger.LogError(
+					markerException,
+					"Could not persist the failed execution marker for seeder {SeederName} and TenantId={TenantId}.",
+					step.Name,
+					tenantId);
+			}
+
+			_logger.LogError(
+				ex,
+				"[SeederTiming] {SeederName} failed for TenantId={TenantId} after {ElapsedMs} ms",
+				step.Name,
+				tenantId,
+				stopwatch.ElapsedMilliseconds);
+			throw;
 		}
 	}
 

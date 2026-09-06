@@ -1933,11 +1933,8 @@ public class ExamSeatAllocationAppService(
         var eligibleStudents = await GetEligibleStudentsForPlanAsync(exam, plan);
 
         var excluded = input.ExcludedStudentIds.ToHashSet();
-        var alreadyAllocated = (await seatAllocationRepository.GetListAsync(a => a.ExamId == examId && a.SeatingPlanId == plan.Id))
-            .Select(a => a.StudentId).ToHashSet();
-
         var pending = eligibleStudents
-            .Where(s => !excluded.Contains(s.Id) && !alreadyAllocated.Contains(s.Id))
+            .Where(s => !excluded.Contains(s.Id))
             .ToList();
 
         var ordered = input.Strategy switch
@@ -1975,12 +1972,15 @@ public class ExamSeatAllocationAppService(
             : await divisionRepository.GetListAsync(division => divisionIds.Contains(division.Id));
         var divisionNamesById = divisions.ToDictionary(division => division.Id, division => division.Name);
 
-        var internalOccupied = await seatAllocationRepository.GetListAsync(a =>
-                a.ExamId == examId && a.SeatingPlanId == plan.Id && input.RoomIds.Contains(a.RoomId));
-                
-        var externalOccupied = await GetExternalOverlappingAllocationsAsync(examId, plan.Id, input.RoomIds);
-        
-        var occupiedSeatNumbersByRoom = internalOccupied.Concat(externalOccupied)
+        var overlappingPlanOccupied = await GetOtherOverlappingPlanAllocationsAsync(
+            examId,
+            plan.Id,
+            input.RoomIds);
+
+        // Automatic mode rebuilds this plan's proposal from every eligible student. Existing
+        // assignments owned by this plan are replaceable draft state; only seats belonging to
+        // another overlapping plan must be treated as occupied.
+        var occupiedSeatNumbersByRoom = overlappingPlanOccupied
             .GroupBy(a => a.RoomId)
             .ToDictionary(g => g.Key, g => g.Select(a => a.SeatNumber).ToHashSet());
 
@@ -2067,57 +2067,115 @@ public class ExamSeatAllocationAppService(
             room => room.Id,
             room => BuildRoomSeats(room).ToDictionary(seat => seat.SeatNumber));
 
+        var excludedStudentIds = input.ExcludedStudentIds.ToHashSet();
         var eligibleStudentIds = (await GetEligibleStudentsForPlanAsync(exam, plan))
+            .Where(student => !excludedStudentIds.Contains(student.Id))
             .Select(student => student.Id)
             .ToHashSet();
-        if (input.Assignments.Any(row => !eligibleStudentIds.Contains(row.StudentId)))
-            throw new UserFriendlyException("The preview contains a student outside this session plan.");
+        var proposedStudentIds = input.Assignments.Select(row => row.StudentId).ToHashSet();
+        if (proposedStudentIds.Count != input.Assignments.Count)
+            throw new UserFriendlyException("A student can appear only once in an allocation preview.");
+        if (!proposedStudentIds.SetEquals(eligibleStudentIds))
+            throw new UserFriendlyException("The automatic preview is incomplete or stale. Generate it again before applying.");
 
-        var existing = await seatAllocationRepository.GetListAsync(allocation =>
-            allocation.ExamId == examId && allocation.SeatingPlanId == plan.Id);
-        var existingByStudent = existing.GroupBy(row => row.StudentId).ToDictionary(group => group.Key, group => group.First());
-        var occupiedSeats = existing
-            .GroupBy(row => (row.RoomId, row.SeatNumber))
-            .ToDictionary(group => group.Key, group => group.First());
-        var external = await GetExternalOverlappingAllocationsAsync(examId, plan.Id, input.RoomIds);
-        foreach (var allocation in external)
-            occupiedSeats.TryAdd((allocation.RoomId, allocation.SeatNumber), allocation);
-
-        var newAllocations = new List<ExamSeatAllocation>();
+        var proposedSeats = new HashSet<(Guid RoomId, int SeatNumber)>();
         foreach (var proposed in input.Assignments)
         {
-            if (existingByStudent.TryGetValue(proposed.StudentId, out var current))
-            {
-                if (current.RoomId == proposed.RoomId && current.SeatNumber == proposed.SeatNumber)
-                    continue;
-                throw new UserFriendlyException("A student in this preview was already seated elsewhere. Refresh the preview.");
-            }
-
             if (!seatsByRoom[proposed.RoomId].TryGetValue(proposed.SeatNumber, out var seat) || seat.IsDisabled)
                 throw new UserFriendlyException("The preview contains a seat that is unavailable.");
-            if (occupiedSeats.ContainsKey((proposed.RoomId, proposed.SeatNumber)))
-                throw new UserFriendlyException("A seat in this preview was occupied after the preview was generated. Refresh and try again.");
-
-            var allocation = new ExamSeatAllocation(
-                guidGenerator.Create(),
-                CurrentTenant.Id,
-                plan.Id,
-                examId,
-                proposed.StudentId,
-                proposed.RoomId,
-                proposed.SeatNumber,
-                proposed.BenchId,
-                isRoomAssign: true);
-            newAllocations.Add(allocation);
-            occupiedSeats[(proposed.RoomId, proposed.SeatNumber)] = allocation;
-            existingByStudent[proposed.StudentId] = allocation;
+            if (!proposedSeats.Add((proposed.RoomId, proposed.SeatNumber)))
+                throw new UserFriendlyException("A room seat can appear only once in an allocation preview.");
         }
 
-        if (newAllocations.Count > 0)
-            await seatAllocationRepository.InsertManyAsync(newAllocations, autoSave: true);
+        var overlappingPlanAllocations = await GetOtherOverlappingPlanAllocationsAsync(
+            examId,
+            plan.Id,
+            input.RoomIds);
+        var externallyOccupiedSeats = overlappingPlanAllocations
+            .Select(allocation => (allocation.RoomId, allocation.SeatNumber))
+            .ToHashSet();
+        if (proposedSeats.Overlaps(externallyOccupiedSeats))
+            throw new UserFriendlyException("A seat in this preview was occupied after the preview was generated. Refresh and try again.");
+
+        List<ExamSeatAllocation> existing;
+        using (dataFilter.Disable<ISoftDelete>())
+        {
+            existing = await seatAllocationRepository.GetListAsync(allocation =>
+                allocation.ExamId == examId && allocation.SeatingPlanId == plan.Id);
+        }
+
+        var existingByStudent = existing.ToDictionary(row => row.StudentId);
+        var activeExisting = existing.Where(row => !row.IsDeleted).ToList();
+        var proposalByStudent = input.Assignments.ToDictionary(row => row.StudentId);
+        var alreadyMatchesProposal = activeExisting.Count == input.Assignments.Count &&
+            activeExisting.All(current =>
+                proposalByStudent.TryGetValue(current.StudentId, out var proposed) &&
+                current.RoomId == proposed.RoomId &&
+                current.SeatNumber == proposed.SeatNumber &&
+                current.BenchId == NormalizeBenchId(proposed.BenchId) &&
+                current.IsRoomAssign);
+
+        if (!alreadyMatchesProposal)
+        {
+            // Release every historical seat key first. The plan has unique indexes for both
+            // student and room/seat, so this two-phase move also supports swaps and restores of
+            // soft-deleted draft rows without transient unique-key failures.
+            for (var index = 0; index < existing.Count; index++)
+            {
+                var current = existing[index];
+                current.Update(plan.Id, current.RoomId, int.MinValue + index, current.BenchId, current.IsRoomAssign);
+            }
+
+            if (existing.Count > 0)
+            {
+                using (dataFilter.Disable<ISoftDelete>())
+                {
+                    await seatAllocationRepository.UpdateManyAsync(existing, autoSave: true);
+                }
+            }
+
+            var toDelete = activeExisting
+                .Where(current => !proposedStudentIds.Contains(current.StudentId))
+                .ToList();
+            var toUpdate = new List<ExamSeatAllocation>();
+            var toInsert = new List<ExamSeatAllocation>();
+
+            foreach (var proposed in input.Assignments)
+            {
+                var benchId = NormalizeBenchId(proposed.BenchId);
+                if (existingByStudent.TryGetValue(proposed.StudentId, out var current))
+                {
+                    current.IsDeleted = false;
+                    current.Update(plan.Id, proposed.RoomId, proposed.SeatNumber, benchId, isRoomAssign: true);
+                    toUpdate.Add(current);
+                    continue;
+                }
+
+                toInsert.Add(new ExamSeatAllocation(
+                    guidGenerator.Create(),
+                    CurrentTenant.Id,
+                    plan.Id,
+                    examId,
+                    proposed.StudentId,
+                    proposed.RoomId,
+                    proposed.SeatNumber,
+                    benchId,
+                    isRoomAssign: true));
+            }
+
+            if (toDelete.Count > 0)
+                await seatAllocationRepository.DeleteManyAsync(toDelete, autoSave: false);
+            if (toUpdate.Count > 0)
+                await seatAllocationRepository.UpdateManyAsync(toUpdate, autoSave: false);
+            if (toInsert.Count > 0)
+                await seatAllocationRepository.InsertManyAsync(toInsert, autoSave: false);
+            await CurrentUnitOfWork!.SaveChangesAsync();
+        }
 
         return await SaveSeatingPlanDraftAsync(examId, input);
     }
+
+    private static Guid? NormalizeBenchId(Guid? benchId) => benchId == Guid.Empty ? null : benchId;
 
     public async Task<SeatLayoutResponseDto> GetSeatLayoutAsync(Guid examId, GetSeatLayoutInput input)
     {
@@ -2128,16 +2186,20 @@ public class ExamSeatAllocationAppService(
 
         var totalSeats = room.TotalBenches > 0 ? room.TotalBenches * room.BenchCapacity : room.Capacity;
 
-        // 1. Internal allocations (this exam)
+        // Allocations owned by the plan being viewed.
         var internalAllocations = await seatAllocationRepository.GetListAsync(a =>
             a.ExamId == examId &&
             a.SeatingPlanId == plan.Id &&
             a.RoomId == input.RoomId);
 
-        // 2. External allocations (overlapping time slots from completely different exams)
-        var externalAllocations = await GetExternalOverlappingAllocationsAsync(examId, plan.Id, new List<Guid> { input.RoomId });
+        // Seats held by any other plan whose subject schedule overlaps this plan. This includes
+        // sibling plans in the same exam as well as plans belonging to another exam.
+        var overlappingPlanAllocations = await GetOtherOverlappingPlanAllocationsAsync(
+            examId,
+            plan.Id,
+            [input.RoomId]);
 
-        var allAllocations = internalAllocations.Concat(externalAllocations).ToList();
+        var allAllocations = internalAllocations.Concat(overlappingPlanAllocations).ToList();
 
         // Students lookup
         var studentIds = allAllocations.Select(a => a.StudentId).Distinct().ToList();
@@ -2153,10 +2215,50 @@ public class ExamSeatAllocationAppService(
             : new List<Standard>();
         var standardsDict = standards.ToDictionary(s => s.Id);
 
-        // Build seat items — one per seat in the room
-        // A seat can only be shown once. The plan filter above prevents normal
-        // cross-plan collisions; grouping also keeps old/inconsistent data from
-        // turning this read-only endpoint into a 500 response.
+        // Include plan and subject context in every occupied seat. The manual editor uses this
+        // to explain why a seat is unavailable, and the published view uses it to label a merged
+        // room containing students from multiple simultaneous plans.
+        var allocationPlanIds = allAllocations
+            .Select(allocation => allocation.SeatingPlanId)
+            .Distinct()
+            .ToList();
+        var allocationPlans = allocationPlanIds.Count == 0
+            ? []
+            : await seatingPlanRepository.GetListAsync(candidate =>
+                allocationPlanIds.Contains(candidate.Id));
+        var allocationPlanNamesById = allocationPlans.ToDictionary(
+            candidate => candidate.Id,
+            candidate => candidate.Name);
+        var allocationPlanSubjects = allocationPlanIds.Count == 0
+            ? []
+            : await seatingPlanSubjectRepository.GetListAsync(subject =>
+                allocationPlanIds.Contains(subject.SeatingPlanId));
+        var allocationSubjectIds = allocationPlanSubjects
+            .Select(subject => subject.SubjectId)
+            .Distinct()
+            .ToList();
+        var allocationSubjects = allocationSubjectIds.Count == 0
+            ? []
+            : await subjectRepository.GetListAsync(subject =>
+                allocationSubjectIds.Contains(subject.Id));
+        var allocationSubjectNamesById = allocationSubjects.ToDictionary(
+            subject => subject.Id,
+            subject => subject.Name);
+        var allocationSubjectNamesByPlanId = allocationPlanSubjects
+            .GroupBy(subject => subject.SeatingPlanId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .Select(subject => allocationSubjectNamesById.GetValueOrDefault(subject.SubjectId))
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Cast<string>()
+                    .Distinct()
+                    .OrderBy(name => name)
+                    .ToList());
+
+        // Build one item per physical seat. Current-plan allocations were concatenated first,
+        // so they remain visible if legacy/inconsistent data contains a duplicate seat; grouping
+        // also prevents that old data from turning this read-only endpoint into a 500 response.
         var allocBySeats = allAllocations
             .GroupBy(a => a.SeatNumber)
             .ToDictionary(g => g.Key, g => g.First());
@@ -2165,21 +2267,38 @@ public class ExamSeatAllocationAppService(
         for (var seat = 1; seat <= totalSeats; seat++)
         {
             allocBySeats.TryGetValue(seat, out var alloc);
-            Student? student = alloc != null && studentsDict.TryGetValue(alloc.StudentId, out var s) ? s : null;
+            Student? student = alloc != null && studentsDict.TryGetValue(alloc.StudentId, out var s)
+                ? s
+                : null;
+            var isExternalExamOccupied = alloc != null && alloc.ExamId != examId;
+            var isOtherPlanOccupied = alloc != null && alloc.SeatingPlanId != plan.Id;
             var stdName = student?.StandardId != null && standardsDict.TryGetValue(student.StandardId!.Value, out var std)
                 ? std.Name : string.Empty;
+            var studentName = student == null
+                ? null
+                : $"{student.FirstName} {student.MiddleName} {student.LastName}"
+                    .Replace("  ", " ")
+                    .Trim();
 
             allItems.Add(new SeatLayoutItemDto
             {
                 SeatNumber = seat,
                 StudentId = alloc?.StudentId,
-                StudentName = (alloc != null && alloc.ExamId != examId) ? "Blocked (Other Exam)" : (student != null ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Replace("  ", " ").Trim() : null),
-                StandardName = (alloc != null && alloc.ExamId != examId) ? "Reserved" : stdName,
-                RollNo = (alloc != null && alloc.ExamId != examId) ? null : student?.RollNo,
+                StudentName = isExternalExamOccupied ? "Blocked (Other Exam)" : studentName,
+                StandardName = isExternalExamOccupied ? "Reserved" : stdName,
+                RollNo = isExternalExamOccupied ? null : student?.RollNo,
                 RoomNumber = room.RoomName,
                 IsRoomAssign = alloc?.IsRoomAssign ?? false,
                 BenchId = alloc?.BenchId,
-                IsExternalExamOccupied = alloc != null && alloc.ExamId != examId
+                IsExternalExamOccupied = isExternalExamOccupied,
+                IsOtherPlanOccupied = isOtherPlanOccupied,
+                SeatingPlanId = alloc?.SeatingPlanId,
+                SeatingPlanName = alloc == null
+                    ? null
+                    : allocationPlanNamesById.GetValueOrDefault(alloc.SeatingPlanId),
+                SubjectNames = alloc == null
+                    ? []
+                    : allocationSubjectNamesByPlanId.GetValueOrDefault(alloc.SeatingPlanId) ?? []
             });
         }
 
@@ -2202,7 +2321,7 @@ public class ExamSeatAllocationAppService(
             RoomId = input.RoomId,
             Room = ObjectMapper.Map<Room, RoomDto>(room),
             TotalSeats = totalSeats,
-            AllocatedCount = allAllocations.Count,
+            AllocatedCount = allocBySeats.Count,
             Items = pagedItems,
             TotalCount = totalCount,
             TotalPages = totalPages,
@@ -2310,9 +2429,31 @@ public class ExamSeatAllocationAppService(
 
         var disabledSeats = ParseIntCsv(room.DisabledSeatNumbersCsv);
         var reservedSeats = ParseIntCsv(room.ReservedSeatNumbersCsv);
-        var totalSeats = room.TotalBenches > 0 ? room.TotalBenches * room.BenchCapacity : room.Capacity;
-        if (input.Students.Any(s => s.SeatNumber > totalSeats || disabledSeats.Contains(s.SeatNumber) || reservedSeats.Contains(s.SeatNumber)))
+        var totalSeats = room.TotalBenches > 0
+            ? room.TotalBenches * room.BenchCapacity
+            : room.Capacity;
+        if (input.Students.Any(s =>
+            s.SeatNumber > totalSeats ||
+            disabledSeats.Contains(s.SeatNumber) ||
+            reservedSeats.Contains(s.SeatNumber)))
             throw new UserFriendlyException("One or more selected seats are outside the room layout or unavailable.");
+
+        var overlappingPlanAllocations = await GetOtherOverlappingPlanAllocationsAsync(
+            examId,
+            plan.Id,
+            [input.RoomId]);
+        var incomingSeatNumbers = input.Students.Select(student => student.SeatNumber).ToHashSet();
+        var conflictingAllocation = overlappingPlanAllocations.FirstOrDefault(allocation =>
+            incomingSeatNumbers.Contains(allocation.SeatNumber));
+        if (conflictingAllocation != null)
+        {
+            var relatedPlan = await seatingPlanRepository.FindAsync(conflictingAllocation.SeatingPlanId);
+            throw new UserFriendlyException(
+                $"{room.RoomName} seat {conflictingAllocation.SeatNumber} is already used by {relatedPlan?.Name ?? "another seating plan"} at the same examination time. Choose another seat.")
+            {
+                Code = "ROOM_SEAT_TIME_CONFLICT"
+            };
+        }
 
         var incomingStudentIds = input.Students.Select(s => s.StudentId).ToHashSet();
 
@@ -2860,44 +3001,42 @@ public class ExamSeatAllocationAppService(
         };
     }
 
-    private async Task<List<ExamSeatAllocation>> GetExternalOverlappingAllocationsAsync(Guid examId, Guid planId, List<Guid> roomIds)
+    private async Task<List<ExamSeatAllocation>> GetOtherOverlappingPlanAllocationsAsync(
+        Guid examId,
+        Guid planId,
+        IReadOnlyCollection<Guid> roomIds)
     {
-        var externalAllocations = new List<ExamSeatAllocation>();
-        
         var planSubjects = await seatingPlanSubjectRepository.GetListAsync(s => s.SeatingPlanId == planId);
-        var planSubjectIds = planSubjects.Select(s => s.ExamSubjectId).ToHashSet();
-        
+        var currentPlanSubjectIds = planSubjects.Select(s => s.ExamSubjectId).ToHashSet();
+        if (currentPlanSubjectIds.Count == 0 || roomIds.Count == 0)
+            return [];
+
         var exam = await GetScopedExamAsync(examId);
-        var currentSubjects = exam.ExamSubjects.Where(s => planSubjectIds.Contains(s.Id)).ToList();
-        
-        var activeTimeSlots = currentSubjects
-            .Where(s => s.StartTime.HasValue && s.EndTime.HasValue)
-            .Select(s => new { Start = s.StartTime.Value, End = s.EndTime.Value })
-            .ToList();
+        var otherExams = await examRepository.GetListAsync(
+            candidate => candidate.Id != examId,
+            includeDetails: true);
+        var examSubjectsById = otherExams
+            .SelectMany(candidate => candidate.ExamSubjects)
+            .Concat(exam.ExamSubjects)
+            .GroupBy(subject => subject.Id)
+            .ToDictionary(group => group.Key, group => group.First());
 
-        if (activeTimeSlots.Count > 0)
-        {
-            var allOtherExams = await examRepository.GetListAsync(e => e.Id != examId, includeDetails: true);
-            var overlappingOtherSubjects = allOtherExams
-                .SelectMany(e => e.ExamSubjects)
-                .Where(s => s.StartTime.HasValue && s.EndTime.HasValue &&
-                            activeTimeSlots.Any(t => s.StartTime.Value < t.End && s.EndTime.Value > t.Start))
-                .Select(s => s.Id)
-                .ToHashSet();
+        var otherPlanSubjects = await seatingPlanSubjectRepository.GetListAsync(subject =>
+            subject.SeatingPlanId != planId);
+        var overlappingPlanIds = otherPlanSubjects
+            .GroupBy(subject => subject.SeatingPlanId)
+            .Where(group => PlanSchedulesOverlap(
+                currentPlanSubjectIds,
+                group.Select(subject => subject.ExamSubjectId).ToList(),
+                examSubjectsById))
+            .Select(group => group.Key)
+            .ToHashSet();
 
-            if (overlappingOtherSubjects.Count > 0)
-            {
-                var overlappingPlanSubjects = await seatingPlanSubjectRepository.GetListAsync(s => overlappingOtherSubjects.Contains(s.ExamSubjectId));
-                var overlappingPlanIds = overlappingPlanSubjects.Select(s => s.SeatingPlanId).ToHashSet();
+        if (overlappingPlanIds.Count == 0)
+            return [];
 
-                if (overlappingPlanIds.Count > 0)
-                {
-                    externalAllocations = await seatAllocationRepository.GetListAsync(a => 
-                        roomIds.Contains(a.RoomId) && overlappingPlanIds.Contains(a.SeatingPlanId));
-                }
-            }
-        }
-        
-        return externalAllocations;
+        return await seatAllocationRepository.GetListAsync(allocation =>
+            roomIds.Contains(allocation.RoomId) &&
+            overlappingPlanIds.Contains(allocation.SeatingPlanId));
     }
 }

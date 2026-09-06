@@ -64,7 +64,7 @@ public partial class FeeAdjustmentAppService
         request.EnsureCanApply();
 
         var dueFees = await dueFeeRepository.GetListAsync(
-            df => df.StudentId == request.StudentId && df.OutstandingAmount > 0.001);
+			df => df.StudentId == request.StudentId && df.OutstandingAmount > 0.001m);
         var feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
         var feeHeads = feeHeadIds.Count > 0
             ? await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id)) : [];
@@ -79,9 +79,9 @@ public partial class FeeAdjustmentAppService
                 MonthOrder = (int)df.Month,
                 FeeHeadId = df.FeeHeadId,
                 FeeHeadName = feeHeadMap.GetValueOrDefault(df.FeeHeadId, string.Empty),
-                TotalFees = df.OriginalAmount, PaidAmount = df.PaidAmount,
-                PendingAmount = df.OutstandingAmount, DueAmount = df.OutstandingAmount,
-                MaxApplicableAmount = Math.Min(df.OutstandingAmount, request.RemainingAmount),
+				TotalFees = (double)df.OriginalAmount, PaidAmount = (double)df.PaidAmount,
+				PendingAmount = (double)df.OutstandingAmount, DueAmount = (double)df.OutstandingAmount,
+				MaxApplicableAmount = Math.Min((double)df.OutstandingAmount, request.RemainingAmount),
             }).ToList();
 
         return new FeeAdjustmentApplyContextDto

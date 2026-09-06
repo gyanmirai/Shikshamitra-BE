@@ -69,8 +69,8 @@ public class FeeAdjustmentManager(
             }
 
             pendingSource.TryGetValue(dueFeeId, out var reserved);
-            var available = dueFee.AdjustableBalance - reserved;
-            if (amount > available + 0.001)
+			var available = dueFee.AdjustableBalance - (decimal)reserved;
+			if ((decimal)amount > available + 0.001m)
             {
                 throw new BusinessException(FeeAdjustmentErrorCodes.SourceExceedsAdjustableBalance)
                     .WithData("DueFeeId", dueFeeId)
@@ -151,7 +151,7 @@ public class FeeAdjustmentManager(
                     .WithData("DueFeeId", dueFeeId);
             }
 
-            if (amount > dueFee.OutstandingAmount + 0.001)
+			if ((decimal)amount > dueFee.OutstandingAmount + 0.001m)
             {
                 throw new BusinessException(FeeAdjustmentErrorCodes.TargetExceedsOutstanding)
                     .WithData("DueFeeId", dueFeeId)
@@ -170,7 +170,7 @@ public class FeeAdjustmentManager(
 
         foreach (var (dueFeeId, amount) in targetLines)
         {
-            dueFeeMap[dueFeeId].ApplyAdjustmentCredit(amount);
+			dueFeeMap[dueFeeId].ApplyAdjustmentCredit((decimal)amount);
         }
 
         await dueFeeRepository.UpdateManyAsync(dueFees, autoSave: false);

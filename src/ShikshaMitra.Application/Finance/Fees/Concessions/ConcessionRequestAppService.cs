@@ -1,11 +1,14 @@
 using System;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
+using ShikshaMitra.Common.Files;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -28,9 +31,12 @@ public partial class ConcessionRequestAppService(
 	IRepository<ConcessionType, Guid> concessionTypeRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<DueFee, Guid> dueFeeRepository,
+	IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
+	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
 	FinanceScopeAccessService financeScopeAccessService,
+	IFileStorageAppService fileStorageAppService,
 	ICurrentUser currentUser,
 	IGuidGenerator guidGenerator,
 	IUnitOfWorkManager unitOfWorkManager,

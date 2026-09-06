@@ -23,6 +23,8 @@ Finance covers fees, collections, concessions, adjustments, refunds, receipts, a
 | 4 | [workflows.md](./workflows.md) | Trace charge, concession, adjustment, collection, refund, and reconciliation flows |
 | 5 | [testing.md](./testing.md) | Pick focused Finance validation commands |
 | 6 | [Concession policy flow](./references/concession-policy-flow.md) | Review the proposed versioned concession policy, fee assignment, request, approval, allocation, and correction design |
+| 7 | [Concession policy end-to-end](./references/concession-policy-end-to-end.md) | Configure, integrate, deploy, and verify concession policies |
+| 8 | [Collection policy end-to-end](./references/collection-policy-end-to-end.md) | Follow the target staff, frontend, backend, runtime, and rollout flow for collection policies |
 
 ## Source of truth
 
@@ -47,6 +49,8 @@ Use this table before searching code:
 | Which workflow should I trace? | [workflows.md](./workflows.md) |
 | Which tests should I run? | [testing.md](./testing.md) |
 | How should Concession Policy integrate with fee structures and student requests? | [Concession policy flow](./references/concession-policy-flow.md) |
+| How does concession policy work end to end? | [Concession policy end-to-end](./references/concession-policy-end-to-end.md) |
+| How should collection policy work end to end? | [Collection policy end-to-end](./references/collection-policy-end-to-end.md) |
 
 ## Validation
 

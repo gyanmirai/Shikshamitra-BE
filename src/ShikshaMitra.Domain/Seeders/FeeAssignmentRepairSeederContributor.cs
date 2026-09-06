@@ -115,7 +115,7 @@ public class FeeAssignmentRepairSeederContributor : BaseSeederContributor
 					CurrentTenant.Id,
 					structure.Id,
 					group.Key,
-					amount,
+					(double)amount,
 					isOneTime,
 					isOptional: false,
 					payableMonth: isOneTime ? lines[0].Month : null,
@@ -135,17 +135,28 @@ public class FeeAssignmentRepairSeederContributor : BaseSeederContributor
 		foreach (var student in students)
 		{
 			var feeStructureId = student.FeeStructureId!.Value;
+			var structure = await _feeStructureRepository.GetAsync(feeStructureId);
 			var assignment = await _studentFeeStructureRepository.FirstOrDefaultAsync(
 				sfs => sfs.StudentId == student.Id);
 
-			if (assignment == null)
+			if (assignment == null &&
+				structure.ConcessionPolicyId.HasValue &&
+				structure.ConcessionPolicyVersionId.HasValue)
 			{
+				var assignmentMetadata = await _feeStructureMetadataRepository.GetAsync(structure.FeeStructureMetadataId);
+				if (!assignmentMetadata.AcademicYearId.HasValue)
+					continue;
 				await _studentFeeStructureRepository.InsertAsync(
 					new StudentFeeStructure(
 						GuidGenerator.Create(),
 						CurrentTenant.Id,
 						student.Id,
-						feeStructureId),
+						feeStructureId,
+						assignmentMetadata.AcademicYearId.Value,
+						structure.ConcessionPolicyId.Value,
+						structure.ConcessionPolicyVersionId.Value,
+						structure.ConcessionFeeHeadScope,
+						structure.GetConcessionApplicableFeeHeadIds()),
 					autoSave: false);
 			}
 
@@ -157,7 +168,6 @@ public class FeeAssignmentRepairSeederContributor : BaseSeederContributor
 			if (details.Count == 0)
 				continue;
 
-			var structure = await _feeStructureRepository.GetAsync(feeStructureId);
 			foreach (var detail in details.Where(d => structure.FeeStructureDetails.All(x => x.Id != d.Id)))
 				structure.AddDetail(detail);
 

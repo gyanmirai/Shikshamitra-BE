@@ -21,7 +21,15 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public Guid? TenantId { get; private set; }
 	public Guid StudentId { get; private set; }
+	public Guid StudentFeeStructureId { get; private set; }
+	public Guid ConcessionPolicyId { get; private set; }
+	public Guid ConcessionPolicyVersionId { get; private set; }
 	public Guid ConcessionTypeId { get; private set; }
+	public Guid AcademicYearId { get; private set; }
+	public Guid BoardId { get; private set; }
+	public Guid EducationMediumId { get; private set; }
+	public Guid StandardId { get; private set; }
+	public Guid DivisionId { get; private set; }
 	public ConcessionRequestStatus Status { get; private set; }
 	public string? Remarks { get; private set; }
 	public string? RejectionReason { get; private set; }
@@ -30,6 +38,7 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public virtual ICollection<ConcessionFeeHeadMapping> ConcessionFeeHeadMappings { get; private set; } = [];
 	public virtual ICollection<ConcessionRequestDocument> ConcessionRequestDocuments { get; private set; } = [];
 	public virtual ICollection<ConcessionDueFeeAllocation> ConcessionDueFeeAllocations { get; private set; } = [];
+	public virtual ICollection<ConcessionReversal> ConcessionReversals { get; private set; } = [];
 
 	private ConcessionRequest() { }
 
@@ -37,6 +46,9 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid id,
 		Guid? tenantId,
 		Guid studentId,
+		Guid studentFeeStructureId,
+		Guid concessionPolicyId,
+		Guid concessionPolicyVersionId,
 		Guid concessionTypeId,
 		Guid academicYearId,
 		Guid boardId,
@@ -48,22 +60,30 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		StudentId = studentId;
+		StudentFeeStructureId = studentFeeStructureId;
+		ConcessionPolicyId = concessionPolicyId;
+		ConcessionPolicyVersionId = concessionPolicyVersionId;
 		ConcessionTypeId = concessionTypeId;
 		Status = ConcessionRequestStatus.Pending;
 		Remarks = remarks;
 		SetAcademicScope(academicYearId, boardId, educationMediumId, standardId, divisionId);
 	}
 
-	public Guid GetAcademicYearId() => this.GetProperty<Guid>(AcademicYearIdProperty);
-	public Guid GetBoardId() => this.GetProperty<Guid>(BoardIdProperty);
-	public Guid GetEducationMediumId() => this.GetProperty<Guid>(EducationMediumIdProperty);
-	public Guid GetStandardId() => this.GetProperty<Guid>(StandardIdProperty);
-	public Guid GetDivisionId() => this.GetProperty<Guid>(DivisionIdProperty);
+	public Guid GetAcademicYearId() => AcademicYearId;
+	public Guid GetBoardId() => BoardId;
+	public Guid GetEducationMediumId() => EducationMediumId;
+	public Guid GetStandardId() => StandardId;
+	public Guid GetDivisionId() => DivisionId;
 	public Guid? GetApprovedBy() => this.GetProperty<Guid?>(ApprovedByProperty);
 	public DateTime? GetApprovedOn() => this.GetProperty<DateTime?>(ApprovedOnProperty);
 
 	public void SetAcademicScope(Guid academicYearId, Guid boardId, Guid mediumId, Guid standardId, Guid divisionId)
 	{
+		AcademicYearId = academicYearId;
+		BoardId = boardId;
+		EducationMediumId = mediumId;
+		StandardId = standardId;
+		DivisionId = divisionId;
 		this.SetProperty(AcademicYearIdProperty, academicYearId);
 		this.SetProperty(BoardIdProperty, boardId);
 		this.SetProperty(EducationMediumIdProperty, mediumId);
@@ -73,6 +93,15 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public decimal GetTotalRequestedConcession() =>
 		ConcessionFeeHeadMappings.Sum(m => m.FeeHeadConcessionAmount);
+
+	public decimal GetTotalApprovedConcession() =>
+		ConcessionDueFeeAllocations.Sum(a => a.ConcessionAmount);
+
+	public decimal GetTotalReversedConcession() =>
+		ConcessionReversals.Sum(r => r.Amount);
+
+	public decimal GetNetApprovedConcession() =>
+		Math.Max(0m, GetTotalApprovedConcession() - GetTotalReversedConcession());
 
 	public void ReplaceFeeHeadMappings(IEnumerable<ConcessionFeeHeadMapping> mappings)
 	{
@@ -155,9 +184,28 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		this.SetProperty(ApprovedOnProperty, DateTime.UtcNow);
 	}
 
+	public void RecordReversals(IEnumerable<ConcessionReversal> reversals)
+	{
+		if (Status is not (ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed))
+			throw new BusinessException(FinanceConcessionErrorCodes.InvalidReversal)
+				.WithData("Status", Status.ToString());
+
+		foreach (var reversal in reversals)
+			ConcessionReversals.Add(reversal);
+
+		var reversed = GetTotalReversedConcession();
+		var approved = GetTotalApprovedConcession();
+		if (reversed <= 0m || reversed > approved)
+			throw new BusinessException(FinanceConcessionErrorCodes.InvalidReversal);
+
+		Status = reversed == approved
+			? ConcessionRequestStatus.Reversed
+			: ConcessionRequestStatus.PartiallyReversed;
+	}
+
 	public void Cancel()
 	{
-		if (Status is ConcessionRequestStatus.Approved or ConcessionRequestStatus.Rejected)
+		if (Status != ConcessionRequestStatus.Pending)
 		{
 			throw new BusinessException(FinanceConcessionErrorCodes.CannotApproveOrRejectNonPending)
 				.WithData("Status", Status.ToString());

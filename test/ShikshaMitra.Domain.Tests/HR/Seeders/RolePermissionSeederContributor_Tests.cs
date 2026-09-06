@@ -21,8 +21,36 @@ public class RolePermissionSeederContributor_Tests
 	public void Permission_Grant_Changes_Should_Use_The_Current_Seeder_Marker_Version()
 	{
 		RolePermissionSeederContributor.StepName.ShouldBe("RolePermissionSeeder");
-		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v14");
+		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v18");
 		RolePermissionSeederContributor.StepOrder.ShouldBe(120);
+	}
+
+	[Fact]
+	public void Finance_Administrators_Should_Receive_Concession_Type_Status_Permission()
+	{
+		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
+
+		foreach (var roleName in new[] { "admin", "Finance Officer" })
+		{
+			rolePermissions[roleName].ShouldContain(
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.ChangeStatus);
+		}
+	}
+
+	[Fact]
+	public void Finance_Roles_Should_Receive_Concession_Policy_Permissions()
+	{
+		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
+
+		foreach (var roleName in new[] { "admin", "super-admin", "Director", "Principal", "Finance Officer" })
+		{
+			var permissions = rolePermissions[roleName];
+
+			foreach (var permission in ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.All)
+			{
+				permissions.ShouldContain(permission);
+			}
+		}
 	}
 
 	[Fact]

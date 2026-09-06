@@ -2,6 +2,8 @@
 using ShikshaMitra.Finance.Fees.Concessions;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -12,7 +14,10 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
 	public string Name { get; private set; }
+	public string NormalizedName { get; private set; }
 	public string? Description { get; private set; }
+	public bool IsActive { get; private set; } = true;
+	public string? DeactivationReason { get; private set; }
 
 	/// <summary>
 	/// Indicates whether this concession type applies as a percentage or a flat amount.
@@ -39,8 +44,8 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = tenantId;
 		AcademicYearId = academicYearId;
-		Name = name;
-		Description = description;
+		SetDetails(name, description);
+		IsActive = isActive;
 		DiscountType = discountType;
 		ConcessionTypeDocuments = new List<ConcessionTypeDocument>();
 	}
@@ -51,14 +56,41 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AmountType? discountType = null
 	)
 	{
-		Name = name;
-		Description = description;
+		SetDetails(name, description);
 		DiscountType = discountType;
 	}
 
-	public void AddDocument(string documentName, long documentSize, List<DocumentType> acceptedFormats)
+	public void Activate()
 	{
-		var document = new ConcessionTypeDocument(Guid.NewGuid(), Id, documentName, documentSize);
+		IsActive = true;
+		DeactivationReason = null;
+	}
+
+	public void Deactivate(string reason)
+	{
+		var normalizedReason = reason?.Trim();
+		if (string.IsNullOrWhiteSpace(normalizedReason))
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.DeactivationReasonRequired);
+		}
+
+		if (normalizedReason.Length > ConcessionTypeConsts.MaxDeactivationReasonLength)
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.DeactivationReasonRequired);
+		}
+
+		IsActive = false;
+		DeactivationReason = normalizedReason;
+	}
+
+	public void AddDocument(
+		string documentName,
+		long documentSize,
+		List<DocumentType> acceptedFormats,
+		bool isRequired = true)
+	{
+		var document = new ConcessionTypeDocument(
+			Guid.NewGuid(), Id, documentName, documentSize, isRequired);
 
 		foreach (var format in acceptedFormats)
 		{
@@ -68,17 +100,38 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ConcessionTypeDocuments.Add(document);
 	}
 
-	public void ReplaceDocuments(List<(string DocumentName, long DocumentSize, List<DocumentType> AcceptedFormats)> documents)
+	public void ReplaceDocuments(
+		List<(string DocumentName, long DocumentSize, List<DocumentType> AcceptedFormats, bool IsRequired)> documents)
 	{
 		ConcessionTypeDocuments.Clear();
 		foreach (var d in documents)
 		{
-			var doc = new ConcessionTypeDocument(Guid.NewGuid(), Id, d.DocumentName, d.DocumentSize);
+			var doc = new ConcessionTypeDocument(
+				Guid.NewGuid(), Id, d.DocumentName, d.DocumentSize, d.IsRequired);
 			foreach (var format in d.AcceptedFormats)
 			{
 				doc.AddAcceptedFormat(format);
 			}
 			ConcessionTypeDocuments.Add(doc);
 		}
+	}
+
+	private void SetDetails(string name, string? description)
+	{
+		var displayName = ConcessionTypeConsts.NormalizeDisplayName(name);
+		if (string.IsNullOrWhiteSpace(displayName) || displayName.Length > ConcessionTypeConsts.MaxNameLength)
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.DuplicateName);
+		}
+
+		var normalizedDescription = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+		if (normalizedDescription?.Length > ConcessionTypeConsts.MaxDescriptionLength)
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.InvalidDocument);
+		}
+
+		Name = displayName;
+		NormalizedName = ConcessionTypeConsts.NormalizeNameKey(displayName);
+		Description = normalizedDescription;
 	}
 }

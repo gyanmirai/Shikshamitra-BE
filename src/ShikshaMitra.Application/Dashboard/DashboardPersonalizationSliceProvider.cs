@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Academic.Examination.Results;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
@@ -139,6 +140,7 @@ public class DashboardPersonalizationSliceProvider(
 	IAttendanceDayRepository attendanceDayRepository,
 	IAttendanceEntryRepository attendanceEntryRepository,
 	IDueFeeRepository dueFeeRepository,
+	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<StudentDocument, Guid> studentDocumentRepository,
 	IRepository<DocumentTypeEntity, Guid> documentTypeRepository,
 	IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository,
@@ -499,12 +501,20 @@ public class DashboardPersonalizationSliceProvider(
 		}
 
 		var dueFees = await dueFeeRepository.GetQueryableAsync();
+		var feeHeads = await feeHeadRepository.GetQueryableAsync();
+		var academicYearId = Guid.TryParse(summary.AcademicYearId, out var parsedAcademicYearId)
+			? parsedAcademicYearId
+			: Guid.Empty;
+		var academicYearFeeHeadIds = feeHeads
+			.Where(fh => fh.AcademicYearId == academicYearId)
+			.Select(fh => fh.Id);
 		var outstandingRows = await asyncExecuter.ToListAsync(dueFees
 			.Where(dueFee =>
 				dueFee.StudentId == studentId &&
-				dueFee.OutstandingAmount > 0d)
+				academicYearFeeHeadIds.Contains(dueFee.FeeHeadId) &&
+				dueFee.OutstandingAmount > 0m)
 			.Select(dueFee => dueFee.OutstandingAmount));
-		var outstandingAmount = outstandingRows.Sum();
+		var outstandingAmount = (double)outstandingRows.Sum();
 
 		UpdateWidget(
 			summary.KpiCards,

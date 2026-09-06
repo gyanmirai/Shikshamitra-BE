@@ -107,7 +107,7 @@ public partial class FeeRefundAppService
 					.Select(df => new RefundMonthItemDto
 					{
 						InstallmentId = df.Id, Month = df.Month.ToString(),
-						Total = df.OriginalAmount, Paid = df.PaidAmount,
+						Total = (double)df.OriginalAmount, Paid = (double)df.PaidAmount,
 						RefundAmount = lineMap.TryGetValue(df.Id, out var amt) ? amt : 0,
 						Status = (int)df.Status
 					}).ToList();
@@ -116,7 +116,7 @@ public partial class FeeRefundAppService
 					FeeHeadId = g.Key,
 					FeeHeadName = feeHeadMap.TryGetValue(g.Key, out var name) ? name : g.Key.ToString(),
 					TotalPaid = items.Sum(i => i.Paid),
-					TotalRefunded = g.Sum(df => df.RefundedAmount),
+					TotalRefunded = (double)g.Sum(df => df.RefundedAmount),
 					Items = items
 				};
 			}).ToList();

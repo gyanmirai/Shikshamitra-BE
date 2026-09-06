@@ -10,12 +10,20 @@ public class ConcessionTypeDocumentConfiguration : IEntityTypeConfiguration<Conc
 	{
 		builder.ToTable("Finance_ConcessionTypeDocuments", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.Property(x => x.DocumentName).HasMaxLength(ConcessionTypeConsts.MaxDocumentNameLength).IsRequired();
+		builder.Property(x => x.MaxFileSizeBytes).IsRequired();
+		builder.Property(x => x.IsRequired).IsRequired().HasDefaultValue(true);
+
+		builder.HasOne<ConcessionType>()
+			.WithMany(x => x.ConcessionTypeDocuments)
+			.HasForeignKey(x => x.ConcessionTypeId)
+			.OnDelete(DeleteBehavior.Cascade);
 
 		// Configure the relationship between ConcessionTypeDocument and ConcessionTypeDocumentFormat
 		builder.HasMany(x => x.AcceptedFormats)
 			.WithOne()
-			.HasForeignKey("ConcessionTypeDocumentId") // Assuming the foreign key is named "ConcessionTypeDocumentId"
-			.OnDelete(DeleteBehavior.Cascade); // Configure cascade delete if needed
+			.HasForeignKey(x => x.ConcessionTypeDocumentId)
+			.OnDelete(DeleteBehavior.Cascade);
 
 		builder.Navigation(x => x.AcceptedFormats).AutoInclude();
 	}

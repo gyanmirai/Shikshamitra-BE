@@ -58,7 +58,7 @@ public partial class CollectFeeWorkflow
 				throw new BusinessException(DueFeeErrorCodes.BillNotGeneratedYet)
 					.WithData("DueFeeId", df.Id)
 					.WithData("DemandDate", df.DemandDate);
-			if (dfp.Amount > df.OutstandingAmount)
+			if ((decimal)dfp.Amount > df.OutstandingAmount)
 				throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
 					.WithData("DueFeeId", df.Id).WithData("Outstanding", df.OutstandingAmount).WithData("Amount", dfp.Amount);
 		}

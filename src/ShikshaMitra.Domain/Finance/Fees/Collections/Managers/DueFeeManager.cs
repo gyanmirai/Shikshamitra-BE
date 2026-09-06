@@ -125,7 +125,7 @@ public class DueFeeManager(
 				month: month,
 				year: year,
 				isOneTime: installmentCount == 1,
-				amount: amount,
+				amount: (decimal)amount,
 				dueDate: dueDate,
 				feeStructureDetailId: detail.Id,
 				paymentTermId: schedule.PaymentTermId,
@@ -258,7 +258,7 @@ public class DueFeeManager(
 			month: month,
 			year: year,
 			isOneTime: detail.IsOneTime,
-			amount: amount,
+			amount: (decimal)amount,
 			dueDate: ComputeDefaultDueDate(month, year));
 
 	private static List<(MonthEnum Month, int Year)> ComputeMonthRange(AcademicYear academicYear)

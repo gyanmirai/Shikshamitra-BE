@@ -28,13 +28,27 @@ public class ConcessionTypeController(
 
 	[HttpGet("{academicYearId}/concession-types")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.View)]
-	public async Task<Result<PagedResultDto<ConcessionTypeResponse>>> GetListAsync(Guid academicYearId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null)
+	public async Task<Result<PagedResultDto<ConcessionTypeResponse>>> GetListAsync(
+		Guid academicYearId,
+		int skipCount = 0,
+		int maxResultCount = 10,
+		string? searchTerm = null,
+		bool includeInactive = false,
+		bool? isActive = null)
 	{
-		var concessionTypes = await concessionTypeAppService.GetListAsync(academicYearId, skipCount, maxResultCount, searchTerm);
+		var concessionTypes = await concessionTypeAppService.GetListAsync(
+			academicYearId, skipCount, maxResultCount, searchTerm, includeInactive, isActive);
 		return Result.Success(concessionTypes);
 	}
 
-	[HttpGet("concession-types/{concessionTypeId}")]
+	[HttpGet("concession-types/document-defaults")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.View)]
+	public async Task<Result<ConcessionTypeDocumentDefaultsResponse>> GetDocumentDefaultsAsync()
+	{
+		return Result.Success(await concessionTypeAppService.GetDocumentDefaultsAsync());
+	}
+
+	[HttpGet("concession-types/{concessionTypeId:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.View)]
 	public async Task<Result<ConcessionTypeResponse>> GetAsync(Guid concessionTypeId)
 	{
@@ -42,15 +56,36 @@ public class ConcessionTypeController(
 		return Result.Success(concessionType);
 	}
 
-	[HttpPut("concession-types/{concessionTypeId}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.Add)]
+	[HttpGet("concession-types/{concessionTypeId:guid}/versions")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.View)]
+	public async Task<Result<PagedResultDto<ConcessionTypeVersionHistoryItemDto>>> GetVersionHistoryAsync(
+		Guid concessionTypeId,
+		int skipCount = 0,
+		int maxResultCount = 50)
+	{
+		var history = await concessionTypeAppService.GetVersionHistoryAsync(
+			concessionTypeId, skipCount, maxResultCount);
+		return Result.Success(history);
+	}
+
+	[HttpPut("concession-types/{concessionTypeId:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.Edit)]
 	public async Task<Result> UpdateAsync(Guid concessionTypeId, ConcessionTypeRequest concessionTypeUpdateRequest)
 	{
 		await concessionTypeAppService.UpdateAsync(concessionTypeId, concessionTypeUpdateRequest);
 		return Result.Success("Concession type updated successfully.");
 	}
 
-	[HttpDelete("concession-types/{concessionTypeId}")]
+	[HttpPatch("concession-types/{concessionTypeId:guid}/status")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.ChangeStatus)]
+	public async Task<Result<ConcessionTypeResponse>> UpdateStatusAsync(
+		Guid concessionTypeId,
+		ConcessionTypeStatusUpdateRequest input)
+	{
+		return Result.Success(await concessionTypeAppService.UpdateStatusAsync(concessionTypeId, input));
+	}
+
+	[HttpDelete("concession-types/{concessionTypeId:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.Delete)]
 	public async Task<Result> DeleteAsync(Guid concessionTypeId)
 	{

@@ -2,7 +2,10 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShikshaMitra.MultiTenancy;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
+using Volo.Abp;
 using Volo.Abp.AuditLogging;
+using Volo.Abp.Auditing;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.FeatureManagement;
@@ -53,6 +56,13 @@ public class ShikshaMitraDomainModule : AbpModule
 		Configure<AbpSequentialGuidGeneratorOptions>(options =>
 		{
 			options.DefaultSequentialGuidType = SequentialGuidType.SequentialAsString;
+		});
+
+		Configure<AbpAuditingOptions>(options =>
+		{
+			options.EntityHistorySelectors.Add(new NamedTypeSelector(
+				"ConcessionType",
+				type => type == typeof(ConcessionType)));
 		});
 
 		Configure<AbpBlobStoringOptions>(options =>

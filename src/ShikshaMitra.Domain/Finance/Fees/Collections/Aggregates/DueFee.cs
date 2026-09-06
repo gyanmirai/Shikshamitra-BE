@@ -29,16 +29,19 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// real per-school configuration is a documented follow-up, not silently assumed elsewhere.
 	/// </summary>
 	public DateTime DueDate { get; private set; }
-	public double OriginalAmount { get; private set; }
-	public double NetAmount { get; private set; }
-	public double PaidAmount { get; private set; }
-	public double OutstandingAmount { get; private set; }
+	public decimal OriginalAmount { get; private set; }
+	public decimal NetAmount { get; private set; }
+	public decimal PaidAmount { get; private set; }
+	public decimal OutstandingAmount { get; private set; }
 
 	/// <summary>Total amount already refunded against this obligation line.</summary>
-	public double RefundedAmount { get; private set; }
+	public decimal RefundedAmount { get; private set; }
+
+	/// <summary>Total concession credit applied to this obligation line.</summary>
+	public decimal ConcessionAmount { get; private set; }
 
 	/// <summary>Total adjustment credit applied to this obligation line (reduces outstanding).</summary>
-	public double AdjustmentCreditAmount { get; private set; }
+	public decimal AdjustmentCreditAmount { get; private set; }
 
 	public FeeStatus Status { get; private set; }
 
@@ -73,7 +76,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MonthEnum month,
 		int year,
 		bool isOneTime,
-		double amount,
+		decimal amount,
 		DateTime dueDate,
 		Guid? feeStructureDetailId = null,
 		Guid? paymentTermId = null,
@@ -96,11 +99,12 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		IsOneTime = isOneTime;
 		DueDate = dueDate;
 		OriginalAmount = amount;
-		NetAmount = 0;
-		PaidAmount = 0;
+		NetAmount = 0m;
+		PaidAmount = 0m;
 		OutstandingAmount = amount;
-		RefundedAmount = 0;
-		AdjustmentCreditAmount = 0;
+		RefundedAmount = 0m;
+		ConcessionAmount = 0m;
+		AdjustmentCreditAmount = 0m;
 		Status = FeeStatus.Pending;
 
 		FeeStructureDetailId = feeStructureDetailId;
@@ -159,23 +163,22 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			return $"{feeStructureDetailId:N}:{paymentTermVersionId:N}:{installmentSequence.Value}";
 		}
 
-		return $"{feeHeadId:N}:{year}:{(int)month}";
+		return $"{feeHeadId:N}:{year}:{(int) month}";
 	}
 
-	public void ApplyPayment(double amount)
+	public void ApplyPayment(decimal amount)
 	{
-		if (amount <= 0)
+		if (amount <= 0m)
 			throw new BusinessException(DueFeeErrorCodes.PaymentAmountMustBePositive)
 				.WithData("Amount", amount);
 
 		PaidAmount += amount;
-		RecalculateOutstanding();
-		Status = OutstandingAmount <= 0d ? FeeStatus.Paid : FeeStatus.Partial;
+		RecalculateBalancesAndStatus();
 	}
 
-	public void ApplyRefund(double amount)
+	public void ApplyRefund(decimal amount)
 	{
-		if (amount <= 0)
+		if (amount <= 0m)
 			throw new BusinessException(DueFeeErrorCodes.RefundAmountMustBePositive)
 				.WithData("Amount", amount);
 
@@ -186,31 +189,31 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("Available", available);
 
 		RefundedAmount += amount;
+		RecalculateBalancesAndStatus();
 	}
 
-	public double RefundableBalance => Math.Max(0d, PaidAmount - RefundedAmount);
+	public decimal RefundableBalance => Math.Max(0m, PaidAmount - RefundedAmount);
 
-	public double AdjustableBalance => Math.Max(0d, OutstandingAmount);
+	public decimal AdjustableBalance => Math.Max(0m, OutstandingAmount);
 
-	public void ReversePayment(double amount)
+	public void ReversePayment(decimal amount)
 	{
-		if (amount <= 0)
+		if (amount <= 0m)
 			throw new BusinessException(DueFeeErrorCodes.ReverseAmountMustBePositive)
 				.WithData("Amount", amount);
 
-		if (amount > PaidAmount)
-			throw new BusinessException(DueFeeErrorCodes.ReverseAmountMustBePositive)
+		if (amount > RefundableBalance)
+			throw new BusinessException(DueFeeErrorCodes.ReverseExceedsPaidAmount)
 				.WithData("Requested", amount)
-				.WithData("PaidAmount", PaidAmount);
+				.WithData("Available", RefundableBalance);
 
 		PaidAmount -= amount;
-		RecalculateOutstanding();
-		Status = PaidAmount <= 0d ? FeeStatus.Pending : FeeStatus.Partial;
+		RecalculateBalancesAndStatus();
 	}
 
-	public void ApplyConcession(double concessionAmount)
+	public void ApplyConcession(decimal concessionAmount)
 	{
-		if (concessionAmount <= 0)
+		if (concessionAmount <= 0m)
 		{
 			throw new BusinessException(DueFeeErrorCodes.PaymentAmountMustBePositive)
 				.WithData("Amount", concessionAmount);
@@ -224,13 +227,35 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("Requested", concessionAmount);
 		}
 
+		ConcessionAmount += concessionAmount;
 		NetAmount += concessionAmount;
-		RecalculateOutstanding();
+		RecalculateBalancesAndStatus();
 	}
 
-	public void ApplyAdjustmentCredit(double amount)
+	public void ReverseConcession(decimal amount)
 	{
-		if (amount <= 0)
+		if (amount <= 0m)
+		{
+			throw new BusinessException(DueFeeErrorCodes.ReverseAmountMustBePositive)
+				.WithData("Amount", amount);
+		}
+
+		if (amount > ConcessionAmount)
+		{
+			throw new BusinessException(FinanceConcessionErrorCodes.ReversalExceedsConcessionBalance)
+				.WithData("DueFeeId", Id)
+				.WithData("Requested", amount)
+				.WithData("Available", ConcessionAmount);
+		}
+
+		ConcessionAmount -= amount;
+		NetAmount -= amount;
+		RecalculateBalancesAndStatus();
+	}
+
+	public void ApplyAdjustmentCredit(decimal amount)
+	{
+		if (amount <= 0m)
 		{
 			throw new BusinessException(DueFeeErrorCodes.PaymentAmountMustBePositive)
 				.WithData("Amount", amount);
@@ -246,9 +271,17 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		AdjustmentCreditAmount += amount;
 		NetAmount += amount;
-		RecalculateOutstanding();
+		RecalculateBalancesAndStatus();
 	}
 
-	private void RecalculateOutstanding() =>
-		OutstandingAmount = Math.Max(0d, OriginalAmount - PaidAmount - NetAmount);
+	private void RecalculateBalancesAndStatus()
+	{
+		var netPaid = Math.Max(0m, PaidAmount - RefundedAmount);
+		OutstandingAmount = Math.Max(0m, OriginalAmount - netPaid - NetAmount);
+		Status = OutstandingAmount <= 0m
+			? FeeStatus.Paid
+			: netPaid > 0m || NetAmount > 0m
+				? FeeStatus.Partial
+				: FeeStatus.Pending;
+	}
 }

@@ -8,8 +8,12 @@ namespace ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 
 public class ConcessionTypeDocumentFormat : Entity<Guid>
 {
-	public Guid ConcessionTypeDocumentId { get; set; }
-	public DocumentType DocumentType { get; set; }
+	public Guid ConcessionTypeDocumentId { get; private set; }
+	public DocumentType DocumentType { get; private set; }
+
+	private ConcessionTypeDocumentFormat()
+	{
+	}
 
 	public ConcessionTypeDocumentFormat(Guid id, Guid concessionTypeDocumentId, DocumentType documentType)
 	{

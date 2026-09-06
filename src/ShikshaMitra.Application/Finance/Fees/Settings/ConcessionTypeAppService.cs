@@ -62,6 +62,8 @@ public class ConcessionTypeAppService(
 		bool includeInactive = false,
 		bool? isActive = null)
 	{
+		if (academicYearId == Guid.Empty || skipCount < 0 || maxResultCount is < 1 or > 100)
+			throw new BusinessException("Finance:ConcessionType:InvalidPaging");
 		var query = await concessionTypeRepository.GetQueryableAsync();
 		query = query.Where(x => x.AcademicYearId == academicYearId);
 

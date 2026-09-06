@@ -6,19 +6,24 @@ using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
+using System.Text.Json;
+using ShikshaMitra.Domain.Finance.Policies;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public partial class StudentFeeStructureAppService
 {
-	public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)
+	public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId, Guid academicYearId)
 	{
+		if (academicYearId == Guid.Empty)
+			throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.AcademicYearRequired);
 		var student = await studentRepository.GetAsync(studentId)
 			?? throw new Volo.Abp.BusinessException("Student with given id does not exist.");
 
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
 
-		var assignment    = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == studentId);
+		var assignment    = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
+			x.StudentId == studentId && x.AcademicYearId == academicYearId);
 		var feeStructureId = assignment?.FeeStructureStandardId ?? student.FeeStructureId;
 
 		if (feeStructureId == null)
@@ -26,8 +31,23 @@ public partial class StudentFeeStructureAppService
 
 		var feeStructure = await feeStructureRepository.GetAsync(feeStructureId.Value)
 			?? throw new Volo.Abp.BusinessException("Assigned fee structure could not be found.");
+		if (assignment is null)
+			throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached);
+		if (assignment.AcademicYearId == Guid.Empty ||
+			assignment.ConcessionPolicyId == Guid.Empty ||
+			assignment.ConcessionPolicyVersionId == Guid.Empty)
+		{
+			var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
+			if (!metadata.AcademicYearId.HasValue)
+				throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.AcademicYearMismatch);
+			var attachedPolicy = await ValidateConcessionPolicySnapshotAsync(feeStructure, metadata.AcademicYearId.Value);
+			assignment.RefreshConcessionPolicySnapshot(
+				metadata.AcademicYearId.Value, attachedPolicy.Policy.Id, attachedPolicy.Version.Id,
+				feeStructure.ConcessionFeeHeadScope, feeStructure.GetConcessionApplicableFeeHeadIds());
+			await studentFeeStructureRepository.UpdateAsync(assignment, autoSave: true);
+		}
 
-		var dueFees = await GetDueFeesForStudentAsync(studentId);
+		var dueFees = await GetDueFeesForStudentAsync(studentId, assignment);
 		var selectedFeeHeadIds = dueFees.Select(d => d.FeeHeadId).ToHashSet();
 		var details = await feeStructureDetailRepository.GetListAsync(d => d.FeeStructureId == feeStructureId.Value);
 
@@ -42,6 +62,11 @@ public partial class StudentFeeStructureAppService
 		else
 			feeHeads = [];
 
+		var policyVersion = await financePolicyVersionRepository.FindAsync(assignment.ConcessionPolicyVersionId)
+			?? throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+		var policySnapshot = JsonSerializer.Deserialize<ConcessionPolicySnapshot>(policyVersion.SnapshotJson)
+			?? throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+
 		return new StudentFeeStructureResponseDto
 		{
 			StudentFeeStructureId  = assignment?.Id ?? feeStructure.Id,
@@ -49,14 +74,30 @@ public partial class StudentFeeStructureAppService
 			StudentId              = studentId,
 			StandardId             = feeStructure.StandardId,
 			StructureName          = feeStructure.Name,
+			AcademicYearId         = assignment.AcademicYearId,
+			ConcessionPolicyId     = assignment.ConcessionPolicyId,
+			ConcessionPolicyVersionId = assignment.ConcessionPolicyVersionId,
+			ConcessionPolicyName   = policySnapshot.PolicyName,
+			ConcessionPolicyCode   = policySnapshot.PolicyCode,
+			ConcessionPolicyVersion = policySnapshot.Version,
+			ConcessionValueSource = policySnapshot.ValueSource.ToString(),
+			ConcessionCalculationMethod = policySnapshot.CalculationMethod.ToString(),
+			ConcessionPercentageValue = policySnapshot.PercentageValue,
+			ConcessionFixedAmount = policySnapshot.FixedAmount,
+			MaximumConcessionPercentage = policySnapshot.MaximumPercentage,
+			MaximumConcessionFixedAmount = policySnapshot.MaximumFixedAmount,
+			ConcessionFeeHeadScope = assignment.ConcessionFeeHeadScope.ToString(),
+			ConcessionApplicableFeeHeadIds = assignment.GetConcessionApplicableFeeHeadIds().ToList(),
+			ConcessionApplyOn = policySnapshot.ApplyOn.ToString(),
 			FeeHeads               = feeHeads,
 		};
 	}
 
-	private async Task<List<DueFee>> GetDueFeesForStudentAsync(Guid studentId)
+	private async Task<List<DueFee>> GetDueFeesForStudentAsync(Guid studentId, StudentFeeStructure? assignment)
 	{
 		var queryable = await dueFeeRepository.GetQueryableAsync();
-		return queryable.Where(d => d.StudentId == studentId)
+		var applicableIds = assignment?.GetConcessionApplicableFeeHeadIds().ToHashSet() ?? [];
+		return queryable.Where(d => d.StudentId == studentId && applicableIds.Contains(d.FeeHeadId))
 			.OrderBy(d => d.Year).ThenBy(d => d.Month).ToList();
 	}
 

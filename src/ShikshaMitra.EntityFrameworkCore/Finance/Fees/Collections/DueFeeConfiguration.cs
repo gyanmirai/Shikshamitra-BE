@@ -14,6 +14,13 @@ public class DueFeeConfiguration : IEntityTypeConfiguration<DueFee>
 		builder.Property(x => x.InstallmentName).HasMaxLength(100);
 		builder.Property(x => x.ScheduleInstanceKey).IsRequired().HasMaxLength(128);
 		builder.Property(x => x.ScheduleSource).HasConversion<int>();
+		builder.Property(x => x.OriginalAmount).HasPrecision(18, 2);
+		builder.Property(x => x.NetAmount).HasPrecision(18, 2);
+		builder.Property(x => x.PaidAmount).HasPrecision(18, 2);
+		builder.Property(x => x.OutstandingAmount).HasPrecision(18, 2);
+		builder.Property(x => x.RefundedAmount).HasPrecision(18, 2);
+		builder.Property(x => x.ConcessionAmount).HasPrecision(18, 2);
+		builder.Property(x => x.AdjustmentCreditAmount).HasPrecision(18, 2);
 
 		// Legacy month/year uniqueness retained for backward-compatible queries,
 		// but schedule-aware generation uniqueness uses ScheduleInstanceKey.

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -83,15 +84,17 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 	[HttpGet("concession-applications")]
 	[ProducesResponseType(typeof(ConcessionApplicationsDto), StatusCodes.Status200OK)]
 	public Task<ConcessionApplicationsDto> GetApplicationsAsync(
+		[FromQuery] Guid academicYearId,
 		[FromQuery] Guid boardId,
 		[FromQuery] Guid educationMediumId,
 		[FromQuery] Guid? standardId = null,
 		[FromQuery] Guid? divisionId = null,
-		[FromQuery] int page = 1,
-		[FromQuery] int pageSize = 20,
+		[FromQuery, Range(1, int.MaxValue)] int page = 1,
+		[FromQuery, Range(1, 100)] int pageSize = 20,
 		[FromQuery] int? status = null) =>
 		concessionRequestAppService.GetApplicationsAsync(new GetConcessionApplicationsInput
 		{
+			AcademicYearId = academicYearId,
 			BoardId = boardId,
 			EducationMediumId = educationMediumId,
 			StandardId = standardId,
@@ -118,9 +121,10 @@ public class ConcessionRequestsController(IConcessionRequestAppService concessio
 	[ProducesResponseType(typeof(StudentConcessionRequestsDto), StatusCodes.Status200OK)]
 	public Task<StudentConcessionRequestsDto> GetStudentRequestsAsync(
 		Guid studentId,
-		[FromQuery] int page = 1,
-		[FromQuery] int pageSize = 10) =>
-		concessionRequestAppService.GetStudentRequestsAsync(studentId, new PagedResultRequestDto
+		[FromQuery] Guid academicYearId,
+		[FromQuery, Range(1, int.MaxValue)] int page = 1,
+		[FromQuery, Range(1, 100)] int pageSize = 10) =>
+		concessionRequestAppService.GetStudentRequestsAsync(studentId, academicYearId, new PagedResultRequestDto
 		{
 			SkipCount = (page - 1) * pageSize,
 			MaxResultCount = pageSize,
@@ -140,4 +144,10 @@ public class ConcessionRequestsController(IConcessionRequestAppService concessio
 	[ProducesResponseType(typeof(ConcessionCancellationResponseDto), StatusCodes.Status200OK)]
 	public Task<ConcessionCancellationResponseDto> CancelAsync(Guid id) =>
 		concessionRequestAppService.CancelAsync(id);
+
+	[HttpPost("{id:guid}/reverse")]
+	[ProducesResponseType(typeof(ConcessionReversalResponseDto), StatusCodes.Status200OK)]
+	public Task<ConcessionReversalResponseDto> ReverseAsync(
+		Guid id, [FromBody] ReverseConcessionRequestDto input) =>
+		concessionRequestAppService.ReverseAsync(id, input);
 }

@@ -35,12 +35,12 @@ public partial class FeeAdjustmentAppService
                     .Select(df =>
                     {
                         pendingSource.TryGetValue(df.Id, out var reserved);
-                        var adjustable = Math.Max(0, df.AdjustableBalance - reserved);
+						var adjustable = (double)Math.Max(0m, df.AdjustableBalance - (decimal)reserved);
                         return new AdjustmentEligibilityMonthDto
                         {
                             DueFeeId = df.Id, Month = df.Month, Year = df.Year,
-                            Total = df.OriginalAmount, Paid = df.PaidAmount,
-                            Refunded = df.RefundedAmount, Adjusted = df.AdjustmentCreditAmount,
+							Total = (double)df.OriginalAmount, Paid = (double)df.PaidAmount,
+							Refunded = (double)df.RefundedAmount, Adjusted = (double)df.AdjustmentCreditAmount,
                             Adjustable = adjustable,
                         };
                     })
@@ -50,7 +50,7 @@ public partial class FeeAdjustmentAppService
                 {
                     FeeHeadId = g.Key,
                     FeeHeadName = feeHeadMap.GetValueOrDefault(g.Key, g.Key.ToString()),
-                    TotalPaid = g.Sum(df => df.PaidAmount),
+					TotalPaid = (double)g.Sum(df => df.PaidAmount),
                     TotalAdjustable = months.Sum(m => m.Adjustable),
                     Months = months,
                 };
@@ -62,7 +62,7 @@ public partial class FeeAdjustmentAppService
             StudentId = studentId, AcademicYearId = academicYearId,
             TotalPaid = grouped.Sum(f => f.TotalPaid),
             TotalAdjustable = grouped.Sum(f => f.TotalAdjustable),
-            TotalAlreadyAdjusted = dueFees.Sum(df => df.AdjustmentCreditAmount),
+			TotalAlreadyAdjusted = (double)dueFees.Sum(df => df.AdjustmentCreditAmount),
             FeeHeads = grouped,
         };
     }

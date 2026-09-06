@@ -20,15 +20,17 @@ public interface IConcessionRequestAppService : IApplicationService
 		Guid documentId,
 		UploadConcessionDocumentFileDto input);
 	Task<ConcessionApplicationsDto> GetApplicationsAsync(GetConcessionApplicationsInput input);
-	Task<StudentConcessionRequestsDto> GetStudentRequestsAsync(Guid studentId, PagedResultRequestDto input);
+	Task<StudentConcessionRequestsDto> GetStudentRequestsAsync(Guid studentId, Guid academicYearId, PagedResultRequestDto input);
 	Task<ConcessionApprovalContextDto> GetApprovalContextAsync(Guid id);
 	Task<ConcessionApprovalResponseDto> ApproveAsync(Guid id, ApproveConcessionRequestDto input);
 	Task<ConcessionRejectionResponseDto> RejectAsync(Guid id, RejectConcessionRequestDto input);
 	Task<ConcessionCancellationResponseDto> CancelAsync(Guid id);
+	Task<ConcessionReversalResponseDto> ReverseAsync(Guid id, ReverseConcessionRequestDto input);
 }
 
 public class GetConcessionApplicationsInput : PagedResultRequestDto, IFinanceClassDivisionFilter
 {
+	public Guid AcademicYearId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid EducationMediumId { get; set; }
 	public int? Status { get; set; }

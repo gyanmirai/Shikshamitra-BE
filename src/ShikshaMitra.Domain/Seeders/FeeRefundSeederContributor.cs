@@ -248,11 +248,11 @@ public class FeeRefundSeederContributor : BaseSeederContributor
                 month:     month,
                 year:      calendarYear,
                 isOneTime: false,
-                amount:    amount,
+				amount:    (decimal)amount,
                 dueDate:   DueFeeManager.ComputeDefaultDueDate(month, calendarYear));
 
             // Simulate that the student has fully paid this month's fee
-            dueFee.ApplyPayment(amount);
+			dueFee.ApplyPayment((decimal)amount);
 
             toInsert.Add(dueFee);
             result[month] = dueFee;
@@ -319,7 +319,7 @@ public class FeeRefundSeederContributor : BaseSeederContributor
         approved.Approve(Guid.Empty, notes: "Verified by finance admin. Auto-approved during seed.");
 
         // Reflect the approval on the DueFee ledger so RefundableBalance is consistent
-        dueFeeMap[MonthEnum.September].ApplyRefund(1_800d);
+		dueFeeMap[MonthEnum.September].ApplyRefund(1_800m);
         await _dueFeeRepository.UpdateAsync(dueFeeMap[MonthEnum.September], autoSave: false);
 
         await _feeRefundRepository.InsertAsync(approved, autoSave: false);

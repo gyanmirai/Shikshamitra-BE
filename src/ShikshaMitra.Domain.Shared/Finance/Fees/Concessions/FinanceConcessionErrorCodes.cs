@@ -12,6 +12,9 @@ public static class FinanceConcessionErrorCodes
 	public const string AllocationSumMismatch = "Finance:Concession:010012";
 	public const string ConcessionExceedsDueOutstanding = "Finance:Concession:010013";
 	public const string InvalidRejectionReason = "Finance:Concession:010014";
+	public const string ReversalExceedsConcessionBalance = "Finance:Concession:010015";
+	public const string InvalidReversal = "Finance:Concession:010016";
+	public const string InvalidDocumentSubmission = "Finance:Concession:010017";
 
 	public const string StudentNotFound = "Finance:Concession:020002";
 	public const string ConcessionTypeNotFound = "Finance:Concession:020003";

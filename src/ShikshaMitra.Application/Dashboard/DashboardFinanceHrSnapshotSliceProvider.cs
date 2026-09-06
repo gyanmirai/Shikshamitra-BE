@@ -8,6 +8,7 @@ using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Dashboard;
@@ -35,6 +36,7 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 	IUserScopeAccessService userScopeAccessService,
 	IFeePaymentReceiptRepository feePaymentReceiptRepository,
 	IDueFeeRepository dueFeeRepository,
+	IRepository<FeeHead, Guid> feeHeadRepository,
 	IConcessionRequestRepository concessionRequestRepository,
 	IAsyncQueryableExecuter asyncExecuter,
 	IPermissionChecker permissionChecker)
@@ -135,15 +137,19 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 				}
 			}
 
-			if (needsDues || needsFinanceModule)
+			if ((needsDues || needsFinanceModule) && academicYearId.HasValue)
 			{
 				var dueQuery = await dueFeeRepository.GetQueryableAsync();
+				var feeHeadQuery = await feeHeadRepository.GetQueryableAsync();
+				var academicYearFeeHeadIds = feeHeadQuery
+					.Where(fh => fh.AcademicYearId == academicYearId.Value)
+					.Select(fh => fh.Id);
 				dueRows = await asyncExecuter.ToListAsync(dueQuery
 					.Where(d =>
-						d.Year == toDate.Year &&
+						academicYearFeeHeadIds.Contains(d.FeeHeadId) &&
 						d.OutstandingAmount > 0 &&
 						scopedStudentIdsQuery.Contains(d.StudentId))
-					.Select(d => new FinanceAmountRow(d.OutstandingAmount, d.StudentId)));
+					.Select(d => new FinanceAmountRow((double)d.OutstandingAmount, d.StudentId)));
 
 				if (needsDues)
 				{
@@ -160,11 +166,12 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 				}
 			}
 
-			if (needsConcession || needsFinanceModule)
+			if ((needsConcession || needsFinanceModule) && academicYearId.HasValue)
 			{
 				var concessionQuery = await concessionRequestRepository.GetQueryableAsync();
 				pendingConcessions = await asyncExecuter.CountAsync(concessionQuery
 					.Where(c =>
+						c.AcademicYearId == academicYearId.Value &&
 						c.Status == ConcessionRequestStatus.Pending &&
 						scopedStudentIdsQuery.Contains(c.StudentId)));
 

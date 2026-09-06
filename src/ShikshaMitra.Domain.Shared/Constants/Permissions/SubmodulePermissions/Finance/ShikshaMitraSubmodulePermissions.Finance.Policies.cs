@@ -14,14 +14,28 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string Clone = $"{SubmoduleName}.Clone";
+			public const string Simulate = $"{SubmoduleName}.Simulate";
+			public const string Archive = $"{SubmoduleName}.Archive";
+			public const string Unarchive = $"{SubmoduleName}.Unarchive";
+			public const string ViewVersions = $"{SubmoduleName}.ViewVersions";
+			public const string ManageAttachment = $"{SubmoduleName}.ManageAttachment";
 
-			public static readonly string[] All = { View, Add, Delete };
+			public static readonly string[] All = { View, Add, Delete, Edit, Clone, Simulate, Archive, Unarchive, ViewVersions, ManageAttachment };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Clone, $"{SubmoduleDisplayName}.Clone" },
+				{ Simulate, $"{SubmoduleDisplayName}.Simulate" },
+				{ Archive, $"{SubmoduleDisplayName}.Archive" },
+				{ Unarchive, $"{SubmoduleDisplayName}.Unarchive" },
+				{ ViewVersions, $"{SubmoduleDisplayName}.ViewVersions" },
+				{ ManageAttachment, $"{SubmoduleDisplayName}.ManageAttachment" }
 			};
 		}
 

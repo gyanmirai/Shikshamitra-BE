@@ -16,6 +16,7 @@ public class FinancePolicyVersionDto : EntityDto<Guid>
 	public string? ChangeReason { get; set; }
 	public DateTime CreationTime { get; set; }
 	public Guid? CreatorId { get; set; }
+	public string? CreatorUserName { get; set; }
 }
 
 public class FinancePolicyVersionListRequestDto : PagedAndSortedResultRequestDto

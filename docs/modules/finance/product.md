@@ -22,7 +22,7 @@ Treat incorrect Finance reports or due balances as production defects.
 | Fee collection | Implemented | Collect fees, allocate payments to due rows, expose student fee details, summaries, and exports |
 | Receipts | Implemented | Read receipt lists and receipt details after payment activity |
 | Charges | Implemented | Create ad hoc charges with maker-checker approval and derived student scope |
-| Concession requests | Implemented | Request concessions, approve allocations to due fee rows, reject, cancel, and manage documents |
+| Concession policy and requests | Implemented | Attach academic-year policy versions to fee structures, snapshot them at student assignment, then request and approve allocations to eligible due fee rows; see [the end-to-end reference](./references/concession-policy-end-to-end.md) |
 | Fee adjustments | Implemented | Create credit pools from paid due rows and apply them to pending obligations |
 | Refunds | Implemented | Request and process fee refunds separately from adjustments |
 | Accounts | Implemented | Income, expense, bank account, transaction categories, transactions, and reconciliation |

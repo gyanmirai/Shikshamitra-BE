@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.Finance.Fees.Concessions;
 
 namespace ShikshaMitra.Finance.Fees.Concessions.Dtos;
@@ -18,6 +19,7 @@ public class CreateConcessionRequestDto
 	public Guid ConcessionTypeId { get; set; }
 	public string? Remarks { get; set; }
 	public List<FeeHeadConcessionDto> FeeHeadConcessions { get; set; } = [];
+	public List<UploadConcessionDocumentEntryDto> Documents { get; set; } = [];
 }
 
 public class UpdateConcessionRequestDto : CreateConcessionRequestDto;
@@ -58,10 +60,20 @@ public class ConcessionRequestDetailDto
 	public Guid StudentId { get; set; }
 	public string StudentName { get; set; } = string.Empty;
 	public Guid ConcessionTypeId { get; set; }
+	public Guid StudentFeeStructureId { get; set; }
+	public Guid ConcessionPolicyId { get; set; }
+	public Guid ConcessionPolicyVersionId { get; set; }
+	public string ConcessionPolicyName { get; set; } = string.Empty;
+	public string ConcessionPolicyCode { get; set; } = string.Empty;
+	public int ConcessionPolicyVersion { get; set; }
 	public string ConcessionTypeName { get; set; } = string.Empty;
 	public ConcessionRequestStatus Status { get; set; }
 	public string StatusName { get; set; } = string.Empty;
 	public decimal TotalConcessionAmount { get; set; }
+	public decimal TotalRequestedConcessionAmount { get; set; }
+	public decimal TotalApprovedConcessionAmount { get; set; }
+	public decimal TotalReversedConcessionAmount { get; set; }
+	public decimal NetApprovedConcessionAmount { get; set; }
 	public string? Remarks { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid EducationMediumId { get; set; }
@@ -70,6 +82,8 @@ public class ConcessionRequestDetailDto
 	public List<FeeHeadConcessionDetailDto> FeeHeadConcessions { get; set; } = [];
 	public List<ConcessionDocumentRequirementDto> RequiredDocuments { get; set; } = [];
 	public List<ConcessionSubmittedDocumentDto> SubmittedDocuments { get; set; } = [];
+	public string DocumentSubmissionState { get; set; } = string.Empty;
+	public List<Guid> MissingDocumentIds { get; set; } = [];
 	public DateTime CreatedAt { get; set; }
 
 	/// <summary>Alias for legacy FE field name.</summary>
@@ -111,6 +125,8 @@ public class ConcessionApplicationItemDto
 	public string DivisionName { get; set; } = string.Empty;
 	public string ConcessionTypeName { get; set; } = string.Empty;
 	public decimal ConcessionAmount { get; set; }
+	public decimal RequestedConcessionAmount { get; set; }
+	public decimal ApprovedConcessionAmount { get; set; }
 	public ConcessionRequestStatus Status { get; set; }
 	public string StatusName { get; set; } = string.Empty;
 	public DateTime CreatedAt { get; set; }
@@ -122,6 +138,8 @@ public class ConcessionApplicationsDto
 	public int ApprovedCount { get; set; }
 	public int RejectedCount { get; set; }
 	public int CancelledCount { get; set; }
+	public int PartiallyReversedCount { get; set; }
+	public int ReversedCount { get; set; }
 	public int TotalCount { get; set; }
 	public int CurrentPage { get; set; }
 	public int PageSize { get; set; }
@@ -157,6 +175,7 @@ public class DueFeeApprovalLineDto
 {
 	public Guid DueFeeId { get; set; }
 	public Guid FeeHeadId { get; set; }
+	public Guid? ConcessionDueFeeAllocationId { get; set; }
 	public int Month { get; set; }
 	public int Year { get; set; }
 	public string MonthLabel { get; set; } = string.Empty;
@@ -166,6 +185,9 @@ public class DueFeeApprovalLineDto
 	public string Status { get; set; } = string.Empty;
 	public bool IsSelectable { get; set; }
 	public decimal MaxConcessionAmount { get; set; }
+	public decimal AppliedConcessionAmount { get; set; }
+	public decimal ReversedConcessionAmount { get; set; }
+	public decimal ReversibleConcessionAmount { get; set; }
 }
 
 public class FeeHeadApprovalGroupDto
@@ -180,6 +202,9 @@ public class ConcessionApprovalContextDto
 {
 	public Guid ConcessionRequestId { get; set; }
 	public Guid StudentId { get; set; }
+	public string ConcessionPolicyName { get; set; } = string.Empty;
+	public string ConcessionPolicyCode { get; set; } = string.Empty;
+	public int ConcessionPolicyVersion { get; set; }
 	public decimal TotalRequestedConcessionAmount { get; set; }
 	public List<FeeHeadApprovalGroupDto> FeeHeadGroups { get; set; } = [];
 }
@@ -223,6 +248,45 @@ public class ConcessionCancellationResponseDto
 	public DateTime CancelledAt { get; set; }
 }
 
+public class ConcessionReversalLineInputDto
+{
+	public Guid ConcessionDueFeeAllocationId { get; set; }
+
+	[Range(typeof(decimal), "0.01", "9999999999999999")]
+	public decimal Amount { get; set; }
+}
+
+public class ReverseConcessionRequestDto
+{
+	[Required, MinLength(10), MaxLength(2000)]
+	public string Reason { get; set; } = string.Empty;
+
+	[Required, MinLength(1)]
+	public List<ConcessionReversalLineInputDto> Lines { get; set; } = [];
+}
+
+public class ConcessionReversalLineDto
+{
+	public Guid ReversalId { get; set; }
+	public Guid ConcessionDueFeeAllocationId { get; set; }
+	public Guid DueFeeId { get; set; }
+	public Guid FeeHeadId { get; set; }
+	public decimal Amount { get; set; }
+}
+
+public class ConcessionReversalResponseDto
+{
+	public Guid ConcessionRequestId { get; set; }
+	public ConcessionRequestStatus Status { get; set; }
+	public string StatusName { get; set; } = string.Empty;
+	public decimal TotalApprovedAmount { get; set; }
+	public decimal TotalReversedAmount { get; set; }
+	public decimal NetApprovedAmount { get; set; }
+	public DateTime ReversedAt { get; set; }
+	public Guid ReversedBy { get; set; }
+	public List<ConcessionReversalLineDto> Lines { get; set; } = [];
+}
+
 public class StudentConcessionRequestItemDto
 {
 	public Guid StudentConcessionTypeRequestId { get; set; }
@@ -230,6 +294,10 @@ public class StudentConcessionRequestItemDto
 	public string ConcessionTypeName { get; set; } = string.Empty;
 	public ConcessionRequestStatus Status { get; set; }
 	public decimal TotalAmount { get; set; }
+	public decimal TotalRequestedAmount { get; set; }
+	public decimal TotalApprovedAmount { get; set; }
+	public decimal TotalReversedAmount { get; set; }
+	public decimal NetApprovedAmount { get; set; }
 	public List<FeeHeadConcessionDetailDto> FeeHeads { get; set; } = [];
 	public List<ConcessionSubmittedDocumentDto> SubmittedDocuments { get; set; } = [];
 	public List<ConcessionDocumentRequirementDto> RequiredDocuments { get; set; } = [];

@@ -67,7 +67,8 @@ public partial class StudentFeeDetailsQueryService(
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
 
 		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
-		var feeStructureAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == studentId);
+		var feeStructureAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(
+			x => x.StudentId == studentId && x.AcademicYearId == academicYearId);
 
 		var ledger = new List<FeeLedgerMonthDto>();
 		var feeSummary = new FeeSummaryDto();
@@ -75,8 +76,8 @@ public partial class StudentFeeDetailsQueryService(
 
 		if (feeStructureAssignment != null)
 		{
-			var dueFeeQ = await dueFeeRepository.GetQueryableAsync();
-			var dueFees = dueFeeQ.Where(d => d.StudentId == studentId)
+			var dueFees = await GetDueFeesAsync(studentId, academicYearId);
+			dueFees = dueFees
 				.OrderBy(d => d.ScheduleDueDate ?? new DateTime(d.Year, (int)d.Month + 1, 1))
 				.ThenBy(d => d.InstallmentSequence ?? 0)
 				.ThenBy(d => d.Year).ThenBy(d => d.Month)
@@ -93,7 +94,9 @@ public partial class StudentFeeDetailsQueryService(
 				.OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month);
 
 			var concessions = await concessionRequestRepository.GetListAsync(c => c.StudentId == studentId
-				&& c.Status == ConcessionRequestStatus.Approved);
+				&& c.AcademicYearId == academicYearId
+				&& (c.Status == ConcessionRequestStatus.Approved
+					|| c.Status == ConcessionRequestStatus.PartiallyReversed));
 
 			var refundByDueFee = await GetRefundsByDueFeeAsync(studentId);
 
@@ -120,13 +123,13 @@ public partial class StudentFeeDetailsQueryService(
 					{
 						DueFeeId = d.Id, FeeHeadId = d.FeeHeadId,
 						FeeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty),
-						Total = d.OriginalAmount, Paid = d.PaidAmount, Due = d.OutstandingAmount,
+						Total = (double)d.OriginalAmount, Paid = (double)d.PaidAmount, Due = (double)d.OutstandingAmount,
 						//ConcessionAmount = concessions.Where(c => c.DueFeeId == d.Id).Sum(c => c.Amount),
 						ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
 						RefundAmount = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Amount,
 						RefundDescription = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Description,
-						Status = d.OutstandingAmount <= 0d ? FeeCollectionStatus.Paid
-							: (d.PaidAmount > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
+						Status = d.OutstandingAmount <= 0m ? FeeCollectionStatus.Paid
+							: (d.PaidAmount > 0m ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 						LateFeeAmount = lateFee.Amount,
 						LateFeeExplanation = lateFee.Explanation,
 						LateFeeWaivedAmount = lateFee.WaivedAmount,
@@ -148,16 +151,19 @@ public partial class StudentFeeDetailsQueryService(
 						.FirstOrDefault(l => l.DueFeeId == line.DueFeeId);
 					if (ledgerLine != null)
 					{
-						ledgerLine.ConcessionAmount += (double)line.ConcessionAmount;
+						var reversedAmount = concession.ConcessionReversals
+							.Where(r => r.ConcessionDueFeeAllocationId == line.Id)
+							.Sum(r => r.Amount);
+						ledgerLine.ConcessionAmount += (double)Math.Max(0m, line.ConcessionAmount - reversedAmount);
 					}
 				}
 			}
 
 			feeSummary = new FeeSummaryDto
 			{
-				TotalFee = dueFees.Sum(d => d.OriginalAmount),
-				PaidFee = dueFees.Sum(d => d.PaidAmount),
-				PendingFee = generatedDueFees.Sum(d => d.OutstandingAmount),
+				TotalFee = (double)dueFees.Sum(d => d.OriginalAmount),
+				PaidFee = (double)dueFees.Sum(d => d.PaidAmount),
+				PendingFee = (double)generatedDueFees.Sum(d => d.OutstandingAmount),
 				ReconciliationAmount = reconByDueFee.Values.Sum(),
 			};
 		}

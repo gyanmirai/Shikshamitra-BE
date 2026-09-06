@@ -69,15 +69,15 @@ public partial class FeeRefundAppService
 			{
 				FeeHeadId = g.Key,
 				FeeHeadName = feeHeadMap.TryGetValue(g.Key, out var n) ? n : g.Key.ToString(),
-				TotalPaid = g.Sum(df => df.PaidAmount),
-				TotalRefunded = g.Sum(df => df.RefundedAmount),
-				TotalRefundable = g.Sum(df => df.RefundableBalance),
+				TotalPaid = (double)g.Sum(df => df.PaidAmount),
+				TotalRefunded = (double)g.Sum(df => df.RefundedAmount),
+				TotalRefundable = (double)g.Sum(df => df.RefundableBalance),
 				Months = g.OrderBy(df => df.Year).ThenBy(df => df.Month)
 					.Select(df => new RefundEligibilityMonthDto
 					{
 						DueFeeId = df.Id, Month = df.Month, Year = df.Year,
-						Total = df.OriginalAmount, Paid = df.PaidAmount,
-						Refunded = df.RefundedAmount, Refundable = df.RefundableBalance,
+						Total = (double)df.OriginalAmount, Paid = (double)df.PaidAmount,
+						Refunded = (double)df.RefundedAmount, Refundable = (double)df.RefundableBalance,
 					}).ToList(),
 			}).ToList();
 

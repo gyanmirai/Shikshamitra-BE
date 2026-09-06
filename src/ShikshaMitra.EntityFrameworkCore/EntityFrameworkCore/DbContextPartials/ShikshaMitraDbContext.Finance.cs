@@ -42,6 +42,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<ConcessionFeeHeadMapping> ConcessionFeeHeadMappings { get; set; }
 	public DbSet<ConcessionRequestDocument> ConcessionRequestDocuments { get; set; }
 	public DbSet<ConcessionDueFeeAllocation> ConcessionDueFeeAllocations { get; set; }
+	public DbSet<ConcessionReversal> ConcessionReversals { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Concession Types
@@ -105,6 +106,7 @@ public partial class ShikshaMitraDbContext
 	// Finance — Policies
 	// ───────────────────────────────────────────────
 	public DbSet<CollectionPolicy> CollectionPolicies { get; set; }
+	public DbSet<ConcessionPolicy> ConcessionPolicies { get; set; }
 	public DbSet<FinancePolicyVersion> FinancePolicyVersions { get; set; }
 	public DbSet<StudentFeePolicyOverride> StudentFeePolicyOverrides { get; set; }
 	public DbSet<CollectionPolicyExceptionWindow> CollectionPolicyExceptionWindows { get; set; }

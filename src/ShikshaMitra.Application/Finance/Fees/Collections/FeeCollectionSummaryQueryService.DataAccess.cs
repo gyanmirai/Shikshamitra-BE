@@ -39,6 +39,11 @@ public partial class FeeCollectionSummaryQueryService
 
 		var studentIds = students.Select(s => s.Id).ToList();
 		var dueFeeQ = await dueFeeRepository.GetQueryableAsync();
+		var feeHeadQ = await feeHeadRepository.GetQueryableAsync();
+		var academicYearFeeHeadIds = feeHeadQ
+			.Where(fh => fh.AcademicYearId == input.AcademicYearId)
+			.Select(fh => fh.Id);
+		dueFeeQ = dueFeeQ.Where(d => academicYearFeeHeadIds.Contains(d.FeeHeadId));
 
 		var (feeAggs, overdueAggs) = await GetStudentFeeAggregatesAsync(
 			dueFeeQ, studentIds, now.Date, currentYear, currentMonth, cancellationToken);
@@ -49,13 +54,19 @@ public partial class FeeCollectionSummaryQueryService
 		var concessionRequestQ = await concessionRequestRepository.GetQueryableAsync();
 		var concessionAggs = await AsyncExecuter.ToListAsync(
 			concessionRequestQ
-				.Where(cr => studentIds.Contains(cr.StudentId) && cr.Status == ConcessionRequestStatus.Approved)
+				.Where(cr => studentIds.Contains(cr.StudentId)
+					&& cr.AcademicYearId == input.AcademicYearId
+					&& (cr.Status == ConcessionRequestStatus.Approved
+						|| cr.Status == ConcessionRequestStatus.PartiallyReversed))
 				.GroupBy(cr => cr.StudentId)
 				.Select(g => new
 				{
 					StudentId = g.Key,
-					TotalApprovedConcession = g.SelectMany(cr => cr.ConcessionDueFeeAllocations)
-						.Sum(a => (double?)a.ConcessionAmount) ?? 0d
+					TotalApprovedConcession =
+						(g.SelectMany(cr => cr.ConcessionDueFeeAllocations)
+							.Sum(a => (double?)a.ConcessionAmount) ?? 0d)
+						- (g.SelectMany(cr => cr.ConcessionReversals)
+							.Sum(r => (double?)r.Amount) ?? 0d)
 				}),
 			cancellationToken);
 
@@ -123,7 +134,7 @@ public partial class FeeCollectionSummaryQueryService
 		var overdueAggs = await AsyncExecuter.ToListAsync(
 			dueFeeQ
 				.Where(d => studentIds.Contains(d.StudentId)
-						 && d.OutstandingAmount > 0d
+						 && d.OutstandingAmount > 0m
 						 && (d.ScheduleSource == ScheduleSource.Legacy || !d.DemandDate.HasValue || d.DemandDate.Value <= currentDate)
 						 && (d.Year < currentYear
 						 || (d.Year == currentYear && (int)d.Month < currentMonth)))

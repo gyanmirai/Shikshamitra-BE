@@ -6,4 +6,6 @@ public enum ConcessionRequestStatus
 	Approved = 1,
 	Rejected = 2,
 	Cancelled = 3,
+	PartiallyReversed = 4,
+	Reversed = 5,
 }

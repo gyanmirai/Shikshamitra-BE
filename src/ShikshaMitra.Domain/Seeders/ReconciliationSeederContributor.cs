@@ -367,7 +367,7 @@ public class ReconciliationSeederContributor : BaseSeederContributor
         if (dueFeeId != Guid.Empty && allocated > 0)
         {
             var dueFee = await _dueFeeRepository.GetAsync(dueFeeId);
-            dueFee.ReversePayment(allocated);
+			dueFee.ReversePayment((decimal)allocated);
             await _dueFeeRepository.UpdateAsync(dueFee, autoSave: false);
         }
 
@@ -431,8 +431,8 @@ public class ReconciliationSeederContributor : BaseSeederContributor
 
         if (dueFee is not null)
         {
-            allocated = Math.Min(amount, dueFee.OutstandingAmount);
-            dueFee.ApplyPayment(allocated);
+			allocated = Math.Min(amount, (double)dueFee.OutstandingAmount);
+			dueFee.ApplyPayment((decimal)allocated);
             await _dueFeeRepository.UpdateAsync(dueFee, autoSave: false);
             dueFeeId = dueFee.Id;
 
@@ -462,7 +462,7 @@ public class ReconciliationSeederContributor : BaseSeederContributor
         return dueFees
             .OrderBy(d => d.Year)
             .ThenBy(d => d.Month)
-            .FirstOrDefault(d => d.OutstandingAmount >= amount)
+			.FirstOrDefault(d => d.OutstandingAmount >= (decimal)amount)
          ?? dueFees.FirstOrDefault();
     }
 

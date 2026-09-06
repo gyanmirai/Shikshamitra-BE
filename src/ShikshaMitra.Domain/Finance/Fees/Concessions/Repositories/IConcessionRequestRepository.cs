@@ -15,10 +15,12 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 	Task<bool> HasPendingForStudentAndTypeAsync(
 		Guid studentId,
 		Guid concessionTypeId,
+		Guid academicYearId,
 		Guid? excludeRequestId = null,
 		CancellationToken cancellationToken = default);
 
 	Task<List<ConcessionRequest>> GetListForApplicationsAsync(
+		Guid academicYearId,
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
@@ -30,6 +32,7 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		CancellationToken cancellationToken = default);
 
 	Task<int> CountForApplicationsAsync(
+		Guid academicYearId,
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
@@ -39,6 +42,7 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		CancellationToken cancellationToken = default);
 
 	Task<Dictionary<ConcessionRequestStatus, int>> GetStatusCountsAsync(
+		Guid academicYearId,
 		Guid boardId,
 		Guid educationMediumId,
 		Guid? standardId,

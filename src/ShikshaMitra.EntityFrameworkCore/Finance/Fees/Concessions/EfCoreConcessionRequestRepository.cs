@@ -32,6 +32,7 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 	public async Task<bool> HasPendingForStudentAndTypeAsync(
 		Guid studentId,
 		Guid concessionTypeId,
+		Guid academicYearId,
 		Guid? excludeRequestId = null,
 		CancellationToken cancellationToken = default)
 	{
@@ -39,12 +40,14 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		return await queryable.AnyAsync(
 			x => x.StudentId == studentId
 				&& x.ConcessionTypeId == concessionTypeId
+				&& x.AcademicYearId == academicYearId
 				&& x.Status == ConcessionRequestStatus.Pending
 				&& (excludeRequestId == null || x.Id != excludeRequestId.Value),
 			cancellationToken);
 	}
 
 	public async Task<List<ConcessionRequest>> GetListForApplicationsAsync(
+		Guid academicYearId,
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
@@ -56,7 +59,7 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		CancellationToken cancellationToken = default)
 	{
 		var query = await BuildApplicationsQueryAsync(
-			boardId, educationMediumId, status, standardId, divisionId, scopedStudentIdsQuery, cancellationToken);
+			academicYearId, boardId, educationMediumId, status, standardId, divisionId, scopedStudentIdsQuery, cancellationToken);
 
 		return await query
 			.OrderByDescending(x => x.CreationTime)
@@ -66,6 +69,7 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 	}
 
 	public async Task<int> CountForApplicationsAsync(
+		Guid academicYearId,
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
@@ -75,11 +79,12 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		CancellationToken cancellationToken = default)
 	{
 		var query = await BuildApplicationsQueryAsync(
-			boardId, educationMediumId, status, standardId, divisionId, scopedStudentIdsQuery, cancellationToken);
+			academicYearId, boardId, educationMediumId, status, standardId, divisionId, scopedStudentIdsQuery, cancellationToken);
 		return await query.CountAsync(cancellationToken);
 	}
 
 	public async Task<Dictionary<ConcessionRequestStatus, int>> GetStatusCountsAsync(
+		Guid academicYearId,
 		Guid boardId,
 		Guid educationMediumId,
 		Guid? standardId,
@@ -88,7 +93,7 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		CancellationToken cancellationToken = default)
 	{
 		var query = await BuildApplicationsQueryAsync(
-			boardId, educationMediumId, status: null, standardId, divisionId, scopedStudentIdsQuery, cancellationToken);
+			academicYearId, boardId, educationMediumId, status: null, standardId, divisionId, scopedStudentIdsQuery, cancellationToken);
 
 		return await query
 			.GroupBy(x => x.Status)
@@ -97,6 +102,7 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 	}
 
 	private async Task<IQueryable<ConcessionRequest>> BuildApplicationsQueryAsync(
+		Guid academicYearId,
 		Guid boardId,
 		Guid educationMediumId,
 		ConcessionRequestStatus? status,
@@ -105,24 +111,11 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		IQueryable<Guid>? scopedStudentIdsQuery,
 		CancellationToken cancellationToken)
 	{
-		var db = await GetDbContextAsync();
 		var queryable = await GetQueryableAsync();
-
-		var studentIds = db.Set<Student>()
-			.Where(s => s.AcademicBoardId == boardId && s.AcademicMediumId == educationMediumId);
-
-		if (standardId.HasValue)
-		{
-			studentIds = studentIds.Where(s => s.StandardId == standardId.Value);
-		}
-
-		if (divisionId.HasValue)
-		{
-			studentIds = studentIds.Where(s => s.DivisionId == divisionId.Value);
-		}
-
-		var allowedStudentIds = studentIds.Select(s => s.Id);
-		var query = queryable.Where(c => allowedStudentIds.Contains(c.StudentId));
+		var query = queryable.Where(c => c.AcademicYearId == academicYearId &&
+			c.BoardId == boardId && c.EducationMediumId == educationMediumId);
+		if (standardId.HasValue) query = query.Where(c => c.StandardId == standardId.Value);
+		if (divisionId.HasValue) query = query.Where(c => c.DivisionId == divisionId.Value);
 
 		// User scope — restrict to students within the caller's access scope
 		if (scopedStudentIdsQuery != null)

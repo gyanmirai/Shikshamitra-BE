@@ -56,7 +56,7 @@ public partial class FeeAdjustmentAppService
                     FeeHeadName = feeHeadMap.GetValueOrDefault(l.FeeHeadId, string.Empty),
                     InstallmentLabel = df?.GetDisplayInstallmentLabel() ?? FormatMonthLabel(l.Month, l.Year),
                     Month = l.Month, Year = l.Year,
-                    PaidAmount = df?.PaidAmount ?? 0, AdjustableAmount = df?.AdjustableBalance ?? 0,
+					PaidAmount = (double)(df?.PaidAmount ?? 0m), AdjustableAmount = (double)(df?.AdjustableBalance ?? 0m),
                     RequestedAmount = l.Amount,
                 };
             }).ToList(),
@@ -103,14 +103,14 @@ public partial class FeeAdjustmentAppService
             Lines = batchLines.Select(a =>
             {
                 dueFeeMap.TryGetValue(a.DueFeeId, out var df);
-                var originalPending = (df?.OutstandingAmount ?? 0) + a.Amount;
+				var originalPending = (double)(df?.OutstandingAmount ?? 0m) + a.Amount;
                 return new ApplyFeeAdjustmentLineResultDto
                 {
                     DueFeeId = a.DueFeeId, FeeHeadId = a.FeeHeadId,
                     FeeHeadName = feeHeadMap.GetValueOrDefault(a.FeeHeadId, string.Empty),
                     InstallmentLabel = FormatMonthLabel(a.Month, a.Year),
                     OriginalPendingAmount = originalPending, AppliedAmount = a.Amount,
-                    FinalPendingAmount = df?.OutstandingAmount ?? 0,
+					FinalPendingAmount = (double)(df?.OutstandingAmount ?? 0m),
                 };
             }).ToList(),
         };

@@ -4,6 +4,7 @@ using ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using ShikshaMitra.Domain.Finance.Policies;
 
 namespace ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 
@@ -20,6 +21,10 @@ public class StandardFeeStructureRequest
 	public List<FeeHeadAssignmentRequest> FeeHeads { get; set; }
 	/// <summary>The Collection Policy governing late fee/waiver for this fee structure. Null clears the attachment (falls back to the academic year's default policy, if any).</summary>
 	public Guid? CollectionPolicyId { get; set; }
+	/// <summary>Active Concession Policy attached to this fee structure. The server resolves and stores its exact version.</summary>
+	public Guid? ConcessionPolicyId { get; set; }
+	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; set; } = ConcessionFeeHeadScope.EntireFeeStructure;
+	public List<Guid> ConcessionApplicableFeeHeadIds { get; set; } = [];
 }
 
 public class FeeHeadAssignmentRequest

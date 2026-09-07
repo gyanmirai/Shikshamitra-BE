@@ -1,4 +1,5 @@
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +9,12 @@ namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 
 internal static class PaymentTermInstallmentValidator
 {
-	public static void Validate(IReadOnlyList<CreatePaymentTermInstallmentDto> installments)
+	public static void PrepareAndValidate(
+		DemandGenerationRule demandGenerationRule,
+		int? demandOffsetDays,
+		IReadOnlyList<CreatePaymentTermInstallmentDto> installments,
+		DateTime boardStart,
+		DateTime boardEnd)
 	{
 		if (installments == null || installments.Count == 0)
 		{
@@ -45,13 +51,29 @@ internal static class PaymentTermInstallmentValidator
 					.WithData("Installment", installment.Name);
 			}
 
+			if (installment.CoverageStartDate.Date < boardStart.Date ||
+				installment.CoverageEndDate.Date > boardEnd.Date)
+			{
+				throw new BusinessException(PaymentTermErrorCodes.InstallmentDateOutsideBoardPeriod)
+					.WithData("Installment", installment.Name)
+					.WithData("BoardStart", boardStart.Date)
+					.WithData("BoardEnd", boardEnd.Date);
+			}
+
+			installment.DemandDate = PaymentTermDemandDateCalculator.Calculate(
+				demandGenerationRule,
+				installment.CoverageStartDate,
+				installment.DueDate,
+				demandOffsetDays,
+				installment.DemandDate);
+
 			// Demand/due may fall before coverage begins (common billing practice).
 			// They must not fall after each other.
-			if (installment.DemandDate.Date > installment.DueDate.Date)
+			if (installment.DemandDate.Value.Date > installment.DueDate.Date)
 			{
 				throw new BusinessException(PaymentTermErrorCodes.DemandDateAfterDueDate)
 					.WithData("Installment", installment.Name)
-					.WithData("DemandDate", installment.DemandDate)
+					.WithData("DemandDate", installment.DemandDate.Value)
 					.WithData("DueDate", installment.DueDate);
 			}
 

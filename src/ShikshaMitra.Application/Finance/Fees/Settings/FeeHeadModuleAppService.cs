@@ -17,7 +17,7 @@ public class FeeHeadModuleAppService : ApplicationService, IFeeHeadModuleAppServ
         var modules = System.Enum.GetValues<FeeHeadModule>()
             .Select(m => new FeeHeadModuleDto
             {
-                Value = m.ToString(),
+                Value = (int)m,
                 DisplayName = ToDisplayName(m)
             })
             .ToList();

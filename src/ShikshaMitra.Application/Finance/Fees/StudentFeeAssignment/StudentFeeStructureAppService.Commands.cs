@@ -19,6 +19,7 @@ public partial class StudentFeeStructureAppService
 
 		var metadata     = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
 		var academicYear = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
+		var policySnapshot = await ValidateConcessionPolicySnapshotAsync(feeStructure, academicYear.Id);
 		var optionalDetails = BuildOptionalDetails(input.FeeHeadDetails);
 		var result = new BulkAssignStudentFeeStructureResultDto();
 
@@ -50,12 +51,18 @@ public partial class StudentFeeStructureAppService
 				}
 
 				student.AssignFeeStructure(input.StandardFeeStructureId);
+				var assignmentId = GuidGenerator.Create();
 				await studentFeeStructureRepository.InsertAsync(
 					new StudentFeeStructure(
-						id: GuidGenerator.Create(),
+						id: assignmentId,
 						tenantId: CurrentTenant.Id,
 						studentId: student.Id,
-						feeStructureStandardId: feeStructure.Id),
+						feeStructureStandardId: feeStructure.Id,
+						academicYearId: academicYear.Id,
+						concessionPolicyId: policySnapshot.Policy.Id,
+						concessionPolicyVersionId: policySnapshot.Version.Id,
+						concessionFeeHeadScope: feeStructure.ConcessionFeeHeadScope,
+						concessionApplicableFeeHeadIds: feeStructure.GetConcessionApplicableFeeHeadIds()),
 					autoSave: false);
 
 				var dueFees = await dueFeeManager.GenerateForStudentAsync(

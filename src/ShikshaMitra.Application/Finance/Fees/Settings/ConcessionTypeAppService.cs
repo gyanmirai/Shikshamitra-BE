@@ -1,18 +1,26 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Finance.Cache;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.AuditLogging;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Guids;
+using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 
 [Authorize]
 [RemoteService(false)]
@@ -20,114 +28,356 @@ public class ConcessionTypeAppService(
 	IRepository<ConcessionType, Guid> concessionTypeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<ConcessionRequest, Guid> concessionRequestRepository,
-	IGuidGenerator guidGenerator
+	FinanceReferenceCacheService referenceCache,
+	IGuidGenerator guidGenerator,
+	IDataFilter<ISoftDelete> softDeleteFilter,
+	IAuditLogRepository auditLogRepository,
+	IRepository<IdentityUser, Guid> userRepository
 ) : ApplicationService, IConcessionTypeAppService
 {
-	public async Task CreateAsync(Guid academicYearId, ConcessionTypeRequest concessionTypeRequest)
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.Add)]
+	public async Task CreateAsync(Guid academicYearId, ConcessionTypeRequest input)
 	{
-		var academicYear = await academicYearRepository.GetAsync(academicYearId) ?? throw new BusinessException("Academic Year not found.");
-
-		// Check for duplicate name within the same academic year
-		var existingConcessionType = await concessionTypeRepository.AnyAsync(x => x.AcademicYearId == academicYearId && x.Name == concessionTypeRequest.Name);
-
-		if (existingConcessionType)
-		{
-			throw new BusinessException("A Concession Type with the same name already exists for this Academic Year.");
-		}
+		_ = await academicYearRepository.GetAsync(academicYearId);
+		await EnsureNameIsUniqueAsync(academicYearId, input.Name);
 
 		var concessionType = new ConcessionType(
-			 guidGenerator.Create(),
-			 CurrentTenant.Id,
-			 academicYearId,
-			 concessionTypeRequest.Name,
-			 concessionTypeRequest.Description
-		);
+			guidGenerator.Create(),
+			CurrentTenant.Id,
+			academicYearId,
+			input.Name,
+			input.Description);
 
-		foreach (var document in concessionTypeRequest.Documents)
+		AddDocuments(concessionType, input.Documents);
+		await concessionTypeRepository.InsertAsync(concessionType, autoSave: true);
+		await referenceCache.InvalidateConcessionTypesAsync();
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.View)]
+	public async Task<PagedResultDto<ConcessionTypeResponse>> GetListAsync(
+		Guid academicYearId,
+		int skipCount = 0,
+		int maxResultCount = 10,
+		string? searchTerm = null,
+		bool includeInactive = false,
+		bool? isActive = null)
+	{
+		if (academicYearId == Guid.Empty || skipCount < 0 || maxResultCount is < 1 or > 100)
+			throw new BusinessException("Finance:ConcessionType:InvalidPaging");
+		var query = await concessionTypeRepository.GetQueryableAsync();
+		query = query.Where(x => x.AcademicYearId == academicYearId);
+
+		if (isActive.HasValue)
 		{
-			concessionType.AddDocument(document.DocumentName, document.DocumentSize, document.AcceptedFormat);
+			query = query.Where(x => x.IsActive == isActive.Value);
+		}
+		else if (!includeInactive)
+		{
+			query = query.Where(x => x.IsActive);
 		}
 
-		await concessionTypeRepository.InsertAsync(concessionType);
-	}
-
-	public async Task<PagedResultDto<ConcessionTypeResponse>> GetListAsync(Guid academicYearId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null)
-	{
-		var query = await concessionTypeRepository.GetQueryableAsync();
-		query = query.Where(x => x.AcademicYearId == academicYearId && (string.IsNullOrEmpty(searchTerm) || x.Name.Contains(searchTerm)));
-		var totalCount = query.Count();
-		var result = await AsyncExecuter.ToListAsync(
-			query.Skip(skipCount).Take(maxResultCount)
-		);
-
-		return new PagedResultDto<ConcessionTypeResponse>
+		if (!string.IsNullOrWhiteSpace(searchTerm))
 		{
-			TotalCount = totalCount,
-			Items = result.Select(x => new ConcessionTypeResponse
-			{
-				Id = x.Id,
-				Name = x.Name,
-				Description = x.Description,
-				Documents = x.ConcessionTypeDocuments.Select(d => new ConcessionTypeDocumentDto
-				{
-					Id = d.Id,
-					DocumentName = d.DocumentName,
-					DocumentSize = d.DocumentSize,
-					AcceptedFormat = d.AcceptedFormats.Select(f => f.DocumentType).ToList(),
-				}).ToList()
-			}).ToList()
-		};
+			var normalizedSearch = ConcessionTypeConsts.NormalizeNameKey(searchTerm);
+			query = query.Where(x => x.NormalizedName.Contains(normalizedSearch));
+		}
+
+		var totalCount = await AsyncExecuter.CountAsync(query);
+		var result = await AsyncExecuter.ToListAsync(
+			query.OrderBy(x => x.Name)
+				.Skip(Math.Max(0, skipCount))
+				.Take(Math.Clamp(maxResultCount, 1, 1000)));
+		var usedIds = await GetUsedIdsAsync(result.Select(x => x.Id));
+
+		return new PagedResultDto<ConcessionTypeResponse>(
+			totalCount,
+			result.Select(x => MapResponse(x, usedIds.Contains(x.Id))).ToList());
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.View)]
 	public async Task<ConcessionTypeResponse> GetAsync(Guid id)
 	{
-		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new BusinessException("Concession Type not found.");
-		return new ConcessionTypeResponse
-		{
-			Id = concessionType.Id,
-			Name = concessionType.Name,
-			Documents = concessionType.ConcessionTypeDocuments.Select(d => new ConcessionTypeDocumentDto
-			{
-				Id = d.Id,
-				DocumentName = d.DocumentName,
-				DocumentSize = d.DocumentSize,
-				AcceptedFormat = d.AcceptedFormats.Select(f => f.DocumentType).ToList(),
-			}).ToList(),
-			Description = concessionType.Description
-		};
+		var concessionType = await concessionTypeRepository.GetAsync(id);
+		var isUsed = await IsUsedAsync(id);
+		return MapResponse(concessionType, isUsed);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.View)]
+	public async Task<PagedResultDto<ConcessionTypeVersionHistoryItemDto>> GetVersionHistoryAsync(
+		Guid id,
+		int skipCount = 0,
+		int maxResultCount = 50)
+	{
+		var concessionType = await concessionTypeRepository.GetAsync(id);
+		var entityTypeName = typeof(ConcessionType).FullName!;
+		var entityId = id.ToString();
+		var changes = await auditLogRepository.GetEntityChangeListAsync(
+			sorting: "ChangeTime asc",
+			maxResultCount: 1000,
+			skipCount: 0,
+			entityId: entityId,
+			entityTypeFullName: entityTypeName,
+			includeDetails: true);
+
+		var auditLogIds = changes.Select(change => change.AuditLogId).Distinct().ToList();
+		var auditLogs = auditLogIds.Count == 0
+			? []
+			: await auditLogRepository.GetListAsync(log => auditLogIds.Contains(log.Id));
+		var auditLogsById = auditLogs.ToDictionary(log => log.Id);
+		var actorIds = auditLogs
+			.Where(log => log.UserId.HasValue)
+			.Select(log => log.UserId!.Value)
+			.Append(concessionType.CreatorId ?? Guid.Empty)
+			.Where(actorId => actorId != Guid.Empty)
+			.Distinct()
+			.ToList();
+		var users = actorIds.Count == 0
+			? []
+			: await userRepository.GetListAsync(user => actorIds.Contains(user.Id));
+		var actorNames = users.ToDictionary(
+			user => user.Id,
+			user => string.IsNullOrWhiteSpace(user.Name) ? user.UserName : user.Name);
+
+		var history = changes.Select((change, index) =>
+		{
+			auditLogsById.TryGetValue(change.AuditLogId, out var auditLog);
+			var actorId = auditLog?.UserId;
+			return new ConcessionTypeVersionHistoryItemDto
+			{
+				Id = change.Id,
+				VersionNumber = index + 1,
+				ChangeAction = change.ChangeType.ToString().ToLowerInvariant(),
+				ChangeTime = change.ChangeTime,
+				ActorId = actorId,
+				ActorName = actorId.HasValue ? actorNames.GetValueOrDefault(actorId.Value) : null,
+				ChangedFields = change.PropertyChanges
+					.Where(propertyChange => IsVisibleHistoryField(propertyChange.PropertyName))
+					.Select(propertyChange => new ConcessionTypeVersionFieldChangeDto
+					{
+						FieldName = propertyChange.PropertyName,
+						OriginalValue = propertyChange.OriginalValue,
+						NewValue = propertyChange.NewValue
+					})
+					.ToList()
+			};
+		}).ToList();
+
+		if (!history.Any(item => item.ChangeAction == "created"))
+		{
+			history.Insert(0, new ConcessionTypeVersionHistoryItemDto
+			{
+				Id = concessionType.Id,
+				VersionNumber = 1,
+				ChangeAction = "created",
+				ChangeTime = concessionType.CreationTime,
+				ActorId = concessionType.CreatorId,
+				ActorName = concessionType.CreatorId.HasValue
+					? actorNames.GetValueOrDefault(concessionType.CreatorId.Value)
+					: null
+			});
+			for (var index = 1; index < history.Count; index++)
+			{
+				history[index].VersionNumber = index + 1;
+			}
+		}
+
+		var ordered = history.OrderByDescending(item => item.VersionNumber).ToList();
+		return new PagedResultDto<ConcessionTypeVersionHistoryItemDto>(
+			ordered.Count,
+			ordered.Skip(Math.Max(0, skipCount)).Take(Math.Clamp(maxResultCount, 1, 100)).ToList());
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.View)]
+	public Task<ConcessionTypeDocumentDefaultsResponse> GetDocumentDefaultsAsync() =>
+		Task.FromResult(new ConcessionTypeDocumentDefaultsResponse
+		{
+			DefaultMaxFileSizeBytes = ConcessionTypeConsts.DefaultMaxFileSizeBytes,
+			AbsoluteMaxFileSizeBytes = ConcessionTypeConsts.AbsoluteMaxFileSizeBytes,
+			DefaultAcceptedFormats = ConcessionTypeConsts.DefaultAcceptedFormats.ToList(),
+			AllowedFormats = Enum.GetValues<ShikshaMitra.Common.DocumentType>().ToList()
+		});
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.Edit)]
 	public async Task UpdateAsync(Guid id, ConcessionTypeRequest input)
 	{
-		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new BusinessException("Concession Type not found.");
+		var concessionType = await concessionTypeRepository.GetAsync(id);
+		EnsureConcurrency(concessionType, input.ConcurrencyStamp);
+		await EnsureNameIsUniqueAsync(concessionType.AcademicYearId, input.Name, id);
+
+		var isUsed = await IsUsedAsync(id);
+		if (isUsed && DocumentDefinitionsChanged(concessionType, input.Documents))
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.DocumentDefinitionsLocked);
+		}
 
 		concessionType.Update(input.Name, input.Description);
-
-		// Check for duplicate name within the same academic year, excluding the current record
-		var existingConcessionType = await concessionTypeRepository.AnyAsync(x => x.AcademicYearId == concessionType.AcademicYearId && x.Name == input.Name && x.Id != id);
-
-		if (existingConcessionType)
+		if (!isUsed)
 		{
-			throw new BusinessException("A Concession Type with the same name already exists for this Academic Year.");
+			concessionType.ReplaceDocuments(input.Documents.Select(ToDocumentTuple).ToList());
 		}
 
-		concessionType.ReplaceDocuments(input.Documents.Select(d => (d.DocumentName, d.DocumentSize, d.AcceptedFormat)).ToList());
-
-		await concessionTypeRepository.UpdateAsync(concessionType);
+		await concessionTypeRepository.UpdateAsync(concessionType, autoSave: true);
+		await referenceCache.InvalidateConcessionTypesAsync();
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.ChangeStatus)]
+	public async Task<ConcessionTypeResponse> UpdateStatusAsync(
+		Guid id,
+		ConcessionTypeStatusUpdateRequest input)
+	{
+		var concessionType = await concessionTypeRepository.GetAsync(id);
+		EnsureConcurrency(concessionType, input.ConcurrencyStamp);
+
+		if (input.IsActive)
+		{
+			concessionType.Activate();
+		}
+		else
+		{
+			concessionType.Deactivate(input.DeactivationReason ?? string.Empty);
+		}
+
+		await concessionTypeRepository.UpdateAsync(concessionType, autoSave: true);
+		await referenceCache.InvalidateConcessionTypesAsync();
+		var isUsed = await IsUsedAsync(id);
+		return MapResponse(concessionType, isUsed);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.Delete)]
+	[UnitOfWork]
 	public async Task DeleteAsync(Guid id)
 	{
-		var concessionType = await concessionTypeRepository.GetAsync(id) ?? throw new BusinessException("Concession Type not found.");
-
-		// Check if the concession type is associated with any concessions before deleting
-		var hasAssociatedConcessions = await concessionRequestRepository.AnyAsync(x => x.ConcessionTypeId == id);
-
-		if (hasAssociatedConcessions)
+		var concessionType = await concessionTypeRepository.GetAsync(id);
+		if (concessionType.IsActive)
 		{
-			throw new BusinessException("Cannot delete this Concession Type as it is associated with existing Concession Requests.");
+			throw new BusinessException(ConcessionTypeErrorCodes.ActiveCannotBeDeleted)
+				.WithData("Name", concessionType.Name);
+		}
+		if (await IsUsedAsync(id))
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.CannotDeleteInUse);
 		}
 
-		await concessionTypeRepository.DeleteAsync(concessionType);
+		await concessionTypeRepository.DeleteAsync(concessionType, autoSave: true);
+		await referenceCache.InvalidateConcessionTypesAsync();
 	}
+
+	private async Task EnsureNameIsUniqueAsync(Guid academicYearId, string name, Guid? excludingId = null)
+	{
+		var normalizedName = ConcessionTypeConsts.NormalizeNameKey(name);
+		var exists = await concessionTypeRepository.AnyAsync(x =>
+			x.AcademicYearId == academicYearId &&
+			x.NormalizedName == normalizedName &&
+			(!excludingId.HasValue || x.Id != excludingId.Value));
+		if (exists)
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.DuplicateName)
+				.WithData("Name", ConcessionTypeConsts.NormalizeDisplayName(name));
+		}
+	}
+
+	private async Task<HashSet<Guid>> GetUsedIdsAsync(IEnumerable<Guid> ids)
+	{
+		var idList = ids.Distinct().ToList();
+		if (idList.Count == 0)
+		{
+			return [];
+		}
+
+		using var _ = softDeleteFilter.Disable();
+		var requests = await concessionRequestRepository.GetListAsync(x => idList.Contains(x.ConcessionTypeId));
+		return requests.Select(x => x.ConcessionTypeId).ToHashSet();
+	}
+
+	private async Task<bool> IsUsedAsync(Guid concessionTypeId)
+	{
+		using var _ = softDeleteFilter.Disable();
+		return await concessionRequestRepository.AnyAsync(x => x.ConcessionTypeId == concessionTypeId);
+	}
+
+	private static void AddDocuments(ConcessionType concessionType, IEnumerable<ConcessionTypeDocumentDto> documents)
+	{
+		foreach (var document in documents)
+		{
+			concessionType.AddDocument(
+				document.DocumentName,
+				document.MaxFileSizeBytes,
+				document.AcceptedFormats,
+				document.IsRequired);
+		}
+	}
+
+	private static (
+		string DocumentName,
+		long DocumentSize,
+		List<ShikshaMitra.Common.DocumentType> AcceptedFormats,
+		bool IsRequired) ToDocumentTuple(ConcessionTypeDocumentDto document) =>
+		(document.DocumentName, document.MaxFileSizeBytes, document.AcceptedFormats, document.IsRequired);
+
+	private static bool DocumentDefinitionsChanged(
+		ConcessionType concessionType,
+		IEnumerable<ConcessionTypeDocumentDto> incomingDocuments)
+	{
+		var current = concessionType.ConcessionTypeDocuments
+			.Select(document => DocumentDefinitionKey(
+				document.DocumentName,
+				document.MaxFileSizeBytes,
+				document.IsRequired,
+				document.AcceptedFormats.Select(format => format.DocumentType)))
+			.OrderBy(value => value, StringComparer.Ordinal)
+			.ToList();
+		var incoming = incomingDocuments
+			.Select(document => DocumentDefinitionKey(
+				document.DocumentName,
+				document.MaxFileSizeBytes,
+				document.IsRequired,
+				document.AcceptedFormats))
+			.OrderBy(value => value, StringComparer.Ordinal)
+			.ToList();
+		return !current.SequenceEqual(incoming, StringComparer.Ordinal);
+	}
+
+	private static string DocumentDefinitionKey(
+		string name,
+		long size,
+		bool isRequired,
+		IEnumerable<ShikshaMitra.Common.DocumentType> formats) =>
+		$"{ConcessionTypeConsts.NormalizeNameKey(name)}|{size}|{isRequired}|{string.Join(',', formats.Order())}";
+
+	private static ConcessionTypeResponse MapResponse(ConcessionType concessionType, bool isUsed) => new()
+	{
+		Id = concessionType.Id,
+		Name = concessionType.Name,
+		Description = concessionType.Description,
+		IsActive = concessionType.IsActive,
+		DeactivationReason = concessionType.DeactivationReason,
+		IsUsedInDownstream = isUsed,
+		IsDocumentRequired = concessionType.ConcessionTypeDocuments.Any(document => document.IsRequired),
+		ConcurrencyStamp = concessionType.ConcurrencyStamp,
+		Documents = concessionType.ConcessionTypeDocuments.Select(document => new ConcessionTypeDocumentDto
+		{
+			Id = document.Id,
+			DocumentName = document.DocumentName,
+			MaxFileSizeBytes = document.MaxFileSizeBytes,
+			IsRequired = document.IsRequired,
+			AcceptedFormats = document.AcceptedFormats.Select(format => format.DocumentType).ToList()
+		}).ToList()
+	};
+
+	private static void EnsureConcurrency(ConcessionType concessionType, string? concurrencyStamp)
+	{
+		if (!string.IsNullOrWhiteSpace(concurrencyStamp) &&
+			!string.Equals(concessionType.ConcurrencyStamp, concurrencyStamp, StringComparison.Ordinal))
+		{
+			throw new AbpDbConcurrencyException(
+				$"Concession Type {concessionType.Id} was modified by another user.");
+		}
+	}
+
+	private static bool IsVisibleHistoryField(string propertyName) => propertyName is
+		nameof(ConcessionType.Name) or
+		nameof(ConcessionType.Description) or
+		nameof(ConcessionType.IsActive) or
+		nameof(ConcessionType.DeactivationReason) or
+		nameof(ConcessionType.DiscountType);
 }

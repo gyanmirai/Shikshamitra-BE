@@ -42,13 +42,31 @@ public class SubstitutionAppService(
 {
     public async Task<PagedResultDto<SubstitutionDto>> GetListAsync(GetSubstitutionsInput input)
     {
+        return await GetListAsync(input, null);
+    }
+
+    private async Task<PagedResultDto<SubstitutionDto>> GetListAsync(
+        GetSubstitutionsInput input,
+        IReadOnlySet<Guid>? substituteTeacherReferenceIds,
+        bool applyUserScope = true)
+    {
         var rows = await substitutionRepository.GetListAsync();
-		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-		rows = rows.FilterByUserScope(scope).ToList();
+        if (substituteTeacherReferenceIds is { Count: > 0 })
+        {
+            rows = rows.Where(x =>
+                x.SubstituteTeacherId.HasValue &&
+                substituteTeacherReferenceIds.Contains(x.SubstituteTeacherId.Value)).ToList();
+        }
+
+        if (applyUserScope)
+        {
+			var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+			rows = rows.FilterByUserScope(scope).ToList();
+        }
         await BackfillAcademicYearAsync(rows, input.AcademicYearId);
         rows = await FilterByAcademicMediumAsync(rows, input.AcademicMediumId);
 
-        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
+        if (applyUserScope && !IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             var currentUserId = CurrentUser.Id;
             if (currentUserId.HasValue)
@@ -64,14 +82,16 @@ public class SubstitutionAppService(
             }
         }
 
-        var filtered = ApplyFilters(rows, input)
+        var filtered = ApplyFilters(rows, input);
+
+        var ordered = filtered
             .OrderBy(x => x.Date)
             .ThenBy(x => x.StartTime)
             .ToList();
 
-        var total = filtered.Count;
+        var total = ordered.Count;
         var max = input.MaxResultCount <= 0 ? 50 : input.MaxResultCount;
-        var paged = filtered.Skip(input.SkipCount).Take(max).ToList();
+        var paged = ordered.Skip(input.SkipCount).Take(max).ToList();
         var audits = await GetAuditLookupAsync(paged.Select(x => x.Id).ToList());
         var dtoRows = new List<SubstitutionDto>();
         foreach (var row in paged)
@@ -189,6 +209,12 @@ public class SubstitutionAppService(
         var originalTeacherName = string.IsNullOrWhiteSpace(input.OriginalTeacherName)
             ? originalTeacher?.EmployeeName ?? string.Empty
             : input.OriginalTeacherName;
+        var substituteTeacher = ResolveEmployeeByTeacherReference(
+            employees,
+            input.SubstituteTeacherId,
+            input.SubstituteTeacherName);
+        var substituteTeacherId = substituteTeacher?.Id ?? input.SubstituteTeacherId;
+        var substituteTeacherName = substituteTeacher?.EmployeeName ?? input.SubstituteTeacherName;
 
         if (input.TimetableSlotSubjectId.HasValue || originalTeacherId.HasValue)
         {
@@ -250,8 +276,8 @@ public class SubstitutionAppService(
                 originalTeacherId,
                 originalTeacherName,
                 input.SubjectName,
-                input.SubstituteTeacherId,
-                input.SubstituteTeacherName,
+                substituteTeacherId,
+                substituteTeacherName,
                 null,
                 input.AcademicMediumId);
         await EnsureAssignedRoomAvailableAsync(
@@ -263,8 +289,8 @@ public class SubstitutionAppService(
                 entity.Id);
 
         entity.Assign(
-                input.SubstituteTeacherId ?? selected.TeacherId,
-                string.IsNullOrWhiteSpace(input.SubstituteTeacherName) ? selected.TeacherName : input.SubstituteTeacherName,
+                selected.TeacherId,
+                selected.TeacherName,
                 input.AssignedRoomId,
                 input.AssignedRoomName,
                 selected.Score,
@@ -380,12 +406,14 @@ public class SubstitutionAppService(
         var entity = await substitutionRepository.GetAsync(id);
 		await EnsureCanViewSubstitutionAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot assign a substitute after the period has ended.");
-        var suggestions = await GetSuggestedTeachersAsync(id);
-        var selected = suggestions.FirstOrDefault(x =>
-            (input.SubstituteTeacherId.HasValue && x.TeacherId == input.SubstituteTeacherId) ||
-            string.Equals(x.TeacherName, input.SubstituteTeacherName, StringComparison.OrdinalIgnoreCase));
-
-        selected = await EnsureSubstituteCanBeAssignedAsync(
+        var employees = await employeeRepository.GetListAsync();
+        var substituteTeacher = ResolveEmployeeByTeacherReference(
+            employees,
+            input.SubstituteTeacherId,
+            input.SubstituteTeacherName);
+        var substituteTeacherId = substituteTeacher?.Id ?? input.SubstituteTeacherId;
+        var substituteTeacherName = substituteTeacher?.EmployeeName ?? input.SubstituteTeacherName;
+        var selected = await EnsureSubstituteCanBeAssignedAsync(
             entity.Date,
             entity.StartTime,
             entity.EndTime,
@@ -394,8 +422,8 @@ public class SubstitutionAppService(
             entity.OriginalTeacherId,
             entity.OriginalTeacherName,
             entity.DepartmentName,
-            input.SubstituteTeacherId,
-            input.SubstituteTeacherName,
+            substituteTeacherId,
+            substituteTeacherName,
             id,
             await ResolveAcademicMediumIdAsync(entity.SubjectId));
         await EnsureAssignedRoomAvailableAsync(
@@ -412,8 +440,8 @@ public class SubstitutionAppService(
         }
 
         entity.Assign(
-            input.SubstituteTeacherId ?? selected?.TeacherId,
-            string.IsNullOrWhiteSpace(input.SubstituteTeacherName) ? selected?.TeacherName ?? string.Empty : input.SubstituteTeacherName,
+            selected.TeacherId,
+            selected.TeacherName,
             input.AssignedRoomId,
             input.AssignedRoomName,
             selected?.Score,
@@ -987,8 +1015,14 @@ public class SubstitutionAppService(
             return new PagedResultDto<SubstitutionDto>(0, []);
         }
 
-        input.SubstituteTeacherId = employee.Id;
-        return await GetListAsync(input);
+        // Older rows may contain the ABP user ID while current rows use the canonical Employee ID.
+        // Match both references so existing duties remain visible after ID normalization.
+        var teacherReferenceIds = GetTeacherReferenceIds(employee, CurrentUser.Id).ToHashSet();
+        input.SubstituteTeacherId = null;
+        // Personal duties are authorized by the exact substitute employee/user references.
+        // Applying class/division scope first can hide a valid assignment outside the
+        // substitute's normal teaching scope.
+        return await GetListAsync(input, teacherReferenceIds, applyUserScope: false);
     }
 
     public async Task<SubstitutionDailySheetDto> GetDailySheetAsync(SubstitutionDailySheetInput input)
@@ -1310,7 +1344,7 @@ public class SubstitutionAppService(
         return dto;
     }
 
-    private static SubstitutionDto Map(SubstitutionRequest row, List<SubstitutionAuditLogDto> auditLogs) => new()
+    private SubstitutionDto Map(SubstitutionRequest row, List<SubstitutionAuditLogDto> auditLogs) => new()
     {
         Id = row.Id,
         Date = row.Date,
@@ -1346,6 +1380,11 @@ public class SubstitutionAppService(
         IsAiSuggested = row.Source == SubstitutionSource.Suggested,
         WorkloadStatus = row.WorkloadStatus,
         AcknowledgementRequired = row.AcknowledgementRequired,
+        IsResponseWindowOpen = SubstitutionTimeWindow.IsOpen(
+            row.Date,
+            row.EndTime,
+            DateTime.UtcNow,
+            GetInstitutionTimeZone()),
         CreatedAt = row.CreationTime,
         AcknowledgedAt = row.AcknowledgedAt?.ToString("HH:mm"),
         CompletedAt = row.CompletedAt?.ToString("HH:mm"),
@@ -1491,12 +1530,9 @@ public class SubstitutionAppService(
         return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
     }
 
-    private static DateTime CombineDateAndTime(DateTime date, TimeOnly time) =>
-        DateTime.SpecifyKind(date.Date.Add(time.ToTimeSpan()), DateTimeKind.Utc);
-
     private static void EnsureSubstitutionWindowNotFinished(DateTime date, TimeOnly endTime, string message)
     {
-        if (DateTime.UtcNow > CombineDateAndTime(date, endTime))
+        if (!SubstitutionTimeWindow.IsOpen(date, endTime, DateTime.UtcNow, GetInstitutionTimeZone()))
         {
             throw new UserFriendlyException(message);
         }
@@ -1504,7 +1540,7 @@ public class SubstitutionAppService(
 
     private static void EnsureSubstitutionWindowStarted(DateTime date, TimeOnly startTime, string message)
     {
-        if (DateTime.UtcNow < CombineDateAndTime(date, startTime))
+        if (!SubstitutionTimeWindow.HasStarted(date, startTime, DateTime.UtcNow, GetInstitutionTimeZone()))
         {
             throw new UserFriendlyException(message);
         }
@@ -1657,11 +1693,18 @@ public class SubstitutionAppService(
 
     private async Task EnsureCanViewSubstitutionAsync(SubstitutionRequest entity)
     {
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-read");
-		if (await HasClassTeacherAccessAsync())
-		{
-			return;
-		}
+        // A substitute assignment is an explicit resource-level grant and may
+        // legitimately fall outside the teacher's normal class/division scope.
+        if (await IsCurrentUserAssignedSubstituteAsync(entity))
+        {
+            return;
+        }
+
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-read");
+        if (await HasClassTeacherAccessAsync())
+        {
+            return;
+        }
 
         if (IsAdminUser() || !CurrentUser.Id.HasValue)
         {
@@ -1726,14 +1769,23 @@ public class SubstitutionAppService(
 
         var currentUserId = CurrentUser.Id;
         if (!currentUserId.HasValue) throw new UserFriendlyException("Unauthorized.");
-        
-        var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId.Value);
-        if (currentEmployee == null) throw new UserFriendlyException("Employee record not found.");
 
-        if (entity.SubstituteTeacherId != currentEmployee.Id)
+        if (!await IsCurrentUserAssignedSubstituteAsync(entity))
         {
             throw new UserFriendlyException("Only the assigned substitute teacher or administrators can perform this action.");
         }
+    }
+
+    private async Task<bool> IsCurrentUserAssignedSubstituteAsync(SubstitutionRequest entity)
+    {
+        if (!entity.SubstituteTeacherId.HasValue || !CurrentUser.Id.HasValue)
+        {
+            return false;
+        }
+
+        var employee = await ResolveCurrentEmployeeAsync();
+        return GetTeacherReferenceIds(employee, CurrentUser.Id)
+            .Contains(entity.SubstituteTeacherId.Value);
     }
 }
 

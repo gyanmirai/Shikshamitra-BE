@@ -1,9 +1,12 @@
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Compensation;
+using ShikshaMitra.HR.Payroll.Templates;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace ShikshaMitra.Seeders;
@@ -238,12 +241,129 @@ public partial class HRSeederContributor
 			hasPendingChanges = true;
 		}
 
+		hasPendingChanges |= await EnsureSeededCompensationRevisionAsync(
+			employee,
+			seededSalary,
+			earningMasters,
+			deductionMasters,
+			pfRuleId);
+
 		if (hasPendingChanges)
 		{
 			await InvalidateUnlockedPayrollSnapshotsAsync(employeeId);
 			await CurrentUnitOfWork.SaveChangesAsync();
 		}
 	}
+
+	private async Task<bool> EnsureSeededCompensationRevisionAsync(
+		Employee employee,
+		SeededSalaryProfile seededSalary,
+		IReadOnlyList<EarningComponent> earningMasters,
+		IReadOnlyList<DeductionComponent> deductionMasters,
+		string? pfRuleId)
+	{
+		if ((await _compensationRevisionRepository.GetListAsync(x => x.EmployeeId == employee.Id)).Count > 0)
+		{
+			return false;
+		}
+
+		var template = (await _salaryStructureTemplateRepository.GetListAsync())
+			.FirstOrDefault(x => x.IsDefault && x.PublishedVersion.HasValue);
+		var templateVersion = template == null
+			? null
+			: (await _salaryStructureTemplateVersionRepository.GetListAsync(x => x.TemplateId == template.Id))
+				.FirstOrDefault(x => x.VersionNumber == template.PublishedVersion);
+		var employerProvidentFund = seededSalary.GetDeductionAmount("Provident Fund (PF)");
+		var employerCost = seededSalary.GrossSalary + employerProvidentFund;
+		var deductions = seededSalary.Deductions.Values.Sum();
+		var revision = new EmployeeCompensationRevision(
+			GuidGenerator.Create(),
+			CurrentTenant.Id,
+			employee.Id,
+			1,
+			new DateTime(2022, 4, 1, 0, 0, 0, DateTimeKind.Utc));
+		var snapshot = JsonSerializer.Serialize(new
+		{
+			Deductions = new object[]
+			{
+				new
+				{
+					ComponentId = deductionMasters.First(x => x.Name == "Provident Fund (PF)").Id,
+					Name = "Provident Fund (PF)",
+					IsStatutory = true,
+					SemanticType = "EMPLOYEE_PROVIDENT_FUND"
+				},
+				new
+				{
+					ComponentId = deductionMasters.First(x => x.Name == "Professional Tax").Id,
+					Name = "Professional Tax",
+					IsStatutory = true,
+					SemanticType = "PROFESSIONAL_TAX"
+				}
+			},
+			PfRuleId = Guid.TryParse(pfRuleId, out var parsedPfRuleId) ? parsedPfRuleId : (Guid?)null
+		});
+		revision.ReplaceDraft(
+			revision.EffectiveMonth,
+			SalaryInputBasis.EmployerCost,
+			CompensationProtectionPolicy.ProtectEmployerCost,
+			employerCost,
+			employerCost,
+			seededSalary.GrossSalary,
+			seededSalary.GrossSalary - deductions,
+			employerCost,
+			template?.Id,
+			templateVersion?.Id,
+			templateVersion?.VersionNumber,
+			Guid.TryParse(pfRuleId, out parsedPfRuleId) ? parsedPfRuleId : null,
+			"IN-GJ",
+			snapshot);
+		var submitterId = GuidGenerator.Create();
+		revision.Submit(submitterId, new DateTime(2022, 4, 1, 0, 0, 0, DateTimeKind.Utc));
+		revision.Approve(GuidGenerator.Create(), new DateTime(2022, 4, 1, 0, 1, 0, DateTimeKind.Utc));
+		await _compensationRevisionRepository.InsertAsync(revision, autoSave: false);
+
+		var lines = new List<EmployeeCompensationRevisionLine>();
+		foreach (var master in earningMasters)
+		{
+			var amount = seededSalary.GetEarningAmount(master.Name);
+			if (amount <= 0m)
+			{
+				continue;
+			}
+
+			lines.Add(new EmployeeCompensationRevisionLine(
+				GuidGenerator.Create(), CurrentTenant.Id, revision.Id, employee.Id, master.Id,
+				master.Name, master.Description, amount, isEarning: true,
+				ResolveSeededSemanticType(master.Name), CompensationLineSource.Template, lines.Count));
+		}
+
+		foreach (var master in deductionMasters.Where(x => x.Name is not "Provident Fund (PF)" and not "Professional Tax"))
+		{
+			var amount = seededSalary.GetDeductionAmount(master.Name);
+			if (amount <= 0m)
+			{
+				continue;
+			}
+
+			lines.Add(new EmployeeCompensationRevisionLine(
+				GuidGenerator.Create(), CurrentTenant.Id, revision.Id, employee.Id, master.Id,
+				master.Name, master.Description, amount, isEarning: false,
+				PayrollComponentSemanticType.Ordinary, CompensationLineSource.Template, lines.Count));
+		}
+
+		await _compensationRevisionLineRepository.InsertManyAsync(lines, autoSave: false);
+		return true;
+	}
+
+	private static PayrollComponentSemanticType ResolveSeededSemanticType(string componentName) =>
+		componentName switch
+		{
+			"Basic Salary" => PayrollComponentSemanticType.Basic,
+			"Dearness Allowance (DA)" => PayrollComponentSemanticType.DearnessAllowance,
+			"Special Allowance" => PayrollComponentSemanticType.BalancingEarning,
+			_ => PayrollComponentSemanticType.Ordinary
+		};
 
 	internal static EmployeePayrollComponent? FindExistingSeedPayrollComponent(
 		IReadOnlyDictionary<(Guid ComponentId, bool IsEarning), EmployeePayrollComponent> existingComponentsById,

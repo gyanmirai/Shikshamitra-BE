@@ -43,7 +43,10 @@ public class ChapterAppService(
 				includeDetails: true
 			)).FirstOrDefault()
 			?? throw new BusinessException("Academic:Chapter:001", "Subject not assigned to this class");
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-create");
+		if (!await HasTeacherSubjectAccessAsync(assignedSubject))
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-create");
+		}
 
 		if (input.Select(x => x.ChapterNo).Distinct().Count() != input.Count)
 		{
@@ -89,7 +92,7 @@ public class ChapterAppService(
 		// even when they do not have a separate class/division UserScope assignment.
 		// Reporting managers inherit the same read visibility for their reportees'
 		// subject allocations.
-		if (!await HasTeacherSubjectReadAccessAsync(assignedSubject))
+		if (!await HasTeacherSubjectAccessAsync(assignedSubject))
 		{
 			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-read");
 		}
@@ -118,9 +121,14 @@ public class ChapterAppService(
 		return dtos;
 	}
 
-	private async Task<bool> HasTeacherSubjectReadAccessAsync(AssignedSubject assignedSubject)
+	private async Task<bool> HasTeacherSubjectAccessAsync(AssignedSubject assignedSubject)
 	{
-		if (!CurrentUser.Id.HasValue || await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
+		// Subject allocation is an explicit resource-level grant. It must be checked
+		// before the hierarchical UserScope fallback, including for users who also
+		// have tenant-wide scope (for example HODs/teachers with broad permissions).
+		// Returning early for tenant-wide scope made the explicit teacher assignment
+		// unusable and caused valid chapter requests to be rejected by UserScope.
+		if (!CurrentUser.Id.HasValue)
 		{
 			return false;
 		}
@@ -161,7 +169,10 @@ public class ChapterAppService(
 				includeDetails: true
 			)
 			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-update");
+		if (!await HasTeacherSubjectAccessAsync(assignedSubject))
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-update");
+		}
 
 		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
 		chapter.UpdateDetails(
@@ -224,7 +235,10 @@ public class ChapterAppService(
 				includeDetails: true
 			)
 			?? throw new BusinessException("Academic:Chapter:003", "Chapter not found");
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-delete");
+		if (!await HasTeacherSubjectAccessAsync(assignedSubject))
+		{
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-delete");
+		}
 
 		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
 
@@ -380,6 +394,7 @@ public class ChapterAppService(
 
 		var chapterIds = dtos.Select(dto => dto.Id).ToList();
 		var linkedByChapter = chapterIds.ToDictionary(id => id, _ => new ChapterLinkSummary());
+		var progressSnapshots = new List<ChapterProgressSnapshot>();
 
 		var lessonPlans = await lessonPlanRepository.GetListAsync(lp =>
 			lp.StandardId == assignedSubject.StandardId &&
@@ -391,9 +406,13 @@ public class ChapterAppService(
 		{
 			var summary = linkedByChapter[lessonPlan.ChapterId];
 			summary.LessonPlans++;
-			// The lesson plan is the progress fallback until a submitted
-			// Teacher Diary provides the actual delivered-lesson progress.
-			summary.CompletionValues.Add(Math.Clamp(lessonPlan.PlannedCompletionPercentage, 0, 100));
+			progressSnapshots.Add(new ChapterProgressSnapshot(
+				lessonPlan.ChapterId,
+				lessonPlan.DivisionId,
+				lessonPlan.PlannedDate,
+				lessonPlan.CreationTime,
+				lessonPlan.PlannedCompletionPercentage,
+				IsActual: false));
 		}
 
 		if (lessonPlans.Count > 0)
@@ -406,17 +425,19 @@ public class ChapterAppService(
 				.GroupBy(diary => diary.LessonPlanId)
 				.ToDictionary(group => group.Key, group => group.OrderByDescending(diary => diary.CreationTime).First());
 			var lessonPlanById = lessonPlans.ToDictionary(lessonPlan => lessonPlan.Id);
-
-			foreach (var diaryGroup in diaryByLessonPlan.Values.GroupBy(diary => lessonPlanById[diary.LessonPlanId].ChapterId))
+			foreach (var diary in diaryByLessonPlan.Values)
 			{
-				var summary = linkedByChapter[diaryGroup.Key];
-				// Submitted diaries record actual delivery and therefore take precedence for
-				// the entire chapter. Planned values are used only when no diary was submitted.
-				summary.CompletionValues.Clear();
-				summary.CompletionValues.AddRange(diaryGroup.Select(diary =>
-					Math.Clamp(diary.ActualCompletionPercentage, 0, 100)));
+				var lessonPlan = lessonPlanById[diary.LessonPlanId];
+				progressSnapshots.Add(new ChapterProgressSnapshot(
+					lessonPlan.ChapterId,
+					lessonPlan.DivisionId,
+					diary.ActualDate,
+					diary.LastModificationTime ?? diary.SubmittedAt ?? diary.CreationTime,
+					diary.ActualCompletionPercentage,
+					IsActual: true));
 			}
 		}
+		var progressByChapter = ChapterProgressCalculator.Calculate(progressSnapshots);
 
 		var homeworks = await homeworkRepository.GetListAsync(hw =>
 			hw.StandardId == assignedSubject.StandardId &&
@@ -474,9 +495,9 @@ public class ChapterAppService(
 		{
 			var summary = linkedByChapter[dto.Id];
 			dto.LessonPlanStatus = summary.LessonPlans > 0 ? "Linked" : DefaultStatus(dto.LessonPlanStatus, "Not Linked");
-			if (summary.CompletionValues.Count > 0)
+			if (progressByChapter.TryGetValue(dto.Id, out var progressPercentage))
 			{
-				dto.ProgressPercentage = (int)Math.Round(summary.CompletionValues.Average());
+				dto.ProgressPercentage = progressPercentage;
 				dto.CoverageStatus = dto.ProgressPercentage switch
 				{
 					100 => "Completed",
@@ -562,7 +583,6 @@ public class ChapterAppService(
 	private sealed class ChapterLinkSummary
 	{
 		public int LessonPlans { get; set; }
-		public List<int> CompletionValues { get; } = new();
 		public int Homeworks { get; set; }
 		public int Assessments { get; set; }
 		public int Questions { get; set; }

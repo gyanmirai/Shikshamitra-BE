@@ -24,6 +24,14 @@ public class PayrollRunItemSnapshotConfiguration : IEntityTypeConfiguration<Payr
 		builder.Property(x => x.GrossSalary).HasPrecision(18, 2);
 		builder.Property(x => x.FullGrossSalary).HasPrecision(18, 2);
 		builder.Property(x => x.TotalDeduction).HasPrecision(18, 2);
+		builder.Property(x => x.EmployerContributionTotal).HasPrecision(18, 2);
+		builder.Property(x => x.EmployerCost).HasPrecision(18, 2);
+		builder.Property(x => x.CompensationSalaryBasis).HasMaxLength(32);
+		builder.Property(x => x.CompensationProtectionPolicy).HasMaxLength(32);
+		builder.Property(x => x.CompensationQuotedAmount).HasPrecision(18, 2);
+		builder.Property(x => x.CompensationProtectedAmount).HasPrecision(18, 2);
+		builder.Property(x => x.CompensationNormalizedProtectedAmount).HasPrecision(18, 2);
+		builder.Property(x => x.CompensationTargetDifference).HasPrecision(18, 2);
 		builder.Property(x => x.NetPay).HasPrecision(18, 2);
 		builder.Property(x => x.PreviousMonthNetPay).HasPrecision(18, 2);
 		builder.Property(x => x.NetPayDelta).HasPrecision(18, 2);
@@ -35,6 +43,10 @@ public class PayrollRunItemSnapshotConfiguration : IEntityTypeConfiguration<Payr
 		builder.Property(x => x.BasisDays).HasPrecision(18, 2);
 		builder.Property(x => x.PayableUnits).HasPrecision(18, 2);
 		builder.Property(x => x.ProrationFactor).HasPrecision(18, 4);
+		builder.Property(x => x.EmployeeStateInsuranceWages).HasPrecision(18, 2);
+		builder.Property(x => x.EmployeeStateInsuranceGovernmentContribution).HasPrecision(18, 2);
+		builder.Property(x => x.EmployeeStateInsuranceCoverageDecision).HasMaxLength(64);
+		builder.Property(x => x.EmployeeStateInsuranceNumber).HasMaxLength(100);
 
 		builder.Property(x => x.IssueCodesJson).HasColumnType("jsonb");
 		builder.Property(x => x.HolidayImpactJson).HasColumnType("jsonb");

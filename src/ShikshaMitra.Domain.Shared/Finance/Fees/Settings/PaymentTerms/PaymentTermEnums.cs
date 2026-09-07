@@ -1,8 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 
 /// <summary>
 /// Lifecycle status of a Payment Term master record.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PaymentTermStatus
 {
 	/// <summary>The term is available for assignment and demand generation.</summary>
@@ -13,8 +16,21 @@ public enum PaymentTermStatus
 }
 
 /// <summary>
+/// Public lifecycle status presented by Payment Term list and detail contracts.
+/// The stored master status and version state are combined into one unambiguous value.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PaymentTermLifecycleStatus
+{
+	Draft = 0,
+	Active = 1,
+	Archived = 2
+}
+
+/// <summary>
 /// Lifecycle status of an individual Payment Term version snapshot.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PaymentTermVersionStatus
 {
 	/// <summary>Editable working copy — not yet locked.</summary>
@@ -33,6 +49,7 @@ public enum PaymentTermVersionStatus
 /// <summary>
 /// Determines how installment demand/due dates shift when they fall on a holiday.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum HolidayShiftingMethod
 {
 	/// <summary>No shifting — dates remain as configured.</summary>
@@ -48,10 +65,11 @@ public enum HolidayShiftingMethod
 /// <summary>
 /// Controls when an installment's demand is generated relative to its due date.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DemandGenerationRule
 {
-	/// <summary>Demand is generated immediately upon structure assignment.</summary>
-	Immediately = 0,
+	/// <summary>Demand is generated when the installment coverage window starts.</summary>
+	OnInstallmentStartDate = 0,
 
 	/// <summary>Demand is generated N days before the due date.</summary>
 	XDaysBeforeDue = 1,
@@ -59,13 +77,25 @@ public enum DemandGenerationRule
 	/// <summary>Demand is generated on the due date.</summary>
 	OnDueDate = 2,
 
-	/// <summary>Demand is generated only from an authorized manual command.</summary>
-	Manual = 3
+	/// <summary>Demand is generated on the explicit date configured for each installment.</summary>
+	SpecificDate = 3
+}
+
+/// <summary>
+/// User-selectable state when a Payment Term is saved. Archive is deliberately
+/// excluded because it is a guarded lifecycle action, not a form value.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PaymentTermSaveStatus
+{
+	Draft = 0,
+	Active = 1
 }
 
 /// <summary>
 /// The initial status assigned to a demand record when it is generated.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum InitialDemandStatus
 {
 	/// <summary>Demand starts as a draft pending review.</summary>

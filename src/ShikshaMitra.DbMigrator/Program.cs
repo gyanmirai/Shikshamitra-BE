@@ -12,7 +12,7 @@ namespace ShikshaMitra.DbMigrator;
 
 static class Program
 {
-	static async Task Main(string[] args)
+	static async Task<int> Main(string[] args)
 	{
 		Log.Logger = new LoggerConfiguration()
 			.MinimumLevel.Information()
@@ -28,7 +28,20 @@ static class Program
 			.WriteTo.Async(c => c.Console())
 			.CreateLogger();
 
-		await CreateHostBuilder(args).RunConsoleAsync();
+		try
+		{
+			await CreateHostBuilder(args).RunConsoleAsync();
+			return 0;
+		}
+		catch (Exception exception)
+		{
+			Log.Fatal(exception, "Database migrator terminated unexpectedly.");
+			return 1;
+		}
+		finally
+		{
+			Log.CloseAndFlush();
+		}
 	}
 
 	public static IHostBuilder CreateHostBuilder(string[] args) =>

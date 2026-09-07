@@ -10,6 +10,15 @@ public class SeatingValidationIssueDto
     public Guid? StudentId { get; set; }
     public Guid? RoomId { get; set; }
     public string? SeatId { get; set; }
+    public int? SeatNumber { get; set; }
+    public string? RoomName { get; set; }
+    public Guid? RelatedSeatingPlanId { get; set; }
+    public string? RelatedSeatingPlanName { get; set; }
+    public DateTime? ExamDate { get; set; }
+    public DateTime? StartTime { get; set; }
+    public DateTime? EndTime { get; set; }
+    public string? SuggestedActionCode { get; set; }
+    public string? SuggestedActionLabel { get; set; }
 }
 
 public class SeatingValidationResponseDto

@@ -132,7 +132,7 @@ public partial class CollectFeeWorkflow
 		IReadOnlyList<PaymentMethodEnum> paymentMethods,
 		bool isBankReceiptConfirmed = true)
 	{
-		var isAnyPartial = dueFeePayments.Any(dfp => dfp.Amount < dueFeeMap[dfp.DueFeeId].OutstandingAmount)
+		var isAnyPartial = dueFeePayments.Any(dfp => (decimal)dfp.Amount < dueFeeMap[dfp.DueFeeId].OutstandingAmount)
 			|| chargePayments.Any(cp => cp.Amount < pendingChargeMap[cp.ChargeId]);
 
 		return FeeReceiptPaymentPolicy.RequiresVerification(paymentMethods) || !isBankReceiptConfirmed
@@ -143,7 +143,7 @@ public partial class CollectFeeWorkflow
 	private static Dictionary<Guid, double> BuildDueFeeBeforeSnapshots(
 		IReadOnlyList<DueFeePaymentDto> dueFeePayments,
 		IReadOnlyDictionary<Guid, DueFee> dueFeeMap) =>
-		dueFeePayments.ToDictionary(dfp => dfp.DueFeeId, dfp => dueFeeMap[dfp.DueFeeId].OutstandingAmount);
+		dueFeePayments.ToDictionary(dfp => dfp.DueFeeId, dfp => (double)dueFeeMap[dfp.DueFeeId].OutstandingAmount);
 
 	private static string BuildFullName(string? first, string? middle, string? last) =>
 		string.Join(" ", new[] { first, middle, last }.Where(p => !string.IsNullOrWhiteSpace(p)));

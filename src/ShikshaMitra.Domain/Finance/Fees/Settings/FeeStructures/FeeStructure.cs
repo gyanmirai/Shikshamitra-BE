@@ -1,6 +1,9 @@
 ﻿using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using System;
+using ShikshaMitra.Domain.Finance.Policies;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -26,6 +29,10 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// frontend-only field with nothing on the backend to resolve against.
 	/// </summary>
 	public Guid? CollectionPolicyId { get; private set; }
+	public Guid? ConcessionPolicyId { get; private set; }
+	public Guid? ConcessionPolicyVersionId { get; private set; }
+	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; private set; } = ConcessionFeeHeadScope.EntireFeeStructure;
+	public string ConcessionApplicableFeeHeadIdsJson { get; private set; } = "[]";
 
 	protected FeeStructure()
 	{
@@ -55,6 +62,34 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		CollectionPolicyId = collectionPolicyId;
 	}
+
+	public void AttachConcessionPolicy(
+		Guid? concessionPolicyId,
+		Guid? concessionPolicyVersionId,
+		ConcessionFeeHeadScope feeHeadScope,
+		IReadOnlyCollection<Guid>? applicableFeeHeadIds)
+	{
+		if (concessionPolicyId.HasValue != concessionPolicyVersionId.HasValue)
+			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound)
+				.WithData("field", "ConcessionPolicyVersionId");
+		ConcessionPolicyId = concessionPolicyId;
+		ConcessionPolicyVersionId = concessionPolicyVersionId;
+		if (!concessionPolicyId.HasValue)
+		{
+			ConcessionFeeHeadScope = ConcessionFeeHeadScope.EntireFeeStructure;
+			ConcessionApplicableFeeHeadIdsJson = "[]";
+			return;
+		}
+
+		var ids = (applicableFeeHeadIds ?? Array.Empty<Guid>()).Distinct().Order().ToList();
+		if (feeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads && ids.Count == 0)
+			throw new BusinessException(ConcessionPolicyErrorCodes.FeeHeadRequired);
+		ConcessionFeeHeadScope = feeHeadScope;
+		ConcessionApplicableFeeHeadIdsJson = JsonSerializer.Serialize(ids);
+	}
+
+	public IReadOnlyList<Guid> GetConcessionApplicableFeeHeadIds() =>
+		JsonSerializer.Deserialize<List<Guid>>(ConcessionApplicableFeeHeadIdsJson) ?? [];
 
 	public void AddDetail(FeeStructureDetail detail)
 	{

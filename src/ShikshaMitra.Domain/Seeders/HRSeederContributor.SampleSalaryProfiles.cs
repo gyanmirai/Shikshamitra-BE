@@ -51,21 +51,34 @@ public partial class HRSeederContributor
 
 	private SeededSalaryProfile BuildSeededSalary(Employee employee)
 	{
-		var grossSalary = ResolveSeededGrossSalary(employee);
+		var salaryScenario = ShouldSeedEsiFullDemoSalaryScenarios()
+			? EsiFullDemoSeedCatalog.FindSalaryScenario(employee.Email)
+			: null;
+		var grossSalary = salaryScenario?.GrossSalary ?? ResolveSeededGrossSalary(employee);
+		var seed = StableSeedHash($"{CurrentTenant.Id:N}:{employee.EmployeeCode}:{employee.Email}:{employee.Id:N}");
+		return BuildSeededSalaryProfile(grossSalary, seed, salaryScenario?.SuppressVariablePay == true);
+	}
+
+	internal static SeededSalaryProfile BuildSeededSalaryProfile(
+		decimal grossSalary,
+		uint seed,
+		bool suppressVariablePay)
+	{
 		var basic = RoundToNearest(grossSalary * 0.50m, 100m);
 		var hra = RoundToNearest(grossSalary * 0.20m, 100m);
 		var da = RoundToNearest(grossSalary * 0.10m, 100m);
 		var transport = grossSalary >= 90_000m ? 5_000m : grossSalary >= 55_000m ? 2_500m : 1_600m;
 		var medical = grossSalary >= 55_000m ? 2_000m : 1_250m;
-		var seed = StableSeedHash($"{CurrentTenant.Id:N}:{employee.EmployeeCode}:{employee.Email}:{employee.Id:N}");
-		var performanceBonus = grossSalary switch
+		var performanceBonus = suppressVariablePay ? 0m : grossSalary switch
 		{
 			>= 100_000m => 8_000m + (seed % 3) * 1_000m,
 			>= 70_000m => 4_000m + (seed % 3) * 1_000m,
 			>= 45_000m => 2_000m + (seed % 2) * 1_000m,
 			_ => seed % 2 == 0 ? 1_000m : 0m
 		};
-		var incentive = seed % 4 == 0 ? 2_000m : seed % 5 == 0 ? 1_000m : 0m;
+		var incentive = suppressVariablePay
+			? 0m
+			: seed % 4 == 0 ? 2_000m : seed % 5 == 0 ? 1_000m : 0m;
 		var specialAllowance = grossSalary - basic - hra - da - transport - medical - performanceBonus - incentive;
 		if (specialAllowance < 0)
 		{
@@ -104,7 +117,6 @@ public partial class HRSeederContributor
 				["Provident Fund (PF)"] = pf,
 				["Professional Tax"] = professionalTax,
 				["Income Tax (TDS)"] = tds,
-				["Employee State Insurance (ESI)"] = 0m,
 				["Loan Repayment"] = loan,
 				["Advance Salary Deduction"] = advance,
 				["Loss of Pay (LOP)"] = 0m
@@ -140,7 +152,7 @@ public partial class HRSeederContributor
 		return min + (seed % (uint)(steps + 1)) * 5_000m;
 	}
 
-	private sealed record SeededSalaryProfile(
+	internal sealed record SeededSalaryProfile(
 		decimal GrossSalary,
 		IReadOnlyDictionary<string, decimal> Earnings,
 		IReadOnlyDictionary<string, decimal> Deductions)

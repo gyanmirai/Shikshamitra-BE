@@ -186,7 +186,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		var dueDate = DateTime.UtcNow.Date.AddDays(-daysOverdue);
 		var dueFee = new DueFee(
 			id: Guid.NewGuid(), tenantId: TestTenantId, studentId: studentId, feeHeadId: feeHeadId,
-			month: MonthEnum.April, year: dueDate.Year, isOneTime: false, amount: 5000d, dueDate: dueDate);
+			month: MonthEnum.April, year: dueDate.Year, isOneTime: false, amount: 5000m, dueDate: dueDate);
 		await _dueFeeRepo.InsertAsync(dueFee, autoSave: true);
 
 		return (yearId, studentId, feeHeadId, dueFee.Id, feeStructure.Id);

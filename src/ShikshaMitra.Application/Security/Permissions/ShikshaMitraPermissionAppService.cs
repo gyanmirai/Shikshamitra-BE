@@ -221,13 +221,6 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 			return;
 		}
 
-		if (allowCurrentUserRead &&
-			providerName.Equals("U", StringComparison.OrdinalIgnoreCase) &&
-			IsAuthenticatedUser())
-		{
-			return;
-		}
-
 		var policyName = Options.ProviderPolicies.GetOrDefault(providerName);
 		if (policyName.IsNullOrEmpty())
 		{
@@ -278,10 +271,6 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		}
 
 	}
-
-	private bool IsAuthenticatedUser() =>
-		CurrentUser.IsAuthenticated ||
-		(CurrentPrincipalAccessor.Principal?.Identity?.IsAuthenticated ?? false);
 
 	private static IEnumerable<string> GetUserIdClaimValues(ClaimsPrincipal? principal)
 	{

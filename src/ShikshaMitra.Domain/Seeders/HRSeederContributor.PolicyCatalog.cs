@@ -234,7 +234,6 @@ public partial class HRSeederContributor
 		new("Provident Fund (PF)", "Employee PF contribution - 12% of Basic", DeductionComponentType.Fixed, CalculationType.Amount, 12m, null, ComponentDependency.Basic, true, 1),
 		new("Professional Tax", "State professional tax", DeductionComponentType.Fixed, CalculationType.Amount, 200m, null, ComponentDependency.Gross, true, 2),
 		new("Income Tax (TDS)", "Tax Deducted at Source", DeductionComponentType.Fixed, CalculationType.Amount, 2_500m, null, ComponentDependency.Gross, true, 3),
-		new("Employee State Insurance (ESI)", "ESI contribution - 0.75% of Gross", DeductionComponentType.Fixed, CalculationType.Amount, 0.75m, null, ComponentDependency.Gross, true, 4),
 		new("Loan Repayment", "Employee loan deduction", DeductionComponentType.Fixed, CalculationType.Amount, 1_500m, null, ComponentDependency.None, true, 5),
 		new("Advance Salary Deduction", "Salary advance recovery", DeductionComponentType.Variable, CalculationType.Amount, 500m, null, ComponentDependency.None, true, 6),
 		new("Loss of Pay (LOP)", "Deduction for unauthorized absence", DeductionComponentType.Fixed, CalculationType.Amount, 100m, null, ComponentDependency.None, true, 7)

@@ -62,6 +62,22 @@ public class FeeCategoryApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Create_FeeCategory_With_FeeHead_Without_Module()
+    {
+        var input = BuildCreateRequest();
+        input.FeeHeads[0].Module = null;
+
+        var response = await Client.PostAsJsonAsync($"{BaseUrl}?academicYearId={_academicYearId}", input, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<FeeCategoryResponse>(JsonOptions);
+        body.ShouldNotBeNull();
+        body!.FeeHeads.Count.ShouldBe(1);
+        body.FeeHeads[0].Module.ShouldBeNull();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Reject_Create_When_Name_Duplicate_In_Same_AcademicYear()
     {
         var name = $"Category-{Guid.NewGuid():N}";
@@ -203,7 +219,7 @@ public class FeeCategoryApi_Tests : ShikshaMitraApiTestBase
         var body = await response.Content.ReadFromJsonAsync<List<FeeHeadModuleDto>>(JsonOptions);
         body.ShouldNotBeNull();
         body!.ShouldNotBeEmpty();
-        body.ShouldContain(m => m.Value == nameof(FeeHeadModule.Academics));
+        body.ShouldContain(m => m.Value == (int)FeeHeadModule.Academics);
     }
 
     private async Task<FeeCategoryResponse> CreateCategoryAsync(string name = null)

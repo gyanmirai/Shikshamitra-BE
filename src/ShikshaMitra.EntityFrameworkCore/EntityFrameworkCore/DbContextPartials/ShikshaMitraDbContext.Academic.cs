@@ -76,6 +76,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<ExamSeatAllocation> ExamSeatAllocations { get; set; }
     public DbSet<ExamSeatingPlan> ExamSeatingPlans { get; set; }
     public DbSet<ExamSeatingPlanSubject> ExamSeatingPlanSubjects { get; set; }
+    public DbSet<ExamSeatingPublication> ExamSeatingPublications { get; set; }
     public DbSet<SeatingPlanAuditLog> SeatingPlanAuditLogs { get; set; }
 
     // Question Bank

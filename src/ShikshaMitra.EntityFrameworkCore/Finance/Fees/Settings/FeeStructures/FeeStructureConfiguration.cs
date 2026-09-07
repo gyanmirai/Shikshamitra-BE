@@ -18,5 +18,8 @@ public class FeeStructureConfiguration : IEntityTypeConfiguration<FeeStructure>
 			.HasForeignKey(x => x.FeeStructureId)
 			.OnDelete(DeleteBehavior.Cascade);
 		builder.Navigation(x => x.FeeStructureDetails).AutoInclude();
+		builder.HasIndex(x => x.ConcessionPolicyId)
+			.HasDatabaseName("IX_Finance_FeeStructures_ConcessionPolicyId");
+		builder.Property(x => x.ConcessionApplicableFeeHeadIdsJson).HasColumnType("text").IsRequired();
 	}
 }

@@ -2,6 +2,7 @@ using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
@@ -23,6 +24,7 @@ public partial class FeeCollectionSummaryQueryService(
 	IReadOnlyRepository<Student, Guid> studentRepository,
 	IReadOnlyRepository<Standard, Guid> standardRepository,
 	IReadOnlyRepository<Division, Guid> divisionRepository,
+	IReadOnlyRepository<FeeHead, Guid> feeHeadRepository,
 	IDueFeeRepository dueFeeRepository,
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,

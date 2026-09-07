@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Templates;
@@ -10,7 +11,8 @@ using Volo.Abp.DependencyInjection;
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class PayrollProvidentFundComponentBuilder(
-	IProvidentFundRepository providentFundRepository)
+	IProvidentFundRepository providentFundRepository,
+	ILogger<PayrollProvidentFundComponentBuilder> logger)
 	: ITransientDependency
 {
 	public async Task<List<EmployeePayrollComponent>> AddProvidentFundDeductionAsync(
@@ -19,14 +21,30 @@ public class PayrollProvidentFundComponentBuilder(
 		int year,
 		int month)
 	{
-		var result = components.ToList();
 		if (payrollDetails == null)
 		{
+			var result = components.ToList();
 			result.RemoveAll(x => x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund);
 			return result;
 		}
 
-		var rule = await ResolveRuleAsync(payrollDetails, year, month);
+		return await AddProvidentFundDeductionAsync(
+			payrollDetails.EmployeeId,
+			Guid.TryParse(payrollDetails.PfRule, out var pfRuleId) ? pfRuleId : null,
+			components,
+			year,
+			month);
+	}
+
+	public async Task<List<EmployeePayrollComponent>> AddProvidentFundDeductionAsync(
+		Guid employeeId,
+		Guid? pfRuleId,
+		List<EmployeePayrollComponent> components,
+		int year,
+		int month)
+	{
+		var result = components.ToList();
+		var rule = await ResolveRuleAsync(pfRuleId, employeeId, year, month);
 		if (rule == null)
 		{
 			result.RemoveAll(x => x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund);
@@ -55,7 +73,7 @@ public class PayrollProvidentFundComponentBuilder(
 
 		result.Add(new EmployeePayrollComponent(
 			Guid.NewGuid(),
-			payrollDetails.EmployeeId,
+			employeeId,
 			$"Provident Fund - {rule.Name}",
 			componentId: null,
 			description: $"{rule.EmployeePercentage:0.##}% employee PF contribution",
@@ -78,21 +96,41 @@ public class PayrollProvidentFundComponentBuilder(
 		int year,
 		int month)
 	{
-		if (payrollDetails == null ||
-		    string.IsNullOrWhiteSpace(payrollDetails.PfRule) ||
-		    !Guid.TryParse(payrollDetails.PfRule, out var pfRuleId))
+		if (payrollDetails == null || !Guid.TryParse(payrollDetails.PfRule, out var pfRuleId))
 		{
 			return null;
 		}
 
-		var rule = await providentFundRepository.FindAsync(pfRuleId);
+		return await ResolveRuleAsync(pfRuleId, payrollDetails.EmployeeId, year, month);
+	}
+
+	public async Task<ProvidentFund?> ResolveRuleAsync(
+		Guid? pfRuleId,
+		Guid employeeId,
+		int year,
+		int month)
+	{
+		if (!pfRuleId.HasValue)
+		{
+			return null;
+		}
+
+		var rule = await providentFundRepository.FindAsync(pfRuleId.Value);
 		var effectiveDate = new DateTime(year, month, 1);
-		return rule is { IsActive: true } &&
-		       (rule.EmployeePercentage > 0m || rule.EmployerPercentage > 0m) &&
-		       rule.EffectiveFrom <= effectiveDate &&
-		       (!rule.EffectiveTo.HasValue || rule.EffectiveTo.Value >= effectiveDate)
-			? rule
-			: null;
+		if (rule is not { IsActive: true } ||
+		    (rule.EmployeePercentage <= 0m && rule.EmployerPercentage <= 0m) ||
+		    rule.EffectiveFrom > effectiveDate ||
+		    rule.EffectiveTo.HasValue && rule.EffectiveTo.Value < effectiveDate)
+		{
+			logger.LogWarning(
+				"Employee {EmployeeId} PF rule {PfRuleId} is unavailable or not effective for {EffectiveDate:yyyy-MM-dd}.",
+				employeeId,
+				pfRuleId,
+				effectiveDate);
+			return null;
+		}
+
+		return rule;
 	}
 
 	private static decimal ResolveProvidentFundBaseAmount(

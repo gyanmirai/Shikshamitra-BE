@@ -10,14 +10,9 @@ namespace ShikshaMitra.Controllers.Academic.Timetable;
 
 [Area("timetable")]
 [Route("api/academics/timetable")]
-public class RoomAvailabilityController : AbpController
+public class RoomAvailabilityController(IRoomAvailabilityAppService service) : ShikshaMitraController
 {
-    private readonly IRoomAvailabilityAppService _service;
-
-    public RoomAvailabilityController(IRoomAvailabilityAppService service)
-    {
-        _service = service;
-    }
+    private readonly IRoomAvailabilityAppService _service = service;
 
     [HttpGet]
     [Route("room-availability")]

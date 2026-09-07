@@ -11,5 +11,5 @@ public interface IStudentFeeStructureAppService : IApplicationService
 
 	Task<BulkAssignStudentFeeStructureResultDto> BulkAssignAsync(BulkAssignStudentFeeStructureDto input);
 
-	Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId);
+	Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId, Guid academicYearId);
 }

@@ -1,11 +1,14 @@
 ﻿using System;
+using System.IO;
 using System.Threading.Tasks;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
+using ShikshaMitra.Models;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
@@ -55,18 +58,43 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 		return NoContent();
 	}
 
+	[HttpPost("types/{concessionTypeId:guid}/documents/{documentId:guid}/file")]
+	[Consumes("multipart/form-data")]
+	// Leave room for multipart headers; the application service still enforces the 20 MB file limit.
+	[RequestFormLimits(MultipartBodyLengthLimit = 21L * 1024 * 1024)]
+	[ProducesResponseType(typeof(ConcessionDocumentFileUploadResponseDto), StatusCodes.Status200OK)]
+	public async Task<ConcessionDocumentFileUploadResponseDto> UploadDocumentFileAsync(
+		Guid concessionTypeId,
+		Guid documentId,
+		[FromForm] ConcessionDocumentUploadRequest input)
+	{
+		using var stream = new MemoryStream();
+		await input.File.CopyToAsync(stream);
+		return await concessionRequestAppService.UploadDocumentFileAsync(
+			concessionTypeId,
+			documentId,
+			new UploadConcessionDocumentFileDto
+			{
+				FileName = input.File.FileName,
+				ContentType = input.File.ContentType,
+				Content = stream.ToArray()
+			});
+	}
+
 	[HttpGet("concession-applications")]
 	[ProducesResponseType(typeof(ConcessionApplicationsDto), StatusCodes.Status200OK)]
 	public Task<ConcessionApplicationsDto> GetApplicationsAsync(
+		[FromQuery] Guid academicYearId,
 		[FromQuery] Guid boardId,
 		[FromQuery] Guid educationMediumId,
 		[FromQuery] Guid? standardId = null,
 		[FromQuery] Guid? divisionId = null,
-		[FromQuery] int page = 1,
-		[FromQuery] int pageSize = 20,
+		[FromQuery, Range(1, int.MaxValue)] int page = 1,
+		[FromQuery, Range(1, 100)] int pageSize = 20,
 		[FromQuery] int? status = null) =>
 		concessionRequestAppService.GetApplicationsAsync(new GetConcessionApplicationsInput
 		{
+			AcademicYearId = academicYearId,
 			BoardId = boardId,
 			EducationMediumId = educationMediumId,
 			StandardId = standardId,
@@ -93,9 +121,10 @@ public class ConcessionRequestsController(IConcessionRequestAppService concessio
 	[ProducesResponseType(typeof(StudentConcessionRequestsDto), StatusCodes.Status200OK)]
 	public Task<StudentConcessionRequestsDto> GetStudentRequestsAsync(
 		Guid studentId,
-		[FromQuery] int page = 1,
-		[FromQuery] int pageSize = 10) =>
-		concessionRequestAppService.GetStudentRequestsAsync(studentId, new PagedResultRequestDto
+		[FromQuery] Guid academicYearId,
+		[FromQuery, Range(1, int.MaxValue)] int page = 1,
+		[FromQuery, Range(1, 100)] int pageSize = 10) =>
+		concessionRequestAppService.GetStudentRequestsAsync(studentId, academicYearId, new PagedResultRequestDto
 		{
 			SkipCount = (page - 1) * pageSize,
 			MaxResultCount = pageSize,
@@ -115,4 +144,10 @@ public class ConcessionRequestsController(IConcessionRequestAppService concessio
 	[ProducesResponseType(typeof(ConcessionCancellationResponseDto), StatusCodes.Status200OK)]
 	public Task<ConcessionCancellationResponseDto> CancelAsync(Guid id) =>
 		concessionRequestAppService.CancelAsync(id);
+
+	[HttpPost("{id:guid}/reverse")]
+	[ProducesResponseType(typeof(ConcessionReversalResponseDto), StatusCodes.Status200OK)]
+	public Task<ConcessionReversalResponseDto> ReverseAsync(
+		Guid id, [FromBody] ReverseConcessionRequestDto input) =>
+		concessionRequestAppService.ReverseAsync(id, input);
 }

@@ -9,6 +9,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.Timing;
 
 namespace ShikshaMitra.Domain.Finance.Policies;
@@ -20,6 +21,7 @@ public class CollectionPolicyAppService(
 	IRepository<FeeStructure, Guid> feeStructureRepository,
 	IRepository<FinancePolicyVersion, Guid> versionRepository,
 	IRepository<StudentFeePolicyOverride, Guid> overrideRepository,
+	IRepository<IdentityUser, Guid> userRepository,
 	LateFeeCalculationService lateFeeCalculationService,
 	WaiverCalculationService waiverCalculationService,
 	ExceptionWindowResolver exceptionWindowResolver,
@@ -225,6 +227,7 @@ public class CollectionPolicyAppService(
 			CreatorId = x.CreatorId
 		}).ToList();
 
+		await FinancePolicyVersionCreatorResolver.PopulateUserNamesAsync(items, userRepository);
 		return new PagedResultDto<FinancePolicyVersionDto>(total, items);
 	}
 

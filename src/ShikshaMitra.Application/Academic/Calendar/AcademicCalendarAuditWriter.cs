@@ -1,4 +1,5 @@
 using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -126,7 +127,7 @@ public class AcademicCalendarAuditWriter(
 
         return beforeValues.Keys.Union(afterValues.Keys)
             .Where(x => !ignored.Contains(x.ToLowerInvariant()))
-            .Where(x => !string.Equals(beforeValues.GetValueOrDefault(x), afterValues.GetValueOrDefault(x), StringComparison.Ordinal))
+            .Where(x => !AreEquivalentValues(x, beforeValues.GetValueOrDefault(x), afterValues.GetValueOrDefault(x)))
             .Select(x =>
             {
                 var hasOld = beforeValues.ContainsKey(x);
@@ -241,5 +242,32 @@ public class AcademicCalendarAuditWriter(
         }
         var normalized = value.Trim('"');
         return normalized.Length <= 500 ? normalized : normalized[..500] + "...";
+    }
+
+    // Calendar dates are date-only business values. JSON serialization may add/remove an offset
+    // (for example 2026-08-27T00:00:00+05:30 vs 2026-08-27T00:00:00) without changing the date.
+    private static bool AreEquivalentValues(string fieldName, string? before, string? after)
+    {
+        if (string.Equals(before, after, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (!fieldName.EndsWith("Date", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return TryGetCalendarDate(before, out var beforeDate)
+            && TryGetCalendarDate(after, out var afterDate)
+            && beforeDate == afterDate;
+    }
+
+    private static bool TryGetCalendarDate(string? value, out DateOnly date)
+    {
+        date = default;
+        var normalized = value?.Trim('"');
+        return normalized?.Length >= 10
+            && DateOnly.TryParseExact(normalized[..10], "yyyy-MM-dd", out date);
     }
 }

@@ -10,8 +10,10 @@ using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.RunPayroll;
+using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.ProfessionalManagement;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
@@ -54,6 +56,7 @@ public partial class HRSeederContributor : BaseSeederContributor
 		DeductionComponentManager deductionComponentManager,
 		IProvidentFundRepository providentFundRepository,
 		IProfessionalTaxRepository professionalTaxRepository,
+		IRepository<StatutoryRuleVersion, Guid> statutoryRuleRepository,
 		IRepository<SalaryStructureTemplate, Guid> salaryStructureTemplateRepository,
 		IRepository<SalaryStructureTemplateVersion, Guid> salaryStructureTemplateVersionRepository,
 		IRepository<WorkCalendarPolicy, Guid> workCalendarPolicyRepository,
@@ -87,6 +90,8 @@ public partial class HRSeederContributor : BaseSeederContributor
 			IEmployeePayrollDetailsRepository employeePayrollDetailsRepository,
 			IEmployeePayrollComponentRepository employeePayrollComponentRepository,
 			IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
+			IRepository<EmployeeCompensationRevision, Guid> compensationRevisionRepository,
+			IRepository<EmployeeCompensationRevisionLine, Guid> compensationRevisionLineRepository,
 			IRepository<PerformanceTemplate, Guid> performanceTemplateRepository,
 			IRepository<PerformanceTemplateSection, Guid> performanceTemplateSectionRepository,
 			IRepository<PerformanceTemplateCriterion, Guid> performanceTemplateCriterionRepository,
@@ -112,6 +117,7 @@ public partial class HRSeederContributor : BaseSeederContributor
 		_deductionComponentManager = deductionComponentManager;
 		_providentFundRepository = providentFundRepository;
 		_professionalTaxRepository = professionalTaxRepository;
+		_statutoryRuleRepository = statutoryRuleRepository;
 		_salaryStructureTemplateRepository = salaryStructureTemplateRepository;
 		_salaryStructureTemplateVersionRepository = salaryStructureTemplateVersionRepository;
 		_workCalendarPolicyRepository = workCalendarPolicyRepository;
@@ -145,6 +151,8 @@ public partial class HRSeederContributor : BaseSeederContributor
 		_employeePayrollDetailsRepository = employeePayrollDetailsRepository;
 		_employeePayrollComponentRepository = employeePayrollComponentRepository;
 		_payrollRunItemSnapshotRepository = payrollRunItemSnapshotRepository;
+		_compensationRevisionRepository = compensationRevisionRepository;
+		_compensationRevisionLineRepository = compensationRevisionLineRepository;
 		_performanceTemplateRepository = performanceTemplateRepository;
 		_performanceTemplateSectionRepository = performanceTemplateSectionRepository;
 		_performanceTemplateCriterionRepository = performanceTemplateCriterionRepository;

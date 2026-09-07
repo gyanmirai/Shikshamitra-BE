@@ -124,6 +124,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Academics.CurriculumManagement.SubjectAssignment", new SubmoduleInfo(CurriculumManagement_SubjectAssignment.All, CurriculumManagement_SubjectAssignment.DisplayNames) },
 			{ "Academics.CurriculumManagement.ElectiveAssignment", new SubmoduleInfo(CurriculumManagement_ElectiveAssignment.All, CurriculumManagement_ElectiveAssignment.DisplayNames) },
 			{ "Academics.CurriculumManagement.ChapterManagement", new SubmoduleInfo(CurriculumManagement_ChapterManagement.All, CurriculumManagement_ChapterManagement.DisplayNames) },
+			{ "Academics.CurriculumManagement.LessonPlan", new SubmoduleInfo(CurriculumManagement_LessonPlan.All, CurriculumManagement_LessonPlan.DisplayNames) },
 			{ "Academics.CurriculumManagement.Resources", new SubmoduleInfo(CurriculumManagement_Resources.All, CurriculumManagement_Resources.DisplayNames) },
 			{ "Academics.CurriculumManagement.Reports", new SubmoduleInfo(CurriculumManagement_Reports.All, CurriculumManagement_Reports.DisplayNames) },
 			{ "Academics.CurriculumManagement.Settings.SubjectCreation", new SubmoduleInfo(CurriculumManagement_SettingsSubjectCreation.All, CurriculumManagement_SettingsSubjectCreation.DisplayNames) },

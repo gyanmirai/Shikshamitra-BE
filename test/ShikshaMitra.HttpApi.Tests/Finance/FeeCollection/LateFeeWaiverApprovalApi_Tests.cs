@@ -109,7 +109,7 @@ public class LateFeeWaiverApprovalApi_Tests : ShikshaMitraApiTestBase
 
 			var dueFee = new DueFee(
 				id: Guid.NewGuid(), tenantId: TestTenantId, studentId: studentId, feeHeadId: feeHeadId,
-				month: MonthEnum.April, year: 2025, isOneTime: false, amount: 20000d,
+				month: MonthEnum.April, year: 2025, isOneTime: false, amount: 20000m,
 				dueDate: DateTime.UtcNow.Date.AddDays(-30));
 			await dueFeeRepo.InsertAsync(dueFee, autoSave: true);
 

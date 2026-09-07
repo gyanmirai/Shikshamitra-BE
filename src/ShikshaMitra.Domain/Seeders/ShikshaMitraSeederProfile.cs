@@ -22,6 +22,11 @@ public static class ShikshaMitraSeederProfile
 		FastDemo
 	};
 
+	public static readonly IReadOnlySet<string> FullDemoOnly = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		FullDemo
+	};
+
 	public static string Normalize(string? profile)
 	{
 		if (string.Equals(profile, FastDemo, System.StringComparison.OrdinalIgnoreCase))

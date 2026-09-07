@@ -3,6 +3,7 @@ using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
+using ShikshaMitra.Domain.Finance.Policies;
 
 namespace ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 
@@ -49,6 +50,10 @@ public class StandardFeeStructureResponseItem : EntityDto<Guid>
 	public FeeStructureStatus Status { get; set; }
 	public List<FeeHeadAssignmentResponse> FeeHeads { get; set; }
 	public Guid? CollectionPolicyId { get; set; }
+	public Guid? ConcessionPolicyId { get; set; }
+	public Guid? ConcessionPolicyVersionId { get; set; }
+	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; set; }
+	public List<Guid> ConcessionApplicableFeeHeadIds { get; set; } = [];
 }
 
 public class FeeHeadAssignmentResponse

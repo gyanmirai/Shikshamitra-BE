@@ -23,7 +23,12 @@ public class AutoAllocateRequestDto
 public class AutoAllocateProposedAssignmentDto
 {
     public Guid StudentId { get; set; }
+    public string? StudentName { get; set; }
+    public int? RollNo { get; set; }
+    public Guid? DivisionId { get; set; }
+    public string? DivisionName { get; set; }
     public Guid RoomId { get; set; }
+    public string? RoomName { get; set; }
     public int SeatNumber { get; set; }
     public Guid? BenchId { get; set; }
 }
@@ -36,4 +41,9 @@ public class AutoAllocateResponseDto
     public int RoomsUsed { get; set; }
     public int EmptySeats { get; set; }
     public int UtilizationPercent { get; set; }
+}
+
+public class ApplyAutoAllocatePreviewInputDto : SaveSeatingPlanDraftInputDto
+{
+    public List<AutoAllocateProposedAssignmentDto> Assignments { get; set; } = [];
 }

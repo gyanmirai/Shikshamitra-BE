@@ -23,6 +23,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
 using ShikshaMitra.Academic.Examination.SeatAllocation;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.HR.Employees;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
 
@@ -48,6 +49,8 @@ public class ExamAppService(
 	IRepository<ExamSeatAllocation, Guid> examSeatAllocationRepository,
 	IRepository<AcademicCalendar, Guid> calendarRepository,
 	IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
+	IRepository<Employee, Guid> employeeRepository,
+	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
 	IUserScopeAccessService userScopeAccessService) : ApplicationService, IExamAppService
 {
 	private const string CalendarSyncDescriptionPrefix = "Auto-created from examination schedule. ExamId: ";
@@ -99,6 +102,7 @@ public class ExamAppService(
 
 		return new ExamBasicDetailsResponseDto
 		{
+			Id = exam.Id,
 			ExamTypeId = exam.ExamTypeId,
 			ExamName = exam.ExamName,
 			StandardId = exam.StandardId,
@@ -601,6 +605,34 @@ public class ExamAppService(
 
 	public async Task<ExamListResultDto> GetListAsync(GetExamsInput input)
 	{
+		var isPendingStatus = input.Status == ExamStatus.Pending;
+		if (!isPendingStatus && input.StartDate.HasValue && input.EndDate.HasValue && input.StartDate > input.EndDate)
+			throw new UserFriendlyException("StartDate cannot be greater than EndDate.");
+
+		// Pending is the planning queue. It must not be constrained by a
+		// schedule-date range because step 2 may not have supplied dates yet.
+		var isDefaultDateRange = !isPendingStatus && !input.StartDate.HasValue && !input.EndDate.HasValue;
+		var filterStartDate = input.StartDate?.DateTime;
+		var filterEndDate = input.EndDate?.DateTime;
+		if (isPendingStatus)
+		{
+			filterStartDate = DateTime.MinValue;
+			filterEndDate = DateTime.MaxValue;
+		}
+		else if (isDefaultDateRange)
+		{
+			var today = DateTime.Now.Date;
+			var daysFromMonday = ((int)today.DayOfWeek + 6) % 7;
+			filterStartDate = today.AddDays(-daysFromMonday);
+			filterEndDate = filterStartDate.Value.AddDays(7).AddTicks(-1);
+		}
+		else
+		{
+			// Be tolerant of a one-sided range while retaining the explicit bound.
+			filterStartDate ??= DateTime.MinValue;
+			filterEndDate ??= DateTime.MaxValue;
+		}
+
 		var examQuery = await examRepository.WithDetailsAsync();
 		var standardQuery = await standardRepository.GetQueryableAsync();
 		var stageQuery = await educationMediumStageRepository.GetQueryableAsync();
@@ -610,7 +642,7 @@ public class ExamAppService(
 						join standard in standardQuery on exam.StandardId equals standard.Id
 						join stage in stageQuery on standard.EducationMediumStageId equals stage.Id
 						join examType in examTypeQuery on exam.ExamTypeId equals examType.Id
-						where stage.EducationMediumId == input.AcademicMediumId
+						where !input.AcademicMediumId.HasValue || stage.EducationMediumId == input.AcademicMediumId.Value
 						select new { exam, standard, stage, examType };
 
 		var query = baseQuery;
@@ -654,6 +686,13 @@ public class ExamAppService(
 				.Where(row => CanAccessExam(row.exam, row.standard, row.stage, scope))
 				.ToList();
 		}
+
+		// Exam dates are derived from subject schedules, so apply the date filter
+		// after loading the detailed exam aggregate but before status counts and paging.
+		allRows = allRows
+			.Where(row => IsExamInDateRange(row.exam, filterStartDate!.Value, filterEndDate!.Value, isDefaultDateRange))
+			.ToList();
+
 		var rowsWithEffectiveStatus = allRows
 			.Select(x => new
 			{
@@ -670,7 +709,7 @@ public class ExamAppService(
 		var completedCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Completed);
 
 		var filteredRows = rowsWithEffectiveStatus
-			.Where(x => x.EffectiveStatus == input.Status)
+			.Where(x => !input.Status.HasValue || x.EffectiveStatus == input.Status.Value)
 			.ToList();
 
 		var totalCount = filteredRows.Count;
@@ -1276,12 +1315,12 @@ public class ExamAppService(
 				.WithData("ExamId", exam.Id);
 		}
 
-		if (Clock.Now <= finalEndAt.Value)
+		if (DateTime.Now <= finalEndAt.Value)
 		{
 			throw new BusinessException("ShikshaMitra.Exam:CompletionBeforeScheduleEnd")
 				.WithData("ExamId", exam.Id)
 				.WithData("FinalSubjectEndAt", finalEndAt.Value.ToString("yyyy-MM-dd HH:mm"))
-				.WithData("CurrentAt", Clock.Now.ToString("yyyy-MM-dd HH:mm"));
+				.WithData("CurrentAt", DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
 		}
 
 		var divisionIds = exam.ExamDivisions.Select(x => x.DivisionId).ToList();
@@ -1325,9 +1364,15 @@ public class ExamAppService(
 			return ExamStatus.Pending;
 		}
 
-		var now = Clock.Now;
+		var now = DateTime.Now;
 		var start = GetExamStartDateTime(exam);
 		var end = GetExamFinalEndAt(exam);
+		if (!start.HasValue || !end.HasValue)
+		{
+			// An exam without a complete schedule remains pending, including
+			// records whose subject dates are both null.
+			return ExamStatus.Pending;
+		}
 
 		if (start.HasValue && end.HasValue && now >= start.Value && now <= end.Value)
 		{
@@ -1369,6 +1414,33 @@ public class ExamAppService(
 			.ToList();
 
 		return dates.Count == 0 ? null : dates.Min();
+	}
+
+	private static bool IsExamInDateRange(
+		Exam exam,
+		DateTime filterStartDate,
+		DateTime filterEndDate,
+		bool includeUndatedExams)
+	{
+		var scheduledDates = exam.ExamSubjects
+			.Where(subject => subject.ExamDate.HasValue)
+			.Select(subject => subject.ExamDate!.Value.Date)
+			.ToList();
+
+		if (scheduledDates.Count == 0)
+		{
+			// Pending exams are planning records until step 2 supplies subject
+			// dates. Keep them visible in the planning list even when the UI sends
+			// the current-week date range explicitly.
+			return includeUndatedExams || exam.Status == ExamStatus.Pending;
+		}
+
+		var examStartDate = scheduledDates.Min();
+		var examEndDate = GetExamFinalEndAt(exam)!.Value;
+
+		// Inclusive overlap: an exam that starts or ends on a filter boundary
+		// is applicable to that date range.
+		return examStartDate <= filterEndDate && examEndDate >= filterStartDate;
 	}
 
 	private static DateTime? GetExamFinalEndAt(Exam exam)
@@ -2723,10 +2795,20 @@ public class ExamAppService(
 	public async Task<List<SubjectAssignmentGroupDto>> GetSubjectsLookupAsync(Guid classId, List<Guid> divisionIds)
 	{
 		var assignmentsQuery = await assignmentRepository.GetQueryableAsync();
-		assignmentsQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(assignmentsQuery);
-		var assignments = await AsyncExecuter.ToListAsync(assignmentsQuery.Where(a =>
+		var classAssignmentsQuery = assignmentsQuery.Where(a =>
 			a.StandardId == classId &&
-			a.Status == SubjectStatus.Published));
+			a.Status == SubjectStatus.Published);
+		var scopedAssignmentsQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(classAssignmentsQuery);
+
+		var assignedSubjectIds = await GetCurrentTeacherAssignedSubjectIdsAsync(classId, divisionIds);
+		if (assignedSubjectIds.Count > 0)
+		{
+			scopedAssignmentsQuery = scopedAssignmentsQuery
+				.Concat(classAssignmentsQuery.Where(assignment => assignedSubjectIds.Contains(assignment.Id)))
+				.Distinct();
+		}
+
+		var assignments = await AsyncExecuter.ToListAsync(scopedAssignmentsQuery);
 
 		var groupedAssignments = new List<SubjectAssignmentGroupDto>();
 
@@ -2867,6 +2949,58 @@ public class ExamAppService(
 		}
 
 		return groupedAssignments;
+	}
+
+	private async Task<HashSet<Guid>> GetCurrentTeacherAssignedSubjectIdsAsync(
+		Guid classId,
+		IReadOnlyCollection<Guid>? divisionIds)
+	{
+		if (!CurrentUser.Id.HasValue || CurrentUser.Roles.Any(role =>
+			string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase)))
+		{
+			return new HashSet<Guid>();
+		}
+
+		var currentEmployee = await employeeRepository.FirstOrDefaultAsync(
+			employee => employee.UserId == CurrentUser.Id.Value);
+		if (currentEmployee == null)
+		{
+			return new HashSet<Guid>();
+		}
+
+		var assignmentsWithTeachersQuery = await assignmentRepository.WithDetailsAsync(
+			assignment => assignment.Teachers);
+		var assignedSubjectIds = (await AsyncExecuter.ToListAsync(
+			assignmentsWithTeachersQuery.Where(assignment =>
+				assignment.StandardId == classId &&
+				assignment.Status == SubjectStatus.Published &&
+				assignment.Teachers.Any(teacher => teacher.TeacherId == currentEmployee.Id))))
+			.Select(assignment => assignment.Id)
+			.ToHashSet();
+
+		var validDivisionIds = (divisionIds ?? Array.Empty<Guid>())
+			.Where(id => id != Guid.Empty)
+			.ToHashSet();
+		var allocations = await teacherSubjectAllocationRepository.GetListAsync(allocation =>
+			allocation.StandardId == classId &&
+			(!validDivisionIds.Any() || validDivisionIds.Contains(allocation.DivisionId)) &&
+			allocation.Teachers.Any(teacher => teacher.TeacherId == currentEmployee.Id));
+		var allocatedSubjectIds = allocations.Select(allocation => allocation.SubjectId).ToHashSet();
+
+		if (allocatedSubjectIds.Count > 0)
+		{
+			var allocatedAssignmentIds = await AsyncExecuter.ToListAsync(
+				assignmentsWithTeachersQuery
+					.Where(assignment =>
+						assignment.StandardId == classId &&
+						assignment.Status == SubjectStatus.Published &&
+						allocatedSubjectIds.Contains(assignment.SubjectId))
+					.Select(assignment => assignment.Id));
+			assignedSubjectIds.UnionWith(allocatedAssignmentIds);
+		}
+
+		return assignedSubjectIds;
 	}
 
 	private sealed record NormalizedExamSubjectSchedule(

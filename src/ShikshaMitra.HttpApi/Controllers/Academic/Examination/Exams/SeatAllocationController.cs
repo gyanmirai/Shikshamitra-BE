@@ -17,6 +17,64 @@ public class SeatAllocationController(
     IExamSeatAllocationAppService seatAllocationAppService
 ) : ShikshaMitraController
 {
+    /// <summary>GET /api/academics/exams/{examId}/seating-plan/v2/workspace — exam plan-group workspace</summary>
+    [HttpGet("{examId}/seating-plan/v2/workspace")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SeatAllocation.View)]
+    public async Task<SeatingPlanWorkspaceDto> GetSeatingPlanWorkspaceAsync(
+        Guid examId,
+        [FromQuery] Guid? seatingPlanId = null)
+    {
+        return await seatAllocationAppService.GetSeatingPlanWorkspaceAsync(examId, seatingPlanId);
+    }
+
+    /// <summary>POST /api/academics/exams/{examId}/seating-plan/v2/plans — prepare one shared or individual subject plan</summary>
+    [HttpPost("{examId}/seating-plan/v2/plans")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SeatAllocation.Add)]
+    public async Task<SeatingPlanWorkspaceDto> PrepareSeatingPlanAsync(
+        Guid examId,
+        PrepareSeatingPlanInputDto input)
+    {
+        return await seatAllocationAppService.PrepareSeatingPlanAsync(examId, input);
+    }
+
+    /// <summary>Compatibility endpoint for older session-first clients.</summary>
+    [HttpPost("{examId}/seating-plan/v2/session")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SeatAllocation.Add)]
+    public async Task<SeatingPlanWorkspaceDto> PrepareSessionSeatingPlanAsync(
+        Guid examId,
+        PrepareSessionSeatingPlanInputDto input)
+    {
+        return await seatAllocationAppService.PrepareSessionSeatingPlanAsync(examId, input);
+    }
+
+    /// <summary>POST /api/academics/exams/{examId}/seating-plan/v2/validate-examination — validate every plan and subject before the single publish action</summary>
+    [HttpPost("{examId}/seating-plan/v2/validate-examination")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SeatAllocation.View)]
+    public async Task<ExaminationSeatingReadinessDto> ValidateExaminationSeatingAsync(Guid examId)
+    {
+        return await seatAllocationAppService.ValidateExaminationSeatingAsync(examId);
+    }
+
+    /// <summary>POST /api/academics/exams/{examId}/seating-plan/v2/reset-draft — remove every draft plan and seat so the examination can be rebuilt</summary>
+    [HttpPost("{examId}/seating-plan/v2/reset-draft")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SeatAllocation.Delete)]
+    public async Task<SeatingPlanWorkspaceDto> ResetExaminationSeatingDraftAsync(
+        Guid examId,
+        ResetExaminationSeatingDraftInputDto input)
+    {
+        return await seatAllocationAppService.ResetExaminationSeatingDraftAsync(examId, input);
+    }
+
+    /// <summary>POST /api/academics/exams/{examId}/seating-plan/v2/publish — validate and publish the complete examination seating arrangement atomically</summary>
+    [HttpPost("{examId}/seating-plan/v2/publish")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SeatAllocation.Publish)]
+    public async Task<SeatingPlanWorkspaceDto> PublishExaminationSeatingAsync(
+        Guid examId,
+        PublishSeatingPlanInputDto input)
+    {
+        return await seatAllocationAppService.PublishExaminationSeatingAsync(examId, input);
+    }
+
     /// <summary>GET /api/academics/exams/seat-allocation — dashboard table</summary>
     [HttpGet("seat-allocation")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SeatAllocation.View)]
@@ -213,5 +271,15 @@ public class SeatAllocationController(
     public async Task<AutoAllocateResponseDto> AutoAllocatePreviewAsync(Guid examId, AutoAllocateRequestDto input)
     {
         return await seatAllocationAppService.AutoAllocatePreviewAsync(examId, input);
+    }
+
+    /// <summary>POST /api/academics/exams/{examId}/seating-plan/v2/apply-preview — merge a reviewed proposal without replacing existing seats</summary>
+    [HttpPost("{examId}/seating-plan/v2/apply-preview")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_SeatAllocation.AutoAllocate)]
+    public async Task<SeatingPlanDraftResponseDto> ApplyAutoAllocatePreviewAsync(
+        Guid examId,
+        ApplyAutoAllocatePreviewInputDto input)
+    {
+        return await seatAllocationAppService.ApplyAutoAllocatePreviewAsync(examId, input);
     }
 }

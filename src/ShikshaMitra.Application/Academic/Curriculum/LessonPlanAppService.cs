@@ -8,6 +8,7 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.Timetable;
 using ShikshaMitra.Academic.Timetable.Timetables;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
@@ -34,13 +35,15 @@ public class LessonPlanAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<AssignedSubject, Guid> assignedSubjectRepository,
     IRepository<AssignedSubjectChapter, Guid> chapterRepository,
+    IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
     IRepository<Employee, Guid> employeeRepository,
     IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
     IRepository<EmployeeLeave, Guid> employeeLeaveRepository,
     IRepository<EducationMediumStage, Guid> mediumStageRepository,
     IHomeworkAppService homeworkAppService,
     IUserScopeAccessService userScopeAccessService,
-    IClassTeacherAccessService classTeacherAccessService
+    IClassTeacherAccessService classTeacherAccessService,
+    IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, ILessonPlanAppService
 {
     private static readonly string[] LessonPlanReviewerRoles =
@@ -51,23 +54,31 @@ public class LessonPlanAppService(
         "academic coordinator"
     };
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.View)]
     public async Task<PagedResultDto<LessonPlanDto>> GetListAsync(GetLessonPlansInput input)
     {
         var query = await lessonPlanRepository.GetQueryableAsync();
         query = await ApplyLessonPlanFiltersAsync(query, input);
-		query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+        var unscopedQuery = query;
 
+        HashSet<Guid> accessibleTeacherIds = [];
         if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
-            var currentUserId = CurrentUser.GetId();
-            var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
-            if (currentEmployee == null)
+            accessibleTeacherIds = await GetCurrentAccessibleTeacherIdsAsync();
+            if (accessibleTeacherIds.Count == 0)
             {
                 return new PagedResultDto<LessonPlanDto>(0, new List<LessonPlanDto>());
             }
 
-            var managedEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
-            query = query.Where(x => x.TeacherId == currentEmployee.Id || managedEmployeeIds.Contains(x.TeacherId));
+            var scopedQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+            var subjectOwnedPlanIds = await GetTeacherAndReporteeSubjectOwnedPlanIdsAsync(unscopedQuery, accessibleTeacherIds);
+
+            query = scopedQuery
+                .Concat(unscopedQuery.Where(plan => accessibleTeacherIds.Contains(plan.TeacherId)))
+                .Concat(unscopedQuery.Where(plan => subjectOwnedPlanIds.Contains(plan.Id)))
+                .Distinct();
+
+            query = query.Where(plan => accessibleTeacherIds.Contains(plan.TeacherId));
         }
 
         var count = await AsyncExecuter.CountAsync(query);
@@ -82,31 +93,23 @@ public class LessonPlanAppService(
         return new PagedResultDto<LessonPlanDto>(count, items);
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.View)]
     public async Task<LessonPlanTimelineDto> GetTimelineAsync(DateTimeOffset date, Guid? teacherId = null, Guid? academicMediumId = null)
     {
         var targetTeacherId = await ResolveTimelineTeacherIdAsync(teacherId);
 
+        HashSet<Guid> accessibleTeacherIds = [];
         if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
-            var currentUserId = CurrentUser.GetId();
-            var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
-            if (currentEmployee == null)
+            accessibleTeacherIds = await GetCurrentAccessibleTeacherIdsAsync();
+            if (accessibleTeacherIds.Count == 0 || !accessibleTeacherIds.Contains(targetTeacherId))
             {
                 throw new AbpAuthorizationException("You are not authorized to view this timeline.");
             }
-
-            if (targetTeacherId != currentEmployee.Id)
-            {
-                var managedEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
-                if (!managedEmployeeIds.Contains(targetTeacherId))
-                {
-                    throw new AbpAuthorizationException("You are not authorized to view this timeline.");
-                }
-            }
         }
         var lessonPlansQuery = await lessonPlanRepository.GetQueryableAsync();
-		lessonPlansQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(lessonPlansQuery);
-        lessonPlansQuery = lessonPlansQuery.Where(x => x.TeacherId == targetTeacherId && x.PlannedDate.Date == date.DateTime.Date);
+        lessonPlansQuery = lessonPlansQuery.Where(x => x.TeacherId == targetTeacherId &&
+            (x.PlannedDate.Date == date.DateTime.Date || x.PlannedDate.Date == date.UtcDateTime.Date));
 
         List<Guid>? allowedStandardIds = null;
         if (academicMediumId.HasValue)
@@ -122,6 +125,18 @@ public class LessonPlanAppService(
                 .Select(s => s.Id));
 
             lessonPlansQuery = lessonPlansQuery.Where(lp => allowedStandardIds.Contains(lp.StandardId));
+        }
+
+        var unscopedLessonPlansQuery = lessonPlansQuery;
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
+        {
+            var scopedLessonPlansQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(lessonPlansQuery);
+            var subjectOwnedPlanIds = await GetTeacherAndReporteeSubjectOwnedPlanIdsAsync(unscopedLessonPlansQuery, accessibleTeacherIds);
+
+            lessonPlansQuery = scopedLessonPlansQuery
+                .Concat(unscopedLessonPlansQuery.Where(plan => accessibleTeacherIds.Contains(plan.TeacherId)))
+                .Concat(unscopedLessonPlansQuery.Where(plan => subjectOwnedPlanIds.Contains(plan.Id)))
+                .Distinct();
         }
 
         var lessonPlans = await AsyncExecuter.ToListAsync(lessonPlansQuery);
@@ -271,27 +286,18 @@ public class LessonPlanAppService(
         };
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.View)]
     public async Task<LessonPlanDto> GetAsync(Guid id)
     {
         var plan = await lessonPlanRepository.GetAsync(id);
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "lesson-plan-read");
+        await EnsureLessonPlanAccessAsync(plan, "lesson-plan-read");
 
         if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
-            var currentUserId = CurrentUser.GetId();
-            var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
-            if (currentEmployee == null)
+            var accessibleTeacherIds = await GetCurrentAccessibleTeacherIdsAsync();
+            if (accessibleTeacherIds.Count == 0 || !accessibleTeacherIds.Contains(plan.TeacherId))
             {
                 throw new AbpAuthorizationException("You are not authorized to view this lesson plan.");
-            }
-
-            if (plan.TeacherId != currentEmployee.Id)
-            {
-                var managedEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
-                if (!managedEmployeeIds.Contains(plan.TeacherId))
-                {
-                    throw new AbpAuthorizationException("You are not authorized to view this lesson plan.");
-                }
             }
         }
 
@@ -309,6 +315,7 @@ public class LessonPlanAppService(
         plan.DivisionId == divisionId &&
         plan.SubjectId == subjectId;
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<LessonPlanDto> CreateAsync(CreateLessonPlanDto input)
     {
         await EnsureOwnTeacherRecordAsync(input.TeacherId, "create");
@@ -347,15 +354,16 @@ public class LessonPlanAppService(
             lessonPlan.Submit();
         }
 
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-create");
+        await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-create");
         var inserted = await lessonPlanRepository.InsertAsync(lessonPlan, autoSave: true);
         return (await MapLessonPlansAsync(new[] { inserted })).Single();
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<LessonPlanDto> UpdateAsync(Guid id, UpdateLessonPlanDto input)
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-update");
+        await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-update");
         await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "modify");
         EnsureLessonPlanEditable(lessonPlan);
         await EnsureChapterMatchesPlanTargetAsync(input.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
@@ -381,10 +389,11 @@ public class LessonPlanAppService(
         return await GetAsync(id);
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<LessonPlanDto> SubmitAsync(Guid id)
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-submit");
+        await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-submit");
         await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "submit");
         EnsureLessonPlanSubmittable(lessonPlan);
         await EnsureChapterMatchesPlanTargetAsync(lessonPlan.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
@@ -396,12 +405,13 @@ public class LessonPlanAppService(
         return await GetAsync(id);
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task BulkSubmitAsync(BulkSubmitLessonPlansDto input)
     {
         foreach (var id in input.LessonPlanIds)
         {
             var plan = await lessonPlanRepository.GetAsync(id);
-            await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "lesson-plan-submit");
+            await EnsureLessonPlanAccessAsync(plan, "lesson-plan-submit");
             await EnsureOwnTeacherRecordAsync(plan.TeacherId, "submit");
             EnsureLessonPlanSubmittable(plan);
             await EnsureChapterMatchesPlanTargetAsync(plan.ChapterId, plan.StandardId, plan.SubjectId);
@@ -412,66 +422,88 @@ public class LessonPlanAppService(
         }
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<LessonPlanDto> ApproveAsync(Guid id, ReviewRemarksDto input)
     {
         await EnsureCanReviewLessonPlansAsync();
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-approve");
+        await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-approve");
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
-        EnsurePlanIsAwaitingReview(lessonPlan);
 
         if (!await HasClassTeacherAccessAsync() && !await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
         {
             throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
         }
+
+        if (lessonPlan.Status == LessonPlanStatus.Approved)
+        {
+            return await GetAsync(id);
+        }
+
+        EnsurePlanIsAwaitingReview(lessonPlan);
 
         lessonPlan.Approve(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
         return await GetAsync(id);
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<LessonPlanDto> RejectAsync(Guid id, ReviewRemarksDto input)
     {
         await EnsureCanReviewLessonPlansAsync();
         EnsureReviewCommentPresent(input, "reject");
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-reject");
+        await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-reject");
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
-        EnsurePlanIsAwaitingReview(lessonPlan);
 
         if (!await HasClassTeacherAccessAsync() && !await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
         {
             throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
         }
+
+        if (lessonPlan.Status == LessonPlanStatus.Rejected)
+        {
+            return await GetAsync(id);
+        }
+
+        EnsurePlanIsAwaitingReview(lessonPlan);
 
         lessonPlan.Reject(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
         return await GetAsync(id);
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<LessonPlanDto> RequestChangesAsync(Guid id, ReviewRemarksDto input)
     {
         await EnsureCanReviewLessonPlansAsync();
         EnsureReviewCommentPresent(input, "request changes for");
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-request-changes");
+        await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-request-changes");
         await EnsureReviewerIsNotPlanOwnerAsync(lessonPlan);
-        EnsurePlanIsAwaitingReview(lessonPlan);
 
         if (!await HasClassTeacherAccessAsync() && !await IsReportingManagerOrAdminAsync(lessonPlan.TeacherId))
         {
             throw new AbpAuthorizationException("You can only review lesson plans of employees in your reporting hierarchy.");
         }
 
+        if (lessonPlan.Status == LessonPlanStatus.NeedsChanges)
+        {
+            return await GetAsync(id);
+        }
+
+        EnsurePlanIsAwaitingReview(lessonPlan);
+
         lessonPlan.RequestChanges(CurrentUser.GetId(), input.Comment);
         await lessonPlanRepository.UpdateAsync(lessonPlan);
         return await GetAsync(id);
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<HomeworkCreateResponseDto> CreateHomeworkFromLessonPlanAsync(Guid id, CreateHomeworkFromLessonPlanDto input)
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(lessonPlan, operation: "lesson-plan-create-homework");
+        await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-create-homework");
         await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "create homework from");
 
         if (lessonPlan.Status != LessonPlanStatus.Approved)
@@ -511,11 +543,30 @@ public class LessonPlanAppService(
         return await homeworkAppService.CreateAsync(input.AcademicMediumId, homework, attachmentBlobName: null);
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.View)]
     public async Task<PagedResultDto<TeacherDiaryDto>> GetTeacherDiariesAsync(GetTeacherDiariesInput input)
     {
         var diaryQuery = await teacherDiaryRepository.GetQueryableAsync();
         var planQuery = await lessonPlanRepository.GetQueryableAsync();
-        planQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(planQuery);
+        var unscopedPlanQuery = planQuery;
+
+        HashSet<Guid> accessibleTeacherIds = [];
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
+        {
+            accessibleTeacherIds = await GetCurrentAccessibleTeacherIdsAsync();
+            if (accessibleTeacherIds.Count == 0)
+            {
+                return new PagedResultDto<TeacherDiaryDto>(0, new List<TeacherDiaryDto>());
+            }
+
+            var scopedPlanQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(planQuery);
+            var subjectOwnedPlanIds = await GetTeacherAndReporteeSubjectOwnedPlanIdsAsync(unscopedPlanQuery, accessibleTeacherIds);
+
+            planQuery = scopedPlanQuery
+                .Concat(unscopedPlanQuery.Where(plan => accessibleTeacherIds.Contains(plan.TeacherId)))
+                .Concat(unscopedPlanQuery.Where(plan => subjectOwnedPlanIds.Contains(plan.Id)))
+                .Distinct();
+        }
 
         var query =
             from diary in diaryQuery
@@ -550,15 +601,7 @@ public class LessonPlanAppService(
 
         if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
-            var currentUserId = CurrentUser.GetId();
-            var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
-            if (currentEmployee == null)
-            {
-                return new PagedResultDto<TeacherDiaryDto>(0, new List<TeacherDiaryDto>());
-            }
-
-            var managedEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
-            query = query.Where(x => x.diary.TeacherId == currentEmployee.Id || managedEmployeeIds.Contains(x.diary.TeacherId));
+            query = query.Where(x => accessibleTeacherIds.Contains(x.diary.TeacherId));
         }
 
         var count = await AsyncExecuter.CountAsync(query);
@@ -573,38 +616,30 @@ public class LessonPlanAppService(
         return new PagedResultDto<TeacherDiaryDto>(count, items);
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.View)]
     public async Task<TeacherDiaryDto> GetTeacherDiaryAsync(Guid id)
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
         var diaryPlan = await lessonPlanRepository.GetAsync(diary.LessonPlanId);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(diaryPlan, operation: "teacher-diary-read");
+        await EnsureLessonPlanAccessAsync(diaryPlan, "teacher-diary-read");
 
         if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
-            var currentUserId = CurrentUser.GetId();
-            var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
-            if (currentEmployee == null)
+            var accessibleTeacherIds = await GetCurrentAccessibleTeacherIdsAsync();
+            if (accessibleTeacherIds.Count == 0 || !accessibleTeacherIds.Contains(diary.TeacherId))
             {
                 throw new AbpAuthorizationException("You are not authorized to view this diary entry.");
-            }
-
-            if (diary.TeacherId != currentEmployee.Id)
-            {
-                var managedEmployeeIds = await GetReportingEmployeesAsync(currentEmployee.Id);
-                if (!managedEmployeeIds.Contains(diary.TeacherId))
-                {
-                    throw new AbpAuthorizationException("You are not authorized to view this diary entry.");
-                }
             }
         }
 
         return (await MapTeacherDiariesAsync(new[] { diary })).Single();
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<TeacherDiaryDto> CreateTeacherDiaryAsync(CreateUpdateTeacherDiaryDto input)
     {
         var plan = await lessonPlanRepository.GetAsync(input.LessonPlanId);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "teacher-diary-create");
+        await EnsureLessonPlanAccessAsync(plan, "teacher-diary-create");
         await EnsureOwnTeacherRecordAsync(plan.TeacherId, "create a diary for");
         await EnsureTeacherDiaryAllowedAsync(plan, input);
 
@@ -616,17 +651,17 @@ public class LessonPlanAppService(
 
         var diary = new TeacherDiary(GuidGenerator.Create(), CurrentTenant.Id, plan.Id, plan.TeacherId, input.ActualDate);
         ApplyDiaryInput(diary, input);
-        diary.Submit();
 
         var inserted = await teacherDiaryRepository.InsertAsync(diary, autoSave: true);
         return (await MapTeacherDiariesAsync(new[] { inserted })).Single();
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<TeacherDiaryDto> UpdateTeacherDiaryAsync(Guid id, CreateUpdateTeacherDiaryDto input)
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
         var existingPlan = await lessonPlanRepository.GetAsync(diary.LessonPlanId);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(existingPlan, operation: "teacher-diary-update");
+        await EnsureLessonPlanAccessAsync(existingPlan, "teacher-diary-update");
         await EnsureOwnTeacherRecordAsync(diary.TeacherId, "modify");
 
         if (input.LessonPlanId != diary.LessonPlanId)
@@ -637,17 +672,17 @@ public class LessonPlanAppService(
         var plan = await lessonPlanRepository.GetAsync(input.LessonPlanId);
         await EnsureTeacherDiaryAllowedAsync(plan, input);
         ApplyDiaryInput(diary, input);
-        diary.Submit();
 
         await teacherDiaryRepository.UpdateAsync(diary);
         return await GetTeacherDiaryAsync(id);
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<TeacherDiaryDto> SubmitTeacherDiaryAsync(Guid id)
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
         var plan = await lessonPlanRepository.GetAsync(diary.LessonPlanId);
-        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(plan, operation: "teacher-diary-submit");
+        await EnsureLessonPlanAccessAsync(plan, "teacher-diary-submit");
         await EnsureOwnTeacherRecordAsync(diary.TeacherId, "submit");
         diary.Submit();
 
@@ -811,57 +846,153 @@ public class LessonPlanAppService(
         );
     }
 
-    private async Task EnsureOwnTeacherRecordAsync(Guid teacherId, string action)
+    private async Task EnsureLessonPlanAccessAsync(LessonPlan lessonPlan, string operation)
     {
-        if (await HasClassTeacherAccessAsync())
+        var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+        if (UserScopeQueryExtensions.HasAccessToEntity(lessonPlan, scope))
         {
             return;
         }
 
-        if (teacherId != CurrentUser.GetId())
+        if (IsAdminUser() || await HasClassTeacherAccessAsync())
         {
-            throw new UserFriendlyException($"You can only {action} your own lesson records.");
+            return;
         }
+
+        var accessibleTeacherIds = await GetCurrentAccessibleTeacherIdsAsync();
+        if (accessibleTeacherIds.Contains(lessonPlan.TeacherId))
+        {
+            return;
+        }
+
+        var assignmentQuery = await assignedSubjectRepository.WithDetailsAsync(
+            assignment => assignment.Teachers);
+        var assignment = await AsyncExecuter.FirstOrDefaultAsync(
+            assignmentQuery.Where(candidate =>
+                candidate.StandardId == lessonPlan.StandardId &&
+                candidate.SubjectId == lessonPlan.SubjectId));
+
+        var assignedBySubject = assignment != null &&
+            assignment.Teachers.Any(teacher => accessibleTeacherIds.Contains(teacher.TeacherId));
+
+        var assignedByDivisionAllocation = await teacherSubjectAllocationRepository.AnyAsync(
+            allocation =>
+                allocation.StandardId == lessonPlan.StandardId &&
+                allocation.DivisionId == lessonPlan.DivisionId &&
+                allocation.SubjectId == lessonPlan.SubjectId &&
+                allocation.Teachers.Any(teacher => accessibleTeacherIds.Contains(teacher.TeacherId)));
+
+        if (!assignedBySubject && !assignedByDivisionAllocation)
+        {
+            userScopeAccessService.EnsureCanAccess(lessonPlan, scope, operation: operation);
+        }
+    }
+
+    private Task<Employee?> GetCurrentEmployeeAsync()
+    {
+        if (!CurrentUser.Id.HasValue)
+        {
+            return Task.FromResult<Employee?>(null);
+        }
+
+        return employeeRepository.FirstOrDefaultAsync(x => x.UserId == CurrentUser.Id.Value);
+    }
+
+    private async Task<HashSet<Guid>> GetCurrentAccessibleTeacherIdsAsync()
+    {
+        var teacherIds = new HashSet<Guid>();
+        if (!CurrentUser.Id.HasValue)
+        {
+            return teacherIds;
+        }
+
+        var currentUserId = CurrentUser.Id.Value;
+        var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
+        if (currentEmployee != null)
+        {
+            teacherIds.Add(currentEmployee.Id);
+        }
+
+        var reporteeEmployeeIds = await reportingManagerAccessService.GetReporteeEmployeeIdsAsync(currentUserId);
+        foreach (var reporteeId in reporteeEmployeeIds)
+        {
+            teacherIds.Add(reporteeId);
+        }
+
+        return teacherIds;
+    }
+
+    private async Task<HashSet<Guid>> GetTeacherAndReporteeSubjectOwnedPlanIdsAsync(
+        IQueryable<LessonPlan> unscopedQuery,
+        HashSet<Guid> accessibleTeacherIds)
+    {
+        if (IsAdminUser() || accessibleTeacherIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(
+            assignment => assignment.Teachers);
+        var assignedSubjects = await AsyncExecuter.ToListAsync(
+            assignedSubjectQuery.Where(assignment =>
+                assignment.Teachers.Any(teacher => accessibleTeacherIds.Contains(teacher.TeacherId))));
+        var assignedSubjectKeys = assignedSubjects
+            .Select(assignment => (assignment.StandardId, assignment.SubjectId))
+            .ToHashSet();
+
+        var allocations = await teacherSubjectAllocationRepository.GetListAsync(
+            allocation => allocation.Teachers.Any(teacher => accessibleTeacherIds.Contains(teacher.TeacherId)));
+        var allocatedSubjectKeys = allocations
+            .Select(allocation => (allocation.StandardId, allocation.DivisionId, allocation.SubjectId))
+            .ToHashSet();
+
+        var teacherPlans = await AsyncExecuter.ToListAsync(
+            unscopedQuery.Where(plan => accessibleTeacherIds.Contains(plan.TeacherId)));
+
+        return teacherPlans
+            .Where(plan =>
+                assignedSubjectKeys.Contains((plan.StandardId, plan.SubjectId)) ||
+                allocatedSubjectKeys.Contains((plan.StandardId, plan.DivisionId, plan.SubjectId)))
+            .Select(plan => plan.Id)
+            .ToHashSet();
+    }
+
+    private async Task EnsureOwnTeacherRecordAsync(Guid teacherId, string action)
+    {
+        if (IsAdminUser() || await HasClassTeacherAccessAsync())
+        {
+            return;
+        }
+
+        var accessibleTeacherIds = await GetCurrentAccessibleTeacherIdsAsync();
+        if (accessibleTeacherIds.Contains(teacherId))
+        {
+            return;
+        }
+
+        var currentEmployee = await GetCurrentEmployeeAsync();
+        if (currentEmployee == null)
+        {
+            throw new AbpAuthorizationException(
+                "Your authenticated user is not linked to an employee record, so lesson records cannot be created or changed.");
+        }
+
+        throw new AbpAuthorizationException($"You can only {action} your own lesson records.");
     }
 
     private bool IsAdminUser()
     {
         return CurrentUser.Roles.Any(role =>
             string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
+            string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase)) ||
+            CurrentUser.IsInRole("admin") ||
+            CurrentUser.IsInRole("administrator");
     }
 
 	private Task<bool> HasClassTeacherAccessAsync() =>
 		CurrentUser.Id.HasValue
 			? classTeacherAccessService.HasAssignmentAsync(CurrentUser.Id.Value)
 			: Task.FromResult(false);
-
-    private async Task<List<Guid>> GetReportingEmployeesAsync(Guid managerEmployeeId)
-    {
-        var allEmployees = await employeeRepository.GetListAsync();
-        var result = new List<Guid>();
-        var visited = new HashSet<Guid>();
-        
-        void Traverse(Guid parentId)
-        {
-            if (!visited.Add(parentId))
-            {
-                return;
-            }
-            var children = allEmployees.Where(x => x.ReportingManagerId == parentId).ToList();
-            foreach (var child in children)
-            {
-                if (!result.Contains(child.Id))
-                {
-                    result.Add(child.Id);
-                    Traverse(child.Id);
-                }
-            }
-        }
-        
-        Traverse(managerEmployeeId);
-        return result;
-    }
 
     private async Task<bool> IsReportingManagerOrAdminAsync(Guid planTeacherId)
     {
@@ -870,62 +1001,37 @@ public class LessonPlanAppService(
             return true;
         }
 
-        var currentUserId = CurrentUser.GetId();
-        var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
-        if (currentEmployee == null)
+        if (!CurrentUser.Id.HasValue)
         {
             return false;
         }
 
-        var targetEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.Id == planTeacherId);
-        if (targetEmployee == null)
-        {
-            return false;
-        }
-
-        var visited = new HashSet<Guid>();
-        var nextManagerId = targetEmployee.ReportingManagerId;
-
-        while (nextManagerId.HasValue && nextManagerId.Value != Guid.Empty)
-        {
-            if (nextManagerId.Value == currentEmployee.Id)
-            {
-                return true;
-            }
-
-            if (!visited.Add(nextManagerId.Value))
-            {
-                break;
-            }
-
-            var manager = await employeeRepository.FirstOrDefaultAsync(x => x.Id == nextManagerId.Value);
-            nextManagerId = manager?.ReportingManagerId;
-        }
-
-        return false;
+        var accessibleTeacherIds = await GetCurrentAccessibleTeacherIdsAsync();
+        return accessibleTeacherIds.Contains(planTeacherId);
     }
 
     private async Task EnsureCanReviewLessonPlansAsync()
     {
+        if (IsAdminUser())
+        {
+            return;
+        }
+
         var hasReviewerRole = LessonPlanReviewerRoles.Any(role =>
             CurrentUser.Roles.Any(currentRole =>
                 string.Equals(currentRole, role, StringComparison.OrdinalIgnoreCase) ||
-                currentRole.Contains("coordinator", StringComparison.OrdinalIgnoreCase)));
+                currentRole.Contains("coordinator", StringComparison.OrdinalIgnoreCase)) ||
+            CurrentUser.IsInRole(role) ||
+            (CurrentUser.Roles.Any(r => r.Contains("coordinator", StringComparison.OrdinalIgnoreCase))));
 
         if (hasReviewerRole)
         {
             return;
         }
 
-        var currentUserId = CurrentUser.GetId();
-        var currentEmployee = await employeeRepository.FirstOrDefaultAsync(x => x.UserId == currentUserId);
-        if (currentEmployee != null)
+        if (CurrentUser.Id.HasValue && await reportingManagerAccessService.HasReporteesAsync(CurrentUser.Id.Value))
         {
-            var subordinates = await GetReportingEmployeesAsync(currentEmployee.Id);
-            if (subordinates.Count > 0)
-            {
-                return;
-            }
+            return;
         }
 
         throw new AbpAuthorizationException(

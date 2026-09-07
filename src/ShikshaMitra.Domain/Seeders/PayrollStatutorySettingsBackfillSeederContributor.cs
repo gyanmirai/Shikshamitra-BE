@@ -13,7 +13,8 @@ namespace ShikshaMitra.Seeders;
 public class PayrollStatutorySettingsBackfillSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "PayrollStatutorySettingsBackfillSeeder";
-	internal const string StepVersion = "PayrollStatutorySettingsBackfillSeeder:v1";
+	// v2 adds the ESI rule that existing v1 completion markers predate.
+	internal const string StepVersion = "PayrollStatutorySettingsBackfillSeeder:v2";
 	internal const int StepOrder = 161;
 
 	private readonly HRSeederContributor _hrSeederContributor;

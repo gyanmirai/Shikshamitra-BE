@@ -29,9 +29,9 @@ public class StudentFeeStructureController(
 	}
 
 	[HttpGet("student/{studentId}")]
-	public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId)
+	public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId, [FromQuery] Guid academicYearId)
 	{
-		return await studentFeeStructureAppService.GetByStudentIdAsync(studentId);
+		return await studentFeeStructureAppService.GetByStudentIdAsync(studentId, academicYearId);
 	}
 }
 

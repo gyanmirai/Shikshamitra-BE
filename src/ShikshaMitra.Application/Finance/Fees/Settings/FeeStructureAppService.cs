@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
@@ -13,6 +14,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Domain.Finance.Policies;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 
@@ -20,9 +22,13 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 [RemoteService(false)]
 public class FeeStructureAppService(
     IRepository<FeeStructure, Guid> feeStructureRepository,
+	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
     IStandardRepository standardRepository,
     IAcademicYearRepository academicYearRepository,
-    IRepository<PaymentTerm, Guid> paymentTermRepository
+	IRepository<PaymentTerm, Guid> paymentTermRepository,
+	IRepository<FeeHead, Guid> feeHeadRepository,
+	IRepository<ConcessionPolicy, Guid> concessionPolicyRepository,
+	IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository
 ) : ApplicationService, IFeeStructureAppService
 {
     public async Task<FeeStructureCreateResponse> CreateAsync(Guid feeStructureMetadataId, StandardFeeStructureSaveRequest input)
@@ -44,6 +50,15 @@ public class FeeStructureAppService(
         );
 
 		feeStructure.AttachCollectionPolicy(input.StandardFeeStructures?.CollectionPolicyId);
+		var concessionAttachment = await ResolveConcessionPolicyAsync(
+			feeStructureMetadataId,
+			input.StandardFeeStructures?.ConcessionPolicyId,
+			input.StandardFeeStructures?.ConcessionFeeHeadScope ?? ConcessionFeeHeadScope.EntireFeeStructure,
+			input.StandardFeeStructures?.ConcessionApplicableFeeHeadIds ?? [],
+			input.StandardFeeStructures?.FeeHeads.Select(x => x.FeeHeadId).ToList() ?? []);
+		feeStructure.AttachConcessionPolicy(
+			concessionAttachment.PolicyId, concessionAttachment.VersionId,
+			concessionAttachment.FeeHeadScope, concessionAttachment.ApplicableFeeHeadIds);
 
         if (input.StandardFeeStructures != null)
         {
@@ -66,6 +81,9 @@ public class FeeStructureAppService(
                 // Attach Payment Term if provided
                 if (feeHead.PaymentTermId.HasValue && feeHead.PaymentTermVersionId.HasValue)
                 {
+					await EnsureAssignablePaymentTermAsync(
+						feeHead.PaymentTermId.Value,
+						feeHead.PaymentTermVersionId.Value);
                     if (feeHead.InstallmentOverrides != null && feeHead.InstallmentOverrides.Count > 0)
                     {
                         var overrides = feeHead.InstallmentOverrides.Select(o => new FeeStructureDetailScheduleOverride(
@@ -134,6 +152,9 @@ public class FeeStructureAppService(
                 // Attach Payment Term if provided
                 if (feeHead.PaymentTermId.HasValue && feeHead.PaymentTermVersionId.HasValue)
                 {
+					await EnsureAssignablePaymentTermAsync(
+						feeHead.PaymentTermId.Value,
+						feeHead.PaymentTermVersionId.Value);
                     if (feeHead.InstallmentOverrides != null && feeHead.InstallmentOverrides.Count > 0)
                     {
                         var overrides = feeHead.InstallmentOverrides.Select(o => new FeeStructureDetailScheduleOverride(
@@ -169,6 +190,15 @@ public class FeeStructureAppService(
 
 		feeStructure.ChangeName(input.Name);
 		feeStructure.AttachCollectionPolicy(input.CollectionPolicyId);
+		var concessionAttachment = await ResolveConcessionPolicyAsync(
+			feeStructure.FeeStructureMetadataId,
+			input.ConcessionPolicyId,
+			input.ConcessionFeeHeadScope,
+			input.ConcessionApplicableFeeHeadIds,
+			input.FeeHeads.Select(x => x.FeeHeadId).ToList());
+		feeStructure.AttachConcessionPolicy(
+			concessionAttachment.PolicyId, concessionAttachment.VersionId,
+			concessionAttachment.FeeHeadScope, concessionAttachment.ApplicableFeeHeadIds);
 
 		// validation to ensure no duplicate fee structure name exists for the same standard
 		var existingStructure = await feeStructureRepository.AnyAsync(x => x.StandardId == feeStructure.StandardId && x.Name == feeStructure.Name && x.Id != feeStructure.Id);
@@ -219,6 +249,10 @@ public class FeeStructureAppService(
                 Name = fs.Name,
 				Status = fs.IsLocked ? FeeStructureStatus.Locked : FeeStructureStatus.Unlocked,
 				CollectionPolicyId = fs.CollectionPolicyId,
+				ConcessionPolicyId = fs.ConcessionPolicyId,
+				ConcessionPolicyVersionId = fs.ConcessionPolicyVersionId,
+				ConcessionFeeHeadScope = fs.ConcessionFeeHeadScope,
+				ConcessionApplicableFeeHeadIds = [.. fs.GetConcessionApplicableFeeHeadIds()],
 				FeeHeads = fs.FeeStructureDetails.Select(d =>
                 {
                     var response = new FeeHeadAssignmentResponse
@@ -286,4 +320,69 @@ public class FeeStructureAppService(
 
         return result;
     }
+
+	private async Task EnsureAssignablePaymentTermAsync(Guid paymentTermId, Guid versionId)
+	{
+		var term = await paymentTermRepository.FindAsync(paymentTermId);
+		if (term == null)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.NotFound)
+				.WithData("PaymentTermId", paymentTermId);
+		}
+
+		var published = term.GetPublishedVersion();
+		if (term.Status != PaymentTermStatus.Active || published == null || published.Id != versionId)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.VersionNotPublished)
+				.WithData("PaymentTermId", paymentTermId)
+				.WithData("VersionId", versionId);
+		}
+	}
+
+	private async Task<(Guid? PolicyId, Guid? VersionId, ConcessionFeeHeadScope FeeHeadScope, IReadOnlyList<Guid> ApplicableFeeHeadIds)> ResolveConcessionPolicyAsync(
+		Guid feeStructureMetadataId,
+		Guid? policyId,
+		ConcessionFeeHeadScope feeHeadScope,
+		IReadOnlyCollection<Guid> requestedApplicableFeeHeadIds,
+		IReadOnlyCollection<Guid> structureFeeHeadIds)
+	{
+		if (!policyId.HasValue) throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached);
+		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructureMetadataId);
+		if (!metadata.AcademicYearId.HasValue)
+			throw new BusinessException(ConcessionPolicyErrorCodes.AcademicYearMismatch);
+		var policy = await concessionPolicyRepository.FindAsync(policyId.Value)
+			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotFound);
+		if (policy.Status != ConcessionPolicyStatus.Active)
+			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotActive);
+		if (policy.AcademicYearId != metadata.AcademicYearId.Value)
+			throw new BusinessException(ConcessionPolicyErrorCodes.AcademicYearMismatch);
+		if (!Enum.IsDefined(feeHeadScope))
+			throw new BusinessException(ConcessionPolicyErrorCodes.InvalidCalculationRule);
+
+		var structureIds = structureFeeHeadIds.Distinct().ToList();
+		var heads = await feeHeadRepository.GetListAsync(x => structureIds.Contains(x.Id));
+		if (heads.Count != structureIds.Count || heads.Any(x =>
+			x.AcademicYearId != metadata.AcademicYearId.Value || !x.IsActive))
+			throw new BusinessException(ConcessionPolicyErrorCodes.FeeHeadRequired);
+		var eligibleIds = heads.Where(x => x.IsConcessionApplied).Select(x => x.Id).ToHashSet();
+		IReadOnlyList<Guid> effectiveIds;
+		if (feeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads)
+		{
+			var requestedIds = requestedApplicableFeeHeadIds.Distinct().ToList();
+			if (requestedIds.Count == 0 || requestedIds.Any(x => !eligibleIds.Contains(x)))
+				throw new BusinessException(ConcessionPolicyErrorCodes.FeeHeadRequired);
+			effectiveIds = requestedIds;
+		}
+		else
+		{
+			effectiveIds = eligibleIds.Order().ToList();
+		}
+		if (effectiveIds.Count == 0)
+			throw new BusinessException(ConcessionPolicyErrorCodes.FeeHeadRequired);
+		var versions = await financePolicyVersionRepository.GetListAsync(x =>
+			x.PolicyType == "concession" && x.PolicyId == policy.Id && x.VersionNumber == policy.Version);
+		var version = versions.SingleOrDefault()
+			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+		return (policy.Id, version.Id, feeHeadScope, effectiveIds);
+	}
 }

@@ -295,7 +295,7 @@ public class FeeCollectionManager(
 
 		var map = dueFees.ToDictionary(df => df.Id);
 		foreach (var (dueFeeId, amount) in allocations)
-			map[dueFeeId].ApplyPayment(amount);
+			map[dueFeeId].ApplyPayment((decimal)amount);
 
 		return dueFees;
 	}
@@ -318,7 +318,7 @@ public class FeeCollectionManager(
 
 		var map = dueFees.ToDictionary(df => df.Id);
 		foreach (var (dueFeeId, amount) in allocations)
-			map[dueFeeId].ReversePayment(amount);
+			map[dueFeeId].ReversePayment((decimal)amount);
 
 		return dueFees;
 	}

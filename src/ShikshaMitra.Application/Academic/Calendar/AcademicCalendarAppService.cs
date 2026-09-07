@@ -15,6 +15,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 
 namespace ShikshaMitra.Academic.Calendar;
 
@@ -37,6 +38,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     private readonly IRepository<Exam, Guid> _examRepository;
     private readonly IRepository<Standard, Guid> _standardRepository;
     private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
+    private readonly IRepository<IdentityUser, Guid> _identityUserRepository;
 
     public AcademicCalendarAppService(
         IRepository<AcademicCalendar, Guid> calendarRepository,
@@ -54,7 +56,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         IRepository<ExamType, Guid> examTypeRepository,
         IRepository<Exam, Guid> examRepository,
         IRepository<Standard, Guid> standardRepository,
-        IRepository<EducationMediumStage, Guid> educationMediumStageRepository)
+        IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
+        IRepository<IdentityUser, Guid> identityUserRepository)
     {
         _calendarRepository = calendarRepository;
         _calendarDayRepository = calendarDayRepository;
@@ -72,6 +75,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         _examRepository = examRepository;
         _standardRepository = standardRepository;
         _educationMediumStageRepository = educationMediumStageRepository;
+        _identityUserRepository = identityUserRepository;
     }
 
     // ─── Calendar Setup CRUD ────────────────────────────────────────────────
@@ -1717,6 +1721,44 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             return dtos;
         }
 
+        // Audit snapshots store IDs, but this is a human-facing API. Resolve every user
+        // reference so fields such as PublishedByUserId never display opaque GUIDs.
+        var userIds = dtos
+            .Select(x => x.ChangedByUserId)
+            .Concat(dtos.SelectMany(x => x.Diff)
+                .Where(x => x.FieldName.EndsWith("UserId", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(x => new[] { x.OldValue, x.NewValue })
+                .Where(x => Guid.TryParse(x, out _))
+                .Select(Guid.Parse))
+            .Distinct()
+            .ToList();
+
+        var users = userIds.Count == 0
+            ? []
+            : await _identityUserRepository.GetListAsync(x => userIds.Contains(x.Id));
+        var userNames = users.ToDictionary(x => x.Id, GetUserDisplayName);
+
+        foreach (var dto in dtos)
+        {
+            if (string.IsNullOrWhiteSpace(dto.ChangedByName) && userNames.TryGetValue(dto.ChangedByUserId, out var changedByName))
+            {
+                dto.ChangedByName = changedByName;
+            }
+
+            foreach (var field in dto.Diff.Where(x => x.FieldName.EndsWith("UserId", StringComparison.OrdinalIgnoreCase)))
+            {
+                field.DisplayName = field.DisplayName.Replace(" User Id", " User", StringComparison.OrdinalIgnoreCase);
+                field.OldValue = ResolveUserName(field.OldValue, userNames);
+                field.NewValue = ResolveUserName(field.NewValue, userNames);
+            }
+
+            foreach (var field in dto.Diff)
+            {
+                field.OldValue = ToDisplayValue(field.FieldName, field.OldValue, dto.EntityType);
+                field.NewValue = ToDisplayValue(field.FieldName, field.NewValue, dto.EntityType);
+            }
+        }
+
         var auditLogIds = dtos.Select(x => x.Id).ToList();
         var notes = await _auditReviewNoteRepository.GetListAsync(x => auditLogIds.Contains(x.AuditLogId));
         var notesByAuditLog = notes
@@ -1730,6 +1772,51 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         }
 
         return dtos;
+    }
+
+    private static string? ResolveUserName(string? value, IReadOnlyDictionary<Guid, string> userNames) =>
+        Guid.TryParse(value, out var userId) && userNames.TryGetValue(userId, out var userName)
+            ? userName
+            : value;
+
+    private static string GetUserDisplayName(Volo.Abp.Identity.IdentityUser user)
+    {
+        var name = string.Join(" ", new[] { user.Name, user.Surname }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        return string.IsNullOrWhiteSpace(name) ? user.UserName : name;
+    }
+
+    private static string? ToDisplayValue(string fieldName, string? value, string? entityType)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        if (fieldName.EndsWith("Date", StringComparison.OrdinalIgnoreCase)
+            && DateOnly.TryParse(value, out var date))
+        {
+            return date.ToString("dd-MM-yyyy");
+        }
+
+        if (!int.TryParse(value, out var enumValue))
+        {
+            return value;
+        }
+
+        return fieldName.ToLowerInvariant() switch
+        {
+            "holidaycategory" when Enum.IsDefined(typeof(HolidayCategory), enumValue) => ((HolidayCategory)enumValue).ToString(),
+            "daytype" when Enum.IsDefined(typeof(DayType), enumValue) => ((DayType)enumValue).ToString(),
+            "status" when string.Equals(entityType, "Academic Calendar", StringComparison.OrdinalIgnoreCase)
+                && Enum.IsDefined(typeof(CalendarStatus), enumValue) => ((CalendarStatus)enumValue).ToString(),
+            "status" when Enum.IsDefined(typeof(CalendarDayStatus), enumValue) => ((CalendarDayStatus)enumValue).ToString(),
+            "shifttype" when Enum.IsDefined(typeof(SchoolShiftType), enumValue) => ((SchoolShiftType)enumValue).ToString(),
+            "reschedulemode" when Enum.IsDefined(typeof(RescheduleMode), enumValue) => ((RescheduleMode)enumValue).ToString(),
+            "calendarvisibility" when Enum.IsDefined(typeof(CalendarVisibility), enumValue) => ((CalendarVisibility)enumValue).ToString(),
+            "impacttype" when Enum.IsDefined(typeof(CalendarImpactType), enumValue) => ((CalendarImpactType)enumValue).ToString(),
+            "impactstatus" when Enum.IsDefined(typeof(CalendarImpactStatus), enumValue) => ((CalendarImpactStatus)enumValue).ToString(),
+            _ => value
+        };
     }
 
     private static AuditLogReviewNoteDto MapReviewNote(AcademicCalendarAuditReviewNote note) => new()

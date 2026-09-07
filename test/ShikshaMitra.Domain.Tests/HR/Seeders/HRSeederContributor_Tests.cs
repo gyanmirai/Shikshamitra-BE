@@ -211,7 +211,6 @@ public class HRSeederContributor_Tests
 			         "Provident Fund (PF)",
 			         "Professional Tax",
 			         "Income Tax (TDS)",
-			         "Employee State Insurance (ESI)",
 			         "Loan Repayment",
 			         "Advance Salary Deduction",
 			         "Loss of Pay (LOP)"
@@ -219,6 +218,8 @@ public class HRSeederContributor_Tests
 		{
 			deductionComponents.ShouldContain(x => x.Name == name);
 		}
+
+		deductionComponents.ShouldNotContain(x => x.Name.Contains("State Insurance"));
 	}
 
 	[Fact]

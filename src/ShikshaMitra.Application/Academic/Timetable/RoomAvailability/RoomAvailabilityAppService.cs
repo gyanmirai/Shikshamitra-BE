@@ -280,7 +280,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                     subReservation.Approve(approverId);
                 }
 
-                await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(subReservation, operation: "room-reservation-create");
+                await EnsureCanAccessReservationAsync(subReservation, "room-reservation-create");
                 await _reservationRepository.InsertAsync(subReservation);
             }
         }
@@ -297,7 +297,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             mainReservation.Approve(approverId);
         }
 
-        await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(mainReservation, operation: "room-reservation-create");
+        await EnsureCanAccessReservationAsync(mainReservation, "room-reservation-create");
         await _reservationRepository.InsertAsync(mainReservation);
 
         var creationAuditLog = new RoomAuditLog(
@@ -351,7 +351,12 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         var reservations = await _reservationRepository.GetListAsync(r =>
             !r.RecurringConfigId.HasValue || r.IsRecurring);
 		var scope = await _userScopeAccessService.GetCurrentUserScopeAsync();
-		reservations = reservations.FilterByUserScope(scope).ToList();
+		var canAccessInstituteWideReservations = IsPrivilegedRoomOperator() || scope.IsAdmin || scope.HasAnyAccess;
+		reservations = reservations
+			.Where(reservation => IsInstituteWideReservation(reservation)
+				? canAccessInstituteWideReservations
+				: UserScopeQueryExtensions.HasAccessToEntity(reservation, scope))
+			.ToList();
 
         if (input.CreatedDate.HasValue)
         {
@@ -361,10 +366,11 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
         var currentUserId = CurrentUser.GetId();
         var isAdmin = IsAdministrator();
+        var isPrivilegedRoomOperator = IsPrivilegedRoomOperator();
+        var visibleUserIds = await GetVisibleReservationUserIdsAsync(currentUserId);
 
         if (!isAdmin && !await HasClassTeacherAccessAsync())
         {
-            var visibleUserIds = await GetVisibleReservationUserIdsAsync(currentUserId);
             reservations = reservations
                 .Where(r => r.CreatorId.HasValue && visibleUserIds.Contains(r.CreatorId.Value))
                 .ToList();
@@ -412,6 +418,17 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             }
         }
 
+        foreach (var dto in dtos)
+        {
+            dto.CanReview = dto.Status == RoomReservationStatus.PendingApproval &&
+                dto.CreatorId.HasValue &&
+                CanReviewReservation(
+                    dto.CreatorId.Value,
+                    currentUserId,
+                    isPrivilegedRoomOperator,
+                    visibleUserIds);
+        }
+
         var configIds = dtos.Where(d => d.RecurringConfigId.HasValue).Select(d => d.RecurringConfigId.Value).Distinct().ToList();
         if (configIds.Any())
         {
@@ -432,7 +449,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     public async Task<RoomReservationDto> UpdateReservationAsync(Guid id, CreateRoomReservationDto input)
     {
         var reservation = await _reservationRepository.GetAsync(id);
-		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(reservation, operation: "room-reservation-update");
+		await EnsureCanAccessReservationAsync(reservation, "room-reservation-update");
 
         var conflicts = await _conflictService.CheckConflictsAsync(
             input.RoomId, input.Date, input.StartTime, input.EndTime, id,
@@ -460,7 +477,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             input.ReservedFor,
             input.Remarks
         );
-		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(reservation, operation: "room-reservation-update");
+		await EnsureCanAccessReservationAsync(reservation, "room-reservation-update");
 
         await _reservationRepository.UpdateAsync(reservation);
 
@@ -487,7 +504,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     public async Task CancelReservationAsync(Guid id, string reason)
     {
         var reservation = await _reservationRepository.GetAsync(id);
-		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(reservation, operation: "room-reservation-cancel");
+		await EnsureCanAccessReservationAsync(reservation, "room-reservation-cancel");
         var oldValJson = JsonSerializer.Serialize(reservation);
 
         reservation.Cancel(CurrentUser.Id ?? Guid.Empty, reason);
@@ -524,35 +541,65 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
     private async Task EnsureUserIsAuthorizedApproverAsync(RoomReservation reservation)
     {
-        var isPrivilegedApprover = CurrentUser.IsInRole("coordinator") ||
-                           CurrentUser.IsInRole("Coordinator") ||
-                           CurrentUser.IsInRole("HOD") ||
-                           CurrentUser.IsInRole("hod") ||
-                           CurrentUser.IsInRole("Principal") ||
-                           CurrentUser.IsInRole("principal");
-        var isAuthorized = IsAdministrator() || isPrivilegedApprover;
-
-        if (!isAuthorized && reservation.CreatorId.HasValue)
-        {
-            var visibleUserIds = await GetVisibleReservationUserIdsAsync(CurrentUser.GetId());
-            isAuthorized = reservation.CreatorId.Value != CurrentUser.GetId() &&
-                          visibleUserIds.Contains(reservation.CreatorId.Value);
-        }
+        var currentUserId = CurrentUser.GetId();
+        var isPrivilegedRoomOperator = IsPrivilegedRoomOperator();
+        var visibleUserIds = await GetVisibleReservationUserIdsAsync(currentUserId);
+        var isAuthorized = isPrivilegedRoomOperator ||
+            reservation.CreatorId.HasValue && CanReviewReservation(
+                reservation.CreatorId.Value,
+                currentUserId,
+                isPrivilegedRoomOperator,
+                visibleUserIds);
 
         if (!isAuthorized)
         {
             throw new Volo.Abp.Authorization.AbpAuthorizationException("You are not authorized to approve or reject room reservations.");
         }
 
-        if (reservation.CreatorId.HasValue && reservation.CreatorId.Value == CurrentUser.Id)
+        if (reservation.CreatorId.HasValue && reservation.CreatorId.Value == currentUserId)
         {
             throw new Volo.Abp.UserFriendlyException("Self-approval is not allowed. You cannot approve or reject your own room reservation requests.");
         }
     }
 
+    private static bool CanReviewReservation(
+        Guid creatorUserId,
+        Guid currentUserId,
+        bool isPrivilegedRoomOperator,
+        IReadOnlySet<Guid> visibleUserIds) =>
+        creatorUserId != currentUserId &&
+        (isPrivilegedRoomOperator || visibleUserIds.Contains(creatorUserId));
+
     private bool IsAdministrator() => CurrentUser.Roles.Any(role =>
         string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase));
+
+	private bool IsPrivilegedRoomOperator() =>
+		IsAdministrator() ||
+		CurrentUser.Roles.Any(role =>
+			string.Equals(role, "coordinator", StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(role, "hod", StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(role, "principal", StringComparison.OrdinalIgnoreCase));
+
+	private async Task EnsureCanAccessReservationAsync(RoomReservation reservation, string operation)
+	{
+		var scope = await _userScopeAccessService.GetCurrentUserScopeAsync();
+		if (IsInstituteWideReservation(reservation))
+		{
+			if (IsPrivilegedRoomOperator())
+			{
+				return;
+			}
+
+			_userScopeAccessService.EnsureHasAnyAccess(scope);
+			return;
+		}
+
+		_userScopeAccessService.EnsureCanAccess(reservation, scope, operation: operation);
+	}
+
+	private static bool IsInstituteWideReservation(RoomReservation reservation) =>
+		!reservation.StandardId.HasValue && !reservation.DivisionId.HasValue;
 
 	private Task<bool> HasClassTeacherAccessAsync() =>
 		CurrentUser.Id.HasValue
@@ -599,8 +646,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     public async Task ApproveReservationAsync(Guid id)
     {
         var reservation = await _reservationRepository.GetAsync(id);
-		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(reservation, operation: "room-reservation-approve");
         await EnsureUserIsAuthorizedApproverAsync(reservation);
+		await EnsureCanAccessReservationAsync(reservation, "room-reservation-approve");
         var oldValJson = JsonSerializer.Serialize(reservation);
 
         await EnsureReservationCanBeApprovedAsync(reservation);
@@ -705,8 +752,8 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     {
         var normalizedReason = NormalizeRequiredReason(reason, "Rejection reason is required.");
         var reservation = await _reservationRepository.GetAsync(id);
-		await _userScopeAccessService.EnsureCurrentUserCanAccessAsync(reservation, operation: "room-reservation-reject");
         await EnsureUserIsAuthorizedApproverAsync(reservation);
+		await EnsureCanAccessReservationAsync(reservation, "room-reservation-reject");
         var oldValJson = JsonSerializer.Serialize(reservation);
 
         reservation.Reject(CurrentUser.Id ?? Guid.Empty, normalizedReason);

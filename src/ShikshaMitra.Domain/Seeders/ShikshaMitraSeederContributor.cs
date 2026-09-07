@@ -160,6 +160,12 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 			Seeders.SalaryTemplateBackfillSeederContributor.StepVersion,
 			Seeders.SalaryTemplateBackfillSeederContributor.StepOrder,
 			Seeders.ShikshaMitraSeederProfile.Demo),
+		TenantStep<Seeders.EsiFullDemoConfigurationSeederContributor>(
+			serviceProvider,
+			Seeders.EsiFullDemoConfigurationSeederContributor.StepName,
+			Seeders.EsiFullDemoConfigurationSeederContributor.StepVersion,
+			Seeders.EsiFullDemoConfigurationSeederContributor.StepOrder,
+			Seeders.ShikshaMitraSeederProfile.FullDemoOnly),
 		TenantStep<Seeders.LeaveApprovedUnitsRepairSeederContributor>(serviceProvider, "LeaveApprovedUnitsRepairSeeder", "LeaveApprovedUnitsRepairSeeder:v1", 165, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.StudentSeederContributor>(serviceProvider, "StudentSeeder", "StudentSeeder:v1", 170, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<Student>(serviceProvider)),
 		TenantStep<Seeders.LibrarySeederContributor>(serviceProvider, "LibrarySeeder", "LibrarySeeder:v1", 175, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<Book>(serviceProvider)),
@@ -268,20 +274,35 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 			await MarkCompletedAsync(markerRepository, step, tenantId, options.Profile, stopwatch.ElapsedMilliseconds);
 			summary.RanCount++;
 			summary.ElapsedMilliseconds += stopwatch.ElapsedMilliseconds;
-		}
-		catch (Exception ex)
-		{
-			stopwatch.Stop();
-			await MarkFailedAsync(markerRepository, step, tenantId, options.Profile, stopwatch.ElapsedMilliseconds, ex);
-			throw;
-		}
-		finally
-		{
 			_logger.LogInformation(
 				"[SeederTiming] {SeederName} completed for TenantId={TenantId} in {ElapsedMs} ms",
 				step.Name,
 				tenantId,
 				stopwatch.ElapsedMilliseconds);
+		}
+		catch (Exception ex)
+		{
+			stopwatch.Stop();
+			try
+			{
+				await MarkFailedAsync(markerRepository, step, tenantId, options.Profile, stopwatch.ElapsedMilliseconds, ex);
+			}
+			catch (Exception markerException)
+			{
+				_logger.LogError(
+					markerException,
+					"Could not persist the failed execution marker for seeder {SeederName} and TenantId={TenantId}.",
+					step.Name,
+					tenantId);
+			}
+
+			_logger.LogError(
+				ex,
+				"[SeederTiming] {SeederName} failed for TenantId={TenantId} after {ElapsedMs} ms",
+				step.Name,
+				tenantId,
+				stopwatch.ElapsedMilliseconds);
+			throw;
 		}
 	}
 

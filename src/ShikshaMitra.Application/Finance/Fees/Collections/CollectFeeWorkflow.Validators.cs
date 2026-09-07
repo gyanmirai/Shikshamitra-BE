@@ -54,7 +54,11 @@ public partial class CollectFeeWorkflow
 			var df = dueFeeMap[dfp.DueFeeId];
 			if (df.StudentId != input.StudentId) throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
 			if (df.FeeHeadId != dfp.FeeHeadId) throw new BusinessException(FeeCollectionErrorCodes.InvalidFeeHead);
-			if (dfp.Amount > df.OutstandingAmount)
+			if (!df.IsBillGeneratedOn(clock.Now.Date))
+				throw new BusinessException(DueFeeErrorCodes.BillNotGeneratedYet)
+					.WithData("DueFeeId", df.Id)
+					.WithData("DemandDate", df.DemandDate);
+			if ((decimal)dfp.Amount > df.OutstandingAmount)
 				throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
 					.WithData("DueFeeId", df.Id).WithData("Outstanding", df.OutstandingAmount).WithData("Amount", dfp.Amount);
 		}

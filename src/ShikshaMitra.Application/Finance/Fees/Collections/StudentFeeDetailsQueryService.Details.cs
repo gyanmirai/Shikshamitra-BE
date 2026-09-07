@@ -23,14 +23,15 @@ public partial class StudentFeeDetailsQueryService
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
 
 		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
-		var feeStructureAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == studentId);
+		var feeStructureAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(
+			x => x.StudentId == studentId && x.AcademicYearId == academicYearId);
 
-		var dueFees = await GetDueFeesAsync(studentId);
+		var dueFees = await GetDueFeesAsync(studentId, academicYearId);
 		var overdueFee = CalculateOverdueFee(dueFees);
 		var feeHeads = await BuildFeeHeadSummariesAsync(studentId, feeStructureAssignment, dueFees);
 		var charges = await BuildChargeDetailsAsync(studentId, academicYearId);
 		var payments = await BuildPaymentHistoryAsync(studentId, academicYearId);
-		var concessions = await BuildConcessionDetailsAsync(studentId);
+		var concessions = await BuildConcessionDetailsAsync(studentId, academicYearId);
 		var feeOverview = BuildFeeOverview(feeHeads, concessions, overdueFee);
 
 		return new StudentFeeDetailsDto
@@ -41,10 +42,16 @@ public partial class StudentFeeDetailsQueryService
 		};
 	}
 
-	private async Task<List<DueFee>> GetDueFeesAsync(Guid studentId)
+	private async Task<List<DueFee>> GetDueFeesAsync(Guid studentId, Guid academicYearId)
 	{
 		var dueFeesQ = await dueFeeRepository.GetQueryableAsync();
-		return dueFeesQ.Where(d => d.StudentId == studentId).ToList();
+		var feeHeadsQ = await feeHeadRepository.GetQueryableAsync();
+		var academicYearFeeHeadIds = feeHeadsQ
+			.Where(fh => fh.AcademicYearId == academicYearId)
+			.Select(fh => fh.Id);
+		return dueFeesQ
+			.Where(d => d.StudentId == studentId && academicYearFeeHeadIds.Contains(d.FeeHeadId))
+			.ToList();
 	}
 
 	private async Task<IQueryable<Guid>> GetReversedTransactionIdsAsync()
@@ -154,10 +161,13 @@ public partial class StudentFeeDetailsQueryService
 		}).ToList();
 	}
 
-	private async Task<List<ConcessionDetailDto>?> BuildConcessionDetailsAsync(Guid studentId)
+	private async Task<List<ConcessionDetailDto>?> BuildConcessionDetailsAsync(Guid studentId, Guid academicYearId)
 	{
 		var approvedConcessions = await concessionRequestRepository.GetListAsync(
-			r => r.StudentId == studentId && r.Status == ConcessionRequestStatus.Approved);
+			r => r.StudentId == studentId
+				&& r.AcademicYearId == academicYearId
+				&& (r.Status == ConcessionRequestStatus.Approved
+					|| r.Status == ConcessionRequestStatus.PartiallyReversed));
 
 		if (approvedConcessions.Count == 0) return null;
 
@@ -168,7 +178,7 @@ public partial class StudentFeeDetailsQueryService
 		{
 			ConcessionRequestConcessionTypeId = r.Id,
 			ConcessionTypeName = typeMap.GetValueOrDefault(r.ConcessionTypeId, string.Empty),
-			Amount = r.ConcessionFeeHeadMappings.Sum(m => (double)m.FeeHeadConcessionAmount) is > 0d and var total ? total : null,
+			Amount = (double)r.GetNetApprovedConcession() is > 0d and var total ? total : null,
 		}).ToList();
 	}
 
@@ -177,7 +187,8 @@ public partial class StudentFeeDetailsQueryService
 		var now = clock.Now;
 		var currentYear = now.Year;
 		var currentMonth = now.Month - 1;
-		return dueFees.Where(d => d.OutstandingAmount > 0d
+		return (double)dueFees.Where(d => d.OutstandingAmount > 0m
+			&& d.IsBillGeneratedOn(now.Date)
 			&& (d.Year < currentYear || (d.Year == currentYear && (int)d.Month < currentMonth)))
 			.Sum(d => d.OutstandingAmount);
 	}

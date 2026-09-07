@@ -30,6 +30,7 @@ public class SeatingPlanDraftResponseDto
     public SeatingPlanStatus Status { get; set; }
     public bool IsLocked { get; set; }
     public DateTime? LastModifiedTime { get; set; }
+    public string Version { get; set; } = string.Empty;
 }
 
 public class SaveSeatingPlanDraftInputDto
@@ -43,7 +44,9 @@ public class SaveSeatingPlanDraftInputDto
     public List<Guid> ExcludedStudentIds { get; set; } = [];
     public List<Guid> SpecialRequirementStudentIds { get; set; } = [];
 
-    /// <summary>The <see cref="SeatingPlanDraftResponseDto.LastModifiedTime"/> the client last read.
-    /// If it no longer matches the server's value, the save is rejected as a concurrency conflict.</summary>
+    /// <summary>Legacy timestamp concurrency token retained for the V1 editor.</summary>
     public DateTime? LastKnownModifiedTime { get; set; }
+
+    /// <summary>Opaque entity version returned by the server. V2 clients should echo this value.</summary>
+    public string? Version { get; set; }
 }

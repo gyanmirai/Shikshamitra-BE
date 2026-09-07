@@ -19,6 +19,19 @@ public interface ICollectionPolicyAppService : IApplicationService
 	Task<CollectionPolicySimulateResponseDto> SimulateAsync(Guid id, CollectionPolicySimulateRequestDto input);
 }
 
+public interface IConcessionPolicyAppService : IApplicationService
+{
+	Task<PagedResultDto<ConcessionPolicyDto>> GetListAsync(ConcessionPolicyListRequestDto input);
+	Task<ConcessionPolicyDto> GetAsync(Guid id);
+	Task<ConcessionPolicyDto> CreateAsync(CreateUpdateConcessionPolicyDto input);
+	Task<ConcessionPolicyDto> UpdateAsync(Guid id, CreateUpdateConcessionPolicyDto input);
+	Task<ConcessionPolicyDto> CloneAsync(Guid id, ConcessionPolicyCloneRequestDto input);
+	Task ArchiveAsync(Guid id);
+	Task<ConcessionPolicyDto> UnarchiveAsync(Guid id);
+	Task<PagedResultDto<FinancePolicyVersionDto>> GetVersionsAsync(Guid id, FinancePolicyVersionListRequestDto input);
+	Task<ConcessionPolicySimulateResponseDto> SimulateAsync(Guid id, ConcessionPolicySimulateRequestDto input);
+}
+
 public interface IStudentFeePolicyOverrideAppService : IApplicationService
 {
 	Task<EffectiveCollectionRulesDto> GetEffectiveRulesAsync(Guid studentId, Guid feeStructureId);

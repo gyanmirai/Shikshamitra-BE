@@ -42,7 +42,21 @@ public class SalarySlipSnapshotWriter(ISalarySlipRepository salarySlipRepository
 
 			SalarySlipGenerationRules.ApplySnapshotMetadata(salarySlip, snapshot, dayCalculationMode);
 			salarySlip.SetStatutorySnapshot(employerContributionLineItems, snapshot.ProvidentFundRuleId,
-				snapshot.ProvidentFundRuleVersion, snapshot.ProfessionalTaxRuleId, snapshot.ProfessionalTaxRuleVersion);
+				snapshot.ProvidentFundRuleVersion, snapshot.ProfessionalTaxRuleId, snapshot.ProfessionalTaxRuleVersion,
+				snapshot.EmployeeStateInsuranceRuleId, snapshot.EmployeeStateInsuranceRuleVersion,
+				snapshot.EmployeeStateInsuranceWages, snapshot.EmployeeStateInsuranceGovernmentContribution,
+				snapshot.EmployeeStateInsuranceCoverageDecision,
+				snapshot.EmployeeStateInsuranceNumber, snapshot.EmployeeStateInsuranceContributionPeriodStart,
+				snapshot.EmployeeStateInsuranceContributionPeriodEnd);
+			salarySlip.SetCompensationSnapshot(
+				snapshot.CompensationRevisionId,
+				snapshot.CompensationRevisionNumber,
+				snapshot.CompensationSalaryBasis,
+				snapshot.CompensationProtectionPolicy,
+				snapshot.CompensationQuotedAmount,
+				snapshot.CompensationProtectedAmount,
+				snapshot.CompensationNormalizedProtectedAmount,
+				snapshot.CompensationTargetDifference);
 			await salarySlipRepository.InsertAsync(salarySlip, cancellationToken: cancellationToken);
 			return salarySlip;
 		}
@@ -50,7 +64,21 @@ public class SalarySlipSnapshotWriter(ISalarySlipRepository salarySlipRepository
 		existingSlip.UpdateLineItems(earningLineItems, deductionLineItems, Clock.Now);
 		SalarySlipGenerationRules.ApplySnapshotMetadata(existingSlip, snapshot, dayCalculationMode);
 		existingSlip.SetStatutorySnapshot(employerContributionLineItems, snapshot.ProvidentFundRuleId,
-			snapshot.ProvidentFundRuleVersion, snapshot.ProfessionalTaxRuleId, snapshot.ProfessionalTaxRuleVersion);
+			snapshot.ProvidentFundRuleVersion, snapshot.ProfessionalTaxRuleId, snapshot.ProfessionalTaxRuleVersion,
+			snapshot.EmployeeStateInsuranceRuleId, snapshot.EmployeeStateInsuranceRuleVersion,
+			snapshot.EmployeeStateInsuranceWages, snapshot.EmployeeStateInsuranceGovernmentContribution,
+			snapshot.EmployeeStateInsuranceCoverageDecision,
+			snapshot.EmployeeStateInsuranceNumber, snapshot.EmployeeStateInsuranceContributionPeriodStart,
+			snapshot.EmployeeStateInsuranceContributionPeriodEnd);
+		existingSlip.SetCompensationSnapshot(
+			snapshot.CompensationRevisionId,
+			snapshot.CompensationRevisionNumber,
+			snapshot.CompensationSalaryBasis,
+			snapshot.CompensationProtectionPolicy,
+			snapshot.CompensationQuotedAmount,
+			snapshot.CompensationProtectedAmount,
+			snapshot.CompensationNormalizedProtectedAmount,
+			snapshot.CompensationTargetDifference);
 		await salarySlipRepository.UpdateAsync(existingSlip, cancellationToken: cancellationToken);
 		return existingSlip;
 	}

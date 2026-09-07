@@ -294,4 +294,4 @@ skills-output.txt
 /.claude/settings.local.json
 
 **/appsettings.Development.json
-./src/ShikshaMitra.DbMigrator/appsettings.Development.json
+src/ShikshaMitra.DbMigrator/appsettings.Development.json

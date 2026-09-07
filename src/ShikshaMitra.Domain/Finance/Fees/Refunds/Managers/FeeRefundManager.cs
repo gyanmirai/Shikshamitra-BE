@@ -47,7 +47,7 @@ public class FeeRefundManager(
         foreach (var (dueFeeId, amount) in lines)
         {
             var dueFee = dueFeeMap[dueFeeId];
-            if (amount > dueFee.RefundableBalance)
+			if ((decimal)amount > dueFee.RefundableBalance)
                 throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance)
                     .WithData("DueFeeId", dueFeeId)
                     .WithData("Requested", amount)
@@ -122,9 +122,9 @@ public class FeeRefundManager(
 
             // Available = stored RefundableBalance + amount already reserved by this request
             var alreadyReserved = existingLineAmounts.TryGetValue(dueFeeId, out var prev) ? prev : 0d;
-            var available = dueFee.RefundableBalance + alreadyReserved;
+			var available = dueFee.RefundableBalance + (decimal)alreadyReserved;
 
-            if (amount > available)
+			if ((decimal)amount > available)
                 throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance)
                     .WithData("DueFeeId", dueFeeId)
                     .WithData("Requested", amount)
@@ -168,7 +168,7 @@ public class FeeRefundManager(
                 throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound)
                     .WithData("DueFeeId", line.DueFeeId);
 
-            dueFee.ApplyRefund(line.Amount);
+			dueFee.ApplyRefund((decimal)line.Amount);
         }
 
         await dueFeeRepository.UpdateManyAsync(dueFees, autoSave: false);

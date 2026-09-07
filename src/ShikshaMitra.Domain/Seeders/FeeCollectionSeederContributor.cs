@@ -219,14 +219,21 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 continue;   // student's standard has no seed fee structure
 
             // Create StudentFeeStructure assignment (idempotent check inside)
-            if (!assignedStudentIds.Contains(student.Id))
+            if (!assignedStudentIds.Contains(student.Id) &&
+                feeStructure.ConcessionPolicyId.HasValue &&
+                feeStructure.ConcessionPolicyVersionId.HasValue)
             {
                 studentFeeStructuresToInsert.Add(
                     new StudentFeeStructure(
                         id:                     GuidGenerator.Create(),
                         tenantId:               CurrentTenant.Id,
                         studentId:              student.Id,
-                        feeStructureStandardId: feeStructure.Id));
+                        feeStructureStandardId: feeStructure.Id,
+						academicYearId:         academicYear.Id,
+						concessionPolicyId:     feeStructure.ConcessionPolicyId.Value,
+						concessionPolicyVersionId: feeStructure.ConcessionPolicyVersionId.Value,
+						concessionFeeHeadScope: feeStructure.ConcessionFeeHeadScope,
+						concessionApplicableFeeHeadIds: feeStructure.GetConcessionApplicableFeeHeadIds()));
                 assignedStudentIds.Add(student.Id);
             }
 
@@ -249,7 +256,7 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 month:     mr.Month,
                 year:      mr.Year,
                 isOneTime: false,
-                amount:    monthlyAmount,
+				amount:    (decimal)monthlyAmount,
                 dueDate:   DueFeeManager.ComputeDefaultDueDate(mr.Month, mr.Year))).ToList();
 
             // One-time development fee (due in first month of academic year)
@@ -261,7 +268,7 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 month:     monthRange[0].Month,
                 year:      monthRange[0].Year,
                 isOneTime: true,
-                amount:    DevFeeAmount,
+				amount:    (decimal)DevFeeAmount,
                 dueDate:   DueFeeManager.ComputeDefaultDueDate(monthRange[0].Month, monthRange[0].Year)));
 
             dueFeesToInsert.AddRange(dueFees);
@@ -694,7 +701,7 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
         await _paymentMethodRecordRepository.InsertAsync(paymentRecord, autoSave: false);
 
         // Reflect the payment in the DueFee ledger
-        dueFee.ApplyPayment(received);
+		dueFee.ApplyPayment((decimal)received);
         await _dueFeeRepository.UpdateAsync(dueFee, autoSave: false);
     }
 

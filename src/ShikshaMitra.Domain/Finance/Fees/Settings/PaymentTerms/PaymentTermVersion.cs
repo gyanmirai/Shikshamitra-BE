@@ -25,6 +25,12 @@ public class PaymentTermVersion : CreationAuditedAggregateRoot<Guid>, IMultiTena
 
 	public PaymentTermVersionStatus Status { get; private set; }
 
+	public HolidayShiftingMethod HolidayShiftingMethod { get; private set; }
+
+	public DemandGenerationRule DemandGenerationRule { get; private set; }
+
+	public int? DemandOffsetDays { get; private set; }
+
 	public DateTime? EffectiveFrom { get; private set; }
 
 	public DateTime? EffectiveTo { get; private set; }
@@ -50,6 +56,9 @@ public class PaymentTermVersion : CreationAuditedAggregateRoot<Guid>, IMultiTena
 		Guid paymentTermId,
 		int versionNumber,
 		PaymentTermVersionStatus status,
+		HolidayShiftingMethod holidayShiftingMethod,
+		DemandGenerationRule demandGenerationRule,
+		int? demandOffsetDays,
 		DateTime? effectiveFrom,
 		DateTime? effectiveTo,
 		string? changeReason = null,
@@ -59,10 +68,30 @@ public class PaymentTermVersion : CreationAuditedAggregateRoot<Guid>, IMultiTena
 		PaymentTermId = paymentTermId;
 		VersionNumber = versionNumber;
 		Status = status;
+		HolidayShiftingMethod = holidayShiftingMethod;
+		DemandGenerationRule = demandGenerationRule;
+		DemandOffsetDays = demandOffsetDays;
 		EffectiveFrom = effectiveFrom?.Date;
 		EffectiveTo = effectiveTo?.Date;
 		ChangeReason = string.IsNullOrWhiteSpace(changeReason) ? null : changeReason.Trim();
 		SnapshotHash = snapshotHash;
+	}
+
+	public void UpdateBillingConfiguration(
+		HolidayShiftingMethod holidayShiftingMethod,
+		DemandGenerationRule demandGenerationRule,
+		int? demandOffsetDays)
+	{
+		if (Status != PaymentTermVersionStatus.Draft)
+		{
+			throw new BusinessException(ErrorCodes.VersionNotEditable)
+				.WithData("VersionNumber", VersionNumber)
+				.WithData("Status", Status.ToString());
+		}
+
+		HolidayShiftingMethod = holidayShiftingMethod;
+		DemandGenerationRule = demandGenerationRule;
+		DemandOffsetDays = demandOffsetDays;
 	}
 
 	/// <summary>

@@ -24,6 +24,15 @@ internal static class PayrollRunProjection
 		snapshot.FullGrossSalary != (decimal)item.FullGrossSalary ||
 		snapshot.TotalDeduction != (decimal)item.TotalDeduction ||
 		snapshot.EmployerContributionTotal != (decimal)item.EmployerContributionTotal ||
+		snapshot.EmployerCost != (decimal)item.EmployerCost ||
+		snapshot.CompensationRevisionId != item.CompensationRevisionId ||
+		snapshot.CompensationRevisionNumber != item.CompensationRevisionNumber ||
+		snapshot.CompensationSalaryBasis != item.CompensationSalaryBasis ||
+		snapshot.CompensationProtectionPolicy != item.CompensationProtectionPolicy ||
+		snapshot.CompensationQuotedAmount != ToNullableDecimal(item.CompensationQuotedAmount) ||
+		snapshot.CompensationProtectedAmount != ToNullableDecimal(item.CompensationProtectedAmount) ||
+		snapshot.CompensationNormalizedProtectedAmount != ToNullableDecimal(item.CompensationNormalizedProtectedAmount) ||
+		snapshot.CompensationTargetDifference != ToNullableDecimal(item.CompensationTargetDifference) ||
 		snapshot.NetPay != (decimal)item.NetPay ||
 		snapshot.PresentDays != (decimal)item.PresentDays ||
 		snapshot.HalfWorkingDays != (decimal)item.HalfWorkingDays ||
@@ -48,7 +57,17 @@ internal static class PayrollRunProjection
 		snapshot.ProvidentFundRuleVersion != item.ProvidentFundRuleVersion ||
 		snapshot.ProfessionalTaxRuleId != item.ProfessionalTaxRuleId ||
 		snapshot.ProfessionalTaxRuleVersion != item.ProfessionalTaxRuleVersion ||
+		snapshot.EmployeeStateInsuranceRuleId != item.EmployeeStateInsuranceRuleId ||
+		snapshot.EmployeeStateInsuranceRuleVersion != item.EmployeeStateInsuranceRuleVersion ||
+		snapshot.EmployeeStateInsuranceWages != (decimal)item.EmployeeStateInsuranceWages ||
+		snapshot.EmployeeStateInsuranceGovernmentContribution != (decimal)item.EmployeeStateInsuranceGovernmentContribution ||
+		snapshot.EmployeeStateInsuranceCoverageDecision != item.EmployeeStateInsuranceCoverageDecision ||
+		snapshot.EmployeeStateInsuranceNumber != item.EmployeeStateInsuranceNumber ||
+		snapshot.EmployeeStateInsuranceContributionPeriodStart != item.EmployeeStateInsuranceContributionPeriodStart ||
+		snapshot.EmployeeStateInsuranceContributionPeriodEnd != item.EmployeeStateInsuranceContributionPeriodEnd ||
 		snapshot.PayrollAdjustmentsJson != adjustmentsJson;
+
+	private static decimal? ToNullableDecimal(double? value) => value.HasValue ? (decimal)value.Value : null;
 
 	public static void ApplySnapshotValues(
 		PayrollRunItemSnapshot snapshot,
@@ -72,6 +91,15 @@ internal static class PayrollRunProjection
 		snapshot.FullGrossSalary = (decimal)item.FullGrossSalary;
 		snapshot.TotalDeduction = (decimal)item.TotalDeduction;
 		snapshot.EmployerContributionTotal = (decimal)item.EmployerContributionTotal;
+		snapshot.EmployerCost = (decimal)item.EmployerCost;
+		snapshot.CompensationRevisionId = item.CompensationRevisionId;
+		snapshot.CompensationRevisionNumber = item.CompensationRevisionNumber;
+		snapshot.CompensationSalaryBasis = item.CompensationSalaryBasis;
+		snapshot.CompensationProtectionPolicy = item.CompensationProtectionPolicy;
+		snapshot.CompensationQuotedAmount = item.CompensationQuotedAmount.HasValue ? (decimal)item.CompensationQuotedAmount.Value : null;
+		snapshot.CompensationProtectedAmount = item.CompensationProtectedAmount.HasValue ? (decimal)item.CompensationProtectedAmount.Value : null;
+		snapshot.CompensationNormalizedProtectedAmount = item.CompensationNormalizedProtectedAmount.HasValue ? (decimal)item.CompensationNormalizedProtectedAmount.Value : null;
+		snapshot.CompensationTargetDifference = item.CompensationTargetDifference.HasValue ? (decimal)item.CompensationTargetDifference.Value : null;
 		snapshot.NetPay = (decimal)item.NetPay;
 		snapshot.PreviousMonthNetPay = item.PreviousMonthNetPay.HasValue ? (decimal)item.PreviousMonthNetPay.Value : null;
 		snapshot.NetPayDelta = item.NetPayDelta.HasValue ? (decimal)item.NetPayDelta.Value : null;
@@ -102,6 +130,14 @@ internal static class PayrollRunProjection
 		snapshot.ProvidentFundRuleVersion = item.ProvidentFundRuleVersion;
 		snapshot.ProfessionalTaxRuleId = item.ProfessionalTaxRuleId;
 		snapshot.ProfessionalTaxRuleVersion = item.ProfessionalTaxRuleVersion;
+		snapshot.EmployeeStateInsuranceRuleId = item.EmployeeStateInsuranceRuleId;
+		snapshot.EmployeeStateInsuranceRuleVersion = item.EmployeeStateInsuranceRuleVersion;
+		snapshot.EmployeeStateInsuranceWages = (decimal)item.EmployeeStateInsuranceWages;
+		snapshot.EmployeeStateInsuranceGovernmentContribution = (decimal)item.EmployeeStateInsuranceGovernmentContribution;
+		snapshot.EmployeeStateInsuranceCoverageDecision = item.EmployeeStateInsuranceCoverageDecision;
+		snapshot.EmployeeStateInsuranceNumber = item.EmployeeStateInsuranceNumber;
+		snapshot.EmployeeStateInsuranceContributionPeriodStart = item.EmployeeStateInsuranceContributionPeriodStart;
+		snapshot.EmployeeStateInsuranceContributionPeriodEnd = item.EmployeeStateInsuranceContributionPeriodEnd;
 		snapshot.PayrollAdjustmentsJson = adjustmentsJson;
 	}
 
@@ -121,6 +157,15 @@ internal static class PayrollRunProjection
 			FullGrossSalary = (double)row.FullGrossSalary,
 			TotalDeduction = (double)row.TotalDeduction,
 			EmployerContributionTotal = (double)row.EmployerContributionTotal,
+			EmployerCost = (double)row.EmployerCost,
+			CompensationRevisionId = row.CompensationRevisionId,
+			CompensationRevisionNumber = row.CompensationRevisionNumber,
+			CompensationSalaryBasis = row.CompensationSalaryBasis,
+			CompensationProtectionPolicy = row.CompensationProtectionPolicy,
+			CompensationQuotedAmount = row.CompensationQuotedAmount.HasValue ? (double)row.CompensationQuotedAmount.Value : null,
+			CompensationProtectedAmount = row.CompensationProtectedAmount.HasValue ? (double)row.CompensationProtectedAmount.Value : null,
+			CompensationNormalizedProtectedAmount = row.CompensationNormalizedProtectedAmount.HasValue ? (double)row.CompensationNormalizedProtectedAmount.Value : null,
+			CompensationTargetDifference = row.CompensationTargetDifference.HasValue ? (double)row.CompensationTargetDifference.Value : null,
 			NetPay = (double)row.NetPay,
 			PreviousMonthNetPay = row.PreviousMonthNetPay.HasValue ? (double)row.PreviousMonthNetPay.Value : null,
 			NetPayDelta = row.NetPayDelta.HasValue ? (double)row.NetPayDelta.Value : null,
@@ -155,6 +200,14 @@ internal static class PayrollRunProjection
 			ProvidentFundRuleVersion = row.ProvidentFundRuleVersion,
 			ProfessionalTaxRuleId = row.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = row.ProfessionalTaxRuleVersion,
+			EmployeeStateInsuranceRuleId = row.EmployeeStateInsuranceRuleId,
+			EmployeeStateInsuranceRuleVersion = row.EmployeeStateInsuranceRuleVersion,
+			EmployeeStateInsuranceWages = (double)row.EmployeeStateInsuranceWages,
+			EmployeeStateInsuranceGovernmentContribution = (double)row.EmployeeStateInsuranceGovernmentContribution,
+			EmployeeStateInsuranceCoverageDecision = row.EmployeeStateInsuranceCoverageDecision,
+			EmployeeStateInsuranceNumber = row.EmployeeStateInsuranceNumber,
+			EmployeeStateInsuranceContributionPeriodStart = row.EmployeeStateInsuranceContributionPeriodStart,
+			EmployeeStateInsuranceContributionPeriodEnd = row.EmployeeStateInsuranceContributionPeriodEnd,
 			PayrollAdjustments = JsonSerializer.Deserialize<List<PayrollAdjustmentDto>>(row.PayrollAdjustmentsJson)
 				?? new List<PayrollAdjustmentDto>()
 		};

@@ -27,9 +27,9 @@ public class FeeCategoryController(
 
     [HttpGet]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.View)]
-    public Task<FeeCategoryListResponse> GetListAsync([FromQuery] Guid academicYearId, [FromQuery] string search = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public Task<FeeCategoryListResponse> GetListAsync([FromQuery] Guid academicYearId, [FromQuery] string? search = null, [FromQuery] string categoryStatus = "all", [FromQuery] string sort = "name", [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
-        return feeCategoryAppService.GetListAsync(academicYearId, search, page, pageSize);
+        return feeCategoryAppService.GetListAsync(academicYearId, search, categoryStatus, sort, page, pageSize);
     }
 
     [HttpGet("{id}")]
@@ -59,4 +59,14 @@ public class FeeCategoryController(
     {
         return feeCategoryAppService.UpdateStatusAsync(id, input);
     }
+
+    [HttpPost("copy/preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.View)]
+    public Task<FeeCategoryCopyPreviewResponse> PreviewCopyAsync([FromBody] FeeCategoryCopyPreviewRequest input) =>
+        feeCategoryAppService.PreviewCopyAsync(input);
+
+    [HttpPost("copy")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Add)]
+    public Task<FeeCategoryCopyResult> CopyAsync([FromBody] FeeCategoryCopyCommitRequest input) =>
+        feeCategoryAppService.CopyAsync(input);
 }

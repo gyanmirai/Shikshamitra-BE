@@ -13,9 +13,12 @@ public class FeeCategoryConfiguration : IEntityTypeConfiguration<FeeCategory>
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.Name).HasMaxLength(100).IsRequired();
+		builder.Property(x => x.NormalizedName).HasMaxLength(100).IsRequired();
 		builder.Property(x => x.Description).HasMaxLength(500);
 		builder.Property(x => x.DeactivationReason).HasMaxLength(500);
 
-		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Name });
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.NormalizedName })
+			.IsUnique()
+			.HasFilter("\"IsDeleted\" = FALSE");
 	}
 }

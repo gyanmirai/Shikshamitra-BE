@@ -1,10 +1,14 @@
 using System;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using ShikshaMitra.EntityFrameworkCore;
 
 #nullable disable
 
 namespace ShikshaMitra.Migrations;
 
+[DbContext(typeof(ShikshaMitraDbContext))]
+[Migration("20260811114557_RemoveSubstitutionSettings")]
 public partial class RemoveSubstitutionSettings : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

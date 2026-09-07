@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.Managers;
+using ShikshaMitra.Finance.Cache;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -17,265 +19,308 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 public class FeeCategoryAppService(
 	IRepository<FeeCategory, Guid> feeCategoryRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
-	IRepository<FeeStructure, Guid> feeStructureRepository,
-	FeeCategoryManager feeCategoryManager
+	IAcademicYearRepository academicYearRepository,
+	FeeCategoryManager feeCategoryManager,
+	FeeHeadUsageService usageService,
+	FinanceReferenceCacheService referenceCache
 ) : ApplicationService, IFeeCategoryAppService
 {
 	public async Task<FeeCategoryResponse> CreateAsync(Guid academicYearId, FeeCategoryCreateRequest input)
 	{
+		await academicYearRepository.GetAsync(academicYearId);
 		await feeCategoryManager.EnsureNameIsUniqueAsync(academicYearId, input.Name);
-
-		var feeCategory = new FeeCategory(
-			GuidGenerator.Create(),
-			CurrentTenant.Id,
-			academicYearId,
-			input.Name.Trim(),
-			input.Description
-		);
-
-		await feeCategoryRepository.InsertAsync(feeCategory);
-
-		var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		var feeHeads = new List<FeeHead>();
-
-		foreach (var headInput in input.FeeHeads)
+		var category = new FeeCategory(GuidGenerator.Create(), CurrentTenant.Id, academicYearId, input.Name, Clean(input.Description));
+		await feeCategoryRepository.InsertAsync(category);
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var heads = new List<FeeHead>();
+		foreach (var item in input.FeeHeads)
 		{
-			var normalizedName = headInput.Name.Trim();
-			if (!seenNames.Add(normalizedName))
-			{
+			if (!seen.Add(FeeCategoryManager.NormalizeName(item.Name)))
 				throw new BusinessException(FinanceFeeCategoryErrorCodes.DuplicateFeeHeadName)
-					.WithData("Name", normalizedName);
-			}
-
-			var feeHead = new FeeHead(
-				GuidGenerator.Create(),
-				CurrentTenant.Id,
-				academicYearId,
-				feeCategory.Id,
-				normalizedName,
-				headInput.Module,
-				headInput.IsConcessionApplied,
-				headInput.Description
-			);
-
-			feeHeads.Add(feeHead);
+					.WithData("Name", item.Name)
+					.WithData("Field", $"FeeHeads[{heads.Count}].Name");
+			var head = new FeeHead(GuidGenerator.Create(), CurrentTenant.Id, academicYearId, category.Id,
+				item.Name, item.Module, item.IsConcessionApplied, Clean(item.Description));
+			await feeHeadRepository.InsertAsync(head);
+			heads.Add(head);
 		}
-
-		foreach (var feeHead in feeHeads)
+		try
 		{
-			await feeHeadRepository.InsertAsync(feeHead);
+			await CurrentUnitOfWork.SaveChangesAsync();
 		}
-
-		return await MapToResponseAsync(feeCategory, feeHeads);
+		catch (Exception exception) when (FeeSetupPersistenceErrors.IsCategoryNameConflict(exception))
+		{
+			throw new BusinessException(FinanceFeeCategoryErrorCodes.DuplicateName).WithData("Name", input.Name);
+		}
+		await referenceCache.InvalidateFeeHeadsAsync();
+		return await MapAsync(category, heads);
 	}
 
-	public async Task<FeeCategoryListResponse> GetListAsync(Guid academicYearId, string search = null, int page = 1, int pageSize = 10)
+	public async Task<FeeCategoryListResponse> GetListAsync(Guid academicYearId, string? search = null, string categoryStatus = "all", string sort = "name", int page = 1, int pageSize = 10)
 	{
-		var query = await feeCategoryRepository.GetQueryableAsync();
-
-		query = query.Where(x => x.AcademicYearId == academicYearId);
-
+		ValidatePage(page, pageSize);
+		var allowedStatuses = new[] { "all", "active", "inactive", "used", "incomplete" };
+		var allowedSorts = new[] { "name", "name-desc", "heads-desc" };
+		if (!allowedStatuses.Contains(categoryStatus, StringComparer.OrdinalIgnoreCase) ||
+			!allowedSorts.Contains(sort, StringComparer.OrdinalIgnoreCase))
+			throw new BusinessException(FinanceFeeCategoryErrorCodes.InvalidQuery)
+				.WithData("CategoryStatus", categoryStatus)
+				.WithData("Sort", sort);
+		await academicYearRepository.GetAsync(academicYearId);
+		var allCategories = await feeCategoryRepository.GetListAsync(x => x.AcademicYearId == academicYearId);
+		var allHeads = await feeHeadRepository.GetListAsync(x => x.AcademicYearId == academicYearId);
+		var usage = await usageService.GetUsageAsync(allHeads.Select(x => x.Id));
+		var headsByCategory = allHeads.GroupBy(x => x.FeeCategoryId).ToDictionary(x => x.Key, x => x.ToList());
+		var usedHeadIds = usage.Where(x => x.Value.Count > 0).Select(x => x.Key).ToHashSet();
+		var usedCategoryIds = allHeads.Where(x => usedHeadIds.Contains(x.Id)).Select(x => x.FeeCategoryId).ToHashSet();
+		var currentHeadCounts = allHeads.Where(x => x.IsCurrentRevision).GroupBy(x => x.FeeCategoryId)
+			.ToDictionary(x => x.Key, x => x.Count());
+		IEnumerable<FeeCategory> filtered = allCategories;
 		if (!string.IsNullOrWhiteSpace(search))
 		{
-			query = query.Where(x => x.Name.Contains(search));
+			var normalized = FeeCategoryManager.NormalizeName(search);
+			var matchingCategoryIds = allHeads.Where(x => SearchText(x.Name, x.Description).Contains(normalized))
+				.Select(x => x.FeeCategoryId)
+				.ToHashSet();
+			filtered = filtered.Where(x => SearchText(x.Name, x.Description).Contains(normalized) || matchingCategoryIds.Contains(x.Id));
 		}
-
-		var totalCount = await feeCategoryRepository.AsyncExecuter.CountAsync(query);
-
-		query = query.OrderByDescending(x => x.CreationTime)
-					 .Skip((page - 1) * pageSize)
-					 .Take(pageSize);
-
-		var categories = await feeCategoryRepository.AsyncExecuter.ToListAsync(query);
-		var categoryIds = categories.Select(x => x.Id).ToList();
-
-		var headQuery = await feeHeadRepository.GetQueryableAsync();
-		var allHeads = await feeHeadRepository.AsyncExecuter.ToListAsync(
-			headQuery.Where(x => categoryIds.Contains(x.FeeCategoryId))
-		);
-
-		var usedFeeHeadIds = await GetUsedFeeHeadIdsAsync(allHeads.Select(x => x.Id).ToList());
-
-		var items = new List<FeeCategoryResponse>();
-		foreach (var category in categories)
+		filtered = categoryStatus.ToLowerInvariant() switch
 		{
-			var heads = allHeads.Where(x => x.FeeCategoryId == category.Id).ToList();
-			items.Add(await MapToResponseAsync(category, heads, usedFeeHeadIds));
-		}
-
+			"active" => filtered.Where(x => x.IsActive),
+			"inactive" => filtered.Where(x => !x.IsActive),
+			"used" => filtered.Where(x => usedCategoryIds.Contains(x.Id)),
+			"incomplete" => filtered.Where(x => currentHeadCounts.GetValueOrDefault(x.Id) == 0),
+			_ => filtered
+		};
+		filtered = sort.ToLowerInvariant() switch
+		{
+			"name-desc" => filtered.OrderByDescending(x => x.Name).ThenBy(x => x.Id),
+			"heads-desc" => filtered.OrderByDescending(x => currentHeadCounts.GetValueOrDefault(x.Id))
+				.ThenBy(x => x.Name).ThenBy(x => x.Id),
+			_ => filtered.OrderBy(x => x.Name).ThenBy(x => x.Id)
+		};
+		var totalCount = filtered.Count();
+		var categories = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+		var currentHeads = allHeads.Where(x => x.IsCurrentRevision).ToList();
 		return new FeeCategoryListResponse
 		{
-			TotalCount = totalCount,
-			CurrentPage = page,
-			PageSize = pageSize,
+			TotalCount = totalCount, CurrentPage = page, PageSize = pageSize,
 			TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
-			Items = items
+			Items = categories.Select(x => Map(x, headsByCategory.GetValueOrDefault(x.Id) ?? [], usage)).ToList(),
+			Summary = new FeeSetupSummaryResponse
+			{
+				CategoryCount = allCategories.Count,
+				FeeHeadCount = currentHeads.Count,
+				ActiveRecordCount = allCategories.Count(x => x.IsActive) + currentHeads.Count(x => x.IsActive && x.FeeCategory.IsActive),
+				InactiveRecordCount = allCategories.Count(x => !x.IsActive) + currentHeads.Count(x => !x.IsActive || !x.FeeCategory.IsActive),
+				InUseRecordCount = usedCategoryIds.Count + usedHeadIds.Count
+			}
 		};
 	}
 
 	public async Task<FeeCategoryResponse> GetByIdAsync(Guid id)
 	{
-		var feeCategory = await feeCategoryRepository.GetAsync(id);
-		var feeHeads = await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id);
-
-		return await MapToResponseAsync(feeCategory, feeHeads);
+		var category = await feeCategoryRepository.GetAsync(id);
+		return await MapAsync(category, await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id));
 	}
 
 	public async Task<FeeCategoryResponse> UpdateAsync(Guid id, FeeCategoryUpdateRequest input)
 	{
-		var feeCategory = await feeCategoryRepository.GetAsync(id);
-
-		await feeCategoryManager.EnsureNameIsUniqueAsync(feeCategory.AcademicYearId, input.Name, id);
-
-		feeCategory.Update(input.Name.Trim(), input.Description);
-		await feeCategoryRepository.UpdateAsync(feeCategory);
-
-		var existingHeads = await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id);
-		var existingHeadsById = existingHeads.ToDictionary(x => x.Id);
-		var incomingIds = input.FeeHeads.Where(x => x.Id.HasValue).Select(x => x.Id!.Value).ToHashSet();
-
-		var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		var resultHeads = new List<FeeHead>();
-
-		foreach (var headInput in input.FeeHeads)
+		var category = await feeCategoryRepository.GetAsync(id);
+		EnsureConcurrency(category.ConcurrencyStamp, input.ConcurrencyStamp, FinanceFeeCategoryErrorCodes.ConcurrencyConflict);
+		await feeCategoryManager.EnsureNameIsUniqueAsync(category.AcademicYearId, input.Name, id);
+		category.Update(input.Name, Clean(input.Description));
+		await feeCategoryRepository.UpdateAsync(category);
+		try
 		{
-			var normalizedName = headInput.Name.Trim();
-			if (!seenNames.Add(normalizedName))
-			{
-				throw new BusinessException(FinanceFeeCategoryErrorCodes.DuplicateFeeHeadName)
-					.WithData("Name", normalizedName);
-			}
-
-			if (headInput.Id.HasValue && existingHeadsById.TryGetValue(headInput.Id.Value, out var existingHead))
-			{
-				await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(
-					feeCategory.AcademicYearId, id, normalizedName, existingHead.Id);
-
-				existingHead.Update(id, normalizedName, headInput.Module, headInput.IsConcessionApplied, headInput.Description);
-				await feeHeadRepository.UpdateAsync(existingHead);
-				resultHeads.Add(existingHead);
-			}
-			else
-			{
-				await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(feeCategory.AcademicYearId, id, normalizedName);
-
-				var newHead = new FeeHead(
-					GuidGenerator.Create(),
-					CurrentTenant.Id,
-					feeCategory.AcademicYearId,
-					id,
-					normalizedName,
-					headInput.Module,
-					headInput.IsConcessionApplied,
-					headInput.Description
-				);
-				await feeHeadRepository.InsertAsync(newHead);
-				resultHeads.Add(newHead);
-			}
+			await CurrentUnitOfWork.SaveChangesAsync();
 		}
-
-		var removedHeads = existingHeads.Where(x => !incomingIds.Contains(x.Id)).ToList();
-		if (removedHeads.Count > 0)
+		catch (Exception exception) when (FeeSetupPersistenceErrors.IsCategoryNameConflict(exception))
 		{
-			var removedIds = removedHeads.Select(x => x.Id).ToList();
-			var usedIds = await GetUsedFeeHeadIdsAsync(removedIds);
-			if (usedIds.Count > 0)
-			{
-				throw new BusinessException(FinanceFeeHeadErrorCodes.CannotDeleteInUse);
-			}
-
-			foreach (var removedHead in removedHeads)
-			{
-				await feeHeadRepository.DeleteAsync(removedHead);
-			}
+			throw new BusinessException(FinanceFeeCategoryErrorCodes.DuplicateName).WithData("Name", input.Name);
 		}
-
-		return await MapToResponseAsync(feeCategory, resultHeads);
+		return await MapAsync(category, await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id));
 	}
 
 	public async Task<MessageResponse> DeleteAsync(Guid id)
 	{
-		var feeHeads = await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id);
-		var usedIds = await GetUsedFeeHeadIdsAsync(feeHeads.Select(x => x.Id).ToList());
-
-		if (usedIds.Count > 0)
-		{
-			throw new BusinessException(FinanceFeeCategoryErrorCodes.CannotDeleteInUse);
-		}
-
-		foreach (var feeHead in feeHeads)
-		{
-			await feeHeadRepository.DeleteAsync(feeHead);
-		}
-
+		await feeCategoryRepository.GetAsync(id);
+		var heads = await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id);
+		var usage = await usageService.GetUsageAsync(heads.Select(x => x.Id));
+		var blockers = usage.Values.SelectMany(x => x).Distinct().ToList();
+		if (blockers.Count > 0)
+			throw new BusinessException(FinanceFeeCategoryErrorCodes.CannotDeleteInUse).WithData("Blockers", blockers);
+		foreach (var head in heads) await feeHeadRepository.DeleteAsync(head);
 		await feeCategoryRepository.DeleteAsync(id);
-
-		return new MessageResponse
-		{
-			Message = "Fee category deleted successfully"
-		};
+		await referenceCache.InvalidateFeeHeadsAsync();
+		return new MessageResponse { Message = "Fee category deleted successfully" };
 	}
 
 	public async Task<FeeCategoryResponse> UpdateStatusAsync(Guid id, FeeCategoryStatusUpdateRequest input)
 	{
-		var feeCategory = await feeCategoryRepository.GetAsync(id);
-		var feeHeads = await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id);
+		var category = await feeCategoryRepository.GetAsync(id);
+		EnsureConcurrency(category.ConcurrencyStamp, input.ConcurrencyStamp, FinanceFeeCategoryErrorCodes.ConcurrencyConflict);
+		if (input.IsActive && !category.IsActive &&
+			!await feeHeadRepository.AnyAsync(x => x.FeeCategoryId == id && x.IsCurrentRevision))
+			throw new BusinessException(FinanceFeeCategoryErrorCodes.ActiveCategoryRequiresFeeHead);
+		category.SetStatus(input.IsActive, Clean(input.DeactivationReason));
+		await feeCategoryRepository.UpdateAsync(category, autoSave: true);
+		return await MapAsync(category, await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id));
+	}
 
-		if (!input.IsActive)
+	public async Task<FeeCategoryCopyPreviewResponse> PreviewCopyAsync(FeeCategoryCopyPreviewRequest input)
+	{
+		if (input.SourceAcademicYearId == input.DestinationAcademicYearId)
+			throw new BusinessException(FinanceFeeCategoryErrorCodes.CopyConflict).WithData("Reason", "Source and destination years must differ.");
+		await academicYearRepository.GetAsync(input.SourceAcademicYearId);
+		await academicYearRepository.GetAsync(input.DestinationAcademicYearId);
+		var source = await feeCategoryRepository.GetListAsync(x => x.AcademicYearId == input.SourceAcademicYearId &&
+			(input.CategoryIds.Count == 0 || input.CategoryIds.Contains(x.Id)));
+		if (input.CategoryIds.Count > 0 && source.Count != input.CategoryIds.Distinct().Count())
+			throw new BusinessException(FinanceFeeCategoryErrorCodes.CopyConflict).WithData("Reason", "One or more source categories were not found in the source academic year.");
+		var destination = await feeCategoryRepository.GetListAsync(x => x.AcademicYearId == input.DestinationAcademicYearId);
+		var sourceHeads = await feeHeadRepository.GetListAsync(x => x.AcademicYearId == input.SourceAcademicYearId && x.IsCurrentRevision);
+		var destinationHeads = await feeHeadRepository.GetListAsync(x => x.AcademicYearId == input.DestinationAcademicYearId && x.IsCurrentRevision);
+		return new FeeCategoryCopyPreviewResponse
 		{
-			var usedIds = await GetUsedFeeHeadIdsAsync(feeHeads.Select(x => x.Id).ToList());
-			if (usedIds.Count > 0)
+			Items = source.Select(category =>
 			{
-				throw new BusinessException(FinanceFeeCategoryErrorCodes.CannotDeleteInUse)
-					.WithData("Reason", "Cannot deactivate a fee category whose fee heads are in use.");
+				var match = destination.FirstOrDefault(x => x.NormalizedName == category.NormalizedName);
+				var heads = sourceHeads.Where(x => x.FeeCategoryId == category.Id).ToList();
+				var matchingHeads = match == null
+					? new List<FeeHead>()
+					: destinationHeads.Where(x => x.FeeCategoryId == match.Id).ToList();
+				var identical = match != null && category.Description == match.Description && category.IsActive == match.IsActive &&
+					HeadsMatch(heads, matchingHeads);
+				var classification = match == null ? "New" : identical ? "Identical" : "Conflict";
+				return new FeeCategoryCopyPreviewItem
+				{
+					SourceCategoryId = category.Id,
+					Name = category.Name,
+					Classification = classification,
+					FeeHeadCount = heads.Count,
+					IsActive = category.IsActive,
+					FeeHeads = heads.OrderBy(x => x.Name).Select(head =>
+					{
+						var destinationHead = matchingHeads.FirstOrDefault(x => x.NormalizedName == head.NormalizedName);
+						var headClassification = match == null || destinationHead == null
+							? "New"
+							: HeadMatches(head, destinationHead) ? "Identical" : "Conflict";
+						return new FeeHeadCopyPreviewItem
+						{
+							SourceFeeHeadId = head.Id,
+							Name = head.Name,
+							Description = head.Description,
+							Module = head.Module.ToString(),
+							IsConcessionApplied = head.IsConcessionApplied,
+							IsActive = head.IsActive,
+							Classification = headClassification
+						};
+					}).ToList()
+				};
+			}).ToList()
+		};
+	}
+
+	public async Task<FeeCategoryCopyResult> CopyAsync(FeeCategoryCopyCommitRequest input)
+	{
+		var preview = await PreviewCopyAsync(input);
+		if (input.Resolutions.Any(x => preview.Items.All(item => item.SourceCategoryId != x.SourceCategoryId)))
+			throw new BusinessException(FinanceFeeCategoryErrorCodes.CopyConflict).WithData("Reason", "A copy resolution references an unknown source category.");
+		var resolutions = input.Resolutions.ToDictionary(x => x.SourceCategoryId);
+		var selectedIds = preview.Items.Select(i => i.SourceCategoryId).ToList();
+		var sourceCategories = await feeCategoryRepository.GetListAsync(x => x.AcademicYearId == input.SourceAcademicYearId && selectedIds.Contains(x.Id));
+		var sourceHeads = await feeHeadRepository.GetListAsync(x => x.AcademicYearId == input.SourceAcademicYearId && x.IsCurrentRevision);
+		var result = new FeeCategoryCopyResult();
+		foreach (var item in preview.Items)
+		{
+			resolutions.TryGetValue(item.SourceCategoryId, out var resolution);
+			if (item.Classification == "Identical" || string.Equals(resolution?.Action, "Skip", StringComparison.OrdinalIgnoreCase) || string.Equals(resolution?.Action, "Keep", StringComparison.OrdinalIgnoreCase))
+			{
+				result.Skipped++;
+				continue;
 			}
+			if (item.Classification == "Conflict" && string.IsNullOrWhiteSpace(resolution?.NewName))
+				throw new BusinessException(FinanceFeeCategoryErrorCodes.CopyConflict).WithData("Category", item.Name);
+			var source = sourceCategories.Single(x => x.Id == item.SourceCategoryId);
+			var name = string.IsNullOrWhiteSpace(resolution?.NewName) ? source.Name : resolution.NewName;
+			await feeCategoryManager.EnsureNameIsUniqueAsync(input.DestinationAcademicYearId, name);
+			var category = new FeeCategory(GuidGenerator.Create(), CurrentTenant.Id, input.DestinationAcademicYearId, name, source.Description);
+			category.SetStatus(source.IsActive,
+				source.IsActive ? null : source.DeactivationReason ?? "Copied as inactive from the source academic year.");
+			await feeCategoryRepository.InsertAsync(category);
+			var heads = new List<FeeHead>();
+			foreach (var sourceHead in sourceHeads.Where(x => x.FeeCategoryId == source.Id))
+			{
+				var head = new FeeHead(GuidGenerator.Create(), CurrentTenant.Id, input.DestinationAcademicYearId, category.Id,
+					sourceHead.Name, sourceHead.Module, sourceHead.IsConcessionApplied, sourceHead.Description, sourceHead.IsActive);
+				if (!sourceHead.IsActive)
+					head.SetActiveStatus(false,
+						sourceHead.DeactivationReason ?? "Copied as inactive from the source academic year.");
+				await feeHeadRepository.InsertAsync(head);
+				heads.Add(head);
+			}
+			try
+			{
+				await CurrentUnitOfWork.SaveChangesAsync();
+			}
+			catch (Exception exception) when (FeeSetupPersistenceErrors.IsCategoryNameConflict(exception))
+			{
+				throw new BusinessException(FinanceFeeCategoryErrorCodes.DuplicateName).WithData("Name", name);
+			}
+			result.Categories.Add(await MapAsync(category, heads));
+			result.Created++;
 		}
-
-		feeCategory.SetStatus(input.IsActive, input.DeactivationReason);
-		await feeCategoryRepository.UpdateAsync(feeCategory);
-
-		foreach (var feeHead in feeHeads)
-		{
-			feeHead.SetActiveStatus(input.IsActive, input.DeactivationReason);
-			await feeHeadRepository.UpdateAsync(feeHead);
-		}
-
-		return await MapToResponseAsync(feeCategory, feeHeads);
+		if (result.Created > 0) await referenceCache.InvalidateFeeHeadsAsync();
+		return result;
 	}
 
-	private async Task<HashSet<Guid>> GetUsedFeeHeadIdsAsync(List<Guid> feeHeadIds)
+	private async Task<FeeCategoryResponse> MapAsync(FeeCategory category, List<FeeHead> heads) =>
+		Map(category, heads, await usageService.GetUsageAsync(heads.Select(x => x.Id)));
+
+	private FeeCategoryResponse Map(FeeCategory category, List<FeeHead> heads, Dictionary<Guid, List<string>> usage)
 	{
-		if (feeHeadIds.Count == 0)
+		var response = ObjectMapper.Map<FeeCategory, FeeCategoryResponse>(category);
+		response.ConcurrencyStamp = category.ConcurrencyStamp;
+		response.FeeHeads = heads.OrderByDescending(x => x.IsCurrentRevision).ThenBy(x => x.Name).Select(head =>
 		{
-			return new HashSet<Guid>();
-		}
-
-		var structureQuery = await feeStructureRepository.GetQueryableAsync();
-		var usedIds = await feeStructureRepository.AsyncExecuter.ToListAsync(
-			structureQuery.Where(fs => fs.IsLocked)
-						  .SelectMany(fs => fs.FeeStructureDetails)
-						  .Where(fsd => feeHeadIds.Contains(fsd.FeeHeadId))
-						  .Select(fsd => fsd.FeeHeadId)
-						  .Distinct()
-		);
-
-		return new HashSet<Guid>(usedIds);
-	}
-
-	private async Task<FeeCategoryResponse> MapToResponseAsync(FeeCategory feeCategory, List<FeeHead> feeHeads, HashSet<Guid> usedFeeHeadIds = null)
-	{
-		usedFeeHeadIds ??= await GetUsedFeeHeadIdsAsync(feeHeads.Select(x => x.Id).ToList());
-
-		var response = ObjectMapper.Map<FeeCategory, FeeCategoryResponse>(feeCategory);
-		response.FeeHeads = feeHeads.Select(feeHead =>
-		{
-			var headResponse = ObjectMapper.Map<FeeHead, FeeHeadResponse>(feeHead);
-			headResponse.FeeCategoryName = feeCategory.Name;
-			headResponse.IsUsedInDownstream = usedFeeHeadIds.Contains(feeHead.Id);
-			return headResponse;
+			var dto = ObjectMapper.Map<FeeHead, FeeHeadResponse>(head);
+			dto.FeeCategoryName = category.Name;
+			dto.ConcurrencyStamp = head.ConcurrencyStamp;
+			dto.UsageBlockers = usage.GetValueOrDefault(head.Id) ?? [];
+			dto.IsUsedInDownstream = dto.UsageBlockers.Count > 0;
+			dto.IsEffectivelyActive = category.IsActive && head.IsActive && head.IsCurrentRevision;
+			return dto;
 		}).ToList();
-		response.IsUsedInDownstream = feeHeads.Any(x => usedFeeHeadIds.Contains(x.Id));
-
+		response.UsageBlockers = response.FeeHeads.SelectMany(x => x.UsageBlockers).Distinct().ToList();
+		response.IsUsedInDownstream = response.UsageBlockers.Count > 0;
 		return response;
+	}
+
+	private static bool HeadsMatch(IEnumerable<FeeHead> source, IEnumerable<FeeHead> destination) =>
+		source.Select(x => (x.NormalizedName, x.Module, x.IsConcessionApplied, x.IsActive, x.Description)).OrderBy(x => x.NormalizedName)
+			.SequenceEqual(destination.Select(x => (x.NormalizedName, x.Module, x.IsConcessionApplied, x.IsActive, x.Description)).OrderBy(x => x.NormalizedName));
+
+	private static bool HeadMatches(FeeHead source, FeeHead destination) =>
+		source.NormalizedName == destination.NormalizedName &&
+		source.Module == destination.Module &&
+		source.IsConcessionApplied == destination.IsConcessionApplied &&
+		source.IsActive == destination.IsActive &&
+		source.Description == destination.Description;
+
+	private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+	private static string SearchText(string name, string? description) =>
+		FeeSetupNameNormalizer.ForComparison($"{name} {description}");
+
+	private static void ValidatePage(int page, int pageSize)
+	{
+		if (page < 1 || pageSize is < 1 or > 100)
+			throw new BusinessException(FinanceFeeCategoryErrorCodes.InvalidQuery).WithData("Page", page).WithData("PageSize", pageSize);
+	}
+
+	private static void EnsureConcurrency(string actual, string supplied, string code)
+	{
+		if (!string.Equals(actual, supplied, StringComparison.Ordinal)) throw new BusinessException(code);
 	}
 }

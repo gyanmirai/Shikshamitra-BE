@@ -9,4 +9,5 @@ public class FeeHeadUpdateRequest
     public FeeHeadModule Module { get; set; }
     public bool IsConcessionApplied { get; set; }
     public string Description { get; set; }
+    public string ConcurrencyStamp { get; set; }
 }

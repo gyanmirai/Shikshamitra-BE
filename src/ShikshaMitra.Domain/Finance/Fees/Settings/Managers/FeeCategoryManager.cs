@@ -15,34 +15,40 @@ public class FeeCategoryManager(
 {
 	public async Task EnsureNameIsUniqueAsync(Guid academicYearId, string name, Guid? excludeId = null)
 	{
-		var normalizedName = name.Trim();
+		var normalizedName = NormalizeName(name);
 
 		var existing = await feeCategoryRepository.FirstOrDefaultAsync(x =>
 			x.AcademicYearId == academicYearId &&
-			x.Name == normalizedName &&
+			x.NormalizedName == normalizedName &&
 			(!excludeId.HasValue || x.Id != excludeId.Value));
 
 		if (existing != null)
 		{
 			throw new BusinessException(FinanceFeeCategoryErrorCodes.DuplicateName)
-				.WithData("Name", normalizedName);
+				.WithData("Name", normalizedName)
+				.WithData("Field", "Name");
 		}
 	}
 
 	public async Task EnsureFeeHeadNameIsUniqueAsync(Guid academicYearId, Guid feeCategoryId, string name, Guid? excludeId = null)
 	{
-		var normalizedName = name.Trim();
+		var normalizedName = NormalizeName(name);
 
 		var existing = await feeHeadRepository.FirstOrDefaultAsync(x =>
 			x.AcademicYearId == academicYearId &&
 			x.FeeCategoryId == feeCategoryId &&
-			x.Name == normalizedName &&
+			x.NormalizedName == normalizedName &&
+			x.IsCurrentRevision &&
 			(!excludeId.HasValue || x.Id != excludeId.Value));
 
 		if (existing != null)
 		{
 			throw new BusinessException(FinanceFeeCategoryErrorCodes.DuplicateFeeHeadName)
-				.WithData("Name", normalizedName);
+				.WithData("Name", normalizedName)
+				.WithData("Field", "Name");
 		}
 	}
+
+	public static string NormalizeName(string name) =>
+		FeeSetupNameNormalizer.ForComparison(name);
 }

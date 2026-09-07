@@ -17,6 +17,9 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
     [Required]
     public string Name { get; private set; }
 
+    [Required]
+    public string NormalizedName { get; private set; }
+
     public FeeHeadModule Module { get; private set; }
 
     public bool IsConcessionApplied { get; private set; }
@@ -26,6 +29,18 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public bool IsActive { get; private set; }
 
     public string? DeactivationReason { get; private set; }
+
+    public Guid RevisionGroupId { get; private set; }
+
+    public int RevisionNumber { get; private set; }
+
+    public Guid? PreviousRevisionId { get; private set; }
+
+    public Guid? SuccessorRevisionId { get; private set; }
+
+    public bool IsCurrentRevision { get; private set; }
+
+    public string? RevisionReason { get; private set; }
 
 	public FeeCategory FeeCategory { get; private set; }
 
@@ -40,22 +55,29 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
         FeeHeadModule module,
         bool isConcessionApplied,
         string? description,
-        bool isActive = true) : base(id)
+        bool isActive = true,
+        Guid? revisionGroupId = null,
+        int revisionNumber = 1,
+        Guid? previousRevisionId = null) : base(id)
     {
         TenantId = tenantId;
         AcademicYearId = academicYearId;
         FeeCategoryId = feeCategoryId;
-        Name = name;
+        SetName(name);
         Module = module;
         IsConcessionApplied = isConcessionApplied;
         Description = description;
         IsActive = isActive;
+        RevisionGroupId = revisionGroupId ?? id;
+        RevisionNumber = revisionNumber;
+        PreviousRevisionId = previousRevisionId;
+        IsCurrentRevision = true;
     }
 
     public void Update(Guid feeCategoryId, string name, FeeHeadModule module, bool isConcessionApplied, string? description)
     {
         FeeCategoryId = feeCategoryId;
-        Name = name;
+        SetName(name);
         Module = module;
         IsConcessionApplied = isConcessionApplied;
         Description = description;
@@ -63,7 +85,26 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public void SetActiveStatus(bool isActive, string? deactivationReason)
     {
+		if (!isActive && string.IsNullOrWhiteSpace(deactivationReason))
+			throw new Volo.Abp.BusinessException(FinanceFeeHeadErrorCodes.DeactivationReasonRequired)
+				.WithData("Field", "DeactivationReason");
         IsActive = isActive;
-        DeactivationReason = isActive ? null : deactivationReason;
+		DeactivationReason = isActive ? null : deactivationReason!.Trim();
+    }
+
+    public void Supersede(Guid successorRevisionId)
+    {
+        SuccessorRevisionId = successorRevisionId;
+        IsCurrentRevision = false;
+        IsActive = false;
+        DeactivationReason = "Superseded by a newer revision.";
+    }
+
+    public void SetRevisionReason(string? reason) => RevisionReason = reason;
+
+    private void SetName(string name)
+    {
+        Name = FeeSetupNameNormalizer.ForStorage(name);
+        NormalizedName = FeeSetupNameNormalizer.ForComparison(Name);
     }
 }

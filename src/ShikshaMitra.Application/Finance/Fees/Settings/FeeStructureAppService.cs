@@ -22,11 +22,18 @@ public class FeeStructureAppService(
     IRepository<FeeStructure, Guid> feeStructureRepository,
     IStandardRepository standardRepository,
     IAcademicYearRepository academicYearRepository,
-    IRepository<PaymentTerm, Guid> paymentTermRepository
+    IRepository<PaymentTerm, Guid> paymentTermRepository,
+	IRepository<FeeHead, Guid> feeHeadRepository,
+	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository
 ) : ApplicationService, IFeeStructureAppService
 {
     public async Task<FeeStructureCreateResponse> CreateAsync(Guid feeStructureMetadataId, StandardFeeStructureSaveRequest input)
     {
+		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructureMetadataId);
+		await EnsureHeadsAvailableForNewSetupAsync(
+			input.StandardFeeStructures?.FeeHeads?.Select(x => x.FeeHeadId) ?? [],
+			metadata.AcademicYearId);
+
 		// validation to ensure no duplicate fee structure name exists for the same standard
 		var existingStructure = await feeStructureRepository.AnyAsync(x => x.StandardId == input.StandardId && x.Name == input.StandardFeeStructures.Name);
 
@@ -111,6 +118,15 @@ public class FeeStructureAppService(
     public async Task UpdateAsync(Guid id, StandardFeeStructureRequest input)
     {
         var feeStructure = await feeStructureRepository.GetAsync(id);
+		var existingHeadIds = feeStructure.FeeStructureDetails.Select(x => x.FeeHeadId).ToHashSet();
+		var requestedHeadIds = input.FeeHeads?.Select(x => x.FeeHeadId).ToList() ?? [];
+		if (requestedHeadIds.Count != requestedHeadIds.Distinct().Count())
+			throw new BusinessException(FinanceFeeHeadErrorCodes.UnavailableForNewSetup)
+				.WithData("Reason", "A fee head cannot be added more than once to the same fee structure.");
+		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
+		await EnsureHeadsAvailableForNewSetupAsync(
+			requestedHeadIds.Where(id => !existingHeadIds.Contains(id)),
+			metadata.AcademicYearId);
 
         feeStructure.EnsureNotLocked();
         feeStructure.ClearDetails();
@@ -180,6 +196,25 @@ public class FeeStructureAppService(
 
 		await feeStructureRepository.UpdateAsync(feeStructure);
     }
+
+	private async Task EnsureHeadsAvailableForNewSetupAsync(IEnumerable<Guid> ids, Guid? academicYearId)
+	{
+		var requestedIds = ids.ToList();
+		if (requestedIds.Count != requestedIds.Distinct().Count())
+			throw new BusinessException(FinanceFeeHeadErrorCodes.UnavailableForNewSetup)
+				.WithData("Reason", "A fee head cannot be added more than once to the same fee structure.");
+		if (requestedIds.Count == 0) return;
+
+		var heads = await feeHeadRepository.GetListAsync(x => requestedIds.Contains(x.Id));
+		var unavailableIds = requestedIds.Where(id => heads.All(head => head.Id != id))
+			.Concat(heads.Where(head => !head.IsActive || !head.IsCurrentRevision || !head.FeeCategory.IsActive ||
+				(academicYearId.HasValue && head.AcademicYearId != academicYearId.Value)).Select(head => head.Id))
+			.Distinct()
+			.ToList();
+		if (unavailableIds.Count > 0)
+			throw new BusinessException(FinanceFeeHeadErrorCodes.UnavailableForNewSetup)
+				.WithData("FeeHeadIds", unavailableIds);
+	}
 
     public async Task DeleteAsync(Guid id)
     {

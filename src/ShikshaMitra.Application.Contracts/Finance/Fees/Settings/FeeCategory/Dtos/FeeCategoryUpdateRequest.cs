@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
@@ -10,5 +9,5 @@ public class FeeCategoryUpdateRequest
 
     public string Description { get; set; }
 
-    public List<FeeHeadItemRequest> FeeHeads { get; set; } = new();
+    public string ConcurrencyStamp { get; set; }
 }

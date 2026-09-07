@@ -18,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Onboarding;
@@ -31,7 +32,9 @@ using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
+using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.AspNetCore.Mvc.Libs;
 using Volo.Abp.Auditing;
 using Volo.Abp.Security.Claims;
@@ -170,8 +173,42 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 				.OrderBy(d => d.Id)
 				.FirstOrDefaultAsync();
 			SeededDivisionId = firstDivision?.Id ?? Guid.Empty;
+			await EnsureFeeStructureUsagePrerequisitesAsync(services, tenantId, SeededAcademicYearId);
 
 			await uow.CompleteAsync();
+		}
+	}
+
+	private async Task EnsureFeeStructureUsagePrerequisitesAsync(
+		IServiceProvider services,
+		Guid tenantId,
+		Guid academicYearId)
+	{
+		if (SeededMediumStageId == Guid.Empty || SeededBoardId == Guid.Empty || SeededMediumId == Guid.Empty)
+			return;
+
+		var standardRepository = services.GetRequiredService<IRepository<Standard, Guid>>();
+		if (!await standardRepository.AnyAsync())
+		{
+			var standardManager = services.GetRequiredService<StandardManager>();
+			await standardRepository.InsertAsync(await standardManager.CreateAsync(
+				SeededMediumStageId,
+				"API Usage Standard",
+				5,
+				null));
+		}
+
+		var metadataRepository = services.GetRequiredService<IRepository<FeeStructureMetadata, Guid>>();
+		if (!await metadataRepository.AnyAsync())
+		{
+			await metadataRepository.InsertAsync(new FeeStructureMetadata(
+				Guid.NewGuid(),
+				tenantId,
+				academicYearId,
+				SeededBoardId,
+				SeededMediumId,
+				null,
+				"API Usage Metadata"));
 		}
 	}
 
@@ -309,7 +346,11 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			configuration.AddInMemoryCollection(new Dictionary<string, string?>
 			{
 				["DevAutoAuth:Enabled"] = "false",
-				["ShikshaMitra:Seeders:HR:SeedSampleApprovedLeaves"] = "false"
+				["ShikshaMitra:Seeders:HR:SeedSampleApprovedLeaves"] = "false",
+				// The development host stores SMTP password as plain configuration, while
+				// ABP treats this setting as encrypted and decrypts it during startup.
+				// Tests do not send mail, so blank the value in this isolated test host.
+				["Settings:Abp.Mailing.Smtp.Password"] = ""
 			});
 		});
 

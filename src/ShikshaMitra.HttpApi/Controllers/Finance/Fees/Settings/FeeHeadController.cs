@@ -19,49 +19,60 @@ public class FeeHeadController(
 ) : AbpController
 {
     [HttpPost]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Add)]
 	public Task<FeeHeadResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] FeeHeadCreateRequest input)
     {
         return feeHeadAppService.CreateAsync(academicYearId, input);
     }
 
     [HttpGet]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.View)]
     public Task<FeeHeadListResponse> GetListAsync(
         [FromQuery] Guid academicYearId,
         [FromQuery] Guid? feeCategoryId = null,
-        [FromQuery] string search = null,
+        [FromQuery] string? search = null,
+        [FromQuery] bool includeSuperseded = false,
+		[FromQuery] bool effectiveOnly = false,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10)
     {
-        return feeHeadAppService.GetListAsync(academicYearId, feeCategoryId, search, page, pageSize);
+        return feeHeadAppService.GetListAsync(academicYearId, feeCategoryId, search, includeSuperseded, effectiveOnly, page, pageSize);
     }
 
     [HttpGet("{id}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.View)]
     public Task<FeeHeadResponse> GetByIdAsync(Guid id)
     {
         return feeHeadAppService.GetByIdAsync(id);
     }
 
     [HttpPut("{feeHeadId}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Add)]
 	public Task<FeeHeadResponse> UpdateAsync(Guid feeHeadId, [FromBody] FeeHeadUpdateRequest input)
     {
         return feeHeadAppService.UpdateAsync(feeHeadId, input);
     }
 
     [HttpDelete("{feeHeadId}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Delete)]
 	public Task<MessageResponse> DeleteAsync(Guid feeHeadId)
     {
         return feeHeadAppService.DeleteAsync(feeHeadId);
     }
 
     [HttpPatch("{feeHeadId}/status")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.Add)]
-	public Task<FeeHeadResponse> UpdateStatusAsync(Guid feeHeadId, [FromBody] FeeHeadStatusUpdateRequest input)
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Add)]
+    public Task<FeeHeadResponse> UpdateStatusAsync(Guid feeHeadId, [FromBody] FeeHeadStatusUpdateRequest input)
     {
         return feeHeadAppService.UpdateStatusAsync(feeHeadId, input);
     }
+
+    [HttpGet("{feeHeadId}/impact")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.View)]
+    public Task<FeeHeadImpactResponse> GetImpactAsync(Guid feeHeadId) => feeHeadAppService.GetImpactAsync(feeHeadId);
+
+    [HttpPost("{feeHeadId}/revisions")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Add)]
+    public Task<FeeHeadResponse> CreateRevisionAsync(Guid feeHeadId, [FromBody] FeeHeadRevisionRequest input) =>
+        feeHeadAppService.CreateRevisionAsync(feeHeadId, input);
 }

@@ -16,5 +16,16 @@ public class FeeHeadResponse : EntityDto<Guid>
     public string DeactivationReason { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+	public Guid? CreatorId { get; set; }
+	public Guid? LastModifierId { get; set; }
 	public bool IsUsedInDownstream { get; set; } = false;
+    public bool IsEffectivelyActive { get; set; }
+    public Guid RevisionGroupId { get; set; }
+    public int RevisionNumber { get; set; }
+    public Guid? PreviousRevisionId { get; set; }
+    public Guid? SuccessorRevisionId { get; set; }
+    public bool IsCurrentRevision { get; set; }
+    public string RevisionReason { get; set; }
+    public string ConcurrencyStamp { get; set; }
+    public System.Collections.Generic.List<string> UsageBlockers { get; set; } = new();
 }

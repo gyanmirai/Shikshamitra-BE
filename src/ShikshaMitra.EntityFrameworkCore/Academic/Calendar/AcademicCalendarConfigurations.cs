@@ -31,8 +31,8 @@ public class AcademicCalendarDayConfiguration : IEntityTypeConfiguration<Academi
         builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicCalendarDays", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         
-        builder.Property(x => x.Title).IsRequired().HasMaxLength(256);
-        builder.Property(x => x.Description).HasMaxLength(1024);
+        builder.Property(x => x.Title).IsRequired().HasMaxLength(AcademicCalendarConsts.CalendarDayTitleMaxLength);
+        builder.Property(x => x.Description).HasMaxLength(AcademicCalendarConsts.CalendarDayDescriptionMaxLength);
         builder.Property(x => x.ChangeReason).HasMaxLength(1024);
         builder.Property(x => x.Venue).HasMaxLength(256);
         builder.Property(x => x.PtmMode).HasMaxLength(32);

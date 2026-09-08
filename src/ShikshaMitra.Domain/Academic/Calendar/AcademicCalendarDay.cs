@@ -1,4 +1,5 @@
 using System;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -66,7 +67,7 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
         AcademicCalendarId = academicCalendarId;
         Date = date.Date; // Store only Date portion
         DayType = dayType;
-        Title = title;
+        Title = NormalizeTitle(title);
         Description = description;
         AppliesToAll = appliesToAll;
         StandardId = standardId;
@@ -111,7 +112,7 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
     {
         Date = date.Date;
         DayType = dayType;
-        Title = title;
+        Title = NormalizeTitle(title);
         Description = description;
         AppliesToAll = appliesToAll;
         StandardId = standardId;
@@ -133,6 +134,15 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
         }
 
         ChangeReason = changeReason;
+    }
+
+    private static string NormalizeTitle(string title)
+    {
+        var normalizedTitle = Check.NotNullOrWhiteSpace(title, nameof(title)).Trim();
+        return Check.Length(
+            normalizedTitle,
+            nameof(title),
+            AcademicCalendarConsts.CalendarDayTitleMaxLength)!;
     }
 
     public void Cancel(string? reason)

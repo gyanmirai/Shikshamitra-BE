@@ -354,7 +354,7 @@ public class ElectiveGroupAppService(
 			Subjects = electiveGroup.Subjects.Select(x => x.Subject.Name).ToList(),
 			Usage = new ElectiveGroupUsageSummaryDto
 			{
-				ClassAllocationsCount = usage.Allocations,
+				ClassAllocationsCount = usage.ClassAllocations,
 				StudentSelectionsCount = usage.StudentSelections,
 				TimetablePeriodsCount = usage.WeeklySlots + usage.TimetableSlots,
 				ExamSchedulesCount = usage.ExamSubjects,
@@ -428,7 +428,7 @@ public class ElectiveGroupAppService(
 			Subjects = ObjectMapper.Map<List<Subject>, List<SubjectDto>>(
 				electiveGroup.Subjects.Select(x => x.Subject).ToList()
 			),
-			UsedInClassesCount = usage.Allocations,
+			UsedInClassesCount = usage.ClassAllocations,
 			StudentSelectionsCount = usage.StudentSelections,
 			TimetablePeriodsCount = usage.WeeklySlots + usage.TimetableSlots,
 			ExamSchedulesCount = usage.ExamSubjects,
@@ -463,9 +463,16 @@ public class ElectiveGroupAppService(
 
 	private async Task<ElectiveGroupUsageCounts> GetUsageCountsAsync(Guid electiveGroupId)
 	{
+		var assignedSubjectQuery = await assignedSubjectRepository.GetQueryableAsync();
+		var classAllocations = await AsyncExecuter.CountAsync(
+			assignedSubjectQuery
+				.Where(assignment => assignment.ElectiveGroupId == electiveGroupId)
+				.Select(assignment => assignment.StandardId)
+				.Distinct());
+
 		return new ElectiveGroupUsageCounts
 		{
-			Allocations = await assignedSubjectRepository.CountAsync(a => a.ElectiveGroupId == electiveGroupId),
+			ClassAllocations = classAllocations,
 			StudentSelections = await studentElectiveSelectionRepository.CountAsync(s => s.ElectiveGroupId == electiveGroupId),
 			WeeklySlots = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.ElectiveGroupId == electiveGroupId),
 			TimetableSlots = await timetableSlotRepository.CountAsync(t => t.ElectiveGroupId == electiveGroupId),
@@ -476,8 +483,8 @@ public class ElectiveGroupAppService(
 	private static List<string> BuildUsageParts(ElectiveGroupUsageCounts usage)
 	{
 		var parts = new List<string>();
-		if (usage.Allocations > 0)
-			parts.Add($"{usage.Allocations} subject allocation(s)");
+		if (usage.ClassAllocations > 0)
+			parts.Add($"{usage.ClassAllocations} class allocation(s)");
 		if (usage.StudentSelections > 0)
 			parts.Add($"{usage.StudentSelections} student elective assignment(s)");
 		if (usage.WeeklySlots > 0)
@@ -510,11 +517,11 @@ public class ElectiveGroupAppService(
 
 	private sealed class ElectiveGroupUsageCounts
 	{
-		public int Allocations { get; set; }
+		public int ClassAllocations { get; set; }
 		public int StudentSelections { get; set; }
 		public int WeeklySlots { get; set; }
 		public int TimetableSlots { get; set; }
 		public int ExamSubjects { get; set; }
-		public int Total => Allocations + StudentSelections + WeeklySlots + TimetableSlots + ExamSubjects;
+		public int Total => ClassAllocations + StudentSelections + WeeklySlots + TimetableSlots + ExamSubjects;
 	}
 }

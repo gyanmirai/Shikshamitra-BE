@@ -39,6 +39,9 @@ public class ElectiveGroupDto : EntityDto<Guid>
 	/// </summary>
 	public List<SubjectDto> Subjects { get; set; } = new List<SubjectDto>();
 
+	/// <summary>
+	/// Number of distinct classes (standards) where this elective group is allocated.
+	/// </summary>
 	public int UsedInClassesCount { get; set; }
 	public int StudentSelectionsCount { get; set; }
 	public int TimetablePeriodsCount { get; set; }
@@ -90,6 +93,10 @@ public class ElectiveGroupUsageDetailDto
 
 public class ElectiveGroupUsageSummaryDto
 {
+	/// <summary>
+	/// Number of distinct classes (standards) where this elective group is allocated.
+	/// Multiple mapped subjects in the same class count as one allocation.
+	/// </summary>
 	public int ClassAllocationsCount { get; set; }
 	public int StudentSelectionsCount { get; set; }
 	public int TimetablePeriodsCount { get; set; }

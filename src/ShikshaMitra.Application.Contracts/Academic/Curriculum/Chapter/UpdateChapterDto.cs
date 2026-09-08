@@ -14,7 +14,7 @@ public class UpdateChapterDto : IValidatableObject
 	/// Must be unique per subject
 	/// </summary>
 	[Required(ErrorMessage = "Chapter Number is required")]
-	[Range(1, 1000, ErrorMessage = "Chapter Number must be between 1 and 1000")]
+	[Range(ChapterConsts.MinChapterNumber, ChapterConsts.MaxChapterNumber, ErrorMessage = "Chapter Number must be between 1 and 1000")]
 	public int ChapterNo { get; set; }
 
 	/// <summary>

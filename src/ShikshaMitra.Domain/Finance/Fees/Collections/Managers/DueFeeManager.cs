@@ -1,5 +1,6 @@
-﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.Services;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
@@ -15,23 +16,12 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
 public class DueFeeManager(
 	IDueFeeRepository dueFeeRepository,
-	PaymentTermScheduleResolver scheduleResolver
+	PaymentTermScheduleResolver scheduleResolver,
+	ProrationPolicyCalculationService prorationCalculator
 ) : DomainService
 {
-	/// <summary>
-	/// Day-of-month a fee obligation becomes due, absent any real per-school configuration
-	/// (none exists yet — see collection-policy-implementation-plan.md Open Questions). Kept
-	/// as one named constant so every DueFee-creation call site computes the same convention;
-	/// changing this later is a one-line edit, not a hunt across the codebase.
-	/// </summary>
 	public const int DefaultDueDayOfMonth = 10;
 
-	/// <summary>
-	/// Computes the due date for a fee obligation covering <paramref name="month"/>/<paramref name="year"/>,
-	/// using <see cref="DefaultDueDayOfMonth"/>. The single canonical place this is computed —
-	/// DueFeeManager.GenerateForStudentAsync and every seeder that hand-builds DueFee rows call
-	/// this rather than each picking their own convention.
-	/// </summary>
 	public static DateTime ComputeDefaultDueDate(MonthEnum month, int year) =>
 		new DateTime(year, (int)month + 1, 1).AddDays(DefaultDueDayOfMonth - 1);
 
@@ -40,16 +30,26 @@ public class DueFeeManager(
 		FeeStructure feeStructure,
 		AcademicYear academicYear,
 		IReadOnlyList<Guid> selectedOptionalFeeHeadIds,
-		IReadOnlyList<CustomOptionalFeeHeadDetail> optionalFeeHeadDetails = null)
+		IReadOnlyList<CustomOptionalFeeHeadDetail>? optionalFeeHeadDetails = null,
+		ProrationPolicySnapshot? prorationPolicy = null,
+		Guid? prorationPolicyVersionId = null,
+		DateTime? chargeStartDate = null,
+		DateTime? chargeEndDate = null)
 	{
-		var alreadyExists = await dueFeeRepository.ExistsForStudentAsync(studentId);
+		var alreadyExists = await dueFeeRepository.ExistsForStudentInPeriodAsync(
+			studentId, academicYear.StartDate.Date, academicYear.EndDate.Date);
 		if (alreadyExists)
 			throw new BusinessException(DueFeeErrorCodes.DueFeesAlreadyGenerated)
 				.WithData("StudentId", studentId);
 
+		var assignmentChargeStart = (chargeStartDate ?? academicYear.StartDate).Date;
+		var assignmentChargeEnd = (chargeEndDate ?? academicYear.EndDate).Date;
+		ValidateChargePeriod(assignmentChargeStart, assignmentChargeEnd, academicYear);
+		if (prorationPolicy != null && !prorationPolicyVersionId.HasValue)
+			throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
+
 		var monthRange = ComputeMonthRange(academicYear);
 		var dueFees = new List<DueFee>();
-
 		foreach (var detail in feeStructure.FeeStructureDetails)
 		{
 			if (detail.IsOptional && !selectedOptionalFeeHeadIds.Contains(detail.FeeHeadId))
@@ -58,15 +58,21 @@ public class DueFeeManager(
 			var customDetail = detail.IsOptional
 				? optionalFeeHeadDetails?.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
 				: null;
+			var detailChargeStart = (customDetail?.ChargeStartDate ?? assignmentChargeStart).Date;
+			var detailChargeEnd = (customDetail?.ChargeEndDate ?? assignmentChargeEnd).Date;
+			ValidateChargePeriod(detailChargeStart, detailChargeEnd, academicYear, detail.FeeHeadId);
 
 			if (detail.PaymentTermId.HasValue && detail.PaymentTermVersionId.HasValue)
 			{
-				dueFees.AddRange(await GenerateFromPaymentTermAsync(studentId, detail, customDetail));
+				dueFees.AddRange(await GenerateFromPaymentTermAsync(
+					studentId, detail, customDetail, prorationPolicy, prorationPolicyVersionId,
+					detailChargeStart, detailChargeEnd));
 				continue;
 			}
 
-			// Legacy path — monthly / one-time without Payment Term attachment
-			dueFees.AddRange(GenerateLegacy(studentId, detail, monthRange, customDetail));
+			dueFees.AddRange(GenerateLegacy(
+				studentId, detail, monthRange, customDetail, prorationPolicy,
+				prorationPolicyVersionId, detailChargeStart, detailChargeEnd));
 		}
 
 		return dueFees;
@@ -75,171 +81,115 @@ public class DueFeeManager(
 	private async Task<List<DueFee>> GenerateFromPaymentTermAsync(
 		Guid studentId,
 		FeeStructureDetail detail,
-		CustomOptionalFeeHeadDetail? customDetail)
+		CustomOptionalFeeHeadDetail? customDetail,
+		ProrationPolicySnapshot? prorationPolicy,
+		Guid? prorationPolicyVersionId,
+		DateTime chargeStartDate,
+		DateTime chargeEndDate)
 	{
 		var schedule = await scheduleResolver.ResolveAsync(detail);
 		if (!schedule.IsValid || schedule.Installments.Count == 0)
-		{
 			throw new BusinessException(PaymentTermErrorCodes.VersionNotPublished)
 				.WithData("FeeStructureDetailId", detail.Id)
 				.WithData("PaymentTermId", detail.PaymentTermId);
-		}
 
 		var annualAmount = customDetail?.Amount ?? detail.Amount;
-		var result = new List<DueFee>();
-		var installmentCount = schedule.Installments.Count;
-		var allocated = 0d;
-
-		for (var i = 0; i < installmentCount; i++)
+		var rows = new List<DueFee>();
+		var allocated = 0m;
+		for (var i = 0; i < schedule.Installments.Count; i++)
 		{
 			var installment = schedule.Installments[i];
-			double amount;
+			var scheduledAmount = i == schedule.Installments.Count - 1
+				? Math.Round(annualAmount - allocated, 2, MidpointRounding.AwayFromZero)
+				: customDetail != null
+					? Math.Round(annualAmount / schedule.Installments.Count, 2, MidpointRounding.AwayFromZero)
+					: Math.Round(annualAmount * installment.AllocationPercentage / 100m, 2, MidpointRounding.AwayFromZero);
+			allocated += scheduledAmount;
 
-			if (customDetail != null)
-			{
-				// Optional custom amount: split evenly across installments.
-				var floor = Math.Floor(annualAmount / installmentCount);
-				var remainder = (int)(annualAmount - floor * installmentCount);
-				amount = i < remainder ? floor + 1 : floor;
-			}
-			else if (i == installmentCount - 1)
-			{
-				// Absorb rounding residual on the last installment.
-				amount = Math.Round(annualAmount - allocated, 2);
-			}
-			else
-			{
-				amount = (double)Math.Round((decimal)annualAmount * installment.AllocationPercentage / 100m, 2);
-				allocated += amount;
-			}
-
+			var calculation = CalculateProration(
+				detail, scheduledAmount, installment.CoverageStartDate, installment.CoverageEndDate,
+				chargeStartDate, chargeEndDate, prorationPolicy);
 			var dueDate = installment.DueDate;
-			var month = ToMonthEnum(dueDate.Month);
-			var year = dueDate.Year;
-
-			result.Add(new DueFee(
-				id: GuidGenerator.Create(),
-				tenantId: CurrentTenant.Id,
-				studentId: studentId,
-				feeHeadId: detail.FeeHeadId,
-				month: month,
-				year: year,
-				isOneTime: installmentCount == 1,
-				amount: (decimal)amount,
-				dueDate: dueDate,
-				feeStructureDetailId: detail.Id,
-				paymentTermId: schedule.PaymentTermId,
-				paymentTermVersionId: schedule.PaymentTermVersionId,
-				paymentTermInstallmentId: null,
-				installmentSequence: installment.Sequence,
-				installmentName: installment.Name,
-				coverageStartDate: installment.CoverageStartDate,
-				coverageEndDate: installment.CoverageEndDate,
-				demandDate: installment.DemandDate,
-				scheduleDueDate: installment.DueDate,
-				scheduleSource: ScheduleSource.PaymentTerm));
+			rows.Add(new DueFee(
+				id: GuidGenerator.Create(), tenantId: CurrentTenant.Id, studentId: studentId,
+				feeHeadId: detail.FeeHeadId, month: ToMonthEnum(dueDate.Month), year: dueDate.Year,
+				isOneTime: detail.IsOneTime, amount: calculation.ProratedAmount, dueDate: dueDate,
+				feeStructureDetailId: detail.Id, paymentTermId: schedule.PaymentTermId,
+				paymentTermVersionId: schedule.PaymentTermVersionId, paymentTermInstallmentId: null,
+				installmentSequence: installment.Sequence, installmentName: installment.Name,
+				coverageStartDate: installment.CoverageStartDate, coverageEndDate: installment.CoverageEndDate,
+				demandDate: installment.DemandDate, scheduleDueDate: installment.DueDate,
+				scheduleSource: ScheduleSource.PaymentTerm, scheduledAmount: scheduledAmount,
+				prorationPolicyId: prorationPolicy?.PolicyId, prorationPolicyVersionId: prorationPolicyVersionId,
+				prorationChargeStartDate: prorationPolicy == null ? null : chargeStartDate,
+				prorationChargeEndDate: prorationPolicy == null ? null : chargeEndDate,
+				prorationEligibleStartDate: calculation.EligibleStartDate,
+				prorationEligibleEndDate: calculation.EligibleEndDate,
+				prorationCoverageDays: calculation.CoverageDays,
+				prorationEligibleDays: calculation.ActualEligibleDays,
+				prorationChargedDays: calculation.ChargedDays,
+				prorationFactor: calculation.Factor,
+				prorationRuleType: calculation.RuleType,
+				prorationRoundingMode: calculation.RoundingMode,
+				prorationExplanation: calculation.Explanation));
 		}
 
-		return result;
+		return rows;
 	}
 
 	private List<DueFee> GenerateLegacy(
 		Guid studentId,
 		FeeStructureDetail detail,
 		List<(MonthEnum Month, int Year)> monthRange,
-		CustomOptionalFeeHeadDetail? customDetail)
+		CustomOptionalFeeHeadDetail? customDetail,
+		ProrationPolicySnapshot? prorationPolicy,
+		Guid? prorationPolicyVersionId,
+		DateTime chargeStartDate,
+		DateTime chargeEndDate)
 	{
 		var dueFees = new List<DueFee>();
-
 		if (detail.IsOneTime)
 		{
-			MonthEnum month;
-			int year;
-			double amount;
-
-			if (customDetail != null)
-			{
-				month = customDetail.PayableMonth ?? (detail.PayableMonth ?? monthRange[0].Month);
-				year = customDetail.PayableYear ?? (detail.PayableYear ?? monthRange[0].Year);
-				amount = customDetail.Amount;
-
-				if (!monthRange.Any(m => m.Month == month && m.Year == year))
-				{
-					throw new BusinessException("Finance:OutofAcademicYearRange",
-							$"Selected payable month '{month}-{year}' is outside the academic year range.")
-						.WithData("Month", month.ToString())
-						.WithData("Year", year);
-				}
-			}
-			else
-			{
-				(month, year) = detail.PayableMonth.HasValue && detail.PayableYear.HasValue
-					? (detail.PayableMonth.Value, detail.PayableYear.Value)
-					: monthRange[0];
-				amount = detail.Amount;
-			}
-
-			dueFees.Add(CreateLegacyDueFee(studentId, detail, month, year, amount));
+			var month = customDetail?.PayableMonth ?? detail.PayableMonth ?? monthRange[0].Month;
+			var year = customDetail?.PayableYear ?? detail.PayableYear ?? monthRange[0].Year;
+			var amount = customDetail?.Amount ?? detail.Amount;
+			if (!monthRange.Any(m => m.Month == month && m.Year == year))
+				throw new BusinessException("Finance:OutofAcademicYearRange")
+					.WithData("Month", month.ToString()).WithData("Year", year);
+			dueFees.Add(CreateLegacyDueFee(
+				studentId, detail, month, year, amount,
+				prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate));
 			return dueFees;
 		}
 
-		if (customDetail != null &&
-			customDetail.StartPayableMonth.HasValue &&
-			customDetail.StartPayableYear.HasValue &&
-			customDetail.EndPayableMonth.HasValue &&
-			customDetail.EndPayableYear.HasValue)
+		var selectedMonths = monthRange;
+		if (customDetail?.StartPayableMonth.HasValue == true && customDetail.StartPayableYear.HasValue &&
+			customDetail.EndPayableMonth.HasValue && customDetail.EndPayableYear.HasValue)
 		{
-			var startMonth = customDetail.StartPayableMonth.Value;
-			var startYear = customDetail.StartPayableYear.Value;
-			var endMonth = customDetail.EndPayableMonth.Value;
-			var endYear = customDetail.EndPayableYear.Value;
-
-			if (!monthRange.Any(m => m.Month == startMonth && m.Year == startYear))
+			var start = new DateTime(customDetail.StartPayableYear.Value, (int)customDetail.StartPayableMonth.Value + 1, 1);
+			var end = new DateTime(customDetail.EndPayableYear.Value, (int)customDetail.EndPayableMonth.Value + 1, 1);
+			if (start > end || start < new DateTime(monthRange[0].Year, (int)monthRange[0].Month + 1, 1) ||
+				end > new DateTime(monthRange[^1].Year, (int)monthRange[^1].Month + 1, 1))
+				throw new BusinessException("Finance:InvalidDateRange");
+			selectedMonths = monthRange.Where(m =>
 			{
-				throw new BusinessException("Finance:OutofAcademicYearRange",
-						$"Selected start month '{startMonth}-{startYear}' is outside the academic year range.")
-					.WithData("Month", startMonth.ToString())
-					.WithData("Year", startYear);
-			}
-
-			if (!monthRange.Any(m => m.Month == endMonth && m.Year == endYear))
-			{
-				throw new BusinessException("Finance:OutofAcademicYearRange",
-						$"Selected end month '{endMonth}-{endYear}' is outside the academic year range.")
-					.WithData("Month", endMonth.ToString())
-					.WithData("Year", endYear);
-			}
-
-			var startDate = new DateTime(startYear, (int)startMonth + 1, 1);
-			var endDate = new DateTime(endYear, (int)endMonth + 1, 1);
-			if (startDate > endDate)
-			{
-				throw new BusinessException("Finance:InvalidDateRange", "Start month cannot be after end month.");
-			}
-
-			var customMonths = monthRange.Where(m =>
-			{
-				var mDate = new DateTime(m.Year, (int)m.Month + 1, 1);
-				return mDate >= startDate && mDate <= endDate;
+				var value = new DateTime(m.Year, (int)m.Month + 1, 1);
+				return value >= start && value <= end;
 			}).ToList();
-
-			foreach (var m in customMonths)
-			{
-				dueFees.Add(CreateLegacyDueFee(studentId, detail, m.Month, m.Year, customDetail.Amount));
-			}
-
-			return dueFees;
 		}
 
-		var months = monthRange.ToList();
-		var count = months.Count;
-		var floorAmount = Math.Floor(detail.Amount / count);
-		var remainder = (int)(detail.Amount - floorAmount * count);
-
-		for (var i = 0; i < count; i++)
+		var totalAmount = customDetail != null ? customDetail.Amount * selectedMonths.Count : detail.Amount;
+		var baseAmount = customDetail != null
+			? customDetail.Amount
+			: Math.Round(totalAmount / selectedMonths.Count, 2, MidpointRounding.AwayFromZero);
+		var allocated = 0m;
+		for (var i = 0; i < selectedMonths.Count; i++)
 		{
-			var feeAmount = i < remainder ? floorAmount + 1 : floorAmount;
-			dueFees.Add(CreateLegacyDueFee(studentId, detail, months[i].Month, months[i].Year, feeAmount));
+			var scheduledAmount = i == selectedMonths.Count - 1 ? totalAmount - allocated : baseAmount;
+			allocated += scheduledAmount;
+			dueFees.Add(CreateLegacyDueFee(
+				studentId, detail, selectedMonths[i].Month, selectedMonths[i].Year, scheduledAmount,
+				prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate));
 		}
 
 		return dueFees;
@@ -250,29 +200,76 @@ public class DueFeeManager(
 		FeeStructureDetail detail,
 		MonthEnum month,
 		int year,
-		double amount) => new(
-			id: GuidGenerator.Create(),
-			tenantId: CurrentTenant.Id,
-			studentId: studentId,
-			feeHeadId: detail.FeeHeadId,
-			month: month,
-			year: year,
-			isOneTime: detail.IsOneTime,
-			amount: (decimal)amount,
-			dueDate: ComputeDefaultDueDate(month, year));
+		decimal scheduledAmount,
+		ProrationPolicySnapshot? prorationPolicy = null,
+		Guid? prorationPolicyVersionId = null,
+		DateTime? chargeStartDate = null,
+		DateTime? chargeEndDate = null)
+	{
+		var coverageStart = new DateTime(year, (int)month + 1, 1);
+		var coverageEnd = coverageStart.AddMonths(1).AddDays(-1);
+		var calculation = CalculateProration(
+			detail, scheduledAmount, coverageStart, coverageEnd,
+			chargeStartDate ?? coverageStart, chargeEndDate ?? coverageEnd, prorationPolicy);
+		return new DueFee(
+			id: GuidGenerator.Create(), tenantId: CurrentTenant.Id, studentId: studentId,
+			feeHeadId: detail.FeeHeadId, month: month, year: year, isOneTime: detail.IsOneTime,
+			amount: calculation.ProratedAmount, dueDate: ComputeDefaultDueDate(month, year),
+			coverageStartDate: coverageStart, coverageEndDate: coverageEnd,
+			scheduledAmount: scheduledAmount,
+			prorationPolicyId: prorationPolicy?.PolicyId, prorationPolicyVersionId: prorationPolicyVersionId,
+			prorationChargeStartDate: prorationPolicy == null ? null : chargeStartDate,
+			prorationChargeEndDate: prorationPolicy == null ? null : chargeEndDate,
+			prorationEligibleStartDate: calculation.EligibleStartDate,
+			prorationEligibleEndDate: calculation.EligibleEndDate,
+			prorationCoverageDays: calculation.CoverageDays,
+			prorationEligibleDays: calculation.ActualEligibleDays,
+			prorationChargedDays: calculation.ChargedDays,
+			prorationFactor: calculation.Factor,
+			prorationRuleType: calculation.RuleType,
+			prorationRoundingMode: calculation.RoundingMode,
+			prorationExplanation: calculation.Explanation);
+	}
+
+	private ProrationCalculationResult CalculateProration(
+		FeeStructureDetail detail,
+		decimal scheduledAmount,
+		DateTime coverageStart,
+		DateTime coverageEnd,
+		DateTime chargeStart,
+		DateTime chargeEnd,
+		ProrationPolicySnapshot? policy)
+	{
+		var rule = policy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
+			?? new ProrationPolicyRuleSnapshot(
+				detail.FeeHeadId, ProrationRuleType.FullCharge,
+				ProrationRoundingMode.Currency, null, null, null);
+		if (detail.IsOneTime)
+			rule = rule with { RuleType = ProrationRuleType.FullCharge };
+		return prorationCalculator.Calculate(rule, scheduledAmount, coverageStart, coverageEnd, chargeStart, chargeEnd);
+	}
+
+	private static void ValidateChargePeriod(
+		DateTime start, DateTime end, AcademicYear academicYear, Guid? feeHeadId = null)
+	{
+		if (start > end || start < academicYear.StartDate.Date || end > academicYear.EndDate.Date)
+		{
+			var error = new BusinessException(ProrationPolicyErrorCodes.InvalidChargePeriod);
+			if (feeHeadId.HasValue) error.WithData("FeeHeadId", feeHeadId.Value);
+			throw error;
+		}
+	}
 
 	private static List<(MonthEnum Month, int Year)> ComputeMonthRange(AcademicYear academicYear)
 	{
 		var result = new List<(MonthEnum, int)>();
 		var current = new DateTime(academicYear.StartDate.Year, academicYear.StartDate.Month, 1);
 		var end = new DateTime(academicYear.EndDate.Year, academicYear.EndDate.Month, 1);
-
 		while (current <= end)
 		{
 			result.Add((ToMonthEnum(current.Month), current.Year));
 			current = current.AddMonths(1);
 		}
-
 		return result;
 	}
 

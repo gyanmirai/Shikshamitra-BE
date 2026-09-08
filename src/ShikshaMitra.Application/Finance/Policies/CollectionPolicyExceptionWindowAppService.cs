@@ -23,14 +23,23 @@ public class CollectionPolicyExceptionWindowAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ManageExceptionWindow)]
 	public async Task<CollectionPolicyExceptionWindowDto> CreateAsync(CreateCollectionPolicyExceptionWindowDto input)
 	{
+		var scope = ParseScope(input.Scope);
+		var effect = ParseEffect(input.Effect);
+		var existingQuery = await repository.GetQueryableAsync();
+		if (existingQuery.Any(x => x.Scope == scope && x.ScopeId == (scope == ExceptionWindowScope.SchoolWide ? null : input.ScopeId) &&
+			x.StartDate <= input.EndDate.Date && x.EndDate >= input.StartDate.Date))
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.ExceptionWindowAlreadyActive)
+				.WithData("reason", "overlapping_window");
+		}
 		var entity = new CollectionPolicyExceptionWindow(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
-			ParseScope(input.Scope),
+			scope,
 			input.ScopeId,
 			input.StartDate,
 			input.EndDate,
-			ParseEffect(input.Effect),
+			effect,
 			input.ExtensionDays,
 			input.ReasonCode,
 			input.Reason,
@@ -105,9 +114,9 @@ public class CollectionPolicyExceptionWindowAppService(
 
 	private static ExceptionWindowEffect ParseEffect(string value) => Enum.TryParse<ExceptionWindowEffect>(value, true, out var effect)
 		? effect
-		: ExceptionWindowEffect.SuspendLateFeeAccrual;
+		: throw new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule).WithData("field", "exceptionWindowEffect");
 
-	private static CollectionPolicyExceptionWindowDto ToDto(CollectionPolicyExceptionWindow entity) => new()
+	private CollectionPolicyExceptionWindowDto ToDto(CollectionPolicyExceptionWindow entity) => new()
 	{
 		Id = entity.Id,
 		Scope = entity.Scope.ToString(),
@@ -119,7 +128,7 @@ public class CollectionPolicyExceptionWindowAppService(
 		ReasonCode = entity.ReasonCode,
 		Reason = entity.Reason,
 		CreatedByUserId = entity.CreatedByUserId,
-		IsActive = DateTime.UtcNow.Date >= entity.StartDate && DateTime.UtcNow.Date <= entity.EndDate,
+		IsActive = clock.Now.Date >= entity.StartDate && clock.Now.Date <= entity.EndDate,
 		CreationTime = entity.CreationTime
 	};
 }

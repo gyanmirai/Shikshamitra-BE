@@ -15,6 +15,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Constants.Permissions;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 
@@ -28,9 +29,14 @@ public class FeeStructureAppService(
 	IRepository<PaymentTerm, Guid> paymentTermRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<ConcessionPolicy, Guid> concessionPolicyRepository,
+	IRepository<RefundPolicy, Guid> refundPolicyRepository,
+	IRepository<CollectionPolicy, Guid> collectionPolicyRepository,
+	IRepository<ProrationPolicy, Guid> prorationPolicyRepository,
 	IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository
 ) : ApplicationService, IFeeStructureAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.ManageAttachment)]
     public async Task<FeeStructureCreateResponse> CreateAsync(Guid feeStructureMetadataId, StandardFeeStructureSaveRequest input)
     {
 		// validation to ensure no duplicate fee structure name exists for the same standard
@@ -49,7 +55,12 @@ public class FeeStructureAppService(
             input.StandardFeeStructures?.Name ?? string.Empty
         );
 
-		feeStructure.AttachCollectionPolicy(input.StandardFeeStructures?.CollectionPolicyId);
+		var collectionAttachment = await ResolveCollectionPolicyAttachmentAsync(
+			feeStructureMetadataId,
+			input.StandardFeeStructures?.CollectionPolicyId,
+			input.StandardFeeStructures?.CollectionPolicyVersionId,
+			input.StandardFeeStructures?.FeeHeads.Select(x => x.FeeHeadId).ToList() ?? []);
+		feeStructure.AttachCollectionPolicy(collectionAttachment.PolicyId, collectionAttachment.VersionId);
 		var concessionAttachment = await ResolveConcessionPolicyAsync(
 			feeStructureMetadataId,
 			input.StandardFeeStructures?.ConcessionPolicyId,
@@ -59,6 +70,24 @@ public class FeeStructureAppService(
 		feeStructure.AttachConcessionPolicy(
 			concessionAttachment.PolicyId, concessionAttachment.VersionId,
 			concessionAttachment.FeeHeadScope, concessionAttachment.ApplicableFeeHeadIds);
+		var refundAttachment = await ResolveRefundPolicyAsync(
+			feeStructureMetadataId,
+			input.StandardFeeStructures?.RefundPolicyId,
+			input.StandardFeeStructures?.RefundPolicyVersionId,
+			input.StandardFeeStructures?.FeeHeads.Select(x => x.FeeHeadId).ToList() ?? []);
+		if (refundAttachment.PolicyId.HasValue)
+			await AuthorizationService.CheckAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.ManageAttachment);
+		feeStructure.AttachRefundPolicy(refundAttachment.PolicyId, refundAttachment.VersionId);
+		var prorationAttachment = await ResolveProrationPolicyAsync(
+			feeStructureMetadataId,
+			input.StandardFeeStructures?.ProrationPolicyId,
+			input.StandardFeeStructures?.ProrationPolicyVersionId,
+			input.StandardFeeStructures?.FeeHeads ?? []);
+		if (prorationAttachment.PolicyId.HasValue)
+			await AuthorizationService.CheckAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.ManageAttachment);
+		feeStructure.AttachProrationPolicy(prorationAttachment.PolicyId, prorationAttachment.VersionId);
 
         if (input.StandardFeeStructures != null)
         {
@@ -122,11 +151,21 @@ public class FeeStructureAppService(
         return new FeeStructureCreateResponse
         {
             Id = feeStructure.Id,
-            Name = feeStructure.Name
+			Name = feeStructure.Name,
+			CollectionPolicyId = feeStructure.CollectionPolicyId,
+			CollectionPolicyVersionId = feeStructure.CollectionPolicyVersionId,
+			ConcessionPolicyId = feeStructure.ConcessionPolicyId,
+			ConcessionPolicyVersionId = feeStructure.ConcessionPolicyVersionId,
+			RefundPolicyId = feeStructure.RefundPolicyId,
+			RefundPolicyVersionId = feeStructure.RefundPolicyVersionId,
+			ProrationPolicyId = feeStructure.ProrationPolicyId,
+			ProrationPolicyVersionId = feeStructure.ProrationPolicyVersionId
         };
     }
 
-    public async Task UpdateAsync(Guid id, StandardFeeStructureRequest input)
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Edit)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.ManageAttachment)]
+    public async Task<FeeStructureCreateResponse> UpdateAsync(Guid id, StandardFeeStructureRequest input)
     {
         var feeStructure = await feeStructureRepository.GetAsync(id);
 
@@ -189,7 +228,12 @@ public class FeeStructureAppService(
         }
 
 		feeStructure.ChangeName(input.Name);
-		feeStructure.AttachCollectionPolicy(input.CollectionPolicyId);
+		var collectionAttachment = await ResolveCollectionPolicyAttachmentAsync(
+			feeStructure.FeeStructureMetadataId,
+			input.CollectionPolicyId,
+			input.CollectionPolicyVersionId,
+			(input.FeeHeads ?? []).Select(x => x.FeeHeadId).ToList());
+		feeStructure.AttachCollectionPolicy(collectionAttachment.PolicyId, collectionAttachment.VersionId);
 		var concessionAttachment = await ResolveConcessionPolicyAsync(
 			feeStructure.FeeStructureMetadataId,
 			input.ConcessionPolicyId,
@@ -199,6 +243,26 @@ public class FeeStructureAppService(
 		feeStructure.AttachConcessionPolicy(
 			concessionAttachment.PolicyId, concessionAttachment.VersionId,
 			concessionAttachment.FeeHeadScope, concessionAttachment.ApplicableFeeHeadIds);
+		var refundAttachment = await ResolveRefundPolicyAsync(
+			feeStructure.FeeStructureMetadataId,
+			input.RefundPolicyId,
+			input.RefundPolicyVersionId,
+			input.FeeHeads.Select(x => x.FeeHeadId).ToList());
+		if (feeStructure.RefundPolicyId != refundAttachment.PolicyId ||
+			feeStructure.RefundPolicyVersionId != refundAttachment.VersionId)
+			await AuthorizationService.CheckAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.ManageAttachment);
+		feeStructure.AttachRefundPolicy(refundAttachment.PolicyId, refundAttachment.VersionId);
+		var prorationAttachment = await ResolveProrationPolicyAsync(
+			feeStructure.FeeStructureMetadataId,
+			input.ProrationPolicyId,
+			input.ProrationPolicyVersionId,
+			input.FeeHeads);
+		if (feeStructure.ProrationPolicyId != prorationAttachment.PolicyId ||
+			feeStructure.ProrationPolicyVersionId != prorationAttachment.VersionId)
+			await AuthorizationService.CheckAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.ManageAttachment);
+		feeStructure.AttachProrationPolicy(prorationAttachment.PolicyId, prorationAttachment.VersionId);
 
 		// validation to ensure no duplicate fee structure name exists for the same standard
 		var existingStructure = await feeStructureRepository.AnyAsync(x => x.StandardId == feeStructure.StandardId && x.Name == feeStructure.Name && x.Id != feeStructure.Id);
@@ -209,6 +273,19 @@ public class FeeStructureAppService(
 		}
 
 		await feeStructureRepository.UpdateAsync(feeStructure);
+		return new FeeStructureCreateResponse
+		{
+			Id = feeStructure.Id,
+			Name = feeStructure.Name,
+			CollectionPolicyId = feeStructure.CollectionPolicyId,
+			CollectionPolicyVersionId = feeStructure.CollectionPolicyVersionId,
+			ConcessionPolicyId = feeStructure.ConcessionPolicyId,
+			ConcessionPolicyVersionId = feeStructure.ConcessionPolicyVersionId,
+			RefundPolicyId = feeStructure.RefundPolicyId,
+			RefundPolicyVersionId = feeStructure.RefundPolicyVersionId,
+			ProrationPolicyId = feeStructure.ProrationPolicyId,
+			ProrationPolicyVersionId = feeStructure.ProrationPolicyVersionId
+		};
     }
 
     public async Task DeleteAsync(Guid id)
@@ -249,8 +326,13 @@ public class FeeStructureAppService(
                 Name = fs.Name,
 				Status = fs.IsLocked ? FeeStructureStatus.Locked : FeeStructureStatus.Unlocked,
 				CollectionPolicyId = fs.CollectionPolicyId,
+				CollectionPolicyVersionId = fs.CollectionPolicyVersionId,
 				ConcessionPolicyId = fs.ConcessionPolicyId,
 				ConcessionPolicyVersionId = fs.ConcessionPolicyVersionId,
+				RefundPolicyId = fs.RefundPolicyId,
+				RefundPolicyVersionId = fs.RefundPolicyVersionId,
+				ProrationPolicyId = fs.ProrationPolicyId,
+				ProrationPolicyVersionId = fs.ProrationPolicyVersionId,
 				ConcessionFeeHeadScope = fs.ConcessionFeeHeadScope,
 				ConcessionApplicableFeeHeadIds = [.. fs.GetConcessionApplicableFeeHeadIds()],
 				FeeHeads = fs.FeeStructureDetails.Select(d =>
@@ -384,5 +466,175 @@ public class FeeStructureAppService(
 		var version = versions.SingleOrDefault()
 			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
 		return (policy.Id, version.Id, feeHeadScope, effectiveIds);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ManageAttachment)]
+	public async Task<CollectionPolicyAttachmentImpactResponse> ValidateCollectionPolicyAttachmentAsync(
+		CollectionPolicyAttachmentImpactRequest input)
+	{
+		var attachment = await ResolveCollectionPolicyAttachmentAsync(
+			input.FeeStructureMetadataId, input.CollectionPolicyId, null, input.FeeHeadIds);
+		return attachment.Impact;
+	}
+
+	private async Task<(Guid? PolicyId, Guid? VersionId)> ResolveRefundPolicyAsync(
+		Guid feeStructureMetadataId,
+		Guid? policyId,
+		Guid? requestedVersionId,
+		IReadOnlyCollection<Guid> structureFeeHeadIds)
+	{
+		if (!policyId.HasValue)
+		{
+			if (requestedVersionId.HasValue)
+				throw new BusinessException(RefundPolicyErrorCodes.PolicyVersionNotFound);
+			return (null, null);
+		}
+
+		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructureMetadataId);
+		if (!metadata.AcademicYearId.HasValue)
+			throw new BusinessException(RefundPolicyErrorCodes.AcademicYearMismatch);
+		var policy = await refundPolicyRepository.FindAsync(policyId.Value)
+			?? throw new BusinessException(RefundPolicyErrorCodes.PolicyNotFound);
+		if (policy.Status != RefundPolicyStatus.Active)
+			throw new BusinessException(RefundPolicyErrorCodes.PolicyNotActive);
+		if (policy.AcademicYearId != metadata.AcademicYearId.Value)
+			throw new BusinessException(RefundPolicyErrorCodes.AcademicYearMismatch);
+
+		var structureIds = structureFeeHeadIds.Distinct().ToHashSet();
+		if (policy.FeeHeadScope == RefundFeeHeadScope.SelectedFeeHeads &&
+			!policy.GetApplicableFeeHeadIds().Any(structureIds.Contains))
+			throw new BusinessException(RefundPolicyErrorCodes.InvalidFeeHeadReference);
+
+		var versions = await financePolicyVersionRepository.GetListAsync(x =>
+			x.PolicyType == "refund" && x.PolicyId == policy.Id && x.VersionNumber == policy.Version);
+		var version = versions.SingleOrDefault()
+			?? throw new BusinessException(RefundPolicyErrorCodes.PolicyVersionNotFound);
+		if (requestedVersionId.HasValue && requestedVersionId.Value != version.Id)
+			throw new BusinessException(RefundPolicyErrorCodes.PolicyVersionNotFound);
+		return (policy.Id, version.Id);
+	}
+
+	private async Task<(Guid? PolicyId, Guid? VersionId)> ResolveProrationPolicyAsync(
+		Guid feeStructureMetadataId,
+		Guid? policyId,
+		Guid? requestedVersionId,
+		IReadOnlyCollection<FeeHeadAssignmentRequest> structureDetails)
+	{
+		if (!policyId.HasValue)
+		{
+			if (requestedVersionId.HasValue)
+				throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
+			return (null, null);
+		}
+
+		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructureMetadataId);
+		if (!metadata.AcademicYearId.HasValue)
+			throw new BusinessException(ProrationPolicyErrorCodes.AcademicYearMismatch);
+		var policy = await prorationPolicyRepository.FindAsync(policyId.Value)
+			?? throw new BusinessException(ProrationPolicyErrorCodes.PolicyNotFound);
+		if (policy.Status != ProrationPolicyStatus.Active)
+			throw new BusinessException(ProrationPolicyErrorCodes.PolicyNotActive);
+		if (policy.AcademicYearId != metadata.AcademicYearId.Value)
+			throw new BusinessException(ProrationPolicyErrorCodes.AcademicYearMismatch);
+
+		var nonFullRuleHeads = policy.Rules
+			.Where(x => x.RuleType != ProrationRuleType.FullCharge)
+			.Select(x => x.FeeHeadId)
+			.ToHashSet();
+		if (structureDetails.Any(x => x.IsOneTime && nonFullRuleHeads.Contains(x.FeeHeadId)))
+			throw new BusinessException(ProrationPolicyErrorCodes.OneTimeFeeCannotBeProrated);
+
+		var versions = await financePolicyVersionRepository.GetListAsync(x =>
+			x.PolicyType == "proration" && x.PolicyId == policy.Id && x.VersionNumber == policy.Version);
+		var version = versions.SingleOrDefault()
+			?? throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
+		if (requestedVersionId.HasValue && requestedVersionId.Value != version.Id)
+			throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
+		return (policy.Id, version.Id);
+	}
+
+	private async Task<(Guid PolicyId, Guid VersionId, CollectionPolicyAttachmentImpactResponse Impact)>
+		ResolveCollectionPolicyAttachmentAsync(
+			Guid feeStructureMetadataId,
+			Guid? collectionPolicyId,
+			Guid? requestedVersionId,
+			IReadOnlyCollection<Guid> structureFeeHeadIds)
+	{
+		if (!collectionPolicyId.HasValue)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.PolicyNotAttached);
+		}
+
+		var metadata = await feeStructureMetadataRepository.FindAsync(feeStructureMetadataId);
+		if (metadata?.AcademicYearId is not { } academicYearId)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.AcademicYearRequired);
+		}
+
+		var policy = await collectionPolicyRepository.FindAsync(collectionPolicyId.Value)
+			?? throw new BusinessException(CollectionPolicyErrorCodes.PolicyNotFound);
+		if (policy.Status != CollectionPolicyStatus.Active)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.PolicyNotActive);
+		}
+		if (policy.AcademicYearId != academicYearId)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.AcademicYearMismatch);
+		}
+
+		var distinctStructureHeads = structureFeeHeadIds.Distinct().ToList();
+		var heads = await feeHeadRepository.GetListAsync(x => distinctStructureHeads.Contains(x.Id));
+		if (heads.Count != distinctStructureHeads.Count || heads.Any(x => !x.IsActive || x.AcademicYearId != academicYearId))
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidFeeHeadReference);
+		}
+
+		var versions = await financePolicyVersionRepository.GetListAsync(x =>
+			x.PolicyType == "collection" && x.PolicyId == policy.Id && x.VersionNumber == policy.Version);
+		var version = versions.SingleOrDefault()
+			?? throw new BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
+		if (requestedVersionId.HasValue && requestedVersionId.Value != version.Id)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
+		}
+
+		var structureSet = distinctStructureHeads.ToHashSet();
+		var lateFeeSet = policy.GetLateFeeApplyOnFeeHeads().ToHashSet();
+		var waiverSet = policy.GetWaiverApplyOnFeeHeads().ToHashSet();
+		var coveredLateFee = structureSet.Intersect(lateFeeSet).Order().ToList();
+		var coveredWaiver = structureSet.Intersect(waiverSet).Order().ToList();
+		var impact = new CollectionPolicyAttachmentImpactResponse
+		{
+			PolicyId = policy.Id,
+			PolicyVersionId = version.Id,
+			PolicyName = policy.PolicyName,
+			PolicyCode = policy.PolicyCode,
+			CoveredLateFeeHeadIds = coveredLateFee,
+			StructureHeadsWithoutLateFee = structureSet.Except(lateFeeSet).Order().ToList(),
+			PolicyLateFeeHeadsNotInStructure = lateFeeSet.Except(structureSet).Order().ToList(),
+			CoveredWaiverHeadIds = coveredWaiver,
+			StructureHeadsWithoutWaiver = structureSet.Except(waiverSet).Order().ToList(),
+			PolicyWaiverHeadsNotInStructure = waiverSet.Except(structureSet).Order().ToList(),
+			IsAttachable = true
+		};
+		if (policy.EnableLateFee && coveredLateFee.Count == 0)
+		{
+			impact.Warnings.Add(
+				"Late fee is enabled, but none of its selected Fee Heads are in this fee structure. No late fee will be charged for this structure.");
+		}
+		if (policy.EnableWaiver && coveredWaiver.Count == 0)
+		{
+			impact.Warnings.Add(
+				"Waiver is enabled, but none of its selected Fee Heads are in this fee structure. No waiver will be available for this structure.");
+		}
+		if (impact.PolicyLateFeeHeadsNotInStructure.Count > 0)
+		{
+			impact.Warnings.Add("Some policy late-fee heads are not present in this fee structure.");
+		}
+		if (impact.PolicyWaiverHeadsNotInStructure.Count > 0)
+		{
+			impact.Warnings.Add("Some policy waiver heads are not present in this fee structure.");
+		}
+		return (policy.Id, version.Id, impact);
 	}
 }

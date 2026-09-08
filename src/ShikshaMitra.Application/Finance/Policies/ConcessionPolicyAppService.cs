@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Concessions;
+using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -20,6 +22,8 @@ public class ConcessionPolicyAppService(
 	IRepository<ConcessionPolicy, Guid> repository,
 	IRepository<FinancePolicyVersion, Guid> versionRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,
+	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
+	IRepository<ConcessionRequest, Guid> concessionRequestRepository,
 	IRepository<IdentityUser, Guid> userRepository,
 	ConcessionPolicyCalculationService calculationService)
 	: ApplicationService, IConcessionPolicyAppService
@@ -34,6 +38,10 @@ public class ConcessionPolicyAppService(
 			var status = ParseListStatus(input.Status);
 			query = query.Where(x => x.Status == status);
 		}
+		else
+		{
+			query = query.Where(x => x.Status != ConcessionPolicyStatus.Archived);
+		}
 		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
 			var search = input.Search.Trim().ToLower();
@@ -42,7 +50,8 @@ public class ConcessionPolicyAppService(
 
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query
-			.OrderByDescending(x => x.Status == ConcessionPolicyStatus.Active)
+			.OrderByDescending(x => x.IsDefault)
+			.ThenByDescending(x => x.Status == ConcessionPolicyStatus.Active)
 			.ThenByDescending(x => x.CreationTime)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
@@ -65,6 +74,23 @@ public class ConcessionPolicyAppService(
 		return dto;
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.View)]
+	public async Task<ConcessionPolicyImpactDto> GetImpactAsync(Guid id)
+	{
+		var entity = await GetRequiredAsync(id);
+		return new ConcessionPolicyImpactDto
+		{
+			PolicyId = entity.Id,
+			PolicyName = entity.PolicyName,
+			Status = entity.Status.ToString(),
+			CurrentVersion = entity.Version,
+			AttachedFeeStructureCount = await feeStructureRepository.CountAsync(x => x.ConcessionPolicyId == id),
+			StudentAssignmentCount = await studentFeeStructureRepository.CountAsync(x => x.ConcessionPolicyId == id),
+			ConcessionRequestCount = await concessionRequestRepository.CountAsync(x => x.ConcessionPolicyId == id),
+			ChangeReasonRequired = entity.Status == ConcessionPolicyStatus.Active,
+		};
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Add)]
 	public async Task<ConcessionPolicyDto> CreateAsync(CreateUpdateConcessionPolicyDto input)
 	{
@@ -72,6 +98,8 @@ public class ConcessionPolicyAppService(
 			? $"CON-{GuidGenerator.Create():N}"[..16].ToUpperInvariant()
 			: input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, null);
+		if (input.IsDefault)
+			await ReplaceExistingDefaultAsync(input.AcademicYearId, null, input.PolicyName, input.ChangeReason);
 		var entity = new ConcessionPolicy(
 			GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId,
 			ConcessionPolicyMapping.ToUpdateModel(input, code));
@@ -84,6 +112,7 @@ public class ConcessionPolicyAppService(
 	public async Task<ConcessionPolicyDto> UpdateAsync(Guid id, CreateUpdateConcessionPolicyDto input)
 	{
 		var entity = await GetRequiredAsync(id);
+		EnsureConcurrency(entity, input.ConcurrencyStamp);
 		if (entity.Status == ConcessionPolicyStatus.Archived)
 			throw new BusinessException(ConcessionPolicyErrorCodes.ArchivedPolicyNotEditable);
 		if (entity.AcademicYearId != input.AcademicYearId)
@@ -92,12 +121,16 @@ public class ConcessionPolicyAppService(
 		if (entity.Status == ConcessionPolicyStatus.Active && targetStatus == ConcessionPolicyStatus.Draft &&
 			(await GetUsedIdsAsync([id])).Contains(id))
 			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyInUse);
+		if (entity.Status == ConcessionPolicyStatus.Active && string.IsNullOrWhiteSpace(input.ChangeReason))
+			throw new BusinessException(ConcessionPolicyErrorCodes.ChangeReasonRequired);
 
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode) ? entity.PolicyCode : input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, id);
+		if (input.IsDefault)
+			await ReplaceExistingDefaultAsync(input.AcademicYearId, id, input.PolicyName, input.ChangeReason);
 		entity.Update(ConcessionPolicyMapping.ToUpdateModel(input, code));
 		await repository.UpdateAsync(entity, autoSave: true);
-		await WriteVersionAsync(entity, "edited");
+		await WriteVersionAsync(entity, "edited", input.ChangeReason);
 		return ConcessionPolicyMapping.ToDto(entity);
 	}
 
@@ -111,6 +144,7 @@ public class ConcessionPolicyAppService(
 			AcademicYearId = targetYear,
 			PolicyName = string.IsNullOrWhiteSpace(input.Name) ? $"{source.PolicyName} Copy" : input.Name,
 			Status = "Draft",
+			IsDefault = false,
 			Description = source.Description,
 			ValueSource = source.ValueSource.ToString(),
 			CalculationMethod = source.CalculationMethod.ToString(),
@@ -210,12 +244,37 @@ public class ConcessionPolicyAppService(
 			.Select(x => x.ConcessionPolicyId!.Value).Distinct())).ToHashSet();
 	}
 
-	private async Task WriteVersionAsync(ConcessionPolicy entity, string action)
+	private async Task ReplaceExistingDefaultAsync(
+		Guid academicYearId, Guid? excludeId, string replacementName, string? reason)
+	{
+		var existingDefaults = await repository.GetListAsync(x =>
+			x.AcademicYearId == academicYearId && x.IsDefault &&
+			(!excludeId.HasValue || x.Id != excludeId.Value));
+		foreach (var existingDefault in existingDefaults)
+		{
+			existingDefault.SetDefault(false);
+			await repository.UpdateAsync(existingDefault, autoSave: true);
+			await WriteVersionAsync(
+				existingDefault,
+				"default_replaced",
+				reason ?? $"Default replaced by {replacementName}.");
+		}
+	}
+
+	private async Task WriteVersionAsync(ConcessionPolicy entity, string action, string? reason = null)
 	{
 		await versionRepository.InsertAsync(new FinancePolicyVersion(
 			GuidGenerator.Create(), CurrentTenant.Id, "concession", entity.Id,
 			entity.AcademicYearId, entity.Version, entity.PolicyName, entity.Status.ToString(),
-			ConcessionPolicyMapping.ToSnapshotJson(entity), action), autoSave: true);
+			ConcessionPolicyMapping.ToSnapshotJson(entity), action, reason), autoSave: true);
+	}
+
+	private static void EnsureConcurrency(ConcessionPolicy entity, string? concurrencyStamp)
+	{
+		if (string.IsNullOrWhiteSpace(concurrencyStamp))
+			throw new BusinessException(ConcessionPolicyErrorCodes.ConcurrencyStampRequired);
+		if (!string.Equals(entity.ConcurrencyStamp, concurrencyStamp, StringComparison.Ordinal))
+			throw new BusinessException(ConcessionPolicyErrorCodes.ConcurrencyConflict);
 	}
 
 	private static ConcessionPolicyStatus ParseListStatus(string value) => value.Trim().ToLowerInvariant() switch

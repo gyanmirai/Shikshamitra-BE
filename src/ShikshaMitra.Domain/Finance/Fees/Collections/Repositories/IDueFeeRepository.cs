@@ -12,4 +12,6 @@ public interface IDueFeeRepository : IRepository<DueFee, Guid>
 	/// Used as a defensive idempotency guard inside <see cref="DueFeeManager"/>.
 	/// </summary>
 	Task<bool> ExistsForStudentAsync(Guid studentId, CancellationToken ct = default);
+	Task<bool> ExistsForStudentInPeriodAsync(
+		Guid studentId, DateTime periodStart, DateTime periodEnd, CancellationToken ct = default);
 }

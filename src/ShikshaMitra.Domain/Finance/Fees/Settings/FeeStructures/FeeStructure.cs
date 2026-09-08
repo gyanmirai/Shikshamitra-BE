@@ -29,8 +29,13 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// frontend-only field with nothing on the backend to resolve against.
 	/// </summary>
 	public Guid? CollectionPolicyId { get; private set; }
+	public Guid? CollectionPolicyVersionId { get; private set; }
 	public Guid? ConcessionPolicyId { get; private set; }
 	public Guid? ConcessionPolicyVersionId { get; private set; }
+	public Guid? RefundPolicyId { get; private set; }
+	public Guid? RefundPolicyVersionId { get; private set; }
+	public Guid? ProrationPolicyId { get; private set; }
+	public Guid? ProrationPolicyVersionId { get; private set; }
 	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; private set; } = ConcessionFeeHeadScope.EntireFeeStructure;
 	public string ConcessionApplicableFeeHeadIdsJson { get; private set; } = "[]";
 
@@ -58,9 +63,21 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Name = name;
 	}
 
+	public void AttachCollectionPolicy(Guid? collectionPolicyId, Guid? collectionPolicyVersionId)
+	{
+		if (collectionPolicyId.HasValue != collectionPolicyVersionId.HasValue)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
+		}
+		CollectionPolicyId = collectionPolicyId;
+		CollectionPolicyVersionId = collectionPolicyVersionId;
+	}
+
+	/// <summary>Legacy hydration path for rows created before immutable policy attachment.</summary>
 	public void AttachCollectionPolicy(Guid? collectionPolicyId)
 	{
 		CollectionPolicyId = collectionPolicyId;
+		CollectionPolicyVersionId = null;
 	}
 
 	public void AttachConcessionPolicy(
@@ -90,6 +107,24 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public IReadOnlyList<Guid> GetConcessionApplicableFeeHeadIds() =>
 		JsonSerializer.Deserialize<List<Guid>>(ConcessionApplicableFeeHeadIdsJson) ?? [];
+
+	public void AttachRefundPolicy(Guid? refundPolicyId, Guid? refundPolicyVersionId)
+	{
+		if (refundPolicyId.HasValue != refundPolicyVersionId.HasValue)
+			throw new BusinessException(RefundPolicyErrorCodes.PolicyVersionNotFound)
+				.WithData("field", "RefundPolicyVersionId");
+		RefundPolicyId = refundPolicyId;
+		RefundPolicyVersionId = refundPolicyVersionId;
+	}
+
+	public void AttachProrationPolicy(Guid? prorationPolicyId, Guid? prorationPolicyVersionId)
+	{
+		if (prorationPolicyId.HasValue != prorationPolicyVersionId.HasValue)
+			throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound)
+				.WithData("field", "ProrationPolicyVersionId");
+		ProrationPolicyId = prorationPolicyId;
+		ProrationPolicyVersionId = prorationPolicyVersionId;
+	}
 
 	public void AddDetail(FeeStructureDetail detail)
 	{

@@ -22,4 +22,18 @@ public static class CollectionPolicyErrorCodes
 	public const string ExceptionWindowReasonRequired = Prefix + "010016";
 	public const string ExceptionWindowAlreadyActive = Prefix + "010017";
 	public const string ExceptionWindowNotFound = Prefix + "010018";
+	public const string InvalidStatus = Prefix + "010019";
+	public const string CodeRequired = Prefix + "010020";
+	public const string InvalidEffectiveDates = Prefix + "010021";
+	public const string InvalidLateFeeRule = Prefix + "010022";
+	public const string InvalidWaiverRule = Prefix + "010023";
+	public const string InvalidFeeHeadReference = Prefix + "010024";
+	public const string PolicyNotActive = Prefix + "010025";
+	public const string AcademicYearMismatch = Prefix + "010026";
+	public const string PolicyVersionNotFound = Prefix + "010027";
+	public const string PolicyNotAttached = Prefix + "010028";
+	public const string PolicyInUse = Prefix + "010029";
+	public const string FeeHeadMismatch = Prefix + "010030";
+	public const string WorkingDayGraceNotSupported = Prefix + "010031";
+	public const string DuplicatePolicyCode = Prefix + "010032";
 }

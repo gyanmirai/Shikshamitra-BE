@@ -16,6 +16,7 @@ public class ConcessionPolicyConfiguration : IEntityTypeConfiguration<Concession
 		builder.Property(x => x.PolicyCode).IsRequired().HasMaxLength(32);
 		builder.Property(x => x.Description).HasMaxLength(500);
 		builder.Property(x => x.Status).IsRequired().HasConversion<int>();
+		builder.Property(x => x.IsDefault).IsRequired();
 		builder.Property(x => x.ValueSource).IsRequired().HasConversion<int>();
 		builder.Property(x => x.CalculationMethod).IsRequired().HasConversion<int>();
 		builder.Property(x => x.ApplyOn).IsRequired().HasConversion<int>();
@@ -29,5 +30,8 @@ public class ConcessionPolicyConfiguration : IEntityTypeConfiguration<Concession
 			.HasDatabaseName("IX_Finance_ConcessionPolicies_Tenant_Year_Name");
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.PolicyCode }).IsUnique()
 			.HasDatabaseName("IX_Finance_ConcessionPolicies_Tenant_Year_Code");
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsDefault })
+			.IsUnique().HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true")
+			.HasDatabaseName("IX_Finance_ConcessionPolicies_ActiveDefault");
 	}
 }

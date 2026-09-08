@@ -1,8 +1,12 @@
 using Shouldly;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Xunit;
 
@@ -17,12 +21,18 @@ public class CollectionPolicyExceptionWindowAppService_Tests : ShikshaMitraAppli
 	private readonly ICollectionPolicyExceptionWindowAppService _windows;
 	private readonly ICollectionPolicyAppService _collectionPolicies;
 	private readonly IGuidGenerator _guidGenerator;
+	private readonly IRepository<AcademicYear, Guid> _academicYearRepository;
+	private readonly IRepository<FeeCategory, Guid> _feeCategoryRepository;
+	private readonly IRepository<FeeHead, Guid> _feeHeadRepository;
 
 	public CollectionPolicyExceptionWindowAppService_Tests()
 	{
 		_windows = GetRequiredService<ICollectionPolicyExceptionWindowAppService>();
 		_collectionPolicies = GetRequiredService<ICollectionPolicyAppService>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
+		_academicYearRepository = GetRequiredService<IRepository<AcademicYear, Guid>>();
+		_feeCategoryRepository = GetRequiredService<IRepository<FeeCategory, Guid>>();
+		_feeHeadRepository = GetRequiredService<IRepository<FeeHead, Guid>>();
 	}
 
 	private static CreateCollectionPolicyExceptionWindowDto SchoolWideWindow(
@@ -36,6 +46,38 @@ public class CollectionPolicyExceptionWindowAppService_Tests : ShikshaMitraAppli
 		ReasonCode = "GATEWAY_OUTAGE",
 		Reason = "Payment gateway was down for several days.",
 	};
+
+	private async Task<CollectionPolicyDto> CreateActivePolicyAsync(string name)
+	{
+		var academicYearId = _guidGenerator.Create();
+		var categoryId = _guidGenerator.Create();
+		var feeHeadId = _guidGenerator.Create();
+		await _academicYearRepository.InsertAsync(new AcademicYear(
+			academicYearId, null, $"Test {academicYearId:N}",
+			new DateTime(2025, 4, 1), new DateTime(2026, 3, 31)), autoSave: true);
+		await _feeCategoryRepository.InsertAsync(new FeeCategory(
+			categoryId, null, academicYearId, $"Category {categoryId:N}", null), autoSave: true);
+		await _feeHeadRepository.InsertAsync(new FeeHead(
+			feeHeadId, null, academicYearId, categoryId, "Tuition Fee",
+			FeeHeadModule.Finance, false, null), autoSave: true);
+
+		return await _collectionPolicies.CreateAsync(new CreateUpdateCollectionPolicyDto
+		{
+			AcademicYearId = academicYearId,
+			PolicyName = name,
+			PolicyCode = $"CP-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
+			Status = "Active",
+			EnableLateFee = true,
+			GracePeriodDays = 0,
+			LateFeeApplyOnFeeHeads = new() { feeHeadId },
+			LateFeeType = "PerDay",
+			AmountPerDay = 20,
+			PercentageBase = "OutstandingAmount",
+			CompoundFrequency = "Daily",
+			RoundingMethod = "None",
+			AllowOnlineCollection = true,
+		});
+	}
 
 	[Fact]
 	public async Task Create_Then_List_Round_Trips_A_SchoolWide_Window()
@@ -88,22 +130,7 @@ public class CollectionPolicyExceptionWindowAppService_Tests : ShikshaMitraAppli
 	[Fact]
 	public async Task Acceptance_SuspendLateFeeAccrual_Window_Zeroes_Late_Fee_Via_Simulate()
 	{
-		var academicYearId = _guidGenerator.Create();
-		var policy = await _collectionPolicies.CreateAsync(new CreateUpdateCollectionPolicyDto
-		{
-			AcademicYearId = academicYearId,
-			PolicyName = "Exception Window Acceptance Policy",
-			PolicyCode = $"CP-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
-			Status = "Active",
-			EnableLateFee = true,
-			GracePeriodDays = 0,
-			LateFeeType = "PerDay",
-			AmountPerDay = 20,
-			PercentageBase = "OutstandingAmount",
-			CompoundFrequency = "Daily",
-			RoundingMethod = "None",
-			AllowOnlineCollection = true,
-		});
+		var policy = await CreateActivePolicyAsync("Exception Window Acceptance Policy");
 
 		var today = DateTime.UtcNow.Date;
 		await _windows.CreateAsync(SchoolWideWindow(today.AddDays(-5), today.AddDays(5)));
@@ -123,22 +150,7 @@ public class CollectionPolicyExceptionWindowAppService_Tests : ShikshaMitraAppli
 	[Fact]
 	public async Task No_Active_Window_Simulates_Normally()
 	{
-		var academicYearId = _guidGenerator.Create();
-		var policy = await _collectionPolicies.CreateAsync(new CreateUpdateCollectionPolicyDto
-		{
-			AcademicYearId = academicYearId,
-			PolicyName = "No Window Policy",
-			PolicyCode = $"CP-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
-			Status = "Active",
-			EnableLateFee = true,
-			GracePeriodDays = 0,
-			LateFeeType = "PerDay",
-			AmountPerDay = 20,
-			PercentageBase = "OutstandingAmount",
-			CompoundFrequency = "Daily",
-			RoundingMethod = "None",
-			AllowOnlineCollection = true,
-		});
+		var policy = await CreateActivePolicyAsync("No Window Policy");
 
 		var result = await _collectionPolicies.SimulateAsync(policy.Id, new CollectionPolicySimulateRequestDto
 		{

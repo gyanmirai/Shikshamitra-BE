@@ -25,6 +25,8 @@ Finance covers fees, collections, concessions, adjustments, refunds, receipts, a
 | 6 | [Concession policy flow](./references/concession-policy-flow.md) | Review the proposed versioned concession policy, fee assignment, request, approval, allocation, and correction design |
 | 7 | [Concession policy end-to-end](./references/concession-policy-end-to-end.md) | Configure, integrate, deploy, and verify concession policies |
 | 8 | [Collection policy end-to-end](./references/collection-policy-end-to-end.md) | Follow the target staff, frontend, backend, runtime, and rollout flow for collection policies |
+| 9 | [Refund Policy flow](./references/refund-policy-flow.md) | Review the proposed policy, receipt-linked request, approval reservation, settlement, accounting, reversal, and reporting design |
+| 10 | [Proration Policy end-to-end](./references/proration-policy-end-to-end.md) | Review the current gap and implement policy versioning, fee attachment, charge periods, demand calculation, downstream integrations, and rollout |
 
 ## Source of truth
 
@@ -51,6 +53,8 @@ Use this table before searching code:
 | How should Concession Policy integrate with fee structures and student requests? | [Concession policy flow](./references/concession-policy-flow.md) |
 | How does concession policy work end to end? | [Concession policy end-to-end](./references/concession-policy-end-to-end.md) |
 | How should collection policy work end to end? | [Collection policy end-to-end](./references/collection-policy-end-to-end.md) |
+| How should Refund Policy integrate with payments, receipts, settlement, accounts, and reports? | [Refund Policy flow](./references/refund-policy-flow.md) |
+| How should Proration Policy connect fee structures, assignments, demands, and downstream Finance modules? | [Proration Policy end-to-end](./references/proration-policy-end-to-end.md) |
 
 ## Validation
 

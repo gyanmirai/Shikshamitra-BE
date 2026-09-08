@@ -3,7 +3,9 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 public enum CollectionPolicyStatus
 {
 	Active = 0,
-	Archived = 1
+	Archived = 1,
+	// Keep the existing numeric values stable for deployed rows. New policies use Draft.
+	Draft = 2
 }
 
 public enum LateFeeCalculationType

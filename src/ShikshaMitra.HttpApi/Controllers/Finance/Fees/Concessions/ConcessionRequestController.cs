@@ -29,6 +29,13 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 		[FromBody] CreateConcessionRequestDto input) =>
 		concessionRequestAppService.CreateAsync(academicYearId, input);
 
+	[HttpPost("preview")]
+	[ProducesResponseType(typeof(ConcessionRequestPreviewDto), StatusCodes.Status200OK)]
+	public Task<ConcessionRequestPreviewDto> PreviewAsync(
+		[FromQuery] Guid academicYearId,
+		[FromBody] ConcessionRequestPreviewInputDto input) =>
+		concessionRequestAppService.PreviewAsync(academicYearId, input);
+
 	[HttpPut("{id:guid}")]
 	[ProducesResponseType(typeof(ApiDataResponseDto<ConcessionRequestDetailDto>), StatusCodes.Status200OK)]
 	public Task<ApiDataResponseDto<ConcessionRequestDetailDto>> UpdateAsync(

@@ -74,6 +74,21 @@ public class FeeLedgerLineDto
     /// <summary>Original fee amount for this month.</summary>
     public double Total { get; set; }
 
+    /// <summary>Full scheduled amount before proration. Equals Total when no proration applied.</summary>
+    public double ScheduledTotal { get; set; }
+
+    public Guid? ProrationPolicyId { get; set; }
+    public Guid? ProrationPolicyVersionId { get; set; }
+    public decimal? ProrationFactor { get; set; }
+    public string? ProrationRuleType { get; set; }
+    public string? ProrationRoundingMode { get; set; }
+    public DateTime? ProrationEligibleStartDate { get; set; }
+    public DateTime? ProrationEligibleEndDate { get; set; }
+    public int? ProrationCoverageDays { get; set; }
+    public int? ProrationEligibleDays { get; set; }
+    public int? ProrationChargedDays { get; set; }
+    public string? ProrationExplanation { get; set; }
+
     /// <summary>Amount already paid (cleared) against this obligation.</summary>
     public double Paid { get; set; }
 

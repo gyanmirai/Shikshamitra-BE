@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.Managers;
@@ -88,6 +89,32 @@ public class FeeHeadAppService(
             Items = dtos
         };
     }
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.View)]
+	public async Task<List<ActiveFeeHeadLookupDto>> GetActiveAsync(Guid academicYearId)
+	{
+		var feeHeadQuery = await feeHeadRepository.GetQueryableAsync();
+		var categoryQuery = await feeCategoryRepository.GetQueryableAsync();
+
+		return await AsyncExecuter.ToListAsync(
+			from feeHead in feeHeadQuery
+			join category in categoryQuery on feeHead.FeeCategoryId equals category.Id
+			where feeHead.AcademicYearId == academicYearId &&
+				feeHead.IsActive &&
+				category.AcademicYearId == academicYearId &&
+				category.IsActive
+			orderby category.Name, feeHead.Name
+			select new ActiveFeeHeadLookupDto
+			{
+				Id = feeHead.Id,
+				AcademicYearId = feeHead.AcademicYearId,
+				FeeCategoryId = feeHead.FeeCategoryId,
+				FeeCategoryName = category.Name,
+				Name = feeHead.Name,
+				Module = feeHead.Module,
+				IsConcessionApplied = feeHead.IsConcessionApplied
+			});
+	}
 
 	public async Task<FeeHeadResponse> GetByIdAsync(Guid id)
 	{

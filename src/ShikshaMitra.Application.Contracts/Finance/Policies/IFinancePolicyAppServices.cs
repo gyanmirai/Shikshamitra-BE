@@ -23,6 +23,7 @@ public interface IConcessionPolicyAppService : IApplicationService
 {
 	Task<PagedResultDto<ConcessionPolicyDto>> GetListAsync(ConcessionPolicyListRequestDto input);
 	Task<ConcessionPolicyDto> GetAsync(Guid id);
+	Task<ConcessionPolicyImpactDto> GetImpactAsync(Guid id);
 	Task<ConcessionPolicyDto> CreateAsync(CreateUpdateConcessionPolicyDto input);
 	Task<ConcessionPolicyDto> UpdateAsync(Guid id, CreateUpdateConcessionPolicyDto input);
 	Task<ConcessionPolicyDto> CloneAsync(Guid id, ConcessionPolicyCloneRequestDto input);
@@ -30,6 +31,36 @@ public interface IConcessionPolicyAppService : IApplicationService
 	Task<ConcessionPolicyDto> UnarchiveAsync(Guid id);
 	Task<PagedResultDto<FinancePolicyVersionDto>> GetVersionsAsync(Guid id, FinancePolicyVersionListRequestDto input);
 	Task<ConcessionPolicySimulateResponseDto> SimulateAsync(Guid id, ConcessionPolicySimulateRequestDto input);
+}
+
+public interface IRefundPolicyAppService : IApplicationService
+{
+	Task<PagedResultDto<RefundPolicyDto>> GetListAsync(RefundPolicyListRequestDto input);
+	Task<RefundPolicyDto> GetAsync(Guid id);
+	Task<RefundPolicyImpactDto> GetImpactAsync(Guid id);
+	Task<RefundPolicyDto> CreateAsync(CreateUpdateRefundPolicyDto input);
+	Task<RefundPolicyDto> UpdateAsync(Guid id, CreateUpdateRefundPolicyDto input);
+	Task<RefundPolicyDto> CloneAsync(Guid id, RefundPolicyCloneRequestDto input);
+	Task ArchiveAsync(Guid id);
+	Task<RefundPolicyDto> UnarchiveAsync(Guid id);
+	Task<PagedResultDto<FinancePolicyVersionDto>> GetVersionsAsync(Guid id, FinancePolicyVersionListRequestDto input);
+	Task<RefundPolicySimulateResponseDto> SimulateAsync(Guid id, RefundPolicySimulateRequestDto input);
+}
+
+public interface IProrationPolicyAppService : IApplicationService
+{
+	Task<PagedResultDto<ProrationPolicyDto>> GetListAsync(ProrationPolicyListRequestDto input);
+	Task<ProrationPolicyDto> GetAsync(Guid id);
+	Task<ProrationPolicyImpactDto> GetImpactAsync(Guid id);
+	Task<ProrationPolicyDto> CreateAsync(CreateUpdateProrationPolicyDto input);
+	Task<ProrationPolicyDto> UpdateAsync(Guid id, CreateUpdateProrationPolicyDto input);
+	Task<ProrationPolicyDto> ActivateAsync(Guid id, string? changeReason = null);
+	Task<ProrationPolicyDto> CloneAsync(Guid id, ProrationPolicyCloneRequestDto input);
+	Task ArchiveAsync(Guid id);
+	Task<ProrationPolicyDto> UnarchiveAsync(Guid id);
+	Task<PagedResultDto<FinancePolicyVersionDto>> GetVersionsAsync(Guid id, FinancePolicyVersionListRequestDto input);
+	Task<ProrationCalculationResultDto> SimulateAsync(Guid id, ProrationPolicySimulateRequestDto input);
+	Task<ProrationPolicyAttachmentImpactDto> GetAttachmentImpactAsync(Guid id, ProrationPolicyAttachmentImpactRequestDto input);
 }
 
 public interface IStudentFeePolicyOverrideAppService : IApplicationService

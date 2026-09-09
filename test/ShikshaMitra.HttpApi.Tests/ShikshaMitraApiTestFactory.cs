@@ -59,6 +59,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 {
 	private SqliteConnection? _keepAliveConnection;
 	private readonly AdmissionCrmTransactionFailureInterceptor _admissionCrmTransactionFailure = new();
+	private readonly AccountCategoryTagIdentityInterceptor _accountCategoryTagIdentity = new();
 
 	public Guid SeededRoleId { get; private set; }
 	public Guid SeededShiftId { get; private set; }
@@ -351,13 +352,13 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			options.Configure(ctx =>
 			{
 				ctx.DbContextOptions.UseSqlite(_keepAliveConnection)
-					.AddInterceptors(_admissionCrmTransactionFailure);
+					.AddInterceptors(_admissionCrmTransactionFailure, _accountCategoryTagIdentity);
 			});
 		});
 
 		var dbOptions = new DbContextOptionsBuilder<ShikshaMitraDbContext>()
 			.UseSqlite(_keepAliveConnection)
-			.AddInterceptors(_admissionCrmTransactionFailure)
+			.AddInterceptors(_admissionCrmTransactionFailure, _accountCategoryTagIdentity)
 			.Options;
 
 		using var context = new ShikshaMitraDbContext(dbOptions);

@@ -8,6 +8,10 @@ public class FeeHeadResponse : EntityDto<Guid>
     public Guid AcademicYearId { get; set; }
     public Guid FeeCategoryId { get; set; }
     public string FeeCategoryName { get; set; }
+    public Guid IncomeCategoryId { get; set; }
+    public string IncomeCategoryName { get; set; }
+    public Guid IncomeAccountHeadId { get; set; }
+    public string IncomeAccountHeadName { get; set; }
     public string Name { get; set; }
     public FeeHeadModule? Module { get; set; }
     public bool IsConcessionApplied { get; set; }
@@ -28,6 +32,10 @@ public class ActiveFeeHeadLookupDto : EntityDto<Guid>
 	public Guid AcademicYearId { get; set; }
 	public Guid FeeCategoryId { get; set; }
 	public string FeeCategoryName { get; set; } = string.Empty;
+	public Guid IncomeCategoryId { get; set; }
+	public string IncomeCategoryName { get; set; } = string.Empty;
+	public Guid IncomeAccountHeadId { get; set; }
+	public string IncomeAccountHeadName { get; set; } = string.Empty;
 	public string Name { get; set; } = string.Empty;
 	public FeeHeadModule? Module { get; set; }
 	public bool IsConcessionApplied { get; set; }

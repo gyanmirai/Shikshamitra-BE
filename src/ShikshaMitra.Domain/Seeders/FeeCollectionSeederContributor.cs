@@ -4,6 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings;
@@ -72,6 +75,8 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
     private readonly IRepository<Student, Guid>                      _studentRepository;
     private readonly IRepository<FeeCategory, Guid>                  _feeCategoryRepository;
     private readonly IRepository<FeeHead, Guid>                      _feeHeadRepository;
+    private readonly IRepository<TransactionCategory, Guid>         _incomeCategoryRepository;
+    private readonly IRepository<AccountHead, Guid>                 _accountHeadRepository;
     private readonly IRepository<ReceiptBook, Guid>                  _receiptBookRepository;
     private readonly IRepository<FeeStructureMetadata, Guid>         _feeStructureMetadataRepository;
     private readonly IRepository<FeeStructure, Guid>                 _feeStructureRepository;
@@ -95,6 +100,8 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
         IRepository<Student, Guid> studentRepository,
         IRepository<FeeCategory, Guid> feeCategoryRepository,
         IRepository<FeeHead, Guid> feeHeadRepository,
+        IRepository<TransactionCategory, Guid> incomeCategoryRepository,
+        IRepository<AccountHead, Guid> accountHeadRepository,
         IRepository<ReceiptBook, Guid> receiptBookRepository,
         IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
         IRepository<FeeStructure, Guid> feeStructureRepository,
@@ -115,6 +122,8 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
         _studentRepository               = studentRepository;
         _feeCategoryRepository           = feeCategoryRepository;
         _feeHeadRepository               = feeHeadRepository;
+        _incomeCategoryRepository         = incomeCategoryRepository;
+        _accountHeadRepository            = accountHeadRepository;
         _receiptBookRepository           = receiptBookRepository;
         _feeStructureMetadataRepository  = feeStructureMetadataRepository;
         _feeStructureRepository          = feeStructureRepository;
@@ -381,6 +390,8 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
         var existing = (await _feeHeadRepository.GetListAsync(h => h.Name == name)).FirstOrDefault();
         if (existing is not null) return existing;
 
+        var incomeCategory = await GetOrCreateIncomeCategoryAsync(academicYearId, name);
+
         var created = await _feeHeadRepository.InsertAsync(
             new FeeHead(
                 id:                  GuidGenerator.Create(),
@@ -390,11 +401,34 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
                 name:                name,
                 module:              FeeHeadModule.Finance,
                 isConcessionApplied: false,
-                description:         description),
+                description:         description,
+                incomeCategoryId:    incomeCategory.Id),
             autoSave: false);
 
         _logger.LogDebug("[FeeCollectionSeeder] Created FeeHead: {Name}", created.Name);
         return created;
+    }
+
+    private async Task<TransactionCategory> GetOrCreateIncomeCategoryAsync(Guid academicYearId, string feeHeadName)
+    {
+        var categoryName = $"{feeHeadName} Income";
+        var existing = (await _incomeCategoryRepository.GetListAsync(x =>
+            x.AcademicYearId == academicYearId && x.CategoryType == TransactionType.Income &&
+            x.Name == categoryName)).FirstOrDefault();
+        if (existing is not null) return existing;
+
+        var categoryId = GuidGenerator.Create();
+        var accountHeadId = GuidGenerator.Create();
+        await _accountHeadRepository.InsertAsync(new AccountHead(
+            accountHeadId, CurrentTenant.Id, academicYearId, categoryName,
+            AccountHeadType.Income, null,
+            "Auto-created revenue account for seeded fee collection data."),
+            autoSave: false);
+
+        return await _incomeCategoryRepository.InsertAsync(new TransactionCategory(
+            categoryId, CurrentTenant.Id, academicYearId, TransactionType.Income, categoryName,
+            "Auto-created income category for seeded fee collection data.", [], true,
+            AccountSettingSeedCode.FromId(categoryId), accountHeadId, DateTimeOffset.UtcNow, null), autoSave: false);
     }
 
     // ─── Receipt book ─────────────────────────────────────────────────────────

@@ -48,12 +48,16 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		var waiverFeeHeadId = _guidGenerator.Create();
 		await _feeCategoryRepository.InsertAsync(new FeeCategory(
 			categoryId, null, academicYearId, $"Category {categoryId:N}", null), autoSave: true);
+		var incomeCategoryId = await ShikshaMitra.Finance.Fees.FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
+			GetRequiredService<IRepository<ShikshaMitra.Domain.Finance.Accounts.Settings.AccountHead, Guid>>(),
+			GetRequiredService<IRepository<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory, Guid>>(),
+			academicYearId, null, "Policy Fee");
 		await _feeHeadRepository.InsertAsync(new FeeHead(
 			lateFeeHeadId, null, academicYearId, categoryId, "Tuition Fee",
-			FeeHeadModule.Finance, false, null), autoSave: true);
+			FeeHeadModule.Finance, false, null, incomeCategoryId), autoSave: true);
 		await _feeHeadRepository.InsertAsync(new FeeHead(
 			waiverFeeHeadId, null, academicYearId, categoryId, "Transport Fee",
-			FeeHeadModule.Finance, false, null), autoSave: true);
+			FeeHeadModule.Finance, false, null, incomeCategoryId), autoSave: true);
 
 		return new CreateUpdateCollectionPolicyDto
 		{

@@ -10,6 +10,9 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.Managers;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Transactions;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 
@@ -19,12 +22,16 @@ public class FeeHeadAppService(
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<FeeCategory, Guid> feeCategoryRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,
-	FeeCategoryManager feeCategoryManager
+	IRepository<TransactionCategory, Guid> incomeCategoryRepository,
+	IRepository<AccountHead, Guid> accountHeadRepository,
+	FeeCategoryManager feeCategoryManager,
+	FeeHeadAccountingManager accountingManager
 ) : ApplicationService, IFeeHeadAppService
 {
 	public async Task<FeeHeadResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input)
     {
 		await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(academicYearId, input.FeeCategoryId, input.Name);
+		await accountingManager.GetValidMappingAsync(academicYearId, input.IncomeCategoryId);
 
 		var feeHead = new FeeHead(
             GuidGenerator.Create(),
@@ -34,7 +41,8 @@ public class FeeHeadAppService(
             input.Name.Trim(),
             input.Module,
             input.IsConcessionApplied,
-            input.Description
+            input.Description,
+            input.IncomeCategoryId
         );
 
         await feeHeadRepository.InsertAsync(feeHead);
@@ -69,6 +77,13 @@ public class FeeHeadAppService(
         var categoryIds = items.Select(x => x.FeeCategoryId).Distinct().ToList();
         var categories = await feeCategoryRepository.GetListAsync(x => categoryIds.Contains(x.Id));
         var categoryDict = categories.ToDictionary(x => x.Id, x => x.Name);
+		var incomeCategoryIds = items.Select(x => x.IncomeCategoryId).Distinct().ToList();
+		var incomeCategories = await incomeCategoryRepository.GetListAsync(x => incomeCategoryIds.Contains(x.Id));
+		var incomeCategoryDict = incomeCategories.ToDictionary(x => x.Id);
+		var accountHeadIds = incomeCategories.Where(x => x.DefaultAccountHeadId.HasValue)
+			.Select(x => x.DefaultAccountHeadId!.Value).Distinct().ToList();
+		var accountHeads = await accountHeadRepository.GetListAsync(x => accountHeadIds.Contains(x.Id));
+		var accountHeadDict = accountHeads.ToDictionary(x => x.Id);
 
 		var usedFeeHeadIds = await GetUsedFeeHeadIdsAsync(items.Select(x => x.Id).ToList());
 
@@ -76,6 +91,7 @@ public class FeeHeadAppService(
         {
             var response = ObjectMapper.Map<FeeHead, FeeHeadResponse>(x);
             response.FeeCategoryName = categoryDict.GetValueOrDefault(x.FeeCategoryId);
+			PopulateAccountingMapping(response, x, incomeCategoryDict, accountHeadDict);
             response.IsUsedInDownstream = usedFeeHeadIds.Contains(x.Id);
             return response;
         }).ToList();
@@ -95,14 +111,24 @@ public class FeeHeadAppService(
 	{
 		var feeHeadQuery = await feeHeadRepository.GetQueryableAsync();
 		var categoryQuery = await feeCategoryRepository.GetQueryableAsync();
+		var incomeCategoryQuery = await incomeCategoryRepository.GetQueryableAsync();
+		var accountHeadQuery = await accountHeadRepository.GetQueryableAsync();
 
 		return await AsyncExecuter.ToListAsync(
 			from feeHead in feeHeadQuery
 			join category in categoryQuery on feeHead.FeeCategoryId equals category.Id
+			join incomeCategory in incomeCategoryQuery on feeHead.IncomeCategoryId equals incomeCategory.Id
+			join accountHead in accountHeadQuery on incomeCategory.DefaultAccountHeadId equals (Guid?)accountHead.Id
 			where feeHead.AcademicYearId == academicYearId &&
 				feeHead.IsActive &&
 				category.AcademicYearId == academicYearId &&
-				category.IsActive
+				category.IsActive &&
+				incomeCategory.AcademicYearId == academicYearId &&
+				incomeCategory.CategoryType == TransactionType.Income &&
+				incomeCategory.IsActive &&
+				accountHead.AcademicYearId == academicYearId &&
+				accountHead.HeadType == AccountHeadType.Income &&
+				accountHead.IsActive
 			orderby category.Name, feeHead.Name
 			select new ActiveFeeHeadLookupDto
 			{
@@ -110,6 +136,10 @@ public class FeeHeadAppService(
 				AcademicYearId = feeHead.AcademicYearId,
 				FeeCategoryId = feeHead.FeeCategoryId,
 				FeeCategoryName = category.Name,
+				IncomeCategoryId = incomeCategory.Id,
+				IncomeCategoryName = incomeCategory.Name,
+				IncomeAccountHeadId = accountHead.Id,
+				IncomeAccountHeadName = accountHead.Name,
 				Name = feeHead.Name,
 				Module = feeHead.Module,
 				IsConcessionApplied = feeHead.IsConcessionApplied
@@ -128,8 +158,15 @@ public class FeeHeadAppService(
 
 		await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(
 			feeHead.AcademicYearId, input.FeeCategoryId, input.Name, feeHeadId);
+		await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, input.IncomeCategoryId);
+		if (feeHead.IncomeCategoryId != input.IncomeCategoryId &&
+			(await GetUsedFeeHeadIdsAsync([feeHeadId])).Count > 0)
+		{
+			throw new BusinessException(FinanceFeeHeadErrorCodes.IncomeCategoryChangeBlocked);
+		}
 
-		feeHead.Update(input.FeeCategoryId, input.Name.Trim(), input.Module, input.IsConcessionApplied, input.Description);
+		feeHead.Update(input.FeeCategoryId, input.Name.Trim(), input.Module, input.IsConcessionApplied,
+			input.Description, input.IncomeCategoryId);
 
 		await feeHeadRepository.UpdateAsync(feeHead);
 
@@ -154,6 +191,11 @@ public class FeeHeadAppService(
     public async Task<FeeHeadResponse> UpdateStatusAsync(Guid feeHeadId, FeeHeadStatusUpdateRequest input)
     {
         var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
+
+		if (input.IsActive)
+		{
+			await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, feeHead.IncomeCategoryId);
+		}
 
 		if (!input.IsActive && (await GetUsedFeeHeadIdsAsync([feeHeadId])).Count > 0)
 		{
@@ -192,8 +234,26 @@ public class FeeHeadAppService(
 
 		var category = await feeCategoryRepository.FindAsync(feeHead.FeeCategoryId);
 		response.FeeCategoryName = category?.Name;
+		var incomeCategory = await incomeCategoryRepository.FindAsync(feeHead.IncomeCategoryId);
+		var accountHead = incomeCategory?.DefaultAccountHeadId is { } accountHeadId
+			? await accountHeadRepository.FindAsync(accountHeadId) : null;
+		response.IncomeCategoryName = incomeCategory?.Name;
+		response.IncomeAccountHeadId = accountHead?.Id ?? Guid.Empty;
+		response.IncomeAccountHeadName = accountHead?.Name;
 		response.IsUsedInDownstream = (await GetUsedFeeHeadIdsAsync([feeHead.Id])).Count > 0;
 
 		return response;
+	}
+
+	private static void PopulateAccountingMapping(FeeHeadResponse response, FeeHead feeHead,
+		IReadOnlyDictionary<Guid, TransactionCategory> incomeCategories,
+		IReadOnlyDictionary<Guid, AccountHead> accountHeads)
+	{
+		if (!incomeCategories.TryGetValue(feeHead.IncomeCategoryId, out var incomeCategory)) return;
+		response.IncomeCategoryName = incomeCategory.Name;
+		if (!incomeCategory.DefaultAccountHeadId.HasValue ||
+			!accountHeads.TryGetValue(incomeCategory.DefaultAccountHeadId.Value, out var accountHead)) return;
+		response.IncomeAccountHeadId = accountHead.Id;
+		response.IncomeAccountHeadName = accountHead.Name;
 	}
 }

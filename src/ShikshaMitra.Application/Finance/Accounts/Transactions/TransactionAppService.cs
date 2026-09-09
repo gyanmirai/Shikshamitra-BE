@@ -16,6 +16,7 @@ namespace ShikshaMitra.Finance.Accounts.Transactions;
 public partial class TransactionAppService(
 	IRepository<Transaction, Guid> transactionRepository,
 	IRepository<TransactionCategory, Guid> transactionCategoryRepository,
+	IRepository<AccountHead, Guid> accountHeadRepository,
 	FinanceScopeAccessService financeScopeAccessService
 ) : ApplicationService, ITransactionAppService
 {
@@ -73,6 +74,7 @@ public partial class TransactionAppService(
 		if (category.CategoryType.HasValue && category.CategoryType.Value != transactionType)
 			throw new BusinessException("ShikshaMitra:TransactionCategoryTypeMismatch")
 				.WithData("CategoryId", category.Id).WithData("Expected", transactionType).WithData("Actual", category.CategoryType);
+		await EnsureCategoryAvailableAsync(category, academicYearId, input.PaymentDate, transactionType);
 
 		var transaction = new Transaction(
 			GuidGenerator.Create(), CurrentTenant.Id, academicYearId, input.CategoryId,
@@ -124,6 +126,7 @@ public partial class TransactionAppService(
 		if (category.CategoryType.HasValue && category.CategoryType.Value != transactionType)
 			throw new BusinessException("ShikshaMitra:TransactionCategoryTypeMismatch")
 				.WithData("CategoryId", category.Id).WithData("Expected", transactionType).WithData("Actual", category.CategoryType);
+		await EnsureCategoryAvailableAsync(category, transaction.AcademicYearId, input.PaymentDate, transactionType);
 
 		transaction.Update(input.CategoryId, input.Name, input.CategoryTags,
 			(decimal)input.Amount, input.PaymentMethod, input.PaymentDate, input.Notes);
@@ -139,5 +142,24 @@ public partial class TransactionAppService(
 		EnsureTransactionType(transaction, transactionType);
 		await transactionRepository.DeleteAsync(transaction, autoSave: true);
 		return new TransactionDeleteResponse { Success = true, Message = "Transaction deleted successfully" };
+	}
+
+	private async Task EnsureCategoryAvailableAsync(TransactionCategory category, Guid academicYearId,
+		DateTime paymentDate, TransactionType transactionType)
+	{
+		var postingTime = new DateTimeOffset(DateTime.SpecifyKind(paymentDate, DateTimeKind.Utc));
+		var expectedHeadType = transactionType == TransactionType.Income ? AccountHeadType.Income : AccountHeadType.Expense;
+		var head = category.DefaultAccountHeadId.HasValue
+			? await accountHeadRepository.FindAsync(category.DefaultAccountHeadId.Value)
+			: null;
+		if (!category.IsActive || category.AcademicYearId != academicYearId ||
+			(category.EffectiveFrom.HasValue && postingTime < category.EffectiveFrom.Value) ||
+			(category.EffectiveTo.HasValue && postingTime > category.EffectiveTo.Value) ||
+			head is null || !head.IsActive || head.AcademicYearId != academicYearId ||
+			head.HeadType != expectedHeadType)
+		{
+			throw new BusinessException("ShikshaMitra:TransactionCategoryNotAvailable")
+				.WithData("CategoryId", category.Id);
+		}
 	}
 }

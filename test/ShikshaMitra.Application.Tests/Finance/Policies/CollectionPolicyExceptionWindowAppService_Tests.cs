@@ -57,9 +57,13 @@ public class CollectionPolicyExceptionWindowAppService_Tests : ShikshaMitraAppli
 			new DateTime(2025, 4, 1), new DateTime(2026, 3, 31)), autoSave: true);
 		await _feeCategoryRepository.InsertAsync(new FeeCategory(
 			categoryId, null, academicYearId, $"Category {categoryId:N}", null), autoSave: true);
+		var incomeCategoryId = await ShikshaMitra.Finance.Fees.FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
+			GetRequiredService<IRepository<ShikshaMitra.Domain.Finance.Accounts.Settings.AccountHead, Guid>>(),
+			GetRequiredService<IRepository<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory, Guid>>(),
+			academicYearId, null, "Exception Fee");
 		await _feeHeadRepository.InsertAsync(new FeeHead(
 			feeHeadId, null, academicYearId, categoryId, "Tuition Fee",
-			FeeHeadModule.Finance, false, null), autoSave: true);
+			FeeHeadModule.Finance, false, null, incomeCategoryId), autoSave: true);
 
 		return await _collectionPolicies.CreateAsync(new CreateUpdateCollectionPolicyDto
 		{

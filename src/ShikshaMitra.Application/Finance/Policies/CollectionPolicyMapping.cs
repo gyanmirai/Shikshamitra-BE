@@ -10,13 +10,15 @@ internal static class CollectionPolicyMapping
 {
 	public static CollectionPolicyStatus ParseStatus(string value) => Normalize(value) switch
 	{
+		"draft" => CollectionPolicyStatus.Draft,
 		"active" => CollectionPolicyStatus.Active,
 		"archived" => CollectionPolicyStatus.Archived,
-		_ => throw new BusinessException(CollectionPolicyErrorCodes.PolicyNotFound).WithData("field", "status")
+		_ => throw new BusinessException(CollectionPolicyErrorCodes.InvalidStatus).WithData("field", "status")
 	};
 
 	public static string MapStatus(CollectionPolicyStatus value) => value switch
 	{
+		CollectionPolicyStatus.Draft => "Draft",
 		CollectionPolicyStatus.Archived => "Archived",
 		_ => "Active"
 	};
@@ -30,7 +32,7 @@ internal static class CollectionPolicyMapping
 		"permonth" => LateFeeCalculationType.PerMonth,
 		"compound" => LateFeeCalculationType.Compound,
 		"slab" => LateFeeCalculationType.Slab,
-		_ => LateFeeCalculationType.Flat
+		_ => throw InvalidEnum("lateFeeType")
 	};
 
 	public static string MapLateFeeType(LateFeeCalculationType value) => value.ToString();
@@ -39,7 +41,8 @@ internal static class CollectionPolicyMapping
 	{
 		"originalfee" => PercentageBaseType.OriginalFee,
 		"remainingbalance" => PercentageBaseType.RemainingBalance,
-		_ => PercentageBaseType.OutstandingAmount
+		"outstandingamount" => PercentageBaseType.OutstandingAmount,
+		_ => throw InvalidEnum("percentageBase")
 	};
 
 	public static string MapPercentageBase(PercentageBaseType value) => value.ToString();
@@ -48,7 +51,8 @@ internal static class CollectionPolicyMapping
 	{
 		"weekly" => CompoundFrequencyType.Weekly,
 		"monthly" => CompoundFrequencyType.Monthly,
-		_ => CompoundFrequencyType.Daily
+		"daily" => CompoundFrequencyType.Daily,
+		_ => throw InvalidEnum("compoundFrequency")
 	};
 
 	public static string MapCompoundFrequency(CompoundFrequencyType value) => value.ToString();
@@ -58,26 +62,36 @@ internal static class CollectionPolicyMapping
 		"roundup" => RoundingMethodType.RoundUp,
 		"rounddown" => RoundingMethodType.RoundDown,
 		"nearestrupee" => RoundingMethodType.NearestRupee,
-		_ => RoundingMethodType.None
+		"none" => RoundingMethodType.None,
+		_ => throw InvalidEnum("roundingMethod")
 	};
 
 	public static string MapRoundingMethod(RoundingMethodType value) => value.ToString();
 
-	public static GracePeriodType ParseGracePeriodType(string value) =>
-		Normalize(value) == "workingday" ? GracePeriodType.WorkingDay : GracePeriodType.Calendar;
+	public static GracePeriodType ParseGracePeriodType(string value) => Normalize(value) switch
+	{
+		"calendar" => GracePeriodType.Calendar,
+		"workingday" => GracePeriodType.WorkingDay,
+		_ => throw InvalidEnum("gracePeriodType")
+	};
 
 	public static string MapGracePeriodType(GracePeriodType value) => value.ToString();
 
-	public static EscalationCalculationType ParseEscalationCalculationType(string value) =>
-		Normalize(value) == "percentage" ? EscalationCalculationType.Percentage : EscalationCalculationType.Flat;
+	public static EscalationCalculationType ParseEscalationCalculationType(string value) => Normalize(value) switch
+	{
+		"flat" => EscalationCalculationType.Flat,
+		"percentage" => EscalationCalculationType.Percentage,
+		_ => throw InvalidEnum("escalationCalculationType")
+	};
 
 	public static string MapEscalationCalculationType(EscalationCalculationType value) => value.ToString();
 
 	public static FeeHeadOverrideMode ParseFeeHeadOverrideMode(string value) => Normalize(value) switch
 	{
+		"inherit" => FeeHeadOverrideMode.Inherit,
 		"nolatefee" => FeeHeadOverrideMode.NoLateFee,
 		"customrule" => FeeHeadOverrideMode.CustomRule,
-		_ => FeeHeadOverrideMode.Inherit
+		_ => throw InvalidEnum("feeHeadOverrideMode")
 	};
 
 	public static string MapFeeHeadOverrideMode(FeeHeadOverrideMode value) => value.ToString();
@@ -144,15 +158,18 @@ internal static class CollectionPolicyMapping
 			LateFeeRule = o.LateFeeRule is null ? null : ToLateFeeRuleOverrideDto(o.LateFeeRule)
 		}).ToList();
 
-	public static CollectionPolicyUpdateModel ToUpdateModel(CreateUpdateCollectionPolicyDto input) =>
+	public static CollectionPolicyUpdateModel ToUpdateModel(
+		CreateUpdateCollectionPolicyDto input,
+		DateTime effectiveFrom,
+		DateTime effectiveTo) =>
 		new(
 			input.PolicyName,
 			input.PolicyCode,
 			input.Description,
 			ParseStatus(input.Status),
 			input.IsDefault,
-			input.EffectiveFrom,
-			input.EffectiveTo,
+			effectiveFrom,
+			effectiveTo,
 			input.EnableLateFee,
 			input.GracePeriodDays,
 			ParseGracePeriodType(input.GracePeriodType),
@@ -191,8 +208,6 @@ internal static class CollectionPolicyMapping
 		Description = entity.Description,
 		Status = MapStatus(entity.Status),
 		IsDefault = entity.IsDefault,
-		EffectiveFrom = entity.EffectiveFrom,
-		EffectiveTo = entity.EffectiveTo,
 		EnableLateFee = entity.EnableLateFee,
 		GracePeriodDays = entity.GracePeriodDays,
 		GracePeriodType = MapGracePeriodType(entity.GracePeriodType),
@@ -231,4 +246,7 @@ internal static class CollectionPolicyMapping
 	public static string ToSnapshotJson(CollectionPolicyDto dto) => JsonSerializer.Serialize(dto);
 
 	private static string Normalize(string? value) => (value ?? string.Empty).Trim().ToLowerInvariant();
+
+	private static BusinessException InvalidEnum(string field) =>
+		new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule).WithData("field", field);
 }

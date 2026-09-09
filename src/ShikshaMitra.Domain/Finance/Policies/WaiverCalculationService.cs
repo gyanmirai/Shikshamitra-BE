@@ -16,6 +16,11 @@ public class WaiverCalculationService : ITransientDependency
 			return new WaiverCalculationResult(0, false, false, "Waiver is disabled on this policy.");
 		}
 
+		if (input.FeeHeadId is { } feeHeadId && !policy.AppliesWaiverTo(feeHeadId))
+		{
+			return new WaiverCalculationResult(0, false, false, "This fee head is outside the policy's waiver scope.");
+		}
+
 		var isExpired = policy.WaiverExpiry is { } expiry && input.AsOfDate.Date > expiry.Date;
 		if (isExpired)
 		{
@@ -59,7 +64,8 @@ public sealed record WaiverCalculationInput(
 	decimal RequestedAmount,
 	decimal LateFeeAmount,
 	DateTime AsOfDate,
-	bool WaiverPreApproved = false);
+	bool WaiverPreApproved = false,
+	Guid? FeeHeadId = null);
 
 public sealed record WaiverCalculationResult(
 	decimal EffectiveWaiverAmount,

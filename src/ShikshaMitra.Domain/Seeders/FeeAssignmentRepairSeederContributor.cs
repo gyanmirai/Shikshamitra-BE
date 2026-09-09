@@ -115,7 +115,7 @@ public class FeeAssignmentRepairSeederContributor : BaseSeederContributor
 					CurrentTenant.Id,
 					structure.Id,
 					group.Key,
-					(double)amount,
+					amount,
 					isOneTime,
 					isOptional: false,
 					payableMonth: isOneTime ? lines[0].Month : null,

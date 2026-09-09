@@ -271,6 +271,7 @@ public class LateFeeCalculationService_Tests
 			b.LateFeeType = LateFeeCalculationType.PerDay;
 			b.AmountPerDay = 20;
 			b.GracePeriodDays = 0;
+			b.LateFeeApplyOnFeeHeads = new[] { tuitionFeeHeadId };
 		});
 
 		var result = _service.Calculate(policy, InputForFeeHead(tuitionFeeHeadId, daysLate: 3));
@@ -289,6 +290,7 @@ public class LateFeeCalculationService_Tests
 			b.LateFeeType = LateFeeCalculationType.PerDay;
 			b.AmountPerDay = 20;
 			b.GracePeriodDays = 0;
+			b.LateFeeApplyOnFeeHeads = new[] { tuitionFeeHeadId, transportFeeHeadId };
 			b.FeeHeadOverrides = new[]
 			{
 				new CollectionPolicyFeeHeadOverride(transportFeeHeadId, FeeHeadOverrideMode.NoLateFee, null)
@@ -313,6 +315,7 @@ public class LateFeeCalculationService_Tests
 			b.LateFeeType = LateFeeCalculationType.PerDay;
 			b.AmountPerDay = 20; // policy-level rule — should NOT be used for libraryFeeHeadId
 			b.GracePeriodDays = 0;
+			b.LateFeeApplyOnFeeHeads = new[] { libraryFeeHeadId };
 			b.FeeHeadOverrides = new[]
 			{
 				new CollectionPolicyFeeHeadOverride(
@@ -349,6 +352,7 @@ public class LateFeeCalculationService_Tests
 			b.LateFeeType = LateFeeCalculationType.PerDay;
 			b.AmountPerDay = 20;
 			b.GracePeriodDays = 0;
+			b.LateFeeApplyOnFeeHeads = new[] { libraryFeeHeadId };
 			b.FeeHeadOverrides = new[]
 			{
 				new CollectionPolicyFeeHeadOverride(

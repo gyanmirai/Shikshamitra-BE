@@ -15,4 +15,10 @@ public class BulkAssignStudentFeeStructureDto
 	public List<Guid> SelectedOptionalFeeHeadIds { get; set; } = new();
 
 	public List<StudentFeeHeadDetailDto> FeeHeadDetails { get; set; } = new();
+
+	public DateTime? ChargeStartDate { get; set; }
+	public DateTime? ChargeEndDate { get; set; }
+	public string ChargePeriodSource { get; set; } = "AcademicYear";
+	public Guid? ChargePeriodSourceReferenceId { get; set; }
+	public string? ChargePeriodOverrideReason { get; set; }
 }

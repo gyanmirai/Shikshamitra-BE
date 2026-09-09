@@ -95,7 +95,7 @@ public class LateFeeWaiverAppService(
 		}
 
 		var waiverResult = waiverCalculationService.Calculate(policy, new WaiverCalculationInput(
-			requestedAmount, remainingLateFee, clock.Now, effective.WaiverPreApproved));
+			requestedAmount, remainingLateFee, clock.Now, effective.WaiverPreApproved, dueFee.FeeHeadId));
 
 		var entity = new LateFeeWaiverApplication(
 			GuidGenerator.Create(),

@@ -9,6 +9,8 @@ public interface IStudentFeeStructureAppService : IApplicationService
 {
 	Task AssignAsync(AssignStudentFeeStructureDto input);
 
+	Task<StudentFeeAssignmentPreviewDto> PreviewAsync(AssignStudentFeeStructureDto input);
+
 	Task<BulkAssignStudentFeeStructureResultDto> BulkAssignAsync(BulkAssignStudentFeeStructureDto input);
 
 	Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId, Guid academicYearId);

@@ -178,7 +178,6 @@ public static class ConcessionRequestTestHelper
 					FeeHeadId = feeHeadId,
 					BasedOn = 0,
 					Amount = 1000m,
-					NetAmount = 900m,
 				});
 			}
 		}
@@ -217,7 +216,6 @@ public static class ConcessionRequestTestHelper
 					FeeHeadId = feeHeadId,
 					BasedOn = 0,
 					Amount = 1000m,
-					NetAmount = 900m,
 				},
 			],
 		};

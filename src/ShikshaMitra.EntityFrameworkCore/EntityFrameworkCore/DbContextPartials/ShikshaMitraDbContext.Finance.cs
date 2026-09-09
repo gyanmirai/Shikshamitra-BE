@@ -107,6 +107,9 @@ public partial class ShikshaMitraDbContext
 	// ───────────────────────────────────────────────
 	public DbSet<CollectionPolicy> CollectionPolicies { get; set; }
 	public DbSet<ConcessionPolicy> ConcessionPolicies { get; set; }
+	public DbSet<RefundPolicy> RefundPolicies { get; set; }
+	public DbSet<ProrationPolicy> ProrationPolicies { get; set; }
+	public DbSet<ProrationPolicyRule> ProrationPolicyRules { get; set; }
 	public DbSet<FinancePolicyVersion> FinancePolicyVersions { get; set; }
 	public DbSet<StudentFeePolicyOverride> StudentFeePolicyOverrides { get; set; }
 	public DbSet<CollectionPolicyExceptionWindow> CollectionPolicyExceptionWindows { get; set; }

@@ -18,3 +18,17 @@ public class FeeHeadResponse : EntityDto<Guid>
     public DateTime? UpdatedAt { get; set; }
 	public bool IsUsedInDownstream { get; set; } = false;
 }
+
+/// <summary>
+/// Lightweight reusable lookup item for active fee-head selectors. Only fee heads whose
+/// parent category is also active are returned by the active lookup endpoint.
+/// </summary>
+public class ActiveFeeHeadLookupDto : EntityDto<Guid>
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid FeeCategoryId { get; set; }
+	public string FeeCategoryName { get; set; } = string.Empty;
+	public string Name { get; set; } = string.Empty;
+	public FeeHeadModule? Module { get; set; }
+	public bool IsConcessionApplied { get; set; }
+}

@@ -100,6 +100,15 @@ public partial class CollectFeeWorkflow
 			: await policyResolver.ResolveEffectiveRulesForStudentAsync(input.StudentId, assignment.FeeStructureStandardId);
 
 		var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(dueFeeIds);
+		var paidAllocations = await lateFeeAllocationRepository.GetListAsync(x => dueFeeIds.Contains(x.DueFeeId));
+		var paidTransactionIds = paidAllocations.Select(x => x.FeeRecordMetadataId).Distinct().ToList();
+		var reversedTransactionIds = (await feeRecordMetadataRepository.GetListAsync(x =>
+			paidTransactionIds.Contains(x.Id) && x.Status == FeeCollectionStatus.Reversed))
+			.Select(x => x.Id).ToHashSet();
+		var paidByDueFee = paidAllocations
+			.Where(x => !reversedTransactionIds.Contains(x.FeeRecordMetadataId))
+			.GroupBy(x => x.DueFeeId)
+			.ToDictionary(x => x.Key, x => x.Sum(a => (decimal)a.Amount));
 
 		var today = clock.Now.Date;
 		var activeWindow = assignment is null
@@ -124,7 +133,9 @@ public partial class CollectFeeWorkflow
 					activeWindow?.Effect,
 					activeWindow?.ExtensionDays,
 					activeWindow?.Label));
-				ceiling = Math.Max(0, result.LateFee - waivedByDueFee.GetValueOrDefault(lfp.DueFeeId, 0m));
+				ceiling = Math.Max(0, result.LateFee
+					- waivedByDueFee.GetValueOrDefault(lfp.DueFeeId, 0m)
+					- paidByDueFee.GetValueOrDefault(lfp.DueFeeId, 0m));
 			}
 
 			if ((decimal)lfp.Amount > ceiling)

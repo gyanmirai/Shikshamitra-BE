@@ -209,6 +209,7 @@ public partial class ConcessionRequestAppService
 						AppliedConcessionAmount = allocation?.ConcessionAmount ?? 0m,
 						ReversedConcessionAmount = reversed,
 						ReversibleConcessionAmount = reversible,
+						ConcurrencyStamp = df.ConcurrencyStamp,
 					};
 				}).ToList();
 
@@ -228,6 +229,7 @@ public partial class ConcessionRequestAppService
 			ConcessionPolicyName = policy.PolicyName,
 			ConcessionPolicyCode = policy.PolicyCode,
 			ConcessionPolicyVersion = policy.Version,
+			RequestConcurrencyStamp = request.ConcurrencyStamp,
 			TotalRequestedConcessionAmount = request.GetTotalRequestedConcession(),
 			FeeHeadGroups = groups,
 		};

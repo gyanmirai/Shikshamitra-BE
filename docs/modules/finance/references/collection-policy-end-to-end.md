@@ -3,7 +3,7 @@ module: finance
 domain: collection-policy
 content_type: Reference
 status: active
-updated_on: 2026-09-03
+updated_on: 2026-09-07
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -47,7 +47,7 @@ Those modules consume the policy result but remain their own source of truth.
 | Versioning | Every create, edit, status change, and clone writes an immutable version/audit snapshot |
 | Historical use | Fee structure and student assignment store policy ID plus exact policy-version ID |
 | Runtime math | Server is authoritative; frontend calculators are previews only |
-| Fee-head mismatch | Use the intersection of policy heads and fee-structure heads; block when an enabled feature has no matching head |
+| Fee-head mismatch | Use the intersection of policy heads and fee-structure heads; zero overlap is allowed and makes that feature inactive for the structure |
 | Policy-only heads | Allowed because one policy may serve multiple structures; show a warning for the current structure |
 | Structure-only heads | Collect normally but do not receive that policy's late fee or waiver |
 | No-policy case | New fee structures and new student assignments are blocked; legacy data needs a controlled migration path |
@@ -60,7 +60,7 @@ Use progressive disclosure in the UI.
 
 | Staff need | Default experience | Advanced controls |
 |---|---|---|
-| Create a normal policy | Name, dates, eligible heads, grace days, one calculation method | Caps, accounting, per-head overrides |
+| Create a normal policy | Name, eligible heads, grace days, one calculation method | Caps, accounting, per-head overrides |
 | Attach to a structure | Default policy is preselected and an impact summary appears | Change policy or inspect version |
 | Collect a payment | Due, late fee, waiver, and payable total are already calculated | Open calculation explanation |
 | Approve a waiver | Review request, reason, evidence, policy limit, and amount | Threshold or bulk-waiver controls |
@@ -74,9 +74,10 @@ Recommended setup order for a school:
 4. Run simulation and fee-structure impact preview.
 5. Resolve every blocking validation and review warnings.
 6. Activate the policy.
-7. Attach it to relevant fee structures; the default policy may be preselected.
-8. Assign fee structures to students; capture the immutable policy version.
-9. Collect fees using server-calculated amounts.
+7. Optionally select it as the academic-year default; this atomically replaces the previous Active Collection Policy default.
+8. Attach it to relevant fee structures; the default policy may be preselected.
+9. Assign fee structures to students; capture the immutable policy version.
+10. Collect fees using server-calculated amounts.
 10. Use waiver, exception-window, or student-override workflows only when needed.
 
 ## Status lifecycle based on Concession Policy
@@ -145,11 +146,8 @@ Academic year + fee heads + payment terms
 | Description | No | Maximum 500 characters | Plain-language purpose |
 | Status | Yes | Create/edit accepts Draft or Active only | Use action buttons, not a free dropdown |
 | Default | Yes | Boolean; at most one Active default per year | Explain that default preselects, it does not override saved attachments |
-| Effective from | No | Date-only, inside academic year | Default to academic-year start |
-| Effective to | No | Date-only, inside academic year and not before start | Default to academic-year end |
-
-If effective dates are supplied, every installment due date governed by an attachment must fall inside the policy period.
-The impact endpoint blocks attachment when the policy cannot cover the structure schedule.
+Collection Policy does not expose editable effective-from or effective-to fields.
+The backend derives and stores the academic-year start and end dates for version snapshots and historical calculations.
 
 ### Late-fee section
 
@@ -229,8 +227,8 @@ The effective scopes are `S intersect L` and `S intersect W`.
 | Head exists in structure and policy | Feature applies to that head |
 | Head exists only in structure | Fee is collectable; this policy does not apply late fee/waiver to it |
 | Head exists only in policy | Ignore for this structure and show a warning |
-| Late fee enabled and `S intersect L` is empty | Block attachment/save |
-| Waiver enabled and `S intersect W` is empty | Block attachment/save |
+| Late fee enabled and `S intersect L` is empty | Allow attachment; warn that no late fee applies to this structure |
+| Waiver enabled and `S intersect W` is empty | Allow attachment; warn that no waiver applies to this structure |
 | Referenced head is missing, inactive, cross-tenant, or wrong academic year | Block policy activation and attachment |
 | Override points to a head outside `L` | Block activation |
 
@@ -253,7 +251,7 @@ The attachment screen must show three groups: **Covered**, **Not covered**, and 
 Before saving a fee structure, the frontend calls a server impact endpoint with the policy, policy version, structure ID/draft heads, and schedule.
 The response should contain:
 
-- policy ID, version ID, name, code, status, and effective dates;
+- policy ID, version ID, name, code, status, and internal academic-year-derived validity dates;
 - covered late-fee heads;
 - structure heads without late fee;
 - policy late-fee heads absent from the structure;
@@ -271,8 +269,8 @@ The save endpoint repeats every check inside its transaction.
 2. The Policies tab queries only Active Collection Policies for the structure's academic year.
 3. The default policy is preselected only for a new structure; staff can change it.
 4. Selecting a policy triggers the server impact preview.
-5. The UI displays policy version, dates, late-fee coverage, waiver coverage, online status, and warnings.
-6. A zero-overlap, wrong-year, inactive, archived, expired, missing-version, or invalid-reference result disables Save.
+5. The UI displays policy version, late-fee coverage, waiver coverage, online status, and warnings.
+6. Wrong-year, inactive, archived, missing-version, or invalid-reference results disable Save; zero overlap remains attachable and displays a feature-specific warning.
 7. Saving stores both `collectionPolicyId` and `collectionPolicyVersionId`.
 8. Changing fee heads, payment terms, or policy invalidates the preview and requires recalculation.
 9. Editing the shared policy is not available from Fee Structure; provide a read-only details link.
@@ -286,8 +284,8 @@ Student assignment repeats these checks:
 - policy and version are attached;
 - policy is Active and same academic year;
 - version belongs to that policy and academic year;
-- fee-head overlap is still valid;
-- effective dates cover the generated schedule;
+- effective fee-head scopes are recomputed by intersection;
+- the generated schedule belongs to the policy's academic year;
 - referenced fee heads, roles, and income head remain valid for new use.
 
 The assignment stores:
@@ -447,7 +445,7 @@ The page contains:
 - required academic-year selector;
 - Current and Archived views;
 - search and status filters;
-- columns for name/code, status, default, effective period, late-fee type, covered heads, used-by count, version, and last update;
+- columns for name/code, status, default, late-fee type, covered heads, used-by count, version, and last update;
 - row actions filtered by exact permission;
 - separate access to exception windows;
 - empty, loading, retry, and permission-denied states.
@@ -473,6 +471,7 @@ Closing a dirty drawer asks for confirmation.
 
 - Details is read-only and resolves names for IDs.
 - Version History shows version, action, actor, timestamp, reason, and a field-level diff.
+- The policy-specific Audit Trail is another presentation of the same immutable `FinancePolicyVersion` stream, covering create, edit, clone, archive, and unarchive without duplicating mutable audit state.
 - Used By lists fee structures and affected future assignments.
 - Impact Preview shows affected structures/students/due rows before an Active policy edit.
 - Calculation explanation is available to collectors without exposing edit controls.
@@ -508,6 +507,7 @@ All routes require authentication and matching permissions.
 | Method | Route | Purpose |
 |---|---|---|
 | GET | `/api/finance/collection-policies` | Paged list for required academic year/search/status |
+| GET | `/api/fee-heads/active?academicYearId={id}` | Reusable lookup of active fee heads whose parent category is active in the requested academic year |
 | GET | `/api/finance/collection-policies/{id}` | Details with resolved reference names and usage |
 | POST | `/api/finance/collection-policies` | Create Draft or fully validated Active policy |
 | PUT | `/api/finance/collection-policies/{id}` | Edit Draft/Active and create a version |
@@ -611,9 +611,9 @@ Payment/waiver/reversal notifications are emitted only after transaction commit 
 |---|---|
 | Draft/inactive policy selected | Activate the policy before attaching it |
 | Wrong academic year | Choose a policy for the fee structure's academic year |
-| Fee-head mismatch with no overlap | This policy covers none of this structure's fee heads |
+| Fee-head mismatch with no overlap | Policy attached; no late fee or waiver applies until the structure and policy share an eligible head |
 | Partial mismatch | Policy attached; show exactly which heads are and are not covered |
-| Invalid effective period | Dates must be ordered, inside the year, and cover the schedule |
+| Invalid academic-year scope | Policy and fee structure must belong to the same academic year |
 | Duplicate default | Name the current default and offer navigation to it |
 | Attached/default archive attempt | List affected structures and the required replacement action |
 | Stale edit | The policy changed; reload and review the new version |
@@ -668,7 +668,7 @@ Business errors use stable error codes with structured data so the frontend can 
 - Draft save versus Activate validation;
 - conditional fields clear safely;
 - server simulation matches displayed preview;
-- mismatch groups and blocked Save;
+- mismatch groups, non-blocking zero-overlap warnings, and blocking invalid-reference states;
 - dirty-close confirmation and duplicate-submit prevention;
 - archive/restore/default replacement guidance;
 - responsive keyboard-accessible drawer;
@@ -680,7 +680,7 @@ Business errors use stable error codes with structured data so the frontend can 
 2. Backfill a Finance Policy Version for every existing Collection Policy.
 3. Add policy-version columns and integrity constraints to fee structures and student assignments.
 4. Backfill only empty references using logged, deterministic rules; never replace historical non-empty snapshots.
-5. Validate every policy's fee heads, dates, roles, accounting head, slabs, and default conflict.
+5. Validate every policy's fee heads, dates, roles, accounting head, slabs, and default eligibility.
 6. Convert invalid existing records to Draft and provide an admin remediation report.
 7. Deploy backend validation/API changes before enabling the new frontend actions.
 8. Have each school review, simulate, activate, and attach policies for open academic years.
@@ -722,7 +722,7 @@ The following gaps must be closed before treating this page as shipped behavior:
 4. Student assignment snapshots Concession Policy but not Collection Policy.
 5. The resolver returns a directly attached policy without status, academic-year, date, or version validation and falls back to the mutable default.
 6. The runtime calculator does not enforce `LateFeeApplyOnFeeHeads` or `WaiverApplyOnFeeHeads`.
-7. Fee-head mismatch is not validated when attaching Collection Policy to Fee Structure.
+7. Fee-head attachment impact is implemented with intersection semantics and warnings; student-assignment snapshot coverage remains incomplete.
 8. Several enum parsers silently choose defaults for invalid strings.
 9. Full numeric/date/reference validation and foreign-key integrity are incomplete.
 10. The filtered default index is not unique.
@@ -731,7 +731,7 @@ The following gaps must be closed before treating this page as shipped behavior:
 13. The Fee Structure screen can edit shared Collection Policy overrides, which should be read-only there.
 14. Frontend policy routing uses Fee Collections permission instead of Collection Policy permissions.
 15. The frontend locally reimplements calculation and can drift from server caps/rules.
-16. Effective dates, WorkingDay grace, overlapping exception windows, and `DisableOnlineCollection` are not fully enforced.
+16. WorkingDay grace, overlapping exception windows, and `DisableOnlineCollection` are not fully enforced.
 17. Remaining previously paid late fee, idempotency, reversal, accounting, receipts, reports, and notification consistency need end-to-end completion.
 
 ## Source map

@@ -10,6 +10,7 @@ public interface ILessonPlanAppService : IApplicationService
 {
     Task<PagedResultDto<LessonPlanDto>> GetListAsync(GetLessonPlansInput input);
     Task<LessonPlanTimelineDto> GetTimelineAsync(DateTimeOffset date, Guid? teacherId = null, Guid? academicMediumId = null);
+    Task<LessonPlanChapterProgressDto> GetChapterProgressAsync(GetLessonPlanChapterProgressInput input);
     Task<LessonPlanDto> GetAsync(Guid id);
     Task<LessonPlanDto> CreateAsync(CreateLessonPlanDto input);
     Task<LessonPlanDto> UpdateAsync(Guid id, UpdateLessonPlanDto input);

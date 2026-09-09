@@ -74,7 +74,7 @@ public class FeeStructureApi_Tests : ShikshaMitraApiTestBase
                     new FeeHeadAssignmentRequest
                     {
                         FeeHeadId    = feeHeadId,
-                        Amount       = 12_000d,
+                        Amount       = 12_000m,
                         IsOneTime    = false, // Recurring fee
                         IsOptional   = false,
                         PayableMonth = MonthEnum.April, // Attempt to set PayableMonth
@@ -126,7 +126,7 @@ public class FeeStructureApi_Tests : ShikshaMitraApiTestBase
                     new FeeHeadAssignmentRequest
                     {
                         FeeHeadId    = feeHeadId,
-                        Amount       = 3_000d,
+                        Amount       = 3_000m,
                         IsOneTime    = true, // One-time fee
                         IsOptional   = false,
                         PayableMonth = MonthEnum.June,

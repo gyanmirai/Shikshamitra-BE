@@ -82,7 +82,7 @@ public class StudentFeeAssignmentApi_Tests : ShikshaMitraApiTestBase
                     new FeeHeadAssignmentRequest
                     {
                         FeeHeadId    = feeHeadId,
-                        Amount       = 12_000d,
+                        Amount       = 12_000m,
                         IsOneTime    = false,
                         IsOptional   = false,
                     },
@@ -248,9 +248,9 @@ public class StudentFeeAssignmentApi_Tests : ShikshaMitraApiTestBase
                 Name = $"Test Custom {Guid.NewGuid():N}"[..24],
                 FeeHeads = new List<FeeHeadAssignmentRequest>
                 {
-                    new() { FeeHeadId = mainFeeHeadId, Amount = 12000d, IsOneTime = false, IsOptional = false },
-                    new() { FeeHeadId = optionalRecId, Amount = 6000d, IsOneTime = false, IsOptional = true },
-                    new() { FeeHeadId = optionalOneId, Amount = 2000d, IsOneTime = true, IsOptional = true }
+                    new() { FeeHeadId = mainFeeHeadId, Amount = 12000m, IsOneTime = false, IsOptional = false },
+                    new() { FeeHeadId = optionalRecId, Amount = 6000m, IsOneTime = false, IsOptional = true },
+                    new() { FeeHeadId = optionalOneId, Amount = 2000m, IsOneTime = true, IsOptional = true }
                 }
             }
         };
@@ -273,7 +273,7 @@ public class StudentFeeAssignmentApi_Tests : ShikshaMitraApiTestBase
                 new()
                 {
                     FeeHeadId = optionalRecId,
-                    Amount = 1500d, // 1500 per month
+                    Amount = 1500m, // 1500 per month
                     StartPayableMonth = MonthEnum.July,
                     StartPayableYear = 2026,
                     EndPayableMonth = MonthEnum.November,
@@ -282,7 +282,7 @@ public class StudentFeeAssignmentApi_Tests : ShikshaMitraApiTestBase
                 new()
                 {
                     FeeHeadId = optionalOneId,
-                    Amount = 2500d, // Custom amount
+                    Amount = 2500m, // Custom amount
                     PayableMonth = MonthEnum.August,
                     PayableYear = 2026
                 }

@@ -21,6 +21,10 @@ public class StudentFeeStructureController(
 		await studentFeeStructureAppService.AssignAsync(input);
 	}
 
+	[HttpPost("preview")]
+	public Task<StudentFeeAssignmentPreviewDto> PreviewAsync([FromBody] AssignStudentFeeStructureDto input) =>
+		studentFeeStructureAppService.PreviewAsync(input);
+
 	[HttpPost("assign-bulk")]
 	public async Task<BulkAssignStudentFeeStructureResultDto> BulkAssignAsync(
 		[FromBody] BulkAssignStudentFeeStructureDto input)

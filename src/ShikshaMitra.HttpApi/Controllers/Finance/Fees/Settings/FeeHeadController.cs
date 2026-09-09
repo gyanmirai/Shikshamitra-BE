@@ -4,6 +4,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -36,6 +37,13 @@ public class FeeHeadController(
     {
         return feeHeadAppService.GetListAsync(academicYearId, feeCategoryId, search, page, pageSize);
     }
+
+	[HttpGet("active")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.View)]
+	public Task<List<ActiveFeeHeadLookupDto>> GetActiveAsync([FromQuery] Guid academicYearId)
+	{
+		return feeHeadAppService.GetActiveAsync(academicYearId);
+	}
 
     [HttpGet("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.View)]

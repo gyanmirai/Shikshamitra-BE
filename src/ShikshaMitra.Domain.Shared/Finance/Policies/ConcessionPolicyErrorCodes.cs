@@ -22,4 +22,8 @@ public static class ConcessionPolicyErrorCodes
 	public const string InputNotAllowed = Prefix + "010016";
 	public const string AcademicYearMismatch = Prefix + "010017";
 	public const string PolicyInUse = Prefix + "010018";
+	public const string ConcurrencyStampRequired = Prefix + "010019";
+	public const string ConcurrencyConflict = Prefix + "010020";
+	public const string ChangeReasonRequired = Prefix + "010021";
+	public const string DefaultPolicyMustBeActive = Prefix + "010022";
 }

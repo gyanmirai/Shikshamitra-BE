@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FluentValidation;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Domain.Finance.Policies;
@@ -45,10 +46,8 @@ public class CollectionPolicyDto : EntityDto<Guid>
 	public string PolicyName { get; set; } = string.Empty;
 	public string PolicyCode { get; set; } = string.Empty;
 	public string Description { get; set; } = string.Empty;
-	public string Status { get; set; } = "Active";
+	public string Status { get; set; } = "Draft";
 	public bool IsDefault { get; set; }
-	public DateTime? EffectiveFrom { get; set; }
-	public DateTime? EffectiveTo { get; set; }
 	public string PolicyType { get; set; } = "collection";
 
 	public bool EnableLateFee { get; set; }
@@ -96,10 +95,9 @@ public class CreateUpdateCollectionPolicyDto
 	public string PolicyName { get; set; } = string.Empty;
 	public string PolicyCode { get; set; } = string.Empty;
 	public string? Description { get; set; }
-	public string Status { get; set; } = "Active";
+	public string Status { get; set; } = "Draft";
 	public bool IsDefault { get; set; }
-	public DateTime? EffectiveFrom { get; set; }
-	public DateTime? EffectiveTo { get; set; }
+	public string? ChangeReason { get; set; }
 
 	public bool EnableLateFee { get; set; }
 	public int GracePeriodDays { get; set; }
@@ -133,10 +131,22 @@ public class CreateUpdateCollectionPolicyDto
 	public bool AllowOnlineCollection { get; set; } = true;
 }
 
+public class CreateUpdateCollectionPolicyDtoValidator : AbstractValidator<CreateUpdateCollectionPolicyDto>
+{
+	public CreateUpdateCollectionPolicyDtoValidator()
+	{
+		RuleFor(x => x.ChangeReason).MaximumLength(500);
+		RuleFor(x => x).Must(x => !x.IsDefault ||
+			string.Equals(x.Status, "Active", StringComparison.OrdinalIgnoreCase))
+			.WithMessage("Only an Active collection policy can be the default.");
+	}
+}
+
 public class CollectionPolicyListRequestDto : PagedAndSortedResultRequestDto
 {
 	public Guid AcademicYearId { get; set; }
 	public string? Status { get; set; }
+	public bool IncludeArchived { get; set; }
 	public string? Search { get; set; }
 }
 

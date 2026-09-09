@@ -84,6 +84,33 @@ public class ConcessionRequestManager(
 		return request;
 	}
 
+	public async Task<ConcessionRequestPreviewResult> PreviewAsync(
+		Guid? tenantId,
+		Guid academicYearId,
+		Guid studentId,
+		Guid concessionTypeId,
+		IReadOnlyList<FeeHeadConcessionInput> feeHeadConcessions)
+	{
+		await LoadStudentAsync(studentId);
+		await LoadConcessionTypeAsync(concessionTypeId, academicYearId);
+		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
+			x.StudentId == studentId && x.AcademicYearId == academicYearId)
+			?? await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
+				x.StudentId == studentId && x.AcademicYearId == Guid.Empty)
+			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached);
+		await EnsureAssignmentPolicySnapshotAsync(assignment, academicYearId);
+		var policy = await LoadPolicySnapshotAsync(assignment);
+		var dueFees = await dueFeeRepository.GetListAsync(df => df.StudentId == studentId);
+		var mappings = BuildFeeHeadMappings(
+			tenantId,
+			Guid.Empty,
+			feeHeadConcessions,
+			dueFees,
+			policy,
+			assignment.GetConcessionApplicableFeeHeadIds());
+		return new ConcessionRequestPreviewResult(assignment, policy, mappings);
+	}
+
 	public async Task ReplaceFeeHeadMappingsAsync(
 		ConcessionRequest request,
 		IReadOnlyList<FeeHeadConcessionInput> feeHeadConcessions)
@@ -118,6 +145,9 @@ public class ConcessionRequestManager(
 			if (requestedMappings is not null && requested is null)
 				throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed)
 					.WithData("FeeHeadId", group.FeeHeadId);
+			if (group.ApprovedConcessionAmount <= 0m)
+				throw new BusinessException(ConcessionPolicyErrorCodes.InvalidCalculationRule)
+					.WithData("FeeHeadId", group.FeeHeadId);
 			if (requested is not null && group.ApprovedConcessionAmount > requested.FeeHeadConcessionAmount)
 				throw new BusinessException(ConcessionPolicyErrorCodes.LimitExceeded)
 					.WithData("FeeHeadId", group.FeeHeadId);
@@ -129,6 +159,12 @@ public class ConcessionRequestManager(
 						.WithData("DueFeeId", line.DueFeeId);
 				var dueFee = studentDueFees.FirstOrDefault(df => df.Id == line.DueFeeId)
 					?? throw new BusinessException(FinanceConcessionErrorCodes.DueFeeNotFound)
+						.WithData("DueFeeId", line.DueFeeId);
+				if (string.IsNullOrWhiteSpace(line.ConcurrencyStamp))
+					throw new BusinessException(FinanceConcessionErrorCodes.ConcurrencyStampRequired)
+						.WithData("DueFeeId", line.DueFeeId);
+				if (!string.Equals(dueFee.ConcurrencyStamp, line.ConcurrencyStamp, StringComparison.Ordinal))
+					throw new BusinessException(FinanceConcessionErrorCodes.ConcurrencyConflict)
 						.WithData("DueFeeId", line.DueFeeId);
 
 				if (dueFee.FeeHeadId != group.FeeHeadId)
@@ -195,7 +231,7 @@ public class ConcessionRequestManager(
 			{
 				if (remaining <= 0) break;
 				var amount = Math.Min(remaining, (decimal)dueFee.OutstandingAmount);
-				lines.Add(new DueFeeAllocationInput(dueFee.Id, amount));
+				lines.Add(new DueFeeAllocationInput(dueFee.Id, amount, dueFee.ConcurrencyStamp));
 				remaining -= amount;
 			}
 
@@ -242,6 +278,12 @@ public class ConcessionRequestManager(
 		var permittedHeads = applicableFeeHeadIds.ToHashSet();
 		var eligibleDueFees = GetEligibleDueFees(
 			dueFees.Where(x => permittedHeads.Contains(x.FeeHeadId)).ToList(), policy.ApplyOn);
+		var requestEnteredFixed = policy.ValueSource == ConcessionValueSource.RequestEnteredWithinLimits &&
+			policy.CalculationMethod == ConcessionCalculationMethod.FixedAmount;
+		var policyFixedTotal = policy.ValueSource == ConcessionValueSource.PolicyFixed &&
+			policy.CalculationMethod == ConcessionCalculationMethod.FixedAmount;
+		if (requestEnteredFixed && inputs.Any(x => x.BasedOn != DiscountBasis.FlatAmount || x.Amount <= 0m))
+			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
 		var candidates = new List<(FeeHeadConcessionInput Input, decimal Base, decimal Amount)>();
 		foreach (var input in inputs)
 		{
@@ -255,8 +297,7 @@ public class ConcessionRequestManager(
 			}
 
 			var baseAmount = headDueFees.Sum(df => (decimal)df.OutstandingAmount);
-			var amount = policy.ValueSource == ConcessionValueSource.PolicyFixed &&
-				policy.CalculationMethod == ConcessionCalculationMethod.FixedAmount
+			var amount = policyFixedTotal || requestEnteredFixed
 				? 0m
 				: concessionPolicyCalculationService.Calculate(
 					policy,
@@ -267,10 +308,14 @@ public class ConcessionRequestManager(
 		}
 
 		var totalBase = candidates.Sum(x => x.Base);
-		if (policy.ValueSource == ConcessionValueSource.PolicyFixed &&
-			policy.CalculationMethod == ConcessionCalculationMethod.FixedAmount)
+		if (policyFixedTotal || requestEnteredFixed)
 		{
-			var totalFixed = concessionPolicyCalculationService.Calculate(policy, totalBase);
+			var requestedTotal = requestEnteredFixed ? inputs.Sum(x => x.Amount) : (decimal?)null;
+			var totalFixed = concessionPolicyCalculationService.Calculate(
+				policy,
+				totalBase,
+				requestEnteredFixed ? DiscountBasis.FlatAmount : null,
+				requestedTotal);
 			candidates = AllocateTotal(candidates, totalFixed);
 		}
 
@@ -281,7 +326,7 @@ public class ConcessionRequestManager(
 				: policy.CalculationMethod == ConcessionCalculationMethod.FixedAmount
 					? DiscountBasis.FlatAmount : DiscountBasis.Percentage;
 			var displayedValue = policy.ValueSource == ConcessionValueSource.RequestEnteredWithinLimits
-				? candidate.Input.Amount
+				? requestEnteredFixed ? candidate.Amount : candidate.Input.Amount
 				: policy.CalculationMethod switch
 				{
 					ConcessionCalculationMethod.Percentage => policy.PercentageValue ?? 0m,
@@ -400,7 +445,12 @@ public class ConcessionRequestManager(
 
 public record FeeHeadConcessionInput(Guid FeeHeadId, DiscountBasis BasedOn, decimal Amount);
 
-public record DueFeeAllocationInput(Guid DueFeeId, decimal ConcessionAmount);
+public record ConcessionRequestPreviewResult(
+	StudentFeeStructure Assignment,
+	ConcessionPolicySnapshot Policy,
+	IReadOnlyList<ConcessionFeeHeadMapping> Mappings);
+
+public record DueFeeAllocationInput(Guid DueFeeId, decimal ConcessionAmount, string ConcurrencyStamp);
 
 public record FeeHeadApprovalInput(
 	Guid FeeHeadId,

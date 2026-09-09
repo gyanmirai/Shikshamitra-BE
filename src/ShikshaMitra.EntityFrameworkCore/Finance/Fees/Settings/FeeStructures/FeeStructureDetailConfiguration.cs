@@ -10,6 +10,7 @@ public class FeeStructureDetailConfiguration : IEntityTypeConfiguration<FeeStruc
 	{
 		builder.ToTable("Finance_FeeStructureDetails", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.Property(x => x.Amount).HasPrecision(18, 2);
 
 		// add navigation for fee head
 		builder.HasOne(x => x.FeeHead)

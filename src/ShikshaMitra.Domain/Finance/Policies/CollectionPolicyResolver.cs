@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Timing;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 namespace ShikshaMitra.Domain.Finance.Policies;
 
@@ -22,7 +24,10 @@ public class CollectionPolicyResolver(
 	IRepository<FeeStructure, Guid> feeStructureRepository,
 	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
 	IRepository<CollectionPolicy, Guid> collectionPolicyRepository,
-	IRepository<StudentFeePolicyOverride, Guid> overrideRepository)
+	IRepository<StudentFeePolicyOverride, Guid> overrideRepository,
+	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
+	IRepository<FinancePolicyVersion, Guid> versionRepository,
+	IClock clock)
 	: DomainService
 {
 	public async Task<CollectionPolicy?> ResolveAsync(Guid feeStructureId)
@@ -33,18 +38,20 @@ public class CollectionPolicyResolver(
 			return null;
 		}
 
-		if (feeStructure.CollectionPolicyId is { } attachedId)
-		{
-			var attached = await collectionPolicyRepository.FindAsync(attachedId);
-			if (attached is not null)
-			{
-				return attached;
-			}
-		}
-
 		var metadata = await feeStructureMetadataRepository.FindAsync(feeStructure.FeeStructureMetadataId);
 		if (metadata?.AcademicYearId is not { } academicYearId)
 		{
+			return null;
+		}
+
+		if (feeStructure.CollectionPolicyId is { } attachedId)
+		{
+			var attached = await collectionPolicyRepository.FindAsync(attachedId);
+			if (attached is not null && attached.Status == CollectionPolicyStatus.Active &&
+				attached.AcademicYearId == academicYearId && IsEffective(attached, clock.Now.Date))
+			{
+				return attached;
+			}
 			return null;
 		}
 
@@ -52,7 +59,9 @@ public class CollectionPolicyResolver(
 		return query
 			.Where(p => p.AcademicYearId == academicYearId
 				&& p.IsDefault
-				&& p.Status == CollectionPolicyStatus.Active)
+				&& p.Status == CollectionPolicyStatus.Active
+				&& (!p.EffectiveFrom.HasValue || p.EffectiveFrom.Value <= clock.Now.Date)
+				&& (!p.EffectiveTo.HasValue || p.EffectiveTo.Value >= clock.Now.Date))
 			.OrderByDescending(p => p.CreationTime)
 			.FirstOrDefault();
 	}
@@ -64,7 +73,29 @@ public class CollectionPolicyResolver(
 	/// </summary>
 	public async Task<EffectiveCollectionRules> ResolveEffectiveRulesForStudentAsync(Guid studentId, Guid feeStructureId)
 	{
-		var policy = await ResolveAsync(feeStructureId);
+		CollectionPolicy? policy = null;
+		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
+			x.StudentId == studentId && x.FeeStructureStandardId == feeStructureId);
+		if (assignment?.CollectionPolicyVersionId is { } versionId && versionId != Guid.Empty)
+		{
+			var version = await versionRepository.FindAsync(versionId);
+			if (version is not null && version.PolicyType == "collection" &&
+				version.PolicyId == assignment.CollectionPolicyId &&
+				version.AcademicYearId == assignment.AcademicYearId)
+			{
+				try
+				{
+					var snapshot = CollectionPolicySnapshot.Deserialize(version.SnapshotJson);
+					policy = CollectionPolicy.FromSnapshot(
+						version.PolicyId, version.TenantId, version.AcademicYearId, version.VersionNumber, snapshot);
+				}
+				catch (System.Text.Json.JsonException)
+				{
+					policy = null;
+				}
+			}
+		}
+		policy ??= await ResolveAsync(feeStructureId);
 
 		var query = await overrideRepository.GetQueryableAsync();
 		var overrideEntity = query
@@ -76,6 +107,10 @@ public class CollectionPolicyResolver(
 			overrideEntity?.CustomGracePeriodDays,
 			overrideEntity?.WaiverPreApproved ?? false);
 	}
+
+	private static bool IsEffective(CollectionPolicy policy, DateTime date) =>
+		(!policy.EffectiveFrom.HasValue || policy.EffectiveFrom.Value.Date <= date.Date) &&
+		(!policy.EffectiveTo.HasValue || policy.EffectiveTo.Value.Date >= date.Date);
 }
 
 public sealed record EffectiveCollectionRules(

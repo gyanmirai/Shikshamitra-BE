@@ -10,6 +10,14 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 /// </summary>
 public sealed class CollectionPolicyUpdateModelBuilder
 {
+	public CollectionPolicyUpdateModelBuilder()
+	{
+		var defaultFeeHeadId = Guid.NewGuid();
+		LateFeeApplyOnFeeHeads = new[] { defaultFeeHeadId };
+		WaiverApplyOnFeeHeads = new[] { defaultFeeHeadId };
+		ApprovalRoleIds = new[] { Guid.NewGuid() };
+	}
+
 	public string PolicyName { get; set; } = "Test Policy";
 	public string PolicyCode { get; set; } = "CP-TEST";
 	public string? Description { get; set; }
@@ -22,7 +30,7 @@ public sealed class CollectionPolicyUpdateModelBuilder
 	public GracePeriodType GracePeriodType { get; set; } = GracePeriodType.Calendar;
 	public IReadOnlyList<Guid> LateFeeApplyOnFeeHeads { get; set; } = Array.Empty<Guid>();
 	public LateFeeCalculationType LateFeeType { get; set; } = LateFeeCalculationType.Flat;
-	public decimal? FlatAmount { get; set; }
+	public decimal? FlatAmount { get; set; } = 10;
 	public decimal? Percentage { get; set; }
 	public PercentageBaseType PercentageBase { get; set; } = PercentageBaseType.OutstandingAmount;
 	public decimal? AmountPerDay { get; set; }

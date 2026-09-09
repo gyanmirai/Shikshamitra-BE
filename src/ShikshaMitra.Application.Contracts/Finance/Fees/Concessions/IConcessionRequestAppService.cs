@@ -11,6 +11,7 @@ namespace ShikshaMitra.Finance.Fees.Concessions;
 public interface IConcessionRequestAppService : IApplicationService
 {
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateAsync(Guid academicYearId, CreateConcessionRequestDto input);
+	Task<ConcessionRequestPreviewDto> PreviewAsync(Guid academicYearId, ConcessionRequestPreviewInputDto input);
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> UpdateAsync(Guid id, Guid academicYearId, UpdateConcessionRequestDto input);
 	Task DeleteAsync(Guid id);
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> GetAsync(Guid id);

@@ -13,6 +13,7 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public partial class StudentFeeStructureAppService
 {
+	[Microsoft.AspNetCore.Authorization.Authorize(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.View)]
 	public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId, Guid academicYearId)
 	{
 		if (academicYearId == Guid.Empty)
@@ -66,6 +67,14 @@ public partial class StudentFeeStructureAppService
 			?? throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
 		var policySnapshot = JsonSerializer.Deserialize<ConcessionPolicySnapshot>(policyVersion.SnapshotJson)
 			?? throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+		ProrationPolicySnapshot? prorationSnapshot = null;
+		if (assignment.ProrationPolicyVersionId.HasValue)
+		{
+			var prorationVersion = await financePolicyVersionRepository.FindAsync(assignment.ProrationPolicyVersionId.Value)
+				?? throw new Volo.Abp.BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
+			prorationSnapshot = JsonSerializer.Deserialize<ProrationPolicySnapshot>(prorationVersion.SnapshotJson)
+				?? throw new Volo.Abp.BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
+		}
 
 		return new StudentFeeStructureResponseDto
 		{
@@ -89,6 +98,14 @@ public partial class StudentFeeStructureAppService
 			ConcessionFeeHeadScope = assignment.ConcessionFeeHeadScope.ToString(),
 			ConcessionApplicableFeeHeadIds = assignment.GetConcessionApplicableFeeHeadIds().ToList(),
 			ConcessionApplyOn = policySnapshot.ApplyOn.ToString(),
+			ProrationPolicyId = assignment.ProrationPolicyId,
+			ProrationPolicyVersionId = assignment.ProrationPolicyVersionId,
+			ProrationPolicyName = prorationSnapshot?.PolicyName,
+			ProrationPolicyCode = prorationSnapshot?.PolicyCode,
+			ProrationPolicyVersion = prorationSnapshot?.Version,
+			ChargeStartDate = assignment.ChargeStartDate == DateTime.MinValue ? null : assignment.ChargeStartDate,
+			ChargeEndDate = assignment.ChargeEndDate == DateTime.MinValue ? null : assignment.ChargeEndDate,
+			ChargePeriodSource = assignment.ChargePeriodSource.ToString(),
 			FeeHeads               = feeHeads,
 		};
 	}
@@ -198,5 +215,7 @@ public partial class StudentFeeStructureAppService
 			StartPayableYear  = fd.StartPayableYear,
 			EndPayableMonth   = fd.EndPayableMonth,
 			EndPayableYear    = fd.EndPayableYear,
+			ChargeStartDate   = fd.ChargeStartDate,
+			ChargeEndDate     = fd.ChargeEndDate,
 		}).ToList() ?? new List<CustomOptionalFeeHeadDetail>();
 }

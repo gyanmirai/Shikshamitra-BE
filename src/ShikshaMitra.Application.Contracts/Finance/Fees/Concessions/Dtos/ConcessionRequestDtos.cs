@@ -10,7 +10,6 @@ public class FeeHeadConcessionDto
 	public Guid FeeHeadId { get; set; }
 	public int BasedOn { get; set; }
 	public decimal Amount { get; set; }
-	public decimal NetAmount { get; set; }
 }
 
 public class CreateConcessionRequestDto
@@ -151,6 +150,7 @@ public class DueFeeAllocationDto
 {
 	public Guid DueFeeId { get; set; }
 	public decimal ConcessionAmount { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class FeeHeadApprovalDto
@@ -163,6 +163,7 @@ public class FeeHeadApprovalDto
 public class ApproveConcessionRequestDto
 {
 	public string? Message { get; set; }
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
 	public List<FeeHeadApprovalDto>? FeeHeadApprovals { get; set; }
 }
 
@@ -188,6 +189,7 @@ public class DueFeeApprovalLineDto
 	public decimal AppliedConcessionAmount { get; set; }
 	public decimal ReversedConcessionAmount { get; set; }
 	public decimal ReversibleConcessionAmount { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class FeeHeadApprovalGroupDto
@@ -205,8 +207,31 @@ public class ConcessionApprovalContextDto
 	public string ConcessionPolicyName { get; set; } = string.Empty;
 	public string ConcessionPolicyCode { get; set; } = string.Empty;
 	public int ConcessionPolicyVersion { get; set; }
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
 	public decimal TotalRequestedConcessionAmount { get; set; }
 	public List<FeeHeadApprovalGroupDto> FeeHeadGroups { get; set; } = [];
+}
+
+public class ConcessionRequestPreviewInputDto
+{
+	public Guid StudentId { get; set; }
+	public Guid ConcessionTypeId { get; set; }
+	public List<FeeHeadConcessionDto> FeeHeadConcessions { get; set; } = [];
+}
+
+public class ConcessionRequestPreviewDto
+{
+	public Guid StudentFeeStructureId { get; set; }
+	public Guid ConcessionPolicyId { get; set; }
+	public Guid ConcessionPolicyVersionId { get; set; }
+	public string ConcessionPolicyName { get; set; } = string.Empty;
+	public string ConcessionPolicyCode { get; set; } = string.Empty;
+	public int ConcessionPolicyVersion { get; set; }
+	public string ApplyOn { get; set; } = string.Empty;
+	public decimal TotalEligibleBase { get; set; }
+	public decimal TotalConcessionAmount { get; set; }
+	public decimal NetPayable { get; set; }
+	public List<FeeHeadConcessionDetailDto> FeeHeadConcessions { get; set; } = [];
 }
 
 public class ApprovedDueFeeAllocationDto

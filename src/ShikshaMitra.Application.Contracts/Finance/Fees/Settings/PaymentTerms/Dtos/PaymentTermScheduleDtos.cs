@@ -60,7 +60,7 @@ public decimal? AllocationPercentage { get; set; }
 public class FeeHeadAssignmentWithTermDto
 {
 public Guid FeeHeadId { get; set; }
-public double Amount { get; set; }
+public decimal Amount { get; set; }
 public bool IsOneTime { get; set; }
 public bool IsOptional { get; set; }
 public MonthEnum PayableMonth { get; set; }

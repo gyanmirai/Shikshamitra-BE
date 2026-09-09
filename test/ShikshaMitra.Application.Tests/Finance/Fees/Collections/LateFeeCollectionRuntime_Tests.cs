@@ -151,7 +151,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		await _feeStructureRepo.InsertAsync(feeStructure, autoSave: true);
 
 		await _studentFeeStructureRepo.InsertAsync(
-			new StudentFeeStructure(Guid.NewGuid(), TestTenantId, studentId, feeStructure.Id), autoSave: true);
+			new StudentFeeStructure(Guid.NewGuid(), TestTenantId, studentId, feeStructure.Id, yearId), autoSave: true);
 
 		if (attachPolicy)
 		{
@@ -163,6 +163,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				Status = "Active",
 				EnableLateFee = true,
 				GracePeriodDays = 0,
+				LateFeeApplyOnFeeHeads = new() { feeHeadId },
 				LateFeeType = "PerDay",
 				AmountPerDay = 20,
 				PercentageBase = "OutstandingAmount",
@@ -170,6 +171,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				RoundingMethod = "None",
 				MaximumLateFeeAmount = maximumLateFeeAmount.HasValue ? (decimal)maximumLateFeeAmount.Value : null,
 				EnableWaiver = true,
+				WaiverApplyOnFeeHeads = new() { feeHeadId },
 				MaximumWaiverAmount = 100,
 				MaximumWaiverPercentage = 100,
 				AllowOnlineCollection = true,

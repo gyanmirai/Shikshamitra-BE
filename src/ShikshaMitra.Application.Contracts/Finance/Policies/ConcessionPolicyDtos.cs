@@ -13,6 +13,7 @@ public class ConcessionPolicyDto : EntityDto<Guid>
 	public string PolicyCode { get; set; } = string.Empty;
 	public string Description { get; set; } = string.Empty;
 	public string Status { get; set; } = "Draft";
+	public bool IsDefault { get; set; }
 	public string PolicyType { get; set; } = "concession";
 	public string ValueSource { get; set; } = "RequestEnteredWithinLimits";
 	public string CalculationMethod { get; set; } = "Percentage";
@@ -28,6 +29,7 @@ public class ConcessionPolicyDto : EntityDto<Guid>
 	public Guid? CreatorId { get; set; }
 	public DateTime? LastModificationTime { get; set; }
 	public Guid? LastModifierId { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class CreateUpdateConcessionPolicyDto
@@ -37,6 +39,7 @@ public class CreateUpdateConcessionPolicyDto
 	public string? PolicyCode { get; set; }
 	public string? Description { get; set; }
 	public string Status { get; set; } = "Draft";
+	public bool IsDefault { get; set; }
 	public string ValueSource { get; set; } = "RequestEnteredWithinLimits";
 	public string CalculationMethod { get; set; } = "Percentage";
 	public decimal? PercentageValue { get; set; }
@@ -45,6 +48,8 @@ public class CreateUpdateConcessionPolicyDto
 	public decimal? MaximumFixedAmount { get; set; }
 	public string ApplyOn { get; set; } = "AllOutstanding";
 	public string RoundingMethod { get; set; } = "None";
+	public string? ChangeReason { get; set; }
+	public string? ConcurrencyStamp { get; set; }
 }
 
 public class CreateUpdateConcessionPolicyDtoValidator : AbstractValidator<CreateUpdateConcessionPolicyDto>
@@ -55,10 +60,13 @@ public class CreateUpdateConcessionPolicyDtoValidator : AbstractValidator<Create
 		RuleFor(x => x.PolicyName).NotEmpty().MinimumLength(3).MaximumLength(128);
 		RuleFor(x => x.PolicyCode).MaximumLength(32);
 		RuleFor(x => x.Description).MaximumLength(500);
+		RuleFor(x => x.ChangeReason).MaximumLength(500);
 		RuleFor(x => x.Status).Must(x =>
 			string.Equals(x, "Draft", StringComparison.OrdinalIgnoreCase) ||
 			string.Equals(x, "Active", StringComparison.OrdinalIgnoreCase))
 			.WithMessage("Status must be Draft or Active. Use the archive action for Archived.");
+		RuleFor(x => x).Must(x => !x.IsDefault || string.Equals(x.Status, "Active", StringComparison.OrdinalIgnoreCase))
+			.WithMessage("Only an Active concession policy can be the default.");
 		RuleFor(x => x.ValueSource).Must(x => EnumValue(x, "PolicyFixed", "RequestEnteredWithinLimits"));
 		RuleFor(x => x.CalculationMethod).Must(x => EnumValue(x, "Percentage", "FixedAmount", "FullWaiver"));
 		RuleFor(x => x.ApplyOn).Must(x => EnumValue(x, "AllOutstanding", "CurrentInstallment", "FutureInstallments"));
@@ -82,6 +90,18 @@ public class CreateUpdateConcessionPolicyDtoValidator : AbstractValidator<Create
 
 	private static bool EnumValue(string? value, params string[] allowed) =>
 		allowed.Any(x => string.Equals(x, value, StringComparison.OrdinalIgnoreCase));
+}
+
+public class ConcessionPolicyImpactDto
+{
+	public Guid PolicyId { get; set; }
+	public string PolicyName { get; set; } = string.Empty;
+	public string Status { get; set; } = string.Empty;
+	public int CurrentVersion { get; set; }
+	public int AttachedFeeStructureCount { get; set; }
+	public int StudentAssignmentCount { get; set; }
+	public int ConcessionRequestCount { get; set; }
+	public bool ChangeReasonRequired { get; set; }
 }
 
 public class ConcessionPolicyListRequestDto : PagedAndSortedResultRequestDto

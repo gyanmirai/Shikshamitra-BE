@@ -92,12 +92,13 @@ public partial class StudentFeeDetailsQueryService
 		return feeHeadDefs.Select(def =>
 		{
 			var paid = paidPerHead.GetValueOrDefault(def.FeeHeadId, 0d);
-			var pending = Math.Max(0d, def.NetAmount - paid);
+			var netAmount = (double)def.NetAmount;
+			var pending = Math.Max(0d, netAmount - paid);
 			var recon = reconByFeeHead.GetValueOrDefault(def.FeeHeadId, 0d);
 			return new FeeHeadSummaryDto
 			{
 				FeeHeadId = def.FeeHeadId, FeeHeadName = def.FeeHeadName,
-				Amount = def.NetAmount, PaidAmount = paid, PendingAmount = pending,
+				Amount = netAmount, PaidAmount = paid, PendingAmount = pending,
 				Description = def.Description, ReconciliationAmount = recon > 0d ? recon : null,
 				Status = pending <= 0d ? FeeCollectionStatus.Paid
 					: (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),

@@ -16,4 +16,14 @@ public class EfCoreDueFeeRepository(IDbContextProvider<ShikshaMitraDbContext> db
 		var dbSet = await GetDbSetAsync();
 		return await dbSet.AnyAsync(x => x.StudentId == studentId, ct);
 	}
+
+	public async Task<bool> ExistsForStudentInPeriodAsync(
+		Guid studentId, DateTime periodStart, DateTime periodEnd, CancellationToken ct = default)
+	{
+		var dbSet = await GetDbSetAsync();
+		return await dbSet.AnyAsync(x => x.StudentId == studentId &&
+			((x.CoverageStartDate.HasValue && x.CoverageEndDate.HasValue &&
+				x.CoverageStartDate.Value <= periodEnd && x.CoverageEndDate.Value >= periodStart) ||
+			 (!x.CoverageStartDate.HasValue && x.Year >= periodStart.Year && x.Year <= periodEnd.Year)), ct);
+	}
 }

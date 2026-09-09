@@ -10,7 +10,7 @@ public class StudentFeeHeadDetailDto
 	public Guid FeeHeadId { get; set; }
 
 	[Required]
-	public double Amount { get; set; }
+	public decimal Amount { get; set; }
 
 	// For one-time optional fees
 	public MonthEnum? PayableMonth { get; set; }
@@ -21,4 +21,7 @@ public class StudentFeeHeadDetailDto
 	public int? StartPayableYear { get; set; }
 	public MonthEnum? EndPayableMonth { get; set; }
 	public int? EndPayableYear { get; set; }
+
+	public DateTime? ChargeStartDate { get; set; }
+	public DateTime? ChargeEndDate { get; set; }
 }

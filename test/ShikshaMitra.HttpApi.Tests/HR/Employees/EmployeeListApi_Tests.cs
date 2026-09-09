@@ -280,6 +280,36 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 	#region Tier 2 — Extended
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Search_Full_Name_With_Encoded_Whitespace_And_Filter_Before_Paging()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var created = await EmployeeTestHelper.CreateEmployeeAsync(Client, "FullNameSearch");
+		foreach (var query in new[]
+		{
+			$"{created.FirstName} {created.LastName}",
+			$"  {created.FirstName.ToUpperInvariant()}   {created.LastName}  ",
+			$"{created.FirstName}\u00a0{created.LastName}",
+			$"{created.LastName}\t{created.FirstName}"
+		})
+		{
+			var response = await Client.GetAsync($"{BaseUrl}?search={Uri.EscapeDataString(query)}&page=1&pageSize=1");
+			response.StatusCode.ShouldBe(HttpStatusCode.OK);
+			var body = await response.Content.ReadFromJsonAsync<EmployeeListResponse>(JsonOptions);
+			body.ShouldNotBeNull();
+			body.Items.Select(x => x.Id).ShouldBe(new[] { created.Id });
+			body.TotalCount.ShouldBe(1);
+			body.CurrentPage.ShouldBe(1);
+		}
+
+		var absent = await Client.GetFromJsonAsync<EmployeeListResponse>(
+			$"{BaseUrl}?search={Uri.EscapeDataString(created.FirstName + " MissingSurname")}&page=1&pageSize=1", JsonOptions);
+		absent.ShouldNotBeNull();
+		absent.Items.ShouldBeEmpty();
+		absent.TotalCount.ShouldBe(0);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Paginate_Employee_List()
 	{

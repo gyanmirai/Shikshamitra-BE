@@ -12,6 +12,7 @@ public class LessonPlanPermissionAuthorization_Tests
 	[Theory]
 	[InlineData(nameof(LessonPlanAppService.GetListAsync))]
 	[InlineData(nameof(LessonPlanAppService.GetTimelineAsync))]
+	[InlineData(nameof(LessonPlanAppService.GetChapterProgressAsync))]
 	[InlineData(nameof(LessonPlanAppService.GetAsync))]
 	[InlineData(nameof(LessonPlanAppService.GetTeacherDiariesAsync))]
 	[InlineData(nameof(LessonPlanAppService.GetTeacherDiaryAsync))]

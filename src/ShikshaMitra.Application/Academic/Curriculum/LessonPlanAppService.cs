@@ -28,6 +28,8 @@ namespace ShikshaMitra.Academic.Curriculum;
 public class LessonPlanAppService(
     IRepository<LessonPlan, Guid> lessonPlanRepository,
     IRepository<TeacherDiary, Guid> teacherDiaryRepository,
+    LessonPlanProgressManager lessonPlanProgressManager,
+    SubjectTeacherReassignmentManager teacherReassignmentManager,
     ITimetableRepository timetableRepository,
     IRepository<TimetableSlot, Guid> timetableSlotRepository,
     IRepository<Standard, Guid> standardRepository,
@@ -107,9 +109,15 @@ public class LessonPlanAppService(
                 throw new AbpAuthorizationException("You are not authorized to view this timeline.");
             }
         }
+        // PlannedDate is persisted as an instant. A local midnight can fall on
+        // the previous UTC date, so matching either date admits adjacent-day
+        // plans. Use one non-overlapping interval for the requested local day.
+        var selectedDate = date.Date;
+        var dayStartUtc = new DateTimeOffset(selectedDate, date.Offset).UtcDateTime;
+        var dayEndUtc = new DateTimeOffset(selectedDate.AddDays(1), date.Offset).UtcDateTime;
         var lessonPlansQuery = await lessonPlanRepository.GetQueryableAsync();
         lessonPlansQuery = lessonPlansQuery.Where(x => x.TeacherId == targetTeacherId &&
-            (x.PlannedDate.Date == date.DateTime.Date || x.PlannedDate.Date == date.UtcDateTime.Date));
+            x.PlannedDate >= dayStartUtc && x.PlannedDate < dayEndUtc);
 
         List<Guid>? allowedStandardIds = null;
         if (academicMediumId.HasValue)
@@ -144,7 +152,7 @@ public class LessonPlanAppService(
         var mappedById = mappedPlans.ToDictionary(x => x.Id);
         var matchedPlanIds = new HashSet<Guid>();
         var slots = new List<TimelineSlotDto>();
-        var timetableDay = ToTimetableDay(date.DateTime.DayOfWeek);
+        var timetableDay = ToTimetableDay(selectedDate.DayOfWeek);
 
         if (timetableDay != null)
         {
@@ -222,7 +230,7 @@ public class LessonPlanAppService(
 
                         var insight = await ResolveLessonPlanInsightAsync(
                             targetTeacherId,
-                            date.DateTime.Date,
+                            selectedDate,
                             timetable.StandardId,
                             timetable.DivisionId
                         );
@@ -276,7 +284,7 @@ public class LessonPlanAppService(
 
         return new LessonPlanTimelineDto
         {
-            Date = date.DateTime,
+            Date = selectedDate,
             TeacherId = targetTeacherId,
             Slots = slots
                 .OrderBy(s => string.IsNullOrWhiteSpace(s.StartTime))
@@ -315,6 +323,23 @@ public class LessonPlanAppService(
         plan.DivisionId == divisionId &&
         plan.SubjectId == subjectId;
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.View)]
+    public async Task<LessonPlanChapterProgressDto> GetChapterProgressAsync(GetLessonPlanChapterProgressInput input)
+    {
+        await EnsureChapterMatchesPlanTargetAsync(input.ChapterId, input.StandardId, input.SubjectId);
+        // Authorize the requested academic context without persisting a plan or
+        // using an arbitrary teacher's ownership to bypass resource scope.
+        var target = new LessonPlan(Guid.Empty, CurrentTenant.Id, input.AcademicYearId,
+            Guid.Empty, input.StandardId, input.DivisionId, input.SubjectId, input.ChapterId,
+            Clock.Now, string.Empty, 0);
+        await EnsureLessonPlanAccessAsync(target, "lesson-plan-chapter-progress");
+        return new LessonPlanChapterProgressDto
+        {
+            MinimumCompletionPercentage = await lessonPlanProgressManager.GetMinimumAsync(
+                input.AcademicYearId, input.StandardId, input.DivisionId, input.SubjectId, input.ChapterId)
+        };
+    }
+
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<LessonPlanDto> CreateAsync(CreateLessonPlanDto input)
     {
@@ -340,6 +365,8 @@ public class LessonPlanAppService(
             input.IsAiGenerated
         );
 
+        await teacherReassignmentManager.EnsureCurrentTimetableTeacherAsync(lessonPlan);
+
         lessonPlan.UpdatePlan(
             input.ChapterId,
             input.Topic,
@@ -355,6 +382,7 @@ public class LessonPlanAppService(
         }
 
         await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-create");
+        await lessonPlanProgressManager.EnsureTargetAsync(lessonPlan, input.ChapterId, input.PlannedCompletionPercentage);
         var inserted = await lessonPlanRepository.InsertAsync(lessonPlan, autoSave: true);
         return (await MapLessonPlansAsync(new[] { inserted })).Single();
     }
@@ -367,6 +395,7 @@ public class LessonPlanAppService(
         await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "modify");
         EnsureLessonPlanEditable(lessonPlan);
         await EnsureChapterMatchesPlanTargetAsync(input.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
+        await lessonPlanProgressManager.EnsureTargetAsync(lessonPlan, input.ChapterId, input.PlannedCompletionPercentage);
 
         await EnsureUniqueLessonPlanAsync(
             lessonPlan.TeacherId,
@@ -399,6 +428,7 @@ public class LessonPlanAppService(
         await EnsureChapterMatchesPlanTargetAsync(lessonPlan.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
         await EnsureLessonPlanCanBeCreatedForDateAsync(lessonPlan.TeacherId, lessonPlan.PlannedDate, lessonPlan.StandardId, lessonPlan.DivisionId);
         await EnsureUniqueLessonPlanAsync(lessonPlan.TeacherId, lessonPlan.PlannedDate, lessonPlan.Topic, lessonPlan.TimetableSlotId, lessonPlan.Id);
+        await lessonPlanProgressManager.EnsureTargetAsync(lessonPlan, lessonPlan.ChapterId, lessonPlan.PlannedCompletionPercentage);
 
         lessonPlan.Submit();
         await lessonPlanRepository.UpdateAsync(lessonPlan);
@@ -417,6 +447,7 @@ public class LessonPlanAppService(
             await EnsureChapterMatchesPlanTargetAsync(plan.ChapterId, plan.StandardId, plan.SubjectId);
             await EnsureLessonPlanCanBeCreatedForDateAsync(plan.TeacherId, plan.PlannedDate, plan.StandardId, plan.DivisionId);
             await EnsureUniqueLessonPlanAsync(plan.TeacherId, plan.PlannedDate, plan.Topic, plan.TimetableSlotId, plan.Id);
+            await lessonPlanProgressManager.EnsureTargetAsync(plan, plan.ChapterId, plan.PlannedCompletionPercentage);
             plan.Submit();
             await lessonPlanRepository.UpdateAsync(plan);
         }

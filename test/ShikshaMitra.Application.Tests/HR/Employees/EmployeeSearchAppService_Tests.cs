@@ -76,6 +76,18 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 			MaxResultCount = 50
 		});
 
+		foreach (var query in new[] { "Akshay\u00a0Patel", "Akshay\tPatel", "Akshay\r\nPatel", "Patel Akshay" })
+		{
+			var result = await _employeeSearchAppService.GetFilteredListAsync(new GetEmployeeListInput
+			{
+				Search = query,
+				SkipCount = 0,
+				MaxResultCount = 1
+			});
+			result.Items.Select(x => x.Id).ShouldBe(new[] { target.Id }, query);
+			result.TotalCount.ShouldBe(1, query);
+		}
+
 		fullNameResult.Items.Select(x => x.Id).ShouldContain(target.Id);
 		fullNameResult.Items.Select(x => x.Id).ShouldNotContain(outsider.Id);
 		middleNameResult.Items.Select(x => x.Id).ShouldContain(target.Id);

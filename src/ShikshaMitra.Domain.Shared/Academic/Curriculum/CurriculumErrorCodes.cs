@@ -19,6 +19,8 @@ public static class CurriculumErrorCodes
     // ── Subject Assignment: 02xxxx ───────────────────────────────
 
     public const string DuplicateSubjectAssignment = "Academic:Curriculum:020001";
+    public const string LessonPlanReassignmentConflict = "Academic:Curriculum:020002";
+    public const string TimetableTeacherChanged = "Academic:Curriculum:020003";
 
     // ── Elective Group: 03xxxx ───────────────────────────────────
 

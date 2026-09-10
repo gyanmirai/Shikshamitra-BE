@@ -90,10 +90,22 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
 	public async Task<Result<AdmissionApplicationDto>> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.DeclineOfferAsync(id, input));
 
+	[HttpGet("{id:guid}/finalization-preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<AdmissionFinalizationPreviewDto>> GetFinalizationPreviewAsync(Guid id) =>
+		Result.Success(await service.GetFinalizationPreviewAsync(id));
+
+	[HttpPost("{id:guid}/finalize")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
+	public async Task<Result<AdmissionFinalizationResultDto>> FinalizeAsync(Guid id, FinalizeAdmissionApplicationDto input) =>
+		Result.Success(await service.FinalizeAsync(id, input));
+
+	[Obsolete("Admissions no longer creates operational enrollment. Use /finalize.")]
 	[HttpPost("{id:guid}/enroll")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
 	public async Task<Result<AdmissionEnrollmentResultDto>> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input) => Result.Success(await service.EnrollAsync(id, input));
 
+	[Obsolete("Placement is owned by Student Onboarding.")]
 	[HttpGet("{id:guid}/enrollment-options")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
 	public async Task<Result<AdmissionEnrollmentOptionsDto>> GetEnrollmentOptionsAsync(Guid id) => Result.Success(await service.GetEnrollmentOptionsAsync(id));

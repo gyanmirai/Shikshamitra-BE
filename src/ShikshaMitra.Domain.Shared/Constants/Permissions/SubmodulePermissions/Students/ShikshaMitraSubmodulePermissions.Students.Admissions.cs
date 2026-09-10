@@ -147,8 +147,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string OverrideWorkflow = $"{SubmoduleName}.OverrideWorkflow";
 			public const string Decide = $"{SubmoduleName}.Decide";
 			public const string Offer = $"{SubmoduleName}.Offer";
+			public const string Finalize = $"{SubmoduleName}.Finalize";
+			[System.Obsolete("Use Finalize. Admissions no longer creates operational enrollments.")]
 			public const string Enroll = $"{SubmoduleName}.Enroll";
-			public static readonly string[] All = { View, Start, Edit, Submit, Reopen, Advance, SkipStage, OverrideWorkflow, Decide, Offer, Enroll };
+			public static readonly string[] All = { View, Start, Edit, Submit, Reopen, Advance, SkipStage, OverrideWorkflow, Decide, Offer, Finalize, Enroll };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ View, $"{SubmoduleDisplayName}.View" },
@@ -161,7 +163,36 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ OverrideWorkflow, $"{SubmoduleDisplayName}.OverrideWorkflow" }
 				, { Decide, $"{SubmoduleDisplayName}.Decide" }
 				, { Offer, $"{SubmoduleDisplayName}.Offer" }
+				, { Finalize, $"{SubmoduleDisplayName}.Finalize" }
 				, { Enroll, $"{SubmoduleDisplayName}.Enroll" }
+			};
+		}
+
+		public static class StudentOnboarding
+		{
+			private const string SubmoduleName = $"{ModuleName}.Onboarding";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Onboarding";
+			public const string View = $"{SubmoduleName}.View";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string Waive = $"{SubmoduleName}.Waive";
+			public const string AllocateSeat = $"{SubmoduleName}.AllocateSeat";
+			public const string AllocateIdentifier = $"{SubmoduleName}.AllocateIdentifier";
+			public const string Activate = $"{SubmoduleName}.Activate";
+			public const string Cancel = $"{SubmoduleName}.Cancel";
+			public const string Repair = $"{SubmoduleName}.Repair";
+			public const string Configure = $"{SubmoduleName}.Configure";
+			public static readonly string[] All = { View, Edit, Waive, AllocateSeat, AllocateIdentifier, Activate, Cancel, Repair, Configure };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Waive, $"{SubmoduleDisplayName}.Waive" },
+				{ AllocateSeat, $"{SubmoduleDisplayName}.AllocateSeat" },
+				{ AllocateIdentifier, $"{SubmoduleDisplayName}.AllocateIdentifier" },
+				{ Activate, $"{SubmoduleDisplayName}.Activate" },
+				{ Cancel, $"{SubmoduleDisplayName}.Cancel" },
+				{ Repair, $"{SubmoduleDisplayName}.Repair" },
+				{ Configure, $"{SubmoduleDisplayName}.Configure" }
 			};
 		}
 
@@ -170,11 +201,12 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Admissions.Applicants";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Admissions.Applicants";
 			public const string View = $"{SubmoduleName}.View";
+			public const string Edit = $"{SubmoduleName}.Edit";
 			public const string NotesView = $"{SubmoduleName}.Notes.View";
 			public const string NotesCreate = $"{SubmoduleName}.Notes.Create";
 			public const string NotesEdit = $"{SubmoduleName}.Notes.Edit";
-			public static readonly string[] All = { View, NotesView, NotesCreate, NotesEdit };
-			public static readonly Dictionary<string, string> DisplayNames = new() { { View, $"{SubmoduleDisplayName}.View" }, { NotesView, $"{SubmoduleDisplayName}.Notes.View" }, { NotesCreate, $"{SubmoduleDisplayName}.Notes.Create" }, { NotesEdit, $"{SubmoduleDisplayName}.Notes.Edit" } };
+			public static readonly string[] All = { View, Edit, NotesView, NotesCreate, NotesEdit };
+			public static readonly Dictionary<string, string> DisplayNames = new() { { View, $"{SubmoduleDisplayName}.View" }, { Edit, $"{SubmoduleDisplayName}.Edit" }, { NotesView, $"{SubmoduleDisplayName}.Notes.View" }, { NotesCreate, $"{SubmoduleDisplayName}.Notes.Create" }, { NotesEdit, $"{SubmoduleDisplayName}.Notes.Edit" } };
 		}
 	}
 }

@@ -35,6 +35,51 @@ public class AdmissionApplication_Tests
 	}
 
 	[Fact]
+	public void Finalization_links_identity_and_onboarding_without_legacy_enrollment_fields()
+	{
+		var application = CreateSubmittedApplication();
+		application.MarkInReview(Guid.NewGuid(), null);
+		application.Approve(Guid.NewGuid(), null);
+		application.IssueOffer(DateTime.UtcNow.AddDays(7), Guid.NewGuid(), null);
+		application.AcceptOffer(Guid.NewGuid(), null);
+		var studentId = Guid.NewGuid();
+		var onboardingCaseId = Guid.NewGuid();
+
+		application.FinalizeAdmission(studentId, onboardingCaseId, DateTime.UtcNow);
+
+		application.Status.ShouldBe(AdmissionApplicationStatus.AdmissionFinalized);
+		application.StudentId.ShouldBe(studentId);
+		application.OnboardingCaseId.ShouldBe(onboardingCaseId);
+		application.FinalizedAt.ShouldNotBeNull();
+		application.EnrolledStudentId.ShouldBeNull();
+		application.StudentEnrollmentId.ShouldBeNull();
+	}
+
+	[Fact]
+	public void Historical_onboarding_link_preserves_legacy_enrolled_status_and_enrollment()
+	{
+		var application = CreateSubmittedApplication();
+		application.MarkInReview(Guid.NewGuid(), null);
+		application.Approve(Guid.NewGuid(), null);
+		application.IssueOffer(DateTime.UtcNow.AddDays(7), Guid.NewGuid(), null);
+		application.AcceptOffer(Guid.NewGuid(), null);
+		var studentId = Guid.NewGuid();
+		var enrollmentId = Guid.NewGuid();
+		var caseId = Guid.NewGuid();
+		application.MarkEnrolled(studentId, enrollmentId);
+
+		application.LinkHistoricalOnboarding(studentId, caseId);
+		application.LinkHistoricalOnboarding(studentId, caseId);
+
+		application.Status.ShouldBe(AdmissionApplicationStatus.Enrolled);
+		application.EnrolledStudentId.ShouldBe(studentId);
+		application.StudentEnrollmentId.ShouldBe(enrollmentId);
+		application.StudentId.ShouldBe(studentId);
+		application.OnboardingCaseId.ShouldBe(caseId);
+		application.FinalizedAt.ShouldBeNull();
+	}
+
+	[Fact]
 	public void RequiresReasonForNegativeDecisions()
 	{
 		var application = CreateSubmittedApplication();
@@ -76,6 +121,7 @@ public class AdmissionApplication_Tests
 	[InlineData(AdmissionApplicationStatus.Rejected)]
 	[InlineData(AdmissionApplicationStatus.OfferAccepted)]
 	[InlineData(AdmissionApplicationStatus.Enrolled)]
+	[InlineData(AdmissionApplicationStatus.AdmissionFinalized)]
 	public void Does_not_allow_approval_from_incompatible_state(AdmissionApplicationStatus status)
 	{
 		var application = CreateSubmittedApplication();
@@ -98,6 +144,14 @@ public class AdmissionApplication_Tests
 				application.IssueOffer(DateTime.UtcNow.AddDays(7), Guid.NewGuid(), null);
 				application.AcceptOffer(Guid.NewGuid(), null);
 				application.MarkEnrolled(Guid.NewGuid(), Guid.NewGuid());
+			}
+			if (status == AdmissionApplicationStatus.AdmissionFinalized)
+			{
+				application.MarkInReview(Guid.NewGuid(), null);
+				application.Approve(Guid.NewGuid(), null);
+				application.IssueOffer(DateTime.UtcNow.AddDays(7), Guid.NewGuid(), null);
+				application.AcceptOffer(Guid.NewGuid(), null);
+				application.FinalizeAdmission(Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
 			}
 		}
 

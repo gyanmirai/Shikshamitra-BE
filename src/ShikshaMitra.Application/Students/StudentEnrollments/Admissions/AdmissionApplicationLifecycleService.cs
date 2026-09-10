@@ -39,7 +39,7 @@ public class AdmissionApplicationLifecycleService(
 			throw new EntityNotFoundException(typeof(AdmissionApplicant), applicantId);
 		var offering = (await offeringRuntimeService.GetAvailableAsync(offeringId)).Offering;
 		inquiryId = await ResolveInquiryAsync(applicantId, offeringId, inquiryId);
-		await EnsureInquiryMatchesAsync(inquiryId, applicantId, offering);
+		var inquiry = await EnsureInquiryMatchesAsync(inquiryId, applicantId, offering);
 		var workflow = await workflowRepository.FindAsync(offering.WorkflowDefinitionId!.Value);
 		var form = await formRepository.FindAsync(offering.ApplicationFormDefinitionId!.Value);
 		if (workflow?.Status != AdmissionWorkflowStatus.Published || form?.Status != AdmissionFormStatus.Published)
@@ -67,7 +67,7 @@ public class AdmissionApplicationLifecycleService(
 		var formInstance = new AdmissionFormInstance(
 			GuidGenerator.Create(), CurrentTenant.Id, application.Id, form.Id, form.Version);
 		await PersistAsync(application, workflowInstance, stages, formInstance,
-			await CreateInitialValuesAsync(applicant, formInstance), inquiryId, workflow, entryInstance);
+			await CreateInitialValuesAsync(applicant, formInstance, inquiry), inquiryId, workflow, entryInstance);
 		return AdmissionApplicationMapper.ToDto(application);
 	}
 
@@ -88,33 +88,62 @@ public class AdmissionApplicationLifecycleService(
 			.OrderByDescending(inquiry => inquiry.CreationTime)))?.Id;
 	}
 
-	private async Task EnsureInquiryMatchesAsync(Guid? inquiryId, Guid applicantId, AdmissionOffering offering)
+	private async Task<AdmissionInquiry?> EnsureInquiryMatchesAsync(Guid? inquiryId, Guid applicantId, AdmissionOffering offering)
 	{
-		if (!inquiryId.HasValue) return;
+		if (!inquiryId.HasValue) return null;
 		var inquiry = await inquiryRepository.FindAsync(inquiryId.Value) ??
 			throw new EntityNotFoundException(typeof(AdmissionInquiry), inquiryId.Value);
 		if (inquiry.ApplicantId != applicantId || inquiry.AdmissionCycleId != offering.AdmissionCycleId ||
 			inquiry.AdmissionOfferingId != offering.Id)
 			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable);
+		return inquiry;
 	}
 
 	private async Task<AdmissionFormFieldValue[]> CreateInitialValuesAsync(
 		AdmissionApplicant applicant,
-		AdmissionFormInstance instance)
+		AdmissionFormInstance instance,
+		AdmissionInquiry? inquiry)
 	{
 		var family = await familyRepository.FindAsync(applicant.FamilyId);
 		var guardian = family?.PrimaryGuardianId.HasValue == true
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
 		var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
-		return fields.Where(field =>
-				(field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey)) ||
-				!string.IsNullOrWhiteSpace(field.DefaultValue))
-			.Select(field => new AdmissionFormFieldValue(
+		var inquiryValues = ReadInquiryValues(inquiry?.FormResponseSnapshotJson);
+		return fields.Select(field => new AdmissionFormFieldValue(
 				GuidGenerator.Create(), CurrentTenant.Id, instance.Id, field.Code,
-				field.BindingType == AdmissionFormBindingType.System
-					? JsonSerializer.Serialize(AdmissionApplicationMapper.GetBoundValue(field.BindingKey!, applicant, guardian))
-					: field.DefaultValue))
+				ResolveInitialValue(field, applicant, guardian, inquiryValues)))
 			.Where(value => value.ValueJson != "null" && !string.IsNullOrWhiteSpace(value.ValueJson)).ToArray();
+	}
+
+	private static string? ResolveInitialValue(
+		AdmissionFormFieldDefinition field,
+		AdmissionApplicant applicant,
+		AdmissionGuardian? guardian,
+		IReadOnlyDictionary<string, string> inquiryValues)
+	{
+		var snapshotKey = string.IsNullOrWhiteSpace(field.BindingKey) ? field.Code : field.BindingKey;
+		if (field.BindingType != AdmissionFormBindingType.System &&
+			inquiryValues.TryGetValue(snapshotKey!, out var snapshotValue) &&
+			!string.IsNullOrWhiteSpace(snapshotValue) && snapshotValue != "null")
+			return snapshotValue;
+		if (field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey))
+			return JsonSerializer.Serialize(AdmissionApplicationMapper.GetBoundValue(field.BindingKey, applicant, guardian));
+		return field.DefaultValue;
+	}
+
+	private static IReadOnlyDictionary<string, string> ReadInquiryValues(string? snapshotJson)
+	{
+		if (string.IsNullOrWhiteSpace(snapshotJson))
+			return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		try
+		{
+			var values = JsonSerializer.Deserialize<Dictionary<string, string>>(snapshotJson) ?? [];
+			return new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase);
+		}
+		catch (JsonException)
+		{
+			return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		}
 	}
 
 	private async Task PersistAsync(

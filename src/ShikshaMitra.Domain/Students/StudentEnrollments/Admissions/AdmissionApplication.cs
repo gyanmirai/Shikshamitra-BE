@@ -24,6 +24,9 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTime? OfferAcceptedAt { get; private set; }
 	public Guid? EnrolledStudentId { get; private set; }
 	public Guid? StudentEnrollmentId { get; private set; }
+	public Guid? StudentId { get; private set; }
+	public Guid? OnboardingCaseId { get; private set; }
+	public DateTime? FinalizedAt { get; private set; }
 	public Guid? CurrentStageInstanceId { get; private set; }
 	public DateTime? LastSavedAt { get; private set; }
 	public DateTime? SubmittedAt { get; private set; }
@@ -111,6 +114,31 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EnrolledStudentId = Check.NotDefaultOrNull<Guid>(studentId, nameof(studentId));
 		StudentEnrollmentId = Check.NotDefaultOrNull<Guid>(studentEnrollmentId, nameof(studentEnrollmentId));
 		Status = AdmissionApplicationStatus.Enrolled;
+	}
+
+	public void FinalizeAdmission(Guid studentId, Guid onboardingCaseId, DateTime finalizedAt)
+	{
+		if (Status == AdmissionApplicationStatus.AdmissionFinalized &&
+		    StudentId == studentId && OnboardingCaseId == onboardingCaseId)
+			return;
+		EnsureStatus(AdmissionApplicationStatus.OfferAccepted);
+		StudentId = Check.NotDefaultOrNull<Guid>(studentId, nameof(studentId));
+		OnboardingCaseId = Check.NotDefaultOrNull<Guid>(onboardingCaseId, nameof(onboardingCaseId));
+		FinalizedAt = finalizedAt.ToUniversalTime();
+		Status = AdmissionApplicationStatus.AdmissionFinalized;
+	}
+
+	public void LinkHistoricalOnboarding(Guid studentId, Guid onboardingCaseId)
+	{
+		if (Status != AdmissionApplicationStatus.Enrolled)
+			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionInvalidState);
+		if (StudentId.HasValue || OnboardingCaseId.HasValue)
+		{
+			if (StudentId == studentId && OnboardingCaseId == onboardingCaseId) return;
+			throw new BusinessException(AdmissionErrorCodes.ApplicationAlreadyEnrolled);
+		}
+		StudentId = Check.NotDefaultOrNull<Guid>(studentId, nameof(studentId));
+		OnboardingCaseId = Check.NotDefaultOrNull<Guid>(onboardingCaseId, nameof(onboardingCaseId));
 	}
 
 	private void SetDecision(AdmissionApplicationStatus status, Guid? actorId, string? reason, bool requireReason)

@@ -8,6 +8,7 @@ using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -61,6 +62,14 @@ public partial class ShikshaMitraDbContext
 	public DbSet<AdmissionActivity> AdmissionActivities { get; set; }
 	public DbSet<AdmissionNote> AdmissionNotes { get; set; }
 	public DbSet<AdmissionApplicationDecisionHistory> AdmissionApplicationDecisionHistories { get; set; }
+	public DbSet<StudentOnboardingCase> StudentOnboardingCases { get; set; }
+	public DbSet<StudentOnboardingStep> StudentOnboardingSteps { get; set; }
+	public DbSet<StudentOnboardingEvent> StudentOnboardingEvents { get; set; }
+	public DbSet<StudentOnboardingPolicy> StudentOnboardingPolicies { get; set; }
+	public DbSet<StudentSeatReservation> StudentSeatReservations { get; set; }
+	public DbSet<StudentIdentifierSeries> StudentIdentifierSeries { get; set; }
+	public DbSet<StudentIdentifierAllocation> StudentIdentifierAllocations { get; set; }
+	public DbSet<StudentOnboardingServiceHandoff> StudentOnboardingServiceHandoffs { get; set; }
 
     // ───────────────────────────────────────────────
     // Students — Records

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -8,6 +9,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private const string FormResponseSnapshotProperty = "AdmissionFormResponseSnapshot";
 	public Guid? TenantId { get; private set; }
 	public string InquiryNumber { get; private set; }
 	public Guid AdmissionCycleId { get; private set; }
@@ -24,6 +26,7 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? DuplicateOfId { get; private set; }
 	public DateTime? ContactedAt { get; private set; }
 	public DateTime? LastActivityAt { get; private set; }
+	public string? FormResponseSnapshotJson => this.GetProperty<string>(FormResponseSnapshotProperty);
 
 	protected AdmissionInquiry() { }
 
@@ -68,6 +71,12 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		AssignedCounsellorId = Check.NotDefaultOrNull<Guid>(counsellorId, nameof(counsellorId));
 		LastActivityAt = DateTime.UtcNow;
+	}
+
+	public void RecordFormResponseSnapshot(string snapshotJson)
+	{
+		this.SetProperty(FormResponseSnapshotProperty,
+			Check.NotNullOrWhiteSpace(snapshotJson, nameof(snapshotJson)));
 	}
 
 	private static string NormalizePhone(string phone)

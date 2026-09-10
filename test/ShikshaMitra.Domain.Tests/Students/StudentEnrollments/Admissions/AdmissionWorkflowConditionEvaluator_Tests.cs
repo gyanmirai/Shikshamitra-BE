@@ -93,16 +93,28 @@ public class AdmissionWorkflowConditionEvaluator_Tests
 
 	[Theory]
 	[InlineData(AdmissionWorkflowStageType.DocumentVerification)]
-	[InlineData(AdmissionWorkflowStageType.Approval)]
+	[InlineData(AdmissionWorkflowStageType.Eligibility)]
+	[InlineData(AdmissionWorkflowStageType.Payment)]
+	[InlineData(AdmissionWorkflowStageType.Review)]
+	[InlineData(AdmissionWorkflowStageType.Offer)]
+	[InlineData(AdmissionWorkflowStageType.Seat)]
 	[InlineData(AdmissionWorkflowStageType.Enrollment)]
+	[InlineData(AdmissionWorkflowStageType.Appointment)]
 	public async System.Threading.Tasks.Task Manual_Decision_Handlers_Should_Require_A_Submitted_Application(
 		AdmissionWorkflowStageType stageType)
 	{
 		var registry = new AdmissionWorkflowStageHandlerRegistry(new IAdmissionWorkflowStageHandler[]
 		{
 			new DocumentVerificationAdmissionWorkflowStageHandler(),
+			new AssessmentAdmissionWorkflowStageHandler(),
+			new EligibilityAdmissionWorkflowStageHandler(),
+			new PaymentAdmissionWorkflowStageHandler(),
+			new ReviewAdmissionWorkflowStageHandler(),
 			new ApprovalAdmissionWorkflowStageHandler(),
-			new EnrollmentAdmissionWorkflowStageHandler()
+			new OfferAdmissionWorkflowStageHandler(),
+			new SeatAdmissionWorkflowStageHandler(),
+			new EnrollmentAdmissionWorkflowStageHandler(),
+			new AppointmentAdmissionWorkflowStageHandler()
 		});
 		var context = new AdmissionWorkflowStageRuntimeContext(
 			Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), AdmissionApplicationStatus.Draft);
@@ -112,5 +124,11 @@ public class AdmissionWorkflowConditionEvaluator_Tests
 		await Should.NotThrowAsync(() =>
 			registry.EnsureCanCompleteAsync(stageType,
 				context with { ApplicationStatus = AdmissionApplicationStatus.Submitted }));
+		await Should.NotThrowAsync(() =>
+			registry.EnsureCanCompleteAsync(stageType,
+				context with { ApplicationStatus = AdmissionApplicationStatus.OfferAccepted }));
+		await Should.ThrowAsync<Volo.Abp.BusinessException>(() =>
+			registry.EnsureCanCompleteAsync(stageType,
+				context with { ApplicationStatus = AdmissionApplicationStatus.Rejected }));
 	}
 }

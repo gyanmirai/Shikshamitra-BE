@@ -15,7 +15,7 @@ namespace ShikshaMitra.Seeders;
 public class RolePermissionSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "RolePermissionSeeder";
-	internal const string StepVersion = "RolePermissionSeeder:v18";
+	internal const string StepVersion = "RolePermissionSeeder:v19";
 	internal const int StepOrder = 120;
 	private const string RoleProviderName = "R";
 
@@ -115,6 +115,31 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.Students,
 			ShikshaMitraModulePermissions.Calendar);
+		var admissionsReceptionistPermissions = AdmissionsBasePermissions()
+			.Concat([
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Submit,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit
+			]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+		var admissionsCounselorPermissions = admissionsReceptionistPermissions
+			.Concat([
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.SkipStage,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Waive,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier
+			]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+		var admissionsApproverPermissions = admissionsCounselorPermissions
+			.Concat([
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.OverrideWorkflow,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Cancel,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair
+			]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 		// Seed baseline access for deterministic staff personas. Tenant admins can still adjust
 		// grants through the Security module; this only inserts missing grants.
 		return new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
@@ -132,10 +157,33 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			["Office Assistant"] = officeStaffPermissions,
 			["Finance Officer"] = financeStaffPermissions,
 			["HR Manager"] = hrStaffPermissions.Concat(HrStaffPlatformPermissions()).ToArray(),
+			["Admissions Receptionist"] = admissionsReceptionistPermissions,
+			["Admissions Counselor"] = admissionsCounselorPermissions,
+			["Admissions Approver"] = admissionsApproverPermissions,
 			["Student"] = studentFamilyPermissions,
 			["Parent"] = studentFamilyPermissions
 		};
 	}
+
+	private static string[] AdmissionsBasePermissions() =>
+	[
+		ShikshaMitraModulePermissions.Students,
+		ShikshaMitraSubmodulePermissions.Students.Default,
+		ShikshaMitraSubmodulePermissions.Students.Admissions.View,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Create,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Edit,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Assign,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.Edit,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesView,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesCreate,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View,
+		ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View
+	];
 
 	private static string[] LeaveSelfServicePermissions() =>
 	[

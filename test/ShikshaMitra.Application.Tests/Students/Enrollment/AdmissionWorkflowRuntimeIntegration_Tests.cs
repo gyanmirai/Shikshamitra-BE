@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
@@ -12,6 +13,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Claims;
@@ -19,7 +21,7 @@ using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
-public class AdmissionWorkflowRuntimeIntegration_Tests
+public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	: ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -35,6 +37,12 @@ public class AdmissionWorkflowRuntimeIntegration_Tests
 	private readonly IRepository<AdmissionFormFieldDefinition, Guid> _formFieldRepository;
 	private readonly IRepository<AdmissionFamily, Guid> _familyRepository;
 	private readonly IRepository<AdmissionApplicant, Guid> _applicantRepository;
+	private readonly IRepository<AdmissionGuardian, Guid> _guardianRepository;
+	private readonly IRepository<AdmissionApplication, Guid> _applicationRepository;
+	private readonly IRepository<StudentOnboardingCase, Guid> _onboardingCaseRepository;
+	private readonly IRepository<StudentOnboardingStep, Guid> _onboardingStepRepository;
+	private readonly IStudentRepository _studentRepository;
+	private readonly IRepository<StudentEnrollment, Guid> _studentEnrollmentRepository;
 	private readonly IRepository<AdmissionWorkflowTransitionHistory, Guid> _historyRepository;
 	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
 	private readonly IEducationMediumStageRepository _stageRepository;
@@ -58,6 +66,12 @@ public class AdmissionWorkflowRuntimeIntegration_Tests
 		_formFieldRepository = GetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>();
 		_familyRepository = GetRequiredService<IRepository<AdmissionFamily, Guid>>();
 		_applicantRepository = GetRequiredService<IRepository<AdmissionApplicant, Guid>>();
+		_guardianRepository = GetRequiredService<IRepository<AdmissionGuardian, Guid>>();
+		_applicationRepository = GetRequiredService<IRepository<AdmissionApplication, Guid>>();
+		_onboardingCaseRepository = GetRequiredService<IRepository<StudentOnboardingCase, Guid>>();
+		_onboardingStepRepository = GetRequiredService<IRepository<StudentOnboardingStep, Guid>>();
+		_studentRepository = GetRequiredService<IStudentRepository>();
+		_studentEnrollmentRepository = GetRequiredService<IRepository<StudentEnrollment, Guid>>();
 		_historyRepository = GetRequiredService<IRepository<AdmissionWorkflowTransitionHistory, Guid>>();
 		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		_stageRepository = GetRequiredService<IEducationMediumStageRepository>();
@@ -110,7 +124,8 @@ public class AdmissionWorkflowRuntimeIntegration_Tests
 				new AdvanceAdmissionWorkflowDto
 				{
 					ExpectedCurrentStageInstanceId = terminalStageId,
-					IdempotencyKey = "aarav-admission-complete"
+					IdempotencyKey = "aarav-admission-complete",
+					ConcurrencyStamp = (await _applicationAppService.GetAsync(aaravApplication.Id)).ConcurrencyStamp
 				});
 			aaravRuntime.Status.ShouldBe(AdmissionWorkflowInstanceStatus.Completed);
 			aaravRuntime.CompletedAt.ShouldNotBeNull();
@@ -122,7 +137,8 @@ public class AdmissionWorkflowRuntimeIntegration_Tests
 				new AdvanceAdmissionWorkflowDto
 				{
 					ExpectedCurrentStageInstanceId = terminalStageId,
-					IdempotencyKey = "aarav-admission-complete"
+					IdempotencyKey = "aarav-admission-complete",
+					ConcurrencyStamp = (await _applicationAppService.GetAsync(aaravApplication.Id)).ConcurrencyStamp
 				});
 			(await CountHistoryAsync(aaravApplication.Id)).ShouldBe(historyCount);
 
@@ -151,6 +167,150 @@ public class AdmissionWorkflowRuntimeIntegration_Tests
 				.ShouldBe("Enrollment Decision");
 			(await _applicationAppService.GetWorkflowAsync(aaravApplication.Id)).WorkflowDefinitionId
 				.ShouldBe(workflowV1.Id);
+		}
+	}
+
+	[Fact]
+	public async Task Inquiry_Form_Values_Should_Update_Identity_And_Prefill_Application()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		using (_principalAccessor.Change(BuildAdminPrincipal()))
+		{
+			await _scopeRepository.InsertAsync(new UserScopeAssignment(
+				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Inquiry carryover test"),
+				autoSave: true);
+			var workflow = await CreateAndPublishWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var inquiryService = GetRequiredService<IAdmissionInquiryAppService>();
+			var inquiry = await inquiryService.CreateAsync(new CreateAdmissionInquiryDto
+			{
+				AdmissionCycleId = offering.AdmissionCycleId,
+				AdmissionOfferingId = offering.Id,
+				ApplicantName = "Fallback Applicant",
+				Phone = "9000000000",
+				Source = AdmissionInquirySource.Website,
+				GuardianFirstName = "Meera",
+				GuardianPhone = "9000000000",
+				ApplicantFirstName = "Fallback",
+				FormValues =
+				[
+					new() { FieldCode = "APPLICANT_FIRST_NAME", ValueJson = "\"Aanya\"" },
+					new() { FieldCode = "APPLICANT_DOB", ValueJson = "\"2016-04-12T00:00:00+05:30\"" },
+					new() { FieldCode = "APPLICANT_GENDER", ValueJson = "\"Female\"" },
+					new() { FieldCode = "GUARDIAN_MOBILE", ValueJson = "\"9876543210\"" },
+					new() { FieldCode = "LEARNING_NOTES", ValueJson = "\"Benefits from visual learning prompts\"" }
+				]
+			});
+
+			var applicant = await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(inquiry.ApplicantId!.Value));
+			var guardian = (await WithUnitOfWorkAsync(() => _guardianRepository.GetListAsync(x => x.FamilyId == applicant.FamilyId))).Single();
+			applicant.FirstName.ShouldBe("Aanya");
+			applicant.DateOfBirth.ShouldBe(new DateTime(2016, 4, 12));
+			applicant.Gender.ShouldBe("Female");
+			guardian.Mobile.ShouldBe("9876543210");
+
+			var application = await _applicationAppService.StartAsync(applicant.Id, offering.Id, inquiry.Id);
+			var form = await _applicationAppService.GetFormAsync(application.Id);
+			form.Values.Single(value => value.FieldCode == "LEARNING_NOTES").ValueJson
+				.ShouldBe("\"Benefits from visual learning prompts\"");
+		}
+	}
+
+	[Fact]
+	public async Task Inquiry_Should_Report_Incomplete_Identity_As_A_Business_Error()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		using (_principalAccessor.Change(BuildAdminPrincipal()))
+		{
+			await _scopeRepository.InsertAsync(new UserScopeAssignment(
+				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Inquiry identity validation test"),
+				autoSave: true);
+			var workflow = await CreateAndPublishWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var inquiryService = GetRequiredService<IAdmissionInquiryAppService>();
+
+			var error = await Should.ThrowAsync<BusinessException>(() => inquiryService.CreateAsync(
+				new CreateAdmissionInquiryDto
+				{
+					AdmissionCycleId = offering.AdmissionCycleId,
+					AdmissionOfferingId = offering.Id,
+					ApplicantName = "Riya Mehta",
+					ApplicantFirstName = "Riya",
+					Phone = "9876501011",
+					GuardianPhone = "9876501011",
+					Source = AdmissionInquirySource.Website,
+					FormValues =
+					[
+						new() { FieldCode = "APPLICANT_FIRST_NAME", ValueJson = "\"Riya\"" },
+						new() { FieldCode = "APPLICANT_DOB", ValueJson = "\"2019-11-22T00:00:00+05:30\"" },
+						new() { FieldCode = "APPLICANT_GENDER", ValueJson = "\"Female\"" },
+						new() { FieldCode = "GUARDIAN_MOBILE", ValueJson = "\"9876501011\"" },
+						new() { FieldCode = "LEARNING_NOTES", ValueJson = "\"Enjoys reading\"" }
+					]
+				}));
+
+			error.Code.ShouldBe(AdmissionErrorCodes.InquiryIdentityIncomplete);
+			error.Data["Fields"].ShouldBe("Guardian.FirstName");
+		}
+	}
+
+	[Fact]
+	public async Task Applicant_Profile_Should_Be_Repairable_Before_Finalization()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		using (_principalAccessor.Change(BuildAdminPrincipal()))
+		{
+			var applicant = await WithUnitOfWorkAsync(async () =>
+			{
+				var family = new AdmissionFamily(Guid.NewGuid(), TestTenantId, $"REPAIR-{Guid.NewGuid():N}"[..20]);
+				await _familyRepository.InsertAsync(family, autoSave: true);
+				var incomplete = new AdmissionApplicant(
+					Guid.NewGuid(), TestTenantId, family.Id, "Aanya", null, null, null, null, null);
+				await _applicantRepository.InsertAsync(incomplete, autoSave: true);
+				return incomplete;
+			});
+
+			var applicantService = GetRequiredService<IAdmissionApplicantAppService>();
+			var updated = await applicantService.UpdateProfileAsync(applicant.Id,
+				new UpdateAdmissionApplicantProfileDto
+				{
+					FirstName = "Aanya",
+					LastName = "Shah",
+					DateOfBirth = new DateTime(2016, 4, 12),
+					Gender = "Female"
+				});
+
+			updated.LastName.ShouldBe("Shah");
+			updated.DateOfBirth.ShouldBe(new DateTime(2016, 4, 12));
+			updated.Gender.ShouldBe("Female");
+		}
+	}
+
+	[Fact]
+	public async Task Active_Offering_Should_Reject_Application_Form_Without_Required_Identity()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		using (_principalAccessor.Change(BuildAdminPrincipal()))
+		{
+			await _scopeRepository.InsertAsync(new UserScopeAssignment(
+				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Offering identity test"),
+				autoSave: true);
+			var workflow = await CreateAndPublishWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var incompleteForm = await WithUnitOfWorkAsync(async () =>
+			{
+				var form = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Incomplete form",
+					$"INCOMPLETE_{Guid.NewGuid():N}"[..24], AdmissionFormLayoutType.SinglePage);
+				form.Publish(Guid.NewGuid());
+				await _formRepository.InsertAsync(form, autoSave: true);
+				return form;
+			});
+			offering.ConfigureReferences(workflow.Id, incompleteForm.Id, incompleteForm.Id);
+
+			var validation = await WithUnitOfWorkAsync(() => _offeringValidator.ValidateStoredAsync(offering));
+
+			validation.Errors.ShouldContain(error =>
+				error.Code == AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete);
 		}
 	}
 
@@ -385,7 +545,20 @@ public class AdmissionWorkflowRuntimeIntegration_Tests
 			AdmissionFormBindingType.Custom, "ApplicantName", false, false, 0, null, null, null, null, null), autoSave: true);
 		await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(
 			Guid.NewGuid(), form.Id, section.Id, "APPLICANT_FIRST_NAME", "Applicant first name", AdmissionFormFieldType.Text,
-			AdmissionFormBindingType.System, "Applicant.FirstName", false, false, 1, null, null, null, null, null), autoSave: true);
+			AdmissionFormBindingType.System, "Applicant.FirstName", true, false, 1, null, null, null, null, null), autoSave: true);
+		await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(
+			Guid.NewGuid(), form.Id, section.Id, "APPLICANT_DOB", "Applicant date of birth", AdmissionFormFieldType.Date,
+			AdmissionFormBindingType.System, "Applicant.DateOfBirth", true, false, 2, null, null, null, null, null), autoSave: true);
+		await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(
+			Guid.NewGuid(), form.Id, section.Id, "APPLICANT_GENDER", "Applicant gender", AdmissionFormFieldType.Select,
+			AdmissionFormBindingType.System, "Applicant.Gender", true, false, 3, null, null, null, null, null,
+			"[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"}]"), autoSave: true);
+		await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(
+			Guid.NewGuid(), form.Id, section.Id, "GUARDIAN_MOBILE", "Guardian mobile", AdmissionFormFieldType.Phone,
+			AdmissionFormBindingType.System, "Guardian.Mobile", false, false, 4, null, null, null, null, null), autoSave: true);
+		await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(
+			Guid.NewGuid(), form.Id, section.Id, "LEARNING_NOTES", "Learning notes", AdmissionFormFieldType.Textarea,
+			AdmissionFormBindingType.Custom, "LearningNotes", false, false, 5, null, null, null, null, null), autoSave: true);
 
 		var offering = new AdmissionOffering(
 			Guid.NewGuid(),
@@ -413,7 +586,7 @@ public class AdmissionWorkflowRuntimeIntegration_Tests
 		var family = new AdmissionFamily(Guid.NewGuid(), TestTenantId, $"FAM-{Guid.NewGuid():N}");
 		await _familyRepository.InsertAsync(family, autoSave: true);
 		var applicant = new AdmissionApplicant(
-			Guid.NewGuid(), TestTenantId, family.Id, firstName, null, "Patel", null, null, null);
+			Guid.NewGuid(), TestTenantId, family.Id, firstName, null, "Patel", new DateTime(2016, 5, 14), "Male", null);
 		await _applicantRepository.InsertAsync(applicant, autoSave: true);
 		return applicant;
 	}

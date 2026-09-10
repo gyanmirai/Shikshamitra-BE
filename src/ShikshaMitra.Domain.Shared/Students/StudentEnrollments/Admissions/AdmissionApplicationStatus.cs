@@ -12,7 +12,10 @@ public enum AdmissionApplicationStatus
 	Offered = 7,
 	OfferAccepted = 8,
 	OfferDeclined = 9,
-	Enrolled = 10
+	/// <summary>Legacy terminal state used by the former admission-owned enrollment command.</summary>
+	Enrolled = 10,
+	/// <summary>The admission is closed and responsibility has moved to Student Onboarding.</summary>
+	AdmissionFinalized = 11
 }
 
 public enum AdmissionRuntimeStageStatus

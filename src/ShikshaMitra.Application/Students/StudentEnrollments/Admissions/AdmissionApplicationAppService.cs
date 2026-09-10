@@ -85,9 +85,19 @@ public class AdmissionApplicationAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
 	public Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.DeclineOfferAsync(id, input);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id) =>
+		decisionService.GetFinalizationPreviewAsync(id);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
+	public Task<AdmissionFinalizationResultDto> FinalizeAsync(Guid id, FinalizeAdmissionApplicationDto input) =>
+		decisionService.FinalizeAsync(id, input);
+
+	[Obsolete("Admissions no longer creates operational enrollment. Use FinalizeAsync.")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
 	public Task<AdmissionEnrollmentResultDto> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input) => decisionService.EnrollAsync(id, input);
 
+	[Obsolete("Placement is owned by Student Onboarding.")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
 	public Task<AdmissionEnrollmentOptionsDto> GetEnrollmentOptionsAsync(Guid id) => decisionService.GetEnrollmentOptionsAsync(id);
 

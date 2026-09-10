@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
-using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using ShikshaMitra.Students.ValueObjects;
-using ShikshaMitra.TenantSettings.Divisions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -21,9 +20,13 @@ public class AdmissionApplicationDecisionService(
 	IRepository<AdmissionGuardian, Guid> guardianRepository,
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
+	IRepository<AdmissionApplicationWorkflowInstance, Guid> workflowRepository,
 	IRepository<AdmissionApplicationDecisionHistory, Guid> historyRepository,
 	IRepository<AdmissionActivity, Guid> activityRepository,
-	IRepository<Division, Guid> divisionRepository,
+	IRepository<StudentOnboardingCase, Guid> onboardingRepository,
+	IRepository<StudentOnboardingStep, Guid> stepRepository,
+	IRepository<StudentOnboardingEvent, Guid> eventRepository,
+	IRepository<StudentOnboardingPolicy, Guid> policyRepository,
 	IStudentRepository studentRepository,
 	IRepository<StudentEnrollment, Guid> enrollmentRepository)
 	: ApplicationService, ITransientDependency
@@ -52,97 +55,127 @@ public class AdmissionApplicationDecisionService(
 	public Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input) =>
 		ChangeAsync(id, input, application => application.DeclineOffer(CurrentUser.Id, input.Reason ?? string.Empty));
 
-	public async Task<AdmissionEnrollmentResultDto> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input)
+	public async Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id)
 	{
-		var application = await GetApplicationAsync(id);
-		EnsureConcurrency(application, input.ConcurrencyStamp);
-		if (application.Status != AdmissionApplicationStatus.OfferAccepted)
-			throw new BusinessException(AdmissionErrorCodes.ApplicationEnrollmentNotReady);
+		var context = await LoadFinalizationContextAsync(id);
+		var matches = await FindPossibleMatchesAsync(context.Applicant);
+		var items = BuildReadinessItems(context, matches);
+		return new AdmissionFinalizationPreviewDto
+		{
+			ApplicationId = id,
+			LinkedStudentId = context.Applicant.ExistingStudentId,
+			IsReady = items.All(item => item.Passed),
+			Items = items,
+			PossibleMatches = matches.Select(ToMatchDto).ToList()
+		};
+	}
 
-		var offering = await offeringRepository.FindAsync(application.AdmissionOfferingId) ??
-			throw new EntityNotFoundException(typeof(AdmissionOffering), application.AdmissionOfferingId);
-		var cycle = await cycleRepository.FindAsync(application.AdmissionCycleId) ??
-			throw new EntityNotFoundException(typeof(AdmissionCycle), application.AdmissionCycleId);
-		var division = await ResolveDivisionAsync(input.DivisionId, offering.StandardId);
+	public async Task<AdmissionFinalizationResultDto> FinalizeAsync(Guid id, FinalizeAdmissionApplicationDto input)
+	{
+		var context = await LoadFinalizationContextAsync(id);
 
-		var applicant = await applicantRepository.FindAsync(application.ApplicantId) ??
-			throw new EntityNotFoundException(typeof(AdmissionApplicant), application.ApplicantId);
-		var student = applicant.ExistingStudentId.HasValue
-			? await studentRepository.FindAsync(applicant.ExistingStudentId.Value)
-			: await CreateStudentAsync(applicant, offering, cycle);
-		if (student == null)
-			throw new BusinessException(AdmissionErrorCodes.ApplicationEnrollmentDataMissing);
+		if (context.Application.Status == AdmissionApplicationStatus.AdmissionFinalized &&
+		    context.Application.StudentId.HasValue && context.Application.OnboardingCaseId.HasValue)
+		{
+			return BuildResult(context.Application, context.Application.StudentId.Value,
+				context.Application.OnboardingCaseId.Value, false);
+		}
 
-		var existingEnrollment = await enrollmentRepository.FirstOrDefaultAsync(enrollment =>
-			enrollment.AcademicYearId == cycle.AcademicYearId && enrollment.StudentId == student.Id);
-		if (existingEnrollment != null)
-			throw new BusinessException(AdmissionErrorCodes.ApplicationEnrollmentDuplicate);
-		if (division != null)
-			await EnsureDivisionCapacityAsync(division, cycle.AcademicYearId);
+		var existingCase = await onboardingRepository.FindAsync(item => item.ApplicationId == id);
+		var idempotentCase = await onboardingRepository.FindAsync(item => item.IdempotencyKey == input.IdempotencyKey);
+		if (idempotentCase != null && idempotentCase.ApplicationId != id)
+			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict)
+				.WithData("Reason", "The idempotency key has already been used for another application.");
+		existingCase ??= idempotentCase;
+		if (existingCase != null)
+		{
+			context.Applicant.LinkStudent(existingCase.StudentId);
+			context.Application.FinalizeAdmission(existingCase.StudentId, existingCase.Id, existingCase.CreationTime);
+			await applicantRepository.UpdateAsync(context.Applicant, false);
+			await applicationRepository.UpdateAsync(context.Application, false);
+			await CurrentUnitOfWork!.SaveChangesAsync();
+			return BuildResult(context.Application, existingCase.StudentId, existingCase.Id, false);
+		}
+		if (string.IsNullOrWhiteSpace(input.ConcurrencyStamp))
+			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
+		EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 
-		if (student.StandardId.HasValue && student.StandardId != offering.StandardId)
-			throw new BusinessException(AdmissionErrorCodes.ApplicationEnrollmentDataMissing);
-		student.UpdateAcademicPlacement(cycle.AcademicYearId, offering.BoardId, offering.MediumId,
-			offering.StageId, offering.StandardId, input.DivisionId);
-		student.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
-		var enrollment = StudentEnrollment.Create(GuidGenerator.Create(), CurrentTenant.Id, student.Id,
-			cycle.AcademicYearId, offering.StandardId, division?.Id);
-		await studentRepository.UpdateAsync(student, false);
-		await enrollmentRepository.InsertAsync(enrollment, false);
-		application.MarkEnrolled(student.Id, enrollment.Id);
-		await applicationRepository.UpdateAsync(application, false);
+		var matches = await FindPossibleMatchesAsync(context.Applicant);
+		var blockingItems = BuildReadinessItems(context, matches)
+			.Where(item => item.Key != "duplicate_resolution" && !item.Passed)
+			.ToList();
+		if (blockingItems.Count > 0)
+			throw new BusinessException(StudentOnboardingErrorCodes.FinalizationNotReady)
+				.WithData("Blockers", string.Join(", ", blockingItems.Select(item => item.Label)));
+		if (!input.ConfirmGuardianContactVerified)
+			throw new BusinessException(StudentOnboardingErrorCodes.GuardianContactUnverified);
+
+		var selectedStudentId = context.Applicant.ExistingStudentId ?? input.ExistingStudentId;
+		if (selectedStudentId.HasValue && input.ConfirmCreateNew)
+			throw new BusinessException(StudentOnboardingErrorCodes.DuplicateResolutionRequired);
+		if (!selectedStudentId.HasValue && matches.Count > 0 && !input.ConfirmCreateNew)
+			throw new BusinessException(StudentOnboardingErrorCodes.DuplicateResolutionRequired)
+				.WithData("CandidateCount", matches.Count);
+		if (input.ExistingStudentId.HasValue && !matches.Any(match => match.Id == input.ExistingStudentId.Value))
+			throw new BusinessException(StudentOnboardingErrorCodes.ExistingStudentInvalid);
+
+		Student student;
+		var reusedExistingStudent = selectedStudentId.HasValue;
+		if (selectedStudentId.HasValue)
+		{
+			student = await studentRepository.FindAsync(selectedStudentId.Value) ??
+				throw new BusinessException(StudentOnboardingErrorCodes.ExistingStudentInvalid);
+		}
+		else
+		{
+			student = CreateStudent(context);
+			await studentRepository.InsertAsync(student, false);
+		}
+
+		if (await enrollmentRepository.AnyAsync(item =>
+			item.StudentId == student.Id && item.AcademicYearId == context.Cycle.AcademicYearId && item.IsActive))
+			throw new BusinessException(StudentOnboardingErrorCodes.EnrollmentAlreadyExists);
+		if (await onboardingRepository.AnyAsync(item =>
+			item.StudentId == student.Id && item.AcademicYearId == context.Cycle.AcademicYearId &&
+			item.Status != StudentOnboardingStatus.Cancelled))
+			throw new BusinessException(StudentOnboardingErrorCodes.OnboardingAlreadyExists);
+
+		var now = DateTime.UtcNow;
+		var policy = await ResolvePolicyAsync(context.Cycle.AcademicYearId, context.Offering.Id, context.Offering.StandardId);
+		var onboardingCase = new StudentOnboardingCase(
+			GuidGenerator.Create(), CurrentTenant.Id, context.Application.Id, context.Applicant.Id, student.Id,
+			context.Offering.Id, context.Cycle.AcademicYearId, context.Offering.BoardId, context.Offering.MediumId,
+			context.Offering.StageId, context.Offering.StandardId, input.IdempotencyKey, now,
+			now.AddHours(policy?.SlaHours ?? 72));
+		await onboardingRepository.InsertAsync(onboardingCase, false);
+		await CreateDefaultStepsAsync(onboardingCase, policy, now);
+
+		context.Applicant.LinkStudent(student.Id);
+		context.Application.FinalizeAdmission(student.Id, onboardingCase.Id, now);
+		await applicantRepository.UpdateAsync(context.Applicant, false);
+		await applicationRepository.UpdateAsync(context.Application, false);
 		await historyRepository.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(),
-			CurrentTenant.Id, application.Id, AdmissionApplicationStatus.Enrolled, "Applicant enrolled", CurrentUser.Id), false);
+			CurrentTenant.Id, context.Application.Id, AdmissionApplicationStatus.AdmissionFinalized,
+			"Admission finalized and transferred to Student Onboarding", CurrentUser.Id), false);
 		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"ApplicantEnrolled", "Applicant converted to Student enrollment", application.ApplicantId, application.Id), false);
+			"AdmissionFinalized", "Student identity linked and onboarding case created",
+			context.Applicant.Id, context.Application.Id), false);
+		await eventRepository.InsertAsync(new StudentOnboardingEvent(GuidGenerator.Create(), CurrentTenant.Id,
+			onboardingCase.Id, "CaseCreated", "Admission finalized; onboarding responsibility started."), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
-		return new AdmissionEnrollmentResultDto
-		{
-			Application = AdmissionApplicationMapper.ToDto(application),
-			StudentId = student.Id,
-			StudentEnrollmentId = enrollment.Id,
-			AcademicYearId = cycle.AcademicYearId,
-			StandardId = offering.StandardId,
-			DivisionId = input.DivisionId
-		};
+		return BuildResult(context.Application, student.Id, onboardingCase.Id, reusedExistingStudent);
 	}
 
-	public async Task<AdmissionEnrollmentOptionsDto> GetEnrollmentOptionsAsync(Guid id)
-	{
-		var application = await GetApplicationAsync(id);
-		if (application.Status != AdmissionApplicationStatus.OfferAccepted)
-			throw new BusinessException(AdmissionErrorCodes.ApplicationEnrollmentNotReady);
-		var offering = await offeringRepository.FindAsync(application.AdmissionOfferingId) ??
-			throw new EntityNotFoundException(typeof(AdmissionOffering), application.AdmissionOfferingId);
-		var cycle = await cycleRepository.FindAsync(application.AdmissionCycleId) ??
-			throw new EntityNotFoundException(typeof(AdmissionCycle), application.AdmissionCycleId);
-		var divisions = await divisionRepository.GetListAsync(item => item.StandardId == offering.StandardId);
-		var divisionIds = divisions.Select(item => item.Id).ToHashSet();
-		var activeEnrollments = await enrollmentRepository.GetListAsync(item =>
-			item.AcademicYearId == cycle.AcademicYearId && item.IsActive && item.DivisionId.HasValue &&
-			divisionIds.Contains(item.DivisionId.Value));
-		var occupancy = activeEnrollments.GroupBy(item => item.DivisionId!.Value)
-			.ToDictionary(group => group.Key, group => group.Count());
+	[Obsolete("Admissions finalization no longer creates StudentEnrollment rows.")]
+	public Task<AdmissionEnrollmentResultDto> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input) =>
+		throw new BusinessException(StudentOnboardingErrorCodes.LegacyEnrollDisabled)
+			.WithData("Replacement", $"/api/student/enrollment/admissions/applications/{id}/finalize");
 
-		return new AdmissionEnrollmentOptionsDto
-		{
-			StandardId = offering.StandardId,
-			Divisions = divisions.OrderBy(item => item.Name).Select(item =>
-			{
-				var occupied = occupancy.GetValueOrDefault(item.Id);
-				return new AdmissionEnrollmentDivisionOptionDto
-				{
-					Id = item.Id,
-					Name = item.Name,
-					Strength = item.Strength,
-					OccupiedSeats = occupied,
-					AvailableSeats = Math.Max(item.Strength - occupied, 0),
-					IsAvailable = occupied < item.Strength
-				};
-			}).ToList()
-		};
-	}
+	[Obsolete("Placement choices belong to Student Onboarding.")]
+	public Task<AdmissionEnrollmentOptionsDto> GetEnrollmentOptionsAsync(Guid id) =>
+		throw new BusinessException(StudentOnboardingErrorCodes.LegacyEnrollDisabled)
+			.WithData("Replacement", "/api/student/onboarding");
 
 	public async Task<List<AdmissionApplicationDecisionHistoryDto>> GetDecisionHistoryAsync(Guid id)
 	{
@@ -152,6 +185,156 @@ public class AdmissionApplicationDecisionService(
 		{
 			Id = item.Id, Status = item.Status, Reason = item.Reason, ActorId = item.ActorId, OccurredAt = item.OccurredAt
 		}).ToList();
+	}
+
+	private async Task CreateDefaultStepsAsync(StudentOnboardingCase onboardingCase, StudentOnboardingPolicy? policy, DateTime now)
+	{
+		for (var index = 0; index < StudentOnboardingStepKeys.Defaults.Length; index++)
+		{
+			var definition = StudentOnboardingStepKeys.Defaults[index];
+			var required = IsRequired(definition.Key, policy);
+			var initialStatus = required ? StudentOnboardingStepStatus.Pending : StudentOnboardingStepStatus.NotRequired;
+			var step = new StudentOnboardingStep(GuidGenerator.Create(), CurrentTenant.Id, onboardingCase.Id,
+				definition.Key, definition.Label, index + 1, required, initialStatus);
+			if (definition.Key == StudentOnboardingStepKeys.Identity)
+				step.Complete(CurrentUser.Id, now, "Core identity verified during admission finalization.");
+			await stepRepository.InsertAsync(step, false);
+		}
+	}
+
+	private async Task<StudentOnboardingPolicy?> ResolvePolicyAsync(Guid academicYearId, Guid offeringId, Guid standardId)
+	{
+		var policies = await policyRepository.GetListAsync(item => item.AcademicYearId == academicYearId && item.IsActive);
+		return policies
+			.OrderByDescending(item => item.OfferingId == offeringId && item.StandardId == standardId)
+			.ThenByDescending(item => item.OfferingId == offeringId)
+			.ThenByDescending(item => item.StandardId == standardId)
+			.ThenByDescending(item => !item.OfferingId.HasValue && !item.StandardId.HasValue)
+			.FirstOrDefault(item =>
+				(item.OfferingId == offeringId || !item.OfferingId.HasValue) &&
+				(item.StandardId == standardId || !item.StandardId.HasValue));
+	}
+
+	private static bool IsRequired(string key, StudentOnboardingPolicy? policy) => key switch
+	{
+		StudentOnboardingStepKeys.Identity => true,
+		StudentOnboardingStepKeys.Family => policy?.RequireFamilyDetails ?? true,
+		StudentOnboardingStepKeys.Communication => policy?.RequireCommunicationDetails ?? true,
+		StudentOnboardingStepKeys.Documents => policy?.RequireDocuments ?? true,
+		StudentOnboardingStepKeys.MedicalAndPreviousSchool => policy?.RequireMedicalDetails ?? false,
+		StudentOnboardingStepKeys.PlacementAndSeat => true,
+		StudentOnboardingStepKeys.IdentifiersAndRoll => true,
+		StudentOnboardingStepKeys.FinanceAccountsServices => policy is not null &&
+			(policy.RequireFeeClearance || policy.RequireStudentAccount || policy.RequireGuardianAccount || policy.RequireServiceConsent),
+		StudentOnboardingStepKeys.FinalReadiness => true,
+		_ => true
+	};
+
+	private async Task<List<Student>> FindPossibleMatchesAsync(AdmissionApplicant applicant)
+	{
+		if (applicant.ExistingStudentId.HasValue)
+		{
+			var linked = await studentRepository.FindAsync(applicant.ExistingStudentId.Value);
+			return linked == null ? [] : [linked];
+		}
+
+		var normalizedFirstName = applicant.FirstName.Trim().ToLower();
+		var normalizedLastName = applicant.LastName?.Trim().ToLower();
+		var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var candidates = await AsyncExecuter.ToListAsync(query.Where(student =>
+			student.FirstName != null && student.FirstName.ToLower() == normalizedFirstName &&
+			(normalizedLastName == null || student.LastName != null && student.LastName.ToLower() == normalizedLastName)));
+
+		if (!applicant.DateOfBirth.HasValue)
+			return candidates.Take(10).ToList();
+		var applicantBirthDate = applicant.DateOfBirth.Value.Date;
+		var detailed = new List<Student>();
+		foreach (var candidate in candidates.Take(25))
+		{
+			var student = await studentRepository.GetWithDetailsAsync(candidate.Id);
+			if (student?.AdditionalDetail?.DateOfBirth?.Date == applicantBirthDate)
+				detailed.Add(student);
+		}
+		return detailed.Take(10).ToList();
+	}
+
+	private static AdmissionStudentMatchDto ToMatchDto(Student student) => new()
+	{
+		StudentId = student.Id,
+		StudentName = string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
+			.Where(value => !string.IsNullOrWhiteSpace(value))),
+		DateOfBirth = student.AdditionalDetail?.DateOfBirth?.UtcDateTime,
+		Status = student.Status,
+		GrNumber = student.GrNumber ?? student.GrNo?.ToString(),
+		AcademicYearId = student.AcademicYearId
+	};
+
+	private static List<AdmissionFinalizationReadinessItemDto> BuildReadinessItems(
+		FinalizationContext context, IReadOnlyCollection<Student> matches)
+	{
+		var application = context.Application;
+		var applicant = context.Applicant;
+		var offerReady = application.Status == AdmissionApplicationStatus.OfferAccepted &&
+			application.OfferAcceptedAt.HasValue &&
+			(!application.OfferExpiresAt.HasValue || application.OfferExpiresAt.Value > DateTime.UtcNow);
+		var identityReady = !string.IsNullOrWhiteSpace(applicant.FirstName) &&
+			!string.IsNullOrWhiteSpace(applicant.LastName) && applicant.DateOfBirth.HasValue &&
+			Enum.TryParse<GenderEnum>(applicant.Gender, true, out _);
+		var guardianReady = context.Guardian != null &&
+			(!string.IsNullOrWhiteSpace(context.Guardian.Mobile) || !string.IsNullOrWhiteSpace(context.Guardian.Email));
+		var workflowReady = context.Workflow?.Status == AdmissionWorkflowInstanceStatus.Completed &&
+			!application.CurrentStageInstanceId.HasValue;
+		return
+		[
+			Item("offer", "Accepted, unexpired offer", offerReady, offerReady ? "Ready" : "Offer must be accepted and unexpired."),
+			Item("workflow", "Admission workflow completed", workflowReady, workflowReady ? "Ready" : "Complete the admission workflow first."),
+			Item("identity", "Core identity complete", identityReady, identityReady ? "Ready" : "Name, date of birth, and gender are required."),
+			Item("guardian", "Primary guardian contact available", guardianReady, guardianReady ? "Verification confirmation is required when finalizing." : "A primary guardian phone or email is required."),
+			Item("duplicate_resolution", "Student identity resolved", applicant.ExistingStudentId.HasValue || matches.Count == 0,
+				applicant.ExistingStudentId.HasValue ? "Existing Student is already linked." : matches.Count == 0 ? "No exact identity matches found." : $"{matches.Count} possible match(es) require a staff decision.")
+		];
+	}
+
+	private static AdmissionFinalizationReadinessItemDto Item(string key, string label, bool passed, string detail) =>
+		new() { Key = key, Label = label, Passed = passed, Detail = detail };
+
+	private Student CreateStudent(FinalizationContext context)
+	{
+		if (!context.Applicant.DateOfBirth.HasValue ||
+		    !Enum.TryParse<GenderEnum>(context.Applicant.Gender, true, out var gender) || context.Guardian == null)
+			throw new BusinessException(StudentOnboardingErrorCodes.CoreIdentityIncomplete);
+		var applicant = context.Applicant;
+		var guardian = context.Guardian;
+		var student = Student.CreateDirectRegistration(GuidGenerator.Create(), CurrentTenant.Id,
+			applicant.FirstName, applicant.MiddleName, applicant.LastName, context.Cycle.AcademicYearId,
+			context.Offering.BoardId, context.Offering.MediumId, context.Offering.StageId, null, null,
+			applicant.DateOfBirth.Value, gender, guardian.Mobile, email: guardian.Email,
+			address1: applicant.AddressLine1, address2: applicant.AddressLine2, city: applicant.City,
+			state: string.IsNullOrWhiteSpace(applicant.State) ? null : new State(applicant.State, string.Empty),
+			country: string.IsNullOrWhiteSpace(applicant.Country) ? null : new Country(applicant.Country, string.Empty),
+			pincode: applicant.PostalCode);
+		student.UpdateFamilyInfo(null, null, new ParentGuardianDetails(
+			$"{guardian.FirstName} {guardian.LastName}".Trim(), null, null, guardian.Email, guardian.Mobile,
+			null, null, null, null, null, null, null, null), null);
+		student.MoveToAdmission();
+		return student;
+	}
+
+	private async Task<FinalizationContext> LoadFinalizationContextAsync(Guid id)
+	{
+		var application = await GetApplicationAsync(id);
+		var applicant = await applicantRepository.FindAsync(application.ApplicantId) ??
+			throw new EntityNotFoundException(typeof(AdmissionApplicant), application.ApplicantId);
+		var family = applicant.FamilyId == Guid.Empty ? null : await familyRepository.FindAsync(applicant.FamilyId);
+		var guardian = family?.PrimaryGuardianId.HasValue == true
+			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value)
+			: await guardianRepository.FindAsync(item => item.FamilyId == applicant.FamilyId && item.IsPrimaryContact);
+		var cycle = await cycleRepository.FindAsync(application.AdmissionCycleId) ??
+			throw new EntityNotFoundException(typeof(AdmissionCycle), application.AdmissionCycleId);
+		var offering = await offeringRepository.FindAsync(application.AdmissionOfferingId) ??
+			throw new EntityNotFoundException(typeof(AdmissionOffering), application.AdmissionOfferingId);
+		var workflow = await workflowRepository.FindAsync(item => item.ApplicationId == id);
+		return new FinalizationContext(application, applicant, guardian, cycle, offering, workflow);
 	}
 
 	private async Task<AdmissionApplicationDto> ChangeAsync(Guid id, AdmissionApplicationDecisionDto input, Action<AdmissionApplication> change)
@@ -171,52 +354,27 @@ public class AdmissionApplicationDecisionService(
 	private async Task<AdmissionApplication> GetApplicationAsync(Guid id) => await applicationRepository.FindAsync(id) ??
 		throw new EntityNotFoundException(typeof(AdmissionApplication), id);
 
-	private async Task<Division?> ResolveDivisionAsync(Guid? divisionId, Guid standardId)
-	{
-		if (!divisionId.HasValue)
-			return null;
-
-		var division = await divisionRepository.FindAsync(divisionId.Value);
-		if (division == null || division.StandardId != standardId)
-			throw new BusinessException(AdmissionErrorCodes.ApplicationEnrollmentDivisionInvalid);
-
-		return division;
-	}
-
-	private async Task EnsureDivisionCapacityAsync(Division division, Guid academicYearId)
-	{
-		var occupied = (await enrollmentRepository.GetListAsync(item =>
-			item.AcademicYearId == academicYearId && item.DivisionId == division.Id && item.IsActive)).Count;
-		if (occupied >= division.Strength)
-			throw new BusinessException(AdmissionErrorCodes.ApplicationEnrollmentDivisionFull);
-	}
-
 	private static void EnsureConcurrency(AdmissionApplication application, string? stamp)
 	{
-		if (!string.IsNullOrWhiteSpace(stamp) && !string.Equals(stamp, application.ConcurrencyStamp, StringComparison.Ordinal))
-			throw new BusinessException(AdmissionApplicationErrorCodes.ConcurrencyConflict);
+		if (string.IsNullOrWhiteSpace(stamp) ||
+		    !string.Equals(stamp, application.ConcurrencyStamp, StringComparison.Ordinal))
+			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
 	}
 
-	private async Task<Student> CreateStudentAsync(AdmissionApplicant applicant, AdmissionOffering offering, AdmissionCycle cycle)
+	private static AdmissionFinalizationResultDto BuildResult(
+		AdmissionApplication application, Guid studentId, Guid caseId, bool reusedExistingStudent) => new()
 	{
-		if (!applicant.DateOfBirth.HasValue || !Enum.TryParse<GenderEnum>(applicant.Gender, true, out var gender))
-			throw new BusinessException(AdmissionErrorCodes.ApplicationEnrollmentDataMissing);
-		var family = applicant.FamilyId == Guid.Empty ? null : await familyRepository.FindAsync(applicant.FamilyId);
-		var guardian = family?.PrimaryGuardianId.HasValue == true
-			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
-		if (guardian == null)
-			throw new BusinessException(AdmissionErrorCodes.ApplicationEnrollmentDataMissing);
-		var student = Student.CreateDirectRegistration(GuidGenerator.Create(), CurrentTenant.Id,
-			applicant.FirstName, applicant.MiddleName, applicant.LastName, cycle.AcademicYearId,
-			offering.BoardId, offering.MediumId, offering.StageId, offering.StandardId, null,
-			applicant.DateOfBirth.Value, gender, guardian.Mobile, email: guardian.Email,
-			address1: applicant.AddressLine1, address2: applicant.AddressLine2, city: applicant.City,
-			state: string.IsNullOrWhiteSpace(applicant.State) ? null : new State(applicant.State, string.Empty),
-			country: string.IsNullOrWhiteSpace(applicant.Country) ? null : new Country(applicant.Country, string.Empty),
-			pincode: applicant.PostalCode);
-		student.UpdateFamilyInfo(null, null, new ParentGuardianDetails(
-			$"{guardian.FirstName} {guardian.LastName}".Trim(), null, null, guardian.Email, guardian.Mobile,
-			null, null, null, null, null, null, null, null), null);
-		return student;
-	}
+		Application = AdmissionApplicationMapper.ToDto(application),
+		StudentId = studentId,
+		OnboardingCaseId = caseId,
+		ReusedExistingStudent = reusedExistingStudent
+	};
+
+	private sealed record FinalizationContext(
+		AdmissionApplication Application,
+		AdmissionApplicant Applicant,
+		AdmissionGuardian? Guardian,
+		AdmissionCycle Cycle,
+		AdmissionOffering Offering,
+		AdmissionApplicationWorkflowInstance? Workflow);
 }

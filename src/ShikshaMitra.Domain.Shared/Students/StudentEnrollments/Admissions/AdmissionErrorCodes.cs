@@ -15,6 +15,7 @@ public static class AdmissionErrorCodes
 	public const string InquiryCycleNotFound = "Admissions.InquiryCycleNotFound";
 	public const string InquiryCycleNotOpen = "Admissions.InquiryCycleNotOpen";
 	public const string InquiryDuplicateTargetInvalid = "Admissions.InquiryDuplicateTargetInvalid";
+	public const string InquiryIdentityIncomplete = "Admissions.InquiryIdentityIncomplete";
 	public const string InquiryCounsellorRequired = "Admissions.InquiryCounsellorRequired";
 	public const string InquiryCounsellorCandidatesRequired = "Admissions.InquiryCounsellorCandidatesRequired";
 	public const string InquiryCounsellorInvalid = "Admissions.InquiryCounsellorInvalid";

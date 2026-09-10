@@ -14,6 +14,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionApplicantsController(IAdmissionApplicantAppService service) : AbpController
 {
 	[HttpGet("{id:guid}"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View)] public async Task<Result<AdmissionApplicant360Dto>> GetAsync(Guid id) => Result.Success(await service.GetAsync(id));
+	[HttpPut("{id:guid}/profile"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.Edit)] public async Task<Result<AdmissionApplicantDto>> UpdateProfileAsync(Guid id, UpdateAdmissionApplicantProfileDto input) => Result.Success(await service.UpdateProfileAsync(id, input));
 	[HttpGet("{id:guid}/activities"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View)] public async Task<Result<List<AdmissionActivityDto>>> GetActivitiesAsync(Guid id) => Result.Success(await service.GetActivitiesAsync(id));
 	[HttpGet("{id:guid}/notes"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesView)] public async Task<Result<List<AdmissionNoteDto>>> GetNotesAsync(Guid id) => Result.Success(await service.GetNotesAsync(id));
 	[HttpPost("{id:guid}/notes"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesCreate)] public async Task<Result<AdmissionNoteDto>> CreateNoteAsync(Guid id, CreateAdmissionNoteDto input) => Result.Success(await service.CreateNoteAsync(id, input));

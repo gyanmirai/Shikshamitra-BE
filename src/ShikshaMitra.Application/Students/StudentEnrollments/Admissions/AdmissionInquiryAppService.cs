@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
@@ -82,6 +83,16 @@ public class AdmissionInquiryAppService(
 		input.ApplicantName = ResolveBinding(values, inquiryFields, "Applicant.Name", input.ApplicantName) ?? input.ApplicantName;
 		if (string.IsNullOrWhiteSpace(input.ApplicantName))
 			input.ApplicantName = string.Join(" ", new[] { input.ApplicantFirstName, input.ApplicantLastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
+		var missingIdentity = new[]
+		{
+			(string.IsNullOrWhiteSpace(input.ApplicantFirstName), "Applicant.FirstName"),
+			(string.IsNullOrWhiteSpace(input.GuardianFirstName), "Guardian.FirstName"),
+			(string.IsNullOrWhiteSpace(input.GuardianPhone), "Guardian.Mobile")
+		}.Where(item => item.Item1).Select(item => item.Item2).ToList();
+		if (missingIdentity.Count > 0)
+			throw new BusinessException(AdmissionErrorCodes.InquiryIdentityIncomplete,
+				"Applicant and primary guardian identity is incomplete.")
+				.WithData("Fields", string.Join(", ", missingIdentity));
 		var phone = string.Concat((string.IsNullOrWhiteSpace(input.Phone) ? input.GuardianPhone : input.Phone).Where(char.IsDigit));
 		var query = await inquiryRepository.GetQueryableAsync();
 		if (!input.ExistingFamilyId.HasValue && !input.CreateSeparateFamily && await AsyncExecuter.AnyAsync(query.Where(x => x.AdmissionCycleId == input.AdmissionCycleId && x.NormalizedPhone == phone)))
@@ -93,12 +104,35 @@ public class AdmissionInquiryAppService(
 		var newGuardian = guardian == null;
 		if (newGuardian) { guardian = new AdmissionGuardian(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.GuardianFirstName, input.GuardianLastName, input.GuardianPhone, input.GuardianEmail, AdmissionGuardianRelationship.Parent, true); family.SetPrimaryGuardian(guardian.Id); }
 		var applicant = new AdmissionApplicant(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.ApplicantFirstName, null, input.ApplicantLastName, input.ApplicantDateOfBirth, null, null);
+		foreach (var field in inquiryFields.Where(field =>
+			field.BindingType == AdmissionFormBindingType.System &&
+			!string.IsNullOrWhiteSpace(field.BindingKey) &&
+			values.TryGetValue(field.Code, out var value) &&
+			!string.IsNullOrWhiteSpace(value)))
+		{
+			AdmissionFormBindingRegistry.ApplyValue(field.BindingKey!, values[field.Code], applicant, guardian);
+		}
 		if (!input.ExistingFamilyId.HasValue) await familyRepository.InsertAsync(family, autoSave: false);
 		if (newGuardian) await guardianRepository.InsertAsync(guardian!, autoSave: false);
 		await applicantRepository.InsertAsync(applicant, autoSave: false);
 		var inquiry = new AdmissionInquiry(GuidGenerator.Create(), CurrentTenant.Id, input.AdmissionCycleId, input.AdmissionOfferingId,
 			input.ApplicantName, phone, input.Email, input.Source, input.SourceDetail);
 		inquiry.LinkIdentity(family.Id, applicant.Id);
+		if (input.FormValues.Count > 0)
+		{
+			var snapshot = input.FormValues
+				.Join(inquiryFields, value => value.FieldCode, field => field.Code,
+					(value, field) => new
+					{
+						Key = string.IsNullOrWhiteSpace(field.BindingKey) ? field.Code : field.BindingKey!,
+						value.ValueJson
+					}, StringComparer.OrdinalIgnoreCase)
+				.GroupBy(value => value.Key, StringComparer.OrdinalIgnoreCase)
+				.ToDictionary(group => group.Key, group => group.Last().ValueJson,
+					StringComparer.OrdinalIgnoreCase);
+			if (snapshot.Count > 0)
+				inquiry.RecordFormResponseSnapshot(JsonSerializer.Serialize(snapshot));
+		}
 		await inquiryRepository.InsertAsync(inquiry, autoSave: true);
 		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "InquiryCreated", "Inquiry created", applicant.Id, null, inquiry.Id), autoSave: true);
 		return Map(inquiry);

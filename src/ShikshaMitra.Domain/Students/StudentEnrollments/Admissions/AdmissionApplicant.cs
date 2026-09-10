@@ -9,5 +9,12 @@ public class AdmissionApplicant : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		FirstName = Check.NotNullOrWhiteSpace(firstName, nameof(firstName)).Trim(); MiddleName = Normalize(middleName); LastName = Normalize(lastName); DateOfBirth = dateOfBirth?.Date; Gender = Normalize(gender); AddressLine1 = Normalize(addressLine1); AddressLine2 = Normalize(addressLine2); City = Normalize(city); State = Normalize(state); Country = Normalize(country); PostalCode = Normalize(postalCode);
 	}
+	public void LinkStudent(Guid studentId)
+	{
+		if (studentId == Guid.Empty) throw new ArgumentException("Student ID is required.", nameof(studentId));
+		if (ExistingStudentId.HasValue && ExistingStudentId.Value != studentId)
+			throw new BusinessException(ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingErrorCodes.ExistingStudentInvalid);
+		ExistingStudentId = studentId;
+	}
 	private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

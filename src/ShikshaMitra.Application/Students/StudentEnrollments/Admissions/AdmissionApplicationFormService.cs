@@ -187,7 +187,7 @@ public class AdmissionApplicationFormService(
 
 	private static void EnsureConcurrency(AdmissionApplication application, string? stamp)
 	{
-		if (!string.IsNullOrWhiteSpace(stamp) &&
+		if (string.IsNullOrWhiteSpace(stamp) ||
 			!string.Equals(application.ConcurrencyStamp, stamp, StringComparison.Ordinal))
 			throw new BusinessException(AdmissionApplicationErrorCodes.ConcurrencyConflict);
 	}

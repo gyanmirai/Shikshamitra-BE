@@ -18,15 +18,31 @@ public class AdmissionApplicationDecisionContract_Tests
 	[InlineData(nameof(AdmissionApplicationAppService.IssueOfferAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
 	[InlineData(nameof(AdmissionApplicationAppService.AcceptOfferAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
 	[InlineData(nameof(AdmissionApplicationAppService.DeclineOfferAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
+	[InlineData(nameof(AdmissionApplicationAppService.GetFinalizationPreviewAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[InlineData(nameof(AdmissionApplicationAppService.FinalizeAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
 	[InlineData(nameof(AdmissionApplicationAppService.EnrollAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
 	[InlineData(nameof(AdmissionApplicationAppService.GetEnrollmentOptionsAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
-	public void Decision_and_enrollment_commands_require_the_expected_permission(string methodName, string permission)
+	public void Decision_and_finalization_commands_require_the_expected_permission(string methodName, string permission)
 	{
 		var method = typeof(AdmissionApplicationAppService).GetMethods().Single(value => value.Name == methodName);
 
 		method.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
 			.Cast<AuthorizeAttribute>()
 			.ShouldContain(attribute => attribute.Policy == permission);
+	}
+
+	[Fact]
+	public void Finalization_contract_stops_before_operational_enrollment()
+	{
+		var inputProperties = typeof(FinalizeAdmissionApplicationDto).GetProperties().Select(value => value.Name).ToList();
+		var resultProperties = typeof(AdmissionFinalizationResultDto).GetProperties().Select(value => value.Name).ToList();
+
+		inputProperties.ShouldContain(nameof(FinalizeAdmissionApplicationDto.IdempotencyKey));
+		inputProperties.ShouldContain(nameof(FinalizeAdmissionApplicationDto.ExistingStudentId));
+		inputProperties.ShouldNotContain("DivisionId");
+		inputProperties.ShouldNotContain("RollNumber");
+		resultProperties.ShouldContain(nameof(AdmissionFinalizationResultDto.OnboardingCaseId));
+		resultProperties.ShouldNotContain("StudentEnrollmentId");
 	}
 
 	[Fact]

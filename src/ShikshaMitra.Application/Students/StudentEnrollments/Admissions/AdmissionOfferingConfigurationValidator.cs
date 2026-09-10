@@ -19,6 +19,7 @@ public class AdmissionOfferingConfigurationValidator(
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
+	IRepository<AdmissionFormFieldDefinition, Guid> formFieldRepository,
 	IEducationBoardRepository boardRepository,
 	IEducationMediumRepository mediumRepository,
 	IEducationMediumStageRepository stageRepository,
@@ -31,7 +32,8 @@ public class AdmissionOfferingConfigurationValidator(
 		AdmissionOfferingValidationCodes.CycleUnavailable,
 		AdmissionOfferingValidationCodes.WorkflowMissing,
 		AdmissionOfferingValidationCodes.InquiryFormMissing,
-		AdmissionOfferingValidationCodes.ApplicationFormMissing
+		AdmissionOfferingValidationCodes.ApplicationFormMissing,
+		AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete
 	];
 
 	public async Task<AdmissionOfferingValidationResult> ValidateAsync(
@@ -182,6 +184,32 @@ public class AdmissionOfferingConfigurationValidator(
 			AdmissionOfferingValidationCodes.ApplicationFormMissing,
 			AdmissionOfferingValidationCodes.ApplicationFormNotPublished,
 			"Application Form", errors);
+		await ValidateApplicationFormIdentityAsync(input.ApplicationFormDefinitionId, errors);
+	}
+
+	private async Task ValidateApplicationFormIdentityAsync(
+		Guid? formId,
+		ICollection<AdmissionOfferingValidationError> errors)
+	{
+		if (!formId.HasValue)
+			return;
+		var form = await formRepository.FindAsync(formId.Value);
+		if (form?.Status != AdmissionFormStatus.Published)
+			return;
+
+		var fields = await formFieldRepository.GetListAsync(field => field.FormDefinitionId == formId.Value);
+		var requiredBindings = fields
+			.Where(field => field.Required && field.BindingType == AdmissionFormBindingType.System)
+			.Select(field => field.BindingKey)
+			.Where(key => !string.IsNullOrWhiteSpace(key))
+			.ToHashSet(StringComparer.OrdinalIgnoreCase);
+		if (!requiredBindings.Contains("Applicant.FirstName") ||
+			!requiredBindings.Contains("Applicant.DateOfBirth") ||
+			!requiredBindings.Contains("Applicant.Gender"))
+		{
+			errors.Add(Error(AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete,
+				"Application Form must require Applicant first name, date of birth, and gender system fields."));
+		}
 	}
 
 	private async Task ValidateFormAsync(

@@ -36,7 +36,7 @@ public class AdmissionApplicationWorkflowService(
 		var existing = await historyRepository.FindAsync(history =>
 			history.WorkflowInstanceId == workflow.Id && history.IdempotencyKey == input.IdempotencyKey.Trim());
 		if (existing != null) return await workflowReadService.GetAsync(id);
-		if (!string.IsNullOrWhiteSpace(input.ConcurrencyStamp) &&
+		if (string.IsNullOrWhiteSpace(input.ConcurrencyStamp) ||
 			!string.Equals(input.ConcurrencyStamp, application.ConcurrencyStamp, StringComparison.Ordinal))
 			throw new BusinessException(AdmissionApplicationErrorCodes.ConcurrencyConflict);
 		await AdvanceInternalAsync(application, workflow, input);

@@ -2,6 +2,7 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using Shouldly;
 using Xunit;
 
@@ -34,5 +35,32 @@ public class AdmissionDecisionModelMapping_Tests : ShikshaMitraEntityFrameworkCo
 		enrollment.GetForeignKeys().ShouldContain(key =>
 			key.Properties.Single().Name == nameof(StudentEnrollment.StudentId) &&
 			key.DeleteBehavior == DeleteBehavior.Restrict);
+	}
+
+	[Fact]
+	public void Onboarding_models_enforce_case_seat_roll_and_identifier_uniqueness()
+	{
+		var model = GetRequiredService<ShikshaMitraDbContext>().Model;
+		var onboardingCase = model.FindEntityType(typeof(StudentOnboardingCase));
+		var reservation = model.FindEntityType(typeof(StudentSeatReservation));
+		var allocation = model.FindEntityType(typeof(StudentIdentifierAllocation));
+		var policy = model.FindEntityType(typeof(StudentOnboardingPolicy));
+
+		onboardingCase.ShouldNotBeNull();
+		onboardingCase.FindProperty(nameof(StudentOnboardingCase.DueAt)).ShouldNotBeNull();
+		onboardingCase.FindProperty(nameof(StudentOnboardingCase.GuardianContactVerifiedAt))!.IsNullable.ShouldBeTrue();
+		onboardingCase.FindProperty(nameof(StudentOnboardingCase.IsHistoricalBackfill))!.IsNullable.ShouldBeFalse();
+		onboardingCase.GetIndexes().ShouldContain(index => index.IsUnique &&
+			index.Properties.Select(property => property.Name)
+				.SequenceEqual(new[] { "TenantId", "ApplicationId" }));
+		onboardingCase.GetIndexes().ShouldContain(index => index.IsUnique &&
+			index.Properties.Select(property => property.Name)
+				.SequenceEqual(new[] { "TenantId", "AcademicYearId", "DivisionId", "RollNumber" }) &&
+			index.GetFilter()!.Contains("Status"));
+		reservation!.GetIndexes().ShouldContain(index => index.IsUnique && index.GetFilter()!.Contains("Status"));
+		allocation!.GetIndexes().ShouldContain(index => index.IsUnique &&
+			index.Properties.Select(property => property.Name)
+				.SequenceEqual(new[] { "TenantId", "IdentifierType", "Value" }));
+		policy!.GetIndexes().Count(index => index.IsUnique).ShouldBe(2);
 	}
 }

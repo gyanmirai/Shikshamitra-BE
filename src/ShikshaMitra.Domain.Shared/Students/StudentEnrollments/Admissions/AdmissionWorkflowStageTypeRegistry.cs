@@ -23,7 +23,7 @@ public static class AdmissionWorkflowStageTypeRegistry
 	[
 		Metadata(AdmissionWorkflowStageType.Inquiry, "Inquiry", "Capture and qualify an admission inquiry.", "mdi:account-question-outline", "#0EA5E9", true, false, false, true, true, "InquiryStageHandler"),
 		Metadata(AdmissionWorkflowStageType.Form, "Form", "Collect information with a published dynamic form.", "mdi:form-select", "#6366F1", true, false, true, true, true, "FormStageHandler", ["formDefinitionId"]),
-		Metadata(AdmissionWorkflowStageType.Assessment, "Assessment", "Record an entrance exam, interaction, or other assessment.", "mdi:clipboard-text-outline", "#8B5CF6", false, false, false, true, false, "AssessmentStageHandler"),
+		Metadata(AdmissionWorkflowStageType.Assessment, "Assessment", "Record an entrance exam, interaction, or other assessment.", "mdi:clipboard-text-outline", "#8B5CF6", false, false, false, true, true, "AssessmentStageHandler"),
 		Metadata(AdmissionWorkflowStageType.Eligibility, "Eligibility", "Evaluate configured admission eligibility criteria.", "mdi:shield-check-outline", "#14B8A6", false, true, false, true, false, "EligibilityStageHandler"),
 		Metadata(AdmissionWorkflowStageType.Payment, "Payment", "Collect or verify an admission payment.", "mdi:cash-check", "#F59E0B", false, false, false, true, false, "PaymentStageHandler"),
 		Metadata(AdmissionWorkflowStageType.DocumentVerification, "Document verification", "Review required applicant documents.", "mdi:file-check-outline", "#06B6D4", false, false, false, true, true, "DocumentVerificationStageHandler"),

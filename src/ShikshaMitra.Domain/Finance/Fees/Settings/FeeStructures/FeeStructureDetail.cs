@@ -15,7 +15,7 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     public Guid FeeStructureId { get; private set; }
     public Guid FeeHeadId { get; private set; }
 
-    public double Amount { get; private set; }
+    public decimal Amount { get; private set; }
     public bool IsOneTime { get; private set; }
     public bool IsOptional { get; private set; }
 
@@ -45,7 +45,7 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
         Guid? tenantId,
         Guid feeStructureId,
         Guid feeHeadId,
-        double amount,
+        decimal amount,
         bool isOneTime,
         bool isOptional,
 		MonthEnum? payableMonth,
@@ -99,7 +99,7 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     }
 
     /// <summary>Updates the amount for this fee head.</summary>
-    public void UpdateAmount(double amount)
+    public void UpdateAmount(decimal amount)
     {
         Amount = amount;
     }

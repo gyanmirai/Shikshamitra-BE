@@ -21,6 +21,7 @@ A staff member selects a concession type on a request, while the server calculat
 | Scope | A policy belongs to an academic year, not a board, medium, class, or division |
 | Status | `Draft`, `Active`, and `Archived`; create/edit accepts Draft or Active, while archive and unarchive are explicit actions |
 | Unarchive | Restores an archived policy to Draft so staff must review it before activation |
+| Default | Only an Active policy can be default for its academic year; selecting another default atomically clears the previous Concession Policy default |
 | Dates | No effective date or end date is stored; the academic-year scope and assignment snapshot control applicability |
 | Concession type | Selected only on the concession request; it supplies the business reason and document rules |
 | Fee structure | Every new fee structure assignment requires an attached Active concession policy from the same academic year |

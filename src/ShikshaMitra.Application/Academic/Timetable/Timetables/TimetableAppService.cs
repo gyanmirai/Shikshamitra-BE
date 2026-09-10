@@ -60,11 +60,11 @@ public class TimetableAppService(
         // Weekly lecture slot is needed for totalSlots in subject summary
         var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(standardId);
 
-        var assignedSubjects = await assignedSubjectRepository.GetListAsync(a =>
-            a.StandardId == standardId &&
-            a.Status == SubjectStatus.Published);
+        var allAssignedSubjects = await assignedSubjectRepository.GetListAsync(a => a.StandardId == standardId);
+        var assignedSubjects = allAssignedSubjects.Where(a => a.Status == SubjectStatus.Published).ToList();
         var publishedWeeklySubjects = GetPublishedWeeklyLectureSubjects(weeklySlot, assignedSubjects);
-        var assignedSubjectBySubjectId = assignedSubjects
+        // Saved slots still need their allocation reference while an allocation is being revised as Draft.
+        var assignedSubjectBySubjectId = allAssignedSubjects
             .GroupBy(a => a.SubjectId)
             .ToDictionary(g => g.Key, g => g.First().Id);
         var selectedElectiveSubjectIdsByGroup = await GetSelectedElectiveSubjectIdsByGroupAsync(standardId, divisionId);

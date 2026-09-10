@@ -35,6 +35,7 @@ public partial class CollectFeeWorkflow(
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
+	IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
 	LateFeeWaiverLookupService waiverLookupService,
 	CollectionPolicyResolver policyResolver,
 	LateFeeCalculationService lateFeeCalculationService,

@@ -26,6 +26,12 @@ public class FeeHeadConfiguration : IEntityTypeConfiguration<FeeHead>
 		builder.Navigation(fh => fh.FeeCategory)
 			.AutoInclude();
 
+		builder.HasOne(fh => fh.IncomeCategory)
+			.WithMany()
+			.HasForeignKey(fh => fh.IncomeCategoryId)
+			.OnDelete(DeleteBehavior.Restrict);
+
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.FeeCategoryId, x.Name });
+		builder.HasIndex(x => x.IncomeCategoryId);
 	}
 }

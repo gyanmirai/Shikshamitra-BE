@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -116,8 +117,8 @@ public class AssignedSubjectChapter : FullAuditedEntity<Guid>, IMultiTenant
 	)
 		: base(id)
 	{
-		ChapterNumber = chapterNumber;
-		ChapterName = chapterName;
+		ChapterNumber = ValidateChapterNumber(chapterNumber);
+		ChapterName = NormalizeChapterName(chapterName);
 		ChapterStartTime = chapterStartTime;
 		ChapterEndTime = chapterEndTime;
 		Description = description;
@@ -135,7 +136,7 @@ public class AssignedSubjectChapter : FullAuditedEntity<Guid>, IMultiTenant
 		string? description = null
 	)
 	{
-		ChapterName = chapterName;
+		ChapterName = NormalizeChapterName(chapterName);
 		ChapterStartTime = chapterStartTime;
 		ChapterEndTime = chapterEndTime;
 		Description = description;
@@ -155,9 +156,38 @@ public class AssignedSubjectChapter : FullAuditedEntity<Guid>, IMultiTenant
 	/// </summary>
 	public void UpdateDetails(int chapterNumber, string chapterName, string? description)
 	{
-		ChapterNumber = chapterNumber;
-		ChapterName = chapterName;
+		ChapterNumber = ValidateChapterNumber(chapterNumber);
+		ChapterName = NormalizeChapterName(chapterName);
 		Description = description;
+	}
+
+	private static string NormalizeChapterName(string chapterName)
+	{
+		var normalizedChapterName = Check.NotNullOrWhiteSpace(chapterName, nameof(chapterName)).Trim();
+		if (normalizedChapterName.Length < ChapterConsts.MinChapterNameLength)
+		{
+			throw new ArgumentException(
+				$"Chapter name must be at least {ChapterConsts.MinChapterNameLength} characters.",
+				nameof(chapterName));
+		}
+
+		return Check.Length(
+			normalizedChapterName,
+			nameof(chapterName),
+			ChapterConsts.MaxChapterNameLength)!;
+	}
+
+	private static int ValidateChapterNumber(int chapterNumber)
+	{
+		if (chapterNumber < ChapterConsts.MinChapterNumber || chapterNumber > ChapterConsts.MaxChapterNumber)
+		{
+			throw new ArgumentOutOfRangeException(
+				nameof(chapterNumber),
+				chapterNumber,
+				$"Chapter Number must be between {ChapterConsts.MinChapterNumber} and {ChapterConsts.MaxChapterNumber}.");
+		}
+
+		return chapterNumber;
 	}
 
 	public void UpdatePlanningDetails(

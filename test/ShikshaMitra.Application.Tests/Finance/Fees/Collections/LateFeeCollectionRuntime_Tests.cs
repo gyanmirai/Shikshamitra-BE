@@ -1,4 +1,5 @@
 using Shouldly;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -133,8 +134,12 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 
 		var cat = new FeeCategory(catId, TestTenantId, yearId, "Tuition", "Tuition fees");
 		await _feeCategoryRepo.InsertAsync(cat, autoSave: true);
+		var incomeCategoryId = await FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
+			GetRequiredService<IRepository<AccountHead, Guid>>(),
+			GetRequiredService<IRepository<TransactionCategory, Guid>>(),
+			yearId, TestTenantId, "Runtime Tuition");
 
-		var feeHead = new FeeHead(feeHeadId, TestTenantId, yearId, catId, "Monthly Fee", FeeHeadModule.Finance, false, "Monthly tuition");
+		var feeHead = new FeeHead(feeHeadId, TestTenantId, yearId, catId, "Monthly Fee", FeeHeadModule.Finance, false, "Monthly tuition", incomeCategoryId);
 		await _feeHeadRepo.InsertAsync(feeHead, autoSave: true);
 
 		var student = new Student(
@@ -151,7 +156,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		await _feeStructureRepo.InsertAsync(feeStructure, autoSave: true);
 
 		await _studentFeeStructureRepo.InsertAsync(
-			new StudentFeeStructure(Guid.NewGuid(), TestTenantId, studentId, feeStructure.Id), autoSave: true);
+			new StudentFeeStructure(Guid.NewGuid(), TestTenantId, studentId, feeStructure.Id, yearId), autoSave: true);
 
 		if (attachPolicy)
 		{
@@ -163,6 +168,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				Status = "Active",
 				EnableLateFee = true,
 				GracePeriodDays = 0,
+				LateFeeApplyOnFeeHeads = new() { feeHeadId },
 				LateFeeType = "PerDay",
 				AmountPerDay = 20,
 				PercentageBase = "OutstandingAmount",
@@ -170,6 +176,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				RoundingMethod = "None",
 				MaximumLateFeeAmount = maximumLateFeeAmount.HasValue ? (decimal)maximumLateFeeAmount.Value : null,
 				EnableWaiver = true,
+				WaiverApplyOnFeeHeads = new() { feeHeadId },
 				MaximumWaiverAmount = 100,
 				MaximumWaiverPercentage = 100,
 				AllowOnlineCollection = true,

@@ -44,7 +44,8 @@ public class SubjectAssignmentAppService(
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<Employee, Guid> employeeRepository,
 	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
-	IReportingManagerAccessService reportingManagerAccessService
+	IReportingManagerAccessService reportingManagerAccessService,
+	SubjectTeacherReassignmentManager teacherReassignmentManager
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -676,6 +677,7 @@ public class SubjectAssignmentAppService(
 		// 2. Process updates
 		// We match existing subjects with input subjects by SubjectId
 		var subjectsToDelete = new List<AssignedSubject>();
+		var teacherChanges = new List<SubjectTeacherChange>();
 		var processedSubjectIds = new HashSet<Guid>();
 		await EnsureSubjectsAreNotAlreadyAssignedAsync(
 			input.ClassId,
@@ -690,6 +692,9 @@ public class SubjectAssignmentAppService(
 			if (existingSubject != null)
 			{
 				await EnsureTeacherRemovalAllowedAsync(existingSubject, inputSubject);
+				var previousPrimaryTeacherId = existingSubject.Teachers
+					.FirstOrDefault(teacher => teacher.TeacherType == SubjectTeacherType.Primary)?.TeacherId;
+				var previousStandardId = existingSubject.StandardId;
 
 				// Update existing
 				existingSubject.SubjectCode = inputSubject.SubjectCode ?? existingSubject.SubjectCode;
@@ -731,6 +736,10 @@ public class SubjectAssignmentAppService(
 					? SubjectType.Core : SubjectType.Elective;
 
 				existingSubject.RecalculateSetupHealth();
+				if (previousStandardId == existingSubject.StandardId)
+				{
+					teacherChanges.Add(new SubjectTeacherChange(existingSubject, previousPrimaryTeacherId));
+				}
 				await assignmentRepository.UpdateAsync(existingSubject);
 			}
 			else
@@ -773,6 +782,8 @@ public class SubjectAssignmentAppService(
 				existingGroup.Add(newSubject); // Add to local list for return mapping
 			}
 		}
+
+		await teacherReassignmentManager.SynchronizeAsync(teacherChanges);
 
 		// 3. Delete removed subjects
 		foreach (var subject in existingGroup)
@@ -1667,6 +1678,14 @@ public class SubjectAssignmentAppService(
 		}
 
 		var removedTeacherIds = existingTeacherIds.Except(requestedTeacherIds).ToList();
+		// Replacing a primary teacher transfers current unrecorded plans and timetable slots.
+		// Historical/recorded lessons keep their author and must not prevent a staff change.
+		if (inputSubject.PrimaryTeacherId.HasValue && inputSubject.PrimaryTeacherId != Guid.Empty)
+		{
+			var previousPrimary = existingSubject.Teachers
+				.FirstOrDefault(teacher => teacher.TeacherType == SubjectTeacherType.Primary)?.TeacherId;
+			removedTeacherIds.RemoveAll(teacherId => teacherId == previousPrimary);
+		}
 		if (removedTeacherIds.Count == 0)
 		{
 			return;

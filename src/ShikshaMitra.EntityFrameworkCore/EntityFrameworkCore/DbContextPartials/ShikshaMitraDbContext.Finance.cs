@@ -57,6 +57,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<ChargeCategory> ChargeCategories { get; set; }
 	public DbSet<TransactionCategory> TransactionCategories { get; set; }
 	public DbSet<BankAccount> BankAccounts { get; set; }
+	public DbSet<AccountHead> AccountHeads { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Student Fee Assignment
@@ -107,6 +108,9 @@ public partial class ShikshaMitraDbContext
 	// ───────────────────────────────────────────────
 	public DbSet<CollectionPolicy> CollectionPolicies { get; set; }
 	public DbSet<ConcessionPolicy> ConcessionPolicies { get; set; }
+	public DbSet<RefundPolicy> RefundPolicies { get; set; }
+	public DbSet<ProrationPolicy> ProrationPolicies { get; set; }
+	public DbSet<ProrationPolicyRule> ProrationPolicyRules { get; set; }
 	public DbSet<FinancePolicyVersion> FinancePolicyVersions { get; set; }
 	public DbSet<StudentFeePolicyOverride> StudentFeePolicyOverrides { get; set; }
 	public DbSet<CollectionPolicyExceptionWindow> CollectionPolicyExceptionWindows { get; set; }

@@ -39,6 +39,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     private readonly IRepository<Standard, Guid> _standardRepository;
     private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
     private readonly IRepository<IdentityUser, Guid> _identityUserRepository;
+    private readonly AcademicCalendarAuditReferenceResolver _auditReferenceResolver;
 
     public AcademicCalendarAppService(
         IRepository<AcademicCalendar, Guid> calendarRepository,
@@ -57,7 +58,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         IRepository<Exam, Guid> examRepository,
         IRepository<Standard, Guid> standardRepository,
         IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
-        IRepository<IdentityUser, Guid> identityUserRepository)
+        IRepository<IdentityUser, Guid> identityUserRepository,
+        AcademicCalendarAuditReferenceResolver auditReferenceResolver)
     {
         _calendarRepository = calendarRepository;
         _calendarDayRepository = calendarDayRepository;
@@ -76,6 +78,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         _standardRepository = standardRepository;
         _educationMediumStageRepository = educationMediumStageRepository;
         _identityUserRepository = identityUserRepository;
+        _auditReferenceResolver = auditReferenceResolver;
     }
 
     // ─── Calendar Setup CRUD ────────────────────────────────────────────────
@@ -1719,6 +1722,18 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         if (dtos.Count == 0)
         {
             return dtos;
+        }
+
+        var roomFields = dtos.SelectMany(x => x.Diff)
+            .Where(x => AcademicCalendarAuditReferenceResolver.IsRoomIdField(x.FieldName))
+            .ToList();
+        var roomNames = await _auditReferenceResolver.GetRoomDisplayNamesAsync(
+            roomFields.SelectMany(x => new[] { x.OldValue, x.NewValue }));
+        foreach (var field in roomFields)
+        {
+            field.DisplayName = AcademicCalendarAuditReferenceResolver.ToRoomFieldDisplayName(field.DisplayName);
+            field.OldValue = AcademicCalendarAuditReferenceResolver.ResolveRoomValue(field.OldValue, roomNames);
+            field.NewValue = AcademicCalendarAuditReferenceResolver.ResolveRoomValue(field.NewValue, roomNames);
         }
 
         // Audit snapshots store IDs, but this is a human-facing API. Resolve every user

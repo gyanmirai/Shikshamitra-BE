@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using ShikshaMitra.Finance.Fees.Concessions;
 using Volo.Abp;
 using Xunit;
@@ -68,6 +69,24 @@ public class ConcessionPolicyCalculationService_Tests
 	}
 
 	[Fact]
+	public void Aggregated_Request_Fixed_Values_Above_Request_Maximum_Are_Rejected()
+	{
+		var policy = BuildPolicy(
+			ConcessionValueSource.RequestEnteredWithinLimits,
+			ConcessionCalculationMethod.FixedAmount,
+			maximumFixedAmount: 500m);
+		var requestEnteredValues = new[] { 300m, 250m };
+
+		var exception = Assert.Throws<BusinessException>(() =>
+			_service.Calculate(
+				policy,
+				1000m,
+				DiscountBasis.FlatAmount,
+				requestEnteredValues.Sum()));
+		Assert.Equal(ConcessionPolicyErrorCodes.LimitExceeded, exception.Code);
+	}
+
+	[Fact]
 	public void Request_Basis_Must_Match_The_Policy_Calculation_Method()
 	{
 		var policy = BuildPolicy(
@@ -105,6 +124,7 @@ public class ConcessionPolicyCalculationService_Tests
 		PolicyName: "Test policy",
 		PolicyCode: "TEST",
 		Status: ConcessionPolicyStatus.Active,
+		IsDefault: false,
 		ValueSource: valueSource,
 		CalculationMethod: calculationMethod,
 		PercentageValue: percentageValue,

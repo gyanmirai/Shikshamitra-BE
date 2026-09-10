@@ -8,6 +8,8 @@ public class FeeHeadItemRequestValidator : AbstractValidator<FeeHeadItemRequest>
 {
     public FeeHeadItemRequestValidator()
     {
+        RuleFor(x => x.IncomeCategoryId).NotEmpty();
+
         RuleFor(x => x.Name)
             .NotEmpty()
             .Length(3, 40);

@@ -29,6 +29,16 @@ public class StudentFeeStructureResponseDto
 	public string ConcessionFeeHeadScope { get; set; } = string.Empty;
 	public List<Guid> ConcessionApplicableFeeHeadIds { get; set; } = [];
 	public string ConcessionApplyOn { get; set; } = string.Empty;
+	public Guid? RefundPolicyId { get; set; }
+	public Guid? RefundPolicyVersionId { get; set; }
+	public Guid? ProrationPolicyId { get; set; }
+	public Guid? ProrationPolicyVersionId { get; set; }
+	public string? ProrationPolicyName { get; set; }
+	public string? ProrationPolicyCode { get; set; }
+	public int? ProrationPolicyVersion { get; set; }
+	public DateTime? ChargeStartDate { get; set; }
+	public DateTime? ChargeEndDate { get; set; }
+	public string? ChargePeriodSource { get; set; }
 
 	public List<StudentFeeHeadDto> FeeHeads { get; set; } = new List<StudentFeeHeadDto>();
 }

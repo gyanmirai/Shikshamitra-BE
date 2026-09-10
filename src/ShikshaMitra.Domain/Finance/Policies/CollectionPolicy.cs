@@ -83,6 +83,11 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Update(CollectionPolicyUpdateModel model)
 	{
+		if (Status == CollectionPolicyStatus.Archived && Version > 0)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.ArchivedPolicyNotEditable);
+		}
+
 		if (string.IsNullOrWhiteSpace(model.PolicyName))
 		{
 			throw new BusinessException(CollectionPolicyErrorCodes.NameRequired);
@@ -93,20 +98,25 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.AcademicYearRequired);
 		}
 
+		if (string.IsNullOrWhiteSpace(model.PolicyCode))
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.CodeRequired);
+		}
+
+		if (model.Status == CollectionPolicyStatus.Archived)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidStatus);
+		}
+
 		if (model.IsDefault && model.Status != CollectionPolicyStatus.Active)
 		{
 			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyMustBeActive);
 		}
 
-		if (model.LateFeeType == LateFeeCalculationType.Slab)
-		{
-			CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(model.EscalationRules);
-		}
-
-		ValidateFeeHeadOverrides(model.FeeHeadOverrides);
+		ValidateRules(model, model.Status == CollectionPolicyStatus.Active);
 
 		PolicyName = model.PolicyName.Trim();
-		PolicyCode = model.PolicyCode.Trim();
+		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;
 		IsDefault = model.IsDefault;
@@ -161,9 +171,25 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Unarchive()
 	{
-		Status = CollectionPolicyStatus.Active;
+		Status = CollectionPolicyStatus.Draft;
+		IsDefault = false;
 		Version++;
 	}
+
+	public void SetDefault(bool isDefault)
+	{
+		if (isDefault && Status != CollectionPolicyStatus.Active)
+			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyMustBeActive);
+		if (IsDefault == isDefault) return;
+		IsDefault = isDefault;
+		Version++;
+	}
+
+	public bool AppliesLateFeeTo(Guid feeHeadId) =>
+		EnableLateFee && GetLateFeeApplyOnFeeHeads().Contains(feeHeadId);
+
+	public bool AppliesWaiverTo(Guid feeHeadId) =>
+		EnableWaiver && GetWaiverApplyOnFeeHeads().Contains(feeHeadId);
 
 	public IReadOnlyList<Guid> GetLateFeeApplyOnFeeHeads() => DeserializeGuids(LateFeeApplyOnFeeHeadsJson);
 	public IReadOnlyList<Guid> GetWaiverApplyOnFeeHeads() => DeserializeGuids(WaiverApplyOnFeeHeadsJson);
@@ -218,6 +244,134 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			{
 				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(feeHeadOverride.LateFeeRule.EscalationRules);
 			}
+		}
+	}
+
+	public CollectionPolicySnapshot ToSnapshot() => new()
+	{
+		PolicyName = PolicyName,
+		PolicyCode = PolicyCode,
+		Description = Description,
+		Status = Status,
+		IsDefault = IsDefault,
+		EffectiveFrom = EffectiveFrom,
+		EffectiveTo = EffectiveTo,
+		EnableLateFee = EnableLateFee,
+		GracePeriodDays = GracePeriodDays,
+		GracePeriodType = GracePeriodType,
+		LateFeeApplyOnFeeHeads = GetLateFeeApplyOnFeeHeads().ToList(),
+		LateFeeType = LateFeeType,
+		FlatAmount = FlatAmount,
+		Percentage = Percentage,
+		PercentageBase = PercentageBase,
+		AmountPerDay = AmountPerDay,
+		AmountPerWeek = AmountPerWeek,
+		AmountPerMonth = AmountPerMonth,
+		CompoundFrequency = CompoundFrequency,
+		EscalationRules = GetEscalationRules().ToList(),
+		FeeHeadOverrides = GetFeeHeadOverrides().ToList(),
+		RoundingMethod = RoundingMethod,
+		ConsiderAsIncome = ConsiderAsIncome,
+		LateFeeIncomeHeadId = LateFeeIncomeHeadId,
+		MaximumLateFeeAmount = MaximumLateFeeAmount,
+		MaximumChargingDays = MaximumChargingDays,
+		EnableWaiver = EnableWaiver,
+		WaiverApplyOnFeeHeads = GetWaiverApplyOnFeeHeads().ToList(),
+		MaximumWaiverAmount = MaximumWaiverAmount,
+		MaximumWaiverPercentage = MaximumWaiverPercentage,
+		WaiverExpiry = WaiverExpiry,
+		RequiresApproval = RequiresApproval,
+		ApprovalRoleIds = GetApprovalRoleIds().ToList(),
+		ApprovalThresholdAmount = ApprovalThresholdAmount,
+		AllowOnlineCollection = AllowOnlineCollection
+	};
+
+	public static CollectionPolicy FromSnapshot(
+		Guid policyId,
+		Guid? tenantId,
+		Guid academicYearId,
+		int version,
+		CollectionPolicySnapshot snapshot)
+	{
+		var entity = new CollectionPolicy(policyId, tenantId, academicYearId, snapshot.ToUpdateModel());
+		entity.Version = version;
+		return entity;
+	}
+
+	private static void ValidateRules(CollectionPolicyUpdateModel model, bool requireComplete)
+	{
+		if (model.EffectiveFrom.HasValue && model.EffectiveTo.HasValue &&
+			model.EffectiveFrom.Value.Date > model.EffectiveTo.Value.Date)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidEffectiveDates);
+		}
+
+		if (model.GracePeriodDays is < 0 or > 365 || model.MaximumChargingDays is <= 0 ||
+			model.MaximumLateFeeAmount is < 0)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule);
+		}
+
+		if (model.Status == CollectionPolicyStatus.Active && model.GracePeriodType == GracePeriodType.WorkingDay)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.WorkingDayGraceNotSupported);
+		}
+
+		if (model.EnableLateFee)
+		{
+			if (requireComplete && model.LateFeeApplyOnFeeHeads.Count == 0)
+			{
+				throw new BusinessException(CollectionPolicyErrorCodes.InvalidFeeHeadReference);
+			}
+
+			var invalidFormula = model.LateFeeType switch
+			{
+				LateFeeCalculationType.Flat => model.FlatAmount is null or <= 0,
+				LateFeeCalculationType.Percentage or LateFeeCalculationType.Compound => model.Percentage is null or <= 0 or > 100,
+				LateFeeCalculationType.PerDay => model.AmountPerDay is null or <= 0,
+				LateFeeCalculationType.PerWeek => model.AmountPerWeek is null or <= 0,
+				LateFeeCalculationType.PerMonth => model.AmountPerMonth is null or <= 0,
+				LateFeeCalculationType.Slab => model.EscalationRules.Count == 0,
+				_ => true
+			};
+			if (requireComplete && invalidFormula)
+			{
+				throw new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule);
+			}
+
+			if (model.LateFeeType == LateFeeCalculationType.Slab && model.EscalationRules.Count > 0)
+			{
+				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(model.EscalationRules);
+			}
+
+			if (model.ConsiderAsIncome && requireComplete && model.LateFeeIncomeHeadId is null)
+			{
+				throw new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule)
+					.WithData("field", "lateFeeIncomeHeadId");
+			}
+		}
+
+		if (model.MaximumWaiverAmount is < 0 || model.MaximumWaiverPercentage is < 0 or > 100 ||
+			model.ApprovalThresholdAmount is < 0)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule);
+		}
+
+		if (model.EnableWaiver && requireComplete)
+		{
+			if (model.WaiverApplyOnFeeHeads.Count == 0 ||
+				(model.RequiresApproval && model.ApprovalRoleIds.Count == 0))
+			{
+				throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule);
+			}
+		}
+
+		ValidateFeeHeadOverrides(model.FeeHeadOverrides);
+		var lateFeeHeads = model.LateFeeApplyOnFeeHeads.ToHashSet();
+		if (model.FeeHeadOverrides.Any(x => !lateFeeHeads.Contains(x.FeeHeadId)))
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidFeeHeadReference)
+				.WithData("reason", "override_outside_late_fee_scope");
 		}
 	}
 

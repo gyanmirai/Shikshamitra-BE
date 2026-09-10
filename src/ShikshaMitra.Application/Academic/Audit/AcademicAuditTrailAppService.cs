@@ -32,7 +32,8 @@ public class AcademicAuditTrailAppService(
 	IRepository<SubstitutionRequest, Guid> substitutionRepository,
 	IRepository<SeatingPlanAuditLog, Guid> seatingPlanAuditRepository,
 	IRepository<ExamResultAuditLog, Guid> examResultAuditRepository,
-	IRepository<IdentityUser, Guid> identityUserRepository)
+	IRepository<IdentityUser, Guid> identityUserRepository,
+	AcademicCalendarAuditReferenceResolver calendarAuditReferenceResolver)
 	: ApplicationService, IAcademicAuditTrailAppService
 {
 	private const int MaxSourceRows = 500;
@@ -50,6 +51,7 @@ public class AcademicAuditTrailAppService(
 		events.AddRange(await GetSeatingPlanEventsAsync(input));
 		events.AddRange(await GetResultEventsAsync(input));
 		await EnrichUserReferencesAsync(events);
+		await EnrichCalendarRoomReferencesAsync(events);
 
 		var filtered = ApplyCommonFilters(events, input).ToList();
 		var total = filtered.Count;
@@ -94,6 +96,24 @@ public class AcademicAuditTrailAppService(
 				if (Guid.TryParse(field.OldValue, out var oldId) && names.TryGetValue(oldId, out var oldName)) field.OldValue = oldName;
 				if (Guid.TryParse(field.NewValue, out var newId) && names.TryGetValue(newId, out var newName)) field.NewValue = newName;
 			}
+		}
+	}
+
+	private async Task EnrichCalendarRoomReferencesAsync(List<AcademicAuditEventDto> events)
+	{
+		var roomFields = events
+			.Where(x => x.SubModuleCode == "academic_calendar")
+			.SelectMany(x => x.ChangedFields)
+			.Where(x => AcademicCalendarAuditReferenceResolver.IsRoomIdField(x.Field))
+			.ToList();
+		var roomNames = await calendarAuditReferenceResolver.GetRoomDisplayNamesAsync(
+			roomFields.SelectMany(x => new[] { x.OldValue, x.NewValue }));
+
+		foreach (var field in roomFields)
+		{
+			field.DisplayName = AcademicCalendarAuditReferenceResolver.ToRoomFieldDisplayName(field.DisplayName);
+			field.OldValue = AcademicCalendarAuditReferenceResolver.ResolveRoomValue(field.OldValue, roomNames);
+			field.NewValue = AcademicCalendarAuditReferenceResolver.ResolveRoomValue(field.NewValue, roomNames);
 		}
 	}
 

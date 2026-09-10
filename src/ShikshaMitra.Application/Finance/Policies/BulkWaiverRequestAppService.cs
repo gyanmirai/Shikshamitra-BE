@@ -165,7 +165,8 @@ public class BulkWaiverRequestAppService(
 			}
 
 			var waiverResult = waiverCalculationService.Calculate(
-				effective.Policy, new WaiverCalculationInput(remainingLateFee, remainingLateFee, clock.Now, WaiverPreApproved: true));
+				effective.Policy, new WaiverCalculationInput(remainingLateFee, remainingLateFee, clock.Now,
+					WaiverPreApproved: true, FeeHeadId: dueFee.FeeHeadId));
 
 			var waiver = new LateFeeWaiverApplication(
 				GuidGenerator.Create(),

@@ -1,43 +1,31 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Finance.Accounts.Settings.Dtos;
 
 public class CreateBankAccountRequest
 {
-    [Required]
-    public string BankName { get; set; }
-
-    [Required]
-    public string BranchName { get; set; }
-
-    public string? BranchAddress { get; set; }
-
-    [Required]
-    public string AccountHolderName { get; set; }
-
-    public BankAccountType AccountType { get; set; }
-
-    [Required]
-    public string AccountNumber { get; set; }
-
-    public string? Purpose { get; set; }
-
-    [Required]
-    public string IfscCode { get; set; }
-
-    public string? UpiId { get; set; }
+	[Required]
+	public string Code { get; set; } = string.Empty;
+	[Required]
+	public Guid? AccountHeadId { get; set; }
+	[Required]
+	public string BankName { get; set; } = string.Empty;
+	[Required]
+	public string BranchName { get; set; } = string.Empty;
+	public string? BranchAddress { get; set; }
+	[Required]
+	public string AccountHolderName { get; set; } = string.Empty;
+	public BankAccountType AccountType { get; set; }
+	[Required]
+	public string AccountNumber { get; set; } = string.Empty;
+	public string? Purpose { get; set; }
+	[Required]
+	public string IfscCode { get; set; } = string.Empty;
+	public string? UpiId { get; set; }
+	public DateTimeOffset? EffectiveFrom { get; set; }
+	public DateTimeOffset? EffectiveTo { get; set; }
+	public string? ConcurrencyStamp { get; set; }
 }
 
-public class UpdateBankAccountRequest
-{
-    public string BankName { get; set; }
-    public string BranchName { get; set; }
-    public string? BranchAddress { get; set; }
-    public string AccountHolderName { get; set; }
-    public BankAccountType AccountType { get; set; }
-    public string AccountNumber { get; set; }
-    public string? Purpose { get; set; }
-    public string IfscCode { get; set; }
-    public string? UpiId { get; set; }
-    public bool IsActive { get; set; }
-}
+public class UpdateBankAccountRequest : CreateBankAccountRequest;

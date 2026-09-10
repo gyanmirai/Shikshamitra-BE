@@ -25,6 +25,12 @@ public class LessonPlanController(ILessonPlanAppService lessonPlanAppService) : 
         return Ok(timeline);
     }
 
+    [HttpGet("chapter-progress")]
+    public async Task<IActionResult> GetChapterProgress([FromQuery] GetLessonPlanChapterProgressInput input)
+    {
+        return Ok(await lessonPlanAppService.GetChapterProgressAsync(input));
+    }
+
     [HttpGet("{id}")]
     public async Task<IActionResult> Get(Guid id)
     {

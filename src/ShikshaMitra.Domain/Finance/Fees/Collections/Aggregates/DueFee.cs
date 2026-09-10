@@ -2,6 +2,7 @@
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.FeeAdjustment;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
+using ShikshaMitra.Domain.Finance.Policies;
 using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -30,6 +31,8 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	public DateTime DueDate { get; private set; }
 	public decimal OriginalAmount { get; private set; }
+	/// <summary>Installment amount before proration.</summary>
+	public decimal ScheduledAmount { get; private set; }
 	public decimal NetAmount { get; private set; }
 	public decimal PaidAmount { get; private set; }
 	public decimal OutstandingAmount { get; private set; }
@@ -59,6 +62,21 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTime? ScheduleDueDate { get; private set; }
 	public ScheduleSource ScheduleSource { get; private set; }
 
+	// ── Proration calculation snapshot ────────────────────────────────────────
+	public Guid? ProrationPolicyId { get; private set; }
+	public Guid? ProrationPolicyVersionId { get; private set; }
+	public DateTime? ProrationChargeStartDate { get; private set; }
+	public DateTime? ProrationChargeEndDate { get; private set; }
+	public DateTime? ProrationEligibleStartDate { get; private set; }
+	public DateTime? ProrationEligibleEndDate { get; private set; }
+	public int? ProrationCoverageDays { get; private set; }
+	public int? ProrationEligibleDays { get; private set; }
+	public int? ProrationChargedDays { get; private set; }
+	public decimal? ProrationFactor { get; private set; }
+	public ProrationRuleType? ProrationRuleType { get; private set; }
+	public ProrationRoundingMode? ProrationRoundingMode { get; private set; }
+	public string? ProrationExplanation { get; private set; }
+
 	/// <summary>
 	/// Stable uniqueness key for idempotent generation.
 	/// Legacy: <c>{feeHeadId}:{year}:{month}</c>
@@ -68,7 +86,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private DueFee() { /* For ORM */ }
 
-	public DueFee(
+public DueFee(
 		Guid id,
 		Guid? tenantId,
 		Guid studentId,
@@ -88,7 +106,21 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateTime? coverageEndDate = null,
 		DateTime? demandDate = null,
 		DateTime? scheduleDueDate = null,
-		ScheduleSource scheduleSource = ScheduleSource.Legacy)
+		ScheduleSource scheduleSource = ScheduleSource.Legacy,
+		decimal? scheduledAmount = null,
+		Guid? prorationPolicyId = null,
+		Guid? prorationPolicyVersionId = null,
+		DateTime? prorationChargeStartDate = null,
+		DateTime? prorationChargeEndDate = null,
+		DateTime? prorationEligibleStartDate = null,
+		DateTime? prorationEligibleEndDate = null,
+		int? prorationCoverageDays = null,
+		int? prorationEligibleDays = null,
+		int? prorationChargedDays = null,
+		decimal? prorationFactor = null,
+		ProrationRuleType? prorationRuleType = null,
+		ProrationRoundingMode? prorationRoundingMode = null,
+		string? prorationExplanation = null)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -99,6 +131,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		IsOneTime = isOneTime;
 		DueDate = dueDate;
 		OriginalAmount = amount;
+		ScheduledAmount = scheduledAmount ?? amount;
 		NetAmount = 0m;
 		PaidAmount = 0m;
 		OutstandingAmount = amount;
@@ -118,6 +151,21 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DemandDate = demandDate?.Date;
 		ScheduleDueDate = scheduleDueDate?.Date;
 		ScheduleSource = scheduleSource;
+		if (prorationPolicyId.HasValue != prorationPolicyVersionId.HasValue)
+			throw new ArgumentException("Proration policy and version must both be present or absent.");
+		ProrationPolicyId = prorationPolicyId;
+		ProrationPolicyVersionId = prorationPolicyVersionId;
+		ProrationChargeStartDate = prorationChargeStartDate?.Date;
+		ProrationChargeEndDate = prorationChargeEndDate?.Date;
+		ProrationEligibleStartDate = prorationEligibleStartDate?.Date;
+		ProrationEligibleEndDate = prorationEligibleEndDate?.Date;
+		ProrationCoverageDays = prorationCoverageDays;
+		ProrationEligibleDays = prorationEligibleDays;
+		ProrationChargedDays = prorationChargedDays;
+		ProrationFactor = prorationFactor;
+		ProrationRuleType = prorationRuleType;
+		ProrationRoundingMode = prorationRoundingMode;
+		ProrationExplanation = string.IsNullOrWhiteSpace(prorationExplanation) ? null : prorationExplanation.Trim();
 		ScheduleInstanceKey = BuildScheduleInstanceKey(
 			scheduleSource,
 			feeHeadId,

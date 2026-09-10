@@ -21,6 +21,9 @@ public class ConcessionPoliciesController(IConcessionPolicyAppService appService
 	[HttpGet("{id:guid}")]
 	public Task<ConcessionPolicyDto> GetAsync(Guid id) => appService.GetAsync(id);
 
+	[HttpGet("{id:guid}/impact")]
+	public Task<ConcessionPolicyImpactDto> GetImpactAsync(Guid id) => appService.GetImpactAsync(id);
+
 	[HttpPost]
 	public Task<ConcessionPolicyDto> CreateAsync([FromBody] CreateUpdateConcessionPolicyDto input) => appService.CreateAsync(input);
 

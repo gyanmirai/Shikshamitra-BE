@@ -28,6 +28,11 @@ public class LateFeeCalculationService : ITransientDependency
 			return LateFeeCalculationResult.Exempt("Late fee is disabled on this policy.");
 		}
 
+		if (input.FeeHeadId is { } scopedFeeHeadId && !policy.AppliesLateFeeTo(scopedFeeHeadId))
+		{
+			return LateFeeCalculationResult.Exempt("This fee head is outside the policy's late-fee scope.");
+		}
+
 		// Step 2 — exception windows (CollectionPolicyExceptionWindow, Phase 4j). The active
 		// window (if any) is resolved by ExceptionWindowResolver — a DB-touching domain service —
 		// before this method is called, so Calculate itself stays a pure function. SuspendLateFeeAccrual

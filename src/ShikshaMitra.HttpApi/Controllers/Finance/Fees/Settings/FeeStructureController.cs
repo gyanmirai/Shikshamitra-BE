@@ -19,6 +19,7 @@ public class FeeStructureController(
 {
     [HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.ManageAttachment)]
 	public Task<FeeStructureCreateResponse> CreateAsync(
         [FromQuery] Guid feeStructureMetadataId,
         [FromBody] StandardFeeStructureSaveRequest input)
@@ -27,8 +28,9 @@ public class FeeStructureController(
     }
 
     [HttpPut("{id}")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add)]
-    public Task UpdateAsync(Guid id, [FromBody] StandardFeeStructureRequest input)
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Edit)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.ManageAttachment)]
+    public Task<FeeStructureCreateResponse> UpdateAsync(Guid id, [FromBody] StandardFeeStructureRequest input)
     {
         return feeStructureAppService.UpdateAsync(id, input);
     }
@@ -59,4 +61,12 @@ public class FeeStructureController(
     {
         return feeStructureAppService.GetMonthsByAcademicYearAsync(academicYearId);
     }
+
+	[HttpPost("collection-policy-impact")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ManageAttachment)]
+	public Task<CollectionPolicyAttachmentImpactResponse> ValidateCollectionPolicyAttachmentAsync(
+		[FromBody] CollectionPolicyAttachmentImpactRequest input)
+	{
+		return feeStructureAppService.ValidateCollectionPolicyAttachmentAsync(input);
+	}
 }

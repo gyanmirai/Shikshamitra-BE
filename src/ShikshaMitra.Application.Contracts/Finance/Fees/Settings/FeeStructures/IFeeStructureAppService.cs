@@ -12,7 +12,7 @@ public interface IFeeStructureAppService : IApplicationService
     Task<FeeStructureCreateResponse> CreateAsync(Guid feeStructureMetadataId, StandardFeeStructureSaveRequest input);
 
     /// <summary>Replaces the fee head assignments of an existing, unlocked fee structure.</summary>
-    Task UpdateAsync(Guid id, StandardFeeStructureRequest input);
+    Task<FeeStructureCreateResponse> UpdateAsync(Guid id, StandardFeeStructureRequest input);
 
     /// <summary>Soft-deletes an unlocked fee structure and its details.</summary>
     Task DeleteAsync(Guid id);
@@ -25,4 +25,6 @@ public interface IFeeStructureAppService : IApplicationService
 
     /// <summary>Returns an ordered list of month-year pairs spanning the given academic year's start and end dates.</summary>
     Task<List<AcademicYearMonthItem>> GetMonthsByAcademicYearAsync(Guid academicYearId);
+
+	Task<CollectionPolicyAttachmentImpactResponse> ValidateCollectionPolicyAttachmentAsync(CollectionPolicyAttachmentImpactRequest input);
 }

@@ -90,6 +90,13 @@ public class LessonPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserSco
         PlannedCompletionPercentage = Math.Clamp(plannedCompletionPercentage, 0, 100);
     }
 
+    public void ReassignTeacher(Guid teacherId)
+    {
+        if (teacherId == Guid.Empty) throw new ArgumentException("Teacher is required.", nameof(teacherId));
+        if (TeacherDiary != null) throw new InvalidOperationException("Recorded lessons retain their original teacher.");
+        TeacherId = teacherId;
+    }
+
     public void Submit()
     {
         Status = LessonPlanStatus.Submitted;

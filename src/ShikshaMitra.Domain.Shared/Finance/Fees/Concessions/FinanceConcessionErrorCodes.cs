@@ -25,4 +25,7 @@ public static class FinanceConcessionErrorCodes
 	public const string DueFeeWrongFeeHead = "Finance:Concession:020009";
 
 	public const string ApproverCannotBeRequestor = "Finance:Concession:030001";
+	public const string ConcurrencyStampRequired = "Finance:Concession:030002";
+	public const string ConcurrencyConflict = "Finance:Concession:030003";
+	public const string ApprovalAllocationsRequired = "Finance:Concession:030004";
 }

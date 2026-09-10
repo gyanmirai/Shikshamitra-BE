@@ -15,12 +15,25 @@ public class DueFeeConfiguration : IEntityTypeConfiguration<DueFee>
 		builder.Property(x => x.ScheduleInstanceKey).IsRequired().HasMaxLength(128);
 		builder.Property(x => x.ScheduleSource).HasConversion<int>();
 		builder.Property(x => x.OriginalAmount).HasPrecision(18, 2);
+		builder.Property(x => x.ScheduledAmount).HasPrecision(18, 2);
 		builder.Property(x => x.NetAmount).HasPrecision(18, 2);
 		builder.Property(x => x.PaidAmount).HasPrecision(18, 2);
 		builder.Property(x => x.OutstandingAmount).HasPrecision(18, 2);
 		builder.Property(x => x.RefundedAmount).HasPrecision(18, 2);
 		builder.Property(x => x.ConcessionAmount).HasPrecision(18, 2);
 		builder.Property(x => x.AdjustmentCreditAmount).HasPrecision(18, 2);
+		builder.Property(x => x.ProrationFactor).HasPrecision(12, 8);
+		builder.Property(x => x.ProrationRuleType).HasConversion<int>();
+		builder.Property(x => x.ProrationRoundingMode).HasConversion<int>();
+		builder.Property(x => x.ProrationExplanation).HasMaxLength(500);
+		builder.HasOne<ShikshaMitra.Domain.Finance.Policies.ProrationPolicy>()
+			.WithMany().HasForeignKey(x => x.ProrationPolicyId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion>()
+			.WithMany().HasForeignKey(x => x.ProrationPolicyVersionId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasIndex(x => x.ProrationPolicyId)
+			.HasDatabaseName("IX_DueFees_ProrationPolicyId");
+		builder.HasIndex(x => x.ProrationPolicyVersionId)
+			.HasDatabaseName("IX_DueFees_ProrationPolicyVersionId");
 
 		// Legacy month/year uniqueness retained for backward-compatible queries,
 		// but schedule-aware generation uniqueness uses ScheduleInstanceKey.

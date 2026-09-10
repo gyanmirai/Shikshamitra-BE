@@ -11,6 +11,14 @@ public class FeeStructureCreateResponse
 {
     public Guid Id { get; set; }
     public string Name { get; set; }
+	public Guid? CollectionPolicyId { get; set; }
+	public Guid? CollectionPolicyVersionId { get; set; }
+	public Guid? ConcessionPolicyId { get; set; }
+	public Guid? ConcessionPolicyVersionId { get; set; }
+	public Guid? RefundPolicyId { get; set; }
+	public Guid? RefundPolicyVersionId { get; set; }
+	public Guid? ProrationPolicyId { get; set; }
+	public Guid? ProrationPolicyVersionId { get; set; }
 }
 
 public class FeeStructureDetailsResponse : EntityDto<Guid>
@@ -50,8 +58,13 @@ public class StandardFeeStructureResponseItem : EntityDto<Guid>
 	public FeeStructureStatus Status { get; set; }
 	public List<FeeHeadAssignmentResponse> FeeHeads { get; set; }
 	public Guid? CollectionPolicyId { get; set; }
+	public Guid? CollectionPolicyVersionId { get; set; }
 	public Guid? ConcessionPolicyId { get; set; }
 	public Guid? ConcessionPolicyVersionId { get; set; }
+	public Guid? RefundPolicyId { get; set; }
+	public Guid? RefundPolicyVersionId { get; set; }
+	public Guid? ProrationPolicyId { get; set; }
+	public Guid? ProrationPolicyVersionId { get; set; }
 	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; set; }
 	public List<Guid> ConcessionApplicableFeeHeadIds { get; set; } = [];
 }
@@ -61,7 +74,7 @@ public class FeeHeadAssignmentResponse
     public Guid FeeHeadId { get; set; }
     public string FeeHeadName { get; set; }
     public string CategoryName { get; set; }
-    public double Amount { get; set; }
+    public decimal Amount { get; set; }
     public bool IsOneTime { get; set; }
     public bool IsOptional { get; set; }
 	public MonthEnum? PayableMonth { get; set; }

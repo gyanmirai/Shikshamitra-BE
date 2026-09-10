@@ -58,6 +58,7 @@ internal static class ConcessionPolicyMapping
 		policyCode,
 		input.Description,
 		ParseStatus(input.Status),
+		input.IsDefault,
 		ParseValueSource(input.ValueSource),
 		ParseCalculationMethod(input.CalculationMethod),
 		input.PercentageValue,
@@ -75,6 +76,7 @@ internal static class ConcessionPolicyMapping
 		PolicyCode = entity.PolicyCode,
 		Description = entity.Description,
 		Status = entity.Status.ToString(),
+		IsDefault = entity.IsDefault,
 		ValueSource = entity.ValueSource.ToString(),
 		CalculationMethod = entity.CalculationMethod.ToString(),
 		PercentageValue = entity.PercentageValue,
@@ -87,7 +89,8 @@ internal static class ConcessionPolicyMapping
 		CreationTime = entity.CreationTime,
 		CreatorId = entity.CreatorId,
 		LastModificationTime = entity.LastModificationTime,
-		LastModifierId = entity.LastModifierId
+		LastModifierId = entity.LastModifierId,
+		ConcurrencyStamp = entity.ConcurrencyStamp
 	};
 
 	public static string ToSnapshotJson(ConcessionPolicy entity) => JsonSerializer.Serialize(entity.ToSnapshot());

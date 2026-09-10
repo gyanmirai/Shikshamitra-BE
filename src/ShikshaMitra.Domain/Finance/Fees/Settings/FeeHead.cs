@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Fees.Settings;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -13,6 +14,8 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid AcademicYearId { get; private set; }
 
     public Guid FeeCategoryId { get; private set; }
+
+    public Guid IncomeCategoryId { get; private set; }
 
     [Required]
     public string Name { get; private set; }
@@ -29,6 +32,8 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public FeeCategory FeeCategory { get; private set; }
 
+	public TransactionCategory IncomeCategory { get; private set; }
+
     protected FeeHead() { }
 
     public FeeHead(
@@ -40,11 +45,13 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
         FeeHeadModule? module,
         bool isConcessionApplied,
         string? description,
+        Guid incomeCategoryId,
         bool isActive = true) : base(id)
     {
         TenantId = tenantId;
         AcademicYearId = academicYearId;
         FeeCategoryId = feeCategoryId;
+        IncomeCategoryId = incomeCategoryId;
         Name = name;
         Module = module;
         IsConcessionApplied = isConcessionApplied;
@@ -52,9 +59,11 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
         IsActive = isActive;
     }
 
-    public void Update(Guid feeCategoryId, string name, FeeHeadModule? module, bool isConcessionApplied, string? description)
+    public void Update(Guid feeCategoryId, string name, FeeHeadModule? module, bool isConcessionApplied,
+        string? description, Guid incomeCategoryId)
     {
         FeeCategoryId = feeCategoryId;
+        IncomeCategoryId = incomeCategoryId;
         Name = name;
         Module = module;
         IsConcessionApplied = isConcessionApplied;

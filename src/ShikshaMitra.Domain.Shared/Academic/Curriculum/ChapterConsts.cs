@@ -5,6 +5,9 @@
 /// </summary>
 public static class ChapterConsts
 {
+	public const int MinChapterNumber = 1;
+	public const int MaxChapterNumber = 1000;
+
 	/// <summary>
 	/// Minimum length for chapter name
 	/// </summary>

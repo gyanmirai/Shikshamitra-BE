@@ -98,7 +98,7 @@ public static class EmployeeSearchQuery
 	}
 
 	private static string NormalizeSearchTerm(string search) =>
-		string.Join(" ", search.Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+		string.Join(" ", search.ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
 	private static string[] SplitSearchTokens(string searchTerm) =>
 		searchTerm.Split(' ', StringSplitOptions.RemoveEmptyEntries);

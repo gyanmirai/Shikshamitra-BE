@@ -52,4 +52,45 @@ public class AcademicCalendarDay_Tests
         day.Description.ShouldBe("Updated marker");
         day.ChangeReason.ShouldBe("Moved from edit marker modal");
     }
+
+    [Fact]
+    public void Constructor_And_Update_Should_Trim_Title()
+    {
+        var day = new AcademicCalendarDay(
+            Guid.NewGuid(),
+            tenantId: null,
+            Guid.NewGuid(),
+            new DateTime(2026, 9, 14),
+            DayType.Holiday,
+            "  Ganesh Chaturthi  ");
+
+        day.Title.ShouldBe("Ganesh Chaturthi");
+
+        day.Update(
+            new DateTime(2026, 9, 14),
+            DayType.Holiday,
+            "  Festival Holiday  ",
+            "A festival celebrating Ganesha",
+            appliesToAll: true,
+            standardId: null,
+            divisionId: null,
+            HolidayCategory.Festival,
+            startTime: null,
+            endTime: null,
+            changeReason: "Updated title");
+
+        day.Title.ShouldBe("Festival Holiday");
+    }
+
+    [Fact]
+    public void Constructor_Should_Reject_A_Whitespace_Only_Title()
+    {
+        Should.Throw<ArgumentException>(() => new AcademicCalendarDay(
+            Guid.NewGuid(),
+            tenantId: null,
+            Guid.NewGuid(),
+            new DateTime(2026, 9, 14),
+            DayType.Holiday,
+            "   "));
+    }
 }

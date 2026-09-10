@@ -6,7 +6,7 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 public class CustomOptionalFeeHeadDetail
 {
 	public Guid FeeHeadId { get; set; }
-	public double Amount { get; set; }
+	public decimal Amount { get; set; }
 
 	// For one-time optional fees
 	public MonthEnum? PayableMonth { get; set; }
@@ -17,4 +17,7 @@ public class CustomOptionalFeeHeadDetail
 	public int? StartPayableYear { get; set; }
 	public MonthEnum? EndPayableMonth { get; set; }
 	public int? EndPayableYear { get; set; }
+
+	public DateTime? ChargeStartDate { get; set; }
+	public DateTime? ChargeEndDate { get; set; }
 }

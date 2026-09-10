@@ -13,6 +13,7 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string PolicyCode { get; protected set; } = string.Empty;
 	public string Description { get; protected set; } = string.Empty;
 	public ConcessionPolicyStatus Status { get; protected set; }
+	public bool IsDefault { get; protected set; }
 	public ConcessionValueSource ValueSource { get; protected set; }
 	public ConcessionCalculationMethod CalculationMethod { get; protected set; }
 	public decimal? PercentageValue { get; protected set; }
@@ -49,6 +50,8 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(ConcessionPolicyErrorCodes.CodeRequired);
 		if (model.Status == ConcessionPolicyStatus.Archived)
 			throw new BusinessException(ConcessionPolicyErrorCodes.InvalidStatus);
+		if (model.IsDefault && model.Status != ConcessionPolicyStatus.Active)
+			throw new BusinessException(ConcessionPolicyErrorCodes.DefaultPolicyMustBeActive);
 
 		ValidateRules(model);
 
@@ -56,6 +59,7 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;
+		IsDefault = model.IsDefault;
 		ValueSource = model.ValueSource;
 		CalculationMethod = model.CalculationMethod;
 		PercentageValue = model.CalculationMethod == ConcessionCalculationMethod.Percentage
@@ -74,12 +78,23 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void Archive()
 	{
 		Status = ConcessionPolicyStatus.Archived;
+		IsDefault = false;
 		Version++;
 	}
 
 	public void Unarchive()
 	{
 		Status = ConcessionPolicyStatus.Draft;
+		IsDefault = false;
+		Version++;
+	}
+
+	public void SetDefault(bool isDefault)
+	{
+		if (isDefault && Status != ConcessionPolicyStatus.Active)
+			throw new BusinessException(ConcessionPolicyErrorCodes.DefaultPolicyMustBeActive);
+		if (IsDefault == isDefault) return;
+		IsDefault = isDefault;
 		Version++;
 	}
 
@@ -89,6 +104,7 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PolicyName,
 		PolicyCode,
 		Status,
+		IsDefault,
 		ValueSource,
 		CalculationMethod,
 		PercentageValue,
@@ -132,6 +148,7 @@ public sealed record ConcessionPolicyUpdateModel(
 	string PolicyCode,
 	string? Description,
 	ConcessionPolicyStatus Status,
+	bool IsDefault,
 	ConcessionValueSource ValueSource,
 	ConcessionCalculationMethod CalculationMethod,
 	decimal? PercentageValue,
@@ -147,6 +164,7 @@ public sealed record ConcessionPolicySnapshot(
 	string PolicyName,
 	string PolicyCode,
 	ConcessionPolicyStatus Status,
+	bool IsDefault,
 	ConcessionValueSource ValueSource,
 	ConcessionCalculationMethod CalculationMethod,
 	decimal? PercentageValue,

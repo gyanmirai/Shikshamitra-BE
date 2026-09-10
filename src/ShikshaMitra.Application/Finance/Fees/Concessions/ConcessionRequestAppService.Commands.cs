@@ -10,9 +10,11 @@ using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Uow;
 using System.Text.Json;
 using ShikshaMitra.Domain.Finance.Policies;
+using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.Finance.Fees.Concessions;
 
@@ -30,6 +32,47 @@ public partial class ConcessionRequestAppService
 		request.ReplaceDocuments(await ValidateAndBuildDocumentsAsync(request, input.Documents));
 		await uow.CompleteAsync();
 		return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(await MapDetailAsync(request));
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Add)]
+	public async Task<ConcessionRequestPreviewDto> PreviewAsync(
+		Guid academicYearId, ConcessionRequestPreviewInputDto input)
+	{
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
+		var preview = await concessionRequestManager.PreviewAsync(
+			CurrentTenant.Id,
+			academicYearId,
+			input.StudentId,
+			input.ConcessionTypeId,
+			MapFeeHeadInputs(input.FeeHeadConcessions));
+		var feeHeadIds = preview.Mappings.Select(x => x.FeeHeadId).ToList();
+		var feeHeadNames = (await feeHeadRepository.GetListAsync(x => feeHeadIds.Contains(x.Id)))
+			.ToDictionary(x => x.Id, x => x.Name);
+		var totalBase = preview.Mappings.Sum(x => x.PreConcessionFeeHeadAmount);
+		var totalConcession = preview.Mappings.Sum(x => x.FeeHeadConcessionAmount);
+		return new ConcessionRequestPreviewDto
+		{
+			StudentFeeStructureId = preview.Assignment.Id,
+			ConcessionPolicyId = preview.Assignment.ConcessionPolicyId,
+			ConcessionPolicyVersionId = preview.Assignment.ConcessionPolicyVersionId,
+			ConcessionPolicyName = preview.Policy.PolicyName,
+			ConcessionPolicyCode = preview.Policy.PolicyCode,
+			ConcessionPolicyVersion = preview.Policy.Version,
+			ApplyOn = preview.Policy.ApplyOn.ToString(),
+			TotalEligibleBase = totalBase,
+			TotalConcessionAmount = totalConcession,
+			NetPayable = Math.Max(0m, totalBase - totalConcession),
+			FeeHeadConcessions = preview.Mappings.Select(x => new FeeHeadConcessionDetailDto
+			{
+				FeeHeadId = x.FeeHeadId,
+				FeeHeadName = feeHeadNames.GetValueOrDefault(x.FeeHeadId, string.Empty),
+				AnnualBaseAmount = x.PreConcessionFeeHeadAmount,
+				BasedOn = (int)x.UserSpecifiedConcessionAmountType,
+				Amount = x.UserSpecifiedConcessionAmountValue,
+				DiscountAmount = x.FeeHeadConcessionAmount,
+				NetAmount = x.PostConcessionFeeHeadAmount,
+			}).ToList(),
+		};
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Add)]
@@ -141,6 +184,10 @@ public partial class ConcessionRequestAppService
 	{
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+		if (string.IsNullOrWhiteSpace(input.RequestConcurrencyStamp))
+			throw new BusinessException(FinanceConcessionErrorCodes.ConcurrencyStampRequired);
+		if (!string.Equals(request.ConcurrencyStamp, input.RequestConcurrencyStamp, StringComparison.Ordinal))
+			throw new BusinessException(FinanceConcessionErrorCodes.ConcurrencyConflict);
 		var assignment = await studentFeeStructureRepository.GetAsync(request.StudentFeeStructureId);
 		var applicableIds = assignment.GetConcessionApplicableFeeHeadIds().ToHashSet();
 		var dueFees = await dueFeeRepository.GetListAsync(df =>
@@ -170,10 +217,13 @@ public partial class ConcessionRequestAppService
 			}
 		}
 
-		var approvals = input.FeeHeadApprovals?.Select(a => new FeeHeadApprovalInput(
+		if (input.FeeHeadApprovals is null || input.FeeHeadApprovals.Count == 0)
+			throw new BusinessException(FinanceConcessionErrorCodes.ApprovalAllocationsRequired);
+		var approvals = input.FeeHeadApprovals.Select(a => new FeeHeadApprovalInput(
 			a.FeeHeadId, a.ApprovedConcessionAmount,
-			a.DueFeeAllocations.Select(d => new DueFeeAllocationInput(d.DueFeeId, d.ConcessionAmount)).ToList()
-		)).ToList() ?? concessionRequestManager.BuildAutoApproveAllocations(request, dueFees);
+			a.DueFeeAllocations.Select(d => new DueFeeAllocationInput(
+				d.DueFeeId, d.ConcessionAmount, d.ConcurrencyStamp)).ToList()
+		)).ToList();
 
 		foreach (var group in approvals)
 		{
@@ -200,7 +250,14 @@ public partial class ConcessionRequestAppService
 
 		await dueFeeRepository.UpdateManyAsync(affectedDueFees, autoSave: false);
 		await concessionRequestRepository.UpdateAsync(request, autoSave: false);
-		await uow.CompleteAsync();
+		try
+		{
+			await uow.CompleteAsync();
+		}
+		catch (AbpDbConcurrencyException)
+		{
+			throw new BusinessException(FinanceConcessionErrorCodes.ConcurrencyConflict);
+		}
 
 		await eventBus.PublishAsync(new Finance.Events.ConcessionApprovedEto
 		{

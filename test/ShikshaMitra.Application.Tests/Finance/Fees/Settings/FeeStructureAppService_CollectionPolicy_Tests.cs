@@ -1,5 +1,8 @@
 using Shouldly;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -12,6 +15,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
@@ -28,26 +32,34 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 
 	private readonly IFeeStructureAppService _feeStructures;
 	private readonly ICollectionPolicyAppService _collectionPolicies;
+	private readonly IConcessionPolicyAppService _concessionPolicies;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepo;
 	private readonly IRepository<EducationBoard, Guid> _boardRepo;
 	private readonly IRepository<EducationMedium, Guid> _mediumRepo;
 	private readonly IRepository<EducationMediumStage, Guid> _stageRepo;
 	private readonly IRepository<Standard, Guid> _standardRepo;
+	private readonly IRepository<FeeStructureMetadata, Guid> _metadataRepo;
+	private readonly IRepository<FeeCategory, Guid> _feeCategoryRepo;
+	private readonly IRepository<FeeHead, Guid> _feeHeadRepo;
 	private readonly ICurrentTenant _currentTenant;
 
 	public FeeStructureAppService_CollectionPolicy_Tests()
 	{
 		_feeStructures = GetRequiredService<IFeeStructureAppService>();
 		_collectionPolicies = GetRequiredService<ICollectionPolicyAppService>();
+		_concessionPolicies = GetRequiredService<IConcessionPolicyAppService>();
 		_academicYearRepo = GetRequiredService<IRepository<AcademicYear, Guid>>();
 		_boardRepo = GetRequiredService<IRepository<EducationBoard, Guid>>();
 		_mediumRepo = GetRequiredService<IRepository<EducationMedium, Guid>>();
 		_stageRepo = GetRequiredService<IRepository<EducationMediumStage, Guid>>();
 		_standardRepo = GetRequiredService<IRepository<Standard, Guid>>();
+		_metadataRepo = GetRequiredService<IRepository<FeeStructureMetadata, Guid>>();
+		_feeCategoryRepo = GetRequiredService<IRepository<FeeCategory, Guid>>();
+		_feeHeadRepo = GetRequiredService<IRepository<FeeHead, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 	}
 
-	private async Task<(Guid AcademicYearId, Guid StandardId)> SeedStandardAsync()
+	private async Task<(Guid AcademicYearId, Guid StandardId, Guid MetadataId, Guid FeeHeadId)> SeedStandardAsync()
 	{
 		var yearId = Guid.NewGuid();
 		var boardId = Guid.NewGuid();
@@ -64,11 +76,24 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 
 		var standard = new Standard(Guid.NewGuid(), TestTenantId, "Standard I", 5, stageId, null);
 		await _standardRepo.InsertAsync(standard, autoSave: true);
+		var metadata = new FeeStructureMetadata(
+			Guid.NewGuid(), TestTenantId, yearId, boardId, mediumId, null, "Standard I fees");
+		await _metadataRepo.InsertAsync(metadata, autoSave: true);
+		var category = new FeeCategory(Guid.NewGuid(), TestTenantId, yearId, "Tuition", null);
+		await _feeCategoryRepo.InsertAsync(category, autoSave: true);
+		var incomeCategoryId = await FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
+			GetRequiredService<IRepository<AccountHead, Guid>>(),
+			GetRequiredService<IRepository<TransactionCategory, Guid>>(),
+			yearId, TestTenantId, "Structure Tuition");
+		var feeHead = new FeeHead(
+			Guid.NewGuid(), TestTenantId, yearId, category.Id, "Tuition Fee",
+			FeeHeadModule.Finance, true, null, incomeCategoryId);
+		await _feeHeadRepo.InsertAsync(feeHead, autoSave: true);
 
-		return (yearId, standard.Id);
+		return (yearId, standard.Id, metadata.Id, feeHead.Id);
 	}
 
-	private async Task<Guid> CreateCollectionPolicyAsync(Guid academicYearId, string name)
+	private async Task<Guid> CreateCollectionPolicyAsync(Guid academicYearId, Guid feeHeadId, string name)
 	{
 		var policy = await _collectionPolicies.CreateAsync(new CreateUpdateCollectionPolicyDto
 		{
@@ -78,6 +103,7 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 			Status = "Active",
 			EnableLateFee = true,
 			GracePeriodDays = 7,
+			LateFeeApplyOnFeeHeads = new() { feeHeadId },
 			LateFeeType = "PerDay",
 			AmountPerDay = 10,
 			PercentageBase = "OutstandingAmount",
@@ -88,22 +114,44 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 		return policy.Id;
 	}
 
+	private async Task<Guid> CreateConcessionPolicyAsync(Guid academicYearId, string name)
+	{
+		var policy = await _concessionPolicies.CreateAsync(new CreateUpdateConcessionPolicyDto
+		{
+			AcademicYearId = academicYearId,
+			PolicyName = name,
+			PolicyCode = $"CNP-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
+			Status = "Active",
+			ValueSource = "PolicyFixed",
+			CalculationMethod = "Percentage",
+			PercentageValue = 10,
+			ApplyOn = "AllOutstanding",
+			RoundingMethod = "None"
+		});
+		return policy.Id;
+	}
+
+	private static List<FeeHeadAssignmentRequest> BuildFeeHeads(Guid feeHeadId) =>
+		[new FeeHeadAssignmentRequest { FeeHeadId = feeHeadId, Amount = 1_000 }];
+
 	[Fact]
 	public async Task Create_Persists_The_Attached_Collection_Policy()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		{
-			var (academicYearId, standardId) = await SeedStandardAsync();
-			var policyId = await CreateCollectionPolicyAsync(academicYearId, "Attach-on-create policy");
+			var (academicYearId, standardId, metadataId, feeHeadId) = await SeedStandardAsync();
+			var policyId = await CreateCollectionPolicyAsync(academicYearId, feeHeadId, "Attach-on-create policy");
+			var concessionPolicyId = await CreateConcessionPolicyAsync(academicYearId, "Attach-on-create concession");
 
-			var created = await _feeStructures.CreateAsync(Guid.NewGuid(), new StandardFeeStructureSaveRequest
+			var created = await _feeStructures.CreateAsync(metadataId, new StandardFeeStructureSaveRequest
 			{
 				StandardId = standardId,
 				StandardFeeStructures = new StandardFeeStructureRequest
 				{
 					Name = "Standard I Fee Structure",
-					FeeHeads = new List<FeeHeadAssignmentRequest>(),
+					FeeHeads = BuildFeeHeads(feeHeadId),
 					CollectionPolicyId = policyId,
+					ConcessionPolicyId = concessionPolicyId,
 				},
 			});
 
@@ -118,26 +166,29 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 	{
 		using (_currentTenant.Change(TestTenantId))
 		{
-			var (academicYearId, standardId) = await SeedStandardAsync();
-			var firstPolicyId = await CreateCollectionPolicyAsync(academicYearId, "First policy");
-			var secondPolicyId = await CreateCollectionPolicyAsync(academicYearId, "Second policy");
+			var (academicYearId, standardId, metadataId, feeHeadId) = await SeedStandardAsync();
+			var firstPolicyId = await CreateCollectionPolicyAsync(academicYearId, feeHeadId, "First policy");
+			var secondPolicyId = await CreateCollectionPolicyAsync(academicYearId, feeHeadId, "Second policy");
+			var concessionPolicyId = await CreateConcessionPolicyAsync(academicYearId, "Update concession");
 
-			var created = await _feeStructures.CreateAsync(Guid.NewGuid(), new StandardFeeStructureSaveRequest
+			var created = await _feeStructures.CreateAsync(metadataId, new StandardFeeStructureSaveRequest
 			{
 				StandardId = standardId,
 				StandardFeeStructures = new StandardFeeStructureRequest
 				{
 					Name = "Standard I Fee Structure",
-					FeeHeads = new List<FeeHeadAssignmentRequest>(),
+					FeeHeads = BuildFeeHeads(feeHeadId),
 					CollectionPolicyId = firstPolicyId,
+					ConcessionPolicyId = concessionPolicyId,
 				},
 			});
 
 			await _feeStructures.UpdateAsync(created.Id, new StandardFeeStructureRequest
 			{
 				Name = "Standard I Fee Structure",
-				FeeHeads = new List<FeeHeadAssignmentRequest>(),
+				FeeHeads = BuildFeeHeads(feeHeadId),
 				CollectionPolicyId = secondPolicyId,
+				ConcessionPolicyId = concessionPolicyId,
 			});
 
 			var response = await _feeStructures.GetByStandardAsync(standardId);
@@ -147,34 +198,91 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 	}
 
 	[Fact]
-	public async Task Update_With_Null_Clears_The_Attachment()
+	public async Task Update_With_Null_Collection_Policy_Is_Rejected()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		{
-			var (academicYearId, standardId) = await SeedStandardAsync();
-			var policyId = await CreateCollectionPolicyAsync(academicYearId, "Clearable policy");
+			var (academicYearId, standardId, metadataId, feeHeadId) = await SeedStandardAsync();
+			var policyId = await CreateCollectionPolicyAsync(academicYearId, feeHeadId, "Required policy");
+			var concessionPolicyId = await CreateConcessionPolicyAsync(academicYearId, "Required concession");
 
-			var created = await _feeStructures.CreateAsync(Guid.NewGuid(), new StandardFeeStructureSaveRequest
+			var created = await _feeStructures.CreateAsync(metadataId, new StandardFeeStructureSaveRequest
 			{
 				StandardId = standardId,
 				StandardFeeStructures = new StandardFeeStructureRequest
 				{
 					Name = "Standard I Fee Structure",
-					FeeHeads = new List<FeeHeadAssignmentRequest>(),
+					FeeHeads = BuildFeeHeads(feeHeadId),
 					CollectionPolicyId = policyId,
+					ConcessionPolicyId = concessionPolicyId,
 				},
 			});
 
-			await _feeStructures.UpdateAsync(created.Id, new StandardFeeStructureRequest
+			await Should.ThrowAsync<AbpValidationException>(() => _feeStructures.UpdateAsync(created.Id, new StandardFeeStructureRequest
 			{
 				Name = "Standard I Fee Structure",
-				FeeHeads = new List<FeeHeadAssignmentRequest>(),
+				FeeHeads = BuildFeeHeads(feeHeadId),
 				CollectionPolicyId = null,
-			});
+				ConcessionPolicyId = concessionPolicyId,
+			}));
 
 			var response = await _feeStructures.GetByStandardAsync(standardId);
 			var structure = response.StandardFeeStructures.Single(fs => fs.Id == created.Id);
-			structure.CollectionPolicyId.ShouldBeNull();
+			structure.CollectionPolicyId.ShouldBe(policyId);
+		}
+	}
+
+	[Fact]
+	public async Task Policy_Heads_Outside_The_Structure_Are_Ignored_Without_Blocking_Attachment()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (academicYearId, standardId, metadataId, structureFeeHeadId) = await SeedStandardAsync();
+			var policyCategory = new FeeCategory(
+				Guid.NewGuid(), TestTenantId, academicYearId, "Policy-only category", null);
+			await _feeCategoryRepo.InsertAsync(policyCategory, autoSave: true);
+			var incomeCategoryId = await FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
+				GetRequiredService<IRepository<AccountHead, Guid>>(),
+				GetRequiredService<IRepository<TransactionCategory, Guid>>(),
+				academicYearId, TestTenantId, "Policy Only");
+			var policyOnlyFeeHead = new FeeHead(
+				Guid.NewGuid(), TestTenantId, academicYearId, policyCategory.Id, "Policy-only Fee",
+				FeeHeadModule.Finance, true, null, incomeCategoryId);
+			await _feeHeadRepo.InsertAsync(policyOnlyFeeHead, autoSave: true);
+			var policyId = await CreateCollectionPolicyAsync(
+				academicYearId, policyOnlyFeeHead.Id, "Reusable policy");
+			var concessionPolicyId = await CreateConcessionPolicyAsync(
+				academicYearId, "Reusable-policy concession");
+
+			var impact = await _feeStructures.ValidateCollectionPolicyAttachmentAsync(
+				new CollectionPolicyAttachmentImpactRequest
+				{
+					FeeStructureMetadataId = metadataId,
+					CollectionPolicyId = policyId,
+					FeeHeadIds = [structureFeeHeadId]
+				});
+
+			impact.IsAttachable.ShouldBeTrue();
+			impact.CoveredLateFeeHeadIds.ShouldBeEmpty();
+			impact.StructureHeadsWithoutLateFee.ShouldContain(structureFeeHeadId);
+			impact.PolicyLateFeeHeadsNotInStructure.ShouldContain(policyOnlyFeeHead.Id);
+			impact.Warnings.ShouldContain(x => x.Contains("No late fee will be charged"));
+
+			var created = await _feeStructures.CreateAsync(metadataId, new StandardFeeStructureSaveRequest
+			{
+				StandardId = standardId,
+				StandardFeeStructures = new StandardFeeStructureRequest
+				{
+					Name = "Structure with a reusable policy",
+					FeeHeads = BuildFeeHeads(structureFeeHeadId),
+					CollectionPolicyId = policyId,
+					ConcessionPolicyId = concessionPolicyId
+				}
+			});
+
+			var response = await _feeStructures.GetByStandardAsync(standardId);
+			response.StandardFeeStructures.Single(x => x.Id == created.Id)
+				.CollectionPolicyId.ShouldBe(policyId);
 		}
 	}
 }

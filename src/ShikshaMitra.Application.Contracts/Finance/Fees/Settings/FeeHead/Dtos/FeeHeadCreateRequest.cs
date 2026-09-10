@@ -9,6 +9,9 @@ public class FeeHeadCreateRequest
     public Guid FeeCategoryId { get; set; }
 
     [Required]
+    public Guid IncomeCategoryId { get; set; }
+
+    [Required]
     public string Name { get; set; }
 
     public FeeHeadModule? Module { get; set; }

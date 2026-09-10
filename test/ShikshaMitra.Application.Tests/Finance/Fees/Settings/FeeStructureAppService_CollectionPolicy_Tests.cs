@@ -1,4 +1,5 @@
 using Shouldly;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
@@ -80,9 +81,13 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 		await _metadataRepo.InsertAsync(metadata, autoSave: true);
 		var category = new FeeCategory(Guid.NewGuid(), TestTenantId, yearId, "Tuition", null);
 		await _feeCategoryRepo.InsertAsync(category, autoSave: true);
+		var incomeCategoryId = await FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
+			GetRequiredService<IRepository<AccountHead, Guid>>(),
+			GetRequiredService<IRepository<TransactionCategory, Guid>>(),
+			yearId, TestTenantId, "Structure Tuition");
 		var feeHead = new FeeHead(
 			Guid.NewGuid(), TestTenantId, yearId, category.Id, "Tuition Fee",
-			FeeHeadModule.Finance, true, null);
+			FeeHeadModule.Finance, true, null, incomeCategoryId);
 		await _feeHeadRepo.InsertAsync(feeHead, autoSave: true);
 
 		return (yearId, standard.Id, metadata.Id, feeHead.Id);
@@ -236,9 +241,13 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 			var policyCategory = new FeeCategory(
 				Guid.NewGuid(), TestTenantId, academicYearId, "Policy-only category", null);
 			await _feeCategoryRepo.InsertAsync(policyCategory, autoSave: true);
+			var incomeCategoryId = await FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
+				GetRequiredService<IRepository<AccountHead, Guid>>(),
+				GetRequiredService<IRepository<TransactionCategory, Guid>>(),
+				academicYearId, TestTenantId, "Policy Only");
 			var policyOnlyFeeHead = new FeeHead(
 				Guid.NewGuid(), TestTenantId, academicYearId, policyCategory.Id, "Policy-only Fee",
-				FeeHeadModule.Finance, true, null);
+				FeeHeadModule.Finance, true, null, incomeCategoryId);
 			await _feeHeadRepo.InsertAsync(policyOnlyFeeHead, autoSave: true);
 			var policyId = await CreateCollectionPolicyAsync(
 				academicYearId, policyOnlyFeeHead.Id, "Reusable policy");

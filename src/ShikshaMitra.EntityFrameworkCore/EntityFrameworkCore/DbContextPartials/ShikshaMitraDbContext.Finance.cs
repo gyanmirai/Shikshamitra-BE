@@ -57,6 +57,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<ChargeCategory> ChargeCategories { get; set; }
 	public DbSet<TransactionCategory> TransactionCategories { get; set; }
 	public DbSet<BankAccount> BankAccounts { get; set; }
+	public DbSet<AccountHead> AccountHeads { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Student Fee Assignment

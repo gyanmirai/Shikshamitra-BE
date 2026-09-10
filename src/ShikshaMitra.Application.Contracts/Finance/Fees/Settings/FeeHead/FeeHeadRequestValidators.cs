@@ -8,6 +8,7 @@ public class FeeHeadCreateRequestValidator : AbstractValidator<FeeHeadCreateRequ
     public FeeHeadCreateRequestValidator()
     {
         RuleFor(x => x.FeeCategoryId).NotEmpty();
+        RuleFor(x => x.IncomeCategoryId).NotEmpty();
 
         RuleFor(x => x.Name)
             .NotEmpty()
@@ -27,6 +28,7 @@ public class FeeHeadUpdateRequestValidator : AbstractValidator<FeeHeadUpdateRequ
     public FeeHeadUpdateRequestValidator()
     {
         RuleFor(x => x.FeeCategoryId).NotEmpty();
+        RuleFor(x => x.IncomeCategoryId).NotEmpty();
 
         RuleFor(x => x.Name)
             .NotEmpty()

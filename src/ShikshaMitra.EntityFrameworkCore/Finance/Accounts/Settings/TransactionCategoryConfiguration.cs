@@ -12,6 +12,20 @@ public class TransactionCategoryConfiguration : IEntityTypeConfiguration<Transac
 		builder.ToTable("Finance_TransactionCategories", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
+		builder.Property(x => x.Code).HasMaxLength(AccountSettingConsts.MaxCodeLength);
+		builder.Property(x => x.NormalizedCode).HasMaxLength(AccountSettingConsts.MaxCodeLength);
+		builder.Property(x => x.Name).IsRequired().HasMaxLength(AccountSettingConsts.MaxNameLength);
+		builder.Property(x => x.NormalizedName).HasMaxLength(AccountSettingConsts.MaxNameLength);
+		builder.Property(x => x.Description).HasMaxLength(AccountSettingConsts.MaxDescriptionLength);
+		builder.Property(x => x.DeactivationReason).HasMaxLength(AccountSettingConsts.MaxDeactivationReasonLength);
+
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.CategoryType, x.NormalizedCode }).IsUnique();
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.CategoryType, x.NormalizedName }).IsUnique();
+		builder.HasOne<AccountHead>()
+			.WithMany()
+			.HasForeignKey(x => x.DefaultAccountHeadId)
+			.OnDelete(DeleteBehavior.Restrict);
+
 		builder.OwnsMany(x => x.Tags, tag =>
 		{
 			tag.WithOwner().HasForeignKey("TransactionCategoryId");

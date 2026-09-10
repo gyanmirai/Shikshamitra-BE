@@ -15,7 +15,8 @@ namespace ShikshaMitra.Seeders;
 public class RolePermissionSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "RolePermissionSeeder";
-	internal const string StepVersion = "RolePermissionSeeder:v20";
+	// Re-run baseline grants for the Account Head master and separate Edit/ChangeStatus actions.
+	internal const string StepVersion = "RolePermissionSeeder:v21";
 	internal const int StepOrder = 120;
 	private const string RoleProviderName = "R";
 

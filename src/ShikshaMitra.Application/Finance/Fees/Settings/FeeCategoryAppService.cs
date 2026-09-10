@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.Managers;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -18,7 +19,10 @@ public class FeeCategoryAppService(
 	IRepository<FeeCategory, Guid> feeCategoryRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,
-	FeeCategoryManager feeCategoryManager
+	IRepository<TransactionCategory, Guid> incomeCategoryRepository,
+	IRepository<AccountHead, Guid> accountHeadRepository,
+	FeeCategoryManager feeCategoryManager,
+	FeeHeadAccountingManager accountingManager
 ) : ApplicationService, IFeeCategoryAppService
 {
 	public async Task<FeeCategoryResponse> CreateAsync(Guid academicYearId, FeeCategoryCreateRequest input)
@@ -40,6 +44,7 @@ public class FeeCategoryAppService(
 
 		foreach (var headInput in input.FeeHeads)
 		{
+			await accountingManager.GetValidMappingAsync(academicYearId, headInput.IncomeCategoryId);
 			var normalizedName = headInput.Name.Trim();
 			if (!seenNames.Add(normalizedName))
 			{
@@ -55,7 +60,8 @@ public class FeeCategoryAppService(
 				normalizedName,
 				headInput.Module,
 				headInput.IsConcessionApplied,
-				headInput.Description
+				headInput.Description,
+				headInput.IncomeCategoryId
 			);
 
 			feeHeads.Add(feeHead);
@@ -133,12 +139,14 @@ public class FeeCategoryAppService(
 		var existingHeads = await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id);
 		var existingHeadsById = existingHeads.ToDictionary(x => x.Id);
 		var incomingIds = input.FeeHeads.Where(x => x.Id.HasValue).Select(x => x.Id!.Value).ToHashSet();
+		var usedFeeHeadIds = await GetUsedFeeHeadIdsAsync(existingHeads.Select(x => x.Id).ToList());
 
 		var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		var resultHeads = new List<FeeHead>();
 
 		foreach (var headInput in input.FeeHeads)
 		{
+			await accountingManager.GetValidMappingAsync(feeCategory.AcademicYearId, headInput.IncomeCategoryId);
 			var normalizedName = headInput.Name.Trim();
 			if (!seenNames.Add(normalizedName))
 			{
@@ -148,10 +156,15 @@ public class FeeCategoryAppService(
 
 			if (headInput.Id.HasValue && existingHeadsById.TryGetValue(headInput.Id.Value, out var existingHead))
 			{
+				if (existingHead.IncomeCategoryId != headInput.IncomeCategoryId && usedFeeHeadIds.Contains(existingHead.Id))
+				{
+					throw new BusinessException(FinanceFeeHeadErrorCodes.IncomeCategoryChangeBlocked);
+				}
 				await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(
 					feeCategory.AcademicYearId, id, normalizedName, existingHead.Id);
 
-				existingHead.Update(id, normalizedName, headInput.Module, headInput.IsConcessionApplied, headInput.Description);
+				existingHead.Update(id, normalizedName, headInput.Module, headInput.IsConcessionApplied,
+					headInput.Description, headInput.IncomeCategoryId);
 				await feeHeadRepository.UpdateAsync(existingHead);
 				resultHeads.Add(existingHead);
 			}
@@ -167,7 +180,8 @@ public class FeeCategoryAppService(
 					normalizedName,
 					headInput.Module,
 					headInput.IsConcessionApplied,
-					headInput.Description
+					headInput.Description,
+					headInput.IncomeCategoryId
 				);
 				await feeHeadRepository.InsertAsync(newHead);
 				resultHeads.Add(newHead);
@@ -178,7 +192,7 @@ public class FeeCategoryAppService(
 		if (removedHeads.Count > 0)
 		{
 			var removedIds = removedHeads.Select(x => x.Id).ToList();
-			var usedIds = await GetUsedFeeHeadIdsAsync(removedIds);
+			var usedIds = usedFeeHeadIds.Where(removedIds.Contains).ToHashSet();
 			if (usedIds.Count > 0)
 			{
 				throw new BusinessException(FinanceFeeHeadErrorCodes.CannotDeleteInUse);
@@ -236,6 +250,10 @@ public class FeeCategoryAppService(
 
 		foreach (var feeHead in feeHeads)
 		{
+			if (input.IsActive)
+			{
+				await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, feeHead.IncomeCategoryId);
+			}
 			feeHead.SetActiveStatus(input.IsActive, input.DeactivationReason);
 			await feeHeadRepository.UpdateAsync(feeHead);
 		}
@@ -265,12 +283,29 @@ public class FeeCategoryAppService(
 	private async Task<FeeCategoryResponse> MapToResponseAsync(FeeCategory feeCategory, List<FeeHead> feeHeads, HashSet<Guid> usedFeeHeadIds = null)
 	{
 		usedFeeHeadIds ??= await GetUsedFeeHeadIdsAsync(feeHeads.Select(x => x.Id).ToList());
+		var incomeCategoryIds = feeHeads.Select(x => x.IncomeCategoryId).Distinct().ToList();
+		var incomeCategories = await incomeCategoryRepository.GetListAsync(x => incomeCategoryIds.Contains(x.Id));
+		var incomeCategoryDict = incomeCategories.ToDictionary(x => x.Id);
+		var accountHeadIds = incomeCategories.Where(x => x.DefaultAccountHeadId.HasValue)
+			.Select(x => x.DefaultAccountHeadId!.Value).Distinct().ToList();
+		var accountHeads = await accountHeadRepository.GetListAsync(x => accountHeadIds.Contains(x.Id));
+		var accountHeadDict = accountHeads.ToDictionary(x => x.Id);
 
 		var response = ObjectMapper.Map<FeeCategory, FeeCategoryResponse>(feeCategory);
 		response.FeeHeads = feeHeads.Select(feeHead =>
 		{
 			var headResponse = ObjectMapper.Map<FeeHead, FeeHeadResponse>(feeHead);
 			headResponse.FeeCategoryName = feeCategory.Name;
+			if (incomeCategoryDict.TryGetValue(feeHead.IncomeCategoryId, out var incomeCategory))
+			{
+				headResponse.IncomeCategoryName = incomeCategory.Name;
+				if (incomeCategory.DefaultAccountHeadId.HasValue &&
+					accountHeadDict.TryGetValue(incomeCategory.DefaultAccountHeadId.Value, out var accountHead))
+				{
+					headResponse.IncomeAccountHeadId = accountHead.Id;
+					headResponse.IncomeAccountHeadName = accountHead.Name;
+				}
+			}
 			headResponse.IsUsedInDownstream = usedFeeHeadIds.Contains(feeHead.Id);
 			return headResponse;
 		}).ToList();

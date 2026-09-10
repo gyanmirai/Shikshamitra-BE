@@ -4,6 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeRefund;
@@ -64,6 +67,8 @@ public class FeeRefundSeederContributor : BaseSeederContributor
     private readonly IRepository<Student, Guid>             _studentRepository;
     private readonly IRepository<FeeCategory, Guid>         _feeCategoryRepository;
     private readonly IRepository<FeeHead, Guid>             _feeHeadRepository;
+    private readonly IRepository<TransactionCategory, Guid> _incomeCategoryRepository;
+    private readonly IRepository<AccountHead, Guid>         _accountHeadRepository;
     private readonly IDueFeeRepository                      _dueFeeRepository;
     private readonly IFeeRefundRepository                   _feeRefundRepository;
     private readonly ILogger<FeeRefundSeederContributor>    _logger;
@@ -76,6 +81,8 @@ public class FeeRefundSeederContributor : BaseSeederContributor
         IRepository<Student, Guid> studentRepository,
         IRepository<FeeCategory, Guid> feeCategoryRepository,
         IRepository<FeeHead, Guid> feeHeadRepository,
+        IRepository<TransactionCategory, Guid> incomeCategoryRepository,
+        IRepository<AccountHead, Guid> accountHeadRepository,
         IDueFeeRepository dueFeeRepository,
         IFeeRefundRepository feeRefundRepository,
         ILogger<FeeRefundSeederContributor> logger)
@@ -85,6 +92,8 @@ public class FeeRefundSeederContributor : BaseSeederContributor
         _studentRepository      = studentRepository;
         _feeCategoryRepository  = feeCategoryRepository;
         _feeHeadRepository      = feeHeadRepository;
+        _incomeCategoryRepository = incomeCategoryRepository;
+        _accountHeadRepository  = accountHeadRepository;
         _dueFeeRepository       = dueFeeRepository;
         _feeRefundRepository    = feeRefundRepository;
         _logger                 = logger;
@@ -201,6 +210,8 @@ public class FeeRefundSeederContributor : BaseSeederContributor
 
         if (existing is not null) return existing;
 
+        var incomeCategory = await GetOrCreateIncomeCategoryAsync(academicYearId);
+
         var created = await _feeHeadRepository.InsertAsync(
             new FeeHead(
                 id:                  GuidGenerator.Create(),
@@ -210,11 +221,34 @@ public class FeeRefundSeederContributor : BaseSeederContributor
                 name:                FeeHeadName,
                 module:              FeeHeadModule.Finance,
                 isConcessionApplied: false,
-                description:         "Auto-created by seed data contributor for fee-refund testing."),
+                description:         "Auto-created by seed data contributor for fee-refund testing.",
+                incomeCategoryId:    incomeCategory.Id),
             autoSave: false);
 
         _logger.LogDebug("[FeeRefundSeeder] Created FeeHead: {Id} – {Name}", created.Id, created.Name);
         return created;
+    }
+
+    private async Task<TransactionCategory> GetOrCreateIncomeCategoryAsync(Guid academicYearId)
+    {
+        var categoryName = $"{FeeHeadName} Income";
+        var existing = (await _incomeCategoryRepository.GetListAsync(x =>
+            x.AcademicYearId == academicYearId && x.CategoryType == TransactionType.Income &&
+            x.Name == categoryName)).FirstOrDefault();
+        if (existing is not null) return existing;
+
+        var categoryId = GuidGenerator.Create();
+        var accountHeadId = GuidGenerator.Create();
+        await _accountHeadRepository.InsertAsync(new AccountHead(
+            accountHeadId, CurrentTenant.Id, academicYearId, categoryName,
+            AccountHeadType.Income, null,
+            "Auto-created revenue account for seeded fee refund data."),
+            autoSave: false);
+
+        return await _incomeCategoryRepository.InsertAsync(new TransactionCategory(
+            categoryId, CurrentTenant.Id, academicYearId, TransactionType.Income, categoryName,
+            "Auto-created income category for seeded fee refund data.", [], true,
+            AccountSettingSeedCode.FromId(categoryId), accountHeadId, DateTimeOffset.UtcNow, null), autoSave: false);
     }
 
     // ─── DueFee rows ─────────────────────────────────────────────────────────

@@ -13,6 +13,8 @@ audience: humans-and-agents
 TL;DR: Finance is split into Fees, Accounts, Audit, Reports, and shared helpers.
 Start in contracts for DTO shape, then trace to application services and domain managers.
 
+Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
+
 ## Layer map
 
 | Layer | Path |

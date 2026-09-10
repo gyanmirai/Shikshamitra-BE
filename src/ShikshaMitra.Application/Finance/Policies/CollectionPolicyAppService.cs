@@ -71,6 +71,7 @@ public class CollectionPolicyAppService(
 			return dto;
 		}).ToList();
 
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "collection", items);
 		return new PagedResultDto<CollectionPolicyDto>(total, items);
 	}
 
@@ -80,6 +81,7 @@ public class CollectionPolicyAppService(
 		var entity = await GetEntityOrThrowAsync(id);
 		var dto = CollectionPolicyMapping.ToDto(entity);
 		dto.IsUsedInDownstream = (await GetUsageCountsAsync(new[] { id })).Contains(id);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "collection", new[] { dto });
 		return dto;
 	}
 
@@ -89,7 +91,7 @@ public class CollectionPolicyAppService(
 		var model = await BuildValidatedModelAsync(input);
 		if (model.Status == CollectionPolicyStatus.Active)
 		{
-			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Activate);
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add);
 		}
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, input.PolicyCode, null);
 		if (model.IsDefault)
@@ -103,7 +105,7 @@ public class CollectionPolicyAppService(
 		return dto;
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Edit)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add)]
 	public async Task<CollectionPolicyDto> UpdateAsync(Guid id, CreateUpdateCollectionPolicyDto input)
 	{
 		var entity = await GetEntityOrThrowAsync(id);
@@ -125,7 +127,7 @@ public class CollectionPolicyAppService(
 		}
 		if (model.Status == CollectionPolicyStatus.Active && entity.Status != CollectionPolicyStatus.Active)
 		{
-			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Activate);
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add);
 		}
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, input.PolicyCode, id);
 		if (model.IsDefault)
@@ -197,7 +199,7 @@ public class CollectionPolicyAppService(
 		return dto;
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Archive)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Delete)]
 	public async Task ArchiveAsync(Guid id)
 	{
 		var entity = await GetEntityOrThrowAsync(id);
@@ -236,7 +238,7 @@ public class CollectionPolicyAppService(
 	private async Task EnsureCanCloneAsync()
 	{
 		if (await AuthorizationService.IsGrantedAsync(
-				ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Clone)
+				ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add)
 			|| await AuthorizationService.IsGrantedAsync(
 				ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add))
 		{
@@ -244,24 +246,24 @@ public class CollectionPolicyAppService(
 		}
 
 		await AuthorizationService.CheckAsync(
-			ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Clone);
+			ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add);
 	}
 
 	private async Task EnsureCanUnarchiveAsync()
 	{
 		if (await AuthorizationService.IsGrantedAsync(
-				ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Unarchive)
+				ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add)
 			|| await AuthorizationService.IsGrantedAsync(
-				ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Archive))
+				ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Delete))
 		{
 			return;
 		}
 
 		await AuthorizationService.CheckAsync(
-			ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Unarchive);
+			ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ViewVersions)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.View)]
 	public async Task<PagedResultDto<FinancePolicyVersionDto>> GetVersionsAsync(Guid id, FinancePolicyVersionListRequestDto input)
 	{
 		await GetEntityOrThrowAsync(id);
@@ -295,7 +297,7 @@ public class CollectionPolicyAppService(
 		return new PagedResultDto<FinancePolicyVersionDto>(total, items);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Simulate)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.View)]
 	public async Task<CollectionPolicySimulateResponseDto> SimulateAsync(Guid id, CollectionPolicySimulateRequestDto input)
 	{
 		var policy = await GetEntityOrThrowAsync(id);

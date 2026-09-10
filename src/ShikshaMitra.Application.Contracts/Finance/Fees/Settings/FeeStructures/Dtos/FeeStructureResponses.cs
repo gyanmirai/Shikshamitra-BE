@@ -2,27 +2,18 @@
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using Volo.Abp.Application.Dtos;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 
-public class FeeStructureCreateResponse
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; }
-	public Guid? CollectionPolicyId { get; set; }
-	public Guid? CollectionPolicyVersionId { get; set; }
-	public Guid? ConcessionPolicyId { get; set; }
-	public Guid? ConcessionPolicyVersionId { get; set; }
-	public Guid? RefundPolicyId { get; set; }
-	public Guid? RefundPolicyVersionId { get; set; }
-	public Guid? ProrationPolicyId { get; set; }
-	public Guid? ProrationPolicyVersionId { get; set; }
-}
+public class FeeStructureCreateResponse : StandardFeeStructureResponseItem { }
 
 public class FeeStructureDetailsResponse : EntityDto<Guid>
 {
+	public List<FeeStructureClassOptionDto> Classes { get; set; } = [];
     public string Name { get; set; }
     public Guid AcademicYearId { get; set; }
     public string AcademicYearName { get; set; }
@@ -54,6 +45,15 @@ public class StandardFeeStructureResponse
 
 public class StandardFeeStructureResponseItem : EntityDto<Guid>
 {
+	public Dictionary<string, string> PolicyLabels { get; set; } = [];
+	public FeeStructurePreviewDto? PublicationReview { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public Guid RevisionRootId { get; set; }
+	public Guid? PreviousRevisionId { get; set; }
+	public int RevisionNumber { get; set; }
+	public Guid? ReceiptBookId { get; set; }
+	public DateTime CreationTime { get; set; }
+	public DateTime? LastModificationTime { get; set; }
     public string Name { get; set; }
 	public FeeStructureStatus Status { get; set; }
 	public List<FeeHeadAssignmentResponse> FeeHeads { get; set; }
@@ -65,12 +65,15 @@ public class StandardFeeStructureResponseItem : EntityDto<Guid>
 	public Guid? RefundPolicyVersionId { get; set; }
 	public Guid? ProrationPolicyId { get; set; }
 	public Guid? ProrationPolicyVersionId { get; set; }
+	[JsonConverter(typeof(JsonStringEnumConverter))]
 	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; set; }
 	public List<Guid> ConcessionApplicableFeeHeadIds { get; set; } = [];
 }
 
 public class FeeHeadAssignmentResponse
 {
+	public Guid Id { get; set; }
+	public List<ScheduleOverrideDto> InstallmentOverrides { get; set; } = [];
     public Guid FeeHeadId { get; set; }
     public string FeeHeadName { get; set; }
     public string CategoryName { get; set; }
@@ -89,6 +92,7 @@ public class FeeHeadAssignmentResponse
     public Guid? PaymentTermVersionId { get; set; }
 
     /// <summary>How this fee head uses the attached Payment Term.</summary>
+	[JsonConverter(typeof(JsonStringEnumConverter))]
     public ScheduleMode ScheduleMode { get; set; }
 
     /// <summary>The Payment Term name (for display).</summary>

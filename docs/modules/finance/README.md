@@ -13,6 +13,8 @@ audience: humans-and-agents
 TL;DR: use this page as the entrypoint for Finance behavior, API families, architecture, workflows, and validation.
 Finance covers fees, collections, concessions, adjustments, refunds, receipts, accounts, audit, and reports.
 
+Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
+
 ## Read order
 
 | Step | File | Use it to |

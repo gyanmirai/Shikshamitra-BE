@@ -8,6 +8,12 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 public interface IFeeStructureAppService : IApplicationService
 {
+	Task<FeeStructureContextDto> GetContextAsync(Guid feeStructureMetadataId, Guid standardId);
+	Task<FeeStructureCreateResponse> PatchAsync(Guid id, FeeStructurePatchRequest input);
+	Task<FeeStructureSettingsDto> GetSettingsAsync(Guid feeStructureMetadataId, Guid standardId);
+	Task<FeeStructurePreviewDto> PreviewAsync(FeeStructurePreviewRequest input);
+	Task<FeeStructureCreateResponse> PublishAsync(Guid id, FeeStructurePublishRequest input);
+	Task<FeeStructureCreateResponse> CreateRevisionAsync(Guid id, FeeStructureRevisionRequest input);
     /// <summary>Creates fee structures for a standard under the given fee structure metadata.</summary>
     Task<FeeStructureCreateResponse> CreateAsync(Guid feeStructureMetadataId, StandardFeeStructureSaveRequest input);
 

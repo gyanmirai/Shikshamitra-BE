@@ -149,7 +149,7 @@ Student assignment responses expose the policy name, code, version, calculation 
 
 ## Permissions
 
-Concession policy permissions include View, Add, Edit, Clone, Simulate, Archive, Unarchive, ViewVersions, and ManageAttachment.
+Concession policy configuration uses View, Add, and Delete under the [fee configuration permission contract](../api.md#fee-configuration-permissions). View includes history/simulation; Add includes editing, cloning, restoring and attachments; Delete controls archival.
 Concession request permissions separately include Add, Edit, View, Approve, Reject, Cancel, and document actions.
 Finance administrators receive module permissions through the existing role-permission expansion; restricted roles must be granted only the actions they perform.
 

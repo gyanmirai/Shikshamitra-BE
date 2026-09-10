@@ -1,3 +1,8 @@
+using System.Security.Claims;
+using Volo.Abp.Security.Claims;
+using Volo.Abp.Identity;
+using ShikshaMitra.Security.UserScope;
+using Volo.Abp;
 using Shouldly;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
@@ -26,8 +31,9 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 /// existed on the domain aggregate (Phase 1) but no AppService/controller ever called it, so
 /// FeePoliciesTab.tsx's "Collection Policy" dropdown had nothing real to save to.
 /// </summary>
-public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
+	private static readonly Guid TestUserId = Guid.Parse("66666666-6666-6666-6666-666666666666");
 	private static readonly Guid TestTenantId = Guid.Parse("55555555-5555-5555-5555-555555555555");
 
 	private readonly IFeeStructureAppService _feeStructures;
@@ -61,6 +67,8 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 
 	private async Task<(Guid AcademicYearId, Guid StandardId, Guid MetadataId, Guid FeeHeadId)> SeedStandardAsync()
 	{
+		await GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(new IdentityUser(TestUserId, "fee-reviewer", "fee-reviewer@example.test", TestTenantId), autoSave: true);
+		await GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: TestUserId), autoSave: true);
 		var yearId = Guid.NewGuid();
 		var boardId = Guid.NewGuid();
 		var mediumId = Guid.NewGuid();
@@ -69,7 +77,7 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 		await _academicYearRepo.InsertAsync(
 			new AcademicYear(yearId, TestTenantId, "2025-26", new DateTime(2025, 4, 1), new DateTime(2026, 3, 31)),
 			autoSave: true);
-		await _boardRepo.InsertAsync(new EducationBoard(boardId, TestTenantId, EducationBoardType.CBSE, yearId), autoSave: true);
+		await _boardRepo.InsertAsync(new EducationBoard(boardId, TestTenantId, EducationBoardType.CBSE, yearId, new DateTime(2025, 4, 1), new DateTime(2026, 3, 31)), autoSave: true);
 		await _mediumRepo.InsertAsync(new EducationMedium(mediumId, TestTenantId, "English", boardId), autoSave: true);
 		await _stageRepo.InsertAsync(
 			new EducationMediumStage(stageId, TestTenantId, "Primary", bannerPicture: null, mediumId), autoSave: true);
@@ -137,6 +145,7 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 	[Fact]
 	public async Task Create_Persists_The_Attached_Collection_Policy()
 	{
+		using (GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(AbpClaimTypes.UserId, TestUserId.ToString()) }, "Test"))))
 		using (_currentTenant.Change(TestTenantId))
 		{
 			var (academicYearId, standardId, metadataId, feeHeadId) = await SeedStandardAsync();
@@ -164,6 +173,7 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 	[Fact]
 	public async Task Update_Changes_The_Attached_Collection_Policy()
 	{
+		using (GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(AbpClaimTypes.UserId, TestUserId.ToString()) }, "Test"))))
 		using (_currentTenant.Change(TestTenantId))
 		{
 			var (academicYearId, standardId, metadataId, feeHeadId) = await SeedStandardAsync();
@@ -185,6 +195,7 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 
 			await _feeStructures.UpdateAsync(created.Id, new StandardFeeStructureRequest
 			{
+				ConcurrencyStamp = created.ConcurrencyStamp,
 				Name = "Standard I Fee Structure",
 				FeeHeads = BuildFeeHeads(feeHeadId),
 				CollectionPolicyId = secondPolicyId,
@@ -200,6 +211,7 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 	[Fact]
 	public async Task Update_With_Null_Collection_Policy_Is_Rejected()
 	{
+		using (GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(AbpClaimTypes.UserId, TestUserId.ToString()) }, "Test"))))
 		using (_currentTenant.Change(TestTenantId))
 		{
 			var (academicYearId, standardId, metadataId, feeHeadId) = await SeedStandardAsync();
@@ -218,11 +230,13 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 				},
 			});
 
-			await Should.ThrowAsync<AbpValidationException>(() => _feeStructures.UpdateAsync(created.Id, new StandardFeeStructureRequest
+			await Should.ThrowAsync<BusinessException>(() => _feeStructures.UpdateAsync(created.Id, new StandardFeeStructureRequest
 			{
 				Name = "Standard I Fee Structure",
 				FeeHeads = BuildFeeHeads(feeHeadId),
 				CollectionPolicyId = null,
+				SaveAsDraft = false,
+				ConcurrencyStamp = created.ConcurrencyStamp,
 				ConcessionPolicyId = concessionPolicyId,
 			}));
 
@@ -235,6 +249,7 @@ public class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplica
 	[Fact]
 	public async Task Policy_Heads_Outside_The_Structure_Are_Ignored_Without_Blocking_Attachment()
 	{
+		using (GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(AbpClaimTypes.UserId, TestUserId.ToString()) }, "Test"))))
 		using (_currentTenant.Change(TestTenantId))
 		{
 			var (academicYearId, standardId, metadataId, structureFeeHeadId) = await SeedStandardAsync();

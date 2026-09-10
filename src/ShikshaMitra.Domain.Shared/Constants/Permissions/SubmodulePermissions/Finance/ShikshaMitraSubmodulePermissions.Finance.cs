@@ -73,6 +73,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Finance.Auditing", new SubmoduleInfo(Auditing.All, Auditing.DisplayNames) },
 			{ "Finance.Adjustments", new SubmoduleInfo(Adjustments.All, Adjustments.DisplayNames) },
 
+			// Operational grants remain independent; configuration Add must not approve financial waivers.
+			{ "Finance.CollectionPolicyOperations", new SubmoduleInfo(Policies_CollectionPolicy.OperationalAll, Policies_CollectionPolicy.DisplayNames) },
+			{ "Finance.ProrationPolicyOperations", new SubmoduleInfo(Policies_ProrationPolicy.OperationalAll, Policies_ProrationPolicy.DisplayNames) },
+
 			// Policies submodules
 			{ "Finance.Policies.ConcessionPolicy", new SubmoduleInfo(Policies_ConcessionPolicy.All, Policies_ConcessionPolicy.DisplayNames) },
 			{ "Finance.Policies.RefundPolicy", new SubmoduleInfo(Policies_RefundPolicy.All, Policies_RefundPolicy.DisplayNames) },

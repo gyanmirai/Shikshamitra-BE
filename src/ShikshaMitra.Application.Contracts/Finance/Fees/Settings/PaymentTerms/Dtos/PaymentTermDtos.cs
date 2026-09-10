@@ -106,6 +106,8 @@ public class PaymentTermDto : EntityDto<Guid>
 
 public class PaymentTermListDto : EntityDto<Guid>
 {
+	public Guid? PublishedVersionId { get; set; }
+	public int? PublishedVersionNumber { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public string Code { get; set; } = string.Empty;
 	public Guid AcademicYearId { get; set; }

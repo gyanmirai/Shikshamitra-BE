@@ -57,6 +57,7 @@ public class RefundPolicyAppService(
 			dto.IsUsedInDownstream = usedIds.Contains(x.Id);
 			return dto;
 		}).ToList();
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "refund", items);
 		return new PagedResultDto<RefundPolicyDto>(total, items);
 	}
 
@@ -66,6 +67,7 @@ public class RefundPolicyAppService(
 		var entity = await GetRequiredAsync(id);
 		var dto = RefundPolicyMapping.ToDto(entity);
 		dto.IsUsedInDownstream = (await GetUsedIdsAsync([id])).Contains(id);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "refund", new[] { dto });
 		return dto;
 	}
 
@@ -103,7 +105,7 @@ public class RefundPolicyAppService(
 		return RefundPolicyMapping.ToDto(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Edit)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add)]
 	public async Task<RefundPolicyDto> UpdateAsync(Guid id, CreateUpdateRefundPolicyDto input)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -130,7 +132,7 @@ public class RefundPolicyAppService(
 		return RefundPolicyMapping.ToDto(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Clone)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add)]
 	public async Task<RefundPolicyDto> CloneAsync(Guid id, RefundPolicyCloneRequestDto input)
 	{
 		var source = await GetRequiredAsync(id);
@@ -165,7 +167,7 @@ public class RefundPolicyAppService(
 		});
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Archive)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Delete)]
 	public async Task ArchiveAsync(Guid id)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -177,7 +179,7 @@ public class RefundPolicyAppService(
 		await WriteVersionAsync(entity, "archived");
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Unarchive)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add)]
 	public async Task<RefundPolicyDto> UnarchiveAsync(Guid id)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -188,7 +190,7 @@ public class RefundPolicyAppService(
 		return RefundPolicyMapping.ToDto(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.ViewVersions)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.View)]
 	public async Task<PagedResultDto<FinancePolicyVersionDto>> GetVersionsAsync(
 		Guid id, FinancePolicyVersionListRequestDto input)
 	{
@@ -210,7 +212,7 @@ public class RefundPolicyAppService(
 		return new PagedResultDto<FinancePolicyVersionDto>(total, items);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Simulate)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.View)]
 	public async Task<RefundPolicySimulateResponseDto> SimulateAsync(Guid id, RefundPolicySimulateRequestDto input)
 	{
 		var entity = await GetRequiredAsync(id);

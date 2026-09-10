@@ -63,6 +63,7 @@ public class ProrationPolicyAppService(
 			dto.IsUsedInDownstream = usedIds.Contains(x.Id);
 			return dto;
 		}).ToList();
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "proration", items);
 		return new PagedResultDto<ProrationPolicyDto>(total, items);
 	}
 
@@ -70,7 +71,9 @@ public class ProrationPolicyAppService(
 	public async Task<ProrationPolicyDto> GetAsync(Guid id)
 	{
 		var entity = await GetRequiredAsync(id);
-		return await ToDtoAsync(entity);
+		var dto = await ToDtoAsync(entity);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "proration", new[] { dto });
+		return dto;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.View)]
@@ -94,7 +97,7 @@ public class ProrationPolicyAppService(
 	{
 		if (ProrationPolicyMapping.ParseStatus(input.Status) == ProrationPolicyStatus.Active)
 			await AuthorizationService.CheckAsync(
-				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Activate);
+				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add);
 		await academicYearRepository.GetAsync(input.AcademicYearId);
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode)
 			? $"PRO-{GuidGenerator.Create():N}"[..16].ToUpperInvariant()
@@ -110,7 +113,7 @@ public class ProrationPolicyAppService(
 		return await ToDtoAsync(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Edit)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add)]
 	public async Task<ProrationPolicyDto> UpdateAsync(Guid id, CreateUpdateProrationPolicyDto input)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -122,7 +125,7 @@ public class ProrationPolicyAppService(
 		var targetStatus = ProrationPolicyMapping.ParseStatus(input.Status);
 		if (entity.Status != ProrationPolicyStatus.Active && targetStatus == ProrationPolicyStatus.Active)
 			await AuthorizationService.CheckAsync(
-				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Activate);
+				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add);
 		if (entity.Status == ProrationPolicyStatus.Active && targetStatus == ProrationPolicyStatus.Draft &&
 			(await GetUsedIdsAsync([id])).Contains(id))
 			throw new BusinessException(ProrationPolicyErrorCodes.PolicyInUse);
@@ -139,7 +142,7 @@ public class ProrationPolicyAppService(
 		return await ToDtoAsync(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Activate)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add)]
 	public async Task<ProrationPolicyDto> ActivateAsync(Guid id, string? changeReason = null)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -153,7 +156,7 @@ public class ProrationPolicyAppService(
 		return await ToDtoAsync(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Clone)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add)]
 	public async Task<ProrationPolicyDto> CloneAsync(Guid id, ProrationPolicyCloneRequestDto input)
 	{
 		var source = await GetRequiredAsync(id);
@@ -176,7 +179,7 @@ public class ProrationPolicyAppService(
 		});
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Archive)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Delete)]
 	public async Task ArchiveAsync(Guid id)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -188,7 +191,7 @@ public class ProrationPolicyAppService(
 		await WriteVersionAsync(entity, "archived");
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Unarchive)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add)]
 	public async Task<ProrationPolicyDto> UnarchiveAsync(Guid id)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -201,7 +204,7 @@ public class ProrationPolicyAppService(
 		return await ToDtoAsync(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.ViewVersions)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.View)]
 	public async Task<PagedResultDto<FinancePolicyVersionDto>> GetVersionsAsync(Guid id, FinancePolicyVersionListRequestDto input)
 	{
 		await GetRequiredAsync(id);
@@ -221,7 +224,7 @@ public class ProrationPolicyAppService(
 		return new PagedResultDto<FinancePolicyVersionDto>(total, items);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Simulate)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.View)]
 	public async Task<ProrationCalculationResultDto> SimulateAsync(Guid id, ProrationPolicySimulateRequestDto input)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -233,7 +236,7 @@ public class ProrationPolicyAppService(
 		return ToCalculationDto(entity, input.FeeHeadId, result);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Simulate)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.View)]
 	public async Task<ProrationPolicyAttachmentImpactDto> GetAttachmentImpactAsync(
 		Guid id, ProrationPolicyAttachmentImpactRequestDto input)
 	{

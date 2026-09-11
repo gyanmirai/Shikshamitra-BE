@@ -10,15 +10,18 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string Prefix = "Students.Admissions.Reviews";
 			public const string View = Prefix + ".View";
-			public const string Edit = Prefix + ".Edit";
-			public const string Submit = Prefix + ".Submit";
-			public const string Assign = Prefix + ".Assign";
-			public const string Decide = Prefix + ".Decide";
-			public static readonly string[] All = [View, Edit, Submit, Assign, Decide];
+			public const string Add = Prefix + ".Add";
+			public const string Delete = Prefix + ".Delete";
+			public const string Edit = Add;
+			public const string Submit = Add;
+			public const string Assign = Add;
+			public const string Decide = Add;
+			public static readonly string[] All = [View, Add, Delete];
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				[View] = "View admission reviews", [Edit] = "Save admission review drafts", [Submit] = "Submit admission recommendations",
-				[Assign] = "Assign admission reviewers", [Decide] = "Decide reviewed admissions"
+				[View] = "View admission reviews",
+				[Add] = "Add or update admission reviews",
+				[Delete] = "Delete admission reviews"
 			};
 		}
 	}

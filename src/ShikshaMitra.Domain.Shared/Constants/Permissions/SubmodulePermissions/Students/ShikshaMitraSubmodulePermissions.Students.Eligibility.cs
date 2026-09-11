@@ -10,14 +10,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string Prefix = "Students.Admissions.Eligibility";
 			public const string View = Prefix + ".View";
-			public const string Evaluate = Prefix + ".Evaluate";
-			public const string RequestException = Prefix + ".RequestException";
-			public const string ReviewException = Prefix + ".ReviewException";
-			public static readonly string[] All = [View, Evaluate, RequestException, ReviewException];
+			public const string Add = Prefix + ".Add";
+			public const string Delete = Prefix + ".Delete";
+			public const string Evaluate = Add;
+			public const string RequestException = Add;
+			public const string ReviewException = Add;
+			public static readonly string[] All = [View, Add, Delete];
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				[View] = "View admission eligibility", [Evaluate] = "Evaluate admission eligibility",
-				[RequestException] = "Request an eligibility exception", [ReviewException] = "Review eligibility exceptions"
+				[View] = "View admission eligibility",
+				[Add] = "Add or update admission eligibility",
+				[Delete] = "Delete admission eligibility"
 			};
 		}
 	}

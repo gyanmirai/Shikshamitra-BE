@@ -10,6 +10,7 @@ public static class ShikshaMitraSubModulePermissions
 	public const string EnrollmentSettings = $"{ShikshaMitraModulePermissions.Students}.Enrollment.Settings";
 	public const string Records = $"{ShikshaMitraModulePermissions.Students}.Records";
 	public const string RecordsSettings = $"{ShikshaMitraModulePermissions.Students}.Records.Settings";
+	public const string StudentOnboarding = $"{ShikshaMitraModulePermissions.Students}.Onboarding";
 	public const string Attendance = $"{ShikshaMitraModulePermissions.Students}.Attendance";
 	public const string AttendanceSettings = $"{ShikshaMitraModulePermissions.Students}.Attendance.Settings";
 	public const string Notification = $"{ShikshaMitraModulePermissions.Students}.Notification";
@@ -190,6 +191,7 @@ public static class ShikshaMitraSubModulePermissions
 		EnrollmentSettings,
 		Records,
 		RecordsSettings,
+		StudentOnboarding,
 		Attendance,
 		AttendanceSettings,
 		Notification,
@@ -348,6 +350,7 @@ public static class ShikshaMitraSubModulePermissions
 		{ EnrollmentSettings, $"{DisplayNamePrefix}.EnrollmentSettings" },
 		{ Records, $"{DisplayNamePrefix}.Records" },
 		{ RecordsSettings, $"{DisplayNamePrefix}.RecordsSettings" },
+		{ StudentOnboarding, $"{DisplayNamePrefix}.StudentOnboarding" },
 		{ Attendance, $"{DisplayNamePrefix}.Attendance" },
 		{ AttendanceSettings, $"{DisplayNamePrefix}.AttendanceSettings" },
 		{ Notification, $"{DisplayNamePrefix}.Notification" },

@@ -12,14 +12,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleDisplayName = $"{DisplayName}.IdentityCompliance";
 
 			public const string View = $"{SubmoduleName}.View";
-			public const string ManageSensitive = $"{SubmoduleName}.ManageSensitive";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			public const string ManageSensitive = Add;
 
-			public static readonly string[] All = [View, ManageSensitive];
+			public static readonly string[] All = [View, Add, Delete];
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ View, $"{SubmoduleDisplayName}.View" },
-				{ ManageSensitive, $"{SubmoduleDisplayName}.ManageSensitive" }
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 	}

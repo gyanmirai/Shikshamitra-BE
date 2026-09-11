@@ -12,21 +12,27 @@ audience: humans-and-agents
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
 
+## Permission catalog
+
+Every Student submodule registered in the backend exposes exactly three assignable permissions: `View`, `Add`, and `Delete`.
+Module visibility permissions under `ShikshaMitra.Module.Students.*` remain separate and only control whether the corresponding module or submodule is visible.
+Student Dashboard reads require `Students.Dashboard.View`; an explicit dashboard refresh requires `Students.Dashboard.Add`.
+
 ## Offering endpoints
 
 | Method | Route | Permission |
 |---|---|---|
 | GET | `/api/student/enrollment/admissions/offerings` | `Students.Admissions.Offerings.View` |
 | GET | `/api/student/enrollment/admissions/offerings/{id}` | `Students.Admissions.Offerings.View` |
-| POST | `/api/student/enrollment/admissions/offerings/cycles/{admissionCycleId}` | `Students.Admissions.Offerings.Create` |
-| PUT | `/api/student/enrollment/admissions/offerings/{id}` | `Students.Admissions.Offerings.Edit` |
-| POST | `/api/student/enrollment/admissions/offerings/{id}/activate` | `Students.Admissions.Offerings.Activate` |
-| POST | `/api/student/enrollment/admissions/offerings/{id}/deactivate` | `Students.Admissions.Offerings.Deactivate` |
+| POST | `/api/student/enrollment/admissions/offerings/cycles/{admissionCycleId}` | `Students.Admissions.Offerings.Add` |
+| PUT | `/api/student/enrollment/admissions/offerings/{id}` | `Students.Admissions.Offerings.Add` |
+| POST | `/api/student/enrollment/admissions/offerings/{id}/activate` | `Students.Admissions.Offerings.Add` |
+| POST | `/api/student/enrollment/admissions/offerings/{id}/deactivate` | `Students.Admissions.Offerings.Delete` |
 | DELETE | `/api/student/enrollment/admissions/offerings/{id}` | `Students.Admissions.Offerings.Delete` |
-| POST | `/api/student/enrollment/admissions/offerings/{id}/clone` | `Students.Admissions.Offerings.Clone` |
-| POST | `/api/student/enrollment/admissions/offerings/validate` | `Students.Admissions.Offerings.Validate` |
+| POST | `/api/student/enrollment/admissions/offerings/{id}/clone` | `Students.Admissions.Offerings.Add` |
+| POST | `/api/student/enrollment/admissions/offerings/validate` | `Students.Admissions.Offerings.Add` |
 | GET | `/api/student/enrollment/admissions/offerings/{id}/availability` | `Students.Admissions.Offerings.View` |
-| POST | `/api/student/enrollment/admissions/offerings/cycles/{admissionCycleId}/bulk` | `Students.Admissions.Offerings.BulkCreate` |
+| POST | `/api/student/enrollment/admissions/offerings/cycles/{admissionCycleId}/bulk` | `Students.Admissions.Offerings.Add` |
 
 The compatibility create route accepts `POST /api/student/enrollment/admissions/offerings?admissionCycleId=...`.
 
@@ -36,20 +42,20 @@ The compatibility create route accepts `POST /api/student/enrollment/admissions/
 |---|---|---|
 | GET/POST | `/api/student/enrollment/admissions/workflows` | Workflow `View` or `Create` |
 | GET/PUT/DELETE | `/api/student/enrollment/admissions/workflows/{id}` | Workflow `View`, `Edit`, or `Delete` |
-| POST | `/api/student/enrollment/admissions/workflows/{id}/clone` | `Students.Admissions.Workflows.Clone` |
-| POST | `/api/student/enrollment/admissions/workflows/{id}/new-version` | `Students.Admissions.Workflows.Clone` |
-| POST | `/api/student/enrollment/admissions/workflows/{id}/validate` | `Students.Admissions.Workflows.Validate` |
-| POST | `/api/student/enrollment/admissions/workflows/{id}/publish` | `Students.Admissions.Workflows.Publish` |
-| POST | `/api/student/enrollment/admissions/workflows/{id}/archive` | `Students.Admissions.Workflows.Archive` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/clone` | `Students.Admissions.Workflows.Add` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/new-version` | `Students.Admissions.Workflows.Add` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/validate` | `Students.Admissions.Workflows.Add` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/publish` | `Students.Admissions.Workflows.Add` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/archive` | `Students.Admissions.Workflows.Delete` |
 | GET | `/api/student/enrollment/admissions/workflows/{id}/versions` | `Students.Admissions.Workflows.View` |
-| GET | `/api/student/enrollment/admissions/workflows/{id}/usage` | `Students.Admissions.Workflows.ViewUsage` |
+| GET | `/api/student/enrollment/admissions/workflows/{id}/usage` | `Students.Admissions.Workflows.View` |
 | GET | `/api/student/enrollment/admissions/workflows/stage-types` | `Students.Admissions.Workflows.View` |
 
 ## Runtime workflow endpoint
 
-`POST /api/student/enrollment/admissions/applications/{id}/workflow/advance` requires `Students.Admissions.Applications.Advance`.
+`POST /api/student/enrollment/admissions/applications/{id}/workflow/advance` requires `Students.Admissions.Applications.Add`.
 The body includes `expectedCurrentStageInstanceId`, a unique `idempotencyKey`, optional `concurrencyStamp`, and optional transition, skip, override, and reason fields.
-Admin overrides additionally require `Students.Admissions.Applications.OverrideWorkflow`.
+Admin overrides additionally require `Students.Admissions.Applications.Add`.
 The response returns current workflow status, stage timestamps, immutable transition history, and `nextRequiredAction`. The next action is derived from the server stage-type registry and is `null` after the workflow completes.
 
 ## Application form runtime
@@ -57,9 +63,9 @@ The response returns current workflow status, stage timestamps, immutable transi
 | Route | Permission | Behavior |
 |---|---|---|
 | `GET /api/student/enrollment/admissions/applications/{id}/form` | `Students.Admissions.Applications.View` | Returns the pinned form definition/version, instance status, and saved values. |
-| `PATCH /api/student/enrollment/admissions/applications/{id}/form-values` | `Students.Admissions.Applications.Edit` | Saves a draft with concurrency checking and rejects unknown field codes. |
-| `POST /api/student/enrollment/admissions/applications/{id}/submit` | `Students.Admissions.Applications.Submit` | Validates visible fields and stores an immutable submission snapshot. |
-| `POST /api/student/enrollment/admissions/applications/{id}/form/reopen` | `Students.Admissions.Applications.Reopen` | Reopens a submitted form for authorized correction and records the event. |
+| `PATCH /api/student/enrollment/admissions/applications/{id}/form-values` | `Students.Admissions.Applications.Add` | Saves a draft with concurrency checking and rejects unknown field codes. |
+| `POST /api/student/enrollment/admissions/applications/{id}/submit` | `Students.Admissions.Applications.Add` | Validates visible fields and stores an immutable submission snapshot. |
+| `POST /api/student/enrollment/admissions/applications/{id}/form/reopen` | `Students.Admissions.Applications.Add` | Reopens a submitted form for authorized correction and records the event. |
 | `GET /api/student/enrollment/admissions/applications/{id}/form/history` | `Students.Admissions.Applications.View` | Returns form creation, draft-save, submission, and reopen history. |
 
 Published form definitions are immutable versions. Existing applications retain their original `FormDefinitionId` and `FormVersion` when an offering is moved to a later version.
@@ -70,7 +76,7 @@ Choice fields support either static option arrays or an approved source descript
 
 The route prefix is `/api/student/enrollment/admissions/assessments`.
 Responses use the standard `Result<T>` envelope.
-Permission names below have prefix `Students.Admissions.Assessments.`.
+Permission names below use only `Students.Admissions.Assessments.View`, `.Add`, and `.Delete`.
 
 | Method and suffix | Permission | Behavior |
 |---|---|---|
@@ -112,12 +118,12 @@ The route prefix is `/api/student/enrollment/admissions/inquiries/{inquiryId}/ma
 | Method | Route suffix | Permission | Purpose |
 | --- | --- | --- | --- |
 | `GET` | none | `Students.Admissions.Inquiries.View` | Read safe policy, deadlines, blockers, capabilities, qualification, and follow-ups |
-| `POST` | `contact` | `Students.Admissions.Inquiries.Manage` | Record a contact note and advance contact readiness |
-| `POST` | `follow-ups` | `Students.Admissions.Inquiries.Manage` | Schedule a bounded future follow-up |
-| `POST` | `follow-ups/{followUpId}/complete` | `Students.Admissions.Inquiries.Manage` | Complete an open follow-up with an optional note |
-| `POST` | `follow-ups/{followUpId}/cancel` | `Students.Admissions.Inquiries.Manage` | Cancel an open follow-up with a reason |
-| `POST` | `qualification` | `Students.Admissions.Inquiries.Manage` | Record a checklist-backed qualification outcome |
-| `POST` | `reopen` | `Students.Admissions.Inquiries.Manage` | Reopen a non-converted qualification with a reason |
+| `POST` | `contact` | `Students.Admissions.Inquiries.Add` | Record a contact note and advance contact readiness |
+| `POST` | `follow-ups` | `Students.Admissions.Inquiries.Add` | Schedule a bounded future follow-up |
+| `POST` | `follow-ups/{followUpId}/complete` | `Students.Admissions.Inquiries.Add` | Complete an open follow-up with an optional note |
+| `POST` | `follow-ups/{followUpId}/cancel` | `Students.Admissions.Inquiries.Add` | Cancel an open follow-up with a reason |
+| `POST` | `qualification` | `Students.Admissions.Inquiries.Add` | Record a checklist-backed qualification outcome |
+| `POST` | `reopen` | `Students.Admissions.Inquiries.Add` | Reopen a non-converted qualification with a reason |
 
 Counsellor choices use `GET /api/student/enrollment/admissions/inquiry-settings/counsellors`, require workflow view permission, and return only active users compatible with the requested offering scope.
 Every management command requires the current management concurrency stamp.
@@ -167,16 +173,16 @@ Base: `/api/student/enrollment/admissions/document-verification`. Responses use 
 | Method and relative route | Permission | Behavior |
 |---|---|---|
 | GET `applications/{applicationId}/stages/{stageInstanceId}` | `Students.Admissions.Documents.View` | Pinned requirements, applicability, chronological evidence/reviews, blockers, effective file limits, action flags, application concurrency stamp |
-| POST `applications/{applicationId}/stages/{stageInstanceId}/requirements/{code}/upload` | `Students.Admissions.Documents.Upload` | Multipart `file`, `concurrencyStamp`, optional `notes`; appends a fresh revision |
-| POST same requirement route `/original` | `Students.Admissions.Documents.RecordOriginal` | JSON `concurrencyStamp`, required observation `notes`; retains any latest upload and resets review |
-| POST same requirement route `/waive` | `Students.Admissions.Documents.Waive` | JSON `concurrencyStamp`, required `reason`; requires policy permission |
-| POST `evidence/{evidenceId}/review` | `Students.Admissions.Documents.Review` | JSON `concurrencyStamp`, `decision: accepted/rejected`, optional `reason` (required for rejection) |
-| GET `evidence/{evidenceId}/download` | `Students.Admissions.Documents.Download` | Scoped private attachment, no-store response, audit activity; storage keys never exposed |
+| POST `applications/{applicationId}/stages/{stageInstanceId}/requirements/{code}/upload` | `Students.Admissions.Documents.Add` | Multipart `file`, `concurrencyStamp`, optional `notes`; appends a fresh revision |
+| POST same requirement route `/original` | `Students.Admissions.Documents.Add` | JSON `concurrencyStamp`, required observation `notes`; retains any latest upload and resets review |
+| POST same requirement route `/waive` | `Students.Admissions.Documents.Delete` | JSON `concurrencyStamp`, required `reason`; requires policy permission |
+| POST `evidence/{evidenceId}/review` | `Students.Admissions.Documents.Add` | JSON `concurrencyStamp`, `decision: accepted/rejected`, optional `reason` (required for rejection) |
+| GET `evidence/{evidenceId}/download` | `Students.Admissions.Documents.View` | Scoped private attachment, no-store response, audit activity; storage keys never exposed |
 | GET `document-types` | `Students.Admissions.Workflows.View` | Tenant catalog mappings, allowed extensions and maximum file size |
 
 All mutations return refreshed stage state and serialize against the application stamp. History is read-only after leaving the stage. Server authorization validates tenant, offering UserScope, application-stage ownership, frozen workflow version, current stage, policy, and evidence revision. Error family `Admissions:Documents:*` provides localized invalid-policy/state/evidence/review, stale-stamp, and completion-gate messages.
 
-Linked Student evidence uses GET `/api/student/records/students/{studentId}/admission-evidence` with both `Students.Records.StudentList.View` and `Students.Admissions.Documents.View`. Its `/{evidenceId}/download` additionally requires `Students.Admissions.Documents.Download` and verifies the finalized source application and Student link.
+Linked Student evidence uses GET `/api/student/records/students/{studentId}/admission-evidence` with both `Students.Records.StudentList.View` and `Students.Admissions.Documents.View`. Its `/{evidenceId}/download` uses the same Admissions document `View` permission and verifies the finalized source application and Student link.
 
 ### Student record profile
 
@@ -190,7 +196,7 @@ This endpoint does not add a Student write or change lifecycle behavior, and it 
 
 ### Onboarding documents
 
-GET/POST `/api/student/onboarding/{caseId}/documents` requires `Students.Onboarding.View`; POST also requires `Students.Onboarding.Edit`. Uploads validate the scoped active case, permitted Student lifecycle, tenant document type, file evidence, and concurrency, then refresh readiness. Replacing an existing file preserves its old private blob until the transaction commits successfully.
+GET/POST `/api/student/onboarding/{caseId}/documents` requires `Students.Onboarding.View`; POST also requires `Students.Onboarding.Add`. Uploads validate the scoped active case, permitted Student lifecycle, tenant document type, file evidence, and concurrency, then refresh readiness. Replacing an existing file preserves its old private blob until the transaction commits successfully.
 
 ## Eligibility APIs
 
@@ -199,10 +205,10 @@ Base: `/api/student/enrollment/admissions/eligibility`. Responses use `Result<T>
 | Method and relative route | Additional permission | Behavior |
 |---|---|---|
 | GET `applications/{applicationId}/stages/{stageId}` | None | Pinned policy, latest evaluation, freshness, blockers, concurrency and action flags |
-| POST same stage route `/evaluate` | `Students.Admissions.Eligibility.Evaluate` | Check declared saved facts and append an immutable evaluation |
+| POST same stage route `/evaluate` | `Students.Admissions.Eligibility.Add` | Check declared saved facts and append an immutable evaluation |
 | GET same stage route `/history` | None | Evaluations, criterion results, exception requests and decisions |
-| POST same stage route `/evaluations/{evaluationId}/exceptions` | `Students.Admissions.Eligibility.RequestException` | Required reason, fresh latest ineligible result, policy permission; append request |
-| POST same stage route `/exceptions/{exceptionId}/review` | `Students.Admissions.Eligibility.ReviewException` | Required reason and `decision: approved/rejected`; enforce configured role and reviewer separation |
+| POST same stage route `/evaluations/{evaluationId}/exceptions` | `Students.Admissions.Eligibility.Add` | Required reason, fresh latest ineligible result, policy permission; append request |
+| POST same stage route `/exceptions/{exceptionId}/review` | `Students.Admissions.Eligibility.Add` | Required reason and `decision: approved/rejected`; enforce configured role and reviewer separation |
 | GET `reviewer-roles` | `Students.Admissions.Workflows.View` only | School roles as `{id,name}` choices |
 
 The summary reports `notChecked`, `eligible`, `ineligible`, `needsInformation`, or `exceptionApproved`, plus a separate `isStale`. Each criterion returns its expected value, actual value, source, outcome and message. Saved evaluation outcomes remain `eligible/ineligible/needsInformation`; exception approval is an additional audited decision. GET does not create an evaluation. Mutations return refreshed summary state. Historical completed stages can be rechecked before finalization; finalized or closed admissions cannot mutate.
@@ -223,13 +229,13 @@ Applicant endpoints enforce `Students.Admissions.Reviews.View` on both HTTP and 
 |---|---|---|
 | GET `applications/{applicationId}/stages/{stageId}` | None | Pinned policy, current evidence, assignment, deadline, safe record, blockers and action flags |
 | GET same stage route `/history` | None | Immutable recommendation, checklist, assignment and actual-decision history |
-| POST same stage route `/draft` | `Students.Admissions.Reviews.Edit` | Save current checklist, notes, optional recommendation and reason |
-| POST same stage route `/submit` | `Students.Admissions.Reviews.Submit` | Submit a complete checklist and reasoned recommendation |
-| POST same stage route `/assignment` | `Students.Admissions.Reviews.Assign` | Reasoned reviewer/deadline change; validate tenant, configured role and offering scope |
-| POST same stage route `/request-correction` | `Students.Admissions.Reviews.Decide`, `Students.Admissions.Applications.Decide`, `Students.Admissions.Applications.Reopen` | Record the actual correction decision and reopen the application form |
+| POST same stage route `/draft` | `Students.Admissions.Reviews.Add` | Save current checklist, notes, optional recommendation and reason |
+| POST same stage route `/submit` | `Students.Admissions.Reviews.Add` | Submit a complete checklist and reasoned recommendation |
+| POST same stage route `/assignment` | `Students.Admissions.Reviews.Add` | Reasoned reviewer/deadline change; validate tenant, configured role and offering scope |
+| POST same stage route `/request-correction` | `Students.Admissions.Reviews.Add`, `Students.Admissions.Applications.Add` | Record the actual correction decision and reopen the application form |
 | GET `queue` | None | Scoped paged active Review queue with `assignedToMe` and `overdueOnly` filters |
 | GET `reviewer-roles` | `Students.Admissions.Workflows.View` only | Tenant roles as `{id,name}` choices |
-| GET `reviewers?filter=...&role=...` | `Students.Admissions.Workflows.View` or `Students.Admissions.Reviews.Assign` | Bounded active tenant user choices with applicable role and scope checks |
+| GET `reviewers?filter=...&role=...` | `Students.Admissions.Workflows.View` or `Students.Admissions.Reviews.Add` | Bounded active tenant user choices with applicable role and scope checks |
 
 Save/submit payloads contain `notes`, `recommendation`, `reason`, and `checklist: [{code,checked,notes}]`; labels and required flags come exclusively from the pinned policy.
 Recommendation values are `approve`, `waitlist`, `reject`, and `requestCorrection`.
@@ -237,7 +243,7 @@ All notes and reasons are limited to 1024 characters; submit requires a nonblank
 Assignment contains nullable `assignedReviewerId` and `dueAt`, plus a required reason; an explicit past deadline is valid and appears overdue.
 The summary reports `notStarted`, `draft`, `submitted`, `approved`, `waitlisted`, `rejected`, `correctionRequested`, or `stale`, with separate freshness and action flags.
 
-Existing application Approve/Reject/Waitlist commands retain their routes and permissions and additionally enforce managed Review approval rules and `Students.Admissions.Reviews.Decide`.
+Existing application Approve/Reject/Waitlist commands retain their routes and permissions and additionally enforce managed Review approval rules and `Students.Admissions.Reviews.Add`.
 The main application detail adds nullable `reviewDecision` with `managedReviewEnabled`, `isSatisfied`, decision capabilities and blockers; absent values preserve the legacy client contract.
 No new competing approval endpoint or automatic decision is introduced.
 Transition facts are `review.status` and `review.decision`; the server overwrites reserved Review facts when managed Review exists.

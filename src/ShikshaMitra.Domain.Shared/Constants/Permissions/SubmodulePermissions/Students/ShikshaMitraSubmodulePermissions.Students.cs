@@ -49,6 +49,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 		/// </summary>
 		public static readonly Dictionary<string, SubmoduleInfo> Submodules = new()
 		{
+			{ "Students.Dashboard", new SubmoduleInfo(Dashboard.All, Dashboard.DisplayNames) },
 			{ "Students.Admissions", new SubmoduleInfo(Admissions.All, Admissions.DisplayNames) },
 			{ "Students.Admissions.Offerings", new SubmoduleInfo(AdmissionOfferings.All, AdmissionOfferings.DisplayNames) },
 			{ "Students.Admissions.Inquiries", new SubmoduleInfo(AdmissionInquiries.All, AdmissionInquiries.DisplayNames) },

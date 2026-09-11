@@ -10,20 +10,19 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string Prefix = "Students.Admissions.Offers";
 			public const string View = Prefix + ".View";
-			public const string Issue = Prefix + ".Issue";
-			public const string Respond = Prefix + ".Respond";
-			public const string Extend = Prefix + ".Extend";
-			public const string Withdraw = Prefix + ".Withdraw";
-			public const string Reissue = Prefix + ".Reissue";
-			public static readonly string[] All = [View, Issue, Respond, Extend, Withdraw, Reissue];
+			public const string Add = Prefix + ".Add";
+			public const string Delete = Prefix + ".Delete";
+			public const string Issue = Add;
+			public const string Respond = Add;
+			public const string Extend = Add;
+			public const string Withdraw = Delete;
+			public const string Reissue = Add;
+			public static readonly string[] All = [View, Add, Delete];
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				[View] = "View admission offers",
-				[Issue] = "Issue admission offers",
-				[Respond] = "Record admission offer responses",
-				[Extend] = "Extend admission offers",
-				[Withdraw] = "Withdraw admission offers",
-				[Reissue] = "Reissue admission offers"
+				[Add] = "Add or update admission offers",
+				[Delete] = "Delete or withdraw admission offers"
 			};
 		}
 	}

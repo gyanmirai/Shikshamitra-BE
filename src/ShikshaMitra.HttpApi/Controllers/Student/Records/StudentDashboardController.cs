@@ -16,7 +16,7 @@ namespace ShikshaMitra.Controllers.Student.Records;
 public class StudentDashboardController(IStudentDashboardAppService dashboardAppService) : AbpControllerBase
 {
 	[HttpGet("previews/{dashboardKey}")]
-	[Authorize(ShikshaMitraSubModulePermissions.StudentDashboard)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Dashboard.View)]
 	[ProducesResponseType(typeof(StudentDashboardPreviewDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -26,7 +26,7 @@ public class StudentDashboardController(IStudentDashboardAppService dashboardApp
 	}
 
 	[HttpPost("previews/{dashboardKey}/refresh")]
-	[Authorize(ShikshaMitraSubModulePermissions.StudentDashboard)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Dashboard.Add)]
 	[ProducesResponseType(typeof(StudentDashboardPreviewDto), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
